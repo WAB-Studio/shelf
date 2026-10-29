@@ -1444,9 +1444,13 @@
     "reviewed": "Revisados ({count})",
     "empty": "Nada sobresale en {month}.",
     "allDone": "Revisaste {month}.",
+    "nothingNoted": "No anotaste nada en {month}.",
     "errors": {
-      "cannotMark": "No puedes marcar este movimiento."
+      "cannotMark": "No puedes marcar este movimiento.",
+      "cannotUndo": "No puedes deshacer esta marca."
     },
-    "back": "Volver a Reportes"
+    "back": "Volver a Reportes",
+    "readerOnly": "Lo corrige quien maneja {account}.",
+    "undo": "Deshacer"
   }
 }

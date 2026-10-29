@@ -8,6 +8,7 @@ import { MonthsList } from "@/components/month/months-screen";
 import { Button, Flex, Figure, ListDetail, Mark, Page, ScreenHeader, Section, Separator, Text, TextLink } from "@/components/ui";
 import type { Task } from "@/lib/plan/carry";
 import type { PlanItem } from "@/lib/plan/roadmap";
+import { closedMonthMarkDay } from "@/lib/plan/closed-month-marks";
 import { nextMonth, partOf, partWords, settledMonths } from "@/lib/plan/months";
 import { planHrefFrom } from "@/lib/plan/return-to";
 import { openMonthsOf, planMonthList, planMonthOf, planShare } from "@/lib/plan/roadmap-read";
@@ -15,6 +16,7 @@ import { screenPlanned } from "@/lib/plan/screen-planned";
 import { loadGoal, type GoalView } from "@/lib/queries/goal";
 import { formatQuantity, isTimeUnit } from "@/lib/units/time";
 import { timeWordsOf } from "@/lib/units/time-words";
+import { todayInZone } from "@/lib/zone";
 
 const monthFormat = new Intl.DateTimeFormat("es", { month: "long", timeZone: "UTC" });
 
@@ -81,6 +83,10 @@ export async function MonthDetail({
   const fig = { fig: (chunks: ReactNode) => <Figure variant="meta" value={chunks} /> };
   const open = goal.archivedAt === null && goal.endedOn === null;
   const closed = row.past;
+  // A goal archived since marks nothing, as on «Mes» (RP-143).
+  const markDay = closed ? (goal.archivedAt === null ? closedMonthMarkDay(month, todayInZone()) : null) : undefined;
+  // A closed month counts a sub-task done only when it was done in it.
+  const doneIn = (doneOn: string | null) => doneOn !== null && (!closed || doneOn < nextMonth(mes));
   const rowPlanned = screenPlanned(row.planned, goal.plan.budgets.some((budget) => budget.month === mes));
   const noteEyebrow = t("oneOffs.note.eyebrowFull", { goal: goal.name, month: name });
   const addHref = `/metas/${goal.id}/meses/${month}/tarea/nueva`;
@@ -193,6 +199,7 @@ export async function MonthDetail({
               : undefined
           }
           fixedMonth={pinOf(task)}
+          markDay={markDay}
           sheet={sheetOf(task, children)}
         />
         {children.map((child) => (
@@ -201,11 +208,12 @@ export async function MonthDetail({
             oneOffId={child.id}
             name={child.name}
             factId={child.factId ?? null}
-            done={child.doneOn !== null}
+            done={doneIn(child.doneOn)}
             child
             trailing={unit && child.estimate ? say(child.estimate) : undefined}
             note={child.note}
             noteEyebrow={noteEyebrow}
+            markDay={markDay}
             sheet={sheetOf(child, [])}
           />
         ))}

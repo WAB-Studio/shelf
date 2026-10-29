@@ -8,6 +8,7 @@ import type { Cadence, CommitmentPlan, WeekView } from "@/lib/day/types";
 import { queryEvidenceBySource } from "@/lib/queries/evidence";
 import type { EvidenceOutcome } from "@/lib/queries/evidence";
 import {
+  livedThrough,
   toCadence,
   toDeclaredFact,
   toEvidenceByCommitment,
@@ -112,7 +113,7 @@ type WeekQueryRow = {
  * read. No extra round trip.
  *
  * `goals` are those that governed the week (RP-24, RP-44): written on or
- * before its Sunday, not ended before it began, and not archived on or before
+ * before its Sunday, not ended before it began, and not archived before
  * its Sunday — so an archive since keeps the past week it lived through, and
  * a goal opened later never enters it. A goal that ended mid-week stays, it
  * lived through the days before. `first_monday` is the Monday of the oldest
@@ -133,7 +134,7 @@ async function queryGoalsRow(
          from "goals"."goals" g
          where (g.created_at at time zone ${TIME_ZONE})::date <= ${weekEnd}::date
            and (g.horizon is null or g.horizon > ${weekStart}::date)
-           and (g.archived_at is null or (g.archived_at at time zone ${TIME_ZONE})::date > ${weekEnd}::date)) as goals,
+           and ${livedThrough("g", weekEnd)}) as goals,
       (select date_trunc('week', min(t.created_at at time zone ${TIME_ZONE}))::date::text
          from (
            select g.created_at from "goals"."goals" g

@@ -4,6 +4,7 @@ import {
   check,
   date,
   index,
+  uniqueIndex,
   pgPolicy,
   text,
   timestamp,
@@ -80,7 +81,8 @@ export const plannedPayments = finances.table(
       .on(table.groupId)
       .where(sql`${table.groupId} is not null`),
     index("planned_payments_due_date_idx").on(table.dueDate),
-    index("planned_payments_settled_transaction_id_idx").on(table.settledTransactionId),
+    // One movement settles one payment: settle inserts its own.
+    uniqueIndex("planned_payments_settled_transaction_id_unique").on(table.settledTransactionId),
     // Parent deletes check these foreign keys; without an index each one scans this table.
     index("planned_payments_from_account_id_idx")
       .on(table.fromAccountId)

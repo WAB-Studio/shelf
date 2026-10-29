@@ -192,9 +192,10 @@ of this gets built, and no schema, table or column is "prepared for" it.
 - [x] **RP-16** — The week is drawn as it was: the days with facts and the days without. No streak, no score, no praise and no reproach. A deliberate rest day is a plan's instruction, not a failure. Decided by the user 2026-09-22.
 - [x] **RP-17** — A goal's measure is read week by week, as the one table its review needs, from the first week to the current one.
 - [x] **RP-142** *(successor of RP-44 and RP-43)* — The week is read for any week, one step back or forward at a time, from
-  the week the first goal was opened to the last week of the furthest open goal's span (a goal with no end reaches twelve
-  months from today). A past week draws as it was lived (RP-16): the goals open in it, its facts and its evidence, a goal
-  archived since still in the weeks it governed (RP-24); a day in it opens its own screen only within the seven days a fact may
+  the week the first goal was opened to the last week of the furthest open goal's span (a goal with no end reaches the
+  months it plans: this one and the eleven after, RP-99). A past week draws as it was lived (RP-16): the goals open in it, its facts and its evidence, a goal
+  archived since still in the weeks it governed (RP-24), the week and the month it was archived on the last day of included —
+  decided by the user 2026-10-28; a day in it opens its own screen only within the seven days a fact may
   still name (RP-06). A coming week draws, day by day, what each open goal's commitments will ask, with no mark, and the tasks
   dated that day; in it only «Darle día» acts. «Mes» reads this month across every open goal — the amount planned and reached
   (RP-28) and its month's list, the tasks carried in first with the month they came from and what they owe (RP-31), then the
@@ -204,7 +205,20 @@ of this gets built, and no schema, table or column is "prepared for" it.
   goal open in it, its planned amount (RP-28, RP-50) and the tasks its plan places there (RP-50–RP-54), fixed ones included,
   marked done in one tap as this month's. A coming week and a coming month list after them the tasks with no day — a goal's
   and the loose ones (RP-59) — each with «Darle día», the step «lo que espera» offers (RP-61). Reading any of them writes
-  nothing. Decided by the user 2026-10-22 (Q6 a) and 2026-10-24 (O7-Q5 a, O7-Q6 b, O7-Q7 a).
+  nothing. A week or a month asked for outside that span lands on its nearer end; a malformed one on this week or this
+  month. Decided by the user 2026-10-22 (Q6 a), 2026-10-24 (O7-Q5 a, O7-Q6 b, O7-Q7 a) and 2026-10-28 (P3 b).
+- [ ] **RP-143** — A closed month's tasks still mark and unmark, on «Mes» and on the goal's own month page, while the month's
+  last day is within a fact's reach (RP-129): seven days after it closes. The mark is dated that last day, so a task done on
+  the 31st and logged on the 2nd counts in its own month. From the eighth day the month reads only, everywhere: no mark, no
+  task's sheet. Decided by the user 2026-10-28.
+- [ ] **RP-145** — «Mes» opens the weeks of the month it reads: under its header, «Semanas» and one link per week the month
+  touches, named by its Monday («29 sep», «6 oct»…), the week it starts in first; this week's link opens «Semana» itself. A month
+  with no goal open draws none. Decided by the user 2026-10-28 (P4 a).
+- [ ] **RP-144** — An open goal's screen offers «Abrir en Claude»: a new claude.ai chat, in a new tab, with a short brief
+  already typed in its box for the person to read and send — the goal, its note and current phase, this month's amount
+  against its plan, what was done over the last seven days with each task's note, and up to ten tasks still open this
+  month. Nothing is sent from GoalLog and no model runs; the chat starts from where the goal stands instead of the whole
+  plan or a previous conversation. Decided by the user 2026-10-28.
 - [x] **RP-123** — A goal that holds goals reads week by week as it reads month by month (RP-80): each week, what it reached is the sum of its goals' in the same unit, plus what its own tasks reached; a goal in another unit adds nothing. Its «Ver por semana» never says it has no figure while its screen shows one. Decided by the user 2026-10-14 (critic of the whole app, question B = a).
 
 #### The account

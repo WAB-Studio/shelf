@@ -39,6 +39,9 @@ export type TaskRowProps = {
   part?: { part: number; hours: number; from: string | null; to: string | null };
   // "YYYY-MM" the task is fixed to against a rhythm (RP-51); absent, no pin is drawn.
   fixedMonth?: string;
+  // A closed month's (RP-143): the day its mark is dated, or null once the month reads only — no
+  // mark, no sheet, the note shown and not opened. Absent, the mark is dated today.
+  markDay?: string | null;
   // What the task's sheet reads besides the row's own props (RP-55).
   sheet: {
     goalId: string;
@@ -72,6 +75,7 @@ export function TaskRow({
   noteEyebrow,
   part,
   fixedMonth,
+  markDay,
   sheet,
 }: TaskRowProps) {
   const t = useTranslations();
@@ -146,6 +150,7 @@ export function TaskRow({
       {note ? <FileText size={18} aria-hidden /> : <File size={18} aria-hidden />}
     </IconButton>
   );
+  const locked = markDay === null;
   const noteProps = parent ? {} : { preview: note, end: noteButton };
 
   let row;
@@ -163,6 +168,7 @@ export function TaskRow({
         trailing={trail}
         data-done={done}
         onClick={() => setSheetOpen(true)}
+        still={locked}
         disabled={pending}
       />
     );
@@ -182,6 +188,7 @@ export function TaskRow({
         {...noteProps}
         onLeadingClick={() => factId && run(() => undoFact({ factId }))}
         onClick={() => setSheetOpen(true)}
+        still={locked}
         disabled={pending}
       />
     );
@@ -195,8 +202,9 @@ export function TaskRow({
         metaVariant="sentence"
         trailing={trail}
         {...noteProps}
-        onLeadingClick={() => run(() => completeOneOff({ oneOffId }))}
+        onLeadingClick={() => run(() => completeOneOff({ oneOffId, day: markDay ?? undefined }))}
         onClick={() => setSheetOpen(true)}
+        still={locked}
         disabled={pending}
       />
     );

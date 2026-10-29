@@ -2,7 +2,7 @@
 
 import { refresh } from "next/cache";
 
-import { markReviewed } from "@/db/queries/month-review";
+import { markReviewed, unmarkReviewed } from "@/db/queries/month-review";
 import { pgErrorCode } from "@/lib/db-error";
 import { ActionError } from "@/lib/errors";
 import { authActionClient } from "@/lib/safe-action";
@@ -21,5 +21,16 @@ export const markReviewedAction = authActionClient
       if (pgErrorCode(error) === "42501") throw new ActionError("review.errors.cannotMark");
       throw error;
     }
+    refresh();
+  });
+
+/**
+ * «Deshacer» on an item under «Revisados» (RF-163): its marks go and it waits again. A movement the
+ * caller only reads deletes nothing under the policy, and that is said in words.
+ */
+export const unmarkReviewedAction = authActionClient
+  .inputSchema(markReviewedSchema)
+  .action(async ({ parsedInput }) => {
+    if (!(await unmarkReviewed(parsedInput))) throw new ActionError("review.errors.cannotUndo");
     refresh();
   });

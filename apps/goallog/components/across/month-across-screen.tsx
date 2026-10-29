@@ -22,15 +22,18 @@ import {
   TextLink,
 } from "@/components/ui";
 import { cadencePhrase } from "@/lib/day/row-phrases";
+import { closedMonthMarkDay } from "@/lib/plan/closed-month-marks";
 import { monthSteps, parseMonthParam } from "@/lib/plan/month-param";
 import { nextMonth } from "@/lib/plan/months";
+import { mondaysTouching } from "@/lib/day/habit-weeks";
+import { weekHref } from "@/lib/day/week-href";
 import { planHrefFrom } from "@/lib/plan/return-to";
 import { openMonthsOf, planMonthOf } from "@/lib/plan/roadmap-read";
 import { loadMonthAcross, type MonthAcrossGoal, type MonthAcrossItem } from "@/lib/queries/month";
 import { listDaylessOneOffs, listGoalOneOffs } from "@/lib/queries/one-offs";
 import { formatQuantity, isTimeUnit } from "@/lib/units/time";
 import { timeWordsOf } from "@/lib/units/time-words";
-import { civilDayMonthShort } from "@/lib/zone";
+import { civilDayMonthShort, weekOf } from "@/lib/zone";
 
 function sum(values: number[]): number {
   return values.reduce((total, value) => total + value, 0);
@@ -46,7 +49,8 @@ function monthHref(month: string | null, thisMonth: string): string | null {
  * `MesTodas`, `MesTodasEscritorio`, `MesTodasVacio`, `MesTodasNada`,
  * `MesTodasHecho`, `MesTodasSinEvidencia` (RP-142, RP-31): a month of every
  * goal open in it, as `loadMonthAcross` reads it, stepped ‹ › one month at a
- * time. A past month reads as it was lived and marks nothing; a coming one
+ * time. A past month reads as it was lived, and marks its tasks on its last
+ * day only while that day is within a fact's reach (RP-143); a coming one
  * marks its tasks as this month does and lists after it what waits with no
  * day. Adding a task or an amount stays on the goal's own month page, which
  * each goal's name opens.
@@ -61,9 +65,17 @@ export async function MonthAcrossScreen({ month, today }: { month?: string; toda
     coming ? listDaylessOneOffs() : [],
   ]);
   const seg = across.month.slice(0, 7);
-  // The page cannot know the bounds before the read: a month past them leaves for this one.
-  if (parseMonthParam(seg, today, across.firstMonth, across.lastMonth).kind === "redirect") redirect("/mes");
+  // The page cannot know the bounds before the read: a month past them lands on the nearer one; with no goal, on this one.
+  const asked = parseMonthParam(seg, today, across.firstMonth, across.lastMonth);
+  if (asked.kind === "redirect") redirect(monthHref(asked.to, thisMonth) ?? "/mes");
   const past = across.view === "past";
+  const markDay = past ? closedMonthMarkDay(across.month, today) : undefined;
+  const after = nextMonth(across.month);
+  const thisMonday = weekOf(today)[0];
+  // Unarchived and lasting past the month: what it left undone moves to the next one.
+  const carriesOn = (goal: MonthAcrossGoal) => goal.open && (goal.plan.horizon === null || goal.plan.horizon > after);
+  // A closed month counts a sub-task done only when it was done in it.
+  const doneIn = (doneOn: string | null) => doneOn !== null && (!past || doneOn < after);
   const t = await getTranslations();
   const words = timeWordsOf(t as unknown as Parameters<typeof timeWordsOf>[0]);
   const monthNames = t.raw("day.monthLong") as string[];
@@ -85,6 +97,8 @@ export async function MonthAcrossScreen({ month, today }: { month?: string; toda
     const unit = goal.unit;
     const say = (n: number) => (unit ? formatQuantity(n, unit, words) : String(n));
     const noteEyebrow = t("oneOffs.note.eyebrowFull", { goal: goal.name, month: thisName });
+    // A goal archived since marks nothing, even within the reach.
+    const rowMarkDay = goal.open ? markDay : null;
 
     const openMonths = openMonthsOf(goal.plan);
     const sheetOf = (task: MonthAcrossItem["task"], kids: MonthAcrossItem["children"]) => ({
@@ -122,8 +136,8 @@ export async function MonthAcrossScreen({ month, today }: { month?: string; toda
 
       const placed =
         where === undefined ? sub : where === "" ? undefined : t("month.group.line", { goal: where, amount: say(owes) });
-      // A closed month says how each task stood and marks nothing (RP-142).
-      if (past) {
+      // A closed month past a fact's reach says how each task stood and marks nothing (RP-142, RP-143).
+      if (rowMarkDay === null) {
         return (
           <Flex key={task.id} direction="column" gap="3">
             {[task, ...children].map((row) => (
@@ -132,11 +146,12 @@ export async function MonthAcrossScreen({ month, today }: { month?: string; toda
                   {row.name}
                 </Text>
                 <Text as="p" variant="meta">
-                  {t(
-                    (row.id === task.id ? entry.done : row.doneOn !== null && row.doneOn < nextMonth(across.month))
-                      ? "month.across.pastDone"
-                      : "month.across.pastOpen",
-                  )}
+                  {(row.id === task.id ? entry.done : doneIn(row.doneOn))
+                    ? t("month.across.pastDone")
+                    : // A plain task of its own month carries on while its goal does, as the goal's month page says.
+                      row.id === task.id && children.length === 0 && entry.carriedFrom === null && carriesOn(goal)
+                      ? t("month.list.staysIn", { month: monthName(after) })
+                      : t("month.across.pastOpen")}
                 </Text>
               </Flex>
             ))}
@@ -167,6 +182,7 @@ export async function MonthAcrossScreen({ month, today }: { month?: string; toda
                 : undefined
             }
             fixedMonth={goal.plan.rhythm !== null ? task.plannedMonth?.slice(0, 7) : undefined}
+            markDay={rowMarkDay}
             sheet={sheetOf(task, children)}
           />
           {children.map((child) => (
@@ -175,12 +191,13 @@ export async function MonthAcrossScreen({ month, today }: { month?: string; toda
               oneOffId={child.id}
               name={child.name}
               factId={child.factId ?? null}
-              done={child.doneOn !== null}
+              done={doneIn(child.doneOn)}
               child
               trailing={unit && child.estimate ? say(child.estimate) : undefined}
               markLabel={t("month.across.mark", { name: child.name })}
               note={child.note}
               noteEyebrow={noteEyebrow}
+              markDay={rowMarkDay}
               sheet={sheetOf(child, [])}
             />
           ))}
@@ -212,6 +229,12 @@ export async function MonthAcrossScreen({ month, today }: { month?: string; toda
           : collapsed
             ? t("month.across.measuresNothingCount", { done: doneTasks, total: leaves.length })
             : t("month.across.measuresNothing");
+    } else if (coming) {
+      // A month not yet lived has reached nothing: it says its plan alone.
+      meta =
+        goal.line.planned === null
+          ? t("month.across.comingNothingPlanned", { month: thisName })
+          : t.rich("month.across.comingPlanned", { planned: say(goal.line.planned), month: thisName, ...fig });
     } else if (goal.line.planned === null) {
       meta = t(goal.items.length === 0 ? "month.across.nothingPlanned" : "month.across.noAmount", {
         month: thisName,
@@ -245,7 +268,7 @@ export async function MonthAcrossScreen({ month, today }: { month?: string; toda
               </Flex>
             </h2>
           </Text>
-          {goal.line ? (
+          {goal.line && !coming ? (
             <Flex align="baseline" gap="2">
               <Figure value={goal.line.reached} unit={unit ?? undefined} bare={goal.line.planned !== null} />
               {goal.line.planned !== null ? (
@@ -444,6 +467,23 @@ export async function MonthAcrossScreen({ month, today }: { month?: string; toda
           </Face>
         }
       />
+      {nothingOpen ? null : (
+        <Flex align="baseline" gap="3" wrap="wrap">
+          <Text as="span" variant="meta">
+            {t("month.across.weeks.label")}
+          </Text>
+          {mondaysTouching(across.month).map((monday) => (
+            <TextLink
+              key={monday}
+              nowrap
+              href={weekHref(monday, thisMonday)}
+              aria-label={t("month.across.weeks.link", { day: civilDayMonthShort(monday) })}
+            >
+              {civilDayMonthShort(monday)}
+            </TextLink>
+          ))}
+        </Flex>
+      )}
       {nothingOpen && across.view !== "this" ? (
         <Text as="p" variant="sentence">
           {t(coming ? "month.across.comingEmpty" : "month.across.pastEmpty", { month: thisName })}

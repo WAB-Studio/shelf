@@ -14,11 +14,14 @@ import styles from "./screen-header.module.css";
 export function ScreenHeader({
   title,
   meta,
+  metaWraps,
   actions,
   back,
 }: {
   title: string;
   meta?: ReactNode;
+  // The datum may take several lines: it wraps instead of holding one line.
+  metaWraps?: boolean;
   actions?: ReactNode;
   back?: { href: string; label: string };
 }) {
@@ -39,7 +42,9 @@ export function ScreenHeader({
             <Heading size="5" className={styles.title}>
               {title}
             </Heading>
-            {meta && <span className={styles.meta}>{meta}</span>}
+            {meta && (
+              <div className={metaWraps ? `${styles.meta} ${styles.metaWraps}` : styles.meta}>{meta}</div>
+            )}
           </div>
         </Flex>
         {actions && (

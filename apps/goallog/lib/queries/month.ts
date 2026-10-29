@@ -30,7 +30,7 @@ import {
   type GoalRow,
   type TaskRow,
 } from "@/lib/queries/goal";
-import { toCadence, toDeclaredFact } from "@/lib/queries/rows";
+import { livedThrough, toCadence, toDeclaredFact } from "@/lib/queries/rows";
 import { getPerson, withGoalsDb, withReadingDb, type Transaction } from "@/lib/session";
 import { dayBefore } from "@/lib/day/weeks";
 import { civilDateInZone, TIME_ZONE, todayInZone, weekOf } from "@/lib/zone";
@@ -42,6 +42,7 @@ export type MonthAcrossGoal = {
   // Null when the goal measures nothing: its tasks draw with no amount.
   line: MonthLine | null;
   items: MonthAcrossItem[];
+  // False for a goal archived since: a past month still draws it, and marks none of it (RP-143).
   open: boolean;
   // What the goal's tasks are placed from; the task sheet reads their plan month off it.
   // A goal that holds goals has no rhythm and no budgets of its own (RP-80).
@@ -140,10 +141,10 @@ function looseHabit({ id, name, daysDone, row, byWeek }: LooseRow, month: string
 
 async function queryRows(tx: Transaction, reading: Reading, today: string): Promise<Row[]> {
   const { month, until, lastDay, openAfter, view } = reading;
-  // A closed month keeps a goal archived since; the current and coming ones read none that is archived.
+  // A closed month keeps a goal archived on its last day or since; the current and coming ones read none that is archived.
   const archived = (alias: "g" | "a") =>
     view === "past"
-      ? sql`(${sql.raw(alias)}.archived_at is null or (${sql.raw(alias)}.archived_at at time zone ${TIME_ZONE})::date > ${lastDay}::date)`
+      ? livedThrough(alias, lastDay)
       : sql`${sql.raw(alias)}.archived_at is null`;
   const archivedG = archived("g");
   const archivedA = archived("a");
@@ -378,7 +379,7 @@ export async function loadMonthAcross(
       unit: sum ? sum.unit : unit,
       line: sum ? lineOfSum(sum, month, today, plan) : line,
       items,
-      open: true,
+      open: row.goal.archived_at === null,
       plan,
       ...placeOf(tree, id),
       holdsGoals: sum !== undefined,

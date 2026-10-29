@@ -163,7 +163,7 @@ test("two weeks out reads «dentro de 2 semanas» and, with nothing dated, the e
   });
 });
 
-test("the last week of the limit month has no ›, past the goal's end it asks nothing, and the week after it lands on /semana (RP-142)", async ({
+test("the last week of the limit month has no ›, past the goal's end it asks nothing, and the week after it lands back on it (RP-142)", async ({
   browser,
   baseURL,
   db,
@@ -176,6 +176,45 @@ test("the last week of the limit month has no ›, past the goal's end it asks n
     await expect(page.getByText("Ninguna meta pide algo esta semana.")).toBeVisible();
     await expect(page.getByRole("link", { name: "Crear una meta" })).toHaveCount(0);
     await page.goto(`/semana?semana=${shift(lastMonday, 7)}`);
-    await expect(page).toHaveURL(/\/semana$/);
+    await expect(page).toHaveURL(new RegExp(`/semana\\?semana=${lastMonday}$`));
   });
 });
+
+test("this week is no coming week: its marks act, it lists no «con día» and offers no «Darle día» (RP-142)", async ({
+  browser,
+  baseURL,
+  db,
+  person,
+}) => {
+  await withComing(browser, baseURL, db, person, 390, async (page) => {
+    await page.goto("/semana");
+    await expect(page.getByText("esta semana", { exact: true }).locator("visible=true")).toHaveCount(1);
+    await expect(giveDay(page, DAYLESS)).toHaveCount(0);
+    await expect(page.getByText("con día", { exact: true })).toHaveCount(0);
+  });
+});
+
+for (const width of [390, 1440]) {
+  test(`at ${width} a coming week tallies nothing: no «hechos» row, and a weekly habit says its cadence alone`, async ({
+    browser,
+    baseURL,
+    db,
+    person,
+  }) => {
+    await withComing(browser, baseURL, db, person, width, async (page) => {
+      const [goal] = await db<{ id: string }[]>`select id from goals.goals where user_id = ${person.id} and name = ${GOAL}`;
+      await db`
+        insert into goals.commitments (user_id, goal_id, name, cadence_kind, cadence_n, satisfaction, created_at)
+        values (${person.id}, ${goal.id}, 'Nadar', 'times_per_week', 3, 'tap', ${noonOf(shift(today, -10))})
+      `;
+      await page.goto(`/semana?semana=${nextMonday}`);
+      await expect(page.getByText("3 veces por semana", { exact: true }).locator("visible=true")).toHaveCount(1);
+      await expect(page.getByText(/de 3 es[at]a semana/)).toHaveCount(0);
+      await expect(page.getByText(/^hechos/)).toHaveCount(0);
+      // This week still tallies.
+      await page.goto("/semana");
+      await expect(page.getByText(/de 3 esta semana/).locator("visible=true")).toHaveCount(1);
+      await expect(page.getByText(/^hechos/).locator("visible=true")).toHaveCount(1);
+    });
+  });
+}

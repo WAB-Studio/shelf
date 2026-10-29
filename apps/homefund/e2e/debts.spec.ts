@@ -2733,9 +2733,9 @@ test.describe("a card in credit with a dollar purchase, and the next payment", (
         const line = lineOf(page, card);
         await expect(line).toHaveText(FULL_LINE);
 
-        // «A favor $ 8.000» is the accent's and the rest is the normal ink.
+        // «A favor $ 8.000 ·» is the accent's (the dot closes its figure) and the rest is the normal ink.
         const accent = await accentInk(page);
-        const holders = await holdersOf(line, "A favor $ 8.000");
+        const holders = await holdersOf(line, "A favor $ 8.000 ·");
         expect(holders).toHaveLength(1);
         expect(holders[0].ink).toBe(accent);
         for (const rest of [/Debes/, /por facturar/]) {
@@ -2840,7 +2840,7 @@ test.describe("a card in credit with a dollar purchase, and the next payment", (
 
           // «A favor» in the accent, «Debes» bold in the normal ink, the parenthesis muted.
           const accent = await accentInk(page);
-          const credit = await holdersOf(balance, "A favor $ 8.000");
+          const credit = await holdersOf(balance, "A favor $ 8.000 ·");
           expect(credit).toHaveLength(1);
           expect(credit[0].ink).toBe(accent);
           const owedInks = await inkOfText(balance, /Debes/);
@@ -2878,10 +2878,9 @@ test.describe("a card in credit with a dollar purchase, and the next payment", (
         await checkDialog();
       });
 
-      test("Q9: the detail's Saldo tile reads the row's whole line, and a card that only owes dollars reads «Debes»", async ({
+      test("Q9: the detail's header and Saldo tile read the row's whole line, and a card that only owes dollars reads «Debes»", async ({
         page,
       }) => {
-        test.skip(laptop, "the tile reads the same at every width");
         const credit: MemberCard = {
           id: randomUUID(),
           name: `Tarjeta Q9 saldo a favor ${bandLabel} ${stamp}`,
@@ -2894,6 +2893,10 @@ test.describe("a card in credit with a dollar purchase, and the next payment", (
           usd: { cents: 2_000, estimateCents: 8_400_000 },
         };
         await seedFund([credit, dollars]);
+        const q9Line = /^A\sfavor\s\$\s8\.000\s·\sDebes\sUS\$\s25([.,]00)?\s\(≈\s\$\s105\.000\spor\sfacturar\)$/;
+        // The datum ScreenHeader draws beside the card's name.
+        const headerMeta = (name: string) =>
+          page.getByRole("heading", { name, exact: true }).locator("xpath=following-sibling::*[1]");
         const fontSize = (el: Locator) =>
           el.evaluate((node) => parseFloat(getComputedStyle(node).fontSize));
 
@@ -2904,9 +2907,25 @@ test.describe("a card in credit with a dollar purchase, and the next payment", (
         const label = main.getByText(debts.tableBalance, { exact: true }).first();
         const tile = label.locator("xpath=following-sibling::*[1]");
         await expect(tile).toHaveText(
-          /^A\sfavor\s\$\s8\.000\s·\sDebes\sUS\$\s25([.,]00)?\s\(≈\s\$\s105\.000\spor\sfacturar\)$/,
+          q9Line,
         );
         expect(await fontSize(tile)).toBeGreaterThanOrEqual(20);
+        // The header under the card's name reads the same whole line.
+        const header = headerMeta(credit.name);
+        await expect(header).toHaveText(
+          q9Line,
+        );
+        // It wraps between its words rather than pushing the page sideways, and «A favor» keeps the accent.
+        const width = page.viewportSize()?.width ?? 0;
+        expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+        expect((await header.boundingBox())?.width ?? Infinity).toBeLessThanOrEqual(width);
+        for (const ink of await inkOfText(header, /A\sfavor/)) expect(ink).toBe(accent);
+        // The dot closes the credit's figure: a wrapped line ends on it and the next starts on «Debes».
+        for (const scope of [tile, header]) {
+          const dots = await inkOfText(scope, /·/);
+          expect(dots).toHaveLength(1);
+          expect(dots[0]).toBe(accent);
+        }
         const creditInks = await inkOfText(tile, /A\sfavor/);
         expect(creditInks.length).toBeGreaterThan(0);
         for (const ink of creditInks) expect(ink).toBe(accent);
@@ -2922,6 +2941,9 @@ test.describe("a card in credit with a dollar purchase, and the next payment", (
         const owesLabel = page.getByRole("main").getByText(debts.tableBalance, { exact: true }).first();
         const owes = owesLabel.locator("xpath=following-sibling::*[1]");
         await expect(owes).toHaveText(/^Debes\sUS\$\s20([.,]00)?$/);
+        await expect(
+          headerMeta(dollars.name),
+        ).toHaveText(/^Debes\sUS\$\s20([.,]00)?$/);
         expect(await inkOf(owes)).not.toBe(accent);
         expect(await fontSize(owes)).toBeGreaterThanOrEqual(20);
       });

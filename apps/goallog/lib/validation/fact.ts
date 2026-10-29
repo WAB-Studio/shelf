@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
+import { addDaysToCivilDate, civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
 
 import { civilDate } from "./civil-date";
 
@@ -11,15 +11,9 @@ export const PAST_DAY_LIMIT = 7;
 // The earliest civil day a fact may name, given today's. Goes through `Date`
 // and back rather than subtracting on the string: a civil date crosses
 // months and years, and a plain digit subtraction does not.
-function earliestPastDay(today: string): string {
+export function earliestPastDay(today: string): string {
   const date = civilDateToDate(today);
   date.setUTCDate(date.getUTCDate() - PAST_DAY_LIMIT);
-  return dateToCivilDate(date);
-}
-
-function shiftDay(day: string, days: number): string {
-  const date = civilDateToDate(day);
-  date.setUTCDate(date.getUTCDate() + days);
   return dateToCivilDate(date);
 }
 
@@ -34,7 +28,7 @@ function requireDayInRange(data: { day?: string | null; onHoy?: boolean }, ctx: 
     ctx.addIssue({ code: "custom", message: "day.errors.dayFuture", path: ["day"] });
     return;
   }
-  if (data.onHoy && data.day < shiftDay(today, -1)) {
+  if (data.onHoy && data.day < addDaysToCivilDate(today, -1)) {
     ctx.addIssue({ code: "custom", message: "day.errors.dayStale", path: ["day"] });
     return;
   }

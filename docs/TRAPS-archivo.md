@@ -258,3 +258,12 @@ _Archived 2026-10-18: merged into «Reading the design canvas spends 30k tokens 
 _Archived 2026-10-22: M6 repaired the chain. Snapshots 0053–0057 carry 0053's 24 foreign-key indexes; `drizzle-kit check` passes and `db:generate` writes nothing._
 - `npm run db:generate` fails on `integracion`: snapshots 0053 and 0054 both name 0052's id as `prevId`. A migration's own proof «generate writes nothing» can only be taken with the chain straightened by hand, then reverted.
 - Do: fix the chain in a module of its own before relying on `db:generate`. Until then, say in a report that the proof ran on a straightened chain.
+
+## The e2e setup purged the leader alone, so a dead run left the member's rows for every later run
+
+- `apps/homefund/e2e/global-setup.ts` purged `userId` and never `memberUserId`. A run that died before its own cleanup on
+  2026-10-23 left three personal accounts owned by lane 2's member («Cuenta de la bandeja», «Nómina», «Visa Oro»).
+- Every spec that reads what the member sees read them as the fund's: 12 `writable-accounts.spec.ts` tests offered one
+  account too many, and `debts.spec.ts` «Deuda total» read $ 1.290.000 where it seeds $ 40.000. Red on every lane 2
+  run from oleada-7 on, green on CI, so it looked like lane state.
+- Purge both identities at setup and teardown. Measured 2026-10-28: 170/0 on `debts` + `writable-accounts` after.

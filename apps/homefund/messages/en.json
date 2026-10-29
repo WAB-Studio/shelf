@@ -1444,9 +1444,13 @@
     "reviewed": "Reviewed ({count})",
     "empty": "Nothing stands out in {month}.",
     "allDone": "You reviewed {month}.",
+    "nothingNoted": "You noted nothing in {month}.",
     "errors": {
-      "cannotMark": "You can't mark this movement."
+      "cannotMark": "You can't mark this movement.",
+      "cannotUndo": "You can't undo this mark."
     },
-    "back": "Back to Reports"
+    "back": "Back to Reports",
+    "readerOnly": "Whoever manages {account} fixes it.",
+    "undo": "Undo"
   }
 }

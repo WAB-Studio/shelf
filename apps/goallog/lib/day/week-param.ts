@@ -7,7 +7,8 @@ export type WeekParam =
   | { kind: "redirect" };
 
 // `?semana=` names another week by any of its days; a malformed value, an
-// array or a week past `lastMonday` leaves the screen for `/semana` itself.
+// array leaves the screen for `/semana` itself; a week past `lastMonday` is
+// "redirect" too, and the screen sends it to that last week (RP-142).
 // Civil dates compare as strings, and the Monday comes from `weekOf`, never
 // from `Date`. `lastMonday` defaults to this week's: no coming week.
 export function parseWeekParam(

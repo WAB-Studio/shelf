@@ -113,7 +113,7 @@ export { TablePagination } from "./table-pagination";
 
 export { FilterBar, FilterSelect, FilterDate, FilterChip } from "./filter-bar";
 
-export { Panel, PanelRow, PanelButton, type PanelCell } from "./panel";
+export { Panel, PanelBlock, PanelRow, PanelButton, type PanelCell } from "./panel";
 
 export { StatTiles } from "./stat-tiles";
 

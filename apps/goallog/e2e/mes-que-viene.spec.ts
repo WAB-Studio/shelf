@@ -2,8 +2,12 @@ import type { Browser, Page } from "@playwright/test";
 import type postgres from "postgres";
 
 import { test, expect, type Person } from "./fixtures";
+import { closedMonthMarkDay } from "@/lib/plan/closed-month-marks";
+import { mondaysTouching } from "@/lib/day/habit-weeks";
+import { weekHref } from "@/lib/day/week-href";
 import { monthOf, nextMonth, previousMonth } from "@/lib/plan/months";
-import { todayInZone } from "@/lib/zone";
+import { civilDayMonthShort, todayInZone, weekOf } from "@/lib/zone";
+import { noOverflow } from "./mover-nota-ayuda";
 
 // RP-142 on «Mes»: ‹ › step a month at a time, back to the month the first
 // goal was opened and forward to the last month of the furthest goal's span.
@@ -105,7 +109,10 @@ for (const width of [390, 1280]) {
       await expect(prev(page)).toHaveAttribute("href", "/mes");
 
       const english = page.locator("section", { has: page.getByRole("heading", { name: `Inglés ${stamp}` }) });
-      expect((await english.innerText()).replace(/\s+/g, " ")).toContain("de 5 h");
+      // A month not yet lived says its plan alone, never a reached figure that can only be zero.
+      const card = (await english.innerText()).replace(/\s+/g, " ");
+      expect(card).toContain(`Plan de 5 h para ${NAMES[Number(comingMonth.slice(5, 7)) - 1]}`);
+      expect(card).not.toMatch(/\b0 min\b/);
       await expect(page.getByRole("heading", { name: `Mudanza ${stamp}` })).toHaveCount(0);
 
       await page.getByRole("button", { name: `Marcar hecha: Clase ${stamp}` }).click();
@@ -128,7 +135,7 @@ test("«Darle día» on a coming month proposes the month's first day (RP-142, R
   });
 });
 
-test("‹ leads to last month, the first one: its tasks as they stood, nothing to mark, no further ‹ (RP-142)", async ({
+test("‹ leads to last month, the first one: its tasks as they stood, marked only within a fact's reach, no further ‹ (RP-142, RP-143)", async ({
   browser,
   baseURL,
   db,
@@ -146,11 +153,13 @@ test("‹ leads to last month, the first one: its tasks as they stood, nothing t
     const english = page.locator("section", { has: page.getByRole("heading", { name: `Inglés ${stamp}` }) });
     await expect(english.getByText(`Hecha ${stamp}`, { exact: true })).toBeVisible();
     await expect(english.getByText("hecha", { exact: true })).toBeVisible();
-    await expect(page.getByRole("button", { name: /^(Marcar hecha|Deshacer): / })).toHaveCount(0);
+    const marks = page.getByRole("button", { name: /^(Marcar hecha|Deshacer): / });
+    if (closedMonthMarkDay(lastMonth, today) === null) await expect(marks).toHaveCount(0);
+    else await expect(page.getByRole("button", { name: `Deshacer: Hecha ${stamp}` })).toBeVisible();
   });
 });
 
-test("the last month of the span has no ›; past it, before the first, or malformed lands on /mes (RP-142)", async ({
+test("the last month of the span has no ›; past it lands on it, before the first on the first, malformed on /mes (RP-142)", async ({
   browser,
   baseURL,
   db,
@@ -160,9 +169,41 @@ test("the last month of the span has no ›; past it, before the first, or malfo
     await page.goto(`/mes?mes=${key(limitMonth)}`);
     await expect(page.getByRole("heading", { level: 1 })).toHaveText(title(limitMonth));
     await expect(next(page)).toHaveCount(0);
-    for (const param of [key(nextMonth(limitMonth)), key(previousMonth(lastMonth)), "nada"]) {
+    const lands: [string, RegExp][] = [
+      [key(nextMonth(limitMonth)), new RegExp(`/mes\\?mes=${key(limitMonth)}$`)],
+      [key(previousMonth(lastMonth)), new RegExp(`/mes\\?mes=${key(lastMonth)}$`)],
+      ["nada", /\/mes$/],
+    ];
+    for (const [param, url] of lands) {
       await page.goto(`/mes?mes=${param}`);
-      await expect(page).toHaveURL(/\/mes$/);
+      await expect(page).toHaveURL(url);
     }
+  });
+});
+
+test("«Semanas» under the month's header opens each week it touches; this week is /semana (RP-145)", async ({
+  browser,
+  baseURL,
+  db,
+  person,
+}) => {
+  await withMonths(browser, baseURL, db, person, 390, async (page) => {
+    await page.goto("/mes");
+    const mondays = mondaysTouching(thisMonth);
+    const links = page.getByRole("link", { name: /^Semana del / });
+    await expect(links).toHaveCount(mondays.length);
+    await expect(page.getByText("Semanas", { exact: true })).toBeVisible();
+    const thisMonday = weekOf(todayInZone())[0];
+    for (const [i, monday] of mondays.entries()) {
+      await expect(links.nth(i)).toHaveAccessibleName(`Semana del ${civilDayMonthShort(monday)}`);
+      await expect(links.nth(i)).toHaveAttribute("href", weekHref(monday, thisMonday));
+    }
+    await page.goto(`/mes?mes=${key(comingMonth)}`);
+    // Its second week: the first may still be this one.
+    const second = mondaysTouching(comingMonth)[1];
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText(title(comingMonth));
+    await noOverflow(page, 390);
+    await page.getByRole("link", { name: `Semana del ${civilDayMonthShort(second)}`, exact: true }).click();
+    await expect(page).toHaveURL(new RegExp(`/semana\\?semana=${second}$`));
   });
 });

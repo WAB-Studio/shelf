@@ -1409,6 +1409,11 @@ Three answers of the user, 2026-10-09.
 - **A goal's note is the task note's sheet with other words**: placeholder «Lo que quieras recordar de esta meta», cap 100 000,
   the count from 90 000. Emptying it and saving removes it; it is never stored empty. It sits between the end line and «Archivar
   esta meta», folded; with no note, «Agregar una nota» (outline, full width) stands in its place.
+- **«Mes» lists its weeks under the header** (RP-145): «Semanas» in meta ink, then one `TextLink` per week the month touches,
+  its Monday as «6 oct», wrapping on the phone; the accessible name is «Semana del 6 oct». Nothing draws it with no goal open.
+- **«Abrir en Claude» sits under the goal's note** (RP-144): outline, full width, a link that opens claude.ai in a new tab,
+  with one meta line under it: «Abre un chat nuevo en claude.ai con tu plan y lo que hiciste estos días ya escrito.» An
+  archived or ended goal draws neither.
 - **A goal that holds goals has no rhythm of its own.** «El plan» replaces «Horas al mes», the chips and «Armar el plan» with
   «Este plan no tiene ritmo propio. Cada mes suma el de sus metas.» and one row per goal inside; its own tasks stay, by month.
 - **The report and the paper group by general goal**, the loose goal as its own group. Superseding `JerarquiaInforme` where it
@@ -1955,6 +1960,6 @@ Canvas «Bitácora de metas», page «Armazón», from y=16500. 360, two states.
 - «Mes» steps both ways (O7-Q6 b): past months read as they were lived, as Semana's past weeks do.
 - How far forward (O7-Q7 a): to the last month of the furthest open goal's span; a goal with no end counts twelve months.
   A coming week allows only «Darle día»; a coming month's tasks mark done in one tap as this month's.
-- **Decided by the user 2026-10-28, on oleada-7's critic** (not built yet; opens the next free RP when planned): a past
+- **Decided by the user 2026-10-28, on oleada-7's critic** (RP-143): a past
   month is read-only everywhere, the goal's own month screen included, once seven days have passed since it closed;
   until then its tasks still mark and unmark, for a task done on the 31st and logged on the 2nd.

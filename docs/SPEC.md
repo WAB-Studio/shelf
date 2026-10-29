@@ -109,6 +109,9 @@ accounting exports, native apps. None of this gets built or left
 - [x] **RF-132** — A movement may name the movement that caused it. A caused charge is shown with its cause and is removed with it.
 - [ ] **RF-133** — A movement whose counterparty is not known is recorded with the side that is known and waits for review; it counts in every balance, and a person completes it later by naming the other account.
 - [x] **RF-162** — A movement dated before the opening day of an account it names is refused, wherever it comes from (a form, the import, the nightly recurring run, a connected AI's import), with «La fecha es anterior a la apertura de la cuenta. Cambia la fecha o la apertura de la cuenta.»; an account's opening day cannot move later than a movement it already has. Movements already stored before their account's opening stay as they are. Decided by the user 2026-10-22 (Q5 a, Q11 a, Q12 a, Q13 b).
+- [ ] **RF-163** — An item marked «Está bien» in «Revisar el mes» can be taken back: under «Revisados» it offers «Deshacer», which drops its mark, so it waits again and counts again on Inicio's line. Only a person who may write the movement takes the mark back. Decided by the user 2026-10-28.
+- [ ] **RF-164** — An edit that changes a movement's amount makes the amount the person's own: «Revisar el mes» no longer lists it as an amount quick entry read from words. Decided by the user 2026-10-28.
+- [ ] **RF-165** — An edit that changes a movement's amount also undoes «Está bien» on it for «Muy por encima de lo usual» and «Dos iguales»: the item waits again in «Revisar el mes». A twin pair waits again when either of its movements changes amount. Decided by the user 2026-10-28.
 
 #### Categories
 

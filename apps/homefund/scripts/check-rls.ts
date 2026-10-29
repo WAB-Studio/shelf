@@ -5336,6 +5336,7 @@ const DELETE_GRANTS: string[] = [
   "recurring_rules",
   "savings_goals",
   "transaction_labels",
+  "transaction_reviews",
   "transaction_sources",
   "transaction_splits",
   "transactions",
@@ -13403,11 +13404,11 @@ async function checkTransactionReviews() {
     stranger: "o7m2-5. a user of another fund reads none of the fund's marks and cannot mark its movements: 42501",
     oncePerRule: "o7m2-6. a second 'twin' on one movement is 23505; a 'from_words' on it saves",
     ruleClosed: "o7m2-7. the four rules save and any other rule is 23514",
-    final: "o7m2-8. the writer can neither update nor delete a mark: 0 rows or 42501, and the mark stays as stored",
+    final: "o7m2-8. the writer can update no mark; a fund member who only reads the movement deletes none; the writer's delete takes it (RF-163)",
     markedBy: "o7m2-9. naming marked_by is refused by the grant, even naming oneself; the stored one is auth.uid() at now()",
     cascade: "o7m2-10. deleting the movement deletes its marks",
     audit: "o7m2-11. a mark writes one INSERT row to audit_log naming transaction_reviews, the mark and its writer",
-    grants: "o7m2-12. anon and service_role hold no privilege on transaction_reviews; authenticated holds select and insert (transaction_id, rule) alone",
+    grants: "o7m2-12. anon and service_role hold no privilege on transaction_reviews; authenticated holds select, insert (transaction_id, rule) and delete alone",
     column: "o7m2-13. amount_from_words is false when the insert omits it, true when it names true, and no update can name it",
     index: "o7m2-14. transaction_reviews carries an index led by marked_by",
     tail: "o7m2-15. the rolled-back o7m2 transactions leave no fixture behind",
@@ -13533,13 +13534,20 @@ async function checkTransactionReviews() {
     const rule = await outcome((sp) => sp`update transaction_reviews set rule = 'from_words' where id = ${id} returning id`);
     const when = await outcome((sp) =>
       sp`update transaction_reviews set marked_at = now() - interval '1 day' where id = ${id} returning id`);
-    const gone = await outcome((sp) => sp`delete from transaction_reviews where id = ${id} returning id`);
+    await tx`reset role`;
+    await enterUserContext(tx, f.leader);
+    const readerGone = await outcome((sp) => sp`delete from transaction_reviews where id = ${id} returning id`);
+    await tx`reset role`;
+    const kept = await o7m2Stored(tx, f.personalMovement);
+    await enterUserContext(tx, f.member);
+    const taken = (await tx`delete from transaction_reviews where id = ${id} returning id`).length;
     await tx`reset role`;
     const after = await o7m2Stored(tx, f.personalMovement);
+    const unchanged = kept.length === 1 && JSON.stringify(kept[0]) === JSON.stringify(before);
     return [{
-      ok: rule.ok && when.ok && gone.ok && after.length === 1 && JSON.stringify(after[0]) === JSON.stringify(before),
-      detail: `as the writer: update rule ${rule.shown}, update marked_at ${when.shown}, delete ${gone.shown}; ` +
-        `after: ${after.length} mark, ${after.length === 1 && JSON.stringify(after[0]) === JSON.stringify(before) ? "unchanged" : `now ${JSON.stringify(after)}`}`,
+      ok: rule.ok && when.ok && readerGone.ok && unchanged && taken === 1 && after.length === 0,
+      detail: `as the writer: update rule ${rule.shown}, update marked_at ${when.shown}; as a reader: delete ${readerGone.shown}, ` +
+        `mark ${unchanged ? "unchanged" : `now ${JSON.stringify(kept)}`}; the writer's delete took ${taken}, ${after.length} left`,
     }];
   });
 
@@ -13630,7 +13638,7 @@ async function checkTransactionReviews() {
     const insertColumns = insertable.map((c) => c.column_name).join(",");
     return [{
       ok: held.length === 0 && driven.every((entry) => entry.endsWith(" 42501")) && mine.select_all && !mine.table_insert &&
-        !mine.any_update && !mine.del && !mine.trunc && insertColumns === "rule,transaction_id",
+        !mine.any_update && mine.del && !mine.trunc && insertColumns === "rule,transaction_id",
       detail: `anon/service_role hold [${held.map((h) => `${h.role} ${h.privilege}`).join(", ")}]; ${driven.join(", ")}; ` +
         `authenticated: select ${mine.select_all}, table insert ${mine.table_insert}, insert columns [${insertColumns}], ` +
         `any update ${mine.any_update}, delete ${mine.del}, truncate ${mine.trunc}`,

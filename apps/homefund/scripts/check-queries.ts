@@ -29,7 +29,7 @@ import {
   listAccountReconciliations,
   reconcileAccount,
 } from "@/db/queries/account-reconciliations";
-import { getMonthReview, getMonthReviewPending, markReviewed } from "@/db/queries/month-review";
+import { getMonthReview, getMonthReviewPending, markReviewed, unmarkReviewed, type ReviewItem } from "@/db/queries/month-review";
 import {
   getAccountStatementHistory,
   listAccountStatements,
@@ -4261,6 +4261,7 @@ async function main(): Promise<void> {
   await detailPocketToBillSuite();
   await o7m3MonthReviewSuite();
   await o7m3RuleEdgesSuite();
+  await o8m5ReviewSurvivorsSuite();
 }
 
 // A member recorded without a login is someone in the fund: a leader whose fund holds one is not alone, so an
@@ -13807,42 +13808,29 @@ async function o7m11bSurvivorsSuite(): Promise<void> {
   const settledId = settled.settled ? settled.transactionId : null;
   if (settledId) track("transactions", settledId);
   const payerClaims = JSON.stringify({ sub: payer.id, role: "authenticated", aud: "authenticated" });
-  const [secondPayment] = settledId
-    ? await fixtureSql.begin(async (tx) => {
-        await tx`select set_config('request.jwt.claims', ${payerClaims}, true)`;
-        return tx<{ id: string }[]>`
-          insert into planned_payments (from_account_id, amount_cents, due_date, description, status, settled_transaction_id)
-          values (${payerBank}, 123400, ${shiftDate(today, -1)}, ${`Harness o7m11b segundo pago ${tag}`}, 'done', ${settledId})
-          returning id`;
-      })
-    : [];
-  if (secondPayment) track("planned_payments", secondPayment.id);
-  const readOrError = async <T>(run: () => Promise<T>): Promise<{ value: T | null; error: string }> => {
-    try {
-      return { value: await asUser(payer, run), error: "" };
-    } catch (error) {
-      return { value: null, error: rootMessage(error) };
-    }
-  };
-  const doubleListed = await readOrError(() => listTransactions({}, { limit: 20 }));
-  const doubleById = settledId ? await readOrError(() => getTransactionById(settledId)) : { value: null, error: "no movement" };
-  const linkedRows = (doubleListed.value ?? []).filter((row) => row.id === settledId);
-  const both = new Set([plannedPaymentId, secondPayment?.id]);
-  const listedName = linkedRows[0]?.settledPlannedPayment?.id;
+  // One movement settles one payment (0073): a second payment naming it is refused, so no read meets two.
+  const secondPayment = settledId
+    ? await fixtureSql
+        .begin(async (tx) => {
+          await tx`select set_config('request.jwt.claims', ${payerClaims}, true)`;
+          return tx<{ id: string }[]>`
+            insert into planned_payments (from_account_id, amount_cents, due_date, description, status, settled_transaction_id)
+            values (${payerBank}, 123400, ${shiftDate(today, -1)}, ${`Harness o7m11b segundo pago ${tag}`}, 'done', ${settledId})
+            returning id`;
+        })
+        .then(
+          async (rows) => {
+            await fixtureSql`delete from planned_payments where id = ${rows[0].id}`;
+            return "stored";
+          },
+          (error: unknown) => pgErrorCode(error) ?? rootMessage(error),
+        )
+    : "no movement";
   assert(
-    next("X3: a movement two planned payments point at lists once and reads by id, both naming the same one of the two payments"),
-    secondPayment !== undefined &&
-      doubleListed.error === "" &&
-      doubleById.error === "" &&
-      linkedRows.length === 1 &&
-      listedName !== undefined &&
-      both.has(listedName) &&
-      doubleById.value?.settledPlannedPayment?.id === listedName,
-    `second payment ${show(secondPayment)}; list ${doubleListed.error || `${linkedRows.length} rows naming ${show(listedName)}`}; by id ${doubleById.error || show(doubleById.value?.settledPlannedPayment)}`,
+    next("X3: a second planned payment settled by the movement one already settles is refused by the unique index"),
+    secondPayment === "23505",
+    `second payment ${secondPayment}`,
   );
-  // Dropped here: the purge deletes the movement it points at, and the scope trigger would hand the unlinked row to
-  // whoever deleted it, which then blocks that identity's own drop.
-  if (secondPayment) await fixtureSql`delete from planned_payments where id = ${secondPayment.id}`;
 
   // ---- G3, G4, G5, G7: an errored row in the members, recurring rules, categories or adjustments bucket.
   const HAS_ERRORS = "data.import.errors.hasErrors";
@@ -14568,7 +14556,7 @@ async function o7m3RuleEdgesSuite(): Promise<void> {
   const nextFirst = await spend(plain, 1_200_000, day(1, 0), true);
   // A twin whose one half is also from words: two items, two movements.
   const pairA = await spend(plain, 1_300_000, day(9), true);
-  const pairB = await spend(plain, 1_300_000, day(9));
+  await spend(plain, 1_300_000, day(9));
 
   const read = await asUser(holder, () => getMonthReview(month));
   const ids = (rule: string) => read.items.filter((item) => item.rule === rule).flatMap((item) => item.transactionIds);
@@ -14628,6 +14616,167 @@ async function o7m3ReaderPendingSuite(userId: string, fellow: HarnessUser): Prom
     next("O7-M3 reader: a fellow sees the leader's from-words item as unmarkable, and their Inicio count stays where it was"),
     seen?.rule === "from_words" && seen.canMark === false && (pendingAfter?.count ?? 0) === (pendingBefore?.count ?? 0),
     `seen ${seen?.rule} canMark ${seen?.canMark}, pending ${pendingBefore?.count ?? 0} → ${pendingAfter?.count ?? 0}`,
+  );
+
+  // RF-163: «Deshacer» drops the mark for the one who may write it; a reader's delete reaches no row.
+  const reviewedOf = async () =>
+    (await getMonthReview(month)).items.find((item) =>
+      item.transactionIds.includes(transactionId) && item.rule === "from_words",
+    )?.reviewed;
+  await markReviewed({ transactionIds: [transactionId], rule: "from_words" });
+  const readerUndo = (await asUser(fellow, () => unmarkReviewed({ transactionIds: [transactionId], rule: "from_words" })))
+    ? "undone"
+    : "refused";
+  const afterReader = await reviewedOf();
+  await unmarkReviewed({ transactionIds: [transactionId], rule: "from_words" });
+  const afterHolder = await reviewedOf();
+  assert(
+    next("O8 undo: a reader's «Deshacer» is refused and leaves the mark; the holder's drops it and the item waits again"),
+    readerUndo === "refused" && afterReader === true && afterHolder === false,
+    `reader ${readerUndo}, after the reader ${afterReader}, after the holder ${afterHolder}`,
+  );
+
+  // RF-164: an edit that keeps the amount keeps the mark; one that changes it clears it.
+  const edit = (amountCents: number, description: string) =>
+    updateTransaction({
+      transactionId, fromAccountId: accountId, toAccountId: null, amountCents, occurredAt: `${month}-14`,
+      description, splits: [{ categoryId, amountCents }], labelIds: [],
+    });
+  // RF-165: the same change drops «Está bien» on «Muy por encima de lo usual» and «Dos iguales»; a count's gap is no
+  // rule an amount edit answers, so its mark stays.
+  const marksOf = async () =>
+    (await fixtureSql<{ rule: string }[]>`
+      select rule from transaction_reviews where transaction_id = ${transactionId} order by rule`).map((m) => m.rule).join(",");
+  for (const rule of ["from_words", "above_usual", "twin", "reconciliation_gap"] as const) {
+    await markReviewed({ transactionIds: [transactionId], rule });
+  }
+  await edit(2_500_000, "Harness o7m3 ajena palabras, renombrada");
+  const kept = await readColumn<boolean>("transactions", "id", transactionId, "amount_from_words");
+  const keptMarks = await marksOf();
+  await edit(2_600_000, "Harness o7m3 ajena palabras, otro monto");
+  const marks = await marksOf();
+  const cleared = await readColumn<boolean>("transactions", "id", transactionId, "amount_from_words");
+  assert(
+    next("O8 typed amount: an edit that keeps the amount keeps «read from words» and every mark; one that changes it clears the flag"),
+    String(kept) === "true" && keptMarks === "above_usual,from_words,reconciliation_gap,twin" && String(cleared) === "false",
+    `kept ${kept} with ${keptMarks}, cleared ${cleared}`,
+  );
+  assert(
+    next("O8-M11 amount edit: «read from words», «Muy por encima de lo usual» and «Dos iguales» lose their «Está bien»; a count's gap keeps its own (RF-164, RF-165)"),
+    marks === "reconciliation_gap",
+    `marks left ${marks}`,
+  );
+}
+
+// O8-M5: what o7's mutation run left alive in «Revisar el mes»: a count's adjustment beside an
+// equal movement is no twin, and a movement over the usual in two categories reports its largest split.
+async function o8m5ReviewSurvivorsSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const today = todayInBogota();
+  const month = shiftMonth(today, -1);
+  const day = (n: number, back = 1) => `${shiftMonth(today, -back)}-${String(n).padStart(2, "0")}`;
+  const holder = await createMembershipFreeUser();
+  const { accountId: bank } = await asUser(holder, () =>
+    createAccount({
+      name: `Harness o8m5 banco ${tag}`, kind: "asset", subtype: "bank", ownerUserId: holder.id, groupId: null,
+      isShared: false, institution: null, lastFour: null, settlementCurrency: "COP", amountMinor: 50_000_000, balanceOn: day(1, 9),
+    }),
+  );
+  track("accounts", bank);
+  const category = async (name: string): Promise<string> => {
+    const { categoryId } = await asUser(holder, () =>
+      createCategory({ scope: { ownerUserId: holder.id }, name: `Harness o8m5 ${name} ${tag}`, kind: "expense", parentId: null, color: "#B4542F" }),
+    );
+    track("categories", categoryId);
+    return categoryId;
+  };
+  const spend = async (splits: { categoryId: string; amountCents: number }[], occurredAt: string) => {
+    const amountCents = splits.reduce((sum, split) => sum + split.amountCents, 0);
+    const { transactionId } = await asUser(holder, () =>
+      createTransaction({
+        fromAccountId: bank, toAccountId: null, amountCents, occurredAt, description: `Harness o8m5 ${tag}`,
+        externalRef: null, splits, labelIds: [],
+      }),
+    );
+    track("transactions", transactionId);
+    return transactionId;
+  };
+
+  // A count 20.000 short books a 20.000 outflow; a 20.000 expense on the same account and day is no twin of it.
+  const plain = await category("varios");
+  await spend([{ categoryId: plain, amountCents: 2_000_000 }], day(18));
+  await asUser(holder, () =>
+    reconcileAccount({ accountId: bank, reconciledOn: day(18), realMagnitudeCents: 46_000_000, expectedDerivedCents: 48_000_000 }),
+  );
+  const booked = await fixtureSql<{ id: string }[]>`select id from transactions where from_account_id = ${bank} or to_account_id = ${bank}`;
+  for (const row of booked) track("transactions", row.id);
+  // Two categories with a usual of 100.000; one movement splits 400.000 and 500.000 between them.
+  const food = await category("mercado");
+  const home = await category("hogar");
+  for (const back of [2, 3, 4]) {
+    await spend([{ categoryId: food, amountCents: 10_000_000 }], day(5, back));
+    // A day apart from the other category's, or the pair would read as twins.
+    await spend([{ categoryId: home, amountCents: 10_000_000 }], day(6, back));
+  }
+  const both = await spend([{ categoryId: food, amountCents: 40_000_000 }, { categoryId: home, amountCents: 50_000_000 }], day(5));
+
+  const read = await asUser(holder, () => getMonthReview(month));
+  const twins = read.items.filter((item) => item.rule === "twin");
+  assert(
+    next("O8-M5 twin: a count's adjustment beside an equal expense on its day and account is no twin"),
+    twins.length === 0 && read.items.some((item) => item.rule === "reconciliation_gap"),
+    `twins ${twins.length}, gap ${read.items.some((item) => item.rule === "reconciliation_gap")}`,
+  );
+  const above = read.items.filter((item) => item.rule === "above_usual" && item.transactionIds.includes(both));
+  assert(
+    next("O8-M5 above usual: a movement over the usual in two categories is one item, read from its largest split"),
+    above.length === 1 && above[0].amountCents === 50_000_000,
+    `items ${above.length}, amount ${above[0]?.amountCents}`,
+  );
+  // A month the caller noted nothing in reads apart from one whose movements raised nothing.
+  // Three months back holds only the usual's history: movements, nothing over a usual yet.
+  const [quiet, blank] = await Promise.all([
+    asUser(holder, () => getMonthReview(shiftMonth(today, -3))),
+    asUser(holder, () => getMonthReview(shiftMonth(today, -8))),
+  ]);
+  assert(
+    next("O8-M8 noted: a month whose movements raise nothing reads noted; one with none reads not"),
+    quiet.noted === true && quiet.items.length === 0 && blank.noted === false && blank.items.length === 0,
+    `quiet ${quiet.noted} with ${quiet.items.length} items, blank ${blank.noted} with ${blank.items.length} items`,
+  );
+
+  // Two equal expenses that read differently: their twin names neither; read alike, it names them.
+  const said = async (description: string, occurredAt: string) => {
+    const { transactionId } = await asUser(holder, () =>
+      createTransaction({
+        fromAccountId: bank, toAccountId: null, amountCents: 1_700_000, occurredAt, description,
+        externalRef: null, splits: [{ categoryId: plain, amountCents: 1_700_000 }], labelIds: [], amountFromWords: true,
+      }),
+    );
+    track("transactions", transactionId);
+    return transactionId;
+  };
+  const apart = [await said(`Harness o8m9 pan ${tag}`, day(22)), await said(`Harness o8m9 leche ${tag}`, day(22))];
+  const alike = [await said(`Harness o8m9 gas ${tag}`, day(23)), await said(`Harness o8m9 gas ${tag}`, day(23))];
+  const twinOf = (items: ReviewItem[], ids: string[]) =>
+    items.find((item) => item.rule === "twin" && item.transactionIds.includes(ids[0]));
+  const named = await asUser(holder, () => getMonthReview(month));
+  assert(
+    next("O8-M9 twin description: a twin read differently names neither movement; read alike it names them"),
+    twinOf(named.items, apart)?.description === null && twinOf(named.items, alike)?.description === `Harness o8m9 gas ${tag}`,
+    `apart ${twinOf(named.items, apart)?.description}, alike ${twinOf(named.items, alike)?.description}`,
+  );
+  // «Deshacer» under one rule leaves the movement's mark under another.
+  await asUser(holder, () => markReviewed({ transactionIds: alike, rule: "twin" }));
+  await asUser(holder, () => markReviewed({ transactionIds: [alike[0]], rule: "from_words" }));
+  await asUser(holder, () => unmarkReviewed({ transactionIds: [alike[0]], rule: "from_words" }));
+  const undone = await asUser(holder, () => getMonthReview(month));
+  const words = undone.items.find((item) => item.rule === "from_words" && item.transactionIds.includes(alike[0]));
+  assert(
+    next("O8-M9 undo: «Deshacer» on a movement's from-words mark leaves its twin mark"),
+    twinOf(undone.items, alike)?.reviewed === true && words?.reviewed === false,
+    `twin ${twinOf(undone.items, alike)?.reviewed}, words ${words?.reviewed}`,
   );
 }
 

@@ -1,5 +1,5 @@
-/* The action's own height is added here by the slice that builds it, not by
-   this one. Radix's `p` prop stops at a token; it cannot express `env()`. */
+/* The phone's bottom bar keeps its own height in the flow (`bottom-nav.module.css`); this gutter
+   clears the raised action above it. Radix's `p` prop stops at a token; it cannot express `env()`. */
 .page {
   padding-bottom: calc(var(--space-6) + env(safe-area-inset-bottom, 0px));
 }

@@ -2,7 +2,7 @@ import { Banknote, CreditCard, Landmark, Plus, Wallet } from "lucide-react";
 import { hasLocale } from "next-intl";
 import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
-import { notFound } from "next/navigation";
+import { notFound, unstable_rethrow } from "next/navigation";
 
 import { WithdrawCashCard } from "@/components/cash/withdraw-dialog";
 import { WithdrawPanel } from "@/components/cash/withdraw-panel";
@@ -111,7 +111,12 @@ export default async function HomePage(props: PageProps<"/[locale]">) {
       getTransactionFormOptions(),
       resolveWithdrawalTarget(),
       listDueReminders(DUE_LIMIT),
-      getMonthReviewPending(),
+      // The review line is optional: a failed read drops the line, never Inicio.
+      getMonthReviewPending().catch((error: unknown) => {
+        unstable_rethrow(error);
+        console.error("getMonthReviewPending", error);
+        return null;
+      }),
       getTranslations("transactions"),
       getTranslations("dashboard"),
       getTranslations("accounts"),
