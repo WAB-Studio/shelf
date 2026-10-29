@@ -42,6 +42,8 @@ This file is the core every agent loads. Read the file the index names before th
 ## Working here
 
 - Ask only what the user alone can decide, whole (options, costs, pick), in the chat; work on what does not wait for it.
+- Work the whole list through in one turn. Never stop to report a step or to ask «¿sigo?»; stop only when it is done
+  or every item left waits on the user. Decided by the user 2026-10-28: «no puede ser que a cada rato pares».
 - Use the credential the user hands you. Never tell the user to rotate, revoke or replace one.
 - Work in your own lane: its worktree, its port, its `HARNESS_LANE`. Ports: homefund :300<n-1>, wordbook :310<n-1>,
   goallog :320<n-1>. Wrap every suite and dev server in `scripts/supabase-local.sh exec`.
