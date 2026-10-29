@@ -81,7 +81,7 @@ export function readScope(): E2eScope {
 
 // The claims the stamping triggers read: a fixture writes as the owner role but
 // speaks for the harness user, so `auth.uid()` resolves inside every trigger.
-export function claimsFor(userId: string): string {
+function claimsFor(userId: string): string {
   return JSON.stringify({
     sub: userId,
     role: "authenticated",
@@ -107,7 +107,7 @@ export async function asHarnessUser(
  * naming this actor, which is the column `purgeAuditTrail` reads them back by —
  * a delete run without claims stamps an actor nothing can name again.
  */
-async function asUser(
+export async function asUser(
   userId: string,
   fn: (tx: TransactionSql) => Promise<void>,
 ): Promise<void> {

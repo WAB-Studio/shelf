@@ -11,21 +11,16 @@ export function TextLink({
   size,
   weight,
   align = "center",
-  justify,
-  gap,
-  px,
-  children,
+  ...target
 }: Pick<ComponentProps<typeof Link>, "size" | "weight"> &
-  Pick<ComponentProps<typeof TapTarget>, "align" | "justify" | "gap" | "px"> & {
+  ComponentProps<typeof TapTarget> & {
     href: ComponentProps<typeof LocaleLink>["href"];
     children: ReactNode;
   }) {
   return (
     <Link asChild size={size} weight={weight}>
       <LocaleLink href={href}>
-        <TapTarget align={align} justify={justify} gap={gap} px={px}>
-          {children}
-        </TapTarget>
+        <TapTarget align={align} {...target} />
       </LocaleLink>
     </Link>
   );

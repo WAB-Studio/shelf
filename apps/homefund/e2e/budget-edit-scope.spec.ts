@@ -13,14 +13,13 @@
 import { randomUUID } from "node:crypto";
 
 import { expect, type Locator, type Page, type Route } from "@playwright/test";
-import type { TransactionSql } from "postgres";
 
 import messages from "@/messages/es.json";
 
 import { fixtureSql } from "../scripts/harness/fixtures";
 import {
   MEMBER_STORAGE_STATE,
-  claimsFor,
+  asUser,
   clearGroup,
   readScope,
   seedGroup,
@@ -77,15 +76,8 @@ const BUDGET_IDS = [ids.personalBudget, ids.heldBudget, ids.strayBudget, ids.fun
 
 let groupId = "";
 
-async function as(userId: string, fn: (tx: TransactionSql) => Promise<void>) {
-  await fixtureSql.begin(async (tx) => {
-    await tx`select set_config('request.jwt.claims', ${claimsFor(userId)}, true)`;
-    await fn(tx);
-  });
-}
-
 async function insertFundAccounts() {
-  await as(scope.userId, async (tx) => {
+  await asUser(scope.userId, async (tx) => {
     await tx`
       insert into accounts (id, group_id, is_shared, name, kind, subtype, initial_balance_cents, initial_balance_on)
       values
@@ -96,7 +88,7 @@ async function insertFundAccounts() {
 
 test.beforeAll(async () => {
   ({ groupId } = await seedGroup());
-  await as(scope.userId, async (tx) => {
+  await asUser(scope.userId, async (tx) => {
     await tx`
       insert into accounts (id, owner_user_id, name, kind, subtype, initial_balance_cents, initial_balance_on)
       values (${ids.leaderAccount}, ${scope.userId}, ${LEADER_ACCOUNT}, 'asset', 'bank', 0, '2026-01-01')`;
@@ -111,7 +103,7 @@ test.beforeAll(async () => {
     await tx`insert into labels (id, group_id, name) values (${ids.longLabel}, ${groupId}, ${LONG_LABEL})`;
   });
   await insertFundAccounts();
-  await as(scope.memberUserId, async (tx) => {
+  await asUser(scope.memberUserId, async (tx) => {
     await tx`
       insert into accounts (id, owner_user_id, name, kind, subtype, initial_balance_cents, initial_balance_on)
       values (${ids.memberAccount}, ${scope.memberUserId}, ${MEMBER_ACCOUNT}, 'asset', 'bank', 0, '2026-01-01')`;
@@ -124,7 +116,7 @@ test.beforeAll(async () => {
 
 test.beforeEach(async () => {
   await dropBudgets();
-  await as(scope.userId, async (tx) => {
+  await asUser(scope.userId, async (tx) => {
     await tx`
       insert into budgets (id, owner_user_id, category_id, period, limit_cents, threshold_pct, name)
       values (${ids.personalBudget}, ${scope.userId}, ${ids.leaderCategory}, 'monthly', 700000, 80, ${PERSONAL_BUDGET})`;
@@ -135,7 +127,7 @@ test.beforeEach(async () => {
       insert into budgets (id, group_id, category_id, period, limit_cents, threshold_pct, name)
       values (${ids.fundBudget}, ${groupId}, ${ids.fundCategory}, 'monthly', 500000, 80, ${FUND_BUDGET})`;
   });
-  await as(scope.memberUserId, async (tx) => {
+  await asUser(scope.memberUserId, async (tx) => {
     await tx`
       insert into budgets (id, owner_user_id, category_id, period, limit_cents, threshold_pct, name)
       values (${ids.memberBudget}, ${scope.memberUserId}, ${ids.memberCategory}, 'monthly', 400000, 80, ${MEMBER_BUDGET})`;
@@ -283,7 +275,7 @@ test.describe("the leader edits", () => {
   test("a personal budget saved on a fund account keeps it listed and selected", async ({ page }) => {
     // Kills: the held account dropped from the scoped list when the scope would not offer it.
     // The account joins the fund after the budget is filed on it, which the trigger allows.
-    await as(scope.userId, async (tx) => {
+    await asUser(scope.userId, async (tx) => {
       await tx`
         insert into accounts (id, owner_user_id, name, kind, subtype, initial_balance_cents, initial_balance_on)
         values (${ids.strayAccount}, ${scope.userId}, ${STRAY_ACCOUNT}, 'asset', 'bank', 0, '2026-01-01')`;

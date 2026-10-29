@@ -180,7 +180,7 @@ test("a lowercase «m» after a number asks with three choices and proposes no a
     assert.equal(interpretQuickEntry(text, ctx).amountPesos, null, `${text} proposes no amount`);
     assert.deepEqual(
       askOf(text),
-      { token, choices: [pesos * 100, pesos * 100_000, pesos * 100_000_000], bare: pesos * 100 },
+      { token, choices: [digits(pesos * 100), words(pesos * 100_000), words(pesos * 100_000_000)] },
       text,
     );
   }
@@ -190,9 +190,8 @@ test("«1,15 m» asks with whole-peso choices only, never a figure with cents", 
   assert.equal(interpretQuickEntry("1,15 m", ctx).amountPesos, null);
   assert.deepEqual(askOf("1,15 m"), {
     token: "1,15 m",
-    choices: [115_000, 115_000_000],
     // «1,15» holds centavos, so no bare figure is offered: both choices are read from words.
-    bare: null,
+    choices: [words(115_000), words(115_000_000)],
   });
 });
 
@@ -244,26 +243,19 @@ test("«mil» alone never reads as a million, nor inside a word", () => {
 // parser proposes no amount and asks, offering the bare number and the number
 // times a million, both in integer cents.
 
-// The choices as cents, and `bare` the one written in digits, so each case reads as one line.
-type Ask = { token: string; choices: number[]; bare: number | null };
+type Ask = NonNullable<ReturnType<typeof interpretQuickEntry>["ask"]>;
 function askOf(text: string): Ask | null {
-  const ask = interpretQuickEntry(text, ctx).ask;
-  if (!ask) return null;
-  // Only the first choice may be the digits as written; every other one is read from words.
-  assert.ok(ask.choices.slice(1).every((choice) => choice.fromWords), `${text}: a later choice is not from words`);
-  return {
-    token: ask.token,
-    choices: ask.choices.map((choice) => choice.cents),
-    bare: ask.choices.find((choice) => !choice.fromWords)?.cents ?? null,
-  };
+  return interpretQuickEntry(text, ctx).ask;
 }
+// A choice as the digits were written, and one read from words (RF-155).
+const digits = (cents: number) => ({ cents, fromWords: false });
+const words = (cents: number) => ({ cents, fromWords: true });
 
 test("«3 M arriendo» asks: no amount, the token as typed, two choices in cents", () => {
   assert.equal(interpretQuickEntry("3 M arriendo", ctx).amountPesos, null);
   assert.deepEqual(askOf("3 M arriendo"), {
     token: "3 M",
-    choices: [300, 300_000_000],
-    bare: 300,
+    choices: [digits(300), words(300_000_000)],
   });
 });
 
@@ -271,8 +263,7 @@ test("«5 M de cable» asks too, with its own token and choices", () => {
   assert.equal(interpretQuickEntry("5 M de cable", ctx).amountPesos, null);
   assert.deepEqual(askOf("5 M de cable"), {
     token: "5 M",
-    choices: [500, 500_000_000],
-    bare: 500,
+    choices: [digits(500), words(500_000_000)],
   });
 });
 
@@ -280,21 +271,18 @@ test("the ask sits in the middle of a message and after other words", () => {
   assert.equal(interpretQuickEntry("pagué 12 M de tubo hoy", ctx).amountPesos, null);
   assert.deepEqual(askOf("pagué 12 M de tubo hoy"), {
     token: "12 M",
-    choices: [1_200, 1_200_000_000],
-    bare: 1_200,
+    choices: [digits(1_200), words(1_200_000_000)],
   });
 });
 
 test("a decimal mantissa asks in cents without float drift", () => {
   assert.deepEqual(askOf("2,5 M cable"), {
     token: "2,5 M",
-    choices: [250, 250_000_000],
-    bare: 250,
+    choices: [digits(250), words(250_000_000)],
   });
   assert.deepEqual(askOf("0,07 M cable"), {
     token: "0,07 M",
-    choices: [7, 7_000_000],
-    bare: 7,
+    choices: [digits(7), words(7_000_000)],
   });
 });
 
@@ -302,14 +290,13 @@ test("the second choice is always the first times a million", () => {
   for (const n of [1, 2, 7, 15, 99, 250, 1500]) {
     const ask = askOf(`${n} M arriendo`);
     assert.ok(ask, `${n} M arriendo should ask`);
-    assert.equal(ask.choices[0], n * 100);
-    assert.equal(ask.choices[1], ask.choices[0] * 1_000_000);
+    assert.deepEqual(ask.choices, [digits(n * 100), words(n * 100 * 1_000_000)]);
   }
 });
 
 test("a lowercase «m» with words after it asks too", () => {
   assert.equal(stored("4 m taxi"), null);
-  assert.deepEqual(askOf("4 m taxi")?.choices, [400, 400_000, 400_000_000]);
+  assert.deepEqual(askOf("4 m taxi")?.choices, [digits(400), words(400_000), words(400_000_000)]);
 });
 
 test("the cases that read cleanly never ask", () => {

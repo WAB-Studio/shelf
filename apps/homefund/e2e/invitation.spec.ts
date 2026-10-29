@@ -13,7 +13,7 @@ import { expect, type Locator, type Page, type Route } from "@playwright/test";
 
 import { fixtureSql } from "../scripts/harness/fixtures";
 import { HARNESS_MEMBER_EMAIL } from "../scripts/harness/session";
-import { MEMBER_STORAGE_STATE, claimsFor, clearGroup, readScope, test } from "./global-setup";
+import { MEMBER_STORAGE_STATE, asUser, clearGroup, readScope, test } from "./global-setup";
 
 const scope = readScope();
 const stamp = randomUUID().slice(0, 8);
@@ -29,8 +29,7 @@ async function seedInvitation(email: string = HARNESS_MEMBER_EMAIL): Promise<voi
   await clearGroup();
   groupId = randomUUID();
   pendingId = randomUUID();
-  await fixtureSql.begin(async (tx) => {
-    await tx`select set_config('request.jwt.claims', ${claimsFor(scope.userId)}, true)`;
+  await asUser(scope.userId, async (tx) => {
     await tx`insert into groups (id, name, cash_mode) values (${groupId}, ${FUND}, 'per_member')`;
     await tx`
       insert into group_members (group_id, user_id, name, role)
@@ -44,8 +43,7 @@ async function seedInvitation(email: string = HARNESS_MEMBER_EMAIL): Promise<voi
 // The invitee already leads OTHER_FUND, alone in it or with one more member.
 async function seedInviteeFund(withCompany: boolean): Promise<void> {
   const otherId = randomUUID();
-  await fixtureSql.begin(async (tx) => {
-    await tx`select set_config('request.jwt.claims', ${claimsFor(scope.memberUserId)}, true)`;
+  await asUser(scope.memberUserId, async (tx) => {
     await tx`insert into groups (id, name, cash_mode) values (${otherId}, ${OTHER_FUND}, 'per_member')`;
     await tx`
       insert into group_members (group_id, user_id, name, role)

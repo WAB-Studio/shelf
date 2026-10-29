@@ -331,9 +331,8 @@ function QuickEntryForm({
     if (!ask) return;
     setPickedChoice(index);
     proposedAmount.current = null;
-    const choice = ask.choices.at(Number(index));
-    // A stale index from an ask the text has since replaced picks nothing.
-    if (!choice) return;
+    // The choices follow from the token alone, and a new token clears the pick: the index is always current.
+    const choice = ask.choices[Number(index)];
     const picked = amountToInput(choice.cents, accountCurrency);
     pickedAmount.current = picked;
     setWordsAmount(choice.fromWords ? picked : null);
