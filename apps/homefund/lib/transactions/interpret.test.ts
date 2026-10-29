@@ -244,10 +244,16 @@ test("«mil» alone never reads as a million, nor inside a word", () => {
 // parser proposes no amount and asks, offering the bare number and the number
 // times a million, both in integer cents.
 
-type Ask = { token: string; choices: number[] };
+// The choices as cents, and `bare` the one written in digits, so each case reads as one line.
+type Ask = { token: string; choices: number[]; bare: number | null };
 function askOf(text: string): Ask | null {
-  const result = interpretQuickEntry(text, ctx) as { ask?: Ask | null };
-  return result.ask ?? null;
+  const ask = interpretQuickEntry(text, ctx).ask;
+  if (!ask) return null;
+  return {
+    token: ask.token,
+    choices: ask.choices.map((choice) => choice.cents),
+    bare: ask.choices.find((choice) => !choice.fromWords)?.cents ?? null,
+  };
 }
 
 test("«3 M arriendo» asks: no amount, the token as typed, two choices in cents", () => {

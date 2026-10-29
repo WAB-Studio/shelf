@@ -332,9 +332,9 @@ function QuickEntryForm({
     setPickedChoice(index);
     proposedAmount.current = null;
     const choice = ask.choices[Number(index)];
-    const picked = amountToInput(choice, accountCurrency);
+    const picked = amountToInput(choice.cents, accountCurrency);
     pickedAmount.current = picked;
-    setWordsAmount(choice === ask.bare ? null : picked);
+    setWordsAmount(choice.fromWords ? picked : null);
     form.setValue("amount", picked, { shouldValidate: true });
   }
 
@@ -393,7 +393,7 @@ function QuickEntryForm({
               onValueChange={pickChoice}
               disabled={create.isPending}
             >
-              {ask.choices.map((cents, index) => (
+              {ask.choices.map(({ cents }, index) => (
                 <RadioCards.Item key={index} value={String(index)}>
                   {formatMoney(cents, accountCurrency, locale)}
                 </RadioCards.Item>
