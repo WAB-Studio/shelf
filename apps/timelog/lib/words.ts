@@ -6,6 +6,9 @@ import type { DurationWords } from "@/lib/duration";
 import { formatDuration } from "@/lib/duration";
 import { TIME_ZONE } from "@/lib/zone";
 
+// Built once: a formatter per call is a native allocation per key on «Llaves».
+const MOMENT = new Intl.DateTimeFormat("es-CO", { timeZone: TIME_ZONE, day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
+
 // The calendar words and the duration a screen reads, from the catalogue.
 export async function calendarWords() {
   const [common, time] = await Promise.all([getTranslations("common"), getTranslations("time")]);
@@ -28,7 +31,6 @@ export async function calendarWords() {
     // «26 oct»
     dayShort: (day: string) => `${Number(day.slice(8, 10))} ${monthsShort[Number(day.slice(5, 7)) - 1]}`,
     // «28 oct, 9:14 p. m.» on Bogotá's clock.
-    moment: (at: Date) =>
-      new Intl.DateTimeFormat("es-CO", { timeZone: TIME_ZONE, day: "numeric", month: "short", hour: "numeric", minute: "2-digit" }).format(at),
+    moment: (at: Date) => MOMENT.format(at),
   };
 }

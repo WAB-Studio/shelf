@@ -24,7 +24,14 @@ export async function POST(request: Request): Promise<Response> {
     return json(400, { error: "shape", issues: parsed.error.issues.map((issue) => ({ path: issue.path.join("."), message: issue.message })) });
   }
 
-  const written = await replaceDays(key, parsed.data);
+  let written: number | null;
+  try {
+    written = await replaceDays(key, parsed.data);
+  } catch (error) {
+    // The name only: a driver's message carries the statement and its parameters.
+    console.error("ingest failed:", error instanceof Error ? error.name : "unknown");
+    return json(500, { error: "server" });
+  }
   if (written === null) return json(401, { error: "key" });
 
   return json(200, { written, days: parsed.data.days.length });

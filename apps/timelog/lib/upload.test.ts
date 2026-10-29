@@ -48,3 +48,8 @@ test("between one and MAX_DAYS days", () => {
   assert.ok(parse({ device: "pc", days: days(MAX_DAYS) }).success);
   assert.equal(parse({ device: "pc", days: days(MAX_DAYS + 1) }).success, false);
 });
+
+test("a name with a control character is refused before Postgres sees it", () => {
+  const upload = { device: "PC", days: [{ day: "2026-10-28", apps: [{ app: "a\u0000b", seconds: 60 }] }] };
+  assert.equal(uploadSchema("2026-10-28").safeParse(upload).success, false);
+});

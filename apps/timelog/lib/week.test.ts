@@ -23,3 +23,9 @@ test("a week asked for outside the span lands on its nearer end; a malformed one
   assert.equal(parseWeek("ayer", "2026-10-14", "2026-10-28"), "2026-10-26");
   assert.equal(parseWeek("2026-02-30", "2026-01-01", "2026-10-28"), "2026-10-26");
 });
+
+test("a first upload dated tomorrow, in next week, still lands on this week", () => {
+  assert.equal(parseWeek("2026-10-26", "2026-11-02", "2026-11-01"), "2026-10-26");
+  assert.equal(parseWeek(undefined, "2026-11-02", "2026-11-01"), "2026-10-26");
+  assert.deepEqual(weekSteps("2026-10-26", "2026-11-02", "2026-11-01"), { prev: null, next: null });
+});

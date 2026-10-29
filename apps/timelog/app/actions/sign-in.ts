@@ -2,7 +2,8 @@
 
 import { createSupabaseServerClient } from "@repo/supabase-auth";
 
-import { isEmailAllowed, signInEmailSchema } from "@/lib/auth";
+import { isEmailAllowed } from "@/lib/auth";
+import { signInEmailSchema } from "@/lib/forms";
 import { env } from "@/lib/env";
 
 export type SignInResult = { ok: true } | { ok: false; error: "emailInvalid" | "notInvited" | "sendFailed" | "rateLimited" };

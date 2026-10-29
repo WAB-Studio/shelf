@@ -27,6 +27,8 @@
     "create": "Crear llave",
     "creating": "Creando…",
     "nameInvalid": "Ponle un nombre de hasta 60 caracteres.",
+    "signedOut": "Tu sesión venció. Vuelve a entrar.",
+    "revokeFailed": "No se pudo revocar la llave. Recarga y prueba otra vez.",
     "shown": "Cópiala ahora: no se vuelve a mostrar.",
     "copy": "Copiar",
     "copied": "Copiada",

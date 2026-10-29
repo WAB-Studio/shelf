@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 
 import { sendSignInLink, type SignInResult } from "@/app/actions/sign-in";
 import { Button, Form, Input, Stack, Text } from "@/components/ui";
+import { signInEmailSchema } from "@/lib/forms";
 
 // RT-08: an address, one link.
 export function SignInForm({ linkError }: { linkError: boolean }) {
@@ -15,6 +16,10 @@ export function SignInForm({ linkError }: { linkError: boolean }) {
 
   function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!signInEmailSchema.safeParse(email).success) {
+      setResult({ ok: false, error: "emailInvalid" });
+      return;
+    }
     startTransition(async () => setResult(await sendSignInLink(email)));
   }
 

@@ -2,12 +2,15 @@ import { z } from "zod";
 
 import { addDays, civilDay, isCivilDay } from "@/lib/zone";
 
+// Postgres refuses a NUL in text and jsonb; a control character is no app's name.
+const name = (max: number) => z.string().trim().min(1).max(max).regex(/^[^\p{Cc}]+$/u, "a control character");
+
 export const MAX_DAYS = 31;
 export const MAX_APPS = 500;
 const DAY_SECONDS = 86_400;
 
 const appDay = z.object({
-  app: z.string().trim().min(1).max(120),
+  app: name(120),
   seconds: z.number().int().min(1).max(DAY_SECONDS),
 });
 
@@ -17,7 +20,7 @@ export function uploadSchema(today: string = civilDay()) {
   const latest = addDays(today, 1);
   return z
     .object({
-      device: z.string().trim().min(1).max(80),
+      device: name(80),
       days: z
         .array(
           z

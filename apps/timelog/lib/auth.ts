@@ -1,11 +1,7 @@
 import "server-only";
 
 import { sql } from "drizzle-orm";
-import { z } from "zod";
-
 import { db } from "@/db/client";
-
-export const signInEmailSchema = z.email().transform((email) => email.trim().toLowerCase());
 
 /**
  * Whether the address is on `timelog.allowed_emails` (RT-08), in one statement. Read before any

@@ -83,11 +83,18 @@ SECURITY DEFINER
 SET search_path = ''
 AS $$
   with live as (
-    update timelog.access_keys k
-       set last_used_at = now()
+    select k.id, k.user_id, k.last_used_at
+      from timelog.access_keys k
      where k.key_hash = hash
        and k.revoked_at is null
-    returning k.user_id
+  ),
+  -- Stamped at most every five minutes: one MCP session sends many requests, and each would lock the row.
+  stamp as (
+    update timelog.access_keys k
+       set last_used_at = now()
+      from live
+     where k.id = live.id
+       and (live.last_used_at is null or live.last_used_at < now() - interval '5 minutes')
   )
   select u.id, u.email::text from live join auth.users u on u.id = live.user_id
 $$;
@@ -112,6 +119,8 @@ begin
   if person is null then
     return null;
   end if;
+  -- Two keys of one person can upload the same device at once; the key's row lock covers only one key.
+  perform pg_advisory_xact_lock(hashtextextended(person::text || '/' || replace_days.device, 0));
 
   delete from timelog.app_seconds s
    where s.user_id = person

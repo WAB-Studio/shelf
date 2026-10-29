@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
 
 import { createKey, revokeKey } from "@/app/actions/keys";
+import { keyNameSchema } from "@/lib/forms";
 import { Between, Button, Code, Form, Input, Stack, Text } from "@/components/ui";
 
 export type KeyLine = { id: string; name: string; when: string | null; revoked: boolean };
@@ -13,20 +14,31 @@ export function KeysPanel({ keys, siteUrl }: { keys: KeyLine[]; siteUrl: string 
   const t = useTranslations("time.keys");
   const [name, setName] = useState("");
   const [fresh, setFresh] = useState<string | null>(null);
-  const [error, setError] = useState(false);
+  const [error, setError] = useState<"nameInvalid" | "signedOut" | "revokeFailed" | null>(null);
   const [copied, setCopied] = useState(false);
   const [pending, startTransition] = useTransition();
 
   function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!keyNameSchema.safeParse(name).success) {
+      setError("nameInvalid");
+      return;
+    }
     startTransition(async () => {
       const result = await createKey(name);
-      setError(!result.ok);
+      setError(result.ok ? null : result.error);
       if (result.ok) {
         setFresh(result.key);
         setName("");
         setCopied(false);
       }
+    });
+  }
+
+  function revoke(id: string) {
+    startTransition(async () => {
+      const result = await revokeKey(id);
+      setError(result.ok ? null : "revokeFailed");
     });
   }
 
@@ -51,7 +63,7 @@ export function KeysPanel({ keys, siteUrl }: { keys: KeyLine[]; siteUrl: string 
           {pending ? t("creating") : t("create")}
         </Button>
       </Form>
-      {error ? <Text as="p" variant="meta">{t("nameInvalid")}</Text> : null}
+      {error ? <Text as="p">{t(error)}</Text> : null}
       {fresh !== null ? (
         <Stack gap={2}>
           <Text as="p">{t("shown")}</Text>
@@ -76,7 +88,7 @@ export function KeysPanel({ keys, siteUrl }: { keys: KeyLine[]; siteUrl: string 
                 <Text variant="meta">{key.revoked ? t("revoked") : key.when === null ? t("unused") : t("used", { when: key.when })}</Text>
               </Stack>
               {key.revoked ? null : (
-                <Button type="button" quiet aria-label={t("revokeLabel", { name: key.name })} onClick={() => startTransition(async () => void (await revokeKey(key.id)))}>
+                <Button type="button" quiet aria-label={t("revokeLabel", { name: key.name })} onClick={() => revoke(key.id)}>
                   {t("revoke")}
                 </Button>
               )}

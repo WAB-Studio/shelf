@@ -24,33 +24,33 @@ Interface language: Spanish. A person reads only their own log.
 
 ### Functional requirements
 
-- **RT-01** An upload carries, per device and day, the seconds each app was active with the person
+- [x] **RT-01** An upload carries, per device and day, the seconds each app was active with the person
   at the computer (ActivityWatch's AFK watcher says not-afk). It never carries a window title, a URL
   or an event. (P5, 1a)
-- **RT-02** An upload replaces that device's day whole: sending the same day twice leaves one copy,
+- [x] **RT-02** An upload replaces that device's day whole: sending the same day twice leaves one copy,
   and a later upload of a day already sent corrects it.
-- **RT-03** An upload names its person by a key, never by a session. A key is shown once, kept as
+- [x] **RT-03** An upload names its person by a key, never by a session. A key is shown once, kept as
   its hash, named by the person, and can be revoked; a revoked key uploads and reads nothing.
-- **RT-04** «Hoy» lists today's apps, longest first, with each one's time and the day's total. A
+- [x] **RT-04** «Hoy» lists today's apps, longest first, with each one's time and the day's total. A
   day with no upload says so and says when the last upload arrived.
-- **RT-05** «Semana» shows Monday to Sunday: each day's total, and the week's apps, longest first.
+- [x] **RT-05** «Semana» shows Monday to Sunday: each day's total, and the week's apps, longest first.
   ‹ › step a week at a time back to the first upload and forward to this week.
-- **RT-06** «Llaves» creates a key, names it, shows it once with the command that uses it, lists
+- [x] **RT-06** «Llaves» creates a key, names it, shows it once with the command that uses it, lists
   the keys with their last use, and revokes one.
-- **RT-07** The MCP server answers with the same key: a day's apps, a week's days and apps, and a
+- [x] **RT-07** The MCP server answers with the same key: a day's apps, a week's days and apps, and a
   range of days' totals. It writes nothing. (P5, 3a)
-- **RT-08** A person signs in by email, the way GoalLog does. Only an allowed address may.
-- **RT-09** The uploader is `timelog-sync`, adapted from `aw-client`: `aw-client timelog --url
+- [x] **RT-08** A person signs in by email, the way GoalLog does. Only an allowed address may.
+- [x] **RT-09** The uploader is `timelog-sync`, adapted from `aw-client`: `aw-client timelog --url
   <TimeLog> --key <key> [--days N]` sends the last N days (default 2) and can run on a schedule.
 
 ### Non-functional requirements
 
-- **RNT-01** Every row is the person's alone: RLS on every table, read as `authenticated`, and no
+- [x] **RNT-01** Every row is the person's alone: RLS on every table, read as `authenticated`, and no
   role reaches a table but through a policy or a definer function.
-- **RNT-02** An upload is one transaction: a day is never half replaced.
-- **RNT-03** Seconds are integers. Hours and minutes are derived for display, never stored.
-- **RNT-04** A screen fans its reads out at once and pays one session settle per read.
-- **RNT-05** No proof calls a paid service.
+- [x] **RNT-02** An upload is one transaction: a day is never half replaced.
+- [x] **RNT-03** Seconds are integers. Hours and minutes are derived for display, never stored.
+- [x] **RNT-04** A screen fans its reads out at once and pays one session settle per read.
+- [x] **RNT-05** No proof calls a paid service.
 
 ### Retired
 
