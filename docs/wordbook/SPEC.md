@@ -309,7 +309,8 @@ this gets built, and no schema, table or column is "prepared for" it.
   - Driven 2026-10-30 by `scripts/mcp/server.test.ts`, over the server's own stdio: the protocol and its errors, the three tools, and the file left byte for byte as it was.
 - [x] **RL-72** *(successor of RL-65)* — The log can be exported from the app as a file the reader saves onto their device: every recorded search, with its date and the headword it reached, in a documented and versioned JSON shape, which is the complete copy. The export also offers a CSV for Anki beside it: one card per row of `/registro`, its word on the front and on the back its latest translation or, when it has none and the network answered, that answer's definition. A row with neither gives no card; after a download the export says how many words stayed out and why, and with no card to give it offers no CSV and says so. The export is deliberate: it is reached from outside the search screen and nothing triggers it on its own. Decided by the user 2026-10-16.
   - Proved 2026-10-17, CI run 38992454179 on 3cec823e: `apps/wordbook/e2e/export.spec.ts:666,673,679,687,697,704,739` (no card: no CSV and why; the definition on the back; the words left out named; the link follows a delete and a sync) and `apps/wordbook/lib/log/anki.test.ts:106,116,123,131`, green.
-- [ ] **RL-68** — The reader reviews the words in their record inside the app, scheduled by spaced repetition (FSRS). Boards are drawn before any work. Decided by the user 2026-10-15.
+- [x] **RL-68** — The reader reviews the words in their record inside the app, scheduled by spaced repetition (FSRS). Decided by the user 2026-10-15; built straight from these words, no boards, decided by the user 2026-10-30.
+  - `/repaso`, reached from `/registro`: the words already learning whose time came, then up to 20 new ones a day, the most looked up first; a sentence, a miss and a pending row stay out. The word, «Mostrar respuesta», then «Otra vez» · «Difícil» · «Bien» · «Fácil», each naming its interval. The cards live on the device (`reading-review`); the copy (RL-22) does not carry them yet.
 - [x] **RL-28** — When a search finds nothing and the word looks like a typo of one the dictionary
   has, the answer offers the words it might have been, and reaching one of them is a tap. The
   suggestion is computed on the device and touches the network on no keystroke.
@@ -701,7 +702,7 @@ Principles, not recipes:
   exactly what RL-09 already does for the sentence path, and it is what keeps a third party from
   learning which word a reader is looking up. The request reaches the network only as the answer
   draws and only with a connection, and never blocks or delays the text.
-- **The server surface is eight route handlers and four pages, and nothing else.** Counted
+- **The server surface is eight route handlers and five pages, and nothing else** (`/repaso` added 2026-10-30, RL-68). Counted
   2026-09-14 against the files `apps/wordbook/app` serves, correcting a figure stale since before this
   slice: the text here read «five route handlers and one page … becoming seven» and had fallen three
   handlers and three pages behind what had already shipped.
@@ -722,6 +723,7 @@ Principles, not recipes:
   - `app/cuenta/page.tsx` — a server component that reads the session and queries nothing.
   - `app/page.tsx`, `app/registro/page.tsx` and `app/registro/[palabra]/page.tsx` — the box and the
     reader's own record.
+  - `app/repaso/page.tsx` — the review (RL-68): a shell; the record and its cards are read on the device.
 - **The word's text never passes through any of them.** That is the claim "no backend" actually
   protects, and it is the one to check before adding a ninth: not how many handlers exist, but whether
   the answer's text still touches none of them (RL-35, RNL-11). The word's decoration — its
@@ -766,6 +768,7 @@ Principles, not recipes:
 | Harness registry | **@repo/harness-registry** (workspace `*`, dev) | Records every identity and run a suite creates, so a purge names only its own rows. |
 | Script runner | **tsx** (`^4.23.12`, dev) | Runs the dictionary build, the checks and the harness scripts under `node --import tsx`. |
 | Type packages | **@types/node** (`^22`), **@types/react**, **@types/react-dom** (`^19`, dev) | The types `tsgo` and `eslint` read. |
+| Spaced repetition | **ts-fsrs 5** (`^5.4.2`) | The FSRS scheduler RL-68 reviews with; 6.0.0 was two days old when chosen. |
 | TEI parse | **fast-xml-parser** (`^5.11.1`, dev) | Streams the source TEI into the payload; the build script's only dependency. |
 
 Playwright and `fast-xml-parser` are development dependencies. `fast-xml-parser`

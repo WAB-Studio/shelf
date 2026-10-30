@@ -1708,7 +1708,7 @@ Taken by the user («2. b 3. b»).
 - **A row of `/registro` can be deleted with a ✕ per row.** Replaces the premise that the record only gains rows. Not built yet.
 - **When sending a sign-in link times out, the screen says it may have been sent:** a new line, with a board drawn before it is built. Not built yet.
 - **The dead RL-45 «swishing» path is deleted.** No visible behaviour changes.
-- **Words are reviewed inside WordBook with spaced repetition (FSRS),** not in Anki; the CSV for Anki stays as an export. Overturns the scope line of `docs/wordbook/SPEC.md` that leaves spaced repetition out (no earlier decision in this file declined it). Needs boards before any work. Not built yet.
+- **Words are reviewed inside WordBook with spaced repetition (FSRS),** not in Anki; the CSV for Anki stays as an export. Overturns the scope line of `docs/wordbook/SPEC.md` that leaves spaced repetition out (no earlier decision in this file declined it). Built 2026-10-30 without boards, by the user's decision that day: `/repaso`, one word at a time, answer on demand, four grades with their intervals, the «Bien» grade drawn solid in the accent.
 - **Access is by invitation only.** Public sign-ups are off in Supabase Auth and the app keeps a list of allowed emails; the server refuses a sign-in link for an email not on the list before any email is sent. PKCE applies: a link only works in the browser that asked for it. Not built yet.
 
 ## Decisions of 2026-10-16: the seven boards of «cuenta», approved by the user

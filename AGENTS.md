@@ -55,7 +55,8 @@ This file is the core every agent loads. Read the file the index names before th
 
 - Work in one session. Write the code and its tests together; spawn a subagent only for work that truly runs in parallel.
   Decided by the user 2026-10-24: «no hacemos todo este circo de agentes».
-- Build a screen straight from its `DESIGN.md` words. Draw no board first; show the screen when it is done.
+- Build a screen straight from its `DESIGN.md` words, whole and working. Draw no board first, even where an older decision asks
+  for one; show the screen when it is done and refine after. Decided by the user 2026-10-30: «es mejor refinar que demorar».
 - Review before merging: run `/code-review` on the branch's diff, then `/simplify`. Fix what they find; that is the review.
 - Keep a module to one diff a person reads at once: about 400 changed lines of code, tests not counted.
 - Report in two lines: what landed and what blocks. No report files, no roadmap update per step.
