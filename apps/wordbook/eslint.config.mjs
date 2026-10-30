@@ -15,10 +15,18 @@ const screenSyntax = [
     selector: "ImportDeclaration[source.value=/\\.module\\.css$/]",
     message: "A CSS module belongs to `components/ui`; add a prop to the primitive instead.",
   },
-  {
-    selector: "JSXText[value=/\\p{L}/u]",
-    message: "Move interface text into next-intl.",
-  },
+];
+
+// RNL-02: every string a person reads comes from the catalogue, primitives and the layout included.
+// Symbols («←», «·») carry no letter and pass.
+const COPY = "Move interface text into next-intl (RNL-02).";
+const READ_PROPS = "/^(aria-label|aria-description|aria-placeholder|aria-valuetext|title|placeholder|alt)$/";
+const copySyntax = [
+  { selector: "JSXText[value=/\\p{L}/u]", message: COPY },
+  { selector: "JSXElement > JSXExpressionContainer > Literal[value=/\\p{L}/u]", message: COPY },
+  { selector: "JSXFragment > JSXExpressionContainer > Literal[value=/\\p{L}/u]", message: COPY },
+  { selector: `JSXAttribute[name.name=${READ_PROPS}] > Literal[value=/\\p{L}/u]`, message: COPY },
+  { selector: `JSXAttribute[name.name=${READ_PROPS}] > JSXExpressionContainer > Literal[value=/\\p{L}/u]`, message: COPY },
 ];
 
 const eslintConfig = defineConfig([
@@ -62,12 +70,17 @@ const eslintConfig = defineConfig([
   {
     files: ["app/**", "components/**"],
     ignores: ["components/ui/**"],
-    rules: { "no-restricted-syntax": ["error", ...screenSyntax] },
+    rules: { "no-restricted-syntax": ["error", ...screenSyntax, ...copySyntax] },
   },
-  // The root layout puts the font variables on <html>; no primitive owns that tag.
+  // Primitives own styling, never copy.
+  {
+    files: ["components/ui/**"],
+    rules: { "no-restricted-syntax": ["error", ...copySyntax] },
+  },
+  // The root layout puts the font variables on <html>; no primitive owns that tag. Its copy still comes from the catalogue.
   {
     files: ["app/layout.tsx", "app/global-error.tsx"],
-    rules: { "no-restricted-syntax": "off" },
+    rules: { "no-restricted-syntax": ["error", ...copySyntax] },
   },
   // A spec asserts what the device really holds, so it reads the store the
   // browser exposes rather than the one the app imports.

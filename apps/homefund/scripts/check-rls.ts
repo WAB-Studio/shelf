@@ -5122,6 +5122,7 @@ const INSERT_GRANT_GAPS: Record<string, string[]> = {
     "updated_at",
   ],
   savings_goals: ["archived_at", "created_at", "id", "updated_at"],
+  reminder_mails: ["id", "mailed_at", "planned_payment_id", "remind_on"],
   sign_in_claims: ["client_key", "count", "day"],
   transaction_labels: [],
   // `marked_by` is stamped by the trigger from auth.uid(); the movement and the rule are the input.
@@ -5276,6 +5277,7 @@ const UPDATE_GRANT_GAPS: Record<string, string[]> = {
   planned_payments: ["created_at", "created_by", "group_id", "id", "owner_user_id", "updated_at"],
   recurring_rules: ["created_at", "created_by", "group_id", "id", "owner_user_id", "paused_reason", "updated_at"],
   savings_goals: ["created_at", "external_ref", "group_id", "id", "owner_user_id", "updated_at"],
+  reminder_mails: ["id", "mailed_at", "planned_payment_id", "remind_on"],
   sign_in_claims: ["client_key", "count", "day"],
   transaction_labels: ["label_id", "transaction_id"],
   // A mark is final: no column is writable.

@@ -5,18 +5,13 @@ import { and, asc, eq, isNotNull, isNull, sql } from "drizzle-orm";
 import { insertRow } from "@/db/insert-row";
 import { accounts, categories, recurringRules, transactions } from "@/db/schema";
 import type { RecurringRule } from "@/db/schema";
+import { settledIn } from "@/db/queries/planned-payments";
 import { withUserDb } from "@/db/session";
-import { BASE_CURRENCY } from "@/lib/currency";
 
 type Frequency = RecurringRule["frequency"];
 
 // A rule names exactly one account, so one of the two joins answers and the
-// other is null — the same `coalesce` `set_transaction_currency` runs on the
-// movement the rule generates. An account the caller cannot read answers null,
-// so the base currency closes it.
-const settledIn = sql<string>`coalesce(
-  from_account.settlement_currency, to_account.settlement_currency, ${BASE_CURRENCY}
-)`;
+// other is null: `settledIn` is the coalesce the movement it generates lands with.
 
 export type RecurringRuleRow = {
   id: string;

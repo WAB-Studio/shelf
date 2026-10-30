@@ -372,8 +372,9 @@ Board C1h corrected the same day: a card in credit reads «Según HomeFund −$ 
     contigo.» and the fund leaves the shell. The leader with other members: «No puedes salir todavía» · «Eres el líder de
     «Casa». Antes de salir, pasa el liderazgo a otro miembro desde «Miembros».» · «Entendido» (RF-59). A leader alone in
     the fund leaves like anyone. No desktop face for either.
-- **Planned payments promise no notice** (Q4 a): «Son recordatorios: aparecen aquí en su fecha, y tú registras el gasto
-  cuando lo pagas.» «te avisan» comes back with RF-141.
+- **A planned payment's reminder mails its author** (RF-141): at 7:00 Bogotá on the reminder date, one plain-text mail
+  «Recordatorio: <nombre> vence el <fecha>» with the amount and a link to «Pagos». A fund payment mails its author only
+  while they are in the fund; moving the reminder date mails again; a payment past its due date is not mailed.
 - **The five open debt cases** of the 2026-10-15 audit (Q7 a) are settled one by one in a question session before their
   module; the rest of the debt fixes do not wait.
 - **Deleting what an ingest rule learned from keeps the rule** (Q8 a), its target set to null: the next delivery proposes
@@ -420,7 +421,7 @@ Board C1h corrected the same day: a card in credit reads «Según HomeFund −$ 
   «Movimientos», one row per payment: its name, «Vence el 15 dic» (or «Venció el 15 oct» in red once the due date has
   passed) and its amount; oldest due first; at most three, the link reads «Ver los 5» when there are more, else «Ver
   pagos». A row leaves when the payment is paid or archived; a payment with no reminder, or whose reminder date has not
-  come, is not shown; none, and the card does not exist. A row opens that payment in «Pagos». RF-141's email stays unbuilt.
+  come, is not shown; none, and the card does not exist. A row opens that payment in «Pagos». RF-141's email goes out the same morning.
 - **A sign-out Auth refuses leaves this device signed out** (Q30 a): the session is never restored; the login says
   «Cerraste sesión aquí, pero no pudimos cerrarla en tus otros dispositivos.»
 

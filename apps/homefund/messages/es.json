@@ -1492,5 +1492,13 @@
     "back": "Volver a Reportes",
     "readerOnly": "Lo corrige quien maneja {account}.",
     "undo": "Deshacer"
+  },
+  "reminderMail": {
+    "subject": "Recordatorio: {name} vence el {due}",
+    "greeting": "Hola,",
+    "body": "Te recordamos que {name} por {amount} vence el {due}.",
+    "action": "Cuando lo pagues, regístralo en Pagos: {url}",
+    "unnamed": "un pago planeado",
+    "footer": "Te llega porque pusiste una fecha de recordatorio en HomeFund."
   }
 }

@@ -4266,6 +4266,7 @@ async function main(): Promise<void> {
   await everyEntityBackupSuite();
   await moneyFormsStaleSuite();
   await nextPaymentMinimumSuite();
+  await reminderMailSuite();
 }
 
 // A member recorded without a login is someone in the fund: a leader whose fund holds one is not alone, so an
@@ -15216,5 +15217,93 @@ async function nextPaymentMinimumSuite(): Promise<void> {
     next("RF-136: a card with an instalment falling due names its minimum alone as the next payment"),
     card !== undefined && card.dueInstallmentsCents > 0 && tile?.accountId === cardId && tile.amountCents === MINIMUM,
     `next payment ${tile?.amountCents ?? "none"} on ${tile?.accountId === cardId ? "the card" : "another debt"}; minimum ${MINIMUM}, instalments due ${card?.dueInstallmentsCents ?? "no row"}`,
+  );
+}
+
+// RF-141: a planned payment whose reminder date has come mails its author once. A later reminder, a stale one and a
+// second run that day mail nothing; a mail that fails hands the reminder back; a reminder moved to another date mails again.
+async function reminderMailSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const today = todayInBogota();
+  const { claimDueReminders } = await import("@/db/queries/reminder-mail");
+  const { mailDueReminders } = await import("@/lib/reminder-mail");
+  const user = await createMembershipFreeUser();
+  const accountId = await asUser(user, async () => {
+    const { accountId } = await createAccount({
+      name: `Harness rf141 cuenta ${tag}`,
+      kind: "asset",
+      subtype: "bank",
+      ownerUserId: user.id,
+      groupId: null,
+      isShared: false,
+      institution: null,
+      lastFour: null,
+      settlementCurrency: "COP",
+      amountMinor: 100_000,
+      balanceOn: shiftDate(today, -10),
+    });
+    return accountId;
+  });
+  track("accounts", accountId);
+  const plan = async (remindOn: string, description: string) => {
+    const { plannedPaymentId } = await asUser(user, () =>
+      createPlannedPayment({
+        fromAccountId: accountId,
+        toAccountId: null,
+        amountCents: 4_500_000,
+        categoryId: null,
+        dueDate: shiftDate(today, 5),
+        remindOn,
+        description: `${description} ${tag}`,
+      }),
+    );
+    track("planned_payments", plannedPaymentId);
+    return plannedPaymentId;
+  };
+  const dueToday = await plan(today, "internet");
+  const later = await plan(shiftDate(today, 1), "luz");
+  const stale = await plan(shiftDate(today, -5), "agua");
+  const ours = new Set([dueToday, later, stale]);
+  const claim = async () => (await claimDueReminders(today)).filter((r) => ours.has(r.id));
+
+  const sent: string[] = [];
+  const first = await mailDueReminders(await claim(), async (mail) => void sent.push(mail.to), "https://homefund.test");
+  const again = await claim();
+  assert(
+    next("RF-141: the reminder due today mails its author once; a later and a stale reminder mail nothing; a second run that day finds nothing"),
+    first.mailed === 1 && sent.length === 1 && sent[0] === user.email && again.length === 0,
+    `first ${JSON.stringify(first)} to ${JSON.stringify(sent)}, second run ${again.length}`,
+  );
+
+  await fixtureSql`delete from reminder_mails where planned_payment_id = ${dueToday}`;
+  const failing = await mailDueReminders(await claim(), async () => {
+    throw new Error("smtp down");
+  }, "https://homefund.test");
+  const retried = await claim();
+  assert(
+    next("RF-141: a reminder whose mail fails is handed back, and the next run claims it again"),
+    failing.failed === 1 && retried.length === 1 && retried[0]?.id === dueToday,
+    `failing ${JSON.stringify(failing)}, retried ${retried.map((r) => r.id).join(",")}`,
+  );
+
+  const { updatePlannedPayment } = await import("@/db/queries/planned-payments");
+  await asUser(user, () =>
+    updatePlannedPayment({
+      plannedPaymentId: dueToday,
+      fromAccountId: accountId,
+      toAccountId: null,
+      amountCents: 4_500_000,
+      categoryId: null,
+      dueDate: shiftDate(today, 5),
+      remindOn: shiftDate(today, -1),
+      description: `internet ${tag}`,
+    }),
+  );
+  const moved = await claim();
+  assert(
+    next("RF-141: a reminder moved to another date is mailed again"),
+    moved.length === 1 && moved[0]?.id === dueToday && moved[0]?.amountCents === 4_500_000 && moved[0]?.currency === "COP",
+    `moved ${JSON.stringify(moved)}`,
   );
 }
