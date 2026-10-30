@@ -42,7 +42,7 @@ Interface language: Spanish. A person reads only their own log.
 - [x] **RT-08** A person signs in by email, the way GoalLog does. Only an allowed address may.
 - [x] **RT-09** The uploader is `timelog-sync`, adapted from `aw-client`: `aw-client timelog --url
   <TimeLog> --key <key> [--days N]` sends the last N days (default 2) and can run on a schedule.
-- [ ] **RT-10** ActivityWatch + TimeLog, our fork of ActivityWatch's Windows installer, bundles
+- [x] **RT-10** ActivityWatch + TimeLog, our fork of ActivityWatch's Windows installer, bundles
   `aw-timelog`: it starts with ActivityWatch and uploads every hour with the key pasted in the tray,
   «TimeLog: pegar llave…». «Llaves» links its latest release.
 
