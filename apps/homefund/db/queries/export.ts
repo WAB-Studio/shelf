@@ -24,7 +24,8 @@ import {
 import { withUserDb } from "@/db/session";
 import { TIME_ZONE } from "@/lib/locales";
 import { SHEET_ENTITIES, sheetDescriptors } from "@/lib/spreadsheet/schema";
-import { fractionToPercent, LABEL_SEPARATOR, type RefEntity, type SheetEntity } from "@/lib/spreadsheet/schema";
+import { LABEL_SEPARATOR, type RefEntity, type SheetEntity } from "@/lib/spreadsheet/schema";
+import { fractionToPercent } from "@/lib/validation/debt-terms";
 import { ACCOUNT_PLACEMENTS } from "@/lib/validation/account";
 
 // The table each entity reads from, keyed by the export's own entity names.

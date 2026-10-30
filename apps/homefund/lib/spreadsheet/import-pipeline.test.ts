@@ -770,7 +770,7 @@ test("a contribution names a file-new goal by name and a movement by its key; an
 // ---- debts and statements (RF-142, RF-78, RF-129) ---------------------------------------------
 
 test("a rate the ledger keeps as a fraction reads as the percentage a person types", async () => {
-  const { fractionToPercent } = await import("./schema");
+  const { fractionToPercent } = await import("@/lib/validation/debt-terms");
   const cases: [string, string][] = [["0.2899", "28.99"], ["0.289900", "28.99"], ["0", "0"], ["0.05", "5"], ["1", "100"], ["0.123456", "12.3456"], ["0.0005", "0.05"]];
   for (const [fraction, percent] of cases) assert.equal(fractionToPercent(fraction), percent, fraction);
 });

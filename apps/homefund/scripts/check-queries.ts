@@ -13938,8 +13938,8 @@ async function o6m7OpeningRefusalsSuite(): Promise<void> {
   const OPENING_KEY = "accounts.errors.openingAfterMovement";
   const IMPORT_KEY = "data.import.errors.beforeOpening";
   // The statements `readImportScope` puts on the wire under the harness: oleada-6's 24 (ab45f478), plus four for each
-  // of the six reads RF-142 fans out beside them (labels, goals, budget and contribution keys, debts, statements).
-  const SCOPE_TRIPS = 48;
+  // of the three reads RF-142 fans out beside them (labels, goals, and one for every key only a restore reads).
+  const SCOPE_TRIPS = 36;
   const show = (value: unknown) => JSON.stringify(value ?? "nothing");
 
   type Said = { serverError?: string; validationErrors?: unknown; data?: Record<string, unknown> } | undefined;

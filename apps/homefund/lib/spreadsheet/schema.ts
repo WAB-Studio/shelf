@@ -205,7 +205,6 @@ export const categoryRowSchema = z.object({
 });
 export type CategoryRow = z.infer<typeof categoryRowSchema>;
 
-// A label lands where a new category does, so the sheet carries no placement (RF-70).
 const placementSchema = z.enum(ACCOUNT_PLACEMENTS, { error: "accounts.errors.placementInvalid" });
 
 export const labelRowSchema = z.object({
@@ -286,13 +285,12 @@ export const transactionRowSchema = z.object({
   // The same movement in its account's own currency, when `currency` is another one (RF-122). Only
   // its shape is read here: the account it is expressed in is known after the name resolves. A blank
   // cell is no second amount, never a required one.
-  counterAmount: z.preprocess(
-    (cell) => (typeof cell === "string" && cell.trim().length === 0 ? null : cell),
+  counterAmount: blankAsNone(
     anyCurrencyAmountSchema({
       required: "transactions.errors.counterAmountRequired",
       invalid: "transactions.errors.counterAmountInvalid",
       tooLarge: "transactions.errors.amountTooLarge",
-    }).nullish(),
+    }),
   ),
   // TRUE while that amount is what the person expected, not what the issuer billed (RF-123); blank
   // is billed.
@@ -358,20 +356,9 @@ export const goalContributionRowSchema = z.object({
 });
 export type GoalContributionRow = z.infer<typeof goalContributionRowSchema>;
 
-// The ledger keeps a rate as a fraction (0.2899); a person reads it as a percentage (28.99).
-// Shifted as text, so no float ever touches it.
-export function fractionToPercent(fraction: string): string {
-  const [whole, decimals = ""] = fraction.trim().split(".");
-  const digits = `${whole}${decimals.padEnd(2, "0")}`;
-  const cut = whole.length + 2;
-  const integer = digits.slice(0, cut).replace(/^0+(?=\d)/, "");
-  const rest = digits.slice(cut).replace(/0+$/, "");
-  return rest.length > 0 ? `${integer}.${rest}` : integer;
-}
-
 // An optional money cell reaches the guard as "" when blank (`toNameShaped`): no figure.
 function blankAsNone<T extends z.ZodType>(schema: T) {
-  return z.preprocess((cell) => (cell === "" ? null : cell), schema.nullish());
+  return z.preprocess((cell) => (typeof cell === "string" && cell.trim().length === 0 ? null : cell), schema.nullish());
 }
 
 // A percentage cell, typed as text or as a number; the form's own rule reads it next.

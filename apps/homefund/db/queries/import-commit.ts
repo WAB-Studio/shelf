@@ -151,8 +151,8 @@ function transactionReasonKey(error: unknown): string {
 }
 
 // The whole file's passing rows, in the entity buckets the pipeline produced. The
-// commit walks them in dependency order (RF-51): members and categories, then accounts,
-// then recurring rules and transactions.
+// commit walks them in dependency order (RF-51): members, categories and labels, then
+// accounts, rules and movements, then goals, contributions, budgets, debts and statements.
 export type CommitInput = {
   members: CommitRow<CreateMemberInput>[];
   categories: CommitRow<CreateCategoryInput>[];
@@ -292,7 +292,21 @@ export async function commitImport(
 ): Promise<CommitOutcome> {
   // All or nothing (RF-51), whoever assembled the input: one errored row anywhere refuses the
   // whole file before a single write, a clean row beside it included.
-  const buckets: CommitRow<unknown>[][] = [
+  const buckets = bucketsOf(input);
+  if (buckets.some((rows) => rows.some((row) => (row.errors?.length ?? 0) > 0 || row.object == null))) {
+    throw new ActionError(FILE_HAS_ERRORS);
+  }
+
+  try {
+    return await writeImport(tx, input, scope);
+  } catch (error) {
+    if (isExternalRefClash(error)) throw new ImportAlreadyCommitting(error);
+    throw error;
+  }
+}
+
+function bucketsOf(input: CommitInput): CommitRow<unknown>[][] {
+  return [
     input.members,
     input.categories,
     input.labels ?? [],
@@ -306,16 +320,6 @@ export async function commitImport(
     input.debts ?? [],
     input.statements ?? [],
   ];
-  if (buckets.some((rows) => rows.some((row) => (row.errors?.length ?? 0) > 0 || row.object == null))) {
-    throw new ActionError(FILE_HAS_ERRORS);
-  }
-
-  try {
-    return await writeImport(tx, input, scope);
-  } catch (error) {
-    if (isExternalRefClash(error)) throw new ImportAlreadyCommitting(error);
-    throw error;
-  }
 }
 
 async function writeImport(
@@ -372,20 +376,7 @@ async function writeImport(
   await commitDebts(tx, input.debts ?? [], accountMap, placeholders);
   await commitStatements(tx, input.statements ?? [], accountMap, placeholders);
 
-  for (const bucket of [
-    input.members,
-    input.categories,
-    input.labels ?? [],
-    input.accounts,
-    input.recurringRules,
-    input.transactions,
-    input.adjustments ?? [],
-    input.budgets ?? [],
-    input.goals ?? [],
-    input.goalContributions ?? [],
-    input.debts ?? [],
-    input.statements ?? [],
-  ]) {
+  for (const bucket of bucketsOf(input)) {
     for (const row of bucket) count(row);
   }
 
@@ -1105,16 +1096,15 @@ async function commitGoals(
     });
   }
 
-  const updateRows = rows.filter((row) => row.status === "update");
-  const updates = updateRows.map((row) => ({
-    external_ref: row.externalRef,
-    group_placed: row.object.placement === "group",
-    name: row.object.name,
-    target_amount_cents: toCents(row.object.targetAmount),
-    target_date: row.object.targetDate ?? null,
-    account_id: accountOf(row),
-  }));
-  for (const [index, chunk] of chunked(updates).entries()) {
+  for (const chunkRows of chunked(rows.filter((row) => row.status === "update"))) {
+    const chunk = chunkRows.map((row) => ({
+      external_ref: row.externalRef,
+      group_placed: row.object.placement === "group",
+      name: row.object.name,
+      target_amount_cents: toCents(row.object.targetAmount),
+      target_date: row.object.targetDate ?? null,
+      account_id: accountOf(row),
+    }));
     const written = await tx.execute<{ external_ref: string }>(sql`
       update ${savingsGoals} as t set
         name = r.name, target_amount_cents = r.target_amount_cents, target_date = r.target_date, account_id = r.account_id
@@ -1122,7 +1112,7 @@ async function commitGoals(
         external_ref text, group_placed boolean, name text, target_amount_cents bigint, target_date date, account_id uuid)
       where t.external_ref = r.external_ref and (t.group_id is not null) = r.group_placed and ${inScope(scope)}
       returning t.external_ref`);
-    refuseUnwritten("goals", updateRows.slice(index * CHUNK_SIZE, (index + 1) * CHUNK_SIZE), written);
+    refuseUnwritten("goals", chunkRows, written, LOCKED_FIELD);
   }
 
   return map;
@@ -1137,19 +1127,18 @@ async function commitContributions(
   placeholders: Set<string>,
   scope: CommitScope,
 ): Promise<void> {
-  const newRows = rows.filter((row) => row.status === "new");
-  const records = newRows.map((row) => {
-    const goalId = link(row.object.goalId, goalMap);
-    assertLinked(goalId, placeholders);
-    return {
-      goal_id: goalId,
-      amount_cents: toCents(row.object.amount),
-      day: row.object.contributedOn,
-      movement: row.object.movement,
-      external_ref: row.externalRef,
-    };
-  });
-  for (const [index, chunk] of chunked(records).entries()) {
+  for (const chunkRows of chunked(rows.filter((row) => row.status === "new"))) {
+    const chunk = chunkRows.map((row) => {
+      const goalId = link(row.object.goalId, goalMap);
+      assertLinked(goalId, placeholders);
+      return {
+        goal_id: goalId,
+        amount_cents: toCents(row.object.amount),
+        day: row.object.contributedOn,
+        movement: row.object.movement,
+        external_ref: row.externalRef,
+      };
+    });
     // The earmark resolves to one movement or none; none drops the row, and the count names it.
     const landed = await tx.execute<{ external_ref: string | null }>(sql`
       insert into ${goalContributions} (goal_id, amount_cents, created_at, transaction_id, external_ref)
@@ -1164,11 +1153,7 @@ async function commitContributions(
     if (landed.length > chunk.length) {
       throw new Error("import-commit: a contribution's movement key names a movement in both scopes");
     }
-    if (landed.length < chunk.length) {
-      const kept = new Set(landed.map((row) => row.external_ref));
-      const lost = newRows.slice(index * CHUNK_SIZE, (index + 1) * CHUNK_SIZE).find((row) => !kept.has(row.externalRef));
-      throw rowFailure("goalContributions", lost?.sheetRow ?? 0, UNKNOWN_MOVEMENT, null);
-    }
+    refuseUnwritten("goalContributions", chunkRows, landed, UNKNOWN_MOVEMENT);
   }
 }
 
@@ -1223,22 +1208,21 @@ async function commitBudgets(
   }
 
   // The category and the place are immutable (RF-71): an update rewrites the rest.
-  const updateRows = rows.filter((row) => row.status === "update");
-  const updates = updateRows.map((row) => {
-    const ids = linked(row);
-    return {
-      external_ref: row.externalRef,
-      category_id: ids.categoryId,
-      group_placed: row.object.placement === "group",
-      account_id: ids.accountId,
-      label_id: ids.labelId,
-      period: row.object.period,
-      limit_cents: toCents(row.object.limit),
-      threshold_pct: row.object.thresholdPct,
-      name: row.object.name ?? null,
-    };
-  });
-  for (const [index, chunk] of chunked(updates).entries()) {
+  for (const chunkRows of chunked(rows.filter((row) => row.status === "update"))) {
+    const chunk = chunkRows.map((row) => {
+      const ids = linked(row);
+      return {
+        external_ref: row.externalRef,
+        category_id: ids.categoryId,
+        group_placed: row.object.placement === "group",
+        account_id: ids.accountId,
+        label_id: ids.labelId,
+        period: row.object.period,
+        limit_cents: toCents(row.object.limit),
+        threshold_pct: row.object.thresholdPct,
+        name: row.object.name ?? null,
+      };
+    });
     const written = await tx.execute<{ external_ref: string }>(sql`
       update ${budgets} as t set
         account_id = r.account_id, label_id = r.label_id, period = r.period, limit_cents = r.limit_cents,
@@ -1249,19 +1233,20 @@ async function commitBudgets(
       where t.external_ref = r.external_ref and t.category_id = r.category_id
         and (t.group_id is not null) = r.group_placed and ${inScope(scope)}
       returning t.external_ref`);
-    refuseUnwritten("budgets", updateRows.slice(index * CHUNK_SIZE, (index + 1) * CHUNK_SIZE), written);
+    refuseUnwritten("budgets", chunkRows, written, LOCKED_FIELD);
   }
 }
 
-// An update the statement left unwritten met a locked field: the first such row is named.
+// A row the statement left unwritten is refused by name: the first one the `returning` lacks.
 function refuseUnwritten(
   entity: SheetEntity,
   rows: CommitRow<unknown>[],
-  written: readonly { external_ref: string }[],
+  written: readonly { external_ref: string | null }[],
+  reasonKey: string,
 ): void {
   const kept = new Set(written.map((row) => row.external_ref));
-  const locked = rows.find((row) => !kept.has(row.externalRef as string));
-  if (locked) throw rowFailure(entity, locked.sheetRow, LOCKED_FIELD, null);
+  const missing = rows.find((row) => !kept.has(row.externalRef));
+  if (missing) throw rowFailure(entity, missing.sheetRow, reasonKey, null);
 }
 
 // Archived as the file says (RF-120): a row already archived keeps its day, a live one in the

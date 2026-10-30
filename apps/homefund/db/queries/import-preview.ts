@@ -1,7 +1,6 @@
 import "server-only";
 
-import { isNotNull } from "drizzle-orm";
-import type { PgTable } from "drizzle-orm/pg-core";
+import { isNotNull, sql } from "drizzle-orm";
 
 import {
   accountStatements,
@@ -20,19 +19,13 @@ import { getUserGroup } from "@/db/queries/groups";
 import { requireUser, withUserDb } from "@/db/session";
 import { statementKey, type SheetEntity } from "@/lib/spreadsheet/schema";
 
-// The table each entity's `external_ref` lives on, keyed by the import's entity
-// names; debts and statements carry none and are keyed by what they belong to. A row's `external_ref` is its stable per-scope import key (RF-52): present
+// The tables whose `external_ref` set is read on its own: the rest come with their rows or with
+// `readRestoredKeys`. A row's `external_ref` is its stable per-scope import key (RF-52): present
 // in the scope means an update, absent means a new row.
-const refTables: Record<Exclude<SheetEntity, "debts" | "statements">, typeof accounts | PgTable> = {
-  accounts,
+const refTables = {
   members: groupMembers,
-  categories,
-  labels,
   recurringRules,
   transactions,
-  budgets,
-  goals: savingsGoals,
-  goalContributions,
 };
 
 // One referenced entity as the resolver needs it: its real id, its current name, and
@@ -73,13 +66,39 @@ export type ImportScope = {
 // The set of `external_ref` values already in the caller's scope for one entity,
 // the null-guarded index the classification matches on (RF-52).
 async function readExistingRefs(entity: keyof typeof refTables): Promise<Set<string>> {
-  const table = refTables[entity] as typeof accounts;
+  const table = refTables[entity] as typeof transactions;
   return withUserDb(async (tx) => {
     const rows = await tx
       .select({ ref: table.externalRef })
       .from(table)
       .where(isNotNull(table.externalRef));
     return new Set(rows.map((row) => row.ref as string));
+  });
+}
+
+type RestoredEntity = "budgets" | "goalContributions" | "debts" | "statements";
+
+// The keys of the four entities only a backup restores, in one trip: budgets and contributions by
+// their `external_ref`, an account's terms by the account (RF-78), a closed statement by its
+// account and cut-off (RF-129).
+async function readRestoredKeys(): Promise<Record<RestoredEntity, Set<string>>> {
+  return withUserDb(async (tx) => {
+    const rows = await tx.execute<{ entity: RestoredEntity; key: string; day: string | null }>(sql`
+      select 'budgets' as entity, external_ref as key, null::text as day from ${budgets} where external_ref is not null
+      union all
+      select 'goalContributions', external_ref, null from ${goalContributions} where external_ref is not null
+      union all
+      select 'debts', account_id::text, null from ${debtTerms}
+      union all
+      select 'statements', account_id::text, cut_off_date::text from ${accountStatements}`);
+    const keys: Record<RestoredEntity, Set<string>> = {
+      budgets: new Set(),
+      goalContributions: new Set(),
+      debts: new Set(),
+      statements: new Set(),
+    };
+    for (const row of rows) keys[row.entity].add(row.day === null ? row.key : statementKey(row.key, row.day));
+    return keys;
   });
 }
 
@@ -108,10 +127,7 @@ export async function readImportScope(): Promise<ImportScope> {
     memberRefs,
     recurringRefs,
     transactionRefs,
-    budgetRefs,
-    contributionRefs,
-    debtAccounts,
-    statementKeys,
+    restoredKeys,
   ] =
     await Promise.all([
       requireUser(),
@@ -166,20 +182,7 @@ export async function readImportScope(): Promise<ImportScope> {
       readExistingRefs("members"),
       readExistingRefs("recurringRules"),
       readExistingRefs("transactions"),
-      readExistingRefs("budgets"),
-      readExistingRefs("goalContributions"),
-      // The accounts that already carry terms: a debt row for one of them rewrites it (RF-78).
-      withUserDb(async (tx) => {
-        const rows = await tx.select({ accountId: debtTerms.accountId }).from(debtTerms);
-        return new Set(rows.map((row) => row.accountId));
-      }),
-      // The statements already closed, by account and cut-off (RF-129): final, never rewritten.
-      withUserDb(async (tx) => {
-        const rows = await tx
-          .select({ accountId: accountStatements.accountId, cutOffDate: accountStatements.cutOffDate })
-          .from(accountStatements);
-        return new Set(rows.map((row) => statementKey(row.accountId, row.cutOffDate)));
-      }),
+      readRestoredKeys(),
     ]);
 
   return {
@@ -195,11 +198,11 @@ export async function readImportScope(): Promise<ImportScope> {
       members: memberRefs,
       recurringRules: recurringRefs,
       transactions: transactionRefs,
-      budgets: budgetRefs,
+      budgets: restoredKeys.budgets,
       goals: refsOf(goalRows),
-      goalContributions: contributionRefs,
-      debts: debtAccounts,
-      statements: statementKeys,
+      goalContributions: restoredKeys.goalContributions,
+      debts: restoredKeys.debts,
+      statements: restoredKeys.statements,
     },
   };
 }

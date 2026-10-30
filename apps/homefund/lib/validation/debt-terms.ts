@@ -60,6 +60,17 @@ export function percentToFraction(value: string): string {
   return `${padded.slice(0, cut)}.${padded.slice(cut)}`;
 }
 
+// The ledger keeps a rate as a fraction (0.2899); a person reads it as a percentage (28.99).
+// Shifted as text, so no float ever touches it.
+export function fractionToPercent(fraction: string): string {
+  const [whole, decimals = ""] = fraction.trim().split(".");
+  const digits = `${whole}${decimals.padEnd(2, "0")}`;
+  const cut = whole.length + 2;
+  const integer = digits.slice(0, cut).replace(/^0+(?=\d)/, "");
+  const rest = digits.slice(cut).replace(/0+$/, "");
+  return rest.length > 0 ? `${integer}.${rest}` : integer;
+}
+
 // The three money fields, read by any offered currency: a field on its own
 // cannot know its minor unit, since "10,50" is a dollar amount and no peso
 // amount at all (RF-121). `refineDebtTermsAmounts` is the one right reading,

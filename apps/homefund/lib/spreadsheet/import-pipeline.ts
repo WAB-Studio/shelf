@@ -953,12 +953,6 @@ function ownedKey(entity: SheetEntity, object: unknown): string | null {
   return null;
 }
 
-function ownedStatus(entity: SheetEntity, object: unknown, existingRefs: Set<string>): "new" | "update" | null {
-  const key = ownedKey(entity, object);
-  if (key === null) return null;
-  return existingRefs.has(key) ? "update" : "new";
-}
-
 /**
  * Refuses the second row a file holds for one account's terms or one account's cut-off: the
  * table keeps one, and a commit handed two would fail on its key with no row named.
@@ -1026,7 +1020,9 @@ export function processRow(
   // in the account's currency, rides back beside it for the commit.
   const counter = (resolved.object as { counterAmountCents?: number }).counterAmountCents;
   const object = counter !== undefined ? { ...checked.data, counterAmountCents: counter } : checked.data;
-  return { ...carried, status: ownedStatus(entity, object, existingRefs) ?? status, errors: [], object };
+  const owned = ownedKey(entity, object);
+  const ownedStatus = owned === null ? status : existingRefs.has(owned) ? "update" : "new";
+  return { ...carried, status: ownedStatus, errors: [], object };
 }
 
 // A blank reference becomes a key derived from the row's own content, so the same file imported
@@ -1081,8 +1077,8 @@ export function buildEffectiveRefs(
   recordsOf: (entity: SheetEntity) => RawRow[],
 ): EffectiveRefs {
   const places: EffectiveRefs["places"] = {
-    personal: `user:${scope.caller.userId}`,
-    group: scope.caller.groupId !== null ? `group:${scope.caller.groupId}` : null,
+    personal: scopeKeyOf({ ownerUserId: scope.caller.userId, groupId: null })!,
+    group: scopeKeyOf({ ownerUserId: null, groupId: scope.caller.groupId }),
   };
   const fundOrOwn = places.group ?? places.personal;
   return {
