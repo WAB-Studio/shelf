@@ -7,10 +7,12 @@ import { z } from "zod";
 
 import { listAccounts } from "@/db/queries/accounts";
 import { getMonthReview } from "@/db/queries/month-review";
+import { importStatement, previewStatement, StatementError } from "@/db/queries/statement-import";
 import { actAsCredentialOwner } from "@/db/session";
 import { lastClosedMonth } from "@/lib/dates";
 import { env } from "@/lib/env";
 import { pgErrorCode } from "@/lib/db-error";
+import { statementImportSchema, statementSchema } from "@/lib/validation/statement-import";
 
 import es from "../../messages/es.json";
 import pkg from "../../package.json";
@@ -40,6 +42,9 @@ async function run(ctx: ServerContext, load: () => Promise<unknown>): Promise<Ca
   try {
     return text(await actAsCredentialOwner(owner, load));
   } catch (error) {
+    if (error instanceof StatementError) {
+      return text({ error: t(`errors.statement.${error.key}`), line: error.line }, true);
+    }
     console.error("mcp tool failed:", error instanceof Error ? error.name : "unknown", pgErrorCode(error) ?? "");
     return text({ error: t("errors.unknown") }, true);
   }
@@ -84,8 +89,30 @@ function registerReadTools(server: McpServer): void {
   );
 }
 
+// RF-144: a statement Claude read enters in two calls. The preview writes nothing and returns the
+// key the import must quote back, so no import runs on lines nobody looked at.
+function registerStatementTools(server: McpServer): void {
+  server.registerTool(
+    "preview_statement",
+    { description: t("tools.previewStatement"), inputSchema: statementSchema, annotations: { readOnlyHint: true } },
+    (input, ctx) => run(ctx, () => previewStatement(input)),
+  );
+  server.registerTool(
+    "import_statement",
+    {
+      description: t("tools.importStatement"),
+      inputSchema: statementImportSchema,
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
+    },
+    (input, ctx) => run(ctx, () => importStatement(input)),
+  );
+}
+
 export function buildHandler(): (request: Request) => Promise<Response> {
-  return createMcpHandler(registerReadTools, {
+  return createMcpHandler((server) => {
+    registerReadTools(server);
+    registerStatementTools(server);
+  }, {
     serverInfo: { name: "homefund", version: pkg.version },
     instructions: t("instructions"),
   });

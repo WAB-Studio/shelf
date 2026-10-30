@@ -10,6 +10,7 @@ import {
   listSilencedShapes,
 } from "@/db/queries/ingest-review";
 import { getTransactionFormOptions } from "@/db/queries/transaction-form";
+import { listAwaitingCounterparty } from "@/db/queries/transactions";
 import { requireUser } from "@/db/session";
 import { routing } from "@/i18n/routing";
 
@@ -31,9 +32,10 @@ export default async function InboxPage(
   if (!hasLocale(routing.locales, locale)) notFound();
 
 
-  const [, deliveries, shapes, options] = await Promise.all([
+  const [, deliveries, awaiting, shapes, options] = await Promise.all([
     requireUser(),
     listPendingDeliveries(),
+    listAwaitingCounterparty(),
     listSilencedShapes(),
     getTransactionFormOptions(),
   ]);
@@ -42,6 +44,7 @@ export default async function InboxPage(
     <Page>
       <InboxScreen
         deliveries={deliveries}
+        awaiting={awaiting}
         shapes={shapes}
         options={options}
       />

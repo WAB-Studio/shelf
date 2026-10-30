@@ -189,6 +189,7 @@ import {
   sheetDescriptors,
   transactionRowSchema,
 } from "@/lib/spreadsheet/schema";
+import { counterpartyPatternKey } from "@/lib/ingest/counterparty-pattern";
 import { createTransactionSchema } from "@/lib/validation/transaction";
 import { and, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
@@ -4270,6 +4271,7 @@ async function main(): Promise<void> {
   await reminderMailSuite();
   await householdContributionSuite();
   await mcpDoorSuite();
+  await statementImportSuite();
 }
 
 // A member recorded without a login is someone in the fund: a leader whose fund holds one is not alone, so an
@@ -8774,7 +8776,6 @@ async function learnedRuleSuite(): Promise<void> {
   const { deleteCategory } = await import("@/db/queries/categories");
   const { recordIngestDelivery } = await import("@/db/queries/webhook-ingest");
   const { fingerprintMessage } = await import("@/lib/ingest/fingerprint");
-  const { counterpartyPatternKey } = await import("@/lib/ingest/counterparty-pattern");
   const user = await createMembershipFreeUser();
 
   const mkAccount = async (name: string): Promise<string> => {
@@ -15401,6 +15402,38 @@ async function householdContributionSuite(): Promise<void> {
   );
 }
 
+// Drives HomeFund's /mcp in-process, as Claude's connector would: JSON-RPC over POST, the answer
+// either plain JSON or one SSE `data:` frame. A tool's text is parsed when it is JSON.
+function mcpClient(POST: (request: Request) => Promise<Response>, token: string) {
+  let counter = 0;
+  const rpc = async (bearer: string | null, method: string, params?: unknown) => {
+    counter += 1;
+    const response = await POST(
+      new Request("http://localhost/mcp", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json, text/event-stream",
+          ...(bearer ? { Authorization: `Bearer ${bearer}` } : {}),
+        },
+        body: JSON.stringify({ jsonrpc: "2.0", id: counter, method, params }),
+      }),
+    );
+    const text = await response.text();
+    const frame = text.startsWith("{") ? text : (text.split("\n").find((line) => line.startsWith("data:")) ?? "").slice(5);
+    return { status: response.status, body: frame ? JSON.parse(frame) : null };
+  };
+  const tool = async (name: string, args: Record<string, unknown> = {}) => {
+    const { body } = await rpc(token, "tools/call", { name, arguments: args });
+    const raw: string = body?.result?.content?.[0]?.text ?? "null";
+    return {
+      isError: body?.result?.isError === true,
+      value: raw.startsWith("{") || raw.startsWith("[") || raw === "null" ? JSON.parse(raw) : raw,
+    };
+  };
+  return { rpc, tool };
+}
+
 async function mcpDoorSuite(): Promise<void> {
   console.log("");
   const tag = randomUUID().slice(0, 8);
@@ -15431,28 +15464,7 @@ async function mcpDoorSuite(): Promise<void> {
   );
   keep("webhook_credentials", ingestId);
 
-  let counter = 0;
-  const rpc = async (bearer: string | null, method: string, params?: unknown) => {
-    counter += 1;
-    const response = await POST(
-      new Request("http://localhost/mcp", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "application/json, text/event-stream",
-          ...(bearer ? { Authorization: `Bearer ${bearer}` } : {}),
-        },
-        body: JSON.stringify({ jsonrpc: "2.0", id: counter, method, params }),
-      }),
-    );
-    const text = await response.text();
-    const frame = text.startsWith("{") ? text : (text.split("\n").find((line) => line.startsWith("data:")) ?? "").slice(5);
-    return { status: response.status, body: frame ? JSON.parse(frame) : null };
-  };
-  const tool = async (name: string, args: Record<string, unknown> = {}) => {
-    const { body } = await rpc(token, "tools/call", { name, arguments: args });
-    return { isError: body?.result?.isError === true, value: JSON.parse(body?.result?.content?.[0]?.text ?? "null") };
-  };
+  const { rpc, tool } = mcpClient(POST, token);
 
   const [anonymous, forged, webhookKey, listed] = await Promise.all([
     rpc(null, "tools/list"),
@@ -15464,7 +15476,7 @@ async function mcpDoorSuite(): Promise<void> {
   assert(
     next("RF-144: /mcp answers 401 with no key, an unknown one or a webhook's, and lists its tools to a key for Claude"),
     anonymous.status === 401 && forged.status === 401 && webhookKey.status === 401 &&
-      JSON.stringify(names) === JSON.stringify(["list_accounts", "review_month"]),
+      JSON.stringify(names) === JSON.stringify(["import_statement", "list_accounts", "preview_statement", "review_month"]),
     `no key ${anonymous.status}, unknown key ${forged.status}, webhook key ${webhookKey.status}, tools ${JSON.stringify(names)}`,
   );
 
@@ -15505,3 +15517,152 @@ async function mcpDoorSuite(): Promise<void> {
     `open month isError ${openMonth.isError}, throttled /mcp ${throttled.status}, webhook key's count ${ingestWindow?.rate_count}`,
   );
 }
+
+// RF-144, RF-134, RF-135: a statement Claude read enters through a preview first, writes each line
+// once whatever the retries, links what was already recorded and proposes what was learned.
+async function statementImportSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const { POST } = await import("@/app/mcp/route");
+  const owner = await createMembershipFreeUser();
+  const stranger = await createMembershipFreeUser();
+  const ids = { bank: randomUUID(), card: randomUUID(), alien: randomUUID(), food: randomUUID(), pay: randomUUID() };
+  for (const [user, build] of [
+    [owner, async (tx: postgres.TransactionSql) => {
+      await tx`
+        insert into accounts (id, owner_user_id, name, kind, subtype, initial_balance_cents, initial_balance_on)
+        values (${ids.bank}, ${owner.id}, ${`Harness rf144 extracto ${tag}`}, 'asset', 'bank', 0, '2026-01-01'),
+          (${ids.card}, ${owner.id}, ${`Harness rf144 bolsillo ${tag}`}, 'asset', 'bank', 0, '2026-01-01')`;
+      await tx`
+        insert into categories (id, owner_user_id, name, kind, color)
+        values (${ids.food}, ${owner.id}, ${`Harness rf144 comida ${tag}`}, 'expense', '#4C8C4A'),
+          (${ids.pay}, ${owner.id}, ${`Harness rf144 sueldo ${tag}`}, 'income', '#4C8C4A')`;
+    }],
+    [stranger, async (tx: postgres.TransactionSql) => {
+      await tx`
+        insert into accounts (id, owner_user_id, name, kind, subtype, initial_balance_cents, initial_balance_on)
+        values (${ids.alien}, ${stranger.id}, ${`Harness rf144 ajena ${tag}`}, 'asset', 'bank', 0, '2026-01-01')`;
+    }],
+  ] as const) {
+    await fixtureSql.begin(async (tx) => {
+      const claims = JSON.stringify({ sub: user.id, role: "authenticated", aud: "authenticated" });
+      await tx`select set_config('request.jwt.claims', ${claims}, true)`;
+      await build(tx);
+    });
+  }
+  track("accounts", ids.bank);
+  track("accounts", ids.card);
+  track("accounts", ids.alien);
+  track("categories", ids.food);
+  track("categories", ids.pay);
+  const { id: credentialId, token } = await asUser(owner, () =>
+    issueWebhookCredential({ name: `Harness rf144 extracto ${tag}`, purpose: "mcp", defaultAccountId: null, defaultCategoryId: null }),
+  );
+  keep("webhook_credentials", credentialId);
+  // A movement the person already wrote by hand, which the statement's line 3 names again.
+  const { transactionId: handId } = await asUser(owner, () =>
+    createTransaction({
+      fromAccountId: ids.bank,
+      toAccountId: null,
+      amountCents: 4_500_000,
+      occurredAt: "2026-09-12",
+      description: "Arriendo",
+      externalRef: null,
+      splits: [{ categoryId: ids.food, amountCents: 4_500_000 }],
+      labelIds: [],
+    }),
+  );
+  // What completing «TRANSF A BOLSILLO» by hand taught before (RF-135).
+  await fixtureSql`
+    insert into ingest_counterparties (owner_user_id, pattern_key, pattern_label, side, state, trusted_account_id)
+    values (${owner.id}, ${counterpartyPatternKey("TRANSF A BOLSILLO 7781")}, 'TRANSF A BOLSILLO', 'to', 'trusted', ${ids.card})`;
+
+  const { tool } = mcpClient(POST, token);
+  const count = async () => {
+    const [row] = await fixtureSql<{ movements: number; sources: number }[]>`
+      select (select count(*)::int from transactions where from_account_id = ${ids.bank} or to_account_id = ${ids.bank}) as movements,
+        (select count(*)::int from transaction_sources where account_id = ${ids.bank}) as sources`;
+    return row!;
+  };
+
+  const rows = [
+    { line: 1, date: "2026-09-10", description: "MERCADO EXITO", amountCents: -8_990_000, reference: `R1-${tag}`, categoryId: ids.food },
+    { line: 2, date: "2026-09-11", description: "PAGO NOMINA", amountCents: 520_000_000, categoryId: ids.pay },
+    { line: 3, date: "2026-09-12", description: "ARRIENDO SEPT", amountCents: -4_500_000, categoryId: ids.food },
+    { line: 4, date: "2026-09-13", description: "TRANSF A BOLSILLO 7781", amountCents: -100_000_00, categoryId: ids.food, unsure: true },
+    { line: 5, date: "2026-09-14", description: "SIN CATEGORIA", amountCents: -1_000 },
+  ];
+  const before = await count();
+  const first = await tool("preview_statement", { accountId: ids.bank, rows });
+  type Line = { line: number; status: string; reason?: string; matchedTransactionId?: string; proposal?: { accountId: string } };
+  const lines = (first.value?.lines ?? []) as Line[];
+  const at = (line: number) => lines.find((one) => one.line === line);
+  const refused = await tool("import_statement", { accountId: ids.bank, rows, previewKey: first.value?.previewKey ?? "x" });
+  const afterRefused = await count();
+  assert(
+    next("RF-144: the preview names each line (new, matches the hand-written one, invalid with its reason) and proposes the learned account; an import with an invalid line writes nothing"),
+    !first.isError &&
+      at(1)?.status === "new" && at(2)?.status === "new" &&
+      at(3)?.status === "matches" && at(3)?.matchedTransactionId === handId &&
+      at(4)?.proposal?.accountId === ids.card &&
+      at(5)?.status === "invalid" && at(5)?.reason === "needs_category_or_account" &&
+      refused.isError && afterRefused.movements === before.movements && afterRefused.sources === before.sources,
+    `preview ${JSON.stringify(first.value)}, refused ${JSON.stringify(refused.value)}, counts ${JSON.stringify([before, afterRefused])}`,
+  );
+
+  const clean = rows.slice(0, 4);
+  const second = await tool("preview_statement", { accountId: ids.bank, rows: clean });
+  const changed = await tool("import_statement", {
+    accountId: ids.bank,
+    rows: clean.map((row) => (row.line === 2 ? { ...row, amountCents: 1 } : row)),
+    previewKey: second.value?.previewKey,
+  });
+  const imported = await tool("import_statement", { accountId: ids.bank, rows: clean, previewKey: second.value?.previewKey });
+  const again = await tool("import_statement", { accountId: ids.bank, rows: clean, previewKey: second.value?.previewKey });
+  const fresh = await tool("preview_statement", { accountId: ids.bank, rows: clean });
+  const after = await count();
+  const [waiting] = await fixtureSql<{ awaiting: boolean }[]>`
+    select t.awaiting_counterparty as awaiting from transactions t
+    join transaction_sources s on s.transaction_id = t.id and s.account_id = ${ids.bank}
+    where t.description = 'TRANSF A BOLSILLO 7781'`;
+  assert(
+    next("RF-134: an import writes the new lines with their source and links the matched one; a changed line or a repeat writes nothing more"),
+    changed.isError && !imported.isError &&
+      imported.value?.created === 3 && imported.value?.linked === 1 &&
+      again.isError && fresh.value?.counts?.already_imported === 4 &&
+      after.movements === before.movements + 3 && after.sources === before.sources + 4 &&
+      waiting?.awaiting === true,
+    `changed ${JSON.stringify(changed.value)}, imported ${JSON.stringify(imported.value)}, again ${JSON.stringify(again.value)}, fresh ${JSON.stringify(fresh.value?.counts)}, counts ${JSON.stringify([before, after])}, awaiting ${waiting?.awaiting}`,
+  );
+
+  const alien = await tool("preview_statement", { accountId: ids.alien, rows: clean });
+  const [alienRows] = await fixtureSql<{ n: number }[]>`
+    select count(*)::int as n from transactions where from_account_id = ${ids.alien} or to_account_id = ${ids.alien}`;
+  assert(
+    next("RF-144: a statement for another person's account is refused as not found"),
+    alien.isError && alienRows?.n === 0,
+    `alien ${JSON.stringify(alien.value)}, rows ${alienRows?.n}`,
+  );
+
+  const twin = { ...rows[0]!, line: 9, reference: `R9-${tag}` };
+  const mismatched = { line: 10, date: "2026-09-15", description: "PAGO ERRADO", amountCents: -2_000, categoryId: ids.pay };
+  const third = await tool("preview_statement", { accountId: ids.bank, rows: [rows[0], twin, mismatched] });
+  const thirdLines = (third.value?.lines ?? []) as Line[];
+  const lone = [{ line: 1, date: "2026-09-16", description: "RETIRO CAJERO", amountCents: -3_000_000, categoryId: ids.food }];
+  const lonePreview = await tool("preview_statement", { accountId: ids.bank, rows: lone });
+  const both = await Promise.all([
+    tool("import_statement", { accountId: ids.bank, rows: lone, previewKey: lonePreview.value?.previewKey }),
+    tool("import_statement", { accountId: ids.bank, rows: lone, previewKey: lonePreview.value?.previewKey }),
+  ]);
+  const [lonely] = await fixtureSql<{ n: number }[]>`
+    select count(*)::int as n from transactions where from_account_id = ${ids.bank} and description = 'RETIRO CAJERO'`;
+  assert(
+    next("RF-134: a new reference on an imported line's day and amount is new; a category of the wrong kind is invalid; two imports at once write a line once"),
+    thirdLines.find((one) => one.line === 1)?.status === "already_imported" &&
+      thirdLines.find((one) => one.line === 9)?.status === "new" &&
+      thirdLines.find((one) => one.line === 10)?.reason === "category_mismatch" &&
+      lonely?.n === 1,
+    `third ${JSON.stringify(thirdLines)}, concurrent ${JSON.stringify(both.map((one) => one.value))}, written ${lonely?.n}`,
+  );
+}
+
