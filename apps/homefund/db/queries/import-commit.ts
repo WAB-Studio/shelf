@@ -3,9 +3,11 @@ import type { PgTable } from "drizzle-orm/pg-core";
 
 import {
   accountReconciliations,
+  accountStatements,
   accounts,
   budgets,
   categories,
+  debtTerms,
   goalContributions,
   groupMembers,
   labels,
@@ -25,6 +27,7 @@ import type { SheetEntity } from "@/lib/spreadsheet/schema";
 import { TIME_ZONE } from "@/lib/locales";
 import type { CreateAccountInput } from "@/lib/validation/account";
 import type { CreateBudgetInput } from "@/lib/validation/budget";
+import { percentToFraction, type DebtTermsInput } from "@/lib/validation/debt-terms";
 import type { CreateGoalInput } from "@/lib/validation/savings-goal";
 import type { ImportedAdjustment } from "@/lib/validation/account-reconciliation";
 import type { CreateCategoryInput } from "@/lib/validation/category";
@@ -51,7 +54,7 @@ export type CommitScope = { userId: string; groupId: string | null };
 // this very one is what a later write refuses — a blank row skipped upstream pulls
 // the two apart, so neither substitutes for the other. `externalRef` is the stable
 // per-scope key (RF-52): present on an update to locate the row, written on an
-// insert unless blank. `placeholderId` is set only for a NEW account or category,
+// insert unless blank. `placeholderId` is set only for a NEW account, category, label or goal,
 // so a reference to it remaps to its REAL inserted id. `object` is the entity's
 // `createXSchema` payload.
 export type CommitRow<T> = {
@@ -147,7 +150,7 @@ function transactionReasonKey(error: unknown): string {
   return "errors.unexpected";
 }
 
-// The whole file's passing rows, in the five entity buckets the pipeline produced. The
+// The whole file's passing rows, in the entity buckets the pipeline produced. The
 // commit walks them in dependency order (RF-51): members and categories, then accounts,
 // then recurring rules and transactions.
 export type CommitInput = {
@@ -162,6 +165,8 @@ export type CommitInput = {
   budgets?: CommitRow<RestoredBudget>[];
   goals?: CommitRow<RestoredGoal>[];
   goalContributions?: CommitRow<RestoredContribution>[];
+  debts?: CommitRow<DebtTermsInput>[];
+  statements?: CommitRow<RestoredStatement>[];
 };
 
 // What a backup row adds to a budget's or a goal's form: its place and whether it is archived.
@@ -170,6 +175,21 @@ export type RestoredBudget = CreateBudgetInput & Restored;
 export type RestoredGoal = Omit<CreateGoalInput, "initialContribution"> & Restored;
 // The day it was set aside, and the movement it earmarks by that movement's key (RF-87).
 export type RestoredContribution = { goalId: string; amount: string; contributedOn: string; movement: string | null };
+// A closed statement as the ledger holds it: its figures signed decimals (RF-129).
+export type RestoredStatement = {
+  accountId: string;
+  periodStart: string;
+  cutOffDate: string;
+  paymentDueDate: string | null;
+  openingBalance: string | null;
+  closingBalance: string;
+  credits: string | null;
+  debits: string | null;
+  minimumPayment: string | null;
+  interestCharged: string | null;
+  feesCharged: string | null;
+  source: string;
+};
 
 export type CommitOutcome = { inserted: number; updated: number };
 
@@ -254,7 +274,7 @@ function jsonbParam(value: unknown): SQL {
  * update runs against `tx`, so a single failure rolls back ALL of it and the audit
  * trigger captures each write (RF-45). Rows classified `new` insert; rows classified
  * `update` overwrite the existing row by its `external_ref` within scope (RF-52). A
- * reference to a file-new account or category resolves to that entity's REAL inserted
+ * reference to a file-new account, category, label or goal resolves to that entity's REAL inserted
  * id through the placeholder maps built as the accounts and categories land — never the
  * pipeline's placeholder. The caller opens the transaction (`withUserDb`) and settles the
  * session; this function only writes.
@@ -277,6 +297,8 @@ export async function commitImport(
     input.budgets ?? [],
     input.goals ?? [],
     input.goalContributions ?? [],
+    input.debts ?? [],
+    input.statements ?? [],
   ];
   if (buckets.some((rows) => rows.some((row) => (row.errors?.length ?? 0) > 0 || row.object == null))) {
     throw new ActionError(FILE_HAS_ERRORS);
@@ -338,6 +360,8 @@ async function writeImport(
   await commitBudgets(tx, input.budgets ?? [], { accountMap, categoryMap, labelMap }, placeholders, scope);
   await archiveRestored(tx, savingsGoals, input.goals ?? [], scope);
   await archiveRestored(tx, budgets, input.budgets ?? [], scope);
+  await commitDebts(tx, input.debts ?? [], accountMap, placeholders);
+  await commitStatements(tx, input.statements ?? [], accountMap, placeholders);
 
   for (const bucket of [
     input.members,
@@ -350,6 +374,8 @@ async function writeImport(
     input.budgets ?? [],
     input.goals ?? [],
     input.goalContributions ?? [],
+    input.debts ?? [],
+    input.statements ?? [],
   ]) {
     for (const row of bucket) count(row);
   }
@@ -1214,6 +1240,93 @@ async function archiveRestored(
       update ${table} as t set archived_at = case when r.archived then coalesce(t.archived_at, now()) end
       from jsonb_to_recordset(${jsonbParam(chunk)}) as r(external_ref text, archived boolean)
       where t.external_ref = r.external_ref and (t.archived_at is null) = r.archived and ${inScope(scope)}`);
+  }
+}
+
+// An account's terms (RF-78), written over the ones it already carries: the account is the key.
+async function commitDebts(
+  tx: Transaction,
+  rows: CommitRow<DebtTermsInput>[],
+  accountMap: Map<string, string>,
+  placeholders: Set<string>,
+): Promise<void> {
+  const cents = (value: string | null | undefined) => (value == null ? null : toCents(value));
+  const records = rows.map((row) => {
+    const accountId = link(row.object.accountId, accountMap);
+    assertLinked(accountId, placeholders);
+    return {
+      account_id: accountId,
+      debt_kind: row.object.debtKind,
+      annual_rate: percentToFraction(row.object.annualRate),
+      minimum_payment_cents: cents(row.object.minimumPayment),
+      minimum_payment_pct: row.object.minimumPaymentPct == null ? null : percentToFraction(row.object.minimumPaymentPct),
+      credit_limit_cents: cents(row.object.creditLimit),
+      statement_cut_off_day: row.object.statementCutOffDay ?? null,
+      payment_due_day: row.object.paymentDueDay ?? null,
+      aval_cents: cents(row.object.aval),
+    };
+  });
+  for (const chunk of chunked(records)) {
+    await tx.execute(sql`
+      insert into ${debtTerms} (account_id, debt_kind, annual_rate, minimum_payment_cents, minimum_payment_pct,
+        credit_limit_cents, statement_cut_off_day, payment_due_day, aval_cents)
+      select account_id, debt_kind, annual_rate, minimum_payment_cents, minimum_payment_pct,
+        credit_limit_cents, statement_cut_off_day, payment_due_day, aval_cents
+      from jsonb_to_recordset(${jsonbParam(chunk)}) as r(
+        account_id uuid, debt_kind text, annual_rate numeric, minimum_payment_cents bigint, minimum_payment_pct numeric,
+        credit_limit_cents bigint, statement_cut_off_day smallint, payment_due_day smallint, aval_cents bigint)
+      on conflict (account_id) do update set
+        debt_kind = excluded.debt_kind, annual_rate = excluded.annual_rate,
+        minimum_payment_cents = excluded.minimum_payment_cents, minimum_payment_pct = excluded.minimum_payment_pct,
+        credit_limit_cents = excluded.credit_limit_cents, statement_cut_off_day = excluded.statement_cut_off_day,
+        payment_due_day = excluded.payment_due_day, aval_cents = excluded.aval_cents`);
+  }
+}
+
+// A signed decimal figure in the integer minor units the ledger keeps; the sign stays its own.
+function toSignedCents(figure: string | null): number | null {
+  if (figure === null) return null;
+  const negative = figure.trim().startsWith("-");
+  const cents = toCents(figure.trim().replace(/^-/, ""));
+  return negative ? -cents : cents;
+}
+
+// A statement already closed for an account's cut-off is final (RF-129): only new ones land.
+async function commitStatements(
+  tx: Transaction,
+  rows: CommitRow<RestoredStatement>[],
+  accountMap: Map<string, string>,
+  placeholders: Set<string>,
+): Promise<void> {
+  const records = rows
+    .filter((row) => row.status === "new")
+    .map((row) => {
+      const accountId = link(row.object.accountId, accountMap);
+      assertLinked(accountId, placeholders);
+      return {
+        account_id: accountId,
+        period_start: row.object.periodStart,
+        cut_off_date: row.object.cutOffDate,
+        payment_due_date: row.object.paymentDueDate,
+        opening_balance_cents: toSignedCents(row.object.openingBalance),
+        closing_balance_cents: toSignedCents(row.object.closingBalance),
+        credits_cents: toSignedCents(row.object.credits),
+        debits_cents: toSignedCents(row.object.debits),
+        minimum_payment_cents: toSignedCents(row.object.minimumPayment),
+        interest_charged_cents: toSignedCents(row.object.interestCharged),
+        fees_charged_cents: toSignedCents(row.object.feesCharged),
+        source: row.object.source,
+      };
+    });
+  for (const chunk of chunked(records)) {
+    await tx.execute(sql`
+      insert into ${accountStatements} (account_id, period_start, cut_off_date, payment_due_date, opening_balance_cents,
+        closing_balance_cents, credits_cents, debits_cents, minimum_payment_cents, interest_charged_cents,
+        fees_charged_cents, source)
+      select * from jsonb_to_recordset(${jsonbParam(chunk)}) as r(
+        account_id uuid, period_start date, cut_off_date date, payment_due_date date, opening_balance_cents bigint,
+        closing_balance_cents bigint, credits_cents bigint, debits_cents bigint, minimum_payment_cents bigint,
+        interest_charged_cents bigint, fees_charged_cents bigint, source text)`);
   }
 }
 

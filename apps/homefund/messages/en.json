@@ -1255,7 +1255,9 @@
       "transactions": "Transactions",
       "budgets": "Budgets",
       "goals": "Savings goals",
-      "goalContributions": "Goal contributions"
+      "goalContributions": "Goal contributions",
+      "debts": "Debts",
+      "statements": "Statements"
     },
     "columns": {
       "name": "Name",
@@ -1295,7 +1297,25 @@
       "targetDate": "Target date",
       "goal": "Goal",
       "contributedOn": "Contribution date",
-      "movement": "Movement (reference)"
+      "movement": "Movement (reference)",
+      "debtKind": "Debt kind",
+      "annualRate": "Effective annual rate (%)",
+      "minimumPayment": "Minimum payment",
+      "minimumPaymentPct": "Minimum payment (%)",
+      "creditLimit": "Credit limit",
+      "cutOffDay": "Cut-off day",
+      "dueDay": "Due day",
+      "aval": "Guarantee",
+      "periodStart": "Period start",
+      "cutOffDate": "Cut-off date",
+      "paymentDueDate": "Payment due date",
+      "openingBalance": "Opening balance",
+      "closingBalance": "Closing balance",
+      "credits": "Credits",
+      "debits": "Debits",
+      "interestCharged": "Interest",
+      "feesCharged": "Fees",
+      "source": "Source"
     },
     "filenames": {
       "export": "finances-export",

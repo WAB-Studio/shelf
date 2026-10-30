@@ -40,6 +40,8 @@ const freshScope = (): Scope => ({
     budgets: new Set(),
     goals: new Set(),
     goalContributions: new Set(),
+    debts: new Set(),
+    statements: new Set(),
     accounts: new Set(["acc-1", "acc-2"]),
     members: new Set(),
     categories: new Set(["cat-1"]),
@@ -763,4 +765,61 @@ test("a contribution names a file-new goal by name and a movement by its key; an
   assert.deepEqual(linked.object, { goalId: goal.placeholderId, amount: "50000", contributedOn: "2026-10-01", movement: "mov-1" });
   assert.equal((bare.object as { movement: string | null }).movement, null);
   assert.deepEqual(lost.errors, [{ key: "data.import.errors.unknownReference", column: "movement", value: "nowhere" }]);
+});
+
+// ---- debts and statements (RF-142, RF-78, RF-129) ---------------------------------------------
+
+test("a rate the ledger keeps as a fraction reads as the percentage a person types", async () => {
+  const { fractionToPercent } = await import("./schema");
+  const cases: [string, string][] = [["0.2899", "28.99"], ["0.289900", "28.99"], ["0", "0"], ["0.05", "5"], ["1", "100"], ["0.123456", "12.3456"], ["0.0005", "0.05"]];
+  for (const [fraction, percent] of cases) assert.equal(fractionToPercent(fraction), percent, fraction);
+});
+
+test("a debt row is new for an account with no terms and an update for one that has them; blank figures are none", async () => {
+  scope.existingRefs.debts = new Set([SAVINGS.id]);
+  const rows = await sheetsOf(
+    await bookSheets({
+      debts: [
+        { account: "Checking", debtKind: "revolving", annualRate: "28.99", minimumPaymentPct: "5", cutOffDay: 15, dueDay: 30 },
+        { account: "Savings", debtKind: "installment", annualRate: 12, minimumPayment: 350000 },
+      ],
+    }),
+  );
+  const [fresh, known] = rows("debts");
+  assert.deepEqual(fresh.errors, []);
+  assert.equal(fresh.status, "new");
+  assert.deepEqual(fresh.object, {
+    accountId: CHECKING.id,
+    debtKind: "revolving",
+    annualRate: "28.99",
+    minimumPayment: null,
+    minimumPaymentPct: "5",
+    creditLimit: null,
+    statementCutOffDay: 15,
+    paymentDueDay: 30,
+    aval: null,
+  });
+  assert.equal(known.status, "update");
+  assert.equal((known.object as { minimumPayment: string }).minimumPayment, "350000");
+});
+
+test("a statement keeps its signed figures; one already closed for that cut-off is an update, a cut-off before its start is refused", async () => {
+  scope.existingRefs.statements = new Set([`${CHECKING.id}|2026-09-15`]);
+  const rows = await sheetsOf(
+    await bookSheets({
+      statements: [
+        { account: "Checking", periodStart: "2026-08-16", cutOffDate: "2026-09-15", closingBalance: -1250000.5 },
+        { account: "Checking", periodStart: "2026-09-16", cutOffDate: "2026-10-15", paymentDueDate: "2026-10-30", closingBalance: -980000, interestCharged: 31250 },
+        { account: "Checking", periodStart: "2026-11-16", cutOffDate: "2026-11-15", closingBalance: 0 },
+      ],
+    }),
+  );
+  const [closed, fresh, backwards] = rows("statements");
+  assert.equal(closed.status, "update");
+  assert.equal((closed.object as { closingBalance: string }).closingBalance, "-1250000.5");
+  assert.equal(fresh.status, "new");
+  assert.deepEqual(fresh.errors, []);
+  assert.equal((fresh.object as { interestCharged: string; openingBalance: null }).interestCharged, "31250");
+  assert.equal((fresh.object as { openingBalance: null }).openingBalance, null);
+  assert.equal(backwards.errors[0]?.column, "periodStart");
 });

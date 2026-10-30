@@ -1,8 +1,10 @@
 import { z } from "zod";
 
+import { accountStatements } from "@/db/schema/account-statements";
 import { accounts } from "@/db/schema/accounts";
 import { budgets } from "@/db/schema/budgets";
 import { categories } from "@/db/schema/categories";
+import { debtTerms } from "@/db/schema/debt-terms";
 import { goalContributions } from "@/db/schema/goal-contributions";
 import { groupMembers } from "@/db/schema/group-members";
 import { labels } from "@/db/schema/labels";
@@ -15,6 +17,7 @@ import { centsToPesos, pesosToCents } from "@/lib/money";
 import { CATEGORY_COLORS } from "@/lib/fund/category-color";
 import { ACCOUNT_PLACEMENTS, accountCurrencySchema, createAccountSchema } from "@/lib/validation/account";
 import { BUDGET_PERIODS } from "@/lib/validation/budget";
+import { DEBT_KINDS } from "@/lib/validation/debt-terms";
 import { CATEGORY_KINDS } from "@/lib/validation/category";
 import { createMemberSchema } from "@/lib/validation/member";
 import { anyCurrencyAmountSchema, occurredAtSchema, pesoAmountSchema } from "@/lib/validation/transaction";
@@ -32,6 +35,8 @@ export const SHEET_ENTITIES = [
   "budgets",
   "goals",
   "goalContributions",
+  "debts",
+  "statements",
 ] as const;
 
 export type SheetEntity = (typeof SHEET_ENTITIES)[number];
@@ -68,6 +73,8 @@ type FieldColumn<Model> = {
   // The cell says only whether `field` is set (TRUE or blank), never its value: a reconciliation id
   // means nothing after a restore, the fact that the row is an adjustment does.
   readonly flag?: true;
+  // A rate the ledger keeps as a fraction and the sheet shows as a percentage.
+  readonly percent?: true;
 };
 
 // A cell with no backing `$inferSelect` column: the export derives it from a
@@ -101,6 +108,8 @@ type TransactionModel = typeof transactions.$inferSelect;
 type BudgetModel = typeof budgets.$inferSelect;
 type GoalModel = typeof savingsGoals.$inferSelect;
 type ContributionModel = typeof goalContributions.$inferSelect;
+type DebtModel = typeof debtTerms.$inferSelect;
+type StatementModel = typeof accountStatements.$inferSelect;
 
 // Every entity now carries an `external_ref` column: its stable per-scope import
 // key (RF-52), matched on to update instead of duplicate. Bounded like the model
@@ -347,6 +356,68 @@ export const goalContributionRowSchema = z.object({
 });
 export type GoalContributionRow = z.infer<typeof goalContributionRowSchema>;
 
+// The ledger keeps a rate as a fraction (0.2899); a person reads it as a percentage (28.99).
+// Shifted as text, so no float ever touches it.
+export function fractionToPercent(fraction: string): string {
+  const [whole, decimals = ""] = fraction.trim().split(".");
+  const digits = `${whole}${decimals.padEnd(2, "0")}`;
+  const cut = whole.length + 2;
+  const integer = digits.slice(0, cut).replace(/^0+(?=\d)/, "");
+  const rest = digits.slice(cut).replace(/0+$/, "");
+  return rest.length > 0 ? `${integer}.${rest}` : integer;
+}
+
+// An optional money cell reaches the guard as "" when blank (`toNameShaped`): no figure.
+function blankAsNone<T extends z.ZodType>(schema: T) {
+  return z.preprocess((cell) => (cell === "" ? null : cell), schema.nullish());
+}
+
+// A percentage cell, typed as text or as a number; the form's own rule reads it next.
+const percentCellSchema = z.union([z.string(), z.number()]).transform(String);
+
+// A day of the month a card cuts or falls due on.
+const monthDaySchema = z.number().int().min(1).max(31);
+
+export const debtRowSchema = z.object({
+  account: referenceNameSchema,
+  debtKind: z.enum(DEBT_KINDS),
+  annualRate: percentCellSchema,
+  minimumPayment: blankAsNone(z.string()),
+  minimumPaymentPct: percentCellSchema.nullish(),
+  creditLimit: blankAsNone(z.string()),
+  cutOffDay: monthDaySchema.nullish(),
+  dueDay: monthDaySchema.nullish(),
+  aval: blankAsNone(z.string()),
+});
+export type DebtRow = z.infer<typeof debtRowSchema>;
+
+// A statement's figures are what the ledger holds, signed by the account's kind: a card's
+// balance owed is negative. A cell is a plain signed decimal, never read as a form's magnitude.
+export const signedFigureSchema = z.string().trim().regex(/^-?\d+(\.\d{1,2})?$/);
+
+export const STATEMENT_SOURCES = ["recorded", "imported"] as const;
+
+// A statement's key: its account and its cut-off day (RF-129).
+export function statementKey(accountId: string, cutOffDate: string): string {
+  return `${accountId}|${cutOffDate}`;
+}
+
+export const statementRowSchema = z.object({
+  account: referenceNameSchema,
+  periodStart: sheetCivilDateSchema,
+  cutOffDate: sheetCivilDateSchema,
+  paymentDueDate: sheetCivilDateSchema.nullish(),
+  openingBalance: blankAsNone(signedFigureSchema),
+  closingBalance: signedFigureSchema,
+  credits: blankAsNone(signedFigureSchema),
+  debits: blankAsNone(signedFigureSchema),
+  minimumPayment: blankAsNone(signedFigureSchema),
+  interestCharged: blankAsNone(signedFigureSchema),
+  feesCharged: blankAsNone(signedFigureSchema),
+  source: z.enum(STATEMENT_SOURCES).nullish().transform((cell) => cell ?? "recorded"),
+});
+export type StatementRow = z.infer<typeof statementRowSchema>;
+
 // `placement` has no single column of its own: the export derives personal vs
 // group from whether `ownerUserId` is set, and the import resolves the owner or
 // group back from it.
@@ -493,6 +564,47 @@ export const goalContributionSheetDescriptor = {
   rowSchema: goalContributionRowSchema,
 } satisfies SheetDescriptor<ContributionModel, typeof goalContributionRowSchema>;
 
+// One row per account that carries terms (RF-78): the account is its key, so a restore writes
+// over the terms it already has.
+export const debtSheetDescriptor = {
+  entity: "debts",
+  refField: "account",
+  columns: [
+    { key: "account", field: "accountId", ref: { entity: "accounts" } },
+    { key: "debtKind", field: "debtKind" },
+    { key: "annualRate", field: "annualRate", percent: true },
+    { key: "minimumPayment", field: "minimumPaymentCents", money: moneyBoundary },
+    { key: "minimumPaymentPct", field: "minimumPaymentPct", percent: true },
+    { key: "creditLimit", field: "creditLimitCents", money: moneyBoundary },
+    { key: "cutOffDay", field: "statementCutOffDay" },
+    { key: "dueDay", field: "paymentDueDay" },
+    { key: "aval", field: "avalCents", money: moneyBoundary },
+  ],
+  rowSchema: debtRowSchema,
+} satisfies SheetDescriptor<DebtModel, typeof debtRowSchema>;
+
+// A statement is final once closed (RF-129): the account and its cut-off name it, and a
+// restore never writes over one already there.
+export const statementSheetDescriptor = {
+  entity: "statements",
+  refField: "cutOffDate",
+  columns: [
+    { key: "account", field: "accountId", ref: { entity: "accounts" } },
+    { key: "periodStart", field: "periodStart" },
+    { key: "cutOffDate", field: "cutOffDate" },
+    { key: "paymentDueDate", field: "paymentDueDate" },
+    { key: "openingBalance", field: "openingBalanceCents", money: moneyBoundary },
+    { key: "closingBalance", field: "closingBalanceCents", money: moneyBoundary },
+    { key: "credits", field: "creditsCents", money: moneyBoundary },
+    { key: "debits", field: "debitsCents", money: moneyBoundary },
+    { key: "minimumPayment", field: "minimumPaymentCents", money: moneyBoundary },
+    { key: "interestCharged", field: "interestChargedCents", money: moneyBoundary },
+    { key: "feesCharged", field: "feesChargedCents", money: moneyBoundary },
+    { key: "source", field: "source" },
+  ],
+  rowSchema: statementRowSchema,
+} satisfies SheetDescriptor<StatementModel, typeof statementRowSchema>;
+
 // The one map both sides iterate, in the fixed entity order.
 export const sheetDescriptors = {
   accounts: accountSheetDescriptor,
@@ -504,4 +616,6 @@ export const sheetDescriptors = {
   budgets: budgetSheetDescriptor,
   goals: goalSheetDescriptor,
   goalContributions: goalContributionSheetDescriptor,
+  debts: debtSheetDescriptor,
+  statements: statementSheetDescriptor,
 } as const;

@@ -4262,6 +4262,7 @@ async function main(): Promise<void> {
   await o7m3MonthReviewSuite();
   await o7m3RuleEdgesSuite();
   await o8m5ReviewSurvivorsSuite();
+  await everyEntityBackupSuite();
 }
 
 // A member recorded without a login is someone in the fund: a leader whose fund holds one is not alone, so an
@@ -6925,8 +6926,8 @@ async function importScopeOwnerSuite(
   );
   await readImportScope();
   const used = await trips(() => readImportScope());
-  // Each read is one transaction of four statements (begin, settle, query, commit): 7 reads.
-  assert(next("The reads fan out"), used <= 7 * 4, `${used} statements for 7 reads`);
+  // Each read is one transaction of four statements (begin, settle, query, commit): 13 reads since RF-142.
+  assert(next("The reads fan out"), used <= 13 * 4, `${used} statements for 13 reads`);
 }
 
 // M23: expense and income leave a reconciliation's adjustment out, and `adjustments` selects them alone (RF-138, RF-23, RF-118).
@@ -7224,6 +7225,8 @@ async function importCategoryScopeSuite(): Promise<void> {
     budgets: new Set(),
     goals: new Set(),
     goalContributions: new Set(),
+    debts: new Set(),
+    statements: new Set(),
     accounts: new Set(["m28-acct-ref"]),
     members: new Set(),
     categories: new Set(["m28-cat-ref"]),
@@ -13933,9 +13936,9 @@ async function o6m7OpeningRefusalsSuite(): Promise<void> {
   const MOVEMENT_KEY = "errors.movementBeforeOpening";
   const OPENING_KEY = "accounts.errors.openingAfterMovement";
   const IMPORT_KEY = "data.import.errors.beforeOpening";
-  // The statements `readImportScope` put on the wire under the harness before this module (oleada-6 at ab45f478); it
-  // reads one more column and no more.
-  const SCOPE_TRIPS = 24;
+  // The statements `readImportScope` puts on the wire under the harness: oleada-6's 24 (ab45f478), plus four for each
+  // of the six reads RF-142 fans out beside them (labels, goals, budget and contribution keys, debts, statements).
+  const SCOPE_TRIPS = 48;
   const show = (value: unknown) => JSON.stringify(value ?? "nothing");
 
   type Said = { serverError?: string; validationErrors?: unknown; data?: Record<string, unknown> } | undefined;
@@ -14791,3 +14794,206 @@ function shiftMonth(base: string, delta: number): string {
   return addCivilMonths(`${base.slice(0, 7)}-01`, delta).slice(0, 7);
 }
 
+
+// RF-142: a backup carries every entity a fund holds, not only its ledger. Labels and the labels on each movement,
+// budgets, savings goals (one archived) and their contributions (one earmarking a movement), a card's debt terms and
+// a closed statement leave in the workbook, come back into a clean fund as the person who imports, and a second
+// import of the same file updates what it wrote and duplicates nothing (RF-52).
+async function everyEntityBackupSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const today = todayInBogota();
+  const name = (what: string) => `Harness rf142 ${what} ${tag}`;
+  const LIMIT = 50_000_000;
+  const TARGET = 300_000_000;
+  const SAVED = 2_500_000;
+  const EARMARKED = 1_000_000;
+  const MOVEMENT = 4_000_000;
+  const CLOSING = -125_000_050;
+
+  const source = await createMembershipFreeUser();
+  const seeded = await asUser(source, async () => {
+    const { categoryId } = await createCategory({
+      scope: { ownerUserId: source.id },
+      name: name("categoria"),
+      kind: "expense",
+      parentId: null,
+      color: CATEGORY_COLORS[0],
+    });
+    track("categories", categoryId);
+    const open = async (what: string, kind: "asset" | "liability", subtype: string) => {
+      const { accountId } = await createAccount({
+        name: name(what),
+        kind,
+        subtype,
+        ownerUserId: source.id,
+        groupId: null,
+        isShared: false,
+        institution: null,
+        lastFour: null,
+        settlementCurrency: "COP",
+        amountMinor: 900_000_000,
+        balanceOn: shiftDate(today, -90),
+      } as never);
+      track("accounts", accountId);
+      return accountId;
+    };
+    return { categoryId, bankId: await open("banco", "asset", "bank"), cardId: await open("tarjeta", "liability", "card") };
+  });
+  const [label] = await fixtureSql<{ id: string }[]>`
+    insert into labels (owner_user_id, name, color) values (${source.id}, ${name("etiqueta")}, ${CATEGORY_COLORS[1]}) returning id`;
+  const { transactionId } = await asUser(source, () =>
+    createTransaction({
+      fromAccountId: seeded.bankId,
+      toAccountId: null,
+      amountCents: MOVEMENT,
+      occurredAt: shiftDate(today, -20),
+      description: name("movimiento"),
+      externalRef: `rf142-${tag}-movimiento`,
+      splits: [{ categoryId: seeded.categoryId, amountCents: MOVEMENT }],
+      labelIds: [label.id],
+    } as never),
+  );
+  track("transactions", transactionId);
+  await fixtureSql`
+    insert into budgets (owner_user_id, category_id, label_id, period, limit_cents, threshold_pct, name)
+    values (${source.id}, ${seeded.categoryId}, ${label.id}, 'monthly', ${LIMIT}, 80, ${name("presupuesto")})`;
+  const [live] = await fixtureSql<{ id: string }[]>`
+    insert into savings_goals (owner_user_id, name, target_amount_cents, target_date, account_id)
+    values (${source.id}, ${name("meta viva")}, ${TARGET}, ${shiftDate(today, 200)}, ${seeded.bankId}) returning id`;
+  const [kept] = await fixtureSql<{ id: string }[]>`
+    insert into savings_goals (owner_user_id, name, target_amount_cents, archived_at)
+    values (${source.id}, ${name("meta archivada")}, ${TARGET}, now()) returning id`;
+  await fixtureSql`
+    insert into goal_contributions (goal_id, amount_cents, created_at, transaction_id) values
+      (${live.id}, ${SAVED}, ${`${shiftDate(today, -10)}T12:00:00-05:00`}, null),
+      (${live.id}, ${EARMARKED}, ${`${shiftDate(today, -20)}T12:00:00-05:00`}, ${transactionId}),
+      (${kept.id}, ${SAVED}, ${`${shiftDate(today, -30)}T12:00:00-05:00`}, null)`;
+  await fixtureSql`
+    insert into debt_terms (account_id, debt_kind, annual_rate, minimum_payment_pct, credit_limit_cents, statement_cut_off_day, payment_due_day)
+    values (${seeded.cardId}, 'revolving', 0.2899, 0.05, 1500000000, 15, 30)`;
+  await fixtureSql`
+    insert into account_statements (account_id, period_start, cut_off_date, payment_due_date, closing_balance_cents, interest_charged_cents)
+    values (${seeded.cardId}, ${shiftDate(today, -45)}, ${shiftDate(today, -15)}, ${shiftDate(today, -1)}, ${CLOSING}, 3125000)`;
+
+  // The real file: written by the workbook, read back by the workbook, as the import reads an upload.
+  const reverse: ReverseSheetLabels = {
+    entityBySheetName: new Map(SHEET_ENTITIES.map((entity) => [`sheets.${entity}`, entity] as const)),
+    columnKeyByHeader: new Map(
+      SHEET_ENTITIES.map(
+        (entity) =>
+          [entity, new Map(sheetDescriptors[entity].columns.map((column) => [`columns.${column.key}`, column.key] as const))] as const,
+      ),
+    ),
+  };
+  const exported = await asUser(source, () => readExport({ entityKeys: [...SHEET_ENTITIES] }));
+  const workbook = buildWorkbook({
+    data: exported,
+    labels: { sheetName: (entity) => `sheets.${entity}`, columnHeader: (key) => `columns.${key}` },
+  });
+  const bytes = new Uint8Array(await workbook.xlsx.writeBuffer());
+
+  const restore = async (user: HarnessUser) => {
+    const parsed = await parseWorkbook({ buffer: bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer, labels: reverse });
+    const importScope = await asUser(user, () => readImportScope());
+    const recordsOf = (entity: (typeof SHEET_ENTITIES)[number]) => (parsed[entity] ?? []).map((row) => row.record as RawRow);
+    const refs = buildEffectiveRefs(importScope, recordsOf);
+    const rows = (entity: (typeof SHEET_ENTITIES)[number]) =>
+      (parsed[entity] ?? []).map((row, index) =>
+        processRow(entity, row.record as RawRow, index, row.sheetRow, refs, importScope.existingRefs[entity]),
+      ).map((row) => ({ ...row, object: row.object as never }));
+    const all = SHEET_ENTITIES.flatMap((entity) => rows(entity).map((row) => ({ entity, row })));
+    const errors = all.flatMap(({ entity, row }) => row.errors.map((e) => `${entity}:${e.key}@${e.column ?? ""}=${e.value ?? ""}`));
+    const isAdjustment = (row: { object: unknown }) => typeof row.object === "object" && row.object !== null && "adjustment" in row.object;
+    const input: CommitInput = {
+      members: rows("members"),
+      categories: rows("categories"),
+      labels: rows("labels"),
+      accounts: rows("accounts"),
+      recurringRules: rows("recurringRules"),
+      transactions: rows("transactions").filter((row) => !isAdjustment(row)),
+      adjustments: rows("transactions").filter(isAdjustment),
+      budgets: rows("budgets"),
+      goals: rows("goals"),
+      goalContributions: rows("goalContributions"),
+      debts: rows("debts"),
+      statements: rows("statements"),
+    };
+    let outcome: { inserted: number; updated: number } | undefined;
+    let failure: unknown;
+    try {
+      outcome = await asUser(user, () => withUserDb((tx) => commitImport(tx, input, { userId: user.id, groupId: null })));
+    } catch (error) {
+      failure = error;
+    }
+    return { errors, outcome, failure };
+  };
+
+  const held = async (user: HarnessUser) => {
+    const [row] = await fixtureSql<Record<string, string | number | null>[]>`
+      select
+        (select count(*)::int from labels where owner_user_id = ${user.id}) as labels,
+        (select string_agg(l.name, ',') from transaction_labels tl join labels l on l.id = tl.label_id
+          join transactions t on t.id = tl.transaction_id where t.description = ${name("movimiento")} and l.owner_user_id = ${user.id}) as movement_labels,
+        (select count(*)::int from budgets where owner_user_id = ${user.id}) as budgets,
+        (select concat_ws('|', b.period, b.limit_cents, b.threshold_pct, c.name, l.name) from budgets b
+          join categories c on c.id = b.category_id left join labels l on l.id = b.label_id where b.owner_user_id = ${user.id}) as budget,
+        (select count(*)::int from savings_goals where owner_user_id = ${user.id}) as goals,
+        (select string_agg(name || ':' || (archived_at is not null)::text || ':' || coalesce(target_date::text, ''), ',' order by name)
+          from savings_goals where owner_user_id = ${user.id}) as goal_states,
+        (select count(*)::int from goal_contributions gc join savings_goals g on g.id = gc.goal_id where g.owner_user_id = ${user.id}) as contributions,
+        (select string_agg(gc.amount_cents::text || '@' || (gc.created_at at time zone 'America/Bogota')::date::text || ':' || (t.description is not null)::text, ',' order by gc.amount_cents, gc.created_at)
+          from goal_contributions gc join savings_goals g on g.id = gc.goal_id left join transactions t on t.id = gc.transaction_id
+          where g.owner_user_id = ${user.id}) as contribution_rows,
+        (select concat_ws('|', d.debt_kind, d.annual_rate::float8, d.minimum_payment_pct::float8, d.credit_limit_cents, d.statement_cut_off_day, d.payment_due_day)
+          from debt_terms d join accounts a on a.id = d.account_id where a.owner_user_id = ${user.id}) as debt,
+        (select count(*)::int from account_statements s join accounts a on a.id = s.account_id where a.owner_user_id = ${user.id}) as statements,
+        (select concat_ws('|', s.period_start, s.cut_off_date, s.payment_due_date, s.closing_balance_cents, s.interest_charged_cents)
+          from account_statements s join accounts a on a.id = s.account_id where a.owner_user_id = ${user.id}) as statement`;
+    return row;
+  };
+  const trackHeld = async (user: HarnessUser) => {
+    for (const r of await fixtureSql<{ id: string }[]>`select id from accounts where owner_user_id = ${user.id}`) track("accounts", r.id);
+    for (const r of await fixtureSql<{ id: string }[]>`select id from categories where owner_user_id = ${user.id}`) track("categories", r.id);
+  };
+
+  const original = await held(source);
+  const clean = await createMembershipFreeUser();
+  const first = await restore(clean);
+  await trackHeld(clean);
+  const restored = await held(clean);
+  const said = (run: Awaited<ReturnType<typeof restore>>) =>
+    `errors [${run.errors.join(", ")}]; ${run.failure === undefined ? `commit ${JSON.stringify(run.outcome)}` : `threw ${refusal(run.failure)}`}`;
+  assert(
+    next("RF-142: every row of the backup passes the import with no error and the commit lands as the person who imports"),
+    first.errors.length === 0 && first.failure === undefined && (first.outcome?.inserted ?? 0) > 0,
+    said(first),
+  );
+  for (const [what, key] of [
+    ["the label, and the label on its movement", "movement_labels"],
+    ["the budget with its period, limit, warning, category and label", "budget"],
+    ["both savings goals, the archived one archived and the live one with its target day", "goal_states"],
+    ["the three contributions with their amounts and days, the earmarked one still on its movement", "contribution_rows"],
+    ["the card's debt terms, its rate and minimum as the fractions it had", "debt"],
+    ["the closed statement with its days and its signed figures", "statement"],
+  ] as const) {
+    assert(
+      next(`RF-142: the clean fund holds ${what} as the backed-up fund held it`),
+      original[key] !== null && restored[key] === original[key],
+      `backed up ${JSON.stringify(original[key])}; restored ${JSON.stringify(restored[key])}`,
+    );
+  }
+
+  const second = await restore(clean);
+  const again = await held(clean);
+  const counts = ["labels", "budgets", "goals", "contributions", "statements"] as const;
+  assert(
+    next("RF-52: the same backup imported twice updates what the first wrote and duplicates no label, budget, goal, contribution or statement"),
+    second.errors.length === 0 &&
+      second.failure === undefined &&
+      second.outcome?.inserted === 0 &&
+      counts.every((key) => again[key] === restored[key]) &&
+      again.debt === restored.debt,
+    `${said(second)}; before ${JSON.stringify(counts.map((key) => restored[key]))}, after ${JSON.stringify(counts.map((key) => again[key]))}`,
+  );
+}

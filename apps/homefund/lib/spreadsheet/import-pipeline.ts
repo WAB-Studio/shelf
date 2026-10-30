@@ -17,7 +17,15 @@ import { isCivilDate } from "@/lib/dates";
 import { ActionError } from "@/lib/errors";
 import { centsToPesos, maxAmountMinor, parseAmount } from "@/lib/money";
 import { resolveCategoryInScope, scopeKeyOf, type ScopeKey } from "@/lib/spreadsheet/resolve-category";
-import { labelNames, SHEET_ENTITIES, sheetDescriptors, type SheetEntity } from "@/lib/spreadsheet/schema";
+import {
+  labelNames,
+  SHEET_ENTITIES,
+  sheetDescriptors,
+  signedFigureSchema,
+  statementKey,
+  STATEMENT_SOURCES,
+  type SheetEntity,
+} from "@/lib/spreadsheet/schema";
 import { parseWorkbook, type ParsedRow, type ReverseSheetLabels } from "@/lib/spreadsheet/workbook";
 import { importedAdjustmentSchema } from "@/lib/validation/account-reconciliation";
 import { createAccountSchema } from "@/lib/validation/account";
@@ -25,6 +33,7 @@ import { createCategorySchema } from "@/lib/validation/category";
 import { importedLabelSchema } from "@/lib/validation/label";
 import { ACCOUNT_PLACEMENTS } from "@/lib/validation/account";
 import { createBudgetSchema } from "@/lib/validation/budget";
+import { debtTermsSchema } from "@/lib/validation/debt-terms";
 import { createGoalSchema } from "@/lib/validation/savings-goal";
 import { createMemberSchema } from "@/lib/validation/member";
 import { createRecurringRuleSchema } from "@/lib/validation/recurring-rule";
@@ -96,6 +105,25 @@ const restoredContributionSchema = z.object({
   movement: z.string().nullable(),
 });
 
+// A closed statement as the ledger holds it (RF-129): its figures signed, its days in order.
+const restoredStatementSchema = z
+  .object({
+    accountId: z.uuid(),
+    periodStart: z.string().refine(isCivilDate),
+    cutOffDate: z.string().refine(isCivilDate),
+    paymentDueDate: z.string().refine(isCivilDate).nullable(),
+    openingBalance: signedFigureSchema.nullable(),
+    closingBalance: signedFigureSchema,
+    credits: signedFigureSchema.nullable(),
+    debits: signedFigureSchema.nullable(),
+    minimumPayment: signedFigureSchema.nullable(),
+    interestCharged: signedFigureSchema.nullable(),
+    feesCharged: signedFigureSchema.nullable(),
+    source: z.enum(STATEMENT_SOURCES),
+  })
+  .refine((row) => row.periodStart <= row.cutOffDate, { path: ["periodStart"] })
+  .refine((row) => row.paymentDueDate === null || row.paymentDueDate >= row.cutOffDate, { path: ["paymentDueDate"] });
+
 // The authoritative id-shaped schema each entity re-runs after name→id resolution,
 // the same one its form uses (RNF-10).
 const createSchemas = {
@@ -108,6 +136,8 @@ const createSchemas = {
   budgets: createBudgetSchema.extend(restoredFields),
   goals: createGoalSchema.omit({ initialContribution: true }).extend(restoredFields),
   goalContributions: restoredContributionSchema,
+  debts: debtTermsSchema,
+  statements: restoredStatementSchema,
 } as const;
 
 // A raw parsed record holds a name, a scalar, integer cents or nothing.
@@ -129,7 +159,7 @@ export type RowFieldError = {
 // schema-validated object a later commit writes. `object` is null for an errored row.
 // `externalRef` and `placeholderId` ride alongside because the authoritative schema
 // strips both from `object`, yet the commit needs the raw stable key to write it and
-// key an update (RF-52), and the placeholder a NEW account or category was assigned so
+// key an update (RF-52), and the placeholder a NEW account, category, label or goal was assigned so
 // a reference to it remaps to its REAL inserted id (RF-51), never the placeholder.
 // `index` is the row's array position — 0-based, stable across preview and commit
 // only because both re-parse the SAME file: it seeds `placeholderFor`, never a
@@ -144,7 +174,7 @@ export type ResolvedRow = {
   object: unknown | null;
   // The row's raw stable key, null when the file left it blank (a trigger backfills it).
   externalRef: string | null;
-  // The deterministic placeholder a file-new account or category is referenced by;
+  // The deterministic placeholder a file-new account, category, label or goal is referenced by;
   // null for every other entity and for an update, which reuses the existing real id.
   placeholderId: string | null;
 };
@@ -438,6 +468,8 @@ const GATE2_COLUMN_BY_FIELD: Partial<Record<SheetEntity, Record<string, string>>
   budgets: { categoryId: "category", accountId: "account", labelId: "label" },
   goals: { accountId: "account" },
   goalContributions: { goalId: "goal" },
+  debts: { accountId: "account", statementCutOffDay: "cutOffDay", paymentDueDay: "dueDay" },
+  statements: { accountId: "account" },
 };
 
 // The column a Zod issue's path names, at whichever gate raised it (RF-51). Gate
@@ -718,6 +750,41 @@ function resolveAndShape(
       };
     }
 
+    case "debts":
+      return {
+        object: {
+          accountId: resolveInto(data.account, refs.accounts, "account"),
+          debtKind: data.debtKind,
+          annualRate: data.annualRate,
+          minimumPayment: data.minimumPayment ?? null,
+          minimumPaymentPct: data.minimumPaymentPct ?? null,
+          creditLimit: data.creditLimit ?? null,
+          statementCutOffDay: data.cutOffDay ?? null,
+          paymentDueDay: data.dueDay ?? null,
+          aval: data.aval ?? null,
+        },
+        errors,
+      };
+
+    case "statements":
+      return {
+        object: {
+          accountId: resolveInto(data.account, refs.accounts, "account"),
+          periodStart: data.periodStart,
+          cutOffDate: data.cutOffDate,
+          paymentDueDate: data.paymentDueDate ?? null,
+          openingBalance: data.openingBalance ?? null,
+          closingBalance: data.closingBalance,
+          credits: data.credits ?? null,
+          debits: data.debits ?? null,
+          minimumPayment: data.minimumPayment ?? null,
+          interestCharged: data.interestCharged ?? null,
+          feesCharged: data.feesCharged ?? null,
+          source: data.source,
+        },
+        errors,
+      };
+
     case "accounts": {
       const ref = text(raw.externalRef);
       const existing = ref.length > 0 ? refs.accountCurrencyByRef.get(ref) : undefined;
@@ -864,6 +931,19 @@ function resolveAndShape(
   }
 }
 
+// Debts and statements have no key of their own: what they belong to says whether the fund
+// already holds them, an account's terms (RF-78) or an account's cut-off (RF-129).
+function ownedStatus(entity: SheetEntity, object: unknown, existingRefs: Set<string>): "new" | "update" | null {
+  if (entity === "debts") {
+    return existingRefs.has((object as { accountId: string }).accountId) ? "update" : "new";
+  }
+  if (entity === "statements") {
+    const { accountId, cutOffDate } = object as { accountId: string; cutOffDate: string };
+    return existingRefs.has(statementKey(accountId, cutOffDate)) ? "update" : "new";
+  }
+  return null;
+}
+
 // One row through the three ordered gates (RF-51): the light guard, name→id
 // resolution against the effective set, then the authoritative schema. Errors are
 // collected, never thrown; each gate feeds the next only on success, and the row is
@@ -878,7 +958,7 @@ export function processRow(
 ): ResolvedRow {
   const status = classify(entity, raw, existingRefs);
 
-  // The raw stable key and, for a NEW account or category, the placeholder a reference
+  // The raw stable key and, for a NEW account, category, label or goal, the placeholder a reference
   // to it resolves to — both carried whatever the gates decide, so an errored row still
   // reports its key and the commit never recomputes either.
   const ref = text(raw.externalRef);
@@ -914,7 +994,7 @@ export function processRow(
   // in the account's currency, rides back beside it for the commit.
   const counter = (resolved.object as { counterAmountCents?: number }).counterAmountCents;
   const object = counter !== undefined ? { ...checked.data, counterAmountCents: counter } : checked.data;
-  return { ...carried, errors: [], object };
+  return { ...carried, status: ownedStatus(entity, object, existingRefs) ?? status, errors: [], object };
 }
 
 // A blank reference becomes a key derived from the row's own content, so the same file imported

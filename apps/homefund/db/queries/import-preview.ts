@@ -1,11 +1,14 @@
 import "server-only";
 
 import { isNotNull } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 
 import {
+  accountStatements,
   accounts,
   budgets,
   categories,
+  debtTerms,
   goalContributions,
   groupMembers,
   labels,
@@ -15,12 +18,12 @@ import {
 } from "@/db/schema";
 import { getUserGroup } from "@/db/queries/groups";
 import { requireUser, withUserDb } from "@/db/session";
-import { type SheetEntity } from "@/lib/spreadsheet/schema";
+import { statementKey, type SheetEntity } from "@/lib/spreadsheet/schema";
 
 // The table each entity's `external_ref` lives on, keyed by the import's entity
-// names. A row's `external_ref` is its stable per-scope import key (RF-52): present
+// names; debts and statements carry none and are keyed by what they belong to. A row's `external_ref` is its stable per-scope import key (RF-52): present
 // in the scope means an update, absent means a new row.
-const refTables = {
+const refTables: Record<Exclude<SheetEntity, "debts" | "statements">, typeof accounts | PgTable> = {
   accounts,
   members: groupMembers,
   categories,
@@ -30,7 +33,7 @@ const refTables = {
   budgets,
   goals: savingsGoals,
   goalContributions,
-} as const;
+};
 
 // One referenced entity as the resolver needs it: its real id, its current name, and
 // its stable key, so a file row that renames it (matched by key) can override the
@@ -69,12 +72,12 @@ export type ImportScope = {
 
 // The set of `external_ref` values already in the caller's scope for one entity,
 // the null-guarded index the classification matches on (RF-52).
-async function readExistingRefs(entity: SheetEntity): Promise<Set<string>> {
-  const table = refTables[entity];
+async function readExistingRefs(entity: keyof typeof refTables): Promise<Set<string>> {
+  const table = refTables[entity] as typeof accounts;
   return withUserDb(async (tx) => {
     const rows = await tx
       .select({ ref: table.externalRef })
-      .from(table as typeof accounts)
+      .from(table)
       .where(isNotNull(table.externalRef));
     return new Set(rows.map((row) => row.ref as string));
   });
@@ -107,6 +110,8 @@ export async function readImportScope(): Promise<ImportScope> {
     transactionRefs,
     budgetRefs,
     contributionRefs,
+    debtAccounts,
+    statementKeys,
   ] =
     await Promise.all([
       requireUser(),
@@ -163,6 +168,18 @@ export async function readImportScope(): Promise<ImportScope> {
       readExistingRefs("transactions"),
       readExistingRefs("budgets"),
       readExistingRefs("goalContributions"),
+      // The accounts that already carry terms: a debt row for one of them rewrites it (RF-78).
+      withUserDb(async (tx) => {
+        const rows = await tx.select({ accountId: debtTerms.accountId }).from(debtTerms);
+        return new Set(rows.map((row) => row.accountId));
+      }),
+      // The statements already closed, by account and cut-off (RF-129): final, never rewritten.
+      withUserDb(async (tx) => {
+        const rows = await tx
+          .select({ accountId: accountStatements.accountId, cutOffDate: accountStatements.cutOffDate })
+          .from(accountStatements);
+        return new Set(rows.map((row) => statementKey(row.accountId, row.cutOffDate)));
+      }),
     ]);
 
   return {
@@ -181,6 +198,8 @@ export async function readImportScope(): Promise<ImportScope> {
       budgets: budgetRefs,
       goals: refsOf(goalRows),
       goalContributions: contributionRefs,
+      debts: debtAccounts,
+      statements: statementKeys,
     },
   };
 }

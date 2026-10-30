@@ -110,7 +110,7 @@ export function buildWorkbook(input: {
 }
 
 /**
- * The fill-in template (RF-49): all five sheets, header row only, plus a hidden
+ * The fill-in template (RF-49): every sheet, header row only, plus a hidden
  * options sheet holding the caller's existing account and category names. Every
  * account-referencing column (transactions/recurring `fromAccount`/`toAccount`)
  * gets a dropdown against the account list; every category-referencing column

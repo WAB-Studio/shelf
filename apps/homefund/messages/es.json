@@ -1255,7 +1255,9 @@
       "transactions": "Movimientos",
       "budgets": "Presupuestos",
       "goals": "Metas de ahorro",
-      "goalContributions": "Aportes a metas"
+      "goalContributions": "Aportes a metas",
+      "debts": "Deudas",
+      "statements": "Extractos"
     },
     "columns": {
       "name": "Nombre",
@@ -1295,7 +1297,25 @@
       "targetDate": "Fecha objetivo",
       "goal": "Meta",
       "contributedOn": "Fecha del aporte",
-      "movement": "Movimiento (referencia)"
+      "movement": "Movimiento (referencia)",
+      "debtKind": "Tipo de deuda",
+      "annualRate": "Tasa efectiva anual (%)",
+      "minimumPayment": "Pago mínimo",
+      "minimumPaymentPct": "Pago mínimo (%)",
+      "creditLimit": "Cupo",
+      "cutOffDay": "Día de corte",
+      "dueDay": "Día de pago",
+      "aval": "Aval",
+      "periodStart": "Inicio del periodo",
+      "cutOffDate": "Fecha de corte",
+      "paymentDueDate": "Fecha límite de pago",
+      "openingBalance": "Saldo inicial",
+      "closingBalance": "Saldo final",
+      "credits": "Abonos",
+      "debits": "Cargos",
+      "interestCharged": "Intereses",
+      "feesCharged": "Comisiones",
+      "source": "Origen"
     },
     "filenames": {
       "export": "finanzas-datos",

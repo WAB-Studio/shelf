@@ -11,6 +11,7 @@ import type {
   RestoredBudget,
   RestoredContribution,
   RestoredGoal,
+  RestoredStatement,
 } from "@/db/queries/import-commit";
 import { getUserGroup } from "@/db/queries/groups";
 import { withUserDb } from "@/db/session";
@@ -25,6 +26,7 @@ import type { CreateCategoryInput } from "@/lib/validation/category";
 import type { ImportedLabel } from "@/lib/validation/label";
 import type { CreateMemberInput } from "@/lib/validation/member";
 import type { CreateRecurringRuleInput } from "@/lib/validation/recurring-rule";
+import type { DebtTermsInput } from "@/lib/validation/debt-terms";
 import type { CreateTransactionInput } from "@/lib/validation/transaction";
 
 // The upload guards raise these; the shared pipeline owns the rest (RF-48).
@@ -145,6 +147,8 @@ export const commitImportAction = authActionClient
       budgets: rowsFor<RestoredBudget>(result, "budgets"),
       goals: rowsFor<RestoredGoal>(result, "goals"),
       goalContributions: rowsFor<RestoredContribution>(result, "goalContributions"),
+      debts: rowsFor<DebtTermsInput>(result, "debts"),
+      statements: rowsFor<RestoredStatement>(result, "statements"),
     };
 
     const outcome = await withUserDb((tx) => commitImport(tx, input, scope)).catch((error: unknown) => {

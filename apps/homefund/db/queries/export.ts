@@ -7,9 +7,11 @@ import type { SQL } from "drizzle-orm";
 import { transactionListConditions } from "@/db/queries/transactions";
 import type { TransactionListFilters } from "@/db/queries/transactions";
 import {
+  accountStatements,
   accounts,
   budgets,
   categories,
+  debtTerms,
   goalContributions,
   groupMembers,
   labels,
@@ -22,7 +24,7 @@ import {
 import { withUserDb } from "@/db/session";
 import { TIME_ZONE } from "@/lib/locales";
 import { SHEET_ENTITIES, sheetDescriptors } from "@/lib/spreadsheet/schema";
-import { LABEL_SEPARATOR, type RefEntity, type SheetEntity } from "@/lib/spreadsheet/schema";
+import { fractionToPercent, LABEL_SEPARATOR, type RefEntity, type SheetEntity } from "@/lib/spreadsheet/schema";
 import { ACCOUNT_PLACEMENTS } from "@/lib/validation/account";
 
 // The table each entity reads from, keyed by the export's own entity names.
@@ -36,6 +38,8 @@ const exportTables = {
   budgets,
   goals: savingsGoals,
   goalContributions,
+  debts: debtTerms,
+  statements: accountStatements,
 } as const;
 
 // A parsed cell holds a resolved name, a scalar, integer cents or nothing; never a
@@ -62,7 +66,7 @@ export type ExportInput = {
   entityKeys: SheetEntity[];
   from?: Date | string;
   to?: Date | string;
-  // Narrows the transactions sheet alone (RF-118); the other four entities stay
+  // Narrows the transactions sheet alone (RF-118); every other entity stays
   // the whole-fund dump RF-50 asks for.
   transactionFilters?: TransactionExportFilters;
 };
@@ -97,6 +101,7 @@ type ColumnView =
       readonly field: string;
       readonly ref?: { readonly entity: RefEntity };
       readonly flag?: true;
+      readonly percent?: true;
     }
   | {
       readonly key: string;
@@ -144,7 +149,7 @@ async function readEntityRows<E extends SheetEntity>(
   }
 
   return withUserDb(async (tx) => {
-    // The table is a union across the five entities; a single concrete type lets
+    // The table is a union across the entities; a single concrete type lets
     // the query builder resolve `.from`, and the projection carries the shape.
     const rows = await tx
       .select(projection)
@@ -282,6 +287,11 @@ function toExportRows<E extends SheetEntity>(
         continue;
       }
 
+      if (column.percent) {
+        cell[column.key] = value == null ? null : fractionToPercent(String(value));
+        continue;
+      }
+
       if (column.key === "contributedOn") {
         cell[column.key] = toCivilDate(value as Date);
         continue;
@@ -302,7 +312,7 @@ function toExportRows<E extends SheetEntity>(
  * resolve to names (RF-49); money stays integer cents, the sheet's cents→pesos
  * boundary a later module's. Transfers stay in the transactions set: RF-19's
  * report-only exclusion does not reach a backup. Filters narrow the transactions
- * sheet to what the ledger list shows (RF-118) and leave the other four sheets
+ * sheet to what the ledger list shows (RF-118) and leave every other sheet
  * whole; with none, every read is the one the unfiltered export already ran.
  */
 export async function readExport(input: ExportInput): Promise<ExportResult> {
