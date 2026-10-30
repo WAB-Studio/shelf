@@ -611,7 +611,9 @@
     "chipFrom": "Desde {date}",
     "chipTo": "Hasta {date}",
     "kindAdjustment": "Descuadre",
-    "adjustmentFix": "Se corrige cuadrando la cuenta de nuevo."
+    "adjustmentFix": "Se corrige cuadrando la cuenta de nuevo.",
+    "forHousehold": "Del hogar",
+    "forHouseholdHint": "Un gasto del hogar pagado con tu cuenta: cuenta como tu aporte al fondo."
   },
   "cash": {
     "withdrawAction": "Retirar efectivo",

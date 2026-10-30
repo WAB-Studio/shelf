@@ -196,6 +196,8 @@ export const transactionFields = {
   // True while that second amount is what the person expects to be billed and
   // not what the issuer billed (RF-123). Absent is the column's own default.
   counterIsEstimate: z.boolean().optional(),
+  // «Del hogar» (RF-139): a household bill paid from a personal account. Read only on an expense.
+  forHousehold: z.boolean().optional(),
   occurredAt: occurredAtSchema,
   description: z
     .string()

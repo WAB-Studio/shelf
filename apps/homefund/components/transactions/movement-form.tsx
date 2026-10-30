@@ -38,6 +38,8 @@ import {
   IconButton,
   Select,
   Spinner,
+  Switch,
+  TapTarget,
   Text,
   TextField,
   type Responsive,
@@ -84,6 +86,7 @@ type MovementFormValues = {
   currency: CurrencyCode;
   counterAmount: string | null;
   counterIsEstimate: boolean;
+  forHousehold: boolean;
   occurredAt: string;
   description: string | null;
   externalRef?: string;
@@ -280,6 +283,7 @@ export function MovementForm({
                   }) ?? movement.currency,
                 ),
           counterIsEstimate: movement.counterIsEstimate,
+          forHousehold: movement.forHousehold,
           occurredAt: movement.occurredAt,
           description: movement.description,
           splits: movement.splits.map((split) => ({
@@ -307,6 +311,7 @@ export function MovementForm({
             BASE_CURRENCY,
           counterAmount: null,
           counterIsEstimate: false,
+          forHousehold: false,
           occurredAt: defaults?.occurredAt ?? todayInBogota(),
           description:
             defaults?.description !== undefined ? defaults.description : null,
@@ -392,6 +397,9 @@ export function MovementForm({
   }, [options.accounts, scopeAccountId]);
 
   const isGroupScoped = kind !== null && scope === "group";
+  // «Del hogar» (RF-139) is offered on an expense from a personal account to a person who has a fund.
+  const offersHousehold =
+    kind === "expense" && scope === "personal" && options.accounts.some((one) => one.groupId);
 
   // A movement is never its own cause (RF-132), so the movement under edit is
   // dropped from what the picker offers; the rest arrive already ordered.
@@ -972,6 +980,29 @@ export function MovementForm({
               </Field>
             )}
           />
+          {offersHousehold && (
+            <Controller
+              name="forHousehold"
+              control={form.control}
+              render={({ field }) => (
+                <Text as="label" size="2">
+                  <TapTarget align="center" gap="2">
+                    <Switch
+                      checked={field.value}
+                      disabled={isPending}
+                      onCheckedChange={field.onChange}
+                    />
+                    <Flex direction="column">
+                      {t("forHousehold")}
+                      <Text size="1" color="gray">
+                        {t("forHouseholdHint")}
+                      </Text>
+                    </Flex>
+                  </TapTarget>
+                </Text>
+              )}
+            />
+          )}
           {/* The movement this one is a charge on (RF-132). Nothing on the
               form waits for it, and no caller is asked to fill it. */}
           {causeCandidates.length > 0 && (

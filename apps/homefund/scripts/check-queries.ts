@@ -4267,6 +4267,7 @@ async function main(): Promise<void> {
   await moneyFormsStaleSuite();
   await nextPaymentMinimumSuite();
   await reminderMailSuite();
+  await householdContributionSuite();
 }
 
 // A member recorded without a login is someone in the fund: a leader whose fund holds one is not alone, so an
@@ -15305,5 +15306,77 @@ async function reminderMailSuite(): Promise<void> {
     next("RF-141: a reminder moved to another date is mailed again"),
     moved.length === 1 && moved[0]?.id === dueToday && moved[0]?.amountCents === 4_500_000 && moved[0]?.currency === "COP",
     `moved ${JSON.stringify(moved)}`,
+async function householdContributionSuite(): Promise<void> {
+  console.log("");
+  const BILL = 4_500_000;
+  const range = currentMonthRange();
+  const payer = await createMembershipFreeUser();
+  const ids = { group: randomUUID(), member: randomUUID(), bank: randomUUID(), cash: randomUUID(), category: randomUUID() };
+  await fixtureSql.begin(async (tx) => {
+    const claims = JSON.stringify({ sub: payer.id, role: "authenticated", aud: "authenticated" });
+    await tx`select set_config('request.jwt.claims', ${claims}, true)`;
+    await tx`insert into groups (id, name, cash_mode) values (${ids.group}, 'Harness rf139 hogar', 'per_member')`;
+    await tx`
+      insert into group_members (id, group_id, user_id, name, role)
+      values (${ids.member}, ${ids.group}, ${payer.id}, 'Harness rf139', 'leader')`;
+    await tx`
+      insert into accounts (id, owner_user_id, name, kind, subtype, initial_balance_cents, initial_balance_on)
+      values
+        (${ids.bank}, ${payer.id}, 'Harness rf139 banco', 'asset', 'bank', 50000000, '2026-01-01'),
+        (${ids.cash}, ${payer.id}, 'Harness rf139 efectivo', 'asset', 'cash', 0, '2026-01-01')`;
+    await tx`
+      insert into categories (id, owner_user_id, name, kind, color)
+      values (${ids.category}, ${payer.id}, 'Harness rf139 servicios', 'expense', '#4C8C4A')`;
+  });
+  track("groups", ids.group);
+  track("group_members", ids.member);
+  track("accounts", ids.bank);
+  track("accounts", ids.cash);
+  track("categories", ids.category);
+
+  const mine = async () =>
+    (await asUser(payer, () => getMemberContributions(range))).find(
+      (row) => row.userId === payer.id && row.currency === "COP",
+    )?.contributionCents ?? 0;
+  const bill = {
+    fromAccountId: ids.bank,
+    toAccountId: null,
+    amountCents: BILL,
+    occurredAt: todayInBogota(),
+    description: "Harness rf139 recibo del hogar",
+    splits: [{ categoryId: ids.category, amountCents: BILL }],
+    labelIds: [],
+  };
+  const before = await mine();
+  const { transactionId } = await asUser(payer, () =>
+    createTransaction({ ...bill, forHousehold: true, externalRef: null }),
+  );
+  keep("transactions", transactionId);
+  const marked = await mine();
+  assert(
+    next("RF-139: an expense from a personal account marked «del hogar» counts as its payer's contribution"),
+    before === 0 && marked === BILL,
+    `contribution ${before} before, ${marked} after; expected 0 and ${BILL}`,
+  );
+
+  await asUser(payer, () => updateTransaction({ ...bill, transactionId }));
+  const untouched = await mine();
+  await asUser(payer, () => updateTransaction({ ...bill, transactionId, forHousehold: false }));
+  const cleared = await mine();
+  assert(
+    next("RF-139: an edit that does not send the mark keeps it; clearing it takes the bill out of the contribution"),
+    untouched === BILL && cleared === 0,
+    `after a blind edit ${untouched} (expected ${BILL}), after clearing ${cleared} (expected 0)`,
+  );
+
+  const { transactionId: transferId } = await asUser(payer, () =>
+    createTransaction({ ...bill, toAccountId: ids.cash, splits: [], forHousehold: true, externalRef: null }),
+  );
+  keep("transactions", transferId);
+  const stored = await readColumn<boolean>("transactions", "id", transferId, "for_household");
+  assert(
+    next("RF-139: only an expense carries the mark; a movement with a destination stores it false"),
+    stored === false,
+    `for_household on a transfer = ${stored}`,
   );
 }

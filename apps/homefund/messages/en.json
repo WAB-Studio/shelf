@@ -611,7 +611,9 @@
     "chipFrom": "From {date}",
     "chipTo": "To {date}",
     "kindAdjustment": "Gap",
-    "adjustmentFix": "Fix it by reconciling the account again."
+    "adjustmentFix": "Fix it by reconciling the account again.",
+    "forHousehold": "For the household",
+    "forHouseholdHint": "A household bill paid from your account: it counts as your contribution to the fund."
   },
   "cash": {
     "withdrawAction": "Withdraw cash",
