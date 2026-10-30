@@ -28,7 +28,7 @@ function names(rows: readonly unknown[] | undefined): string[] {
 }
 
 /**
- * The fill-in template download (RF-49). Streams an `.xlsx` of all five sheets,
+ * The fill-in template download (RF-49). Streams an `.xlsx` of every sheet,
  * header row only, whose account and category reference columns offer the caller's
  * existing names as dropdowns sourced from a hidden options sheet. The name read is
  * RLS-bound, so the options never exceed what the caller can write back on import.

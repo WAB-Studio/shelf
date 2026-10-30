@@ -180,7 +180,7 @@ accounting exports, native apps. None of this gets built or left
 
 - [x] **RF-49** — Download a spreadsheet template with the expected columns and the existing accounts and categories as valid options.
 - [x] **RF-118** — The transaction listing exports exactly the rows its active filters select, in the same shape the import accepts.
-- [ ] **RF-142** *(successor of RF-50)* — The backup exports, and the import restores, accounts, members, categories, recurring rules, transactions, budgets (RF-71), goals and their contributions (RF-87, RF-119), debts and statements (RF-78, RF-129), and labels (RF-70), in one shape. A purchase made in dollars on a peso card (RF-123) is exported and re-imported in dollars, never converted to pesos. Decided by the user 2026-10-15.
+- [x] **RF-142** *(successor of RF-50)* — The backup exports, and the import restores, accounts, members, categories, recurring rules, transactions, budgets (RF-71), goals and their contributions (RF-87, RF-119), debts and statements (RF-78, RF-129), and labels (RF-70), in one shape. A purchase made in dollars on a peso card (RF-123) is exported and re-imported in dollars, never converted to pesos. Decided by the user 2026-10-15.
 - [x] **RF-51** — Import with preview: everything is validated before anything is written, errors are reported per row, and the user confirms. All or nothing.
 - [x] **RF-52** — Re-importing the same file does not duplicate: every row carries a stable external reference and, if it already exists in the fund, it is updated.
 - [x] **RF-53** — Read-only audit log viewer, filterable by entity, user and date range.

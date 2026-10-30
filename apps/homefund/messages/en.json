@@ -1250,8 +1250,14 @@
       "accounts": "Accounts",
       "members": "Members",
       "categories": "Categories",
+      "labels": "Labels",
       "recurringRules": "Recurring rules",
-      "transactions": "Transactions"
+      "transactions": "Transactions",
+      "budgets": "Budgets",
+      "goals": "Savings goals",
+      "goalContributions": "Goal contributions",
+      "debts": "Debts",
+      "statements": "Statements"
     },
     "columns": {
       "name": "Name",
@@ -1279,7 +1285,37 @@
       "endsOn": "End date",
       "occurredAt": "Date",
       "counterAmount": "Amount in the account's currency",
-      "counterIsEstimate": "Estimated amount"
+      "counterIsEstimate": "Estimated amount",
+      "labels": "Labels",
+      "account": "Account",
+      "label": "Label",
+      "period": "Period",
+      "limit": "Limit",
+      "thresholdPct": "Warn at (%)",
+      "archived": "Archived",
+      "targetAmount": "Target amount",
+      "targetDate": "Target date",
+      "goal": "Goal",
+      "contributedOn": "Contribution date",
+      "movement": "Movement (reference)",
+      "debtKind": "Debt kind",
+      "annualRate": "Effective annual rate (%)",
+      "minimumPayment": "Minimum payment",
+      "minimumPaymentPct": "Minimum payment (%)",
+      "creditLimit": "Credit limit",
+      "cutOffDay": "Cut-off day",
+      "dueDay": "Due day",
+      "aval": "Guarantee",
+      "periodStart": "Period start",
+      "cutOffDate": "Cut-off date",
+      "paymentDueDate": "Payment due date",
+      "openingBalance": "Opening balance",
+      "closingBalance": "Closing balance",
+      "credits": "Credits",
+      "debits": "Debits",
+      "interestCharged": "Interest",
+      "feesCharged": "Fees",
+      "source": "Source"
     },
     "filenames": {
       "export": "finances-export",
@@ -1300,7 +1336,11 @@
         "adjustmentRefused": "The adjustment could not be booked: its date is before the account's opening or latest reconciliation, or the account is archived.",
         "hasErrors": "The file still has errors. Fix them and import again.",
         "alreadyCommitting": "This file was already being imported in another tab. Check the movements before importing it again.",
-        "beforeOpening": "Date before its account's opening."
+        "beforeOpening": "Date before its account's opening.",
+        "outOfPlace": "This name exists, but not in the placement the row names.",
+        "noFund": "The row belongs to a fund and you have none.",
+        "repeatedRow": "Another row in the file already carries this for the same account. Keep only one.",
+        "lockedField": "This row changes the category or the place, which cannot change. Add it as a new row instead."
       }
     }
   },

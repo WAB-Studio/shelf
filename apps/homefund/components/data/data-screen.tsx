@@ -82,7 +82,7 @@ export function DataScreen({
   }
 
   // Only picked entities and set bounds ride the query; an empty selection drops
-  // its key so the route falls back to all five (RF-50).
+  // its key so the route falls back to all of them (RF-142).
   const exportQuery = new URLSearchParams();
   const picked = entities.filter((entity) => selected.has(entity));
   if (picked.length > 0) exportQuery.set("entities", picked.join(","));
