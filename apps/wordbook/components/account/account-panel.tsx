@@ -34,7 +34,8 @@ function bareSpan(
 type EmailFormState =
   | { kind: "idle" }
   | { kind: "sending" }
-  | { kind: "sent" }
+  // `maybe`: the send timed out, so the mail may or may not have left (RL-67).
+  | { kind: "sent"; maybe?: true }
   | {
       kind: "failed";
       error: Extract<SendSignInLinkResult, { ok: false }>["error"] | "offline";
@@ -185,8 +186,9 @@ function SignedOutForm() {
   async function handleResend(): Promise<void> {
     setResend({ kind: "sending" });
     let timer: ReturnType<typeof setTimeout> | null = null;
-    const timedOut = new Promise<{ ok: false; error: "offline" }>((resolve) => {
-      timer = setTimeout(() => resolve({ ok: false, error: "offline" }), SEND_LINK_TIMEOUT_MS);
+    // The clock running out is not a refusal: the request may have reached the server (RL-67).
+    const timedOut = new Promise<{ ok: false; error: "maybeSent" }>((resolve) => {
+      timer = setTimeout(() => resolve({ ok: false, error: "maybeSent" }), SEND_LINK_TIMEOUT_MS);
     });
     let result: SendSignInLinkResult | { ok: false; error: "offline" };
     try {
@@ -282,8 +284,9 @@ function SignedOutForm() {
     setState({ kind: "sending" });
 
     let timer: ReturnType<typeof setTimeout> | null = null;
-    const timedOut = new Promise<{ ok: false; error: "offline" }>((resolve) => {
-      timer = setTimeout(() => resolve({ ok: false, error: "offline" }), SEND_LINK_TIMEOUT_MS);
+    // The clock running out is not a refusal: the request may have reached the server (RL-67).
+    const timedOut = new Promise<{ ok: false; error: "maybeSent" }>((resolve) => {
+      timer = setTimeout(() => resolve({ ok: false, error: "maybeSent" }), SEND_LINK_TIMEOUT_MS);
     });
 
     let result: SendSignInLinkResult | { ok: false; error: "offline" };
@@ -296,14 +299,18 @@ function SignedOutForm() {
       result = { ok: false, error: "offline" };
     }
     if (timer) clearTimeout(timer);
-    if (result.ok) {
+    // A send that may have left opens the code step too, its wait counted, so another is asked for knowingly.
+    const maybe = !result.ok && result.error === "maybeSent";
+    if (result.ok || maybe) {
       const at = Date.now();
       savePending(email, at);
       setSentAt(at);
       setNow(at);
     }
     setResend({ kind: "idle" });
-    setState(result.ok ? { kind: "sent" } : { kind: "failed", error: result.error });
+    if (result.ok) setState({ kind: "sent" });
+    else if (maybe) setState({ kind: "sent", maybe: true });
+    else setState({ kind: "failed", error: result.error });
   }
 
   if (held) {
@@ -337,7 +344,7 @@ function SignedOutForm() {
       {state.kind === "sent" ? (
         <Flex direction="column" gap="3" maxWidth="400px">
           <Text size="2" role="status">
-            {t("sent", { email })}
+            {state.maybe ? t("maybeSent", { email }) : t("sent", { email })}
           </Text>
           <form
             onSubmit={(event) => {

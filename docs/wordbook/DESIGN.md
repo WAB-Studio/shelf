@@ -1796,6 +1796,10 @@ Board «CuentaCódigo», WordBook, dark 360 primary and 1280, under the Copia bl
 - **Offline (`CuentaCódigoSinRed`):** `CuentaSinRed`'s glyph + «Sin conexión. No se pudo comprobar el código.»; the
   button reads «Reintentar», block width.
 - **Done:** no board; `CuentaCopiaConfirmar` follows.
+- **A send that timed out may have left (RL-67):** Auth timing out, or the 8 s clock running out on a request that never
+  settled, opens the code step with «Tardó en responder, pero puede que el código ya haya salido a {email}. Revisa tu
+  correo antes de pedir otro.» in place of «Revisa tu correo…», the wait for another already counting. A connection that
+  fails outright keeps «Sin conexión».
 - **«Entrar con mi correo» keeps its words.**
 - **An interrupted code step comes back:** the address is kept on the device for the code's hour; «Usar otro correo» or a code that lands clears it.
 
