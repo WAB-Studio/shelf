@@ -298,6 +298,11 @@ export const transactionRowSchema = z.object({
     .boolean()
     .nullish()
     .transform((cell) => cell ?? false),
+  // TRUE on a household bill paid from a personal account, marked «del hogar» (RF-139); blank is not.
+  forHousehold: z
+    .boolean()
+    .nullish()
+    .transform((cell) => cell ?? false),
   // Every label's name, joined by `LABEL_SEPARATOR`; each resolves like a category.
   labels: z
     .string()
@@ -498,6 +503,7 @@ export const transactionSheetDescriptor = {
     { key: "currency", field: "currency" },
     { key: "counterAmount", field: "counterAmountCents", money: moneyBoundary },
     { key: "counterIsEstimate", field: "counterIsEstimate" },
+    { key: "forHousehold", field: "forHousehold" },
     { key: "category", synthetic: true, ref: { entity: "categories" } },
     { key: "occurredAt", field: "occurredAt" },
     { key: "description", field: "description" },

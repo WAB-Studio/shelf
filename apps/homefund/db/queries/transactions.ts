@@ -50,7 +50,7 @@ export type CreateTransactionArgs = {
   counterIsEstimate?: boolean;
   // Quick entry read the amount from words and the person kept it (RF-155); insert only.
   amountFromWords?: boolean;
-  // «Del hogar» (RF-139): only an expense carries it, so a movement with a destination stores false.
+  // «Del hogar» (RF-139): stored only on an expense from a personal account (`householdMark`).
   forHousehold?: boolean;
   occurredAt: string;
   description: string | null;
@@ -256,7 +256,7 @@ export async function insertTransaction(
       ${counterAmountCents},
       ${counterIsEstimate},
       ${amountFromWords},
-      ${toAccountId === null && forHousehold},
+      ${householdMark(sql`${fromAccountId}::uuid`, sql`${toAccountId}::uuid`, sql`${forHousehold}`)},
       ${occurredAt},
       ${description},
       ${externalRef}
@@ -294,6 +294,15 @@ export async function insertTransaction(
 // and the row stays readable, so a screen can say why instead of reporting it gone (RF-138).
 // `stale` is an edit whose form loaded the movement before someone else saved it: nothing written.
 export type TransactionWriteOutcome = "done" | "missing" | "adjustment" | "stale";
+
+/**
+ * The «del hogar» mark as stored (RF-139): it holds only on an expense paid from a personal
+ * account, whatever the caller asked, so every write that sets the accounts states it again.
+ */
+export function householdMark(from: SQL, to: SQL, mark: SQL): SQL {
+  return sql`(${mark} and ${to} is null
+    and exists (select 1 from accounts a where a.id = ${from} and a.owner_user_id is not null))`;
+}
 
 function stampMatches(expectedUpdatedAt: string) {
   return stampIs(transactions.updatedAt, expectedUpdatedAt);
@@ -357,8 +366,12 @@ export async function updateTransaction({
         ...(currency ? { currency } : {}),
         counterAmountCents,
         counterIsEstimate,
-        // Absent leaves the mark alone; sent, a movement that gained a destination drops it.
-        ...(forHousehold === undefined ? {} : { forHousehold: toAccountId === null && forHousehold }),
+        // Absent keeps the stored mark, but only while the movement is still a personal expense.
+        forHousehold: householdMark(
+          sql`${fromAccountId}::uuid`,
+          sql`${toAccountId}::uuid`,
+          forHousehold === undefined ? sql`${transactions.forHousehold}` : sql`${forHousehold}`,
+        ),
         occurredAt,
         description,
         reviewedAt: sql`case when ${transactions.recurringRuleId} is not null and ${transactions.reviewedAt} is null then now() else ${transactions.reviewedAt} end`,

@@ -397,9 +397,12 @@ export function MovementForm({
   }, [options.accounts, scopeAccountId]);
 
   const isGroupScoped = kind !== null && scope === "group";
-  // «Del hogar» (RF-139) is offered on an expense from a personal account to a person who has a fund.
+  // «Del hogar» (RF-139) is offered on an expense from a personal account to a person who has a fund,
+  // and stays on a movement that already carries it, so a mark can always be cleared.
   const offersHousehold =
-    kind === "expense" && scope === "personal" && options.accounts.some((one) => one.groupId);
+    kind === "expense" &&
+    scope === "personal" &&
+    (movement?.forHousehold === true || options.accounts.some((one) => one.groupId));
 
   // A movement is never its own cause (RF-132), so the movement under edit is
   // dropped from what the picker offers; the rest arrive already ordered.
@@ -509,7 +512,9 @@ export function MovementForm({
       ? accept.isPending
       : create.isPending;
 
-  function onSubmit(values: MovementFormValues) {
+  function onSubmit(submitted: MovementFormValues) {
+    // A switch hidden by a change of account never sends a mark the person no longer sees.
+    const values = { ...submitted, forHousehold: offersHousehold && submitted.forHousehold };
     // The resolver already parsed `values` for this mode, dropping the field the
     // other mode's action refuses: `external_ref` on edit, `transaction_id` on
     // create.

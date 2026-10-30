@@ -15311,7 +15311,13 @@ async function householdContributionSuite(): Promise<void> {
   const BILL = 4_500_000;
   const range = currentMonthRange();
   const payer = await createMembershipFreeUser();
-  const ids = { group: randomUUID(), member: randomUUID(), bank: randomUUID(), cash: randomUUID(), category: randomUUID() };
+  const ids = {
+    group: randomUUID(),
+    member: randomUUID(),
+    bank: randomUUID(),
+    cash: randomUUID(),
+    category: randomUUID(),
+  };
   await fixtureSql.begin(async (tx) => {
     const claims = JSON.stringify({ sub: payer.id, role: "authenticated", aud: "authenticated" });
     await tx`select set_config('request.jwt.claims', ${claims}, true)`;
@@ -15378,5 +15384,14 @@ async function householdContributionSuite(): Promise<void> {
     next("RF-139: only an expense carries the mark; a movement with a destination stores it false"),
     stored === false,
     `for_household on a transfer = ${stored}`,
+  );
+
+  await asUser(payer, () => updateTransaction({ ...bill, transactionId, forHousehold: true }));
+  await asUser(payer, () => updateTransaction({ ...bill, transactionId, toAccountId: ids.cash, splits: [] }));
+  const turned = await readColumn<boolean>("transactions", "id", transactionId, "for_household");
+  assert(
+    next("RF-139: a marked expense edited into a transfer, without sending the mark, saves and drops it"),
+    turned === false,
+    `for_household after the edit = ${turned}`,
   );
 }
