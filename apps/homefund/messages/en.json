@@ -1407,7 +1407,10 @@
       "amountTooLarge": "The amount is too large.",
       "directionInvalid": "The «direction» field only accepts «expense» or «income».",
       "scopeViolation": "That category belongs to another scope than the account. Pick a fund category for a fund account, or one of yours for your own account."
-    }
+    },
+    "mcpHeading": "Connect Claude",
+    "mcpDescription": "Add HomeFund as an HTTP MCP connector with this URL and a key for Claude in the «Authorization: Bearer» header. A webhook key does not open this door. Claude sees your accounts and «Review the month» with your own permissions; revoking the key disconnects it.",
+    "mcpIssue": "Create a key for Claude"
   },
   "ingest": {
     "title": "Inbox",
@@ -1504,5 +1507,18 @@
     "action": "Once you pay it, record it in Payments: {url}",
     "unnamed": "a planned payment",
     "footer": "You are getting this because you set a reminder date in HomeFund."
+  },
+  "mcp": {
+    "instructions": "HomeFund is a household's books: accounts, movements and a shared fund. Amounts are whole cents with their currency. Read with the tools; never invent movements.",
+    "tools": {
+      "listAccounts": "The open accounts the person can see, personal and the fund's, with their balance per currency in cents.",
+      "reviewMonth": "«Review the month»: the movements that stand out in a closed month by fixed rules (an amount far above its category's usual, two equal on one day, an amount read from words, a reconciliation gap), and whether each is already marked fine.",
+      "monthParam": "The month, YYYY-MM. Absent, the last closed month."
+    },
+    "errors": {
+      "unauthorized": "The key is not valid or was revoked.",
+      "unknown": "It could not be done. Try again.",
+      "openMonth": "Only a closed month is reviewed: ask for one before the current month."
+    }
   }
 }

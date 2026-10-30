@@ -20,7 +20,7 @@ export async function POST(request: Request): Promise<Response> {
 
   // Resolve and throttle before parsing, so an unauthorized or over-limit
   // caller is rejected without the cost of reading the body.
-  const cred = await resolveWebhookCredential(token);
+  const cred = await resolveWebhookCredential(token, "ingest");
   if (cred === null) {
     return Response.json({ error: "unauthorized" }, { status: 401 });
   }

@@ -10,6 +10,7 @@ import {
 import { pgErrorCode } from "@/lib/db-error";
 import { ActionError } from "@/lib/errors";
 import { authActionClient } from "@/lib/safe-action";
+import { z } from "zod";
 import {
   issueWebhookCredentialSchema,
   revokeWebhookCredentialSchema,
@@ -80,4 +81,20 @@ export const revokeWebhookCredentialAction = authActionClient
     if (!revoked) throw new ActionError("errors.notFound");
 
     refresh();
+  });
+
+// RF-144: a key that opens /mcp alone, never the webhook. Its own window, wider than a webhook's: a
+// conversation spends several requests per answer. Shown once, like every key.
+export const issueClaudeKeyAction = authActionClient
+  .inputSchema(z.object({}))
+  .action(async () => {
+    const credential = await issueWebhookCredential({
+      name: "Claude",
+      purpose: "mcp",
+      defaultAccountId: null,
+      defaultCategoryId: null,
+      rateLimitPerMin: 600,
+    });
+    refresh();
+    return credential;
   });
