@@ -1,6 +1,6 @@
 import "server-only";
 
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 
 import { insertRow } from "@/db/insert-row";
 import { debtTerms } from "@/db/schema";
@@ -34,14 +34,21 @@ export type UpsertDebtTermsArgs = {
   statementCutOffDay: number | null;
   paymentDueDay: number | null;
   avalCents: number | null;
+  // RF-156: the stamp the form loaded the terms with, null when it opened on none. Named, the
+  // rewrite lands only on that row; absent, the terms are rewritten whatever they hold.
+  expectedUpdatedAt?: string | null;
 };
 
 // The single row per account: an insert the first time, an in-place rewrite after,
 // pivoting on the primary-key conflict. The boolean-less return names the account
 // the policy admitted.
 export async function upsertDebtTerms(
+  args: UpsertDebtTermsArgs & { expectedUpdatedAt?: undefined },
+): Promise<{ accountId: string }>;
+export async function upsertDebtTerms(args: UpsertDebtTermsArgs): Promise<{ accountId: string } | "stale">;
+export async function upsertDebtTerms(
   args: UpsertDebtTermsArgs,
-): Promise<{ accountId: string }> {
+): Promise<{ accountId: string } | "stale"> {
   // A decimal string binds straight to a numeric column — the column type casts it.
   const writable = {
     debtKind: args.debtKind,
@@ -62,12 +69,20 @@ export async function upsertDebtTerms(
       debtTerms,
       { accountId: args.accountId, ...writable },
       {
-        onConflict: { target: debtTerms.accountId, set: writable },
+        onConflict: {
+          target: debtTerms.accountId,
+          set: writable,
+          where:
+            args.expectedUpdatedAt === undefined
+              ? undefined
+              : sql`${debtTerms.updatedAt} is not distinct from ${args.expectedUpdatedAt}::text::timestamptz`,
+        },
         returning: { accountId: debtTerms.accountId },
       },
     );
 
-    return { accountId: row.accountId };
+    // Nothing returned is a conflict the stamp held back: the terms changed after the form opened.
+    return row ? { accountId: row.accountId } : "stale";
   });
 }
 

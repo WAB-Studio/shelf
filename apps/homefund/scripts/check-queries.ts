@@ -4264,6 +4264,7 @@ async function main(): Promise<void> {
   await o7m3RuleEdgesSuite();
   await o8m5ReviewSurvivorsSuite();
   await everyEntityBackupSuite();
+  await moneyFormsStaleSuite();
 }
 
 // A member recorded without a login is someone in the fund: a leader whose fund holds one is not alone, so an
@@ -15032,5 +15033,117 @@ async function everyEntityBackupSuite(): Promise<void> {
       refusal(locked.failure).includes("budgets") &&
       after.budget === original.budget,
     `${said(locked)}; budget ${JSON.stringify(after.budget)}`,
+  );
+}
+
+// RF-156 on the money forms that had no stamp: a budget or a goal opened before another save is refused on save and
+// keeps what the other save wrote; one carrying the row's own stamp lands; one carrying none is refused. Debt terms are
+// only ever written onto a debt that had none, so terms someone else wrote first are refused, never overwritten.
+async function moneyFormsStaleSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const today = todayInBogota();
+  const budgetActions = (await import("@/app/actions/budgets")) as unknown as {
+    updateBudgetAction: (input: Record<string, unknown>) => Promise<StaleAnswer>;
+  };
+  const goalActions = (await import("@/app/actions/savings-goals")) as unknown as {
+    updateGoalAction: (input: Record<string, unknown>) => Promise<StaleAnswer>;
+  };
+  const debtActions = (await import("@/app/actions/debt-terms")) as unknown as {
+    saveDebtTermsAction: (input: Record<string, unknown>) => Promise<StaleAnswer>;
+  };
+  const isStale = (r: StaleAnswer) => r?.serverError === "errors.stale";
+  const user = await createMembershipFreeUser();
+  const { categoryId, cardId } = await asUser(user, async () => {
+    const { categoryId } = await createCategory({
+      scope: { ownerUserId: user.id },
+      name: `Harness rf156 categoria ${tag}`,
+      kind: "expense",
+      parentId: null,
+      color: CATEGORY_COLORS[0],
+    });
+    track("categories", categoryId);
+    const { accountId } = await createAccount({
+      name: `Harness rf156 tarjeta ${tag}`,
+      kind: "liability",
+      subtype: "card",
+      ownerUserId: user.id,
+      groupId: null,
+      isShared: false,
+      institution: null,
+      lastFour: null,
+      settlementCurrency: "COP",
+      amountMinor: 100_000,
+      balanceOn: shiftDate(today, -10),
+    } as never);
+    track("accounts", accountId);
+    return { categoryId, cardId: accountId };
+  });
+  const [budget] = await fixtureSql<{ id: string }[]>`
+    insert into budgets (owner_user_id, category_id, period, limit_cents, threshold_pct)
+    values (${user.id}, ${categoryId}, 'monthly', 10000000, 80) returning id`;
+  const [goal] = await fixtureSql<{ id: string }[]>`
+    insert into savings_goals (owner_user_id, name, target_amount_cents)
+    values (${user.id}, ${`Harness rf156 meta ${tag}`}, 50000000) returning id`;
+
+  const budgetStamp = async () =>
+    (await fixtureSql<{ t: string }[]>`select updated_at::text as t from budgets where id = ${budget.id}`)[0]?.t ?? "";
+  const goalStamp = async () =>
+    (await fixtureSql<{ t: string }[]>`select updated_at::text as t from savings_goals where id = ${goal.id}`)[0]?.t ?? "";
+  const limitOf = async () =>
+    (await fixtureSql<{ c: string }[]>`select limit_cents::text as c from budgets where id = ${budget.id}`)[0]?.c;
+  const targetOf = async () =>
+    (await fixtureSql<{ c: string }[]>`select target_amount_cents::text as c from savings_goals where id = ${goal.id}`)[0]?.c;
+  const saveBudget = (limit: string, expectedUpdatedAt?: string) =>
+    asUser(user, () =>
+      budgetActions.updateBudgetAction({ budgetId: budget.id, period: "monthly", limit, thresholdPct: 80, expectedUpdatedAt }),
+    );
+  const saveGoal = (targetAmount: string, expectedUpdatedAt?: string) =>
+    asUser(user, () =>
+      goalActions.updateGoalAction({ goalId: goal.id, name: `Harness rf156 meta ${tag}`, targetAmount, expectedUpdatedAt }),
+    );
+
+  // The form opens, someone else saves, then the form saves.
+  const openedBudget = await budgetStamp();
+  await fixtureSql`update budgets set limit_cents = 20000000 where id = ${budget.id}`;
+  const staleBudget = await saveBudget("300000", openedBudget);
+  const freshBudget = await saveBudget("400000", await budgetStamp());
+  const blindBudget = await saveBudget("500000");
+  assert(
+    next("RF-156: a budget saved over another save is refused stale; with the row's own stamp it lands; with none it is refused"),
+    isStale(staleBudget) && freshBudget?.serverError === undefined && isStale(blindBudget) && (await limitOf()) === "40000000",
+    `stale ${JSON.stringify(staleBudget)}, fresh ${JSON.stringify(freshBudget)}, blind ${JSON.stringify(blindBudget)}, limit ${await limitOf()}`,
+  );
+
+  const openedGoal = await goalStamp();
+  await fixtureSql`update savings_goals set target_amount_cents = 60000000 where id = ${goal.id}`;
+  const staleGoal = await saveGoal("700000", openedGoal);
+  const freshGoal = await saveGoal("800000", await goalStamp());
+  const blindGoal = await saveGoal("900000");
+  assert(
+    next("RF-156: a goal saved over another save is refused stale; with the row's own stamp it lands; with none it is refused"),
+    isStale(staleGoal) && freshGoal?.serverError === undefined && isStale(blindGoal) && (await targetOf()) === "80000000",
+    `stale ${JSON.stringify(staleGoal)}, fresh ${JSON.stringify(freshGoal)}, blind ${JSON.stringify(blindGoal)}, target ${await targetOf()}`,
+  );
+
+  const terms = (annualRate: string) => ({
+    accountId: cardId,
+    debtKind: "revolving",
+    annualRate,
+    minimumPayment: null,
+    minimumPaymentPct: "5",
+    creditLimit: null,
+    statementCutOffDay: 15,
+    paymentDueDay: 30,
+    aval: null,
+  });
+  const rateOf = async () =>
+    (await fixtureSql<{ r: string }[]>`select annual_rate::text as r from debt_terms where account_id = ${cardId}`)[0]?.r;
+  const first = await asUser(user, () => debtActions.saveDebtTermsAction(terms("28")));
+  const second = await asUser(user, () => debtActions.saveDebtTermsAction(terms("35")));
+  assert(
+    next("RF-156: debt terms land on a debt that had none; a second form opened on that bare debt is refused stale and the first terms stand"),
+    first?.serverError === undefined && isStale(second) && Number(await rateOf()) === 0.28,
+    `first ${JSON.stringify(first)}, second ${JSON.stringify(second)}, rate ${await rateOf()}`,
   );
 }

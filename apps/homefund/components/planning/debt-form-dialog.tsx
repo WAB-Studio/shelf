@@ -12,6 +12,7 @@ import { createAccountAction } from "@/app/actions/accounts";
 import { saveDebtTermsAction } from "@/app/actions/debt-terms";
 import {
   Button,
+  Callout,
   Dialog,
   Field,
   FieldControl,
@@ -208,8 +209,12 @@ function DebtForm({
   const createAccount = useAction(createAccountAction, {
     onError: onActionError,
   });
+  const [stale, setStale] = useState(false);
   const saveTerms = useAction(saveDebtTermsAction, {
-    onError: onActionError,
+    onError: (result) => {
+      if (result.error.serverError === "errors.stale") setStale(true);
+      else onActionError(result);
+    },
   });
 
   const [termsFailed, setTermsFailed] = useState(false);
@@ -287,7 +292,7 @@ function DebtForm({
   return (
     <form onSubmit={form.handleSubmit(onSubmit)} noValidate>
       <FieldGroup>
-        {termsFailed && (
+        {termsFailed && !stale && (
           <Text as="div" role="alert" size="2" color="red">
             {t("errors.termsNotSaved")}
           </Text>
@@ -697,6 +702,12 @@ function DebtForm({
             </Field>
           )}
         />
+
+        {stale && (
+          <Callout.Root color="red" variant="soft" role="alert">
+            <Callout.Text>{tKey("errors.stale")}</Callout.Text>
+          </Callout.Root>
+        )}
 
         <Field>
           <Flex gap="3" justify="end">

@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { POSTGRES_TIMESTAMPTZ_TEXT } from "@/lib/validation/transaction";
+
 import type { CurrencyCode } from "@/lib/currency";
 import {
   anyCurrencyAmountSchema,
@@ -77,6 +79,11 @@ export type CreateBudgetInput = z.infer<typeof createBudgetSchema>;
 export const updateBudgetSchema = z.object({
   budgetId: z.uuid({ error: "budgets.errors.budgetInvalid" }),
   ...budgetFields,
+  // The stamp the form loaded the row with; a save after someone else's is refused stale.
+  expectedUpdatedAt: z
+    .string()
+    .regex(POSTGRES_TIMESTAMPTZ_TEXT, { error: "errors.unexpected" })
+    .optional(),
 });
 
 export type UpdateBudgetInput = z.infer<typeof updateBudgetSchema>;

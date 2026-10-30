@@ -136,7 +136,10 @@ export const updateGoalAction = authActionClient
     });
     const { targetAmountCents } = toGoalMinor({ targetAmount }, currency);
 
-    let updated: boolean;
+    // RF-156: an edit sent without the stamp its form loaded is stale, refused before any write.
+    if (!goal.expectedUpdatedAt) throw new ActionError("errors.stale");
+
+    let updated: Awaited<ReturnType<typeof updateGoal>>;
     try {
       updated = await updateGoal({
         ...goal,
@@ -148,6 +151,7 @@ export const updateGoalAction = authActionClient
       mapGoalError(error);
     }
 
+    if (updated === "stale") throw new ActionError("errors.stale");
     if (!updated) throw new ActionError("errors.notFound");
 
     refresh();

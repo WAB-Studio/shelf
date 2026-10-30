@@ -78,9 +78,9 @@ export const saveDebtTermsAction = authActionClient
         .safeParse(amounts);
       if (!verdict.success) throw new ActionError(verdict.error.issues[0].message);
 
-      let savedAccountId: string;
+      let saved: Awaited<ReturnType<typeof upsertDebtTerms>>;
       try {
-        ({ accountId: savedAccountId } = await upsertDebtTerms({
+        saved = await upsertDebtTerms({
           accountId,
           debtKind,
           annualRate: percentToFraction(annualRate),
@@ -91,12 +91,16 @@ export const saveDebtTermsAction = authActionClient
           statementCutOffDay: statementCutOffDay ?? null,
           paymentDueDay: paymentDueDay ?? null,
           avalCents: aval != null ? toMinor(aval) : null,
-        }));
+          // The form writes terms onto a debt that had none (RF-156): any found are someone else's.
+          expectedUpdatedAt: null,
+        });
       } catch (error) {
         mapDebtTermsError(error);
       }
 
+      if (saved === "stale") throw new ActionError("errors.stale");
+
       refresh();
-      return { accountId: savedAccountId };
+      return { accountId: saved.accountId };
     },
   );

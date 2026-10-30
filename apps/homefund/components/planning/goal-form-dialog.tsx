@@ -4,6 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Info } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useAction } from "next-safe-action/hooks";
+import { useState } from "react";
 import { Controller, useForm, type Resolver } from "react-hook-form";
 import { toast } from "sonner";
 
@@ -157,9 +158,13 @@ function GoalForm({
     onSuccess: onActionSuccess,
     onError: onActionError,
   });
+  const [stale, setStale] = useState(false);
   const update = useAction(updateGoalAction, {
     onSuccess: onActionSuccess,
-    onError: onActionError,
+    onError: (result) => {
+      if (result.error.serverError === "errors.stale") setStale(true);
+      else onActionError(result);
+    },
   });
 
   const isPending = isEdit ? update.isPending : create.isPending;
@@ -168,7 +173,8 @@ function GoalForm({
     // The resolver already parsed `values` against the schema for this mode,
     // stripping the field the other mode's action does not accept.
     if (isEdit) {
-      update.execute(values as UpdateGoalInput);
+      setStale(false);
+      update.execute({ ...(values as UpdateGoalInput), expectedUpdatedAt: goal.updatedAt });
     } else {
       create.execute(values as CreateGoalInput);
     }
@@ -329,6 +335,12 @@ function GoalForm({
           </Callout.Icon>
           <Callout.Text>{t("virtualHint")}</Callout.Text>
         </Callout.Root>
+
+        {stale && (
+          <Callout.Root color="red" variant="soft" role="alert">
+            <Callout.Text>{tKey("errors.stale")}</Callout.Text>
+          </Callout.Root>
+        )}
 
         <Field>
           <Flex gap="3" justify="end">
