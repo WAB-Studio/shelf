@@ -3,6 +3,7 @@ import { z } from "zod";
 import { accounts } from "@/db/schema/accounts";
 import { categories } from "@/db/schema/categories";
 import { groupMembers } from "@/db/schema/group-members";
+import { labels } from "@/db/schema/labels";
 import { recurringRules } from "@/db/schema/recurring-rules";
 import { transactions } from "@/db/schema/transactions";
 import { BASE_CURRENCY } from "@/lib/currency";
@@ -14,13 +15,14 @@ import { CATEGORY_KINDS } from "@/lib/validation/category";
 import { createMemberSchema } from "@/lib/validation/member";
 import { anyCurrencyAmountSchema, occurredAtSchema, pesoAmountSchema } from "@/lib/validation/transaction";
 
-// The five entities export (RF-50) writes and import (RF-51/52) reads, in one
+// The entities export (RF-142) writes and import (RF-51/52) reads, in one
 // declared shape so both sides agree on the columns, their order and the rule
 // each cell obeys. No database access lives here: this is types and schemas.
 export const SHEET_ENTITIES = [
   "accounts",
   "members",
   "categories",
+  "labels",
   "recurringRules",
   "transactions",
 ] as const;
@@ -40,9 +42,9 @@ const moneyBoundary: MoneyBoundary = {
   fromSheet: pesosToCents,
 };
 
-// The two entities a cell can point at by name. A dev→prod restore re-links across
+// The entities a cell can point at by name. A dev→prod restore re-links across
 // databases, so a reference travels as a name, not a uuid that means nothing there.
-type RefEntity = "accounts" | "categories";
+export type RefEntity = "accounts" | "categories" | "labels";
 
 // One flat column of a sheet. `key` is the English header, the next-intl key a
 // later UI module translates, and the field name on a parsed row; `field` is
@@ -60,8 +62,8 @@ type FieldColumn<Model> = {
 };
 
 // A cell with no backing `$inferSelect` column: the export derives it from a
-// related row and the import reconstructs it. The only one today is a
-// transaction's category, which lives on its split, not the transaction row.
+// related row and the import reconstructs it: a transaction's category, which lives
+// on its split, and its labels, which live on `transaction_labels`.
 type SyntheticColumn = {
   readonly key: string;
   readonly synthetic: true;
@@ -84,6 +86,7 @@ type SheetDescriptor<Model, Schema extends z.ZodType> = {
 type AccountModel = typeof accounts.$inferSelect;
 type MemberModel = typeof groupMembers.$inferSelect;
 type CategoryModel = typeof categories.$inferSelect;
+type LabelModel = typeof labels.$inferSelect;
 type RecurringRuleModel = typeof recurringRules.$inferSelect;
 type TransactionModel = typeof transactions.$inferSelect;
 
@@ -181,6 +184,26 @@ export const categoryRowSchema = z.object({
 });
 export type CategoryRow = z.infer<typeof categoryRowSchema>;
 
+// A label lands where a new category does, so the sheet carries no placement (RF-70).
+export const labelRowSchema = z.object({
+  externalRef: externalRefSchema,
+  name: referenceNameSchema,
+  color: z.enum(CATEGORY_COLORS),
+});
+export type LabelRow = z.infer<typeof labelRowSchema>;
+
+// A movement's labels share one cell, their names joined by this mark: a name may hold a
+// comma, and a semicolon is rarer in one.
+export const LABEL_SEPARATOR = "; ";
+
+// The cell split back into names; a blank one is no labels.
+export function labelNames(cell: string | null | undefined): string[] {
+  return (cell ?? "")
+    .split(LABEL_SEPARATOR.trim())
+    .map((name) => name.trim())
+    .filter((name) => name.length > 0);
+}
+
 // A rule is one-sided (RF-29): one account by name, income or expense, never a
 // transfer; its category is named too. Frequency, interval and day-of-month get a
 // light guard here — the authoritative createRecurringRuleSchema, with its
@@ -252,6 +275,12 @@ export const transactionRowSchema = z.object({
     .boolean()
     .nullish()
     .transform((cell) => cell ?? false),
+  // Every label's name, joined by `LABEL_SEPARATOR`; each resolves like a category.
+  labels: z
+    .string()
+    .trim()
+    .nullish()
+    .refine((cell) => labelNames(cell).every((name) => name.length <= 80)),
 });
 export type TransactionRow = z.infer<typeof transactionRowSchema>;
 
@@ -299,6 +328,17 @@ export const categorySheetDescriptor = {
   rowSchema: categoryRowSchema,
 } satisfies SheetDescriptor<CategoryModel, typeof categoryRowSchema>;
 
+export const labelSheetDescriptor = {
+  entity: "labels",
+  refField: "externalRef",
+  columns: [
+    { key: "externalRef", field: "externalRef" },
+    { key: "name", field: "name" },
+    { key: "color", field: "color" },
+  ],
+  rowSchema: labelRowSchema,
+} satisfies SheetDescriptor<LabelModel, typeof labelRowSchema>;
+
 export const recurringRuleSheetDescriptor = {
   entity: "recurringRules",
   refField: "externalRef",
@@ -318,8 +358,7 @@ export const recurringRuleSheetDescriptor = {
   rowSchema: recurringRuleRowSchema,
 } satisfies SheetDescriptor<RecurringRuleModel, typeof recurringRuleRowSchema>;
 
-// Splits and labels are nested, not flat cells: a later import module bridges
-// them, so they carry no column here and stay out of the flat row schema.
+// A movement with more than one split leaves its category blank: one cell cannot hold them.
 //
 // `currency` names what the row's `amount` is written in (RF-121, RF-124). The import
 // never converts, so a row whose cell differs from the account it names carries that account's own amount in `counterAmount`
@@ -339,6 +378,7 @@ export const transactionSheetDescriptor = {
     { key: "occurredAt", field: "occurredAt" },
     { key: "description", field: "description" },
     { key: "adjustment", field: "reconciliationId", flag: true },
+    { key: "labels", synthetic: true, ref: { entity: "labels" } },
   ],
   rowSchema: transactionRowSchema,
 } satisfies SheetDescriptor<TransactionModel, typeof transactionRowSchema>;
@@ -348,6 +388,7 @@ export const sheetDescriptors = {
   accounts: accountSheetDescriptor,
   members: memberSheetDescriptor,
   categories: categorySheetDescriptor,
+  labels: labelSheetDescriptor,
   recurringRules: recurringRuleSheetDescriptor,
   transactions: transactionSheetDescriptor,
 } as const;

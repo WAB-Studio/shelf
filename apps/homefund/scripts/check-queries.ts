@@ -7219,7 +7219,8 @@ async function importCategoryScopeSuite(): Promise<void> {
   const own = acct("M28 Cuenta mia", "user");
   const fund = acct("M28 Cuenta fondo", "group", "m28-acct-ref");
 
-  const emptyRefs = (): Record<"accounts" | "members" | "categories" | "recurringRules" | "transactions", Set<string>> => ({
+  const emptyRefs = (): Record<"accounts" | "members" | "categories" | "labels" | "recurringRules" | "transactions", Set<string>> => ({
+    labels: new Set(),
     accounts: new Set(["m28-acct-ref"]),
     members: new Set(),
     categories: new Set(["m28-cat-ref"]),
@@ -7230,6 +7231,7 @@ async function importCategoryScopeSuite(): Promise<void> {
     caller: { userId: U, groupId },
     accounts: [own, fund],
     categories: [mercadoOwn, mercadoFund, sueldoOwn, sueldoFund, onlyFund, onlyOwn, twiceA, twiceB, keyedFund],
+    labels: [],
     existingRefs: emptyRefs(),
   });
 

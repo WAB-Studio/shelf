@@ -1250,6 +1250,7 @@
       "accounts": "Cuentas",
       "members": "Miembros",
       "categories": "Categorías",
+      "labels": "Etiquetas",
       "recurringRules": "Reglas recurrentes",
       "transactions": "Movimientos"
     },
@@ -1279,7 +1280,8 @@
       "endsOn": "Fecha de fin",
       "occurredAt": "Fecha",
       "counterAmount": "Monto en la moneda de la cuenta",
-      "counterIsEstimate": "Monto estimado"
+      "counterIsEstimate": "Monto estimado",
+      "labels": "Etiquetas"
     },
     "filenames": {
       "export": "finanzas-datos",

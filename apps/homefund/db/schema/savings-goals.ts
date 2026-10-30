@@ -7,6 +7,7 @@ import {
   pgPolicy,
   text,
   timestamp,
+  uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
 import { authenticatedRole, authUid } from "drizzle-orm/supabase";
@@ -30,11 +31,21 @@ export const savingsGoals = finances.table(
     targetDate: date({ mode: "string" }),
     // Display only: the account this goal's savings sit in; cleared if that account is deleted.
     accountId: uuid().references(() => accounts.id, { onDelete: "set null" }),
+    // The stable per-scope import key (RF-52, RF-142): a re-import matches on it to update instead of duplicate.
+    // Auto-filled to `id::text` by a trigger when omitted.
+    externalRef: text(),
     archivedAt: timestamp({ withTimezone: true }),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
+    check("savings_goals_external_ref_length", sql`length(${table.externalRef}) <= 200`),
+    uniqueIndex("savings_goals_owner_external_ref_unique")
+      .on(table.ownerUserId, table.externalRef)
+      .where(sql`${table.externalRef} is not null`),
+    uniqueIndex("savings_goals_group_external_ref_unique")
+      .on(table.groupId, table.externalRef)
+      .where(sql`${table.externalRef} is not null`),
     check("savings_goals_target_positive", sql`${table.targetAmountCents} > 0`),
     // A goal belongs to a user or a group, never both and never neither — mirrors categories.
     check(

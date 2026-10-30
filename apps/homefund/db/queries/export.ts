@@ -10,14 +10,16 @@ import {
   accounts,
   categories,
   groupMembers,
+  labels,
   recurringRules,
+  transactionLabels,
   transactions,
   transactionSplits,
 } from "@/db/schema";
 import { withUserDb } from "@/db/session";
 import { TIME_ZONE } from "@/lib/locales";
 import { SHEET_ENTITIES, sheetDescriptors } from "@/lib/spreadsheet/schema";
-import type { SheetEntity } from "@/lib/spreadsheet/schema";
+import { LABEL_SEPARATOR, type RefEntity, type SheetEntity } from "@/lib/spreadsheet/schema";
 import { ACCOUNT_PLACEMENTS } from "@/lib/validation/account";
 
 // The table each entity reads from, keyed by the export's own entity names.
@@ -25,6 +27,7 @@ const exportTables = {
   accounts,
   members: groupMembers,
   categories,
+  labels,
   recurringRules,
   transactions,
 } as const;
@@ -86,18 +89,18 @@ type ColumnView =
   | {
       readonly key: string;
       readonly field: string;
-      readonly ref?: { readonly entity: "accounts" | "categories" };
+      readonly ref?: { readonly entity: RefEntity };
       readonly flag?: true;
     }
   | {
       readonly key: string;
       readonly synthetic: true;
-      readonly ref?: { readonly entity: "accounts" | "categories" };
+      readonly ref?: { readonly entity: RefEntity };
     };
 
 // True when an entity's descriptor points at the given entity by name, so its name
 // map is worth a round trip.
-function referencesEntity(entity: SheetEntity, ref: "accounts" | "categories"): boolean {
+function referencesEntity(entity: SheetEntity, ref: RefEntity): boolean {
   const columns = sheetDescriptors[entity].columns as readonly ColumnView[];
   return columns.some((column) => column.ref?.entity === ref);
 }
@@ -149,7 +152,7 @@ async function readEntityRows<E extends SheetEntity>(
 
 // The caller's id→name map for one referenced entity, read in the caller's RLS
 // scope so a reference resolves to a name the same scope can read back.
-async function readNameMap(table: typeof accounts | typeof categories): Promise<Map<string, string>> {
+async function readNameMap(table: typeof accounts | typeof categories | typeof labels): Promise<Map<string, string>> {
   return withUserDb(async (tx) => {
     const rows = await tx.select({ id: table.id, name: table.name }).from(table);
     return new Map(rows.map((row) => [row.id, row.name]));
@@ -158,13 +161,17 @@ async function readNameMap(table: typeof accounts | typeof categories): Promise<
 
 const emptyNameMap = new Map<string, string>();
 
-// Each transaction's split category ids, grouped by transaction (RF-69). Read in
-// the caller's RLS scope so a split resolves to a category the same scope reads
-// back. One round trip for every split; the category fill picks the ids of the
-// transactions it exports and ignores the rest. A filtered export carries the
-// list's predicates into the same round trip, so it never reads the whole
-// ledger's splits to fill a handful of cells (RNF-15).
-async function readSplitCategoryIds(conditions: SQL[]): Promise<Map<string, string[]>> {
+// Each transaction's split category ids (RF-69), or its label ids (RF-70), grouped by
+// transaction. Read in the caller's RLS scope so an id resolves to a name the same scope
+// reads back. One round trip for the whole child table; the fill picks the ids of the
+// transactions it exports and ignores the rest. A filtered export carries the list's
+// predicates into the same round trip, so it never reads the whole ledger's children to
+// fill a handful of cells (RNF-15).
+async function readLinkedIds(
+  child: typeof transactionSplits | typeof transactionLabels,
+  linked: PgColumn,
+  conditions: SQL[],
+): Promise<Map<string, string[]>> {
   return withUserDb(async (tx) => {
     const exported =
       conditions.length === 0
@@ -173,42 +180,39 @@ async function readSplitCategoryIds(conditions: SQL[]): Promise<Map<string, stri
             tx
               .select({ present: sql`1` })
               .from(transactions)
-              .where(
-                and(
-                  eq(transactions.id, transactionSplits.transactionId),
-                  ...conditions,
-                ),
-              ),
+              .where(and(eq(transactions.id, child.transactionId), ...conditions)),
           );
 
     const rows = await tx
-      .select({
-        transactionId: transactionSplits.transactionId,
-        categoryId: transactionSplits.categoryId,
-      })
-      .from(transactionSplits)
+      .select({ transactionId: child.transactionId, linkedId: linked })
+      .from(child as typeof transactionSplits)
       .where(exported);
 
     const byTransaction = new Map<string, string[]>();
     for (const row of rows) {
       const ids = byTransaction.get(row.transactionId) ?? [];
-      ids.push(row.categoryId);
+      ids.push(row.linkedId as string);
       byTransaction.set(row.transactionId, ids);
     }
     return byTransaction;
   });
 }
 
-const emptySplitMap = new Map<string, string[]>();
+const emptyLinkMap = new Map<string, string[]>();
+
+// Every id→name map a reference cell reads, keyed by the entity it names.
+type NameMaps = Record<RefEntity, Map<string, string>>;
+
+// A transaction's children, by transaction id.
+type Children = { splitCategoryIds: Map<string, string[]>; labelIds: Map<string, string[]> };
 
 // One raw row turned into its sheet shape: a reference to its name, `placement` to
 // a personal/group indicator, money left in integer cents (RNF-05), scalars as is.
 function toExportRows<E extends SheetEntity>(
   entity: E,
   rows: Record<string, unknown>[],
-  accountNames: Map<string, string>,
-  categoryNames: Map<string, string>,
-  splitCategoryIds: Map<string, string[]>,
+  names: NameMaps,
+  children: Children,
 ): ExportRow<E>[] {
   const columns = sheetDescriptors[entity].columns as readonly ColumnView[];
 
@@ -216,12 +220,18 @@ function toExportRows<E extends SheetEntity>(
     const cell: Record<string, CellValue> = {};
 
     for (const column of columns) {
+      if ("synthetic" in column && column.key === "labels") {
+        // Every label the movement carries, by name, in one cell; none leaves it blank.
+        const named = (children.labelIds.get(row.id as string) ?? []).flatMap((id) => names.labels.get(id) ?? []);
+        cell[column.key] = named.length > 0 ? named.sort().join(LABEL_SEPARATOR) : null;
+        continue;
+      }
+
       if ("synthetic" in column) {
-        // The only synthetic column is a transaction's category (RF-69): the name
-        // of its SINGLE split. Zero splits (a transfer) or more than one (no
-        // faithful single cell) leave it blank.
-        const ids = splitCategoryIds.get(row.id as string) ?? [];
-        cell[column.key] = ids.length === 1 ? categoryNames.get(ids[0]) ?? null : null;
+        // A transaction's category (RF-69): the name of its SINGLE split. Zero splits
+        // (a transfer) or more than one (no faithful single cell) leave it blank.
+        const ids = children.splitCategoryIds.get(row.id as string) ?? [];
+        cell[column.key] = ids.length === 1 ? names.categories.get(ids[0]) ?? null : null;
         continue;
       }
 
@@ -242,8 +252,7 @@ function toExportRows<E extends SheetEntity>(
       if (column.ref) {
         // A reference presents the referenced row's name; a null id (a one-sided
         // movement) or a name outside the caller's scope yields null.
-        const names = column.ref.entity === "accounts" ? accountNames : categoryNames;
-        cell[column.key] = value == null ? null : names.get(value as string) ?? null;
+        cell[column.key] = value == null ? null : names[column.ref.entity].get(value as string) ?? null;
         continue;
       }
 
@@ -277,6 +286,7 @@ export async function readExport(input: ExportInput): Promise<ExportResult> {
 
   const needsAccounts = requested.some((entity) => referencesEntity(entity, "accounts"));
   const needsCategories = requested.some((entity) => referencesEntity(entity, "categories"));
+  const needsLabels = requested.some((entity) => referencesEntity(entity, "labels"));
   const needsSplits = requested.includes("transactions");
 
   // Built once so the rows and their splits are narrowed by the very same set.
@@ -284,7 +294,7 @@ export async function readExport(input: ExportInput): Promise<ExportResult> {
     ? transactionListConditions(input.transactionFilters)
     : [];
 
-  const [sets, accountNames, categoryNames, splitCategoryIds] = await Promise.all([
+  const [sets, accountNames, categoryNames, labelNames, splitCategoryIds, labelIds] = await Promise.all([
     Promise.all(
       requested.map((entity) =>
         readEntityRows(
@@ -299,18 +309,17 @@ export async function readExport(input: ExportInput): Promise<ExportResult> {
     ),
     needsAccounts ? readNameMap(accounts) : Promise.resolve(emptyNameMap),
     needsCategories ? readNameMap(categories) : Promise.resolve(emptyNameMap),
-    needsSplits ? readSplitCategoryIds(listed) : Promise.resolve(emptySplitMap),
+    needsLabels ? readNameMap(labels) : Promise.resolve(emptyNameMap),
+    needsSplits ? readLinkedIds(transactionSplits, transactionSplits.categoryId, listed) : Promise.resolve(emptyLinkMap),
+    needsSplits ? readLinkedIds(transactionLabels, transactionLabels.labelId, listed) : Promise.resolve(emptyLinkMap),
   ]);
+
+  const names: NameMaps = { accounts: accountNames, categories: categoryNames, labels: labelNames };
+  const children: Children = { splitCategoryIds, labelIds };
 
   const result: ExportResult = {};
   requested.forEach((entity, index) => {
-    result[entity] = toExportRows(
-      entity,
-      sets[index],
-      accountNames,
-      categoryNames,
-      splitCategoryIds,
-    ) as never;
+    result[entity] = toExportRows(entity, sets[index], names, children) as never;
   });
 
   return result;

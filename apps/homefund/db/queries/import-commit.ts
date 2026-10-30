@@ -6,6 +6,7 @@ import {
   accounts,
   categories,
   groupMembers,
+  labels,
   recurringRules,
   transactionLabels,
   transactionSplits,
@@ -21,6 +22,7 @@ import type { SheetEntity } from "@/lib/spreadsheet/schema";
 import type { CreateAccountInput } from "@/lib/validation/account";
 import type { ImportedAdjustment } from "@/lib/validation/account-reconciliation";
 import type { CreateCategoryInput } from "@/lib/validation/category";
+import type { ImportedLabel } from "@/lib/validation/label";
 import type { CreateMemberInput } from "@/lib/validation/member";
 import type { CreateRecurringRuleInput } from "@/lib/validation/recurring-rule";
 import type { CreateTransactionInput } from "@/lib/validation/transaction";
@@ -87,6 +89,8 @@ const EXTERNAL_REF_INDEXES = new Set([
   "group_members_group_external_ref_unique",
   "categories_owner_external_ref_unique",
   "categories_group_external_ref_unique",
+  "labels_owner_external_ref_unique",
+  "labels_group_external_ref_unique",
   "accounts_owner_external_ref_unique",
   "accounts_group_external_ref_unique",
   "recurring_rules_owner_external_ref_unique",
@@ -138,6 +142,7 @@ function transactionReasonKey(error: unknown): string {
 export type CommitInput = {
   members: CommitRow<CreateMemberInput>[];
   categories: CommitRow<CreateCategoryInput>[];
+  labels?: CommitRow<ImportedLabel>[];
   accounts: CommitRow<CreateAccountInput>[];
   recurringRules: CommitRow<CreateRecurringRuleInput>[];
   transactions: CommitRow<CreateTransactionInput>[];
@@ -243,6 +248,7 @@ export async function commitImport(
   const buckets: CommitRow<unknown>[][] = [
     input.members,
     input.categories,
+    input.labels ?? [],
     input.accounts,
     input.recurringRules,
     input.transactions,
@@ -275,6 +281,7 @@ async function writeImport(
   // scope, both resolved from the session (RF-63), never from the file.
   await commitMembers(tx, input.members, scope);
   const categoryMap = await commitCategories(tx, input.categories, scope);
+  const labelMap = await commitLabels(tx, input.labels ?? [], scope);
 
   // Then accounts, so a movement or rule that names one can link to its real id.
   const accountMap = await commitAccounts(tx, input.accounts, scope);
@@ -291,16 +298,18 @@ async function writeImport(
 
   // The placeholders any reference could still be carrying: the union of every file-new
   // account and category. After remap, no written reference may be one of these.
-  const placeholders = new Set<string>([...accountMap.keys(), ...categoryMap.keys()]);
+  const placeholders = new Set<string>([...accountMap.keys(), ...categoryMap.keys(), ...labelMap.keys()]);
 
   await commitRecurringRules(tx, input.recurringRules, accountMap, categoryMap, placeholders, scope);
   await commitTransactions(tx, input.transactions, accountMap, categoryMap, placeholders, scope);
+  await commitTransactionLabels(tx, input.transactions, labelMap, placeholders, scope);
 
   await commitAdjustments(tx, input.adjustments ?? [], accountMap, placeholders);
 
   for (const bucket of [
     input.members,
     input.categories,
+    input.labels ?? [],
     input.accounts,
     input.recurringRules,
     input.transactions,
@@ -428,6 +437,43 @@ async function commitCategories(
       update ${categories} as c set name = r.name, parent_id = r.parent_id, color = r.color
       from jsonb_to_recordset(${jsonbParam(chunk)}) as r(external_ref text, name text, parent_id uuid, color text)
       where c.external_ref = r.external_ref and ${inScope}`);
+  }
+
+  return map;
+}
+
+// Labels land where a new category does: the caller's fund when there is one, else with the
+// caller (RF-70). The map remaps a file-new label's placeholder to its real id.
+async function commitLabels(
+  tx: Transaction,
+  rows: CommitRow<ImportedLabel>[],
+  scope: CommitScope,
+): Promise<Map<string, string>> {
+  const map = new Map<string, string>();
+  if (rows.length === 0) return map;
+
+  const ownerUserId = scope.groupId ? null : scope.userId;
+  const newRows = rows.filter((row) => row.status === "new");
+  if (newRows.length > 0) {
+    const inserted = await insertChunked(
+      tx,
+      labels,
+      ["owner_user_id", "group_id", "name", "color", "external_ref"],
+      newRows.map((row) => [ownerUserId, scope.groupId, row.object.name, row.object.color, row.externalRef]),
+    );
+    newRows.forEach((row, index) => {
+      if (row.placeholderId) map.set(row.placeholderId, inserted[index].id);
+    });
+  }
+
+  const updates = rows
+    .filter((row) => row.status === "update")
+    .map((row) => ({ external_ref: row.externalRef, name: row.object.name, color: row.object.color }));
+  for (const chunk of chunked(updates)) {
+    await tx.execute(sql`
+      update ${labels} as t set name = r.name, color = r.color
+      from jsonb_to_recordset(${jsonbParam(chunk)}) as r(external_ref text, name text, color text)
+      where t.external_ref = r.external_ref and ${inScope(scope)}`);
   }
 
   return map;
@@ -948,6 +994,32 @@ async function writeSplits(
   await tx.execute(
     sql`insert into ${transactionSplits} (transaction_id, category_id, amount_cents) values ${values}`,
   );
+}
+
+// Every movement's labels (RF-70), once all of them have landed: each one is found by the key it
+// was written with, which every row carries (a blank one was keyed by its content upstream). An
+// update already lost its old labels with its old splits, so this only ever adds.
+async function commitTransactionLabels(
+  tx: Transaction,
+  rows: CommitRow<CreateTransactionInput>[],
+  labelMap: Map<string, string>,
+  placeholders: Set<string>,
+  scope: CommitScope,
+): Promise<void> {
+  const links = rows.flatMap((row) =>
+    row.object.labelIds.map((labelId) => {
+      const linked = link(labelId, labelMap)!;
+      assertLinked(linked, placeholders);
+      return { external_ref: row.externalRef, label_id: linked };
+    }),
+  );
+  for (const chunk of chunked(links)) {
+    await tx.execute(sql`
+      insert into ${transactionLabels} (transaction_id, label_id)
+      select t.id, r.label_id
+      from jsonb_to_recordset(${jsonbParam(chunk)}) as r(external_ref text, label_id uuid)
+      join ${transactions} as t on t.external_ref = r.external_ref and ${inScope(scope)}`);
+  }
 }
 
 // Reconciliation refusals a backup row can meet: the day, the opening, the latest count, an archived account.

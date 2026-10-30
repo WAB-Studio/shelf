@@ -6,6 +6,7 @@ import type { ExportResult } from "@/db/queries/export";
 import {
   SHEET_ENTITIES,
   sheetDescriptors,
+  type RefEntity,
   type SheetEntity,
 } from "@/lib/spreadsheet/schema";
 
@@ -21,7 +22,7 @@ type ColumnView = {
   readonly key: string;
   readonly field: string;
   readonly money?: { readonly toSheet: (cents: number) => number };
-  readonly ref?: { readonly entity: "accounts" | "categories" };
+  readonly ref?: { readonly entity: RefEntity };
 };
 
 // The read side of the same column: the export writes a cell with `toSheet`, the
@@ -131,7 +132,8 @@ export function buildTemplate(input: {
     options.getCell(index + 1, 2).value = name;
   });
 
-  const rangeByRef: Record<"accounts" | "categories", string | null> = {
+  // A labels cell holds several names, so no single-pick list can offer them.
+  const rangeByRef: Partial<Record<RefEntity, string | null>> = {
     accounts: optionRange(1, input.accountNames.length),
     categories: optionRange(2, input.categoryNames.length),
   };
@@ -145,7 +147,7 @@ export function buildTemplate(input: {
     columns.forEach((column, index) => {
       if (!column.ref) return;
       const range = rangeByRef[column.ref.entity];
-      if (range === null) return;
+      if (range == null) return;
 
       const columnIndex = index + 1;
       for (let row = 2; row <= TEMPLATE_DATA_ROWS; row += 1) {

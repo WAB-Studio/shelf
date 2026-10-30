@@ -6,6 +6,7 @@ import {
   accounts,
   categories,
   groupMembers,
+  labels,
   recurringRules,
   transactions,
 } from "@/db/schema";
@@ -20,6 +21,7 @@ const refTables = {
   accounts,
   members: groupMembers,
   categories,
+  labels,
   recurringRules,
   transactions,
 } as const;
@@ -54,6 +56,7 @@ export type ImportScope = {
   caller: { userId: string; groupId: string | null };
   accounts: ScopedAccount[];
   categories: ScopedCategory[];
+  labels: ScopedEntity[];
   existingRefs: Record<SheetEntity, Set<string>>;
 };
 
@@ -70,7 +73,7 @@ async function readExistingRefs(entity: SheetEntity): Promise<Set<string>> {
   });
 }
 
-// The stable keys present among a set of scoped rows, for the two entities whose id
+// The stable keys present among a set of scoped rows, for the entities whose id
 // and name are read anyway — no extra round trip for their `existingRefs` set.
 function refsOf(rows: ScopedEntity[]): Set<string> {
   return new Set(rows.filter((row) => row.externalRef != null).map((row) => row.externalRef as string));
@@ -78,14 +81,14 @@ function refsOf(rows: ScopedEntity[]): Set<string> {
 
 /**
  * The read side of the import pipeline (RF-51/52), all in the caller's RLS scope like
- * `readExport`: the account and category rows a reference resolves through, and every
- * entity's existing `external_ref` set for new-vs-update classification. The accounts
- * and categories reads carry `external_ref`, so their key sets need no separate trip.
+ * `readExport`: the account, category and label rows a reference resolves through, and every
+ * entity's existing `external_ref` set for new-vs-update classification. Those three
+ * reads carry `external_ref`, so their key sets need no separate trip.
  * The caller's id and fund ride the same fan-out as the entity reads.
  * Each read is its own round trip, fanned out with `Promise.all`, never chained.
  */
 export async function readImportScope(): Promise<ImportScope> {
-  const [user, group, accountRows, categoryRows, memberRefs, recurringRefs, transactionRefs] =
+  const [user, group, accountRows, categoryRows, labelRows, memberRefs, recurringRefs, transactionRefs] =
     await Promise.all([
       requireUser(),
       getUserGroup(),
@@ -114,6 +117,17 @@ export async function readImportScope(): Promise<ImportScope> {
           })
           .from(categories),
       ),
+      withUserDb((tx) =>
+        tx
+          .select({
+            id: labels.id,
+            name: labels.name,
+            externalRef: labels.externalRef,
+            ownerUserId: labels.ownerUserId,
+            groupId: labels.groupId,
+          })
+          .from(labels),
+      ),
       readExistingRefs("members"),
       readExistingRefs("recurringRules"),
       readExistingRefs("transactions"),
@@ -123,9 +137,11 @@ export async function readImportScope(): Promise<ImportScope> {
     caller: { userId: user.id, groupId: group?.id ?? null },
     accounts: accountRows,
     categories: categoryRows,
+    labels: labelRows,
     existingRefs: {
       accounts: refsOf(accountRows),
       categories: refsOf(categoryRows),
+      labels: refsOf(labelRows),
       members: memberRefs,
       recurringRules: recurringRefs,
       transactions: transactionRefs,

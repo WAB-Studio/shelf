@@ -1250,6 +1250,7 @@
       "accounts": "Accounts",
       "members": "Members",
       "categories": "Categories",
+      "labels": "Labels",
       "recurringRules": "Recurring rules",
       "transactions": "Transactions"
     },
@@ -1279,7 +1280,8 @@
       "endsOn": "End date",
       "occurredAt": "Date",
       "counterAmount": "Amount in the account's currency",
-      "counterIsEstimate": "Estimated amount"
+      "counterIsEstimate": "Estimated amount",
+      "labels": "Labels"
     },
     "filenames": {
       "export": "finances-export",

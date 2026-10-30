@@ -19,22 +19,26 @@ const UUID = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0
 const CHECKING = { id: UUID(1), name: "Checking", externalRef: "acc-1", ownerUserId: UUID(99), groupId: null, settlementCurrency: "COP", initialBalanceOn: "2026-01-01" };
 const SAVINGS = { id: UUID(2), name: "Savings", externalRef: "acc-2", ownerUserId: UUID(99), groupId: null, settlementCurrency: "COP", initialBalanceOn: "2026-01-01" };
 const FOOD = { id: UUID(11), name: "Food", externalRef: "cat-1", ownerUserId: UUID(99), groupId: null, kind: "expense" };
+const TRIP = { id: UUID(21), name: "Trip", externalRef: "lab-1", ownerUserId: UUID(99), groupId: null };
 
 type Scope = {
   caller: { userId: string; groupId: string | null };
   accounts: unknown[];
   categories: unknown[];
-  existingRefs: Record<"accounts" | "members" | "categories" | "recurringRules" | "transactions", Set<string>>;
+  labels: unknown[];
+  existingRefs: Record<"accounts" | "members" | "categories" | "labels" | "recurringRules" | "transactions", Set<string>>;
 };
 let scope: Scope;
 const freshScope = (): Scope => ({
   caller: { userId: UUID(99), groupId: null },
   accounts: [CHECKING, SAVINGS],
   categories: [FOOD],
+  labels: [TRIP],
   existingRefs: {
     accounts: new Set(["acc-1", "acc-2"]),
     members: new Set(),
     categories: new Set(["cat-1"]),
+    labels: new Set(["lab-1"]),
     recurringRules: new Set(),
     transactions: new Set(),
   },
@@ -632,4 +636,62 @@ test("RF-162: the file-new account is held to its own row's day, not to a same-n
   );
   const movementRows = result.perEntity.find((e) => e.entity === "transactions")!.rows;
   assert.deepEqual(movementRows.map((r) => r.errors.length), [0, 1]);
+});
+
+// ---- labels (RF-142, RF-70) -------------------------------------------------------------------
+
+const LABEL_COLUMNS = [...COLUMNS, "labels"] as const;
+
+async function bookLabels(labelRows: Record<string, string | null>[], movements: Record<string, string | number | null>[]) {
+  const wb = new ExcelJS.Workbook();
+  const labels = wb.addWorksheet(messages.data.sheets.labels);
+  const labelKeys = ["externalRef", "name", "color"];
+  labels.addRow(labelKeys.map((key) => messages.data.columns[key]));
+  for (const row of labelRows) labels.addRow(labelKeys.map((key) => row[key] ?? null));
+  const sheet = wb.addWorksheet(messages.data.sheets.transactions);
+  sheet.addRow(LABEL_COLUMNS.map((key) => messages.data.columns[key]));
+  for (const row of movements) sheet.addRow(LABEL_COLUMNS.map((key) => row[key] ?? null));
+  return new Uint8Array(await wb.xlsx.writeBuffer());
+}
+
+async function sheetsOf(bytes: Uint8Array) {
+  const result = await runAll(bytes);
+  return (entity: string) => result.perEntity.find((e) => e.entity === entity)!.rows;
+}
+
+test("a movement names its labels in one cell: an existing one by its id, a file-new one by its placeholder", async () => {
+  const rows = await sheetsOf(
+    await bookLabels(
+      [{ name: "Gift", color: "#06B6D4" }],
+      [{ ...spend(1000, "labelled"), labels: "Gift; Trip" }],
+    ),
+  );
+  const [label] = rows("labels");
+  assert.deepEqual(label.errors, []);
+  assert.equal(label.status, "new");
+  assert.ok(label.placeholderId);
+  const [movement] = rows("transactions");
+  assert.deepEqual(movement.errors, []);
+  assert.deepEqual((movement.object as { labelIds: string[] }).labelIds, [label.placeholderId, TRIP.id]);
+});
+
+test("a label name nobody holds refuses its movement on the labels cell", async () => {
+  const rows = await sheetsOf(await bookLabels([], [{ ...spend(1000, "a"), labels: "Trip; Nowhere" }]));
+  const [movement] = rows("transactions");
+  assert.deepEqual(movement.errors, [{ key: "data.import.errors.unknownReference", column: "labels", value: "Trip; Nowhere" }]);
+});
+
+test("a blank labels cell is no labels, and an existing label's key updates it", async () => {
+  const rows = await sheetsOf(
+    await bookLabels([{ externalRef: "lab-1", name: "Trip renamed", color: "#DC2626" }], [{ ...spend(1000, "a"), labels: "Trip renamed" }, spend(2000, "b")]),
+  );
+  assert.equal(rows("labels")[0].status, "update");
+  const [labelled, bare] = rows("transactions");
+  assert.deepEqual((labelled.object as { labelIds: string[] }).labelIds, [TRIP.id]);
+  assert.deepEqual((bare.object as { labelIds: string[] }).labelIds, []);
+});
+
+test("a label row with no colour is refused, as the form refuses it", async () => {
+  const rows = await sheetsOf(await bookLabels([{ name: "Gift", color: null }], []));
+  assert.equal(rows("labels")[0].errors[0]?.column, "color");
 });

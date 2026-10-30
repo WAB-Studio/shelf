@@ -17,11 +17,12 @@ import { isCivilDate } from "@/lib/dates";
 import { ActionError } from "@/lib/errors";
 import { centsToPesos, maxAmountMinor, parseAmount } from "@/lib/money";
 import { resolveCategoryInScope, scopeKeyOf, type ScopeKey } from "@/lib/spreadsheet/resolve-category";
-import { SHEET_ENTITIES, sheetDescriptors, type SheetEntity } from "@/lib/spreadsheet/schema";
+import { labelNames, SHEET_ENTITIES, sheetDescriptors, type SheetEntity } from "@/lib/spreadsheet/schema";
 import { parseWorkbook, type ParsedRow, type ReverseSheetLabels } from "@/lib/spreadsheet/workbook";
 import { importedAdjustmentSchema } from "@/lib/validation/account-reconciliation";
 import { createAccountSchema } from "@/lib/validation/account";
 import { createCategorySchema } from "@/lib/validation/category";
+import { importedLabelSchema } from "@/lib/validation/label";
 import { createMemberSchema } from "@/lib/validation/member";
 import { createRecurringRuleSchema } from "@/lib/validation/recurring-rule";
 import { createTransactionSchema, foreignSettlementCurrency } from "@/lib/validation/transaction";
@@ -82,6 +83,7 @@ const createSchemas = {
   accounts: createAccountSchema,
   members: createMemberSchema,
   categories: createCategorySchema,
+  labels: importedLabelSchema,
   recurringRules: createRecurringRuleSchema,
   transactions: createTransactionSchema,
 } as const;
@@ -147,6 +149,7 @@ export type ImportResult = {
 export type EffectiveRefs = {
   accounts: Map<string, string[]>;
   categories: Map<string, string[]>;
+  labels: Map<string, string[]>;
   accountCurrencies: Map<string, string>;
   // An existing account's settlement currency by its stable key, for the file row that updates it.
   accountCurrencyByRef: Map<string, string>;
@@ -402,6 +405,7 @@ const GATE2_COLUMN_BY_FIELD: Partial<Record<SheetEntity, Record<string, string>>
     occurredAt: "occurredAt",
     description: "description",
     externalRef: "externalRef",
+    labelIds: "labels",
   },
 };
 
@@ -628,6 +632,9 @@ function resolveAndShape(
       // No cross-entity reference: the guard's output is already id-shaped.
       return { object: data, errors };
 
+    case "labels":
+      return { object: { name: data.name, color: data.color }, errors };
+
     case "categories": {
       const parentId = resolveInto(data.parent, refs.categories, "parent");
       return {
@@ -723,6 +730,9 @@ function resolveAndShape(
       }
 
       const splits = isTransfer ? [] : [{ categoryId, amount: data.amount }];
+      const labelIds = labelNames(data.labels as string | null | undefined).flatMap(
+        (name) => resolveInto(name, refs.labels, "labels") ?? [],
+      );
 
       return {
         object: {
@@ -743,7 +753,7 @@ function resolveAndShape(
           description: data.description,
           externalRef: data.externalRef,
           splits,
-          labelIds: [],
+          labelIds,
         },
         errors,
       };
@@ -771,7 +781,7 @@ export function processRow(
   const ref = text(raw.externalRef);
   const externalRef = ref.length > 0 ? ref : null;
   const placeholderId =
-    (entity === "accounts" || entity === "categories") && status === "new"
+    (entity === "accounts" || entity === "categories" || entity === "labels") && status === "new"
       ? placeholderFor(entity, ref, index)
       : null;
   const carried = { index, sheetRow, status, externalRef, placeholderId };
@@ -858,6 +868,7 @@ export function buildEffectiveRefs(
   return {
     accounts: buildEffectiveMap(scope.accounts, recordsOf("accounts"), "accounts"),
     categories: buildEffectiveMap(scope.categories, recordsOf("categories"), "categories"),
+    labels: buildEffectiveMap(scope.labels, recordsOf("labels"), "labels"),
     accountCurrencies: buildAccountCurrencies(scope.accounts, recordsOf("accounts")),
     accountCurrencyByRef: new Map(
       scope.accounts.flatMap((account) =>
