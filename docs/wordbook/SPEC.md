@@ -39,8 +39,7 @@ this gets built, and no schema, table or column is "prepared for" it.
 
 #### The box
 
-- [ ] **RL-01** — The app opens on one search box. It has focus, it sits in the thumb's reach, and it answers as the person types.
-  - Open, 2026-10-30: the focus on open and «answers as the person types» are driven (`e2e/word.spec.ts`, «RL-01: the box holds the focus»). The thumb's reach is not built: the box sits at the top of the column at 360 px, and no design places it lower.
+- [x] **RL-77** *(successor of RL-01)* — The app opens on one search box at the top of the column. It has focus, so the keyboard is up from the start, and it answers as the person types. Decided by the user 2026-10-30. Proven by `e2e/word.spec.ts`, «RL-77: the box holds the focus».
 - [x] **RL-02** — The box takes a word or a whole sentence. The person never picks a mode and never sees one.
 - [x] **RL-03** — The typed string is looked up whole in the local dictionary first, so a multi-word entry such as `give up` answers as a word. It is treated as a sentence only when that lookup misses **and** the string has more than one token.
 
@@ -382,6 +381,9 @@ this gets built, and no schema, table or column is "prepared for" it.
 ### Retired
 
 Dead codes. The number stays burned and the tick stays as it was.
+
+- [ ] **RL-01** — The app opens on one search box. It has focus, it sits in the thumb's reach, and it answers as the person types.
+  _Retired 2026-10-30, by the user. Successor: RL-77. The box opens focused, so the keyboard covers the lower half of a phone: the box stays at the top, where the eye already is and the answer lands under it._
 
 - [x] **RL-55** *(successor of RL-39)* — A lookup a reader settles on is recorded on the device,
   from the app's first day, only when it found something: an entry in the dictionary, a translation for a
