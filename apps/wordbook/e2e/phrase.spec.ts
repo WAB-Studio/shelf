@@ -103,6 +103,9 @@ test("the sentence path debounces, dedupes, and never raises the word UI", async
   await expect.poll(translated.count, "exactly one request once it does").toBe(1);
 
   await expect(page.getByText(messages.phrase.originNetwork)).toBeVisible();
+  // RL-07 again once the answer stands: the dictionary worker has long replied
+  // by now, so an offer that arrives late would be on the page.
+  await expect(page.getByText(messages.word.suggestions)).toHaveCount(0);
 
   const originLabel = page.getByText(messages.phrase.originNetwork);
   const style = await originLabel.evaluate((el) => {

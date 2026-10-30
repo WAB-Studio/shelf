@@ -40,7 +40,7 @@ this gets built, and no schema, table or column is "prepared for" it.
 #### The box
 
 - [ ] **RL-01** — The app opens on one search box. It has focus, it sits in the thumb's reach, and it answers as the person types.
-  - Open, 2026-10-16: no test drives the focus on open (no `toBeFocused` in `e2e/`; only `components/search/search-box.tsx:24` carries it) nor the thumb's reach; `e2e/word.spec.ts:141` has it in its title and asserts neither. «Answers as the person types» is driven (`e2e/word.spec.ts:141`).
+  - Open, 2026-10-30: the focus on open and «answers as the person types» are driven (`e2e/word.spec.ts`, «RL-01: the box holds the focus»). The thumb's reach is not built: the box sits at the top of the column at 360 px, and no design places it lower.
 - [x] **RL-02** — The box takes a word or a whole sentence. The person never picks a mode and never sees one.
 - [x] **RL-03** — The typed string is looked up whole in the local dictionary first, so a multi-word entry such as `give up` answers as a word. It is treated as a sentence only when that lookup misses **and** the string has more than one token.
 
@@ -159,8 +159,7 @@ this gets built, and no schema, table or column is "prepared for" it.
 - [ ] **RL-69** — Access is by invitation only. Public sign-ups are off in Supabase Auth and the app keeps a list of allowed emails; the server refuses a sign-in link for an email not on the list before any email is sent. PKCE applies: a link only works in the browser that asked for it. Decided by the user 2026-10-15.
   - Open, 2026-10-16: the template still sends `token_hash` and public sign-ups are still on.
 
-- [ ] **RL-07** — Autocomplete appears only while the string is being treated as a word. A sentence never raises it.
-  - Open, 2026-10-16: the negative half is read too early: `e2e/phrase.spec.ts:87` counts the suggestions right after `fill`, before they settle, so it passes if they would arrive later. The positive half is driven (`e2e/word.spec.ts:227`).
+- [x] **RL-07** — Autocomplete appears only while the string is being treated as a word. A sentence never raises it.
 - [x] **RL-26** — A headword's answer can be heard. The device speaks it with the voice the browser
   already carries, so a headword with no IPA is spoken exactly like one that has it. Decided by the
   user 2026-09-08: **27,899 of the 64,258 entries carry no IPA at all** (36,359 do), and written
@@ -364,9 +363,8 @@ this gets built, and no schema, table or column is "prepared for" it.
     governs the first; no assertion anywhere enforces the second.
 - [ ] **RNL-02** — Every string a person reads comes from the message catalogue. The interface is Spanish.
   - Open, 2026-10-16: nothing drives «every string comes from the catalogue»: `lib/catalog.test.ts` checks the catalogue's own quoting, not that components carry no literal.
-- [ ] **RNL-03** — The app holds at a 360 px viewport: no horizontal overflow, no overlapping control, no tap target under 32 px on its shorter side. It is used one-handed, standing, holding a book. It also holds at a wide viewport: the reading column keeps a maximum measure and centres, so at 1440 px the box and the answer read as a column rather than stretching the full width. The phone is the case the app is designed for; the desktop is the case it must not look neglected in.
+- [x] **RNL-03** — The app holds at a 360 px viewport: no horizontal overflow, no overlapping control, no tap target under 32 px on its shorter side. It is used one-handed, standing, holding a book. It also holds at a wide viewport: the reading column keeps a maximum measure and centres, so at 1440 px the box and the answer read as a column rather than stretching the full width. The phone is the case the app is designed for; the desktop is the case it must not look neglected in.
   - Widened 2026-09-07 from the 360 px case alone. The code was unticked and nothing had been verified against it, so no tick is invalidated; the alternative was retiring it for a successor, which buys nothing here.
-  - Open, 2026-10-16: «no overlapping control» is driven by no test, and the wide case is driven at 1280 px (`e2e/escritorio.spec.ts:56`), not 1440. The 360 px overflow and the 44 px target are driven (`e2e/word.spec.ts:141`, `e2e/bottom-nav.spec.ts:103`), the target only on `/`.
 - [x] **RNL-04** — The dictionary asset is built from its source by a script kept in the repository, and the build records the source URL, the edition, the licence and the entry counts beside the asset.
 - [x] **RNL-05** — The sentence path never fires on a keystroke: it waits for the typing to settle, does not fire below a minimum number of tokens, never fires twice for the same text, and cancels a request already in flight when the text changes. The word path is never throttled and never delayed.
 - [x] **RNL-06** — Recording a lookup never delays, blocks or fails a lookup. The write is never awaited on the path that produces an answer, a failure to write is swallowed, and the log's storage is a separate database from the dictionary's, so a write can never contend with a read of the payload.

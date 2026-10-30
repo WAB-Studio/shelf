@@ -211,7 +211,7 @@ of this gets built, and no schema, table or column is "prepared for" it.
   last day is within a fact's reach (RP-129): seven days after it closes. The mark is dated that last day, so a task done on
   the 31st and logged on the 2nd counts in its own month. From the eighth day the month reads only, everywhere: no mark, no
   task's sheet. Decided by the user 2026-10-28.
-- [ ] **RP-145** — «Mes» opens the weeks of the month it reads: under its header, «Semanas» and one link per week the month
+- [x] **RP-145** — «Mes» opens the weeks of the month it reads: under its header, «Semanas» and one link per week the month
   touches, named by its Monday («29 sep», «6 oct»…), the week it starts in first; this week's link opens «Semana» itself. A month
   with no goal open draws none. Decided by the user 2026-10-28 (P4 a).
 - [x] **RP-144** — An open goal's screen offers «Abrir en Claude»: a new claude.ai chat, in a new tab, with a short brief
