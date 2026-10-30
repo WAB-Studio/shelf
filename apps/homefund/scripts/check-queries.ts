@@ -2157,7 +2157,7 @@ async function readSuite(
 
   // RF-83: the tile names the debt the earliest due date belongs to — by id as
   // well as by name, since the badge on the table's row is placed by the id — and
-  // its figure is that debt's minimum plus the installments falling due by then.
+  // its figure is that debt's minimum alone, its instalments already inside it (RF-136).
   await checkReadValue(
     "getDebtsScreenData names the debt behind the next payment",
     () => getDebtsScreenData(),
@@ -2173,7 +2173,7 @@ async function readSuite(
       const expected =
         earliest === null
           ? null
-          : (earliest.minimumPaymentCents ?? 0) + earliest.dueInstallmentsCents;
+          : (earliest.minimumPaymentCents ?? 0);
       const tile = screen.totals.nextPayment;
 
       return {
@@ -4265,6 +4265,7 @@ async function main(): Promise<void> {
   await o8m5ReviewSurvivorsSuite();
   await everyEntityBackupSuite();
   await moneyFormsStaleSuite();
+  await nextPaymentMinimumSuite();
 }
 
 // A member recorded without a login is someone in the fund: a leader whose fund holds one is not alone, so an
@@ -15155,5 +15156,65 @@ async function moneyFormsStaleSuite(): Promise<void> {
     next("RF-156: terms sent by someone who cannot write the debt are refused as not found, not as stale, and the terms stand"),
     foreign?.serverError !== undefined && !isStale(foreign) && Number(await rateOf()) === 0.28,
     `stranger ${JSON.stringify(foreign)}, rate ${await rateOf()}`,
+  );
+}
+
+// RF-83, RF-136: the next payment is the debt's minimum alone. An instalment falling due is already inside that
+// minimum, so a card carrying one never adds it a second time.
+async function nextPaymentMinimumSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const today = todayInBogota();
+  const MINIMUM = 12_000_000;
+  const holder = await createMembershipFreeUser();
+  const cardId = await asUser(holder, async () => {
+    const { accountId } = await createAccount({
+      name: `Harness rf136 tarjeta ${tag}`,
+      kind: "liability",
+      subtype: "card",
+      ownerUserId: holder.id,
+      groupId: null,
+      isShared: false,
+      institution: null,
+      lastFour: null,
+      settlementCurrency: "COP",
+      amountMinor: 200_000_000,
+      balanceOn: shiftDate(today, -90),
+    } as never);
+    track("accounts", accountId);
+    return accountId;
+  });
+  await fixtureSql`
+    insert into debt_terms (account_id, debt_kind, annual_rate, minimum_payment_cents, statement_cut_off_day, payment_due_day)
+    values (${cardId}, 'revolving', 0.30, ${MINIMUM}, 1, 28)`;
+  const { planId } = await asUser(holder, () =>
+    createInstallmentPlan({
+      accountId: cardId,
+      description: `Harness rf136 cuotas ${tag}`,
+      principalCents: 30_000_000,
+      nInstallments: 3,
+      frequency: "monthly",
+      interestRate: null,
+      downPaymentCents: null,
+      avalCents: null,
+      startDate: shiftDate(today, -40),
+      merchant: null,
+      // The first line already due, so it falls before the card's next due day.
+      lines: [
+        { seq: 1, dueDate: shiftDate(today, -10), amountCents: 10_000_000 },
+        { seq: 2, dueDate: shiftDate(today, 20), amountCents: 10_000_000 },
+        { seq: 3, dueDate: shiftDate(today, 50), amountCents: 10_000_000 },
+      ],
+    }),
+  );
+  track("installment_plans", planId);
+
+  const screen = await asUser(holder, () => getDebtsScreenData());
+  const card = screen.withTerms.find((row) => row.accountId === cardId);
+  const tile = screen.totals.nextPayment;
+  assert(
+    next("RF-136: a card with an instalment falling due names its minimum alone as the next payment"),
+    card !== undefined && card.dueInstallmentsCents > 0 && tile?.accountId === cardId && tile.amountCents === MINIMUM,
+    `next payment ${tile?.amountCents ?? "none"} on ${tile?.accountId === cardId ? "the card" : "another debt"}; minimum ${MINIMUM}, instalments due ${card?.dueInstallmentsCents ?? "no row"}`,
   );
 }

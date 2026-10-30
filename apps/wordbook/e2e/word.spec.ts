@@ -785,7 +785,7 @@ test("a proper noun is labelled a proper noun, and the word «pronombre» is dra
   await expect(page.getByText("pronombre", { exact: true })).toHaveCount(0);
 });
 
-test("RL-01: the box holds the focus on open, and still holds it once the dictionary is in", async ({ page }) => {
+test("RL-77: the box holds the focus on open, and still holds it once the dictionary is in", async ({ page }) => {
   await deleteTranslator(page);
   await page.goto("/");
   const searchBox = page.getByRole("textbox", { name: messages.search.label });
