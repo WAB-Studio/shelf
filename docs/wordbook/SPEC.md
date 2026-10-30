@@ -155,7 +155,7 @@ this gets built, and no schema, table or column is "prepared for" it.
   reader's behalf: `verifyOtp` is not idempotent and a timeout says nothing about whether the token
   was spent.
 - [ ] **RL-67** — When sending a sign-in link times out, the screen says the link may have been sent, before the reader asks for another. A board is drawn before it is built. Decided by the user 2026-10-15.
-- [ ] **RL-69** — Access is by invitation only. Public sign-ups are off in Supabase Auth and the app keeps a list of allowed emails; the server refuses a sign-in link for an email not on the list before any email is sent. PKCE applies: a link only works in the browser that asked for it. Decided by the user 2026-10-15.
+- [x] **RL-69** — Access is by invitation only. Public sign-ups are off in Supabase Auth and the app keeps a list of allowed emails; the server refuses a sign-in link for an email not on the list before any email is sent. PKCE applies: a link only works in the browser that asked for it. Decided by the user 2026-10-15.
   - Open, 2026-10-16: the template still sends `token_hash` and public sign-ups are still on.
 
 - [x] **RL-07** — Autocomplete appears only while the string is being treated as a word. A sentence never raises it.
