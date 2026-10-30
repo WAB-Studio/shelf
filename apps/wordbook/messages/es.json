@@ -194,8 +194,7 @@
       "linkTimeoutTitle": "No se pudo comprobar el enlace",
       "linkTimeoutBody": "Falló de nuestro lado, no del enlace. Ábrelo otra vez desde el correo; si tampoco entra, pide uno nuevo aquí.",
       "linkInvalidTitle": "El enlace no vale o ya venció",
-      "linkInvalidBody": "Pide uno nuevo aquí abajo. Cada enlace sirve una sola vez y dura una hora.",
-      "maybeSent": "Tardó en responder, pero puede que el correo ya haya salido. Revísalo antes de pedir otro."
+      "linkInvalidBody": "Pide uno nuevo aquí abajo. Cada enlace sirve una sola vez y dura una hora."
     },
     "copy": {
       "label": "Copia",

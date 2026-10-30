@@ -26,11 +26,9 @@ async function supabaseClient() {
 const emailSchema = z.email();
 
 export type SendSignInLinkResult =
-  | { ok: true }
-  | {
-      ok: false;
-      error: "emailInvalid" | "domainUndeliverable" | "sendFailed" | "maybeSent" | "rateLimited" | "capped" | "notInvited";
-    };
+  // `maybe`: Auth timed out, so the mail may have left; the reader is told before asking for another (RL-67).
+  | { ok: true; maybe?: true }
+  | { ok: false; error: "emailInvalid" | "domainUndeliverable" | "sendFailed" | "rateLimited" | "capped" | "notInvited" };
 
 // RFC 5321 §5.1: no MX falls back to the domain's own address record
 // (implicit MX). RFC 7505: a domain that takes no mail at all publishes
@@ -154,10 +152,10 @@ export async function sendSignInLink(email: string): Promise<SendSignInLinkResul
 
   if (error) {
     console.error("sign-in link request failed", error);
-    // A send Auth refused spends nothing; a timed-out one may have been delivered, so it keeps its count.
-    if (!isAuthRetryableFetchError(error)) await releaseSignInLink(spent);
-    // RL-67: a timeout may have sent the mail, so the reader is told before asking for another.
-    if (isAuthRetryableFetchError(error)) return { ok: false, error: "maybeSent" };
+    // A timed-out send may have been delivered, so it keeps its count and opens the code step.
+    if (isAuthRetryableFetchError(error)) return { ok: true, maybe: true };
+    // A send Auth refused spends nothing.
+    await releaseSignInLink(spent);
     // 429 (over_email_send_rate_limit) names the wait, not just the
     // failure to send — every other status keeps the generic copy.
     return { ok: false, error: error.status === 429 ? "rateLimited" : "sendFailed" };

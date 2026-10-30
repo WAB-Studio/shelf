@@ -34,7 +34,7 @@ function bareSpan(
 type EmailFormState =
   | { kind: "idle" }
   | { kind: "sending" }
-  // `maybe`: the send timed out, so the mail may or may not have left (RL-67).
+  // `maybe`: Auth timed out, so the mail may or may not have left (RL-67).
   | { kind: "sent"; maybe?: true }
   | {
       kind: "failed";
@@ -186,9 +186,8 @@ function SignedOutForm() {
   async function handleResend(): Promise<void> {
     setResend({ kind: "sending" });
     let timer: ReturnType<typeof setTimeout> | null = null;
-    // The clock running out is not a refusal: the request may have reached the server (RL-67).
-    const timedOut = new Promise<{ ok: false; error: "maybeSent" }>((resolve) => {
-      timer = setTimeout(() => resolve({ ok: false, error: "maybeSent" }), SEND_LINK_TIMEOUT_MS);
+    const timedOut = new Promise<{ ok: false; error: "offline" }>((resolve) => {
+      timer = setTimeout(() => resolve({ ok: false, error: "offline" }), SEND_LINK_TIMEOUT_MS);
     });
     let result: SendSignInLinkResult | { ok: false; error: "offline" };
     try {
@@ -207,7 +206,9 @@ function SignedOutForm() {
     setNow(at);
     setCode("");
     setCodeState({ kind: "idle" });
-    setResend({ kind: "done" });
+    setState({ kind: "sent", maybe: result.maybe });
+    // A resend that may not have left says so on the line above, never «Te mandamos otro código».
+    setResend(result.maybe ? { kind: "idle" } : { kind: "done" });
     setFocusCode((current) => current + 1);
   }
 
@@ -284,9 +285,8 @@ function SignedOutForm() {
     setState({ kind: "sending" });
 
     let timer: ReturnType<typeof setTimeout> | null = null;
-    // The clock running out is not a refusal: the request may have reached the server (RL-67).
-    const timedOut = new Promise<{ ok: false; error: "maybeSent" }>((resolve) => {
-      timer = setTimeout(() => resolve({ ok: false, error: "maybeSent" }), SEND_LINK_TIMEOUT_MS);
+    const timedOut = new Promise<{ ok: false; error: "offline" }>((resolve) => {
+      timer = setTimeout(() => resolve({ ok: false, error: "offline" }), SEND_LINK_TIMEOUT_MS);
     });
 
     let result: SendSignInLinkResult | { ok: false; error: "offline" };
@@ -299,18 +299,14 @@ function SignedOutForm() {
       result = { ok: false, error: "offline" };
     }
     if (timer) clearTimeout(timer);
-    // A send that may have left opens the code step too, its wait counted, so another is asked for knowingly.
-    const maybe = !result.ok && result.error === "maybeSent";
-    if (result.ok || maybe) {
+    if (result.ok) {
       const at = Date.now();
       savePending(email, at);
       setSentAt(at);
       setNow(at);
     }
     setResend({ kind: "idle" });
-    if (result.ok) setState({ kind: "sent" });
-    else if (maybe) setState({ kind: "sent", maybe: true });
-    else setState({ kind: "failed", error: result.error });
+    setState(result.ok ? { kind: "sent", maybe: result.maybe } : { kind: "failed", error: result.error });
   }
 
   if (held) {

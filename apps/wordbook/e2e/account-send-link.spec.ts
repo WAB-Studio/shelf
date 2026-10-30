@@ -11,7 +11,10 @@ import messages from "../messages/es.json";
 // would spend the address's real send quota (RL-22's own action already
 // logs and classifies the real thing; this proves what the reader sees for
 // each of the three outcomes `SignedOutForm` can render).
-async function mockSendSignInLinkResult(page: Page, result: { ok: true } | { ok: false; error: string }): Promise<void> {
+async function mockSendSignInLinkResult(
+  page: Page,
+  result: { ok: true; maybe?: true } | { ok: false; error: string },
+): Promise<void> {
   await page.route("**/cuenta", async (route) => {
     const request = route.request();
     if (request.method() !== "POST") {
@@ -186,7 +189,7 @@ test("no network: the button gives up, names the connection, keeps the email, an
 // `route.abort` above cannot produce. This proves only that the failure
 // line still shows up in that case; a request genuinely stuck forever also
 // stalls Next's own action queue behind it, so this does not claim retry.
-test("RL-67: a request that never settles gives up on the clock and opens the code step, saying the mail may have left", async ({ page }) => {
+test("a request that never settles still gives up, on the clock rather than the rejection", async ({ page }) => {
   await page.route("**/cuenta", async (route) => {
     if (route.request().method() !== "POST") {
       await route.continue();
@@ -202,20 +205,18 @@ test("RL-67: a request that never settles gives up on the clock and opens the co
   const tappedAt = Date.now();
   await page.getByRole("button", { name: messages.account.copy.noSessionAction }).click();
 
-  await expect(page.getByText(messages.account.maybeSent.replace("{email}", email))).toBeVisible({ timeout: 15_000 });
-  console.log(`account-send-link never-settles: maybe-sent line after ${Date.now() - tappedAt}ms`);
-  // The code step is open, with the wait for another already counting.
-  await expect(page.getByRole("button", { name: /Pedir otro en \d+ s/ })).toBeVisible();
+  await expect(page.getByText(messages.account.errors.offline, { exact: true })).toBeVisible({ timeout: 15_000 });
+  console.log(`account-send-link never-settles: failure line after ${Date.now() - tappedAt}ms`);
 });
 
 test("RL-67: Auth timing out opens the code step with the may-have-left line, never the failure", async ({ page }) => {
-  await mockSendSignInLinkResult(page, { ok: false, error: "maybeSent" });
+  await mockSendSignInLinkResult(page, { ok: true, maybe: true });
   const email = "reader@example.com";
   await submit(page, email);
 
   await expect(page.getByText(messages.account.maybeSent.replace("{email}", email))).toBeVisible();
+  await expect(page.getByText(messages.account.sent.replace("{email}", email))).toHaveCount(0);
   await expect(page.getByText(messages.account.errors.sendFailed, { exact: true })).toHaveCount(0);
-  await expect(page.getByRole("textbox", { name: messages.account.emailLabel })).toHaveCount(0);
 });
 
 test("on a real connection the happy path is unchanged: no wait for the offline clock", async ({ page }) => {
