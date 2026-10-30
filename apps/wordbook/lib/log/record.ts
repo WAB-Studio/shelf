@@ -3,6 +3,7 @@ import { countPending } from "./pending";
 import { pendingRowFrom } from "./record-text";
 import { normaliseSyncState, signOutSyncState, syncStateForReader } from "./sync-state";
 import type { LookupRecord, SyncState } from "./types";
+import { clearCards } from "../review/store";
 
 // A separate database from `reading-dictionary`: an IndexedDB transaction is
 // scoped to one database, so a write here never queues behind a read of the
@@ -418,6 +419,8 @@ export async function clearLocalLookups(): Promise<void> {
     transaction.onerror = () => reject(transaction.error);
     transaction.onabort = () => reject(transaction.error);
   });
+  // The review's cards name the record's words (RL-68): an emptied record leaves none behind.
+  await clearCards().catch(() => undefined);
   if (typeof window !== "undefined") window.dispatchEvent(new Event(LOG_CLEARED_EVENT));
 }
 

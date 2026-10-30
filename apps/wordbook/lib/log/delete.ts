@@ -1,6 +1,7 @@
 import type { Tombstone } from "@/lib/sync/protocol";
 import { openLogDatabase } from "./record";
 import type { LookupRecord, SyncState } from "./types";
+import { deleteCard } from "../review/store";
 
 // Deleting a `/registro` row (RL-66, device half) and the marks other devices
 // made (RL-70). No request leaves from here (RNL-09): the queue waits in the
@@ -100,6 +101,7 @@ export async function deleteStudyGroup(key: string): Promise<{ deleted: number }
     sync.put({ ...current, pending: [...current.pending, ...fresh] } satisfies QueueRow);
   }
   await done;
+  await deleteCard(key).catch(() => undefined);
   if (typeof window !== "undefined") window.dispatchEvent(new Event(LOG_DELETED_EVENT));
   return { deleted: plan.ids.length };
 }
