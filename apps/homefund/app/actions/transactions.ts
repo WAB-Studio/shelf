@@ -18,7 +18,7 @@ import { withUserDb } from "@/db/session";
 import { BASE_CURRENCY, type CurrencyCode } from "@/lib/currency";
 import { pgErrorCode } from "@/lib/db-error";
 import { ActionError } from "@/lib/errors";
-import { learnedPatternKey, PATTERN_FIELD_MAX } from "@/lib/ingest/counterparty-pattern";
+import { learnedPattern } from "@/lib/ingest/counterparty-pattern";
 import { parseAmount } from "@/lib/money";
 import { authActionClient } from "@/lib/safe-action";
 import {
@@ -287,8 +287,7 @@ export const completeCounterpartyAction = authActionClient
       }
 
       const description = row.description?.trim() ?? "";
-      const patternKey = learnedPatternKey(description);
-      const patternLabel = description.slice(0, PATTERN_FIELD_MAX);
+      const { key: patternKey, label: patternLabel } = learnedPattern(description);
 
       // A movement with no description carries no span to learn from: the
       // completion still lands, only nothing teaches `ingest_counterparties`,

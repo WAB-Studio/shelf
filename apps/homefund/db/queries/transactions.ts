@@ -28,7 +28,7 @@ import { withUserDb, withUserDbOrTx } from "@/db/session";
 import { stampIs } from "@/db/queries/stamp";
 import type { CurrencyCode } from "@/lib/currency";
 import { pgConstraintName, pgErrorCode } from "@/lib/db-error";
-import { learnedPatternKey, proposalFor, type TrustedPattern } from "@/lib/ingest/counterparty-pattern";
+import { learnedPattern, proposalFor, type TrustedPattern } from "@/lib/ingest/counterparty-pattern";
 import type { SettlementCurrencies } from "@/lib/validation/transaction";
 
 export type TransactionSplitInput = { categoryId: string; amountCents: number };
@@ -52,6 +52,8 @@ export type CreateTransactionArgs = {
   amountFromWords?: boolean;
   // «Del hogar» (RF-139): stored only on an expense from a personal account (`householdMark`).
   forHousehold?: boolean;
+  // RF-133: one side is not known yet and waits for a person; insert only.
+  awaitingCounterparty?: boolean;
   occurredAt: string;
   description: string | null;
   externalRef: string | null;
@@ -228,6 +230,7 @@ export async function insertTransaction(
     counterIsEstimate = false,
     amountFromWords = false,
     forHousehold = false,
+    awaitingCounterparty = false,
     occurredAt,
     description,
     externalRef,
@@ -245,6 +248,7 @@ export async function insertTransaction(
       counter_is_estimate,
       amount_from_words,
       for_household,
+      awaiting_counterparty,
       occurred_at,
       description,
       external_ref
@@ -257,6 +261,7 @@ export async function insertTransaction(
       ${counterIsEstimate},
       ${amountFromWords},
       ${householdMark(sql`${fromAccountId}::uuid`, sql`${toAccountId}::uuid`, sql`${forHousehold}`)},
+      ${awaitingCounterparty},
       ${occurredAt},
       ${description},
       ${externalRef}
@@ -705,6 +710,23 @@ export type AwaitingCounterpartyRow = {
 };
 
 /**
+ * The caller's trusted patterns as one JSON value (RF-135): `learning` and `ambiguous` propose
+ * nothing. RLS scopes `ingest_counterparties` and `accounts` to the caller, so it needs no owner
+ * predicate; an archived account is never proposed. Matched in JS by `proposalFor`.
+ */
+export const trustedPatternsSql = sql<TrustedPattern[]>`coalesce((
+  select jsonb_agg(jsonb_build_object(
+    'patternKey', c.pattern_key,
+    'side', c.side,
+    'accountId', c.trusted_account_id,
+    'accountLabel', a.name
+  ))
+  from ${ingestCounterparties} c
+  join ${accounts} a on a.id = c.trusted_account_id and a.archived_at is null
+  where c.state = 'trusted'
+), '[]'::jsonb)`;
+
+/**
  * Movements waiting for a person (RF-133): `awaiting_counterparty` and
  * `reviewed_at is null`. Naming only one account is NOT this condition on its
  * own — every income and every expense is one-sided by design (RF-17), so that
@@ -723,23 +745,6 @@ export type AwaitingCounterpartyRow = {
  * here, in JS, against that one function's own output — never one lookup per
  * row, and never two implementations of the same rule.
  */
-/**
- * The caller's trusted patterns as one JSON value (RF-135): `learning` and `ambiguous` propose
- * nothing. RLS scopes `ingest_counterparties` and `accounts` to the caller, so it needs no owner
- * predicate; an archived account is never proposed. Matched in JS by `proposalFor`.
- */
-export const trustedPatternsSql = sql<TrustedPattern[]>`coalesce((
-  select jsonb_agg(jsonb_build_object(
-    'patternKey', c.pattern_key,
-    'side', c.side,
-    'accountId', c.trusted_account_id,
-    'accountLabel', a.name
-  ))
-  from ${ingestCounterparties} c
-  join ${accounts} a on a.id = c.trusted_account_id and a.archived_at is null
-  where c.state = 'trusted'
-), '[]'::jsonb)`;
-
 export async function listAwaitingCounterparty(
   filters: AwaitingCounterpartyFilters = {},
 ): Promise<AwaitingCounterpartyRow[]> {
@@ -781,8 +786,8 @@ export async function listAwaitingCounterparty(
 
   return rows.map((row) => {
     const missingSide: "from" | "to" = row.fromAccountId === null ? "from" : "to";
-    const patternKey = learnedPatternKey(row.description ?? "");
-    const proposal = proposalFor(row.trustedPatterns, missingSide, row.description ?? "");
+    const patternKey = learnedPattern(row.description ?? "").key;
+    const proposal = proposalFor(row.trustedPatterns, missingSide, patternKey);
 
     return {
       id: row.id,

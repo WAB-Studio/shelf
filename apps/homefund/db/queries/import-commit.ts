@@ -20,6 +20,7 @@ import {
 import type { Transaction } from "@/db/session";
 import { BASE_CURRENCY } from "@/lib/currency";
 import { insertRow } from "@/db/insert-row";
+import { jsonbParam } from "@/db/jsonb-param";
 import { householdMark } from "@/db/queries/transactions";
 import { pgConstraintName, pgErrorCode } from "@/lib/db-error";
 import { ActionError } from "@/lib/errors";
@@ -268,12 +269,6 @@ function chunked<T>(rows: T[]): T[][] {
   const out: T[][] = [];
   for (let start = 0; start < rows.length; start += CHUNK_SIZE) out.push(rows.slice(start, start + CHUNK_SIZE));
   return out;
-}
-
-// A set of records as ONE jsonb parameter for `jsonb_to_recordset` / `jsonb_array_elements_text`:
-// Drizzle expands a JS array into a parenthesised list, never an array (docs/TRAPS.md).
-function jsonbParam(value: unknown): SQL {
-  return sql`${JSON.stringify(value)}::jsonb`;
 }
 
 /**

@@ -43,7 +43,7 @@ async function run(ctx: ServerContext, load: () => Promise<unknown>): Promise<Ca
     return text(await actAsCredentialOwner(owner, load));
   } catch (error) {
     if (error instanceof StatementError) {
-      return text({ error: t(`errors.statement.${error.key}`), ...(error.line ? { line: error.line } : {}) }, true);
+      return text({ error: t(`errors.statement.${error.key}`), line: error.line }, true);
     }
     console.error("mcp tool failed:", error instanceof Error ? error.name : "unknown", pgErrorCode(error) ?? "");
     return text({ error: t("errors.unknown") }, true);
@@ -108,13 +108,11 @@ function registerStatementTools(server: McpServer): void {
   );
 }
 
-function registerTools(server: McpServer): void {
-  registerReadTools(server);
-  registerStatementTools(server);
-}
-
 export function buildHandler(): (request: Request) => Promise<Response> {
-  return createMcpHandler(registerTools, {
+  return createMcpHandler((server) => {
+    registerReadTools(server);
+    registerStatementTools(server);
+  }, {
     serverInfo: { name: "homefund", version: pkg.version },
     instructions: t("instructions"),
   });

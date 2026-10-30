@@ -4,10 +4,11 @@ import { createHash } from "node:crypto";
 
 import { sql } from "drizzle-orm";
 
-import { trustedPatternsSql } from "@/db/queries/transactions";
+import { jsonbParam } from "@/db/jsonb-param";
+import { insertTransaction, trustedPatternsSql } from "@/db/queries/transactions";
 import { withUserDb, type Transaction } from "@/db/session";
 import { pgConstraintName, pgErrorCode } from "@/lib/db-error";
-import { proposalFor, type TrustedPattern } from "@/lib/ingest/counterparty-pattern";
+import { learnedPattern, proposalFor, type TrustedPattern } from "@/lib/ingest/counterparty-pattern";
 import type { StatementInput, StatementRow } from "@/lib/validation/statement-import";
 
 // What a statement line becomes (RF-144, RF-134):
@@ -35,7 +36,8 @@ export type PreviewLine = {
   // RF-135: the other account a remembered pattern names for the missing side. A proposal only: the
   // import never fills it on its own; Claude passes it as `counterAccountId` once the person agrees.
   proposal?: { accountId: string; accountName: string };
-  awaitsCounterparty: boolean;
+  // Only on a new line the person marked unsure: it is written waiting for its other side (RF-133).
+  awaitsCounterparty?: true;
 };
 
 export type StatementPreview = {
@@ -83,8 +85,7 @@ type Context = {
   trusted: TrustedPattern[];
 };
 
-const idsJson = (values: (string | undefined)[]) =>
-  JSON.stringify(values.filter((value): value is string => !!value));
+const idsParam = (values: (string | undefined)[]) => jsonbParam(values.filter((value): value is string => !!value));
 
 // Everything the classification reads, in one round trip under the caller's policies.
 async function readContext(tx: Transaction, input: StatementInput): Promise<Context> {
@@ -98,7 +99,7 @@ async function readContext(tx: Transaction, input: StatementInput): Promise<Cont
       coalesce((select json_agg(json_build_object('ref', s.source_ref, 'transactionId', s.transaction_id))
         from transaction_sources s
         where s.account_id = ${input.accountId}
-          and s.source_ref in (select jsonb_array_elements_text(${idsJson(input.rows.map((one) => one.reference))}::jsonb))),
+          and s.source_ref in (select jsonb_array_elements_text(${idsParam(input.rows.map((one) => one.reference))}))),
         '[]') as refs,
       coalesce((select json_agg(json_build_object('id', t.id, 'occurredAt', t.occurred_at,
           'legCents', (case when t.currency = a.settlement_currency then t.amount_cents
@@ -115,11 +116,11 @@ async function readContext(tx: Transaction, input: StatementInput): Promise<Cont
       coalesce((select json_agg(json_build_object('id', c.id, 'kind', c.kind,
           'ownerUserId', c.owner_user_id, 'groupId', c.group_id))
         from categories c
-        where c.id::text in (select jsonb_array_elements_text(${idsJson(input.rows.map((one) => one.categoryId))}::jsonb))),
+        where c.id in (select jsonb_array_elements_text(${idsParam(input.rows.map((one) => one.categoryId))})::uuid)),
         '[]') as categories,
       coalesce((select json_agg(json_build_object('id', a.id, 'currency', a.settlement_currency))
         from accounts a
-        where a.id::text in (select jsonb_array_elements_text(${idsJson(input.rows.map((one) => one.counterAccountId))}::jsonb))
+        where a.id in (select jsonb_array_elements_text(${idsParam(input.rows.map((one) => one.counterAccountId))})::uuid)
           and a.archived_at is null), '[]') as accounts,
       ${trustedPatternsSql} as trusted`);
   return row!;
@@ -150,56 +151,58 @@ function invalidReason(
     : "category_mismatch";
 }
 
-function classify(input: StatementInput, context: Context): PreviewLine[] {
+function classify(rows: StatementRow[], context: Context): PreviewLine[] {
   const account = context.account!;
   const imported = new Map(context.refs.map((one) => [one.ref, one.transactionId]));
   // A movement already imported under one of these lines' references is spoken for: no other line
   // of the statement may match it.
   const taken = new Set(context.refs.map((one) => one.transactionId));
-  return [...input.rows]
-    .sort((a, b) => a.line - b.line)
-    .map((row): PreviewLine => {
-      const out = row.amountCents < 0;
-      const kind = row.counterAccountId ? "transfer" : out ? "expense" : "income";
-      const base = { line: row.line, kind, awaitsCounterparty: false } as const;
-      const importedAs = row.reference === undefined ? undefined : imported.get(row.reference);
-      if (importedAs) return { ...base, status: "already_imported", matchedTransactionId: importedAs };
-      // The same day, the same amount, the same direction on this account. A leg sourced before is
-      // this line only when neither carries a reference: a referenced line was looked up above.
-      const match = context.candidates.find(
+  // Candidates by day, amount on this account and direction, oldest first.
+  const byShape = new Map<string, Context["candidates"]>();
+  for (const candidate of context.candidates) {
+    if (candidate.legCents === null) continue;
+    const shape = `${candidate.occurredAt}|${candidate.legCents}|${candidate.outOfAccount}`;
+    byShape.set(shape, [...(byShape.get(shape) ?? []), candidate]);
+  }
+  return rows.map((row): PreviewLine => {
+    const out = row.amountCents < 0;
+    const kind = row.counterAccountId ? "transfer" : out ? "expense" : "income";
+    const base = { line: row.line, kind } as const;
+    const importedAs = row.reference === undefined ? undefined : imported.get(row.reference);
+    if (importedAs) return { ...base, status: "already_imported", matchedTransactionId: importedAs };
+    // The same day, the same amount, the same direction on this account. A leg sourced before is
+    // this line only when neither carries a reference: a referenced line was looked up above.
+    const match = byShape
+      .get(`${row.date}|${Math.abs(row.amountCents)}|${out}`)
+      ?.find(
         (candidate) =>
           !taken.has(candidate.id) &&
-          candidate.occurredAt === row.date &&
-          candidate.legCents !== null &&
-          Number(candidate.legCents) === Math.abs(row.amountCents) &&
-          candidate.outOfAccount === out &&
           (!candidate.sourced || (row.reference === undefined && candidate.sourceRef === null)),
       );
-      if (match) {
-        taken.add(match.id);
-        return { ...base, status: match.sourced ? "already_imported" : "matches", matchedTransactionId: match.id };
-      }
-      const reason = invalidReason(row, account, context);
-      if (reason) return { ...base, status: "invalid", reason };
-      const remembered = row.counterAccountId
-        ? undefined
-        : proposalFor(context.trusted, out ? "to" : "from", row.description);
-      return {
-        ...base,
-        status: "new",
-        awaitsCounterparty: !row.counterAccountId && row.unsure === true,
-        ...(remembered ? { proposal: { accountId: remembered.accountId, accountName: remembered.accountLabel } } : {}),
-      };
-    });
+    if (match) {
+      taken.add(match.id);
+      return { ...base, status: match.sourced ? "already_imported" : "matches", matchedTransactionId: match.id };
+    }
+    const reason = invalidReason(row, account, context);
+    if (reason) return { ...base, status: "invalid", reason };
+    const remembered = row.counterAccountId
+      ? undefined
+      : proposalFor(context.trusted, out ? "to" : "from", learnedPattern(row.description).key);
+    return {
+      ...base,
+      status: "new",
+      ...(!row.counterAccountId && row.unsure ? { awaitsCounterparty: true } : {}),
+      ...(remembered ? { proposal: { accountId: remembered.accountId, accountName: remembered.accountLabel } } : {}),
+    };
+  });
 }
 
 // The key binds an import to the lines a preview showed AND to what it said about each: a line that
 // would now be written differently changes it, so the import refuses rather than act unseen.
-function previewKeyOf(input: StatementInput, lines: PreviewLine[]): string {
-  const rows = [...input.rows].sort((a, b) => a.line - b.line);
+function previewKeyOf(accountId: string, rows: StatementRow[], lines: PreviewLine[]): string {
   const said = lines.map((line) => [line.line, line.status, line.matchedTransactionId ?? null]);
   return createHash("sha256")
-    .update(JSON.stringify({ accountId: input.accountId, rows, said }))
+    .update(JSON.stringify({ accountId, rows, said }))
     .digest("hex")
     .slice(0, 32);
 }
@@ -208,11 +211,12 @@ function summarise(input: StatementInput, context: Context): StatementPreview {
   const account = context.account;
   if (!account) throw new StatementError("notFound");
   if (!account.canWrite) throw new StatementError("readOnly");
-  const lines = classify(input, context);
+  const rows = [...input.rows].sort((a, b) => a.line - b.line);
+  const lines = classify(rows, context);
   const counts = { new: 0, matches: 0, already_imported: 0, invalid: 0 };
   for (const line of lines) counts[line.status] += 1;
   return {
-    previewKey: previewKeyOf(input, lines),
+    previewKey: previewKeyOf(input.accountId, rows, lines),
     account: { id: account.id, name: account.name, currency: account.currency },
     lines,
     counts,
@@ -225,19 +229,6 @@ export async function previewStatement(input: StatementInput): Promise<Statement
 }
 
 const sourceOf = (row: StatementRow) => ({ ref: row.reference ?? null, seq: row.reference ? null : row.line });
-
-// The movement alone: its split and source go in one batch once every movement exists, because a
-// sibling insert in the same statement cannot see the row its policies look up.
-async function insertMovement(tx: Transaction, accountId: string, row: StatementRow, awaits: boolean): Promise<string> {
-  const out = row.amountCents < 0;
-  const other = row.counterAccountId ?? null;
-  const [movement] = await tx.execute<{ id: string }>(sql`
-    insert into transactions (from_account_id, to_account_id, amount_cents, occurred_at, description, awaiting_counterparty)
-    values (${out ? accountId : other}::uuid, ${out ? other : accountId}::uuid, ${Math.abs(row.amountCents)},
-      ${row.date}, ${row.description}, ${awaits})
-    returning id`);
-  return movement!.id;
-}
 
 /**
  * Writes what the preview with this key showed, in one transaction: a new line becomes a movement
@@ -257,42 +248,40 @@ export async function importStatement(
     const rows = new Map(input.rows.map((row) => [row.line, row]));
     let current: number | undefined;
     try {
-      // Each line's leg on this account: a matched movement gains only its source, a new one also its split.
-      const legs: { transactionId: string; row: StatementRow; split: boolean }[] = [];
+      // Each line's leg on this account: a matched movement gains only its source.
+      const legs: { transactionId: string; row: StatementRow }[] = [];
       for (const line of preview.lines) {
         const row = rows.get(line.line)!;
-        if (line.status === "matches") legs.push({ transactionId: line.matchedTransactionId!, row, split: false });
+        if (line.status === "matches") legs.push({ transactionId: line.matchedTransactionId!, row });
         if (line.status !== "new") continue;
         current = line.line;
-        const transactionId = await insertMovement(tx, input.accountId, row, line.awaitsCounterparty);
-        legs.push({ transactionId, row, split: !row.counterAccountId });
+        const out = row.amountCents < 0;
+        const amountCents = Math.abs(row.amountCents);
+        const other = row.counterAccountId ?? null;
+        const { transactionId } = await insertTransaction(tx, {
+          fromAccountId: out ? input.accountId : other,
+          toAccountId: out ? other : input.accountId,
+          amountCents,
+          awaitingCounterparty: line.awaitsCounterparty === true,
+          occurredAt: row.date,
+          description: row.description,
+          externalRef: null,
+          splits: other ? [] : [{ categoryId: row.categoryId!, amountCents }],
+          labelIds: [],
+        });
+        legs.push({ transactionId, row });
       }
       current = undefined;
-      const splits = legs.filter((leg) => leg.split);
       if (legs.length > 0) {
-        const splitInsert =
-          splits.length === 0
-            ? sql``
-            : sql`split as (
-                insert into transaction_splits (transaction_id, category_id, amount_cents)
-                values ${sql.join(
-                  splits.map(
-                    (leg) =>
-                      sql`(${leg.transactionId}::uuid, ${leg.row.categoryId!}::uuid, ${Math.abs(leg.row.amountCents)}::bigint)`,
-                  ),
-                  sql`, `,
-                )}),`;
         await tx.execute(sql`
-          with ${splitInsert} source as (
-            insert into transaction_sources (transaction_id, account_id, source_ref, source_seq)
-            values ${sql.join(
-              legs.map((leg) => {
-                const { ref, seq } = sourceOf(leg.row);
-                return sql`(${leg.transactionId}::uuid, ${input.accountId}::uuid, ${ref}, ${seq}::int)`;
-              }),
-              sql`, `,
-            )})
-          select 1`);
+          insert into transaction_sources (transaction_id, account_id, source_ref, source_seq)
+          values ${sql.join(
+            legs.map((leg) => {
+              const { ref, seq } = sourceOf(leg.row);
+              return sql`(${leg.transactionId}::uuid, ${input.accountId}::uuid, ${ref}, ${seq}::int)`;
+            }),
+            sql`, `,
+          )}`);
       }
     } catch (error) {
       console.error("statement line refused:", pgErrorCode(error) ?? "", pgConstraintName(error) ?? "");

@@ -8776,7 +8776,6 @@ async function learnedRuleSuite(): Promise<void> {
   const { deleteCategory } = await import("@/db/queries/categories");
   const { recordIngestDelivery } = await import("@/db/queries/webhook-ingest");
   const { fingerprintMessage } = await import("@/lib/ingest/fingerprint");
-  const { counterpartyPatternKey } = await import("@/lib/ingest/counterparty-pattern");
   const user = await createMembershipFreeUser();
 
   const mkAccount = async (name: string): Promise<string> => {
@@ -15403,6 +15402,38 @@ async function householdContributionSuite(): Promise<void> {
   );
 }
 
+// Drives HomeFund's /mcp in-process, as Claude's connector would: JSON-RPC over POST, the answer
+// either plain JSON or one SSE `data:` frame. A tool's text is parsed when it is JSON.
+function mcpClient(POST: (request: Request) => Promise<Response>, token: string) {
+  let counter = 0;
+  const rpc = async (bearer: string | null, method: string, params?: unknown) => {
+    counter += 1;
+    const response = await POST(
+      new Request("http://localhost/mcp", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json, text/event-stream",
+          ...(bearer ? { Authorization: `Bearer ${bearer}` } : {}),
+        },
+        body: JSON.stringify({ jsonrpc: "2.0", id: counter, method, params }),
+      }),
+    );
+    const text = await response.text();
+    const frame = text.startsWith("{") ? text : (text.split("\n").find((line) => line.startsWith("data:")) ?? "").slice(5);
+    return { status: response.status, body: frame ? JSON.parse(frame) : null };
+  };
+  const tool = async (name: string, args: Record<string, unknown> = {}) => {
+    const { body } = await rpc(token, "tools/call", { name, arguments: args });
+    const raw: string = body?.result?.content?.[0]?.text ?? "null";
+    return {
+      isError: body?.result?.isError === true,
+      value: raw.startsWith("{") || raw.startsWith("[") || raw === "null" ? JSON.parse(raw) : raw,
+    };
+  };
+  return { rpc, tool };
+}
+
 async function mcpDoorSuite(): Promise<void> {
   console.log("");
   const tag = randomUUID().slice(0, 8);
@@ -15433,28 +15464,7 @@ async function mcpDoorSuite(): Promise<void> {
   );
   keep("webhook_credentials", ingestId);
 
-  let counter = 0;
-  const rpc = async (bearer: string | null, method: string, params?: unknown) => {
-    counter += 1;
-    const response = await POST(
-      new Request("http://localhost/mcp", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "application/json, text/event-stream",
-          ...(bearer ? { Authorization: `Bearer ${bearer}` } : {}),
-        },
-        body: JSON.stringify({ jsonrpc: "2.0", id: counter, method, params }),
-      }),
-    );
-    const text = await response.text();
-    const frame = text.startsWith("{") ? text : (text.split("\n").find((line) => line.startsWith("data:")) ?? "").slice(5);
-    return { status: response.status, body: frame ? JSON.parse(frame) : null };
-  };
-  const tool = async (name: string, args: Record<string, unknown> = {}) => {
-    const { body } = await rpc(token, "tools/call", { name, arguments: args });
-    return { isError: body?.result?.isError === true, value: JSON.parse(body?.result?.content?.[0]?.text ?? "null") };
-  };
+  const { rpc, tool } = mcpClient(POST, token);
 
   const [anonymous, forged, webhookKey, listed] = await Promise.all([
     rpc(null, "tools/list"),
@@ -15567,26 +15577,7 @@ async function statementImportSuite(): Promise<void> {
     insert into ingest_counterparties (owner_user_id, pattern_key, pattern_label, side, state, trusted_account_id)
     values (${owner.id}, ${counterpartyPatternKey("TRANSF A BOLSILLO 7781")}, 'TRANSF A BOLSILLO', 'to', 'trusted', ${ids.card})`;
 
-  let counter = 0;
-  const tool = async (name: string, args: Record<string, unknown>) => {
-    counter += 1;
-    const response = await POST(
-      new Request("http://localhost/mcp", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "application/json, text/event-stream",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ jsonrpc: "2.0", id: counter, method: "tools/call", params: { name, arguments: args } }),
-      }),
-    );
-    const text = await response.text();
-    const frame = text.startsWith("{") ? text : (text.split("\n").find((line) => line.startsWith("data:")) ?? "").slice(5);
-    const body = frame ? JSON.parse(frame) : null;
-    const raw = body?.result?.content?.[0]?.text ?? "null";
-    return { isError: body?.result?.isError === true, value: raw.startsWith("{") || raw.startsWith("[") ? JSON.parse(raw) : raw };
-  };
+  const { tool } = mcpClient(POST, token);
   const count = async () => {
     const [row] = await fixtureSql<{ movements: number; sources: number }[]>`
       select (select count(*)::int from transactions where from_account_id = ${ids.bank} or to_account_id = ${ids.bank}) as movements,

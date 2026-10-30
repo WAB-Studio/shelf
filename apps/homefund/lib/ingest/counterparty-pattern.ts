@@ -55,21 +55,23 @@ export function counterpartyPatternKey(description: string): string {
 
 // `ingest_counterparties.pattern_key`/`pattern_label` both cap at 120 (migration 0041); a description
 // runs to 200, so what is learned and what is looked up are both the capped span.
-export const PATTERN_FIELD_MAX = 120;
+const PATTERN_FIELD_MAX = 120;
 
-export function learnedPatternKey(description: string): string {
-  return counterpartyPatternKey(description.trim()).slice(0, PATTERN_FIELD_MAX);
+export function learnedPattern(description: string): { key: string; label: string } {
+  const trimmed = description.trim();
+  return {
+    key: counterpartyPatternKey(trimmed).slice(0, PATTERN_FIELD_MAX),
+    label: trimmed.slice(0, PATTERN_FIELD_MAX),
+  };
 }
 
 export type TrustedPattern = { patternKey: string; side: "from" | "to"; accountId: string; accountLabel: string };
 
-// RF-135: the account a trusted pattern names for a movement's missing side, or none.
+// RF-135: the account a trusted pattern names for a movement's missing side, by its learned key.
 export function proposalFor(
   patterns: readonly TrustedPattern[],
   side: "from" | "to",
-  description: string,
+  key: string,
 ): TrustedPattern | undefined {
-  const key = learnedPatternKey(description);
   return patterns.find((pattern) => pattern.side === side && pattern.patternKey === key);
 }
-
