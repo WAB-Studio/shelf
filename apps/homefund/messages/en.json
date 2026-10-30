@@ -611,7 +611,10 @@
     "chipFrom": "From {date}",
     "chipTo": "To {date}",
     "kindAdjustment": "Gap",
-    "adjustmentFix": "Fix it by reconciling the account again."
+    "adjustmentFix": "Fix it by reconciling the account again.",
+    "forHousehold": "For the household",
+    "forHouseholdHint": "A household bill paid from your account: it counts as your contribution to the fund.",
+    "forHouseholdCounts": "Counts as a contribution by whoever paid it"
   },
   "cash": {
     "withdrawAction": "Withdraw cash",
@@ -1286,6 +1289,7 @@
       "occurredAt": "Date",
       "counterAmount": "Amount in the account's currency",
       "counterIsEstimate": "Estimated amount",
+      "forHousehold": "For the household",
       "labels": "Labels",
       "account": "Account",
       "label": "Label",

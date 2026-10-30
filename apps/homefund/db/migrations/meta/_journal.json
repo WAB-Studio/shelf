@@ -540,6 +540,13 @@
       "when": 1793396308016,
       "tag": "0076_a_reminder_is_mailed_once",
       "breakpoints": true
+    },
+    {
+      "idx": 77,
+      "version": "7",
+      "when": 1793398532530,
+      "tag": "0077_a_household_bill_is_a_contribution",
+      "breakpoints": true
     }
   ]
 }

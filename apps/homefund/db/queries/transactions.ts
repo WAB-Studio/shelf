@@ -50,6 +50,8 @@ export type CreateTransactionArgs = {
   counterIsEstimate?: boolean;
   // Quick entry read the amount from words and the person kept it (RF-155); insert only.
   amountFromWords?: boolean;
+  // «Del hogar» (RF-139): stored only on an expense from a personal account (`householdMark`).
+  forHousehold?: boolean;
   occurredAt: string;
   description: string | null;
   externalRef: string | null;
@@ -66,6 +68,8 @@ export type UpdateTransactionArgs = {
   currency?: CurrencyCode | null;
   counterAmountCents?: number | null;
   counterIsEstimate?: boolean;
+  // `undefined` leaves the «del hogar» mark alone (RF-139).
+  forHousehold?: boolean;
   occurredAt: string;
   description: string | null;
   splits: TransactionSplitInput[];
@@ -107,6 +111,8 @@ export type TransactionListRow = {
   currency: CurrencyCode;
   counterAmountCents: number | null;
   counterIsEstimate: boolean;
+  // Marked «del hogar»: counts as its payer's contribution to the fund (RF-139).
+  forHousehold: boolean;
   occurredAt: string;
   description: string | null;
   fromAccountId: string | null;
@@ -221,6 +227,7 @@ export async function insertTransaction(
     counterAmountCents = null,
     counterIsEstimate = false,
     amountFromWords = false,
+    forHousehold = false,
     occurredAt,
     description,
     externalRef,
@@ -237,6 +244,7 @@ export async function insertTransaction(
       counter_amount_cents,
       counter_is_estimate,
       amount_from_words,
+      for_household,
       occurred_at,
       description,
       external_ref
@@ -248,6 +256,7 @@ export async function insertTransaction(
       ${counterAmountCents},
       ${counterIsEstimate},
       ${amountFromWords},
+      ${householdMark(sql`${fromAccountId}::uuid`, sql`${toAccountId}::uuid`, sql`${forHousehold}`)},
       ${occurredAt},
       ${description},
       ${externalRef}
@@ -285,6 +294,15 @@ export async function insertTransaction(
 // and the row stays readable, so a screen can say why instead of reporting it gone (RF-138).
 // `stale` is an edit whose form loaded the movement before someone else saved it: nothing written.
 export type TransactionWriteOutcome = "done" | "missing" | "adjustment" | "stale";
+
+/**
+ * The «del hogar» mark as stored (RF-139): it holds only on an expense paid from a personal
+ * account, whatever the caller asked, so every write that sets the accounts states it again.
+ */
+export function householdMark(from: SQL, to: SQL, mark: SQL): SQL {
+  return sql`(${mark} and ${to} is null
+    and exists (select 1 from accounts a where a.id = ${from} and a.owner_user_id is not null))`;
+}
 
 function stampMatches(expectedUpdatedAt: string) {
   return stampIs(transactions.updatedAt, expectedUpdatedAt);
@@ -325,6 +343,7 @@ export async function updateTransaction({
   currency,
   counterAmountCents = null,
   counterIsEstimate = false,
+  forHousehold,
   occurredAt,
   description,
   splits,
@@ -347,6 +366,12 @@ export async function updateTransaction({
         ...(currency ? { currency } : {}),
         counterAmountCents,
         counterIsEstimate,
+        // Absent keeps the stored mark, but only while the movement is still a personal expense.
+        forHousehold: householdMark(
+          sql`${fromAccountId}::uuid`,
+          sql`${toAccountId}::uuid`,
+          forHousehold === undefined ? sql`${transactions.forHousehold}` : sql`${forHousehold}`,
+        ),
         occurredAt,
         description,
         reviewedAt: sql`case when ${transactions.recurringRuleId} is not null and ${transactions.reviewedAt} is null then now() else ${transactions.reviewedAt} end`,
@@ -565,6 +590,7 @@ export async function listTransactions(
         currency: transactions.currency,
         counterAmountCents: transactions.counterAmountCents,
         counterIsEstimate: transactions.counterIsEstimate,
+        forHousehold: transactions.forHousehold,
         occurredAt: transactions.occurredAt,
         description: transactions.description,
         fromAccountId: transactions.fromAccountId,

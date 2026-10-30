@@ -930,6 +930,7 @@ function resolveAndShape(
             : data.counterIsEstimate === true
               ? { counterIsEstimate: true }
               : {}),
+          ...(data.forHousehold ? { forHousehold: true } : {}),
           occurredAt: data.occurredAt,
           description: data.description,
           externalRef: data.externalRef,

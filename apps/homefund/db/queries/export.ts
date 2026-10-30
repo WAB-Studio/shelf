@@ -269,6 +269,12 @@ function toExportRows<E extends SheetEntity>(
 
       // The estimate mark belongs to a second amount: a movement with none leaves the
       // cell blank rather than the column's FALSE (RF-123).
+      // An unmarked movement leaves «Del hogar» blank, so the sheet reads like the form (RF-139).
+      if (entity === "transactions" && column.field === "forHousehold") {
+        cell[column.key] = value === true ? true : null;
+        continue;
+      }
+
       if (entity === "transactions" && column.field === "counterIsEstimate") {
         cell[column.key] = row.counterAmountCents == null ? null : (value as boolean);
         continue;

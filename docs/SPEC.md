@@ -145,7 +145,7 @@ accounting exports, native apps. None of this gets built or left
 
 - [x] **RF-88** — Dashboard: net worth per owner (personal and group), and income, expense and net for the current month.
 - [x] **RF-34** — This month's expenses by category, largest first.
-- [ ] **RF-139** *(successor of RF-66)* — Each member's contribution for the month: net of transfers into the group's accounts, less those flowing back to that member, plus the movements paid from that member's personal accounts that the person marked «del hogar» — a household bill paid from a personal card. The mark is on the movement and can be set and cleared. Decided by the user 2026-10-15.
+- [x] **RF-139** *(successor of RF-66)* — Each member's contribution for the month: net of transfers into the group's accounts, less those flowing back to that member, plus the movements paid from that member's personal accounts that the person marked «del hogar» — a household bill paid from a personal card. The mark is on the movement and can be set and cleared. Decided by the user 2026-10-15.
 - [x] **RF-35** — Six-month comparison of income and expense.
 - [x] **RF-67** — In every report grouped by member, the group's shared accounts appear as their own group. Shared accounts are not split across people.
 
