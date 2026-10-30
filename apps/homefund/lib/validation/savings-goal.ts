@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { POSTGRES_TIMESTAMPTZ_TEXT } from "@/lib/validation/transaction";
+import { expectedUpdatedAtSchema } from "@/lib/validation/transaction";
 
 import type { CurrencyCode } from "@/lib/currency";
 import { isCivilDate } from "@/lib/dates";
@@ -99,11 +99,7 @@ export type CreateGoalInput = z.infer<typeof createGoalSchema>;
 export const updateGoalSchema = z.object({
   goalId: z.uuid({ error: "goals.errors.goalInvalid" }),
   ...goalFields,
-  // The stamp the form loaded the row with; a save after someone else's is refused stale.
-  expectedUpdatedAt: z
-    .string()
-    .regex(POSTGRES_TIMESTAMPTZ_TEXT, { error: "errors.unexpected" })
-    .optional(),
+  expectedUpdatedAt: expectedUpdatedAtSchema,
 });
 
 export type UpdateGoalInput = z.infer<typeof updateGoalSchema>;

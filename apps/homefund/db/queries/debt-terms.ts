@@ -34,16 +34,16 @@ export type UpsertDebtTermsArgs = {
   statementCutOffDay: number | null;
   paymentDueDay: number | null;
   avalCents: number | null;
-  // RF-156: the stamp the form loaded the terms with, null when it opened on none. Named, the
-  // rewrite lands only on that row; absent, the terms are rewritten whatever they hold.
-  expectedUpdatedAt?: string | null;
+  // RF-156: the form opened on a debt with no terms, so terms found holding other values are
+  // someone else's and are kept. Absent, the terms are rewritten whatever they hold.
+  keepOthers?: true;
 };
 
 // The single row per account: an insert the first time, an in-place rewrite after,
 // pivoting on the primary-key conflict. The boolean-less return names the account
 // the policy admitted.
 export async function upsertDebtTerms(
-  args: UpsertDebtTermsArgs & { expectedUpdatedAt?: undefined },
+  args: UpsertDebtTermsArgs & { keepOthers?: undefined },
 ): Promise<{ accountId: string }>;
 export async function upsertDebtTerms(args: UpsertDebtTermsArgs): Promise<{ accountId: string } | "stale">;
 export async function upsertDebtTerms(
@@ -72,13 +72,11 @@ export async function upsertDebtTerms(
         onConflict: {
           target: debtTerms.accountId,
           set: writable,
-          // The row the form loaded, or one already holding these very terms: a retry whose
-          // first answer was lost on the way back is the person's own save, never someone else's.
-          where:
-            args.expectedUpdatedAt === undefined
-              ? undefined
-              : sql`${debtTerms.updatedAt} is not distinct from ${args.expectedUpdatedAt}::text::timestamptz
-                  or row(${debtTerms.debtKind}, ${debtTerms.annualRate}, ${debtTerms.minimumPaymentCents},
+          // Terms already holding these very values are the person's own retry, whose first
+          // answer was lost on the way back; any others are kept.
+          where: !args.keepOthers
+            ? undefined
+            : sql`row(${debtTerms.debtKind}, ${debtTerms.annualRate}, ${debtTerms.minimumPaymentCents},
                     ${debtTerms.minimumPaymentPct}, ${debtTerms.creditLimitCents}, ${debtTerms.statementCutOffDay},
                     ${debtTerms.paymentDueDay}, ${debtTerms.avalCents})
                   is not distinct from row(excluded.debt_kind, excluded.annual_rate, excluded.minimum_payment_cents,

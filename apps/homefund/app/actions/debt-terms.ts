@@ -92,19 +92,15 @@ export const saveDebtTermsAction = authActionClient
           paymentDueDay: paymentDueDay ?? null,
           avalCents: aval != null ? toMinor(aval) : null,
           // The form writes terms onto a debt that had none (RF-156): any found are someone else's.
-          expectedUpdatedAt: null,
+          keepOthers: true,
         });
       } catch (error) {
         mapDebtTermsError(error);
       }
 
-      // The screen reloads, so the debt shows the terms that landed first.
-      if (saved === "stale") {
-        refresh();
-        throw new ActionError("errors.stale");
-      }
-
+      // Refused or not, the screen reloads: a stale save leaves it showing the terms that landed first.
       refresh();
+      if (saved === "stale") throw new ActionError("errors.stale");
       return { accountId: saved.accountId };
     },
   );

@@ -129,14 +129,10 @@ export const updateBudgetAction = authActionClient
         mapBudgetError(error);
       }
 
-      // The screen reloads, so the form reopened as the refusal asks carries the new stamp.
-      if (updated === "stale") {
-        refresh();
-        throw new ActionError("errors.stale");
-      }
-      if (!updated) throw new ActionError("errors.notFound");
-
+      // Refused or not, the screen reloads: a form reopened as the refusal asks carries the new stamp.
       refresh();
+      if (updated === "stale") throw new ActionError("errors.stale");
+      if (!updated) throw new ActionError("errors.notFound");
     },
   );
 
