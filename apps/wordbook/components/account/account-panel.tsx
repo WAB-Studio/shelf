@@ -34,7 +34,8 @@ function bareSpan(
 type EmailFormState =
   | { kind: "idle" }
   | { kind: "sending" }
-  | { kind: "sent" }
+  // `maybe`: Auth timed out, so the mail may or may not have left (RL-67).
+  | { kind: "sent"; maybe?: true }
   | {
       kind: "failed";
       error: Extract<SendSignInLinkResult, { ok: false }>["error"] | "offline";
@@ -205,7 +206,9 @@ function SignedOutForm() {
     setNow(at);
     setCode("");
     setCodeState({ kind: "idle" });
-    setResend({ kind: "done" });
+    setState({ kind: "sent", maybe: result.maybe });
+    // A resend that may not have left says so on the line above, never «Te mandamos otro código».
+    setResend(result.maybe ? { kind: "idle" } : { kind: "done" });
     setFocusCode((current) => current + 1);
   }
 
@@ -303,7 +306,7 @@ function SignedOutForm() {
       setNow(at);
     }
     setResend({ kind: "idle" });
-    setState(result.ok ? { kind: "sent" } : { kind: "failed", error: result.error });
+    setState(result.ok ? { kind: "sent", maybe: result.maybe } : { kind: "failed", error: result.error });
   }
 
   if (held) {
@@ -337,7 +340,7 @@ function SignedOutForm() {
       {state.kind === "sent" ? (
         <Flex direction="column" gap="3" maxWidth="400px">
           <Text size="2" role="status">
-            {t("sent", { email })}
+            {state.maybe ? t("maybeSent", { email }) : t("sent", { email })}
           </Text>
           <form
             onSubmit={(event) => {
