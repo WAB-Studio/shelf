@@ -1513,12 +1513,21 @@
     "tools": {
       "listAccounts": "Las cuentas abiertas que la persona puede ver: personales y del fondo, con su saldo por moneda en centavos.",
       "reviewMonth": "«Revisar el mes»: los movimientos que destacan en un mes cerrado según reglas fijas (monto muy por encima de lo usual en su categoría, dos iguales el mismo día, monto leído de palabras, diferencia de una conciliación), con si ya se marcó «Está bien».",
-      "monthParam": "El mes, AAAA-MM. Si falta, el último mes cerrado."
+      "monthParam": "El mes, AAAA-MM. Si falta, el último mes cerrado.",
+      "previewStatement": "Paso 1 de importar un extracto bancario: dice qué haría cada línea sin escribir nada. Cada línea: «new» (se creará), «matches» (ya está registrada a mano o como el otro lado de una transferencia; solo se enlaza), «already_imported» (se omite) o «invalid» (con su motivo). «proposal» es la cuenta que la persona usó antes para esa descripción: pregúntale antes de pasarla como counterAccountId. Muestra el resumen a la persona antes del paso 2.",
+      "importStatement": "Paso 2: importa exactamente las líneas que mostró preview_statement, con su previewKey. Todo o nada: si cambió una línea o queda una inválida, no escribe nada. Repetirlo no duplica movimientos."
     },
     "errors": {
       "unauthorized": "La clave no es válida o fue revocada.",
       "unknown": "No se pudo completar. Inténtalo de nuevo.",
-      "openMonth": "Solo se revisa un mes cerrado: pide uno anterior al mes en curso."
+      "openMonth": "Solo se revisa un mes cerrado: pide uno anterior al mes en curso.",
+      "statement": {
+        "notFound": "La cuenta no existe, está archivada o no la puedes ver.",
+        "readOnly": "No puedes registrar movimientos en esa cuenta.",
+        "previewChanged": "Las líneas no son las de la vista previa: vuelve a llamar preview_statement.",
+        "invalidLines": "Hay líneas inválidas: corrígelas o quítalas y vuelve a previsualizar.",
+        "lineRefused": "Una línea no se pudo registrar; no se importó nada."
+      }
     }
   }
 }

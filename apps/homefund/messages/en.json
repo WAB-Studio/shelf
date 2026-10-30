@@ -1513,12 +1513,21 @@
     "tools": {
       "listAccounts": "The open accounts the person can see, personal and the fund's, with their balance per currency in cents.",
       "reviewMonth": "«Review the month»: the movements that stand out in a closed month by fixed rules (an amount far above its category's usual, two equal on one day, an amount read from words, a reconciliation gap), and whether each is already marked fine.",
-      "monthParam": "The month, YYYY-MM. Absent, the last closed month."
+      "monthParam": "The month, YYYY-MM. Absent, the last closed month.",
+      "previewStatement": "Step 1 of importing a bank statement: says what each line would do, writing nothing. Each line: «new» (will be created), «matches» (already recorded by hand or as a transfer's other side; only linked), «already_imported» (skipped) or «invalid» (with its reason). «proposal» is the account the person used before for that description: ask them before passing it as counterAccountId. Show the summary to the person before step 2.",
+      "importStatement": "Step 2: imports exactly the lines preview_statement showed, with its previewKey. All or nothing: if a line changed or one is invalid, nothing is written. Repeating it never duplicates movements."
     },
     "errors": {
       "unauthorized": "The key is not valid or was revoked.",
       "unknown": "It could not be done. Try again.",
-      "openMonth": "Only a closed month is reviewed: ask for one before the current month."
+      "openMonth": "Only a closed month is reviewed: ask for one before the current month.",
+      "statement": {
+        "notFound": "The account does not exist, is archived or you cannot see it.",
+        "readOnly": "You cannot record movements in that account.",
+        "previewChanged": "The lines are not the preview's: call preview_statement again.",
+        "invalidLines": "Some lines are invalid: fix or remove them and preview again.",
+        "lineRefused": "A line could not be recorded; nothing was imported."
+      }
     }
   }
 }

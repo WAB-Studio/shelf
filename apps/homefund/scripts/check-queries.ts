@@ -189,6 +189,7 @@ import {
   sheetDescriptors,
   transactionRowSchema,
 } from "@/lib/spreadsheet/schema";
+import { counterpartyPatternKey } from "@/lib/ingest/counterparty-pattern";
 import { createTransactionSchema } from "@/lib/validation/transaction";
 import { and, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
@@ -4270,6 +4271,7 @@ async function main(): Promise<void> {
   await reminderMailSuite();
   await householdContributionSuite();
   await mcpDoorSuite();
+  await statementImportSuite();
 }
 
 // A member recorded without a login is someone in the fund: a leader whose fund holds one is not alone, so an
@@ -15464,7 +15466,7 @@ async function mcpDoorSuite(): Promise<void> {
   assert(
     next("RF-144: /mcp answers 401 with no key, an unknown one or a webhook's, and lists its tools to a key for Claude"),
     anonymous.status === 401 && forged.status === 401 && webhookKey.status === 401 &&
-      JSON.stringify(names) === JSON.stringify(["list_accounts", "review_month"]),
+      JSON.stringify(names) === JSON.stringify(["import_statement", "list_accounts", "preview_statement", "review_month"]),
     `no key ${anonymous.status}, unknown key ${forged.status}, webhook key ${webhookKey.status}, tools ${JSON.stringify(names)}`,
   );
 
@@ -15503,5 +15505,150 @@ async function mcpDoorSuite(): Promise<void> {
     next("RF-144: an open month is refused; a key over its window answers 429, not 401; /mcp never spends a webhook key's window"),
     openMonth.isError && throttled.status === 429 && ingestWindow?.rate_count === 0,
     `open month isError ${openMonth.isError}, throttled /mcp ${throttled.status}, webhook key's count ${ingestWindow?.rate_count}`,
+  );
+}
+
+// RF-144, RF-134, RF-135: a statement Claude read enters through a preview first, writes each line
+// once whatever the retries, links what was already recorded and proposes what was learned.
+async function statementImportSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const { POST } = await import("@/app/mcp/route");
+  const owner = await createMembershipFreeUser();
+  const stranger = await createMembershipFreeUser();
+  const ids = { bank: randomUUID(), card: randomUUID(), alien: randomUUID(), food: randomUUID(), pay: randomUUID() };
+  for (const [user, build] of [
+    [owner, async (tx: postgres.TransactionSql) => {
+      await tx`
+        insert into accounts (id, owner_user_id, name, kind, subtype, initial_balance_cents, initial_balance_on)
+        values (${ids.bank}, ${owner.id}, ${`Harness rf144 extracto ${tag}`}, 'asset', 'bank', 0, '2026-01-01'),
+          (${ids.card}, ${owner.id}, ${`Harness rf144 bolsillo ${tag}`}, 'asset', 'bank', 0, '2026-01-01')`;
+      await tx`
+        insert into categories (id, owner_user_id, name, kind, color)
+        values (${ids.food}, ${owner.id}, ${`Harness rf144 comida ${tag}`}, 'expense', '#4C8C4A'),
+          (${ids.pay}, ${owner.id}, ${`Harness rf144 sueldo ${tag}`}, 'income', '#4C8C4A')`;
+    }],
+    [stranger, async (tx: postgres.TransactionSql) => {
+      await tx`
+        insert into accounts (id, owner_user_id, name, kind, subtype, initial_balance_cents, initial_balance_on)
+        values (${ids.alien}, ${stranger.id}, ${`Harness rf144 ajena ${tag}`}, 'asset', 'bank', 0, '2026-01-01')`;
+    }],
+  ] as const) {
+    await fixtureSql.begin(async (tx) => {
+      const claims = JSON.stringify({ sub: user.id, role: "authenticated", aud: "authenticated" });
+      await tx`select set_config('request.jwt.claims', ${claims}, true)`;
+      await build(tx);
+    });
+  }
+  track("accounts", ids.bank);
+  track("accounts", ids.card);
+  track("accounts", ids.alien);
+  track("categories", ids.food);
+  track("categories", ids.pay);
+  const { id: credentialId, token } = await asUser(owner, () =>
+    issueWebhookCredential({ name: `Harness rf144 extracto ${tag}`, purpose: "mcp", defaultAccountId: null, defaultCategoryId: null }),
+  );
+  keep("webhook_credentials", credentialId);
+  // A movement the person already wrote by hand, which the statement's line 3 names again.
+  const { transactionId: handId } = await asUser(owner, () =>
+    createTransaction({
+      fromAccountId: ids.bank,
+      toAccountId: null,
+      amountCents: 4_500_000,
+      occurredAt: "2026-09-12",
+      description: "Arriendo",
+      externalRef: null,
+      splits: [{ categoryId: ids.food, amountCents: 4_500_000 }],
+      labelIds: [],
+    }),
+  );
+  // What completing «TRANSF A BOLSILLO» by hand taught before (RF-135).
+  await fixtureSql`
+    insert into ingest_counterparties (owner_user_id, pattern_key, pattern_label, side, state, trusted_account_id)
+    values (${owner.id}, ${counterpartyPatternKey("TRANSF A BOLSILLO 7781")}, 'TRANSF A BOLSILLO', 'to', 'trusted', ${ids.card})`;
+
+  let counter = 0;
+  const tool = async (name: string, args: Record<string, unknown>) => {
+    counter += 1;
+    const response = await POST(
+      new Request("http://localhost/mcp", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json, text/event-stream",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ jsonrpc: "2.0", id: counter, method: "tools/call", params: { name, arguments: args } }),
+      }),
+    );
+    const text = await response.text();
+    const frame = text.startsWith("{") ? text : (text.split("\n").find((line) => line.startsWith("data:")) ?? "").slice(5);
+    const body = frame ? JSON.parse(frame) : null;
+    const raw = body?.result?.content?.[0]?.text ?? "null";
+    return { isError: body?.result?.isError === true, value: raw.startsWith("{") || raw.startsWith("[") ? JSON.parse(raw) : raw };
+  };
+  const count = async () => {
+    const [row] = await fixtureSql<{ movements: number; sources: number }[]>`
+      select (select count(*)::int from transactions where from_account_id = ${ids.bank} or to_account_id = ${ids.bank}) as movements,
+        (select count(*)::int from transaction_sources where account_id = ${ids.bank}) as sources`;
+    return row!;
+  };
+
+  const rows = [
+    { line: 1, date: "2026-09-10", description: "MERCADO EXITO", amountCents: -8_990_000, reference: `R1-${tag}`, categoryId: ids.food },
+    { line: 2, date: "2026-09-11", description: "PAGO NOMINA", amountCents: 520_000_000, categoryId: ids.pay },
+    { line: 3, date: "2026-09-12", description: "ARRIENDO SEPT", amountCents: -4_500_000, categoryId: ids.food },
+    { line: 4, date: "2026-09-13", description: "TRANSF A BOLSILLO 7781", amountCents: -100_000_00, categoryId: ids.food, unsure: true },
+    { line: 5, date: "2026-09-14", description: "SIN CATEGORIA", amountCents: -1_000 },
+  ];
+  const before = await count();
+  const first = await tool("preview_statement", { accountId: ids.bank, rows });
+  type Line = { line: number; status: string; reason?: string; matchedTransactionId?: string; proposal?: { accountId: string } };
+  const lines = (first.value?.lines ?? []) as Line[];
+  const at = (line: number) => lines.find((one) => one.line === line);
+  const refused = await tool("import_statement", { accountId: ids.bank, rows, previewKey: first.value?.previewKey ?? "x" });
+  const afterRefused = await count();
+  assert(
+    next("RF-144: the preview names each line (new, matches the hand-written one, invalid with its reason) and proposes the learned account; an import with an invalid line writes nothing"),
+    !first.isError &&
+      at(1)?.status === "new" && at(2)?.status === "new" &&
+      at(3)?.status === "matches" && at(3)?.matchedTransactionId === handId &&
+      at(4)?.proposal?.accountId === ids.card &&
+      at(5)?.status === "invalid" && at(5)?.reason === "needs_category_or_account" &&
+      refused.isError && afterRefused.movements === before.movements && afterRefused.sources === before.sources,
+    `preview ${JSON.stringify(first.value)}, refused ${JSON.stringify(refused.value)}, counts ${JSON.stringify([before, afterRefused])}`,
+  );
+
+  const clean = rows.slice(0, 4);
+  const second = await tool("preview_statement", { accountId: ids.bank, rows: clean });
+  const changed = await tool("import_statement", {
+    accountId: ids.bank,
+    rows: clean.map((row) => (row.line === 2 ? { ...row, amountCents: 1 } : row)),
+    previewKey: second.value?.previewKey,
+  });
+  const imported = await tool("import_statement", { accountId: ids.bank, rows: clean, previewKey: second.value?.previewKey });
+  const again = await tool("import_statement", { accountId: ids.bank, rows: clean, previewKey: second.value?.previewKey });
+  const after = await count();
+  const [waiting] = await fixtureSql<{ awaiting: boolean }[]>`
+    select t.awaiting_counterparty as awaiting from transactions t
+    join transaction_sources s on s.transaction_id = t.id and s.account_id = ${ids.bank}
+    where t.description = 'TRANSF A BOLSILLO 7781'`;
+  assert(
+    next("RF-134: an import writes the new lines with their source and links the matched one; a changed line or a repeat writes nothing more"),
+    changed.isError && !imported.isError &&
+      imported.value?.created === 3 && imported.value?.linked === 1 &&
+      again.value?.created === 0 && again.value?.skipped === 4 &&
+      after.movements === before.movements + 3 && after.sources === before.sources + 4 &&
+      waiting?.awaiting === true,
+    `changed ${JSON.stringify(changed.value)}, imported ${JSON.stringify(imported.value)}, again ${JSON.stringify(again.value)}, counts ${JSON.stringify([before, after])}, awaiting ${waiting?.awaiting}`,
+  );
+
+  const alien = await tool("preview_statement", { accountId: ids.alien, rows: clean });
+  const [alienRows] = await fixtureSql<{ n: number }[]>`
+    select count(*)::int as n from transactions where from_account_id = ${ids.alien} or to_account_id = ${ids.alien}`;
+  assert(
+    next("RF-144: a statement for another person's account is refused as not found"),
+    alien.isError && alienRows?.n === 0,
+    `alien ${JSON.stringify(alien.value)}, rows ${alienRows?.n}`,
   );
 }
