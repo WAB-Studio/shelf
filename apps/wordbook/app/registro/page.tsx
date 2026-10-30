@@ -17,10 +17,9 @@ import { Button, Flex, Headword, Page } from "@/components/ui";
 // a word up (RNL-08). `measure="full"`: Registro is a list, not prose, so it
 // takes the width it needs (docs/wordbook/DESIGN.md "Viewport").
 export default async function RegistroPage() {
-  const [t, tReview] = await Promise.all([getTranslations("log"), getTranslations("review")]);
-  // A boolean only, never the reader itself: `ClearPanel` decides whether
+  // `reader`: a boolean only, never the reader itself: `ClearPanel` decides whether
   // to draw the account option from this alone (`RegistroVaciarConfirmarSinCuenta`).
-  const reader = await getReader();
+  const [t, tReview, reader] = await Promise.all([getTranslations("log"), getTranslations("review"), getReader()]);
 
   return (
     <Page measure="full">

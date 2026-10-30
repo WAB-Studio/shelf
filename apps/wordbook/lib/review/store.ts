@@ -28,6 +28,8 @@ function openDatabase(): Promise<IDBDatabase> {
       resolve(database);
     };
     request.onerror = () => reject(request.error);
+    // Another tab holds an older version open: fail rather than leave the review loading forever.
+    request.onblocked = () => reject(new Error("reading-review blocked"));
   });
   databasePromise.catch(() => {
     databasePromise = null;
@@ -44,14 +46,29 @@ export async function readCards(): Promise<ReviewCard[]> {
   });
 }
 
+function write(apply: (store: IDBObjectStore) => void): Promise<void> {
+  return openDatabase().then(
+    (database) =>
+      new Promise((resolve, reject) => {
+        const transaction = database.transaction(STORE_NAME, "readwrite");
+        apply(transaction.objectStore(STORE_NAME));
+        transaction.oncomplete = () => resolve();
+        transaction.onerror = () => reject(transaction.error);
+        transaction.onabort = () => reject(transaction.error);
+      }),
+  );
+}
+
+// A word the reader removes from the record leaves the review with it: its schedule is the word's too.
+export function deleteCard(key: string): Promise<void> {
+  return write((store) => store.delete(key));
+}
+
+export function clearCards(): Promise<void> {
+  return write((store) => store.clear());
+}
+
 // Resolves once the write is committed, so the next word never shows before the last answer is kept.
-export async function saveCard(card: ReviewCard): Promise<void> {
-  const database = await openDatabase();
-  return new Promise((resolve, reject) => {
-    const transaction = database.transaction(STORE_NAME, "readwrite");
-    transaction.objectStore(STORE_NAME).put(card);
-    transaction.oncomplete = () => resolve();
-    transaction.onerror = () => reject(transaction.error);
-    transaction.onabort = () => reject(transaction.error);
-  });
+export function saveCard(card: ReviewCard): Promise<void> {
+  return write((store) => store.put(card));
 }

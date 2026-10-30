@@ -34,7 +34,8 @@ export function buildQueue(rows: StudyRow[], cards: ReviewCard[], now: number): 
     .filter(({ card }) => card.due <= now)
     .sort((a, b) => a.card.due - b.card.due);
   const today = localDay(now);
-  const introducedToday = cards.filter((card) => card.introducedOn === today).length;
+  const live = new Set(reviewable.map((row) => row.key));
+  const introducedToday = cards.filter((card) => card.introducedOn === today && live.has(card.key)).length;
   const fresh = reviewable
     .filter((row) => !byKey.has(row.key))
     .sort((a, b) => b.count - a.count || b.lastAt - a.lastAt)

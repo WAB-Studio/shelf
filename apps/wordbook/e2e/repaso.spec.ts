@@ -83,6 +83,22 @@ test("RL-68: /registro opens the review, which asks each word of the record and 
   await page.getByRole("button", { name: new RegExp(`^${messages.review.grade.easy}`) }).click();
 
   await expect(page.getByText("Repasaste 2 palabras. Terminaste por hoy.")).toBeVisible();
+  // Both words just answered come back later, so the screen counts them.
+  await expect(page.getByText("2 palabras vuelven más adelante.")).toBeVisible();
+});
+
+test("RL-68: a keyboard keeps its place: showing the answer focuses «Bien», a grade focuses the next «Mostrar respuesta»", async ({
+  page,
+}) => {
+  await page.goto("/registro");
+  await seedRecord(page, RECORD);
+  await page.goto("/repaso");
+  await expect(page.getByRole("button", { name: messages.review.show })).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("button", { name: new RegExp(`^${messages.review.grade.good}`) })).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("heading", { name: "frisk" })).toBeVisible();
+  await expect(page.getByRole("button", { name: messages.review.show })).toBeFocused();
 });
 
 test("RL-68: the answers are kept on the device, so a word put away does not come back on a reload", async ({ page }) => {

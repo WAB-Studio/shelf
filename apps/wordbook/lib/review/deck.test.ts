@@ -65,3 +65,12 @@ test("RL-68: a card whose word left the record is not asked", () => {
   const orphan = { ...rate("gone", null, "good", NOW - DAY), due: NOW - 1 };
   assert.deepEqual(buildQueue([row("snuff")], [orphan], NOW).items.map((item) => item.row.key), ["snuff"]);
 });
+
+test("RL-68: a card introduced today whose word left the record does not spend today's cap", () => {
+  const rows = Array.from({ length: NEW_PER_DAY + 5 }, (_, i) => row(`w${i}`));
+  const orphans = Array.from({ length: 5 }, (_, i) => ({
+    ...rate(`gone${i}`, null, "good", NOW - 60_000),
+    introducedOn: localDay(NOW),
+  }));
+  assert.equal(buildQueue(rows, orphans, NOW).items.length, NEW_PER_DAY);
+});
