@@ -28,9 +28,12 @@ export default async function CuentaPage({
 }: {
   searchParams: Promise<{ tab?: string | string[]; error?: string | string[] }>;
 }) {
-  const [t, tTheme] = await Promise.all([getTranslations("account"), getTranslations("theme")]);
-  const reader = await getReader();
-  const { tab: rawTab, error: rawError } = await searchParams;
+  const [t, tTheme, reader, { tab: rawTab, error: rawError }] = await Promise.all([
+    getTranslations("account"),
+    getTranslations("theme"),
+    getReader(),
+    searchParams,
+  ]);
   const tab = rawTab === "info" ? "info" : "account";
   const linkFailure = resolveLinkFailure(rawError);
 

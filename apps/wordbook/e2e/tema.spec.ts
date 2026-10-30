@@ -58,3 +58,16 @@ test("RNL-07: at 1280px the control sits at the sidebar's foot, and /cuenta carr
   await expect(controls).toHaveCount(1);
   await expect(page.getByRole("navigation").getByRole("radiogroup", { name: messages.theme.label })).toBeVisible();
 });
+
+test("RNL-07: tapping the mode already on screen keeps it, so the system switching later does not move it", async ({
+  page,
+}) => {
+  await page.emulateMedia({ colorScheme: "dark" });
+  await page.goto("/cuenta");
+  const dark = page.getByRole("radio", { name: messages.theme.dark });
+  await expect(dark).toBeChecked();
+  await dark.click();
+
+  await page.emulateMedia({ colorScheme: "light" });
+  expect(await groundColour(page)).toBe(DARK_GROUND);
+});

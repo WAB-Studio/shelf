@@ -7,6 +7,7 @@ import { useSyncExternalStore } from "react";
 import { chooseTheme, currentTheme, subscribeTheme, type ThemeChoice as Mode } from "@/lib/theme-choice";
 
 // RNL-07's control, «Claro» · «Oscuro», showing the mode on screen now: the system's until one is chosen.
+// Each item saves on its own tap, so the mode already showing can be kept too: the root fires nothing then.
 // The server never knows it, so the first paint shows none selected and the real one lands a commit later.
 export function ThemeChoice() {
   const t = useTranslations("theme");
@@ -16,10 +17,13 @@ export function ThemeChoice() {
       size="3"
       aria-label={t("label")}
       value={mode}
-      onValueChange={(value) => chooseTheme(value as Mode)}
     >
-      <SegmentedControl.Item value="light">{t("light")}</SegmentedControl.Item>
-      <SegmentedControl.Item value="dark">{t("dark")}</SegmentedControl.Item>
+      <SegmentedControl.Item value="light" onClick={() => chooseTheme("light")}>
+        {t("light")}
+      </SegmentedControl.Item>
+      <SegmentedControl.Item value="dark" onClick={() => chooseTheme("dark")}>
+        {t("dark")}
+      </SegmentedControl.Item>
     </SegmentedControl.Root>
   );
 }

@@ -27,6 +27,8 @@ body {
   --rl-muted-quiet: #787263;
   --rl-accent: #9a3b24;
   --rl-accent-contrast: #faf8f2;
+  /* Native controls, scrollbars and autofill follow the mode on screen. */
+  color-scheme: light;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -42,9 +44,11 @@ body {
     --rl-muted-quiet: #898271;
     --rl-accent: #d9805f;
     --rl-accent-contrast: #14130f;
+    color-scheme: dark;
   }
 }
 
+/* The same dark palette as the block above, for a reader who chose it; change both together. */
 :root[data-theme="dark"] {
   --rl-ground: #14130f;
   --rl-raised: #1c1b16;
@@ -57,6 +61,7 @@ body {
   --rl-muted-quiet: #898271;
   --rl-accent: #d9805f;
   --rl-accent-contrast: #14130f;
+  color-scheme: dark;
 }
 
 /* Retints the two ramps every Radix Themes primitive already reads through —

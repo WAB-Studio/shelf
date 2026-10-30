@@ -24,12 +24,20 @@ export function currentTheme(): ThemeChoice {
   return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
 }
 
+// Another tab's choice arrives as a `storage` event and is applied here too: the choice is the device's.
 export function subscribeTheme(onChange: () => void): () => void {
   const system = window.matchMedia("(prefers-color-scheme: dark)");
+  const fromOtherTab = (event: StorageEvent) => {
+    if (event.key !== KEY || (event.newValue !== "light" && event.newValue !== "dark")) return;
+    document.documentElement.dataset.theme = event.newValue;
+    onChange();
+  };
   system.addEventListener("change", onChange);
   window.addEventListener(CHANGED, onChange);
+  window.addEventListener("storage", fromOtherTab);
   return () => {
     system.removeEventListener("change", onChange);
     window.removeEventListener(CHANGED, onChange);
+    window.removeEventListener("storage", fromOtherTab);
   };
 }
