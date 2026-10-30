@@ -3,7 +3,7 @@ import "server-only";
 import { getTranslations } from "next-intl/server";
 import nodemailer from "nodemailer";
 
-import type { DueReminder } from "@/db/queries/reminder-mail";
+import type { ReminderMailTarget } from "@/db/queries/reminder-mail";
 import type { CurrencyCode } from "@/lib/currency";
 import { FORMAT_LOCALE } from "@/lib/locales";
 import { formatMoney } from "@/lib/money";
@@ -11,9 +11,9 @@ import { formatMoney } from "@/lib/money";
 export type ReminderMail = { to: string; subject: string; text: string };
 
 // Plain text only: the description is the person's own words and never reaches markup.
-export async function composeReminderMail(reminder: DueReminder, siteUrl: string): Promise<ReminderMail> {
+export async function composeReminderMail(reminder: ReminderMailTarget, siteUrl: string): Promise<ReminderMail> {
   const t = await getTranslations({ locale: reminder.locale, namespace: "reminderMail" });
-  const name = reminder.description ?? t("unnamed");
+  const name = reminder.description?.trim() || t("unnamed");
   // A civil date, so it is drawn in UTC: a zone would move it a day.
   const due = new Intl.DateTimeFormat(FORMAT_LOCALE[reminder.locale], {
     day: "numeric",

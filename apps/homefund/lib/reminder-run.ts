@@ -1,11 +1,11 @@
 import "server-only";
 
-import { type DueReminder, releaseReminder } from "@/db/queries/reminder-mail";
+import { releaseReminder, type ReminderMailTarget } from "@/db/queries/reminder-mail";
 import { composeReminderMail, type SendMail } from "@/lib/reminder-mail";
 
 // One mail at a time: Gmail throttles bursts, and a family's day holds a handful at most.
 export async function mailDueReminders(
-  reminders: DueReminder[],
+  reminders: ReminderMailTarget[],
   send: SendMail,
   siteUrl: string,
 ): Promise<{ mailed: number; failed: number }> {
@@ -17,8 +17,11 @@ export async function mailDueReminders(
       mailed += 1;
     } catch (error) {
       console.error("reminder mail failed", reminder.id, error);
-      await releaseReminder(reminder.id);
       failed += 1;
+      // A release that fails too leaves this one unmailed, never the rest of the run.
+      await releaseReminder(reminder).catch((releaseError: unknown) =>
+        console.error("reminder release failed", reminder.id, releaseError),
+      );
     }
   }
   return { mailed, failed };

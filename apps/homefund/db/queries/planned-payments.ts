@@ -18,7 +18,7 @@ type PlannedPaymentStatus = PlannedPayment["status"];
 // The source settles the payment, or the destination when there is no source —
 // the very `coalesce` `set_transaction_currency` runs when the movement lands.
 // An account the caller cannot read answers null, so the base currency closes it.
-const settledIn = sql<string>`coalesce(
+export const settledIn = sql<string>`coalesce(
   from_account.settlement_currency, to_account.settlement_currency, ${BASE_CURRENCY}
 )`;
 
