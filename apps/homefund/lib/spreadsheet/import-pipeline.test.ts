@@ -823,3 +823,48 @@ test("a statement keeps its signed figures; one already closed for that cut-off 
   assert.equal((fresh.object as { openingBalance: null }).openingBalance, null);
   assert.equal(backwards.errors[0]?.column, "periodStart");
 });
+
+// ---- review: scopes, repeats (RF-142) ---------------------------------------------------------
+
+test("a label keeps the place its row names; blank lands in the caller's fund, and a fund label on a personal movement is refused", async () => {
+  scope.caller.groupId = UUID(500);
+  const rows = await sheetsOf(
+    await bookSheets({
+      labels: [
+        { name: "Own", placement: "personal", color: "#06B6D4" },
+        { name: "Shared", color: "#06B6D4" },
+      ],
+      transactions: [
+        { ...spend(1000, "own"), labels: "Own; Own" },
+        { ...spend(2000, "shared"), labels: "Shared" },
+      ],
+    }),
+  );
+  const [own, shared] = rows("labels");
+  assert.equal((own.object as { placement: string }).placement, "personal");
+  assert.equal((shared.object as { placement: string }).placement, "group");
+  const [owned, refused] = rows("transactions");
+  assert.deepEqual((owned.object as { labelIds: string[] }).labelIds, [own.placeholderId]);
+  assert.deepEqual(refused.errors, [{ key: "data.import.errors.outOfPlace", column: "labels", value: "Shared" }]);
+});
+
+test("a second row for one account's terms, or one account's cut-off, is refused; the first stands", async () => {
+  const rows = await sheetsOf(
+    await bookSheets({
+      debts: [
+        { account: "Checking", debtKind: "revolving", annualRate: "20" },
+        { account: "Checking", debtKind: "revolving", annualRate: "21" },
+      ],
+      statements: [
+        { account: "Checking", periodStart: "2026-08-16", cutOffDate: "2026-09-15", closingBalance: -100 },
+        { account: "Checking", periodStart: "2026-08-17", cutOffDate: "2026-09-15", closingBalance: -200 },
+      ],
+    }),
+  );
+  for (const entity of ["debts", "statements"]) {
+    const [first, second] = rows(entity);
+    assert.deepEqual(first.errors, [], entity);
+    assert.deepEqual(second.errors, [{ key: "data.import.errors.repeatedRow", column: "account", value: null }], entity);
+    assert.equal(second.object, null, entity);
+  }
+});

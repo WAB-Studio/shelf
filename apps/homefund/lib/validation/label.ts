@@ -42,13 +42,6 @@ export const createLabelSchema = z
 
 export type CreateLabelInput = z.infer<typeof createLabelSchema>;
 
-// A label restored from a backup (RF-142): the form's own rules, its scope the fund's.
-export const importedLabelSchema = z
-  .object({ name: labelNameSchema, color: labelColorSchema })
-  .superRefine(requireColor);
-
-export type ImportedLabel = z.infer<typeof importedLabelSchema>;
-
 // A label never changes scope, so the placement is absent from an edit.
 export const updateLabelSchema = z
   .object({

@@ -1338,7 +1338,9 @@
         "alreadyCommitting": "This file was already being imported in another tab. Check the movements before importing it again.",
         "beforeOpening": "Date before its account's opening.",
         "outOfPlace": "This name exists, but not in the placement the row names.",
-        "noFund": "The row belongs to a fund and you have none."
+        "noFund": "The row belongs to a fund and you have none.",
+        "repeatedRow": "Another row in the file already carries this for the same account. Keep only one.",
+        "lockedField": "This row changes the category or the place, which cannot change. Add it as a new row instead."
       }
     }
   },

@@ -1338,7 +1338,9 @@
         "alreadyCommitting": "Este archivo ya se estaba importando en otra pestaña. Revisa los movimientos antes de importarlo otra vez.",
         "beforeOpening": "Fecha anterior a la apertura de su cuenta.",
         "outOfPlace": "Este nombre existe, pero no en el ámbito que dice la fila.",
-        "noFund": "La fila es del fondo y no tienes un fondo."
+        "noFund": "La fila es del fondo y no tienes un fondo.",
+        "repeatedRow": "Otra fila del archivo ya trae este dato para la misma cuenta. Deja una sola.",
+        "lockedField": "Esta fila cambia la categoría o el ámbito, y eso no se puede cambiar. Créala como una fila nueva."
       }
     }
   },

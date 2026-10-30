@@ -23,7 +23,7 @@ import type { SheetEntity } from "@/lib/spreadsheet/schema";
 import type { ImportedAdjustment } from "@/lib/validation/account-reconciliation";
 import type { CreateAccountInput } from "@/lib/validation/account";
 import type { CreateCategoryInput } from "@/lib/validation/category";
-import type { ImportedLabel } from "@/lib/validation/label";
+import type { CreateLabelInput } from "@/lib/validation/label";
 import type { CreateMemberInput } from "@/lib/validation/member";
 import type { CreateRecurringRuleInput } from "@/lib/validation/recurring-rule";
 import type { DebtTermsInput } from "@/lib/validation/debt-terms";
@@ -139,7 +139,7 @@ export const commitImportAction = authActionClient
     const input: CommitInput = {
       members: rowsFor<CreateMemberInput>(result, "members"),
       categories: rowsFor<CreateCategoryInput>(result, "categories"),
-      labels: rowsFor<ImportedLabel>(result, "labels"),
+      labels: rowsFor<CreateLabelInput>(result, "labels"),
       accounts: rowsFor<CreateAccountInput>(result, "accounts"),
       recurringRules: rowsFor<CreateRecurringRuleInput>(result, "recurringRules"),
       transactions: rowsFor<CreateTransactionInput>(result, "transactions", (object) => !isAdjustment(object)),

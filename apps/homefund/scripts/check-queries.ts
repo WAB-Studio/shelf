@@ -150,6 +150,7 @@ import { updateRecurringRule } from "@/db/queries/recurring-rules";
 import {
   buildEffectiveRefs,
   processRow,
+  refuseRepeated,
   type RawRow,
 } from "@/lib/spreadsheet/import-pipeline";
 import { commitImport } from "@/db/queries/import-commit";
@@ -14893,15 +14894,18 @@ async function everyEntityBackupSuite(): Promise<void> {
   });
   const bytes = new Uint8Array(await workbook.xlsx.writeBuffer());
 
-  const restore = async (user: HarnessUser) => {
+  const restore = async (user: HarnessUser, alter?: (input: CommitInput) => void) => {
     const parsed = await parseWorkbook({ buffer: bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer, labels: reverse });
     const importScope = await asUser(user, () => readImportScope());
     const recordsOf = (entity: (typeof SHEET_ENTITIES)[number]) => (parsed[entity] ?? []).map((row) => row.record as RawRow);
     const refs = buildEffectiveRefs(importScope, recordsOf);
-    const rows = (entity: (typeof SHEET_ENTITIES)[number]) =>
-      (parsed[entity] ?? []).map((row, index) =>
+    const rows = (entity: (typeof SHEET_ENTITIES)[number]) => {
+      const resolved = (parsed[entity] ?? []).map((row, index) =>
         processRow(entity, row.record as RawRow, index, row.sheetRow, refs, importScope.existingRefs[entity]),
-      ).map((row) => ({ ...row, object: row.object as never }));
+      );
+      refuseRepeated(entity, resolved);
+      return resolved.map((row) => ({ ...row, object: row.object as never }));
+    };
     const all = SHEET_ENTITIES.flatMap((entity) => rows(entity).map((row) => ({ entity, row })));
     const errors = all.flatMap(({ entity, row }) => row.errors.map((e) => `${entity}:${e.key}@${e.column ?? ""}=${e.value ?? ""}`));
     const isAdjustment = (row: { object: unknown }) => typeof row.object === "object" && row.object !== null && "adjustment" in row.object;
@@ -14919,6 +14923,7 @@ async function everyEntityBackupSuite(): Promise<void> {
       debts: rows("debts"),
       statements: rows("statements"),
     };
+    alter?.(input);
     let outcome: { inserted: number; updated: number } | undefined;
     let failure: unknown;
     try {
@@ -14995,5 +15000,37 @@ async function everyEntityBackupSuite(): Promise<void> {
       counts.every((key) => again[key] === restored[key]) &&
       again.debt === restored.debt,
     `${said(second)}; before ${JSON.stringify(counts.map((key) => restored[key]))}, after ${JSON.stringify(counts.map((key) => again[key]))}`,
+  );
+
+  // A goal the fund archived since the backup comes back to life before a contribution it lost lands on it.
+  await fixtureSql`
+    update savings_goals set archived_at = now() where owner_user_id = ${clean.id} and name = ${name("meta viva")}`;
+  await fixtureSql`
+    delete from goal_contributions where amount_cents = ${SAVED} and transaction_id is null
+      and goal_id = (select id from savings_goals where owner_user_id = ${clean.id} and name = ${name("meta viva")})`;
+  const third = await restore(clean);
+  const revived = await held(clean);
+  assert(
+    next("RF-142: a goal archived since the backup comes back live first, so the contribution it lost lands again"),
+    third.failure === undefined && revived.contribution_rows === original.contribution_rows && revived.goal_states === original.goal_states,
+    `${said(third)}; contributions ${JSON.stringify(revived.contribution_rows)}, goals ${JSON.stringify(revived.goal_states)}`,
+  );
+
+  // A budget row that names another category is refused on its own row, never written in part.
+  const otherCategory = await asUser(clean, () =>
+    createCategory({ scope: { ownerUserId: clean.id }, name: name("otra"), kind: "expense", parentId: null, color: CATEGORY_COLORS[2] }),
+  );
+  track("categories", otherCategory.categoryId);
+  const locked = await restore(clean, (input) => {
+    for (const row of input.budgets ?? []) (row.object as { categoryId: string }).categoryId = otherCategory.categoryId;
+  });
+  const after = await held(clean);
+  assert(
+    next("RF-71: a backup that moves a budget to another category is refused on the budget's row, and the budget keeps its own"),
+    locked.failure !== undefined &&
+      refusal(locked.failure).includes("data.import.errors.lockedField") &&
+      refusal(locked.failure).includes("budgets") &&
+      after.budget === original.budget,
+    `${said(locked)}; budget ${JSON.stringify(after.budget)}`,
   );
 }

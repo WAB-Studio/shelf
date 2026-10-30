@@ -206,8 +206,12 @@ export const categoryRowSchema = z.object({
 export type CategoryRow = z.infer<typeof categoryRowSchema>;
 
 // A label lands where a new category does, so the sheet carries no placement (RF-70).
+const placementSchema = z.enum(ACCOUNT_PLACEMENTS, { error: "accounts.errors.placementInvalid" });
+
 export const labelRowSchema = z.object({
   externalRef: externalRefSchema,
+  // Blank lands the label where a new category lands: the caller's fund, else with the caller.
+  placement: placementSchema.nullish(),
   name: referenceNameSchema,
   color: z.enum(CATEGORY_COLORS),
 });
@@ -307,8 +311,6 @@ export type TransactionRow = z.infer<typeof transactionRowSchema>;
 
 // A budget or a goal names its place, as an account does: the same category or account name
 // may be held personally and in the fund, and the place says which one the row means (RF-140).
-const placementSchema = z.enum(ACCOUNT_PLACEMENTS, { error: "accounts.errors.placementInvalid" });
-
 // TRUE lands the row archived (RF-120); blank, live.
 const archivedSchema = z.literal(true).nullish();
 
@@ -467,6 +469,7 @@ export const labelSheetDescriptor = {
   refField: "externalRef",
   columns: [
     { key: "externalRef", field: "externalRef" },
+    { key: "placement", field: "ownerUserId" },
     { key: "name", field: "name" },
     { key: "color", field: "color" },
   ],
