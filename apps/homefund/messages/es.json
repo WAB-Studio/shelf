@@ -1467,6 +1467,19 @@
       "deliveryInvalid": "Elige un mensaje válido.",
       "merchantInvalid": "Elige un comercio válido.",
       "shapeInvalid": "Elige un mensaje silenciado válido."
+    },
+    "awaiting": {
+      "title": "Por completar ({count})",
+      "description": "Movimientos de los que se sabe un solo lado. Ya cuentan en los saldos; nombra la otra cuenta para completarlos.",
+      "noDescription": "Sin descripción",
+      "intoKnown": "Entró a {account} · {date}",
+      "outOfKnown": "Salió de {account} · {date}",
+      "fromLabel": "¿De qué cuenta vino?",
+      "toLabel": "¿A qué cuenta fue?",
+      "pick": "Elige una cuenta",
+      "proposed": "Sugerida: la usaste antes con esta descripción.",
+      "complete": "Completar",
+      "completed": "Movimiento completado"
     }
   },
   "review": {

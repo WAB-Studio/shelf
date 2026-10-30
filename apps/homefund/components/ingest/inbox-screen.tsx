@@ -10,6 +10,7 @@ import {
   rejectDeliveryAction,
 } from "@/app/actions/ingest";
 import { deleteTransactionAction } from "@/app/actions/transactions";
+import { AwaitingCounterparty } from "@/components/ingest/awaiting-counterparty";
 import { DeliveryCard } from "@/components/ingest/delivery-card";
 import { InboxTable, type InboxTableRow } from "@/components/ingest/inbox-table";
 import { SilencedShapes } from "@/components/ingest/silenced-shapes";
@@ -35,6 +36,7 @@ import type {
   SilencedShapeRow,
 } from "@/db/queries/ingest-review";
 import type { TransactionFormOptions } from "@/db/queries/transaction-form";
+import type { AwaitingCounterpartyRow } from "@/db/queries/transactions";
 import { todayInBogota } from "@/lib/dates";
 import { categoryNamesById } from "@/lib/fund/category-names";
 import { scopeOfAccounts } from "@/lib/fund/category-scope";
@@ -138,10 +140,12 @@ function categoryInfo(
 
 export function InboxScreen({
   deliveries,
+  awaiting,
   shapes,
   options,
 }: {
   deliveries: PendingDeliveryRow[];
+  awaiting: AwaitingCounterpartyRow[];
   shapes: SilencedShapeRow[];
   options: TransactionFormOptions;
 }) {
@@ -273,6 +277,8 @@ export function InboxScreen({
           )}
         </Flex>
       </Box>
+
+      <AwaitingCounterparty rows={awaiting} accounts={options.accounts} />
 
       <SilencedShapes shapes={shapes} />
 

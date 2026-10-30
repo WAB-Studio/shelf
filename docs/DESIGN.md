@@ -392,7 +392,7 @@ Board C1h corrected the same day: a card in credit reads «Según HomeFund −$ 
 - **Region** (Q13 b): HomeFund's and WordBook's Vercel region is measured with `vercel inspect` before anything is pinned.
 - **«Revisar el mes»** (2026-10-18, the user's idea): RF-155 opened. A screen and an MCP tool list the month's anomalies
   by fixed rules; Claude does any AI review through MCP. The screen ships in oleada-7; the MCP tool `review_month`
-  lands with RF-144's server, reading the same query, and RF-155 stays open until then (O7-Q4 a, 2026-10-24).
+  lands with RF-144's server, reading the same query, and RF-155 stays open until then (O7-Q4 a, 2026-10-24). Built 2026-10-30: `review_month` on `/mcp`, closed months only.
   Shipped on oleada-7: `/reports/review` (from «Reportes» and Inicio's «Revisar <mes> · N movimientos», which counts
   movements, a twin pair as two) and quick entry's `amount_from_words`. The MCP tool still waits for RF-144.
 - **Quick entry, lowercase «m»** (critic C2 b, later the same day): a lowercase «m» is never a million; only «M» or
@@ -494,3 +494,16 @@ Board C1h corrected the same day: a card in credit reads «Según HomeFund −$ 
   - A movement's `amount_from_words` clears when an edit changes its amount: a typed amount is the person's own.
   - Still to fix from the same critic, no decision needed: the row names the movement's description; «Corregir» comes back
     to the review; the debt detail's header reads the Q9 line as its «Saldo» tile does (Q18 left the header in pesos).
+
+## Decisions of 2026-10-30: a bank statement through Claude, by the user («dejala ya funcional»)
+
+- «Ajustes · Webhooks» has a «Conectar con Claude» card: the `/mcp` address and «Crear clave para Claude». The key opens
+  `/mcp` alone and shows once, under the same warning as a webhook token. A webhook key never opens `/mcp`.
+- Claude imports in two calls: `preview_statement` writes nothing and names each line «new», «matches», «already_imported»
+  or «invalid»; `import_statement` quotes the preview's key and writes all or nothing. The person confirms in the
+  conversation between the two.
+- «Bandeja» lists «Por completar (n)» under the deliveries: one card per movement with one side known. The card reads
+  the description, «Salió de / Entró a <cuenta> · <fecha>» and the amount; one account select («¿A qué cuenta fue?» or
+  «¿De qué cuenta vino?») and «Completar». A remembered account prefills the select with «Sugerida: la usaste antes con
+  esta descripción.»; it never completes on its own.
+

@@ -1467,6 +1467,19 @@
       "deliveryInvalid": "Choose a valid message.",
       "merchantInvalid": "Choose a valid merchant.",
       "shapeInvalid": "Choose a valid silenced message."
+    },
+    "awaiting": {
+      "title": "To complete ({count})",
+      "description": "Movements with only one side known. They already count in the balances; name the other account to complete them.",
+      "noDescription": "No description",
+      "intoKnown": "Came into {account} · {date}",
+      "outOfKnown": "Left {account} · {date}",
+      "fromLabel": "Which account did it come from?",
+      "toLabel": "Which account did it go to?",
+      "pick": "Pick an account",
+      "proposed": "Suggested: you used it before with this description.",
+      "complete": "Complete",
+      "completed": "Movement completed"
     }
   },
   "review": {
