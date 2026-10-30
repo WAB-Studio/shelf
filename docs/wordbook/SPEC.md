@@ -304,10 +304,10 @@ this gets built, and no schema, table or column is "prepared for" it.
 - [x] **RL-34** — The record keeps, for every lookup, the word, its translation cut to 120
   characters and at most 3 senses, and how the answer was reached; and the reader reads it inside
   the app.
-- [ ] **RL-27** — A local server, which the reader starts on their own machine, offers the exported
+- [x] **RL-27** — A local server, which the reader starts on their own machine, offers the exported
   file to an MCP client: the most looked-up words, the most recent ones, and the full history of one
   word. It only ever reads the file; no tool modifies it. The server is not part of the deployed app.
-  - Open, 2026-10-16: `scripts/mcp/server.ts` has no test: the MCP protocol, the tools it offers and its reading of the file are undriven. Only the queries are (`scripts/mcp/aggregate.test.ts:40,67,76,85`).
+  - Driven 2026-10-30 by `scripts/mcp/server.test.ts`, over the server's own stdio: the protocol and its errors, the three tools, and the file left byte for byte as it was.
 - [x] **RL-72** *(successor of RL-65)* — The log can be exported from the app as a file the reader saves onto their device: every recorded search, with its date and the headword it reached, in a documented and versioned JSON shape, which is the complete copy. The export also offers a CSV for Anki beside it: one card per row of `/registro`, its word on the front and on the back its latest translation or, when it has none and the network answered, that answer's definition. A row with neither gives no card; after a download the export says how many words stayed out and why, and with no card to give it offers no CSV and says so. The export is deliberate: it is reached from outside the search screen and nothing triggers it on its own. Decided by the user 2026-10-16.
   - Proved 2026-10-17, CI run 38992454179 on 3cec823e: `apps/wordbook/e2e/export.spec.ts:666,673,679,687,697,704,739` (no card: no CSV and why; the definition on the back; the words left out named; the link follows a delete and a sync) and `apps/wordbook/lib/log/anki.test.ts:106,116,123,131`, green.
 - [ ] **RL-68** — The reader reviews the words in their record inside the app, scheduled by spaced repetition (FSRS). Boards are drawn before any work. Decided by the user 2026-10-15.
