@@ -3,7 +3,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useTranslations } from "next-intl";
 import { useAction } from "next-safe-action/hooks";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Controller, useForm, useWatch, type Resolver } from "react-hook-form";
 import { toast } from "sonner";
 
@@ -11,6 +11,7 @@ import { createBudgetAction, updateBudgetAction } from "@/app/actions/budgets";
 import {
   Box,
   Button,
+  Callout,
   Dialog,
   Field,
   FieldControl,
@@ -191,9 +192,15 @@ function BudgetForm({
 
   const toastActionError = useActionErrorToast();
 
+  const [stale, setStale] = useState(false);
+
   // The scope refusal belongs to the label when one is picked, else to the
-  // account; every other refusal stays a toast.
+  // account; a stale edit says so above the buttons; every other refusal stays a toast.
   function onActionError(args: { error: { serverError?: string } }) {
+    if (args.error.serverError === "errors.stale") {
+      setStale(true);
+      return;
+    }
     if (args.error.serverError === SCOPE_REFUSAL) {
       const field = form.getValues("labelId") ? "labelId" : "accountId";
       form.setError(field, { message: SCOPE_REFUSAL });
@@ -289,7 +296,8 @@ function BudgetForm({
     // The resolver already parsed `values` against the schema for this mode,
     // stripping the field the other mode's action does not accept.
     if (isEdit) {
-      update.execute(values as UpdateBudgetInput);
+      setStale(false);
+      update.execute({ ...(values as UpdateBudgetInput), expectedUpdatedAt: budget.updatedAt });
     } else {
       create.execute(values as CreateBudgetInput);
     }
@@ -541,6 +549,12 @@ function BudgetForm({
               </Field>
             )}
           />
+        )}
+
+        {stale && (
+          <Callout.Root color="red" variant="soft" role="alert">
+            <Callout.Text>{tKey("errors.stale")}</Callout.Text>
+          </Callout.Root>
         )}
 
         <Field>

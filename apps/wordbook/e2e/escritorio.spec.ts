@@ -117,3 +117,29 @@ for (const route of ["/registro", "/registro/apple", "/cuenta"]) {
     expect(Math.round(mainBox!.x + mainBox!.width)).toBe(viewport!.width);
   });
 }
+
+test("RNL-03: at 1440px the box and the answer read as a centred 620px column", async ({ page }) => {
+  await disableTranslator(page);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/?q=throughout");
+  await expect(page.getByRole("heading", { name: "throughout" })).toBeVisible({ timeout: 10000 });
+  await page.evaluate(() => document.fonts.ready);
+
+  const mainBox = await page.locator("main").boundingBox();
+  const searchBox = await page.getByRole("textbox", { name: messages.search.label }).boundingBox();
+  const answer = await page.getByRole("heading", { name: "throughout" }).boundingBox();
+  expect(mainBox).not.toBeNull();
+  expect(searchBox).not.toBeNull();
+  expect(answer).not.toBeNull();
+
+  expect(mainBox!.width).toBeLessThanOrEqual(620.5);
+  const expectedX = 240 + (1440 - 240 - 620) / 2;
+  expect(mainBox!.x).toBeGreaterThan(expectedX - 2);
+  expect(mainBox!.x).toBeLessThan(expectedX + 2);
+  // The box and the answer live inside that column, not across the viewport.
+  for (const inner of [searchBox!, answer!]) {
+    expect(inner.x).toBeGreaterThanOrEqual(mainBox!.x - 1);
+    expect(inner.x + inner.width).toBeLessThanOrEqual(mainBox!.x + mainBox!.width + 1);
+  }
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(1440);
+});

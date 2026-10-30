@@ -166,7 +166,20 @@ test("the data screen carries every exportable entity into its download link", a
   });
   await expect(link).toHaveAttribute(
     "href",
-    "/es/settings/data/export?entities=accounts%2Cmembers%2Ccategories%2CrecurringRules%2Ctransactions",
+    "/es/settings/data/export?entities=" +
+      [
+        "accounts",
+        "members",
+        "categories",
+        "labels",
+        "recurringRules",
+        "transactions",
+        "budgets",
+        "goals",
+        "goalContributions",
+        "debts",
+        "statements",
+      ].join("%2C"),
   );
 });
 

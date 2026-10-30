@@ -1,11 +1,12 @@
 import "server-only";
 
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 
 import { insertRow } from "@/db/insert-row";
 import { budgets } from "@/db/schema";
 import type { Budget } from "@/db/schema";
 import { withUserDb } from "@/db/session";
+import { staleOrGone, stampIs } from "@/db/queries/stamp";
 import { BASE_CURRENCY } from "@/lib/currency";
 import { periodRange, todayInBogota } from "@/lib/dates";
 
@@ -28,6 +29,8 @@ export type BudgetStatus = {
   remainingCents: number;
   overThreshold: boolean;
   overspent: boolean;
+  // `updated_at::text` as Postgres prints it; an edit sends it back (RF-156).
+  updatedAt: string;
 };
 
 /**
@@ -79,9 +82,11 @@ export async function listBudgetsWithStatus(
       currency: string;
       limit_cents: string;
       spent_cents: string;
+      updated_at: string;
     }>(sql`
       select
         b.id,
+        b.updated_at::text as updated_at,
         b.name,
         b.category_id,
         b.account_id,
@@ -141,6 +146,7 @@ export async function listBudgetsWithStatus(
         period: row.period,
         thresholdPct: row.threshold_pct,
         currency: row.currency,
+        updatedAt: row.updated_at,
         limitCents,
         spentCents,
         remainingCents: limitCents - spentCents,
@@ -306,8 +312,12 @@ export type UpdateBudgetArgs = {
   limitCents: number;
   thresholdPct: number;
   name: string | null;
+  expectedUpdatedAt?: string;
 };
 
+// Without a stamp the answer is only whether a row was written; with one it may be "stale".
+export async function updateBudget(args: UpdateBudgetArgs & { expectedUpdatedAt?: undefined }): Promise<boolean>;
+export async function updateBudget(args: UpdateBudgetArgs): Promise<boolean | "stale">;
 export async function updateBudget({
   budgetId,
   accountId,
@@ -316,15 +326,22 @@ export async function updateBudget({
   limitCents,
   thresholdPct,
   name,
-}: UpdateBudgetArgs): Promise<boolean> {
+  expectedUpdatedAt,
+}: UpdateBudgetArgs): Promise<boolean | "stale"> {
   return withUserDb(async (tx) => {
     const rows = await tx
       .update(budgets)
       .set({ accountId, labelId, period, limitCents, thresholdPct, name })
-      .where(eq(budgets.id, budgetId))
+      .where(
+        and(
+          eq(budgets.id, budgetId),
+          expectedUpdatedAt ? stampIs(budgets.updatedAt, expectedUpdatedAt) : undefined,
+        ),
+      )
       .returning({ id: budgets.id });
 
-    return rows.length > 0;
+    if (rows.length > 0) return true;
+    return expectedUpdatedAt ? staleOrGone(tx, budgets, budgets.id, budgetId) : false;
   });
 }
 

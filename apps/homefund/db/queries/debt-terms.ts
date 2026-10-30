@@ -1,6 +1,6 @@
 import "server-only";
 
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 
 import { insertRow } from "@/db/insert-row";
 import { debtTerms } from "@/db/schema";
@@ -34,14 +34,21 @@ export type UpsertDebtTermsArgs = {
   statementCutOffDay: number | null;
   paymentDueDay: number | null;
   avalCents: number | null;
+  // RF-156: the form opened on a debt with no terms, so terms found holding other values are
+  // someone else's and are kept. Absent, the terms are rewritten whatever they hold.
+  keepOthers?: true;
 };
 
 // The single row per account: an insert the first time, an in-place rewrite after,
 // pivoting on the primary-key conflict. The boolean-less return names the account
 // the policy admitted.
 export async function upsertDebtTerms(
+  args: UpsertDebtTermsArgs & { keepOthers?: undefined },
+): Promise<{ accountId: string }>;
+export async function upsertDebtTerms(args: UpsertDebtTermsArgs): Promise<{ accountId: string } | "stale">;
+export async function upsertDebtTerms(
   args: UpsertDebtTermsArgs,
-): Promise<{ accountId: string }> {
+): Promise<{ accountId: string } | "stale"> {
   // A decimal string binds straight to a numeric column — the column type casts it.
   const writable = {
     debtKind: args.debtKind,
@@ -62,12 +69,26 @@ export async function upsertDebtTerms(
       debtTerms,
       { accountId: args.accountId, ...writable },
       {
-        onConflict: { target: debtTerms.accountId, set: writable },
+        onConflict: {
+          target: debtTerms.accountId,
+          set: writable,
+          // Terms already holding these very values are the person's own retry, whose first
+          // answer was lost on the way back; any others are kept.
+          where: !args.keepOthers
+            ? undefined
+            : sql`row(${debtTerms.debtKind}, ${debtTerms.annualRate}, ${debtTerms.minimumPaymentCents},
+                    ${debtTerms.minimumPaymentPct}, ${debtTerms.creditLimitCents}, ${debtTerms.statementCutOffDay},
+                    ${debtTerms.paymentDueDay}, ${debtTerms.avalCents})
+                  is not distinct from row(excluded.debt_kind, excluded.annual_rate, excluded.minimum_payment_cents,
+                    excluded.minimum_payment_pct, excluded.credit_limit_cents, excluded.statement_cut_off_day,
+                    excluded.payment_due_day, excluded.aval_cents)`,
+        },
         returning: { accountId: debtTerms.accountId },
       },
     );
 
-    return { accountId: row.accountId };
+    // Nothing returned is a conflict the stamp held back: the terms changed after the form opened.
+    return row ? { accountId: row.accountId } : "stale";
   });
 }
 

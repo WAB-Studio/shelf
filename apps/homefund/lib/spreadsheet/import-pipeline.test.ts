@@ -19,22 +19,33 @@ const UUID = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0
 const CHECKING = { id: UUID(1), name: "Checking", externalRef: "acc-1", ownerUserId: UUID(99), groupId: null, settlementCurrency: "COP", initialBalanceOn: "2026-01-01" };
 const SAVINGS = { id: UUID(2), name: "Savings", externalRef: "acc-2", ownerUserId: UUID(99), groupId: null, settlementCurrency: "COP", initialBalanceOn: "2026-01-01" };
 const FOOD = { id: UUID(11), name: "Food", externalRef: "cat-1", ownerUserId: UUID(99), groupId: null, kind: "expense" };
+const TRIP = { id: UUID(21), name: "Trip", externalRef: "lab-1", ownerUserId: UUID(99), groupId: null };
 
 type Scope = {
   caller: { userId: string; groupId: string | null };
   accounts: unknown[];
   categories: unknown[];
-  existingRefs: Record<"accounts" | "members" | "categories" | "recurringRules" | "transactions", Set<string>>;
+  labels: unknown[];
+  goals: unknown[];
+  existingRefs: Record<string, Set<string>>;
 };
 let scope: Scope;
 const freshScope = (): Scope => ({
   caller: { userId: UUID(99), groupId: null },
   accounts: [CHECKING, SAVINGS],
   categories: [FOOD],
+  labels: [TRIP],
+  goals: [],
   existingRefs: {
+    budgets: new Set(),
+    goals: new Set(),
+    goalContributions: new Set(),
+    debts: new Set(),
+    statements: new Set(),
     accounts: new Set(["acc-1", "acc-2"]),
     members: new Set(),
     categories: new Set(["cat-1"]),
+    labels: new Set(["lab-1"]),
     recurringRules: new Set(),
     transactions: new Set(),
   },
@@ -632,4 +643,228 @@ test("RF-162: the file-new account is held to its own row's day, not to a same-n
   );
   const movementRows = result.perEntity.find((e) => e.entity === "transactions")!.rows;
   assert.deepEqual(movementRows.map((r) => r.errors.length), [0, 1]);
+});
+
+// ---- labels (RF-142, RF-70) -------------------------------------------------------------------
+
+const LABEL_COLUMNS = [...COLUMNS, "labels"] as const;
+
+async function bookLabels(labelRows: Record<string, string | null>[], movements: Record<string, string | number | null | undefined>[]) {
+  const wb = new ExcelJS.Workbook();
+  const labels = wb.addWorksheet(messages.data.sheets.labels);
+  const labelKeys = ["externalRef", "name", "color"];
+  labels.addRow(labelKeys.map((key) => messages.data.columns[key]));
+  for (const row of labelRows) labels.addRow(labelKeys.map((key) => row[key] ?? null));
+  const sheet = wb.addWorksheet(messages.data.sheets.transactions);
+  sheet.addRow(LABEL_COLUMNS.map((key) => messages.data.columns[key]));
+  for (const row of movements) sheet.addRow(LABEL_COLUMNS.map((key) => row[key] ?? null));
+  return new Uint8Array(await wb.xlsx.writeBuffer());
+}
+
+async function sheetsOf(bytes: Uint8Array) {
+  const result = await runAll(bytes);
+  return (entity: string) => result.perEntity.find((e) => e.entity === entity)!.rows;
+}
+
+test("a movement names its labels in one cell: an existing one by its id, a file-new one by its placeholder", async () => {
+  const rows = await sheetsOf(
+    await bookLabels(
+      [{ name: "Gift", color: "#06B6D4" }],
+      [{ ...spend(1000, "labelled"), labels: "Gift; Trip" }],
+    ),
+  );
+  const [label] = rows("labels");
+  assert.deepEqual(label.errors, []);
+  assert.equal(label.status, "new");
+  assert.ok(label.placeholderId);
+  const [movement] = rows("transactions");
+  assert.deepEqual(movement.errors, []);
+  assert.deepEqual((movement.object as { labelIds: string[] }).labelIds, [label.placeholderId, TRIP.id]);
+});
+
+test("a label name nobody holds refuses its movement on the labels cell", async () => {
+  const rows = await sheetsOf(await bookLabels([], [{ ...spend(1000, "a"), labels: "Trip; Nowhere" }]));
+  const [movement] = rows("transactions");
+  assert.deepEqual(movement.errors, [{ key: "data.import.errors.unknownReference", column: "labels", value: "Trip; Nowhere" }]);
+});
+
+test("a blank labels cell is no labels, and an existing label's key updates it", async () => {
+  const rows = await sheetsOf(
+    await bookLabels([{ externalRef: "lab-1", name: "Trip renamed", color: "#DC2626" }], [{ ...spend(1000, "a"), labels: "Trip renamed" }, spend(2000, "b")]),
+  );
+  assert.equal(rows("labels")[0].status, "update");
+  const [labelled, bare] = rows("transactions");
+  assert.deepEqual((labelled.object as { labelIds: string[] }).labelIds, [TRIP.id]);
+  assert.deepEqual((bare.object as { labelIds: string[] }).labelIds, []);
+});
+
+test("a label row with no colour is refused, as the form refuses it", async () => {
+  const rows = await sheetsOf(await bookLabels([{ name: "Gift", color: null }], []));
+  assert.equal(rows("labels")[0].errors[0]?.column, "color");
+});
+
+// ---- budgets, goals and their contributions (RF-142) ------------------------------------------
+
+type SheetRows = Record<string, Record<string, string | number | boolean | null>[]>;
+
+async function bookSheets(sheets: SheetRows) {
+  const { sheetDescriptors } = await import("./schema");
+  const wb = new ExcelJS.Workbook();
+  for (const [entity, rows] of Object.entries(sheets)) {
+    const sheet = wb.addWorksheet(messages.data.sheets[entity]);
+    const keys = (sheetDescriptors[entity as keyof typeof sheetDescriptors].columns as readonly { key: string }[]).map((c) => c.key);
+    sheet.addRow(keys.map((key) => messages.data.columns[key]));
+    for (const row of rows) sheet.addRow(keys.map((key) => row[key] ?? null));
+  }
+  return new Uint8Array(await wb.xlsx.writeBuffer());
+}
+
+const FUND = UUID(500);
+const FUND_FOOD = { ...FOOD, id: UUID(13), externalRef: "cat-fund", ownerUserId: null, groupId: FUND };
+
+test("a budget's category is the one held in the place its row names, personal or fund", async () => {
+  scope.caller.groupId = FUND;
+  scope.categories = [FOOD, FUND_FOOD];
+  const rows = await sheetsOf(
+    await bookSheets({
+      budgets: [
+        { placement: "personal", category: "Food", period: "monthly", limit: 500000, thresholdPct: 80 },
+        { placement: "group", category: "Food", account: "Checking", period: "monthly", limit: 500000, thresholdPct: 80, archived: true },
+      ],
+    }),
+  );
+  const [own, fund] = rows("budgets");
+  assert.deepEqual(own.errors, []);
+  assert.equal((own.object as { categoryId: string }).categoryId, FOOD.id);
+  assert.equal((own.object as { archived: boolean }).archived, false);
+  // Checking is the caller's own, never the fund's: the place refuses it.
+  assert.deepEqual(fund.errors, [{ key: "data.import.errors.outOfPlace", column: "account", value: "Checking" }]);
+});
+
+test("a row placed in the fund, from someone with no fund, is refused on its placement", async () => {
+  const rows = await sheetsOf(await bookSheets({ goals: [{ name: "Viaje", placement: "group", targetAmount: 1000000 }] }));
+  assert.deepEqual(rows("goals")[0].errors, [{ key: "data.import.errors.noFund", column: "placement", value: "group" }]);
+});
+
+test("a contribution names a file-new goal by name and a movement by its key; an unknown key is refused", async () => {
+  scope.existingRefs.transactions = new Set(["mov-1"]);
+  const rows = await sheetsOf(
+    await bookSheets({
+      goals: [{ name: "Viaje", placement: "personal", targetAmount: 1000000, targetDate: "2027-06-01" }],
+      goalContributions: [
+        { goal: "Viaje", amount: 50000, contributedOn: "2026-10-01", movement: "mov-1" },
+        { goal: "Viaje", amount: 20000, contributedOn: "2026-10-02" },
+        { goal: "Viaje", amount: 20000, contributedOn: "2026-10-03", movement: "nowhere" },
+      ],
+    }),
+  );
+  const [goal] = rows("goals");
+  assert.deepEqual(goal.errors, []);
+  const [linked, bare, lost] = rows("goalContributions");
+  assert.deepEqual(linked.errors, []);
+  assert.deepEqual(linked.object, { goalId: goal.placeholderId, amount: "50000", contributedOn: "2026-10-01", movement: "mov-1" });
+  assert.equal((bare.object as { movement: string | null }).movement, null);
+  assert.deepEqual(lost.errors, [{ key: "data.import.errors.unknownReference", column: "movement", value: "nowhere" }]);
+});
+
+// ---- debts and statements (RF-142, RF-78, RF-129) ---------------------------------------------
+
+test("a rate the ledger keeps as a fraction reads as the percentage a person types", async () => {
+  const { fractionToPercent } = await import("@/lib/validation/debt-terms");
+  const cases: [string, string][] = [["0.2899", "28.99"], ["0.289900", "28.99"], ["0", "0"], ["0.05", "5"], ["1", "100"], ["0.123456", "12.3456"], ["0.0005", "0.05"]];
+  for (const [fraction, percent] of cases) assert.equal(fractionToPercent(fraction), percent, fraction);
+});
+
+test("a debt row is new for an account with no terms and an update for one that has them; blank figures are none", async () => {
+  scope.existingRefs.debts = new Set([SAVINGS.id]);
+  const rows = await sheetsOf(
+    await bookSheets({
+      debts: [
+        { account: "Checking", debtKind: "revolving", annualRate: "28.99", minimumPaymentPct: "5", cutOffDay: 15, dueDay: 30 },
+        { account: "Savings", debtKind: "installment", annualRate: 12, minimumPayment: 350000 },
+      ],
+    }),
+  );
+  const [fresh, known] = rows("debts");
+  assert.deepEqual(fresh.errors, []);
+  assert.equal(fresh.status, "new");
+  assert.deepEqual(fresh.object, {
+    accountId: CHECKING.id,
+    debtKind: "revolving",
+    annualRate: "28.99",
+    minimumPayment: null,
+    minimumPaymentPct: "5",
+    creditLimit: null,
+    statementCutOffDay: 15,
+    paymentDueDay: 30,
+    aval: null,
+  });
+  assert.equal(known.status, "update");
+  assert.equal((known.object as { minimumPayment: string }).minimumPayment, "350000");
+});
+
+test("a statement keeps its signed figures; one already closed for that cut-off is an update, a cut-off before its start is refused", async () => {
+  scope.existingRefs.statements = new Set([`${CHECKING.id}|2026-09-15`]);
+  const rows = await sheetsOf(
+    await bookSheets({
+      statements: [
+        { account: "Checking", periodStart: "2026-08-16", cutOffDate: "2026-09-15", closingBalance: -1250000.5 },
+        { account: "Checking", periodStart: "2026-09-16", cutOffDate: "2026-10-15", paymentDueDate: "2026-10-30", closingBalance: -980000, interestCharged: 31250 },
+        { account: "Checking", periodStart: "2026-11-16", cutOffDate: "2026-11-15", closingBalance: 0 },
+      ],
+    }),
+  );
+  const [closed, fresh, backwards] = rows("statements");
+  assert.equal(closed.status, "update");
+  assert.equal((closed.object as { closingBalance: string }).closingBalance, "-1250000.5");
+  assert.equal(fresh.status, "new");
+  assert.deepEqual(fresh.errors, []);
+  assert.equal((fresh.object as { interestCharged: string; openingBalance: null }).interestCharged, "31250");
+  assert.equal((fresh.object as { openingBalance: null }).openingBalance, null);
+  assert.equal(backwards.errors[0]?.column, "periodStart");
+});
+
+// ---- review: scopes, repeats (RF-142) ---------------------------------------------------------
+
+test("a label keeps the place its row names; blank lands in the caller's fund, and a fund label on a personal movement is refused", async () => {
+  scope.caller.groupId = UUID(500);
+  const rows = await sheetsOf(
+    await bookSheets({
+      labels: [
+        { name: "Own", placement: "personal", color: "#06B6D4" },
+        { name: "Shared", color: "#06B6D4" },
+      ],
+      transactions: [
+        { ...spend(1000, "own"), labels: "Own; Own" },
+        { ...spend(2000, "shared"), labels: "Shared" },
+      ],
+    }),
+  );
+  const [own, shared] = rows("labels");
+  assert.equal((own.object as { placement: string }).placement, "personal");
+  assert.equal((shared.object as { placement: string }).placement, "group");
+  const [owned, refused] = rows("transactions");
+  assert.deepEqual((owned.object as { labelIds: string[] }).labelIds, [own.placeholderId]);
+  assert.deepEqual(refused.errors, [{ key: "data.import.errors.outOfPlace", column: "labels", value: "Shared" }]);
+});
+
+test("a second row for one account's terms, or one account's cut-off, is refused; the first stands", async () => {
+  const rows = await sheetsOf(
+    await bookSheets({
+      debts: [
+        { account: "Checking", debtKind: "revolving", annualRate: "20" },
+        { account: "Checking", debtKind: "revolving", annualRate: "21" },
+      ],
+      statements: [
+        { account: "Checking", periodStart: "2026-08-16", cutOffDate: "2026-09-15", closingBalance: -100 },
+        { account: "Checking", periodStart: "2026-08-17", cutOffDate: "2026-09-15", closingBalance: -200 },
+      ],
+    }),
+  );
+  for (const entity of ["debts", "statements"]) {
+    const [first, second] = rows(entity);
+    assert.deepEqual(first.errors, [], entity);
+    assert.deepEqual(second.errors, [{ key: "data.import.errors.repeatedRow", column: "account", value: null }], entity);
+    assert.equal(second.object, null, entity);
+  }
 });

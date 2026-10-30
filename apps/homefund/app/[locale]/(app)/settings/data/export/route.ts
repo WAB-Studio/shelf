@@ -25,7 +25,7 @@ function todayInBogota(): string {
 }
 
 // The requested entities, from a comma-separated list or repeated `entities` keys;
-// anything unknown is dropped and an empty selection falls back to all five (RF-50).
+// anything unknown is dropped and an empty selection falls back to all of them (RF-142).
 function requestedEntities(params: URLSearchParams): SheetEntity[] {
   const known = SHEET_ENTITIES as readonly string[];
   const picked = params

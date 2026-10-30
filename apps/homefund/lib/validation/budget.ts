@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { expectedUpdatedAtSchema } from "@/lib/validation/transaction";
+
 import type { CurrencyCode } from "@/lib/currency";
 import {
   anyCurrencyAmountSchema,
@@ -77,6 +79,7 @@ export type CreateBudgetInput = z.infer<typeof createBudgetSchema>;
 export const updateBudgetSchema = z.object({
   budgetId: z.uuid({ error: "budgets.errors.budgetInvalid" }),
   ...budgetFields,
+  expectedUpdatedAt: expectedUpdatedAtSchema,
 });
 
 export type UpdateBudgetInput = z.infer<typeof updateBudgetSchema>;

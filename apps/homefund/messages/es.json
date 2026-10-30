@@ -1250,8 +1250,14 @@
       "accounts": "Cuentas",
       "members": "Miembros",
       "categories": "Categorías",
+      "labels": "Etiquetas",
       "recurringRules": "Reglas recurrentes",
-      "transactions": "Movimientos"
+      "transactions": "Movimientos",
+      "budgets": "Presupuestos",
+      "goals": "Metas de ahorro",
+      "goalContributions": "Aportes a metas",
+      "debts": "Deudas",
+      "statements": "Extractos"
     },
     "columns": {
       "name": "Nombre",
@@ -1279,7 +1285,37 @@
       "endsOn": "Fecha de fin",
       "occurredAt": "Fecha",
       "counterAmount": "Monto en la moneda de la cuenta",
-      "counterIsEstimate": "Monto estimado"
+      "counterIsEstimate": "Monto estimado",
+      "labels": "Etiquetas",
+      "account": "Cuenta",
+      "label": "Etiqueta",
+      "period": "Periodo",
+      "limit": "Límite",
+      "thresholdPct": "Aviso al (%)",
+      "archived": "Archivado",
+      "targetAmount": "Monto meta",
+      "targetDate": "Fecha objetivo",
+      "goal": "Meta",
+      "contributedOn": "Fecha del aporte",
+      "movement": "Movimiento (referencia)",
+      "debtKind": "Tipo de deuda",
+      "annualRate": "Tasa efectiva anual (%)",
+      "minimumPayment": "Pago mínimo",
+      "minimumPaymentPct": "Pago mínimo (%)",
+      "creditLimit": "Cupo",
+      "cutOffDay": "Día de corte",
+      "dueDay": "Día de pago",
+      "aval": "Aval",
+      "periodStart": "Inicio del periodo",
+      "cutOffDate": "Fecha de corte",
+      "paymentDueDate": "Fecha límite de pago",
+      "openingBalance": "Saldo inicial",
+      "closingBalance": "Saldo final",
+      "credits": "Abonos",
+      "debits": "Cargos",
+      "interestCharged": "Intereses",
+      "feesCharged": "Comisiones",
+      "source": "Origen"
     },
     "filenames": {
       "export": "finanzas-datos",
@@ -1300,7 +1336,11 @@
         "adjustmentRefused": "El descuadre no se pudo registrar: su fecha es anterior a la apertura o al último cuadre de la cuenta, o la cuenta está archivada.",
         "hasErrors": "El archivo todavía tiene errores. Corrígelos e impórtalo de nuevo.",
         "alreadyCommitting": "Este archivo ya se estaba importando en otra pestaña. Revisa los movimientos antes de importarlo otra vez.",
-        "beforeOpening": "Fecha anterior a la apertura de su cuenta."
+        "beforeOpening": "Fecha anterior a la apertura de su cuenta.",
+        "outOfPlace": "Este nombre existe, pero no en el ámbito que dice la fila.",
+        "noFund": "La fila es del fondo y no tienes un fondo.",
+        "repeatedRow": "Otra fila del archivo ya trae este dato para la misma cuenta. Deja una sola.",
+        "lockedField": "Esta fila cambia la categoría o el ámbito, y eso no se puede cambiar. Créala como una fila nueva."
       }
     }
   },

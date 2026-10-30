@@ -4,8 +4,10 @@ import {
   check,
   index,
   pgPolicy,
+  text,
   timestamp,
   unique,
+  uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
 import { authenticatedRole, authUid } from "drizzle-orm/supabase";
@@ -25,11 +27,18 @@ export const goalContributions = finances.table(
       .references(() => savingsGoals.id, { onDelete: "cascade" }),
     transactionId: uuid().references(() => transactions.id, { onDelete: "cascade" }),
     amountCents: bigint({ mode: "number" }).notNull(),
+    // The stable per-scope import key (RF-52, RF-142): a re-import matches on it to update instead of duplicate.
+    // Auto-filled to `id::text` by a trigger when omitted.
+    externalRef: text(),
     // When the amount was set aside (RF-119). A virtual aporte earmarks no movement, so without
     // this the row has no date at all and the list has nothing to show.
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
+    check("goal_contributions_external_ref_length", sql`length(${table.externalRef}) <= 200`),
+    uniqueIndex("goal_contributions_goal_external_ref_unique")
+      .on(table.goalId, table.externalRef)
+      .where(sql`${table.externalRef} is not null`),
     check("goal_contributions_amount_positive", sql`${table.amountCents} > 0`),
     // A movement counts once toward a goal.
     unique("goal_contributions_goal_transaction_unique").on(table.goalId, table.transactionId),

@@ -5057,7 +5057,7 @@ const INSERT_GRANT_GAPS: Record<string, string[]> = {
   budgets: ["archived_at", "created_at", "id", "updated_at"],
   categories: ["created_at", "id", "updated_at"],
   debt_terms: ["created_at", "updated_at"],
-  goal_contributions: ["created_at", "id"],
+  goal_contributions: ["id"],
   group_members: ["archived_at", "created_at", "id", "invite_state", "updated_at"],
   groups: ["created_at", "updated_at"],
   // Every column, both here and in the UPDATE map: `private.remember_counterparty` is the
@@ -5198,10 +5198,10 @@ const UPDATE_GRANT_GAPS: Record<string, string[]> = {
     "owner_user_id",
     "record_id",
   ],
-  budgets: ["category_id", "created_at", "group_id", "id", "owner_user_id", "updated_at"],
+  budgets: ["category_id", "created_at", "external_ref", "group_id", "id", "owner_user_id", "updated_at"],
   categories: ["created_at", "group_id", "id", "kind", "owner_user_id", "updated_at"],
   debt_terms: ["account_id", "created_at", "updated_at"],
-  goal_contributions: ["amount_cents", "created_at", "goal_id", "id", "transaction_id"],
+  goal_contributions: ["amount_cents", "created_at", "external_ref", "goal_id", "id", "transaction_id"],
   group_members: [
     "created_at",
     "external_ref",
@@ -5272,10 +5272,10 @@ const UPDATE_GRANT_GAPS: Record<string, string[]> = {
     "start_date",
     "updated_at",
   ],
-  labels: ["created_at", "group_id", "id", "owner_user_id", "updated_at"],
+  labels: ["created_at", "external_ref", "group_id", "id", "owner_user_id", "updated_at"],
   planned_payments: ["created_at", "created_by", "group_id", "id", "owner_user_id", "updated_at"],
   recurring_rules: ["created_at", "created_by", "group_id", "id", "owner_user_id", "paused_reason", "updated_at"],
-  savings_goals: ["created_at", "group_id", "id", "owner_user_id", "updated_at"],
+  savings_goals: ["created_at", "external_ref", "group_id", "id", "owner_user_id", "updated_at"],
   sign_in_claims: ["client_key", "count", "day"],
   transaction_labels: ["label_id", "transaction_id"],
   // A mark is final: no column is writable.
@@ -8100,17 +8100,17 @@ async function checkArchivePolicies() {
 }
 
 // Assertions 250-251: an aporte carried no date of its own until 0023 — a virtual one earmarks no
-// movement, so the list RF-119 puts on the screen had nothing to date it by. `created_at` is stamped
-// by the default and left outside the per-column INSERT grant, the shape `group_members.created_at`
-// took in 0019, so the proof is that same one: the forged value is refused and the row still lands
-// dated. Fixtures live in one transaction forced to roll back.
+// movement, so the list RF-119 puts on the screen had nothing to date it by. The default stamps one
+// that names no day; since 0075 a restored backup names the day it had (RF-142), so `created_at` sits
+// inside the INSERT grant and the day written is the day kept. Fixtures live in one transaction
+// forced to roll back.
 async function checkContributionStamp() {
   console.log("");
   const ownerUser = randomUUID();
   const forgedAt = "2000-01-01T00:00:00Z";
   const forcedRollback = Symbol("forced rollback");
 
-  const label = "250. goal_contributions refuses a forged created_at and stamps its own";
+  const label = "250. goal_contributions stamps an aporte that names no day and keeps the day a restore names";
   const tailLabel = "251. the rolled-back aporte-date transaction leaves no trace";
 
   type OrmTx = Parameters<Parameters<typeof orm.transaction>[0]>[0];
@@ -8143,11 +8143,14 @@ async function checkContributionStamp() {
           values (${ownerUser}, 'rls aporte date goal', 200000000) returning id`,
       );
 
-      const forgedAporte = await refusalOf((sp) =>
+      const restored = await refusalOf((sp) =>
         sp.execute(
           dsql`insert into goal_contributions (goal_id, amount_cents, created_at)
             values (${goal.id}, 5000000, ${forgedAt}::timestamptz)`,
         ),
+      );
+      const [{ kept }] = await tx.execute<{ kept: string }>(
+        dsql`select count(*)::text as kept from goal_contributions where goal_id = ${goal.id} and created_at = ${forgedAt}::timestamptz`,
       );
       // A virtual aporte, the one that has no movement to borrow a date from.
       const [landed] = await tx.execute<{ forged: boolean; stamped: boolean }>(
@@ -8157,11 +8160,8 @@ async function checkContributionStamp() {
       );
       assert(
         label,
-        forgedAporte.includes("42501") &&
-          forgedAporte.includes("permission denied for table goal_contributions") &&
-          landed.forged === false &&
-          landed.stamped,
-        `${forgedAporte}; the row that landed carries the forged timestamp = ${landed?.forged}, stamped = ${landed?.stamped}`,
+        restored === "no refusal — the statement was accepted" && kept === "1" && landed.forged === false && landed.stamped,
+        `restore: ${restored}, rows on the named day ${kept}; the unnamed row carries that day = ${landed?.forged}, stamped = ${landed?.stamped}`,
       );
 
       // Nothing this section wrote may survive; force the ROLLBACK.

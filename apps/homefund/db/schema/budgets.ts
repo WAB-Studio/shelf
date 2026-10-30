@@ -7,6 +7,7 @@ import {
   smallint,
   text,
   timestamp,
+  uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
 import { authenticatedRole, authUid } from "drizzle-orm/supabase";
@@ -38,11 +39,21 @@ export const budgets = finances.table(
     // The overspend alert threshold, a percentage of the limit (RF-73).
     thresholdPct: smallint().notNull(),
     name: text(),
+    // The stable per-scope import key (RF-52, RF-142): a re-import matches on it to update instead of duplicate.
+    // Auto-filled to `id::text` by a trigger when omitted.
+    externalRef: text(),
     archivedAt: timestamp({ withTimezone: true }),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
+    check("budgets_external_ref_length", sql`length(${table.externalRef}) <= 200`),
+    uniqueIndex("budgets_owner_external_ref_unique")
+      .on(table.ownerUserId, table.externalRef)
+      .where(sql`${table.externalRef} is not null`),
+    uniqueIndex("budgets_group_external_ref_unique")
+      .on(table.groupId, table.externalRef)
+      .where(sql`${table.externalRef} is not null`),
     check("budgets_limit_positive", sql`${table.limitCents} > 0`),
     check("budgets_threshold_pct_valid", sql`${table.thresholdPct} between 1 and 100`),
     // A budget belongs to a user or a group, never both and never neither — mirrors categories.

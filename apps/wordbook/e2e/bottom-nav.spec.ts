@@ -336,3 +336,53 @@ for (const width of LABEL_WIDTHS) {
     });
   });
 }
+
+test("RNL-03: at 360px no control overlaps another, at the top or the foot of each route", async ({ page }) => {
+  await page.addInitScript(() => {
+    delete (window as unknown as { Translator?: unknown }).Translator;
+  });
+
+  for (const route of ["/?q=throughout", "/registro", "/cuenta"]) {
+    await page.goto(route);
+    await drawn(page);
+    // The answer stands before its controls are measured; the other routes draw none.
+    if (route.startsWith("/?")) await expect(page.getByRole("heading", { name: "throughout" })).toBeVisible({ timeout: 10000 });
+
+    for (const edge of ["top", "foot"] as const) {
+      if (edge === "foot") await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+      await afterFrames(page);
+      // Each control on screen is the topmost element at its own centre, and
+      // no two controls share pixels unless one holds the other.
+      const clashes = await page.evaluate(() => {
+        const controls = Array.from(
+          document.querySelectorAll<HTMLElement>('button, a[href], input, [tabindex]:not([tabindex="-1"])'),
+        ).filter((el) => {
+          if (!el.checkVisibility()) return false;
+          const r = el.getBoundingClientRect();
+          return r.width > 0 && r.bottom > 0 && r.top < window.innerHeight;
+        });
+        const name = (el: HTMLElement) => `${el.tagName} «${(el.getAttribute("aria-label") ?? el.textContent ?? "").trim().slice(0, 30)}»`;
+        const found: string[] = [];
+        for (const el of controls) {
+          const r = el.getBoundingClientRect();
+          const x = Math.min(Math.max(r.left + r.width / 2, 0), window.innerWidth - 1);
+          const y = Math.min(Math.max(r.top + r.height / 2, 0), window.innerHeight - 1);
+          const hit = document.elementFromPoint(x, y);
+          if (hit && hit !== el && !el.contains(hit) && !hit.contains(el)) found.push(`${name(el)} under ${hit.tagName}`);
+        }
+        for (const [i, a] of controls.entries()) {
+          for (const b of controls.slice(i + 1)) {
+            if (a.contains(b) || b.contains(a)) continue;
+            const ra = a.getBoundingClientRect();
+            const rb = b.getBoundingClientRect();
+            const w = Math.min(ra.right, rb.right) - Math.max(ra.left, rb.left);
+            const h = Math.min(ra.bottom, rb.bottom) - Math.max(ra.top, rb.top);
+            if (w > 1 && h > 1) found.push(`${name(a)} overlaps ${name(b)}`);
+          }
+        }
+        return found;
+      });
+      expect(clashes, `${route} at its ${edge}`).toEqual([]);
+    }
+  }
+});

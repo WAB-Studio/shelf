@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { check, index, pgPolicy, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { check, index, pgPolicy, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import { authenticatedRole, authUid } from "drizzle-orm/supabase";
 
 import { finances } from "./_schema";
@@ -16,10 +16,20 @@ export const labels = finances.table(
     groupId: uuid().references(() => groups.id, { onDelete: "cascade" }),
     name: text().notNull(),
     color: text(),
+    // The stable per-scope import key (RF-52, RF-142): a re-import matches on it to update instead of duplicate.
+    // Auto-filled to `id::text` by a trigger when omitted.
+    externalRef: text(),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
+    check("labels_external_ref_length", sql`length(${table.externalRef}) <= 200`),
+    uniqueIndex("labels_owner_external_ref_unique")
+      .on(table.ownerUserId, table.externalRef)
+      .where(sql`${table.externalRef} is not null`),
+    uniqueIndex("labels_group_external_ref_unique")
+      .on(table.groupId, table.externalRef)
+      .where(sql`${table.externalRef} is not null`),
     check("labels_name_length", sql`length(btrim(${table.name})) between 1 and 80`),
     // A label belongs to a user or a group, never both and never neither — mirrors categories.
     check("labels_owner_xor_group", sql`num_nonnulls(${table.ownerUserId}, ${table.groupId}) = 1`),

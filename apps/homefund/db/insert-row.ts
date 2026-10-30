@@ -47,8 +47,8 @@ export async function insertRow<
   values: InsertValues<T> | InsertValues<T>[],
   options?: {
     returning?: R;
-    // No `set` means `on conflict … do nothing`.
-    onConflict?: { target: PgColumn | PgColumn[]; set?: InsertValues<T> };
+    // No `set` means `on conflict … do nothing`; `where` holds the update to the rows it admits.
+    onConflict?: { target: PgColumn | PgColumn[]; set?: InsertValues<T>; where?: SQL };
   },
 ): Promise<Returned<R>[]> {
   const rows = (Array.isArray(values) ? values : [values]) as Record<
@@ -103,7 +103,8 @@ export async function insertRow<
 
   let conflict = sql``;
   if (options?.onConflict) {
-    const { target, set } = options.onConflict;
+    const { target, set, where } = options.onConflict;
+    if (where && !set) throw new Error("insertRow: a conflict `where` guards an update and needs its `set`");
     const targetList = sql.join(
       (Array.isArray(target) ? target : [target]).map(identifier),
       sql`, `,
@@ -119,7 +120,7 @@ export async function insertRow<
               ([key, value]) => sql`${identifier(columnFor(key))} = ${cell(key, value)}`,
             ),
             sql`, `,
-          )}`
+          )}${where ? sql` where ${where}` : sql``}`
         : sql` on conflict (${targetList}) do nothing`;
   }
 

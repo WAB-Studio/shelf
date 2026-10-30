@@ -113,7 +113,10 @@ export const updateBudgetAction = authActionClient
       });
       const limitCents = toMinor(limit, currency);
 
-      let updated: boolean;
+      // RF-156: an edit sent without the stamp its form loaded is stale, refused before any write.
+      if (!budget.expectedUpdatedAt) throw new ActionError("errors.stale");
+
+      let updated: Awaited<ReturnType<typeof updateBudget>>;
       try {
         updated = await updateBudget({
           ...budget,
@@ -126,9 +129,10 @@ export const updateBudgetAction = authActionClient
         mapBudgetError(error);
       }
 
-      if (!updated) throw new ActionError("errors.notFound");
-
+      // Refused or not, the screen reloads: a form reopened as the refusal asks carries the new stamp.
       refresh();
+      if (updated === "stale") throw new ActionError("errors.stale");
+      if (!updated) throw new ActionError("errors.notFound");
     },
   );
 

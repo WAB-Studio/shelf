@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { expectedUpdatedAtSchema } from "@/lib/validation/transaction";
+
 import type { CurrencyCode } from "@/lib/currency";
 import { isCivilDate } from "@/lib/dates";
 import {
@@ -97,6 +99,7 @@ export type CreateGoalInput = z.infer<typeof createGoalSchema>;
 export const updateGoalSchema = z.object({
   goalId: z.uuid({ error: "goals.errors.goalInvalid" }),
   ...goalFields,
+  expectedUpdatedAt: expectedUpdatedAtSchema,
 });
 
 export type UpdateGoalInput = z.infer<typeof updateGoalSchema>;

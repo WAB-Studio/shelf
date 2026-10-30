@@ -4,7 +4,15 @@ import { refresh } from "next/cache";
 import { z } from "zod";
 
 import { commitImport, ImportAlreadyCommitting } from "@/db/queries/import-commit";
-import type { CommitInput, CommitRow, CommitScope } from "@/db/queries/import-commit";
+import type {
+  CommitInput,
+  CommitRow,
+  CommitScope,
+  RestoredBudget,
+  RestoredContribution,
+  RestoredGoal,
+  RestoredStatement,
+} from "@/db/queries/import-commit";
 import { getUserGroup } from "@/db/queries/groups";
 import { withUserDb } from "@/db/session";
 import { ActionError } from "@/lib/errors";
@@ -15,8 +23,10 @@ import type { SheetEntity } from "@/lib/spreadsheet/schema";
 import type { ImportedAdjustment } from "@/lib/validation/account-reconciliation";
 import type { CreateAccountInput } from "@/lib/validation/account";
 import type { CreateCategoryInput } from "@/lib/validation/category";
+import type { CreateLabelInput } from "@/lib/validation/label";
 import type { CreateMemberInput } from "@/lib/validation/member";
 import type { CreateRecurringRuleInput } from "@/lib/validation/recurring-rule";
+import type { DebtTermsInput } from "@/lib/validation/debt-terms";
 import type { CreateTransactionInput } from "@/lib/validation/transaction";
 
 // The upload guards raise these; the shared pipeline owns the rest (RF-48).
@@ -129,10 +139,16 @@ export const commitImportAction = authActionClient
     const input: CommitInput = {
       members: rowsFor<CreateMemberInput>(result, "members"),
       categories: rowsFor<CreateCategoryInput>(result, "categories"),
+      labels: rowsFor<CreateLabelInput>(result, "labels"),
       accounts: rowsFor<CreateAccountInput>(result, "accounts"),
       recurringRules: rowsFor<CreateRecurringRuleInput>(result, "recurringRules"),
       transactions: rowsFor<CreateTransactionInput>(result, "transactions", (object) => !isAdjustment(object)),
       adjustments: rowsFor<ImportedAdjustment>(result, "transactions", isAdjustment),
+      budgets: rowsFor<RestoredBudget>(result, "budgets"),
+      goals: rowsFor<RestoredGoal>(result, "goals"),
+      goalContributions: rowsFor<RestoredContribution>(result, "goalContributions"),
+      debts: rowsFor<DebtTermsInput>(result, "debts"),
+      statements: rowsFor<RestoredStatement>(result, "statements"),
     };
 
     const outcome = await withUserDb((tx) => commitImport(tx, input, scope)).catch((error: unknown) => {
