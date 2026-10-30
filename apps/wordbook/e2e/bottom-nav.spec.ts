@@ -345,7 +345,8 @@ test("RNL-03: at 360px no control overlaps another, at the top or the foot of ea
   for (const route of ["/?q=throughout", "/registro", "/cuenta"]) {
     await page.goto(route);
     await drawn(page);
-    await page.locator('[aria-busy="false"]').first().waitFor({ state: "attached" });
+    // The answer stands before its controls are measured; the other routes draw none.
+    if (route.startsWith("/?")) await expect(page.getByRole("heading", { name: "throughout" })).toBeVisible({ timeout: 10000 });
 
     for (const edge of ["top", "foot"] as const) {
       if (edge === "foot") await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
