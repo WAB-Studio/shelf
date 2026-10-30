@@ -845,6 +845,7 @@ Principles, not recipes:
 | Spreadsheets (phase 2) | **ExcelJS** (`exceljs ^4.4.0`) | Reading and writing `.xlsx` with valid options in the template. |
 | Framework | **Next 16.4.1** and **React 19.2.8** (`next`, `react`, `react-dom`, pinned) | Routing, server actions and rendering; the versions the three apps share. |
 | Mail | **Nodemailer** (`nodemailer ^7.0.13`) | RF-141's reminder through the Gmail account Auth already sends from. |
+| AI door | **mcp-handler 2** (`^2.2.0`) over **@modelcontextprotocol/server 2** (`^2.3.1`) | RF-144's `/mcp`, at GoalLog's versions: the Streamable HTTP transport and the 401 without a JSON-RPC server written here. |
 | Postgres client | **postgres** (`^3.4.9`) | The driver Drizzle runs on, over the Supabase pooler. |
 | Supabase clients | **@supabase/supabase-js** (`^2.112.4`) and **@supabase/ssr** (`^0.12.5`) | The cookie session and the one-time-code check against Auth; `supabase-js` also gives the retryable-error test sign-in uses. |
 | Shared auth | **@repo/supabase-auth** (workspace `*`) | The cookie session and claim verification the apps share, already written and proved. |

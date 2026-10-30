@@ -1407,7 +1407,9 @@
       "amountTooLarge": "The amount is too large.",
       "directionInvalid": "The «direction» field only accepts «expense» or «income».",
       "scopeViolation": "That category belongs to another scope than the account. Pick a fund category for a fund account, or one of yours for your own account."
-    }
+    },
+    "mcpHeading": "Connect Claude",
+    "mcpDescription": "Add HomeFund as an HTTP MCP connector with this URL and one of your credentials in the «Authorization: Bearer» header. Claude sees your accounts and «Review the month» with your own permissions; revoking the credential disconnects it."
   },
   "ingest": {
     "title": "Inbox",

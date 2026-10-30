@@ -1407,7 +1407,9 @@
       "amountTooLarge": "El monto es demasiado alto.",
       "directionInvalid": "El campo «direction» solo acepta «expense» o «income».",
       "scopeViolation": "Esa categoría es de otro ámbito que la cuenta. Elige una del fondo para una cuenta del fondo, o una tuya para una cuenta tuya."
-    }
+    },
+    "mcpHeading": "Conectar con Claude",
+    "mcpDescription": "Agrega HomeFund como conector MCP de tipo HTTP con esta URL y una de tus credenciales en la cabecera «Authorization: Bearer». Claude verá tus cuentas y «Revisar el mes» con tus mismos permisos; revocar la credencial lo desconecta."
   },
   "ingest": {
     "title": "Bandeja",
