@@ -12,9 +12,9 @@ body {
   min-height: 100%;
 }
 
-/* docs/wordbook/DESIGN.md: light is the base, dark is the primary look. No
-   toggle lives here yet (RNL-07 is a separate module) — the OS preference
-   alone picks the mode. */
+/* docs/wordbook/DESIGN.md: light is the base, dark is the primary look. The
+   system's mode decides until the reader chooses one (RNL-07), which lands as
+   `data-theme` on <html> and wins either way. */
 :root {
   --rl-ground: #faf8f2;
   --rl-raised: #ffffff;
@@ -30,7 +30,7 @@ body {
 }
 
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --rl-ground: #14130f;
     --rl-raised: #1c1b16;
     --rl-line: #2a2820;
@@ -43,6 +43,20 @@ body {
     --rl-accent: #d9805f;
     --rl-accent-contrast: #14130f;
   }
+}
+
+:root[data-theme="dark"] {
+  --rl-ground: #14130f;
+  --rl-raised: #1c1b16;
+  --rl-line: #2a2820;
+  --rl-border: #302e25;
+  --rl-control-edge: #6b6753;
+  --rl-ink: #f0ebdd;
+  --rl-ink-secondary: #e6e0d0;
+  --rl-muted: #9a9484;
+  --rl-muted-quiet: #898271;
+  --rl-accent: #d9805f;
+  --rl-accent-contrast: #14130f;
 }
 
 /* Retints the two ramps every Radix Themes primitive already reads through —

@@ -9,6 +9,7 @@ import { Heading, Link } from "@radix-ui/themes";
 import { readNavQuery, writeNavQuery } from "@/lib/nav/query-storage";
 
 import { TapTarget } from "./tap-target";
+import { ThemeChoice } from "./theme-choice";
 import styles from "./bottom-nav.module.css";
 
 // The query name `search-screen.tsx` writes to the address bar on settle.
@@ -92,9 +93,9 @@ const items = [
 // account slice), now also the desktop sidebar's three destinations — one
 // `<nav>`, one CSS media query at 1024px, never a second tree mounted
 // alongside it. Never an action, a filter or a count: `Fuente` rides as a
-// link on the screens that carry the box, not a fourth item here, and the
-// theme control (RNL-07) is a different module's — the sidebar's foot below
-// the three items is left empty for it.
+// link on the screens that carry the box, not a fourth item here. The
+// sidebar's foot carries the theme control (RNL-07); on the phone it lives in
+// /cuenta, since the bar has no foot.
 export function BottomNav() {
   const pathname = usePathname();
   const t = useTranslations("nav");
@@ -173,10 +174,12 @@ export function BottomNav() {
           </Link>
         );
       })}
-      {/* Reserved for the theme control (RNL-07, a different module). Empty
-          on purpose: flex-grow pushes it to the sidebar's foot; it draws
-          nothing on the bar, where it collapses to zero width. */}
+      {/* flex-grow pushes the theme control to the sidebar's foot; both draw
+          nothing on the bar, where they collapse to zero width. */}
       <div className={styles.spacer} aria-hidden="true" />
+      <div className={styles.foot}>
+        <ThemeChoice />
+      </div>
     </nav>
   );
 }
