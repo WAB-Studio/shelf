@@ -103,7 +103,7 @@ RNF-08 sets the requirement. This is how it shows in the interface.
 ## Decisions of 2026-10-15 (pending list), by the user
 
 - **A dollar purchase on a peso card is exported and re-imported in dollars** in the backup (RF-50), with its currency, never converted to pesos. Not built yet.
-- **A household bill paid from a personal card can be marked «del hogar»** and counts as a contribution to the fund. It is a mark on the movement; the contributions report (RF-66) changes. Built 2026-10-30 (RF-139): a «Del hogar» switch on the movement form, offered on an expense from a personal account to someone with a fund; the bill counts in the currency it was paid in, only while its payer is a live member.
+- **A household bill paid from a personal card can be marked «del hogar»** and counts as a contribution to the fund. It is a mark on the movement; the contributions report (RF-66) changes. Built 2026-10-30 (RF-139): a «Del hogar» switch on the movement form, offered on an expense from a personal account to someone with a fund; or kept visible on a movement that carries it so it can be cleared. The bill books as its account settled it, an archived member keeps their past bills, and the mark travels in the backup's «Del hogar» column.
 - **Seeded categories keep both sets, personal and fund.** Every screen that names a category shows its scope («Mercado · fondo»), and the importer resolves a category name by the scope of the account it lands in. Not built yet.
 - **Each member keeps seeing the other's personal accounts and movements** (RF-58 stays).
 - **A planned payment's reminder notifies by email** (RF-74's reminder date). It spends the free Auth email quota. Not built yet.
