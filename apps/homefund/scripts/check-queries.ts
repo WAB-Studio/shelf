@@ -164,6 +164,7 @@ import { getUserLocale, upsertUserLocale } from "@/db/queries/user-locale";
 import {
   getWebhookCredentialOptions,
   issueWebhookCredential,
+  revokeWebhookCredential,
   listWebhookCredentials,
 } from "@/db/queries/webhook-credentials";
 import { getSessionUser, withUserDb } from "@/db/session";
@@ -4268,6 +4269,7 @@ async function main(): Promise<void> {
   await nextPaymentMinimumSuite();
   await reminderMailSuite();
   await householdContributionSuite();
+  await mcpDoorSuite();
 }
 
 // A member recorded without a login is someone in the fund: a leader whose fund holds one is not alone, so an
@@ -15396,5 +15398,92 @@ async function householdContributionSuite(): Promise<void> {
     next("RF-139: a marked expense edited into a transfer, without sending the mark, saves and drops it"),
     turned === false,
     `for_household after the edit = ${turned}`,
+  );
+}
+
+async function mcpDoorSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const { POST } = await import("@/app/mcp/route");
+  const owner = await createMembershipFreeUser();
+  const stranger = await createMembershipFreeUser();
+  const ownAccount = randomUUID();
+  const strangerAccount = randomUUID();
+  for (const [user, id, name] of [
+    [owner, ownAccount, `Harness rf144 banco ${tag}`],
+    [stranger, strangerAccount, `Harness rf144 ajeno ${tag}`],
+  ] as const) {
+    await fixtureSql.begin(async (tx) => {
+      const claims = JSON.stringify({ sub: user.id, role: "authenticated", aud: "authenticated" });
+      await tx`select set_config('request.jwt.claims', ${claims}, true)`;
+      await tx`
+        insert into accounts (id, owner_user_id, name, kind, subtype, initial_balance_cents, initial_balance_on)
+        values (${id}, ${user.id}, ${name}, 'asset', 'bank', 1250000, '2026-01-01')`;
+    });
+    track("accounts", id);
+  }
+  const { id: credentialId, token } = await asUser(owner, () =>
+    issueWebhookCredential({ name: `Harness rf144 ${tag}`, defaultAccountId: null, defaultCategoryId: null }),
+  );
+  keep("webhook_credentials", credentialId);
+
+  let counter = 0;
+  const rpc = async (bearer: string | null, method: string, params?: unknown) => {
+    counter += 1;
+    const response = await POST(
+      new Request("http://localhost/mcp", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json, text/event-stream",
+          ...(bearer ? { Authorization: `Bearer ${bearer}` } : {}),
+        },
+        body: JSON.stringify({ jsonrpc: "2.0", id: counter, method, params }),
+      }),
+    );
+    const text = await response.text();
+    const frame = text.startsWith("{") ? text : (text.split("\n").find((line) => line.startsWith("data:")) ?? "").slice(5);
+    return { status: response.status, body: frame ? JSON.parse(frame) : null };
+  };
+  const tool = async (name: string, args: Record<string, unknown> = {}) => {
+    const { body } = await rpc(token, "tools/call", { name, arguments: args });
+    return { isError: body?.result?.isError === true, value: JSON.parse(body?.result?.content?.[0]?.text ?? "null") };
+  };
+
+  const [anonymous, forged, listed] = await Promise.all([
+    rpc(null, "tools/list"),
+    rpc(`whk_${randomUUID()}`, "tools/list"),
+    rpc(token, "tools/list"),
+  ]);
+  const names = (listed.body?.result?.tools ?? []).map((one: { name: string }) => one.name).sort();
+  assert(
+    next("RF-144: /mcp answers 401 with no key or an unknown one, and lists its tools to a live key"),
+    anonymous.status === 401 && forged.status === 401 && JSON.stringify(names) === JSON.stringify(["list_accounts", "review_month"]),
+    `no key ${anonymous.status}, unknown key ${forged.status}, tools ${JSON.stringify(names)}`,
+  );
+
+  const accounts = await tool("list_accounts");
+  const ids = (accounts.value as { id: string }[] | null)?.map((one) => one.id) ?? [];
+  assert(
+    next("RF-144: list_accounts runs as the key's owner: their account with its balance, never another person's"),
+    !accounts.isError && ids.includes(ownAccount) && !ids.includes(strangerAccount),
+    `isError ${accounts.isError}, own ${ids.includes(ownAccount)}, stranger's ${ids.includes(strangerAccount)}`,
+  );
+
+  const review = await tool("review_month", { month: "2026-09" });
+  const badMonth = await rpc(token, "tools/call", { name: "review_month", arguments: { month: "septiembre" } });
+  assert(
+    next("RF-155: review_month answers the month's review to Claude; a malformed month is refused"),
+    !review.isError && (review.value as { month?: string })?.month === "2026-09" &&
+      (badMonth.body?.result?.isError === true || badMonth.body?.error !== undefined),
+    `review ${JSON.stringify(review.value)?.slice(0, 120)}, bad month ${JSON.stringify(badMonth.body)?.slice(0, 160)}`,
+  );
+
+  await asUser(owner, () => revokeWebhookCredential({ id: credentialId }));
+  const revoked = await rpc(token, "tools/list");
+  assert(
+    next("RF-144: a revoked key is shut out of /mcp at once"),
+    revoked.status === 401,
+    `revoked key answered ${revoked.status}`,
   );
 }

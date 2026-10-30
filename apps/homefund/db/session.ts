@@ -1,5 +1,7 @@
 import "server-only";
 
+import { AsyncLocalStorage } from "node:async_hooks";
+
 import { settleSessionSql, verifiedClaims, type SessionUser } from "@repo/supabase-auth";
 import { getLocale } from "next-intl/server";
 
@@ -20,7 +22,25 @@ export type Transaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
 // the one the harness stub replaces, so the harness renders no request for
 // `cookies()` to read.
 function getVerifiedClaims() {
-  return verifiedClaims(createSupabaseServerClient);
+  return acting.getStore() ?? verifiedClaims(createSupabaseServerClient);
+}
+
+type Acting = { claims: Record<string, unknown>; user: SessionUser };
+
+const acting = new AsyncLocalStorage<Acting>();
+
+/**
+ * Runs `fn` as an owner a bearer credential already resolved (`/mcp`, RF-144), with no cookie:
+ * inside it every query and guard of this module takes that owner instead of the request's. The
+ * id is one `resolveWebhookCredential` returned, never one read from a payload; `run`, not
+ * `enterWith`, so the identity ends with `fn`.
+ */
+export function actAsCredentialOwner<T>(userId: string, fn: () => Promise<T>): Promise<T> {
+  if (!userId) throw new Error("actAsCredentialOwner called without a user id");
+  return acting.run(
+    { user: { id: userId, email: "" }, claims: { sub: userId, role: "authenticated", aud: "authenticated" } },
+    fn,
+  );
 }
 
 export async function getSessionUser(): Promise<SessionUser | null> {
