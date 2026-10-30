@@ -7,7 +7,7 @@ import { useTranslations } from "next-intl";
 import { IconButton, TextField } from "@/components/ui";
 
 // The one input the whole app answers from: no submit, no mode, never
-// disabled — a status the box cannot read must never take its focus (RL-01).
+// disabled — a status the box cannot read must never take its focus (RL-77).
 export function SearchBox({
   value,
   onChange,
