@@ -360,8 +360,8 @@ this gets built, and no schema, table or column is "prepared for" it.
     through Playwright — because it also carries React's render and commit and the driver's own
     dispatch. It is recorded here so nobody reads one number and cites the other. This requirement
     governs the first; no assertion anywhere enforces the second.
-- [ ] **RNL-02** — Every string a person reads comes from the message catalogue. The interface is Spanish.
-  - Open, 2026-10-16: nothing drives «every string comes from the catalogue»: `lib/catalog.test.ts` checks the catalogue's own quoting, not that components carry no literal.
+- [x] **RNL-02** — Every string a person reads comes from the message catalogue. The interface is Spanish.
+  - Driven 2026-10-30 by `eslint.config.mjs`'s `copySyntax`, over screens, primitives and the layout: no letter in JSX text, in a string child, or in a prop a person reads (`aria-label`, `title`, `placeholder`, `alt`…).
 - [x] **RNL-03** — The app holds at a 360 px viewport: no horizontal overflow, no overlapping control, no tap target under 32 px on its shorter side. It is used one-handed, standing, holding a book. It also holds at a wide viewport: the reading column keeps a maximum measure and centres, so at 1440 px the box and the answer read as a column rather than stretching the full width. The phone is the case the app is designed for; the desktop is the case it must not look neglected in.
   - Widened 2026-09-07 from the 360 px case alone. The code was unticked and nothing had been verified against it, so no tick is invalidated; the alternative was retiring it for a successor, which buys nothing here.
 - [x] **RNL-04** — The dictionary asset is built from its source by a script kept in the repository, and the build records the source URL, the edition, the licence and the entry counts beside the asset.
