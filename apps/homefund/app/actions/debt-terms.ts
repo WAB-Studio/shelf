@@ -98,7 +98,11 @@ export const saveDebtTermsAction = authActionClient
         mapDebtTermsError(error);
       }
 
-      if (saved === "stale") throw new ActionError("errors.stale");
+      // The screen reloads, so the debt shows the terms that landed first.
+      if (saved === "stale") {
+        refresh();
+        throw new ActionError("errors.stale");
+      }
 
       refresh();
       return { accountId: saved.accountId };

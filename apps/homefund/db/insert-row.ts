@@ -104,6 +104,7 @@ export async function insertRow<
   let conflict = sql``;
   if (options?.onConflict) {
     const { target, set, where } = options.onConflict;
+    if (where && !set) throw new Error("insertRow: a conflict `where` guards an update and needs its `set`");
     const targetList = sql.join(
       (Array.isArray(target) ? target : [target]).map(identifier),
       sql`, `,

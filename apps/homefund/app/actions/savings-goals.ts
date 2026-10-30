@@ -151,7 +151,11 @@ export const updateGoalAction = authActionClient
       mapGoalError(error);
     }
 
-    if (updated === "stale") throw new ActionError("errors.stale");
+    // The screen reloads, so the form reopened as the refusal asks carries the new stamp.
+    if (updated === "stale") {
+      refresh();
+      throw new ActionError("errors.stale");
+    }
     if (!updated) throw new ActionError("errors.notFound");
 
     refresh();

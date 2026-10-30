@@ -15140,10 +15140,20 @@ async function moneyFormsStaleSuite(): Promise<void> {
   const rateOf = async () =>
     (await fixtureSql<{ r: string }[]>`select annual_rate::text as r from debt_terms where account_id = ${cardId}`)[0]?.r;
   const first = await asUser(user, () => debtActions.saveDebtTermsAction(terms("28")));
+  const retry = await asUser(user, () => debtActions.saveDebtTermsAction(terms("28")));
   const second = await asUser(user, () => debtActions.saveDebtTermsAction(terms("35")));
   assert(
-    next("RF-156: debt terms land on a debt that had none; a second form opened on that bare debt is refused stale and the first terms stand"),
-    first?.serverError === undefined && isStale(second) && Number(await rateOf()) === 0.28,
-    `first ${JSON.stringify(first)}, second ${JSON.stringify(second)}, rate ${await rateOf()}`,
+    next("RF-156: debt terms land on a debt that had none; the same terms sent again land; a second form with others is refused stale"),
+    first?.serverError === undefined && retry?.serverError === undefined && isStale(second) && Number(await rateOf()) === 0.28,
+    `first ${JSON.stringify(first)}, retry ${JSON.stringify(retry)}, second ${JSON.stringify(second)}, rate ${await rateOf()}`,
+  );
+
+  // A stranger is refused by the policy before any stamp is read: never told someone else changed it.
+  const stranger = await createMembershipFreeUser();
+  const foreign = await asUser(stranger, () => debtActions.saveDebtTermsAction(terms("40")));
+  assert(
+    next("RF-156: terms sent by someone who cannot write the debt are refused as not found, not as stale, and the terms stand"),
+    foreign?.serverError !== undefined && !isStale(foreign) && Number(await rateOf()) === 0.28,
+    `stranger ${JSON.stringify(foreign)}, rate ${await rateOf()}`,
   );
 }

@@ -254,6 +254,7 @@ function DebtForm({
   }
 
   async function onSubmit(values: DebtFormValues) {
+    setStale(false);
     let accountId = createdId ?? account?.accountId ?? values.accountId;
     if (isCreate) {
       // Step one: the account. A liability's opening balance is submitted as a
