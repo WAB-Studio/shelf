@@ -4,10 +4,13 @@ import { isNotNull } from "drizzle-orm";
 
 import {
   accounts,
+  budgets,
   categories,
+  goalContributions,
   groupMembers,
   labels,
   recurringRules,
+  savingsGoals,
   transactions,
 } from "@/db/schema";
 import { getUserGroup } from "@/db/queries/groups";
@@ -24,6 +27,9 @@ const refTables = {
   labels,
   recurringRules,
   transactions,
+  budgets,
+  goals: savingsGoals,
+  goalContributions,
 } as const;
 
 // One referenced entity as the resolver needs it: its real id, its current name, and
@@ -57,6 +63,7 @@ export type ImportScope = {
   accounts: ScopedAccount[];
   categories: ScopedCategory[];
   labels: ScopedEntity[];
+  goals: ScopedEntity[];
   existingRefs: Record<SheetEntity, Set<string>>;
 };
 
@@ -81,14 +88,26 @@ function refsOf(rows: ScopedEntity[]): Set<string> {
 
 /**
  * The read side of the import pipeline (RF-51/52), all in the caller's RLS scope like
- * `readExport`: the account, category and label rows a reference resolves through, and every
- * entity's existing `external_ref` set for new-vs-update classification. Those three
+ * `readExport`: the account, category, label and goal rows a reference resolves through, and every
+ * entity's existing `external_ref` set for new-vs-update classification. Those four
  * reads carry `external_ref`, so their key sets need no separate trip.
  * The caller's id and fund ride the same fan-out as the entity reads.
  * Each read is its own round trip, fanned out with `Promise.all`, never chained.
  */
 export async function readImportScope(): Promise<ImportScope> {
-  const [user, group, accountRows, categoryRows, labelRows, memberRefs, recurringRefs, transactionRefs] =
+  const [
+    user,
+    group,
+    accountRows,
+    categoryRows,
+    labelRows,
+    goalRows,
+    memberRefs,
+    recurringRefs,
+    transactionRefs,
+    budgetRefs,
+    contributionRefs,
+  ] =
     await Promise.all([
       requireUser(),
       getUserGroup(),
@@ -128,9 +147,22 @@ export async function readImportScope(): Promise<ImportScope> {
           })
           .from(labels),
       ),
+      withUserDb((tx) =>
+        tx
+          .select({
+            id: savingsGoals.id,
+            name: savingsGoals.name,
+            externalRef: savingsGoals.externalRef,
+            ownerUserId: savingsGoals.ownerUserId,
+            groupId: savingsGoals.groupId,
+          })
+          .from(savingsGoals),
+      ),
       readExistingRefs("members"),
       readExistingRefs("recurringRules"),
       readExistingRefs("transactions"),
+      readExistingRefs("budgets"),
+      readExistingRefs("goalContributions"),
     ]);
 
   return {
@@ -138,6 +170,7 @@ export async function readImportScope(): Promise<ImportScope> {
     accounts: accountRows,
     categories: categoryRows,
     labels: labelRows,
+    goals: goalRows,
     existingRefs: {
       accounts: refsOf(accountRows),
       categories: refsOf(categoryRows),
@@ -145,6 +178,9 @@ export async function readImportScope(): Promise<ImportScope> {
       members: memberRefs,
       recurringRules: recurringRefs,
       transactions: transactionRefs,
+      budgets: budgetRefs,
+      goals: refsOf(goalRows),
+      goalContributions: contributionRefs,
     },
   };
 }

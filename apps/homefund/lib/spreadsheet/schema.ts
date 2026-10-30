@@ -1,16 +1,20 @@
 import { z } from "zod";
 
 import { accounts } from "@/db/schema/accounts";
+import { budgets } from "@/db/schema/budgets";
 import { categories } from "@/db/schema/categories";
+import { goalContributions } from "@/db/schema/goal-contributions";
 import { groupMembers } from "@/db/schema/group-members";
 import { labels } from "@/db/schema/labels";
 import { recurringRules } from "@/db/schema/recurring-rules";
+import { savingsGoals } from "@/db/schema/savings-goals";
 import { transactions } from "@/db/schema/transactions";
 import { BASE_CURRENCY } from "@/lib/currency";
 import { isCivilDate } from "@/lib/dates";
 import { centsToPesos, pesosToCents } from "@/lib/money";
 import { CATEGORY_COLORS } from "@/lib/fund/category-color";
-import { accountCurrencySchema, createAccountSchema } from "@/lib/validation/account";
+import { ACCOUNT_PLACEMENTS, accountCurrencySchema, createAccountSchema } from "@/lib/validation/account";
+import { BUDGET_PERIODS } from "@/lib/validation/budget";
 import { CATEGORY_KINDS } from "@/lib/validation/category";
 import { createMemberSchema } from "@/lib/validation/member";
 import { anyCurrencyAmountSchema, occurredAtSchema, pesoAmountSchema } from "@/lib/validation/transaction";
@@ -25,6 +29,9 @@ export const SHEET_ENTITIES = [
   "labels",
   "recurringRules",
   "transactions",
+  "budgets",
+  "goals",
+  "goalContributions",
 ] as const;
 
 export type SheetEntity = (typeof SHEET_ENTITIES)[number];
@@ -44,7 +51,9 @@ const moneyBoundary: MoneyBoundary = {
 
 // The entities a cell can point at by name. A dev→prod restore re-links across
 // databases, so a reference travels as a name, not a uuid that means nothing there.
-export type RefEntity = "accounts" | "categories" | "labels";
+// A contribution names the movement it earmarks by that movement's own key (RF-87): a
+// movement has no name.
+export type RefEntity = "accounts" | "categories" | "labels" | "goals" | "transactions";
 
 // One flat column of a sheet. `key` is the English header, the next-intl key a
 // later UI module translates, and the field name on a parsed row; `field` is
@@ -89,6 +98,9 @@ type CategoryModel = typeof categories.$inferSelect;
 type LabelModel = typeof labels.$inferSelect;
 type RecurringRuleModel = typeof recurringRules.$inferSelect;
 type TransactionModel = typeof transactions.$inferSelect;
+type BudgetModel = typeof budgets.$inferSelect;
+type GoalModel = typeof savingsGoals.$inferSelect;
+type ContributionModel = typeof goalContributions.$inferSelect;
 
 // Every entity now carries an `external_ref` column: its stable per-scope import
 // key (RF-52), matched on to update instead of duplicate. Bounded like the model
@@ -284,6 +296,57 @@ export const transactionRowSchema = z.object({
 });
 export type TransactionRow = z.infer<typeof transactionRowSchema>;
 
+// A budget or a goal names its place, as an account does: the same category or account name
+// may be held personally and in the fund, and the place says which one the row means (RF-140).
+const placementSchema = z.enum(ACCOUNT_PLACEMENTS, { error: "accounts.errors.placementInvalid" });
+
+// TRUE lands the row archived (RF-120); blank, live.
+const archivedSchema = z.literal(true).nullish();
+
+// A limit, a target or a contribution is read in the currency its row derives (RF-121), which
+// only the commit's account and fund know; the shape passes if any currency reads it.
+function moneyCellSchema(entity: "budgets" | "goals", field: "limit" | "target" | "amount") {
+  return anyCurrencyAmountSchema({
+    required: `${entity}.errors.${field}Required`,
+    invalid: `${entity}.errors.${field}Invalid`,
+    tooLarge: `${entity}.errors.${field}TooLarge`,
+  });
+}
+
+export const budgetRowSchema = z.object({
+  externalRef: externalRefSchema,
+  name: z.string().trim().max(80, { error: "budgets.errors.nameTooLong" }).nullish(),
+  placement: placementSchema,
+  category: referenceNameSchema,
+  account: referenceNameSchema.nullish(),
+  label: referenceNameSchema.nullish(),
+  period: z.enum(BUDGET_PERIODS),
+  limit: moneyCellSchema("budgets", "limit"),
+  thresholdPct: z.number().int().min(1).max(100),
+  archived: archivedSchema,
+});
+export type BudgetRow = z.infer<typeof budgetRowSchema>;
+
+export const goalRowSchema = z.object({
+  externalRef: externalRefSchema,
+  name: referenceNameSchema,
+  placement: placementSchema,
+  targetAmount: moneyCellSchema("goals", "target"),
+  targetDate: sheetCivilDateSchema.nullish(),
+  account: referenceNameSchema.nullish(),
+  archived: archivedSchema,
+});
+export type GoalRow = z.infer<typeof goalRowSchema>;
+
+export const goalContributionRowSchema = z.object({
+  externalRef: externalRefSchema,
+  goal: referenceNameSchema,
+  amount: moneyCellSchema("goals", "amount"),
+  contributedOn: sheetCivilDateSchema,
+  movement: externalRefSchema,
+});
+export type GoalContributionRow = z.infer<typeof goalContributionRowSchema>;
+
 // `placement` has no single column of its own: the export derives personal vs
 // group from whether `ownerUserId` is set, and the import resolves the owner or
 // group back from it.
@@ -383,6 +446,53 @@ export const transactionSheetDescriptor = {
   rowSchema: transactionRowSchema,
 } satisfies SheetDescriptor<TransactionModel, typeof transactionRowSchema>;
 
+export const budgetSheetDescriptor = {
+  entity: "budgets",
+  refField: "externalRef",
+  columns: [
+    { key: "externalRef", field: "externalRef" },
+    { key: "name", field: "name" },
+    { key: "placement", field: "ownerUserId" },
+    { key: "category", field: "categoryId", ref: { entity: "categories" } },
+    { key: "account", field: "accountId", ref: { entity: "accounts" } },
+    { key: "label", field: "labelId", ref: { entity: "labels" } },
+    { key: "period", field: "period" },
+    { key: "limit", field: "limitCents", money: moneyBoundary },
+    { key: "thresholdPct", field: "thresholdPct" },
+    { key: "archived", field: "archivedAt", flag: true },
+  ],
+  rowSchema: budgetRowSchema,
+} satisfies SheetDescriptor<BudgetModel, typeof budgetRowSchema>;
+
+export const goalSheetDescriptor = {
+  entity: "goals",
+  refField: "externalRef",
+  columns: [
+    { key: "externalRef", field: "externalRef" },
+    { key: "name", field: "name" },
+    { key: "placement", field: "ownerUserId" },
+    { key: "targetAmount", field: "targetAmountCents", money: moneyBoundary },
+    { key: "targetDate", field: "targetDate" },
+    { key: "account", field: "accountId", ref: { entity: "accounts" } },
+    { key: "archived", field: "archivedAt", flag: true },
+  ],
+  rowSchema: goalRowSchema,
+} satisfies SheetDescriptor<GoalModel, typeof goalRowSchema>;
+
+// `contributedOn` is the Bogotá day of `created_at`, the day the list shows it by (RF-119).
+export const goalContributionSheetDescriptor = {
+  entity: "goalContributions",
+  refField: "externalRef",
+  columns: [
+    { key: "externalRef", field: "externalRef" },
+    { key: "goal", field: "goalId", ref: { entity: "goals" } },
+    { key: "amount", field: "amountCents", money: moneyBoundary },
+    { key: "contributedOn", field: "createdAt" },
+    { key: "movement", field: "transactionId", ref: { entity: "transactions" } },
+  ],
+  rowSchema: goalContributionRowSchema,
+} satisfies SheetDescriptor<ContributionModel, typeof goalContributionRowSchema>;
+
 // The one map both sides iterate, in the fixed entity order.
 export const sheetDescriptors = {
   accounts: accountSheetDescriptor,
@@ -391,4 +501,7 @@ export const sheetDescriptors = {
   labels: labelSheetDescriptor,
   recurringRules: recurringRuleSheetDescriptor,
   transactions: transactionSheetDescriptor,
+  budgets: budgetSheetDescriptor,
+  goals: goalSheetDescriptor,
+  goalContributions: goalContributionSheetDescriptor,
 } as const;

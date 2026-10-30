@@ -26,7 +26,8 @@ type Scope = {
   accounts: unknown[];
   categories: unknown[];
   labels: unknown[];
-  existingRefs: Record<"accounts" | "members" | "categories" | "labels" | "recurringRules" | "transactions", Set<string>>;
+  goals: unknown[];
+  existingRefs: Record<string, Set<string>>;
 };
 let scope: Scope;
 const freshScope = (): Scope => ({
@@ -34,7 +35,11 @@ const freshScope = (): Scope => ({
   accounts: [CHECKING, SAVINGS],
   categories: [FOOD],
   labels: [TRIP],
+  goals: [],
   existingRefs: {
+    budgets: new Set(),
+    goals: new Set(),
+    goalContributions: new Set(),
     accounts: new Set(["acc-1", "acc-2"]),
     members: new Set(),
     categories: new Set(["cat-1"]),
@@ -642,7 +647,7 @@ test("RF-162: the file-new account is held to its own row's day, not to a same-n
 
 const LABEL_COLUMNS = [...COLUMNS, "labels"] as const;
 
-async function bookLabels(labelRows: Record<string, string | null>[], movements: Record<string, string | number | null>[]) {
+async function bookLabels(labelRows: Record<string, string | null>[], movements: Record<string, string | number | null | undefined>[]) {
   const wb = new ExcelJS.Workbook();
   const labels = wb.addWorksheet(messages.data.sheets.labels);
   const labelKeys = ["externalRef", "name", "color"];
@@ -694,4 +699,68 @@ test("a blank labels cell is no labels, and an existing label's key updates it",
 test("a label row with no colour is refused, as the form refuses it", async () => {
   const rows = await sheetsOf(await bookLabels([{ name: "Gift", color: null }], []));
   assert.equal(rows("labels")[0].errors[0]?.column, "color");
+});
+
+// ---- budgets, goals and their contributions (RF-142) ------------------------------------------
+
+type SheetRows = Record<string, Record<string, string | number | boolean | null>[]>;
+
+async function bookSheets(sheets: SheetRows) {
+  const { sheetDescriptors } = await import("./schema");
+  const wb = new ExcelJS.Workbook();
+  for (const [entity, rows] of Object.entries(sheets)) {
+    const sheet = wb.addWorksheet(messages.data.sheets[entity]);
+    const keys = (sheetDescriptors[entity as keyof typeof sheetDescriptors].columns as readonly { key: string }[]).map((c) => c.key);
+    sheet.addRow(keys.map((key) => messages.data.columns[key]));
+    for (const row of rows) sheet.addRow(keys.map((key) => row[key] ?? null));
+  }
+  return new Uint8Array(await wb.xlsx.writeBuffer());
+}
+
+const FUND = UUID(500);
+const FUND_FOOD = { ...FOOD, id: UUID(13), externalRef: "cat-fund", ownerUserId: null, groupId: FUND };
+
+test("a budget's category is the one held in the place its row names, personal or fund", async () => {
+  scope.caller.groupId = FUND;
+  scope.categories = [FOOD, FUND_FOOD];
+  const rows = await sheetsOf(
+    await bookSheets({
+      budgets: [
+        { placement: "personal", category: "Food", period: "monthly", limit: 500000, thresholdPct: 80 },
+        { placement: "group", category: "Food", account: "Checking", period: "monthly", limit: 500000, thresholdPct: 80, archived: true },
+      ],
+    }),
+  );
+  const [own, fund] = rows("budgets");
+  assert.deepEqual(own.errors, []);
+  assert.equal((own.object as { categoryId: string }).categoryId, FOOD.id);
+  assert.equal((own.object as { archived: boolean }).archived, false);
+  // Checking is the caller's own, never the fund's: the place refuses it.
+  assert.deepEqual(fund.errors, [{ key: "data.import.errors.outOfPlace", column: "account", value: "Checking" }]);
+});
+
+test("a row placed in the fund, from someone with no fund, is refused on its placement", async () => {
+  const rows = await sheetsOf(await bookSheets({ goals: [{ name: "Viaje", placement: "group", targetAmount: 1000000 }] }));
+  assert.deepEqual(rows("goals")[0].errors, [{ key: "data.import.errors.noFund", column: "placement", value: "group" }]);
+});
+
+test("a contribution names a file-new goal by name and a movement by its key; an unknown key is refused", async () => {
+  scope.existingRefs.transactions = new Set(["mov-1"]);
+  const rows = await sheetsOf(
+    await bookSheets({
+      goals: [{ name: "Viaje", placement: "personal", targetAmount: 1000000, targetDate: "2027-06-01" }],
+      goalContributions: [
+        { goal: "Viaje", amount: 50000, contributedOn: "2026-10-01", movement: "mov-1" },
+        { goal: "Viaje", amount: 20000, contributedOn: "2026-10-02" },
+        { goal: "Viaje", amount: 20000, contributedOn: "2026-10-03", movement: "nowhere" },
+      ],
+    }),
+  );
+  const [goal] = rows("goals");
+  assert.deepEqual(goal.errors, []);
+  const [linked, bare, lost] = rows("goalContributions");
+  assert.deepEqual(linked.errors, []);
+  assert.deepEqual(linked.object, { goalId: goal.placeholderId, amount: "50000", contributedOn: "2026-10-01", movement: "mov-1" });
+  assert.equal((bare.object as { movement: string | null }).movement, null);
+  assert.deepEqual(lost.errors, [{ key: "data.import.errors.unknownReference", column: "movement", value: "nowhere" }]);
 });

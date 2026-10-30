@@ -4,10 +4,13 @@ import type { PgTable } from "drizzle-orm/pg-core";
 import {
   accountReconciliations,
   accounts,
+  budgets,
   categories,
+  goalContributions,
   groupMembers,
   labels,
   recurringRules,
+  savingsGoals,
   transactionLabels,
   transactionSplits,
   transactions,
@@ -19,7 +22,10 @@ import { pgConstraintName, pgErrorCode } from "@/lib/db-error";
 import { ActionError } from "@/lib/errors";
 import { parseAmount } from "@/lib/money";
 import type { SheetEntity } from "@/lib/spreadsheet/schema";
+import { TIME_ZONE } from "@/lib/locales";
 import type { CreateAccountInput } from "@/lib/validation/account";
+import type { CreateBudgetInput } from "@/lib/validation/budget";
+import type { CreateGoalInput } from "@/lib/validation/savings-goal";
 import type { ImportedAdjustment } from "@/lib/validation/account-reconciliation";
 import type { CreateCategoryInput } from "@/lib/validation/category";
 import type { ImportedLabel } from "@/lib/validation/label";
@@ -97,6 +103,11 @@ const EXTERNAL_REF_INDEXES = new Set([
   "recurring_rules_group_external_ref_unique",
   "transactions_owner_external_ref_unique",
   "transactions_group_external_ref_unique",
+  "budgets_owner_external_ref_unique",
+  "budgets_group_external_ref_unique",
+  "savings_goals_owner_external_ref_unique",
+  "savings_goals_group_external_ref_unique",
+  "goal_contributions_goal_external_ref_unique",
 ]);
 
 /**
@@ -148,7 +159,17 @@ export type CommitInput = {
   transactions: CommitRow<CreateTransactionInput>[];
   // A backup's reconciliation adjustments (RF-50): booked as reconciliations, never as movements.
   adjustments?: CommitRow<ImportedAdjustment>[];
+  budgets?: CommitRow<RestoredBudget>[];
+  goals?: CommitRow<RestoredGoal>[];
+  goalContributions?: CommitRow<RestoredContribution>[];
 };
+
+// What a backup row adds to a budget's or a goal's form: its place and whether it is archived.
+type Restored = { placement: "personal" | "group"; archived: boolean };
+export type RestoredBudget = CreateBudgetInput & Restored;
+export type RestoredGoal = Omit<CreateGoalInput, "initialContribution"> & Restored;
+// The day it was set aside, and the movement it earmarks by that movement's key (RF-87).
+export type RestoredContribution = { goalId: string; amount: string; contributedOn: string; movement: string | null };
 
 export type CommitOutcome = { inserted: number; updated: number };
 
@@ -253,6 +274,9 @@ export async function commitImport(
     input.recurringRules,
     input.transactions,
     input.adjustments ?? [],
+    input.budgets ?? [],
+    input.goals ?? [],
+    input.goalContributions ?? [],
   ];
   if (buckets.some((rows) => rows.some((row) => (row.errors?.length ?? 0) > 0 || row.object == null))) {
     throw new ActionError(FILE_HAS_ERRORS);
@@ -306,6 +330,15 @@ async function writeImport(
 
   await commitAdjustments(tx, input.adjustments ?? [], accountMap, placeholders);
 
+  // Goals before their contributions, both after the movements a contribution earmarks; a
+  // goal is archived only once its contributions are in, since an archived one takes none.
+  const goalMap = await commitGoals(tx, input.goals ?? [], accountMap, placeholders, scope);
+  for (const id of goalMap.keys()) placeholders.add(id);
+  await commitContributions(tx, input.goalContributions ?? [], goalMap, placeholders, scope);
+  await commitBudgets(tx, input.budgets ?? [], { accountMap, categoryMap, labelMap }, placeholders, scope);
+  await archiveRestored(tx, savingsGoals, input.goals ?? [], scope);
+  await archiveRestored(tx, budgets, input.budgets ?? [], scope);
+
   for (const bucket of [
     input.members,
     input.categories,
@@ -314,6 +347,9 @@ async function writeImport(
     input.recurringRules,
     input.transactions,
     input.adjustments ?? [],
+    input.budgets ?? [],
+    input.goals ?? [],
+    input.goalContributions ?? [],
   ]) {
     for (const row of bucket) count(row);
   }
@@ -994,6 +1030,191 @@ async function writeSplits(
   await tx.execute(
     sql`insert into ${transactionSplits} (transaction_id, category_id, amount_cents) values ${values}`,
   );
+}
+
+// The owner and group columns a budget or a goal lands with, by the place its row names.
+function placeColumns(placement: "personal" | "group", scope: CommitScope): [string | null, string | null] {
+  return placement === "group" ? [null, requireGroup(scope.groupId)] : [scope.userId, null];
+}
+
+async function commitGoals(
+  tx: Transaction,
+  rows: CommitRow<RestoredGoal>[],
+  accountMap: Map<string, string>,
+  placeholders: Set<string>,
+  scope: CommitScope,
+): Promise<Map<string, string>> {
+  const map = new Map<string, string>();
+  const accountOf = (row: CommitRow<RestoredGoal>) => {
+    const accountId = link(row.object.accountId ?? null, accountMap);
+    assertLinked(accountId, placeholders);
+    return accountId;
+  };
+
+  const newRows = rows.filter((row) => row.status === "new");
+  if (newRows.length > 0) {
+    const inserted = await insertChunked(
+      tx,
+      savingsGoals,
+      ["owner_user_id", "group_id", "name", "target_amount_cents", "target_date", "account_id", "external_ref"],
+      newRows.map((row) => [
+        ...placeColumns(row.object.placement, scope),
+        row.object.name,
+        toCents(row.object.targetAmount),
+        row.object.targetDate ?? null,
+        accountOf(row),
+        row.externalRef,
+      ]),
+    );
+    newRows.forEach((row, index) => {
+      if (row.placeholderId) map.set(row.placeholderId, inserted[index].id);
+    });
+  }
+
+  const updates = rows
+    .filter((row) => row.status === "update")
+    .map((row) => ({
+      external_ref: row.externalRef,
+      name: row.object.name,
+      target_amount_cents: toCents(row.object.targetAmount),
+      target_date: row.object.targetDate ?? null,
+      account_id: accountOf(row),
+    }));
+  for (const chunk of chunked(updates)) {
+    await tx.execute(sql`
+      update ${savingsGoals} as t set
+        name = r.name, target_amount_cents = r.target_amount_cents, target_date = r.target_date, account_id = r.account_id
+      from jsonb_to_recordset(${jsonbParam(chunk)}) as r(
+        external_ref text, name text, target_amount_cents bigint, target_date date, account_id uuid)
+      where t.external_ref = r.external_ref and ${inScope(scope)}`);
+  }
+
+  return map;
+}
+
+// A contribution is final once set aside (RF-119 removes it, never edits it), so a key already
+// in the fund is left alone. Its day lands at Bogotá noon, which reads back as that day.
+async function commitContributions(
+  tx: Transaction,
+  rows: CommitRow<RestoredContribution>[],
+  goalMap: Map<string, string>,
+  placeholders: Set<string>,
+  scope: CommitScope,
+): Promise<void> {
+  const records = rows
+    .filter((row) => row.status === "new")
+    .map((row) => {
+      const goalId = link(row.object.goalId, goalMap);
+      assertLinked(goalId, placeholders);
+      return {
+        goal_id: goalId,
+        amount_cents: toCents(row.object.amount),
+        day: row.object.contributedOn,
+        movement: row.object.movement,
+        external_ref: row.externalRef,
+      };
+    });
+  for (const chunk of chunked(records)) {
+    await tx.execute(sql`
+      insert into ${goalContributions} (goal_id, amount_cents, created_at, transaction_id, external_ref)
+      select r.goal_id, r.amount_cents, (r.day::date + time '12:00') at time zone ${TIME_ZONE}, t.id, r.external_ref
+      from jsonb_to_recordset(${jsonbParam(chunk)}) as r(
+        goal_id uuid, amount_cents bigint, day text, movement text, external_ref text)
+      left join ${transactions} as t on t.external_ref = r.movement and ${inScope(scope)}`);
+  }
+}
+
+// A budget's category, account and label share its place; the scope trigger holds them to it.
+async function commitBudgets(
+  tx: Transaction,
+  rows: CommitRow<RestoredBudget>[],
+  maps: { accountMap: Map<string, string>; categoryMap: Map<string, string>; labelMap: Map<string, string> },
+  placeholders: Set<string>,
+  scope: CommitScope,
+): Promise<void> {
+  const linked = (row: CommitRow<RestoredBudget>) => {
+    const categoryId = link(row.object.categoryId, maps.categoryMap)!;
+    const accountId = link(row.object.accountId ?? null, maps.accountMap);
+    const labelId = link(row.object.labelId ?? null, maps.labelMap);
+    for (const id of [categoryId, accountId, labelId]) assertLinked(id, placeholders);
+    return { categoryId, accountId, labelId };
+  };
+
+  const newRows = rows.filter((row) => row.status === "new");
+  if (newRows.length > 0) {
+    await insertChunked(
+      tx,
+      budgets,
+      [
+        "owner_user_id",
+        "group_id",
+        "category_id",
+        "account_id",
+        "label_id",
+        "period",
+        "limit_cents",
+        "threshold_pct",
+        "name",
+        "external_ref",
+      ],
+      newRows.map((row) => {
+        const ids = linked(row);
+        return [
+          ...placeColumns(row.object.placement, scope),
+          ids.categoryId,
+          ids.accountId,
+          ids.labelId,
+          row.object.period,
+          toCents(row.object.limit),
+          row.object.thresholdPct,
+          row.object.name ?? null,
+          row.externalRef,
+        ];
+      }),
+    );
+  }
+
+  // The category is immutable (RF-71): an update rewrites the rest.
+  const updates = rows
+    .filter((row) => row.status === "update")
+    .map((row) => {
+      const ids = linked(row);
+      return {
+        external_ref: row.externalRef,
+        account_id: ids.accountId,
+        label_id: ids.labelId,
+        period: row.object.period,
+        limit_cents: toCents(row.object.limit),
+        threshold_pct: row.object.thresholdPct,
+        name: row.object.name ?? null,
+      };
+    });
+  for (const chunk of chunked(updates)) {
+    await tx.execute(sql`
+      update ${budgets} as t set
+        account_id = r.account_id, label_id = r.label_id, period = r.period, limit_cents = r.limit_cents,
+        threshold_pct = r.threshold_pct, name = r.name
+      from jsonb_to_recordset(${jsonbParam(chunk)}) as r(
+        external_ref text, account_id uuid, label_id uuid, period text, limit_cents bigint, threshold_pct smallint, name text)
+      where t.external_ref = r.external_ref and ${inScope(scope)}`);
+  }
+}
+
+// Archived as the file says (RF-120): a row already archived keeps its day, a live one in the
+// file comes back to life.
+async function archiveRestored(
+  tx: Transaction,
+  table: typeof budgets | typeof savingsGoals,
+  rows: CommitRow<Restored>[],
+  scope: CommitScope,
+): Promise<void> {
+  const records = rows.map((row) => ({ external_ref: row.externalRef, archived: row.object.archived }));
+  for (const chunk of chunked(records)) {
+    await tx.execute(sql`
+      update ${table} as t set archived_at = case when r.archived then coalesce(t.archived_at, now()) end
+      from jsonb_to_recordset(${jsonbParam(chunk)}) as r(external_ref text, archived boolean)
+      where t.external_ref = r.external_ref and (t.archived_at is null) = r.archived and ${inScope(scope)}`);
+  }
 }
 
 // Every movement's labels (RF-70), once all of them have landed: each one is found by the key it

@@ -1252,7 +1252,10 @@
       "categories": "Categories",
       "labels": "Labels",
       "recurringRules": "Recurring rules",
-      "transactions": "Transactions"
+      "transactions": "Transactions",
+      "budgets": "Budgets",
+      "goals": "Savings goals",
+      "goalContributions": "Goal contributions"
     },
     "columns": {
       "name": "Name",
@@ -1281,7 +1284,18 @@
       "occurredAt": "Date",
       "counterAmount": "Amount in the account's currency",
       "counterIsEstimate": "Estimated amount",
-      "labels": "Labels"
+      "labels": "Labels",
+      "account": "Account",
+      "label": "Label",
+      "period": "Period",
+      "limit": "Limit",
+      "thresholdPct": "Warn at (%)",
+      "archived": "Archived",
+      "targetAmount": "Target amount",
+      "targetDate": "Target date",
+      "goal": "Goal",
+      "contributedOn": "Contribution date",
+      "movement": "Movement (reference)"
     },
     "filenames": {
       "export": "finances-export",
@@ -1302,7 +1316,9 @@
         "adjustmentRefused": "The adjustment could not be booked: its date is before the account's opening or latest reconciliation, or the account is archived.",
         "hasErrors": "The file still has errors. Fix them and import again.",
         "alreadyCommitting": "This file was already being imported in another tab. Check the movements before importing it again.",
-        "beforeOpening": "Date before its account's opening."
+        "beforeOpening": "Date before its account's opening.",
+        "outOfPlace": "This name exists, but not in the placement the row names.",
+        "noFund": "The row belongs to a fund and you have none."
       }
     }
   },

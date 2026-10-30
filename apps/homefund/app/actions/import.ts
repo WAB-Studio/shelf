@@ -4,7 +4,14 @@ import { refresh } from "next/cache";
 import { z } from "zod";
 
 import { commitImport, ImportAlreadyCommitting } from "@/db/queries/import-commit";
-import type { CommitInput, CommitRow, CommitScope } from "@/db/queries/import-commit";
+import type {
+  CommitInput,
+  CommitRow,
+  CommitScope,
+  RestoredBudget,
+  RestoredContribution,
+  RestoredGoal,
+} from "@/db/queries/import-commit";
 import { getUserGroup } from "@/db/queries/groups";
 import { withUserDb } from "@/db/session";
 import { ActionError } from "@/lib/errors";
@@ -135,6 +142,9 @@ export const commitImportAction = authActionClient
       recurringRules: rowsFor<CreateRecurringRuleInput>(result, "recurringRules"),
       transactions: rowsFor<CreateTransactionInput>(result, "transactions", (object) => !isAdjustment(object)),
       adjustments: rowsFor<ImportedAdjustment>(result, "transactions", isAdjustment),
+      budgets: rowsFor<RestoredBudget>(result, "budgets"),
+      goals: rowsFor<RestoredGoal>(result, "goals"),
+      goalContributions: rowsFor<RestoredContribution>(result, "goalContributions"),
     };
 
     const outcome = await withUserDb((tx) => commitImport(tx, input, scope)).catch((error: unknown) => {

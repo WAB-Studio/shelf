@@ -23,6 +23,9 @@ import { importedAdjustmentSchema } from "@/lib/validation/account-reconciliatio
 import { createAccountSchema } from "@/lib/validation/account";
 import { createCategorySchema } from "@/lib/validation/category";
 import { importedLabelSchema } from "@/lib/validation/label";
+import { ACCOUNT_PLACEMENTS } from "@/lib/validation/account";
+import { createBudgetSchema } from "@/lib/validation/budget";
+import { createGoalSchema } from "@/lib/validation/savings-goal";
 import { createMemberSchema } from "@/lib/validation/member";
 import { createRecurringRuleSchema } from "@/lib/validation/recurring-rule";
 import { createTransactionSchema, foreignSettlementCurrency } from "@/lib/validation/transaction";
@@ -45,6 +48,10 @@ const AMBIGUOUS_REFERENCE = "data.import.errors.ambiguousReference";
 // The name exists, but only in the scope the row's account is not in (RF-140).
 const CATEGORY_OUT_OF_SCOPE = "data.import.errors.categoryOutOfScope";
 const INVALID_CELL = "data.import.errors.invalidCell";
+// A budget's or a goal's name resolves, but only outside the place its row names (RF-142).
+const OUT_OF_PLACE = "data.import.errors.outOfPlace";
+// The row names the fund as its place, and the person importing has none.
+const NO_FUND = "data.import.errors.noFund";
 // A category resolves fine and still refuses the row: its kind must match the
 // movement's own direction (RF-27), the same rule `assert_split_matches_transaction`
 // enforces at write time — checked here so a bad row never reaches that trigger.
@@ -77,6 +84,18 @@ const CATALOGUE_KEY = /^[A-Za-z0-9_]+(\.[A-Za-z0-9_]+)+$/;
 // authoritative schema's `z.uuid()` and a later commit rebuilds the same map.
 const PLACEHOLDER_NAMESPACE = "finances-app/import";
 
+// What a budget or a goal carries beside its form's fields: the place it lands in and whether
+// it lands archived (RF-120).
+const restoredFields = { placement: z.enum(ACCOUNT_PLACEMENTS), archived: z.boolean() };
+
+// A contribution restored with its day and the movement it earmarks, by that movement's key.
+const restoredContributionSchema = z.object({
+  goalId: z.uuid(),
+  amount: z.string(),
+  contributedOn: z.string().refine(isCivilDate),
+  movement: z.string().nullable(),
+});
+
 // The authoritative id-shaped schema each entity re-runs after name→id resolution,
 // the same one its form uses (RNF-10).
 const createSchemas = {
@@ -86,6 +105,9 @@ const createSchemas = {
   labels: importedLabelSchema,
   recurringRules: createRecurringRuleSchema,
   transactions: createTransactionSchema,
+  budgets: createBudgetSchema.extend(restoredFields),
+  goals: createGoalSchema.omit({ initialContribution: true }).extend(restoredFields),
+  goalContributions: restoredContributionSchema,
 } as const;
 
 // A raw parsed record holds a name, a scalar, integer cents or nothing.
@@ -150,6 +172,11 @@ export type EffectiveRefs = {
   accounts: Map<string, string[]>;
   categories: Map<string, string[]>;
   labels: Map<string, string[]>;
+  goals: Map<string, string[]>;
+  // Every movement key a contribution may name: the fund's and the file's (RF-87).
+  movementKeys: Set<string>;
+  // Where a row whose placement is personal, or group, lands; null for a fund the caller lacks.
+  places: { personal: ScopeKey; group: ScopeKey | null };
   accountCurrencies: Map<string, string>;
   // An existing account's settlement currency by its stable key, for the file row that updates it.
   accountCurrencyByRef: Map<string, string>;
@@ -161,6 +188,7 @@ export type EffectiveRefs = {
   // maps hold. A file-new fund account of a caller with no fund has none (null).
   accountScopes: Map<string, ScopeKey | null>;
   categoryScopes: Map<string, ScopeKey>;
+  labelScopes: Map<string, ScopeKey>;
   // Each effective account's opening day, by the same ids the name map holds.
   accountOpenings: Map<string, string>;
 };
@@ -407,6 +435,9 @@ const GATE2_COLUMN_BY_FIELD: Partial<Record<SheetEntity, Record<string, string>>
     externalRef: "externalRef",
     labelIds: "labels",
   },
+  budgets: { categoryId: "category", accountId: "account", labelId: "label" },
+  goals: { accountId: "account" },
+  goalContributions: { goalId: "goal" },
 };
 
 // The column a Zod issue's path names, at whichever gate raised it (RF-51). Gate
@@ -614,7 +645,79 @@ function resolveAndShape(
     return null;
   };
 
+  // A budget's or a goal's reference, picked among the same-named rows by the place the row
+  // names: the category, account or label must share it, as the scope trigger demands.
+  const resolveInPlace = (
+    name: unknown,
+    map: Map<string, string[]>,
+    scopes: ReadonlyMap<string, ScopeKey | null>,
+    place: ScopeKey | null,
+    column: string,
+  ): string | null => {
+    if (name == null || place === null) return null;
+    const resolved = resolveCategoryInScope(map.get(name as string) ?? [], place, scopes as ReadonlyMap<string, ScopeKey>);
+    if ("id" in resolved) return resolved.id;
+    const key = { unknown: UNKNOWN_REFERENCE, ambiguous: AMBIGUOUS_REFERENCE, outOfScope: OUT_OF_PLACE }[resolved.error];
+    errors.push({ key, column, value: rawCellValue(entity, raw, column) });
+    return null;
+  };
+
+  const placeOf = (placement: unknown): ScopeKey | null => {
+    const place = placement === "group" ? refs.places.group : refs.places.personal;
+    if (place === null) errors.push({ key: NO_FUND, column: "placement", value: rawCellValue(entity, raw, "placement") });
+    return place;
+  };
+
   switch (entity) {
+    case "budgets": {
+      const place = placeOf(data.placement);
+      return {
+        object: {
+          categoryId: resolveInPlace(data.category, refs.categories, refs.categoryScopes, place, "category"),
+          accountId: resolveInPlace(data.account, refs.accounts, refs.accountScopes, place, "account"),
+          labelId: resolveInPlace(data.label, refs.labels, refs.labelScopes, place, "label"),
+          period: data.period,
+          limit: data.limit,
+          thresholdPct: data.thresholdPct,
+          name: data.name ?? null,
+          placement: data.placement,
+          archived: data.archived === true,
+        },
+        errors,
+      };
+    }
+
+    case "goals": {
+      const place = placeOf(data.placement);
+      return {
+        object: {
+          name: data.name,
+          targetAmount: data.targetAmount,
+          targetDate: data.targetDate ?? null,
+          accountId: resolveInPlace(data.account, refs.accounts, refs.accountScopes, place, "account"),
+          placement: data.placement,
+          archived: data.archived === true,
+        },
+        errors,
+      };
+    }
+
+    case "goalContributions": {
+      const movement = (data.movement ?? null) as string | null;
+      if (movement !== null && !refs.movementKeys.has(movement)) {
+        errors.push({ key: UNKNOWN_REFERENCE, column: "movement", value: rawCellValue(entity, raw, "movement") });
+      }
+      return {
+        object: {
+          goalId: resolveInto(data.goal, refs.goals, "goal"),
+          amount: data.amount,
+          contributedOn: data.contributedOn,
+          movement,
+        },
+        errors,
+      };
+    }
+
     case "accounts": {
       const ref = text(raw.externalRef);
       const existing = ref.length > 0 ? refs.accountCurrencyByRef.get(ref) : undefined;
@@ -781,7 +884,7 @@ export function processRow(
   const ref = text(raw.externalRef);
   const externalRef = ref.length > 0 ? ref : null;
   const placeholderId =
-    (entity === "accounts" || entity === "categories" || entity === "labels") && status === "new"
+    (entity === "accounts" || entity === "categories" || entity === "labels" || entity === "goals") && status === "new"
       ? placeholderFor(entity, ref, index)
       : null;
   const carried = { index, sheetRow, status, externalRef, placeholderId };
@@ -869,6 +972,15 @@ export function buildEffectiveRefs(
     accounts: buildEffectiveMap(scope.accounts, recordsOf("accounts"), "accounts"),
     categories: buildEffectiveMap(scope.categories, recordsOf("categories"), "categories"),
     labels: buildEffectiveMap(scope.labels, recordsOf("labels"), "labels"),
+    goals: buildEffectiveMap(scope.goals, recordsOf("goals"), "goals"),
+    movementKeys: new Set([
+      ...scope.existingRefs.transactions,
+      ...recordsOf("transactions").flatMap((raw) => (text(raw.externalRef).length > 0 ? [text(raw.externalRef)] : [])),
+    ]),
+    places: {
+      personal: `user:${scope.caller.userId}`,
+      group: scope.caller.groupId !== null ? `group:${scope.caller.groupId}` : null,
+    },
     accountCurrencies: buildAccountCurrencies(scope.accounts, recordsOf("accounts")),
     accountCurrencyByRef: new Map(
       scope.accounts.flatMap((account) =>
@@ -887,6 +999,10 @@ export function buildEffectiveRefs(
         : `user:${scope.caller.userId}`,
     ),
     categoryScopes: buildScopes<ScopeKey>(scope.categories, recordsOf("categories"), "categories", () =>
+      scope.caller.groupId !== null ? `group:${scope.caller.groupId}` : `user:${scope.caller.userId}`,
+    ),
+    // A file-new label lands where a file-new category does.
+    labelScopes: buildScopes<ScopeKey>(scope.labels, recordsOf("labels"), "labels", () =>
       scope.caller.groupId !== null ? `group:${scope.caller.groupId}` : `user:${scope.caller.userId}`,
     ),
   };

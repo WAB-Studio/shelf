@@ -1252,7 +1252,10 @@
       "categories": "Categorías",
       "labels": "Etiquetas",
       "recurringRules": "Reglas recurrentes",
-      "transactions": "Movimientos"
+      "transactions": "Movimientos",
+      "budgets": "Presupuestos",
+      "goals": "Metas de ahorro",
+      "goalContributions": "Aportes a metas"
     },
     "columns": {
       "name": "Nombre",
@@ -1281,7 +1284,18 @@
       "occurredAt": "Fecha",
       "counterAmount": "Monto en la moneda de la cuenta",
       "counterIsEstimate": "Monto estimado",
-      "labels": "Etiquetas"
+      "labels": "Etiquetas",
+      "account": "Cuenta",
+      "label": "Etiqueta",
+      "period": "Periodo",
+      "limit": "Límite",
+      "thresholdPct": "Aviso al (%)",
+      "archived": "Archivado",
+      "targetAmount": "Monto meta",
+      "targetDate": "Fecha objetivo",
+      "goal": "Meta",
+      "contributedOn": "Fecha del aporte",
+      "movement": "Movimiento (referencia)"
     },
     "filenames": {
       "export": "finanzas-datos",
@@ -1302,7 +1316,9 @@
         "adjustmentRefused": "El descuadre no se pudo registrar: su fecha es anterior a la apertura o al último cuadre de la cuenta, o la cuenta está archivada.",
         "hasErrors": "El archivo todavía tiene errores. Corrígelos e impórtalo de nuevo.",
         "alreadyCommitting": "Este archivo ya se estaba importando en otra pestaña. Revisa los movimientos antes de importarlo otra vez.",
-        "beforeOpening": "Fecha anterior a la apertura de su cuenta."
+        "beforeOpening": "Fecha anterior a la apertura de su cuenta.",
+        "outOfPlace": "Este nombre existe, pero no en el ámbito que dice la fila.",
+        "noFund": "La fila es del fondo y no tienes un fondo."
       }
     }
   },

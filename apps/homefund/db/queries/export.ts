@@ -8,10 +8,13 @@ import { transactionListConditions } from "@/db/queries/transactions";
 import type { TransactionListFilters } from "@/db/queries/transactions";
 import {
   accounts,
+  budgets,
   categories,
+  goalContributions,
   groupMembers,
   labels,
   recurringRules,
+  savingsGoals,
   transactionLabels,
   transactions,
   transactionSplits,
@@ -30,6 +33,9 @@ const exportTables = {
   labels,
   recurringRules,
   transactions,
+  budgets,
+  goals: savingsGoals,
+  goalContributions,
 } as const;
 
 // A parsed cell holds a resolved name, a scalar, integer cents or nothing; never a
@@ -152,10 +158,23 @@ async function readEntityRows<E extends SheetEntity>(
 
 // The caller's id→name map for one referenced entity, read in the caller's RLS
 // scope so a reference resolves to a name the same scope can read back.
-async function readNameMap(table: typeof accounts | typeof categories | typeof labels): Promise<Map<string, string>> {
+async function readNameMap(
+  table: typeof accounts | typeof categories | typeof labels | typeof savingsGoals,
+): Promise<Map<string, string>> {
   return withUserDb(async (tx) => {
-    const rows = await tx.select({ id: table.id, name: table.name }).from(table);
+    const rows = await tx.select({ id: table.id, name: table.name }).from(table as typeof accounts);
     return new Map(rows.map((row) => [row.id, row.name]));
+  });
+}
+
+// A movement goes by its own key (RF-52): the only one of its names a restore keeps.
+async function readMovementKeys(): Promise<Map<string, string>> {
+  return withUserDb(async (tx) => {
+    const rows = await tx
+      .select({ id: transactions.id, ref: transactions.externalRef })
+      .from(transactions)
+      .where(exists(tx.select({ present: sql`1` }).from(goalContributions).where(eq(goalContributions.transactionId, transactions.id))));
+    return new Map(rows.flatMap((row) => (row.ref !== null ? [[row.id, row.ref] as const] : [])));
   });
 }
 
@@ -256,10 +275,15 @@ function toExportRows<E extends SheetEntity>(
         continue;
       }
 
-      // `placement` has no column of its own: an account naming an owner is
-      // personal, one naming a group is group (RF-60), derived from `ownerUserId`.
-      if (entity === "accounts" && column.field === "ownerUserId") {
+      // `placement` has no column of its own: a row naming an owner is personal, one
+      // naming a group is group (RF-60), derived from `ownerUserId`.
+      if (column.key === "placement") {
         cell[column.key] = value == null ? ACCOUNT_PLACEMENTS[1] : ACCOUNT_PLACEMENTS[0];
+        continue;
+      }
+
+      if (column.key === "contributedOn") {
+        cell[column.key] = toCivilDate(value as Date);
         continue;
       }
 
@@ -287,6 +311,8 @@ export async function readExport(input: ExportInput): Promise<ExportResult> {
   const needsAccounts = requested.some((entity) => referencesEntity(entity, "accounts"));
   const needsCategories = requested.some((entity) => referencesEntity(entity, "categories"));
   const needsLabels = requested.some((entity) => referencesEntity(entity, "labels"));
+  const needsGoals = requested.some((entity) => referencesEntity(entity, "goals"));
+  const needsMovementKeys = requested.some((entity) => referencesEntity(entity, "transactions"));
   const needsSplits = requested.includes("transactions");
 
   // Built once so the rows and their splits are narrowed by the very same set.
@@ -294,7 +320,7 @@ export async function readExport(input: ExportInput): Promise<ExportResult> {
     ? transactionListConditions(input.transactionFilters)
     : [];
 
-  const [sets, accountNames, categoryNames, labelNames, splitCategoryIds, labelIds] = await Promise.all([
+  const [sets, accountNames, categoryNames, labelNames, goalNames, movementKeys, splitCategoryIds, labelIds] = await Promise.all([
     Promise.all(
       requested.map((entity) =>
         readEntityRows(
@@ -310,11 +336,19 @@ export async function readExport(input: ExportInput): Promise<ExportResult> {
     needsAccounts ? readNameMap(accounts) : Promise.resolve(emptyNameMap),
     needsCategories ? readNameMap(categories) : Promise.resolve(emptyNameMap),
     needsLabels ? readNameMap(labels) : Promise.resolve(emptyNameMap),
+    needsGoals ? readNameMap(savingsGoals) : Promise.resolve(emptyNameMap),
+    needsMovementKeys ? readMovementKeys() : Promise.resolve(emptyNameMap),
     needsSplits ? readLinkedIds(transactionSplits, transactionSplits.categoryId, listed) : Promise.resolve(emptyLinkMap),
     needsSplits ? readLinkedIds(transactionLabels, transactionLabels.labelId, listed) : Promise.resolve(emptyLinkMap),
   ]);
 
-  const names: NameMaps = { accounts: accountNames, categories: categoryNames, labels: labelNames };
+  const names: NameMaps = {
+    accounts: accountNames,
+    categories: categoryNames,
+    labels: labelNames,
+    goals: goalNames,
+    transactions: movementKeys,
+  };
   const children: Children = { splitCategoryIds, labelIds };
 
   const result: ExportResult = {};
