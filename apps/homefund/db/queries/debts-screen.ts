@@ -254,7 +254,7 @@ export async function getDebtsScreenData(): Promise<DebtsScreenData> {
     }));
 
   // The earliest named due date carries the consolidated next payment (RF-83):
-  // that row's minimum plus the installments falling due by then, the currency it
+  // that row's minimum alone, its instalments already inside it (RF-136), the currency it
   // bills in, and the debt it belongs to — its id as well as its name, so the row
   // that carries the badge is named rather than matched back by hand. Only a debt
   // that owes in the pocket it bills in competes: one at zero or in credit has
@@ -268,7 +268,7 @@ export async function getDebtsScreenData(): Promise<DebtsScreenData> {
       if (earliest !== null && earliest.date <= row.nextDueDate) return earliest;
       return {
         accountId: row.accountId,
-        amountCents: (row.minimumPaymentCents ?? 0) + row.dueInstallmentsCents,
+        amountCents: row.minimumPaymentCents ?? 0,
         currency: row.currency,
         date: row.nextDueDate,
         name: row.name,
