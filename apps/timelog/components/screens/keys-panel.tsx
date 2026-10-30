@@ -5,11 +5,14 @@ import { useTranslations } from "next-intl";
 
 import { createKey, revokeKey } from "@/app/actions/keys";
 import { keyNameSchema } from "@/lib/forms";
-import { Between, Button, Code, Form, Input, Stack, Text } from "@/components/ui";
+import { Between, Button, Code, Form, Input, Stack, Text, TextLink } from "@/components/ui";
+
+// ActivityWatch with aw-timelog bundled (RT-10): the latest release of our fork.
+const INSTALLER_URL = "https://github.com/WAB-Studio/activitywatch/releases/latest";
 
 export type KeyLine = { id: string; name: string; when: string | null; revoked: boolean };
 
-// «Llaves» (RT-06): create one, see it once with its command, revoke one.
+// «Llaves» (RT-06, RT-10): create one, see it once with its command, revoke one; the installer to paste it in.
 export function KeysPanel({ keys, siteUrl }: { keys: KeyLine[]; siteUrl: string }) {
   const t = useTranslations("time.keys");
   const [name, setName] = useState("");
@@ -51,6 +54,10 @@ export function KeysPanel({ keys, siteUrl }: { keys: KeyLine[]; siteUrl: string 
   return (
     <Stack gap={4}>
       <Text as="p" variant="meta">{t("intro")}</Text>
+      <Stack gap={1}>
+        <Text as="p">{t("install")}</Text>
+        <TextLink href={INSTALLER_URL}>{t("download")} ›</TextLink>
+      </Stack>
       <Form onSubmit={submit}>
         <Input
           aria-label={t("name")}
@@ -74,7 +81,7 @@ export function KeysPanel({ keys, siteUrl }: { keys: KeyLine[]; siteUrl: string 
               {copied ? t("copied") : t("copy")}
             </Button>
           </Between>
-          <Code>{`aw-client timelog --url ${siteUrl} --key ${fresh}`}</Code>
+          <Code>{`py -m aw_client timelog --url ${siteUrl} --key ${fresh}`}</Code>
         </Stack>
       ) : null}
       {keys.length === 0 ? (

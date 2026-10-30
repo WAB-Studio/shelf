@@ -35,7 +35,7 @@ Sand that fell. The screen says how much and where, and judges nothing.
   when nothing arrived.
 - **Semana**: «Del 26 oct al 1 nov» as title, ‹ › beside it; seven rows Monday to Sunday, each with
   its total and a bar against the week's longest day; under them the week's apps as in «Hoy».
-- **Llaves**: a name field and «Crear llave» on top; the new key shown once in mono with «Copiar»
+- **Llaves**: under the intro, one line on the Windows installer and «Descargar para Windows ›»; a name field and «Crear llave» on top; the new key shown once in mono with «Copiar»
   and the command line that uses it; then the keys as rows (name, «usada <cuándo>», «Revocar»).
 - The nav: «Hoy», «Semana», «Llaves», a bar at the foot on the phone, a row above the title on
   the desktop. A day with nothing reads «—».

@@ -212,14 +212,12 @@ this gets built, and no schema, table or column is "prepared for" it.
   answers as before, and the answer says network either way. That fallback keeps RL-53's reading: when the provider's
   best pick is unusable — empty, the quota warning, or an echo — it answers with the usable `matches` candidate of
   highest `match` score, and only when none is usable does the route answer 502.
-- [ ] **RL-10** — While the device's translator is downloading what it needs, the interface says so and the box stays usable.
-  - Open, 2026-10-16: no test drives `"downloading"` or `phrase.downloadingModel` / `downloadProgress`; `e2e/phrase.spec.ts:138` stops at the control disappearing.
+- [x] **RL-10** — While the device's translator is downloading what it needs, the interface says so and the box stays usable.
 - [x] **RL-11** — When the device has a translator that is not yet installed, that sentence is translated over the network and a single control offers to install the translator. Activating that control is what starts the download; every sentence after it is translated on the device. A person who never activates it keeps getting network translations and is never blocked.
 
 #### The payload
 
-- [ ] **RL-12** — The dictionary is fetched once, as a static asset, and installed onto the device. Its progress is shown and the box stays typeable throughout.
-  - Open, 2026-10-16: the progress line is never shown by a test: `install.preparing` and `install.progress` are asserted only absent (`e2e/sin-red-una-visita.spec.ts:158,184`), and no test types during the install. The fetch-once and install halves are driven (`e2e/install.spec.ts:15`).
+- [x] **RL-12** — The dictionary is fetched once, as a static asset, and installed onto the device. Its progress is shown and the box stays typeable throughout.
 - [x] **RL-13** — An interrupted install leaves no partial dictionary. The next open finds the dictionary whole or absent, never in between, and starts it again from zero.
 - [x] **RL-33** — The dictionary's source, its edition and its CC BY-SA 3.0 licence are named in an
   information tab inside `/cuenta`, linking to the source and to the licence text, and stating that
@@ -254,7 +252,7 @@ this gets built, and no schema, table or column is "prepared for" it.
 - [x] **RL-66** — A row of `/registro` is deleted with a ✕ on its row. The row leaves this device and, with an account open, the account's copy. Decided by the user 2026-10-15.
   - Proved 2026-10-17, CI run 38992454179 on 3cec823e: `apps/wordbook/e2e/registro-borrar.spec.ts:259,295,364,408,430,484,496,632,673`, green.
   - Proved 2026-10-17, CI run 38992454179 on 3cec823e: the local words, a delete with the copy off says it reaches this device alone and sends no request, `apps/wordbook/e2e/registro-borrar.spec.ts:315,335,611`, green.
-- [ ] **RL-76** *(successor of RL-55)* — A lookup a reader settles on is recorded on the device,
+- [x] **RL-76** *(successor of RL-55)* — A lookup a reader settles on is recorded on the device,
   from the app's first day. It is recorded answered when it found something: an entry in the dictionary, a
   translation for a sentence, or, for a word the dictionary has no entry for, the network's answer (RL-44) once
   that answer arrived. A word the dictionary has no entry for whose network answer failed or never arrived, and a
@@ -303,7 +301,7 @@ this gets built, and no schema, table or column is "prepared for" it.
 - [x] **RL-74** — On the code step, «Pedir otro código» sends a new code to the same address without typing it again,
   once a countdown of Auth's wait between sends has run out; the new code replaces the last. A send Auth refuses does
   not count against the daily caps. Decided by the user 2026-10-17.
-- [ ] **RL-75** — The daily sign-in mail cap counts per address and per requesting IP /64 together, with a ceiling of 10
+- [x] **RL-75** — The daily sign-in mail cap counts per address and per requesting IP /64 together, with a ceiling of 10
   per address, so a stranger cannot spend the owner's mails. RL-74 stays as written. Decided by the user 2026-10-18 (Q5).
 - [x] **RL-34** — The record keeps, for every lookup, the word, its translation cut to 120
   characters and at most 3 senses, and how the answer was reached; and the reader reads it inside

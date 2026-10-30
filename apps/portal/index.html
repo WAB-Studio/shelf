@@ -13,7 +13,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
-/* Layout: a phone's home screen scaled to the window — soft colour wallpaper, the time large, three white app cards filling the middle. One look for both themes. */
+/* Layout: a phone's home screen scaled to the window — soft colour wallpaper, the time large, four white app cards filling the middle. One look for both themes. */
 :root {
   --card: rgba(255, 255, 255, .92);
   --card-ink: #1D1D1F;
@@ -47,7 +47,8 @@ body {
 .clock span { display: block; margin-top: calc(var(--u) * 1); font-size: max(17px, calc(var(--u) * 2.1)); font-weight: 500; }
 h1 { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
 
-.row { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: max(16px, calc(var(--u) * 2)); width: 100%; max-width: calc(var(--u) * 112); }
+.row { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: max(16px, calc(var(--u) * 2)); width: 100%; max-width: calc(var(--u) * 148); }
+@media (max-width: 1100px) { .row { grid-template-columns: repeat(2, minmax(0, 1fr)); max-width: 760px; } }
 @media (max-width: 760px) { .row { grid-template-columns: 1fr; max-width: 420px; } }
 
 .card {
@@ -98,6 +99,14 @@ h1 { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0
       <span class="ico" style="background:#1C6E5A" aria-hidden="true"><svg viewBox="0 0 34 34" fill="none" stroke="#fff" stroke-width="2.2"><circle cx="17" cy="17" r="3" fill="#fff"/><circle cx="17" cy="17" r="8" opacity=".7"/><circle cx="17" cy="17" r="13" opacity=".4"/></svg></span>
       <h2>GoalLog</h2>
       <p>La bitácora de metas: hoy, la semana y el plan del mes.</p>
+      <span class="more" aria-hidden="true">Abrir ›</span>
+    </a>
+  </li>
+  <li>
+    <a class="card" href="https://timelog-delta.vercel.app">
+      <span class="ico" style="background:#14120f" aria-hidden="true"><svg viewBox="0 0 34 34" fill="none" stroke="#d9a441" stroke-width="2.6" stroke-linecap="round"><path d="M7 10h20M7 17h13M7 24h7"/></svg></span>
+      <h2>TimeLog</h2>
+      <p>El registro de tiempo: cuánto estuvo abierta cada app del PC.</p>
       <span class="more" aria-hidden="true">Abrir ›</span>
     </a>
   </li>
