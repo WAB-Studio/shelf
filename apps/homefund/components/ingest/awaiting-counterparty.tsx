@@ -32,8 +32,10 @@ function AwaitingCard({ row, accounts }: { row: AwaitingCounterpartyRow; account
   const onError = useActionErrorToast();
   const known = row.missingSide === "from" ? row.toAccountId : row.fromAccountId;
   const offered = accounts.filter((account) => account.id !== known && account.canWrite);
-  // A remembered account prefills the choice and never completes on its own (RF-135).
-  const [accountId, setAccountId] = useState(row.proposedAccountId ?? "");
+  // A remembered account prefills the choice and never completes on its own (RF-135); one the person
+  // cannot pick here (read-only, or the known side itself) prefills nothing.
+  const proposed = offered.some((account) => account.id === row.proposedAccountId) ? row.proposedAccountId! : "";
+  const [accountId, setAccountId] = useState(proposed);
   const complete = useAction(completeCounterpartyAction, {
     onSuccess: () => toast.success(t("completed")),
     onError,
@@ -70,7 +72,7 @@ function AwaitingCard({ row, accounts }: { row: AwaitingCounterpartyRow; account
               ))}
             </Select.Content>
           </Select.Root>
-          {row.proposedAccountId !== null && accountId === row.proposedAccountId && (
+          {proposed !== "" && accountId === proposed && (
             <FieldDescription>{t("proposed")}</FieldDescription>
           )}
         </Field>

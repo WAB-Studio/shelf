@@ -15628,6 +15628,7 @@ async function statementImportSuite(): Promise<void> {
   });
   const imported = await tool("import_statement", { accountId: ids.bank, rows: clean, previewKey: second.value?.previewKey });
   const again = await tool("import_statement", { accountId: ids.bank, rows: clean, previewKey: second.value?.previewKey });
+  const fresh = await tool("preview_statement", { accountId: ids.bank, rows: clean });
   const after = await count();
   const [waiting] = await fixtureSql<{ awaiting: boolean }[]>`
     select t.awaiting_counterparty as awaiting from transactions t
@@ -15637,10 +15638,10 @@ async function statementImportSuite(): Promise<void> {
     next("RF-134: an import writes the new lines with their source and links the matched one; a changed line or a repeat writes nothing more"),
     changed.isError && !imported.isError &&
       imported.value?.created === 3 && imported.value?.linked === 1 &&
-      again.value?.created === 0 && again.value?.skipped === 4 &&
+      again.isError && fresh.value?.counts?.already_imported === 4 &&
       after.movements === before.movements + 3 && after.sources === before.sources + 4 &&
       waiting?.awaiting === true,
-    `changed ${JSON.stringify(changed.value)}, imported ${JSON.stringify(imported.value)}, again ${JSON.stringify(again.value)}, counts ${JSON.stringify([before, after])}, awaiting ${waiting?.awaiting}`,
+    `changed ${JSON.stringify(changed.value)}, imported ${JSON.stringify(imported.value)}, again ${JSON.stringify(again.value)}, fresh ${JSON.stringify(fresh.value?.counts)}, counts ${JSON.stringify([before, after])}, awaiting ${waiting?.awaiting}`,
   );
 
   const alien = await tool("preview_statement", { accountId: ids.alien, rows: clean });
@@ -15651,4 +15652,26 @@ async function statementImportSuite(): Promise<void> {
     alien.isError && alienRows?.n === 0,
     `alien ${JSON.stringify(alien.value)}, rows ${alienRows?.n}`,
   );
+
+  const twin = { ...rows[0]!, line: 9, reference: `R9-${tag}` };
+  const mismatched = { line: 10, date: "2026-09-15", description: "PAGO ERRADO", amountCents: -2_000, categoryId: ids.pay };
+  const third = await tool("preview_statement", { accountId: ids.bank, rows: [rows[0], twin, mismatched] });
+  const thirdLines = (third.value?.lines ?? []) as Line[];
+  const lone = [{ line: 1, date: "2026-09-16", description: "RETIRO CAJERO", amountCents: -3_000_000, categoryId: ids.food }];
+  const lonePreview = await tool("preview_statement", { accountId: ids.bank, rows: lone });
+  const both = await Promise.all([
+    tool("import_statement", { accountId: ids.bank, rows: lone, previewKey: lonePreview.value?.previewKey }),
+    tool("import_statement", { accountId: ids.bank, rows: lone, previewKey: lonePreview.value?.previewKey }),
+  ]);
+  const [lonely] = await fixtureSql<{ n: number }[]>`
+    select count(*)::int as n from transactions where from_account_id = ${ids.bank} and description = 'RETIRO CAJERO'`;
+  assert(
+    next("RF-134: a new reference on an imported line's day and amount is new; a category of the wrong kind is invalid; two imports at once write a line once"),
+    thirdLines.find((one) => one.line === 1)?.status === "already_imported" &&
+      thirdLines.find((one) => one.line === 9)?.status === "new" &&
+      thirdLines.find((one) => one.line === 10)?.reason === "category_mismatch" &&
+      lonely?.n === 1,
+    `third ${JSON.stringify(thirdLines)}, concurrent ${JSON.stringify(both.map((one) => one.value))}, written ${lonely?.n}`,
+  );
 }
+

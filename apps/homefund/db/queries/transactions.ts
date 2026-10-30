@@ -28,7 +28,7 @@ import { withUserDb, withUserDbOrTx } from "@/db/session";
 import { stampIs } from "@/db/queries/stamp";
 import type { CurrencyCode } from "@/lib/currency";
 import { pgConstraintName, pgErrorCode } from "@/lib/db-error";
-import { counterpartyPatternKey } from "@/lib/ingest/counterparty-pattern";
+import { learnedPatternKey, proposalFor, type TrustedPattern } from "@/lib/ingest/counterparty-pattern";
 import type { SettlementCurrencies } from "@/lib/validation/transaction";
 
 export type TransactionSplitInput = { categoryId: string; amountCents: number };
@@ -704,13 +704,6 @@ export type AwaitingCounterpartyRow = {
   proposedAccountLabel: string | null;
 };
 
-type TrustedPattern = {
-  patternKey: string;
-  side: "from" | "to";
-  accountId: string;
-  accountLabel: string;
-};
-
 /**
  * Movements waiting for a person (RF-133): `awaiting_counterparty` and
  * `reviewed_at is null`. Naming only one account is NOT this condition on its
@@ -730,6 +723,23 @@ type TrustedPattern = {
  * here, in JS, against that one function's own output — never one lookup per
  * row, and never two implementations of the same rule.
  */
+/**
+ * The caller's trusted patterns as one JSON value (RF-135): `learning` and `ambiguous` propose
+ * nothing. RLS scopes `ingest_counterparties` and `accounts` to the caller, so it needs no owner
+ * predicate; an archived account is never proposed. Matched in JS by `proposalFor`.
+ */
+export const trustedPatternsSql = sql<TrustedPattern[]>`coalesce((
+  select jsonb_agg(jsonb_build_object(
+    'patternKey', c.pattern_key,
+    'side', c.side,
+    'accountId', c.trusted_account_id,
+    'accountLabel', a.name
+  ))
+  from ${ingestCounterparties} c
+  join ${accounts} a on a.id = c.trusted_account_id and a.archived_at is null
+  where c.state = 'trusted'
+), '[]'::jsonb)`;
+
 export async function listAwaitingCounterparty(
   filters: AwaitingCounterpartyFilters = {},
 ): Promise<AwaitingCounterpartyRow[]> {
@@ -750,22 +760,6 @@ export async function listAwaitingCounterparty(
     conditions.push(eq(transactions.createdBy, filters.memberUserId));
   }
 
-  // Trusted only: `learning` and `ambiguous` propose nothing (RF-135). RLS
-  // already scopes `ingest_counterparties` and `accounts` to the caller, so
-  // this needs no owner predicate of its own — the same shape `listSilencedShapes`
-  // already leans on for a subquery over an RLS-scoped table.
-  const trustedPatternsJson = sql<TrustedPattern[]>`coalesce((
-    select jsonb_agg(jsonb_build_object(
-      'patternKey', c.pattern_key,
-      'side', c.side,
-      'accountId', c.trusted_account_id,
-      'accountLabel', a.name
-    ))
-    from ${ingestCounterparties} c
-    join ${accounts} a on a.id = c.trusted_account_id
-    where c.state = 'trusted'
-  ), '[]'::jsonb)`;
-
   const rows = await withUserDb((tx) =>
     tx
       .select({
@@ -778,7 +772,7 @@ export async function listAwaitingCounterparty(
         fromAccountId: transactions.fromAccountId,
         toAccountId: transactions.toAccountId,
         createdBy: transactions.createdBy,
-        trustedPatterns: trustedPatternsJson,
+        trustedPatterns: trustedPatternsSql,
       })
       .from(transactions)
       .where(and(...conditions))
@@ -787,10 +781,8 @@ export async function listAwaitingCounterparty(
 
   return rows.map((row) => {
     const missingSide: "from" | "to" = row.fromAccountId === null ? "from" : "to";
-    const patternKey = counterpartyPatternKey(row.description ?? "");
-    const proposal = row.trustedPatterns.find(
-      (pattern) => pattern.side === missingSide && pattern.patternKey === patternKey,
-    );
+    const patternKey = learnedPatternKey(row.description ?? "");
+    const proposal = proposalFor(row.trustedPatterns, missingSide, row.description ?? "");
 
     return {
       id: row.id,
