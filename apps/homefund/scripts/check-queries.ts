@@ -15227,7 +15227,7 @@ async function reminderMailSuite(): Promise<void> {
   const tag = randomUUID().slice(0, 8);
   const today = todayInBogota();
   const { claimDueReminders } = await import("@/db/queries/reminder-mail");
-  const { mailDueReminders } = await import("@/lib/reminder-run");
+  const { mailDueReminders } = await import("@/lib/reminder-mail");
   const user = await createMembershipFreeUser();
   const accountId = await asUser(user, async () => {
     const { accountId } = await createAccount({

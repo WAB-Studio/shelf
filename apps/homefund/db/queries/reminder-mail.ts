@@ -26,14 +26,14 @@ export async function claimDueReminders(today: string): Promise<ReminderMailTarg
     remind_on: string;
   }>(sql`
     with due as (
-      select p.id, p.remind_on
+      select p.id, p.remind_on, u.email, a.locale
       from finances.planned_payments p
+      -- Only an author with an address to mail is claimed: no row says a mail went out that did not.
+      join auth.users u on u.id = p.created_by and u.email is not null
+      join finances.app_users a on a.id = p.created_by
       where p.status = 'pending'
         and p.remind_on between ${today}::date - 2 and ${today}::date
         and p.due_date >= ${today}::date
-        -- Only an author with an address to mail is claimed: no row says a mail went out that did not.
-        and exists (select 1 from auth.users u where u.id = p.created_by and u.email is not null)
-        and exists (select 1 from finances.app_users a where a.id = p.created_by)
         -- A fund payment reminds its author only while they are still in that fund.
         and (
           p.group_id is null
@@ -49,12 +49,11 @@ export async function claimDueReminders(today: string): Promise<ReminderMailTarg
       on conflict do nothing
       returning planned_payment_id as id, remind_on
     )
-    select c.id, u.email, a.locale, c.description, c.amount_cents::text as amount_cents, c.due_date::text as due_date,
+    select c.id, due.email, due.locale, c.description, c.amount_cents::text as amount_cents, c.due_date::text as due_date,
       claimed.remind_on::text as remind_on, ${settledIn} as currency
     from claimed
+    join due on due.id = claimed.id
     join finances.planned_payments c on c.id = claimed.id
-    join auth.users u on u.id = c.created_by
-    join finances.app_users a on a.id = c.created_by
     left join finances.accounts from_account on from_account.id = c.from_account_id
     left join finances.accounts to_account on to_account.id = c.to_account_id
   `);

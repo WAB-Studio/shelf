@@ -1,8 +1,7 @@
 import { claimDueReminders } from "@/db/queries/reminder-mail";
 import { env } from "@/lib/env";
 import { todayInBogota } from "@/lib/dates";
-import { gmailSender } from "@/lib/reminder-mail";
-import { mailDueReminders } from "@/lib/reminder-run";
+import { gmailSender, mailDueReminders } from "@/lib/reminder-mail";
 
 // RF-141: once a day, each planned payment whose reminder date has come mails its author.
 export async function GET(request: Request) {
