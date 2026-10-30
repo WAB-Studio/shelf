@@ -1492,5 +1492,13 @@
     "back": "Back to Reports",
     "readerOnly": "Whoever manages {account} fixes it.",
     "undo": "Undo"
+  },
+  "reminderMail": {
+    "subject": "Reminder: {name} is due on {due}",
+    "greeting": "Hi,",
+    "body": "A reminder that {name} for {amount} is due on {due}.",
+    "action": "Once you pay it, record it in Payments: {url}",
+    "unnamed": "a planned payment",
+    "footer": "You are getting this because you set a reminder date in HomeFund."
   }
 }

@@ -134,7 +134,7 @@ accounting exports, native apps. None of this gets built or left
 - [x] **RF-160** *(successor of RF-72)* — A budget's spent and remaining amounts derive from the transaction splits that fall in the current period and match its category or any of that category's subcategories, and any account or label narrowing; they are never stored. Filtering movements by a parent category shows its subcategories' movements too. Decided by the user 2026-10-18.
 - [x] **RF-73** — A budget carries an overspend alert threshold as a percentage of its limit; a budget is flagged once its derived spending crosses that threshold.
 - [x] **RF-74** — CRUD for one-off planned payments: a future movement — its accounts, amount, category and due date — with an optional reminder date, kept distinct from recurring rules.
-- [ ] **RF-141** — A planned payment's reminder (RF-74) notifies the person by email on its reminder date. Decided by the user 2026-10-15.
+- [x] **RF-141** — A planned payment's reminder (RF-74) notifies the person by email on its reminder date. Decided by the user 2026-10-15.
 - [x] **RF-161** *(successor of RF-75)* — Settling a planned payment records the transaction it planned, links the two, and marks the planned payment done; while that movement exists the payment cannot be settled again, and a cancelled one is never settled. Deleting the movement that settled a planned payment returns the payment to «Por pagar», unlinked, so it can be settled again. Decided by the user 2026-10-22 (Q4 b).
 - [x] **RF-76** — CRUD for savings goals: a target amount and an optional target date, scoped to a user or a group.
 - [x] **RF-87** — A savings goal's progress — amount saved and amount remaining — derives from its contributions (`goal_contributions`), each an amount set aside virtually with no movement required; it is never stored.
@@ -844,6 +844,7 @@ Principles, not recipes:
 | Language | **next-intl** (`^4.13.7`) | Locale routing, server-side translations, date and number formatting. |
 | Spreadsheets (phase 2) | **ExcelJS** (`exceljs ^4.4.0`) | Reading and writing `.xlsx` with valid options in the template. |
 | Framework | **Next 16.4.1** and **React 19.2.8** (`next`, `react`, `react-dom`, pinned) | Routing, server actions and rendering; the versions the three apps share. |
+| Mail | **Nodemailer** (`nodemailer ^7.0.13`) | RF-141's reminder through the Gmail account Auth already sends from. |
 | Postgres client | **postgres** (`^3.4.9`) | The driver Drizzle runs on, over the Supabase pooler. |
 | Supabase clients | **@supabase/supabase-js** (`^2.112.4`) and **@supabase/ssr** (`^0.12.5`) | The cookie session and the one-time-code check against Auth; `supabase-js` also gives the retryable-error test sign-in uses. |
 | Shared auth | **@repo/supabase-auth** (workspace `*`) | The cookie session and claim verification the apps share, already written and proved. |

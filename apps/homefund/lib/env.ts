@@ -21,6 +21,10 @@ export const env = createEnv({
     // Auth's admin API for the invitation (RF-148). The prefix check rejects a
     // publishable key or a legacy JWT; without it the invitation is a notice.
     SUPABASE_SECRET_KEY: z.string().startsWith("sb_secret_").optional(),
+    // RF-141's reminder mail leaves through the Gmail account Auth already sends from. Without
+    // both, the cron mails nothing and says so.
+    SMTP_USER: z.email().optional(),
+    SMTP_PASS: z.string().min(1).optional(),
   },
   client: {
     NEXT_PUBLIC_SUPABASE_URL: z.url(),
