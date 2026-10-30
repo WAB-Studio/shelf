@@ -12,6 +12,7 @@ import { createAccountAction } from "@/app/actions/accounts";
 import { saveDebtTermsAction } from "@/app/actions/debt-terms";
 import {
   Button,
+  Callout,
   Dialog,
   Field,
   FieldControl,
@@ -208,11 +209,15 @@ function DebtForm({
   const createAccount = useAction(createAccountAction, {
     onError: onActionError,
   });
+  // Why the last submit failed: someone else's terms landed first, or ours did not.
+  const [refusal, setRefusal] = useState<"errors.stale" | "termsNotSaved" | null>(null);
   const saveTerms = useAction(saveDebtTermsAction, {
-    onError: onActionError,
+    onError: (result) => {
+      if (result.error.serverError === "errors.stale") setRefusal("errors.stale");
+      else onActionError(result);
+    },
   });
 
-  const [termsFailed, setTermsFailed] = useState(false);
 
   const isPending = createAccount.isPending || saveTerms.isPending;
 
@@ -249,6 +254,7 @@ function DebtForm({
   }
 
   async function onSubmit(values: DebtFormValues) {
+    setRefusal(null);
     let accountId = createdId ?? account?.accountId ?? values.accountId;
     if (isCreate) {
       // Step one: the account. A liability's opening balance is submitted as a
@@ -276,7 +282,7 @@ function DebtForm({
     // next submit saves terms only (RF-78).
     if (!(await saveTermsFor(values, accountId))) {
       if (isCreate) onCreated(accountId);
-      setTermsFailed(true);
+      setRefusal((current) => current ?? "termsNotSaved");
       return;
     }
 
@@ -287,7 +293,7 @@ function DebtForm({
   return (
     <form onSubmit={form.handleSubmit(onSubmit)} noValidate>
       <FieldGroup>
-        {termsFailed && (
+        {refusal === "termsNotSaved" && (
           <Text as="div" role="alert" size="2" color="red">
             {t("errors.termsNotSaved")}
           </Text>
@@ -697,6 +703,12 @@ function DebtForm({
             </Field>
           )}
         />
+
+        {refusal === "errors.stale" && (
+          <Callout.Root color="red" variant="soft" role="alert">
+            <Callout.Text>{tKey("errors.stale")}</Callout.Text>
+          </Callout.Root>
+        )}
 
         <Field>
           <Flex gap="3" justify="end">

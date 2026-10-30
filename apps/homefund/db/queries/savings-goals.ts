@@ -1,10 +1,11 @@
 import "server-only";
 
-import { desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 
 import { insertRow } from "@/db/insert-row";
 import { goalContributions, savingsGoals, transactions } from "@/db/schema";
 import { withUserDb } from "@/db/session";
+import { staleOrGone, stampIs } from "@/db/queries/stamp";
 import { BASE_CURRENCY } from "@/lib/currency";
 import { todayInBogota } from "@/lib/dates";
 import { TIME_ZONE } from "@/lib/locales";
@@ -29,6 +30,8 @@ export type GoalProgress = {
   requiredMonthlyCents: number | null;
   // Behind the straight line from the day the goal opened to its target date.
   behindPace: boolean;
+  // `updated_at::text` as Postgres prints it; an edit sends it back (RF-156).
+  updatedAt: string;
 };
 
 /**
@@ -80,10 +83,12 @@ export async function listGoalsWithProgress(options?: {
       progress_pct: number;
       required_monthly_cents: string | null;
       behind_pace: boolean;
+      updated_at: string;
     }>(sql`
       with goals as (
         select
           g.id,
+          g.updated_at::text as updated_at,
           g.name,
           g.target_amount_cents,
           g.target_date,
@@ -166,6 +171,7 @@ export async function listGoalsWithProgress(options?: {
             ? null
             : Number(row.required_monthly_cents),
         behindPace: row.behind_pace,
+        updatedAt: row.updated_at,
       };
     });
   });
@@ -258,23 +264,34 @@ export type UpdateGoalArgs = {
   targetAmountCents: number;
   targetDate: string | null;
   accountId: string | null;
+  expectedUpdatedAt?: string;
 };
 
+// Without a stamp the answer is only whether a row was written; with one it may be "stale".
+export async function updateGoal(args: UpdateGoalArgs & { expectedUpdatedAt?: undefined }): Promise<boolean>;
+export async function updateGoal(args: UpdateGoalArgs): Promise<boolean | "stale">;
 export async function updateGoal({
   goalId,
   name,
   targetAmountCents,
   targetDate,
   accountId,
-}: UpdateGoalArgs): Promise<boolean> {
+  expectedUpdatedAt,
+}: UpdateGoalArgs): Promise<boolean | "stale"> {
   return withUserDb(async (tx) => {
     const rows = await tx
       .update(savingsGoals)
       .set({ name, targetAmountCents, targetDate, accountId })
-      .where(eq(savingsGoals.id, goalId))
+      .where(
+        and(
+          eq(savingsGoals.id, goalId),
+          expectedUpdatedAt ? stampIs(savingsGoals.updatedAt, expectedUpdatedAt) : undefined,
+        ),
+      )
       .returning({ id: savingsGoals.id });
 
-    return rows.length > 0;
+    if (rows.length > 0) return true;
+    return expectedUpdatedAt ? staleOrGone(tx, savingsGoals, savingsGoals.id, goalId) : false;
   });
 }
 

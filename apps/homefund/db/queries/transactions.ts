@@ -25,6 +25,7 @@ import {
 } from "@/db/schema";
 import type { Transaction } from "@/db/session";
 import { withUserDb, withUserDbOrTx } from "@/db/session";
+import { stampIs } from "@/db/queries/stamp";
 import type { CurrencyCode } from "@/lib/currency";
 import { pgConstraintName, pgErrorCode } from "@/lib/db-error";
 import { counterpartyPatternKey } from "@/lib/ingest/counterparty-pattern";
@@ -285,10 +286,8 @@ export async function insertTransaction(
 // `stale` is an edit whose form loaded the movement before someone else saved it: nothing written.
 export type TransactionWriteOutcome = "done" | "missing" | "adjustment" | "stale";
 
-// A form's copy of `updated_at::text`, parsed from text inside the SQL: a parameter bound as
-// `timestamptz` travels through a JS `Date` and loses its microseconds (docs/TRAPS.md).
 function stampMatches(expectedUpdatedAt: string) {
-  return sql<boolean>`${transactions.updatedAt} = ${expectedUpdatedAt}::text::timestamptz`;
+  return stampIs(transactions.updatedAt, expectedUpdatedAt);
 }
 
 // Only on a refused write, so the common path pays nothing for it.
