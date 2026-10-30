@@ -319,5 +319,10 @@
     "notes": "{count, plural, one {# nota de la frase} other {# notas de la frase}}",
     "installing": "El diccionario empezó a instalarse",
     "installFailed": "La instalación del diccionario falló"
+  },
+  "theme": {
+    "label": "Tema",
+    "light": "Claro",
+    "dark": "Oscuro"
   }
 }

@@ -2,6 +2,7 @@
 
 import { IBM_Plex_Sans, Newsreader } from "next/font/google";
 import { NextIntlClientProvider, useTranslations } from "next-intl";
+import { THEME_BOOT_SCRIPT } from "@/lib/theme-choice";
 
 import messages from "@/messages/es.json";
 import { AppTheme, Button, Flex, Headword, Separator } from "@/components/ui";
@@ -51,7 +52,10 @@ function GlobalErrorBody({ reset }: { reset: () => void }) {
 
 export default function GlobalError({ reset }: { error: Error & { digest?: string }; reset: () => void }) {
   return (
-    <html lang="es" className={`${sans.variable} ${serif.variable}`}>
+    <html lang="es" className={`${sans.variable} ${serif.variable}`} suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: THEME_BOOT_SCRIPT }} />
+      </head>
       <body>
         <NextIntlClientProvider locale="es" messages={messages}>
           <AppTheme>

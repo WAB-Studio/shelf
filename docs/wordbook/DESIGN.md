@@ -493,9 +493,9 @@ Measured over the built asset, 64,258 entries. Design for these, not for the rar
 - **The theme control has two homes, one per shape of the navigation.** Decided by the user
   2026-09-08, looking at the `BarraSidebar` board: the sidebar's foot on desktop, inside `/cuenta`
   on the phone. Two surfaces, not one, because the bar that carries the phone's navigation has no
-  foot to put a control in and the sidebar does. **This gives RNL-07 a home; it does not build it —
-  RNL-07 stays unticked.** `app/theme.css:14-17` admits today that the reader does not choose: the
-  OS preference alone picks the mode, and no toggle lives there yet.
+  foot to put a control in and the sidebar does. Built 2026-10-30: «Tema» · «Claro» · «Oscuro», a segmented
+  control showing the mode on screen; the system's until one is chosen, which is kept on the device and
+  applied before the first paint.
 
 - **A word's photo is online-only, and it never sits behind a tap.** Decided by the user 2026-09-08,
   on their own words: **«las fotos no es obligatorio para sesiones offline»**. Embedding one photo

@@ -4,6 +4,7 @@ import { headers } from "next/headers";
 import { IBM_Plex_Sans, Newsreader } from "next/font/google";
 import { NextIntlClientProvider } from "next-intl";
 import { getTranslations } from "next-intl/server";
+import { THEME_BOOT_SCRIPT } from "@/lib/theme-choice";
 
 import { ForgetPhotoCredits } from "@/components/forget-photo-credits";
 import { RegisterServiceWorker } from "@/components/register-service-worker";
@@ -73,7 +74,11 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
   }
 
   return (
-    <html lang="es" className={`${sans.variable} ${serif.variable}`}>
+    // `data-theme` is set by the script below before hydration (RNL-07), so the server's <html> never carries it.
+    <html lang="es" className={`${sans.variable} ${serif.variable}`} suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: THEME_BOOT_SCRIPT }} />
+      </head>
       <body>
         <NextIntlClientProvider>
           <AppTheme>
