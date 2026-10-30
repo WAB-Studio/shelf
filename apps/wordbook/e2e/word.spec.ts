@@ -784,3 +784,15 @@ test("a proper noun is labelled a proper noun, and the word «pronombre» is dra
   await expect(page.getByText(messages.word.pos.pn, { exact: true }).first()).toBeVisible();
   await expect(page.getByText("pronombre", { exact: true })).toHaveCount(0);
 });
+
+test("RL-01: the box holds the focus on open, and still holds it once the dictionary is in", async ({ page }) => {
+  await deleteTranslator(page);
+  await page.goto("/");
+  const searchBox = page.getByRole("textbox", { name: messages.search.label });
+  await expect(searchBox).toBeFocused();
+  await expect(page.locator('[aria-busy="false"]').first()).toBeAttached();
+  await expect(searchBox).toBeFocused();
+  // Typing straight away, with no tap first, answers.
+  await page.keyboard.type("throughout");
+  await expect(page.getByRole("heading", { name: "throughout" })).toBeVisible({ timeout: 5000 });
+});

@@ -207,3 +207,37 @@ test("«Semanas» under the month's header opens each week it touches; this week
     await expect(page).toHaveURL(new RegExp(`/semana\\?semana=${second}$`));
   });
 });
+
+test("a month with no goal open draws no «Semanas»; the month that had one does (RP-145)", async ({
+  browser,
+  baseURL,
+  db,
+  person,
+}) => {
+  const twoAgo = previousMonth(lastMonth);
+  // Opened two months ago, horizon on the first of last month: open in that month alone.
+  const [ended] = await db<{ id: string }[]>`
+    insert into goals.goals (user_id, name, horizon, created_at)
+    values (${person.id}, ${`Terminada ${Date.now()}`}, ${lastMonth}::date, ${`${key(twoAgo)}-10T17:00:00Z`})
+    returning id
+  `;
+  const context = await browser.newContext({ storageState: person.sessionFile, baseURL: baseURL! });
+  try {
+    const page = await context.newPage();
+    await page.setViewportSize({ width: 390, height: 900 });
+    const links = page.getByRole("link", { name: /^Semana del / });
+
+    // This month is always reachable; any other month past the span lands on its last.
+    await page.goto("/mes");
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText(title(thisMonth));
+    await expect(page.getByText("Semanas", { exact: true })).toHaveCount(0);
+    await expect(links).toHaveCount(0);
+
+    await page.goto(`/mes?mes=${key(twoAgo)}`);
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText(title(twoAgo));
+    await expect(links).toHaveCount(mondaysTouching(twoAgo).length);
+  } finally {
+    await context.close();
+    await db`delete from goals.goals where id = ${ended.id}`;
+  }
+});
