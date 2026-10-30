@@ -15306,6 +15306,9 @@ async function reminderMailSuite(): Promise<void> {
     next("RF-141: a reminder moved to another date is mailed again"),
     moved.length === 1 && moved[0]?.id === dueToday && moved[0]?.amountCents === 4_500_000 && moved[0]?.currency === "COP",
     `moved ${JSON.stringify(moved)}`,
+  );
+}
+
 async function householdContributionSuite(): Promise<void> {
   console.log("");
   const BILL = 4_500_000;
