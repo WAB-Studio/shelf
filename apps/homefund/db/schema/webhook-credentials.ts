@@ -38,6 +38,9 @@ export const webhookCredentials = finances.table(
     rateWindowStartedAt: timestamp({ withTimezone: true }),
     rateCount: integer().notNull().default(0),
     lastUsedAt: timestamp({ withTimezone: true }),
+    // What the key opens, fixed when it is minted: `ingest` the webhook (RF-90), `mcp` Claude's
+    // door (RF-144). A key never opens the other, so a forwarder's key reads nothing.
+    purpose: text().notNull().default("ingest"),
     revokedAt: timestamp({ withTimezone: true }),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
@@ -47,6 +50,7 @@ export const webhookCredentials = finances.table(
     check("webhook_credentials_token_hash_length", sql`length(${table.tokenHash}) = 64`),
     check("webhook_credentials_rate_limit_positive", sql`${table.rateLimitPerMin} > 0`),
     check("webhook_credentials_rate_count_non_negative", sql`${table.rateCount} >= 0`),
+    check("webhook_credentials_purpose", sql`${table.purpose} in ('ingest', 'mcp')`),
     // The resolver keys on the token hash, so it is unique across every credential.
     uniqueIndex("webhook_credentials_token_hash_unique").on(table.tokenHash),
     index("webhook_credentials_owner_user_id_idx").on(table.ownerUserId),

@@ -15423,9 +15423,13 @@ async function mcpDoorSuite(): Promise<void> {
     track("accounts", id);
   }
   const { id: credentialId, token } = await asUser(owner, () =>
-    issueWebhookCredential({ name: `Harness rf144 ${tag}`, defaultAccountId: null, defaultCategoryId: null }),
+    issueWebhookCredential({ name: `Harness rf144 ${tag}`, purpose: "mcp", defaultAccountId: null, defaultCategoryId: null }),
   );
   keep("webhook_credentials", credentialId);
+  const { id: ingestId, token: ingestToken } = await asUser(owner, () =>
+    issueWebhookCredential({ name: `Harness rf144 webhook ${tag}`, defaultAccountId: null, defaultCategoryId: null }),
+  );
+  keep("webhook_credentials", ingestId);
 
   let counter = 0;
   const rpc = async (bearer: string | null, method: string, params?: unknown) => {
@@ -15450,16 +15454,18 @@ async function mcpDoorSuite(): Promise<void> {
     return { isError: body?.result?.isError === true, value: JSON.parse(body?.result?.content?.[0]?.text ?? "null") };
   };
 
-  const [anonymous, forged, listed] = await Promise.all([
+  const [anonymous, forged, webhookKey, listed] = await Promise.all([
     rpc(null, "tools/list"),
     rpc(`whk_${randomUUID()}`, "tools/list"),
+    rpc(ingestToken, "tools/list"),
     rpc(token, "tools/list"),
   ]);
   const names = (listed.body?.result?.tools ?? []).map((one: { name: string }) => one.name).sort();
   assert(
-    next("RF-144: /mcp answers 401 with no key or an unknown one, and lists its tools to a live key"),
-    anonymous.status === 401 && forged.status === 401 && JSON.stringify(names) === JSON.stringify(["list_accounts", "review_month"]),
-    `no key ${anonymous.status}, unknown key ${forged.status}, tools ${JSON.stringify(names)}`,
+    next("RF-144: /mcp answers 401 with no key, an unknown one or a webhook's, and lists its tools to a key for Claude"),
+    anonymous.status === 401 && forged.status === 401 && webhookKey.status === 401 &&
+      JSON.stringify(names) === JSON.stringify(["list_accounts", "review_month"]),
+    `no key ${anonymous.status}, unknown key ${forged.status}, webhook key ${webhookKey.status}, tools ${JSON.stringify(names)}`,
   );
 
   const accounts = await tool("list_accounts");
@@ -15485,5 +15491,17 @@ async function mcpDoorSuite(): Promise<void> {
     next("RF-144: a revoked key is shut out of /mcp at once"),
     revoked.status === 401,
     `revoked key answered ${revoked.status}`,
+  );
+
+  await fixtureSql`update webhook_credentials set revoked_at = null where id = ${credentialId}`;
+  const openMonth = await tool("review_month", { month: todayInBogota().slice(0, 7) });
+  const [ingestWindow] = await fixtureSql<{ rate_count: number }[]>`
+    select rate_count from webhook_credentials where id = ${ingestId}`;
+  await fixtureSql`update webhook_credentials set rate_limit_per_min = 1, rate_count = 1, rate_window_started_at = now() where id = ${credentialId}`;
+  const throttled = await rpc(token, "tools/list");
+  assert(
+    next("RF-144: an open month is refused; a key over its window answers 429, not 401; /mcp never spends a webhook key's window"),
+    openMonth.isError && throttled.status === 429 && ingestWindow?.rate_count === 0,
+    `open month isError ${openMonth.isError}, throttled /mcp ${throttled.status}, webhook key's count ${ingestWindow?.rate_count}`,
   );
 }

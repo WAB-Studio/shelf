@@ -2401,7 +2401,7 @@ async function checkWebhookCredentialPolicies() {
             throttled: boolean;
           }[]
         >`select owner_user_id, default_account_id, default_category_id, throttled
-          from private.resolve_webhook_credential(${hash})`;
+          from private.resolve_webhook_credential(${hash}, 'ingest')`;
 
       await enterUserContext(tx, subject);
 
@@ -4525,7 +4525,7 @@ async function checkWebhookCredentialOwnerWrites() {
       // and the resolver on the base connection stops answering for the hash either way.
       await tx`reset role`;
       const resolved = await tx<{ owner_user_id: string }[]>`
-        select owner_user_id from private.resolve_webhook_credential(${ownerHash})`;
+        select owner_user_id from private.resolve_webhook_credential(${ownerHash}, 'ingest')`;
       assert(labels[3], resolved.length === 0, `resolver rows = ${resolved.length}`);
 
       // 156: the UPDATE grant lists name, the defaults, the rate limit and revoked_at and nothing else.
@@ -4956,7 +4956,7 @@ async function checkIngestMerchantTrust() {
         values ('rls ingest resolver id', ${tokenHash}) returning id`;
       await tx`reset role`;
       const resolved = await tx<{ id: string; owner_user_id: string }[]>`
-        select id, owner_user_id from private.resolve_webhook_credential(${tokenHash})`;
+        select id, owner_user_id from private.resolve_webhook_credential(${tokenHash}, 'ingest')`;
       assert(
         labels[6],
         resolved.length === 1 &&
@@ -5311,6 +5311,8 @@ const UPDATE_GRANT_GAPS: Record<string, string[]> = {
     "id",
     "last_used_at",
     "owner_user_id",
+    // Fixed at minting: a key never changes what it opens.
+    "purpose",
     "rate_count",
     "rate_window_started_at",
     "token_hash",

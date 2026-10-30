@@ -1409,7 +1409,8 @@
       "scopeViolation": "That category belongs to another scope than the account. Pick a fund category for a fund account, or one of yours for your own account."
     },
     "mcpHeading": "Connect Claude",
-    "mcpDescription": "Add HomeFund as an HTTP MCP connector with this URL and one of your credentials in the «Authorization: Bearer» header. Claude sees your accounts and «Review the month» with your own permissions; revoking the credential disconnects it."
+    "mcpDescription": "Add HomeFund as an HTTP MCP connector with this URL and a key for Claude in the «Authorization: Bearer» header. A webhook key does not open this door. Claude sees your accounts and «Review the month» with your own permissions; revoking the key disconnects it.",
+    "mcpIssue": "Create a key for Claude"
   },
   "ingest": {
     "title": "Inbox",
@@ -1516,7 +1517,8 @@
     },
     "errors": {
       "unauthorized": "The key is not valid or was revoked.",
-      "unknown": "It could not be done. Try again."
+      "unknown": "It could not be done. Try again.",
+      "openMonth": "Only a closed month is reviewed: ask for one before the current month."
     }
   }
 }

@@ -1409,7 +1409,8 @@
       "scopeViolation": "Esa categoría es de otro ámbito que la cuenta. Elige una del fondo para una cuenta del fondo, o una tuya para una cuenta tuya."
     },
     "mcpHeading": "Conectar con Claude",
-    "mcpDescription": "Agrega HomeFund como conector MCP de tipo HTTP con esta URL y una de tus credenciales en la cabecera «Authorization: Bearer». Claude verá tus cuentas y «Revisar el mes» con tus mismos permisos; revocar la credencial lo desconecta."
+    "mcpDescription": "Agrega HomeFund como conector MCP de tipo HTTP con esta URL y una clave para Claude en la cabecera «Authorization: Bearer». Una clave de webhook no abre esta puerta. Claude ve tus cuentas y «Revisar el mes» con tus mismos permisos; revocar la clave lo desconecta.",
+    "mcpIssue": "Crear clave para Claude"
   },
   "ingest": {
     "title": "Bandeja",
@@ -1516,7 +1517,8 @@
     },
     "errors": {
       "unauthorized": "La clave no es válida o fue revocada.",
-      "unknown": "No se pudo completar. Inténtalo de nuevo."
+      "unknown": "No se pudo completar. Inténtalo de nuevo.",
+      "openMonth": "Solo se revisa un mes cerrado: pide uno anterior al mes en curso."
     }
   }
 }

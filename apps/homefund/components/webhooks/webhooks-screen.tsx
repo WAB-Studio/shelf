@@ -7,6 +7,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 
 import { revokeWebhookCredentialAction } from "@/app/actions/webhook-credentials";
+import { ClaudeKey } from "@/components/webhooks/claude-key";
 import { WebhookCredentialDialog } from "@/components/webhooks/webhook-credential-dialog";
 import { WebhooksTable } from "@/components/webhooks/webhooks-table";
 import {
@@ -284,6 +285,7 @@ export function WebhooksScreen({
           <Text size="2" color="gray">
             {t("mcpDescription")}
           </Text>
+          <ClaudeKey />
         </Flex>
       </Card>
 

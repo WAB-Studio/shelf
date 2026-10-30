@@ -17,6 +17,8 @@ import pkg from "../../package.json";
 
 export const MCP_URL = `${env.NEXT_PUBLIC_SITE_URL.replace(/\/+$/, "")}/mcp`;
 
+export const RESOURCE_METADATA_PATH = "/.well-known/oauth-protected-resource/mcp";
+
 // A tool answers outside a request, where next-intl's request config does not run.
 const t = createTranslator({ locale: "es", messages: { mcp: es.mcp }, namespace: "mcp" });
 
@@ -73,7 +75,12 @@ function registerReadTools(server: McpServer): void {
       inputSchema: z.object({ month: MONTH.optional().describe(t("tools.monthParam")) }),
       annotations: { readOnlyHint: true },
     },
-    (input: { month?: string }, ctx) => run(ctx, () => getMonthReview(input.month ?? lastClosedMonth())),
+    (input: { month?: string }, ctx) => {
+      const month = input.month ?? lastClosedMonth();
+      // A month still open is not reviewed: its items could still change (RF-155 reviews a closed month).
+      if (month > lastClosedMonth()) return Promise.resolve(text({ error: t("errors.openMonth") }, true));
+      return run(ctx, () => getMonthReview(month));
+    },
   );
 }
 

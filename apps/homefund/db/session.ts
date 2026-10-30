@@ -113,17 +113,5 @@ export async function withImpersonatedDb<T>(
   // This helper must never run without a resolved user id: no fallback, no anon.
   if (!userId) throw new Error("withImpersonatedDb called without a user id");
 
-  const claims = JSON.stringify({
-    sub: userId,
-    role: "authenticated",
-    aud: "authenticated",
-  });
-
-  return db.transaction(async (tx) => {
-    await tx.execute(
-      settleSessionSql({ claims, searchPath: "finances, public" }),
-    );
-
-    return fn(tx);
-  });
+  return actAsCredentialOwner(userId, () => withUserDb(fn));
 }

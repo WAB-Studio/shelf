@@ -547,6 +547,13 @@
       "when": 1793398532530,
       "tag": "0077_a_household_bill_is_a_contribution",
       "breakpoints": true
+    },
+    {
+      "idx": 78,
+      "version": "7",
+      "when": 1793400832781,
+      "tag": "0078_a_key_opens_one_door",
+      "breakpoints": true
     }
   ]
 }
