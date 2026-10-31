@@ -22,6 +22,7 @@ import {
   Box,
   Button,
   ConfirmDialog,
+  CopyField,
   Dialog,
   EmptyState,
   Flex,
@@ -143,11 +144,13 @@ export function InboxScreen({
   awaiting,
   shapes,
   options,
+  ingestUrl,
 }: {
   deliveries: PendingDeliveryRow[];
   awaiting: AwaitingCounterpartyRow[];
   shapes: SilencedShapeRow[];
   options: TransactionFormOptions;
+  ingestUrl: string;
 }) {
   const t = useTranslations("ingest");
   const tKey = useTranslations();
@@ -235,7 +238,29 @@ export function InboxScreen({
   const reviewing = deliveries.find((one) => one.id === reviewId) ?? null;
 
   const emptyState = (
-    <EmptyState title={t("emptyTitle")} description={t("emptyDescription")} />
+    <EmptyState
+      title={t("emptyTitle")}
+      description={t("emptyDescription")}
+      action={
+        <Flex direction="column" gap="3" width="100%" maxWidth="480px">
+          <CopyField
+            id="inbox-ingest-url"
+            label={t("emptyAddressLabel")}
+            value={ingestUrl}
+            copyLabel={t("copy")}
+            copiedLabel={t("copied")}
+            failedLabel={t("copyFailed")}
+          />
+          <Flex direction="column" gap="1">
+            {[1, 2, 3].map((step) => (
+              <Text key={step} size="2" color="gray">
+                {step}. {t(`emptyStep${step}` as "emptyStep1")}
+              </Text>
+            ))}
+          </Flex>
+        </Flex>
+      }
+    />
   );
 
   return (
