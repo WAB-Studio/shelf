@@ -388,8 +388,12 @@ export function formatAmountTyping(
   const headDigits = head.replace(/\D/g, "");
   const ownGroup = lastMark !== -1 && raw[lastMark] === groupMark;
 
+  // Both marks in the text settle it: the last one is the decimal, the other the group.
+  const bothMarks = marks.includes(".") && marks.includes(",");
+
   let isDecimal = false;
-  if (lastMark !== -1) {
+  if (bothMarks) isDecimal = true;
+  else if (lastMark !== -1) {
     if (tail.length <= 1) isDecimal = !ownGroup || marks.length === 1;
     else if (tail.length === 2) isDecimal = !ownGroup;
     else if (tail.length === 3) isDecimal = headDigits.replace(/^0+/, "") === "";

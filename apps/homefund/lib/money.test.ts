@@ -200,3 +200,16 @@ test("amountToInput writes the locale's decimal mark and parseAmount reads it ba
     assert.equal(parseAmount(amountToInput(1_250, "COP", locale)), 1_250);
   }
 });
+
+// With both marks in the text the last is the decimal and the other the group, in either language.
+test("formatAmountTyping reads a pasted figure with both marks by its last mark", () => {
+  const typed = (raw: string, locale: string) => formatAmountTyping(raw, raw.length, locale).text;
+  assert.equal(typed("1,234.56", "es"), "1.234,56");
+  assert.equal(parseAmount(typed("1,234.56", "es")), 123_456);
+  assert.equal(typed("1.234,56", "en"), "1,234.56");
+  assert.equal(parseAmount(typed("1.234,56", "en")), 123_456);
+  assert.equal(typed("1.234,56", "es"), "1.234,56");
+  assert.equal(typed("1,234.56", "en"), "1,234.56");
+  assert.equal(typed("1,234,567.5", "es"), "1.234.567,5");
+  assert.equal(typed("1.234.567,5", "en"), "1,234,567.5");
+});
