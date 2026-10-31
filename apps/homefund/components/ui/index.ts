@@ -18,6 +18,8 @@ export {
 } from "@radix-ui/themes";
 
 export { Columns } from "./columns";
+export { Mosaic, MosaicTile } from "./mosaic";
+export { Ring } from "./ring";
 export { DateInput } from "./date-input";
 export { ProportionBar, type ProportionSegment } from "./proportion-bar";
 

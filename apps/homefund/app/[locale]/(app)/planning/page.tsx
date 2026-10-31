@@ -11,7 +11,10 @@ import { getUserGroup } from "@/db/queries/groups";
 import { listPlannedPayments } from "@/db/queries/planned-payments";
 import { listRecurringRules } from "@/db/queries/recurring-rules";
 import { listGoalsWithProgress } from "@/db/queries/savings-goals";
+import { getTransactionFormOptions } from "@/db/queries/transaction-form";
 import { civilDateToDate } from "@/lib/dates";
+import { categoryNamesById } from "@/lib/fund/category-names";
+import { nearestLimit } from "@/lib/fund/glance";
 import { formatMoney } from "@/lib/money";
 import { routing } from "@/i18n/routing";
 
@@ -54,7 +57,7 @@ export default async function PlanningPage(
   if (!hasLocale(routing.locales, locale)) notFound();
 
 
-  const [budgets, goals, payments, debts, rules, group, t, format] =
+  const [budgets, goals, payments, debts, rules, group, options, t, format, tc] =
     await Promise.all([
       listBudgetsWithStatus(),
       listGoalsWithProgress(),
@@ -62,9 +65,15 @@ export default async function PlanningPage(
       getDebtsScreenData(),
       listRecurringRules(),
       getUserGroup(),
+      getTransactionFormOptions(),
       getTranslations({ locale, namespace: "planning" }),
       getFormatter({ locale }),
+      getTranslations({ locale, namespace: "categories" }),
     ]);
+
+  const categoryNames = categoryNamesById(options.categories, (name) =>
+    tc("scopedName", { name }),
+  );
 
   // Every summary is derived here from the same reads the areas use; money is
   // formatted for display only, never re-stored, and cents stay integer. A
@@ -154,6 +163,21 @@ export default async function PlanningPage(
         paymentsSummary={paymentsSummary}
         debtsSummary={debtsSummary}
         recurringSummary={recurringSummary}
+        budgetsTop={nearestLimit(budgets, 5)}
+        budgetNames={categoryNames}
+        goal={goals[0] ?? null}
+        payments={payments.slice(0, 3)}
+        debtsTotal={total}
+        debtsNext={
+          debts.totals.nextPayment !== null
+            ? t("debtsNext", {
+                date: format.dateTime(civilDateToDate(debts.totals.nextPayment.date), {
+                  day: "numeric",
+                  month: "short",
+                }),
+              })
+            : null
+        }
       />
     </Page>
   );

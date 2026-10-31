@@ -14,7 +14,6 @@ import {
 import { BudgetFormDialog } from "@/components/planning/budget-form-dialog";
 import { BudgetsTable } from "@/components/planning/budgets-table";
 import type { BudgetTableRow } from "@/components/planning/budgets-table";
-import { PlanningSubNav } from "@/components/planning/planning-sub-nav";
 import {
   Box,
   Button,
@@ -223,9 +222,6 @@ export function BudgetsScreen({
         actions={!archived && budgets.length > 0 ? addButton : undefined}
       />
 
-      <Box display={{ initial: "none", md: "block" }}>
-        <PlanningSubNav />
-      </Box>
 
       {/* One left edge with the header and the table: the band they carry from `md`. */}
       <Flex direction="column" gap="4" px={{ initial: "0", md: "6" }} align={{ initial: "stretch", sm: "start" }}>

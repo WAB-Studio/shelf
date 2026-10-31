@@ -22,7 +22,6 @@ import { GoalContributeDialog } from "@/components/planning/goal-contribute-dial
 import { GoalContributionsDialog } from "@/components/planning/goal-contributions-dialog";
 import { GoalFormDialog } from "@/components/planning/goal-form-dialog";
 import { GoalsTable } from "@/components/planning/goals-table";
-import { PlanningSubNav } from "@/components/planning/planning-sub-nav";
 import {
   Badge,
   Box,
@@ -286,9 +285,6 @@ export function GoalsScreen({
         />
       </Box>
 
-      <Box display={{ initial: "none", md: "block" }}>
-        <PlanningSubNav />
-      </Box>
 
       {/* The band the header and the table carry from `lg` up, where the page
           hands the gutter over; below it the page's own padding still holds. */}

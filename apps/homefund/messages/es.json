@@ -681,7 +681,12 @@
     "recurringTitle": "Recurrentes",
     "recurringSummary": "{count, plural, one {# regla · {concept} el {date}} other {# reglas · próxima {concept} el {date}}}",
     "recurringEmpty": "Sin reglas activas",
-    "nav": "Secciones de planeación"
+    "nav": "Secciones de planeación",
+    "over": "Superado",
+    "spentOf": "{spent} de {limit}",
+    "goalLeft": "Faltan {amount}",
+    "goalLeftPace": "Faltan {amount} · {pace}/mes",
+    "debtsNext": "Próximo pago el {date}"
   },
   "budgets": {
     "ofLimit": " / {amount}",
