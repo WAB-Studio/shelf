@@ -77,6 +77,8 @@
       "adv": "adverbio",
       "phraseologicalUnit": "locución"
     },
+    "rareMore": "Ver {count, plural, one {# sentido poco usado} other {# sentidos poco usados}}",
+    "rareLess": "Ocultar los sentidos poco usados",
     "translationsMore": "ver {count} más",
     "translationsLess": "ver menos"
   },

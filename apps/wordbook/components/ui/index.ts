@@ -25,6 +25,8 @@ export { Figure } from "./figure";
 
 export { Band } from "./band";
 
+export { Highlight } from "./highlight";
+
 export { Wordmark } from "./wordmark";
 
 export { Separator } from "./separator";
