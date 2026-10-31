@@ -92,7 +92,7 @@ export function MoveGoalAction({ goalId, name, tree: nodes, today }: MoveGoalAct
 
   return (
     <>
-      <Button variant="outline" block onClick={openSheet}>
+      <Button variant="quiet" block onClick={openSheet}>
         {t("tree.goal.move")}
       </Button>
       <Sheet open={open} onOpenChange={setOpen} label={name} title={t("tree.move.title")}>

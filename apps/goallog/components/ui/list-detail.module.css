@@ -13,7 +13,7 @@
   display: none;
 }
 
-@media (min-width: 1024px) {
+@media (min-width: 768px) {
   .frame {
     display: grid;
     grid-template-columns: 320px minmax(0, 1fr);

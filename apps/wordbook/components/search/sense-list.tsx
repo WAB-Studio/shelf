@@ -19,6 +19,7 @@ import {
   Text,
   TapTarget,
 } from "@/components/ui";
+import { TranslationList } from "@/components/translations/translation-list";
 import { GeneratedText, type GeneratedTextState } from "./generated-text";
 import { NetworkAnswer, type NetworkAnswerState } from "./network-answer";
 
@@ -205,7 +206,7 @@ function SenseDetail({
         <Text size="1" color="gray">
           {t("translations")}
         </Text>
-        <Text variant="translation">{sense.translations.join(", ")}</Text>
+        <TranslationList items={sense.translations} />
       </Flex>
       {!compact && sense.definition !== null && (
         <Flex direction="column" data-definition-block="">
@@ -215,7 +216,7 @@ function SenseDetail({
               <Text variant="definitionLabel" muted>
                 {t("definitionEnglish")}
               </Text>
-              <Text size="2" serif muted english>
+              <Text size="2" muted english>
                 {sense.definition}
               </Text>
             </Flex>

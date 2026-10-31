@@ -39,7 +39,7 @@ test("the brief names the goal, what was done in the last seven days with its no
   });
   assert.match(brief, /^Estoy siguiendo mi meta «Inglés B2» en GoalLog\./);
   assert.match(brief, /Nota de la meta: Examen en marzo/);
-  assert.match(brief, /Fase actual: Gramática, hasta el 30 nov\./);
+  assert.match(brief, /Fase actual: Gramática \(hasta el 30 nov\)\./);
   assert.match(brief, /Este mes llevo 4 h de 10 h\./);
   assert.match(brief, /- 26 oct: Lectura cap\. 1 \(nota: costó el vocabulario\)\n- 27 oct: Lectura cap\. 2/);
   assert.doesNotMatch(brief, /Diagnóstico/, "a task done eight days ago is out of the brief");
@@ -92,4 +92,15 @@ test("a busy week keeps its latest days and says how many more came before", () 
   assert.match(brief, /- … y 3 más antes/);
   assert.doesNotMatch(brief, /Hecha 00/);
   assert.match(brief, /Hoy es 28 oct\./, "the closing question is never cut");
+});
+
+test("a commitment marked today counts as done, and a phase ending in a full stop leaves no «.,»", () => {
+  const brief = claudeBrief({
+    ...base,
+    phase: { name: "Perder el miedo a hablar sin congelarse.", endsOn: "2026-11-30" },
+    marked: [{ day: "2026-10-28", name: "Anki" }],
+  });
+  assert.doesNotMatch(brief, /no anoté nada hecho/);
+  assert.match(brief, /- 28 oct: Anki/);
+  assert.match(brief, /congelarse \(hasta el 30 nov\)\./);
 });

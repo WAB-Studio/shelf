@@ -19,7 +19,7 @@ body {
    same design inverted. The class comes from the pre-paint script, never
    from a media query, so a chosen face survives the device's own setting. */
 .light {
-  --pulsar-ground: #edeff2;
+  --pulsar-ground: #f4f5f8;
   --pulsar-raised: #ffffff;
   --pulsar-line: #dce1e7;
   --pulsar-border: #c7ced7;
@@ -28,8 +28,17 @@ body {
   --pulsar-muted: #5e6874;
   --pulsar-quiet: #8a939e;
   --pulsar-control-edge: #8a939e;
-  --pulsar-accent: #1c6e5a;
-  --pulsar-accent-soft: #dceae5;
+  /* Tangerine, burnt enough to carry white: #ffffff on accent 5.18:1; accent
+     on raised 5.18:1, on ground 4.75:1, on soft 4.5+ (ratios in
+     docs/goallog/DESIGN.md "Naranja y marino"). */
+  --pulsar-accent: #c2410c;
+  --pulsar-accent-soft: #fff3ec;
+  /* A destructive act: 6.57:1 on raised, 6.03 on ground. */
+  --pulsar-danger: #b42318;
+  /* The brand block: the desktop rail. Both faces share the navy family. */
+  --pulsar-brand: #0b1f3a;
+  --pulsar-brand-soft: #1b3560;
+  --pulsar-brand-line: #26416b;
   --pulsar-today: #e3e8ee;
   --pulsar-on-accent: #ffffff;
   --pulsar-scrim: rgba(18, 23, 28, 0.34);
@@ -45,8 +54,16 @@ body {
   --pulsar-muted: #949ea9;
   --pulsar-quiet: #5c666f;
   --pulsar-control-edge: #626c77;
-  --pulsar-accent: #4fbea0;
-  --pulsar-accent-soft: #17332c;
+  --pulsar-accent: #ff8a4c;
+  --pulsar-accent-soft: #3a2012;
+  /* 9.20:1 on ground, 8.55 on raised. */
+  --pulsar-danger: #ff9b92;
+  /* Lifted from #07142a, which vanished on the ground: navy stays a brand block
+     here, 1.20:1 against it, ink 14.22, muted 7.74, sky 9.33 on it; ink 9.03,
+     sky 5.92, muted 4.91 on the active #1f4180 (docs/goallog/DESIGN.md). */
+  --pulsar-brand: #0e2347;
+  --pulsar-brand-soft: #1f4180;
+  --pulsar-brand-line: #2a4778;
   --pulsar-today: #1e252c;
   --pulsar-on-accent: #0f1317;
   /* Darker than the dark ground on purpose: a sheet is raised, and it has to
@@ -55,23 +72,31 @@ body {
 }
 
 /* docs/goallog/DESIGN.md "Type" — a figure is set in mono, a sentence in
-   Archivo; the section label, screen title, commitment name and measure
+   Archivo; a title is set in Archivo Black (`--font-display`), one weight, so
+   its weights below are 400; the section label, screen title, commitment name and measure
    each carry their own size so no screen invents one. */
 :root {
-  --pulsar-text-label-size: 11px;
-  --pulsar-text-label-tracking: 0.14em;
-  --pulsar-text-title-size: 27px;
-  --pulsar-text-title-weight: 600;
+  --pulsar-brand-ink: #f1f5fb;
+  --pulsar-brand-ink-secondary: #cbd6e6;
+  --pulsar-brand-muted: #a9b8cf;
+  /* The one highlight: sky, 9.91:1 on the brand navy. Never text on white. */
+  --pulsar-highlight: #7dd3fc;
+  --pulsar-text-label-size: 14px;
+  --pulsar-text-label-tracking: 0.02em;
+  --pulsar-text-title-size: 30px;
+  --pulsar-text-title-weight: 400;
   --pulsar-text-title-tracking: -0.02em;
-  --pulsar-text-title-size-wide: 41px;
-  --pulsar-text-title-weight-wide: 650;
+  --pulsar-text-title-size-wide: 44px;
+  --pulsar-text-title-weight-wide: 400;
   --pulsar-text-title-tracking-wide: -0.03em;
   --pulsar-text-name-size: 16px;
   --pulsar-text-name-weight: 500;
-  --pulsar-text-meta-size: 12px;
+  --pulsar-text-meta-size: 14px;
+  /* A quiet sentence or a note: reading text goes no lower than 14px at any width. */
+  --pulsar-text-small-size: 14px;
   --pulsar-text-measure-size: 26px;
   --pulsar-text-measure-weight: 500;
-  --pulsar-text-unit-size: 11px;
+  --pulsar-text-unit-size: 14px;
   --pulsar-text-measure-tracking: 0.02em;
   --pulsar-text-sheet-title-size: 21px;
   --pulsar-text-sheet-title-size-wide: 24px;
@@ -83,6 +108,7 @@ body {
   background: var(--pulsar-ground);
   color: var(--pulsar-ink);
   font-family: var(--font-sans);
+  font-variant-numeric: tabular-nums;
 }
 
 /* Radix Themes pins `--default-font-family` to its own system stack on the
@@ -110,11 +136,11 @@ body {
   min-height: 0;
 }
 
-/* RNP-16, `ArmazonPestanas.dc.html`: below 1024px the tabs are fixed over the
+/* RNP-16, `ArmazonPestanas.dc.html`: below 768px the tabs are fixed over the
    foot of the viewport (components/ui/bottom-nav), so the shell keeps their
    height clear under the content: 56px of tab, the nav's 1px rule, and the
    home-area inset the nav pads itself with. Print draws no tabs and no gap. */
-@media screen and (max-width: 1023.98px) {
+@media screen and (max-width: 767.98px) {
   body > .radix-themes {
     /* Grows with its content, so the reserved padding is scrollable height
        and not an overflow the root's flex shrink clips short. */
@@ -123,11 +149,11 @@ body {
   }
 }
 
-/* RNP-17, `HoyEscritorio.dc.html`: from 1024px the shell is a row. The rail
+/* RNP-17, `HoyEscritorio.dc.html`: from 768px the shell is a row. The rail
    (`components/ui/bottom-nav`) stands first and sticks to the viewport; the
    screen takes the rest. The root grows with its content so the rail has the
    whole scroll to stick through. */
-@media (min-width: 1024px) {
+@media (min-width: 768px) {
   body > .radix-themes {
     flex-direction: row;
     flex: 1 0 auto;

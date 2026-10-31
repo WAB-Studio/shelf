@@ -42,7 +42,7 @@ test("pressing back after one lookup keeps the app open and empties the box", as
   expect(page.url()).not.toBe("about:blank");
   await expect(searchBox).toBeVisible();
   await expect(searchBox).toHaveValue("");
-  await expect(page.getByText(messages.search.empty)).toBeVisible();
+  await expect(page.getByText(messages.search.brandLine)).toBeVisible();
 });
 
 test("three lookups in a row leave three stops for back to walk, in order", async ({ page }) => {
@@ -75,7 +75,7 @@ test("three lookups in a row leave three stops for back to walk, in order", asyn
 
   await page.goBack();
   await expect(searchBox).toHaveValue("");
-  await expect(page.getByText(messages.search.empty)).toBeVisible();
+  await expect(page.getByText(messages.search.brandLine)).toBeVisible();
 });
 
 test("opening /?q=serendipity cold answers it with no typing", async ({ page }) => {

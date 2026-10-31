@@ -9,7 +9,7 @@
    a field label never reads as a second heading. */
 .label {
   font-family: var(--font-sans);
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 500;
   line-height: 1.3;
   color: var(--pulsar-ink-secondary);

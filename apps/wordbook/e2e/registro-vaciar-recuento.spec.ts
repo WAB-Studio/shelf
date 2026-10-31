@@ -214,7 +214,7 @@ function zebraRound() {
 const trigger = (page: Page) => page.getByRole("button", { name: clear("trigger"), exact: true });
 const keep = (page: Page) => page.getByRole("button", { name: clear("keep"), exact: true });
 const body = (page: Page, words: number, lookups: number) =>
-  page.getByText(clear("confirmBody", { words, lookups }), { exact: true });
+  page.getByText(clear("confirmBody", { words, lookups, kind: "words" }), { exact: true });
 const anyBody = (page: Page) => page.locator("p", { hasText: clear("confirmTitle") });
 const deleteX = (page: Page, word: string) =>
   page.getByRole("button", { name: study("deleteRow", { word }), exact: true });

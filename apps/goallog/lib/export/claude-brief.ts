@@ -27,6 +27,8 @@ export type BriefInput = {
   // This month's line, its figures already worded in the goal's unit; null without a planned amount.
   month: { reached: string; planned: string } | null;
   today: string;
+  // The commitments marked on a day (day, commitment's name): done too, though no task carries them.
+  marked?: { day: string; name: string }[];
 };
 
 // One line however the note was typed, cut on a whole character so an emoji never splits.
@@ -43,20 +45,21 @@ function oneLine(text: string | null | undefined): string | null {
  * what was done over the last days with each task's note, and what is still open this month.
  */
 export function claudeBrief(input: BriefInput): string {
-  const { name, note, phase, tasks, open, month, today } = input;
+  const { name, note, phase, tasks, open, month, today, marked = [] } = input;
   const from = addDaysToCivilDate(today, -(BRIEF_DAYS - 1));
   const done = tasks
     .filter((task): task is Task & { doneOn: string } => task.doneOn !== null && task.doneOn >= from && task.doneOn <= today)
     .sort((a, b) => a.doneOn.localeCompare(b.doneOn));
+  const habits = marked.filter((fact) => fact.day >= from && fact.day <= today);
   const next = open.slice(0, BRIEF_NEXT);
 
   const lines = [translate("goal.claude.intro", { goal: name })];
   const goalNote = oneLine(note);
   if (goalNote) lines.push(translate("goal.claude.note", { note: goalNote }));
-  if (phase) lines.push(translate("goal.claude.phase", { phase: phase.name, until: civilDayMonthShort(phase.endsOn) }));
+  if (phase) lines.push(translate("goal.claude.phase", { phase: phase.name.trim().replace(/[.,;:!\s]+$/, ""), until: civilDayMonthShort(phase.endsOn) }));
   if (month) lines.push(translate("goal.claude.monthPlan", month));
   lines.push("");
-  if (done.length === 0) lines.push(translate("goal.claude.noneDone"));
+  if (done.length === 0 && habits.length === 0) lines.push(translate("goal.claude.noneDone"));
   else {
     lines.push(translate("goal.claude.doneTitle"));
     // The latest days win when the week was busier than the list holds.
@@ -70,6 +73,16 @@ export function claudeBrief(input: BriefInput): string {
           ? translate("goal.claude.doneLineNote", { ...values, note: taskNote })
           : translate("goal.claude.doneLine", values),
       );
+    }
+  }
+  if (habits.length > 0) {
+    // One line a day and commitment: the same fact written twice reads once.
+    const seen = new Set<string>();
+    for (const fact of habits.sort((a, b) => a.day.localeCompare(b.day))) {
+      const key = `${fact.day}|${fact.name}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      lines.push(translate("goal.claude.doneLine", { day: civilDayMonthShort(fact.day), task: fact.name }));
     }
   }
   lines.push("");

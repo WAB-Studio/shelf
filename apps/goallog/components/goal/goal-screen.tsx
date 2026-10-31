@@ -34,6 +34,8 @@ import {
   Face,
   Figure,
   Flex,
+  Fold,
+  Hero,
   Mark,
   Notice,
   Page,
@@ -129,7 +131,7 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
   // The end sheet counts from this week: an ended goal opens on 1 (it ends this Sunday).
   const sheetWeeks = ended ? 1 : endDay === null ? null : weekIndexOf(today, endDay);
   const holds = goal.holdsGoals;
-  const insideAction =
+  const insideActionOf = (variant?: "quiet") =>
     archived || ended || goal.level === "small" ? null : (
       <CreateInsideAction
         goalId={goal.id}
@@ -137,8 +139,10 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
         horizon={goal.horizon}
         kind={goal.level === "large" ? "small" : "big"}
         rhythm={goal.rhythm !== null}
+        variant={variant}
       />
     );
+  const insideAction = insideActionOf();
   // The open goals under this one, in plan order: what archiving it takes along.
   const branchNames = goal.tree
     .filter((node) => node.archivedAt === null && node.ancestors.includes(goal.id))
@@ -168,9 +172,9 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
   const deleteRefusal =
     goal.deletable || goal.deleteBlock === null ? null : (
       <Section as="div">
-        <Button variant="outline" block disabled aria-describedby="delete-goal-reason">
+        <Text as="p" variant="name" tone="muted">
           {t("goal.delete.action")}
-        </Button>
+        </Text>
         <Text as="p" id="delete-goal-reason" variant="sentence" tone="muted">
           {t(
             goal.deleteBlock === "goals"
@@ -257,6 +261,7 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
                   }
                 : null,
             today,
+            marked: goal.marked,
           }),
         );
   const planEndLabel = planEnd
@@ -416,7 +421,7 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
           </Text>
         ) : null}
         {planned === null && !holds && !archived && !ended ? (
-          <Button asChild variant="outline">
+          <Button asChild variant="quiet">
             <Link href={planHrefFrom(goal.id, today.slice(0, 7), `/metas/${goal.id}`)}>
               {t("goal.detail.monthPlanLink", { month: monthName })}
             </Link>
@@ -485,6 +490,20 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
   const measureName = goal.measureUnit
     ? distinctMeasureName(goal.measureName, goal.measureUnit, [unitWord(goal.measureUnit)])
     : null;
+  // The goal's one navy block: what it has counted so far, in the title face.
+  const hero = goal.measureUnit ? (
+    <Hero
+      label={t("goal.detail.heroLabel")}
+      figure={<Figure value={goal.measureTotal} unit={goal.measureUnit} variant="measure" />}
+      caption={t.rich("goal.detail.measureSince", {
+        date:
+          openedOn.slice(0, 4) === today.slice(0, 4)
+            ? civilDateLabel(openedOn)
+            : t("goal.detail.measureSinceYear", { date: civilDateLabel(openedOn), year: openedOn.slice(0, 4) }),
+        fig: (chunks) => <Figure variant="meta" value={chunks} />,
+      })}
+    />
+  ) : null;
   const measurePanel = (
       goal.measureUnit ? (
         <Panel>
@@ -498,23 +517,6 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
                 : t("goal.detail.measures", { unit: unitWord(goal.measureUnit) })}
           </Text>
           {phoneActs}
-
-          {goal.measureUnit ? (
-            <Figure
-              value={goal.measureTotal}
-              unit={goal.measureUnit}
-              variant="measure"
-            />
-          ) : null}
-          <Text as="p" variant="sentence" tone="muted">
-            {t.rich("goal.detail.measureSince", {
-              date:
-                openedOn.slice(0, 4) === today.slice(0, 4)
-                  ? civilDateLabel(openedOn)
-                  : t("goal.detail.measureSinceYear", { date: civilDateLabel(openedOn), year: openedOn.slice(0, 4) }),
-              fig: (chunks) => <Figure variant="meta" value={chunks} />,
-            })}
-          </Text>
 
           {monthBlock}
           {noticeLines}
@@ -665,7 +667,7 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
         ))}
         {archived || ended ? null : (
           <Face on="phone">
-            <Button asChild variant="outline" block>
+            <Button asChild variant="quiet" block>
               <Link href={`/metas/${goal.id}/fases/nueva`}>
                 {t("goal.phases.add")}
               </Link>
@@ -674,6 +676,59 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
         )}
       </Section>
     </Panel>
+  );
+
+  // On the phone the admin acts of the goal fold into one row at the foot, so its commitments lead.
+  const phoneMenu =
+    archived || ended ? null : (
+      <Face on="phone">
+        <Fold label={t("goal.detail.more")}>
+          <Flex direction="column">
+            <RenameGoalAction goalId={goal.id} name={goal.name} variant="quiet" />
+            {holds ? null : insideActionOf("quiet")}
+            <MoveGoalAction goalId={goal.id} name={goal.name} tree={goal.tree} today={today} />
+            <ArchiveGoalAction goalId={goal.id} name={goal.name} variant="quiet" {...archiveBranch} />
+            {deleteAction(true)}
+          </Flex>
+        </Fold>
+      </Face>
+    );
+
+  const foot = (
+    <>
+      {holds ? null : <Face on="desktop">{insideAction}</Face>}
+      {archived || ended ? null : (
+        <Face on="desktop">
+          <MoveGoalAction goalId={goal.id} name={goal.name} tree={goal.tree} today={today} />
+        </Face>
+      )}
+      <GoalNote goalId={goal.id} name={goal.name} note={goal.note} />
+      {claudeHref === null ? null : (
+        <Flex direction="column" gap="2">
+          <Button asChild variant="quiet" block>
+            <a
+              href={claudeHref}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label={t("goal.claude.openLabel", { goal: goal.name })}
+            >
+              {t("goal.claude.open")}
+            </a>
+          </Button>
+          <Text as="p" variant="sentence">
+            {t("goal.claude.hint")}
+          </Text>
+        </Flex>
+      )}
+      {archived ? (
+        <>
+          <ReopenGoalButton goalId={goal.id} />
+          {deleteAction(true)}
+        </>
+      ) : null}
+      {phoneMenu}
+      {deleteRefusal}
+    </>
   );
 
   return (
@@ -702,57 +757,16 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
             <Face on="desktop">
               <Flex gap="3">
                 <RenameGoalAction goalId={goal.id} name={goal.name} />
-                <ArchiveGoalAction goalId={goal.id} name={goal.name} block={false} short {...archiveBranch} />
+                <ArchiveGoalAction goalId={goal.id} name={goal.name} variant="ghost" block={false} short {...archiveBranch} />
                 {deleteAction(false)}
               </Flex>
             </Face>
           )
         }
       />
-      {archived ? null : (
-        <Face on="phone">
-          <RenameGoalAction goalId={goal.id} name={goal.name} variant="outline" />
-        </Face>
-      )}
+      {hero}
 
-      {holds ? null : insideAction}
-
-      <Split before={before} main={main} after={after} aside={380} afterBelow />
-
-      {archived || ended ? null : (
-        <MoveGoalAction goalId={goal.id} name={goal.name} tree={goal.tree} today={today} />
-      )}
-      <GoalNote goalId={goal.id} name={goal.name} note={goal.note} />
-      {claudeHref === null ? null : (
-        <Flex direction="column" gap="2">
-          <Button asChild variant="outline" block>
-            <a
-              href={claudeHref}
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label={t("goal.claude.openLabel", { goal: goal.name })}
-            >
-              {t("goal.claude.open")}
-            </a>
-          </Button>
-          <Text as="p" variant="meta">
-            {t("goal.claude.hint")}
-          </Text>
-        </Flex>
-      )}
-
-      {archived ? (
-        <>
-          <ReopenGoalButton goalId={goal.id} />
-          {deleteAction(true)}
-        </>
-      ) : ended ? null : (
-        <Face on="phone">
-          <ArchiveGoalAction goalId={goal.id} name={goal.name} {...archiveBranch} />
-          {deleteAction(true)}
-        </Face>
-      )}
-      {deleteRefusal}
+      <Split before={before} main={main} after={after} aside={380} afterBelow mainFirst foot={foot} />
     </Page>
   );
 }

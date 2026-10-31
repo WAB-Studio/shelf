@@ -51,12 +51,12 @@ type RowProps = Omit<ComponentPropsWithoutRef<"button">, "children" | "name"> & 
   quiet?: boolean;
   // The whole row is one link and nothing else: a goal in the list of goals.
   href?: string;
-  // From 1024px these replace `meta` and join `trailing`: the desktop row
+  // From 768px these replace `meta` and join `trailing`: the desktop row
   // carries the goal's month and its last day (`MetasCentroEscritorio`).
   wideMeta?: ReactNode;
   wideTrailing?: ReactNode;
-  // Under 1024px a line of its own between the name and `meta`, in the same
-  // face as `meta`; from 1024px it is gone, `wideMeta` says it there.
+  // Under 768px a line of its own between the name and `meta`, in the same
+  // face as `meta`; from 768px it is gone, `wideMeta` says it there.
   narrowMetaAbove?: ReactNode;
   // Up to two lines of free text under the name and its meta, line breaks
   // kept, clipped with an ellipsis (`TareaNotaGuardada`).

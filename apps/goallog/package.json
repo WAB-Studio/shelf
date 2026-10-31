@@ -19,6 +19,7 @@
     "check:e2e": "node --env-file=.env.local ../../node_modules/@playwright/test/cli.js test",
     "check:policies": "NODE_PATH=./scripts/node-stubs node --experimental-test-module-mocks --import tsx --env-file=.env.local scripts/check-policies.ts",
     "check:day": "node --import tsx --env-file=.env.local scripts/check-day.ts",
+    "check:timelog": "node --import tsx --env-file=.env.local scripts/check-timelog.ts",
     "check:goal": "node --import tsx --env-file=.env.local scripts/check-goal.ts",
     "check:goal-actions": "node --import tsx --env-file=.env.local --test scripts/check-goal-actions.ts",
     "check:mcp": "node --import tsx --env-file=.env.local --test \"scripts/mcp/*.ts\"",

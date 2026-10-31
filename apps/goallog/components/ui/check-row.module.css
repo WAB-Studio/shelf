@@ -69,7 +69,7 @@
 .note {
   padding-inline-start: 12px;
   border-inline-start: 1px solid var(--pulsar-border);
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.5;
   color: var(--pulsar-ink-secondary);
   white-space: pre-line;
@@ -134,7 +134,7 @@
   border: 1.5px solid var(--pulsar-border);
   border-radius: 8px;
   font-family: var(--font-mono);
-  font-size: 13px;
+  font-size: 14px;
   letter-spacing: 0.02em;
   cursor: pointer;
 }
@@ -160,7 +160,7 @@
   border-block-start: 1px solid var(--pulsar-border);
 }
 
-@media (min-width: 1024px) {
+@media (min-width: 768px) {
   .bar {
     inset-block-end: 0;
   }

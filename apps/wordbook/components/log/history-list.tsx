@@ -9,11 +9,15 @@ import { useTranslations } from "next-intl";
 import { readWordStudy, type StudyRow } from "@/lib/log/summary";
 import { countRecords, LOG_CLEARED_EVENT, LOG_FLUSHED_EVENT, readSyncState } from "@/lib/log/record";
 import { deleteStudyGroup, LOG_DELETED_EVENT } from "@/lib/log/delete";
+import { countKind } from "@/lib/log/outcome";
 import { filterStudyRows, rememberFilter } from "@/lib/log/study-filter";
+import { splitTranslations } from "@/lib/log/translation-line";
 import { SYNC_LANDED_EVENT } from "@/lib/sync/driver";
+import { TranslationList } from "@/components/translations/translation-list";
 import {
-  Box,
   Button,
+  Card,
+  Figure,
   Flex,
   Grid,
   IconButton,
@@ -48,16 +52,17 @@ type RowActions = {
   remove: (key: string) => void;
 };
 
+// The rows drawn at first and per «Ver más»: 400 rows at once is a 37,000px page.
+const PAGE_ROWS = 50;
+
 const StudyRowItem = memo(function StudyRowItem({
   row,
-  first,
   phase,
   local,
   note,
   actions,
 }: {
   row: StudyRow;
-  first: boolean;
   // Undefined on every row but the target, so pressing one ✕ re-renders one row.
   phase: DeleteTarget["phase"] | undefined;
   local: boolean;
@@ -77,81 +82,27 @@ const StudyRowItem = memo(function StudyRowItem({
       ? null
       : row.forms.map((form) => form.text).join(", ");
   return (
-    // The ✕ sits in a track of its own beside the link, never inside it, so
-    // a tap on it can never navigate (`RegistroBorrarFila`); the rule and the
-    // question under the row run under both tracks.
-    <Grid columns="minmax(0, 1fr) 44px" gapY="3" align="center">
-      {!first && <Separator size="4" spanTracks />}
-      <Link asChild underline="none">
-        <NextLink href={`/registro/${encodeURIComponent(row.key)}`} prefetch={false}>
-          <TapTarget direction="column" align="stretch" width="100%">
-            {/* `minmax(0, 1fr) auto` on the phone stacks the translation under
-              the word; the desktop's third track puts word, translation and
-              count on one row (RL-56's board). `gridColumn`/`gridRow` move
-              each cell between the two shapes. The `minmax(0, …)` is
-              written out, not left to Radix's own `columns` shorthand:
-              `grid.props.js`'s `parseValue` only rewrites a bare digit
-              count into `repeat(n, minmax(0, 1fr))` — a literal string like
-              `"1fr auto"` passes through unchanged, so a `1fr` track alone
-              never gets a zero floor.
-
-              A truncated word still needs a second guard past that: CSS
-              blockifies a grid item's own display, but not a *grandchild*
-              that only sits inside a plain `Box`, so `Text truncate` stayed
-              `display: inline` — where `overflow: hidden` does not clip —
-              and rendered at its full, un-clamped width regardless of the
-              column underneath it. Making the wrapper a `Flex` (a
-              container of its own) blockifies the `Text` it holds exactly
-              the way module 3's original code had it as the grid item
-              directly (docs/wordbook/DESIGN.md "What the data forces"). */}
-            <Grid
-              columns={{ initial: "minmax(0, 1fr) auto", md: "minmax(0, 1fr) minmax(0, 1fr) 40px" }}
-              gap="3"
-              align="center"
-            >
-              <Flex gridColumn="1" gridRow="1" minWidth="0" overflow="hidden">
-                <Text serif truncate english>
+    // The row is a card. The word and its count are the link; the ✕ sits in a track of its own
+    // beside it, so a tap on it can never navigate (`RegistroBorrarFila`). The translations sit
+    // under both, outside the link, because their «ver más» is a control of its own.
+    <Card padding="3">
+      <Grid columns="minmax(0, 1fr) 44px" gapY="2" align="center">
+        <Link asChild underline="none">
+          <NextLink href={`/registro/${encodeURIComponent(row.key)}`} prefetch={false}>
+            <TapTarget width="100%" align="center" justify="between" gap="3">
+              {/* `Text truncate` needs a flex container of its own to clip (docs/wordbook/DESIGN.md
+                  "What the data forces"). */}
+              <Flex minWidth="0" overflow="hidden" flexGrow="1">
+                <Text size="5" weight="bold" serif truncate english>
                   {word}
                 </Text>
               </Flex>
-              <Flex
-                gridColumn={{ initial: "1", md: "2" }}
-                gridRow={{ initial: "2", md: "1" }}
-                minWidth="0"
-                overflow="hidden"
-                direction="column"
-              >
-                {waiting ? (
-                  <>
-                    <Text size="2" muted="quietest" truncate>
-                      {t("study.pendingWaiting")}
-                    </Text>
-                    <Text size="2" muted="quietest">
-                      {t(row.lastOutcome === "untranslated" ? "study.pendingPhrase" : "study.pendingWord")}
-                    </Text>
-                  </>
-                ) : row.lastTranslation !== null ? (
-                  <Text variant="translation" muted truncate>
-                    {row.lastTranslation}
-                  </Text>
-                ) : row.lastOutcome === "unlisted" ? (
-                  <Text variant="translation" muted truncate>
-                    {t("study.noResult")}
-                  </Text>
-                ) : null}
-                {formsLine !== null && !waiting && (
-                  <Text size="2" muted truncate>
-                    {formsLine}
-                  </Text>
-                )}
-              </Flex>
-              <Box gridColumn={{ initial: "2", md: "3" }} gridRow="1" justifySelf="end">
-                <MetaLabel>{row.count}</MetaLabel>
-              </Box>
-            </Grid>
-          </TapTarget>
-        </NextLink>
-      </Link>
+              <MetaLabel nowrap aria-label={t("study.rowCountLabel", { count: row.count })}>
+                {t("study.rowCount", { count: row.count })}
+              </MetaLabel>
+            </TapTarget>
+          </NextLink>
+        </Link>
       {phase === undefined && (
         // A ghost's negative margins stretch it past a grid track it fills;
         // centred in a cell of its own it keeps to 44px, clear of the link.
@@ -169,6 +120,30 @@ const StudyRowItem = memo(function StudyRowItem({
           </IconButton>
         </Flex>
       )}
+
+      <Flex gridColumn="1 / -1" direction="column" gap="1" minWidth="0">
+        {waiting ? (
+          <>
+            <Text size="2" muted="quietest">
+              {t("study.pendingWaiting")}
+            </Text>
+            <Text size="2" muted="quietest">
+              {t(row.lastOutcome === "untranslated" ? "study.pendingPhrase" : "study.pendingWord")}
+            </Text>
+          </>
+        ) : row.lastTranslation !== null ? (
+          <TranslationList items={splitTranslations(row.lastTranslation)} muted />
+        ) : row.lastOutcome === "unlisted" ? (
+          <Text variant="translation" muted>
+            {t("study.noResult")}
+          </Text>
+        ) : null}
+        {formsLine !== null && !waiting && (
+          <Text size="2" muted truncate>
+            {formsLine}
+          </Text>
+        )}
+      </Flex>
 
       {(phase === "asking" || phase === "deleting") && (
         // The order and weights of `RegistroVaciarConfirmar`: the accent on
@@ -227,7 +202,8 @@ const StudyRowItem = memo(function StudyRowItem({
           </Flex>
         </Flex>
       )}
-    </Grid>
+      </Grid>
+    </Card>
   );
 });
 
@@ -261,6 +237,7 @@ export function HistoryList() {
   // A page opened with the filter already in the address must also feed the back link.
   useEffect(() => rememberFilter(initialFilter), [initialFilter]);
   const [state, setState] = useState<ListState>({ kind: "loading" });
+  const [shownRows, setShownRows] = useState(PAGE_ROWS);
   // Bumped by the failed state's own retry, since the read runs in an
   // effect and a click cannot call it directly.
   const [attempt, setAttempt] = useState(0);
@@ -440,9 +417,11 @@ export function HistoryList() {
   }
 
   const filtering = query.trim() !== "";
+  const kind = countKind(state.rows);
 
   function change(text: string): void {
     setQuery(text);
+    setShownRows(PAGE_ROWS);
     rememberFilter(text);
     // The router's own `replace` fetches the page again, which a reader
     // offline cannot; `history.replaceState` only rewrites the address.
@@ -461,8 +440,8 @@ export function HistoryList() {
           size="3"
           value={query}
           onChange={(event) => change(event.target.value)}
-          placeholder={t("study.filterLabel")}
-          aria-label={t("study.filterLabel")}
+          label={t("study.filterLabel")}
+          placeholder={t("study.filterPlaceholder")}
           autoCapitalize="none"
           autoCorrect="off"
           spellCheck={false}
@@ -487,32 +466,43 @@ export function HistoryList() {
         </TextField.Root>
         {filtering && visible.length > 0 && (
           <Text size="2" muted>
-            {t("study.filterCount", { shown: visible.length, total: state.totalWords })}
+            {t("study.filterCount", { shown: visible.length, total: state.totalWords, kind })}
           </Text>
         )}
       </Flex>
 
-      <Text size="2" muted>
-        {t("study.header", { lookups: state.totalLookups, words: state.totalWords })}
-      </Text>
+      <Flex gap="6" wrap="wrap">
+        <Figure value={state.totalLookups} label={t("study.figureLookups", { count: state.totalLookups })} />
+        <Figure value={state.totalWords} label={t("study.figureWords", { count: state.totalWords, kind })} />
+      </Flex>
 
       {visible.length === 0 ? (
         <Text size="2" muted>
-          {t("study.filterNone", { query: query.trim() })}
+          {t("study.filterNone", { query: query.trim(), kind })}
         </Text>
       ) : (
-        <Flex direction="column" gap="3">
-          {visible.map((row, index) => (
-            <StudyRowItem
-              key={row.key}
-              row={row}
-              first={index === 0}
-              phase={target?.key === row.key ? target.phase : undefined}
-              local={target?.key === row.key && target.local}
-              note={target?.key === row.key && target.note}
-              actions={actions}
-            />
-          ))}
+        <Flex direction="column" gap="4">
+          {/* One column on the phone, two and three as the screen widens: a row is a card, so the
+              desktop's width fills with cards and not with a void beside one. */}
+          <Grid columns={{ initial: "1", lg: "2", xl: "3" }} gap="3" align="start">
+            {visible.slice(0, shownRows).map((row) => (
+              <StudyRowItem
+                key={row.key}
+                row={row}
+                phase={target?.key === row.key ? target.phase : undefined}
+                local={target?.key === row.key && target.local}
+                note={target?.key === row.key && target.note}
+                actions={actions}
+              />
+            ))}
+          </Grid>
+          {visible.length > shownRows && (
+            <Flex justify="center">
+              <Button size="3" variant="soft" onClick={() => setShownRows(shownRows + PAGE_ROWS)}>
+                {t("study.more", { count: visible.length - shownRows })}
+              </Button>
+            </Flex>
+          )}
         </Flex>
       )}
     </Flex>

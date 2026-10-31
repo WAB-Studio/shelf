@@ -31,7 +31,7 @@
 
 /* RNP-17: beside the rail, `app/theme.css`'s row frame. The column fills what
    the rail leaves and starts at its edge; the board's padding is 44 over 56. */
-@media (min-width: 1024px) {
+@media (min-width: 768px) {
   .page {
     flex: 1 1 0;
     min-inline-size: 0;
@@ -58,14 +58,14 @@
   }
 }
 
-@media (min-width: 1024px) {
+@media (min-width: 768px) {
   .page.column > :not(header) {
     max-inline-size: 640px;
   }
 }
 
 /* A screen with no rail: the 700px centred column holds at every width. */
-@media (min-width: 1024px) {
+@media (min-width: 768px) {
   .page.alone {
     flex: 1 0 auto;
     width: 100%;
@@ -81,9 +81,9 @@
   min-block-size: 100dvh;
 }
 
-/* From 1024 a button or link-button standing alone in the column is as wide as
+/* From 768 a button or link-button standing alone in the column is as wide as
    its text, 160 at least, at the column's start; below, the column's stretch. */
-@media (min-width: 1024px) {
+@media (min-width: 768px) {
   .page.page > :is(a, button) {
     align-self: flex-start;
     inline-size: fit-content;
@@ -103,7 +103,7 @@
   }
 }
 
-@media (min-width: 1024px) {
+@media (min-width: 768px) {
   .page.alone.snug {
     gap: 32px;
   }

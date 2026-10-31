@@ -19,7 +19,7 @@ type PulsarTextProps = {
   // already has its headline above the card.
   plainWide?: boolean;
   // A section's head on the phone: a 2px ink rule above it, 18px of air under
-  // the rule. From 1024 the card is the divider, so the rule goes.
+  // the rule. From 768 the card is the divider, so the rule goes.
   rule?: boolean;
   // A task's note read whole: line breaks kept, set off by a thin left rule.
   note?: boolean;

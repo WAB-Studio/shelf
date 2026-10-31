@@ -16,11 +16,13 @@ import {
   deletePhaseSchema,
   editCadenceSchema,
   editPhaseSchema,
+  renameCommitmentSchema,
 } from "@/lib/validation/plan-edit";
 
 export type EditPhaseResult = { ok: true } | { ok: false; error: MessageKey };
 export type DeletePhaseResult = { ok: true } | { ok: false; error: MessageKey };
 export type EditCadenceResult = { ok: true } | { ok: false; error: MessageKey };
+export type RenameCommitmentResult = { ok: true } | { ok: false; error: MessageKey };
 export type DeleteCommitmentResult = { ok: true } | { ok: false; error: MessageKey };
 
 // Every screen a phase or a commitment can change what it draws on; a loose habit has its own too.
@@ -188,6 +190,42 @@ export async function editCadence(input: unknown): Promise<EditCadenceResult> {
     if (pgCode(error) === "42501") return { ok: false, error: "plan.errors.cadenceHasFacts" };
     throw error;
   }
+}
+
+/**
+ * Renames a live commitment, whatever facts name it: the facts stay explained and the weeks it governed read
+ * as they did. One UPDATE of `name` alone; a retired one and another person's read as not changed.
+ */
+export async function renameCommitment(input: unknown): Promise<RenameCommitmentResult> {
+  const parsed = renameCommitmentSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: messageKey(parsed.error.issues[0].message) };
+
+  const person = await getPerson();
+  if (!person) return { ok: false, error: "plan.errors.signedOut" };
+
+  const { commitmentId, name } = parsed.data;
+
+  const [row] = await withGoalsDb((tx) =>
+    tx.execute<{ goal_id: string | null; retired: boolean | null; changed: number }>(sql`
+      with t as (
+        select id, goal_id, retired_at is not null as retired
+        from "goals"."commitments" where id = ${commitmentId} and user_id = ${person.id}
+      ),
+      upd as (
+        update "goals"."commitments" set name = ${name}
+        where id in (select id from t where not retired)
+        returning id
+      )
+      select (select goal_id from t) as goal_id, (select retired from t) as retired, (select count(*) from upd)::int as changed
+    `),
+  );
+
+  if (row.changed === 0) {
+    return { ok: false, error: row.retired ? "plan.errors.commitmentRetired" : "plan.errors.commitmentNotFound" };
+  }
+
+  revalidateScreens(row.goal_id, commitmentId);
+  return { ok: true };
 }
 
 /**

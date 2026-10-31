@@ -5,13 +5,13 @@
   display: contents;
 }
 
-@media (min-width: 1024px) {
+@media (min-width: 768px) {
   .phone {
     display: none;
   }
 }
 
-@media (max-width: 1023.98px) {
+@media (max-width: 767.98px) {
   .desktop {
     display: none;
   }

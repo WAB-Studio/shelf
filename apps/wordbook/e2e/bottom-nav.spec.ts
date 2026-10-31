@@ -172,12 +172,13 @@ test("returning through the bar does not record the restored query again", async
   const assetResponse = page.waitForResponse(
     (response) => response.url().includes(manifest.asset.path) && response.ok(),
   );
-  // Opened at the query, the state a reader is in once they have looked a
-  // word up: the bar reads the address bar into its own memory at mount.
-  await page.goto("/?q=manures");
+  // The reader types the word: opening a URL that already carries the query is not a lookup.
+  await page.goto("/");
   await assetResponse;
   // aria-busy turns false once the worker has built its index and the install is done.
   await expect(page.locator('[aria-busy="false"]').first()).toBeAttached();
+  await page.getByRole("textbox", { name: messages.search.label }).fill("manures");
+  await expect(page).toHaveURL(/q=manures/);
 
   const nav = () => page.getByRole("navigation", { name: messages.nav.label });
   for (let trip = 0; trip < 3; trip += 1) {

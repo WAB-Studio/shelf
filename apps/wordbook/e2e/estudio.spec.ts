@@ -1,4 +1,4 @@
-import { expect, test } from "./fixtures";
+import { expect, studyHeader, test } from "./fixtures";
 import type { Page } from "@playwright/test";
 import { DATABASE_VERSION } from "../lib/log/record";
 
@@ -163,7 +163,8 @@ function formsOf(line: string): string[] {
 }
 
 async function rowText(page: Page, href: string): Promise<string> {
-  return page.locator(`a[href="${href}"]`).innerText();
+  // A row is a card: the link holds the word and its count, the translations and forms sit beside it.
+  return page.locator(`a[href="${href}"]`).locator("xpath=ancestor::section[1]").innerText();
 }
 
 test("a lemma and its inflected forms are one row: both forms under it, the count of all of them", async ({ page }) => {
@@ -254,7 +255,8 @@ test("a miss and a phrase each keep their own row, beside a lemma's", async ({ p
   await page.reload();
 
   await expect(page.locator('a[href^="/registro/"]')).toHaveCount(3);
-  const rows = await page.locator('a[href^="/registro/"]').allInnerTexts();
+  // A row is a card: its translation sits beside the link.
+  const rows = await page.locator("section").filter({ has: page.locator('a[href^="/registro/"]') }).allInnerTexts();
   const miss = rows.find((t) => t.includes("asdkjh"));
   expect(miss).toMatch(/\b1\b/);
   const phraseRow = rows.find((t) => t.includes(phrase));
@@ -274,7 +276,9 @@ test("a search with no result says «sin resultado» in its own row", async ({ p
   await page.reload();
 
   await expect(page.locator('a[href^="/registro/"]')).toHaveCount(1);
-  expect(await page.locator('a[href^="/registro/"]').innerText()).toContain("sin resultado");
+  expect(await page.locator("section").filter({ has: page.locator('a[href^="/registro/"]') }).innerText()).toContain(
+    "sin resultado",
+  );
 });
 
 test("rows order by the count of the whole lemma, ties broken by the most recent search", async ({ page }) => {
@@ -314,7 +318,7 @@ test("the header counts every search and one word per lemma", async ({ page }) =
   ]);
   await page.reload();
 
-  await expect(page.getByText("4 búsquedas · 2 palabras.")).toBeVisible();
+  await expect(studyHeader(page, 4, 2)).toBeVisible();
 });
 
 test("the forms line lists the most searched form first, a tie to the most recent", async ({ page }) => {

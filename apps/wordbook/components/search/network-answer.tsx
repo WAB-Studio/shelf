@@ -30,7 +30,7 @@ export function NetworkAnswer({ state, surface }: { state: NetworkAnswerState; s
       <Flex direction="column" data-network-answer={surface}>
         <Separator size="4" />
         <Box pt="2" pb="1">
-          <Text variant="pendingHint" serif muted>
+          <Text variant="pendingHint" muted>
             {t("networkPending")}
           </Text>
         </Box>
@@ -91,7 +91,7 @@ export function NetworkAnswer({ state, surface }: { state: NetworkAnswerState; s
               <Text variant="definitionLabel" muted>
                 {t("definitionEnglish")}
               </Text>
-              <Text variant="generatedProse" serif muted english>
+              <Text variant="generatedProse" muted english>
                 {answer.definition}
               </Text>
             </Flex>
@@ -100,11 +100,11 @@ export function NetworkAnswer({ state, surface }: { state: NetworkAnswerState; s
             <Text variant="definitionLabel" muted>
               {t("example")}
             </Text>
-            <Text variant="generatedProse" serif english>
+            <Text variant="generatedProse" english>
               {answer.example.en}
             </Text>
             <VisuallyHidden>{t("exampleTranslation")}</VisuallyHidden>
-            <Text variant="exampleTranslation" serif muted>
+            <Text variant="exampleTranslation" muted>
               {answer.example.es}
             </Text>
           </Flex>

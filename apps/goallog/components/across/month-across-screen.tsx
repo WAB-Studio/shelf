@@ -34,7 +34,7 @@ import { loadMonthAcross, type MonthAcrossGoal, type MonthAcrossItem } from "@/l
 import { listComingDayless } from "@/lib/queries/one-offs";
 import { formatQuantity, isTimeUnit } from "@/lib/units/time";
 import { timeWordsOf } from "@/lib/units/time-words";
-import { civilDayMonthShort, weekOf } from "@/lib/zone";
+import { addDaysToCivilDate, civilDayMonthShort, weekOf } from "@/lib/zone";
 
 function sum(values: number[]): number {
   return values.reduce((total, value) => total + value, 0);
@@ -247,6 +247,8 @@ export async function MonthAcrossScreen({ month, today }: { month?: string; toda
         : goal.items.length === 0
           ? { href: `${goalHref}/tarea/nueva`, label: t("month.across.addTask") }
           : null;
+    // The invitation says what «sin monto» would: a card holds one of the two.
+    if (planLink && goal.line && goal.line.planned === null) meta = null;
     // A goal with tasks closes its card with the same link, to the real route.
     const addLink = !collapsed && !past && !planLink && goal.items.length > 0 ? `${goalHref}/tarea/nueva` : null;
 
@@ -421,6 +423,8 @@ export async function MonthAcrossScreen({ month, today }: { month?: string; toda
           : "month.across.eyebrow.past",
   );
   const title = thisName.charAt(0).toUpperCase() + thisName.slice(1);
+  // One card takes the whole row, two share it, three or more fill three columns.
+  const drawnCount = blocks.length + (habitsGroup ? 1 : 0);
   const nothingOpen = across.goals.length === 0 && across.loose.length === 0;
   const drawn = new Set(
     across.goals.flatMap((goal) => goal.items.flatMap((entry) => [entry.task.id, ...entry.children.map((kid) => kid.id)])),
@@ -457,7 +461,10 @@ export async function MonthAcrossScreen({ month, today }: { month?: string; toda
           <Text as="span" variant="meta">
             {t("month.across.weeks.label")}
           </Text>
-          {mondaysTouching(across.month).map((monday) => (
+          {mondaysTouching(across.month)
+            // A week that ended before the first goal was opened has nothing in it.
+            .filter((monday) => across.firstDay === null || addDaysToCivilDate(monday, 6) >= across.firstDay)
+            .map((monday) => (
             <TextLink
               key={monday}
               nowrap
@@ -490,7 +497,7 @@ export async function MonthAcrossScreen({ month, today }: { month?: string; toda
           {across.evidence === "unreadable" ? (
             <EvidenceNote title={t("month.across.unreadableTitle")} body={t("month.across.unreadableBody")} />
           ) : null}
-          <Grid columns={{ initial: "1", lg: "3" }} gap={{ initial: "6", md: "4" }} align="start">
+          <Grid columns={{ initial: "1", lg: String(Math.min(3, Math.max(1, drawnCount))) as "1" | "2" | "3" }} gap={{ initial: "6", md: "4" }} align="start">
             {blocks}
             {habitsGroup}
           </Grid>

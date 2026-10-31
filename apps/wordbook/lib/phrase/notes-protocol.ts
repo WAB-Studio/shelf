@@ -32,15 +32,24 @@ const MIN_TOKENS = 2;
 // looks like — nothing in the contract asks for two different ceilings.
 const MAX_PHRASE_TOKENS = 12;
 
-// Whitespace and `.,;:'"?!` both break a token — this is the one place a
-// contraction or a quoted word costs the gate: "don't" splits into "don"
-// and "t", and "t" never passes `admitWord`. A sentence, not a word list, is
-// what this route is for, and the reader's own translation still fails it
-// the same way a word list would.
-const SEPARATOR = /[\s.,;:'"?!]+/;
+// Whitespace and `.,;:"?!` break a token; an apostrophe inside a word does
+// not, so "I'm" and "don't" stay whole and meet `admitWord`, which allows
+// `'` inside a word. A curly apostrophe is folded to the straight one first,
+// and a quote left at either end of a token is trimmed.
+const SEPARATOR = /[\s.,;:"?!]+/;
 
 export function tokenisePhrase(s: string): string[] {
-  return s.split(SEPARATOR).filter(Boolean);
+  return s
+    .replace(/[\u2018\u2019]/g, "'")
+    .split(SEPARATOR)
+    .map((token) => token.replace(/^'+|'+$/g, ""))
+    .filter(Boolean);
+}
+
+// The only one-letter words English builds a sentence from; `admitWord`
+// refuses any token under two letters, which would refuse "I" and "a".
+export function isOneLetterWord(token: string): boolean {
+  return /^[ia]$/i.test(token);
 }
 
 // The translation is Spanish prose, not a word list, so `admitWord` never
@@ -110,6 +119,7 @@ export function admitPhrase(source: string, translation: string): string[] | nul
   if (sourceTokens.length < MIN_TOKENS) return null;
 
   for (const token of sourceTokens) {
+    if (isOneLetterWord(token)) continue;
     if (admitWord(token) === null) return null;
   }
 

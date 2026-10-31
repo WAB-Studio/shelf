@@ -92,6 +92,7 @@ function goalView(unit: string | null): GoalView {
     plan,
     roadmap: fillPlan(plan),
     note: null,
+    marked: [],
     parent: null,
     ancestors: [],
     level: null,
