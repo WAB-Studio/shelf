@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
+import { ChevronRight } from "lucide-react";
 import { getTranslations } from "next-intl/server";
 
 import type { Translator } from "@/i18n/translator";
@@ -7,9 +8,8 @@ import type { Cadence } from "@/lib/day/types";
 import type { GoalCommitment } from "@/lib/queries/goal";
 import { weekdaysSentence } from "@/lib/day/row-phrases";
 import { evidenceUnitWords } from "@/lib/evidence/unit-words";
-import { Button, Figure, Flex, Section, Text } from "@/components/ui";
 
-import { CommitmentRow } from "./retire-sheet";
+import { Button, Figure, Flex, Row, Section, Text } from "@/components/ui";
 
 
 // The count in words, section-label style ("ocho compromisos", "tres
@@ -27,7 +27,7 @@ export function countWord(n: number, t: Translator, feminine = false): string {
 
 // `Meta.dc.html`'s own cadence phrasing — full words, unlike `day.cadence`'s
 // abbreviated one, which a day row's tighter space asks for instead.
-function cadenceWords(cadence: Cadence, t: Translator): string {
+export function cadenceWords(cadence: Cadence, t: Translator): string {
   switch (cadence.kind) {
     case "daily":
       return t("goal.cadence.daily");
@@ -111,27 +111,35 @@ export async function CommitmentList({
         retired: commitments.length - activeCount,
       })}
     >
-      {commitments.map((commitment) => (
-        <CommitmentRow
-          key={commitment.id}
-          commitmentId={commitment.id}
-          name={commitment.name}
-          retired={commitment.retiredAt !== null}
-          retiredLabel={t("goal.commitments.retired")}
-          factDayCount={commitment.factDayCount}
-          goalId={goalId}
-          trailing={
-            <Flex direction="column" align="end">
-              <Text as="span" variant="sentence" tone="muted">
-                {cadenceWords(commitment.cadence, t)}
-              </Text>
-              <Text as="span" variant="sentence" tone="muted">
-                {satisfactionWords(commitment, t)}
-              </Text>
-            </Flex>
-          }
-        />
-      ))}
+      {commitments.map((commitment) => {
+        const retired = commitment.retiredAt !== null;
+        const trailing = (
+          <Flex direction="column" align="end">
+            <Text as="span" variant="sentence" tone="muted">
+              {cadenceWords(commitment.cadence, t)}
+            </Text>
+            <Text as="span" variant="sentence" tone="muted">
+              {satisfactionWords(commitment, t)}
+            </Text>
+          </Flex>
+        );
+        // A retired one stays in the list and goes nowhere (RP-13); a live one opens its own screen.
+        return retired ? (
+          <Row key={commitment.id} name={commitment.name} meta={t("goal.commitments.retired")} trailing={trailing} disabled />
+        ) : (
+          <Row
+            key={commitment.id}
+            href={`/metas/${goalId}/compromisos/${commitment.id}`}
+            name={commitment.name}
+            trailing={
+              <Flex align="center" gap="2">
+                {trailing}
+                <ChevronRight size={16} strokeWidth={1.5} aria-hidden />
+              </Flex>
+            }
+          />
+        );
+      })}
       {!archived ? (
         <Button asChild variant={commitments.length > 0 ? "outline" : "solid"} block>
           <Link href={`/metas/${goalId}/compromisos/nuevo`}>{t("goal.commitments.add")}</Link>

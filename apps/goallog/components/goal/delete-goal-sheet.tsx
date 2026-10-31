@@ -53,7 +53,7 @@ export function DeleteGoalSheet({
 
   return (
     <>
-      <Button variant="outline" block={block} onClick={openSheet}>
+      <Button variant={block ? "quiet" : "ghost"} tone="danger" block={block} onClick={openSheet}>
         {t("goal.delete.action")}
       </Button>
       <Sheet

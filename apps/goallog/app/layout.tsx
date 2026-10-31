@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
-import { Archivo, Archivo_Black, DM_Mono } from "next/font/google";
+import { Archivo, Archivo_Black, Chivo_Mono } from "next/font/google";
 import { NextIntlClientProvider } from "next-intl";
 import { getTranslations } from "next-intl/server";
 import { Theme } from "@radix-ui/themes";
@@ -27,7 +27,7 @@ const display = Archivo_Black({
 });
 
 // Every figure: hours, counts, minutes, dates and quantities.
-const mono = DM_Mono({
+const mono = Chivo_Mono({
   variable: "--font-mono",
   subsets: ["latin"],
   weight: ["400", "500"],

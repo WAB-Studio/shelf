@@ -21,7 +21,7 @@ export type CreateInsideActionProps = {
   horizon: string | null;
   // A large goal takes a small one; a general or lone goal takes a large one.
   kind: "big" | "small";
-  variant?: "solid" | "outline" | "ghost";
+  variant?: "solid" | "outline" | "ghost" | "quiet";
   // The goal above has a rhythm: the sheet says it stops counting.
   rhythm?: boolean;
 };

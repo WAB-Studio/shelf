@@ -147,6 +147,12 @@
     "pace": "día {day} ·",
     "paceUnder": ", bajo el {threshold} %"
   },
+  "hero": {
+    "label": "Avance de hoy",
+    "figure": "{done} de {total}",
+    "caption": "hechos hoy",
+    "captionPartial": "hechos hoy · {partial} en parte"
+  },
   "tally": "hechos <fig>{done}</fig> de <fig>{total}</fig>",
   "tallyPartial": "hechos <fig>{done}</fig> de <fig>{total}</fig> · <fig>{partial}</fig> en parte",
   "met": {

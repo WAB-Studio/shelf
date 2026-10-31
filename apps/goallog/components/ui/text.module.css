@@ -48,7 +48,7 @@
 /* The quiet sentence: Archivo 13 / 1.5 in muted. Mono is for figures and dates. */
 .sentence.sentence {
   font-family: var(--font-sans);
-  font-size: 13px;
+  font-size: var(--pulsar-text-small-size);
   font-weight: 400;
   letter-spacing: normal;
   text-transform: none;
@@ -116,7 +116,7 @@
   margin: 0;
   padding-inline-start: 10px;
   border-inline-start: 2px solid var(--pulsar-line);
-  font-size: 13px;
+  font-size: var(--pulsar-text-small-size);
   line-height: 1.45;
   white-space: pre-line;
   overflow-wrap: anywhere;

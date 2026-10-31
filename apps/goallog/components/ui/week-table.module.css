@@ -107,7 +107,7 @@
   font-size: var(--pulsar-text-label-size);
   font-weight: 400;
   letter-spacing: var(--pulsar-text-label-tracking);
-  text-transform: uppercase;
+  text-transform: none;
   color: var(--pulsar-muted);
 }
 
@@ -270,7 +270,7 @@
   font-size: var(--pulsar-text-label-size);
   font-weight: 400;
   letter-spacing: var(--pulsar-text-label-tracking);
-  text-transform: uppercase;
+  text-transform: none;
   color: var(--pulsar-muted);
 }
 

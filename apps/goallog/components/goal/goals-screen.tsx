@@ -141,7 +141,7 @@ export async function GoalsScreen({
         </Button>
         {habitsSection}
         <Section label={t("export.entry.section")}>
-          <Button asChild variant="outline" block stack>
+          <Button asChild variant="quiet" block stack>
             <Link href="/metas/importar">
               {t("import.entry.title")}
               <Text variant="sentence">{t("import.entry.hint")}</Text>
@@ -316,14 +316,14 @@ export async function GoalsScreen({
         after={
           <Panel>
             <Section label={t("export.entry.section")}>
-              <Button asChild variant="outline" block stack>
+              <Button asChild variant="quiet" block stack>
                 <Link href="/metas/importar">
                   {t("import.entry.title")}
                   <Text variant="sentence">{t("import.entry.hint")}</Text>
                 </Link>
               </Button>
               {open.length + ended.length > 0 ? (
-                <Button asChild variant="outline" block stack>
+                <Button asChild variant="quiet" block stack>
                   <Link href="/exportar">
                     {t("export.entry.title")}
                     <Text variant="sentence">{t("export.entry.hint")}</Text>

@@ -152,8 +152,8 @@
     padding: 24px 14px 8px;
     font-family: var(--font-mono);
     font-size: var(--pulsar-text-label-size);
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    text-transform: none;
     color: var(--pulsar-ink-secondary);
   }
 

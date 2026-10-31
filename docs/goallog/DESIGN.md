@@ -33,11 +33,11 @@ lines and inks; this section replaces their accent rows.
 - **Accent: tangerine.** Burnt orange, `#C2410C` light, `#FF8A4C` dark. A lighter orange
   does not carry white at 4.5:1; this step does, so the pill button keeps white ink on the light face
   and dark ink on the dark one.
-- **Brand block: deep navy `#0B1F3A`** (dark face `#07142A`), the desktop rail. The rail re-speaks the
+- **Brand block: deep navy `#0B1F3A`** (dark face `#0E2347`), the desktop rail and the hero block of a screen. The rail re-speaks the
   ink, muted, line and accent tokens inside itself, so every row in it stays on a token.
 - **Highlight: sky `#7DD3FC`**, only on the navy (focus ring, the current item's mark). Never text on white.
 - **Titles: Archivo Black** (`--font-display`), one weight, 30px on the phone and 44px from 700. Sentences stay
-  Archivo, figures DM Mono; the body sets tabular figures. Chosen: a heavy sporty grotesque of the
+  Archivo, figures Chivo Mono; the body sets tabular figures. Chosen: a heavy sporty grotesque of the
   family already loaded, so it adds character without a second voice.
 - **Primary buttons are pills** (radius 999px). Fields, rows and sheets keep their 10px.
 
@@ -54,10 +54,25 @@ lines and inks; this section replaces their accent rows.
 | rail ink `#F1F5FB` / secondary `#CBD6E6` / muted `#A9B8CF` on `#0B1F3A` | 15.10 / 11.25 / 8.22 |
 | rail sky `#7DD3FC` on `#0B1F3A` | 9.91 |
 | rail ink / sky / muted on active `#1B3560` | 11.13 / 7.30 / 6.06 |
-| dark rail ink / muted on `#07142A` | 16.80 / 9.14 |
-| dark rail ink / muted on active `#17305A` | 11.95 / 6.50 |
+| dark rail ink / muted / sky on `#0E2347` | 14.22 / 7.74 / 9.33 |
+| dark rail ink / sky / muted on active `#1F4180` | 9.03 / 5.92 / 4.91 |
 
 The ground moves to `#F4F5F8` (muted on it 5.19, secondary ink 10.28).
+
+Decided by the user 2026-10-30 after the critic: **navy stays a brand block in the dark face.** This departs
+from «la misma página invertida»: the dark rail was `#07142A`, which vanished on the ground `#0F1317`; it is
+lifted to `#0E2347` (1.20:1 against the ground, a block and not a hairline) and the navy never inverts.
+
+- **One hero block per main screen**, navy on both faces, carrying the figure of the day or of the goal in
+  the title face (Hoy: «1 de 6» and its bar; a goal: its total). The rest of the page stays on the ground.
+- **Button hierarchy.** The pill is the primary action alone. `quiet` is a row with a chevron, for going
+  somewhere; `tone="danger"` on a quiet or ghost button is a destructive act drawn in ink with a red mark,
+  never a pill. A page holds one pill.
+- **One header.** `ScreenHeader` draws back, title and action in fixed places; the chat entry sits at the
+  end of the title line and moves nowhere.
+- **Sentence case** in every label («Mover el final», «Nombre»). Body text on desktop is 14px at least.
+- **Zero is a plain zero.** Figures are set in Chivo Mono, whose zero is unslashed: DM Mono slashes it with no
+  feature to turn that off, so «0 min» read «Ø min».
 
 ## Tokens
 
@@ -113,7 +128,7 @@ Dark, the same design inverted:
 ## Type
 
 - Sentences, headings, commitment names and controls: **Archivo**, fallback `system-ui, sans-serif`.
-- Every figure: **DM Mono**, fallback `ui-monospace, monospace`, `letter-spacing: 0.02em`.
+- Every figure: **Chivo Mono**, fallback `ui-monospace, monospace`, `letter-spacing: 0.02em`.
 - Set a section label at 11 px, mono, uppercase, `letter-spacing: 0.14em`, in **muted**. It names a
   goal or a group, never a state.
 - Set a screen title at 27 px / 600 / `-0.02em` on the phone, 38–44 px / 600–700 / `-0.03em` wide.

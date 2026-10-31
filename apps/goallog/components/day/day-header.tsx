@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
-import { Face, Flex, ScreenHeader, Text, TextLink, ThemeToggle } from "@/components/ui";
+import { Face, Flex, ScreenHeader, SectionLabel, Text, TextLink, ThemeToggle } from "@/components/ui";
 
 type HeaderLink = { href: string; label: string };
 
@@ -94,7 +94,14 @@ export function DayHeader({
         chat
         steps={title === undefined}
         title={title ?? date}
-        eyebrow={title ? date : undefined}
+        eyebrow={
+          title ? (
+            // The rail already says the date from 1024.
+            <Face on="phone">
+              <SectionLabel>{date}</SectionLabel>
+            </Face>
+          ) : undefined
+        }
         controls={controls}
         meta={tally}
         metaVariant="sentence"

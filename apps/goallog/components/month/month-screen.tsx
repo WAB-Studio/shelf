@@ -330,8 +330,7 @@ export async function MonthDetail({
 
 /**
  * `ArmazonEncabezado.dc.html` case 2 (RP-31, RP-32): the month screen. The
- * header names the month and leads back to the goal, with «Todos los meses»
- * for the phone; from 1024 `ListDetail` draws the goal's months beside it, the
+ * header names the month and leads back to the goal, its one way out; from 1024 `ListDetail` draws the goal's months beside it, the
  * month open.
  */
 export async function MonthScreen({ goalId, month }: { goalId: string; month: string }) {
@@ -341,14 +340,12 @@ export async function MonthScreen({ goalId, month }: { goalId: string; month: st
   const mes = `${month}-01`;
   if (!goal.months.some((entry) => entry.month === mes)) notFound();
 
-  const t = await getTranslations();
   return (
     <Page width="full">
       <ScreenHeader
         chat
         title={capitalised(yearLabel(mes))}
         back={{ href: `/metas/${goal.id}`, place: goal.name }}
-        eyebrow={<TextLink href={`/metas/${goal.id}/meses`}>{t("month.list.allMonths")}</TextLink>}
       />
       <ListDetail
         show="detail"

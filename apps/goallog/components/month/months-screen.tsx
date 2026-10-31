@@ -142,13 +142,16 @@ export async function MonthsList({
     </>
   ) : null;
 
+  const nothingPlanned =
+    goal.budgets.length === 0 && goal.rhythm === null && goal.months.every((row) => row.planned === null);
   const rows: TableRow[] = goal.months.map((row) => {
     const started = row.past || row.current;
     const share = row.past ? planShare(goal.plan, row.month) : null;
     const own = screenPlanned(row.planned, goal.plan.budgets.some((budget) => budget.month === row.month));
     const figure = own === null ? null : formatQuantity(own, unit, words);
-    const said = figure === null ? t("month.months.noAmount") : started ? t("month.months.of", { planned: figure }) : figure;
-    const amount = <Text tone="secondary">{said}</Text>;
+    // With no amount anywhere the invitation above says it once; a row says nothing.
+    const said = figure === null ? null : started ? t("month.months.of", { planned: figure }) : figure;
+    const amount = said === null && nothingPlanned ? null : <Text tone="secondary">{said ?? t("month.months.noAmount")}</Text>;
     const state = row.current
       ? t("month.months.current")
       : share && share.carried > 0

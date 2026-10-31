@@ -24,7 +24,6 @@ export function ScreenHeader({
   metaVariant = "meta",
   lead,
   chat = false,
-  steps = false,
 }: {
   title: string;
   back?: { href: string; place: string };
@@ -45,7 +44,7 @@ export function ScreenHeader({
   lead?: ReactNode;
   // Draws the way into /chat at the end of the controls line (`ChatEntrada`, RP-91).
   chat?: boolean;
-  // The eyebrow or controls hold a row of steps: the entry moves to the title's line.
+  // The eyebrow or controls hold a row of steps; the entry still sits at the end of their line.
   steps?: boolean;
 }) {
   const t = useTranslations("common");
@@ -68,7 +67,8 @@ export function ScreenHeader({
       <SectionLabel>{eyebrow}</SectionLabel>
     );
   // With a way back and no row for controls or an eyebrow, the entry shares the back's line.
-  const chatInTitle = chat && steps;
+  // The entry keeps one place on every screen: the end of the line over the title.
+  const chatInTitle = false;
   const chatInBackRow = chat && !!back && !controls && !eyebrowNode;
   const backLink = back ? (
     <Link

@@ -14,6 +14,8 @@ export function Split({
   twoFifths = false,
   even = false,
   afterBelow = false,
+  mainFirst = false,
+  foot,
 }: {
   main: ReactNode;
   before?: ReactNode;
@@ -32,6 +34,10 @@ export function Split({
   // From 1024 `after` leaves the right column and stands under both, at the
   // content's full width: a part whose text needs more than the aside gives.
   afterBelow?: boolean;
+  // On a phone `main` comes first, then `before`, `after` and `foot`: the part a person came for leads.
+  mainFirst?: boolean;
+  // What closes the screen under the split, at every width; with `mainFirst` it keeps last on a phone.
+  foot?: ReactNode;
 }) {
   const className = [
     styles.split,
@@ -39,12 +45,14 @@ export function Split({
     twoFifths ? styles.twoFifths : undefined,
     even ? styles.even : undefined,
     afterBelow ? styles.afterBelow : undefined,
+    mainFirst ? styles.mainFirst : undefined,
     before ? undefined : styles.noBefore,
   ]
     .filter(Boolean)
     .join(" ");
 
   return (
+    <>
     <div className={className}>
       {before ? <div className={styles.before} data-part="split-before">{before}</div> : null}
       <div className={styles.main} data-part="split-main">
@@ -53,5 +61,7 @@ export function Split({
       </div>
       {after ? <div className={styles.after} data-part="split-after">{after}</div> : null}
     </div>
+    {foot ? <div className={mainFirst ? `${styles.foot} ${styles.footLast}` : styles.foot} data-part="split-foot">{foot}</div> : null}
+    </>
   );
 }

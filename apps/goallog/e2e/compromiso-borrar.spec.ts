@@ -51,10 +51,13 @@ async function rowsOf(db: Db, id: string) {
     from goals.commitments where id = ${id}`;
 }
 
-const rowOnGoal = (page: Page, name: string): Locator => page.locator("main button", { hasText: name });
+// A live commitment is a link to its own screen; a retired one a disabled row.
+const rowOnGoal = (page: Page, name: string): Locator => page.locator("main a, main button", { hasText: name });
 
+// The row opens the commitment's screen, whose «Retirarlo o borrarlo» opens the sheet.
 async function openSheet(page: Page, name: string): Promise<Locator> {
-  await rowOnGoal(page, name).click();
+  await page.locator("main a", { hasText: name }).click();
+  await page.getByRole("button", { name: "Retirarlo o borrarlo", exact: true }).click();
   const sheet = dialog(page);
   await expect(sheet.getByRole("heading", { name: "¿Retirarlo?" })).toBeVisible();
   return sheet;
@@ -200,7 +203,7 @@ test.describe("the delete (RP-127)", () => {
       await sheet.getByRole("button", { name: "Borrar el compromiso", exact: true }).click();
       await page.getByRole("button", { name: "Dejarlo como está", exact: true }).click();
       await expect(dialog(page)).toHaveCount(0);
-      await expect(rowOnGoal(page, "Estirar")).toBeVisible();
+      await expect(page.getByRole("main")).toContainText("Estirar");
       expect(posts).toHaveLength(0);
       expect(await rowsOf(db, id)).toHaveLength(1);
     } finally {
@@ -273,7 +276,7 @@ test.describe("the delete (RP-127)", () => {
       await sheet.getByRole("button", { name: "Borrar el compromiso", exact: true }).click();
       await page.getByRole("button", { name: "Borrarlo", exact: true }).click();
       await expect(dialog(page).getByText(FACT_REFUSAL)).toBeVisible();
-      await expect(rowOnGoal(page, "Estirar")).toHaveCount(1);
+      await expect(page.getByRole("main")).toContainText("Estirar");
       expect(await rowsOf(db, id)).toHaveLength(1);
     } finally {
       await context.close();
@@ -401,7 +404,7 @@ test.describe("the cadence page of a commitment (RP-127, RP-12)", () => {
     }
   });
 
-  test("a commitment with a fact, a retired one, an unknown one and another person's are not found, while a fact-less one opens", async ({ person, personId, browser, baseURL, db }) => {
+  test("a retired one, an unknown one and another person's are not found, while one with a fact or none opens", async ({ person, personId, browser, baseURL, db }) => {
     // Kills: rendering the page without reading `factDayCount`, `retiredAt` or the owner (the form opens on all of them).
     const goal = await seedOpenGoal(db, person, { name: "Cuidado", unit: MINUTES, horizon: null });
     const open = await seedCommitment(db, person, goal, "Libre");
@@ -421,8 +424,14 @@ test.describe("the cadence page of a commitment (RP-127, RP-12)", () => {
       } finally {
         await control.context.close();
       }
+      const named = await visit(browser, baseURL, person, path(goal, withFact), 360);
+      try {
+        await expect(named.page.getByRole("heading", { level: 1, name: "Con hecho" })).toBeVisible();
+        await expect(named.page.getByRole("button", { name: "Cambiar el nombre", exact: true })).toBeVisible();
+      } finally {
+        await named.context.close();
+      }
       const cases = [
-        path(goal, withFact),
         path(goal, retired),
         path(goal, "00000000-0000-4000-8000-000000000000"),
         path(goal, "xyz"),

@@ -257,6 +257,8 @@ export type GoalView = {
   plan: PlanInput;
   roadmap: Roadmap;
   note: string | null;
+  // The days a commitment was marked, with its name: what «Abrir en Claude» tells of the last days.
+  marked: { day: string; name: string }[];
   // The goal above and the ones above that, the top one first.
   parent: GoalRef | null;
   ancestors: GoalRef[];
@@ -835,6 +837,10 @@ export async function loadGoal(
       ? { state: "noRhythm", months: [], unplaced: [], end: null, lastDay: row.goal.horizon === null ? null : dayBefore(row.goal.horizon) }
       : fillPlan(figures.plan),
     note: row.goal.note ?? null,
+    marked: row.facts.flatMap((fact) => {
+      const name = row.commitments.find((commitment) => commitment.id === fact.commitment_id)?.name;
+      return fact.commitment_id && name ? [{ day: fact.day, name }] : [];
+    }),
     parent: parent ? ref(parent) : null,
     ancestors: (node?.ancestors ?? []).map((id) => ref(tree.byId.get(id)!)).reverse(),
     level: node?.level ?? null,

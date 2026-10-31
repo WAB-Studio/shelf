@@ -156,7 +156,7 @@ export function Table({ caption, columns, rows, figures = [], unit, current, nar
             {row.phoneMark ? <> · {row.phoneMark}</> : null}
           </span>
         ) : null}
-        {row.phoneUnder ? <span className={styles.detail}>{row.phoneUnder}</span> : null}
+        {row.phoneUnder ? <span className={styles.detailWrap}>{row.phoneUnder}</span> : null}
       </span>
       {lead === undefined ? null : (
         <span className={styles.stackFigure} data-part="table-stack-figure">

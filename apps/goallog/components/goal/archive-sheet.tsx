@@ -11,7 +11,7 @@ import { type MessageKey } from "@/i18n/translator";
 export type ArchiveGoalActionProps = {
   goalId: string;
   name: string;
-  variant?: "outline" | "ghost";
+  variant?: "outline" | "ghost" | "quiet";
   block?: boolean;
   // «Archivar» beside another control; the foot of the phone face says the whole act.
   short?: boolean;

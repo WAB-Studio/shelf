@@ -198,7 +198,7 @@ test("the general's figure is the sum of its goals, not its own month (RP-80, RP
   // The loose goal keeps its own reading.
   const looseHeader = text.slice(text.indexOf(lc(LOOSE)), text.indexOf(lc("Grabar el audio de referencia (semana 1)")));
   expect(looseHeader).toContain("0 min");
-  expect(looseHeader).toContain(`en ${MONTH_WORD} · sin monto este mes`);
+  expect(looseHeader).not.toContain("sin monto este mes");
   await expect(page.getByRole("link", { name: `Planear ${MONTH_WORD}`, exact: true }).last()).toBeVisible();
 });
 
@@ -237,11 +237,12 @@ test("an inner goal's «sin monto» notice is not printed inside the general's b
   const page = await context.newPage();
   await openMes(page);
 
-  // g3 has a task and no amount this month; only the loose goal says so.
-  const notice = page.getByText(/sin monto este mes/);
-  await expect(notice).toHaveCount(1);
+  // g3 has a task and no amount this month; only the loose goal invites a plan, in a link and not a line.
+  await expect(page.getByText(/sin monto este mes/)).toHaveCount(0);
   const looseY = (await boxOf(page.getByRole("heading", { level: 2, name: LOOSE, exact: true }))).y;
-  expect((await boxOf(notice)).y).toBeGreaterThan(looseY);
+  const invite = page.getByRole("link", { name: `Planear ${MONTH_WORD}`, exact: true });
+  await expect(invite).toHaveCount(1);
+  expect((await boxOf(invite)).y).toBeGreaterThan(looseY);
   const text = await mainText(page);
   const block = text.slice(text.indexOf(lc(G)), text.indexOf(lc(LOOSE)));
   expect(block).not.toContain("sin monto");

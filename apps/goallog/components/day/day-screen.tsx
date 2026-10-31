@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Fragment, type ReactNode } from "react";
 import { getTranslations } from "next-intl/server";
 
-import { Button, Face, Figure, Flex, Page, Panel, Section, SectionLabel, Split, Text, TextLink } from "@/components/ui";
+import { Button, Face, Figure, Flex, Hero, Page, Panel, Progress, Section, SectionLabel, Split, Text, TextLink } from "@/components/ui";
 import type { Translator } from "@/i18n/translator";
 import { dayPhrase as dayPhraseOf, endedPhrase, type DayPhraseKey } from "@/lib/day/day-phrase";
 import { metPhrase, phaseLine } from "@/lib/day/row-phrases";
@@ -167,6 +167,17 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
       : counted.partial > 0
         ? t.rich("day.tallyPartial", { done: counted.done, total: counted.total, partial: counted.partial, ...fig })
         : t.rich("day.tally", { done: counted.done, total: counted.total, ...fig });
+  // Today's one navy block: how many of what the day asks are done, and the bar of it.
+  const hero =
+    past || lastEnded || counted.total === 0 ? null : (
+      <Hero
+        label={t("day.hero.label")}
+        figure={t("day.hero.figure", { done: counted.done, total: counted.total })}
+        caption={counted.partial > 0 ? t("day.hero.captionPartial", { partial: counted.partial }) : t("day.hero.caption")}
+      >
+        <Progress percent={Math.floor((counted.done * 100) / counted.total)} />
+      </Hero>
+    );
   const slotByCommitmentId = new Map(view.slots.map((slot) => [slot.commitmentId, slot]));
 
   // Stable: within each kind, `loadDay`'s own creation order stands.
@@ -743,10 +754,10 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
               : undefined
           }
           theme={{ toLightLabel: t("day.theme.toLight"), toDarkLabel: t("day.theme.toDark") }}
-          tally={tally}
           ended={endedLines}
         />
       )}
+      {hero}
 
       {evidence === "unreadable" ? (
         <EvidenceNote title={t("day.unreadableTitle")} body={t("day.unreadableBody")} />

@@ -2,7 +2,9 @@ import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
 import { notFound, redirect } from "next/navigation";
 
+import { CommitmentActions } from "@/components/goal/commitment-actions";
 import { CommitmentForm } from "@/components/goal/commitment-form";
+import { CommitmentScreen } from "@/components/goal/commitment-screen";
 import { loadGoalForm } from "@/lib/queries/goal";
 import { getPerson } from "@/lib/session";
 
@@ -13,9 +15,9 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 /**
- * The cadence page of a commitment (RP-127): the creation form in its cadence-only mode. A retired
- * commitment, one a fact names, another goal's and another person's are all «not found»; the act
- * refuses the same rows if one is opened before a fact lands.
+ * A commitment's own screen (RP-127): the creation form in its cadence-only mode while no fact names it,
+ * its name and a cadence read as it was once one does. A retired commitment, another goal's and another
+ * person's are «not found»; the act refuses the same rows if a fact lands while the form is open.
  */
 export default async function CommitmentCadencePage({
   params,
@@ -28,7 +30,10 @@ export default async function CommitmentCadencePage({
   const { goalId, commitmentId } = await params;
   const goal = await loadGoalForm(goalId);
   const commitment = goal?.commitments.find((candidate) => candidate.id === commitmentId);
-  if (!goal || !commitment || commitment.retiredAt !== null || commitment.factDayCount > 0) notFound();
+  if (!goal || !commitment || commitment.retiredAt !== null) notFound();
+  if (commitment.factDayCount > 0) {
+    return <CommitmentScreen goalId={goal.id} goalName={goal.name} commitment={commitment} />;
+  }
 
   return (
     <CommitmentForm
@@ -38,6 +43,14 @@ export default async function CommitmentCadencePage({
       measureUnit={goal.measureUnit}
       sources={[]}
       edit={{ commitmentId: commitment.id, cadence: commitment.cadence, name: commitment.name }}
+      foot={
+        <CommitmentActions
+          commitmentId={commitment.id}
+          goalId={goal.id}
+          name={commitment.name}
+          factDayCount={commitment.factDayCount}
+        />
+      }
     />
   );
 }

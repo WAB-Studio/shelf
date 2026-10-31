@@ -54,6 +54,8 @@ export type MonthAcrossGoal = {
   rootName: string;
   aboveName: string | null;
   holdsGoals: boolean;
+  // The civil day the goal was opened.
+  startedOn: string;
   // Goals under it that measure in another unit and add nothing to its line.
   outOfUnit: { id: string; name: string; unit: string }[];
 };
@@ -71,6 +73,8 @@ export type MonthAcross = {
   // "YYYY-MM": the month the first goal or habit was opened in, and the last «Mes» steps forward to.
   firstMonth: string | null;
   lastMonth: string;
+  // The civil day the earliest open goal was opened: the weeks before it have nothing to show; null with no goal.
+  firstDay: string | null;
   today: string;
   evidence: "read" | "unreadable";
   // In the tree's order: each goal after the one above it.
@@ -383,6 +387,7 @@ export async function loadMonthAcross(
       plan,
       ...placeOf(tree, id),
       holdsGoals: sum !== undefined,
+      startedOn: civilDateInZone(new Date(row.goal.created_at)),
       outOfUnit: sum?.outOfUnit ?? [],
     };
   });
@@ -400,6 +405,7 @@ export async function loadMonthAcross(
     view,
     firstMonth: rows[0]?.first_month ?? null,
     lastMonth: forwardLimit({ horizons: rows[0]?.horizons ?? [], today }),
+    firstDay: goals.length === 0 ? null : goals.map((goal) => goal.startedOn).sort()[0],
     today,
     evidence: outcome.status === "read" ? "read" : "unreadable",
     goals,

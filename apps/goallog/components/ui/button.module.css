@@ -111,6 +111,61 @@
   color: var(--pulsar-accent);
 }
 
+/* docs/goallog/DESIGN.md "Naranja y marino": the row a person goes somewhere
+   by. No pill and no ring; a hairline under it, the label at the start and a
+   chevron drawn at the end from two borders, so it works on a link as on a
+   button. */
+.quiet.quiet {
+  justify-content: space-between;
+  inline-size: 100%;
+  border-radius: 10px;
+  background-color: transparent;
+  box-shadow: inset 0 -1px 0 var(--pulsar-line);
+  color: var(--pulsar-ink);
+  /* Radix's ghost pulls itself over the gutter; a row keeps to it. */
+  margin: 0;
+  padding-inline: 4px;
+}
+
+.quiet.quiet::after {
+  content: "";
+  flex: none;
+  inline-size: 7px;
+  block-size: 7px;
+  margin-inline-end: 6px;
+  border-inline-end: 1.5px solid var(--pulsar-muted);
+  border-block-start: 1.5px solid var(--pulsar-muted);
+  transform: rotate(45deg);
+}
+
+/* A label with its hint (`stack`) is a column: the chevron leaves the flow to the row's end. */
+.quiet.quiet.stack {
+  position: relative;
+  padding-inline: 4px 24px;
+}
+
+.quiet.quiet.stack::after {
+  position: absolute;
+  inset-inline-end: 0;
+  inset-block-start: calc(50% - 4px);
+  margin: 0;
+}
+
+.quiet.quiet.quiet:disabled,
+.quiet.quiet.quiet[data-disabled] {
+  box-shadow: inset 0 -1px 0 var(--pulsar-line);
+}
+
+.quiet.quiet:hover {
+  background-color: var(--pulsar-accent-soft);
+}
+
+/* A destructive act, quiet: danger ink on the raised and ground faces, 6.57 and
+   6.03 light (#b42318), 9.20 and 8.55 dark (#ff9b92). */
+.dangerTone.dangerTone {
+  color: var(--pulsar-danger);
+}
+
 /* docs/goallog/DESIGN.md "The controls": solid is the accent filled, with no
    ring of its own. */
 .solid.solid {

@@ -4,8 +4,25 @@
 .before,
 .main,
 .after,
-.tail {
+.tail,
+.foot {
   display: contents;
+}
+
+/* The phone's order with `mainFirst`: the page's own items sit at 0, `main` among them. */
+.mainFirst .before > *,
+.mainFirst .before > * > * {
+  order: 10;
+}
+
+.mainFirst .after > *,
+.mainFirst .after > * > * {
+  order: 11;
+}
+
+.footLast > *,
+.footLast > * > * {
+  order: 12;
 }
 
 /* On a phone the tail follows every other part of the split. */
@@ -15,6 +32,15 @@
 }
 
 @media (min-width: 1024px) {
+  .mainFirst .before > *,
+  .mainFirst .before > * > *,
+  .mainFirst .after > *,
+  .mainFirst .after > * > *,
+  .footLast > *,
+  .footLast > * > * {
+    order: 0;
+  }
+
   .split {
     display: grid;
     /* Main is always the wider column: below 1280 the two share what the rail

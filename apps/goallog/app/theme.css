@@ -33,6 +33,8 @@ body {
      docs/goallog/DESIGN.md "Naranja y marino"). */
   --pulsar-accent: #c2410c;
   --pulsar-accent-soft: #fff3ec;
+  /* A destructive act: 6.57:1 on raised, 6.03 on ground. */
+  --pulsar-danger: #b42318;
   /* The brand block: the desktop rail. Both faces share the navy family. */
   --pulsar-brand: #0b1f3a;
   --pulsar-brand-soft: #1b3560;
@@ -54,9 +56,14 @@ body {
   --pulsar-control-edge: #626c77;
   --pulsar-accent: #ff8a4c;
   --pulsar-accent-soft: #3a2012;
-  --pulsar-brand: #07142a;
-  --pulsar-brand-soft: #17305a;
-  --pulsar-brand-line: #1c3563;
+  /* 9.20:1 on ground, 8.55 on raised. */
+  --pulsar-danger: #ff9b92;
+  /* Lifted from #07142a, which vanished on the ground: navy stays a brand block
+     here, 1.20:1 against it, ink 14.22, muted 7.74, sky 9.33 on it; ink 9.03,
+     sky 5.92, muted 4.91 on the active #1f4180 (docs/goallog/DESIGN.md). */
+  --pulsar-brand: #0e2347;
+  --pulsar-brand-soft: #1f4180;
+  --pulsar-brand-line: #2a4778;
   --pulsar-today: #1e252c;
   --pulsar-on-accent: #0f1317;
   /* Darker than the dark ground on purpose: a sheet is raised, and it has to
@@ -74,8 +81,8 @@ body {
   --pulsar-brand-muted: #a9b8cf;
   /* The one highlight: sky, 9.91:1 on the brand navy. Never text on white. */
   --pulsar-highlight: #7dd3fc;
-  --pulsar-text-label-size: 11px;
-  --pulsar-text-label-tracking: 0.14em;
+  --pulsar-text-label-size: 12px;
+  --pulsar-text-label-tracking: 0.02em;
   --pulsar-text-title-size: 30px;
   --pulsar-text-title-weight: 400;
   --pulsar-text-title-tracking: -0.02em;
@@ -85,6 +92,8 @@ body {
   --pulsar-text-name-size: 16px;
   --pulsar-text-name-weight: 500;
   --pulsar-text-meta-size: 12px;
+  /* A quiet sentence or a note: 13px on the phone, 14px from 1024 where body text goes no lower. */
+  --pulsar-text-small-size: 13px;
   --pulsar-text-measure-size: 26px;
   --pulsar-text-measure-weight: 500;
   --pulsar-text-unit-size: 11px;
@@ -93,6 +102,13 @@ body {
   --pulsar-text-sheet-title-size-wide: 24px;
   --pulsar-text-line-size: 15px;
   --pulsar-text-line-leading: 1.6;
+}
+
+@media (min-width: 1024px) {
+  :root {
+    --pulsar-text-small-size: 14px;
+    --pulsar-text-meta-size: 14px;
+  }
 }
 
 body {
