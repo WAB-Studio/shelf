@@ -12,7 +12,7 @@ import {
 } from "@/components/ui";
 import type { CategoryExpense } from "@/db/queries/reports/expenses-by-category";
 import type { MonthlyFlow } from "@/db/queries/reports/monthly-flow";
-import { chartColor, shares, topWithRest } from "@/lib/fund/glance";
+import { categoryChartColor, shares, topWithRest } from "@/lib/fund/glance";
 import { scopedCategoryName } from "@/lib/fund/category-names";
 
 // Income reads jade and spending violet on every chart; red is only for what was
@@ -57,7 +57,7 @@ export function MonthGlance({
                 tKey("categories.scopedName", { name }),
               ),
               cents: row.totalCents,
-              color: chartColor(row.categoryId),
+              color: categoryChartColor(row.color, row.categoryId),
             })),
             ...(restCents > 0
               ? [{ key: "rest", label: t("glanceOthers"), cents: restCents, color: REST }]

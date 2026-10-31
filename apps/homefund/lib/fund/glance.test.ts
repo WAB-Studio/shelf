@@ -5,7 +5,9 @@ import {
   averageOfActive,
   budgetTotals,
   CHART_PALETTE,
+  categoryChartColor,
   chartColor,
+  isRedish,
   dayNet,
   groupByDay,
   nearestLimit,
@@ -95,4 +97,14 @@ test("chartColor is stable per key and stays inside the palette", () => {
   for (const key of ["a", "b", "Arriendo", "0b5f6a52-6f3b-4c4b-9f64-8c1f0f1d7a11"]) {
     assert.ok((CHART_PALETTE as readonly string[]).includes(chartColor(key)));
   }
+});
+
+test("a stored colour is kept on a chart unless it is red", () => {
+  assert.equal(categoryChartColor("#22C55E", "k"), "#22C55E");
+  assert.equal(categoryChartColor(null, "k"), chartColor("k"));
+  assert.equal(categoryChartColor("#DC2626", "k"), chartColor("k"));
+  assert.equal(categoryChartColor("#E11D48", "k"), chartColor("k"));
+  assert.equal(isRedish("#DC2626"), true);
+  assert.equal(isRedish("#F97316"), false);
+  assert.equal(isRedish("#64748B"), false);
 });

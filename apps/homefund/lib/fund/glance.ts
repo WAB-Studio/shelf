@@ -160,3 +160,27 @@ export function chartColor(key: string): string {
   for (const char of key) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
   return CHART_PALETTE[hash % CHART_PALETTE.length];
 }
+
+// Whether a stored #rrggbb colour reads as red (hue within 20 degrees of it, and
+// saturated enough to be one): a chart keeps red for what was exceeded.
+export function isRedish(hex: string): boolean {
+  const match = /^#([0-9a-f]{6})$/i.exec(hex);
+  if (!match) return false;
+  const [r, g, b] = [0, 2, 4].map((at) => parseInt(match[1].slice(at, at + 2), 16) / 255);
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const delta = max - min;
+  if (delta < 0.2 || max === 0) return false;
+  let hue: number;
+  if (max === r) hue = ((g - b) / delta + 6) % 6;
+  else if (max === g) hue = (b - r) / delta + 2;
+  else hue = (r - g) / delta + 4;
+  const degrees = hue * 60;
+  return degrees <= 20 || degrees >= 340;
+}
+
+// The colour a category wears on a chart: the one it is stored with, or the palette's
+// when it has none or is red.
+export function categoryChartColor(stored: string | null, key: string): string {
+  return stored && /^#[0-9a-f]{6}$/i.test(stored) && !isRedish(stored) ? stored : chartColor(key);
+}
