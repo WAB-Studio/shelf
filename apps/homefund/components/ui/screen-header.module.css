@@ -66,3 +66,14 @@
     letter-spacing: -0.03em;
   }
 }
+
+/* The screen's headline figure: its own row, ahead of the actions' wrap. */
+.figure {
+  order: 3;
+  flex-basis: 100%;
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  color: var(--gray-12);
+}

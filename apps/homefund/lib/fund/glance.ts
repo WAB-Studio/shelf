@@ -104,3 +104,38 @@ export function groupByDay<T extends { occurredAt: string }>(rows: T[]): DayGrou
   }
   return groups;
 }
+
+export type BudgetTotal = { currency: string; limitCents: number; spentCents: number };
+
+// Limit and spend summed per currency, in the order each currency first appears:
+// two currencies are two totals and never one (RF-124).
+export function budgetTotals(rows: LimitBudget[]): BudgetTotal[] {
+  const totals = new Map<string, BudgetTotal>();
+  for (const row of rows) {
+    const total = totals.get(row.currency) ?? {
+      currency: row.currency,
+      limitCents: 0,
+      spentCents: 0,
+    };
+    total.limitCents += row.limitCents;
+    total.spentCents += row.spentCents;
+    totals.set(row.currency, total);
+  }
+  return [...totals.values()];
+}
+
+// A day's net per currency: income in, expense out. A transfer moves money between
+// the fund's own accounts and a reconciliation adjustment is no spending, so neither
+// counts (RF-19, RF-138). Order of first appearance.
+export function dayNet(
+  rows: { kind: string; currency: string; amountCents: number; reconciliationId: string | null }[],
+): [string, number][] {
+  const nets = new Map<string, number>();
+  for (const row of rows) {
+    if (row.reconciliationId !== null) continue;
+    if (row.kind !== "income" && row.kind !== "expense") continue;
+    const signed = row.kind === "income" ? row.amountCents : -row.amountCents;
+    nets.set(row.currency, (nets.get(row.currency) ?? 0) + signed);
+  }
+  return [...nets];
+}

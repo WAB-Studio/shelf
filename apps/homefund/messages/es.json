@@ -643,7 +643,8 @@
     "adjustmentFix": "Se corrige cuadrando la cuenta de nuevo.",
     "forHousehold": "Del hogar",
     "forHouseholdHint": "Un gasto del hogar pagado con tu cuenta: cuenta como tu aporte al fondo.",
-    "forHouseholdCounts": "Cuenta como aporte de quien lo pagó"
+    "forHouseholdCounts": "Cuenta como aporte de quien lo pagó",
+    "headlineNet": "Neto"
   },
   "cash": {
     "withdrawAction": "Retirar efectivo",
@@ -748,7 +749,9 @@
       "periodInvalid": "Elige un periodo válido.",
       "budgetInvalid": "Ese presupuesto no es válido.",
       "scopeViolation": "La cuenta o la etiqueta no pertenecen al mismo ámbito que la categoría."
-    }
+    },
+    "headlineLeft": "Quedan {left} de {limit}",
+    "headlineOver": "Superado por {over} de {limit}"
   },
   "goals": {
     "title": "Metas de ahorro",
@@ -826,7 +829,8 @@
       "goalInvalid": "Esa meta no es válida.",
       "contributionInvalid": "Ese aporte no es válido.",
       "scopeViolation": "La cuenta no pertenece al mismo ámbito que la meta."
-    }
+    },
+    "headlineSaved": "Apartado"
   },
   "plannedPayments": {
     "title": "Pagos planificados",

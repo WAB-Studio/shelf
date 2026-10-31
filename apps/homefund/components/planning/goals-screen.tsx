@@ -213,6 +213,19 @@ export function GoalsScreen({
       <Box display={{ initial: "none", lg: "block" }}>
         <ScreenHeader
           title={t("title")}
+        figure={
+          !archived && goals.length > 0 ? (
+            <>
+              {t("headlineSaved")}{" "}
+              {[...bandTotals.entries()].map(([currency, sums], index) => (
+                <Fragment key={currency}>
+                  {index > 0 && " · "}
+                  <Money minor={sums.savedCents} currency={currency} size="inherit" signed={false} />
+                </Fragment>
+              ))}
+            </>
+          ) : undefined
+        }
           meta={
             <>
               {t("listMeta", { count: goals.length })}
@@ -255,6 +268,19 @@ export function GoalsScreen({
       <Box display={{ initial: "block", lg: "none" }}>
         <ScreenHeader
           title={t("title")}
+        figure={
+          !archived && goals.length > 0 ? (
+            <>
+              {t("headlineSaved")}{" "}
+              {[...bandTotals.entries()].map(([currency, sums], index) => (
+                <Fragment key={currency}>
+                  {index > 0 && " · "}
+                  <Money minor={sums.savedCents} currency={currency} size="inherit" signed={false} />
+                </Fragment>
+              ))}
+            </>
+          ) : undefined
+        }
           meta={hasGroup ? <FundChip label={tKey("fund.label")} /> : undefined}
           actions={!archived && goals.length > 0 ? addButton : undefined}
         />

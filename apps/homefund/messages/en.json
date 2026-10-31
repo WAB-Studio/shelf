@@ -643,7 +643,8 @@
     "adjustmentFix": "Fix it by reconciling the account again.",
     "forHousehold": "For the household",
     "forHouseholdHint": "A household bill paid from your account: it counts as your contribution to the fund.",
-    "forHouseholdCounts": "Counts as a contribution by whoever paid it"
+    "forHouseholdCounts": "Counts as a contribution by whoever paid it",
+    "headlineNet": "Net"
   },
   "cash": {
     "withdrawAction": "Withdraw cash",
@@ -748,7 +749,9 @@
       "periodInvalid": "Choose a valid period.",
       "budgetInvalid": "That budget is not valid.",
       "scopeViolation": "The account or label does not belong to the same scope as the category."
-    }
+    },
+    "headlineLeft": "{left} left of {limit}",
+    "headlineOver": "Over by {over} of {limit}"
   },
   "goals": {
     "title": "Savings goals",
@@ -826,7 +829,8 @@
       "goalInvalid": "That goal is not valid.",
       "contributionInvalid": "That contribution is not valid.",
       "scopeViolation": "The account does not belong to the same scope as the goal."
-    }
+    },
+    "headlineSaved": "Set aside"
   },
   "plannedPayments": {
     "title": "Planned payments",

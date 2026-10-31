@@ -3,6 +3,8 @@ import { test } from "node:test";
 
 import {
   averageOfActive,
+  budgetTotals,
+  dayNet,
   groupByDay,
   nearestLimit,
   nextDebtPayment,
@@ -61,4 +63,27 @@ test("groupByDay keeps first-seen order", () => {
     ["2026-10-30", 2],
     ["2026-10-29", 1],
   ]);
+});
+
+test("budgetTotals sums per currency and never across them", () => {
+  const totals = budgetTotals([
+    { id: "a", limitCents: 100, spentCents: 40, currency: "COP" },
+    { id: "b", limitCents: 50, spentCents: 60, currency: "USD" },
+    { id: "c", limitCents: 200, spentCents: 10, currency: "COP" },
+  ]);
+  assert.deepEqual(totals, [
+    { currency: "COP", limitCents: 300, spentCents: 50 },
+    { currency: "USD", limitCents: 50, spentCents: 60 },
+  ]);
+});
+
+test("dayNet counts income and expense only, per currency", () => {
+  const row = (kind: string, amountCents: number, reconciliationId: string | null = null, currency = "COP") => ({
+    kind, currency, amountCents, reconciliationId,
+  });
+  assert.deepEqual(
+    dayNet([row("income", 500), row("expense", 200), row("transfer", 999), row("expense", 50, "r1")]),
+    [["COP", 300]],
+  );
+  assert.deepEqual(dayNet([]), []);
 });
