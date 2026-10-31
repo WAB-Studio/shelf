@@ -16,8 +16,9 @@
   gap: 5px;
   padding: 14px 18px;
   background-color: var(--color-panel-solid);
-  border: 1px solid var(--gray-a4);
-  border-radius: 16px;
+  border: 1px solid var(--hf-line);
+  box-shadow: var(--hf-shadow);
+  border-radius: var(--hf-card-radius);
 }
 
 .label {

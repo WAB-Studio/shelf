@@ -1,0 +1,44 @@
+/* One tap picks the category: a tile over its name, ringed once chosen. */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(76px, 1fr));
+  gap: 8px;
+  width: 100%;
+}
+
+.choice {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  min-width: 0;
+  padding: 10px 4px;
+  border: 1px solid var(--gray-a5);
+  border-radius: 12px;
+  background-color: var(--color-panel-solid);
+  color: var(--gray-12);
+  font: inherit;
+  font-size: 12.5px;
+  line-height: 1.2;
+  text-align: center;
+  cursor: pointer;
+}
+
+.choice:hover {
+  background-color: var(--gray-a2);
+}
+
+.choice[aria-pressed="true"] {
+  border-color: var(--accent-9);
+  background-color: var(--accent-3);
+  box-shadow: 0 0 0 1px var(--accent-9);
+}
+
+.label {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

@@ -11,6 +11,9 @@ export type ShellSummary = {
   role: GroupMember["role"] | null;
   // Deliveries waiting in the queue (RF-90), the sidebar's amber count.
   pendingDeliveries: number;
+  // Movements one side known, waiting to be completed («Por completar»): with
+  // the deliveries, what the phone's Bandeja tab counts.
+  awaitingCounterparty: number;
   // The caller's live fund (RF-55), read as getUserGroup reads it; null runs personal-only.
   group: { id: string; name: string } | null;
 };
@@ -25,13 +28,14 @@ export type ShellSummary = {
  */
 export async function getShellSummary(): Promise<ShellSummary> {
   const user = await getSessionUser();
-  if (!user) return { memberName: null, role: null, pendingDeliveries: 0, group: null };
+  if (!user) return { memberName: null, role: null, pendingDeliveries: 0, awaitingCounterparty: 0, group: null };
 
   return withUserDb(async (tx) => {
     const [row] = await tx.execute<{
       member_name: string | null;
       role: GroupMember["role"] | null;
       pending_deliveries: number;
+      awaiting_counterparty: number;
       group_id: string | null;
       group_name: string | null;
     }>(sql`select
@@ -41,6 +45,8 @@ export async function getShellSummary(): Promise<ShellSummary> {
         where gm.user_id = ${user.id} and gm.archived_at is null limit 1) as role,
       (select count(*)::int from ingest_deliveries
         where status = 'pending') as pending_deliveries,
+      (select count(*)::int from transactions
+        where awaiting_counterparty and reviewed_at is null) as awaiting_counterparty,
       (select g.id from groups g join group_members gm on gm.group_id = g.id
         where gm.user_id = ${user.id} and gm.archived_at is null limit 1) as group_id,
       (select g.name from groups g join group_members gm on gm.group_id = g.id
@@ -50,6 +56,7 @@ export async function getShellSummary(): Promise<ShellSummary> {
       memberName: row.member_name,
       role: row.role,
       pendingDeliveries: row.pending_deliveries,
+      awaitingCounterparty: row.awaiting_counterparty,
       group: row.group_id !== null && row.group_name !== null
         ? { id: row.group_id, name: row.group_name } : null,
     };

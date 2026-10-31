@@ -20,6 +20,7 @@ import {
   Field,
   FieldControl,
   FieldGroup,
+  FormFooter,
   FieldLabel,
   FieldMessage,
   Flex,
@@ -31,6 +32,7 @@ import {
   TapTarget,
   Text,
   TextField,
+  AmountField,
 } from "@/components/ui";
 import type {
   OfferedCurrency,
@@ -87,6 +89,8 @@ export function QuickEntrySheet({
           grows past the viewport instead of the row shrinking inside it. */}
       <Dialog.Content
         maxWidth={{ initial: "min(600px, 100vw - 32px)", md: "576px" }}
+        // The sheet scrolls inside the screen, so the save button can ride its foot.
+        maxHeight="calc(100dvh - 48px)"
       >
         <Flex align="center" justify="between" mb="4">
           <Dialog.Title mb="0">{t("quickTitle")}</Dialog.Title>
@@ -179,6 +183,8 @@ function QuickEntryForm({
   const amount = useWatch({ control: form.control, name: "amount" });
   const currency = useWatch({ control: form.control, name: "currency" });
   const splits = useWatch({ control: form.control, name: "splits" });
+  // Errors wait for a submit attempt: an untouched form is not a wrong one.
+  const submitted = form.formState.isSubmitted;
 
   // The figure is read in whatever the chosen account settles in, so switching
   // account switches the reading with it.
@@ -360,9 +366,9 @@ function QuickEntryForm({
     <form onSubmit={form.handleSubmit(onSubmit)} noValidate>
       <FieldGroup>
         <Field>
-          <FieldLabel htmlFor="quick-text">{t("quickTitle")}</FieldLabel>
           <TextField.Root
             id="quick-text"
+            aria-label={t("quickTitle")}
             value={text}
             onChange={(event) => handleText(event.target.value)}
             placeholder={t("quickPlaceholder")}
@@ -410,7 +416,7 @@ function QuickEntryForm({
             <Field invalid={fieldState.invalid}>
               <FieldLabel htmlFor="quick-amount">{t("amountLabel")}</FieldLabel>
               <FieldControl>
-                <TextField.Root
+                <AmountField
                   {...field}
                   id="quick-amount"
                   size="3"
@@ -426,8 +432,9 @@ function QuickEntryForm({
         <Controller
           name="splits"
           control={form.control}
-          render={({ field, fieldState }) => (
-            <Field invalid={fieldState.invalid}>
+          // Destructured here, ahead of the submit gate: a field that never reads its error is never told it changed.
+          render={({ field, fieldState: { invalid, error } }) => (
+            <Field invalid={submitted && invalid}>
               <FieldLabel>{t("categoryLabel")}</FieldLabel>
               <SplitEditor
                 total={amount}
@@ -435,10 +442,11 @@ function QuickEntryForm({
                 scope={scope}
                 kind="expense"
                 categories={options.categories}
+                frequentIds={options.frequentCategoryIds}
                 value={field.value}
                 onChange={field.onChange}
               />
-              <FieldMessage error={fieldState.error} />
+              <FieldMessage error={submitted ? error : undefined} />
             </Field>
           )}
         />
@@ -533,10 +541,12 @@ function QuickEntryForm({
         {/* Never dead while the form is short of something: submitting is what
             makes it say so. An unanswered question is the one exception, since
             the hint already says what is missing (RF-22). */}
-        <Button type="submit" size="3" disabled={create.isPending || awaitingPick}>
-          {create.isPending && <Spinner />}
-          {t("quickSave")}
-        </Button>
+        <FormFooter>
+          <Button type="submit" size="3" disabled={create.isPending || awaitingPick}>
+            {create.isPending && <Spinner />}
+            {t("quickSave")}
+          </Button>
+        </FormFooter>
       </FieldGroup>
     </form>
   );

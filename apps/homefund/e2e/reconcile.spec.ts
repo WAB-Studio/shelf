@@ -835,7 +835,7 @@ test.describe("confirming (B7)", () => {
         page
           .getByRole("row")
           .or(page.locator('a[href*="/movements/"]'))
-          .getByText("Descuadre", { exact: true }),
+          .getByText("Diferencia", { exact: true }),
       ).toHaveCount(0);
     } finally {
       await dropAccount(account.id);
@@ -1279,7 +1279,7 @@ test.describe("the gap in the field's frame (RF-137, board C1)", () => {
       const figureSpan = gapFigure(dialog, signed(-4_900));
       await expect(figureSpan).toBeVisible();
       expect(flat(await figureSpan.innerText())).toBe(signed(-4_900));
-      await expect(figureSpan).toHaveCSS("color", await colorOf(dialog, "--accent-11"));
+      await expect(figureSpan).toHaveCSS("color", await colorOf(dialog, "--jade-11"));
 
       await submit(dialog).click();
       const first = historyFigures(dialog).first();
@@ -1315,7 +1315,7 @@ test.describe("the gap in the field's frame (RF-137, board C1)", () => {
 
       const figureSpan = gapFigure(dialog, signed(-5_000));
       await expect(figureSpan).toBeVisible();
-      await expect(figureSpan).toHaveCSS("color", await colorOf(dialog, "--accent-11"));
+      await expect(figureSpan).toHaveCSS("color", await colorOf(dialog, "--jade-11"));
     } finally {
       await dropAccount(account.id);
     }

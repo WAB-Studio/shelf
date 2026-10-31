@@ -17,7 +17,7 @@ import {
   FieldMessage,
   Flex,
   Spinner,
-  TextField,
+  DateInput,
 } from "@/components/ui";
 import type { PlannedPaymentRow } from "@/db/queries/planned-payments";
 import { todayInBogota } from "@/lib/dates";
@@ -99,11 +99,10 @@ function SettleForm({
             <Field invalid={fieldState.invalid}>
               <FieldLabel htmlFor="settle-date">{t("occurredAtLabel")}</FieldLabel>
               <FieldControl>
-                <TextField.Root
+                <DateInput
                   {...field}
                   id="settle-date"
                   size="3"
-                  type="date"
                   disabled={settle.isPending}
                 />
               </FieldControl>

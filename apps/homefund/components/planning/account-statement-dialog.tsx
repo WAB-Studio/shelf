@@ -21,6 +21,7 @@ import {
   Spinner,
   Text,
   TextField,
+  AmountField,
 } from "@/components/ui";
 import { minorUnitExponent, type CurrencyCode } from "@/lib/currency";
 import { todayInBogota } from "@/lib/dates";
@@ -222,7 +223,7 @@ function StatementForm({
                 </Flex>
               </FieldLabel>
               <FieldControl>
-                <TextField.Root
+                <AmountField
                   id="statement-opening"
                   size="3"
                   inputMode={amountInputMode(currency)}
@@ -251,7 +252,7 @@ function StatementForm({
                 {t("statementClosingLabel")}
               </FieldLabel>
               <FieldControl>
-                <TextField.Root
+                <AmountField
                   {...field}
                   id="statement-closing"
                   size="3"
@@ -278,7 +279,7 @@ function StatementForm({
                 </Flex>
               </FieldLabel>
               <FieldControl>
-                <TextField.Root
+                <AmountField
                   id="statement-credits"
                   size="3"
                   inputMode={amountInputMode(currency)}
@@ -311,7 +312,7 @@ function StatementForm({
                 </Flex>
               </FieldLabel>
               <FieldControl>
-                <TextField.Root
+                <AmountField
                   id="statement-debits"
                   size="3"
                   inputMode={amountInputMode(currency)}
@@ -347,7 +348,7 @@ function StatementForm({
                   </Flex>
                 </FieldLabel>
                 <FieldControl>
-                  <TextField.Root
+                  <AmountField
                     id="statement-minimum"
                     size="3"
                     inputMode={amountInputMode(currency)}
@@ -382,7 +383,7 @@ function StatementForm({
                   </Flex>
                 </FieldLabel>
                 <FieldControl>
-                  <TextField.Root
+                  <AmountField
                     id="statement-interest"
                     size="3"
                     inputMode={amountInputMode(currency)}
@@ -417,7 +418,7 @@ function StatementForm({
                   </Flex>
                 </FieldLabel>
                 <FieldControl>
-                  <TextField.Root
+                  <AmountField
                     id="statement-fees"
                     size="3"
                     inputMode={amountInputMode(currency)}

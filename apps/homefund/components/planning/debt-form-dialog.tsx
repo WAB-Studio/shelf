@@ -24,6 +24,7 @@ import {
   Spinner,
   Text,
   TextField,
+  AmountField,
 } from "@/components/ui";
 import {
   BASE_CURRENCY,
@@ -415,7 +416,7 @@ function DebtForm({
                   {t("openingBalanceLabel")}
                 </FieldLabel>
                 <FieldControl>
-                  <TextField.Root
+                  <AmountField
                     {...field}
                     id="debt-amount"
                     size="3"
@@ -528,7 +529,7 @@ function DebtForm({
                   {t("minimumFixed")}
                 </FieldLabel>
                 <FieldControl>
-                  <TextField.Root
+                  <AmountField
                     id="debt-minimum-fixed"
                     size="3"
                     inputMode={amountInputMode(currency)}
@@ -586,7 +587,7 @@ function DebtForm({
                 </Flex>
               </FieldLabel>
               <FieldControl>
-                <TextField.Root
+                <AmountField
                   id="debt-credit-limit"
                   size="3"
                   inputMode={amountInputMode(currency)}
@@ -687,7 +688,7 @@ function DebtForm({
                 </Flex>
               </FieldLabel>
               <FieldControl>
-                <TextField.Root
+                <AmountField
                   id="debt-aval"
                   size="3"
                   inputMode={amountInputMode(currency)}

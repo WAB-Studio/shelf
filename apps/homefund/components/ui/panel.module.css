@@ -1,10 +1,11 @@
-/* The card of SPEC-A3: one hairline, no shadow, 16px on the corner. */
+/* The card of SPEC-A3, in the brand's finish: tinted line, soft shadow, 20px corner. */
 .panel {
   background-color: var(--color-panel-solid);
-  border: 1px solid var(--gray-a4);
+  border: 1px solid var(--hf-line);
+  box-shadow: var(--hf-shadow);
   /* SPEC-A3 gives a card 16px and its dense table 14px, and has not said which
      one a card that carries a list of rows takes. */
-  border-radius: 16px;
+  border-radius: var(--hf-card-radius);
   /* What holds a row's content off the card's edge, `PanelRow` and `PanelBlock` alike. */
   --panel-inset: 18px;
 }

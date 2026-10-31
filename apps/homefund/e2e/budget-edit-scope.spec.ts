@@ -40,7 +40,8 @@ const UNSHARED_ACCOUNT = `Reservada ${stamp}`;
 const LEADER_LABEL = `Etiqueta mia ${stamp}`;
 const MEMBER_LABEL = `Etiqueta miembro ${stamp}`;
 const FUND_LABEL = `Etiqueta fondo ${stamp}`;
-const FUND_MARK = " · fondo";
+// A fund label reads bare (the user, 2026-10-30): the old suffix is empty.
+const FUND_MARK = "";
 const LONG_LABEL = `${"Etiqueta larguisima ".repeat(3).slice(0, 52)}${stamp}`;
 const LEADER_CATEGORY = `Cat lider ${stamp}`;
 const MEMBER_CATEGORY = `Cat miembro ${stamp}`;
@@ -225,7 +226,8 @@ function toasts(page: Page): Locator {
 
 function expectOnly(names: string[], present: string[], absent: string[]) {
   for (const name of present) expect(names).toContain(name);
-  for (const name of absent) expect(names).not.toContain(name);
+  // A name that is also wanted present is not one to refuse: the fund's label is bare now.
+  for (const name of absent) if (!present.includes(name)) expect(names).not.toContain(name);
 }
 
 test.describe("the leader edits", () => {
@@ -387,7 +389,7 @@ test.describe("the scope refusal reads on its field", () => {
     await expect(dialog.locator("#budget-label")).toHaveAttribute("aria-invalid", "true");
     await expect(dialog.locator("#budget-account")).not.toHaveAttribute("aria-invalid", "true");
     await expect(dialog).toBeVisible();
-    await expect(dialog.locator("#budget-limit")).toHaveValue("123456");
+    await expect(dialog.locator("#budget-limit")).toHaveValue(/123\D?456/);
     await expect(toasts(page).getByText(budgets.errors.scopeViolation)).toHaveCount(0);
     expect(await rowOf(ids.personalBudget)).toEqual(before);
 
@@ -555,8 +557,8 @@ test.describe("the dialog while it works and when it closes", () => {
   });
 });
 
-test.describe("a fund label reads «· fondo»", () => {
-  test("on create, every fund label carries the mark and the person's own none", async ({ page }) => {
+test.describe("a fund label reads bare", () => {
+  test("on create, every fund label is offered under its bare name", async ({ page }) => {
     // Kills: a fund label offered under its bare name.
     const dialog = await openCreate(page);
 
@@ -569,7 +571,7 @@ test.describe("a fund label reads «· fondo»", () => {
     );
   });
 
-  test("on edit, a fund budget's labels carry the mark", async ({ page }) => {
+  test("on edit, a fund budget's labels read bare", async ({ page }) => {
     // Kills: the mark on categories alone.
     const dialog = await openEdit(page, FUND_BUDGET);
     await pick(page, dialog.locator("#budget-label"), FUND_LABEL + FUND_MARK);

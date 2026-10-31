@@ -33,6 +33,7 @@ This file is the core every agent loads. Read the file the index names before th
 - `docs/agentes/lanes.md`: opening, working in and dropping a lane; `HARNESS_LANE`; the harness.
 - `docs/agentes/verificacion.md`: suites, judges, CI, what a session spends.
 - `docs/agentes/canvas.md`: the canvases, when the user asks for a drawing.
+- `docs/agentes/lecciones-agenda-amiga.md`: the user's design critiques, as rules. Read it before a critique or a restyle.
 - `docs/agentes/wordbook.md`: WordBook's `/cuenta`, auth, keys and census.
 - `docs/agentes/historia.md`: the measurements and decisions behind these rules.
 - `docs/TRAPS.md`: read it before writing a query, a migration or a spec.
@@ -53,8 +54,8 @@ This file is the core every agent loads. Read the file the index names before th
 
 ## Modules
 
-- Work in one session. Write the code and its tests together; spawn a subagent only for work that truly runs in parallel.
-  Decided by the user 2026-10-24: «no hacemos todo este circo de agentes».
+- Fan independent work out to parallel agents, one lane each (`scripts/worktree.sh`). Write the code and its tests together.
+  Decided by the user 2026-10-30: «lanzar varios agentes para agilizar el trabajo».
 - Build a screen straight from its `DESIGN.md` words, whole and working. Draw no board first, even where an older decision asks
   for one; show the screen when it is done and refine after. Decided by the user 2026-10-30: «es mejor refinar que demorar».
 - Review before merging: run `/code-review` on the branch's diff, then `/simplify`. Fix what they find; that is the review.
@@ -98,13 +99,8 @@ This file is the core every agent loads. Read the file the index names before th
 
 ## Verification
 - `npm run typecheck` is tsgo, `npm run lint` is eslint cached. Both take seconds. Run them freely.
-- Per module run `typecheck`, `lint`, `check:unit` and the module's own new tests. Run the `check:*` and specs below
-  once, after the last module of the list, over all of it. Decided by the user 2026-10-28: «deberíamos hacerlo al
-  final de todas las cosas que queremos hacer no en cada uno».
-- Size that final proof by what the list reaches:
-  - A pure function, or a file nothing imports yet: `typecheck`, `lint`, `check:unit` and its own tests.
-  - A query or a server action: add every `check:*` that imports it. Grep the importers; in doubt, run them all.
-  - A screen: its own specs and the specs the plan names. The whole e2e suite runs in CI, never locally.
+- Run only `typecheck` and `lint` locally. Write the tests; CI runs every `check:*` and spec. Decided by the user
+  2026-10-30: «dejar de ejecutar tests y checks que me tienen podrido de tantos pasos».
 - Chase a red with the one spec that failed and the server log. Never by repeating the suite.
 - Stub every paid model in a test, a check and a CI job. No proof calls OpenAI or spends a key. Decided by the user
   2026-10-15: «no me gusta eso de que los tests gastan dinero».

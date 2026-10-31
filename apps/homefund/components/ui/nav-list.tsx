@@ -33,7 +33,7 @@ export function NavList({
 }) {
   if (variant === "sidebar") {
     return (
-      <Flex direction="column" style={{ gap: 2 }}>
+      <Flex direction="column">
         {items.map((item) => (
           <LocaleLink
             key={item.key}

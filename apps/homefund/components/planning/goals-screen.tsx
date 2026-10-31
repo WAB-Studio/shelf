@@ -8,7 +8,7 @@ import {
   useTable,
 } from "@tanstack/react-table";
 import { EllipsisVertical, Plus } from "lucide-react";
-import { useLocale, useTranslations } from "next-intl";
+import { useFormatter, useLocale, useTranslations } from "next-intl";
 import { useAction } from "next-safe-action/hooks";
 import { Fragment, useState } from "react";
 import { toast } from "sonner";
@@ -34,7 +34,6 @@ import {
   Figure,
   Flex,
   FundChip,
-  Heading,
   IconButton,
   Money,
   Progress,
@@ -45,6 +44,7 @@ import {
 import type { GoalProgress } from "@/db/queries/savings-goals";
 import type { TransactionFormOptions } from "@/db/queries/transaction-form";
 import { usePathname, useRouter } from "@/i18n/navigation";
+import { civilDateToDate } from "@/lib/dates";
 import { formatMoney } from "@/lib/money";
 import { useActionErrorToast } from "@/lib/use-action-toast";
 
@@ -237,7 +237,7 @@ export function GoalsScreen({
             </>
           }
           actions={
-            !archived && (
+            !archived && goals.length > 0 && (
               <Button
                 type="button"
                 variant="surface"
@@ -253,14 +253,11 @@ export function GoalsScreen({
       </Box>
 
       <Box display={{ initial: "block", lg: "none" }}>
-        <Flex justify="between" align="center" gap="3" wrap="wrap">
-          <Flex align="center" gap="2">
-            <Heading size="5">{t("title")}</Heading>
-            {hasGroup && <FundChip label={tKey("fund.label")} />}
-          </Flex>
-          {/* Add would create an active goal, so the archived tab offers none. */}
-          {!archived && addButton}
-        </Flex>
+        <ScreenHeader
+          title={t("title")}
+          meta={hasGroup ? <FundChip label={tKey("fund.label")} /> : undefined}
+          actions={!archived && goals.length > 0 ? addButton : undefined}
+        />
       </Box>
 
       <Box display={{ initial: "none", md: "block" }}>
@@ -269,7 +266,7 @@ export function GoalsScreen({
 
       {/* The band the header and the table carry from `lg` up, where the page
           hands the gutter over; below it the page's own padding still holds. */}
-      <Flex direction="column" px={{ initial: "0", lg: "6" }}>
+      <Flex direction="column" px={{ initial: "0", lg: "6" }} align={{ initial: "stretch", sm: "start" }}>
         <SegmentedControl.Root
           value={archived ? "archived" : "active"}
           onValueChange={onTabChange}
@@ -411,6 +408,7 @@ function GoalCard({
   const t = useTranslations("goals");
   const tKey = useTranslations();
   const locale = useLocale();
+  const format = useFormatter();
 
   return (
     <Card>
@@ -517,6 +515,24 @@ function GoalCard({
             </Button>
           )}
         </Flex>
+
+        {/* The same date and monthly pace the desktop table reads. */}
+        {!archived && goal.targetDate !== null && !goal.reachedTarget && (
+          <Text size="1" color={goal.behindPace ? "amber" : "gray"}>
+            {format.dateTime(civilDateToDate(goal.targetDate), {
+              day: "numeric",
+              month: "short",
+              year: "numeric",
+            })}
+            {goal.requiredMonthlyCents !== null && (
+              <>
+                {" · "}
+                {formatMoney(goal.requiredMonthlyCents, goal.currency, locale)}
+                {t("perMonth")}
+              </>
+            )}
+          </Text>
+        )}
       </Flex>
     </Card>
   );

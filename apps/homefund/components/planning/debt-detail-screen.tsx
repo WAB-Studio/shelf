@@ -231,7 +231,7 @@ export function DebtDetailScreen({ data }: { data: DebtDetailData }) {
             size="inherit"
           />
         ),
-      note: nextPayment === null ? undefined : shortDate(nextPayment.date),
+      note: nextPayment === null ? tDebts("tileNoNextPayment") : shortDate(nextPayment.date),
     },
     {
       key: "availableCredit",

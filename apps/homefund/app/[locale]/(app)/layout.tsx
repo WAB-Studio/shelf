@@ -6,7 +6,7 @@ import { notFound } from "next/navigation";
 import { AppSidebar } from "@/components/fund/app-sidebar";
 import { AppTabs } from "@/components/fund/app-tabs";
 import { QuickEntryProvider } from "@/components/transactions/quick-entry-provider";
-import { Box, Flex, Separator, Text } from "@/components/ui";
+import { AppMark, Box, Flex, Heading } from "@/components/ui";
 import { getShellSummary } from "@/db/queries/app-shell";
 import { getTransactionFormOptions } from "@/db/queries/transaction-form";
 import { requireUser } from "@/db/session";
@@ -39,7 +39,7 @@ function routeOf(pathname: string, locale: string): string {
  * under it inherits it without a second check. There is no fund to switch (RF-55):
  * the caller's optional group is resolved once here and named in the shell.
  *
- * The sidebar owns navigation from `md` up and the bottom bar owns it below; the
+ * The sidebar owns navigation from `sm` up and the bottom bar owns it below; the
  * two never render together.
  */
 export default async function AppLayout(props: LayoutProps<"/[locale]">) {
@@ -83,22 +83,25 @@ export default async function AppLayout(props: LayoutProps<"/[locale]">) {
           pendingCount={summary.pendingDeliveries}
         />
         <Flex direction="column" flexGrow="1" minWidth="0">
-          {/* The sidebar names the fund from `md` up, so the bar is the phone's alone. */}
-          <Box display={{ initial: "block", md: "none" }}>
-            <Flex asChild align="center" gap="2" px="3" py="2">
+          {/* The sidebar names the fund from `sm` up, so the bar is the phone's alone. */}
+          <Box display={{ initial: "block", sm: "none" }}>
+            <Flex asChild align="center" gap="3" px="4" pt="4" pb="1">
               <header>
-                <Text weight="bold" truncate>
+                <AppMark size={28} />
+                <Heading as="h2" size="5" truncate>
                   {fundName}
-                </Text>
+                </Heading>
               </header>
             </Flex>
-            <Separator size="4" />
           </Box>
           {props.children}
         </Flex>
       </Flex>
-      <Box display={{ initial: "block", md: "none" }}>
-        <AppTabs hasGroup={group !== null} />
+      <Box display={{ initial: "block", sm: "none" }}>
+        <AppTabs
+          hasGroup={group !== null}
+          inboxCount={summary.pendingDeliveries + summary.awaitingCounterparty}
+        />
       </Box>
     </QuickEntryProvider>
   );

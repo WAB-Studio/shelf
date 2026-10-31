@@ -2,7 +2,7 @@
 
 import { useId, type ReactNode } from "react";
 import { Plus, X } from "lucide-react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { Select } from "@radix-ui/themes";
 
 import styles from "./filter-bar.module.css";
@@ -76,6 +76,7 @@ export function FilterDate({
   onValueChange: (v: string) => void;
   width?: number;
 }) {
+  const locale = useLocale();
   const controlId = useId();
 
   return (
@@ -86,6 +87,7 @@ export function FilterDate({
       <input
         id={controlId}
         type="date"
+        lang={locale}
         className={styles.date}
         value={value}
         onChange={(event) => onValueChange(event.target.value)}

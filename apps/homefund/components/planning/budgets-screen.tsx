@@ -26,7 +26,7 @@ import {
   Figure,
   Flex,
   FundChip,
-  Heading,
+  ScreenHeader,
   IconButton,
   Progress,
   SegmentedControl,
@@ -193,55 +193,56 @@ export function BudgetsScreen({
 
   return (
     <Flex direction="column" gap="4">
-      <Flex justify="between" align="center" gap="3" wrap="wrap">
-        <Flex align="center" gap="2">
-          <Heading size="5">{t("title")}</Heading>
-          {hasGroup && <FundChip label={tKey("fund.label")} />}
-        </Flex>
-        {/* Add would create an active budget, so the archived tab offers none. */}
-        {!archived && addButton}
-      </Flex>
+      <ScreenHeader
+        title={t("title")}
+        meta={hasGroup ? <FundChip label={tKey("fund.label")} /> : undefined}
+        // The empty state carries its own «add», so the header's would be a second.
+        actions={!archived && budgets.length > 0 ? addButton : undefined}
+      />
 
       <Box display={{ initial: "none", md: "block" }}>
         <PlanningSubNav />
       </Box>
 
-      <SegmentedControl.Root
-        value={archived ? "archived" : "active"}
-        onValueChange={(value) => pushQuery(month, value === "archived")}
-      >
-        <SegmentedControl.Item value="active">
-          {t("activeTab")}
-        </SegmentedControl.Item>
-        <SegmentedControl.Item value="archived">
-          {t("archivedTab")}
-        </SegmentedControl.Item>
-      </SegmentedControl.Root>
+      {/* One left edge with the header and the table: the band they carry from `md`. */}
+      <Flex direction="column" gap="4" px={{ initial: "0", md: "6" }} align={{ initial: "stretch", sm: "start" }}>
+        <SegmentedControl.Root
+          value={archived ? "archived" : "active"}
+          onValueChange={(value) => pushQuery(month, value === "archived")}
+        >
+          <SegmentedControl.Item value="active">
+            {t("activeTab")}
+          </SegmentedControl.Item>
+          <SegmentedControl.Item value="archived">
+            {t("archivedTab")}
+          </SegmentedControl.Item>
+        </SegmentedControl.Root>
 
-      <Flex align="center" justify="center" gap="4">
-        <IconButton
-          type="button"
-          variant="ghost"
-          color="gray"
-          size="3"
-          aria-label={t("previousMonth")}
-          onClick={() => goToMonth(-1)}
-        >
-          <ChevronLeft size={18} />
-        </IconButton>
-        <Text weight="bold">
-          {monthLabel}
-        </Text>
-        <IconButton
-          type="button"
-          variant="ghost"
-          color="gray"
-          size="3"
-          aria-label={t("nextMonth")}
-          onClick={() => goToMonth(1)}
-        >
-          <ChevronRight size={18} />
-        </IconButton>
+        <Flex align="center" justify="center" gap="4" width="100%">
+          <IconButton
+            type="button"
+            variant="ghost"
+            color="gray"
+            size="3"
+            aria-label={t("previousMonth")}
+            onClick={() => goToMonth(-1)}
+          >
+            <ChevronLeft size={18} />
+          </IconButton>
+          <Text weight="bold">
+            {monthLabel}
+          </Text>
+          <IconButton
+            type="button"
+            variant="ghost"
+            color="gray"
+            size="3"
+            aria-label={t("nextMonth")}
+            onClick={() => goToMonth(1)}
+          >
+            <ChevronRight size={18} />
+          </IconButton>
+        </Flex>
       </Flex>
 
       <Box display={{ initial: "block", lg: "none" }}>
@@ -420,7 +421,7 @@ function BudgetCard({
       <Flex align="center" gap="3">
         <CategoryTile color={color} size={16} />
         <Flex flexGrow="1" minWidth="0" align="baseline">
-          <Text weight="medium" truncate>
+          <Text weight="medium" wrap="balance">
             {title}
           </Text>
           {/* Whose it is stays whole however long the name runs. */}
@@ -430,18 +431,6 @@ function BudgetCard({
             </Text>
           )}
         </Flex>
-        <Figure
-          size="2"
-          weight="medium"
-          color={budget.overspent ? "red" : undefined}
-        >
-          {formatMoney(budget.spentCents, budget.currency, locale)}
-          <Text color="gray" weight="regular">
-            {t("ofLimit", {
-              amount: formatMoney(budget.limitCents, budget.currency, locale),
-            })}
-          </Text>
-        </Figure>
         <DropdownMenu.Root>
           <DropdownMenu.Trigger>
             <IconButton
@@ -477,6 +466,19 @@ function BudgetCard({
           </DropdownMenu.Content>
         </DropdownMenu.Root>
       </Flex>
+      {/* The figure has the whole line: name above, amounts below, nothing cut. */}
+      <Figure
+        size="2"
+        weight="medium"
+        color={budget.overspent ? "red" : undefined}
+        >
+        {formatMoney(budget.spentCents, budget.currency, locale)}
+        <Text color="gray" weight="regular">
+          {t("ofLimit", {
+            amount: formatMoney(budget.limitCents, budget.currency, locale),
+          })}
+        </Text>
+      </Figure>
       <Progress
         value={pct}
         color={tone === "gray" ? undefined : tone}

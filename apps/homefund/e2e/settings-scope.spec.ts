@@ -482,9 +482,8 @@ test.describe("the fund's categories by role (C3i)", () => {
       const shown = band(page);
       await expect(shown.getByText(parentName, { exact: true })).toHaveCount(1);
       await expect(shown.getByText(childName, { exact: true })).toHaveCount(1);
-      const marked = (name: string) => messages.categories.scopedName.replace("{name}", name);
-      await expect(shown.getByText(marked(parentName))).toHaveCount(0);
-      await expect(shown.getByText(marked(childName))).toHaveCount(0);
+      await expect(shown.getByText(`${parentName} · fondo`)).toHaveCount(0);
+      await expect(shown.getByText(`${childName} · fondo`)).toHaveCount(0);
     });
 
     test("on the phone reads the fund's name above the cards and no leader-only line", async ({ page }) => {

@@ -399,3 +399,50 @@ test("a bare «mil» or «un millón» is from words; «0 m» asks nothing, for 
   assert.equal(interpretQuickEntry("un millón arriendo", ctx).amountFromWords, true);
   assert.equal(interpretQuickEntry("0 m de cable", ctx).ask, null);
 });
+
+test("a number glued to a letter stays in the note", () => {
+  const result = interpretQuickEntry("Mercado D1 87500", ctx);
+  assert.equal(result.amountPesos, "87500");
+  assert.equal(result.description, "Mercado D1");
+});
+
+test("the longest standalone number is the amount", () => {
+  assert.equal(stored("Mercado 2 87.500"), 8_750_000);
+  assert.equal(stored("Mercado 2 87,500"), 8_750_000);
+  assert.equal(stored("Mercado 87k"), 8_700_000);
+  assert.equal(stored("Mercado 87 mil"), 8_700_000);
+});
+
+test("a word begins an account or a category name, case and accent aside", () => {
+  const result = interpretQuickEntry("Almuerzo bancolombia 15000", {
+    categories: [
+      { id: "c1", name: "Almuerzos", kind: "expense" },
+      { id: "c2", name: "Mercado", kind: "expense" },
+    ],
+    accounts: [
+      { id: "a1", name: "Bancolombia ahorros" },
+      { id: "a2", name: "Efectivo" },
+    ],
+    defaultAccountId: "a2",
+  });
+  assert.equal(result.accountId, "a1");
+  assert.equal(result.categoryId, "c1");
+  assert.equal(result.description, "");
+  assert.equal(
+    interpretQuickEntry("Crédito 5000", {
+      categories: [{ id: "c3", name: "Credito", kind: "expense" }],
+      accounts: [],
+      defaultAccountId: null,
+    }).categoryId,
+    "c3",
+  );
+});
+
+test("a currency code glued to the amount outranks the longer phone numbers of a bank message", () => {
+  assert.equal(
+    stored(
+      "Bancolombia: Compraste COP122.000,50 en BOLD CO ONLINE con tu T.Cred *4872, el 26/08/2026 a las 09:15. Si tienes dudas, encuentranos aqui: 6045109095 o 018000931987.",
+    ),
+    12_200_050,
+  );
+});

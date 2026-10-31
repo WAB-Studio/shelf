@@ -86,7 +86,7 @@ test("a save after the run moved the rule is refused as stale, keeping what was 
 
   await expect(dialog.getByText(messages.errors.stale, { exact: true })).toBeVisible();
   await expect(dialog).toBeVisible();
-  await expect(dialog.getByRole("textbox", { name: rules.amountLabel })).toHaveValue("27000");
+  await expect(dialog.getByRole("textbox", { name: rules.amountLabel })).toHaveValue(/^27\D?000$/);
   await expect(save(dialog)).toBeEnabled();
   expect(await stored()).toEqual(afterRun);
   expect(afterRun.amount_cents).toBe("1500000");

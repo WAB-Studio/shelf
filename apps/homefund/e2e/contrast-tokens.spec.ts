@@ -57,11 +57,11 @@ const send = (page: Page) => page.getByRole("button", { name: messages.auth.send
 test.describe("light", () => {
   test.beforeEach(async ({ page }) => open(page, "light"));
 
-  test("a focused button outlines in jade-11", async ({ page }) => {
+  test("a focused button outlines in violet-11", async ({ page }) => {
     await page.getByLabel(messages.auth.emailLabel).fill("a@b.invalid");
     await page.keyboard.press("Tab");
     await expect(send(page)).toBeFocused();
-    await expect(send(page)).toHaveCSS("outline-color", await resolved(page, "var(--jade-11)"));
+    await expect(send(page)).toHaveCSS("outline-color", await resolved(page, "var(--violet-11)"));
     await expect(send(page)).toHaveCSS("outline-style", "solid");
   });
 
@@ -122,7 +122,7 @@ for (const theme of ["light", "dark"] as const) {
         expect(ratio(ring, ground), `${name} on the ground`).toBeGreaterThanOrEqual(3);
       }
       if (theme === "light") {
-        expect(ratio(rings[messages.common.cancel], panel)).toBeCloseTo(6.04, 1);
+        expect(ratio(rings[messages.common.cancel], panel)).toBeCloseTo(5.9, 1);
       }
     });
   });

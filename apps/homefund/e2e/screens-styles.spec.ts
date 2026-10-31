@@ -372,7 +372,8 @@ test.describe("budgets", () => {
 
     const spent = within.getByText(/^\$\s[\d.,]+\s\/\s\$/).first();
     expect(await computed(spent, "font-variant-numeric")).toContain("tabular-nums");
-    expect(await computed(within.getByText(names.within, { exact: true }), "text-overflow")).toBe(
+    // The name wraps to a second line instead of being cut.
+    expect(await computed(within.getByText(names.within, { exact: true }), "text-overflow")).not.toBe(
       "ellipsis",
     );
   });
@@ -544,7 +545,7 @@ test.describe("welcome", () => {
 });
 
 test.describe("withdraw", () => {
-  test("the row spans the card, reads from the start and shows a pointer", async ({
+  test("the row is a button at least 44px tall", async ({
     page,
   }, testInfo) => {
     test.skip(!mobileOnly(testInfo.project.name), "the phone's dashboard");
@@ -552,13 +553,8 @@ test.describe("withdraw", () => {
 
     const row = page.getByRole("button", { name: messages.cash.withdrawAction }).first();
     await expect(row).toBeVisible();
-    const [width, parentWidth] = await row.evaluate((el) => [
-      el.getBoundingClientRect().width,
-      el.parentElement!.getBoundingClientRect().width,
-    ]);
-    expect(Math.abs(width - parentWidth)).toBeLessThanOrEqual(1);
-    expect(await computed(row, "text-align")).toBe("start");
-    expect(await computed(row, "cursor")).toBe("pointer");
+    const height = await row.evaluate((el) => el.getBoundingClientRect().height);
+    expect(height).toBeGreaterThanOrEqual(44);
   });
 });
 
@@ -643,6 +639,7 @@ test.describe("movement form", () => {
   test("the split amount is 110px wide and tabular", async ({ page }, testInfo) => {
     test.skip(testInfo.project.name !== "desktop", "the phone's row is narrower than the field");
     const form = await openExpenseForm(page);
+    await form.getByRole("button", { name: messages.transactions.splitDivide, exact: true }).click();
 
     const amount = form.getByRole("textbox", {
       name: messages.transactions.splitRowAmount.replace("{position}", "1"),
@@ -686,6 +683,8 @@ test.describe("movement form", () => {
 
   test("the remainder is washed green at zero and red otherwise", async ({ page }) => {
     const form = await openExpenseForm(page);
+    // The remainder belongs to the split editor, which sits behind «Dividir».
+    await form.getByRole("button", { name: messages.transactions.splitDivide, exact: true }).click();
 
     const amount = form.getByRole("textbox", {
       name: messages.transactions.splitRowAmount.replace("{position}", "1"),

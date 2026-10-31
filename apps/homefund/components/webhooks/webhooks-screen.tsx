@@ -156,10 +156,10 @@ export function WebhooksScreen({
 
       <Box display={{ initial: "block", lg: "none" }}>
         <Flex direction="column" gap="4">
-          <Flex justify="between" align="center" gap="3" wrap="wrap">
-            <Heading size="5">{t("title")}</Heading>
-            {credentials.length > 0 && issueButton}
-          </Flex>
+          <ScreenHeader
+            title={t("title")}
+            actions={credentials.length > 0 ? issueButton : undefined}
+          />
 
           {credentials.length === 0 ? (
             <EmptyState

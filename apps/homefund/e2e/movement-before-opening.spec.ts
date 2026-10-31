@@ -86,7 +86,11 @@ async function choose(page: Page, trigger: Locator, option: string) {
 async function fill(page: Page, dialog: Locator, date: string) {
   await choose(page, field(dialog, "movement-from"), ACCOUNT_NAME);
   await field(dialog, "movement-amount").fill("4000");
-  await choose(page, dialog.getByRole("combobox", { name: transactions.splitRowCategory.replace("{position}", "1"), exact: true }), scope.categoryName);
+  const tile = dialog.getByRole("button", { name: scope.categoryName, exact: true });
+  const more = dialog.getByRole("button", { name: transactions.categoryMore, exact: true });
+  await expect(tile.or(more).first()).toBeVisible();
+  if (!(await tile.isVisible())) await more.click();
+  await tile.click();
   await field(dialog, "movement-date").fill(date);
   await field(dialog, "movement-note").fill(NOTE);
 }

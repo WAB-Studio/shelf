@@ -27,6 +27,8 @@ import {
   Spinner,
   Text,
   TextField,
+  AmountField,
+  DateInput,
 } from "@/components/ui";
 import type { PlannedPaymentRow } from "@/db/queries/planned-payments";
 import type { TransactionFormOptions } from "@/db/queries/transaction-form";
@@ -259,7 +261,7 @@ function PaymentForm({
             <Field invalid={fieldState.invalid}>
               <FieldLabel htmlFor="payment-amount">{t("amountLabel")}</FieldLabel>
               <FieldControl>
-                <TextField.Root
+                <AmountField
                   {...field}
                   id="payment-amount"
                   size="3"
@@ -343,11 +345,10 @@ function PaymentForm({
             <Field invalid={fieldState.invalid}>
               <FieldLabel htmlFor="payment-due">{t("dueLabel")}</FieldLabel>
               <FieldControl>
-                <TextField.Root
+                <DateInput
                   {...field}
                   id="payment-due"
                   size="3"
-                  type="date"
                   disabled={isPending}
                 />
               </FieldControl>
@@ -371,10 +372,9 @@ function PaymentForm({
                 </Flex>
               </FieldLabel>
               <FieldControl>
-                <TextField.Root
+                <DateInput
                   id="payment-remind"
                   size="3"
-                  type="date"
                   value={field.value ?? ""}
                   onChange={(event) => field.onChange(event.target.value || null)}
                   onBlur={field.onBlur}

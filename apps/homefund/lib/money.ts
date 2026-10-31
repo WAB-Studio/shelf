@@ -326,3 +326,42 @@ export function convertMinor(amountMinor: number, rate: number): number {
 export function centsToPesos(cents: number): number {
   return cents / 100;
 }
+
+/**
+ * What an amount field shows as a person types: the whole digits grouped by the
+ * language's thousands mark, and the decimals after its decimal mark, so 125000
+ * reads «125.000». The caret travels with the digits it stood among. Every mark
+ * the person typed that is the language's group mark is dropped and regrouped,
+ * which is why deleting inside «1.250» never turns it into a decimal. The text
+ * `parseAmount` reads back is this text, so nothing is stored differently.
+ */
+export function formatAmountTyping(
+  raw: string,
+  caret: number,
+  locale: string,
+): { text: string; caret: number } {
+  const decimalMark = locale.startsWith("en") ? "." : ",";
+  const groupMark = decimalMark === "," ? "." : ",";
+
+  // The digits left of the caret, counted before anything is rewritten.
+  let digitsBefore = raw.slice(0, caret).replace(/\D/g, "").length;
+
+  const cut = raw.indexOf(decimalMark);
+  const whole = (cut === -1 ? raw : raw.slice(0, cut)).replace(/\D/g, "").replace(/^0+(?=\d)/, "");
+  const fraction = cut === -1 ? null : raw.slice(cut + 1).replace(/\D/g, "").slice(0, STORAGE_EXPONENT);
+
+  const grouped = whole.replace(/\B(?=(\d{3})+$)/g, groupMark);
+  const text = fraction === null ? grouped : `${grouped || "0"}${decimalMark}${fraction}`;
+
+  // A fraction with no whole digits gains the zero before it, which the caret passes.
+  if (whole === "" && fraction !== null && digitsBefore > 0) digitsBefore += 1;
+
+  // Walk the new text until as many digits as stood left of the caret are behind it.
+  let seen = 0;
+  let position = 0;
+  while (position < text.length && seen < digitsBefore) {
+    if (/\d/.test(text[position])) seen += 1;
+    position += 1;
+  }
+  return { text, caret: position };
+}

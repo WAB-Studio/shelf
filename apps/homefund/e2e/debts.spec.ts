@@ -1950,7 +1950,7 @@ async function inkOf(container: Locator): Promise<string> {
 async function accentInk(page: Page): Promise<string> {
   return page.evaluate(() => {
     const probe = document.createElement("span");
-    probe.style.color = "var(--accent-11)";
+    probe.style.color = "var(--jade-11)";
     document.querySelector("main")!.appendChild(probe);
     const ink = getComputedStyle(probe).color;
     probe.remove();
@@ -3064,7 +3064,7 @@ test.describe("a card in credit with a dollar purchase, and the next payment", (
         const tile = label.locator("xpath=..");
         // textContent: the label is drawn in capitals, which innerText returns.
         expect(flat((await tile.textContent()) ?? "")).toMatch(
-          new RegExp(`^${debts.tileNextPayment}\\s*${NO_VALUE}$`),
+          new RegExp(`^${debts.tileNextPayment}\\s*${NO_VALUE}\\s*${debts.tileNoNextPayment}$`),
         );
       });
 

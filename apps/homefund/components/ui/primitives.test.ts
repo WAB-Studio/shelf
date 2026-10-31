@@ -106,10 +106,10 @@ test("AmountField is tabular and takes a fixed width", () => {
   assert.match(out, /font-variant-numeric:tabular-nums/);
 });
 
-test("panel.module.css draws the notice card at 560px with a 16px corner", () => {
+test("panel.module.css draws the notice card at 560px with the card corner", () => {
   const css = readFileSync(new URL("./panel.module.css", import.meta.url), "utf8");
   assert.match(css, /\[data-variant="notice"\]\s*\{[^}]*width: 560px;[^}]*padding: 34px 32px;/);
-  assert.match(css, /\.panel\s*\{[^}]*border-radius: 16px;/);
+  assert.match(css, /\.panel\s*\{[^}]*border-radius: var\(--hf-card-radius\);/);
 });
 
 // ICU separates the mark from the figure with a no-break space.
@@ -135,10 +135,10 @@ test("Money with no tone renders the markup it always has", () => {
   );
 });
 
-test("Money in credit inks the accent and never writes a sign", () => {
+test("Money in credit inks the income jade and never writes a sign", () => {
   for (const signed of [true, false] as const) {
     const out = money({ minor: 15_000_000, currency: "COP", tone: "credit", signed });
-    assert.match(out, /color:var\(--accent-11\)/);
+    assert.match(out, /color:var\(--jade-11\)/);
     assert.equal(textOf(out), "$ 150.000");
   }
   assert.doesNotMatch(textOf(money({ minor: 2_500, currency: "USD", tone: "credit" })), /[+\u2212-]/);
@@ -146,7 +146,7 @@ test("Money in credit inks the accent and never writes a sign", () => {
 
 test("Money in credit draws no sign even when signed is always and the amount is negative", () => {
   const out = money({ minor: -2_500, currency: "USD", tone: "credit", signed: "always" });
-  assert.match(out, /color:var\(--accent-11\)/);
+  assert.match(out, /color:var\(--jade-11\)/);
   assert.equal(textOf(out), "US$ 25,00");
 });
 
@@ -159,7 +159,7 @@ test("Money draws its words inside its one span, in its ink", () => {
     words: { before: "A favor ", after: "" },
   });
   assert.equal(out.match(/<span/g)?.length, 1);
-  assert.match(out, /^<span[^>]*color:var\(--accent-11\)[^>]*>A favor \$ 150\.000<\/span>$/);
+  assert.match(out, /^<span[^>]*color:var\(--jade-11\)[^>]*>A favor \$ 150\.000<\/span>$/);
 
   const wrapped = money({
     minor: 10_500_000,

@@ -10,7 +10,7 @@ import {
   Flex,
   FundChip,
   Grid,
-  Heading,
+  ScreenHeader,
   PlainLink,
   Text,
 } from "@/components/ui";
@@ -25,16 +25,6 @@ const HUB_ORDER = [
   "debts",
   "recurring",
 ] as const satisfies readonly (typeof PLANNING_KEYS)[number][];
-
-// The one place a card's colour lives: `destinations.ts` owns the route and the
-// icon, and neither carries a tint of its own.
-const TINTS: Record<(typeof PLANNING_KEYS)[number], string> = {
-  budgets: "jade",
-  goals: "grass",
-  payments: "amber",
-  debts: "indigo",
-  recurring: "violet",
-};
 
 /**
  * The Planeación hub: one card per area, each carrying a live one-line summary
@@ -82,10 +72,10 @@ export async function PlanningHub({
 
   return (
     <Flex direction="column" gap="4">
-      <Flex align="center" gap="2">
-        <Heading size="6">{t("title")}</Heading>
-        {groupName !== null && <FundChip label={tKey("fund.label")} />}
-      </Flex>
+      <ScreenHeader
+        title={t("title")}
+        meta={groupName !== null ? <FundChip label={tKey("fund.label")} /> : undefined}
+      />
 
       <Flex direction="column" gap="3">
         {HUB_ORDER.map((key) => {
@@ -95,7 +85,6 @@ export async function PlanningHub({
             <HubCard
               key={key}
               icon={area.icon}
-              tint={TINTS[key]}
               title={titles[key]}
               summary={summaries[key]}
               href={area.href}
@@ -114,13 +103,11 @@ export async function PlanningHub({
 // so the five rows line up.
 function HubCard({
   icon: Icon,
-  tint,
   title,
   summary,
   href,
 }: {
   icon: LucideIcon;
-  tint: string;
   title: string;
   summary: string;
   href?: string;
@@ -129,8 +116,8 @@ function HubCard({
     <Disc
       size={44}
       radius={5}
-      surface={href ? `var(--${tint}-a3)` : "var(--gray-a3)"}
-      ink={href ? `var(--${tint}-11)` : "var(--gray-9)"}
+      surface={href ? "var(--violet-3)" : "var(--gray-a3)"}
+      ink={href ? "var(--violet-11)" : "var(--gray-9)"}
     >
       <Icon size={21} />
     </Disc>
@@ -164,7 +151,7 @@ function HubCard({
       </Box>
 
       <Box display={{ initial: "none", md: "block" }}>
-        <Grid columns="1fr 220px 210px" gap="4" align="center">
+        <Grid columns="minmax(180px, 1fr) minmax(0, 2fr) 24px" gap="4" align="center">
           <Flex align="center" gap="3" minWidth="0">
             {disc}
             {titleText}

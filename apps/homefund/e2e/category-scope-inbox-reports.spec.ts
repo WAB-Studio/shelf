@@ -33,7 +33,9 @@ const scope = readScope();
 const stamp = randomUUID().slice(0, 8);
 
 const NAME = `T4 Mercado ${stamp}`;
-const MARKED = messages.categories.scopedName.replace("{name}", NAME);
+// A fund category reads bare now (the user, 2026-10-30), so the fixture gives it a name of its own
+// to tell the two scopes apart.
+const MARKED = `${NAME} del fondo`;
 const CREDENTIAL = `Credencial T4 ${stamp}`;
 const MERCHANT = `Tienda T4 ${stamp}`;
 
@@ -77,7 +79,7 @@ test.beforeAll(async () => {
       values (${ids.personalCategory}, ${scope.userId}, ${NAME}, 'expense', '#4C8C4A')`;
     await tx`
       insert into categories (id, group_id, name, kind, color)
-      values (${ids.fundCategory}, ${groupId}, ${NAME}, 'expense', '#8C4A4A')`;
+      values (${ids.fundCategory}, ${groupId}, ${MARKED}, 'expense', '#8C4A4A')`;
 
     for (const [account, category, cents] of [
       [ids.fundAccount, ids.fundCategory, FUND_CENTS],
@@ -397,10 +399,8 @@ test.describe("a delivery whose category is of another scope than its account", 
     }
 
     const dialog = page.getByRole("dialog");
-    const category = dialog.getByRole("combobox", {
-      name: messages.transactions.splitRowCategory.replace("{position}", "1"),
-    });
-    await expect(category).toHaveText(messages.transactions.categoryLabel);
+    // No category is pressed: the fund's one was dropped with the scope.
+    await expect(dialog.getByRole("button", { name: NAME, exact: true, pressed: true })).toHaveCount(0);
 
     await dialog.getByRole("button", { name: messages.ingest.accept, exact: true }).click();
     await expect(dialog.getByText(messages.transactions.errors.splitCategoryInvalid)).toBeVisible();
@@ -422,10 +422,11 @@ test.describe("a delivery whose category is of another scope than its account", 
     }
 
     const dialog = page.getByRole("dialog");
-    await dialog
-      .getByRole("combobox", { name: messages.transactions.splitRowCategory.replace("{position}", "1") })
-      .click();
-    await page.getByRole("option", { name: NAME, exact: true }).click();
+    const tile = dialog.getByRole("button", { name: NAME, exact: true });
+    const more = dialog.getByRole("button", { name: messages.transactions.categoryMore, exact: true });
+    await expect(tile.or(more).first()).toBeVisible();
+    if (!(await tile.isVisible())) await more.click();
+    await tile.click();
     await dialog.getByRole("button", { name: messages.ingest.accept, exact: true }).click();
     await expect(page.getByText(messages.ingest.acceptedToast)).toBeVisible();
 

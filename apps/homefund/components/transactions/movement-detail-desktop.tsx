@@ -237,7 +237,14 @@ export function MovementDetailDesktop({
 
   function causeRowCells(row: TransactionListRow) {
     return [
-      { key: "tile", content: <CategoryTile color={causeRowColor(row)} size={36} /> },
+      { key: "tile", content: (
+          <CategoryTile
+            color={causeRowColor(row)}
+            size={36}
+            name={causeRowTitle(row)}
+            transfer={row.kind === "transfer"}
+          />
+        ), },
       {
         key: "title",
         content: (
@@ -277,7 +284,12 @@ export function MovementDetailDesktop({
         <Flex direction="column" gap="4" flexGrow="1" minWidth="0">
           <Panel>
             <Flex direction="column" align="center" gap="2" px="4" py="7">
-              <CategoryTile color={tileColor} size={60} />
+              <CategoryTile
+                color={tileColor}
+                size={60}
+                name={(firstSplit && categoryNames.get(firstSplit)) || kindLabel}
+                transfer={kind === "transfer" || isAdjustment}
+              />
               <Money
                 minor={isAdjustment && movement.toAccountId === null ? -movement.amountCents : movement.amountCents}
                 currency={movement.currency}

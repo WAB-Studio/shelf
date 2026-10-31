@@ -24,6 +24,7 @@ import {
   Spinner,
   Text,
   TextField,
+  DateInput,
 } from "@/components/ui";
 import type { AccountRow } from "@/db/queries/accounts";
 import type { ReconcileSheet } from "@/db/queries/account-reconciliations";
@@ -189,7 +190,7 @@ function ReconcileForm({ account }: { account: AccountRow }) {
             <Field invalid={fieldState.invalid || refusal?.field === "reconciledOn"}>
               <FieldLabel htmlFor="reconcile-day">{t("reconcileDay")}</FieldLabel>
               <FieldControl tap>
-                <TextField.Root
+                <DateInput
                   {...field}
                   onChange={(event) => {
                     setRefusal(null);
@@ -197,7 +198,6 @@ function ReconcileForm({ account }: { account: AccountRow }) {
                   }}
                   id="reconcile-day"
                   size="3"
-                  type="date"
                   max={todayInBogota()}
                   readOnly={isPending}
                 />

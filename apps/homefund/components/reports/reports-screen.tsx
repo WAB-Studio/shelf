@@ -6,8 +6,10 @@ import {
   BarChart,
   Box,
   CategoryTile,
+  EmptyState,
   Flex,
   Heading,
+  ScreenHeader,
   Disc,
   Money,
   ReportCard,
@@ -35,10 +37,10 @@ const SERIES_COLORS = {
 function ReportsHead({ title }: { title: string }) {
   const t = useTranslations("review");
   return (
-    <Flex justify="between" align="center" gap="3" wrap="wrap">
-      <Heading size="6">{title}</Heading>
-      <TextLink href="/reports/review" size="2" weight="medium">{t("entry")}</TextLink>
-    </Flex>
+    <ScreenHeader
+      title={title}
+      actions={<TextLink href="/reports/review" size="2" weight="medium">{t("entry")}</TextLink>}
+    />
   );
 }
 
@@ -120,7 +122,7 @@ export function ReportsScreen({ data }: { data: ReportsData }) {
         <Flex direction="column" gap="6">
           <ReportsHead title={t("title")} />
 
-          <Flex direction="column" gap="4">
+          <Flex direction="column" gap="4" px="6">
             <ReportCard>
               <Heading as="h2" size="4">{t("comparisonTitle")}</Heading>
               {byCurrency(sixMonthFlow).map(([currency, months]) => (
@@ -224,7 +226,7 @@ function ExpenseBands({
         </Text>
         {rows.map((row) => (
           <Flex key={row.categoryId} align="center" gap="3">
-            <CategoryTile color={row.color} size={28} />
+            <CategoryTile color={row.color} size={28} name={row.name} />
             <Box asChild flexGrow="1" minWidth="0">
               <Text as="div" size="3" truncate>
                 {scopedCategoryName(row.name, row.scope, (name) =>
@@ -288,6 +290,17 @@ function CurrencyTrend({
       { key: "expense", valueCents: month.expenseCents },
     ],
   }));
+
+  // A window with nothing in it would draw axes and no bar.
+  if (months.every((month) => month.incomeCents === 0 && month.expenseCents === 0)) {
+    return (
+      <EmptyState
+        variant="filtered"
+        title={t("comparisonEmpty")}
+        description={t("comparisonEmptyHint", { currency })}
+      />
+    );
+  }
 
   return (
     <Flex direction="column" gap="3">

@@ -72,7 +72,12 @@ export function RecentMovements({
             {
               key: "tile",
               content: (
-                <CategoryTile color={rowColor(row, categoryColors)} size={36} />
+                <CategoryTile
+                  color={rowColor(row, categoryColors)}
+                  size={36}
+                  name={rowTitle(row, categoryNames, kindLabels)}
+                  transfer={row.kind === "transfer" || row.reconciliationId !== null}
+                />
               ),
             },
             {
@@ -80,10 +85,10 @@ export function RecentMovements({
               content: (
                 <Flex direction="column" minWidth="0">
                   <Text size="2" weight="medium" truncate>
-                    {rowTitle(row, categoryNames, kindLabels)}
+                    {row.description || rowTitle(row, categoryNames, kindLabels)}
                   </Text>
                   <Text size="1" color="gray" truncate>
-                    {rowSubtitle(row, accountNames)}
+                    {rowCaption(row, categoryNames, accountNames, kindLabels)}
                   </Text>
                 </Flex>
               ),
@@ -139,6 +144,21 @@ export function rowTitle(
   const first = row.splits[0]?.categoryId;
   const fallback = row.kind === "income" ? kindLabels.income : kindLabels.expense;
   return (first && categoryNames.get(first)) || fallback;
+}
+
+// The phone's second line when the person wrote a description: it takes the
+// title, so the category the title would have been moves down beside the account.
+export function rowCaption(
+  row: TransactionListRow,
+  categoryNames: Map<string, string>,
+  accountNames: Map<string, string>,
+  kindLabels: KindLabels,
+): string | undefined {
+  const account = rowSubtitle(row, accountNames);
+  if (!row.description) return account;
+  return [rowTitle(row, categoryNames, kindLabels), account]
+    .filter(Boolean)
+    .join(" · ");
 }
 
 // A transfer reads "origin → destination"; an income names its destination, an
