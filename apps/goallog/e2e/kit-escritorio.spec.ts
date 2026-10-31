@@ -1,6 +1,6 @@
 import type { Page } from "@playwright/test";
 
-import { test, expect, laneNumber, settled } from "./fixtures";
+import { test, expect, laneNumber, openMore, settled } from "./fixtures";
 import { boxOf } from "./box";
 
 // RNP-17 at the kit's level: what `components/ui` does at 1024px and does not
@@ -52,8 +52,7 @@ test("at 1280 the nav is a rail down the left edge and nothing sits under it (RN
 // rule), four equal links, the page column 640 wide and centred from 700 up.
 for (const [width, pageBox] of [
   [360, { x: 0, width: 360 }],
-  [800, { x: 80, width: 640 }],
-  [1023, { x: 191.5, width: 640 }],
+  [767, { x: 63.5, width: 640 }],
 ] as const) {
   test(`at ${width} the nav is four tabs at the foot and the page column has not moved (RNP-17)`, async ({
     page,
@@ -84,7 +83,7 @@ for (const [width, pageBox] of [
   });
 }
 
-test("a sheet is a centred 480 px dialog at 1280 and pinned to the foot at 360 and 800, and the review's header names the column alone for a time unit (RNP-17, RP-35)", async ({
+test("a sheet is a centred 480 px dialog at 1280 and pinned to the foot at 360 and 767, and the review's totals spell out hours and minutes for a time unit (RNP-17, RP-35)", async ({
   page,
   db,
   personId,
@@ -129,8 +128,10 @@ test("a sheet is a centred 480 px dialog at 1280 and pinned to the foot at 360 a
     await page.keyboard.press("Escape");
     await expect(dialog).toBeHidden();
 
-    for (const width of [360, 800]) {
+    for (const width of [360, 767]) {
       await page.setViewportSize({ width, height: 740 });
+      await expect(page.getByRole("button", { name: "Más sobre la meta" })).toBeVisible();
+      await openMore(page);
       await page.getByRole("button", { name: "Renombrar" }).click();
       await expect(dialog).toBeVisible();
       await expect.poll(async () => (await box(page, "[role=dialog]")).width).toBe(width);
@@ -151,8 +152,10 @@ test("a sheet is a centred 480 px dialog at 1280 and pinned to the foot at 360 a
 
     await page.setViewportSize({ width: 1280, height: 800 });
     await page.goto(`/metas/${goalId}/revision`);
-    // Each cell spells out its hours and minutes, so the header carries no unit.
-    await expect(page.getByRole("table").getByRole("columnheader").nth(1)).toHaveText("total");
+    // The weeks are bars (DESIGN «Decisión del 2026-10-31»): each total spells out its hours and minutes, never the unit word.
+    const first = page.getByRole("list", { name: "por semana" }).locator("li").first();
+    await expect(first).toContainText("min");
+    await expect(first).not.toContainText("minutos");
   } finally {
     await db`delete from goals.goals where id = ${goalId} and user_id = ${personId}`;
   }

@@ -160,23 +160,23 @@ test("an evidence commitment names diccionario at creation, stays empty below it
 
     // Before any lookup: the day's row is empty, names no act (no source
     // text yet), and there is no tap that could write a fact for it — the
-    // row is a disabled button, and evidence never reaches `declareFact`
-    // regardless (RP-05).
+    // row is text, never a control (DESIGN «An act that cannot be done is
+    // plain text»), and evidence never reaches `declareFact` regardless (RP-05).
     await page.goto("/");
-    const row = page.locator("button", { hasText: commitmentName });
+    const row = page.locator("div:has([data-state])", { hasText: commitmentName }).last();
+    const control = page.getByRole("button", { name: new RegExp(commitmentName) });
     await expect(row).toBeVisible();
     await expect(row.locator("[data-state]")).toHaveAttribute("data-state", "empty");
-    await expect(row).not.toContainText("diccionario");
-    expect(await metaOf(row, commitmentName)).toBe(`${threshold} búsquedas`);
-    await expect(row).toBeDisabled();
+    // Unmet, the row says who notes it (DESIGN «An evidence row reads automatic»), not a source that met it.
+    expect(await metaOf(row, commitmentName)).toBe(`lo anota el ${sources.readingLookups} · ${threshold} búsquedas`);
+    await expect(control).toHaveCount(0);
     expect(await factCount(db, commitmentId)).toBe(0);
 
     // One fewer than the threshold, stamped at 23:30 Bogotá: still empty.
     await insertLookup(db, personId, deviceId, 1, eveningInBogota(day));
     await page.reload();
     await expect(row.locator("[data-state]")).toHaveAttribute("data-state", "empty");
-    await expect(row).not.toContainText("diccionario");
-    expect(await metaOf(row, commitmentName)).toBe(`${threshold} búsquedas`);
+    expect(await metaOf(row, commitmentName)).toBe(`lo anota el ${sources.readingLookups} · ${threshold} búsquedas`);
 
     // The threshold itself, stamped the same evening: the evidence mark
     // (never the declared one), named, and still nothing to undo — the same
@@ -187,7 +187,7 @@ test("an evidence commitment names diccionario at creation, stays empty below it
     expect(await metaOf(row, commitmentName)).toBe(`${threshold} búsquedas · ${sources.readingLookups}`);
     await expect(row).not.toContainText("lo dijiste tú");
     await expect(row).not.toContainText("pide el número");
-    await expect(row).toBeDisabled();
+    await expect(control).toHaveCount(0);
     expect(await factCount(db, commitmentId)).toBe(0);
 
     // /semana draws that same day's mark as evidence, named the way

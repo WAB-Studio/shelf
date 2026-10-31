@@ -9,7 +9,7 @@ import { boxOf } from "./box";
 
 // Module 813 (RP-71, RP-32, RP-17, RP-35), `MesesFuturoYTareas` 6a and `MesesConAño` option B: no `Table` prints a
 // unit the catalogue translates («searches»), a unit other than time is said once, and the phone's label column is
-// 112px in every table so a month with its year never breaks in two lines.
+// 132px in every table so a month with its year never breaks in two lines.
 
 const thisMonth = monthOf(todayInZone());
 const today = todayInZone();
@@ -138,7 +138,8 @@ test("a week with 1 reads «1 búsqueda» in the singular", async ({ person, bro
   }
 });
 
-test("revision at 1440: the total column's header says «búsquedas», not «searches»", async ({
+// The review's weeks are bars, each total a Figure beside its name (DESIGN «Decisión del 2026-10-31»): the unit stands in every total.
+test("revision at 1440: the weeks' totals say «búsquedas», not «searches»", async ({
   person,
   browser,
   baseURL,
@@ -147,10 +148,10 @@ test("revision at 1440: the total column's header says «búsquedas», not «sea
   const goalId = await seedGoal(db, person, { name: "Cabecera búsquedas", unit: SEARCHES });
   const { page, close } = await visit(browser, baseURL, person, `/metas/${goalId}/revision`, 1440);
   try {
-    const header = page.locator("thead th:visible").filter({ hasText: "total" });
-    await expect(header).toHaveCount(1);
-    await expect(header).toContainText("búsquedas");
-    await expect(header).not.toContainText("searches");
+    const weeks = page.getByRole("list", { name: "por semana" });
+    await expect(weeks).toBeVisible();
+    await expect(weeks.locator("li").first()).toContainText("búsquedas");
+    await expect(weeks).not.toContainText("searches");
   } finally {
     await close();
     await drop(db, person, goalId);
@@ -176,7 +177,7 @@ test("exportar at 1440: the «hecho» header of a searches goal says «búsqueda
   }
 });
 
-test("a free unit (km) stays as typed: «6 km» beside the figure and «km» in the header", async ({
+test("a free unit (km) stays as typed: «6 km» beside the figure and «km» in every total", async ({
   person,
   browser,
   baseURL,
@@ -194,9 +195,9 @@ test("a free unit (km) stays as typed: «6 km» beside the figure and «km» in 
   }
   const wide = await visit(browser, baseURL, person, path, 1440);
   try {
-    const header = wide.page.locator("thead th:visible").filter({ hasText: "total" });
-    await expect(header).toContainText("km");
-    await expect(header).not.toContainText("kilómetro");
+    const weeks = wide.page.getByRole("list", { name: "por semana" });
+    await expect(weeks.locator("li").first()).toContainText("km");
+    await expect(weeks).not.toContainText("kilómetro");
   } finally {
     await wide.close();
     await drop(db, person, goalId);
@@ -234,7 +235,7 @@ test("a month not reached draws «—» alone: no unit word beside the dash", as
 });
 
 for (const width of [360, 1024]) {
-  test(`exportar at ${width}: each of 16 month labels is one line, 112px wide, and the page does not overflow`, async ({
+  test(`exportar at ${width}: each of 16 month labels is one line, 132px wide, and the page does not overflow`, async ({
     person,
     browser,
     baseURL,
@@ -267,7 +268,7 @@ for (const width of [360, 1024]) {
       );
       expect(boxes.length, "month labels drawn").toBe(16);
       for (const box of boxes) expect(box.height, `«${box.text}» height`).toBeLessThanOrEqual(box.line * 1.5);
-      for (const box of boxes) expect(box.width, `«${box.text}» width`).toBeCloseTo(112, 0);
+      for (const box of boxes) expect(box.width, `«${box.text}» width`).toBeCloseTo(132, 0);
       const scroll = await page.evaluate(() => document.documentElement.scrollWidth);
       expect(scroll).toBeLessThanOrEqual(width);
     } finally {
@@ -277,7 +278,7 @@ for (const width of [360, 1024]) {
   });
 }
 
-test("revision at 360: «semana 1» with its dates under it is a label of at least 112px, its dates on one line, and the page does not overflow", async ({
+test("revision at 360: «semana 1» with its dates under it is a label of at least 110px, its dates on one line, and the page does not overflow", async ({
   person,
   browser,
   baseURL,
@@ -288,10 +289,10 @@ test("revision at 360: «semana 1» with its dates under it is a label of at lea
   try {
     const week = row(page, "semana 1");
     await expect(week).toBeVisible();
-    const label = week.locator(":scope > span").first();
-    // `fitDetail`: the column takes the longest date line of any row («· en curso» included), never under 112.
-    expect((await boxOf(label)).width).toBeGreaterThanOrEqual(111.5);
-    expect((await boxOf(label.locator("span"))).height).toBeLessThan(24);
+    // The bars row gives its label a column of 110px at least (`WeekBars`); the dates under the name never break in two.
+    const label = week.locator('[class*="label"]').first();
+    expect((await boxOf(label)).width).toBeGreaterThanOrEqual(109.5);
+    expect((await boxOf(week.locator('[class*="detail"]').first())).height).toBeLessThan(24);
     const scroll = await page.evaluate(() => document.documentElement.scrollWidth);
     expect(scroll).toBeLessThanOrEqual(360);
   } finally {
@@ -334,8 +335,8 @@ test("a unit typed capitalised («Searches») still reads the catalogue's word i
 });
 
 // A closed month that carried a task over says «cerrado · N % pasó a <mes>» under its label: a line that does not
-// break, whose width must never widen the 112px label.
-test("exportar at 360: a closed month with «cerrado · N % pasó a …» under it keeps its label 112px and the figures where they were", async ({
+// break, whose width must never widen the 132px label.
+test("exportar at 360: a closed month with «cerrado · N % pasó a …» under it keeps its label 132px and the figures where they were", async ({
   person,
   browser,
   baseURL,
@@ -362,7 +363,7 @@ test("exportar at 360: a closed month with «cerrado · N % pasó a …» under 
     await expect(closed).toBeVisible();
     expect(flat(await closed.innerText())).toMatch(/pasó a/);
     const label = closed.locator(":scope > span").first();
-    expect((await boxOf(label)).width).toBeCloseTo(112, 0);
+    expect((await boxOf(label)).width).toBeCloseTo(132, 0);
     const scroll = await page.evaluate(() => document.documentElement.scrollWidth);
     expect(scroll).toBeLessThanOrEqual(360);
   } finally {

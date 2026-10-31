@@ -265,7 +265,7 @@ test.describe("the order under the label (board VerMenos 3 and 4)", () => {
     const id = await noEnd(db, person, "Escribir", 146);
     const { page, context } = await visit(browser, baseURL, person, weekPath(id, "?todo=1"), 360);
     try {
-      const label = await boxOf(page.locator("main").getByText("por semana", { exact: true }).locator("visible=true").first());
+      const label = await boxOf(page.locator("main").getByText("Por semana", { exact: true }).locator("visible=true").first());
       const link = await boxOf(seeLess(page.locator("main")).first());
       const first = await boxOf(weekRows(page).first());
       expect(label.y + label.height).toBeLessThanOrEqual(link.y);

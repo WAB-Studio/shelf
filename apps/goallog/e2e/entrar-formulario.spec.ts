@@ -76,7 +76,8 @@ async function expectCentred(page: Page, height: number) {
   const above = top.y;
   const below = height - (last.y + last.height);
   expect(Math.abs(above - below)).toBeLessThanOrEqual(24);
-  expect(above).toBeGreaterThan(40);
+  // The 14px floor of reading text (DESIGN «Sentence case») made the consent column taller: it still leaves a margin over the 24px centring tolerance.
+  expect(above).toBeGreaterThan(32);
 }
 
 async function expectOneForm(page: Page, label: string, button: string, lead: string) {

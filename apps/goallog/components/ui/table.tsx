@@ -74,7 +74,7 @@ type TableProps = {
   // Lets a row's `detail` wrap, for a state line longer than its label column.
   wrapDetail?: boolean;
   // Grows the label column to its longest `detail`, one width on every row of
-  // both faces, rather than hold 112px (`RevisionConAño.dc.html`'s «28 sep–4 oct
+  // both faces, rather than hold 132px (`RevisionConAño.dc.html`'s «28 sep–4 oct
   // 2026»). Unlinked rows only: a linked row's anchor is not on the phone's grid.
   fitDetail?: boolean;
   // Lets a `narrow` table's note wrap at a word when it does not fit beside the

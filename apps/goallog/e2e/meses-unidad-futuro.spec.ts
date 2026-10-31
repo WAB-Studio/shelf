@@ -220,7 +220,8 @@ test("/mes says the unit once: «0 de 67 búsquedas», «15 de 40 km»; no amoun
     expect(text).not.toMatch(/searches/i);
     const portfolio = flat(await page.locator("section", { hasText: "Portafolio" }).first().innerText());
     expect(portfolio).toContain("0 min");
-    expect(portfolio).toContain("sin monto este mes");
+    // The card holds the invitation in place of «sin monto este mes» (`MonthAcrossScreen`): one of the two.
+    expect(portfolio).toMatch(/Planear \p{L}+/u);
     // A figure with no «de» keeps its unit.
     const unamounted = flat(await page.locator("section", { hasText: "Sin monto búsquedas" }).first().innerText());
     expect(unamounted).toContain("0 búsquedas");

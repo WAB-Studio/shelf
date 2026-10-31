@@ -49,7 +49,7 @@
 }
 
 .stackLabel {
-  flex: 0 0 112px;
+  flex: 0 0 132px;
   min-inline-size: 0;
   font-size: var(--pulsar-text-meta-size);
   color: var(--pulsar-muted);
@@ -116,7 +116,7 @@
 }
 
 /* Beside a list's own chevron the note is a short phrase («sin monto»): it
-   keeps its line, and the label never gives up its 112px. */
+   keeps its line, and the label never gives up its 132px. */
 .narrow .stackNote {
   white-space: nowrap;
 }
@@ -178,12 +178,13 @@
   white-space: normal;
 }
 
-/* The label column takes its longest date line, never under 112px: every row
-   is a subgrid of the stack's three tracks, so one row's range widens them all.
-   The row's 4px inset rides the first track, hence 116. */
+/* The label column takes its longest date line, never under 132px (the 14px mono
+   «septiembre 2026» is 131 wide): every row is a subgrid of the stack's three
+   tracks, so one row's range widens them all. The row's 4px inset rides the
+   first track, hence 136. */
 .fitDetail .stack {
   display: grid;
-  grid-template-columns: minmax(116px, max-content) max-content minmax(min-content, 1fr);
+  grid-template-columns: minmax(136px, max-content) max-content minmax(min-content, 1fr);
   column-gap: 12px;
 }
 

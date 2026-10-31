@@ -136,14 +136,13 @@ test("the week's figure carries its unit on Hoy, the goal and the review, and is
     await expect(page.getByText(`mide ${first}`)).toHaveCount(0);
     await expect(page.getByText(new RegExp(`^${total}\\s*${KM}`)).first()).toBeVisible();
 
-    // The review: the unit heads the page, «total» the column, never the name.
+    // The review: the unit heads the page and each week's total carries it (the weeks are bars now), never a commitment's name.
     await page.goto(`/metas/${goal.id}/revision`);
     await expect(page.getByText(`mide en ${KM}`, { exact: true })).toHaveCount(1);
     await expect(page.locator("p", { hasText: first })).toHaveCount(0);
-    const header = page.getByRole("columnheader").nth(1);
-    await expect(header).toContainText("total");
-    await expect(header).not.toContainText(first);
-    await expect(page.getByRole("table").getByText(total, { exact: true }).first()).toBeVisible();
+    const weeks = page.getByRole("list", { name: "por semana" });
+    await expect(weeks).not.toContainText(first);
+    await expect(weeks.locator("li").filter({ hasText: new RegExp(`${total}\\s*${KM}`) }).first()).toBeVisible();
   } finally {
     await context.close();
     await dropPerson(db, personId);

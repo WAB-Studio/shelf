@@ -39,7 +39,7 @@ import { loadMonthAcross, type MonthAcrossGoal, type MonthAcrossItem } from "@/l
 import { listComingDayless } from "@/lib/queries/one-offs";
 import { formatQuantity, isTimeUnit } from "@/lib/units/time";
 import { timeWordsOf } from "@/lib/units/time-words";
-import { addDaysToCivilDate, civilDayMonthShort, weekOf } from "@/lib/zone";
+import { civilDayMonthShort, weekOf } from "@/lib/zone";
 
 function sum(values: number[]): number {
   return values.reduce((total, value) => total + value, 0);
@@ -497,10 +497,7 @@ export async function MonthAcrossScreen({ month, today }: { month?: string; toda
           <Text as="span" variant="meta">
             {t("month.across.weeks.label")}
           </Text>
-          {mondaysTouching(across.month)
-            // A week that ended before the first goal was opened has nothing in it.
-            .filter((monday) => across.firstDay === null || addDaysToCivilDate(monday, 6) >= across.firstDay)
-            .map((monday) => (
+          {mondaysTouching(across.month).map((monday) => (
             <TextLink
               key={monday}
               nowrap

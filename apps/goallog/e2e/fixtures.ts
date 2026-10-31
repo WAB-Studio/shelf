@@ -183,7 +183,7 @@ export function todayCount(page: Page, done: number | string, total: number | st
 // On the phone a goal's own acts (rename, move, archive, delete, add inside) fold into one row at the foot, «Más sobre la meta»; from
 // 768 they stand in the header and the foot. Open the fold where it is there and shut.
 export async function openMore(page: Page): Promise<void> {
-  await expect(page.locator("main")).toBeVisible();
+  await expect(page.locator("main").first()).toBeVisible();
   const more = page.getByRole("button", { name: "Más sobre la meta" });
   if ((await more.isVisible()) && (await more.getAttribute("aria-expanded")) === "false") await more.click();
 }

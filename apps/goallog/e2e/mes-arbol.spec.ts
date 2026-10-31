@@ -326,5 +326,6 @@ test("with no tree, goals keep the flat blocks: one heading per goal, each with 
   expect(text.indexOf(lc("Tarea de A"))).toBeLessThan(b1);
   expect(b1).toBeLessThan(text.indexOf(lc("Tarea de B")));
   expect(text.slice(text.indexOf(lc("Tarea de A")), b1)).not.toContain("suelta a");
-  expect(text).toContain(`en ${MONTH_WORD} · sin monto este mes`);
+  // The card holds the invitation in place of «sin monto este mes» (`MonthAcrossScreen`): one of the two.
+  expect(text).toContain(`planear ${MONTH_WORD}`);
 });

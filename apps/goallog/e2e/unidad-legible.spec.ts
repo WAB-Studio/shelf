@@ -137,7 +137,7 @@ for (const [width, where] of [[360, "/exportar"], [1280, "/metas/<id>/revision"]
       const muted = await token(page, "--pulsar-muted");
       // The weekly review draws its weeks as bars, each total a Figure (DESIGN «Decisión del 2026-10-31»): no table cell there.
       const units = await seen(page, where === "/exportar" ? "table-unit" : "figure-unit");
-      allPaint(units, null, "table cell unit");
+      allPaint(units, where === "/exportar" ? muted : null, "table cell unit");
     } finally {
       await close();
     }
@@ -151,7 +151,7 @@ test("/exportar at 1280: the «km» in the header of a measured column is --puls
     const muted = await token(page, "--pulsar-muted");
     const units = await seen(page, "table-header-unit");
     expect(units.map((u) => u.text)).toContain("km");
-    allPaint(units, null, "header unit");
+    allPaint(units, muted, "header unit");
   } finally {
     await close();
   }
