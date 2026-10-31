@@ -10,7 +10,7 @@ import { DashboardSummary } from "@/components/reports/dashboard-summary";
 import {
   RecentMovements,
   rowColor,
-  rowSubtitle,
+  rowCaption,
   rowTitle,
   rowTone,
   type KindLabels,
@@ -302,14 +302,31 @@ export default async function HomePage(props: PageProps<"/[locale]">) {
               </TextLink>
             </Flex>
 
+            {rows.length === 0 && (
+              <EmptyState
+                variant="filtered"
+                title={t("homeEmptyTitle")}
+                description={t("homeEmptyDescription")}
+                action={<QuickEntryPill variant="action" />}
+              />
+            )}
+
             <Flex direction="column" gap="2">
               {rows.slice(0, PHONE_RECENT_LIMIT).map((row) => (
                 <Card key={row.id} asChild>
                   <LocaleLink href={`/movements/${row.id}`}>
                     <MovementRow
                       tile={<CategoryTile color={rowColor(row, categoryColors)} />}
-                      title={rowTitle(row, categoryNames, kindLabels)}
-                      subtitle={rowSubtitle(row, accountNames)}
+                      title={
+                        row.description ||
+                        rowTitle(row, categoryNames, kindLabels)
+                      }
+                      subtitle={rowCaption(
+                        row,
+                        categoryNames,
+                        accountNames,
+                        kindLabels,
+                      )}
                       amount={rowAmount(row, locale)}
                       tone={rowTone(row)}
                     />

@@ -21,7 +21,7 @@ import {
   DropdownMenu,
   EmptyState,
   Flex,
-  Heading,
+  ScreenHeader,
   IconButton,
   Text,
   type DataSection,
@@ -121,7 +121,7 @@ export function LabelsScreen({
 
   return (
     <Flex direction="column" gap="4">
-      <Heading size="5">{t("title")}</Heading>
+      <ScreenHeader title={t("title")} />
 
       {/* The laptop's dense table and the phone's cards: exactly one of the
           two is displayed at any width. */}

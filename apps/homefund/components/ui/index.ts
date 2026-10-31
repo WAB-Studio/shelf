@@ -67,6 +67,7 @@ export {
   Sidebar,
   SidebarSeparator,
   SidebarHead,
+  SidebarBody,
   SidebarFoot,
   SidebarAction,
   SidebarPerson,
@@ -85,6 +86,8 @@ export { TextLink } from "./text-link";
 
 export { Page } from "./page";
 
+export { CategoryChoice, CategoryChoiceGrid } from "./category-choice";
+export { PersonalMark } from "./personal-mark";
 export { MovementRow } from "./movement-row";
 
 export { CategoryTile } from "./category-tile";

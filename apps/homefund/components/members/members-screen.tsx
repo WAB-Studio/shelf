@@ -23,7 +23,6 @@ import {
   DropdownMenu,
   EmptyState,
   Flex,
-  Heading,
   IconButton,
   ScreenHeader,
   SegmentedControl,
@@ -160,16 +159,18 @@ export function MembersScreen({
 
       <Box display={{ initial: "block", lg: "none" }}>
         <Flex direction="column" gap="4">
-          <Flex justify="between" align="center" gap="3" wrap="wrap">
-            <Heading size="5">{t("title")}</Heading>
-            {/* Add would create an active member, so the archived tab offers none; RF-100 keeps it from anyone but the leader. */}
-            {isLeader && !archived && (
-              <Button type="button" onClick={() => setFormTarget("new")}>
-                <Plus size={16} />
-                {t("add")}
-              </Button>
-            )}
-          </Flex>
+          {/* Add would create an active member, so the archived tab offers none; RF-100 keeps it from anyone but the leader. */}
+          <ScreenHeader
+            title={t("title")}
+            actions={
+              isLeader && !archived ? (
+                <Button type="button" onClick={() => setFormTarget("new")}>
+                  <Plus size={16} />
+                  {t("add")}
+                </Button>
+              ) : undefined
+            }
+          />
 
           <SegmentedControl.Root
             value={archived ? "archived" : "active"}

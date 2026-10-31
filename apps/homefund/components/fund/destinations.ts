@@ -55,8 +55,9 @@ export type Destination = {
   icon: LucideIcon;
 };
 
-// The phone's bottom bar: the frequent three, around the raised action.
-export const TAB_KEYS = ["home", "movements", "planning"] as const;
+// The phone's bottom bar: the frequent three, around the raised action. Planeación
+// is reached from Inicio and from the first row of the settings panel.
+export const TAB_KEYS = ["home", "movements", "inbox"] as const;
 
 // The sidebar's own list, in the order `private/design-desktop/SPEC-A3.md` fixes.
 // Planeación opens in place: a laptop has the height to offer its five screens

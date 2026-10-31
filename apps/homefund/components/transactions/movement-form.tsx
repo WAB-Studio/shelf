@@ -331,6 +331,8 @@ export function MovementForm({
     name: "counterIsEstimate",
   });
   const splits = useWatch({ control: form.control, name: "splits" });
+  // Errors wait for a submit attempt: an untouched form is not a wrong one.
+  const submitted = form.formState.isSubmitted;
 
   const kind = deriveKind(fromAccountId, toAccountId);
 
@@ -883,7 +885,7 @@ export function MovementForm({
                 name="splits"
                 control={form.control}
                 render={({ field, fieldState }) => (
-                  <Field invalid={fieldState.invalid}>
+                  <Field invalid={submitted && fieldState.invalid}>
                     <FieldLabel>{t("categoryLabel")}</FieldLabel>
                     <SplitEditor
                       total={amount}
@@ -891,10 +893,11 @@ export function MovementForm({
                       scope={scope}
                       kind={kind}
                       categories={options.categories}
+                      frequentIds={options.frequentCategoryIds}
                       value={field.value}
                       onChange={field.onChange}
                     />
-                    <FieldMessage error={fieldState.error} />
+                    <FieldMessage error={submitted ? fieldState.error : undefined} />
                   </Field>
                 )}
               />

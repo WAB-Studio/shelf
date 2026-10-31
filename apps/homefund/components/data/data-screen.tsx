@@ -18,6 +18,7 @@ import {
   FilterField,
   Flex,
   Heading,
+  ScreenHeader,
   Spinner,
   Switch,
   Table,
@@ -172,7 +173,7 @@ export function DataScreen({
 
   return (
     <Flex direction="column" gap="4">
-      <Heading size="5">{t("screen.title")}</Heading>
+      <ScreenHeader title={t("screen.title")} />
 
       <Card>
         <Flex direction="column" gap="4">

@@ -591,8 +591,17 @@ export function MovementsScreen({
                     <MovementCard
                       key={row.id}
                       row={row}
-                      title={rowTitle(row, categoryNames, t)}
-                      subtitle={rowSubtitle(row, accountNames)}
+                      title={row.description || rowTitle(row, categoryNames, t)}
+                      subtitle={
+                        row.description
+                          ? [
+                              rowTitle(row, categoryNames, t),
+                              rowSubtitle(row, accountNames),
+                            ]
+                              .filter(Boolean)
+                              .join(" · ")
+                          : rowSubtitle(row, accountNames)
+                      }
                       color={rowColor(row, categoryColors)}
                       amount={
                         row.reconciliationId !== null ? (

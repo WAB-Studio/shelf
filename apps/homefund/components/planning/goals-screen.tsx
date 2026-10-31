@@ -34,7 +34,6 @@ import {
   Figure,
   Flex,
   FundChip,
-  Heading,
   IconButton,
   Money,
   Progress,
@@ -237,7 +236,7 @@ export function GoalsScreen({
             </>
           }
           actions={
-            !archived && (
+            !archived && goals.length > 0 && (
               <Button
                 type="button"
                 variant="surface"
@@ -253,14 +252,11 @@ export function GoalsScreen({
       </Box>
 
       <Box display={{ initial: "block", lg: "none" }}>
-        <Flex justify="between" align="center" gap="3" wrap="wrap">
-          <Flex align="center" gap="2">
-            <Heading size="5">{t("title")}</Heading>
-            {hasGroup && <FundChip label={tKey("fund.label")} />}
-          </Flex>
-          {/* Add would create an active goal, so the archived tab offers none. */}
-          {!archived && addButton}
-        </Flex>
+        <ScreenHeader
+          title={t("title")}
+          meta={hasGroup ? <FundChip label={tKey("fund.label")} /> : undefined}
+          actions={!archived && goals.length > 0 ? addButton : undefined}
+        />
       </Box>
 
       <Box display={{ initial: "none", md: "block" }}>

@@ -179,6 +179,8 @@ function QuickEntryForm({
   const amount = useWatch({ control: form.control, name: "amount" });
   const currency = useWatch({ control: form.control, name: "currency" });
   const splits = useWatch({ control: form.control, name: "splits" });
+  // Errors wait for a submit attempt: an untouched form is not a wrong one.
+  const submitted = form.formState.isSubmitted;
 
   // The figure is read in whatever the chosen account settles in, so switching
   // account switches the reading with it.
@@ -427,7 +429,7 @@ function QuickEntryForm({
           name="splits"
           control={form.control}
           render={({ field, fieldState }) => (
-            <Field invalid={fieldState.invalid}>
+            <Field invalid={submitted && fieldState.invalid}>
               <FieldLabel>{t("categoryLabel")}</FieldLabel>
               <SplitEditor
                 total={amount}
@@ -435,10 +437,11 @@ function QuickEntryForm({
                 scope={scope}
                 kind="expense"
                 categories={options.categories}
+                frequentIds={options.frequentCategoryIds}
                 value={field.value}
                 onChange={field.onChange}
               />
-              <FieldMessage error={fieldState.error} />
+              <FieldMessage error={submitted ? fieldState.error : undefined} />
             </Field>
           )}
         />

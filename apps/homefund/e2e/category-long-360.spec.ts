@@ -18,7 +18,8 @@ import { asHarnessUser, clearGroup, readScope, seedGroup, test } from "./global-
 const scope = readScope();
 const stamp = randomUUID().slice(0, 8);
 
-const FUND_MARK = " · fondo";
+// The fund's categories carry no suffix any more; a personal one wears a glyph.
+const FUND_MARK = "";
 const LONG_CATEGORY = `${"Categoria larguisima del fondo ".repeat(2).slice(0, 52)}${stamp}`;
 const PERSONAL_CATEGORY = `Categoria personal ${stamp}`;
 const FUND_ACCOUNT = `Cuenta del fondo ${stamp}`;
@@ -157,20 +158,13 @@ test.describe("a budget card at 360 px", () => {
     return page.locator(".rt-Card").filter({ hasText: name });
   }
 
-  test("a fund budget on a 60-character category keeps « · fondo» whole inside its card", async ({ page }) => {
-    // Kills: one truncated Text for name and mark, which cuts the mark first.
+  test("a fund budget on a 60-character category stays inside its card", async ({ page }) => {
+    // Kills: an unclamped name pushing the card past the phone's width.
     await page.goto("/es/planning/budgets");
     const card = cardOf(page, LONG_CATEGORY);
     await expect(card).toHaveCount(1);
-    const mark = card.getByText(FUND_MARK.trim(), { exact: true });
-    await expect(mark).toBeVisible();
-
     const cardBox = await card.boundingBox();
-    const markBox = await mark.boundingBox();
-    expect(markBox!.x).toBeGreaterThanOrEqual(cardBox!.x);
-    expect(markBox!.x + markBox!.width).toBeLessThanOrEqual(cardBox!.x + cardBox!.width);
-    expect(markBox!.x + markBox!.width).toBeLessThanOrEqual(360);
-    expect(await mark.evaluate((el) => el.scrollWidth - el.clientWidth)).toBeLessThanOrEqual(0);
+    expect(cardBox!.x + cardBox!.width).toBeLessThanOrEqual(360);
     expect(await overflow(page)).toBeLessThanOrEqual(0);
   });
 
@@ -180,6 +174,5 @@ test.describe("a budget card at 360 px", () => {
     const card = cardOf(page, PERSONAL_CATEGORY);
     await expect(card).toHaveCount(1);
     await expect(card.getByText(PERSONAL_CATEGORY, { exact: true })).toBeVisible();
-    await expect(card.getByText(FUND_MARK.trim())).toHaveCount(0);
   });
 });

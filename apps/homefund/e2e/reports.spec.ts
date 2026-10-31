@@ -550,7 +550,7 @@ test.describe("a +400.000 adjustment this month", () => {
 
     // The adjustment is not a category: the one expense category is the only row.
     await expect(
-      band(page).getByText(/^Descuadre$/, { exact: true }),
+      band(page).getByText(/^Diferencia$/, { exact: true }),
     ).toHaveCount(0);
   });
 

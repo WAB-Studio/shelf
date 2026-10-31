@@ -20,6 +20,7 @@ import {
   type NavListItem,
   Sidebar,
   SidebarAction,
+  SidebarBody,
   SidebarFoot,
   SidebarHead,
   SidebarPerson,
@@ -119,12 +120,14 @@ export function AppSidebar({
         }
       />
 
-      <NavList variant="sidebar" items={items(PRIMARY_KEYS)} />
-      <SidebarSeparator />
-      <NavList
-        variant="sidebar"
-        items={[...items(SIDEBAR_SECONDARY_KEYS), settings]}
-      />
+      <SidebarBody>
+        <NavList variant="sidebar" items={items(PRIMARY_KEYS)} />
+        <SidebarSeparator />
+        <NavList
+          variant="sidebar"
+          items={[...items(SIDEBAR_SECONDARY_KEYS), settings]}
+        />
+      </SidebarBody>
 
       <SidebarFoot>
         <SidebarAction

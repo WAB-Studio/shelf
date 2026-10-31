@@ -12,8 +12,6 @@ import { withdrawCashAction } from "@/app/actions/cash";
 import {
   Button,
   Callout,
-  Card,
-  CategoryTile,
   Dialog,
   Field,
   FieldControl,
@@ -22,7 +20,6 @@ import {
   FieldLabel,
   FieldMessage,
   Flex,
-  PanelButton,
   Select,
   Spinner,
   Text,
@@ -56,22 +53,10 @@ export function WithdrawCashCard({
   return (
     <Dialog.Root open={open} onOpenChange={setOpen}>
       <Dialog.Trigger>
-        <Card asChild>
-          <PanelButton variant="surface">
-            <Flex align="center" gap="3">
-              <CategoryTile
-                color="var(--accent-3)"
-                size={34}
-                icon={
-                  <BanknoteArrowDown size={19} strokeWidth={2.2} color="var(--accent-11)" />
-                }
-              />
-              <Text size="3" weight="medium">
-                {t("withdrawAction")}
-              </Text>
-            </Flex>
-          </PanelButton>
-        </Card>
+        <Button tap variant="ghost" color="gray" size="2">
+          <BanknoteArrowDown size={17} strokeWidth={2.2} aria-hidden />
+          {t("withdrawAction")}
+        </Button>
       </Dialog.Trigger>
       <Dialog.Content>
         <Dialog.Title>{t("withdrawTitle")}</Dialog.Title>

@@ -32,9 +32,9 @@ import {
   FilterBar,
   FilterSelect,
   Flex,
-  Heading,
   IconButton,
   Money,
+  PersonalMark,
   ScreenHeader,
   SegmentedControl,
   Separator,
@@ -362,10 +362,7 @@ export function AccountsScreen({
 
       <Box display={{ initial: "block", lg: "none" }}>
         <Flex direction="column" gap="4">
-          <Flex justify="between" align="center" gap="3" wrap="wrap">
-            <Heading size="5">{t("title")}</Heading>
-            {!archived && addButton}
-          </Flex>
+          <ScreenHeader title={t("title")} actions={!archived ? addButton : undefined} />
           <SegmentedControl.Root
             value={archived ? "archived" : "active"}
             onValueChange={onTabChange}
@@ -550,6 +547,7 @@ function AccountCard({
         <Flex direction="column" gap="1" flexGrow="1" minWidth="0">
           <Flex align="center" gap="2" wrap="wrap">
             <Text weight="medium">{account.name}</Text>
+            {account.ownerUserId && <PersonalMark label={t("ownerPersonal")} />}
             <Badge color={account.kind === "liability" ? "red" : "green"}>
               {t(account.kind === "liability" ? "kindLiability" : "kindAsset")}
             </Badge>

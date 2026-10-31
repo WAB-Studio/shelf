@@ -26,7 +26,7 @@ import {
   Figure,
   Flex,
   FundChip,
-  Heading,
+  ScreenHeader,
   IconButton,
   Progress,
   SegmentedControl,
@@ -193,14 +193,12 @@ export function BudgetsScreen({
 
   return (
     <Flex direction="column" gap="4">
-      <Flex justify="between" align="center" gap="3" wrap="wrap">
-        <Flex align="center" gap="2">
-          <Heading size="5">{t("title")}</Heading>
-          {hasGroup && <FundChip label={tKey("fund.label")} />}
-        </Flex>
-        {/* Add would create an active budget, so the archived tab offers none. */}
-        {!archived && addButton}
-      </Flex>
+      <ScreenHeader
+        title={t("title")}
+        meta={hasGroup ? <FundChip label={tKey("fund.label")} /> : undefined}
+        // The empty state carries its own «add», so the header's would be a second.
+        actions={!archived && budgets.length > 0 ? addButton : undefined}
+      />
 
       <Box display={{ initial: "none", md: "block" }}>
         <PlanningSubNav />

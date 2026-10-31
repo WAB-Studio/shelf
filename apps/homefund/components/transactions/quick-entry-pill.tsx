@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 
 import { useQuickEntry } from "@/components/transactions/quick-entry-provider";
 import {
+  Button,
   Card,
   CategoryTile,
   Flex,
@@ -24,10 +25,20 @@ import {
 export function QuickEntryPill({
   variant = "compact",
 }: {
-  variant?: "compact" | "wide";
+  variant?: "compact" | "wide" | "action";
 }) {
   const t = useTranslations("transactions");
   const { openQuick, openFull } = useQuickEntry();
+
+  // The empty list's call to action: the same tap as a plain button.
+  if (variant === "action") {
+    return (
+      <Button tap onClick={openQuick}>
+        <Plus size={16} strokeWidth={2.4} aria-hidden />
+        {t("quickAction")}
+      </Button>
+    );
+  }
 
   if (variant === "wide") {
     return (
