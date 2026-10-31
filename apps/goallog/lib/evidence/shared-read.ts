@@ -22,18 +22,21 @@ const asked = new WeakMap<Transaction, { from: unknown; to: unknown; zone: strin
 export function sharedRows(tx: Transaction, from: Bound, to: Bound, zone: string): Promise<SharedRows> {
   const earlier = asked.get(tx);
   if (earlier && earlier.from === from && earlier.to === to && earlier.zone === zone) return earlier.rows;
-  // `civil` is a CTE so `zone` is bound once: grouping by a second bind of it cannot be proved equal.
+  // One `between`, so a goal's span bounds are spelled once: each source is shaped to (src, day, app, n) first,
+  // a search counting 1 and a TimeLog row its seconds, and the window and the grouping apply to both. The window closes a parenthesis because the proof that reads the bounds off the wire ends `to` there.
   const rows = (async () => {
     const result = await tx.execute<Row>(sql`
-      with civil as (
-        select (at at time zone ${zone})::date as day from reading.lookups
-      )
-      select 's' as src, day::text as day, null::text as app, count(*)::int as n
-        from civil where day between ${from} and ${to} group by day
-      union all
-      select 't', day::text, app, sum(seconds)::int
-        from timelog.app_seconds where day between ${from} and ${to} group by day, app
-      order by 2`);
+      select src, day::text as day, app, sum(n)::int as n
+        from (
+          select * from (
+            select 's' as src, (at at time zone ${zone})::date as day, null::text as app, 1 as n from "reading"."lookups"
+            union all
+            select 't', day, app, seconds from timelog.app_seconds
+          ) u
+          where day::date between ${from} and ${to}
+        ) windowed
+       group by src, day, app
+       order by 2`);
     const out: SharedRows = { searches: [], timelog: [] };
     for (const row of result) {
       if (row.src === "s") out.searches.push({ day: row.day, quantity: row.n });
