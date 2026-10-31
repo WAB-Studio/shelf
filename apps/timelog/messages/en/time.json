@@ -38,7 +38,9 @@
     "prev": "Previous day",
     "next": "Next day",
     "apps": "Apps",
-    "claudeCard": "Claude in total"
+    "claudeCard": "Claude in total",
+    "windowBar": "{title}: {duration}",
+    "windowsMore": "and {n} more windows"
   },
   "week": {
     "title": "{from} to {to}",
@@ -115,7 +117,10 @@
     "bar": "{name}: {duration}",
     "empty": "No Claude time that day.",
     "never": "No Claude Code time has arrived yet. It is read from its sessions folder on your PC; if you use it in WSL, point to that folder in aw-timelog.toml (claude_dir) and wait for the next upload.",
-    "overlap": "The three add up as they are: if you used two at once, both count."
+    "overlap": "The three add up as they are: if you used two at once, both count.",
+    "sessions": "Claude Code sessions",
+    "session": "{project}: {duration}",
+    "span": "{from} – {to}"
   },
   "internet": {
     "title": "Internet",
@@ -124,7 +129,9 @@
     "never": "No sites have arrived yet. Install ActivityWatch's browser extension and they will show here after the next upload.",
     "install": "How to install the extension",
     "more": "and {n} more sites",
-    "privacy": "The site alone (github.com): never the page or the full address."
+    "privacy": "Only you see this. Sites and apps on your exclusion list (banks and password managers, by default) never leave your PC.",
+    "pageBar": "{title}: {duration}",
+    "pagesMore": "and {n} more pages"
   },
   "export": {
     "title": "Export",

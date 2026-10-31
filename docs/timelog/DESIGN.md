@@ -104,3 +104,10 @@ longest hostnames as bars, «y N sitios más», and a line saying only the site 
 arrived says so in a sentence and how to connect it, never a flat zero. «Semana» adds a card
 «Claude en la semana» in its block and, under the apps, «Claude por día»: seven bars and «Exportar esta
 semana». «Exportar» is a narrow screen like «Llaves»: two dates, a pill and three shortcuts.
+
+Details (2026-10-30, after «rastree todo más detallado»): a row that has a detail opens onto it, the native
+disclosure (a `›` before the row that turns when open, the detail indented under a 2px rail, no script). An app
+row opens onto its longest window titles as compact bars; a site opens onto its pages, each a compact bar named by
+the page title with its address under it in the meta line. «Claude» ends with «Sesiones de Claude Code»: bars
+named by project, the span «9:12 a. m. – 10:40 a. m.» under each. The privacy line under «Internet» says only the
+person sees it and that the exclusion list never leaves the PC.

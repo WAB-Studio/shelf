@@ -38,7 +38,9 @@
     "prev": "Día anterior",
     "next": "Día siguiente",
     "apps": "Apps",
-    "claudeCard": "Claude en total"
+    "claudeCard": "Claude en total",
+    "windowBar": "{title}: {duration}",
+    "windowsMore": "y {n} ventanas más"
   },
   "week": {
     "title": "Del {from} al {to}",
@@ -115,7 +117,10 @@
     "bar": "{name}: {duration}",
     "empty": "Sin tiempo de Claude ese día.",
     "never": "Todavía no llega tiempo de Claude Code. Se lee de su carpeta de sesiones en tu PC; si lo usas en WSL, indica esa carpeta en aw-timelog.toml (claude_dir) y espera la próxima subida.",
-    "overlap": "Los tres se suman tal cual: si usaste dos a la vez, cuentan los dos."
+    "overlap": "Los tres se suman tal cual: si usaste dos a la vez, cuentan los dos.",
+    "sessions": "Sesiones de Claude Code",
+    "session": "{project}: {duration}",
+    "span": "{from} – {to}"
   },
   "internet": {
     "title": "Internet",
@@ -124,7 +129,9 @@
     "never": "Todavía no llegan sitios. Instala la extensión de ActivityWatch en tu navegador y se verán aquí tras la próxima subida.",
     "install": "Cómo instalar la extensión",
     "more": "y {n} sitios más",
-    "privacy": "Solo el sitio (github.com): nunca la página ni la dirección completa."
+    "privacy": "Solo tú lo ves. Los sitios y apps de tu lista de exclusión (bancos y gestores de contraseñas, por defecto) nunca salen de tu PC.",
+    "pageBar": "{title}: {duration}",
+    "pagesMore": "y {n} páginas más"
   },
   "export": {
     "title": "Exportar",

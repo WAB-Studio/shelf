@@ -19,7 +19,7 @@ test("a day with no apps passes: it empties that day (RT-02)", () => {
   assert.ok(parse({ device: "pc", days: [day(today, [])] }).success);
 });
 
-test("a window title or any other field is refused (RT-01)", () => {
+test("an unknown top-level field is refused", () => {
   assert.equal(parse({ device: "pc", days: [day(today)], titles: ["secreto"] }).success, false);
   assert.equal(parse({ device: "pc", days: [{ ...day(today), title: "x" }] }).success, true, "a day's extra key is stripped, never stored");
 });
@@ -81,4 +81,39 @@ test("a day's sites add up to a day at most, none twice; Claude Code is whole se
   for (const seconds of [-1, 1.5, 86_401]) {
     assert.equal(parse({ device: "pc", days: [{ ...day(today), claude_code_seconds: seconds }] }).success, false, String(seconds));
   }
+});
+
+const withDay = (extra: Record<string, unknown>) => parse({ device: "pc", days: [{ ...day(today), ...extra }] });
+
+test("windows, pages and Claude Code sessions ride along and an old payload still passes (RT-18, RT-19)", () => {
+  const result = withDay({
+    windows: [{ app: "Code.exe", title: "shelf - VS Code", seconds: 600 }],
+    pages: [{ host: "github.com", url: "https://github.com/WAB-Studio/shelf/pull/1", title: " PR 1 ", seconds: 60 }],
+    claude_sessions: [{ session: "abc", project: "-home-me-projects-shelf", first: "2026-10-28T14:00:00Z", last: "2026-10-28T14:30:00Z", seconds: 900 }],
+  });
+  assert.ok(result.success);
+  assert.equal(result.data.days[0].pages?.[0].title, "PR 1");
+  assert.ok(parse({ device: "pc", days: [day(today)] }).success);
+  assert.ok(withDay({ windows: [], pages: [], claude_sessions: [] }).success, "named and empty replaces with nothing");
+});
+
+test("a page is a bare address under its own host: a query, a fragment or another host are refused (RT-18)", () => {
+  const page = (url: string, host = "github.com") => withDay({ pages: [{ host, url, title: "t", seconds: 5 }] }).success;
+  assert.equal(page("https://github.com/a?token=SECRET"), false);
+  assert.equal(page("https://github.com/a#x"), false);
+  assert.equal(page("https://evil.com/a"), false);
+  assert.equal(page("ftp://github.com/a"), false);
+  assert.ok(page("https://www.github.com/a"), "www is the same host");
+  assert.ok(page("http://localhost:3000/x", "localhost"));
+  assert.equal(withDay({ pages: [{ host: "github.com", url: "https://github.com/a", title: "a\u0000b", seconds: 5 }] }).success, false);
+});
+
+test("windows and pages add up to a day at most, none twice; a session ends after it starts (RT-18, RT-19)", () => {
+  const w = (title: string, seconds: number) => ({ app: "Code.exe", title, seconds });
+  assert.equal(withDay({ windows: [w("a", 1), w("a", 2)] }).success, false);
+  assert.equal(withDay({ windows: [w("a", 50_000), w("b", 40_000)] }).success, false);
+  const s = (session: string, first: string, last: string) => ({ session, project: "p", first, last, seconds: 5 });
+  assert.equal(withDay({ claude_sessions: [s("x", "2026-10-28T15:00:00Z", "2026-10-28T14:00:00Z")] }).success, false);
+  assert.equal(withDay({ claude_sessions: [s("x", "2026-10-28T14:00:00Z", "2026-10-28T15:00:00Z"), s("x", "2026-10-28T14:00:00Z", "2026-10-28T15:00:00Z")] }).success, false);
+  assert.equal(withDay({ claude_sessions: [s("x", "not a time", "2026-10-28T15:00:00Z")] }).success, false);
 });

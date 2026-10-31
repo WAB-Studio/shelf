@@ -186,3 +186,55 @@ test("a person reads their own sites and Claude Code days and none of another's;
   );
   await assert.rejects(asPerson(ana, (tx) => tx.execute(sql`delete from timelog.site_seconds`)), denied);
 });
+
+const rowsOf = <T extends object>(table: string, who: Person, on: string, order: string) =>
+  db
+    .unsafe(`select * from timelog.${table} where user_id = $1 and day = $2 order by ${order} collate "C"`, [who.id, on])
+    .then((rows) => rows.map((row) => Object.fromEntries(Object.entries(row).filter(([name]) => name !== "user_id" && name !== "received_at")) as T));
+
+test("windows, pages and sessions are written whole per device-day and left alone when a day does not name them (RT-18, RT-19)", async () => {
+  const on = "2026-10-27";
+  const sent = {
+    day: on,
+    apps: [],
+    windows: [{ app: "Code.exe", title: "shelf - VS Code", seconds: 600 }],
+    pages: [{ host: "github.com", url: "https://github.com/WAB-Studio/shelf", title: "shelf", seconds: 120 }],
+    claude_sessions: [{ session: "abc", project: "-home-me-projects-shelf", first: "2026-10-27T14:00:00Z", last: "2026-10-27T14:30:00Z", seconds: 900 }],
+  };
+  assert.equal(await upload(ana, "pc", [sent]), 3);
+  assert.deepEqual(await rowsOf("window_seconds", ana, on, "title"), [{ device: "pc", day: on, app: "Code.exe", title: "shelf - VS Code", seconds: 600 }]);
+  assert.equal((await rowsOf<{ url: string }>("page_seconds", ana, on, "url"))[0].url, "https://github.com/WAB-Studio/shelf");
+  const [session] = await rowsOf<{ session: string; project: string; seconds: number; first_at: Date }>("claude_sessions", ana, on, "session");
+  assert.deepEqual([session.session, session.project, session.seconds, new Date(session.first_at).toISOString()], ["abc", "-home-me-projects-shelf", 900, "2026-10-27T14:00:00.000Z"]);
+
+  assert.equal(await upload(ana, "pc", [{ day: on, apps: [{ app: "x.exe", seconds: 1 }] }]), 1, "an old payload touches none of them");
+  assert.equal((await rowsOf("window_seconds", ana, on, "title")).length, 1);
+  assert.equal((await rowsOf("page_seconds", ana, on, "url")).length, 1);
+  assert.equal((await rowsOf("claude_sessions", ana, on, "session")).length, 1);
+
+  assert.equal(await upload(ana, "pc", [{ day: on, apps: [], windows: [], pages: [], claude_sessions: [] }]), 0);
+  for (const table of ["window_seconds", "page_seconds", "claude_sessions"]) assert.deepEqual(await rowsOf(table, ana, on, "device"), [], table);
+});
+
+test("a page with a query or a session ending before it starts rolls the whole upload back (RNT-02)", async () => {
+  const on = "2026-10-28";
+  await upload(ana, "pc", [{ day: on, apps: [{ app: "keep.exe", seconds: 7 }] }]);
+  await assert.rejects(upload(ana, "pc", [{ day: on, apps: [{ app: "other.exe", seconds: 7 }], pages: [{ host: "a.com", url: "https://a.com/x?token=1", title: "", seconds: 5 }] }]));
+  assert.deepEqual(await appsOf(ana, on), [{ app: "keep.exe", seconds: 7 }]);
+});
+
+test("a person reads their own windows, pages and sessions and none of another's; no API role writes them (RNT-01)", async () => {
+  const on = "2026-10-29";
+  await db`insert into timelog.window_seconds (user_id, device, day, app, title, seconds) values (${beto.id}, 'pc', ${on}, 'a', 'b', 9), (${ana.id}, 'pc', ${on}, 'a', 'b', 9)`;
+  await db`insert into timelog.page_seconds (user_id, device, day, host, url, title, seconds) values (${beto.id}, 'pc', ${on}, 'a.com', 'https://a.com/', '', 9), (${ana.id}, 'pc', ${on}, 'a.com', 'https://a.com/', '', 9)`;
+  await db`insert into timelog.claude_sessions (user_id, device, day, session, project, first_at, last_at, seconds) values (${beto.id}, 'pc', ${on}, 's', 'p', now(), now(), 9), (${ana.id}, 'pc', ${on}, 's', 'p', now(), now(), 9)`;
+  for (const table of ["window_seconds", "page_seconds", "claude_sessions"]) {
+    const seen = await asPerson(ana, (tx) => tx.execute<{ user_id: string }>(sql`select distinct user_id from ${sql.identifier("timelog")}.${sql.identifier(table)}`).then((rows) => rows.map((row) => row.user_id)));
+    assert.deepEqual(seen, [ana.id], table);
+    await assert.rejects(asPerson(ana, (tx) => tx.execute(sql`delete from ${sql.identifier("timelog")}.${sql.identifier(table)}`)), denied, table);
+  }
+  await assert.rejects(
+    asPerson(ana, (tx) => tx.execute(sql`insert into timelog.window_seconds (user_id, device, day, app, title, seconds) values (${ana.id}, 'pc', ${on}, 'forged', 't', 1)`)),
+    denied,
+  );
+});

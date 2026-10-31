@@ -9,6 +9,10 @@ export type DayTotal = { day: string; seconds: number };
 export type SiteTime = { host: string; seconds: number };
 // One day's Claude time by where it was spent: the CLI, claude.ai in a browser, the desktop app.
 export type ClaudeDay = { day: string; code: number; web: number; desktop: number };
+export type WindowTime = { app: string; title: string; seconds: number };
+export type PageTime = { host: string; url: string; title: string; seconds: number };
+// A Claude Code session on the days asked: its project folder as Claude Code named it, the first and last message, the seconds.
+export type ClaudeSessionTime = { session: string; project: string; first: Date; last: Date; seconds: number };
 export type DayApp = { day: string; app: string; seconds: number };
 
 // Every device added: one app on two PCs is one row. Longest first, then by name.
@@ -70,6 +74,45 @@ export async function claudeBetween(from: string, to: string): Promise<ClaudeDay
        order by day`),
   );
   return [...rows];
+}
+
+// Window titles inside apps, every device added (RT-18). Longest first.
+export async function windowsBetween(from: string, to: string): Promise<WindowTime[]> {
+  const rows = await withTimeDb((tx) =>
+    tx.execute<WindowTime>(sql`
+      select app, title, sum(seconds)::int as seconds
+        from timelog.window_seconds
+       where day between ${from}::date and ${to}::date
+       group by app, title
+       order by seconds desc, app, title`),
+  );
+  return [...rows];
+}
+
+// Pages, every device added (RT-18). Longest first.
+export async function pagesBetween(from: string, to: string): Promise<PageTime[]> {
+  const rows = await withTimeDb((tx) =>
+    tx.execute<PageTime>(sql`
+      select host, url, title, sum(seconds)::int as seconds
+        from timelog.page_seconds
+       where day between ${from}::date and ${to}::date
+       group by host, url, title
+       order by seconds desc, url, title`),
+  );
+  return [...rows];
+}
+
+// Claude Code sessions that worked in the range (RT-19): a session over two devices or two days is one row.
+export async function claudeSessionsBetween(from: string, to: string): Promise<ClaudeSessionTime[]> {
+  const rows = await withTimeDb((tx) =>
+    tx.execute<{ session: string; project: string; first: string; last: string; seconds: number }>(sql`
+      select session, min(project) as project, min(first_at) as first, max(last_at) as last, sum(seconds)::int as seconds
+        from timelog.claude_sessions
+       where day between ${from}::date and ${to}::date
+       group by session
+       order by seconds desc, session`),
+  );
+  return rows.map((row) => ({ ...row, first: new Date(row.first), last: new Date(row.last) }));
 }
 
 // Each day's apps over a range, for the export's top app. Rows per day, not a day's whole list at a time.

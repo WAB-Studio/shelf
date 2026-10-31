@@ -15,6 +15,13 @@
       "when": 1793419340320,
       "tag": "0001_claude_and_sites",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1793420390405,
+      "tag": "0002_windows_pages_sessions",
+      "breakpoints": true
     }
   ]
 }

@@ -3,11 +3,14 @@ import { getTranslations } from "next-intl/server";
 import { BarRows } from "@/components/screens/app-rows";
 import { ClaudeBlock, InternetBlock } from "@/components/screens/claude-internet";
 import { Between, Card, Cards, Figure, Hero, Split, Stack, Text, TextLink, Title } from "@/components/ui";
+import { readableApp } from "@/lib/app-names";
 import { claudeTotal } from "@/lib/daily";
-import { appsBetween, claudeBetween, dayTotals, sitesBetween, uploadSpan } from "@/lib/queries";
+import { appsBetween, claudeBetween, claudeSessionsBetween, dayTotals, pagesBetween, sitesBetween, uploadSpan, windowsBetween } from "@/lib/queries";
 import { sum } from "@/lib/totals";
 import { calendarWords } from "@/lib/words";
 import { addDays, civilDay } from "@/lib/zone";
+
+const TITLES_SHOWN = 8;
 
 // One day (RT-04, RT-11): the total in the brand block, the top app and, on a past day, the gap to the day before, then the apps.
 // «Hoy» is this screen for today; any past day opens on `/dia/AAAA-MM-DD`.
@@ -15,9 +18,12 @@ export async function DayView({ day }: { day: string }) {
   const today = civilDay();
   const isToday = day === today;
   const before = addDays(day, -1);
-  const [raw, sites, claudeDays, previous, span, words, t] = await Promise.all([
+  const [raw, sites, pages, windows, sessions, claudeDays, previous, span, words, t] = await Promise.all([
     appsBetween(day, day),
     sitesBetween(day, day),
+    pagesBetween(day, day),
+    windowsBetween(day, day),
+    claudeSessionsBetween(day, day),
     claudeBetween(day, day),
     // Only a whole day compares: uploads carry day totals, so today so far has no like-for-like yesterday.
     isToday ? Promise.resolve([]) : dayTotals(before, before),
@@ -28,6 +34,12 @@ export async function DayView({ day }: { day: string }) {
   const claude = claudeDays[0];
   const claudeSeconds = claude === undefined ? 0 : claudeTotal(claude);
   const apps = words.apps(raw);
+  // Windows come under the readable name of their app, two processes with one name together.
+  const titlesOf = new Map<string, typeof windows>();
+  for (const one of windows) {
+    const name = readableApp(one.app);
+    if (name !== null) titlesOf.set(name, [...(titlesOf.get(name) ?? []), one]);
+  }
   const total = sum(apps);
   const top = apps[0];
   const previousTotal = previous[0]?.seconds ?? 0;
@@ -98,11 +110,25 @@ export async function DayView({ day }: { day: string }) {
                 figure: words.duration(one.seconds),
                 seconds: one.seconds,
                 label: t("bar", { app: one.app, duration: words.duration(one.seconds) }),
+                detail: titlesOf.has(one.app) ? (
+                  <>
+                    <BarRows
+                      rows={(titlesOf.get(one.app) ?? []).slice(0, TITLES_SHOWN).map((title) => ({
+                        key: title.app + title.title,
+                        name: title.title,
+                        figure: words.duration(title.seconds),
+                        seconds: title.seconds,
+                        label: t("windowBar", { title: title.title, duration: words.duration(title.seconds) }),
+                      }))}
+                    />
+                    {(titlesOf.get(one.app) ?? []).length > TITLES_SHOWN ? <Text as="p" variant="meta">{t("windowsMore", { n: (titlesOf.get(one.app) ?? []).length - TITLES_SHOWN })}</Text> : null}
+                  </>
+                ) : undefined,
               }))}
             />
           </Stack>
-          <ClaudeBlock claude={claude} hasClaudeCode={span.hasClaudeCode} hasSites={span.hasSites} words={words} />
-          <InternetBlock sites={sites} hasSites={span.hasSites} words={words} />
+          <ClaudeBlock claude={claude} sessions={sessions} hasClaudeCode={span.hasClaudeCode} hasSites={span.hasSites} words={words} />
+          <InternetBlock sites={sites} pages={pages} hasSites={span.hasSites} words={words} />
         </Stack>
       </Split>
     </Stack>

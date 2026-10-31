@@ -7,7 +7,7 @@ export const runtime = "nodejs";
 const json = (status: number, body: unknown) =>
   Response.json(body, { status, headers: { "Cache-Control": "no-store" } });
 
-// The uploader's door (RT-01..RT-03): a key, a JSON body, one statement.
+// The uploader's door (RT-02, RT-03, RT-13..RT-19): a key, a JSON body, one statement.
 export async function POST(request: Request): Promise<Response> {
   const key = bearerOf(request.headers.get("authorization"));
   if (key === null) return json(401, { error: "key" });
