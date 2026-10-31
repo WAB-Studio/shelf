@@ -193,6 +193,19 @@ const saveButton = (dialog: Locator) =>
 const cancelButton = (dialog: Locator) =>
   dialog.getByRole("button", { name: common.cancel, exact: true });
 
+// One category is a tile of the grid; «Más» shows the rest of the catalogue.
+async function pickCategory(dialog: Locator, name: string) {
+  const tile = dialog.getByRole("button", { name, exact: true });
+  const more = dialog.getByRole("button", { name: transactions.categoryMore, exact: true });
+  await expect(tile.or(more).first()).toBeVisible();
+  if (!(await tile.isVisible())) await more.click();
+  await tile.click();
+}
+
+// Splitting across several categories sits behind «Dividir».
+const divide = (dialog: Locator) =>
+  dialog.getByRole("button", { name: transactions.splitDivide, exact: true }).click();
+
 const splitCategory = (dialog: Locator, position: number) =>
   dialog.getByRole("combobox", {
     name: transactions.splitRowCategory.replace("{position}", String(position)),
@@ -226,7 +239,7 @@ test.describe("on the laptop", () => {
 
     await fillAccounts(page, dialog, { from: null, to: SOURCE_NAME });
     await field(dialog, "movement-amount").fill("1 234 567,89");
-    await choose(page, splitCategory(dialog, 1), INCOME_CATEGORY);
+    await pickCategory(dialog, INCOME_CATEGORY);
 
     // The kind is read off the accounts and shown, never chosen (RF-18).
     await expect(dialog.getByText(transactions.kindIncome, { exact: true })).toBeVisible();
@@ -259,7 +272,7 @@ test.describe("on the laptop", () => {
 
     await expect(dialog.getByText(transactions.kindTransfer, { exact: true })).toBeVisible();
     // A transfer carries no category (RF-69): the editor is not even on the form.
-    await expect(splitCategory(dialog, 1)).toHaveCount(0);
+    await expect(dialog.getByRole("button", { name: transactions.splitDivide, exact: true })).toHaveCount(0);
 
     await saveButton(dialog).click();
     await expect(dialog).toBeHidden();
@@ -299,7 +312,8 @@ test.describe("on the laptop", () => {
 
     await fillAccounts(page, dialog, { from: SOURCE_NAME, to: null });
     await field(dialog, "movement-amount").fill("50000");
-    await choose(page, splitCategory(dialog, 1), scope.categoryName);
+    await pickCategory(dialog, scope.categoryName);
+    await divide(dialog);
 
     // A lone split holds the whole amount and cannot be edited away from it, so
     // the second row goes in before the first one is narrowed.
@@ -330,7 +344,8 @@ test.describe("on the laptop", () => {
 
     await fillAccounts(page, dialog, { from: SOURCE_NAME, to: null });
     await field(dialog, "movement-amount").fill("50000");
-    await choose(page, splitCategory(dialog, 1), scope.categoryName);
+    await pickCategory(dialog, scope.categoryName);
+    await divide(dialog);
 
     // A lone split holds the whole amount and cannot be edited away from it, so
     // the second row goes in before the first one is narrowed.
@@ -352,7 +367,7 @@ test.describe("on the laptop", () => {
     const dialog = await openFullForm(page, testInfo);
 
     await fillAccounts(page, dialog, { from: SOURCE_NAME, to: null });
-    await choose(page, splitCategory(dialog, 1), scope.categoryName);
+    await pickCategory(dialog, scope.categoryName);
 
     const posts = countActionPosts(page);
     await saveButton(dialog).click();
@@ -368,7 +383,7 @@ test.describe("on the laptop", () => {
 
     await fillAccounts(page, dialog, { from: SOURCE_NAME, to: null });
     await field(dialog, "movement-amount").fill("9999");
-    await choose(page, splitCategory(dialog, 1), scope.categoryName);
+    await pickCategory(dialog, scope.categoryName);
 
     const posts = countActionPosts(page);
     await cancelButton(dialog).click();
@@ -402,7 +417,7 @@ test.describe("on the laptop", () => {
       const dialog = await openFullForm(page, testInfo);
       await fillAccounts(page, dialog, { from: SOURCE_NAME, to: null });
       await field(dialog, "movement-amount").fill("4000");
-      await choose(page, splitCategory(dialog, 1), scope.categoryName);
+      await pickCategory(dialog, scope.categoryName);
 
       await saveButton(dialog).click();
 
@@ -419,7 +434,7 @@ test.describe("on the laptop", () => {
       const dialog = await openFullForm(page, testInfo);
       await fillAccounts(page, dialog, { from: SOURCE_NAME, to: null });
       await field(dialog, "movement-amount").fill("4000");
-      await choose(page, splitCategory(dialog, 1), scope.categoryName);
+      await pickCategory(dialog, scope.categoryName);
 
       await saveButton(dialog).click();
 
@@ -498,9 +513,10 @@ test.describe("on the laptop", () => {
     const [bankBefore, cashBefore] = [await balanceOf(ids.source), await balanceOf(ids.cash)];
 
     await page.goto("/es");
-    await choose(page, page.locator("#withdraw-panel-source"), SOURCE_NAME);
+    await page.getByRole("button", { name: cash.withdrawAction, exact: true }).filter({ visible: true }).click();
+    await choose(page, page.locator("#withdraw-source"), SOURCE_NAME);
     await expect(page.getByText(CASH_NAME, { exact: true })).toBeVisible();
-    await page.locator("#withdraw-panel-amount").fill("100000");
+    await page.locator("#withdraw-amount").fill("100000");
     await page.getByRole("button", { name: cash.withdrawSave, exact: true }).filter({ visible: true }).click();
 
     await expect(page.getByText(cash.withdrawSaved, { exact: true })).toBeVisible();
@@ -592,7 +608,7 @@ test.describe("a resent save and a stale edit", () => {
     const dialog = await openFullForm(page, testInfo);
     await fillAccounts(page, dialog, { from: SOURCE_NAME, to: null });
     await field(dialog, "movement-amount").fill("4000");
-    await choose(page, splitCategory(dialog, 1), scope.categoryName);
+    await pickCategory(dialog, scope.categoryName);
 
     await saveButton(dialog).click();
     await expect.poll(() => dropped).toBe(1);
@@ -630,7 +646,7 @@ test.describe("a resent save and a stale edit", () => {
     const dialog = await openFullForm(page, testInfo);
     await fillAccounts(page, dialog, { from: SOURCE_NAME, to: null });
     await field(dialog, "movement-amount").fill("4000");
-    await choose(page, splitCategory(dialog, 1), scope.categoryName);
+    await pickCategory(dialog, scope.categoryName);
 
     await saveButton(dialog).click();
     await expect.poll(() => dropped).toBe(1);
@@ -642,7 +658,7 @@ test.describe("a resent save and a stale edit", () => {
 
     await expect(dialog.getByText(RESEND_CHANGED, { exact: true })).toBeVisible();
     await expect(dialog).toBeVisible();
-    await expect(field(dialog, "movement-amount")).toHaveValue("9000");
+    await expect(field(dialog, "movement-amount")).toHaveValue(/9\D?000/);
     const rows = await movements();
     expect(rows).toHaveLength(1);
     expect(rows[0].amount_cents).toBe("400000");
@@ -656,7 +672,7 @@ test.describe("a resent save and a stale edit", () => {
       const dialog = await openFullForm(page, testInfo, false);
       await fillAccounts(page, dialog, { from: SOURCE_NAME, to: null });
       await field(dialog, "movement-amount").fill(amount);
-      await choose(page, splitCategory(dialog, 1), scope.categoryName);
+      await pickCategory(dialog, scope.categoryName);
       await saveButton(dialog).click();
       await expect(dialog).toBeHidden();
     }
@@ -692,7 +708,7 @@ test.describe("a resent save and a stale edit", () => {
 
     await expect(dialogA.getByText(messages.errors.stale, { exact: true })).toBeVisible();
     await expect(dialogA).toBeVisible();
-    await expect(field(dialogA, "movement-amount")).toHaveValue("27000");
+    await expect(field(dialogA, "movement-amount")).toHaveValue(/^27\D?000$/);
     await expect(saveButton(dialogA)).toBeEnabled();
     // The other tab's figure stands.
     const rows = await movements();
@@ -717,7 +733,7 @@ test.describe("a resent save and a stale edit", () => {
 // A withdrawal whose answer never reached the browser (RNF-10, Q24): the server moved
 // the money, the browser saw the request fail, and the person presses save again.
 test.describe("a cash withdrawal sent again", () => {
-  test.skip(({ viewport }) => viewport?.width === 360, "the panel is the laptop's; the phone's dialog shares the action");
+  test.skip(({ viewport }) => viewport?.width === 360, "the laptop's button sits beside quick entry; the phone's keeps its own");
 
   const save = (page: Page) =>
     page.getByRole("button", { name: cash.withdrawSave, exact: true }).filter({ visible: true });
@@ -741,8 +757,9 @@ test.describe("a cash withdrawal sent again", () => {
     const bankBefore = await balanceOf(ids.source);
 
     await page.goto("/es");
-    await choose(page, page.locator("#withdraw-panel-source"), SOURCE_NAME);
-    await page.locator("#withdraw-panel-amount").fill("100000");
+    await page.getByRole("button", { name: cash.withdrawAction, exact: true }).filter({ visible: true }).click();
+    await choose(page, page.locator("#withdraw-source"), SOURCE_NAME);
+    await page.locator("#withdraw-amount").fill("100000");
     await save(page).click();
     await expect.poll(() => dropped).toBe(1);
     await expect.poll(async () => (await movements()).length).toBe(1);
@@ -760,11 +777,12 @@ test.describe("a cash withdrawal sent again", () => {
   test("two withdrawals one after the other, without reloading, are two transfers", async ({ page }) => {
     // Kills: a request ref that outlives its attempt, so the second withdrawal answers the first.
     await page.goto("/es");
-    await choose(page, page.locator("#withdraw-panel-source"), SOURCE_NAME);
     for (const amount of ["100000", "50000"]) {
-      await page.locator("#withdraw-panel-amount").fill(amount);
+      await page.getByRole("button", { name: cash.withdrawAction, exact: true }).filter({ visible: true }).click();
+    await choose(page, page.locator("#withdraw-source"), SOURCE_NAME);
+      await page.locator("#withdraw-amount").fill(amount);
       await save(page).click();
-      await expect(page.locator("#withdraw-panel-amount")).toHaveValue("");
+      await expect(page.getByRole("dialog")).toBeHidden();
     }
 
     const rows = await movements();

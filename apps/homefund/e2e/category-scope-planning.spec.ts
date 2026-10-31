@@ -32,7 +32,9 @@ const scope = readScope();
 const stamp = randomUUID().slice(0, 8);
 
 const NAME = `T4 Mercado ${stamp}`;
-const MARKED = messages.categories.scopedName.replace("{name}", NAME);
+// A fund category reads bare now (the user, 2026-10-30), so the fixture gives it a name of its own
+// to tell the two scopes apart.
+const MARKED = `${NAME} del fondo`;
 const NAMED_BUDGET = `Comida ${stamp}`;
 const PAYMENT = `Pago fondo ${stamp}`;
 const RULE = `Regla fondo ${stamp}`;
@@ -89,7 +91,7 @@ test.beforeAll(async () => {
       values (${ids.personalCategory}, ${scope.userId}, ${NAME}, 'expense', '#4C8C4A')`;
     await tx`
       insert into categories (id, group_id, name, kind, color)
-      values (${ids.fundCategory}, ${groupId}, ${NAME}, 'expense', '#8C4A4A')`;
+      values (${ids.fundCategory}, ${groupId}, ${MARKED}, 'expense', '#8C4A4A')`;
     await tx`
       insert into budgets (id, group_id, category_id, period, limit_cents, threshold_pct)
       values (${ids.fundBudget}, ${groupId}, ${ids.fundCategory}, 'monthly', 500000, 80)`;

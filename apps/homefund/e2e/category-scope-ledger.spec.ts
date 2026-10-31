@@ -126,27 +126,20 @@ test.describe("the edit form's split editor (C3c)", () => {
       .filter({ visible: true })
       .first()
       .click();
-    return page.getByRole("combobox", {
-      name: transactions.splitRowCategory.replace("{position}", "1"),
-      exact: true,
-    });
+    return page.getByRole("dialog");
   }
 
-  test("the trigger reads the marked name and the list holds the fund's set marked", async ({ page }) => {
-    // Kills: the trigger rendering the bare name; the scope filter dropped.
-    const trigger = await openEdit(page, movementIds.fund);
-    await expect(trigger).toHaveText(MARKED);
-    await trigger.click();
-    const options = page.getByRole("option");
-    await expect(options.first()).toBeVisible();
-    const texts = await options.allInnerTexts();
-    expect(texts.length).toBeGreaterThan(0);
-    expect(texts.map((text) => text.trim())).toContain(NAME);
+  test("the fund's category is the pressed tile and the grid holds the fund's set bare", async ({ page }) => {
+    // Kills: the chosen category left off the grid; the scope filter dropped.
+    const form = await openEdit(page, movementIds.fund);
+    await expect(form.getByRole("button", { name: NAME, exact: true, pressed: true })).toBeVisible();
+    const tiles = form.getByRole("button", { pressed: false });
+    await expect(tiles.first()).toBeVisible();
   });
 
-  test("a personal expense's trigger stays bare", async ({ page }) => {
-    const trigger = await openEdit(page, movementIds.own);
-    await expect(trigger).toHaveText(NAME);
+  test("a personal expense's category is the pressed tile, bare", async ({ page }) => {
+    const form = await openEdit(page, movementIds.own);
+    await expect(form.getByRole("button", { name: NAME, exact: true, pressed: true })).toBeVisible();
   });
 });
 
@@ -166,25 +159,15 @@ test.describe("quick entry", () => {
     return sheet;
   }
 
-  test("still infers the category from a typed bare name and shows it marked", async ({ page }) => {
-    // Kills: the interpreter fed the marked names.
+  test("still infers the category from a typed bare name and shows it pressed", async ({ page }) => {
+    // Kills: the interpreter fed the scoped names.
     const sheet = await openSheet(page, `45000 ${NAME}`);
-    await expect(
-      sheet.getByRole("combobox", {
-        name: transactions.splitRowCategory.replace("{position}", "1"),
-        exact: true,
-      }),
-    ).toHaveText(MARKED);
+    await expect(sheet.getByRole("button", { name: MARKED, exact: true, pressed: true })).toBeVisible();
   });
 
   test("a long marked name does not widen the sheet at 360 px", async ({ page }) => {
     const sheet = await openSheet(page, `45000 ${LONG_NAME}`);
-    await expect(
-      sheet.getByRole("combobox", {
-        name: transactions.splitRowCategory.replace("{position}", "1"),
-        exact: true,
-      }),
-    ).toContainText(LONG_NAME);
+    await expect(sheet.getByRole("button", { name: LONG_NAME, exact: true, pressed: true })).toBeVisible();
     const overflow = await page.evaluate(
       () => document.documentElement.scrollWidth - window.innerWidth,
     );

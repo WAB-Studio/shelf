@@ -120,14 +120,22 @@ function lowerMChoices(amount: string): AmountAsk["choices"] {
 // the note. Of the rest the longest wins, the earliest on a tie, so «Mercado 2
 // 87500» reads 87500.
 function findAmountToken(text: string): RegExpExecArray | null {
+  // A currency mark right before the run («$», «COP122.000,50») says it is money
+  // whatever else the text holds; the letters glue it to a word only otherwise.
+  const markedBefore = (match: RegExpMatchArray): boolean => {
+    const head = text.slice(0, match.index);
+    return /\$\s*$/.test(head) || /(?<![\p{L}\d])[A-Z]{3}$/u.test(head);
+  };
   const candidates = [...text.matchAll(AMOUNT_PATTERN)].filter((match) => {
     const before = text[match.index - 1] ?? "";
     const after = text[match.index + match[0].length] ?? "";
     return (
-      !/[\p{L}_/:*]/u.test(before) &&
+      (!/[\p{L}_/:*]/u.test(before) || markedBefore(match)) &&
       !/[/:]/u.test(after)
     );
   });
+  const marked = candidates.find(markedBefore);
+  if (marked) return marked as RegExpExecArray;
   let best: RegExpMatchArray | null = null;
   for (const match of candidates) {
     if (!best || match[0].length > best[0].length) best = match;

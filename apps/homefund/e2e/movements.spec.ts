@@ -1012,8 +1012,8 @@ test.describe("the «Descuadre» filter (RF-138, boards C2a-C2e)", () => {
     }
   });
 
-  test.describe("at 768 px (C2e)", () => {
-    test.use({ viewport: { width: 768, height: 900 } });
+  test.describe("at 767 px, the widest phone band (C2e)", () => {
+    test.use({ viewport: { width: 767, height: 900 } });
 
     test("the five options lie in one row and every label is whole", async ({ page }, testInfo) => {
       test.skip(testInfo.project.name !== "mobile", "the phone band is the mobile project's");
@@ -1045,13 +1045,12 @@ test.describe("the «Descuadre» filter (RF-138, boards C2a-C2e)", () => {
   });
 });
 
-// RF-140 (board C3a): the ledger names a fund category «{nombre} · fondo» and a
-// personal one bare. The person holds both under one name, so only the mark
-// tells the two apart.
+// RF-140 (board C3a): the ledger names a fund category and a personal one alike, bare
+// (the user, 2026-10-30: no «· fondo»). The person holds both under one name.
 test.describe("a category of the fund among the movements (RF-140, board C3a)", () => {
   const STAMP = randomUUID().slice(0, 8);
   const NAME = `T4 Mercado ${STAMP}`;
-  const MARKED = `${NAME} · fondo`;
+  const MARKED = NAME;
   const ids = {
     account: randomUUID(),
     fund: randomUUID(),
@@ -1108,7 +1107,7 @@ test.describe("a category of the fund among the movements (RF-140, board C3a)", 
     return texts.flatMap((text) => text.split("\n").map(flat)).filter(Boolean);
   }
 
-  test("the fund's movement reads «· fondo» and the personal one bare", async ({ page }, testInfo) => {
+  test("the fund's movement and the personal one both read the bare name", async ({ page }, testInfo) => {
     const desktop = testInfo.project.name === "desktop";
     // Kills: the names map built from bare names; every category marked.
     await page.goto("/es/movements");
@@ -1133,17 +1132,15 @@ test.describe("a category of the fund among the movements (RF-140, board C3a)", 
         if (await cell.count()) lines.push(flat(await cell.innerText()));
       }
       const all = await rowLines(page, true);
-      expect(all.filter((line) => line === MARKED)).toHaveLength(2);
-      expect(all.filter((line) => line === NAME)).toHaveLength(2);
+      expect(all.filter((line) => line === NAME)).toHaveLength(4);
     } else {
       lines = await rowLines(page, false);
     }
-    expect(lines.filter((line) => line === MARKED)).toHaveLength(1);
-    expect(lines.filter((line) => line === NAME)).toHaveLength(1);
-    expect(lines.filter((line) => line.includes("· fondo") && line !== MARKED)).toEqual([]);
+    expect(lines.filter((line) => line === NAME)).toHaveLength(2);
+    expect(lines.filter((line) => line.includes("· fondo"))).toEqual([]);
   });
 
-  test("the category select offers the bare name and the marked one", async ({ page }, testInfo) => {
+  test("the category select offers the bare name once per scope", async ({ page }, testInfo) => {
     const desktop = testInfo.project.name === "desktop";
     // Kills: the select's list built bare (one option, or two alike).
     await page.goto("/es/movements");
@@ -1157,8 +1154,7 @@ test.describe("a category of the fund among the movements (RF-140, board C3a)", 
       .filter({ visible: true })
       .click();
 
-    await expect(page.getByRole("option", { name: NAME, exact: true })).toHaveCount(1);
-    await expect(page.getByRole("option", { name: MARKED, exact: true })).toHaveCount(1);
+    await expect(page.getByRole("option", { name: NAME, exact: true })).toHaveCount(2);
   });
 
   test("the category chip names the fund's scope", async ({ page }, testInfo) => {

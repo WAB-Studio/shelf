@@ -437,3 +437,12 @@ test("a word begins an account or a category name, case and accent aside", () =>
     "c3",
   );
 });
+
+test("a currency code glued to the amount outranks the longer phone numbers of a bank message", () => {
+  assert.equal(
+    stored(
+      "Bancolombia: Compraste COP122.000,50 en BOLD CO ONLINE con tu T.Cred *4872, el 26/08/2026 a las 09:15. Si tienes dudas, encuentranos aqui: 6045109095 o 018000931987.",
+    ),
+    12_200_050,
+  );
+});

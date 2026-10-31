@@ -47,12 +47,12 @@ async function computed(locator: Locator, property: string): Promise<string> {
   return locator.evaluate((el, prop) => getComputedStyle(el).getPropertyValue(prop), property);
 }
 
-function card(page: Page, name: "net" | "month" | "cash"): Locator {
+function card(page: Page, name: "net" | "month"): Locator {
   return page.locator(`[data-card="${name}"]`);
 }
 
 test.describe("dashboard band", () => {
-  test("at 360 the net card is the one box, the rest are not and the cash card is hidden", async ({
+  test("at 360 the net card is the one box, the month card is not", async ({
     page,
   }, testInfo) => {
     test.skip(testInfo.project.name !== "mobile", "the phone's column");
@@ -62,10 +62,9 @@ test.describe("dashboard band", () => {
     expect(await computed(card(page, "net"), "display")).toBe("flex");
     expect(await computed(card(page, "month"), "display")).toBe("contents");
     expect(await computed(card(page, "net").locator(".."), "display")).toBe("contents");
-    expect(await computed(card(page, "cash"), "display")).toBe("none");
   });
 
-  test("at 1280 three cards share the row 1.35 : 1 : 0.9 and the net figure is display-sized", async ({
+  test("at 1280 the net card takes the row, the month card sits under it and the net figure is display-sized", async ({
     page,
   }, testInfo) => {
     test.skip(testInfo.project.name !== "desktop", "the laptop's row");
@@ -74,7 +73,7 @@ test.describe("dashboard band", () => {
 
     expect(await computed(card(page, "net"), "flex-grow")).toBe("1.35");
     expect(await computed(card(page, "month"), "flex-grow")).toBe("1");
-    expect(await computed(card(page, "cash"), "flex-grow")).toBe("0.9");
+    expect(await page.locator(`[data-card="cash"]`).count()).toBe(0);
 
     expect(await computed(card(page, "net"), "border-top-left-radius")).toBe("20px");
 

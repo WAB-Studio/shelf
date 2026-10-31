@@ -105,9 +105,14 @@ body {
 
 
 /* The 44px floor (SPEC-A3) for every field: a text input, a select's trigger and a
-   segmented control reach it by default, whatever size a screen asks for.
-   Doubled to outrank Radix's own size class. */
-.rt-TextFieldRoot.rt-TextFieldRoot,
+   segmented control reach it by default, whatever size a screen asks for. The text
+   input's root is raised by both borders and a rounding pixel so the input itself,
+   which a person measures, is 44. Doubled to outrank Radix's own size class. */
+.rt-TextFieldRoot.rt-TextFieldRoot {
+  box-sizing: border-box;
+  min-height: 47px;
+}
+
 .rt-SelectTrigger.rt-SelectTrigger:not(.rt-variant-ghost) {
   box-sizing: border-box;
   min-height: 44px;
