@@ -27,6 +27,8 @@ export { PageTitle } from "./page-title";
 
 export { Highlight } from "./highlight";
 
+export { MarkedWord } from "./marked-word";
+
 export { Wordmark } from "./wordmark";
 
 export { Separator } from "./separator";

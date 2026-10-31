@@ -1,7 +1,6 @@
 import { useTranslations } from "next-intl";
 
-import { Box, Flex, Highlight, Separator, Text, VisuallyHidden } from "@/components/ui";
-import { splitAroundWord } from "@/lib/word/mark-word";
+import { Box, Flex, MarkedWord, Separator, Text, VisuallyHidden } from "@/components/ui";
 import type { WordText } from "@/lib/word/protocol";
 
 // The three shapes module 9's hook resolves a word's decoration to. State
@@ -79,9 +78,7 @@ export function GeneratedText({ state, headword }: { state: GeneratedTextState; 
                   skipped when the heading above already says "Ejemplo". */}
               {hasDefinition && <VisuallyHidden>{t("example")}</VisuallyHidden>}
               <Text variant="generatedProse" english>
-                {splitAroundWord(text.example.en, headword === undefined ? [] : [headword]).map((piece, index) =>
-                  piece.hit ? <Highlight key={index}>{piece.text}</Highlight> : piece.text,
-                )}
+                <MarkedWord text={text.example.en} forms={headword === undefined ? [] : [headword]} />
               </Text>
               <VisuallyHidden>{t("exampleTranslation")}</VisuallyHidden>
               <Text variant="exampleTranslation" muted>

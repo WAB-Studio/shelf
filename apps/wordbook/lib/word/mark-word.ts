@@ -1,18 +1,25 @@
+import { lemmaCandidates } from "@/lib/dictionary/inflect";
+
 export type Piece = { text: string; hit: boolean };
 
-function escape(source: string): string {
-  return source.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+// A lemma shorter than this is matched as written: «a», «I» and «be» would otherwise hit «and», «it» and «been».
+const MIN_INFLECTED_LENGTH = 4;
+
+function isFormOf(token: string, forms: ReadonlySet<string>): boolean {
+  const lower = token.toLowerCase();
+  if (forms.has(lower)) return true;
+  return lemmaCandidates(lower).some(({ lemma }) => lemma.length >= MIN_INFLECTED_LENGTH && forms.has(lemma));
 }
 
-// A phrase cut around the forms of one word, to set the word apart. A form also matches with up to
-// three letters after it (`bleak` in «bleaker», `run` in «running»), and never inside a longer word.
+// A phrase cut around the word to set it apart: a token hits when it is one of the forms the word was
+// searched under, or an inflection the resolver traces back to one of them (`bleaker` to `bleak`).
 export function splitAroundWord(text: string, forms: readonly string[]): Piece[] {
-  const usable = [...new Set(forms.map((form) => form.trim()).filter((form) => form !== ""))].sort((a, b) => b.length - a.length);
-  if (usable.length === 0) return [{ text, hit: false }];
-  const pattern = new RegExp(`(?<![\\p{L}\\p{N}])(?:${usable.map(escape).join("|")})\\p{L}{0,3}(?![\\p{L}\\p{N}])`, "giu");
+  const wanted = new Set(forms.map((form) => form.trim().toLowerCase()).filter((form) => form !== ""));
+  if (wanted.size === 0) return [{ text, hit: false }];
   const pieces: Piece[] = [];
   let from = 0;
-  for (const match of text.matchAll(pattern)) {
+  for (const match of text.matchAll(/[\p{L}\p{N}]+(?:['’][\p{L}]+)?/gu)) {
+    if (!isFormOf(match[0], wanted)) continue;
     if (match.index > from) pieces.push({ text: text.slice(from, match.index), hit: false });
     pieces.push({ text: match[0], hit: true });
     from = match.index + match[0].length;

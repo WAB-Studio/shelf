@@ -26,3 +26,9 @@ export function groupByDay<Row extends { lastAt: number; count: number }>(rows: 
   }
   return days;
 }
+
+// The `limit` rows searched most recently: a page of the diary is the newest days whole, and «ver más» adds
+// older ones, never a most-searched word from last week ahead of a word from today.
+export function newestRows<Row extends { lastAt: number }>(rows: readonly Row[], limit: number): Row[] {
+  return [...rows].sort((a, b) => b.lastAt - a.lastAt).slice(0, limit);
+}

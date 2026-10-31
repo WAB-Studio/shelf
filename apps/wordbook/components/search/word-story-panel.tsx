@@ -8,8 +8,7 @@ import { LOG_FLUSHED_EVENT } from "@/lib/log/record";
 import { readWordStory, type WordStory } from "@/lib/log/story";
 import { dueWhen } from "@/lib/review/schedule";
 import { readCards } from "@/lib/review/store";
-import { splitAroundWord } from "@/lib/word/mark-word";
-import { Button, Card, Flex, Highlight, MetaLabel, Separator, Text } from "@/components/ui";
+import { Button, Card, Flex, MarkedWord, MetaLabel, Separator, Text } from "@/components/ui";
 
 type Review = { kind: "new" } | { kind: "due" } | { kind: "later"; due: number; when: "today" | "tomorrow" | "later" };
 
@@ -75,9 +74,7 @@ export function WordStoryPanel({ headword }: { headword: string }) {
           ) : (
             story.phrases.map((phrase) => (
               <Text key={phrase} size="3" english>
-                {splitAroundWord(phrase, story.forms).map((piece, index) =>
-                  piece.hit ? <Highlight key={index}>{piece.text}</Highlight> : piece.text,
-                )}
+                <MarkedWord text={phrase} forms={story.forms} />
               </Text>
             ))
           )}

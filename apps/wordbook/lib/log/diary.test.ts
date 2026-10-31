@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { groupByDay } from "./diary";
+import { groupByDay, newestRows } from "./diary";
 
 const at = (iso: string) => new Date(iso).getTime();
 
@@ -23,4 +23,13 @@ test("rows gather under today, yesterday and older days, newest day first", () =
 
 test("no rows, no days", () => {
   assert.deepEqual(groupByDay([], Date.now()), []);
+});
+
+test("a page keeps the newest rows, however often an older one was searched", () => {
+  const rows = [
+    { lastAt: 1, count: 99 },
+    { lastAt: 3, count: 1 },
+    { lastAt: 2, count: 1 },
+  ];
+  assert.deepEqual(newestRows(rows, 2).map((row) => row.lastAt), [3, 2]);
 });

@@ -14,7 +14,7 @@ import { buildQueue, isReviewable, type ReviewQueue } from "@/lib/review/deck";
 import { dueWhen, GRADES, intervals, intervalUnit, rate, staysInSession, type ReviewGrade } from "@/lib/review/schedule";
 import { answerSenses, pickSense } from "@/lib/review/sense";
 import { readCards, saveCard } from "@/lib/review/store";
-import { gapOutWord, splitAroundWord } from "@/lib/word/mark-word";
+import { gapOutWord } from "@/lib/word/mark-word";
 import { TranslationList } from "@/components/translations/translation-list";
 import {
   ActionBar,
@@ -25,7 +25,7 @@ import {
   Flex,
   Grid,
   Headword,
-  Highlight,
+  MarkedWord,
   Link,
   Live,
   MetaLabel,
@@ -309,9 +309,7 @@ export function ReviewSession() {
             )}
             {phrase !== null && (
               <Text size="3" english>
-                {splitAroundWord(phrase, forms).map((piece, index) =>
-                  piece.hit ? <Highlight key={index}>{piece.text}</Highlight> : piece.text,
-                )}
+                <MarkedWord text={phrase} forms={forms} />
               </Text>
             )}
             {formsLine !== null && (

@@ -367,11 +367,9 @@
   "review": {
     "title": "Repaso",
     "open": "Repasar",
-    "sideTitle": "Para repasar hoy",
     "sideNone": "Nada por repasar hoy.",
     "dueToday": "{kind, select, words {{count, plural, one {palabra} other {palabras}}} phrases {{count, plural, one {frase} other {frases}}} other {{count, plural, one {entrada} other {entradas}}}} para repasar hoy",
     "reviewNowHome": "Repasar ahora",
-    "dueUnit": "{kind, select, words {{count, plural, one {palabra} other {palabras}}} phrases {{count, plural, one {frase} other {frases}}} other {{count, plural, one {entrada} other {entradas}}}}",
     "openKind": "{kind, select, words {Repasar palabras} phrases {Repasar frases} other {Repasar entradas}}",
     "loadFailed": "No se pudo abrir el repaso en este dispositivo.",
     "saveFailed": "No se pudo guardar la respuesta. Vuelve a intentarlo.",
