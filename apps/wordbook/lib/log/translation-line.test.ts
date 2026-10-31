@@ -129,3 +129,10 @@ test("previewTranslations: three show, the rest wait behind a count", () => {
   assert.deepEqual(previewTranslations(items), { shown: ["a", "b", "c"], hidden: 2 });
   assert.deepEqual(previewTranslations(["a", "b"]), { shown: ["a", "b"], hidden: 0 });
 });
+
+test("formatSenseTranslations: a slang sense stays out of the line while a common one stands", () => {
+  const slang: Sense = { pos: "n", ipa: null, translations: ["nalgas"], definition: "(slang, euphemistic) The buttocks." };
+  const verb: Sense = { pos: "v", ipa: null, translations: ["estorbar", "impedir"], definition: null };
+  assert.equal(formatSenseTranslations([verb, slang]), "estorbar, impedir");
+  assert.equal(formatSenseTranslations([slang]), "nalgas");
+});

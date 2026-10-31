@@ -98,9 +98,11 @@ this gets built, and no schema, table or column is "prepared for" it.
     they fold.
   - Measured 2026-09-20 through the app's own `buildIndex` and `groupFor`: of **58,944** indexed
     headwords, **171 carry more than one pronunciation**, and **23 of those interleave** in the order
-    the screen really draws, after RL-43's sort. They are `a`, `bass`, `bow`, `desert`, `earth`,
-    `english`, `flush`, `frank`, `italic`, `job`, `lead`, `less`, `minute`, `mow`, `mush`,
-    `parmesan`, `polish`, `renaissance`, `row`, `second`, `subject`, `sun` and `tear`: the
+    the screen really draws, after RL-43's sort (**24** since 2026-10-30, when a rarely met sense — a
+    species, a trade label, an initialism — stopped leading: `mow` left the list, `angle` and `sob` joined
+    it). They are `a`, `angle`, `bass`, `bow`, `desert`, `earth`,
+    `english`, `flush`, `frank`, `italic`, `job`, `lead`, `less`, `minute`, `mush`,
+    `parmesan`, `polish`, `renaissance`, `row`, `second`, `sob`, `subject`, `sun` and `tear`: the
     homographs a reader of English actually meets.
   - **19 headwords split on a notation accident alone and stop splitting**: `buffalo`, `calliope`,
     `canton`, `daisy`, `facebook`, `flora`, `god`, `ham`, `hope`, `iron curtain`, `john`, `majesty`,

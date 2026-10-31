@@ -1,6 +1,7 @@
 import { normaliseHeadword, type DictionaryPayload, type PartOfSpeech, type RawEntry } from "./format";
 import type { InflectionRule } from "./inflect";
 import { POS_FREQUENCY_ORDER } from "./pos-frequency";
+import { isRareSense } from "./rare-sense";
 
 export type Sense = {
   pos: PartOfSpeech;
@@ -96,9 +97,12 @@ function compareSenses(order: string | undefined, pinnedPos: PartOfSpeech | null
   }
   const rankA = frequencyRank(order, a.pos);
   const rankB = frequencyRank(order, b.pos);
-  if (rankA !== null && rankB !== null) return rankA - rankB;
-  if (rankA !== null) return -1;
-  if (rankB !== null) return 1;
+  if (rankA !== null && rankB !== null && rankA !== rankB) return rankA - rankB;
+  if (rankA === null && rankB !== null) return 1;
+  if (rankA !== null && rankB === null) return -1;
+  // Between two senses the measured order cannot split, the common one leads, even across parts of speech.
+  const rarity = Number(isRareSense(a)) - Number(isRareSense(b));
+  if (rarity !== 0) return rarity;
   return POS_RANK[a.pos] - POS_RANK[b.pos];
 }
 
