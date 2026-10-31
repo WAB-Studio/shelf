@@ -1,0 +1,17 @@
+/* The native picker only opens from the calendar button; the input itself stays
+   out of sight and out of the tab order. */
+.native {
+  position: absolute;
+  inset: 0;
+  width: 0;
+  height: 0;
+  padding: 0;
+  border: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.wrap {
+  position: relative;
+  display: inline-flex;
+}

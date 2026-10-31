@@ -1,6 +1,6 @@
 "use client";
 
-import { useFormatter, useTranslations } from "next-intl";
+import { useFormatter, useLocale, useTranslations } from "next-intl";
 
 import {
   BarChart,
@@ -12,6 +12,7 @@ import {
   ScreenHeader,
   Disc,
   Money,
+  ProportionBar,
   ReportCard,
   ReportRow,
   Text,
@@ -25,12 +26,15 @@ import type { MemberContributionNamed } from "@/db/queries/reports/reports-scree
 import type { CurrencyCode } from "@/lib/currency";
 import { civilDateToDate } from "@/lib/dates";
 import { scopedCategoryName } from "@/lib/fund/category-names";
+import { averageOfActive, categoryChartColor, shares } from "@/lib/fund/glance";
+import type { Locale } from "@/lib/locales";
+import { formatCompactMoney, formatMoney } from "@/lib/money";
 
-// The two flow series carry the fund's colours: jade for what comes in, tomato
-// for what goes out.
+// The two flow series carry the fund's colours: jade for what comes in, violet
+// for what goes out. Red is kept for what was exceeded.
 const SERIES_COLORS = {
   income: "var(--jade-9)",
-  expense: "var(--tomato-9)",
+  expense: "var(--violet-9)",
 } as const;
 
 // The title and the way into «Revisar el mes» (RF-155), on both faces.
@@ -122,7 +126,7 @@ export function ReportsScreen({ data }: { data: ReportsData }) {
         <Flex direction="column" gap="6">
           <ReportsHead title={t("title")} />
 
-          <Flex direction="column" gap="4" px="6">
+          <Flex direction="column" gap="4">
             <ReportCard>
               <Heading as="h2" size="4">{t("comparisonTitle")}</Heading>
               {byCurrency(sixMonthFlow).map(([currency, months]) => (
@@ -218,30 +222,46 @@ function ExpenseBands({
 
   return [...bands].map(([currency, rows]) => {
     const adjustment = adjustments.get(currency);
+    const percents = shares(rows.map((row) => row.totalCents));
 
     return (
       <Flex key={currency} direction="column" gap="3">
         <Text size="2" color="gray">
           {t("inCurrency", { currency })}
         </Text>
-        {rows.map((row) => (
+        {rows.map((row, index) => (
           <Flex key={row.categoryId} align="center" gap="3">
             <CategoryTile color={row.color} size={28} name={row.name} />
-            <Box asChild flexGrow="1" minWidth="0">
-              <Text as="div" size="3" truncate>
-                {scopedCategoryName(row.name, row.scope, (name) =>
-                  tKey("categories.scopedName", { name }),
-                )}
-              </Text>
-            </Box>
-            <Text size="3" weight="medium">
-              <Money
-                minor={row.totalCents}
-                currency={row.currency}
-                signed={false}
-                size="inherit"
-              />
-            </Text>
+            <Flex direction="column" gap="1" flexGrow="1" minWidth="0">
+              <Flex justify="between" gap="3" align="baseline">
+                <Text as="div" size="3" truncate>
+                  {scopedCategoryName(row.name, row.scope, (name) =>
+                    tKey("categories.scopedName", { name }),
+                  )}
+                </Text>
+                <Text size="3" weight="medium">
+                  <Money
+                    minor={row.totalCents}
+                    currency={row.currency}
+                    signed={false}
+                    size="inherit"
+                  />
+                </Text>
+              </Flex>
+              <Flex align="center" gap="3">
+                <Box flexGrow="1">
+                  <ProportionBar
+                    aria-label={t("shareLabel", { pct: percents[index] })}
+                    segments={[
+                      { key: row.categoryId, value: percents[index], color: categoryChartColor(row.color, row.categoryId) },
+                    ]}
+                    total={100}
+                    height={8}
+                  />
+                </Box>
+                <Text size="2" color="gray">{percents[index]}%</Text>
+              </Flex>
+            </Flex>
           </Flex>
         ))}
         {adjustment && (
@@ -278,6 +298,7 @@ function CurrencyTrend({
 }) {
   const t = useTranslations("reports");
   const format = useFormatter();
+  const locale = useLocale() as Locale;
 
   const inCurrency = t("inCurrency", { currency });
 
@@ -302,11 +323,23 @@ function CurrencyTrend({
     );
   }
 
+  const average = averageOfActive(months.map((month) => month.expenseCents));
+  const emptyMonths = months
+    .filter((month) => month.incomeCents === 0 && month.expenseCents === 0)
+    .map((month) => format.dateTime(civilDateToDate(month.monthStart), { month: "long" }));
+
   return (
     <Flex direction="column" gap="3">
       <BarChart
         data={chartData}
         seriesColors={SERIES_COLORS}
+        formatValue={(cents) => formatCompactMoney(cents, currency, locale)}
+        averageCents={average}
+        averageLabel={
+          average === null
+            ? undefined
+            : t("averageLabel", { amount: formatMoney(average, currency, locale) })
+        }
         aria-label={`${t("comparisonTitle")} ${inCurrency}`}
       />
       <Flex gap="4" wrap="wrap">
@@ -319,6 +352,11 @@ function CurrencyTrend({
           label={`${t("legendExpense")} ${inCurrency}`}
         />
       </Flex>
+      {emptyMonths.length > 0 && (
+        <Text size="2" color="gray">
+          {t("emptyMonths", { months: format.list(emptyMonths, { type: "conjunction" }) })}
+        </Text>
+      )}
     </Flex>
   );
 }

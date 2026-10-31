@@ -2436,13 +2436,13 @@ for (const [bandLabel, width] of [
             const before = await owedNow();
             await page.goto("/es/planning");
             const summary = page
-              .getByText(/^\$\s[\d.]+\s(·|en deudas)/)
+              .getByText(/^\$\s[\d.]+(\s(·|en deudas)|$)/)
               .filter({ visible: true });
             await expect(summary).toHaveCount(1);
             const text = flat(await summary.innerText());
             const after = await owedNow();
             return [before, after].some((owed) =>
-              text.startsWith(`$ ${groupedPesos(owed)} `),
+              `${text} `.startsWith(`$ ${groupedPesos(owed)} `),
             )
               ? "match"
               : `${text} | ${before} ${after}`;

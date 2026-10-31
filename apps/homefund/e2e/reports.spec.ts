@@ -174,11 +174,11 @@ test("the six-month series draws each month's figures", async ({ page }) => {
   // The container measures itself before Recharts draws into it.
   await expect(chart.locator("svg")).toBeVisible();
 
-  // The screen's own series colours: jade carries income, tomato expense. A month
+  // The screen's own series colours: jade carries income, violet expense. A month
   // with no movement draws no bar, so these counts are the populated months — and
   // the transfer, which is neither, adds no bar of its own (RF-19).
   const incomeBars = chart.locator('path[fill="var(--jade-9)"]');
-  const expenseBars = chart.locator('path[fill="var(--tomato-9)"]');
+  const expenseBars = chart.locator('path[fill="var(--violet-9)"]');
 
   await expect(incomeBars).toHaveCount(1);
   await expect(expenseBars).toHaveCount(2);
@@ -189,7 +189,7 @@ test("the six-month series draws each month's figures", async ({ page }) => {
   await expect
     .poll(() => barRatio(incomeBars.first(), expenseBars.last()))
     .toBeCloseTo(INCOME_CENTS / EXPENSE_CENTS, 2);
-  // Oldest first, so the first tomato bar is last month's expense.
+  // Oldest first, so the first violet bar is last month's expense.
   await expect
     .poll(() => barRatio(expenseBars.first(), expenseBars.last()))
     .toBeCloseTo(PRIOR_EXPENSE_CENTS / EXPENSE_CENTS, 2);
@@ -572,7 +572,7 @@ test.describe("a +400.000 adjustment this month", () => {
     ).toBeVisible();
 
     const incomeBars = chart.locator('path[fill="var(--jade-9)"]');
-    const expenseBars = chart.locator('path[fill="var(--tomato-9)"]');
+    const expenseBars = chart.locator('path[fill="var(--violet-9)"]');
     await expect(incomeBars).toHaveCount(1);
     await expect(expenseBars).toHaveCount(2);
     // Every bar is one of the two series' colours.
@@ -649,7 +649,7 @@ test.describe("a negative adjustment", () => {
     const chart = page.getByRole("img", { name: /Últimos 6 meses en COP/ });
     await expect(chart.locator("svg")).toBeVisible();
     const incomeBars = chart.locator('path[fill="var(--jade-9)"]');
-    const expenseBars = chart.locator('path[fill="var(--tomato-9)"]');
+    const expenseBars = chart.locator('path[fill="var(--violet-9)"]');
     await expect(expenseBars).toHaveCount(2);
 
     await expect

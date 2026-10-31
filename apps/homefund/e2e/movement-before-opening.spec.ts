@@ -162,7 +162,7 @@ test.describe("a date before the account's opening", () => {
     await expect(dialog).toBeVisible();
     await expect(saveButton(dialog)).toBeEnabled();
     await expect(field(dialog, "movement-amount")).toHaveValue(/4\D?000/);
-    await expect(field(dialog, "movement-date")).toHaveValue(BEFORE);
+    await expect(field(dialog, "movement-date")).toHaveValue(BEFORE.split("-").reverse().join("/"));
     await expect(field(dialog, "movement-note")).toHaveValue(NOTE);
     expect(await rows()).toEqual([]);
   });
@@ -206,7 +206,7 @@ test.describe("a date before the account's opening", () => {
 
     await expectTopmost(toasts(page).getByText(WORDS, { exact: true }));
     await expect(dialog.getByText(WORDS, { exact: true })).toBeVisible();
-    await expect(field(dialog, "movement-date")).toHaveValue(BEFORE);
+    await expect(field(dialog, "movement-date")).toHaveValue(BEFORE.split("-").reverse().join("/"));
     await expect(field(dialog, "movement-note")).toHaveValue(NOTE);
   });
 
@@ -226,7 +226,7 @@ test.describe("a date before the account's opening", () => {
 
     await expectTopmost(toasts(page).getByText(WORDS_OPENING, { exact: true }));
     await expect(dialog.getByText(WORDS_OPENING, { exact: true })).toBeVisible();
-    await expect(field(dialog, "account-balance-on")).toHaveValue(AFTER);
+    await expect(field(dialog, "account-balance-on")).toHaveValue(AFTER.split("-").reverse().join("/"));
     expect(accounts.errors.openingAfterMovement).toBe(WORDS_OPENING);
   });
 });

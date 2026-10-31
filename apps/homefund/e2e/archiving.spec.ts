@@ -133,7 +133,14 @@ test("archives a budget out of the active list and restores it from the archive"
  * of them, so the phone's locator drops the copy it is not looking at.
  */
 function apartado(page: Page, desktop: boolean, name: string): Locator {
-  if (!desktop) return page.getByText(goals.apartado).filter({ visible: true });
+  // The header's headline figure also reads «Apartado», so the card's own is found inside the card.
+  if (!desktop) {
+    return page
+      .locator(".rt-Card")
+      .filter({ hasText: name })
+      .getByText(goals.apartado)
+      .filter({ visible: true });
+  }
 
   return page
     .getByRole("table", { name: goals.title })

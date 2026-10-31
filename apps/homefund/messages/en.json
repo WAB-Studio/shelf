@@ -21,7 +21,8 @@
     "removeFilter": "Remove {label}",
     "fund": "Fund",
     "currencyTotals": "Totals by currency",
-    "optional": "Optional"
+    "optional": "Optional",
+    "openCalendar": "Open calendar"
   },
   "auth": {
     "signOut": "Sign out",
@@ -142,7 +143,24 @@
     "firstAccountTitle": "Open your first account",
     "addAccountKind": "Add",
     "monthAdjustment": "Month gap",
-    "reviewLine": "Review {month} · {count, plural, one {# movement} other {# movements}}"
+    "reviewLine": "Review {month} · {count, plural, one {# movement} other {# movements}}",
+    "asideBudgets": "Close to the limit",
+    "asideBudgetsSee": "See budgets",
+    "budgetOver": "Over",
+    "budgetSpent": "{spent} of {limit}",
+    "asideGoal": "Goal",
+    "goalLeft": "{amount} to go",
+    "goalLeftPace": "{amount} to go · {pace}/mo",
+    "asideDebt": "Next debt payment",
+    "glanceTitle": "The month at a glance",
+    "glanceIncome": "Income",
+    "glanceSpending": "Spending",
+    "glanceSpentOf": "You spent {pct}% of what came in",
+    "glanceNoIncome": "No money has come in this month",
+    "glanceMeterLabel": "Spending against income in {currency}",
+    "glanceByCategory": "Spending by category",
+    "glanceOthers": "Other",
+    "ownerBarLabel": "Net worth by owner in {currency}"
   },
   "reports": {
     "title": "Reports",
@@ -158,7 +176,10 @@
     "contributionsTitle": "Contributions this month",
     "contributionsEmpty": "No contributions this month. A contribution is a transfer from a personal account to a fund account.",
     "noGroup": "Contributions are a fund figure. You have no fund yet.",
-    "monthAdjustment": "Month gap"
+    "monthAdjustment": "Month gap",
+    "shareLabel": "{pct}% of the month's spending",
+    "averageLabel": "Average {amount}",
+    "emptyMonths": "No movements in {months}: the average leaves them out."
   },
   "nav": {
     "title": "Navigation",
@@ -612,7 +633,7 @@
     "allLabels": "All labels",
     "typeLabel": "Type",
     "descriptionLabel": "Description",
-    "listMeta": "{count} · net",
+    "listMeta": "{count, plural, =1 {# movement} other {# movements}}",
     "listMetaAdjustments": "{count, plural, =1 {# gap} other {# gaps}}",
     "export": "Export",
     "emptyTitle": "No movements yet",
@@ -624,7 +645,8 @@
     "adjustmentFix": "Fix it by reconciling the account again.",
     "forHousehold": "For the household",
     "forHouseholdHint": "A household bill paid from your account: it counts as your contribution to the fund.",
-    "forHouseholdCounts": "Counts as a contribution by whoever paid it"
+    "forHouseholdCounts": "Counts as a contribution by whoever paid it",
+    "headlineNet": "Net"
   },
   "cash": {
     "withdrawAction": "Withdraw cash",
@@ -661,7 +683,12 @@
     "recurringTitle": "Recurring",
     "recurringSummary": "{count, plural, one {# rule · {concept} on {date}} other {# rules · next {concept} on {date}}}",
     "recurringEmpty": "No active rules",
-    "nav": "Planning sections"
+    "nav": "Planning sections",
+    "over": "Over",
+    "spentOf": "{spent} of {limit}",
+    "goalLeft": "{amount} to go",
+    "goalLeftPace": "{amount} to go · {pace}/mo",
+    "debtsNext": "Next payment on {date}"
   },
   "budgets": {
     "ofLimit": " / {amount}",
@@ -729,7 +756,9 @@
       "periodInvalid": "Choose a valid period.",
       "budgetInvalid": "That budget is not valid.",
       "scopeViolation": "The account or label does not belong to the same scope as the category."
-    }
+    },
+    "headlineLeft": "{left} left of {limit}",
+    "headlineOver": "Over by {over} of {limit}"
   },
   "goals": {
     "title": "Savings goals",
@@ -807,7 +836,8 @@
       "goalInvalid": "That goal is not valid.",
       "contributionInvalid": "That contribution is not valid.",
       "scopeViolation": "The account does not belong to the same scope as the goal."
-    }
+    },
+    "headlineSaved": "Set aside"
   },
   "plannedPayments": {
     "title": "Planned payments",

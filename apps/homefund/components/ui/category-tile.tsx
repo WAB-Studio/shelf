@@ -31,9 +31,11 @@ const GLYPHS: [RegExp, LucideIcon][] = [
   [/restaur|almuerzo|comida|cena|caf[eé]|food|dining|lunch|meal/i, Utensils],
   [/arriendo|alquiler|hipoteca|vivienda|hogar|casa|rent|mortgage|home|housing/i, Home],
   [/internet|wifi|claro|tel[eé]fon|celular|phone/i, Wifi],
-  [/servicio|energ|agua|luz|gas|utilit|electric|water/i, Zap],
-  [/combustible|gasolina|tanqueo|fuel|gas station/i, Fuel],
-  [/transporte|bus|metro|taxi|uber|transit/i, Bus],
+  // Fuel sits before the utilities so «Gas station» is not a bill; «gas» is a whole word,
+  // never the start of «gastos».
+  [/combustible|gasolin|tanqueo|fuel|gas station|petrol/i, Fuel],
+  [/servicio|energ|agua|luz|\bgas\b|utilit|electric|water/i, Zap],
+  [/transport|\bbus\b|metro|taxi|uber|transit/i, Bus],
   [/carro|auto|veh[ií]culo|parqueadero|car\b|vehicle|parking/i, Car],
   [/salud|m[eé]dic|droguer|farmacia|health|pharmac|doctor/i, HeartPulse],
   [/mascota|veterin|perro|gato|pet/i, PawPrint],
@@ -46,7 +48,7 @@ const GLYPHS: [RegExp, LucideIcon][] = [
   [/cuidado|belleza|personal|beauty|care/i, Sparkles],
 ];
 
-function glyphFor(name: string | null | undefined, transfer: boolean): LucideIcon {
+export function glyphFor(name: string | null | undefined, transfer: boolean): LucideIcon {
   if (transfer) return ArrowLeftRight;
   const match = name ? GLYPHS.find(([pattern]) => pattern.test(name)) : undefined;
   return match ? match[1] : Tag;

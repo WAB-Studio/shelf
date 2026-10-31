@@ -19,7 +19,7 @@ import {
   ScreenHeader,
   IconButton,
   Select,
-  TextField,
+  DateInput,
 } from "@/components/ui";
 import type { AuditFilterOptions, AuditLogRow } from "@/db/queries/audit-log";
 import { usePathname, useRouter } from "@/i18n/navigation";
@@ -221,9 +221,9 @@ export function AuditScreen({
             <Flex gap="3" wrap="wrap">
               <FilterField label={t("rangeFrom")}>
                 {(id) => (
-                  <TextField.Root
+                  <DateInput
+                    filter
                     id={id}
-                    type="date"
                     value={filters.from ?? ""}
                     onChange={(event) =>
                       updateFilters({ from: event.target.value || null })
@@ -233,9 +233,9 @@ export function AuditScreen({
               </FilterField>
               <FilterField label={t("rangeTo")}>
                 {(id) => (
-                  <TextField.Root
+                  <DateInput
+                    filter
                     id={id}
-                    type="date"
                     value={filters.to ?? ""}
                     onChange={(event) =>
                       updateFilters({ to: event.target.value || null })

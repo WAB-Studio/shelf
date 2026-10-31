@@ -278,7 +278,7 @@ test.describe("planning hub", () => {
     test.skip(!mobileOnly(testInfo.project.name), "the phone's row");
     await page.goto("/es/planning");
 
-    const link = page.locator("main a[href*='/planning/debts']").first();
+    const link = page.locator("main a[href*='/planning/debts']").locator("visible=true").first();
     await expect(link).toBeVisible();
     expect(await computed(link, "text-decoration-line")).toBe("none");
 
@@ -293,7 +293,7 @@ test.describe("planning hub", () => {
     test.skip(!mobileOnly(testInfo.project.name), "the phone's row");
     await page.goto("/es/planning");
 
-    const link = page.locator("main a[href*='/planning/']").first();
+    const link = page.locator("main a[href*='/planning/']").locator("visible=true").first();
     const truncating = link.locator("span.rt-truncate:visible");
     await expect(truncating.first()).toBeVisible();
     for (const node of await truncating.all()) {

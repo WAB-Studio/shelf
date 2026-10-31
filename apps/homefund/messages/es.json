@@ -21,7 +21,8 @@
     "removeFilter": "Quitar {label}",
     "fund": "Fondo",
     "currencyTotals": "Totales por moneda",
-    "optional": "Opcional"
+    "optional": "Opcional",
+    "openCalendar": "Abrir calendario"
   },
   "auth": {
     "signOut": "Cerrar sesión",
@@ -142,7 +143,24 @@
     "firstAccountTitle": "Abre tu primera cuenta",
     "addAccountKind": "Añadir",
     "monthAdjustment": "Diferencia del mes",
-    "reviewLine": "Revisar {month} · {count, plural, one {# movimiento} other {# movimientos}}"
+    "reviewLine": "Revisar {month} · {count, plural, one {# movimiento} other {# movimientos}}",
+    "asideBudgets": "Cerca del límite",
+    "asideBudgetsSee": "Ver presupuestos",
+    "budgetOver": "Superado",
+    "budgetSpent": "{spent} de {limit}",
+    "asideGoal": "Meta",
+    "goalLeft": "Faltan {amount}",
+    "goalLeftPace": "Faltan {amount} · {pace}/mes",
+    "asideDebt": "Próximo pago de deuda",
+    "glanceTitle": "El mes de un vistazo",
+    "glanceIncome": "Ingresos",
+    "glanceSpending": "Gastos",
+    "glanceSpentOf": "Gastaste el {pct}% de lo que entró",
+    "glanceNoIncome": "Este mes no ha entrado dinero",
+    "glanceMeterLabel": "Gastos frente a ingresos en {currency}",
+    "glanceByCategory": "Gasto por categoría",
+    "glanceOthers": "Otras",
+    "ownerBarLabel": "Patrimonio por dueño en {currency}"
   },
   "reports": {
     "title": "Reportes",
@@ -158,7 +176,10 @@
     "contributionsTitle": "Aportes del mes",
     "contributionsEmpty": "Sin aportes este mes. Un aporte es un traspaso de una cuenta personal a una del fondo.",
     "noGroup": "Los aportes son una cifra del fondo. Todavía no tienes fondo.",
-    "monthAdjustment": "Diferencia del mes"
+    "monthAdjustment": "Diferencia del mes",
+    "shareLabel": "{pct}% del gasto del mes",
+    "averageLabel": "Promedio {amount}",
+    "emptyMonths": "Sin movimientos en {months}: el promedio no los cuenta."
   },
   "nav": {
     "title": "Navegación",
@@ -612,7 +633,7 @@
     "allLabels": "Todas las etiquetas",
     "typeLabel": "Tipo",
     "descriptionLabel": "Descripción",
-    "listMeta": "{count} · neto",
+    "listMeta": "{count, plural, =1 {# movimiento} other {# movimientos}}",
     "listMetaAdjustments": "{count, plural, =1 {# diferencia} other {# diferencias}}",
     "export": "Exportar",
     "emptyTitle": "Todavía no hay movimientos",
@@ -624,7 +645,8 @@
     "adjustmentFix": "Se corrige cuadrando la cuenta de nuevo.",
     "forHousehold": "Del hogar",
     "forHouseholdHint": "Un gasto del hogar pagado con tu cuenta: cuenta como tu aporte al fondo.",
-    "forHouseholdCounts": "Cuenta como aporte de quien lo pagó"
+    "forHouseholdCounts": "Cuenta como aporte de quien lo pagó",
+    "headlineNet": "Neto"
   },
   "cash": {
     "withdrawAction": "Retirar efectivo",
@@ -661,7 +683,12 @@
     "recurringTitle": "Recurrentes",
     "recurringSummary": "{count, plural, one {# regla · {concept} el {date}} other {# reglas · próxima {concept} el {date}}}",
     "recurringEmpty": "Sin reglas activas",
-    "nav": "Secciones de planeación"
+    "nav": "Secciones de planeación",
+    "over": "Superado",
+    "spentOf": "{spent} de {limit}",
+    "goalLeft": "Faltan {amount}",
+    "goalLeftPace": "Faltan {amount} · {pace}/mes",
+    "debtsNext": "Próximo pago el {date}"
   },
   "budgets": {
     "ofLimit": " / {amount}",
@@ -729,7 +756,9 @@
       "periodInvalid": "Elige un periodo válido.",
       "budgetInvalid": "Ese presupuesto no es válido.",
       "scopeViolation": "La cuenta o la etiqueta no pertenecen al mismo ámbito que la categoría."
-    }
+    },
+    "headlineLeft": "Quedan {left} de {limit}",
+    "headlineOver": "Superado por {over} de {limit}"
   },
   "goals": {
     "title": "Metas de ahorro",
@@ -807,7 +836,8 @@
       "goalInvalid": "Esa meta no es válida.",
       "contributionInvalid": "Ese aporte no es válido.",
       "scopeViolation": "La cuenta no pertenece al mismo ámbito que la meta."
-    }
+    },
+    "headlineSaved": "Apartado"
   },
   "plannedPayments": {
     "title": "Pagos planificados",

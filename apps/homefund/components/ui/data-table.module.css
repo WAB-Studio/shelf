@@ -130,6 +130,6 @@
 
 @media (min-width: 1024px) {
   .gutter {
-    padding: 0 32px;
+    padding: 0 var(--band-gutter, 32px);
   }
 }

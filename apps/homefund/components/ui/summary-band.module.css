@@ -12,12 +12,6 @@
 }
 
 @media (min-width: 1024px) {
-  /* The desktop pane hands the gutter to the bands inside it, and these cards
-     are a band of their own. */
-  .summary {
-    padding: 0 32px;
-  }
-
   .cards {
     display: flex;
     align-items: stretch;
@@ -130,3 +124,10 @@
   color: var(--brand-lime);
 }
 
+
+/* Dark: the ink card would vanish into the ground, so it lifts to a violet
+   surface with its own border. */
+:global(.dark) .card[data-featured] {
+  background-color: #2a1a5e;
+  border-color: #4b3a8f;
+}

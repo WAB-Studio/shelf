@@ -23,7 +23,6 @@ import {
 } from "@/components/planning/debts-table";
 import type { DebtTableRow } from "@/components/planning/debts-table";
 import { InstallmentPlanDialog } from "@/components/planning/installment-plan-dialog";
-import { PlanningSubNav } from "@/components/planning/planning-sub-nav";
 import {
   Box,
   Button,
@@ -351,9 +350,6 @@ export function DebtsScreen({
             </Button>
           }
         />
-        <Box display={{ initial: "none", md: "block" }}>
-          <PlanningSubNav />
-        </Box>
         {/* One labelled set per currency, none of them summing another: a card
             that bills in pesos and buys in dollars owes in both (RF-124). */}
         <Flex direction="column" gap="3">
@@ -430,9 +426,6 @@ export function DebtsScreen({
             actions={addButton}
           />
 
-          <Box display={{ initial: "none", md: "block" }}>
-            <PlanningSubNav />
-          </Box>
 
           {/* The same labelled sets the laptop's band draws, stacked (RF-124). */}
           <Flex direction="column" gap="4">

@@ -14,7 +14,6 @@ import {
 import { BudgetFormDialog } from "@/components/planning/budget-form-dialog";
 import { BudgetsTable } from "@/components/planning/budgets-table";
 import type { BudgetTableRow } from "@/components/planning/budgets-table";
-import { PlanningSubNav } from "@/components/planning/planning-sub-nav";
 import {
   Box,
   Button,
@@ -38,6 +37,9 @@ import type { TransactionFormOptions } from "@/db/queries/transaction-form";
 import { usePathname, useRouter } from "@/i18n/navigation";
 import { addCivilMonths, civilDateToDate } from "@/lib/dates";
 import { categoryNamesById, scopedCategoryParts } from "@/lib/fund/category-names";
+import type { CurrencyCode } from "@/lib/currency";
+import type { Locale } from "@/lib/locales";
+import { budgetTotals } from "@/lib/fund/glance";
 import { formatMoney } from "@/lib/money";
 import { useActionErrorToast } from "@/lib/use-action-toast";
 
@@ -111,6 +113,9 @@ export function BudgetsScreen({
     },
     onError: onActionError,
   });
+
+  const figureOf = (cents: number, currency: string) =>
+    formatMoney(cents, currency as CurrencyCode, locale as Locale);
 
   // A name and colour per category id — children included — so a card reads its
   // title and dot without a second lookup.
@@ -196,16 +201,30 @@ export function BudgetsScreen({
       <ScreenHeader
         title={t("title")}
         meta={hasGroup ? <FundChip label={tKey("fund.label")} /> : undefined}
+        figure={
+          !archived && budgets.length > 0
+            ? budgetTotals(budgets)
+                .map((total) =>
+                  total.spentCents > total.limitCents
+                    ? t("headlineOver", {
+                        over: figureOf(total.spentCents - total.limitCents, total.currency),
+                        limit: figureOf(total.limitCents, total.currency),
+                      })
+                    : t("headlineLeft", {
+                        left: figureOf(total.limitCents - total.spentCents, total.currency),
+                        limit: figureOf(total.limitCents, total.currency),
+                      }),
+                )
+                .join(" · ")
+            : undefined
+        }
         // The empty state carries its own «add», so the header's would be a second.
         actions={!archived && budgets.length > 0 ? addButton : undefined}
       />
 
-      <Box display={{ initial: "none", md: "block" }}>
-        <PlanningSubNav />
-      </Box>
 
       {/* One left edge with the header and the table: the band they carry from `md`. */}
-      <Flex direction="column" gap="4" px={{ initial: "0", md: "6" }} align={{ initial: "stretch", sm: "start" }}>
+      <Flex direction="column" gap="4" align={{ initial: "stretch", sm: "start" }}>
         <SegmentedControl.Root
           value={archived ? "archived" : "active"}
           onValueChange={(value) => pushQuery(month, value === "archived")}

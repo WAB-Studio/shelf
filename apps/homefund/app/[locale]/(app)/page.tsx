@@ -6,6 +6,8 @@ import { notFound, unstable_rethrow } from "next/navigation";
 
 import { WithdrawCashCard } from "@/components/cash/withdraw-dialog";
 import { DashboardSummary } from "@/components/reports/dashboard-summary";
+import { MonthGlance } from "@/components/reports/month-glance";
+import { HomeAside } from "@/components/reports/home-aside";
 import {
   RecentMovements,
   rowColor,
@@ -23,6 +25,7 @@ import {
   Button,
   Card,
   CategoryTile,
+  Columns,
   EmptyState,
   Flex,
   Heading,
@@ -34,16 +37,21 @@ import {
   Text,
   TextLink,
 } from "@/components/ui";
+import { listBudgetsWithStatus } from "@/db/queries/budgets";
 import { resolveWithdrawalTarget } from "@/db/queries/cash";
+import { getDebtOverview } from "@/db/queries/debt-overview";
 import { listDueReminders } from "@/db/queries/due-reminders";
 import { getMonthReviewPending } from "@/db/queries/month-review";
+import { listGoalsWithProgress } from "@/db/queries/savings-goals";
 import { getPendingInvitation } from "@/db/queries/group-members";
 import { getUserGroup } from "@/db/queries/groups";
 import { getDashboardData } from "@/db/queries/reports/dashboard";
+import { getExpensesByCategory } from "@/db/queries/reports/expenses-by-category";
 import { getTransactionFormOptions } from "@/db/queries/transaction-form";
 import { listTransactions } from "@/db/queries/transactions";
 import type { TransactionListRow } from "@/db/queries/transactions";
 import { requireUser } from "@/db/session";
+import { currentMonthRange } from "@/lib/dates";
 import { Link as LocaleLink } from "@/i18n/navigation";
 import { routing } from "@/i18n/routing";
 import { PERSONAL_CASH_ACCOUNT_NAME } from "@/lib/fund/seed";
@@ -51,6 +59,7 @@ import type { Locale } from "@/lib/locales";
 import type { ACCOUNT_SUBTYPES } from "@/lib/validation/account";
 import { formatMoney } from "@/lib/money";
 import { categoryNamesById } from "@/lib/fund/category-names";
+import { nearestLimit, nextDebtPayment } from "@/lib/fund/glance";
 
 export async function generateMetadata(
   props: PageProps<"/[locale]">,
@@ -71,6 +80,17 @@ const RECENT_LIMIT = 8;
 const PHONE_RECENT_LIMIT = 3;
 // «Por pagar» lists this many reminders; the link carries the rest as a count.
 const DUE_LIMIT = 3;
+// A read the screen can do without: a failure is logged and the block it feeds is dropped.
+function optional<T>(label: string, read: Promise<T>): Promise<T | null> {
+  return read.catch((error: unknown) => {
+    unstable_rethrow(error);
+    console.error(label, error);
+    return null;
+  });
+}
+
+// The budgets the desktop's right column keeps in view: the fullest ones.
+const ASIDE_BUDGETS = 3;
 
 // The three classes an account opens as — a subtype, never the asset/liability
 // kind `lib/validation/account` names — each its own tile in the first-account
@@ -100,7 +120,7 @@ export default async function HomePage(props: PageProps<"/[locale]">) {
   // requireUser stays the auth guard. The form options carry the account and
   // category names a row reads for its title and subtitle, the same pairing the
   // movements list fans out (RF-23); the amount is formatted for display only.
-  const [, group, invitation, dashboardData, rows, options, withdrawal, due, review, t, td, ta, tc] =
+  const [, group, invitation, dashboardData, rows, options, withdrawal, due, review, monthExpenses, budgets, goals, debts, t, td, ta, tc] =
     await Promise.all([
       requireUser(),
       getUserGroup(),
@@ -116,6 +136,12 @@ export default async function HomePage(props: PageProps<"/[locale]">) {
         console.error("getMonthReviewPending", error);
         return null;
       }),
+      // The month glance and the right column ride the same fan-out (RNF-09); each one
+      // is optional, so a failed read drops its block, never Inicio.
+      optional("getExpensesByCategory", getExpensesByCategory(currentMonthRange())),
+      optional("listBudgetsWithStatus", listBudgetsWithStatus()),
+      optional("listGoalsWithProgress", listGoalsWithProgress()),
+      optional("getDebtOverview", getDebtOverview()),
       getTranslations("transactions"),
       getTranslations("dashboard"),
       getTranslations("accounts"),
@@ -254,27 +280,45 @@ export default async function HomePage(props: PageProps<"/[locale]">) {
       accountNames.get(withdrawal.targetCashAccountId)) ||
     PERSONAL_CASH_ACCOUNT_NAME[locale];
 
+  const nextDebt = nextDebtPayment(debts ?? []);
+
   return (
     <Page gutter="flush-md">
       <Box display={{ initial: "none", md: "block" }}>
         <ScreenHeader title={td("title")} />
       </Box>
 
-      <Flex direction="column" gap="4">
-        <DashboardSummary data={dashboardData} />
+      <Box px={{ initial: "0", md: "6" }}>
+        <Columns
+          lead={
+            <>
+              <DashboardSummary data={dashboardData} />
+              <MonthGlance flows={dashboardData.monthFlow} expenses={monthExpenses ?? []} />
+            </>
+          }
+          aside={
+            <>
+              {review && <MonthReviewLine month={review.month} count={review.count} />}
 
-        {review && (
-          <Box px={{ initial: "0", md: "6" }}>
-            <MonthReviewLine month={review.month} count={review.count} />
-          </Box>
-        )}
+              {due.total > 0 && <DueRemindersCard rows={due.rows} total={due.total} />}
 
-        {due.total > 0 && (
-          <Box px={{ initial: "0", md: "6" }}>
-            <DueRemindersCard rows={due.rows} total={due.total} />
-          </Box>
-        )}
-
+              <Box display={{ initial: "none", md: "block" }}>
+                <Flex direction="column" gap="4">
+                  <HomeAside
+                    budgets={nearestLimit(budgets ?? [], ASIDE_BUDGETS)}
+                    budgetNames={categoryNames}
+                    goal={goals?.[0] ?? null}
+                    debt={nextDebt}
+                    debtName={
+                      nextDebt ? (accountNames.get(nextDebt.accountId) ?? null) : null
+                    }
+                  />
+                </Flex>
+              </Box>
+            </>
+          }
+          main={
+            <>
         <Box display={{ initial: "block", md: "none" }}>
           <Flex direction="column" gap="4">
             <QuickEntryPill />
@@ -333,7 +377,7 @@ export default async function HomePage(props: PageProps<"/[locale]">) {
           </Flex>
         </Box>
 
-        <Box display={{ initial: "none", md: "block" }} px="6">
+        <Box display={{ initial: "none", md: "block" }}>
           <Flex direction="column" gap="4">
             <Flex align="stretch" gap="3">
               <Box flexGrow="1" minWidth="0">
@@ -356,7 +400,10 @@ export default async function HomePage(props: PageProps<"/[locale]">) {
             />
           </Flex>
         </Box>
-      </Flex>
+            </>
+          }
+        />
+      </Box>
     </Page>
   );
 }

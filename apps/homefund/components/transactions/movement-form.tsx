@@ -44,6 +44,7 @@ import {
   TextField,
   type Responsive,
   AmountField,
+  DateInput,
 } from "@/components/ui";
 import type { TransactionFormOptions } from "@/db/queries/transaction-form";
 import type { TransactionListRow } from "@/db/queries/transactions";
@@ -271,7 +272,7 @@ export function MovementForm({
           transactionId: movement.id,
           fromAccountId: movement.fromAccountId,
           toAccountId: movement.toAccountId,
-          amount: amountToInput(movement.amountCents, movement.currency),
+          amount: amountToInput(movement.amountCents, movement.currency, locale),
           currency: movement.currency,
           counterAmount:
             movement.counterAmountCents === null
@@ -282,6 +283,7 @@ export function MovementForm({
                     from: movement.fromSettlementCurrency,
                     to: movement.toSettlementCurrency,
                   }) ?? movement.currency,
+                  locale,
                 ),
           counterIsEstimate: movement.counterIsEstimate,
           forHousehold: movement.forHousehold,
@@ -289,7 +291,7 @@ export function MovementForm({
           description: movement.description,
           splits: movement.splits.map((split) => ({
             categoryId: split.categoryId,
-            amount: amountToInput(split.amountCents, movement.currency),
+            amount: amountToInput(split.amountCents, movement.currency, locale),
           })),
           labelIds: movement.labels.map((label) => label.id),
           causedByTransactionId,
@@ -594,7 +596,7 @@ export function MovementForm({
       setRateUnavailable(false);
       form.setValue(
         "counterAmount",
-        amountToInput(convertMinor(amountMinor, data.rate), foreign),
+        amountToInput(convertMinor(amountMinor, data.rate), foreign, locale),
         { shouldValidate: true },
       );
     },
@@ -947,11 +949,10 @@ export function MovementForm({
               <Field invalid={fieldState.invalid}>
                 <FieldLabel htmlFor="movement-date">{t("dateLabel")}</FieldLabel>
                 <FieldControl>
-                  <TextField.Root
+                  <DateInput
                     {...field}
                     id="movement-date"
                     size="3"
-                    type="date"
                     disabled={isPending}
                   />
                 </FieldControl>

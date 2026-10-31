@@ -406,7 +406,7 @@ test("a number glued to a letter stays in the note", () => {
   assert.equal(result.description, "Mercado D1");
 });
 
-test("the longest standalone number is the amount", () => {
+test("a number that is no bare quantity wins over a quantity before it", () => {
   assert.equal(stored("Mercado 2 87.500"), 8_750_000);
   assert.equal(stored("Mercado 2 87,500"), 8_750_000);
   assert.equal(stored("Mercado 87k"), 8_700_000);
@@ -445,4 +445,31 @@ test("a currency code glued to the amount outranks the longer phone numbers of a
     ),
     12_200_050,
   );
+});
+
+test("a reference, an order or a phone number is never the amount", () => {
+  assert.equal(stored("Pago 50000 ref 123456789"), 5_000_000);
+  assert.equal(stored("Factura 45000 pedido 9876543"), 4_500_000);
+  assert.equal(stored("Pago de internet 3001234567 por 85000"), 8_500_000);
+  assert.equal(stored("Recarga cel 3001234567 20000"), 2_000_000);
+  assert.equal(stored("Domicilio tel 018000931987 12000"), 1_200_000);
+  assert.equal(stored("Compra #4455667 total 32000"), 3_200_000);
+});
+
+test("a number beside an amount word wins over an earlier one", () => {
+  assert.equal(stored("Mercado 120000 valor 98000"), 9_800_000);
+  assert.equal(stored("Cena 4 personas total 160000"), 16_000_000);
+});
+
+test("an account word leaves the description only when it named the account chosen", () => {
+  const result = interpretQuickEntry("Mercado nequi *4872 5000", {
+    categories: [],
+    accounts: [
+      { id: "a1", name: "Nequi Laura", lastFour: null },
+      { id: "a2", name: "Tarjeta Visa", lastFour: "4872" },
+    ],
+    defaultAccountId: null,
+  } as never);
+  assert.equal(result.accountId, "a2");
+  assert.match(result.description, /nequi/i);
 });

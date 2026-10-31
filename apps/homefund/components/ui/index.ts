@@ -17,7 +17,11 @@ export {
   Spinner,
 } from "@radix-ui/themes";
 
+export { Columns } from "./columns";
+export { Mosaic, MosaicFigure, MosaicNote, MosaicTile } from "./mosaic";
+export { Ring } from "./ring";
 export { DateInput } from "./date-input";
+export { ProportionBar, type ProportionSegment } from "./proportion-bar";
 
 export {
   Field,

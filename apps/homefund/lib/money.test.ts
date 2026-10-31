@@ -5,6 +5,8 @@ import {
   convertMinor,
   deriveRate,
   formatAmountTyping,
+  amountToInput,
+  formatCompactMoney,
   formatMoney,
   maxAmountMinor,
   parseAmount,
@@ -118,7 +120,7 @@ test("formatAmountTyping groups thousands with the language's mark and keeps the
   assert.deepEqual(formatAmountTyping("1250000", 7, "en"), { text: "1,250,000", caret: 9 });
   assert.deepEqual(formatAmountTyping("1250,5", 6, "es"), { text: "1.250,5", caret: 7 });
   assert.deepEqual(formatAmountTyping(",5", 2, "es"), { text: "0,5", caret: 3 });
-  assert.deepEqual(formatAmountTyping("12,345", 6, "es"), { text: "12,34", caret: 5 });
+  assert.deepEqual(formatAmountTyping("12,345", 6, "es").text, "12.345");
   assert.deepEqual(formatAmountTyping("", 0, "es"), { text: "", caret: 0 });
 });
 
@@ -126,4 +128,88 @@ test("what formatAmountTyping writes is what parseAmount reads, in integer cents
   assert.equal(parseAmount(formatAmountTyping("125000", 6, "es").text), 12_500_000);
   assert.equal(parseAmount(formatAmountTyping("1250000,5", 9, "es").text), 125_000_050);
   assert.equal(parseAmount(formatAmountTyping("1250000.5", 9, "en").text), 125_000_050);
+});
+
+test("formatCompactMoney shortens a magnitude and drops the sign", () => {
+  const short = formatCompactMoney(-260_000_000, "COP", "es");
+  assert.ok(!short.includes("-") && short.length < formatMoney(260_000_000, "COP", "es").length);
+  assert.equal(formatCompactMoney(0, "COP", "es").includes("0"), true);
+});
+
+// The language's own decimal mark with 1 or 2 digits is the decimal; its own group mark only
+// with one digit and no other mark; 3 digits after any mark are a group.
+test("formatAmountTyping reads each keystroke as the figure the person means", () => {
+  const typed = (raw: string, locale: string) => formatAmountTyping(raw, raw.length, locale).text;
+  // Spanish: the keypad's point is a decimal at once.
+  assert.equal(typed("12.5", "es"), "12,5");
+  assert.equal(parseAmount(typed("12.5", "es")), 1_250);
+  assert.equal(typed("12,50", "es"), "12,50");
+  assert.equal(parseAmount(typed("12,50", "es")), 1_250);
+  assert.equal(typed("1.234,5", "es"), "1.234,5");
+  // English mirrors it.
+  assert.equal(typed("12,5", "en"), "12.5");
+  assert.equal(typed("12.50", "en"), "12.50");
+  assert.equal(typed("1,234.5", "en"), "1,234.5");
+  // Three digits are a group in either language.
+  assert.equal(typed("1,250", "en"), "1,250");
+  assert.equal(typed("1.250", "es"), "1.250");
+  assert.equal(typed("1,250", "es"), "1.250");
+  assert.equal(typed("1.250", "en"), "1,250");
+  assert.equal(typed("1.234.567", "es"), "1.234.567");
+});
+
+// Backspacing a grouped figure must never turn the group mark into a decimal.
+test("backspacing «1.250.000» in Spanish keeps every state a whole figure", () => {
+  let text = "1.250.000";
+  const seen: string[] = [];
+  for (let step = 0; step < 5; step += 1) {
+    // The person deletes the last character of what the field shows.
+    text = formatAmountTyping(text.slice(0, -1), text.length - 1, "es").text;
+    seen.push(text);
+  }
+  assert.deepEqual(seen, ["125.000", "12.500", "1.250", "125", "12"]);
+  // «125.000» backspaced is «125.00»: the group, not 125 with two decimals.
+  assert.equal(formatAmountTyping("125.00", 6, "es").text, "12.500");
+  assert.equal(parseAmount(formatAmountTyping("125.00", 6, "es").text), 1_250_000);
+  assert.equal(formatAmountTyping("1.250.0", 7, "es").text, "12.500");
+  assert.equal(formatAmountTyping("12.50", 5, "es").text, "1.250");
+  assert.equal(formatAmountTyping("1.25", 4, "es").text, "125");
+  assert.equal(formatAmountTyping("12", 2, "es").text, "12");
+  // English: «125,00» is what «125,000» leaves.
+  assert.equal(formatAmountTyping("125,00", 6, "en").text, "12,500");
+});
+
+test("formatAmountTyping never cuts a third decimal: parseAmount refuses it", () => {
+  for (const locale of ["es", "en"]) {
+    const mark = locale === "es" ? "," : ".";
+    const text = formatAmountTyping(`0${mark}125`, 5, locale).text;
+    assert.equal(text, `0${mark}125`);
+    assert.equal(parseAmount(text), null);
+
+    const long = formatAmountTyping(`12${mark}3456`, 7, locale).text;
+    assert.equal(long, `12${mark}3456`);
+    assert.equal(parseAmount(long), null);
+  }
+});
+
+test("amountToInput writes the locale's decimal mark and parseAmount reads it back", () => {
+  assert.equal(amountToInput(1_250, "COP", "es"), "12,50");
+  assert.equal(amountToInput(1_250, "COP", "en"), "12.50");
+  assert.equal(amountToInput(1_250, "COP"), "12,50");
+  for (const locale of ["es", "en"]) {
+    assert.equal(parseAmount(amountToInput(1_250, "COP", locale)), 1_250);
+  }
+});
+
+// With both marks in the text the last is the decimal and the other the group, in either language.
+test("formatAmountTyping reads a pasted figure with both marks by its last mark", () => {
+  const typed = (raw: string, locale: string) => formatAmountTyping(raw, raw.length, locale).text;
+  assert.equal(typed("1,234.56", "es"), "1.234,56");
+  assert.equal(parseAmount(typed("1,234.56", "es")), 123_456);
+  assert.equal(typed("1.234,56", "en"), "1,234.56");
+  assert.equal(parseAmount(typed("1.234,56", "en")), 123_456);
+  assert.equal(typed("1.234,56", "es"), "1.234,56");
+  assert.equal(typed("1,234.56", "en"), "1,234.56");
+  assert.equal(typed("1,234,567.5", "es"), "1.234.567,5");
+  assert.equal(typed("1.234.567,5", "en"), "1,234,567.5");
 });

@@ -13,7 +13,6 @@ import {
 import { PaymentFormDialog } from "@/components/planning/payment-form-dialog";
 import { PaymentsTable } from "@/components/planning/payments-table";
 import { PaymentSettleDialog } from "@/components/planning/payment-settle-dialog";
-import { PlanningSubNav } from "@/components/planning/planning-sub-nav";
 import {
   Box,
   Button,
@@ -148,9 +147,6 @@ export function PaymentsScreen({
         actions={addButton}
       />
 
-      <Box display={{ initial: "none", md: "block" }}>
-        <PlanningSubNav />
-      </Box>
 
       <Box display={{ initial: "block", lg: "none" }}>
       {payments.length === 0 ? (

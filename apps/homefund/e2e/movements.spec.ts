@@ -505,7 +505,7 @@ test.describe("an adjustment among the movements (RF-137, RF-138)", () => {
 
     // Seeded: income $ 71.000, expense $ 32.000. Counting the +$ 12.000 as
     // income reads $ 51.000; as an expense, $ 27.000.
-    const meta = page.getByText(/· neto/).filter({ visible: true }).first();
+    const meta = page.getByText(/^Neto/).filter({ visible: true }).first();
     const text = flat(await meta.innerText());
     expect(text).toContain("+$ 39.000");
     expect(text).not.toContain("51.000");
@@ -935,11 +935,12 @@ test.describe("the «Descuadre» filter (RF-138, boards C2a-C2e)", () => {
     // Kills: the count-only meta applied to every type but «all».
     await page.goto("/es/movements?type=expense");
 
-    const meta = metaOf(page, /· neto/);
+    const meta = metaOf(page, /^1 movimiento$/);
     await expect(meta).toBeVisible();
     const text = flat(await meta.innerText());
-    expect(text).toContain("1 · neto");
-    expect(text).toContain("−$ 32.000");
+    expect(text).toContain("1 movimiento");
+    const net = page.getByText(/^Neto/).filter({ visible: true }).first();
+    expect(flat(await net.innerText())).toContain("−$ 32.000");
     expect(text).not.toContain("diferencia");
   });
 

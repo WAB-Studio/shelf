@@ -22,7 +22,6 @@ import { GoalContributeDialog } from "@/components/planning/goal-contribute-dial
 import { GoalContributionsDialog } from "@/components/planning/goal-contributions-dialog";
 import { GoalFormDialog } from "@/components/planning/goal-form-dialog";
 import { GoalsTable } from "@/components/planning/goals-table";
-import { PlanningSubNav } from "@/components/planning/planning-sub-nav";
 import {
   Badge,
   Box,
@@ -213,6 +212,19 @@ export function GoalsScreen({
       <Box display={{ initial: "none", lg: "block" }}>
         <ScreenHeader
           title={t("title")}
+        figure={
+          !archived && goals.length > 0 ? (
+            <>
+              {t("headlineSaved")}{" "}
+              {[...bandTotals.entries()].map(([currency, sums], index) => (
+                <Fragment key={currency}>
+                  {index > 0 && " · "}
+                  <Money minor={sums.savedCents} currency={currency} size="inherit" signed={false} />
+                </Fragment>
+              ))}
+            </>
+          ) : undefined
+        }
           meta={
             <>
               {t("listMeta", { count: goals.length })}
@@ -255,14 +267,24 @@ export function GoalsScreen({
       <Box display={{ initial: "block", lg: "none" }}>
         <ScreenHeader
           title={t("title")}
+        figure={
+          !archived && goals.length > 0 ? (
+            <>
+              {t("headlineSaved")}{" "}
+              {[...bandTotals.entries()].map(([currency, sums], index) => (
+                <Fragment key={currency}>
+                  {index > 0 && " · "}
+                  <Money minor={sums.savedCents} currency={currency} size="inherit" signed={false} />
+                </Fragment>
+              ))}
+            </>
+          ) : undefined
+        }
           meta={hasGroup ? <FundChip label={tKey("fund.label")} /> : undefined}
           actions={!archived && goals.length > 0 ? addButton : undefined}
         />
       </Box>
 
-      <Box display={{ initial: "none", md: "block" }}>
-        <PlanningSubNav />
-      </Box>
 
       {/* The band the header and the table carry from `lg` up, where the page
           hands the gutter over; below it the page's own padding still holds. */}

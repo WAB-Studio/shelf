@@ -535,3 +535,20 @@ Board C1h corrected the same day: a card in credit reads «Según HomeFund −$ 
   number. Planeación stays one tap away from a row beside «Ver reportes» on Inicio and the first row of the Ajustes
   panel. The desktop sidebar is unchanged (the usability critic, delegated by the user, 2026-10-30).
 
+
+## Decisión del 2026-10-31: ronda 3 de la crítica
+
+Elegidas por el crítico; el usuario puede cambiarlas («Elige lo que recomiendes»).
+
+- De 768 a 1279 px la barra lateral es un riel de 88 px: el ícono con su etiqueta debajo, sin depender del hover. Desde 1280 px
+  vuelve la de 248 px.
+- Inicio de escritorio va a dos columnas: a la izquierda la marca, el mes y los movimientos; a la derecha, fijos, «Por pagar»,
+  los tres presupuestos más cerca del límite, la meta y el próximo pago de deuda. Sus lecturas viajan en el mismo
+  `Promise.all` (RNF-09).
+- El ancho máximo es 1440 px, con tres columnas desde 1600 px donde la pantalla las tiene.
+- Gráficas: el gasto en violeta, el ingreso en jade y el rojo solo para lo «Superado».
+- Cada pantalla tiene un solo margen izquierdo de 32 px, sea de la página o de sus bandas (`--band-gutter`).
+- Planeación es un mosaico (presupuestos grande, meta con anillo, deudas en tinta con la cifra en lima, pagos ancho) y las
+  pestañas de escritorio que repetían la barra lateral se quitan.
+- Una cifra titular bajo el título: Presupuestos «Quedan $ X de $ Y», Movimientos el neto del mes, Metas lo apartado.
+- «Aportes del mes»: el usuario eligió el campo «De quién» en el ingreso al fondo (ver RF de aportes).
