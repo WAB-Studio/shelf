@@ -16,7 +16,7 @@ This file is the core every agent loads. Read the file the index names before th
 
 - Call the apps by their names: `apps/homefund` is **HomeFund**, `apps/wordbook` **WordBook**, `apps/goallog` **GoalLog**, `apps/timelog` **TimeLog**,
   `apps/portal` «Shelf». Vercel projects: `homefund`, `wordbook`, `goallog`, `timelog`; the repo is `WAB-Studio/shelf`. Production deploys the
-  old folders until the final merge moves each to `<app>app.vercel.app`; `our-piggy-bank`, `reading-neon`, `pulsar-psi-six` keep answering.
+  old folders until the final merge moves each to `<app>app.vercel.app` (TimeLog stays on `timelog-delta.vercel.app`: `timelogapp` belongs to someone else); `our-piggy-bank`, `reading-neon`, `pulsar-psi-six` keep answering.
 - HomeFund: contract `docs/SPEC.md` §1, model and invariants §2, stack §4, flows `docs/FLOWS.md`, design `docs/DESIGN.md`.
 - WordBook: `docs/wordbook/SPEC.md`, `docs/wordbook/DESIGN.md`. GoalLog: `docs/goallog/SPEC.md`, `docs/goallog/DESIGN.md`.
   TimeLog: `docs/timelog/SPEC.md`, `docs/timelog/DESIGN.md`; its uploader is `../timelog-sync`, a fork of `aw-client`.

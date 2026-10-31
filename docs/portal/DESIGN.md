@@ -41,7 +41,7 @@ Replaces the wallpaper, the big clock and the home-screen row of 2026-10-01. The
 
 - **No ornament.** No clock, gradient, glow or lift on hover; a card's border takes its app's colour on hover and focus.
 - **One card per app**, the whole card a link to `https://homefundapp.vercel.app`, `https://wordbookapp.vercel.app`,
-  `https://goallogapp.vercel.app`, `https://timelogapp.vercel.app`. It holds the mark in the app's colours, the name, one
+  `https://goallogapp.vercel.app`, `https://timelog-delta.vercel.app`. It holds the mark in the app's colours, the name, one
   line in the user's voice, the button «Abrir ›» (48 px high, the app's fill and ink) and real screenshots on a tint of the app.
 - **Identities**, from each app's `DESIGN.md`: HomeFund «Violeta y lima» (violet `#5b2ee5`, lime `#c8f560`; its piggy bank from
   `apps/homefund/public/icons/icon.svg`); WordBook «Verde botella y caléndula» (`#0c5a43`, marigold `#f6b83a`; its open book from
