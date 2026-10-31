@@ -340,27 +340,9 @@ export function MovementsScreen({
             )
           }
           meta={
-            filters.type === "adjustment" ? (
-              t("listMetaAdjustments", { count: totals.count })
-            ) : (
-              <>
-                {t("listMeta", { count: totals.count })}{" "}
-                {/* One figure per currency, each naming the one it counts: no
-                  total on this screen is the sum of two of them (RF-124). */}
-                {nets.map(([currency, net], index) => (
-                  <span key={currency}>
-                    {index > 0 && " · "}
-                    <Money
-                      minor={net}
-                      currency={currency}
-                      tone={net < 0 ? "expense" : "income"}
-                      size="inherit"
-                    />{" "}
-                    {currency}
-                  </span>
-                ))}
-              </>
-            )
+            filters.type === "adjustment"
+              ? t("listMetaAdjustments", { count: totals.count })
+              : t("listMeta", { count: totals.count })
           }
           actions={
             rows.length > 0 && (

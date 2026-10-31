@@ -64,9 +64,14 @@
     justify-content: center;
     gap: 4px;
     padding: 8px 0;
-    font-size: 10.5px;
+    font-size: 10px;
+    letter-spacing: -0.02em;
     line-height: 1.15;
     text-align: center;
+  }
+
+  .row[data-current] {
+    font-weight: 500;
   }
 
   .label {
