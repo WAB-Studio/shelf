@@ -37,11 +37,14 @@
     "prev": "Previous day",
     "next": "Next day",
     "apps": "Apps",
-    "claudeCard": "Claude in total",
+    "claudeCard": "Claude",
     "windowBar": "{title}: {duration}",
     "windowsMore": "and {n} more windows",
     "byClass": "Where it went",
-    "byClassLabel": "The day split by class of app"
+    "byClassLabel": "The day split by class of app",
+    "claudeGlance": "{duration} with Claude · {percent}% of the day",
+    "claudeNoneDay": "No Claude that day.",
+    "devicesSum": "Sum of {n} devices"
   },
   "week": {
     "title": "{from} to {to}",

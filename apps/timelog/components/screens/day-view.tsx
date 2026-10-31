@@ -9,9 +9,9 @@ import { appClass, timeByClass } from "@/lib/app-classes";
 import { readableApp } from "@/lib/app-names";
 import { projectName } from "@/lib/claude-project";
 import { claudeTotal } from "@/lib/daily";
-import { appsBetween, claudeBetween, claudeSessionsBetween, dayTotals, pagesBetween, sitesBetween, uploadSpan, windowsBetween } from "@/lib/queries";
+import { appsBetween, claudeBetween, claudeSessionsBetween, dayTotals, devicesBetween, pagesBetween, sitesBetween, uploadSpan, windowsBetween } from "@/lib/queries";
 import { focusShare, hourMarks, layoutSessions, minuteOfDay } from "@/lib/timeline";
-import { sum } from "@/lib/totals";
+import { percent, sum } from "@/lib/totals";
 import { calendarWords } from "@/lib/words";
 import { addDays, civilDay } from "@/lib/zone";
 
@@ -23,7 +23,7 @@ export async function DayView({ day }: { day: string }) {
   const today = civilDay();
   const isToday = day === today;
   const before = addDays(day, -1);
-  const [raw, sites, pages, windows, sessions, claudeDays, previous, span, words, t, tClaude, tInternet, tTimeline, tClass, tAll] = await Promise.all([
+  const [raw, sites, pages, windows, sessions, claudeDays, previous, devices, span, words, t, tClaude, tInternet, tTimeline, tClass, tAll] = await Promise.all([
     appsBetween(day, day),
     sitesBetween(day, day),
     pagesBetween(day, day),
@@ -32,6 +32,7 @@ export async function DayView({ day }: { day: string }) {
     claudeBetween(day, day),
     // Only a whole day compares: uploads carry day totals, so today so far has no like-for-like yesterday.
     isToday ? Promise.resolve([]) : dayTotals(before, before),
+    devicesBetween(day, day),
     uploadSpan(),
     calendarWords(),
     getTranslations("time.today"),
@@ -50,6 +51,12 @@ export async function DayView({ day }: { day: string }) {
     const name = readableApp(one.app);
     if (name !== null) titlesOf.set(name, [...(titlesOf.get(name) ?? []), one]);
   }
+  const claudeParts = [
+    { key: "code", tone: "claude" as const, seconds: claude?.code ?? 0, name: tClaude("code"), figure: words.duration(claude?.code ?? 0) },
+    { key: "web", tone: "claudeWeb" as const, seconds: claude?.web ?? 0, name: tClaude("web"), figure: words.duration(claude?.web ?? 0) },
+    { key: "desktop", tone: "claudeApp" as const, seconds: claude?.desktop ?? 0, name: tClaude("desktop"), figure: words.duration(claude?.desktop ?? 0) },
+  ];
+  const claudeLabel = claudeParts.filter((one) => one.seconds > 0).map((one) => `${one.name}: ${one.figure}`).join(", ");
   const total = sum(apps);
   const top = apps[0];
   const tSystem = tAll("system");
@@ -85,23 +92,41 @@ export async function DayView({ day }: { day: string }) {
               <Stack gap={2}>
                 <Text variant="meta">{t(isToday ? "total" : "totalPast")}</Text>
                 <Figure parts={words.durationParts(total)} mark />
+                {devices.length > 1 ? (
+                  <Stack gap={1}>
+                    <Text variant="meta">{t("devicesSum", { n: devices.length })}</Text>
+                    {devices.map((one) => (
+                      <Text key={one.device} variant="meta" truncate>{one.device} · {words.duration(one.seconds)}</Text>
+                    ))}
+                  </Stack>
+                ) : null}
                 {isToday && span.lastReceived !== null ? <Text variant="meta">{t("updated", { ago: words.ago(span.lastReceived) })}</Text> : null}
               </Stack>
             </Stack>
-            <Stack gap={2}>
+            <Stack gap={4}>
+              <Stack gap={2}>
+                <Text variant="meta">{t("claudeCard")}</Text>
+                <Text as="p">{claudeSeconds > 0 ? t("claudeGlance", { duration: words.duration(claudeSeconds), percent: percent(claudeSeconds, total) }) : t("claudeNoneDay")}</Text>
+                {claudeSeconds > 0 ? (
+                  <Composition
+                    thin
+                    label={claudeLabel}
+                    parts={claudeParts.filter((one) => one.seconds > 0)}
+                  />
+                ) : null}
+              </Stack>
+              <Stack gap={2}>
               <Text variant="meta">{t("byClass")}</Text>
               <Composition
                 label={t("byClassLabel")}
                 parts={classes.map((one) => ({ key: one.kind, tone: one.kind, seconds: one.seconds, name: tClass(one.kind), figure: words.duration(one.seconds) }))}
               />
+              </Stack>
             </Stack>
             <Cards>
               <Card label={t("topApp")}>
                 <Text truncate>{top.app}</Text>
                 <Text mono>{words.duration(top.seconds)}</Text>
-              </Card>
-              <Card label={t("claudeCard")}>
-                <Text mono>{claudeSeconds > 0 ? words.duration(claudeSeconds) : "—"}</Text>
               </Card>
               {!isToday && previousTotal > 0 ? (
                 <Card label={t("versus")}>
