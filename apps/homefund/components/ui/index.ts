@@ -17,6 +17,8 @@ export {
   Spinner,
 } from "@radix-ui/themes";
 
+export { DateInput } from "./date-input";
+
 export {
   Field,
   FieldControl,

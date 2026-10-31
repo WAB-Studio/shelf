@@ -29,6 +29,7 @@ import {
   Text,
   TextField,
   AmountField,
+  DateInput,
 } from "@/components/ui";
 import type { RecurringRuleRow } from "@/db/queries/recurring-rules";
 import type { TransactionFormOptions } from "@/db/queries/transaction-form";
@@ -367,11 +368,10 @@ function RecurringForm({
             <Field invalid={fieldState.invalid}>
               <FieldLabel htmlFor="rule-next">{t("nextRunLabel")}</FieldLabel>
               <FieldControl>
-                <TextField.Root
+                <DateInput
                   {...field}
                   id="rule-next"
                   size="3"
-                  type="date"
                   disabled={isPending}
                 />
               </FieldControl>
@@ -583,10 +583,9 @@ function RecurringForm({
                   </Flex>
                 </FieldLabel>
                 <FieldControl>
-                  <TextField.Root
+                  <DateInput
                     id="rule-ends"
                     size="3"
-                    type="date"
                     value={field.value ?? ""}
                     onChange={(event) =>
                       field.onChange(event.target.value || null)
