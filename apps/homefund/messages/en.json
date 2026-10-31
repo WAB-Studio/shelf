@@ -142,7 +142,15 @@
     "firstAccountTitle": "Open your first account",
     "addAccountKind": "Add",
     "monthAdjustment": "Month gap",
-    "reviewLine": "Review {month} · {count, plural, one {# movement} other {# movements}}"
+    "reviewLine": "Review {month} · {count, plural, one {# movement} other {# movements}}",
+    "asideBudgets": "Close to the limit",
+    "asideBudgetsSee": "See budgets",
+    "budgetOver": "Over",
+    "budgetSpent": "{spent} of {limit}",
+    "asideGoal": "Goal",
+    "goalLeft": "{amount} to go",
+    "goalLeftPace": "{amount} to go · {pace}/mo",
+    "asideDebt": "Next debt payment"
   },
   "reports": {
     "title": "Reports",

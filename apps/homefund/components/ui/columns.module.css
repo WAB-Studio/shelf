@@ -1,0 +1,49 @@
+.columns {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.lead,
+.main,
+.aside {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+@media (min-width: 1024px) {
+  .columns[data-aside] {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 340px;
+    grid-template-areas:
+      "lead aside"
+      "main aside";
+    column-gap: 24px;
+    row-gap: var(--space-4);
+    align-items: start;
+  }
+
+  .lead {
+    grid-area: lead;
+  }
+
+  .main {
+    grid-area: main;
+  }
+
+  /* Stays in view while the movements beside it scroll past. */
+  .aside {
+    grid-area: aside;
+    position: sticky;
+    top: 24px;
+  }
+}
+
+@media (min-width: 1600px) {
+  .columns[data-aside] {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 340px;
+    grid-template-areas: "lead main aside";
+  }
+}

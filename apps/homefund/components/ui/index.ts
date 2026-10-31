@@ -17,6 +17,7 @@ export {
   Spinner,
 } from "@radix-ui/themes";
 
+export { Columns } from "./columns";
 export { DateInput } from "./date-input";
 
 export {

@@ -142,7 +142,15 @@
     "firstAccountTitle": "Abre tu primera cuenta",
     "addAccountKind": "Añadir",
     "monthAdjustment": "Diferencia del mes",
-    "reviewLine": "Revisar {month} · {count, plural, one {# movimiento} other {# movimientos}}"
+    "reviewLine": "Revisar {month} · {count, plural, one {# movimiento} other {# movimientos}}",
+    "asideBudgets": "Cerca del límite",
+    "asideBudgetsSee": "Ver presupuestos",
+    "budgetOver": "Superado",
+    "budgetSpent": "{spent} de {limit}",
+    "asideGoal": "Meta",
+    "goalLeft": "Faltan {amount}",
+    "goalLeftPace": "Faltan {amount} · {pace}/mes",
+    "asideDebt": "Próximo pago de deuda"
   },
   "reports": {
     "title": "Reportes",
