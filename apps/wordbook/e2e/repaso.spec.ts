@@ -118,7 +118,7 @@ test("RL-68: the answers are kept on the device, so a word put away does not com
   }
 
   await page.reload();
-  await expect(page.getByText("Hoy no tienes palabras por repasar.")).toBeVisible();
+  await expect(page.getByText("Hoy no tienes entradas por repasar.")).toBeVisible();
   await expect(page.getByText("3 entradas vuelven más adelante.")).toBeVisible();
 });
 

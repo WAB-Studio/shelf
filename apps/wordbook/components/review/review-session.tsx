@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useRef, useState } from "react";
 import NextLink from "next/link";
 import { useFormatter, useTranslations } from "next-intl";
 
@@ -9,21 +9,28 @@ import type { Sense } from "@/lib/dictionary/index-build";
 import { cardBack, cardFront } from "@/lib/log/anki";
 import { contentUnit, isPhraseRow } from "@/lib/log/outcome";
 import { readWordStudy } from "@/lib/log/summary";
+import { readWordStory, type WordStory } from "@/lib/log/story";
 import { buildQueue, isReviewable, type ReviewQueue } from "@/lib/review/deck";
 import { dueWhen, GRADES, intervals, intervalUnit, rate, staysInSession, type ReviewGrade } from "@/lib/review/schedule";
 import { answerSenses, pickSense } from "@/lib/review/sense";
 import { readCards, saveCard } from "@/lib/review/store";
+import { gapOutWord, splitAroundWord } from "@/lib/word/mark-word";
 import { TranslationList } from "@/components/translations/translation-list";
 import {
+  ActionBar,
+  Box,
   Button,
   Card,
+  FlashCard,
   Flex,
   Grid,
   Headword,
+  Highlight,
   Link,
   Live,
   MetaLabel,
   PosLabel,
+  Progress,
   Separator,
   Skeleton,
   Text,
@@ -67,6 +74,8 @@ export function ReviewSession() {
   const [failedSave, setFailedSave] = useState(false);
   // The one sense the card draws, for the word on screen.
   const [sense, setSense] = useState<{ key: string; sense: Sense } | null>(null);
+  // The reader's own phrases holding the word on screen: the hint on the front, the context on the back.
+  const [story, setStory] = useState<{ key: string; story: WordStory } | null>(null);
   const showRef = useRef<HTMLButtonElement>(null);
   const goodRef = useRef<HTMLButtonElement>(null);
 
@@ -119,6 +128,19 @@ export function ReviewSession() {
     };
   }, [currentKey, currentIsPhrase, currentTranslation, lookup]);
 
+  useEffect(() => {
+    if (currentKey === undefined || currentIsPhrase) return;
+    let live = true;
+    readWordStory(currentKey)
+      .then((found) => {
+        if (live) setStory({ key: currentKey, story: found });
+      })
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [currentKey, currentIsPhrase]);
+
   // An entry put back for a minute shows again once it is due.
   const dueAt = current?.card != null && state.kind === "ready" && current.card.due > state.clock ? current.card.due : null;
   useEffect(() => {
@@ -138,6 +160,19 @@ export function ReviewSession() {
     if (index < 0 || dueAt !== null) return;
     (revealed ? goodRef : showRef).current?.focus();
   }, [index, revealed, dueAt]);
+
+  // Keys 1 to 4 grade the answer on a keyboard, in the order of the buttons.
+  const gradeByKey = useEffectEvent((event: KeyboardEvent) => {
+    const grade = GRADES[Number(event.key) - 1];
+    if (grade === undefined || event.altKey || event.ctrlKey || event.metaKey) return;
+    if (state.kind !== "ready" || state.revealedAt === null || state.saving) return;
+    void answer(grade, Date.now());
+  });
+  useEffect(() => {
+    const listener = (event: KeyboardEvent) => gradeByKey(event);
+    window.addEventListener("keydown", listener);
+    return () => window.removeEventListener("keydown", listener);
+  }, []);
 
   async function answer(grade: ReviewGrade, now: number) {
     if (state.kind !== "ready" || state.saving || state.revealedAt === null) return;
@@ -230,81 +265,111 @@ export function ReviewSession() {
   const formsLine =
     row.forms.length === 1 && row.forms[0]?.text === row.key ? null : row.forms.map((form) => form.text).join(", ");
 
-  return (
-    <Card tall>
-      <Flex direction="column" gap="5">
-        <MetaLabel>{t("progress", { current: repeat ? Math.min(answered.length, total) : state.index + 1, total })}</MetaLabel>
-        <Flex direction="column" gap="2">
-          <Headword>{cardFront(row)}</Headword>
-          {(card === null || repeat) && (
-            <Text size="2" muted>
-              {repeat ? t("repeat") : t(isPhraseRow(row) ? "newPhrase" : "newWord")}
-            </Text>
-          )}
-        </Flex>
-        {/* Mounted before the answer it carries, so a screen reader hears it arrive. */}
-        <Live>{revealedAt === null ? "" : drawn !== null ? drawn.translations.slice(0, 3).join(", ") : back}</Live>
+  const phrase = story !== null && story.key === row.key ? (story.story.phrases[0] ?? null) : null;
+  const forms = story !== null && story.key === row.key ? story.story.forms : [row.key];
+  const done = repeat ? Math.min(answered.length, total) : state.index;
 
+  return (
+    <Flex direction="column" gap="4">
+      <Flex direction="column" gap="2">
+        <MetaLabel>{t("progress", { current: repeat ? Math.min(answered.length, total) : state.index + 1, total })}</MetaLabel>
+        <Progress aria-label={t("progressLabel")} value={Math.round((done / total) * 100)} />
+      </Flex>
+      <FlashCard face={revealedAt === null ? "front" : "back"}>
+        <Headword size={revealedAt === null && !isPhraseRow(row) ? "hero" : "default"}>{cardFront(row)}</Headword>
+        {(card === null || repeat) && (
+          <Text size="2" muted>
+            {repeat ? t("repeat") : t(isPhraseRow(row) ? "newPhrase" : "newWord")}
+          </Text>
+        )}
         {revealedAt === null ? (
-          <Button ref={showRef} size="3" onClick={() => setState({ ...state, revealedAt: Date.now() })}>
+          phrase !== null && (
+            <Flex direction="column" gap="1">
+              <MetaLabel>{t("hintTitle")}</MetaLabel>
+              <Text size="3" english>
+                {gapOutWord(phrase, forms)}
+              </Text>
+            </Flex>
+          )
+        ) : (
+          <Flex direction="column" gap="2" align="center">
+            <Separator size="2" />
+            {drawn !== null ? (
+              <>
+                <PosLabel>{tWord(`pos.${drawn.pos}`)}</PosLabel>
+                <TranslationList items={drawn.translations} lead />
+                {drawn.definition !== null && (
+                  <Text size="2" muted english>
+                    {drawn.definition}
+                  </Text>
+                )}
+              </>
+            ) : (
+              <Text variant="lead">{back}</Text>
+            )}
+            {phrase !== null && (
+              <Text size="3" english>
+                {splitAroundWord(phrase, forms).map((piece, index) =>
+                  piece.hit ? <Highlight key={index}>{piece.text}</Highlight> : piece.text,
+                )}
+              </Text>
+            )}
+            {formsLine !== null && (
+              <Text size="2" muted>
+                {t("forms", { forms: formsLine })}
+              </Text>
+            )}
+          </Flex>
+        )}
+      </FlashCard>
+      {/* Mounted before the answer it carries, so a screen reader hears it arrive. */}
+      <Live>{revealedAt === null ? "" : drawn !== null ? drawn.translations.slice(0, 3).join(", ") : back}</Live>
+
+      <ActionBar>
+        {revealedAt === null ? (
+          <Button ref={showRef} size="3" block onClick={() => setState({ ...state, revealedAt: Date.now() })}>
             {t("show")}
           </Button>
         ) : (
-          <>
-            <Flex direction="column" gap="2">
-              <Separator size="4" />
-              {drawn !== null ? (
-                <>
-                  <PosLabel>{tWord(`pos.${drawn.pos}`)}</PosLabel>
-                  <TranslationList items={drawn.translations} />
-                  {drawn.definition !== null && (
-                    <Text size="2" muted english>
-                      {drawn.definition}
-                    </Text>
-                  )}
-                </>
-              ) : (
-                <Text variant="translation">{back}</Text>
-              )}
-              {formsLine !== null && (
-                <Text size="2" muted>
-                  {t("forms", { forms: formsLine })}
-                </Text>
-              )}
-            </Flex>
-            <Grid columns={{ initial: "2", sm: "4" }} gap="2">
-              {GRADES.map((grade) => {
-                const { unit, count } = intervalUnit(intervals(card, revealedAt)[grade]);
-                return (
-                  <Button
-                    key={grade}
-                    ref={grade === "good" ? goodRef : undefined}
-                    size="3"
-                    variant={grade === "good" ? "solid" : "soft"}
-                    disabled={saving}
-                    onClick={() => void answer(grade, Date.now())}
-                  >
-                    <Flex direction="column" align="center">
-                      {t(`grade.${grade}`)}
-                      <Text size="1">{t(`in.${unit}`, { count })}</Text>
-                    </Flex>
-                  </Button>
-                );
-              })}
-            </Grid>
-          </>
+          <Grid columns="4" gap="2">
+            {GRADES.map((grade) => {
+              const { unit, count } = intervalUnit(intervals(card, revealedAt)[grade]);
+              return (
+                <Button
+                  key={grade}
+                  ref={grade === "good" ? goodRef : undefined}
+                  size="3"
+                  variant={grade === "good" ? "solid" : "soft"}
+                  disabled={saving}
+                  onClick={() => void answer(grade, Date.now())}
+                >
+                  <Flex direction="column" align="center">
+                    {t(`grade.${grade}`)}
+                    <Text size="1">{t(`in.${unit}`, { count })}</Text>
+                  </Flex>
+                </Button>
+              );
+            })}
+          </Grid>
         )}
-        {failedSave && (
-          // «Failure» in docs/wordbook/DESIGN.md: a hairline and the line in full ink. The grades above
-          // are the retry, still pressable.
-          <Flex direction="column" gap="3">
-            <Separator size="4" />
-            <Text weight="bold" role="alert">
-              {t("saveFailed")}
+        {revealedAt !== null && (
+          <Box display={{ initial: "none", md: "block" }} pt="2">
+            <Text size="1" muted>
+              {t("keysHint")}
             </Text>
-          </Flex>
+          </Box>
         )}
-      </Flex>
-    </Card>
+      </ActionBar>
+      {failedSave && (
+        // «Failure» in docs/wordbook/DESIGN.md: a hairline and the line in full ink. The grades above
+        // are the retry, still pressable.
+        <Flex direction="column" gap="3">
+          <Separator size="4" />
+          <Text weight="bold" role="alert">
+            {t("saveFailed")}
+          </Text>
+        </Flex>
+      )}
+    </Flex>
   );
 }

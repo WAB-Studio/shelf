@@ -37,6 +37,8 @@ export { Panels } from "./panels";
 
 export { Mosaic, Tile } from "./tile";
 
+export { ActionBar, FlashCard } from "./flash-card";
+
 export { BottomNav } from "./bottom-nav";
 
 export { ThemeChoice } from "./theme-choice";
