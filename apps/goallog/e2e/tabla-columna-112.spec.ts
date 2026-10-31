@@ -3,14 +3,14 @@ import { dayBefore } from "@/lib/day/weeks";
 import { monthOf } from "@/lib/plan/months";
 import { todayInZone } from "@/lib/zone";
 
-// `MesesConAño.dc.html`, option B (approved 2026-10-10): the narrow table's label column is 112px, room for
-// «septiembre 2027» on one line, at 360 and in the 320px list beside an open month at 1024.
+// `MesesConAño.dc.html`, option B (approved 2026-10-10): the narrow table's label column holds «septiembre 2027» on one line, at 360
+// and in the 320px list beside an open month at 1024. It was 112px in the 12px mono; at the 14px floor of reading text it is 128px.
 
 const thisMonth = monthOf(todayInZone());
 const lastMonth = monthOf(dayBefore(thisMonth));
 
 for (const width of [360, 1024]) {
-  test(`at ${width}px every month label in the months list is 112px wide`, async ({ person, browser, baseURL, db }) => {
+  test(`at ${width}px every month label in the months list is 128px wide`, async ({ person, browser, baseURL, db }) => {
     const [goal] = await db<{ id: string }[]>`
       insert into goals.goals (user_id, name, horizon, measure_name, measure_unit, created_at)
       values (${person.id}, ${`Columna 112 ${width} ${Date.now()}`}, ${thisMonth}::date + 62, 'minutos', 'minutos',
@@ -35,7 +35,7 @@ for (const width of [360, 1024]) {
       );
       expect(widths.length, "visible month rows").toBeGreaterThan(1);
       for (const { text, width: labelWidth } of widths) {
-        expect(labelWidth, `label «${text}»`).toBeCloseTo(112, 0);
+        expect(labelWidth, `label «${text}»`).toBeCloseTo(128, 0);
       }
     } finally {
       await context.close();

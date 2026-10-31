@@ -133,8 +133,8 @@ test("an ended goal's lines are sentences in Archivo and stand together", async 
     expect(family).not.toMatch(/mono/i);
     const one = (await boxOf(line(ended[0])));
     const two = (await boxOf(line(ended[1])));
-    // One block: the lines are a link's height apart, never a section's worth of air.
-    expect(Math.abs(two.y - one.y)).toBeLessThanOrEqual(56);
+    // One block: the lines are a card row apart (85 at the 14px floor), never a section's worth of air.
+    expect(Math.abs(two.y - one.y)).toBeLessThanOrEqual(90);
   } finally {
     await context.close();
     await db`delete from goals.goals where user_id = ${person.id}`;
