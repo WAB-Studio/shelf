@@ -10,7 +10,7 @@ export const STRIP_DAYS = 30;
 // A day a commitment was met, with what it counted: a declared quantity, a
 // source's minutes, or nothing for a tap. `partial` is a quantity written
 // short of its target: a day touched, never a day done.
-export type DoneDay = { day: string; quantity: number | null; by: "declared" | "evidence" | "partial" };
+export type DoneDay = { day: string; quantity: number | null; by: "declared" | "evidence" | "partial"; note?: string | null };
 
 // `neutral` is a day the cadence does not ask on: neither done nor open.
 export type StripCell = { day: string; state: "declared" | "evidence" | "partial" | "open" | "neutral" | "before" };
@@ -23,7 +23,7 @@ export function stripDays(today: string): string[] {
 // The days of a commitment's own: what a person declared, from the facts that name it. A tap is met by any
 // fact; a quantity only once the day's sum reaches its target, as `tally.ts` counts it.
 export function declaredDays(
-  facts: readonly { day: string; quantity: number | null }[],
+  facts: readonly { day: string; quantity: number | null; note?: string | null }[],
   satisfiedBy: SatisfiedBy,
 ): DoneDay[] {
   const byDay = new Map<string, number | null>();
@@ -31,9 +31,11 @@ export function declaredDays(
     const known = byDay.get(fact.day);
     byDay.set(fact.day, fact.quantity === null ? (known ?? null) : (known ?? 0) + fact.quantity);
   }
+  const notes = new Map(facts.filter((fact) => fact.note).map((fact) => [fact.day, fact.note as string]));
   return [...byDay].map(([day, quantity]) => ({
     day,
     quantity,
+    note: notes.get(day) ?? null,
     by: satisfiedBy.kind === "quantity" && (quantity ?? 0) < satisfiedBy.target ? ("partial" as const) : ("declared" as const),
   }));
 }
@@ -62,7 +64,7 @@ export function commitmentDays(input: {
   // Distinct days with a fact, over all time.
   declaredDayCount: number;
   // The facts inside the strip's window.
-  recent: readonly { day: string; quantity: number | null }[];
+  recent: readonly { day: string; quantity: number | null; note?: string | null }[];
   evidence: Record<string, EvidenceDay[]> | null;
 }): { declaredDayCount: number; evidenceDayCount: number; done: DoneDay[] } {
   const { satisfiedBy, today } = input;

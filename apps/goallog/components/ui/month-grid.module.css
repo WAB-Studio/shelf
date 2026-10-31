@@ -59,3 +59,38 @@
 .today {
   box-shadow: inset 0 0 0 2px var(--pulsar-ink);
 }
+
+/* A day up to today is a link: the tile keeps its fill, the focus ring is the ink. */
+.link {
+  text-decoration: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.link:focus-visible {
+  outline: 2px solid var(--pulsar-ink);
+  outline-offset: 2px;
+}
+
+.legend {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-block-start: 12px;
+}
+
+.legendEnd {
+  font-size: 14px;
+  color: var(--pulsar-muted);
+}
+
+.swatch {
+  inline-size: 20px;
+  block-size: 20px;
+  border-radius: 6px;
+}
+
+.legendNote {
+  margin: 4px 0 0;
+  font-size: 14px;
+  color: var(--pulsar-muted);
+}

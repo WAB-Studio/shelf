@@ -413,7 +413,7 @@ function toGoalCommitment(
   row: CommitmentRow,
   factDayCount: number,
   today: string,
-  recent: { day: string; quantity: number | null }[] = [],
+  recent: { day: string; quantity: number | null; note?: string | null }[] = [],
   evidence: Record<string, EvidenceDay[]> | null = null,
 ): GoalCommitment {
   const satisfiedBy = toSatisfiedBy(row);
@@ -459,13 +459,13 @@ function factDayCounts(facts: FactRow[]): Map<string, number> {
 }
 
 // Per commitment, the facts inside the strip's window.
-function recentFacts(facts: FactRow[], today: string): Map<string, { day: string; quantity: number | null }[]> {
+function recentFacts(facts: FactRow[], today: string): Map<string, { day: string; quantity: number | null; note: string | null }[]> {
   const start = stripDays(today)[0];
-  const byCommitment = new Map<string, { day: string; quantity: number | null }[]>();
+  const byCommitment = new Map<string, { day: string; quantity: number | null; note: string | null }[]>();
   for (const fact of facts) {
     if (!fact.commitment_id || fact.day < start) continue;
     const list = byCommitment.get(fact.commitment_id) ?? [];
-    list.push({ day: fact.day, quantity: fact.quantity });
+    list.push({ day: fact.day, quantity: fact.quantity, note: fact.note });
     byCommitment.set(fact.commitment_id, list);
   }
   return byCommitment;
@@ -999,7 +999,7 @@ export async function loadGoalForm(
     tx.execute<{
       goal: GoalRow | null;
       phases: PhaseRow[];
-      commitments: (CommitmentRow & { fact_day_count: number; recent: { day: string; quantity: number | null }[] })[];
+      commitments: (CommitmentRow & { fact_day_count: number; recent: { day: string; quantity: number | null; note?: string | null }[] })[];
       tasks: TaskRow[];
       tree: TreeSqlRow[];
     }>(sql`
@@ -1013,8 +1013,10 @@ export async function loadGoalForm(
                    'source_unit', s.unit,
                    'source_label_key', s.label_key,
                    'fact_day_count', (select count(distinct f.day)::int from "goals"."facts" f where f.commitment_id = c.id),
-                   'recent', (select coalesce(json_agg(json_build_object('day', r.day::text, 'quantity', r.quantity) order by r.day), '[]'::json)
-                                from (select f.day, sum(f.quantity)::int as quantity from "goals"."facts" f
+                   'recent', (select coalesce(json_agg(json_build_object('day', r.day::text, 'quantity', r.quantity, 'note', r.note) order by r.day), '[]'::json)
+                                from (select f.day, sum(f.quantity)::int as quantity,
+                                              (array_agg(f.note order by f.written_at desc) filter (where f.note is not null))[1] as note
+                                         from "goals"."facts" f
                                        where f.commitment_id = c.id and f.day >= ${stripStart}::date group by f.day) r)
                  ) order by c.position, c.created_at, c.id), '[]'::json)
            from "goals"."commitments" c

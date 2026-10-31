@@ -61,6 +61,8 @@ type RowProps = Omit<ComponentPropsWithoutRef<"button">, "children" | "name"> & 
   // Up to two lines of free text under the name and its meta, line breaks
   // kept, clipped with an ellipsis (`TareaNotaGuardada`).
   preview?: string | null;
+  // A line the person wrote, whole, under the name and its meta: a quantity's note. Archivo, in the name's own column.
+  note?: string | null;
   // A control of its own at the row's end, a sibling of the row's button
   // because a button cannot hold one (`TareaNotaGuardada`'s note button).
   end?: ReactNode;
@@ -94,6 +96,7 @@ export const Row = forwardRef<HTMLButtonElement, RowProps>(function Row(
     wideTrailing,
     narrowMetaAbove,
     preview,
+    note,
     end,
     card,
     still,
@@ -138,6 +141,11 @@ export const Row = forwardRef<HTMLButtonElement, RowProps>(function Row(
         {wideMeta ? (
           <Text as="span" variant={metaVariant} className={styles.wideOnly}>
             {wideMeta}
+          </Text>
+        ) : null}
+        {note ? (
+          <Text as="span" variant="sentence" tone="secondary" data-part="row-note">
+            {note}
           </Text>
         ) : null}
         {preview ? (
