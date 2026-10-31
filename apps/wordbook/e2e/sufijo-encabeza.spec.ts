@@ -1,4 +1,4 @@
-import { expect, test } from "./fixtures";
+import { expect, openRareSenses, test } from "./fixtures";
 import type { Locator, Page } from "@playwright/test";
 
 import messages from "../messages/es.json";
@@ -65,6 +65,8 @@ test("`sternly`'s `-ly` fixes the adjective, so `stern` leads with «severo», n
   await searchBox.fill("sternly");
   await expect(page.getByRole("heading", { name: "stern", exact: true })).toBeVisible({ timeout: 5000 });
   await expect(glossLocator(page, "severo")).toBeVisible();
+  // The noun's nautical sense is one a reader meets seldom, folded under the entry's own line.
+  await openRareSenses(page);
   await expect(glossLocator(page, "popa")).toBeVisible();
   expect(await textLeads(page, "severo", "popa")).toBe(true);
   // `glossLocator` alone would pass just as well against the old

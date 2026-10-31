@@ -43,7 +43,7 @@ export function ReviewCard() {
           <>
             <Figure size="hero" value={due.due} label={t("dueToday", { count: due.due, kind: due.unit })} />
             <Button asChild size="3">
-              <NextLink href="/repaso">{t("reviewNowHome")}</NextLink>
+              <NextLink href="/repaso" prefetch={false}>{t("reviewNowHome")}</NextLink>
             </Button>
           </>
         ) : (

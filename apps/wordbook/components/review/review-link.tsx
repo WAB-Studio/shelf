@@ -29,7 +29,7 @@ export function ReviewLink() {
 
   return (
     <Button asChild size="3" variant="soft">
-      <NextLink href="/repaso">{unit === null ? t("open") : t("openKind", { kind: unit })}</NextLink>
+      <NextLink href="/repaso" prefetch={false}>{unit === null ? t("open") : t("openKind", { kind: unit })}</NextLink>
     </Button>
   );
 }
