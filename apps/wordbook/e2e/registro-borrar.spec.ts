@@ -10,7 +10,7 @@ import { DATABASE_VERSION } from "../lib/log/record";
 import { LOG_DELETED_EVENT } from "../lib/log/delete";
 import type { LookupRecord, SyncState } from "../lib/log/types";
 import { closeRun, openRun } from "@repo/harness-registry";
-import { afterFrames, expect, freezeTimers, runClock, test } from "./fixtures";
+import { afterFrames, expect, freezeTimers, runClock, studyHeader, test } from "./fixtures";
 
 // K10, RL-66, RL-70, RNL-11: each /registro row carries a ✕ that deletes its
 // group. Written from SPEC RL-66/RL-70, RNL-11 (successor of RNL-09, approved
@@ -201,8 +201,7 @@ const action = (page: Page, name: string) =>
   page.getByRole("button", { name, exact: true }).or(page.getByRole("link", { name, exact: true }));
 const confirmTitle = (page: Page, word: string) =>
   page.getByText(study("deleteConfirmTitle", { word }), { exact: true });
-const header = (page: Page, lookups: number, words: number) =>
-  page.getByText(study("header", { lookups, words }), { exact: true });
+const header = (page: Page, lookups: number, words: number) => studyHeader(page, lookups, words);
 // The two bodies differ only by « en todos tus dispositivos»: exact or nothing.
 const bodyEveryDevice = (page: Page, count: number) =>
   page.getByText(study("deleteConfirmBody", { count }), { exact: true });
@@ -506,14 +505,14 @@ test("Filtered: deleting while filtering keeps the filter and updates «N de M»
   await openRegistro(page, { lookups: leaveRows() });
   const filter = page.getByRole("textbox", { name: study("filterLabel") });
   await filter.fill("lea");
-  await expect(page.getByText(study("filterCount", { shown: 2, total: 3 }), { exact: true })).toBeVisible();
+  await expect(page.getByText(study("filterCount", { shown: 2, total: 3, kind: "words" }), { exact: true })).toBeVisible();
   await expect(rowLink(page, "left")).toHaveCount(0);
 
   await deleteViaUi(page, "leave");
   await expect(rowLink(page, "leave")).toHaveCount(0);
   await expect(filter).toHaveValue("lea");
   await expect(page).toHaveURL(/filtro=lea/);
-  await expect(page.getByText(study("filterCount", { shown: 1, total: 2 }), { exact: true })).toBeVisible();
+  await expect(page.getByText(study("filterCount", { shown: 1, total: 2, kind: "words" }), { exact: true })).toBeVisible();
   await expect(rowLink(page, "leaf")).toBeVisible();
   await expect(rowLink(page, "left"), "the filter was reset").toHaveCount(0);
 });

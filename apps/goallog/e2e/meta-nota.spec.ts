@@ -2,7 +2,7 @@ import type { Locator, Page } from "@playwright/test";
 
 import { GOAL_NOTE_MAX } from "@/lib/validation/plan";
 
-import { test, expect } from "./fixtures";
+import { test, expect, openMore } from "./fixtures";
 import { countActionPosts, expectTitle, holdActions, MINUTES, monthsAhead, openAs, seedGoal } from "./meta-arbol-seed";
 import { grouped, noOverflow, noteOf, setNote } from "./mover-nota-ayuda";
 import { boxOf } from "./box";
@@ -48,6 +48,7 @@ test("with no note the screen offers «Añadir una nota» between the end line a
     await expect(page.getByRole("button", { name: "Nota", exact: true })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Cambiar la nota" })).toHaveCount(0);
 
+    await openMore(page);
     const y = async (locator: Locator) => (await boxOf(locator)).y;
     const end = await y(page.getByRole("button", { name: "mover el final" }));
     const archive = await y(page.getByRole("button", { name: "Archivar esta meta" }));

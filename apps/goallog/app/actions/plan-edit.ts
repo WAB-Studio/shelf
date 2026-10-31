@@ -8,7 +8,10 @@ import { goals, phases } from "@/db/schema";
 import { messageKey, type MessageKey } from "@/i18n/translator";
 import { NamedError } from "@/lib/actions/named-error";
 import { pgCode } from "@/lib/db-error";
-import { getPerson, withGoalsDb } from "@/lib/session";
+import { evidenceDoneDays } from "@/lib/day/constancy";
+import { queryEvidenceBySource } from "@/lib/queries/evidence";
+import { getPerson, withGoalsDb, withReadingDb } from "@/lib/session";
+import { civilDateInZone, todayInZone } from "@/lib/zone";
 import { isClosed } from "@/lib/validation/closed";
 import { phasesOverlap, phaseWithinHorizon } from "@/lib/validation/plan";
 import {
@@ -16,11 +19,13 @@ import {
   deletePhaseSchema,
   editCadenceSchema,
   editPhaseSchema,
+  renameCommitmentSchema,
 } from "@/lib/validation/plan-edit";
 
 export type EditPhaseResult = { ok: true } | { ok: false; error: MessageKey };
 export type DeletePhaseResult = { ok: true } | { ok: false; error: MessageKey };
 export type EditCadenceResult = { ok: true } | { ok: false; error: MessageKey };
+export type RenameCommitmentResult = { ok: true } | { ok: false; error: MessageKey };
 export type DeleteCommitmentResult = { ok: true } | { ok: false; error: MessageKey };
 
 // Every screen a phase or a commitment can change what it draws on; a loose habit has its own too.
@@ -143,8 +148,9 @@ export async function deletePhase(input: unknown): Promise<DeletePhaseResult> {
 }
 
 /**
- * Changes the cadence of a commitment or a loose habit no fact names (RP-127, RP-135). One statement
- * reads the row and writes it only while it is live and no fact names it; the guard trigger of 0025
+ * Changes the cadence of a commitment or a loose habit no fact names (RP-127, RP-135), and no day of its
+ * evidence source counts as done. One statement reads the row and writes it only while it is live and no
+ * fact names it (an evidence commitment reads its source between, then writes in a guarded statement of its own); the guard trigger of 0025
  * answers the same (`42501`) if a fact arrives between the read and the write. What satisfies the
  * commitment and its amount are not columns of this statement.
  */
@@ -162,25 +168,59 @@ export async function editCadence(input: unknown): Promise<EditCadenceResult> {
 
   try {
     const [row] = await withGoalsDb((tx) =>
-      tx.execute<{ goal_id: string | null; retired: boolean; facts: boolean }>(sql`
+      tx.execute<{
+        goal_id: string | null;
+        retired: boolean;
+        facts: boolean;
+        evidence: boolean;
+        source_key: string | null;
+        threshold: number | null;
+        created_at: string;
+      }>(sql`
         with t as (
-          select id, goal_id, retired_at is not null as retired,
-                 exists (select 1 from "goals"."facts" f where f.commitment_id = c.id) as facts
-          from "goals"."commitments" c where c.id = ${commitmentId} and c.user_id = ${person.id}
+          select c.id, c.goal_id, c.retired_at is not null as retired,
+                 exists (select 1 from "goals"."facts" f where f.commitment_id = c.id) as facts,
+                 c.satisfaction = 'evidence' as evidence, s.key as source_key, c.threshold, c.created_at
+          from "goals"."commitments" c
+          left join "goals"."evidence_sources" s on s.id = c.source_id
+          where c.id = ${commitmentId} and c.user_id = ${person.id}
         ),
         upd as (
           update "goals"."commitments"
           set cadence_kind = ${data.cadenceKind}, cadence_n = ${cadenceN}, cadence_weekdays = ${cadenceWeekdays}
-          where id in (select id from t where not retired and not facts)
+          where id in (select id from t where not retired and not facts and not evidence)
           returning id
         )
-        select goal_id, retired, facts from t
+        select goal_id, retired, facts, evidence, source_key, threshold, created_at from t
       `),
     );
 
     if (!row) return { ok: false, error: "plan.errors.commitmentNotFound" };
     if (row.retired) return { ok: false, error: "plan.errors.commitmentRetired" };
     if (row.facts) return { ok: false, error: "plan.errors.cadenceHasFacts" };
+    if (row.evidence) {
+      // Evidence writes no fact (RP-05): the days its source met the threshold, from the day the commitment was
+      // written, are days done all the same, so the same refusal stands. An unreadable source cannot say there
+      // are none, so it refuses too.
+      const createdOn = civilDateInZone(new Date(row.created_at));
+      const today = todayInZone();
+      const days = await withReadingDb((tx) => queryEvidenceBySource(tx, person.id, createdOn, today)).then(
+        (bySourceKey) => evidenceDoneDays({ sourceKey: row.source_key, threshold: row.threshold ?? 1, createdOn }, bySourceKey, today).length,
+        () => null,
+      );
+      if (days === null || days > 0) return { ok: false, error: "plan.errors.cadenceHasFacts" };
+      // The write re-checks the declared facts in its own statement and says so when it changed nothing.
+      const written = await withGoalsDb((tx) =>
+        tx.execute<{ id: string }>(sql`
+          update "goals"."commitments"
+          set cadence_kind = ${data.cadenceKind}, cadence_n = ${cadenceN}, cadence_weekdays = ${cadenceWeekdays}
+          where id = ${commitmentId} and user_id = ${person.id} and retired_at is null
+            and not exists (select 1 from "goals"."facts" f where f.commitment_id = ${commitmentId})
+          returning id
+        `),
+      );
+      if (written.length === 0) return { ok: false, error: "plan.errors.cadenceHasFacts" };
+    }
 
     revalidateScreens(row.goal_id, commitmentId);
     return { ok: true };
@@ -188,6 +228,42 @@ export async function editCadence(input: unknown): Promise<EditCadenceResult> {
     if (pgCode(error) === "42501") return { ok: false, error: "plan.errors.cadenceHasFacts" };
     throw error;
   }
+}
+
+/**
+ * Renames a live commitment, whatever facts name it: the facts stay explained and the weeks it governed read
+ * as they did. One UPDATE of `name` alone; a retired one and another person's read as not changed.
+ */
+export async function renameCommitment(input: unknown): Promise<RenameCommitmentResult> {
+  const parsed = renameCommitmentSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: messageKey(parsed.error.issues[0].message) };
+
+  const person = await getPerson();
+  if (!person) return { ok: false, error: "plan.errors.signedOut" };
+
+  const { commitmentId, name } = parsed.data;
+
+  const [row] = await withGoalsDb((tx) =>
+    tx.execute<{ goal_id: string | null; retired: boolean | null; changed: number }>(sql`
+      with t as (
+        select id, goal_id, retired_at is not null as retired
+        from "goals"."commitments" where id = ${commitmentId} and user_id = ${person.id}
+      ),
+      upd as (
+        update "goals"."commitments" set name = ${name}
+        where id in (select id from t where not retired)
+        returning id
+      )
+      select (select goal_id from t) as goal_id, (select retired from t) as retired, (select count(*) from upd)::int as changed
+    `),
+  );
+
+  if (row.changed === 0) {
+    return { ok: false, error: row.retired ? "plan.errors.commitmentRetired" : "plan.errors.commitmentNotFound" };
+  }
+
+  revalidateScreens(row.goal_id, commitmentId);
+  return { ok: true };
 }
 
 /**

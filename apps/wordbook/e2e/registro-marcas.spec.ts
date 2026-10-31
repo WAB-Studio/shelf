@@ -1,12 +1,11 @@
 import { randomUUID } from "node:crypto";
 
-import { createTranslator } from "next-intl";
 import type { Page, Route } from "@playwright/test";
 
 import messages from "../messages/es.json";
 import { DATABASE_VERSION } from "../lib/log/record";
 import type { LookupRecord, SyncState } from "../lib/log/types";
-import { expect, test } from "./fixtures";
+import { expect, studyHeader, test } from "./fixtures";
 
 // RL-70, RL-66 (device half): a search another device deleted leaves this one
 // when /registro opens with the copy on, the rows it held and the count above
@@ -14,7 +13,6 @@ import { expect, test } from "./fixtures";
 // marks and no row. Every answer of the route is the test's own: no session,
 // no address, no database row.
 
-const t = createTranslator({ locale: "es", messages });
 
 type SeedLookup = Omit<LookupRecord, "id">;
 
@@ -120,8 +118,7 @@ function answerJson(route: Route, body: unknown): Promise<void> {
 }
 
 const rowLink = (page: Page, word: string) => page.locator(`a[href="/registro/${word}"]`);
-const header = (page: Page, lookups: number, words: number) =>
-  page.getByText(t("log.study.header", { lookups, words }));
+const header = (page: Page, lookups: number, words: number) => studyHeader(page, lookups, words);
 
 test("RL-70: marks another device made remove an own row and a pulled row here, and the header counts drop", async ({
   page,

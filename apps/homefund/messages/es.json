@@ -21,12 +21,14 @@
     "removeFilter": "Quitar {label}",
     "fund": "Fondo",
     "currencyTotals": "Totales por moneda",
-    "optional": "Opcional"
+    "optional": "Opcional",
+    "openCalendar": "Abrir calendario"
   },
   "auth": {
     "signOut": "Cerrar sesión",
-    "tagline": "Las cuentas de la casa, claras y compartidas.",
+    "tagline": "Las cuentas de la casa, <mark>claras</mark> y compartidas.",
     "passwordlessHint": "Te enviamos un código para entrar sin contraseña.",
+    "invitationOnly": "Por ahora se entra por invitación.",
     "emailLabel": "Correo electrónico",
     "emailPlaceholder": "tu@correo.com",
     "sendLink": "Enviar código",
@@ -113,7 +115,7 @@
       "addWithoutEmail": "Agregar sin correo",
       "toDashboard": "Ir al panel",
       "skip": "Omitir por ahora",
-      "emailFailed": "Añadimos a la persona, pero no pudimos enviar el correo. Avísale que entre con ese correo; si ya está en otro grupo, no se unirá a este."
+      "emailFailed": "Añadimos a la persona, pero no pudimos enviar el correo. Avísale que entre con ese correo; si ya está en otro fondo, no se unirá a este."
     }
   },
   "dashboard": {
@@ -140,8 +142,25 @@
     "title": "Inicio",
     "firstAccountTitle": "Abre tu primera cuenta",
     "addAccountKind": "Añadir",
-    "monthAdjustment": "Descuadre del mes",
-    "reviewLine": "Revisar {month} · {count, plural, one {# movimiento} other {# movimientos}}"
+    "monthAdjustment": "Diferencia del mes",
+    "reviewLine": "Revisar {month} · {count, plural, one {# movimiento} other {# movimientos}}",
+    "asideBudgets": "Cerca del límite",
+    "asideBudgetsSee": "Ver presupuestos",
+    "budgetOver": "Superado",
+    "budgetSpent": "{spent} de {limit}",
+    "asideGoal": "Meta",
+    "goalLeft": "Faltan {amount}",
+    "goalLeftPace": "Faltan {amount} · {pace}/mes",
+    "asideDebt": "Próximo pago de deuda",
+    "glanceTitle": "El mes de un vistazo",
+    "glanceIncome": "Ingresos",
+    "glanceSpending": "Gastos",
+    "glanceSpentOf": "Gastaste el {pct}% de lo que entró",
+    "glanceNoIncome": "Este mes no ha entrado dinero",
+    "glanceMeterLabel": "Gastos frente a ingresos en {currency}",
+    "glanceByCategory": "Gasto por categoría",
+    "glanceOthers": "Otras",
+    "ownerBarLabel": "Patrimonio por dueño en {currency}"
   },
   "reports": {
     "title": "Reportes",
@@ -150,12 +169,18 @@
     "byCategoryTitle": "Gastos por categoría",
     "byCategoryEmpty": "Sin gastos este mes.",
     "comparisonTitle": "Últimos 6 meses",
+    "comparisonEmpty": "Sin movimientos en estos meses.",
+    "comparisonEmptyHint": "Cuando anotes ingresos o gastos en {currency}, los verás aquí mes a mes.",
     "legendIncome": "Ingresos",
     "legendExpense": "Gastos",
     "contributionsTitle": "Aportes del mes",
-    "contributionsEmpty": "Sin aportes este mes.",
+    "contributionsEmpty": "Sin aportes este mes. Un aporte es un traspaso de una cuenta personal a una del fondo, o un ingreso al fondo con «De quién».",
     "noGroup": "Los aportes son una cifra del fondo. Todavía no tienes fondo.",
-    "monthAdjustment": "Descuadre del mes"
+    "monthAdjustment": "Diferencia del mes",
+    "shareLabel": "{pct}% del gasto del mes",
+    "averageLabel": "Promedio {amount}",
+    "emptyMonths": "Sin movimientos en {months}: el promedio no los cuenta.",
+    "contributionsNote": "Los ingresos al fondo sin «De quién» no cuentan como aporte."
   },
   "nav": {
     "title": "Navegación",
@@ -181,7 +206,7 @@
     "labels": "Etiquetas",
     "data": "Datos",
     "audit": "Auditoría",
-    "webhooks": "Webhooks",
+    "webhooks": "Correos del banco",
     "roleLeader": "Propietario",
     "roleMember": "Miembro"
   },
@@ -250,7 +275,7 @@
     "invitationGoneTitle": "Esta invitación ya no está vigente",
     "invitationGoneBody": "{inviter} la retiró o ya pasó. Si quieres unirte a «{fund}», pídele que te invite otra vez.",
     "invitationOtherTitle": "Ya estás en el fondo «{other}»",
-    "invitationOtherBody": "Se puede estar en un solo fondo. Para unirte a «{fund}», sal primero de «{other}» desde «Grupo».",
+    "invitationOtherBody": "Se puede estar en un solo fondo. Para unirte a «{fund}», sal primero de «{other}» desde «Ajustes del fondo».",
     "invitationGoAccounts": "Ir a mis cuentas",
     "title": "Miembros",
     "add": "Añadir miembro",
@@ -259,7 +284,7 @@
     "nameLabel": "Nombre",
     "emailLabel": "Correo (opcional)",
     "emailHint": "Si lo escribes, le mandamos una invitación para entrar a HomeFund.",
-    "editEmailFailed": "Guardamos el correo, pero no pudimos enviar la invitación. Avísale que entre con ese correo; si ya está en otro grupo, no se unirá a este.",
+    "editEmailFailed": "Guardamos el correo, pero no pudimos enviar la invitación. Avísale que entre con ese correo; si ya está en otro fondo, no se unirá a este.",
     "activeTab": "Activos",
     "archivedTab": "Archivados",
     "you": "Tú",
@@ -295,8 +320,8 @@
       "nameRequired": "Escribe el nombre del miembro.",
       "nameTooLong": "El nombre no puede pasar de 80 caracteres.",
       "emailInvalid": "Escribe un correo válido.",
-      "emailTaken": "Ese correo ya tiene una invitación en este grupo.",
-      "alreadyMember": "Esa persona ya está en este grupo."
+      "emailTaken": "Ese correo ya tiene una invitación en este fondo.",
+      "alreadyMember": "Esa persona ya está en este fondo."
     }
   },
   "bienvenida": {
@@ -311,8 +336,8 @@
     "editTitle": "Editar cuenta",
     "nameLabel": "Nombre",
     "kindLabel": "Tipo",
-    "kindAsset": "Activo",
-    "kindLiability": "Pasivo",
+    "kindAsset": "Lo que tengo",
+    "kindLiability": "Lo que debo",
     "kindLocked": "El tipo no se puede cambiar después de crear la cuenta.",
     "subtypeLabel": "Clase",
     "subtypeBancaria": "Bancaria",
@@ -388,8 +413,8 @@
     "reconcileRealLiability": "Deuda real",
     "reconcileRealHintAsset": "Si la cuenta quedó en negativo, escribe la cifra con un menos: -5000.",
     "reconcileRealHintLiability": "Si pagaste de más, escribe lo que quedó con un menos: -5000.",
-    "reconcileGap": "Descuadre",
-    "reconcileGapHint": "Se registra como un movimiento de descuadre del {date}.",
+    "reconcileGap": "Diferencia",
+    "reconcileGapHint": "Se registra como un movimiento de diferencia del {date}.",
     "reconcileBalanced": "Cuadra. No se registra ningún movimiento.",
     "reconcileSubmit": "Cuadrar",
     "reconcilePending": "Cuadrando…",
@@ -423,7 +448,7 @@
     "placementLocked": "El lugar no se puede cambiar después de crear la categoría.",
     "personalEmptyTitle": "Todavía no tienes categorías propias",
     "personalEmptyDescription": "Crea una categoría tuya para clasificar los movimientos de tus cuentas personales.",
-    "scopedName": "{name} · fondo",
+    "scopedName": "{name}",
     "leaderOnly": "Pide al propietario del fondo que cree o cambie las categorías del fondo.",
     "subcategoryCount": "{count, plural, one {# subcategoría} other {# subcategorías}}",
     "tableCategory": "Categoría",
@@ -484,6 +509,9 @@
   "transactions": {
     "quickTitle": "Nuevo movimiento",
     "quickPlaceholder": "Anota un gasto…",
+    "quickAction": "Anotar un gasto",
+    "homeEmptyTitle": "Todavía no hay movimientos",
+    "homeEmptyDescription": "Anota el primer gasto y aparecerá aquí.",
     "quickInterpreted": "Interpretado · todo queda editable antes de guardar",
     "quickUnrecognized": "No reconocí el monto ni la categoría · complétalos",
     "quickAskQuestion": "¿Cuánto es «{token}»?",
@@ -521,7 +549,7 @@
     "filterExpenses": "Gastos",
     "filterIncome": "Ingresos",
     "filterTransfers": "Traspasos",
-    "filterAdjustments": "Descuadre",
+    "filterAdjustments": "Diferencia",
     "seeAll": "Ver todo",
     "filteredEmptyTitle": "Sin resultados",
     "filteredEmptyDescription": "Ningún movimiento coincide con estos filtros en el periodo elegido.",
@@ -562,6 +590,10 @@
     "splitRowAmount": "Monto {position}",
     "splitRowRemove": "Quitar categoría {position}",
     "splitUnassigned": "Sin asignar",
+    "categoryMore": "Más",
+    "categoryFewer": "Menos",
+    "splitDivide": "Dividir",
+    "splitSingle": "Una sola categoría",
     "splitsTitle": "Categorías",
     "splitsTotal": "<amount></amount> total",
     "saved": "Movimiento guardado",
@@ -594,7 +626,8 @@
       "causeInvalid": "Elige un movimiento válido.",
       "causeNotFound": "No puedes usar ese movimiento como causa.",
       "causeSelf": "Un movimiento no puede ser su propia causa.",
-      "counterpartyComplete": "Este movimiento ya tiene las dos cuentas; no hay nada que completar."
+      "counterpartyComplete": "Este movimiento ya tiene las dos cuentas; no hay nada que completar.",
+      "contributorInvalid": "Elige un miembro del fondo"
     },
     "labelsLabel": "Etiquetas",
     "labelsNone": "Crea etiquetas en Ajustes para usarlas aquí.",
@@ -602,19 +635,22 @@
     "allLabels": "Todas las etiquetas",
     "typeLabel": "Tipo",
     "descriptionLabel": "Descripción",
-    "listMeta": "{count} · neto",
-    "listMetaAdjustments": "{count, plural, =1 {# descuadre} other {# descuadres}}",
+    "listMeta": "{count, plural, =1 {# movimiento} other {# movimientos}}",
+    "listMetaAdjustments": "{count, plural, =1 {# diferencia} other {# diferencias}}",
     "export": "Exportar",
     "emptyTitle": "Todavía no hay movimientos",
     "unreviewedFilter": "Sin revisar",
     "ruleFilter": "Regla recurrente",
     "chipFrom": "Desde {date}",
     "chipTo": "Hasta {date}",
-    "kindAdjustment": "Descuadre",
+    "kindAdjustment": "Diferencia",
     "adjustmentFix": "Se corrige cuadrando la cuenta de nuevo.",
     "forHousehold": "Del hogar",
     "forHouseholdHint": "Un gasto del hogar pagado con tu cuenta: cuenta como tu aporte al fondo.",
-    "forHouseholdCounts": "Cuenta como aporte de quien lo pagó"
+    "forHouseholdCounts": "Cuenta como aporte de quien lo pagó",
+    "headlineNet": "Neto",
+    "contributorLabel": "De quién",
+    "contributorNone": "Sin asignar"
   },
   "cash": {
     "withdrawAction": "Retirar efectivo",
@@ -651,7 +687,12 @@
     "recurringTitle": "Recurrentes",
     "recurringSummary": "{count, plural, one {# regla · {concept} el {date}} other {# reglas · próxima {concept} el {date}}}",
     "recurringEmpty": "Sin reglas activas",
-    "nav": "Secciones de planeación"
+    "nav": "Secciones de planeación",
+    "over": "Superado",
+    "spentOf": "{spent} de {limit}",
+    "goalLeft": "Faltan {amount}",
+    "goalLeftPace": "Faltan {amount} · {pace}/mes",
+    "debtsNext": "Próximo pago el {date}"
   },
   "budgets": {
     "ofLimit": " / {amount}",
@@ -719,7 +760,9 @@
       "periodInvalid": "Elige un periodo válido.",
       "budgetInvalid": "Ese presupuesto no es válido.",
       "scopeViolation": "La cuenta o la etiqueta no pertenecen al mismo ámbito que la categoría."
-    }
+    },
+    "headlineLeft": "Quedan {left} de {limit}",
+    "headlineOver": "Superado por {over} de {limit}"
   },
   "goals": {
     "title": "Metas de ahorro",
@@ -797,7 +840,8 @@
       "goalInvalid": "Esa meta no es válida.",
       "contributionInvalid": "Ese aporte no es válido.",
       "scopeViolation": "La cuenta no pertenece al mismo ámbito que la meta."
-    }
+    },
+    "headlineSaved": "Apartado"
   },
   "plannedPayments": {
     "title": "Pagos planificados",
@@ -994,6 +1038,8 @@
     "tileTotal": "Deuda total",
     "tileTotalNote": "{count, plural, =1 {# obligación} other {# obligaciones}}",
     "tileMonthlyInterest": "Interés mensual",
+    "tileNoInterest": "Sin interés",
+    "tileNoNextPayment": "Sin cuotas programadas",
     "tileMonthlyInterestNote": "{pct} del saldo",
     "tileNextPayment": "Próximo pago",
     "tileNextPaymentNote": "{date} · {name}",
@@ -1204,7 +1250,7 @@
     "notLeader": "Solo el propietario del fondo puede hacer este cambio.",
     "memberHasHistory": "Esta persona tiene movimientos. Archívala en su lugar.",
     "invitationGone": "Esta invitación ya no está vigente.",
-    "alreadyInFund": "Ya estás en otro fondo. Para unirte a este, sal primero desde «Grupo».",
+    "alreadyInFund": "Ya estás en otro fondo. Para unirte a este, sal primero desde «Ajustes del fondo».",
     "leaderStays": "No puedes salir todavía. Antes de salir, pasa el liderazgo a otro miembro desde «Miembros».",
     "accountHasMovements": "Esta cuenta tiene movimientos. Archívala en su lugar.",
     "accountHasHistory": "No puedes pasar al fondo una cuenta con movimientos. Archívala en su lugar.",
@@ -1217,7 +1263,7 @@
     "reconcileBeforeLatest": "Ya cuadraste esta cuenta el {date}. Elige ese día o uno posterior.",
     "reconcileStale": "Los movimientos cambiaron mientras cuadrabas. Revisa las cifras y vuelve a intentarlo.",
     "reconcileFailed": "No se pudo cuadrar la cuenta. Inténtalo de nuevo.",
-    "adjustmentReadOnly": "Un descuadre no se edita ni se borra; se corrige cuadrando la cuenta de nuevo.",
+    "adjustmentReadOnly": "Una diferencia no se edita ni se borra; se corrige cuadrando la cuenta de nuevo.",
     "movementBeforeOpening": "La fecha es anterior a la apertura de la cuenta. Cambia la fecha o la apertura de la cuenta."
   },
   "data": {
@@ -1271,7 +1317,7 @@
       "amount": "Monto",
       "currency": "Moneda",
       "settlementCurrency": "Moneda de liquidación",
-      "adjustment": "Descuadre",
+      "adjustment": "Diferencia",
       "balanceOn": "Fecha inicial",
       "email": "Correo",
       "parent": "Categoría principal",
@@ -1290,6 +1336,7 @@
       "counterAmount": "Monto en la moneda de la cuenta",
       "counterIsEstimate": "Monto estimado",
       "forHousehold": "Del hogar",
+      "contributedBy": "De quién",
       "labels": "Etiquetas",
       "account": "Cuenta",
       "label": "Etiqueta",
@@ -1336,20 +1383,21 @@
         "ambiguousReference": "Más de una cuenta o categoría comparte este nombre. Renombra una para que sea única.",
         "categoryKindMismatch": "Elige una categoría del mismo tipo (ingreso o gasto) que este movimiento.",
         "categoryOutOfScope": "Esta categoría es de otro alcance que la cuenta. Elige una del fondo para una cuenta del fondo, o una tuya para una cuenta tuya.",
-        "adjustmentOneAccount": "Un descuadre lleva una sola cuenta, de origen o de destino.",
-        "adjustmentRefused": "El descuadre no se pudo registrar: su fecha es anterior a la apertura o al último cuadre de la cuenta, o la cuenta está archivada.",
+        "adjustmentOneAccount": "Una diferencia lleva una sola cuenta, de origen o de destino.",
+        "adjustmentRefused": "La diferencia no se pudo registrar: su fecha es anterior a la apertura o al último cuadre de la cuenta, o la cuenta está archivada.",
         "hasErrors": "El archivo todavía tiene errores. Corrígelos e impórtalo de nuevo.",
         "alreadyCommitting": "Este archivo ya se estaba importando en otra pestaña. Revisa los movimientos antes de importarlo otra vez.",
         "beforeOpening": "Fecha anterior a la apertura de su cuenta.",
         "outOfPlace": "Este nombre existe, pero no en el ámbito que dice la fila.",
         "noFund": "La fila es del fondo y no tienes un fondo.",
         "repeatedRow": "Otra fila del archivo ya trae este dato para la misma cuenta. Deja una sola.",
-        "lockedField": "Esta fila cambia la categoría o el ámbito, y eso no se puede cambiar. Créala como una fila nueva."
+        "lockedField": "Esta fila cambia la categoría o el ámbito, y eso no se puede cambiar. Créala como una fila nueva.",
+        "contributorUnknown": "El miembro de «De quién» no pertenece al fondo de la cuenta destino."
       }
     }
   },
   "webhooks": {
-    "title": "Webhooks",
+    "title": "Correos del banco",
     "add": "Crear credencial",
     "emptyTitle": "Sin credenciales",
     "emptyDescription": "Crea una credencial para que un atajo o un servicio anote movimientos por ti.",
@@ -1415,7 +1463,14 @@
   "ingest": {
     "title": "Bandeja",
     "emptyTitle": "No hay nada por revisar",
-    "emptyDescription": "Aquí caen los mensajes del banco que reenvías. Reenvía uno para empezar.",
+    "emptyDescription": "Aquí caen los mensajes del banco que reenvías. Para empezar, conecta tu banco a esta dirección.",
+    "emptyAddressLabel": "Dirección de recepción",
+    "emptyStep1": "Crea una credencial en Ajustes · Correos del banco.",
+    "emptyStep2": "Haz que el correo o la regla de tu banco envíe cada aviso a esta dirección con tu token.",
+    "emptyStep3": "Cuando llegue uno, aparece aquí para que lo revises.",
+    "copy": "Copiar",
+    "copied": "Copiado",
+    "copyFailed": "No se pudo copiar. Selecciona el texto y cópialo a mano.",
     "receivedOn": "Llegó el {date}",
     "noMerchant": "Sin comercio",
     "amountMissing": "Falta el monto",
@@ -1527,7 +1582,7 @@
       "listAccounts": "Las cuentas abiertas que la persona puede ver: personales y del fondo, con su saldo por moneda en centavos.",
       "reviewMonth": "«Revisar el mes»: los movimientos que destacan en un mes cerrado según reglas fijas (monto muy por encima de lo usual en su categoría, dos iguales el mismo día, monto leído de palabras, diferencia de una conciliación), con si ya se marcó «Está bien».",
       "monthParam": "El mes, AAAA-MM. Si falta, el último mes cerrado.",
-      "previewStatement": "Paso 1 de importar un extracto bancario: dice qué haría cada línea sin escribir nada. Cada línea: «new» (se creará), «matches» (ya está registrada a mano o como el otro lado de una transferencia; solo se enlaza), «already_imported» (se omite) o «invalid» (con su motivo). «proposal» es la cuenta que la persona usó antes para esa descripción: pregúntale antes de pasarla como counterAccountId. Muestra el resumen a la persona antes del paso 2.",
+      "previewStatement": "Paso 1 de importar un extracto bancario: dice qué haría cada línea sin escribir nada. Cada línea: «new» (se creará), «matches» (ya está registrada a mano o como el otro lado de una transferencia; solo se enlaza), «already_imported» (se omite) o «invalid» (con su motivo). «proposal» es la cuenta que la persona usó antes para esa descripción: pregúntale antes de pasarla como counterAccountId. Una transferencia con una cuenta en otra moneda trae «counter»: pregúntale a la persona cuánto le llegó (o salió) en esa cuenta, pásalo como counterAmountCents y confírmale la TRM que resulta. Muestra el resumen a la persona antes del paso 2.",
       "importStatement": "Paso 2: importa exactamente lo que mostró preview_statement, con su previewKey. Todo o nada: si una línea cambió, o lo que la vista previa dijo de ella, o queda una inválida, no escribe nada y pide previsualizar de nuevo. Repetirlo nunca duplica movimientos: lo ya importado sale como «already_imported»."
     },
     "errors": {

@@ -42,6 +42,8 @@ let serial = 0;
 const MINUS = "−";
 
 const TODAY = todayInBogota();
+// The date field reads day first in Spanish, whatever civil date it holds underneath.
+const dmy = (iso: string) => iso.split("-").reverse().join("/");
 const OPENED = addCivilDays(TODAY, -30);
 const SPENT = addCivilDays(TODAY, -10);
 
@@ -368,7 +370,7 @@ test.describe("the dialog's states", () => {
       await expect(
         dialog.getByText(accounts.reconcileCurrency.replace("{currency}", "COP"), { exact: true }),
       ).toBeVisible();
-      await expect(dayField(dialog)).toHaveValue(TODAY);
+      await expect(dayField(dialog)).toHaveValue(dmy(TODAY));
       expect(flat(await line(dialog, accounts.reconcileDerived).innerText())).toContain(
         peso(DERIVED_TODAY / 100),
       );
@@ -514,7 +516,7 @@ test.describe("refusals (B5b)", () => {
 
       await expect(dialog.getByText(errors.reconcileFutureDay, { exact: true })).toBeVisible();
       await expect(realField(dialog)).toHaveValue("123456");
-      await expect(dayField(dialog)).toHaveValue(addCivilDays(TODAY, 1));
+      await expect(dayField(dialog)).toHaveValue(dmy(addCivilDays(TODAY, 1)));
       expect(await reconciliationsOf(account.id)).toHaveLength(0);
     } finally {
       await dropAccount(account.id);
@@ -835,7 +837,7 @@ test.describe("confirming (B7)", () => {
         page
           .getByRole("row")
           .or(page.locator('a[href*="/movements/"]'))
-          .getByText("Descuadre", { exact: true }),
+          .getByText("Diferencia", { exact: true }),
       ).toHaveCount(0);
     } finally {
       await dropAccount(account.id);
@@ -877,11 +879,12 @@ test.describe("the history", () => {
       const names = await dialog.getByRole("button").evaluateAll((buttons) =>
         buttons.map((b) => (b.getAttribute("aria-label") ?? b.textContent ?? "").trim()),
       );
-      // The footer's two and the dialog's own close; a history row adds none.
-      expect(names.filter((n) => !/^(cerrar|close)$/i.test(n))).toEqual(
+      // The footer's two, the dialog's own close and the day field's calendar; a history row adds none.
+      const named = names.filter((n) => !/^(cerrar|close|abrir calendario|open calendar)$/i.test(n));
+      expect(named).toEqual(
         expect.arrayContaining([common.cancel, accounts.reconcileSubmit]),
       );
-      expect(names.filter((n) => !/^(cerrar|close)$/i.test(n))).toHaveLength(2);
+      expect(named).toHaveLength(2);
       await expect(dialog.getByRole("link")).toHaveCount(0);
       await expect(dialog.getByRole("menu")).toHaveCount(0);
       await expect(dialog.getByRole("menuitem")).toHaveCount(0);
@@ -1279,7 +1282,7 @@ test.describe("the gap in the field's frame (RF-137, board C1)", () => {
       const figureSpan = gapFigure(dialog, signed(-4_900));
       await expect(figureSpan).toBeVisible();
       expect(flat(await figureSpan.innerText())).toBe(signed(-4_900));
-      await expect(figureSpan).toHaveCSS("color", await colorOf(dialog, "--accent-11"));
+      await expect(figureSpan).toHaveCSS("color", await colorOf(dialog, "--jade-11"));
 
       await submit(dialog).click();
       const first = historyFigures(dialog).first();
@@ -1315,7 +1318,7 @@ test.describe("the gap in the field's frame (RF-137, board C1)", () => {
 
       const figureSpan = gapFigure(dialog, signed(-5_000));
       await expect(figureSpan).toBeVisible();
-      await expect(figureSpan).toHaveCSS("color", await colorOf(dialog, "--accent-11"));
+      await expect(figureSpan).toHaveCSS("color", await colorOf(dialog, "--jade-11"));
     } finally {
       await dropAccount(account.id);
     }

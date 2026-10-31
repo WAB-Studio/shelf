@@ -1,7 +1,13 @@
-/* The phone keeps the page's gutter and Radix's own heading metrics; only the
-   desktop pane draws the band of SPEC-A3. */
+/* The phone keeps the page's gutter; only the desktop pane draws the band of SPEC-A3. */
 .header {
   padding: 0;
+}
+
+/* A display title on the phone too: the screen names itself in the brand's face. */
+.title.title {
+  font-size: 28px;
+  line-height: 1.15;
+  letter-spacing: -0.03em;
 }
 
 /* The title and its datum share one baseline whatever either measures. */
@@ -48,15 +54,26 @@
 
 @media (min-width: 1024px) {
   .header {
-    padding: 24px 32px 16px;
+    padding: 24px var(--band-gutter, 32px) 16px;
   }
 
   /* Doubled to outrank Radix's own size class, which lands in another sheet at
      the same specificity and whichever order the bundler chose. */
   .title.title {
-    font-size: 24px;
-    line-height: 1.2;
+    font-size: clamp(32px, 3.2vw, 44px);
+    line-height: 1.1;
     font-weight: 700;
-    letter-spacing: -0.025em;
+    letter-spacing: -0.03em;
   }
+}
+
+/* The screen's headline figure: its own row, ahead of the actions' wrap. */
+.figure {
+  order: 3;
+  flex-basis: 100%;
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  color: var(--gray-12);
 }

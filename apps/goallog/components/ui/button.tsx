@@ -20,13 +20,16 @@ type TapSize = 44 | 48 | 52;
 // `surface` and `classic` paint from its scales, so they are typed away rather
 // than left one keystroke behind a legal prop. `color` and `highContrast` go
 // with them — both name a hue this design does not have.
-type Variant = "solid" | "outline" | "ghost";
+// `quiet` is the row a person goes somewhere by: no pill, no ring, the label at
+// the start and a chevron at the end. The pill belongs to the primary action alone.
+type Variant = "solid" | "outline" | "ghost" | "quiet";
 
 // `NoEncontrada.dc.html`'s own second action: a ghost that reads as a link
 // rather than a way out, so its ink is the accent instead of `ghost`'s own
 // muted. The only tone this design names; a screen reaching for another one
 // is asking for a colour the token table does not have.
-type Tone = "accent";
+// `danger` is a destructive act drawn quietly: the label in the danger ink, never a pill.
+type Tone = "accent" | "danger";
 
 type PulsarControlProps = {
   tap?: TapSize;
@@ -45,7 +48,13 @@ const variants: Record<Variant, string | undefined> = {
   solid: styles.solid,
   outline: styles.outline,
   ghost: styles.ghost,
+  quiet: styles.quiet,
 };
+
+// Radix has no `quiet`: it sizes one as a ghost and the dressing paints it.
+function radixVariant(variant: Variant): "solid" | "outline" | "ghost" {
+  return variant === "quiet" ? "ghost" : variant;
+}
 
 function classes(
   { tap, block, stack, variant = "solid", tone }: PulsarControlProps,
@@ -55,7 +64,7 @@ function classes(
     styles.control,
     tap === 44 ? styles.tap44 : tap === 52 ? styles.tap52 : styles.tap48,
     variants[variant],
-    tone === "accent" ? styles.accentTone : undefined,
+    tone === "accent" ? styles.accentTone : tone === "danger" ? styles.dangerTone : undefined,
     block ? styles.block : undefined,
     stack ? styles.stack : undefined,
     className,
@@ -70,7 +79,7 @@ export const Button = forwardRef<HTMLButtonElement, Narrowed<ButtonProps> & Puls
       <ThemesButton
         ref={ref}
         {...props}
-        variant={variant}
+        variant={radixVariant(variant)}
         className={classes({ tap, block, stack, variant, tone }, className)}
       />
     );
@@ -85,7 +94,7 @@ export const IconButton = forwardRef<
     <ThemesIconButton
       ref={ref}
       {...props}
-      variant={variant}
+      variant={radixVariant(variant)}
       className={classes({ tap, block, variant, tone }, className)}
     />
   );

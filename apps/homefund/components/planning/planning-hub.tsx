@@ -1,6 +1,6 @@
 import type { LucideIcon } from "lucide-react";
 import { ChevronRight } from "lucide-react";
-import { getTranslations } from "next-intl/server";
+import { getFormatter, getLocale, getTranslations } from "next-intl/server";
 
 import { PLANNING_KEYS, destinations } from "@/components/fund/destinations";
 import {
@@ -8,12 +8,26 @@ import {
   Card,
   Disc,
   Flex,
-  FundChip,
-  Grid,
   Heading,
+  FundChip,
+  Money,
+  Mosaic,
+  MosaicFigure,
+  MosaicNote,
+  MosaicTile,
+  Progress,
+  Ring,
+  ScreenHeader,
   PlainLink,
   Text,
 } from "@/components/ui";
+import type { BudgetStatus } from "@/db/queries/budgets";
+import type { PlannedPaymentRow } from "@/db/queries/planned-payments";
+import type { GoalProgress } from "@/db/queries/savings-goals";
+import type { CurrencyCode } from "@/lib/currency";
+import { civilDateToDate } from "@/lib/dates";
+import type { Locale } from "@/lib/locales";
+import { formatMoney } from "@/lib/money";
 
 // The hub's own order for its five cards. `PLANNING_KEYS` stays the sidebar's
 // order — `PlanningSubNav`'s chips read it directly — so the hub keeps its own
@@ -25,16 +39,6 @@ const HUB_ORDER = [
   "debts",
   "recurring",
 ] as const satisfies readonly (typeof PLANNING_KEYS)[number][];
-
-// The one place a card's colour lives: `destinations.ts` owns the route and the
-// icon, and neither carries a tint of its own.
-const TINTS: Record<(typeof PLANNING_KEYS)[number], string> = {
-  budgets: "jade",
-  goals: "grass",
-  payments: "amber",
-  debts: "indigo",
-  recurring: "violet",
-};
 
 /**
  * The Planeación hub: one card per area, each carrying a live one-line summary
@@ -48,8 +52,22 @@ export async function PlanningHub({
   paymentsSummary,
   debtsSummary,
   recurringSummary,
+  budgetsTop,
+  budgetNames,
+  goal,
+  payments,
+  debtsTotal,
+  debtsNext,
 }: {
   groupName: string | null;
+  // The mosaic's own reads: the five fullest budgets, the first goal, the next
+  // three payments and the debts line split into its figure and its next date.
+  budgetsTop: BudgetStatus[];
+  budgetNames: Map<string, string>;
+  goal: GoalProgress | null;
+  payments: PlannedPaymentRow[];
+  debtsTotal: string;
+  debtsNext: string | null;
   budgetsSummary: string;
   goalsSummary: string;
   paymentsSummary: string;
@@ -58,6 +76,12 @@ export async function PlanningHub({
 }) {
   const t = await getTranslations("planning");
   const tKey = await getTranslations();
+  const format = await getFormatter();
+  const locale = (await getLocale()) as Locale;
+  const money = (cents: number, currency: string) =>
+    formatMoney(cents, currency as CurrencyCode, locale);
+  const shortDate = (date: string) =>
+    format.dateTime(civilDateToDate(date), { day: "numeric", month: "short" });
 
   const titles: Record<(typeof PLANNING_KEYS)[number], string> = {
     budgets: t("budgetsTitle"),
@@ -82,12 +106,106 @@ export async function PlanningHub({
 
   return (
     <Flex direction="column" gap="4">
-      <Flex align="center" gap="2">
-        <Heading size="6">{t("title")}</Heading>
-        {groupName !== null && <FundChip label={tKey("fund.label")} />}
-      </Flex>
+      <ScreenHeader
+        title={t("title")}
+        meta={groupName !== null ? <FundChip label={tKey("fund.label")} /> : undefined}
+      />
 
-      <Flex direction="column" gap="3">
+      <Box display={{ initial: "none", md: "block" }}>
+        <Mosaic>
+          <MosaicTile href="/planning/budgets" size="large">
+            <Heading as="h2" size="5">{titles.budgets}</Heading>
+            <Text size="2" color="gray">{budgetsSummary}</Text>
+            <Flex direction="column" gap="4" mt="2">
+              {budgetsTop.map((budget) => {
+                const pct = (budget.spentCents / budget.limitCents) * 100;
+                const name = budget.name ?? budgetNames.get(budget.categoryId) ?? "";
+                return (
+                  <Flex key={budget.id} direction="column" gap="1">
+                    <Flex justify="between" align="baseline" gap="3">
+                      <Text size="3" weight="medium" truncate>{name}</Text>
+                      <Text size="2" color={budget.overspent ? "red" : "gray"}>
+                        {budget.overspent ? t("over") : `${Math.round(pct)}%`}
+                      </Text>
+                    </Flex>
+                    <Progress
+                      value={Math.min(100, pct)}
+                      color={budget.overspent ? "red" : budget.overThreshold ? "amber" : undefined}
+                      aria-label={name}
+                    />
+                    <Text size="2" color="gray">
+                      {t("spentOf", {
+                        spent: money(budget.spentCents, budget.currency),
+                        limit: money(budget.limitCents, budget.currency),
+                      })}
+                    </Text>
+                  </Flex>
+                );
+              })}
+            </Flex>
+          </MosaicTile>
+
+          <MosaicTile href="/planning/goals" size="medium">
+            <Heading as="h2" size="5">{titles.goals}</Heading>
+            {goal ? (
+              <Flex align="center" gap="4">
+                <Ring value={goal.progressPct} aria-label={goal.name}>
+                  <Text size="3" weight="bold">{goal.progressPct}%</Text>
+                </Ring>
+                <Flex direction="column" gap="1" minWidth="0">
+                  <Text size="3" weight="medium" truncate>{goal.name}</Text>
+                  <Text size="2" color="gray">
+                    {goal.requiredMonthlyCents === null
+                      ? t("goalLeft", { amount: money(goal.remainingCents, goal.currency) })
+                      : t("goalLeftPace", {
+                          amount: money(goal.remainingCents, goal.currency),
+                          pace: money(goal.requiredMonthlyCents, goal.currency),
+                        })}
+                  </Text>
+                </Flex>
+              </Flex>
+            ) : (
+              <Text size="2" color="gray">{goalsSummary}</Text>
+            )}
+          </MosaicTile>
+
+          <MosaicTile href="/planning/debts" size="medium" tone="ink">
+            <Heading as="h2" size="5">{titles.debts}</Heading>
+            <MosaicFigure>{debtsTotal}</MosaicFigure>
+            <MosaicNote>{debtsNext ?? debtsSummary}</MosaicNote>
+          </MosaicTile>
+
+          <MosaicTile href="/planning/payments" size="wide">
+            <Heading as="h2" size="5">{titles.payments}</Heading>
+            {payments.length === 0 ? (
+              <Text size="2" color="gray">{paymentsSummary}</Text>
+            ) : (
+              <Flex gap="5" wrap="wrap">
+                {payments.map((payment) => (
+                  <Flex key={payment.id} direction="column" gap="1" minWidth="0" flexBasis="0" flexGrow="1">
+                    <Text size="2" color="gray">{shortDate(payment.dueDate)}</Text>
+                    <Text size="3" weight="medium" truncate>
+                      {payment.description ?? t("noConcept")}
+                    </Text>
+                    <Money
+                      minor={payment.amountCents}
+                      currency={payment.currency as CurrencyCode}
+                      signed={false}
+                    />
+                  </Flex>
+                ))}
+              </Flex>
+            )}
+          </MosaicTile>
+
+          <MosaicTile href="/planning/recurring" size="small">
+            <Heading as="h2" size="5">{titles.recurring}</Heading>
+            <Text size="2" color="gray">{recurringSummary}</Text>
+          </MosaicTile>
+        </Mosaic>
+      </Box>
+
+      <Flex direction="column" gap="3" display={{ initial: "flex", md: "none" }}>
         {HUB_ORDER.map((key) => {
           const area = areas.get(key);
           if (!area) return null;
@@ -95,7 +213,6 @@ export async function PlanningHub({
             <HubCard
               key={key}
               icon={area.icon}
-              tint={TINTS[key]}
               title={titles[key]}
               summary={summaries[key]}
               href={area.href}
@@ -107,20 +224,16 @@ export async function PlanningHub({
   );
 }
 
-// A row card: enabled when it names an href, muted with no chevron when it does
-// not. The icon rides a soft tinted disc; the summary carries the derived line.
-// Below `md` it stacks the title over the summary; from `md` up it gains a
-// three-column row, title, summary and chevron each keeping their own width
-// so the five rows line up.
+// The phone's row card: enabled when it names an href, muted with no chevron when
+// it does not. The icon rides a soft tinted disc; the summary carries the derived
+// line, under the title.
 function HubCard({
   icon: Icon,
-  tint,
   title,
   summary,
   href,
 }: {
   icon: LucideIcon;
-  tint: string;
   title: string;
   summary: string;
   href?: string;
@@ -129,8 +242,8 @@ function HubCard({
     <Disc
       size={44}
       radius={5}
-      surface={href ? `var(--${tint}-a3)` : "var(--gray-a3)"}
-      ink={href ? `var(--${tint}-11)` : "var(--gray-9)"}
+      surface={href ? "var(--violet-3)" : "var(--gray-a3)"}
+      ink={href ? "var(--violet-11)" : "var(--gray-9)"}
     >
       <Icon size={21} />
     </Disc>
@@ -152,27 +265,14 @@ function HubCard({
 
   const body = (
     <Card>
-      <Box display={{ initial: "block", md: "none" }}>
-        <Flex align="center" gap="3">
-          {disc}
-          <Flex direction="column" gap="1" flexGrow="1" minWidth="0">
-            {titleText}
-            {summaryText}
-          </Flex>
-          {chevron}
-        </Flex>
-      </Box>
-
-      <Box display={{ initial: "none", md: "block" }}>
-        <Grid columns="1fr 220px 210px" gap="4" align="center">
-          <Flex align="center" gap="3" minWidth="0">
-            {disc}
-            {titleText}
-          </Flex>
+      <Flex align="center" gap="3">
+        {disc}
+        <Flex direction="column" gap="1" flexGrow="1" minWidth="0">
+          {titleText}
           {summaryText}
-          <Flex justify="end">{chevron}</Flex>
-        </Grid>
-      </Box>
+        </Flex>
+        {chevron}
+      </Flex>
     </Card>
   );
 

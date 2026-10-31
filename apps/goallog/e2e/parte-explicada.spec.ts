@@ -80,8 +80,10 @@ for (const width of [360, 1280]) {
 
       // Figure, then the line, then the bar, then «llevas».
       // From the 20th the pace line holds the figure and ends «, bajo el 60 %».
-      const figure = page.getByText(new RegExp(`de ${say(firstShare)}( ?, bajo el 60 %)?$`)).locator("visible=true").first();
-      const bar = page.locator("[data-part='progress-track']").locator("visible=true");
+      // The navy block above repeats the month in its own line and bar: the month block is the section that is no hero.
+      const block = page.locator("section:not([data-part='hero'])").filter({ has: page.locator("[data-part='progress-track']") }).last();
+      const figure = block.getByText(new RegExp(`de ${say(firstShare)}( ?, bajo el 60 %)?$`)).locator("visible=true").first();
+      const bar = block.locator("[data-part='progress-track']").locator("visible=true");
       const lleva = visible(page, /^(llevas \d+ %|día \d+ ·)/);
       await expect(bar).toHaveCount(1);
       const [y0, y1, y2, y3] = [await top(figure), await top(line), await top(bar), await top(lleva)];
@@ -95,8 +97,8 @@ for (const width of [360, 1280]) {
       const figures = await line.locator("[data-part='figure']").allTextContents();
       expect(figures).toEqual([say(firstShare), "10 h"]);
 
-      // Muted like «llevas…» (or, from the 20th when the pace line replaces it, like «en total…»).
-      const reference = dayOfMonth >= 20 ? visible(page, /^en total, desde el/) : lleva;
+      // Muted like «llevas…» (or, from the 20th, like the pace line that replaces it).
+      const reference = lleva;
       expect(await color(line)).toBe(await color(reference));
       const ink = page.getByRole("heading", { level: 1 }).locator("visible=true").first();
       expect(await color(line)).not.toBe(await color(ink));
@@ -286,7 +288,8 @@ test("360 · the part line on the goal's month block reads muted: unlike the ink
     const ink = page.getByRole("heading", { level: 1 }).locator("visible=true").first();
     expect(lineColor).not.toBe(await color(ink));
     expect(lineColor).not.toBe(await tokenColor(page, "--pulsar-ink"));
-    const reference = dayOfMonth >= 20 ? visible(page, /^en total, desde el/) : visible(page, /^(llevas \d+ %|día \d+ ·)/);
+    // «en total…» sits in the navy block now, in its own muted: the reference is the block's own line («llevas …» or the pace).
+    const reference = visible(page, /^(llevas \d+ %|día \d+ ·)/);
     expect(lineColor).toBe(await color(reference));
     expect(lineColor).toBe(await tokenColor(page, "--pulsar-muted"));
   } finally {

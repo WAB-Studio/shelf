@@ -4272,6 +4272,9 @@ async function main(): Promise<void> {
   await householdContributionSuite();
   await mcpDoorSuite();
   await statementImportSuite();
+  await incomeContributorSuite();
+  await incomeContributorFollowUpSuite();
+  await incomeContributorEditsSuite();
 }
 
 // A member recorded without a login is someone in the fund: a leader whose fund holds one is not alone, so an
@@ -4336,10 +4339,10 @@ async function roundTripSuite(scope: HarnessScope, userId: string): Promise<void
   await getTransactionFormOptions();
   const form = await trips(() => getTransactionFormOptions());
   // One transaction: the single read's BEGIN, settle and COMMIT once, plus the
-  // other six reads as statements. Seven transactions cost seven times `single`.
+  // other seven reads as statements. Seven transactions cost seven times `single`.
   assert(
     next("getTransactionFormOptions opens one transaction, not seven"),
-    form === single + 6,
+    form === single + 7,
     `${form} round trips for the form options, ${single} for one read of them`,
   );
 
@@ -15664,5 +15667,364 @@ async function statementImportSuite(): Promise<void> {
       lonely?.n === 1,
     `third ${JSON.stringify(thirdLines)}, concurrent ${JSON.stringify(both.map((one) => one.value))}, written ${lonely?.n}`,
   );
+
+  const dollars = randomUUID();
+  await fixtureSql.begin(async (tx) => {
+    const claims = JSON.stringify({ sub: owner.id, role: "authenticated", aud: "authenticated" });
+    await tx`select set_config('request.jwt.claims', ${claims}, true)`;
+    await tx`
+      insert into accounts (id, owner_user_id, name, kind, subtype, settlement_currency, initial_balance_cents, initial_balance_on)
+      values (${dollars}, ${owner.id}, ${`Harness rf144 dolares ${tag}`}, 'asset', 'bank', 'USD', 0, '2026-01-01')`;
+  });
+  track("accounts", dollars);
+  const exchange = { line: 1, date: "2026-09-17", description: "COMPRA DOLARES", amountCents: -4_000_000, counterAccountId: dollars };
+  const unpriced = await tool("preview_statement", { accountId: ids.bank, rows: [exchange] });
+  const priced = { ...exchange, counterAmountCents: 1_000 };
+  const pricedPreview = await tool("preview_statement", { accountId: ids.bank, rows: [priced] });
+  const exchanged = await tool("import_statement", { accountId: ids.bank, rows: [priced], previewKey: pricedPreview.value?.previewKey });
+  const [booked] = await fixtureSql<{ currency: string; amount_cents: string; counter_amount_cents: string }[]>`
+    select currency, amount_cents::text, counter_amount_cents::text from transactions
+    where from_account_id = ${ids.bank} and to_account_id = ${dollars}`;
+  const otherSide = await tool("preview_statement", {
+    accountId: dollars,
+    rows: [{ line: 1, date: "2026-09-17", description: "ABONO DESDE COP", amountCents: 1_000 }],
+  });
+  type Counter = { status: string; reason?: string; counter?: { currency: string; amountCents: number | null } };
+  const unpricedLine = unpriced.value?.lines?.[0] as Counter | undefined;
+  const pricedLine = pricedPreview.value?.lines?.[0] as Counter | undefined;
+  assert(
+    next("RF-144: a transfer to an account in another currency asks for what arrived there, is booked with it, and that account's statement recognises it"),
+    unpricedLine?.status === "invalid" && unpricedLine.reason === "needs_counter_amount" &&
+      unpricedLine.counter?.currency === "USD" && unpricedLine.counter.amountCents === null &&
+      pricedLine?.status === "new" && pricedLine.counter?.amountCents === 1_000 &&
+      exchanged.value?.created === 1 &&
+      booked?.currency === "COP" && booked.amount_cents === "4000000" && booked.counter_amount_cents === "1000" &&
+      otherSide.value?.lines?.[0]?.status === "matches",
+    `unpriced ${JSON.stringify(unpricedLine)}, priced ${JSON.stringify(pricedLine)}, imported ${JSON.stringify(exchanged.value)}, booked ${JSON.stringify(booked)}, other side ${JSON.stringify(otherSide.value?.lines)}`,
+  );
+
+  const inbound = {
+    line: 1, date: "2026-09-18", description: "VENTA DOLARES", amountCents: 3_900_000, counterAccountId: dollars, counterAmountCents: 1_000,
+  };
+  const inboundPreview = await tool("preview_statement", { accountId: ids.bank, rows: [inbound] });
+  const inboundImport = await tool("import_statement", { accountId: ids.bank, rows: [inbound], previewKey: inboundPreview.value?.previewKey });
+  const [received] = await fixtureSql<{ currency: string; counter_amount_cents: string }[]>`
+    select currency, counter_amount_cents::text from transactions
+    where from_account_id = ${dollars} and to_account_id = ${ids.bank} and occurred_at = '2026-09-18'`;
+  const dollarSide = await tool("preview_statement", {
+    accountId: dollars,
+    rows: [{ line: 1, date: "2026-09-18", description: "VENTA A COP", amountCents: -1_000 }],
+  });
+  assert(
+    next("RF-144: a transfer in from an account in another currency is booked with what left there, and that account's statement recognises it"),
+    inboundImport.value?.created === 1 && received?.currency === "COP" && received.counter_amount_cents === "1000" &&
+      dollarSide.value?.lines?.[0]?.status === "matches",
+    `imported ${JSON.stringify(inboundImport.value)}, received ${JSON.stringify(received)}, dollar side ${JSON.stringify(dollarSide.value?.lines)}`,
+  );
 }
 
+
+// RF-166: an income into a fund account names who put it in; «Aportes del mes» counts it for them.
+async function incomeContributorSuite(): Promise<void> {
+  console.log("");
+  const PAY = 3_000_000;
+  const range = currentMonthRange();
+  const payer = await createMembershipFreeUser();
+  const stranger = await createMembershipFreeUser();
+  const ids = {
+    group: randomUUID(),
+    member: randomUUID(),
+    otherGroup: randomUUID(),
+    otherMember: randomUUID(),
+    pot: randomUUID(),
+    category: randomUUID(),
+  };
+  await fixtureSql.begin(async (tx) => {
+    await tx`
+      insert into groups (id, name, cash_mode)
+      values (${ids.group}, 'Harness rf166 fondo', 'per_member'), (${ids.otherGroup}, 'Harness rf166 otro', 'per_member')`;
+    await tx`
+      insert into group_members (id, group_id, user_id, name, role)
+      values (${ids.member}, ${ids.group}, ${payer.id}, 'Harness rf166', 'leader'),
+             (${ids.otherMember}, ${ids.otherGroup}, ${stranger.id}, 'Harness rf166 otro', 'leader')`;
+    await tx`
+      insert into accounts (id, group_id, is_shared, name, kind, subtype, initial_balance_cents, initial_balance_on)
+      values (${ids.pot}, ${ids.group}, true, 'Harness rf166 fondo', 'asset', 'bank', 0, '2026-01-01')`;
+    await tx`
+      insert into categories (id, group_id, name, kind, color)
+      values (${ids.category}, ${ids.group}, 'Harness rf166 ingreso', 'income', '#4C8C4A')`;
+  });
+  track("groups", ids.group);
+  track("groups", ids.otherGroup);
+  track("group_members", ids.member);
+  track("group_members", ids.otherMember);
+  track("accounts", ids.pot);
+  track("categories", ids.category);
+
+  const mine = async () =>
+    (await asUser(payer, () => getMemberContributions(range))).find(
+      (row) => row.userId === payer.id && row.currency === "COP",
+    )?.contributionCents ?? 0;
+  const income = {
+    fromAccountId: null,
+    toAccountId: ids.pot,
+    amountCents: PAY,
+    occurredAt: todayInBogota(),
+    description: "Harness rf166 ingreso",
+    splits: [{ categoryId: ids.category, amountCents: PAY }],
+    labelIds: [],
+    externalRef: null,
+  };
+
+  const unnamed = await asUser(payer, () => createTransaction(income));
+  keep("transactions", unnamed.transactionId);
+  const withoutName = await mine();
+  const named = await asUser(payer, () =>
+    createTransaction({ ...income, contributedByMemberId: ids.member }),
+  );
+  keep("transactions", named.transactionId);
+  const withName = await mine();
+  assert(
+    next("RF-166: an income into a fund account counts as an aporte for the member it names; one naming nobody counts for no one"),
+    withoutName === 0 && withName === PAY,
+    `contribution ${withoutName} with only the unnamed income, ${withName} after the named one; expected 0 and ${PAY}`,
+  );
+
+  let refused = false;
+  try {
+    const foreign = await asUser(payer, () =>
+      createTransaction({ ...income, contributedByMemberId: ids.otherMember }),
+    );
+    keep("transactions", foreign.transactionId);
+  } catch {
+    refused = true;
+  }
+  assert(
+    next("RF-166: the policy refuses a contributor who belongs to another fund"),
+    refused,
+    `an income crediting another fund's member was ${refused ? "refused" : "accepted"}`,
+  );
+}
+
+// RF-166, the edges: a member with no login is counted, an edit that moves the income to
+// another fund drops the contributor instead of failing, and the backup names who put it in.
+async function incomeContributorFollowUpSuite(): Promise<void> {
+  console.log("");
+  const PAY = 2_000_000;
+  const range = currentMonthRange();
+  const payer = await createMembershipFreeUser();
+  const ids = {
+    group: randomUUID(),
+    member: randomUUID(),
+    guest: randomUUID(),
+    pot: randomUUID(),
+    category: randomUUID(),
+  };
+  await fixtureSql.begin(async (tx) => {
+    await tx`
+      insert into groups (id, name, cash_mode)
+      values (${ids.group}, 'Harness rf166b fondo', 'per_member')`;
+    await tx`
+      insert into group_members (id, group_id, user_id, name, role)
+      values (${ids.member}, ${ids.group}, ${payer.id}, 'Harness rf166b', 'leader'),
+             (${ids.guest}, ${ids.group}, null, 'Harness rf166b invitado', 'member')`;
+    await tx`
+      insert into accounts (id, group_id, is_shared, name, kind, subtype, initial_balance_cents, initial_balance_on)
+      values (${ids.pot}, ${ids.group}, true, 'Harness rf166b fondo', 'asset', 'bank', 0, '2026-01-01')`;
+    await tx`
+      insert into categories (id, group_id, name, kind, color)
+      values (${ids.category}, ${ids.group}, 'Harness rf166b ingreso', 'income', '#4C8C4A')`;
+  });
+  track("groups", ids.group);
+  track("group_members", ids.member);
+  track("group_members", ids.guest);
+  track("accounts", ids.pot);
+  track("categories", ids.category);
+
+  const income = {
+    fromAccountId: null,
+    toAccountId: ids.pot,
+    amountCents: PAY,
+    occurredAt: todayInBogota(),
+    description: "Harness rf166b ingreso",
+    splits: [{ categoryId: ids.category, amountCents: PAY }],
+    labelIds: [],
+    externalRef: null,
+  };
+
+  const { transactionId } = await asUser(payer, () =>
+    createTransaction({ ...income, contributedByMemberId: ids.guest }),
+  );
+  keep("transactions", transactionId);
+  const counted = (await asUser(payer, () => getMemberContributions(range))).find(
+    (row) => row.memberId === ids.guest && row.currency === "COP",
+  );
+  assert(
+    next("RF-166: an income credited to a member with no login is counted for that member"),
+    counted?.contributionCents === PAY && counted.userId === null,
+    `guest contribution ${JSON.stringify(counted)}; expected ${PAY} and no user`,
+  );
+
+  const sheet = await asUser(payer, () => readExport({ entityKeys: ["transactions"] }));
+  const exportedRow = (sheet.transactions ?? []).find((row) => row.description === "Harness rf166b ingreso");
+  assert(
+    next("RF-166: the backup writes «De quién» by the member's name"),
+    exportedRow?.contributedBy === "Harness rf166b invitado",
+    `contributedBy cell ${JSON.stringify(exportedRow?.contributedBy)}`,
+  );
+}
+
+// RF-166, the writes around it: an import names the member or is refused, a blank cell keeps
+// the stored one, an income leaving its fund drops it, and completing the counterparty clears it.
+async function incomeContributorEditsSuite(): Promise<void> {
+  console.log("");
+  const PAY = 1_500_000;
+  const payer = await createMembershipFreeUser();
+  const ids = {
+    group: randomUUID(),
+    member: randomUUID(),
+    guest: randomUUID(),
+    pot: randomUUID(),
+    mine: randomUUID(),
+    category: randomUUID(),
+    personalCategory: randomUUID(),
+  };
+  await fixtureSql.begin(async (tx) => {
+    await tx`insert into groups (id, name, cash_mode) values (${ids.group}, 'Harness rf166c fondo', 'per_member')`;
+    await tx`
+      insert into group_members (id, group_id, user_id, name, role)
+      values (${ids.member}, ${ids.group}, ${payer.id}, 'Harness rf166c', 'leader'),
+             (${ids.guest}, ${ids.group}, null, 'Harness rf166c invitado', 'member')`;
+    await tx`
+      insert into accounts (id, group_id, is_shared, name, kind, subtype, initial_balance_cents, initial_balance_on)
+      values (${ids.pot}, ${ids.group}, true, 'Harness rf166c fondo', 'asset', 'bank', 0, '2026-01-01')`;
+    await tx`
+      insert into accounts (id, owner_user_id, name, kind, subtype, initial_balance_cents, initial_balance_on)
+      values (${ids.mine}, ${payer.id}, 'Harness rf166c mia', 'asset', 'bank', 0, '2026-01-01')`;
+    await tx`
+      insert into categories (id, group_id, name, kind, color)
+      values (${ids.category}, ${ids.group}, 'Harness rf166c ingreso', 'income', '#4C8C4A')`;
+    await tx`
+      insert into categories (id, owner_user_id, name, kind, color)
+      values (${ids.personalCategory}, ${payer.id}, 'Harness rf166c mi ingreso', 'income', '#4C8C4A')`;
+  });
+  track("groups", ids.group);
+  track("group_members", ids.member);
+  track("group_members", ids.guest);
+  track("accounts", ids.pot);
+  track("accounts", ids.mine);
+  track("categories", ids.category);
+  track("categories", ids.personalCategory);
+
+  const base = {
+    fromAccountId: null,
+    toAccountId: ids.pot,
+    amountCents: PAY,
+    occurredAt: todayInBogota(),
+    description: "Harness rf166c ingreso",
+    splits: [{ categoryId: ids.category, amountCents: PAY }],
+    labelIds: [],
+    externalRef: null,
+  };
+  const contributorOf = async (id: string) =>
+    (await fixtureSql<{ contributed_by_member_id: string | null }[]>`
+      select contributed_by_member_id from transactions where id = ${id}`)[0]?.contributed_by_member_id ?? null;
+
+  const ref = `rf166c-${randomUUID().slice(0, 8)}`;
+  const { transactionId } = await asUser(payer, () =>
+    createTransaction({ ...base, externalRef: ref, contributedByMemberId: ids.guest }),
+  );
+  keep("transactions", transactionId);
+
+  // The import row for the same key, naming nobody: the stored contributor stays.
+  const importRow = (status: "new" | "update", name: string | null | undefined, key: string, sheetRow: number) => ({
+    index: 0,
+    sheetRow,
+    status,
+    externalRef: key,
+    placeholderId: null,
+    object: {
+      ...base,
+      amount: "15000",
+      splits: [{ categoryId: ids.category, amount: "15000" }],
+      externalRef: key,
+      ...(name === undefined ? {} : { contributedByName: name }),
+    } as never,
+  });
+  const commit = async (transactions: ReturnType<typeof importRow>[]) => {
+    try {
+      await asUser(payer, () =>
+        withUserDb((tx) =>
+          commitImport(
+            tx,
+            { members: [], categories: [], accounts: [], recurringRules: [], transactions, adjustments: [] },
+            { userId: payer.id, groupId: ids.group },
+          ),
+        ),
+      );
+      return null;
+    } catch (error) {
+      try {
+        return JSON.parse((error as Error).message) as { reasonKey?: string; sheetRow?: number };
+      } catch {
+        return { reasonKey: String(error) };
+      }
+    }
+  };
+
+  const blank = await commit([importRow("update", undefined, ref, 2)]);
+  const kept = await contributorOf(transactionId);
+  assert(
+    next("RF-166: re-importing a movement whose «De quién» cell is blank keeps the stored contributor"),
+    blank === null && kept === ids.guest,
+    `commit ${JSON.stringify(blank)}; contributor after = ${kept}, expected ${ids.guest}`,
+  );
+
+  const named = await commit([importRow("update", "Harness rf166c", ref, 2)]);
+  const renamed = await contributorOf(transactionId);
+  const unknown = await commit([importRow("new", "Nadie Existe", `${ref}-x`, 7)]);
+  const stranger = await fixtureSql<{ id: string }[]>`select id from transactions where external_ref = ${`${ref}-x`}`;
+  assert(
+    next("RF-166: an import names the member by name; a name that is no member of the fund is a row error and writes nothing"),
+    named === null &&
+      renamed === ids.member &&
+      unknown?.reasonKey === "data.import.errors.contributorUnknown" &&
+      unknown.sheetRow === 7 &&
+      stranger.length === 0,
+    `named ${JSON.stringify(named)} -> ${renamed}; unknown ${JSON.stringify(unknown)}, rows written ${stranger.length}`,
+  );
+
+  await asUser(payer, () =>
+    updateTransaction({
+      ...base,
+      transactionId,
+      toAccountId: ids.mine,
+      splits: [{ categoryId: ids.personalCategory, amountCents: PAY }],
+      contributedByMemberId: undefined,
+    }),
+  );
+  const left = await contributorOf(transactionId);
+  assert(
+    next("RF-166: editing an income into an account outside its fund, sending no contributor, saves and drops it"),
+    left === null,
+    `contributor after the move = ${left}`,
+  );
+
+  const { transactionId: waiting } = await asUser(payer, () =>
+    createTransaction({ ...base, contributedByMemberId: ids.guest, awaitingCounterparty: true }),
+  );
+  keep("transactions", waiting);
+  const before = await contributorOf(waiting);
+  const actions = (await import("@/app/actions/transactions")) as unknown as {
+    completeCounterpartyAction: (input: unknown) => Promise<{ serverError?: string }>;
+  };
+  const completed = await asUser(payer, () =>
+    actions.completeCounterpartyAction({ transactionId: waiting, accountId: ids.mine }),
+  );
+  const after = await contributorOf(waiting);
+  assert(
+    next("RF-166: completing the counterparty of an income gives it a source and clears «De quién»"),
+    before === ids.guest && after === null && completed?.serverError === undefined,
+    `before ${before}, after ${after}, ${completed?.serverError ?? "no error"}`,
+  );
+}

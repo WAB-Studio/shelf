@@ -21,7 +21,7 @@ import {
  * arrives here without an edit, and it holds the sheet's own language, theme and
  * sign-out controls (RF-46, RF-47, RF-54).
  *
- * The fund's settings lead the phone's list alone: from `md` up the chevron beside
+ * The fund's settings lead the phone's list alone: from `sm` up the chevron beside
  * the fund name reaches them, and no surface offers a destination twice.
  */
 export async function SettingsScreen({ hasGroup }: { hasGroup: boolean }) {
@@ -60,12 +60,12 @@ export async function SettingsScreen({ hasGroup }: { hasGroup: boolean }) {
       <Flex direction="column" gap="4" px={{ initial: "0", md: "6" }}>
         {/* One list, two shapes: the sidebar's pill rows on a laptop, the sheet's
             stack on a phone. Exactly one is displayed at any width. */}
-        <Box display={{ initial: "none", md: "block" }}>
+        <Box display={{ initial: "none", sm: "block" }}>
           <Card size="2">
             <NavList variant="sidebar" items={items} />
           </Card>
         </Box>
-        <Box display={{ initial: "block", md: "none" }}>
+        <Box display={{ initial: "block", sm: "none" }}>
           {fundItems.length > 0 && <NavList items={fundItems} />}
           <NavList items={items} />
         </Box>

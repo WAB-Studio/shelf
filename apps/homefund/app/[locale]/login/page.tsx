@@ -7,7 +7,7 @@ import { notFound } from "next/navigation";
 import { LoginForm } from "@/components/auth/login-form";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { ThemeSwitcher } from "@/components/theme-switcher";
-import { AppMark, Box, Callout, Card, Flex, Heading, Text } from "@/components/ui";
+import { AppMark, Box, Callout, Card, Flex, Heading, Highlight, Text } from "@/components/ui";
 import { routing } from "@/i18n/routing";
 
 // A path the proxy put in `?next=`, or nothing: a repeated parameter arrives as
@@ -54,17 +54,21 @@ export default async function LoginPage(props: PageProps<"/[locale]/login">) {
       <main>
         {/* Language and theme both work signed out (FLOWS §8, §10). */}
         <Flex justify="end" align="center" gap="2" py="2">
-          <LanguageSwitcher />
-          <ThemeSwitcher />
+          <LanguageSwitcher width="9.5rem" showText />
+          <ThemeSwitcher width="9.5rem" showText />
         </Flex>
         <Flex direction="column" flexGrow="1" align="center" justify="center">
           <Box width="100%" maxWidth={{ initial: "24rem", md: "28rem" }}>
             <Flex direction="column" gap="4">
               <Flex direction="column" gap="3">
-                <AppMark />
-                <Flex direction="column" gap="1">
-                  <Heading size="7">{t("common.appName")}</Heading>
-                  <Text color="gray">{t("auth.tagline")}</Text>
+                <AppMark size={72} />
+                <Flex direction="column" gap="2">
+                  <Heading size="9">{t("common.appName")}</Heading>
+                  <Text size="4">
+                    {t.rich("auth.tagline", {
+                      mark: (chunks) => <Highlight>{chunks}</Highlight>,
+                    })}
+                  </Text>
                 </Flex>
               </Flex>
               {linkNotice && (
@@ -78,9 +82,14 @@ export default async function LoginPage(props: PageProps<"/[locale]/login">) {
               <Card>
                 <LoginForm next={firstValue(searchParams.next)} />
               </Card>
-              <Text size="2" color="gray" align="center">
-                {t("auth.passwordlessHint")}
-              </Text>
+              <Flex direction="column" gap="1">
+                <Text size="2" weight="medium" align="center">
+                  {t("auth.invitationOnly")}
+                </Text>
+                <Text size="2" color="gray" align="center">
+                  {t("auth.passwordlessHint")}
+                </Text>
+              </Flex>
             </Flex>
           </Box>
         </Flex>

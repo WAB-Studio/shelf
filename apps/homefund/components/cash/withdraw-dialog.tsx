@@ -12,8 +12,6 @@ import { withdrawCashAction } from "@/app/actions/cash";
 import {
   Button,
   Callout,
-  Card,
-  CategoryTile,
   Dialog,
   Field,
   FieldControl,
@@ -22,11 +20,10 @@ import {
   FieldLabel,
   FieldMessage,
   Flex,
-  PanelButton,
   Select,
   Spinner,
   Text,
-  TextField,
+  AmountField,
 } from "@/components/ui";
 import type { AccountRow } from "@/db/queries/accounts";
 import { useActionErrorToast } from "@/lib/use-action-toast";
@@ -45,10 +42,13 @@ export function WithdrawCashCard({
   sources,
   destinationName,
   willCreate,
+  variant = "ghost",
 }: {
   sources: AccountRow[];
   destinationName: string;
   willCreate: boolean;
+  // `surface` is the desktop's secondary button beside quick entry.
+  variant?: "ghost" | "surface";
 }) {
   const t = useTranslations("cash");
   const [open, setOpen] = useState(false);
@@ -56,22 +56,10 @@ export function WithdrawCashCard({
   return (
     <Dialog.Root open={open} onOpenChange={setOpen}>
       <Dialog.Trigger>
-        <Card asChild>
-          <PanelButton variant="surface">
-            <Flex align="center" gap="3">
-              <CategoryTile
-                color="var(--accent-3)"
-                size={34}
-                icon={
-                  <BanknoteArrowDown size={19} strokeWidth={2.2} color="var(--accent-11)" />
-                }
-              />
-              <Text size="3" weight="medium">
-                {t("withdrawAction")}
-              </Text>
-            </Flex>
-          </PanelButton>
-        </Card>
+        <Button variant={variant} color="gray" size="2">
+          <BanknoteArrowDown size={17} strokeWidth={2.2} aria-hidden />
+          {t("withdrawAction")}
+        </Button>
       </Dialog.Trigger>
       <Dialog.Content>
         <Dialog.Title>{t("withdrawTitle")}</Dialog.Title>
@@ -189,7 +177,7 @@ function WithdrawForm({
             <Field invalid={fieldState.invalid}>
               <FieldLabel htmlFor="withdraw-amount">{t("amountLabel")}</FieldLabel>
               <FieldControl>
-                <TextField.Root
+                <AmountField
                   {...field}
                   id="withdraw-amount"
                   size="3"

@@ -1,5 +1,7 @@
 /* Sticky rather than fixed: the document keeps its own scroll, so nothing beside
-   the column has to become a scroller for the column's foot to stay in view. */
+   the column has to become a scroller. The column itself never scrolls: its head
+   and foot stay in flow and the destinations between them (`.body`) scroll alone,
+   so nothing ever slides under the foot. */
 .sidebar {
   position: sticky;
   top: 0;
@@ -10,36 +12,24 @@
   padding: 22px 14px 18px;
   background-color: var(--color-panel-solid);
   border-right: 1px solid var(--gray-a4);
+  overflow: hidden;
+}
+
+.body {
+  flex: 1 1 0;
+  min-height: 0;
   overflow-y: auto;
-}
-
-/* A 720p laptop is shorter than the destinations, the button and the person row
-   together. The list scrolls between a pinned head and a pinned foot, so the
-   fund stays named and Registrar stays reachable at any height; on a canvas tall
-   enough for all of it, nothing sticks and nothing moves. */
-.sidebar > :first-child {
-  position: sticky;
-  top: 0;
-  z-index: 1;
-  background-color: var(--color-panel-solid);
-}
-
-.sidebar > :last-child {
-  position: sticky;
-  bottom: 0;
-  z-index: 1;
-  background-color: var(--color-panel-solid);
 }
 
 .separator {
   width: calc(100% - 20px);
   align-self: center;
-  margin: 16px 0;
+  margin: 8px 0;
 }
 
 .head {
   gap: 8px;
-  padding: 4px 10px 20px;
+  padding: 4px 10px 12px;
 }
 
 /* Doubled, here and below, to outrank Radix's own size and variant classes,
@@ -96,4 +86,60 @@
 .chevron {
   margin-left: auto;
   flex-shrink: 0;
+}
+
+/* The rail: from `sm` to `lg` the column is an 88px strip, each destination an
+   icon with its label under it, so nothing waits on a hover to be named. From
+   1280px the 248px column above takes over. */
+.mark {
+  display: none;
+}
+
+@media (max-width: 1279.98px) {
+  .sidebar {
+    width: 88px;
+    padding: 16px 6px 14px;
+  }
+
+  .mark {
+    display: grid;
+    place-items: center;
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+    background-color: var(--accent-9);
+    color: var(--accent-contrast);
+    font-size: 18px;
+    font-weight: 700;
+  }
+
+  .head {
+    justify-content: center;
+    padding: 0 0 12px;
+  }
+
+  .head > :not(.mark) {
+    display: none;
+  }
+
+  .foot {
+    gap: 10px;
+  }
+
+  .action.action {
+    flex-direction: column;
+    gap: 4px;
+    padding: 10px 2px;
+    font-size: 11px;
+    line-height: 1.15;
+  }
+
+  .person.person {
+    justify-content: center;
+    padding: 4px 0;
+  }
+
+  .person > :not(.avatar) {
+    display: none;
+  }
 }

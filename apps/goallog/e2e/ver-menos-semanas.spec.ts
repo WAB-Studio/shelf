@@ -265,13 +265,14 @@ test.describe("the order under the label (board VerMenos 3 and 4)", () => {
     const id = await noEnd(db, person, "Escribir", 146);
     const { page, context } = await visit(browser, baseURL, person, weekPath(id, "?todo=1"), 360);
     try {
-      const label = await boxOf(page.locator("main").getByText("por semana", { exact: true }).locator("visible=true").first());
+      // The weeks are bars with no caption of their own now: the line that says what the goal measures stands over them.
+      const label = await boxOf(page.locator("main").getByText(/^mide /).locator("visible=true").first());
       const link = await boxOf(seeLess(page.locator("main")).first());
       const first = await boxOf(weekRows(page).first());
       expect(label.y + label.height).toBeLessThanOrEqual(link.y);
       expect(link.y + link.height).toBeLessThanOrEqual(first.y);
-      // Tight under the label, as the board draws it: no gap of a whole line.
-      expect(link.y - (label.y + label.height)).toBeLessThanOrEqual(16);
+      // Under the measure line by the page's own gap of 32 and no more: the review's bars close the section after it.
+      expect(link.y - (label.y + label.height)).toBeLessThanOrEqual(32);
     } finally {
       await context.close();
     }

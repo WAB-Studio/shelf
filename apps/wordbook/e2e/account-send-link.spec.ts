@@ -63,6 +63,8 @@ test.afterEach(() => {
 
 async function submit(page: Page, email: string): Promise<void> {
   await page.goto("/cuenta");
+  // A click before the page hydrates submits the form natively, and no action POST ever leaves.
+  await page.waitForLoadState("networkidle");
   await page.getByRole("textbox", { name: messages.account.emailLabel }).fill(email);
   await page.getByRole("button", { name: messages.account.copy.noSessionAction }).click();
 }

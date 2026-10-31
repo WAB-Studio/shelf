@@ -25,6 +25,7 @@ import {
   EmptyState,
   Flex,
   Heading,
+  ScreenHeader,
   IconButton,
   SegmentedControl,
   Text,
@@ -365,10 +366,7 @@ export function CategoriesScreen({
 
   return (
     <Flex direction="column" gap="4">
-      <Flex justify="between" align="center" gap="3" wrap="wrap">
-        <Heading size="5">{t("title")}</Heading>
-        {addButton}
-      </Flex>
+      <ScreenHeader title={t("title")} actions={addButton} />
       <SegmentedControl.Root value={kind} onValueChange={onKindChange}>
         <SegmentedControl.Item value="expense">
           {t("expenseTab")}

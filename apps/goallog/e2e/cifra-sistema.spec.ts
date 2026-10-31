@@ -2,8 +2,8 @@ import { test, expect } from "./fixtures";
 import { todayInZone } from "@/lib/zone";
 
 // `SistemaPiezas.dc.html`: a figure's unit stays glued to its
-// number, in mono, and both stay on one line. Measured on Hoy's quantity row at
-// 1280 and on the goal's page at the phone.
+// number, in mono, and both stay on one line. Measured on the goal's commitment row at the
+// phone and at 1280.
 const stamp = Date.now();
 
 for (const [width, height] of [
@@ -37,13 +37,14 @@ for (const [width, height] of [
     });
     try {
       const page = await context.newPage();
-      // Hoy draws its figures from 1024; on the phone the goal's page is the row.
-      await page.goto(width >= 1024 ? "/" : `/metas/${goal.id}`);
+      // The goal's page holds the commitment's row at every width; Hoy's figures at 1280 are the navy block's and a card's big one.
+      await page.goto(`/metas/${goal.id}`);
       await expect(page.getByRole("main").getByText(`Correr ${width} ${stamp}`).first()).toBeVisible();
 
       const measured = await page.evaluate(() => {
         const visible = (el: Element) => (el as HTMLElement).getClientRects().length > 0;
-        const figures = [...document.querySelectorAll<HTMLElement>("[data-part='figure']")].filter(visible);
+        // The navy block's key figure and a card's big one are set in the title face by design (DESIGN «Naranja y marino»): neither is a row figure.
+        const figures = [...document.querySelectorAll<HTMLElement>("[data-part='figure']")].filter((figure) => visible(figure) && !figure.closest("[data-part='hero']") && ![...figure.classList].some((name) => /_big$/.test(name)));
         return figures.flatMap((figure) => {
           const unit = figure.querySelector<HTMLElement>("[data-part='figure-unit']");
           if (!unit) return [];

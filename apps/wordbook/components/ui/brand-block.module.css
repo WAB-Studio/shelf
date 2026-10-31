@@ -1,0 +1,48 @@
+/* The one dark surface of the main screen: bottle green, the same in both
+   modes, holding the app's name and the search box. */
+.block {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-5);
+  border-radius: var(--radius-5);
+  background: var(--rl-brand);
+  color: var(--rl-brand-ink);
+}
+
+.title {
+  margin: 0;
+}
+
+/* The search box alone: the name and the line give way to the answer below. */
+.compact {
+  padding: var(--space-3);
+}
+
+/* The sidebar carries the name from 1024px up (bottom-nav.module.css). */
+@media (min-width: 1024px) {
+  .title {
+    display: none;
+  }
+}
+
+.line {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  line-height: 1.2;
+  color: var(--rl-brand-ink);
+}
+
+/* The field keeps its raised ground on the block; its edge is lifted to the
+   block's own soft tone so it still reads at 3:1 against the green. */
+.block :global(.rt-TextFieldRoot) {
+  --rl-control-edge: var(--rl-brand-edge);
+}
+
+/* A field's visible label sits on the green in the block's soft tone. */
+.block [data-field-label] {
+  color: var(--rl-brand-soft);
+}

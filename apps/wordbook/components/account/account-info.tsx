@@ -5,7 +5,12 @@ import { useFormatter, useTranslations } from "next-intl";
 
 import manifestJson from "@/public/dictionary/manifest.json";
 import { manifestSchema } from "@/lib/dictionary/format";
-import { POS_FREQUENCY_LICENCE_URL, POS_FREQUENCY_SOURCE_URL } from "@/lib/dictionary/pos-frequency-source";
+import {
+  POS_FREQUENCY_LICENCE_URL,
+  POS_FREQUENCY_SOURCE_URL,
+  SPANISH_FREQUENCY_LICENCE_URL,
+  SPANISH_FREQUENCY_SOURCE_URL,
+} from "@/lib/dictionary/pos-frequency-source";
 import packageJson from "@/package.json";
 import { Flex, Link, MetaLabel, Separator, TapTarget, Text } from "@/components/ui";
 
@@ -80,6 +85,17 @@ export function AccountInfo() {
         </Text>
         <Credit href={POS_FREQUENCY_SOURCE_URL}>{t("frequencySource")}</Credit>
         <Credit href={POS_FREQUENCY_LICENCE_URL}>{t("frequencyLicence")}</Credit>
+      </Flex>
+
+      <Separator size="4" />
+
+      <Flex direction="column" gap="1">
+        <MetaLabel>{t("translationOrderLabel")}</MetaLabel>
+        <Text size="2" as="p">
+          {t("translationOrderBody")}
+        </Text>
+        <Credit href={SPANISH_FREQUENCY_SOURCE_URL}>{t("translationOrderSource")}</Credit>
+        <Credit href={SPANISH_FREQUENCY_LICENCE_URL}>{t("translationOrderLicence")}</Credit>
       </Flex>
 
       <Separator size="4" />

@@ -1,0 +1,22 @@
+/* The title takes two lines before it gives up a word, so a long description is
+   read whole on a phone instead of cut at «Mercado Éxito Laur…». */
+.title {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+
+.title[data-wrap] {
+  display: block;
+  -webkit-line-clamp: unset;
+  line-clamp: unset;
+}
+
+/* The amount keeps every digit and the room it needs; the title gives way. */
+.amount {
+  flex-shrink: 0;
+  white-space: nowrap;
+}

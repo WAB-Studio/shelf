@@ -2,7 +2,7 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Info } from "lucide-react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { useAction } from "next-safe-action/hooks";
 import { useEffect, useState } from "react";
 import { Controller, useForm, useWatch, type Resolver } from "react-hook-form";
@@ -27,6 +27,8 @@ import {
   Spinner,
   Text,
   TextField,
+  AmountField,
+  DateInput,
 } from "@/components/ui";
 import type { PlannedPaymentRow } from "@/db/queries/planned-payments";
 import type { TransactionFormOptions } from "@/db/queries/transaction-form";
@@ -104,6 +106,7 @@ function PaymentForm({
 }) {
   const t = useTranslations("plannedPayments");
   // Root-scoped: the keys under `common` sit outside the `plannedPayments` namespace.
+  const locale = useLocale();
   const tKey = useTranslations();
 
   const isEdit = !!payment;
@@ -151,7 +154,7 @@ function PaymentForm({
           plannedPaymentId: payment.id,
           fromAccountId: payment.fromAccountId,
           toAccountId: payment.toAccountId,
-          amount: amountToInput(payment.amountCents, payment.currency),
+          amount: amountToInput(payment.amountCents, payment.currency, locale),
           categoryId: payment.categoryId,
           dueDate: payment.dueDate,
           remindOn: payment.remindOn,
@@ -259,7 +262,7 @@ function PaymentForm({
             <Field invalid={fieldState.invalid}>
               <FieldLabel htmlFor="payment-amount">{t("amountLabel")}</FieldLabel>
               <FieldControl>
-                <TextField.Root
+                <AmountField
                   {...field}
                   id="payment-amount"
                   size="3"
@@ -343,11 +346,10 @@ function PaymentForm({
             <Field invalid={fieldState.invalid}>
               <FieldLabel htmlFor="payment-due">{t("dueLabel")}</FieldLabel>
               <FieldControl>
-                <TextField.Root
+                <DateInput
                   {...field}
                   id="payment-due"
                   size="3"
-                  type="date"
                   disabled={isPending}
                 />
               </FieldControl>
@@ -371,10 +373,9 @@ function PaymentForm({
                 </Flex>
               </FieldLabel>
               <FieldControl>
-                <TextField.Root
+                <DateInput
                   id="payment-remind"
                   size="3"
-                  type="date"
                   value={field.value ?? ""}
                   onChange={(event) => field.onChange(event.target.value || null)}
                   onBlur={field.onBlur}

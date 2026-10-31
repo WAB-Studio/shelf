@@ -171,6 +171,29 @@ export async function settled(page: Page): Promise<void> {
   await page.evaluate(() => document.fonts.ready);
 }
 
+// Hoy's count: the navy block's figure «N de M» over its caption «hechos hoy», which adds «· k en parte» while a row is partial
+// (docs/goallog/DESIGN.md «Naranja y marino»). Past days keep the tally line, which is text.
+export function todayCount(page: Page, done: number | string, total: number | string, partial?: number): Locator {
+  const hero = page
+    .locator('[data-part="hero"]')
+    .filter({ has: page.locator('[data-part="hero-figure"]', { hasText: new RegExp(`^${done} de ${total}$`) }) });
+  return partial === undefined ? hero.filter({ hasNotText: "en parte" }) : hero.filter({ hasText: `hechos hoy · ${partial} en parte` });
+}
+
+// On the phone a goal's own acts (rename, move, archive, delete, add inside) fold into one row at the foot, «Más sobre la meta»; from
+// 768 they stand in the header and the foot. Open the fold where it is there and shut.
+export async function openMore(page: Page): Promise<void> {
+  // `load` fires with the loading fallback standing: the fold is in the streamed page, so wait for the one real `main`.
+  await settled(page);
+  const more = page.getByRole("button", { name: "Más sobre la meta" });
+  if (!(await more.isVisible())) return;
+  // A press before the page hydrates does nothing: press again until the row reads open.
+  await expect(async () => {
+    if ((await more.getAttribute("aria-expanded")) === "false") await more.click({ timeout: 1000 });
+    await expect(more).toHaveAttribute("aria-expanded", "true", { timeout: 1000 });
+  }).toPass({ timeout: 10_000 });
+}
+
 export async function visit(page: Page, url: string): Promise<void> {
   await page.goto(url);
   await settled(page);

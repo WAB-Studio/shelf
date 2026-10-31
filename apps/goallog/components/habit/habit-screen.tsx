@@ -98,6 +98,7 @@ export async function HabitScreen({
       <Section label={t("habit.months.title")}>
         <Table
           narrow
+          wrapNote
           above={seeLess ?? earlier}
           caption={
             hidden > 0

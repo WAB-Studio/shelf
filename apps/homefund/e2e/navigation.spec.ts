@@ -96,8 +96,9 @@ test.describe("the phone's navigation", () => {
   }) => {
     await page.goto("/es");
 
-    for (const label of [nav.home, nav.movements, nav.planning]) {
-      const tab = page.getByRole("link", { name: label, exact: true });
+    // Bandeja's name carries its count once something waits, so it matches by prefix.
+    for (const label of [nav.home, nav.movements, nav.inbox]) {
+      const tab = page.getByRole("link", { name: new RegExp(`^${label}(,|$)`) });
       await expect(tab).toBeVisible();
 
       const box = await tab.boundingBox();

@@ -1,0 +1,29 @@
+.card {
+  box-sizing: border-box;
+  min-width: 0;
+  padding: var(--space-4);
+  border: 1px solid var(--rl-line);
+  border-radius: var(--radius-5);
+  background: var(--rl-raised);
+  box-shadow: var(--rl-shadow);
+}
+
+.snug {
+  padding: var(--space-3);
+}
+
+.flush {
+  padding: 0;
+}
+
+@media (min-width: 1024px) {
+  .tall {
+    min-height: min(560px, calc(100vh - 220px));
+    padding: var(--space-6);
+  }
+}
+
+.tint {
+  background: var(--rl-tint-3);
+  border-color: var(--rl-tint-4);
+}

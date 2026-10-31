@@ -7,6 +7,7 @@ import {
   Badge,
   DataTable,
   Flex,
+  PersonalMark,
   Money,
   RowMenu,
   Text,
@@ -22,7 +23,7 @@ const NO_VALUE = "—";
 const WIDTHS = {
   name: "minmax(0, 1fr)",
   institution: "196px",
-  lastFour: "132px",
+  lastFour: "148px",
   kind: "108px",
   balance: "168px",
   menu: "36px",
@@ -78,9 +79,12 @@ export function AccountsTable({
       width: WIDTHS.name,
       cell: (row) => (
         <Flex direction="column" gap="1" minWidth="0">
-          <Text size="2" weight="medium" truncate>
-            {row.name}
-          </Text>
+          <Flex align="center" gap="2" minWidth="0">
+            <Text size="2" weight="medium" truncate>
+              {row.name}
+            </Text>
+            {row.ownerUserId && <PersonalMark label={t("ownerPersonal")} />}
+          </Flex>
           {/* One scope, never both: a personal account names its owner, a
               group account the group (RF-60). */}
           <Text size="2" color="gray">
@@ -106,7 +110,6 @@ export function AccountsTable({
       key: "lastFour",
       header: t("lastFourLabel"),
       width: WIDTHS.lastFour,
-      align: "end",
       numeric: true,
       cell: (row) =>
         row.lastFour ? (

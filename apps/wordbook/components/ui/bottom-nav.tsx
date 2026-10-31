@@ -6,9 +6,11 @@ import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Heading, Link } from "@radix-ui/themes";
 
-import { readNavQuery, writeNavQuery } from "@/lib/nav/query-storage";
+
+import { QUERY_COMMITTED_EVENT, readNavQuery, writeNavQuery } from "@/lib/nav/query-storage";
 
 import { TapTarget } from "./tap-target";
+import { Wordmark } from "./wordmark";
 import { ThemeChoice } from "./theme-choice";
 import styles from "./bottom-nav.module.css";
 
@@ -24,11 +26,15 @@ function searchHref(query: string): string {
   return query ? `/?${QUERY_PARAM}=${encodeURIComponent(query)}` : "/";
 }
 
-// Nothing here ever pushes a re-render on its own (mirrors sense-list.tsx's
-// own `subscribeNever`): the value this reads only changes across a mount,
-// which a route change already forces by remounting `BottomNav` fresh.
-function subscribeNever(): () => void {
-  return () => {};
+// The address bar's query changes under a mounted bar when the search screen writes it
+// (`history.pushState` tells no one) or the browser walks its history.
+function subscribeToQuery(onChange: () => void): () => void {
+  window.addEventListener(QUERY_COMMITTED_EVENT, onChange);
+  window.addEventListener("popstate", onChange);
+  return () => {
+    window.removeEventListener(QUERY_COMMITTED_EVENT, onChange);
+    window.removeEventListener("popstate", onChange);
+  };
 }
 
 function getServerQuery(): string {
@@ -106,7 +112,7 @@ export function BottomNav() {
   // paint — the real value lands one commit later, the way sense-list.tsx's
   // `speechSupported` already does.
   const query = useSyncExternalStore(
-    subscribeNever,
+    subscribeToQuery,
     () => (pathname === "/" ? readAddressBarQuery() : readNavQuery()),
     getServerQuery,
   );
@@ -144,7 +150,9 @@ export function BottomNav() {
 
   return (
     <nav className={styles.nav} aria-label={t("label")}>
-      <Heading as="h2" className={styles.title}>{tMeta("title")}</Heading>
+      <Heading as="h2" className={styles.title} aria-label={tMeta("title")}>
+        <Wordmark>{t.rich("brand", { mark: (chunks) => <mark>{chunks}</mark> })}</Wordmark>
+      </Heading>
       {items.map(({ route, key }) => {
         const selected = pathname === route;
         const Glyph = GLYPHS[key];
@@ -156,7 +164,9 @@ export function BottomNav() {
             underline="none"
             className={`${styles.item} ${selected ? styles.selected : styles.unselected}`}
           >
-            <NextLink href={href} aria-current={selected ? "page" : undefined}>
+            {/* Once a query rides on the search link its address changes with every settle; prefetching each
+                  one would ask the server on a keystroke. */}
+            <NextLink href={href} prefetch={key === "search" && query !== "" ? false : undefined} aria-current={selected ? "page" : undefined}>
               {/* Radix's own `md` breakpoint is 1024px (`--md` in
                   breakpoints.css), the same one bottom-nav.module.css
                   switches on: icon above label on the bar, icon beside

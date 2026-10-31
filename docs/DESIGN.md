@@ -21,13 +21,27 @@ RNF-08 sets the requirement. This is how it shows in the interface.
 - Hold the floor at 44 px (decided by the user 2026-10-15, raised from 32 px). Enforce it in the `components/ui` primitives, never in a screen.
 - `TapTarget` in `components/ui` owns that floor for a link's content.
 
+## Violeta y lima
+
+Decided by the user 2026-10-30: the recipe of Agenda Amiga (a title face with character, one strong colour and one
+highlight, a white ground, pill buttons), with HomeFund's own palette and faces.
+
+- Ground: white in light, `#110c20` in dark. Text ink: `--brand-ink` `#1a1033`.
+- Accent: Radix `violet` with steps 9 to 11 replaced in `app/theme.css`. Gray: `mauve`.
+- Highlight: `--brand-lime` `#c8f560`. Use it only on the ink or the violet, never as text on white.
+- The net-worth card is the brand block: ink ground, its figure in lime, its content on Radix's dark tokens.
+- Titles: Bricolage Grotesque 700, tracking −0.025em. Text and figures: Figtree with tabular numbers.
+- Buttons and icon buttons are pills (`radius="full"` by default in `Button`).
+- Success stays `jade` (paid, reached, income bars): a state, never the brand.
+
 ## Tokens
 
 | Token | Light | Dark | Ratio |
 |---|---|---|---|
-| `--focus-8` (ring) | `--jade-11` `#208368` | the control's `--accent-11` (Radix's step 8 was 2.80:1 on the panel) | light 4.20:1 on `#f5f3ef`; dark 8.39:1 gray and 8.35:1 red on `#191918`, 8.86:1 and 8.82:1 on `#141310` |
-| `--accent-9` (primary button) | `#1f7a62` | `#1f7a62` (Radix `#29a383` was 3.15:1) | 5.23:1 with white |
-| `--accent-10` (primary hover) | `#1b6e57` | `#1b6e57` (Radix `#27b08b` was 2.74:1) | 6.15:1 with white |
+| `--focus-8` (ring) | `--violet-11` `#5b2ee5` | `--violet-11` `#b8a3ff`; a control with its own colour rings at its `--accent-11` | light 7.08:1 on white; dark 8.50:1 on `#110c20` |
+| `--violet-9` (primary button) | `#5b2ee5` | `#5b2ee5` | 7.08:1 with white |
+| `--violet-10` (primary hover) | `#4a22c4` | `#4a22c4` | 9.06:1 with white |
+| `--brand-lime` on `--brand-ink` | `#c8f560` on `#1a1033` | same | 14.31:1 |
 | `--red-9` (danger button) | `#d13a3f` (Radix `#e5484d` was 3.91:1) | `#d13a3f` | 4.79:1 with white |
 | `--red-10` (danger hover) | `#c42a2f` (Radix `#dc3e42` was 4.37:1) | `#c42a2f` (Radix `#ec5d5e`) | 5.65:1 with white |
 
@@ -506,4 +520,35 @@ Board C1h corrected the same day: a card in credit reads «Según HomeFund −$ 
   the description, «Salió de / Entró a <cuenta> · <fecha>» and the amount; one account select («¿A qué cuenta fue?» or
   «¿De qué cuenta vino?») and «Completar». A remembered account prefills the select with «Sugerida: la usaste antes con
   esta descripción.»; it never completes on its own.
+- A transfer between two currencies is imported at the rate the person confirms (the user, 2026-10-30: «deben ser por
+  trm, se confirma con el usuario cuánto le llegó»). The preview marks it `needs_counter_amount` and names the other
+  account's currency; Claude asks how much arrived or left there and confirms the resulting TRM. It is booked in the
+  statement's currency with that amount as `counter_amount_cents`, and the other account's statement links to it.
+- Choosing a category when noting an expense is a grid of the person's most frequent categories (`CategoryTile`, one tap
+  selects, «Más» shows all); splitting across several categories sits behind «Dividir» and opens the split editor. No
+  validation message shows before a submit attempt. Frequency is the count of the person's movements per category, read
+  in the form options' one fan-out (the user, 2026-10-30).
+- A fund category no longer reads «· fondo»: its name is bare everywhere. A personal account (and a personal category
+  where a component, not a string, draws it) wears a small `User` glyph with an aria-label (the user, 2026-10-30).
+- The phone's bottom bar reads Inicio · Movimientos · [+] · Bandeja · Ajustes: Bandeja (the `Inbox` icon) replaces
+  Planeación and carries a count of pending deliveries plus «Por completar», hidden at zero, its aria-label naming the
+  number. Planeación stays one tap away from a row beside «Ver reportes» on Inicio and the first row of the Ajustes
+  panel. The desktop sidebar is unchanged (the usability critic, delegated by the user, 2026-10-30).
 
+
+## Decisión del 2026-10-31: ronda 3 de la crítica
+
+Elegidas por el crítico; el usuario puede cambiarlas («Elige lo que recomiendes»).
+
+- De 768 a 1279 px la barra lateral es un riel de 88 px: el ícono con su etiqueta debajo, sin depender del hover. Desde 1280 px
+  vuelve la de 248 px.
+- Inicio de escritorio va a dos columnas: a la izquierda la marca, el mes y los movimientos; a la derecha, fijos, «Por pagar»,
+  los tres presupuestos más cerca del límite, la meta y el próximo pago de deuda. Sus lecturas viajan en el mismo
+  `Promise.all` (RNF-09).
+- El ancho máximo es 1440 px, con tres columnas desde 1600 px donde la pantalla las tiene.
+- Gráficas: el gasto en violeta, el ingreso en jade y el rojo solo para lo «Superado».
+- Cada pantalla tiene un solo margen izquierdo de 32 px, sea de la página o de sus bandas (`--band-gutter`).
+- Planeación es un mosaico (presupuestos grande, meta con anillo, deudas en tinta con la cifra en lima, pagos ancho) y las
+  pestañas de escritorio que repetían la barra lateral se quitan.
+- Una cifra titular bajo el título: Presupuestos «Quedan $ X de $ Y», Movimientos el neto del mes, Metas lo apartado.
+- «Aportes del mes»: el usuario eligió el campo «De quién» en el ingreso al fondo (ver RF de aportes).

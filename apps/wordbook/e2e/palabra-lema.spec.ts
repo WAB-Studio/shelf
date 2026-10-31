@@ -45,7 +45,7 @@ async function precedes(a: Locator, b: Locator): Promise<boolean> {
 // pronunciation block, user 2026-10-08). `left` is an exact entry AND an
 // inflection of `leave`; its own senses are verb, adjective, adverb, noun.
 const OFFER = '«left» también es una forma de «leave»';
-const FIRST_GROUP = "sobrado, sobras"; // left, verbo
+const FIRST_GROUP = "sobras, sobrado"; // left, verbo
 const SECOND_GROUP = "izquierda, de izquierda, izquierdo"; // left, adjetivo
 const LAST_GROUP_DEFINITION = "The left side or direction."; // left, sustantivo
 const LEAVE_FIRST = "dejar, abandonar"; // prefix of leave's verb line
@@ -94,12 +94,16 @@ test("RL-58: only the first group sits above the offer, never a second one", asy
       .filter(
         (n) =>
           n.children.length === 0 &&
+          n.closest("[data-entry-index]") === null &&
           pos.includes(n.textContent ?? "") &&
           Boolean(n.compareDocumentPosition(headerEl) & Node.DOCUMENT_POSITION_FOLLOWING),
       )
       .map((n) => n.textContent);
   }, OFFER);
-  expect(labelsAbove).toEqual(["verbo"]);
+  // The first group's category is the first of the entry's index, which the filter above leaves out; no
+  // second group's label sits above the offer.
+  expect(labelsAbove).toEqual([]);
+  await expect(page.locator("main [data-entry-index]").first()).toContainText("verbo");
 });
 
 test("RL-58: at 360 the top of the leave block is less than one viewport from the start of the answer", async ({
@@ -167,7 +171,7 @@ test("RL-58: with two pronunciation blocks the offer sits under block 1's first 
   const header = page.getByText('«said» también es una forma de «say»', { exact: true });
   await expect(header).toBeVisible({ timeout: 5000 });
   const blockOneGroup = line(page, "dicho");
-  const lemmaVerb = line(page, "decir, poner, digamos, se dice");
+  const lemmaVerb = line(page, "decir, poner, digamos");
   const blockTwoGroup = line(page, "Saíd");
   await expect(blockOneGroup).toBeVisible();
   await expect(lemmaVerb).toBeVisible();

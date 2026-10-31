@@ -399,3 +399,77 @@ test("a bare «mil» or «un millón» is from words; «0 m» asks nothing, for 
   assert.equal(interpretQuickEntry("un millón arriendo", ctx).amountFromWords, true);
   assert.equal(interpretQuickEntry("0 m de cable", ctx).ask, null);
 });
+
+test("a number glued to a letter stays in the note", () => {
+  const result = interpretQuickEntry("Mercado D1 87500", ctx);
+  assert.equal(result.amountPesos, "87500");
+  assert.equal(result.description, "Mercado D1");
+});
+
+test("a number that is no bare quantity wins over a quantity before it", () => {
+  assert.equal(stored("Mercado 2 87.500"), 8_750_000);
+  assert.equal(stored("Mercado 2 87,500"), 8_750_000);
+  assert.equal(stored("Mercado 87k"), 8_700_000);
+  assert.equal(stored("Mercado 87 mil"), 8_700_000);
+});
+
+test("a word begins an account or a category name, case and accent aside", () => {
+  const result = interpretQuickEntry("Almuerzo bancolombia 15000", {
+    categories: [
+      { id: "c1", name: "Almuerzos", kind: "expense" },
+      { id: "c2", name: "Mercado", kind: "expense" },
+    ],
+    accounts: [
+      { id: "a1", name: "Bancolombia ahorros" },
+      { id: "a2", name: "Efectivo" },
+    ],
+    defaultAccountId: "a2",
+  });
+  assert.equal(result.accountId, "a1");
+  assert.equal(result.categoryId, "c1");
+  assert.equal(result.description, "");
+  assert.equal(
+    interpretQuickEntry("Crédito 5000", {
+      categories: [{ id: "c3", name: "Credito", kind: "expense" }],
+      accounts: [],
+      defaultAccountId: null,
+    }).categoryId,
+    "c3",
+  );
+});
+
+test("a currency code glued to the amount outranks the longer phone numbers of a bank message", () => {
+  assert.equal(
+    stored(
+      "Bancolombia: Compraste COP122.000,50 en BOLD CO ONLINE con tu T.Cred *4872, el 26/08/2026 a las 09:15. Si tienes dudas, encuentranos aqui: 6045109095 o 018000931987.",
+    ),
+    12_200_050,
+  );
+});
+
+test("a reference, an order or a phone number is never the amount", () => {
+  assert.equal(stored("Pago 50000 ref 123456789"), 5_000_000);
+  assert.equal(stored("Factura 45000 pedido 9876543"), 4_500_000);
+  assert.equal(stored("Pago de internet 3001234567 por 85000"), 8_500_000);
+  assert.equal(stored("Recarga cel 3001234567 20000"), 2_000_000);
+  assert.equal(stored("Domicilio tel 018000931987 12000"), 1_200_000);
+  assert.equal(stored("Compra #4455667 total 32000"), 3_200_000);
+});
+
+test("a number beside an amount word wins over an earlier one", () => {
+  assert.equal(stored("Mercado 120000 valor 98000"), 9_800_000);
+  assert.equal(stored("Cena 4 personas total 160000"), 16_000_000);
+});
+
+test("an account word leaves the description only when it named the account chosen", () => {
+  const result = interpretQuickEntry("Mercado nequi *4872 5000", {
+    categories: [],
+    accounts: [
+      { id: "a1", name: "Nequi Laura", lastFour: null },
+      { id: "a2", name: "Tarjeta Visa", lastFour: "4872" },
+    ],
+    defaultAccountId: null,
+  } as never);
+  assert.equal(result.accountId, "a2");
+  assert.match(result.description, /nequi/i);
+});

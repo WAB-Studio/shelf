@@ -11,12 +11,12 @@ import styles from "./page.module.css";
 // rail leaves.
 //
 // `width="column"` is `full` with a one-column screen's content held to 640
-// from 1024 (docs/goallog/DESIGN.md "The space system"), the header spanning.
+// from 768 (docs/goallog/DESIGN.md "The space system"), the header spanning.
 //
 // `alone` is a screen outside the shell, with no rail beside it (the consent
-// screen): from 1024 its 640px column stays centred at the phone's padding.
+// screen): from 768 its 640px column stays centred at the phone's padding.
 // `middle` centres the column's content vertically on a screen that has one
-// thing to say. `snug` closes the column's gap to the phone's 32 from 1024, for
+// thing to say. `snug` closes the column's gap to the phone's 32 from 768, for
 // a screen that would otherwise outgrow the viewport.
 export function Page({
   children,

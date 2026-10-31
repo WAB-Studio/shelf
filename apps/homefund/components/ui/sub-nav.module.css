@@ -36,6 +36,6 @@
 
 @media (min-width: 1024px) {
   .nav {
-    padding: 0 44px 16px;
+    padding: 0 var(--band-gutter, 32px) 16px;
   }
 }

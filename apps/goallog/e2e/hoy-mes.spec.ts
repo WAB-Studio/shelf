@@ -97,7 +97,7 @@ test("Hoy draws the month line in hours and minutes, the pace line from the 20th
     await page.setViewportSize({ width: 360, height: 740 });
     await page.goto("/");
     await lines(0);
-    await expect(seen("este mes")).toHaveCount(1);
+    await expect(seen("Este mes")).toHaveCount(1);
     await expect(seen(bareName).first()).toBeVisible();
     // The goal with no amount is a row of the day, never a line of the block.
     await expect(page.getByText("de 12 h", { exact: true }).locator("visible=true")).toHaveCount(late ? 1 : 2);
@@ -121,7 +121,7 @@ test("Hoy draws the month line in hours and minutes, the pace line from the 20th
     await expect(page.locator("main")).toHaveCount(1);
     await expect(seen(underName).first()).toBeVisible();
     await expect(seen("de 12 h")).toHaveCount(0);
-    await expect(seen("este mes")).toHaveCount(0);
+    await expect(seen("Este mes")).toHaveCount(0);
     await expect(page.getByText(/bajo el 60 %/).locator("visible=true")).toHaveCount(0);
   } finally {
     await context.close();

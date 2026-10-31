@@ -6,24 +6,39 @@ body {
   margin: 0;
 }
 
+/* The ground is painted on the document itself: a screen taller than the
+   window would otherwise show the browser's own colour below the 100vh theme. */
+html.light,
+html.light body {
+  background: #ffffff;
+}
+
+html.dark,
+html.dark body {
+  background: #110c20;
+}
+
 /* Every portalled surface (menu, listbox, dialog) wraps in its own nested
    `Theme`, another `.radix-themes` node that re-declares these variables from
    Radix's own stylesheet: doubled to outrank that same-specificity rule
    whichever sheet loads last. */
 .radix-themes.radix-themes {
   --default-font-family: var(--font-sans);
-  --heading-font-family: var(--font-sans);
+  --heading-font-family: var(--font-heading), var(--font-sans);
   --code-font-family: var(--font-geist-mono);
 }
 
-/* The page sits on a warm off-white so white cards read as raised, not flush.
-   Keyed off the class the pre-paint script already wrote, so the tone lands on
-   first paint with no flash. The doubled class outranks Radix's own token. */
-.light .radix-themes.radix-themes {
-  --color-background: #f5f3ef;
-  --gray-12: #1b1a16;
-  /* Radix's focus step meets the ground at 1.9:1; jade-11 rings at 4.20:1. */
-  --focus-8: var(--jade-11);
+/* «Violeta y lima» (DESIGN.md): a white ground, the deep violet ink for text, the
+   violet ring. Keyed off the class the pre-paint script already wrote, so the
+   tone lands on first paint with no flash. The doubled class outranks Radix's
+   own token. */
+.light .radix-themes.radix-themes:not(.dark) {
+  --color-background: #ffffff;
+  --gray-12: #1a1033;
+  /* The brand violet as Radix's own step 11, so a `color="violet"` text and the
+     accent alike read it: 7.08:1 on the white ground, and the ring with it. */
+  --violet-11: #5b2ee5;
+  --focus-8: var(--violet-11);
 }
 
 /* A control with its own colour (gray «Cancelar», red «Eliminar») re-declares
@@ -39,8 +54,14 @@ body {
   outline-color: var(--accent-11);
 }
 
-.dark .radix-themes.radix-themes {
-  --color-background: #141310;
+.dark .radix-themes.radix-themes,
+.radix-themes.radix-themes.dark {
+  --color-background: #110c20;
+  /* The panel takes the violet of the ground instead of Radix's neutral gray. */
+  --color-panel-solid: #1b1530;
+  /* 8.50:1 on the ground: the violet text and ring on dark. */
+  --violet-11: #b8a3ff;
+  --focus-8: var(--violet-11);
 }
 
 /* Dark: a control with its own colour rings at step 8, 2.80:1 on the dialog
@@ -55,12 +76,60 @@ body {
   outline-color: var(--accent-11);
 }
 
-/* The solid button's white label: Radix's jade-9 and red-9 carry it at 3.15:1
-   and 3.91:1. These steps reach 5.23:1 and 6.15:1 (jade), 4.79:1 and 5.65:1
-   (red), in both appearances. */
+/* The solid button's white label: #5b2ee5 carries it at 7.08:1 and its hover
+   #4a22c4 at 9.06:1; Radix's red-9 carried it at 3.91:1, these red steps at
+   4.79:1 and 5.65:1, in both appearances. The lime is the highlight: never
+   text on white, only behind the ink (14.31:1) or as a mark on the violet. */
 .radix-themes.radix-themes {
-  --accent-9: #1f7a62;
-  --accent-10: #1b6e57;
+  --violet-9: #5b2ee5;
+  --violet-10: #4a22c4;
+  --brand-lime: #c8f560;
+  --brand-ink: #1a1033;
   --red-9: #d13a3f;
   --red-10: #c42a2f;
+}
+
+
+/* Titles carry the brand: the grotesque, bold. Zero-specificity scope, so a
+   primitive that sets its own heading metrics still wins. */
+:where(.radix-themes) .rt-Heading {
+  font-weight: 700;
+}
+
+/* Money and dates line up in columns wherever they are read. */
+.radix-themes {
+  font-variant-numeric: tabular-nums;
+}
+
+/* The surface finish (DESIGN.md «Violeta y lima»): a tinted violet line and a
+   soft ink shadow instead of Radix's gray hairline; every card primitive reads these. */
+.radix-themes.radix-themes {
+  --hf-line: #e4dcff;
+  --hf-shadow: 0 1px 2px rgb(26 16 51 / 0.04), 0 8px 24px -12px rgb(26 16 51 / 0.12);
+  --hf-card-radius: 20px;
+}
+
+.dark .radix-themes.radix-themes,
+.radix-themes.radix-themes.dark {
+  --hf-line: #2d2450;
+  --hf-shadow: 0 8px 24px -12px rgb(0 0 0 / 0.5);
+}
+
+
+/* The 44px floor (SPEC-A3) for every field: a text input, a select's trigger and a
+   segmented control reach it by default, whatever size a screen asks for. The text
+   input's root is raised by both borders and a rounding pixel so the input itself,
+   which a person measures, is 44. Doubled to outrank Radix's own size class. */
+.rt-TextFieldRoot.rt-TextFieldRoot {
+  box-sizing: border-box;
+  min-height: 47px;
+}
+
+.rt-SelectTrigger.rt-SelectTrigger:not(.rt-variant-ghost) {
+  box-sizing: border-box;
+  min-height: 44px;
+}
+
+.rt-SegmentedControlRoot.rt-SegmentedControlRoot {
+  min-height: 44px;
 }

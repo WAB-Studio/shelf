@@ -1,7 +1,9 @@
 import type { ReactNode } from "react";
 import { Badge, Box, Flex, Text } from "@radix-ui/themes";
 
-// The signed amount only turns green for income; an expense and a transfer both
+import styles from "./movement-row.module.css";
+
+// The signed amount only turns jade for income; an expense and a transfer both
 // read in the plain ink of the row (per the ledger designs).
 type MovementTone = "expense" | "income" | "transfer";
 
@@ -17,6 +19,7 @@ export function MovementRow({
   tone = "expense",
   badge,
   caused,
+  wrap = false,
 }: {
   tile: ReactNode;
   title: string;
@@ -26,13 +29,21 @@ export function MovementRow({
   badge?: string;
   // The marker a charge wears; the screen passes the word, never the style.
   caused?: string;
+  // Lets a long title run on to as many lines as it needs instead of clamping.
+  wrap?: boolean;
 }) {
   return (
     <Flex align="center" gap="3">
       {tile}
       <Box flexGrow="1" minWidth="0">
         <Flex align="center" gap="2">
-          <Text as="div" size="3" weight="medium" truncate>
+          <Text
+            as="div"
+            size="3"
+            weight="medium"
+            className={styles.title}
+            data-wrap={wrap || undefined}
+          >
             {title}
           </Text>
           {badge && (
@@ -55,8 +66,8 @@ export function MovementRow({
       <Text
         size="3"
         weight="medium"
-        color={tone === "income" ? "grass" : undefined}
-        style={{ fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}
+        color={tone === "income" ? "jade" : undefined}
+        className={styles.amount}
       >
         {amount}
       </Text>

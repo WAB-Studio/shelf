@@ -14,7 +14,7 @@ export default async function HomePage({
   const initialQuery = Array.isArray(q) ? q[0] : q;
 
   return (
-    <Page>
+    <Page measure="panels">
       <SearchScreen initialQuery={initialQuery} />
     </Page>
   );

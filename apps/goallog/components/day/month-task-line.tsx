@@ -94,6 +94,11 @@ export function MonthTaskLine({
             </Text>
           ) : null}
           <Text variant="name">{name}</Text>
+          {isTimeUnit(unit) ? (
+            <Text variant="meta" tone="muted">
+              {estimate !== null ? formatQuantity(estimate, unit, words) : t("roadmap.plan.unestimated")}
+            </Text>
+          ) : null}
           <Text variant="sentence">
             {splitPart !== null
               ? t.rich("day.monthLine.nextPart", {
@@ -105,13 +110,6 @@ export function MonthTaskLine({
                 : t("day.monthLine.next")}
           </Text>
         </Flex>
-        {isTimeUnit(unit) ? (
-          <Flex flexShrink="0" pt="2">
-            <Text variant="meta" tone="muted" wrap="nowrap">
-              {estimate !== null ? formatQuantity(estimate, unit, words) : t("roadmap.plan.unestimated")}
-            </Text>
-          </Flex>
-        ) : null}
         <Flex mr="-3">{noteButton}</Flex>
       </Flex>
       {error ? (

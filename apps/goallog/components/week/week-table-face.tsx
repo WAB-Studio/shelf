@@ -19,7 +19,7 @@ const PAST_KEY: Partial<Record<FlexibleKey, MessageKey>> = {
 };
 
 /**
- * `SemanaEscritorio.dc.html` from 1024, `SemanaPlegada.dc.html` below it: the
+ * `SemanaEscritorio.dc.html` from 768, `SemanaPlegada.dc.html` below it: the
  * week as commitments down and days across, one set of groups drawn twice.
  * A day on or after a goal's horizon asks nothing of it, and neither does a
  * day before its commitment was written; each such day reads «no pedía».
@@ -162,7 +162,7 @@ export function WeekTableFace({
   if (foldGroups.length === 0) return null;
 
   const cells = tallyDays(week).map(({ day, done, total }) =>
-    day > today || total === 0 ? null : { figure: String(done), rest: t("week.ratioOf", { total }) },
+    day > today || total === 0 ? null : { figure: String(done), rest: t("week.ratioOf", { total }), percent: Math.floor((done * 100) / total) },
   );
   const footer = coming ? undefined : { label: t("week.table.footer"), cells };
 

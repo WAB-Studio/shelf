@@ -181,7 +181,7 @@
   }
 }
 
-@media (min-width: 1024px) {
+@media (min-width: 768px) {
   .actions {
     inline-size: auto;
   }
@@ -211,7 +211,7 @@
   inline-size: 100%;
 }
 
-@media (min-width: 1024px) {
+@media (min-width: 768px) {
   .exit {
     max-inline-size: 560px;
   }
@@ -228,7 +228,7 @@
 }
 
 .lead.lead.lead {
-  font-size: 13px;
+  font-size: 14px;
   margin: 10px 0 0;
   overflow-wrap: anywhere;
 }

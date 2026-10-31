@@ -1,6 +1,9 @@
 import { assertSuiteDatabase } from "@repo/harness-registry";
 import { test as base, expect } from "@playwright/test";
-import type { Page } from "@playwright/test";
+import type { Locator, Page } from "@playwright/test";
+import { createTranslator } from "next-intl";
+
+import messages from "../messages/es.json";
 
 // `registro`, `offline` and `sync` insert `auth.users` rows on `MIGRATION_DATABASE_URL`; with
 // none set, no spec can write. Specs without a database keep running.
@@ -270,4 +273,23 @@ export async function afterFrames(page: Page): Promise<void> {
   await page.evaluate(
     () => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))),
   );
+}
+
+// The two figures /registro heads its list with: the searches and the words (or entries) the record
+// holds. Found as one locator, so it is visible only while both read as given.
+export function studyHeader(page: Page, lookups: number, words: number, kind: "words" | "entries" = "words"): Locator {
+  const t = createTranslator({ locale: "es", messages });
+  const lookupsLabel = `${lookups} ${t("log.study.figureLookups", { count: lookups })}`;
+  const wordsLabel = `${words} ${t("log.study.figureWords", { count: words, kind })}`;
+  return page
+    .locator("main")
+    .filter({ has: page.getByRole("group", { name: lookupsLabel, exact: true }) })
+    .filter({ has: page.getByRole("group", { name: wordsLabel, exact: true }) });
+}
+
+// Opens the fold under an entry that lists senses a reader meets seldom, when it has one. A spec that
+// reads every sense of a word calls this first.
+export async function openRareSenses(page: Page): Promise<void> {
+  const fold = page.getByRole("button", { name: /^Ver \d+ sentidos? poco usados?$/ });
+  if ((await fold.count()) > 0) await fold.first().click();
 }

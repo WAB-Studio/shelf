@@ -10,10 +10,10 @@ import { DATABASE_VERSION } from "../lib/log/record";
 // of 2026-10-18). The sentences below are the board's, character for character,
 // not the catalog's keys: a renamed key must not move what the reader reads.
 const WAITING = "Sin respuesta todavía";
-const WORD_LINE = "Se responde sola cuando vuelva la conexión.";
-const PHRASE_LINE = "Se traduce sola cuando vuelva la conexión.";
+const WORD_LINE = "El diccionario no la tiene y aún no hay respuesta. Se vuelve a pedir una vez al día, con conexión.";
+const PHRASE_LINE = "La traducción no llegó. Se vuelve a pedir una vez al día, con conexión.";
 const PAGE_TITLE = "Esta búsqueda espera respuesta";
-const PAGE_BODY = "No había conexión cuando la buscaste. Se responde sola cuando vuelva, y su traducción aparece aquí.";
+const PAGE_BODY = "No hubo respuesta cuando la buscaste: faltaba la conexión o el servicio no contestó. Se vuelve a pedir una vez al día, con conexión, y su traducción aparece aquí.";
 const SEARCHES = "Búsquedas";
 
 type Seed = Omit<LookupRecord, "id">;
@@ -117,8 +117,11 @@ async function openRegistro(page: Page, rows: Seed[]): Promise<void> {
   await expect(page.getByRole("heading", { name: messages.log.title })).toBeVisible();
 }
 
+// A row is a card holding the word's link, its translation and its waiting lines.
 const rowOf = (page: Page, text: string): Locator =>
-  page.getByRole("link").filter({ has: page.getByText(text, { exact: true }) });
+  page
+    .locator("section")
+    .filter({ has: page.getByRole("link").filter({ has: page.getByText(text, { exact: true }) }) });
 
 // Study order: count desc, then most recent. zzorble twice, then the sentence,
 // alpha, mango: a waiting group sits among the answered ones, not after them.
@@ -138,7 +141,7 @@ test("RL-76: a pending word reads «Sin respuesta todavía» and «Se responde s
   await expect(row).toHaveCount(1);
   await expect(row.getByText(WAITING, { exact: true })).toBeVisible();
   await expect(row.getByText(WORD_LINE, { exact: true })).toBeVisible();
-  await expect(row.getByText("2", { exact: true })).toBeVisible();
+  await expect(row.getByText("2 veces", { exact: true })).toBeVisible();
   await expect(row.getByText(PHRASE_LINE)).toHaveCount(0);
   // It is not drawn as a miss: no «sin resultado», no form list.
   await expect(row.getByText(messages.log.study.noResult)).toHaveCount(0);
@@ -175,7 +178,7 @@ test("RL-76: an answered row beside them is unchanged, and the order is the usua
 
 test("RL-76: tapping a pending word opens its word page", async ({ page }) => {
   await openRegistro(page, ROWS());
-  await rowOf(page, "zzorble").click();
+  await rowOf(page, "zzorble").getByRole("link").click();
   await expect(page).toHaveURL(/\/registro\/zzorble$/);
 });
 

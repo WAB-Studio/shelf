@@ -2,8 +2,7 @@ import { randomBytes, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
-import { createTranslator } from "next-intl";
-import { confirmCopy, expect, test } from "./fixtures";
+import { confirmCopy, expect, studyHeader, test } from "./fixtures";
 import type { Locator, Page } from "@playwright/test";
 import postgres from "postgres";
 
@@ -14,10 +13,6 @@ import type { DictionaryPayload } from "../lib/dictionary/format";
 import type { LookupRecord, SyncState } from "../lib/log/types";
 import { closeRun, openRun } from "@repo/harness-registry";
 
-// The same runtime `next-intl` renders with: `log.study.header` is an ICU
-// plural, so a literal `"{lookups}"` substring never appears in the
-// rendered text and a naive `.replace` against it always misses.
-const t = createTranslator({ locale: "es", messages });
 
 // `check:e2e` runs the bare Playwright CLI, no `--env-file`: the direct
 // Postgres access the «vaciar aquí y en mi cuenta» tests need is not there
@@ -318,11 +313,12 @@ test("a lookup's row lists the typed word, its count and the dictionary's own tr
 
   await page.goto("/registro");
 
-  await expect(page.getByText(t("log.study.header", { lookups: 1, words: 1 }))).toBeVisible();
+  await expect(studyHeader(page, 1, 1)).toBeVisible();
 
-  const row = page.locator('a[href="/registro/apple"]');
-  await expect(row).toBeVisible();
-  const rowText = await row.innerText();
+  const link = page.locator('a[href="/registro/apple"]');
+  await expect(link).toBeVisible();
+  // The row is a card: the link holds the word and its count, its main translation sits under it.
+  const rowText = await link.locator("xpath=ancestor::section[1]").innerText();
   expect(rowText).toContain("apple");
   expect(rowText).toContain("1");
 
@@ -334,7 +330,8 @@ test("a lookup's row lists the typed word, its count and the dictionary's own tr
   // non-empty check but fails each of these.
   const wordTranslations = dictionaryTranslations("apple");
   expect(wordTranslations.length, 'the shipped dictionary carries no entry for "apple"').toBeGreaterThan(0);
-  for (const translation of wordTranslations) {
+  // The row is compact (decision of 2026-10-31): the main translation only, the rest on the word's own page.
+  for (const translation of wordTranslations.slice(0, 1)) {
     expect(rowText, `the row for "apple" never shows its dictionary translation "${translation}"`).toContain(
       translation,
     );
@@ -369,7 +366,7 @@ test("tapping \"Registro\" in the nav bar draws the search that motivated the tr
 
   // No ceiling forces this row to wait: the unmount flush this tap triggers
   // is the only thing that has to land before the count shows.
-  await expect(page.getByText(t("log.study.header", { lookups: 1, words: 1 }))).toBeVisible({ timeout: 2500 });
+  await expect(studyHeader(page, 1, 1)).toBeVisible({ timeout: 2500 });
 
   const row = page.locator('a[href="/registro/apple"]');
   await expect(row).toBeVisible();
@@ -388,7 +385,7 @@ test("with no rows, /registro draws the study's empty state and its action retur
   // for a file with no rows in it would only repeat that with an action
   // that does not work.
   await expect(page.getByRole("button", { name: messages.log.study.download })).toHaveCount(0);
-  await expect(page.getByText(t("log.study.header", { lookups: 0, words: 0 }))).toHaveCount(0);
+  await expect(studyHeader(page, 0, 0)).toHaveCount(0);
 
   await page.getByRole("button", { name: messages.log.study.emptyAction }).click();
   await expect(page).toHaveURL(/\/$/);
@@ -481,7 +478,7 @@ test("RL-34: «Reintentar» on the failed /registro reads the store again and li
   await page.getByRole("button", { name: messages.log.study.failedAction }).click();
 
   await expect(page.locator('a[href="/registro/apple"]')).toBeVisible();
-  await expect(page.getByText(t("log.study.header", { lookups: 1, words: 1 }))).toBeVisible();
+  await expect(studyHeader(page, 1, 1)).toBeVisible();
   await expect(page.getByText(messages.log.study.failedTitle)).toHaveCount(0);
 });
 
@@ -546,8 +543,10 @@ test("at rest, /registro shows «Vaciar el registro» muted beside «Descargar e
     // both roles this reads — the accent and the muted tone both change
     // between the two passes below, not just which token wins.
     const palette = {
-      light: { accent: "#9A3B24", muted: "#6B675A" },
-      dark: { accent: "#D9805F", muted: "#9A9484" },
+      // «Verde botella»: the accent text is bottle green in light, mint in dark; the filled button
+      // stays bottle green in both.
+      light: { accent: "#0C5A43", solid: "#0C5A43", muted: "#6B675A" },
+      dark: { accent: "#5FCFA3", solid: "#0C5A43", muted: "#9A9484" },
     } as const;
 
     for (const scheme of ["light", "dark"] as const) {
@@ -573,7 +572,7 @@ test("at rest, /registro shows «Vaciar el registro» muted beside «Descargar e
       // No red anywhere the break draws (`docs/wordbook/DESIGN.md` "Failure"):
       // the accent lives only on «Conservarlo», never on either destructive
       // option, in neither mode.
-      expect(await computedColor(keep, "backgroundColor")).toBe(hexToRgb(palette[scheme].accent));
+      expect(await computedColor(keep, "backgroundColor")).toBe(hexToRgb(palette[scheme].solid));
       expect(await computedColor(localAction)).toBe(hexToRgb(palette[scheme].muted));
       expect(await computedColor(accountAction)).toBe(hexToRgb(palette[scheme].muted));
 
@@ -602,8 +601,9 @@ test("the «generated» mark reads at 4.5:1 and the search field's edge at 3:1, 
     example: { en: "She ate an apple.", es: "Ella comió una manzana." },
   });
   const palette = {
-    light: { quiet: "#787263", edge: "#A08E60", border: "#DED8C8" },
-    dark: { quiet: "#898271", edge: "#6B6753", border: "#302E25" },
+    // The search box sits on the brand block, whose field edge is the same soft green in both modes.
+    light: { quiet: "#787263", edge: "#9FC4B4", border: "#DED8C8" },
+    dark: { quiet: "#898271", edge: "#9FC4B4", border: "#302E25" },
   } as const;
 
   const assetResponse = page.waitForResponse(
@@ -667,7 +667,7 @@ test("«Conservarlo» closes the confirmation without deleting anything", async 
   await recordSearch(page, "apple");
 
   await page.goto("/registro");
-  await expect(page.getByText(t("log.study.header", { lookups: 1, words: 1 }))).toBeVisible();
+  await expect(studyHeader(page, 1, 1)).toBeVisible();
 
   await page.getByRole("button", { name: messages.log.clear.trigger }).click();
   const keep = page.getByRole("button", { name: messages.log.clear.keep });
@@ -675,7 +675,7 @@ test("«Conservarlo» closes the confirmation without deleting anything", async 
   await keep.click();
 
   await expect(keep).toHaveCount(0);
-  await expect(page.getByText(t("log.study.header", { lookups: 1, words: 1 }))).toBeVisible();
+  await expect(studyHeader(page, 1, 1)).toBeVisible();
   const rows = await readLogRows(page);
   expect(rows).toHaveLength(1);
 });
@@ -712,7 +712,7 @@ test("without a session, «Vaciar el registro» empties IndexedDB, falls to the 
   await recordSearch(page, "banana");
 
   await page.goto("/registro");
-  await expect(page.getByText(t("log.study.header", { lookups: 1, words: 1 }))).toBeVisible();
+  await expect(studyHeader(page, 1, 1)).toBeVisible();
   await expect(page.locator('a[href="/registro/banana"]')).toBeVisible();
 });
 

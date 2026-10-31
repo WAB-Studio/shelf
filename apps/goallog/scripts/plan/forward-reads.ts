@@ -32,6 +32,7 @@ function installStubs(): void {
     if (request === "next/headers") return { cookies: async () => ({ getAll: () => [], set() {} }) };
     if (request === "next/cache") return { revalidatePath: (path: string) => void revalidated.push(path) };
     if (request === "./reading-lookups") return { readReadingLookups: async () => [] };
+    if (request === "./timelog-apps") return { TIMELOG_SOURCES: [], timelogReader: () => async () => [] };
     return originalLoad(request, parent, isMain);
   };
 }

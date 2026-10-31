@@ -1,15 +1,18 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
+import { ChevronRight } from "lucide-react";
 import { getTranslations } from "next-intl/server";
 
 import type { Translator } from "@/i18n/translator";
 import type { Cadence } from "@/lib/day/types";
 import type { GoalCommitment } from "@/lib/queries/goal";
+import { strip, stripCount } from "@/lib/day/constancy";
+import { todayInZone } from "@/lib/zone";
+import { sentenceCase } from "@/lib/day/day-words";
 import { weekdaysSentence } from "@/lib/day/row-phrases";
 import { evidenceUnitWords } from "@/lib/evidence/unit-words";
-import { Button, Figure, Flex, Section, Text } from "@/components/ui";
 
-import { CommitmentRow } from "./retire-sheet";
+import { Button, Figure, Flex, Row, Section, Strip, Text } from "@/components/ui";
 
 
 // The count in words, section-label style ("ocho compromisos", "tres
@@ -27,7 +30,7 @@ export function countWord(n: number, t: Translator, feminine = false): string {
 
 // `Meta.dc.html`'s own cadence phrasing — full words, unlike `day.cadence`'s
 // abbreviated one, which a day row's tighter space asks for instead.
-function cadenceWords(cadence: Cadence, t: Translator): string {
+export function cadenceWords(cadence: Cadence, t: Translator): string {
   switch (cadence.kind) {
     case "daily":
       return t("goal.cadence.daily");
@@ -76,6 +79,13 @@ function satisfactionWords(commitment: GoalCommitment, t: Translator): ReactNode
   }
 }
 
+// The row's thirty days, small, with its «26 de 30» said to a screen reader.
+function MiniStrip({ commitment, today, t }: { commitment: GoalCommitment; today: string; t: Translator }) {
+  const cells = strip(today, commitment, commitment.done);
+  const { done, of } = stripCount(cells, commitment.cadence);
+  return <Strip size="mini" cells={cells} label={of === null ? t("goal.commitments.stripAriaDays", { done }) : t("goal.commitments.stripAria", { done, of })} />;
+}
+
 /**
  * `Meta.dc.html`'s commitment rows (RP-12, RP-13, RP-14): the name on the
  * left, the cadence over the satisfaction right-aligned in mono. A retired
@@ -101,39 +111,49 @@ export async function CommitmentList({
   // A retired commitment stays in the list — never hidden (RP-13) — but it
   // no longer asks anything of the goal, so the count above it names what is
   // still active and adds the retired ones apart: it always matches the rows.
+  const today = todayInZone();
   const activeCount = commitments.filter((commitment) => commitment.retiredAt === null).length;
 
   return (
     <Section
       label={t("goal.detail.commitmentsCount", {
-        word: countWord(activeCount, t),
+        word: sentenceCase(countWord(activeCount, t)),
         count: activeCount,
         retired: commitments.length - activeCount,
       })}
     >
-      {commitments.map((commitment) => (
-        <CommitmentRow
-          key={commitment.id}
-          commitmentId={commitment.id}
-          name={commitment.name}
-          retired={commitment.retiredAt !== null}
-          retiredLabel={t("goal.commitments.retired")}
-          factDayCount={commitment.factDayCount}
-          goalId={goalId}
-          trailing={
-            <Flex direction="column" align="end">
-              <Text as="span" variant="sentence" tone="muted">
-                {cadenceWords(commitment.cadence, t)}
-              </Text>
-              <Text as="span" variant="sentence" tone="muted">
-                {satisfactionWords(commitment, t)}
-              </Text>
-            </Flex>
-          }
-        />
-      ))}
+      {commitments.map((commitment) => {
+        const retired = commitment.retiredAt !== null;
+        const trailing = (
+          <Flex direction="column" align="end">
+            <Text as="span" variant="sentence" tone="muted">
+              {cadenceWords(commitment.cadence, t)}
+            </Text>
+            <Text as="span" variant="sentence" tone="muted">
+              {satisfactionWords(commitment, t)}
+            </Text>
+            {retired ? null : <MiniStrip commitment={commitment} today={today} t={t} />}
+          </Flex>
+        );
+        // A retired one stays in the list and goes nowhere (RP-13); a live one opens its own screen.
+        return retired ? (
+          <Row key={commitment.id} name={commitment.name} meta={t("goal.commitments.retired")} trailing={trailing} disabled />
+        ) : (
+          <Row
+            key={commitment.id}
+            href={`/metas/${goalId}/compromisos/${commitment.id}`}
+            name={commitment.name}
+            trailing={
+              <Flex align="center" gap="2">
+                {trailing}
+                <ChevronRight size={16} strokeWidth={1.5} aria-hidden />
+              </Flex>
+            }
+          />
+        );
+      })}
       {!archived ? (
-        <Button asChild variant={commitments.length > 0 ? "outline" : "solid"} block>
+        <Button asChild variant="solid" block>
           <Link href={`/metas/${goalId}/compromisos/nuevo`}>{t("goal.commitments.add")}</Link>
         </Button>
       ) : null}

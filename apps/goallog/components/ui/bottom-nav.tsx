@@ -35,9 +35,9 @@ export function NoTabMarked() {
   return <span hidden data-no-tab-marked />;
 }
 
-// How wide the screen is, as the CSS reads it: from 1024px the nav is the
+// How wide the screen is, as the CSS reads it: from 768px the nav is the
 // rail and a goal's own pages mark that goal's item, below it they mark `Metas`.
-const WIDE = "(min-width: 1024px)";
+const WIDE = "(min-width: 768px)";
 const subscribeWide = (listener: () => void) => {
   const query = window.matchMedia(WIDE);
   query.addEventListener("change", listener);
@@ -53,7 +53,7 @@ const serverWide = () => false;
 // already-translated strings, never a function, since a Server Component cannot
 // hand this Client one anything but a serializable prop.
 //
-// From 1024px the same links are the desktop rail (RNP-17): the props below
+// From 768px the same links are the desktop rail (RNP-17): the props below
 // `labels` fill the parts only the rail draws, and none of them renders below
 // that width. The visual mark of a goal's page is CSS from the first paint;
 // `aria-current` follows the width once the page hydrates.
@@ -155,7 +155,7 @@ export function BottomNav({
           </div>
         ) : null}
         {items.map((item) => {
-          // From 1024 a goal of the list owns its pages' mark; `Metas` keeps
+          // From 768 a goal of the list owns its pages' mark; `Metas` keeps
           // the visual mark below that width only.
           const owned = item.href === "/metas" && openGoal !== undefined;
           const marked = item.active && !unmarked;

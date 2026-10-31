@@ -9,11 +9,14 @@ import {
   Flex,
   Page,
   Panel,
+  PanelGrid,
+  Progress,
   Row,
   ScreenHeader,
   Section,
   Split,
   Text,
+  TextLink,
 } from "@/components/ui";
 import { SignOutButton } from "@/components/account/sign-out-button";
 import { GoalBranch, type BranchGoal } from "@/components/goal/goal-branch";
@@ -141,7 +144,7 @@ export async function GoalsScreen({
         </Button>
         {habitsSection}
         <Section label={t("export.entry.section")}>
-          <Button asChild variant="outline" block stack>
+          <Button asChild variant="quiet" block stack>
             <Link href="/metas/importar">
               {t("import.entry.title")}
               <Text variant="sentence">{t("import.entry.hint")}</Text>
@@ -241,6 +244,60 @@ export async function GoalsScreen({
     };
   });
 
+  // A card a goal: the month's figure big, its bar, the phase in effect and the weeks left. A tree of goals
+  // keeps its list, where depth and folding live.
+  const cards =
+    open.length > 0 && inside.size === 0 ? (
+      <PanelGrid>
+        {open.map((goal) => {
+          const month: MetasMonth | null = goal.month;
+          const unit = goal.monthUnit ?? undefined;
+          const percent =
+            month?.kind === "amount" && month.planned ? Math.min(100, Math.floor((month.reached * 100) / month.planned)) : null;
+          return (
+            <Panel key={goal.id} label={goal.name}>
+              <Section label={goal.name}>
+                {month ? <Text variant="sentence">{monthName(month.month)}</Text> : null}
+                {" "}
+                {month?.kind === "amount" ? (
+                  <Flex align="baseline" gap="2" wrap="wrap">
+                    <Figure variant="big" value={month.reached} unit={unit} bare={month.planned !== null} />
+                    {" "}
+                    {month.planned !== null ? (
+                      <Text variant="sentence">
+                        {t("day.monthLine.of")} <Figure value={month.planned} unit={unit} variant="meta" />
+                      </Text>
+                    ) : null}
+                  </Flex>
+                ) : month?.kind === "tasks" ? (
+                  <Text as="p" variant="sentence">
+                    {t("goal.list.tasksDone", { done: month.done, total: month.total })}
+                  </Text>
+                ) : null}
+                {percent !== null ? <Progress brand percent={percent} size="thick" /> : null}
+                {month?.kind === "amount" && month.planned && month.reached > month.planned ? (
+                  <Text as="p" variant="sentence">
+                    {t("month.across.over")} <Figure value={month.reached - month.planned} unit={unit} variant="meta" />
+                  </Text>
+                ) : null}
+                {goal.phaseAim ? (
+                  <Text as="p" variant="sentence">
+                    {t("goal.list.phaseNow", { aim: goal.phaseAim })}
+                  </Text>
+                ) : null}
+                <Text as="p" variant="sentence" tone="muted">
+                  {goal.weeksLeft === null
+                    ? t("goal.list.noEnd")
+                    : `${t("goal.list.weeksLeft", { count: goal.weeksLeft })} · ${t("goal.list.untilShort", { date: lastDay(goal) ?? "" })}`}
+                </Text>
+                <TextLink href={`/metas/${goal.id}`}>{t("goal.list.openGoal", { name: goal.name })}</TextLink>
+              </Section>
+            </Panel>
+          );
+        })}
+      </PanelGrid>
+    ) : null;
+
   return (
     <Page width="full">
       <ScreenHeader chat title={t("common.nav.goals")} />
@@ -248,8 +305,9 @@ export async function GoalsScreen({
         twoFifths
         main={
           <>
+            {cards}
             <Panel as="div">
-              {open.length > 0 ? (
+              {open.length > 0 && !cards ? (
                 <Section label={t("goal.list.openTitle")}>
                   <Flex
                     direction="column"
@@ -262,6 +320,10 @@ export async function GoalsScreen({
                     <Link href="/metas/nueva">{t("goal.list.addAnother")}</Link>
                   </Button>
                 </Section>
+              ) : cards ? (
+                <Button asChild variant="outline" block>
+                  <Link href="/metas/nueva">{t("goal.list.addAnother")}</Link>
+                </Button>
               ) : (
                 <Button asChild block>
                   <Link href="/metas/nueva">{t("goal.none.action")}</Link>
@@ -316,14 +378,14 @@ export async function GoalsScreen({
         after={
           <Panel>
             <Section label={t("export.entry.section")}>
-              <Button asChild variant="outline" block stack>
+              <Button asChild variant="quiet" block stack>
                 <Link href="/metas/importar">
                   {t("import.entry.title")}
                   <Text variant="sentence">{t("import.entry.hint")}</Text>
                 </Link>
               </Button>
               {open.length + ended.length > 0 ? (
-                <Button asChild variant="outline" block stack>
+                <Button asChild variant="quiet" block stack>
                   <Link href="/exportar">
                     {t("export.entry.title")}
                     <Text variant="sentence">{t("export.entry.hint")}</Text>

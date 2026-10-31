@@ -4,7 +4,7 @@ import type postgres from "postgres";
 import { horizonForWeeks } from "@/lib/day/weeks";
 import { todayInZone } from "@/lib/zone";
 
-import { test, expect } from "./fixtures";
+import { test, expect, openMore } from "./fixtures";
 import { boxOf } from "./box";
 
 // Module 900, clause 5 (board CrearDentroAviso): the create-inside sheet says the upper goal's rhythm stops
@@ -27,6 +27,7 @@ async function openSheet(browser: Browser, baseURL: string, sessionFile: string,
   const context = await browser.newContext({ storageState: sessionFile, baseURL, viewport: { width: 360, height: 900 } });
   const page = await context.newPage();
   await page.goto(`/metas/${goalId}`);
+  await openMore(page);
   await page.getByRole("button", { name: "Añadir meta pequeña" }).click();
   const sheet = page.getByRole("dialog");
   await expect(sheet).toBeVisible();

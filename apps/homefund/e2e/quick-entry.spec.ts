@@ -58,17 +58,8 @@ test("reads the amount and the category out of one line and records the movement
     sheet.getByRole("textbox", { name: transactions.amountLabel, exact: true }),
   ).toHaveValue(AMOUNT_PESOS);
   await expect(
-    sheet.getByRole("textbox", {
-      name: transactions.splitRowAmount.replace("{position}", "1"),
-      exact: true,
-    }),
-  ).toHaveValue(AMOUNT_PESOS);
-  await expect(
-    sheet.getByRole("combobox", {
-      name: transactions.splitRowCategory.replace("{position}", "1"),
-      exact: true,
-    }),
-  ).toHaveText(scope.categoryName);
+    sheet.getByRole("button", { name: scope.categoryName, exact: true, pressed: true }),
+  ).toBeVisible();
 
   // Nothing has been recorded yet, so the account has no last-used to fall back
   // on and the source is picked by hand.
@@ -257,7 +248,7 @@ test("an amount typed by hand survives further text that proposes none", async (
   await quick.press("End");
   await quick.press("m");
   await expect(quick).toHaveValue(`${scope.categoryName} 1.500m`);
-  await expect(amount).toHaveValue("9000");
+  await expect(amount).toHaveValue(/^9\D?000$/);
 
   await sheet.getByRole("combobox", { name: transactions.accountLabel, exact: true }).click();
   await page.getByRole("option", { name: scope.accountName, exact: true }).click();
@@ -480,7 +471,7 @@ test("an amount typed first stays when the text typed after it has no number", a
   await amount.fill("9000");
   await quick.pressSequentially(`${scope.categoryName} almuerzo`);
   await expect(quick).toHaveValue(`${scope.categoryName} almuerzo`);
-  await expect(amount).toHaveValue("9000");
+  await expect(amount).toHaveValue(/^9\D?000$/);
   await expect(save).toBeEnabled();
 
   await pickAccount(page, sheet);

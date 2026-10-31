@@ -2,7 +2,7 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Info } from "lucide-react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { useAction } from "next-safe-action/hooks";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Controller, useForm, useWatch, type Resolver } from "react-hook-form";
@@ -28,6 +28,8 @@ import {
   Spinner,
   Text,
   TextField,
+  AmountField,
+  DateInput,
 } from "@/components/ui";
 import type { RecurringRuleRow } from "@/db/queries/recurring-rules";
 import type { TransactionFormOptions } from "@/db/queries/transaction-form";
@@ -115,6 +117,7 @@ function RecurringForm({
 }) {
   const t = useTranslations("recurringRules");
   // Root-scoped: the keys under `common` sit outside the `recurringRules` namespace.
+  const locale = useLocale();
   const tKey = useTranslations();
 
   const isEdit = !!rule;
@@ -158,7 +161,7 @@ function RecurringForm({
           direction: rule.toAccountId !== null ? "income" : "expense",
           fromAccountId: rule.fromAccountId,
           toAccountId: rule.toAccountId,
-          amount: amountToInput(rule.amountCents, rule.currency),
+          amount: amountToInput(rule.amountCents, rule.currency, locale),
           categoryId: rule.categoryId,
           description: rule.description,
           frequency: rule.frequency,
@@ -346,7 +349,7 @@ function RecurringForm({
             <Field invalid={fieldState.invalid}>
               <FieldLabel htmlFor="rule-amount">{t("amountLabel")}</FieldLabel>
               <FieldControl>
-                <TextField.Root
+                <AmountField
                   {...field}
                   id="rule-amount"
                   size="3"
@@ -366,11 +369,10 @@ function RecurringForm({
             <Field invalid={fieldState.invalid}>
               <FieldLabel htmlFor="rule-next">{t("nextRunLabel")}</FieldLabel>
               <FieldControl>
-                <TextField.Root
+                <DateInput
                   {...field}
                   id="rule-next"
                   size="3"
-                  type="date"
                   disabled={isPending}
                 />
               </FieldControl>
@@ -582,10 +584,9 @@ function RecurringForm({
                   </Flex>
                 </FieldLabel>
                 <FieldControl>
-                  <TextField.Root
+                  <DateInput
                     id="rule-ends"
                     size="3"
-                    type="date"
                     value={field.value ?? ""}
                     onChange={(event) =>
                       field.onChange(event.target.value || null)

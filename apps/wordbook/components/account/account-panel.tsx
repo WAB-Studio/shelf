@@ -354,8 +354,7 @@ function SignedOutForm() {
                 size="3"
                 value={code}
                 onChange={(event) => setCode(event.target.value)}
-                placeholder={t("codeLabel")}
-                aria-label={t("codeLabel")}
+                label={t("codeLabel")}
                 inputMode="numeric"
                 autoComplete="one-time-code"
                 maxLength={6}
@@ -426,8 +425,7 @@ function SignedOutForm() {
             size="3"
             value={email}
             onChange={(event) => setEmail(event.target.value)}
-            placeholder={t("emailLabel")}
-            aria-label={t("emailLabel")}
+            label={t("emailLabel")}
             aria-describedby={state.kind === "failed" ? SEND_FAILURE_ID : undefined}
             aria-invalid={state.kind === "failed" ? true : undefined}
             autoCapitalize="none"

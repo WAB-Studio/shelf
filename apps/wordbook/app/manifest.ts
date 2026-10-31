@@ -17,7 +17,7 @@ export default async function manifest(): Promise<MetadataRoute.Manifest> {
     // "Tokens"), so the launch splash and the status bar read the same warm
     // near-black ground and terracotta accent as the app itself.
     background_color: "#14130f",
-    theme_color: "#d9805f",
+    theme_color: "#0a3d2e",
     lang: "es",
     icons: [
       {

@@ -1,7 +1,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { useAction } from "next-safe-action/hooks";
 import { useState } from "react";
 import { Controller, useForm, useWatch, type Resolver } from "react-hook-form";
@@ -24,6 +24,8 @@ import {
   Spinner,
   Text,
   TextField,
+  AmountField,
+  DateInput,
 } from "@/components/ui";
 import type { AccountRow } from "@/db/queries/accounts";
 import { BASE_CURRENCY, OFFERED_CURRENCIES } from "@/lib/currency";
@@ -122,6 +124,7 @@ function AccountForm({
 }) {
   const t = useTranslations("accounts");
   // Root-scoped: the keys under `common` sit outside the `accounts` namespace.
+  const locale = useLocale();
   const tKey = useTranslations();
 
   const isEdit = !!account;
@@ -150,6 +153,7 @@ function AccountForm({
           amount: amountToInput(
             Math.abs(account.initialBalanceCents),
             account.settlementCurrency,
+            locale,
           ),
           balanceOn: account.initialBalanceOn,
         }
@@ -440,7 +444,7 @@ function AccountForm({
             <Field invalid={fieldState.invalid}>
               <FieldLabel htmlFor="account-amount">{amountLabel}</FieldLabel>
               <FieldControl>
-                <TextField.Root
+                <AmountField
                   {...field}
                   id="account-amount"
                   size="3"
@@ -461,11 +465,10 @@ function AccountForm({
                 {t("openingBalanceOnLabel")}
               </FieldLabel>
               <FieldControl>
-                <TextField.Root
+                <DateInput
                   {...field}
                   id="account-balance-on"
                   size="3"
-                  type="date"
                   disabled={isPending}
                 />
               </FieldControl>

@@ -163,41 +163,37 @@ test("a goal opened on a Wednesday two weeks back draws its measure week by week
     const scrollWidth = await page.evaluate(() => document.documentElement.scrollWidth);
     expect(scrollWidth).toBeLessThanOrEqual(360);
 
-    // `RevisionEscritorio.dc.html`: the same rows, a real `<table>`, widened
-    // past the kit's usual 640px cap.
+    // Wide: the same list of bars (decided 2026-10-31), no table, spanning the main column past the old 1020 cap.
     await page.setViewportSize({ width: 1440, height: 900 });
     await expect(page.getByText("mide en horas y minutos", { exact: true })).toBeVisible();
     await expect(page.getByText(`mide en ${unit}`, { exact: true })).toHaveCount(0);
-    const table = page.getByRole("table");
-    await expect(table).toBeVisible();
-    const rows = table.getByRole("row");
-    await expect(rows).toHaveCount(4); // the header row plus three weeks
+    await expect(page.getByRole("table")).toHaveCount(0);
+    const list = page.locator("main ol:visible");
+    await expect(items).toHaveCount(3);
 
-    const week1Row = rows.nth(1);
-    await expect(week1Row.getByRole("cell").nth(0)).toContainText("semana 1");
-    await expect(week1Row.getByRole("cell").nth(1)).toHaveText("11 h 30 min");
+    const week1Row = items.nth(0);
+    await expect(week1Row).toContainText("semana 1");
+    await expect(week1Row).toContainText("11 h 30 min");
     await expect(week1Row).not.toHaveAttribute("data-current", "");
 
-    const week3Row = rows.nth(3);
-    await expect(week3Row.getByRole("cell").nth(0)).toContainText("semana 3");
-    await expect(week3Row.getByRole("cell").nth(1)).toHaveText("0 min");
-    // «en curso» is a mark after the week's dates, not a cell: SEMANA, TOTAL and FASE are the columns.
-    await expect(week3Row.getByRole("cell")).toHaveCount(3);
-    await expect(week3Row.getByRole("cell").nth(0)).toContainText("en curso");
+    const week3Row = items.nth(2);
+    await expect(week3Row).toContainText("semana 3");
+    await expect(week3Row).toContainText("0 min");
+    // «en curso» is a mark after the week's dates, not an element of its own.
+    await expect(week3Row).toContainText("en curso");
     await expect(week3Row).toHaveAttribute("data-current", "");
 
     // A phase is named on the week it starts, not again on each week it spans.
-    await expect.soft(week1Row.getByRole("cell").nth(2)).toHaveText("Fase única");
-    await expect.soft(rows.nth(2).getByRole("cell").nth(2)).toHaveText("");
-    await expect.soft(week3Row.getByRole("cell").nth(2)).toHaveText("");
+    await expect.soft(week1Row).toContainText("Fase única");
+    await expect.soft(items.nth(1)).not.toContainText("Fase única");
+    await expect.soft(week3Row).not.toContainText("Fase única");
 
-    // From 1024 the table spans the main column, past the old 1020 cap.
-    const tableWidth = (await boxOf(table)).width;
-    expect(tableWidth).toBeGreaterThan(1020);
+    const listWidth = (await boxOf(list)).width;
+    expect(listWidth).toBeGreaterThan(1020);
     const mainWidth = await page.evaluate(() => document.querySelector("main")?.getBoundingClientRect().width);
-    expect(tableWidth).toBeGreaterThan(mainWidth! * 0.8);
+    expect(listWidth).toBeGreaterThan(mainWidth! * 0.8);
 
-    // The header's way back is the only one: no link after the table.
+    // The header's way back is the only one: no link after the list.
     await expect(page.getByRole("link", { name: "Volver a la meta" })).toHaveCount(0);
     await page.getByLabel(`Volver a ${goalName}`).click();
     await page.waitForURL(`**/metas/${goalId}`);
@@ -273,11 +269,8 @@ test("a goal measured in «páginas» reads its plain number on the goal and in 
     `;
 
     await page.goto(`/metas/${goalId}`);
-    // The goal's total sits right above «en total, desde…»; the month block below carries its own 750.
-    const total = page
-      .locator("p", { hasText: /^en total, desde el / })
-      .locator("visible=true")
-      .locator("xpath=preceding-sibling::*[1]");
+    // The goal's total is the figure of the navy block; the month block below carries its own 750.
+    const total = page.locator('[data-part="hero-figure"]');
     await expect(total).toHaveCount(1);
     await expect(total).toHaveText(`750 ${unit}`);
     // The month block beside «sin monto planeado» names the unit too, as the total does.
@@ -293,12 +286,11 @@ test("a goal measured in «páginas» reads its plain number on the goal and in 
     await page.goto(`/metas/${goalId}/revision`);
     await expect(page.getByText(`mide en ${unit}`, { exact: true })).toBeVisible();
     await expect(page.getByText("mide en horas y minutos")).toHaveCount(0);
-    await expect(page.locator("li[data-current]")).toContainText(`750${unit}`);
+    await expect(page.locator("li[data-current]")).toContainText(`750 ${unit}`);
 
     await page.setViewportSize({ width: 1280, height: 900 });
-    const table = page.getByRole("table");
-    await expect(table.getByRole("columnheader").nth(1)).toHaveText(`total${unit}`);
-    await expect(table.locator("tr[data-current]").getByRole("cell").nth(1)).toHaveText("750");
+    await expect(page.getByRole("table")).toHaveCount(0);
+    await expect(page.locator("li[data-current]")).toContainText(`750 ${unit}`);
   } finally {
     await deleteGoal(db, personId, goalId);
   }

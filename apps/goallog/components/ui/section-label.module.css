@@ -1,16 +1,21 @@
-/* docs/goallog/DESIGN.md "Type": 11px mono, uppercase, 0.14em, in muted. */
+/* docs/goallog/DESIGN.md "Type": 14px Archivo, sentence case, 0.02em, in muted. */
 .label {
   display: block;
-  font-family: var(--font-mono);
+  font-family: var(--font-sans);
   font-size: var(--pulsar-text-label-size);
   font-weight: 500;
   letter-spacing: var(--pulsar-text-label-tracking);
   line-height: 1.3;
-  text-transform: uppercase;
+  text-transform: none;
   color: var(--pulsar-muted);
 }
 
 @media print {
+  /* Chrome's PDF of Archivo at 500 leaves a gap after an «f», and a search or a copy reads «Portaf olio»: paper sets the label at 600. */
+  .label {
+    font-weight: 600;
+  }
+
   .label[data-print-suffix]::after {
     content: attr(data-print-suffix);
   }

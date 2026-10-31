@@ -1,13 +1,13 @@
 "use client";
 
-import { type ReactNode, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 
 import { retireCommitment } from "@/app/actions/plan";
 import { deleteCommitment } from "@/app/actions/plan-edit";
-import { Button, Flex, Row, Sheet, SheetActions, Text } from "@/components/ui";
+import { Button, Flex, Sheet, SheetActions, Text } from "@/components/ui";
 import { type MessageKey } from "@/i18n/translator";
 
 export type RetireSheetProps = {
@@ -20,6 +20,8 @@ export type RetireSheetProps = {
   // than say "0 días" (RP-13's own "what it leaves intact" is nothing to
   // name when nothing has been done yet).
   factDayCount: number;
+  // Days its source met the threshold: days done, but never declared, so they never lock a deletion.
+  evidenceDayCount?: number;
   // The goal the commitment belongs to. While no fact names it (RP-127) the sheet also offers its cadence page
   // and the delete; null is a loose habit, which offers both on its own screen instead.
   goalId: string | null;
@@ -32,6 +34,8 @@ export type DeleteSheetProps = {
   name: string;
   // A habit has no list to return to: deleted, it leaves its own screen for /metas.
   habit: boolean;
+  // A goal's commitment: deleted, it leaves its own screen for the goal's.
+  goalId?: string;
 };
 
 /**
@@ -39,7 +43,7 @@ export type DeleteSheetProps = {
  * sheet's «Retirarlo» is the act that keeps the row. A fact that landed while it was open comes back as
  * the act's own sentence and the row stays.
  */
-export function DeleteCommitmentSheet({ open, onOpenChange, commitmentId, name, habit }: DeleteSheetProps) {
+export function DeleteCommitmentSheet({ open, onOpenChange, commitmentId, name, habit, goalId }: DeleteSheetProps) {
   const t = useTranslations();
   const router = useRouter();
   const [pending, setPending] = useState(false);
@@ -54,6 +58,7 @@ export function DeleteCommitmentSheet({ open, onOpenChange, commitmentId, name, 
     if (result.ok) {
       onOpenChange(false);
       if (habit) router.push("/metas");
+      else if (goalId) router.push(`/metas/${goalId}`);
       router.refresh();
     } else {
       setError(result.error);
@@ -97,20 +102,27 @@ export function DeleteCommitmentSheet({ open, onOpenChange, commitmentId, name, 
  * (`private/measure-retire.ts` proved it against a real `loadDay` call
  * before and after retiring one).
  */
-export function RetireSheet({ open, onOpenChange, commitmentId, name, factDayCount, goalId }: RetireSheetProps) {
+export function RetireSheet({ open, onOpenChange, commitmentId, name, factDayCount, evidenceDayCount = 0, goalId }: RetireSheetProps) {
   const t = useTranslations();
   const router = useRouter();
   const [pending, setPending] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  // The server refuses a delete by declared facts alone, and a cadence change by those and the source's days.
   const editable = factDayCount === 0 && goalId !== null;
+  const cadenceOpen = editable && evidenceDayCount === 0;
   // Facts name it: the cadence and the delete stay in view, disabled, with their reason. A loose habit says it on its own screen.
   const locked = factDayCount > 0 && goalId !== null;
+  const evidenceLocked = editable && evidenceDayCount > 0;
   const [error, setError] = useState<MessageKey | null>(null);
 
-  const description =
+  const description = [
     factDayCount > 0
       ? t("plan.retireSheet.descriptionWithDays", { days: factDayCount })
-      : t("plan.retireSheet.descriptionNoDays");
+      : t("plan.retireSheet.descriptionNoDays"),
+    evidenceDayCount > 0 ? t("plan.retireSheet.evidenceDays", { days: evidenceDayCount }) : null,
+  ]
+    .filter(Boolean)
+    .join(" ");
 
   async function handleRetire() {
     if (pending) return;
@@ -121,6 +133,8 @@ export function RetireSheet({ open, onOpenChange, commitmentId, name, factDayCou
     setPending(false);
     if (result.ok) {
       onOpenChange(false);
+      // A goal's commitment is retired from its own screen, which then has nothing to show.
+      if (goalId) router.push(`/metas/${goalId}`);
       router.refresh();
     } else {
       setError(result.error);
@@ -145,11 +159,14 @@ export function RetireSheet({ open, onOpenChange, commitmentId, name, factDayCou
         <Button block onClick={handleRetire} disabled={pending}>
           {t("plan.retireSheet.confirm")}
         </Button>
-        {editable ? (
+        {cadenceOpen ? (
+          // The sheet opens on this commitment's own screen, where the link points: pressing it closes the sheet over it.
           <Button asChild block variant="outline">
-            <Link href={`/metas/${goalId}/compromisos/${commitmentId}`}>{t("goal.commitments.changeCadence")}</Link>
+            <Link href={`/metas/${goalId}/compromisos/${commitmentId}`} onClick={() => onOpenChange(false)}>
+              {t("goal.commitments.changeCadence")}
+            </Link>
           </Button>
-        ) : locked ? (
+        ) : locked || evidenceLocked ? (
           <Button block variant="outline" disabled aria-describedby="cadence-locked-reason">
             {t("goal.commitments.changeCadence")}
           </Button>
@@ -172,6 +189,11 @@ export function RetireSheet({ open, onOpenChange, commitmentId, name, factDayCou
           </Button>
         </Flex>
       ) : null}
+      {evidenceLocked ? (
+        <Text as="p" id="cadence-locked-reason" variant="sentence" tone="muted">
+          {t("plan.retireSheet.evidenceLocked", { days: evidenceDayCount })}
+        </Text>
+      ) : null}
       {locked ? (
         <>
           <Flex justify="start">
@@ -192,6 +214,7 @@ export function RetireSheet({ open, onOpenChange, commitmentId, name, factDayCou
         commitmentId={commitmentId}
         name={name}
         habit={false}
+        goalId={goalId}
       />
     ) : null}
     </>
@@ -230,45 +253,6 @@ export function RetireAction({ label, ...sheet }: Omit<RetireSheetProps, "open" 
         {label}
       </Button>
       <RetireSheet open={open} onOpenChange={setOpen} goalId={null} {...sheet} />
-    </>
-  );
-}
-
-export type CommitmentRowProps = {
-  commitmentId: string;
-  name: string;
-  retired: boolean;
-  retiredLabel: string;
-  factDayCount: number;
-  goalId: string | null;
-  trailing?: ReactNode;
-  // A habit with no goal says its cadence under the name and its note under that.
-  meta?: ReactNode;
-  preview?: string | null;
-};
-
-/**
- * The goal screen's own commitment row: a retired one stays disabled — never
- * hidden, never tappable (RP-13) — an active one opens `RetireSheet`.
- */
-export function CommitmentRow({ commitmentId, name, retired, retiredLabel, factDayCount, goalId, trailing, meta, preview }: CommitmentRowProps) {
-  const [open, setOpen] = useState(false);
-
-  if (retired) {
-    return <Row name={name} meta={retiredLabel} trailing={trailing} disabled />;
-  }
-
-  return (
-    <>
-      <Row name={name} meta={meta} metaVariant="sentence" preview={preview} trailing={trailing} onClick={() => setOpen(true)} />
-      <RetireSheet
-        open={open}
-        onOpenChange={setOpen}
-        commitmentId={commitmentId}
-        name={name}
-        factDayCount={factDayCount}
-        goalId={goalId}
-      />
     </>
   );
 }

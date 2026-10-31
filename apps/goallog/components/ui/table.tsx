@@ -68,13 +68,13 @@ type TableProps = {
   // Keeps the wide face's label column on one line (`ReporteMesesSemanas.dc.html`'s
   // «sem 1 · 28 jul–2 ago 2026»): the column grows to its text rather than wrap it.
   nowrapLabel?: boolean;
-  // Draws the phone's stack from 1024 to 1279px, where the shell's rail leaves
+  // Draws the phone's stack from 768 to 1279px, where the shell's rail leaves
   // a two-column card too narrow for the wide face; the wide face returns at 1280.
   stackInCard?: boolean;
   // Lets a row's `detail` wrap, for a state line longer than its label column.
   wrapDetail?: boolean;
   // Grows the label column to its longest `detail`, one width on every row of
-  // both faces, rather than hold 112px (`RevisionConAño.dc.html`'s «28 sep–4 oct
+  // both faces, rather than hold 128px (`RevisionConAño.dc.html`'s «28 sep–4 oct
   // 2026»). Unlinked rows only: a linked row's anchor is not on the phone's grid.
   fitDetail?: boolean;
   // Lets a `narrow` table's note wrap at a word when it does not fit beside the
@@ -156,7 +156,7 @@ export function Table({ caption, columns, rows, figures = [], unit, current, nar
             {row.phoneMark ? <> · {row.phoneMark}</> : null}
           </span>
         ) : null}
-        {row.phoneUnder ? <span className={styles.detail}>{row.phoneUnder}</span> : null}
+        {row.phoneUnder ? <span className={styles.detailWrap}>{row.phoneUnder}</span> : null}
       </span>
       {lead === undefined ? null : (
         <span className={styles.stackFigure} data-part="table-stack-figure">

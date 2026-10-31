@@ -1,0 +1,29 @@
+.mark {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4em;
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.12;
+}
+
+.lg {
+  font-size: 34px;
+}
+
+.icon {
+  flex: none;
+  width: 1em;
+  height: 1em;
+}
+
+/* Ink on marigold, never marigold as text; the margin keeps the highlight off the «d». */
+.mark mark {
+  margin-inline-start: 0.14em;
+  padding: 0 0.14em;
+  border-radius: 0.2em;
+  background: var(--rl-highlight);
+  color: var(--rl-highlight-ink);
+}

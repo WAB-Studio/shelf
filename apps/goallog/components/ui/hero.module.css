@@ -1,0 +1,144 @@
+/* The navy brand block: ink 15.10, muted 8.22 and sky 9.91 on #0B1F3A light;
+   14.22, 7.74 and 9.33 on #0E2347 dark (docs/goallog/DESIGN.md). */
+.hero {
+  --pulsar-ink: var(--pulsar-brand-ink);
+  --pulsar-ink-secondary: var(--pulsar-brand-ink-secondary);
+  --pulsar-muted: var(--pulsar-brand-muted);
+  --pulsar-line: var(--pulsar-brand-line);
+  --pulsar-border: var(--pulsar-brand-line);
+  --pulsar-accent: var(--pulsar-highlight);
+  --pulsar-accent-soft: var(--pulsar-brand-soft);
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 20px;
+  border-radius: 14px;
+  background: var(--pulsar-brand);
+  color: var(--pulsar-brand-ink);
+}
+
+.label {
+  font-family: var(--font-sans);
+  font-weight: 500;
+  font-size: var(--pulsar-text-label-size);
+  letter-spacing: var(--pulsar-text-label-tracking);
+  color: var(--pulsar-brand-muted);
+}
+
+/* The title face, one weight. A `Figure` inside speaks the same face, its unit a step down. */
+.figure.figure,
+.figure.figure * {
+  font-family: var(--font-display), var(--font-sans), sans-serif;
+  font-weight: 400;
+  letter-spacing: -0.02em;
+  color: var(--pulsar-brand-ink);
+}
+
+.figure.figure {
+  font-size: 44px;
+  line-height: 1.05;
+}
+
+.figure.figure :is([data-part="figure"], [data-part="figure-unit"]) {
+  font-size: inherit;
+}
+
+.figure.figure [data-part="figure-unit"] {
+  font-size: 18px;
+  color: var(--pulsar-brand-muted);
+}
+
+/* Sky on navy, 9.91:1 (9.33 dark): the one realce. The unit stays muted. */
+.figure.figure.highlight,
+.figure.figure.highlight :is([data-part="figure"], [data-part="hero-figure"]) {
+  color: var(--pulsar-highlight);
+}
+
+/* The week: seven columns, the letter over its mark; today is a fill. */
+.days {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 4px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.day {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 0;
+  border-radius: 10px;
+}
+
+.dayToday {
+  background: var(--pulsar-brand-soft);
+}
+
+.dayLabel {
+  font-size: 14px;
+  color: var(--pulsar-brand-muted);
+}
+
+.dayToday .dayLabel {
+  color: var(--pulsar-brand-ink);
+  font-weight: 600;
+}
+
+/* A day part done: a ring filled to its share, as far round as the day got. */
+.share {
+  display: block;
+  box-sizing: border-box;
+  inline-size: 24px;
+  block-size: 24px;
+  border-radius: 50%;
+  background: conic-gradient(var(--pulsar-accent) var(--share), transparent 0);
+  box-shadow: inset 0 0 0 1.5px var(--pulsar-accent);
+}
+
+.dayFigure {
+  min-block-size: 1.3em;
+  font-family: var(--font-mono);
+  font-size: 14px;
+  color: var(--pulsar-brand-ink-secondary);
+}
+
+.dayNone {
+  display: block;
+  inline-size: 24px;
+  block-size: 24px;
+}
+
+.dayNone::before {
+  content: "·";
+  display: block;
+  text-align: center;
+  line-height: 24px;
+  color: var(--pulsar-brand-muted);
+}
+
+.caption {
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--pulsar-brand-ink-secondary);
+}
+
+@media (min-width: 768px) {
+  .hero {
+    padding: 28px 32px;
+  }
+
+  .figure.figure {
+    font-size: 56px;
+  }
+}
+
+@media print {
+  .hero {
+    background: none;
+    color: inherit;
+  }
+}

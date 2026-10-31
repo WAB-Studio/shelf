@@ -42,7 +42,7 @@ async function phaseCount(db: postgres.Sql, goalId: string): Promise<number> {
   return Number(row.count);
 }
 
-test("a fresh goal draws its phase way in outlined and its commitment way in solid; the first phase added lists as semanas 1–4 and the day names it", async ({
+test("a fresh goal draws its phase way in a quiet row and its commitment way in solid; the first phase added lists as semanas 1–4 and the day names it", async ({
   person,
   browser,
 }) => {
@@ -56,11 +56,11 @@ test("a fresh goal draws its phase way in outlined and its commitment way in sol
     const aim = `Primer objetivo ${Date.now()}`;
     const goalId = await createGoal(page, goalName);
 
-    // No phase yet: the way in is outlined all the same; on an empty goal the
+    // No phase yet: the way in is a quiet row all the same; on an empty goal the
     // only solid act is «Añadir un compromiso».
     const addPhaseLink = page.getByRole("link", { name: "Añadir una fase" });
     await expect(addPhaseLink).toBeVisible();
-    await expect(addPhaseLink).toHaveClass(/\boutline\b/);
+    await expect(addPhaseLink).toHaveClass(/quiet/);
     await expect(page.getByRole("link", { name: "Añadir un compromiso" })).toHaveClass(/\bsolid\b/);
     await expect(page.getByText("cero fases")).toHaveCount(0);
 
@@ -75,7 +75,7 @@ test("a fresh goal draws its phase way in outlined and its commitment way in sol
 
     await expect(page.getByText(aim)).toBeVisible();
     await expect(page.getByText("semanas 1–4")).toBeVisible();
-    await expect(page.getByText("una fase", { exact: true })).toBeVisible();
+    await expect(page.getByText("Una fase", { exact: true })).toBeVisible();
 
     // The day this phase covers names it (RP-15): a goal's own opening day
     // falls in week 1, so today's screen reads this phase's own aim.
@@ -87,7 +87,7 @@ test("a fresh goal draws its phase way in outlined and its commitment way in sol
     await page.setViewportSize(viewport!);
 
     await page.goto(`/metas/${goalId}`);
-    await expect(addPhaseLink).toHaveClass(/\boutline\b/);
+    await expect(addPhaseLink).toHaveClass(/quiet/);
   } finally {
     await context.close();
   }
@@ -121,7 +121,7 @@ test("a goal that already has a phase prefills the next span right after it, ref
   // Outlined with a phase and without one alike.
   await page.goto(`/metas/${goalId}`);
   const addPhaseLink = page.getByRole("link", { name: "Añadir una fase" });
-  await expect(addPhaseLink).toHaveClass(/\boutline\b/);
+  await expect(addPhaseLink).toHaveClass(/quiet/);
 
   // The prefill, proved against the goal's own last phase rather than a
   // hardcoded number: right after it, four weeks long — 1–4 the first time,
@@ -200,16 +200,18 @@ test("the goal's own commitment count drops when one is retired, though the row 
     await page.getByRole("button", { name: "Añadirlo" }).click();
     await page.waitForURL(`**/metas/${goalId}`);
 
-    await expect(page.getByText("un compromiso", { exact: true })).toBeVisible();
+    await expect(page.getByText("Un compromiso", { exact: true })).toBeVisible();
 
-    const row = page.locator("button", { hasText: commitmentName });
-    await row.click();
+    // A live row is a link to the commitment's own screen, whose «Retirarlo o borrarlo» opens the sheet.
+    await page.locator("main a", { hasText: commitmentName }).click();
+    await page.getByRole("button", { name: "Retirarlo o borrarlo", exact: true }).click();
     const sheet = page.getByRole("dialog");
     await sheet.getByRole("button", { name: "Retirarlo" }).click();
     await expect(sheet).toBeHidden();
+    const row = page.locator("main button", { hasText: commitmentName });
 
-    await expect(page.getByText("cero compromisos", { exact: true })).toHaveCount(0);
-    await expect(page.getByText("un compromiso", { exact: true })).not.toBeVisible();
+    await expect(page.getByText("Cero compromisos", { exact: true })).toHaveCount(0);
+    await expect(page.getByText("Un compromiso", { exact: true })).not.toBeVisible();
     // Retired, never hidden (RP-13): the row itself stays, marked, out of
     // the count above it.
     await expect(row).toContainText("retirado");

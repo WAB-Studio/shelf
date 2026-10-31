@@ -3,6 +3,8 @@ import "server-only";
 import { desc, eq, sql } from "drizzle-orm";
 import { cache } from "react";
 
+import { addCivilDays, todayInBogota } from "@/lib/dates";
+
 import { listAccounts } from "@/db/queries/accounts";
 import type { AccountRow } from "@/db/queries/accounts";
 import { listScopedCategories } from "@/db/queries/categories";
@@ -40,6 +42,10 @@ export type TransactionFormOptions = {
   categories: ScopedCategory[];
   labels: ScopedLabel[];
   members: { userId: string; name: string }[];
+  // Every active member of the fund, login or not, for «De quién» on an income into a fund
+  // account (RF-166); `callerMemberId` is the one the form opens on.
+  fundMembers: { id: string; name: string }[];
+  callerMemberId: string | null;
   lastUsedAccountId: string | null;
   // What each selectable account settles in (RF-121), so the form knows when to
   // ask for the second amount without going back to the server for it.
@@ -53,6 +59,10 @@ export type TransactionFormOptions = {
   // most recent movements, newest first. A caller offers a fresh charge to
   // attach against these; the movement already under edit filters itself out.
   recentMovements: TransactionListRow[];
+  // The categories the caller's own movements use most, busiest first: the
+  // grid the category choice opens with. Ids the caller can no longer read are
+  // simply never matched against the list.
+  frequentCategoryIds: string[];
 };
 
 /**
@@ -67,8 +77,8 @@ export const getTransactionFormOptions = cache(
   async function getTransactionFormOptions(): Promise<TransactionFormOptions> {
     const user = await requireUser();
 
-    // One transaction for all seven reads: they pipeline on its connection, so
-    // BEGIN, the settle and COMMIT are paid once instead of seven times.
+    // One transaction for all eight reads: they pipeline on its connection, so
+    // BEGIN, the settle and COMMIT are paid once instead of eight times.
     const [
       accountRows,
       categories,
@@ -77,6 +87,7 @@ export const getTransactionFormOptions = cache(
       lastUsedAccountId,
       currencies,
       recentMovements,
+      frequentCategoryIds,
     ] = await withUserDb((tx) =>
       Promise.all([
         listAccounts({ archived: false }, tx),
@@ -86,6 +97,7 @@ export const getTransactionFormOptions = cache(
         getLastUsedAccountId(tx),
         listCurrencyOptions(tx),
         listTransactions({}, { limit: CAUSE_CANDIDATE_LIMIT, tx }),
+        listFrequentCategoryIds(user.id, tx),
       ]),
     );
 
@@ -97,13 +109,42 @@ export const getTransactionFormOptions = cache(
       members: members.flatMap((member) =>
         member.userId ? [{ userId: member.userId, name: member.name }] : [],
       ),
+      fundMembers: members.map((member) => ({ id: member.id, name: member.name })),
+      callerMemberId: members.find((member) => member.userId === user.id)?.id ?? null,
       lastUsedAccountId,
       accountCurrencies: currencies.accountCurrencies,
       scopeCurrency: currencies.scopeCurrency,
       recentMovements,
+      frequentCategoryIds,
     };
   },
 );
+
+// How many categories the grid can ever show before «Más»; the rest of the list
+// is the person's catalogue order.
+const FREQUENT_CATEGORY_LIMIT = 24;
+// Only the recent past counts, so the grid follows what the person spends on now and the
+// read stays bounded as the ledger grows.
+const FREQUENT_WINDOW_DAYS = 90;
+
+// Count of the caller's own movements per category, busiest first.
+async function listFrequentCategoryIds(
+  userId: string,
+  tx: Transaction,
+): Promise<string[]> {
+  const rows = await tx.execute<{ category_id: string }>(sql`
+    select s.category_id
+    from transaction_splits s
+    join transactions t on t.id = s.transaction_id
+    where t.created_by = ${userId}
+      and t.occurred_at >= ${addCivilDays(todayInBogota(), -FREQUENT_WINDOW_DAYS)}
+    group by s.category_id
+    order by count(*) desc, s.category_id
+    limit ${FREQUENT_CATEGORY_LIMIT}
+  `);
+
+  return rows.map((row) => row.category_id);
+}
 
 /**
  * Both currency answers the write screens need, in ONE round trip (RF-121): what
@@ -151,8 +192,9 @@ async function listCurrencyOptions(outerTx?: Transaction): Promise<{
 }
 
 // The account the quick-entry field defaults to (RF-22): the source of the
-// caller's most recent movement, or its destination for an income, or null when
-// they have recorded nothing yet.
+// caller's most recent expense (or transfer), since an income's account is rarely
+// the one the next spending leaves from. With no such movement, the destination of
+// their latest income; null when they have recorded nothing yet.
 export async function getLastUsedAccountId(
   outerTx?: Transaction,
 ): Promise<string | null> {
@@ -168,7 +210,11 @@ export async function getLastUsedAccountId(
       })
       .from(transactions)
       .where(eq(transactions.createdBy, user.id))
-      .orderBy(desc(transactions.occurredAt), desc(transactions.createdAt))
+      .orderBy(
+        sql`${transactions.fromAccountId} is null`,
+        desc(transactions.occurredAt),
+        desc(transactions.createdAt),
+      )
       .limit(1);
 
     return row?.accountId ?? null;

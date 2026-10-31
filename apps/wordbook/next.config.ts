@@ -28,9 +28,10 @@ const nextConfig: NextConfig = {
       {
         // `public/` is served with `max-age=0` by default, so every open would
         // re-validate 8.2 MB — the opposite of an app that answers offline. The
-        // asset's filename carries its edition, so a changed dictionary is a
-        // changed URL and this copy is never stale.
-        source: "/dictionary/:path*",
+        // asset's filename carries its edition and payload version, so a changed
+        // dictionary is a changed URL and this copy is never stale. The manifest
+        // that names it keeps its own name and is revalidated.
+        source: "/dictionary/eng-spa-:name.json",
         headers: [
           {
             key: "Cache-Control",

@@ -20,6 +20,7 @@ import {
   type NavListItem,
   Sidebar,
   SidebarAction,
+  SidebarBody,
   SidebarFoot,
   SidebarHead,
   SidebarPerson,
@@ -42,7 +43,7 @@ function icon(Icon: LucideIcon, current: boolean) {
  * The desktop shell (`private/design-desktop/SPEC-A3.md`): every primary screen one
  * click away from every other, Ajustes among them, and quick entry (RF-22)
  * without leaving the screen. The person's own row keeps the settings panel, which
- * is their menu and not an index of destinations. Below `md` it does not render —
+ * is their menu and not an index of destinations. Below `sm` it does not render —
  * the bottom bar owns navigation there.
  */
 export function AppSidebar({
@@ -96,7 +97,7 @@ export function AppSidebar({
   }
 
   return (
-    <Sidebar label={t("title")} display={{ initial: "none", md: "flex" }}>
+    <Sidebar label={t("title")} display={{ initial: "none", sm: "flex" }}>
       <SidebarHead
         title={fundName}
         action={
@@ -119,12 +120,14 @@ export function AppSidebar({
         }
       />
 
-      <NavList variant="sidebar" items={items(PRIMARY_KEYS)} />
-      <SidebarSeparator />
-      <NavList
-        variant="sidebar"
-        items={[...items(SIDEBAR_SECONDARY_KEYS), settings]}
-      />
+      <SidebarBody>
+        <NavList variant="sidebar" items={items(PRIMARY_KEYS)} />
+        <SidebarSeparator />
+        <NavList
+          variant="sidebar"
+          items={[...items(SIDEBAR_SECONDARY_KEYS), settings]}
+        />
+      </SidebarBody>
 
       <SidebarFoot>
         <SidebarAction

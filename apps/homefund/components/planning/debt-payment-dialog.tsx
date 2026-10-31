@@ -23,7 +23,8 @@ import {
   Select,
   Spinner,
   Text,
-  TextField,
+  AmountField,
+  DateInput,
 } from "@/components/ui";
 import type { DebtPocket } from "@/db/queries/debt-overview";
 import {
@@ -265,7 +266,7 @@ function PaymentForm({
                 {t("amountLabel")}
               </FieldLabel>
               <FieldControl>
-                <TextField.Root
+                <AmountField
                   {...field}
                   id="debt-payment-amount"
                   size="3"
@@ -288,11 +289,10 @@ function PaymentForm({
                 {t("dateLabel")}
               </FieldLabel>
               <FieldControl>
-                <TextField.Root
+                <DateInput
                   {...field}
                   id="debt-payment-date"
                   size="3"
-                  type="date"
                   disabled={isPending}
                 />
               </FieldControl>

@@ -3,9 +3,9 @@
 // RNL-01). `readInstalled` decides "installing" versus "ready" alone
 // (RL-13); this file never guesses at the store's state.
 import { buildIndex, type DictionaryIndex } from "./index-build";
-import type { DictionaryManifest, DictionaryPayload } from "./format";
 import { install, type InstallFailure, type InstallProgress } from "./install";
 import { hasEntry, lookupWord, suggest } from "./lookup";
+import { resolveDictionary } from "./refresh";
 import { readInstalled } from "./store";
 import type { DictionaryStatus, WorkerRequest, WorkerResponse } from "./worker-protocol";
 
@@ -73,23 +73,21 @@ function toFailure(error: unknown): InstallFailure {
 
 async function runInstallFlow(): Promise<void> {
   try {
-    const installed = await readInstalled();
-    let manifest: DictionaryManifest;
-    let payload: DictionaryPayload;
-    if (installed) {
-      manifest = installed.manifest;
-      payload = installed.payload;
-    } else {
-      const onProgress = throttled(100, (progress) => postStatus({ state: "installing", progress }));
-      onProgress({ received: 0, total: null });
-      const result = await install({ onProgress });
-      manifest = result.manifest;
-      payload = result.payload;
-    }
-    const built = buildIndex(payload);
-    index = built;
-    postStatus({ state: "ready", manifest });
-    flushQueue(built);
+    await resolveDictionary({
+      read: readInstalled,
+      install: async (quiet) => {
+        if (quiet) return install({ onProgress: () => {} });
+        const onProgress = throttled(100, (progress) => postStatus({ state: "installing", progress }));
+        onProgress({ received: 0, total: null });
+        return install({ onProgress });
+      },
+      ready: ({ manifest, payload }) => {
+        const built = buildIndex(payload);
+        index = built;
+        postStatus({ state: "ready", manifest });
+        flushQueue(built);
+      },
+    });
   } catch (error) {
     index = null;
     postStatus({ state: "failed", reason: toFailure(error) });

@@ -21,7 +21,7 @@ import { CreatedScreen } from "./created-screen";
 import { EditSheet, type Change, type Editing } from "./edit-sheet";
 import { ReviewTree } from "./review-tree";
 
-const WIDE = "(min-width: 1024px)";
+const WIDE = "(min-width: 768px)";
 
 function subscribeWide(notify: () => void) {
   const query = window.matchMedia(WIDE);
@@ -37,7 +37,7 @@ function subscribeWide(notify: () => void) {
 export function ReviewScreen({ today, snapshots }: { today: string; snapshots: GoalSnapshot[] }) {
   const t = useTranslations();
   const router = useRouter();
-  // The original text stands beside the tree only from 1024px; below, the page holds none of it.
+  // The original text stands beside the tree only from 768px; below, the page holds none of it.
   const wide = useSyncExternalStore(subscribeWide, () => window.matchMedia(WIDE).matches, () => false);
   const [stored, setStored] = useState<ReadDraft | null>(null);
   const [editing, setEditing] = useState<Editing | null>(null);
@@ -266,7 +266,7 @@ export function ReviewScreen({ today, snapshots }: { today: string; snapshots: G
   const eyebrow = stored.via === "model" ? t("import.review.eyebrow") : t("import.review.eyebrowTemplate");
   const text = storedText(stored);
 
-  // What the review was read from sits beside it from 1024; a file leaves no text to show.
+  // What the review was read from sits beside it from 768; a file leaves no text to show.
   const source = (
     <Flex direction="column" gap="5">
       {!wide ? null : text !== null ? (

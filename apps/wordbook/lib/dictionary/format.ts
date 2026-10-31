@@ -1,8 +1,8 @@
 import { z } from "zod";
 
-// Bump this when RawEntry's shape changes; the worker refuses a payload whose
+// Bump this when RawEntry's shape or the payload's order changes (an installed copy then reinstalls); the worker refuses a payload whose
 // version does not match its own.
-export const PAYLOAD_VERSION = 1;
+export const PAYLOAD_VERSION = 3;
 
 export const DICTIONARY_DIR = "/dictionary";
 export const MANIFEST_PATH = "/dictionary/manifest.json";

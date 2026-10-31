@@ -56,10 +56,11 @@ test("a week across two months says both months and the year; an ended goal's la
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(360);
 
     await page.setViewportSize({ width: 1280, height: 900 });
-    const rows = page.getByRole("table").getByRole("row");
-    await expect(rows.nth(1).getByRole("cell").nth(0)).toContainText("28 sep–4 oct 2026");
-    await expect(rows.nth(2).getByRole("cell").nth(0)).toContainText("5–7 oct 2026");
-    expect(await page.getByRole("table").innerText()).not.toContain("en curso");
+    // The same list of bars at every width: no table.
+    await expect(page.getByRole("table")).toHaveCount(0);
+    await expect(items(page).nth(0)).toContainText("28 sep–4 oct 2026");
+    await expect(items(page).nth(1)).toContainText("5–7 oct 2026");
+    expect(await page.getByRole("main").first().innerText()).not.toContain("en curso");
   } finally {
     await drop(db, personId, goalId);
   }
@@ -83,7 +84,8 @@ test("a week across two years says both years, on one line, and the page holds 3
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(360);
 
     await page.setViewportSize({ width: 1280, height: 900 });
-    await expect(page.getByRole("table").getByRole("row").nth(1).getByRole("cell").nth(0)).toContainText("29 dic 2025–4 ene 2026");
+    await expect(page.getByRole("table")).toHaveCount(0);
+    await expect(items(page).nth(0)).toContainText("29 dic 2025–4 ene 2026");
   } finally {
     await drop(db, personId, goalId);
   }
@@ -106,7 +108,8 @@ test("an open goal's row for today carries its year and says «en curso» once (
     // PorSemanaTelefono: «en curso» closes the dates' own line, with no note of its own beside the figure.
     const current = items(page).nth(2);
     await expect(current.getByText(`${range(monday, dayAfter(monday, 6))} · en curso`, { exact: true })).toHaveCount(1);
-    await expect(current.locator(":scope > span")).toHaveCount(2);
+    // The rule, the label, the bar and the total: no note of its own beside the figure.
+    await expect(current.locator(":scope > span")).toHaveCount(4);
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(360);
   } finally {
     await drop(db, personId, goalId);

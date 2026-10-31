@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import fs from "node:fs/promises";
 
 import { createTranslator } from "next-intl";
-import { expect, test } from "./fixtures";
+import { expect, studyHeader, test } from "./fixtures";
 import type { Page, Route } from "@playwright/test";
 
 import messages from "../messages/es.json";
@@ -156,7 +156,7 @@ test("10,003 rows export whole, and the file round-trips through JSON exactly", 
   // workers on a two-core runner the fold lands outside the 5s: measured in CI
   // 2026-09-19, `element(s) not found` with the screen already drawn and the
   // heading in place. The number below matches the work, not the patience.
-  await expect(page.getByText(t("log.study.header", { lookups: 10_003, words: 10_003 }))).toBeVisible({
+  await expect(studyHeader(page, 10_003, 10_003)).toBeVisible({
     timeout: 30_000,
   });
 
@@ -198,7 +198,7 @@ test("the nav reaches /registro, which counts what was searched and exports it",
   await page.getByRole("navigation", { name: messages.nav.label }).getByRole("link", { name: messages.nav.log }).click();
   await expect(page).toHaveURL(/\/registro$/);
 
-  await expect(page.getByText(t("log.study.header", { lookups: 1, words: 1 }))).toBeVisible();
+  await expect(studyHeader(page, 1, 1)).toBeVisible();
 
   const exported = await downloadExport(page);
   expect(exported.exportSchema).toBe(1);

@@ -16,10 +16,10 @@ import {
   EmptyState,
   FilterField,
   Flex,
-  Heading,
+  ScreenHeader,
   IconButton,
   Select,
-  TextField,
+  DateInput,
 } from "@/components/ui";
 import type { AuditFilterOptions, AuditLogRow } from "@/db/queries/audit-log";
 import { usePathname, useRouter } from "@/i18n/navigation";
@@ -156,8 +156,9 @@ export function AuditScreen({
 
   return (
     <Flex direction="column" gap="4">
-      <Flex justify="between" align="center" gap="3">
-        <Heading size="5">{t("title")}</Heading>
+      <ScreenHeader
+        title={t("title")}
+        actions={
         <IconButton
           type="button"
           variant={showFilters || filtersActive ? "soft" : "ghost"}
@@ -169,7 +170,8 @@ export function AuditScreen({
         >
           <SlidersHorizontal size={18} />
         </IconButton>
-      </Flex>
+        }
+      />
 
       {showFilters && (
         <Card>
@@ -219,9 +221,9 @@ export function AuditScreen({
             <Flex gap="3" wrap="wrap">
               <FilterField label={t("rangeFrom")}>
                 {(id) => (
-                  <TextField.Root
+                  <DateInput
+                    filter
                     id={id}
-                    type="date"
                     value={filters.from ?? ""}
                     onChange={(event) =>
                       updateFilters({ from: event.target.value || null })
@@ -231,9 +233,9 @@ export function AuditScreen({
               </FilterField>
               <FilterField label={t("rangeTo")}>
                 {(id) => (
-                  <TextField.Root
+                  <DateInput
+                    filter
                     id={id}
-                    type="date"
                     value={filters.to ?? ""}
                     onChange={(event) =>
                       updateFilters({ to: event.target.value || null })

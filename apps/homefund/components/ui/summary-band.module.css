@@ -12,12 +12,6 @@
 }
 
 @media (min-width: 1024px) {
-  /* The desktop pane hands the gutter to the bands inside it, and these cards
-     are a band of their own. */
-  .summary {
-    padding: 0 32px;
-  }
-
   .cards {
     display: flex;
     align-items: stretch;
@@ -30,8 +24,9 @@
     min-width: 0;
     padding: 18px 20px;
     background-color: var(--color-panel-solid);
-    border: 1px solid var(--gray-a4);
-    border-radius: 16px;
+    border: 1px solid var(--hf-line);
+    box-shadow: var(--hf-shadow);
+    border-radius: var(--hf-card-radius);
   }
 
   /* The 1.35 / 1 / 0.9 of the Inicio artboard, off a zero basis so the ratio is
@@ -55,43 +50,18 @@
   /* Doubled to outrank Radix's own size class, which lands in another sheet at
      the same specificity and whichever order the bundler chose. */
   .figure.figure {
-    font-size: 40px;
+    font-size: clamp(44px, 4.4vw, 64px);
     line-height: 1;
     letter-spacing: -0.03em;
   }
 
-  /* The card's figures share it in equal columns, split by the hairline the
-     artboard draws between them. */
+  /* The card's figures wrap into as many columns as the card is wide enough
+     for, so a seven-digit figure never runs into its neighbour. Doubled to
+     outrank the Flex's own display. */
   .stats.stats {
-    gap: 0;
-  }
-
-  .stats > * {
-    flex: 1 1 0;
-    min-width: 0;
-    padding-left: 18px;
-  }
-
-  .stats > *:first-child {
-    padding-left: 0;
-  }
-
-  .stats > * + * {
-    border-left: 1px solid var(--gray-a3);
-  }
-
-  /* A fourth figure no longer fits the row beside the other three: the figures
-     wrap into as many columns as the card is wide enough for, one at the
-     narrowest, with no hairline since a wrapped row has no fixed seam. */
-  .stats[data-stats="4"] {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
     gap: 14px 20px;
-  }
-
-  .stats[data-stats="4"] > * {
-    padding-left: 0;
-    border-left: 0;
   }
 
   /* A card hidden below `md` is a card again from here. */
@@ -112,8 +82,9 @@
   min-width: 0;
   padding: 18px 20px;
   background-color: var(--color-panel-solid);
-  border: 1px solid var(--gray-a4);
-  border-radius: 16px;
+  border: 1px solid var(--hf-line);
+  box-shadow: var(--hf-shadow);
+  border-radius: var(--hf-card-radius);
 }
 
 /* Gastos por categoría and aportes del mes share this row. The artboard gives
@@ -123,4 +94,40 @@
   grid-template-columns: 1.15fr 1fr;
   align-items: stretch;
   gap: 16px;
+}
+
+/* The featured card is a box below `md` too, unlike its siblings; from `md`
+   it takes the whole first row and the others share the next. */
+@media (min-width: 1024px) {
+  .cards {
+    flex-wrap: wrap;
+  }
+
+  /* Doubled to outrank the base rule below, which sets the phone's padding. */
+  .card.card[data-featured] {
+    flex-basis: 100%;
+    padding: 28px 32px;
+  }
+}
+
+.card[data-featured] {
+  display: flex;
+  flex-direction: column;
+  padding: 20px;
+  background-color: var(--brand-ink);
+  border: 1px solid transparent;
+  border-radius: 20px;
+}
+
+/* Lime on the ink: 14.31:1. */
+.card[data-featured] .figure {
+  color: var(--brand-lime);
+}
+
+
+/* Dark: the ink card would vanish into the ground, so it lifts to a violet
+   surface with its own border. */
+:global(.dark) .card[data-featured] {
+  background-color: #2a1a5e;
+  border-color: #4b3a8f;
 }

@@ -17,9 +17,12 @@ export function Page({
   measure = "reading",
 }: {
   children?: ReactNode;
-  measure?: "reading" | "full";
+  // `"panels"` keeps the reading measure up to 1280px and from there hands the whole width to `Panels`.
+  measure?: "reading" | "full" | "panels";
 }) {
-  const className = measure === "full" ? `${styles.page} ${styles.full}` : styles.page;
+  const className = [styles.page, measure === "full" ? styles.full : undefined, measure === "panels" ? styles.panels : undefined]
+    .filter(Boolean)
+    .join(" ");
   return (
     <>
       <Flex asChild direction="column" flexGrow="1" p="6" className={className}>

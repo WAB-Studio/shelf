@@ -1,6 +1,5 @@
 "use client";
 
-import type { ReactNode } from "react";
 import { useTranslations } from "next-intl";
 
 import {
@@ -10,9 +9,11 @@ import {
   BandStats,
   Badge,
   Button,
+  Disc,
   Flex,
   Money,
   PlainLink,
+  ProportionBar,
   SummaryBand,
   TapTarget,
   Text,
@@ -34,21 +35,15 @@ import type { CurrencyCode } from "@/lib/currency";
  * two net-worth figures, two chips for the owner who holds both, and two sets of
  * month figures — each saying which currency it counts.
  *
- * From `md` up the blocks become the three side-by-side cards of the Inicio
- * artboard, `cash` filling the third; below it the two figure blocks stack as they
- * always have and the cash card, which the phone reaches through its own dialog,
- * is not displayed.
+ * From `md` up the net worth is a band of its own and the month's figures sit in
+ * one compact card under it, as display figures; below it the two blocks stack as
+ * they always have. The cash withdrawal is a button beside quick entry, not a card.
  */
-export function DashboardSummary({
-  data,
-  cash,
-}: {
-  data: DashboardData;
-  cash?: ReactNode;
-}) {
+export function DashboardSummary({ data }: { data: DashboardData }) {
   const t = useTranslations("dashboard");
   const tc = useTranslations("common");
   const tr = useTranslations("reports");
+  const tn = useTranslations("nav");
 
   const {
     netWorth,
@@ -67,7 +62,7 @@ export function DashboardSummary({
   return (
     <SummaryBand>
       <BandCards>
-        <BandCard ratio={1.35} data-card="net">
+        <BandCard ratio={1.35} featured data-card="net">
           <Flex direction="column" gap="2">
             {/* Two figures are two totals, so the stack takes a name of its own;
                 one figure is already named by the label under it. */}
@@ -120,33 +115,59 @@ export function DashboardSummary({
               </Flex>
             )}
 
-            <Flex gap="2" wrap="wrap">
-              {buckets.map((bucket) => (
-                <Badge key={bucketKey(bucket)} color="gray" variant="soft" radius="full">
-                  {t.rich("ownerChip", {
-                    name: bucketLabel(bucket, t),
-                    amount: () => (
-                      <Money
-                        minor={bucket.netWorthCents}
-                        currency={bucket.currency}
-                        tone={signTone(bucket.netWorthCents)}
-                        size="inherit"
-                      />
-                    ),
-                  })}
-                </Badge>
-              ))}
-            </Flex>
+            {byCurrencyBuckets(buckets).map(([currency, owners]) => {
+              // Only what is owned has a share of the bar; a bucket below zero is listed
+              // beside it, with its sign.
+              const owned = owners.filter((bucket) => bucket.netWorthCents > 0);
+              const colorOf = (bucket: OwnerNetWorthNamed) =>
+                bucket.netWorthCents > 0
+                  ? OWNER_COLORS[owned.indexOf(bucket) % OWNER_COLORS.length]
+                  : "var(--gray-9)";
+
+              return (
+                <Flex key={currency} direction="column" gap="2">
+                  {owned.length > 0 && (
+                    <ProportionBar
+                      aria-label={t("ownerBarLabel", { currency })}
+                      segments={owned.map((bucket) => ({
+                        key: bucketKey(bucket),
+                        value: bucket.netWorthCents,
+                        color: colorOf(bucket),
+                      }))}
+                    />
+                  )}
+                  <Flex gap="4" wrap="wrap">
+                    {owners.map((bucket) => (
+                      <Flex key={bucketKey(bucket)} align="center" gap="2">
+                        <Disc size={10} surface={colorOf(bucket)} />
+                        <Text size="2" color="gray">{bucketLabel(bucket, t)}</Text>
+                        <Text size="2" weight="medium">
+                          <Money
+                            minor={bucket.netWorthCents}
+                            currency={bucket.currency}
+                            tone={signTone(bucket.netWorthCents)}
+                            size="inherit"
+                          />
+                        </Text>
+                      </Flex>
+                    ))}
+                  </Flex>
+                </Flex>
+              );
+            })}
           </Flex>
         </BandCard>
 
-        <BandCard ratio={1} centered data-card="month">
+        <BandCard ratio={1} data-card="month">
           <Flex direction="column" gap="4">
             {monthFlow.map((flow) => (
               <Flex key={flow.currency} direction="column" gap="2">
-                <Text size="2" color="gray">
-                  {tr("inCurrency", { currency: flow.currency })}
-                </Text>
+                {/* One currency is already named by the net-worth label beside. */}
+                {monthFlow.length > 1 && (
+                  <Text size="2" color="gray">
+                    {tr("inCurrency", { currency: flow.currency })}
+                  </Text>
+                )}
                 <BandStats count={flow.adjustmentCents !== 0 ? 4 : 3}>
                   <MonthStat
                     label={t("monthIncome")}
@@ -159,6 +180,7 @@ export function DashboardSummary({
                     minor={flow.expenseCents}
                     currency={flow.currency}
                     tone="expense"
+                    signed={false}
                   />
                   <MonthStat
                     label={t("monthNet")}
@@ -181,18 +203,35 @@ export function DashboardSummary({
           </Flex>
         </BandCard>
 
-        <BandCard ratio={0.9} hideBelowMd data-card="cash">
-          {cash}
-        </BandCard>
       </BandCards>
 
-      <Flex>
+      <Flex gap="2" wrap="wrap">
         <Button asChild tap variant="ghost">
           <LocaleLink href="/reports">{t("viewReports")}</LocaleLink>
+        </Button>
+        {/* The phone's bar gave Planeación's tab to Bandeja; this is its way in. */}
+        <Button asChild tap variant="ghost">
+          <LocaleLink href="/planning">{tn("planning")}</LocaleLink>
         </Button>
       </Flex>
     </SummaryBand>
   );
+}
+
+// The owners' colours on the ink card: lime, a light violet, a mint, a peach.
+const OWNER_COLORS = ["#c8f560", "#a78bfa", "#5eead4", "#fdba74"];
+
+// The owner buckets regrouped per currency: a bar never mixes two of them (RF-124).
+function byCurrencyBuckets(
+  buckets: OwnerNetWorthNamed[],
+): [CurrencyCode, OwnerNetWorthNamed[]][] {
+  const groups = new Map<CurrencyCode, OwnerNetWorthNamed[]>();
+  for (const bucket of buckets) {
+    const group = groups.get(bucket.currency);
+    if (group) group.push(bucket);
+    else groups.set(bucket.currency, [bucket]);
+  }
+  return [...groups];
 }
 
 // A figure that can fall either way reads its sign off its own value: below zero
@@ -237,14 +276,14 @@ function MonthStat({
   minor: number;
   currency: CurrencyCode;
   tone: MoneyTone;
-  signed?: "always";
+  signed?: boolean | "always";
 }) {
   return (
     <Flex direction="column" gap="1">
       <Text size="2" color="gray">
         {label}
       </Text>
-      <Text size="4" weight="medium">
+      <Text size={{ initial: "4", md: "7" }} weight={{ initial: "medium", md: "bold" }}>
         <Money
           minor={minor}
           currency={currency}

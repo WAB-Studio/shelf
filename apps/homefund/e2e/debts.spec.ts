@@ -1950,7 +1950,7 @@ async function inkOf(container: Locator): Promise<string> {
 async function accentInk(page: Page): Promise<string> {
   return page.evaluate(() => {
     const probe = document.createElement("span");
-    probe.style.color = "var(--accent-11)";
+    probe.style.color = "var(--jade-11)";
     document.querySelector("main")!.appendChild(probe);
     const ink = getComputedStyle(probe).color;
     probe.remove();
@@ -2436,13 +2436,13 @@ for (const [bandLabel, width] of [
             const before = await owedNow();
             await page.goto("/es/planning");
             const summary = page
-              .getByText(/^\$\s[\d.]+\s(·|en deudas)/)
+              .getByText(/^\$\s[\d.]+(\s(·|en deudas)|$)/)
               .filter({ visible: true });
             await expect(summary).toHaveCount(1);
             const text = flat(await summary.innerText());
             const after = await owedNow();
             return [before, after].some((owed) =>
-              text.startsWith(`$ ${groupedPesos(owed)} `),
+              `${text} `.startsWith(`$ ${groupedPesos(owed)} `),
             )
               ? "match"
               : `${text} | ${before} ${after}`;
@@ -3064,7 +3064,7 @@ test.describe("a card in credit with a dollar purchase, and the next payment", (
         const tile = label.locator("xpath=..");
         // textContent: the label is drawn in capitals, which innerText returns.
         expect(flat((await tile.textContent()) ?? "")).toMatch(
-          new RegExp(`^${debts.tileNextPayment}\\s*${NO_VALUE}$`),
+          new RegExp(`^${debts.tileNextPayment}\\s*${NO_VALUE}\\s*${debts.tileNoNextPayment}$`),
         );
       });
 

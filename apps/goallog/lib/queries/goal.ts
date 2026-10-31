@@ -5,6 +5,7 @@ import { cache } from "react";
 import { z } from "zod";
 
 import { measureOf } from "@/lib/day/derive";
+import { commitmentDays, stripDays, type DoneDay } from "@/lib/day/constancy";
 import { evidenceDaysFor } from "@/lib/day/measure-inputs";
 import { measureByWeek, totalInSpan } from "@/lib/day/review";
 import type { Cadence, EvidenceDay, Phase, ReviewWeek, SatisfiedBy } from "@/lib/day/types";
@@ -21,7 +22,7 @@ import { queryEvidenceBySource } from "@/lib/queries/evidence";
 import type { EvidenceOutcome } from "@/lib/queries/evidence";
 import { getPerson, withGoalsDb, withReadingDb, type Transaction } from "@/lib/session";
 import { civilDateInZone, TIME_ZONE, todayInZone } from "@/lib/zone";
-import { dayBefore } from "@/lib/day/weeks";
+import { dayBefore, daysBetween } from "@/lib/day/weeks";
 import { fillPlan, type PlanInput, type PlanTask, type Roadmap } from "@/lib/plan/roadmap";
 import { planMonthList } from "@/lib/plan/roadmap-read";
 import {
@@ -191,13 +192,18 @@ export type GoalCommitment = {
   // `satisfiedBy.kind === "evidence"` — the goal's screen reads the source's
   // name from `sources.json` under this key, never a sentence stored here.
   sourceLabelKey: SourceKey | null;
-  // Distinct days this commitment has a declared fact on (the retire
-  // sheet: "los N días en que lo hiciste" — RP-13 says the days already done
-  // stay done). Counted here, off `row.facts` the goal statement already
-  // carries whole, never a second round trip and never a subselect: an
-  // evidence-satisfied commitment writes no fact of its own (RP-05), so this
-  // is 0 for one and the screen drops the clause rather than say "0 días".
+  // Distinct days this commitment has a declared fact on (the retire sheet: "los N días en que lo hiciste" —
+  // RP-13 says the days already done stay done). The server refuses a change or a delete by this count alone.
   factDayCount: number;
+  // The days its evidence source met the threshold since it was written: days done all the same (RP-05
+  // writes no fact), counted apart because only a declared day locks a deletion.
+  evidenceDayCount: number;
+  // The civil day it was written: the strip counts nothing before it.
+  createdOn: string;
+  // The days of the last thirty it was met, declared or by evidence, newest first (constancy).
+  done: DoneDay[];
+  // The catalogue key of the evidence source, to read its days by.
+  sourceKey: string | null;
 };
 
 export type GoalView = {
@@ -257,6 +263,8 @@ export type GoalView = {
   plan: PlanInput;
   roadmap: Roadmap;
   note: string | null;
+  // The days a commitment was marked, with its name: what «Abrir en Claude» tells of the last days.
+  marked: { day: string; name: string }[];
   // The goal above and the ones above that, the top one first.
   parent: GoalRef | null;
   ancestors: GoalRef[];
@@ -400,15 +408,37 @@ async function queryGoalRow(tx: Transaction, goalId: string): Promise<GoalQueryR
   return row;
 }
 
-function toGoalCommitment(row: CommitmentRow, factDayCount: number): GoalCommitment {
+// `recent` is the facts of the strip's window; `evidence` the sources' reading, null where there is none.
+function toGoalCommitment(
+  row: CommitmentRow,
+  factDayCount: number,
+  today: string,
+  recent: { day: string; quantity: number | null }[] = [],
+  evidence: Record<string, EvidenceDay[]> | null = null,
+): GoalCommitment {
+  const satisfiedBy = toSatisfiedBy(row);
+  const createdOn = civilDateInZone(new Date(row.created_at));
+  const days = commitmentDays({
+    satisfiedBy,
+    sourceKey: row.source_key,
+    createdOn,
+    today,
+    declaredDayCount: factDayCount,
+    recent,
+    evidence,
+  });
   return {
     id: row.id,
     name: row.name,
     cadence: toCadence(row),
-    satisfiedBy: toSatisfiedBy(row),
+    satisfiedBy,
     retiredAt: row.retired_at,
     sourceLabelKey: row.satisfaction === "evidence" && row.source_label_key ? sourceKey(row.source_label_key) : null,
-    factDayCount,
+    factDayCount: days.declaredDayCount,
+    evidenceDayCount: days.evidenceDayCount,
+    createdOn,
+    done: days.done,
+    sourceKey: row.source_key,
   };
 }
 
@@ -426,6 +456,19 @@ function factDayCounts(facts: FactRow[]): Map<string, number> {
   const counts = new Map<string, number>();
   for (const [commitmentId, days] of daysByCommitment) counts.set(commitmentId, days.size);
   return counts;
+}
+
+// Per commitment, the facts inside the strip's window.
+function recentFacts(facts: FactRow[], today: string): Map<string, { day: string; quantity: number | null }[]> {
+  const start = stripDays(today)[0];
+  const byCommitment = new Map<string, { day: string; quantity: number | null }[]>();
+  for (const fact of facts) {
+    if (!fact.commitment_id || fact.day < start) continue;
+    const list = byCommitment.get(fact.commitment_id) ?? [];
+    list.push({ day: fact.day, quantity: fact.quantity });
+    byCommitment.set(fact.commitment_id, list);
+  }
+  return byCommitment;
 }
 
 /**
@@ -652,8 +695,9 @@ export async function loadGoal(
   const evidence = evidenceOutcome.status === "read" ? evidenceOutcome.bySourceKey : null;
   const phases = row.phases.map(toPhase);
   const dayCounts = factDayCounts(row.facts);
+  const recent = recentFacts(row.facts, today);
   const commitments = row.commitments.map((commitment) =>
-    toGoalCommitment(commitment, dayCounts.get(commitment.id) ?? 0),
+    toGoalCommitment(commitment, dayCounts.get(commitment.id) ?? 0, today, recent.get(commitment.id), evidence),
   );
 
   const tree = buildTree(row.tree.map(toTreeRow));
@@ -835,6 +879,10 @@ export async function loadGoal(
       ? { state: "noRhythm", months: [], unplaced: [], end: null, lastDay: row.goal.horizon === null ? null : dayBefore(row.goal.horizon) }
       : fillPlan(figures.plan),
     note: row.goal.note ?? null,
+    marked: row.facts.flatMap((fact) => {
+      const name = row.commitments.find((commitment) => commitment.id === fact.commitment_id)?.name;
+      return fact.commitment_id && name ? [{ day: fact.day, name }] : [];
+    }),
     parent: parent ? ref(parent) : null,
     ancestors: (node?.ancestors ?? []).map((id) => ref(tree.byId.get(id)!)).reverse(),
     level: node?.level ?? null,
@@ -921,9 +969,15 @@ export async function loadGoalForm(
   goalId: string,
   month?: string,
   today: string = todayInZone(),
+  // `evidence`: also read what the sources recorded for the goal, beside the statement and never after it
+  // (RNP-03), so a commitment's evidence days count as days done (RP-127). A source that cannot be read leaves
+  // the declared days alone (RNP-04).
+  options: { evidence?: boolean } = {},
 ): Promise<GoalForm | null> {
   if (!z.uuid().safeParse(goalId).success) return null;
+  const person = options.evidence ? await getPerson() : null;
   const asked = month !== undefined && /^\d{4}-(0[1-9]|1[0-2])$/.test(month) ? `${month}-01` : null;
+  const stripStart = stripDays(today)[0];
 
   const tasks =
     asked === null
@@ -940,11 +994,12 @@ export async function loadGoalForm(
                  or o.id in (select m.parent_id from "goals"."one_offs" m
                               where m.goal_id = ${goalId} and m.planned_month = ${asked}::date)))`;
 
-  const [row] = await withGoalsDb((tx) =>
+  const [[row], evidence] = await Promise.all([
+    withGoalsDb((tx) =>
     tx.execute<{
       goal: GoalRow | null;
       phases: PhaseRow[];
-      commitments: (CommitmentRow & { fact_day_count: number })[];
+      commitments: (CommitmentRow & { fact_day_count: number; recent: { day: string; quantity: number | null }[] })[];
       tasks: TaskRow[];
       tree: TreeSqlRow[];
     }>(sql`
@@ -957,7 +1012,10 @@ export async function loadGoalForm(
                    'source_key', s.key,
                    'source_unit', s.unit,
                    'source_label_key', s.label_key,
-                   'fact_day_count', (select count(distinct f.day)::int from "goals"."facts" f where f.commitment_id = c.id)
+                   'fact_day_count', (select count(distinct f.day)::int from "goals"."facts" f where f.commitment_id = c.id),
+                   'recent', (select coalesce(json_agg(json_build_object('day', r.day::text, 'quantity', r.quantity)), '[]'::json)
+                                from (select f.day, sum(f.quantity)::int as quantity from "goals"."facts" f
+                                       where f.commitment_id = c.id and f.day >= ${stripStart}::date group by f.day) r)
                  ) order by c.position, c.created_at, c.id), '[]'::json)
            from "goals"."commitments" c
            left join "goals"."evidence_sources" s on s.id = c.source_id
@@ -965,7 +1023,18 @@ export async function loadGoalForm(
         ${tasks} as tasks,
         (select coalesce(json_agg(${TREE_COLUMNS}), '[]'::json) from "goals"."goals" g) as tree
     `),
-  );
+    ),
+    person
+      ? withReadingDb((tx) => {
+          const { from, to } = goalSpan(goalId, today);
+          // From the earliest of the goal's span and its commitments' own creation, so every day `editCadence`
+          // counts (from a commitment's creation) is read here too.
+          const first = sql`least(${from}, (select (min(c.created_at) at time zone ${TIME_ZONE})::date
+                                              from "goals"."commitments" c where c.goal_id = ${goalId}))`;
+          return queryEvidenceBySource(tx, person.id, first, to);
+        }).catch(() => null)
+      : null,
+  ]);
   if (!row.goal) return null;
   const goal = row.goal;
 
@@ -987,7 +1056,9 @@ export async function loadGoalForm(
     endedOn: goal.horizon !== null && goal.horizon <= today ? dayBefore(goal.horizon) : null,
     measureUnit,
     phases: row.phases.map(toPhase),
-    commitments: row.commitments.map((commitment) => toGoalCommitment(commitment, commitment.fact_day_count)),
+    commitments: row.commitments.map((commitment) =>
+      toGoalCommitment(commitment, commitment.fact_day_count, today, commitment.recent, evidence),
+    ),
     month: inSpan ? { month: asked, past: asked < monthOf(today) } : null,
     tasks: row.tasks.map((task) => toPlanTask(task, openedOn)),
   };
@@ -1015,7 +1086,7 @@ export async function listLooseCommitments(): Promise<LooseCommitment[]> {
         order by c.position, c.created_at, c.id
     `),
   );
-  return rows.map(({ row }) => ({ ...toGoalCommitment(row, row.fact_day_count), note: row.note ?? null }));
+  return rows.map(({ row }) => ({ ...toGoalCommitment(row, row.fact_day_count, todayInZone()), note: row.note ?? null }));
 }
 
 function toGoalSummary(row: GoalRow): GoalSummary {
@@ -1097,6 +1168,11 @@ export type MetasOpenGoal = MetasSummary & {
   // The unit `month` is drawn in: the goals' own when it holds goals, else its measure's.
   monthUnit: string | null;
   outOfUnit: { id: string; name: string; unit: string }[];
+  // The aim of the phase in effect today, null between phases or with none.
+  phaseAim: string | null;
+  // Weeks to the horizon, the last part of one counted whole; null for a goal with no end. An open goal ends
+  // after today, so it is at least one.
+  weeksLeft: number | null;
 };
 
 type MetasRow = GoalRow & {
@@ -1106,6 +1182,7 @@ type MetasRow = GoalRow & {
   budgets: { month: string; amount: number }[];
   tasks: TaskRow[];
   measure_sources: { satisfaction: string; source_key: string | null; source_unit: string | null }[];
+  phase_aim: string | null;
 };
 
 /**
@@ -1149,7 +1226,10 @@ export async function listGoalsForMetas(today: string = todayInZone()): Promise<
                    )), '[]'::json)
              from "goals"."commitments" c
              join "goals"."evidence_sources" s on s.id = c.source_id
-             where c.goal_id = g.id and c.satisfaction = 'evidence') as measure_sources
+             where c.goal_id = g.id and c.satisfaction = 'evidence') as measure_sources,
+          (select p.aim from "goals"."phases" p
+            where p.goal_id = g.id and p.starts_on <= ${today}::date and p.ends_on >= ${today}::date
+            order by p.starts_on limit 1) as phase_aim
         from "goals"."goals" g
         order by g.position, g.created_at, g.id
       `),
@@ -1251,6 +1331,8 @@ export async function listGoalsForMetas(today: string = todayInZone()): Promise<
         month: toMonth(row),
         monthUnit: (holds(row.id) ? rolled.get(row.id)?.unit : null) ?? row.measure_unit,
         outOfUnit: holds(row.id) ? (rolled.get(row.id)?.outOfUnit ?? []) : [],
+        phaseAim: row.phase_aim,
+        weeksLeft: row.horizon === null ? null : Math.ceil(daysBetween(today, row.horizon) / 7),
       })),
     ended: [...live.values()].filter((row) => row.horizon !== null && row.horizon <= today).map(placed),
     archived,

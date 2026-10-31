@@ -17,7 +17,7 @@ import {
   FieldMessage,
   Flex,
   Spinner,
-  TextField,
+  AmountField,
 } from "@/components/ui";
 import type { GoalProgress } from "@/db/queries/savings-goals";
 import { useActionErrorToast } from "@/lib/use-action-toast";
@@ -99,7 +99,7 @@ function ContributeForm({
             <Field invalid={fieldState.invalid}>
               <FieldLabel htmlFor="goal-amount">{t("amountLabel")}</FieldLabel>
               <FieldControl>
-                <TextField.Root
+                <AmountField
                   {...field}
                   id="goal-amount"
                   size="3"

@@ -17,10 +17,17 @@ export {
   Spinner,
 } from "@radix-ui/themes";
 
+export { Columns } from "./columns";
+export { Mosaic, MosaicFigure, MosaicNote, MosaicTile } from "./mosaic";
+export { Ring } from "./ring";
+export { DateInput } from "./date-input";
+export { ProportionBar, type ProportionSegment } from "./proportion-bar";
+
 export {
   Field,
   FieldControl,
   FieldGroup,
+  FormFooter,
   FieldLabel,
   FieldDescription,
   FieldError,
@@ -67,6 +74,7 @@ export {
   Sidebar,
   SidebarSeparator,
   SidebarHead,
+  SidebarBody,
   SidebarFoot,
   SidebarAction,
   SidebarPerson,
@@ -85,11 +93,15 @@ export { TextLink } from "./text-link";
 
 export { Page } from "./page";
 
+export { CategoryChoice, CategoryChoiceGrid } from "./category-choice";
+export { PersonalMark } from "./personal-mark";
 export { MovementRow } from "./movement-row";
 
 export { CategoryTile } from "./category-tile";
 
 export { AppMark } from "./app-mark";
+
+export { Highlight } from "./highlight";
 
 export { FundChip } from "./fund-chip";
 

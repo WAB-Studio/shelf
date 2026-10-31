@@ -107,11 +107,11 @@ for (const width of [360, 1280]) {
   });
 }
 
-test("the eyebrow is the header's string eyebrow, in mono capitals", async ({ browser, baseURL, person }) => {
+test("the eyebrow is the header's string eyebrow, in mono, sentence case", async ({ browser, baseURL, person }) => {
   await withPage(browser, baseURL, person.sessionFile, 360, async (page) => {
     await page.goto("/semana");
     const eyebrow = page.getByText("esta semana", { exact: true }).first();
     await expect(eyebrow).toBeVisible();
-    expect(await eyebrow.evaluate((el) => getComputedStyle(el).textTransform)).toBe("uppercase");
+    expect(await eyebrow.evaluate((el) => getComputedStyle(el).textTransform)).toBe("none");
   });
 });

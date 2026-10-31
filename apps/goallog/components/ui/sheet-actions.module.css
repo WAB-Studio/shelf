@@ -1,10 +1,10 @@
-/* Below 1024px the group vanishes: its buttons are the sheet body's own flex
+/* Below 768px the group vanishes: its buttons are the sheet body's own flex
    items, so nothing moves. */
 .actions {
   display: contents;
 }
 
-@media (min-width: 1024px) {
+@media (min-width: 768px) {
   .actions {
     display: flex;
     /* The primary is first in the markup and stands last, at the right. */

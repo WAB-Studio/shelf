@@ -191,11 +191,9 @@ test.describe("the paper report: a «por mes» table of 15 rows or more starts w
     await withGoal({ person, browser, baseURL: baseURL!, db }, { months: 46, measured: true, tag: `m46b${tasks}`, tasks }, (w) => {
       expect(new Set(w.rows.map((row) => row.page)).size, "table spans more than one page").toBeGreaterThan(1);
       w.rows.forEach((row, index) => {
-        // The month's name prints on a line of its own and its cells on the next line of the same page.
-        const next = w.pages[row.page][row.at + 1];
-        expect(next, `row ${labelOf(index)} on page ${row.page + 1} has its cells under it`).toBeDefined();
-        expect(next, `row ${labelOf(index)}: next line is its cells, not another month`).not.toMatch(
-          new RegExp(`^(${NAMES.join("|")}) \\d{4}`),
+        // A row is one line, its figures beside the month; a closed or current month adds its state under the name.
+        expect(w.pages[row.page][row.at], `row ${labelOf(index)} on page ${row.page + 1} has its cells beside it`).toMatch(
+          new RegExp(`^(${NAMES.join("|")}) \\d{4} \\S`),
         );
         if (index > 0) {
           const before = w.rows[index - 1];

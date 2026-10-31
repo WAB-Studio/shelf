@@ -1,6 +1,11 @@
 /* The phone's bottom bar keeps its own height in the flow (`bottom-nav.module.css`); this gutter
    clears the raised action above it. Radix's `p` prop stops at a token; it cannot express `env()`. */
 .page {
+  /* Wide screens keep the main column to a readable width, centred in what the
+     sidebar leaves, so a figure is never a thousand pixels from its name. */
+  width: 100%;
+  max-width: 1440px;
+  margin-inline: auto;
   padding-bottom: calc(var(--space-6) + env(safe-area-inset-bottom, 0px));
 }
 
@@ -9,9 +14,17 @@
    the screen above swaps its phone shape for those bands. Handing it over
    sooner leaves the phone shape flush against the pane. */
 @media (min-width: 1024px) {
+  /* A default page holds the one 32px left edge itself, so the bands inside it
+     add none; a flush page hands it to them. Either way a screen's header,
+     filters and table start at the same x. */
+  .page {
+    --band-gutter: 0px;
+  }
+
   .page[data-gutter="flush-md"] {
     padding-left: 0;
     padding-right: 0;
+    --band-gutter: 32px;
   }
 }
 
@@ -19,5 +32,6 @@
   .page[data-gutter="flush-lg"] {
     padding-left: 0;
     padding-right: 0;
+    --band-gutter: 32px;
   }
 }

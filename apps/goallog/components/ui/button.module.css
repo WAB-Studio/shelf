@@ -14,7 +14,8 @@
   --accent-a11: var(--pulsar-ink);
   --accent-contrast: var(--pulsar-on-accent);
   --focus-8: var(--pulsar-accent);
-  border-radius: 10px;
+  /* The pill: the recipe's primary button. */
+  border-radius: 999px;
   /* Radix sets a control's label from its own scale — 14px at size 2, a size
      docs/goallog/DESIGN.md has no role for. A label on a control reads at the
      same step a commitment name does. */
@@ -49,11 +50,11 @@
   min-block-size: 52px;
 }
 
-/* Full width on the phone comes from the column's own stretch. From 1024 a
+/* Full width on the phone comes from the column's own stretch. From 768 a
    block button is sized to its text, 160 at least, wherever it sits (a sheet's
    actions row included); a flex column (Split from 301) would stretch it, so
    the width is set, not left to the parent. */
-@media (min-width: 1024px) {
+@media (min-width: 768px) {
   .block.block {
     inline-size: fit-content;
     min-inline-size: 160px;
@@ -110,6 +111,61 @@
   color: var(--pulsar-accent);
 }
 
+/* docs/goallog/DESIGN.md "Naranja y marino": the row a person goes somewhere
+   by. No pill and no ring; a hairline under it, the label at the start and a
+   chevron drawn at the end from two borders, so it works on a link as on a
+   button. */
+.quiet.quiet {
+  justify-content: space-between;
+  inline-size: 100%;
+  border-radius: 10px;
+  background-color: transparent;
+  box-shadow: inset 0 -1px 0 var(--pulsar-line);
+  color: var(--pulsar-ink);
+  /* Radix's ghost pulls itself over the gutter; a row keeps to it. */
+  margin: 0;
+  padding-inline: 4px;
+}
+
+.quiet.quiet::after {
+  content: "";
+  flex: none;
+  inline-size: 7px;
+  block-size: 7px;
+  margin-inline-end: 6px;
+  border-inline-end: 1.5px solid var(--pulsar-muted);
+  border-block-start: 1.5px solid var(--pulsar-muted);
+  transform: rotate(45deg);
+}
+
+/* A label with its hint (`stack`) is a column: the chevron leaves the flow to the row's end. */
+.quiet.quiet.stack {
+  position: relative;
+  padding-inline: 4px 24px;
+}
+
+.quiet.quiet.stack::after {
+  position: absolute;
+  inset-inline-end: 0;
+  inset-block-start: calc(50% - 4px);
+  margin: 0;
+}
+
+.quiet.quiet.quiet:disabled,
+.quiet.quiet.quiet[data-disabled] {
+  box-shadow: inset 0 -1px 0 var(--pulsar-line);
+}
+
+.quiet.quiet:hover {
+  background-color: var(--pulsar-accent-soft);
+}
+
+/* A destructive act, quiet: danger ink on the raised and ground faces, 6.57 and
+   6.03 light (#b42318), 9.20 and 8.55 dark (#ff9b92). */
+.dangerTone.dangerTone {
+  color: var(--pulsar-danger);
+}
+
 /* docs/goallog/DESIGN.md "The controls": solid is the accent filled, with no
    ring of its own. */
 .solid.solid {
@@ -135,6 +191,8 @@
    design does not use. */
 .control.control:disabled,
 .control.control[data-disabled] {
+  /* The pill is the decision: a control that cannot be pressed is no pill. */
+  border-radius: 10px;
   background-color: transparent;
   color: var(--pulsar-muted);
   box-shadow: inset 0 0 0 1.5px var(--pulsar-line);

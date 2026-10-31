@@ -1,6 +1,6 @@
 import type { Locator, Page } from "@playwright/test";
 
-import { expect } from "./fixtures";
+import { expect, openMore } from "./fixtures";
 import type { Db } from "./meta-arbol-seed";
 
 // Helpers of the specs of moving a goal and writing its note (module 872b, RP-82, RP-95).
@@ -27,6 +27,7 @@ export async function noOverflow(page: Page, width = 360) {
 }
 
 export async function openMoveSheet(page: Page): Promise<Locator> {
+  await openMore(page);
   await page.getByRole("button", { name: "Mover bajo otra meta" }).click();
   const sheet = page.getByRole("dialog");
   await expect(sheet).toBeVisible();

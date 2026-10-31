@@ -36,7 +36,7 @@ export function ScreenHeader({
   eyebrowFill?: boolean;
   // A row on the eyebrow's line: the steps, the way back, the theme toggle.
   controls?: ReactNode;
-  // Beside the title from 1024, under it below.
+  // Beside the title from 768, under it below.
   actions?: ReactNode;
   // One line under the title: mono figures by default, the quiet sentence when it reads as one.
   meta?: ReactNode;
@@ -68,6 +68,7 @@ export function ScreenHeader({
       <SectionLabel>{eyebrow}</SectionLabel>
     );
   // With a way back and no row for controls or an eyebrow, the entry shares the back's line.
+  // A row of steps (Semana, Mes) takes the whole line over the title, so the entry stands at the end of the title's line instead.
   const chatInTitle = chat && steps;
   const chatInBackRow = chat && !!back && !controls && !eyebrowNode;
   const backLink = back ? (
@@ -156,7 +157,7 @@ export function ScreenHeaderSkeleton() {
 
 // What a screen that has nothing to show says and offers
 // (`ArmazonFallo.dc.html`, `ArmazonNoEncontrada.dc.html`): an optional line and
-// its exits, stacked full width on the phone, a row capped at 560px from 1024.
+// its exits, stacked full width on the phone, a row capped at 560px from 768.
 export function ScreenExit({ message, children }: { message?: string; children: ReactNode }) {
   return (
     <div className={styles.exit}>

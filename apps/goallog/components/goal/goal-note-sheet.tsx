@@ -70,7 +70,7 @@ export function GoalNote({ goalId, name, note }: GoalNoteProps) {
   return (
     <>
       {note === null ? (
-        <Button variant="outline" block onClick={openSheet}>
+        <Button variant="quiet" block onClick={openSheet}>
           {t("tree.note.add")}
         </Button>
       ) : (

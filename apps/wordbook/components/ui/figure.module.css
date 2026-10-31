@@ -1,0 +1,25 @@
+.figure {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.value {
+  font-family: var(--font-display);
+  font-size: 34px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  color: var(--rl-ink);
+}
+
+.label {
+  font-size: 14px;
+  color: var(--rl-muted);
+}
+
+/* Doubled to outrank `.value`. */
+.hero.hero {
+  font-size: 64px;
+  line-height: 1;
+}

@@ -59,6 +59,7 @@ import path from "node:path";
 import { XMLParser } from "fast-xml-parser";
 
 import type { DictionaryManifest, DictionaryPayload, PartOfSpeech, RawEntry } from "../lib/dictionary/format";
+import { orderEntryTranslations } from "./translation-order";
 import { DICTIONARY_DIR, PAYLOAD_VERSION, manifestSchema, normaliseHeadword } from "../lib/dictionary/format";
 
 const EDITION = "2025.11.23";
@@ -74,7 +75,9 @@ const CACHE_DIR = path.join(APP_DIR, ".cache");
 const TARBALL_PATH = path.join(CACHE_DIR, `freedict-eng-spa-${EDITION}.src.tar.xz`);
 const EXTRACT_DIR = path.join(CACHE_DIR, "extracted");
 const OUTPUT_DIR = path.join(APP_DIR, "public", "dictionary");
-const JSON_FILENAME = `eng-spa-${EDITION}.json`;
+// The payload version is in the name: a new payload is a new URL, so the year-long cache never hands an
+// installed copy the body of the version it replaces.
+const JSON_FILENAME = `eng-spa-${EDITION}-v${PAYLOAD_VERSION}.json`;
 const MANIFEST_FILENAME = "manifest.json";
 const LICENSE_FILENAME = "LICENSE.txt";
 
@@ -347,7 +350,10 @@ are never run together into one string; part of speech is folded onto the
 six values apps/wordbook/lib/dictionary/format.ts declares, mapping the
 source's thirteen further categories and its unlabelled entries onto the
 closest of the six. It changed nothing else: no headword, translation or
-definition text was altered beyond those two cuts.
+definition text was altered beyond those two cuts, except that inside a
+sense a translation absent from the 20,000 commonest Spanish words
+(scripts/spanish-frequency.txt, CC BY-SA 4.0, hermitdave/FrequencyWords)
+moves behind the rest, in the order it had.
 `;
 }
 
@@ -368,7 +374,7 @@ function build(teiPath: string): BuildResult {
   log(`build: ${built.length} entries carry a translation`);
 
   log("build: sorting by headword then part of speech");
-  const entries = sortEntries(built);
+  const entries = sortEntries(built).map(orderEntryTranslations);
 
   const payload: DictionaryPayload = { version: PAYLOAD_VERSION, entries };
   const jsonBytes = Buffer.from(JSON.stringify(payload));

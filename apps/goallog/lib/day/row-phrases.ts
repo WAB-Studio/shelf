@@ -135,14 +135,14 @@ export type RowMetaPieces = {
   amount: string | undefined;
   // The met phrase of a quiet row, or the progress of a flexible one.
   status: string | null;
-  writtenTime: string | undefined;
   writtenLabel: string | undefined;
   // A `quantity` row with a fact that day under its target: not done, yet the
   // person wrote a number. Both already formatted, a time as «45 min».
   partial?: { logged: string; target: string } | null;
   // An evidence row's ask and, once met, what it got and where from. Already
   // translated. It replaces every other piece: the line is only this.
-  evidence?: { asks: string; got: string | null; source: string | null };
+  // `noted` is the open row's «lo anota el diccionario», said before what it asks.
+  evidence?: { asks: string; got: string | null; source: string | null; noted?: string | null };
 };
 
 // The line as parts: a figure (a number, a quantity, an hour) is drawn in mono,
@@ -170,12 +170,11 @@ export function partialPair(logged: string, target: string, unit: string | null)
 export function rowMeta(translate: Translate, pieces: RowMetaPieces): RowMetaPart[] | undefined {
   const { kind, done, quiet, status } = pieces;
   if (pieces.evidence) {
-    const { asks, got, source } = pieces.evidence;
-    return [{ text: got === null ? asks : source ? `${got} · ${source}` : got }];
+    const { asks, got, source, noted } = pieces.evidence;
+    return [{ text: got === null ? (noted ? `${noted} · ${asks}` : asks) : source ? `${got} · ${source}` : got }];
   }
   const loud = !quiet && kind !== "evidence";
   const partial = loud && !done && kind === "quantity" ? (pieces.partial ?? null) : null;
-  const said = loud && (done || partial) ? translate("day.row.saidByYou") : null;
 
   const amount: RowMetaPart[] | undefined = partial
     ? partialParts(translate("day.row.partialAmount", { logged: LOGGED, target: TARGET }), partial)
@@ -186,8 +185,6 @@ export function rowMeta(translate: Translate, pieces: RowMetaPieces): RowMetaPar
     pieces.cadenceText ? [{ text: pieces.cadenceText }] : null,
     amount,
     status ? [{ text: status }] : null,
-    pieces.writtenTime ? [{ figure: pieces.writtenTime }] : null,
-    said ? [{ text: said }] : null,
     pieces.writtenLabel ? [{ text: pieces.writtenLabel }] : null,
   ];
   const parts = pieceParts

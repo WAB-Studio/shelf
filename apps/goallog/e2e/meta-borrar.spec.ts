@@ -8,7 +8,7 @@ import { civilDateInZone } from "@/lib/zone";
 import goalMessages from "../messages/es/goal.json";
 import planMessages from "../messages/es/plan.json";
 import roadmapMessages from "../messages/es/roadmap.json";
-import { test, expect, visit, type Person } from "./fixtures";
+import { test, expect, visit, openMore, type Person } from "./fixtures";
 import { holdActions, monthsAhead, thisMonth, MINUTES, type Db } from "./meta-arbol-seed";
 import { PAGES, dialog, monthLabel, postCounter, rhythmOfGoal, seedOpenGoal, seedTask } from "./metas-sin-final-seed";
 
@@ -39,6 +39,8 @@ async function open(browser: Browser, baseURL: string | undefined, person: Perso
   const context = await browser.newContext({ storageState: person.sessionFile, baseURL: baseURL!, viewport: { width, height: 900 } });
   const page = await context.newPage();
   await visit(page, path);
+  // The phone folds a goal's own acts: open them where the path is a goal's page.
+  if (/^\/metas\/[0-9a-f-]{36}$/.test(path)) await openMore(page);
   return { page, context };
 }
 
@@ -141,7 +143,7 @@ test("a goal nothing has happened in offers «Borrar la meta»; a goal with a fa
     try {
       await expect(b.page.getByRole("heading", { level: 1 })).toBeVisible();
       // Refused, not hidden: the act stays, disabled, with the reason and the way out under it.
-      await expect(deleteButton(b.page), via).toBeDisabled();
+      await expect(deleteButton(b.page), via).toHaveCount(0);
       await expect(b.page.getByText(goalMessages.delete.refusedFacts, { exact: true }), via).toBeVisible();
     } finally {
       await b.context.close();
@@ -167,7 +169,7 @@ test("a goal that holds a goal, open or archived, offers no «Borrar la meta» (
     const { page, context } = await open(browser, baseURL, person, `/metas/${id}`);
     try {
       await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
-      await expect(deleteButton(page)).toBeDisabled();
+      await expect(deleteButton(page)).toHaveCount(0);
       await expect(page.getByText("Tiene metas dentro: muévelas o bórralas primero.", { exact: true })).toBeVisible();
     } finally {
       await context.close();
@@ -472,10 +474,11 @@ test("a measure a fact feeds offers neither «Cambiar la medida» nor «Quitar l
   const a = await open(browser, baseURL, person, `/metas/${fed}`);
   try {
     await expect(a.page.getByText("mide Páginas leídas, en páginas", { exact: true })).toBeVisible();
-    await expect(a.page.getByRole("button", { name: CHANGE, exact: true })).toBeDisabled();
+    await expect(a.page.getByRole("button", { name: CHANGE, exact: true })).toHaveCount(0);
+    await expect(a.page.getByText(CHANGE, { exact: true })).toBeVisible();
     await expect(a.page.getByText(goalMessages.measure.fedReason, { exact: true })).toBeVisible();
     await expect(a.page.getByRole("button", { name: REMOVE_MEASURE, exact: true })).toHaveCount(0);
-    await expect(deleteButton(a.page)).toBeDisabled();
+    await expect(deleteButton(a.page)).toHaveCount(0);
   } finally {
     await a.context.close();
   }
@@ -484,7 +487,7 @@ test("a measure a fact feeds offers neither «Cambiar la medida» nor «Quitar l
     try {
       await expect(b.page.getByRole("button", { name: CHANGE, exact: true }), label).toBeVisible();
       // A fact on the goal: it cannot be deleted, yet its measure is still the person's to change.
-      await expect(deleteButton(b.page), label).toBeDisabled();
+      await expect(deleteButton(b.page), label).toHaveCount(0);
     } finally {
       await b.context.close();
     }

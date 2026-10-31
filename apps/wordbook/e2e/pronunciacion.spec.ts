@@ -1,4 +1,4 @@
-import { expect, test } from "./fixtures";
+import { expect, openRareSenses, test } from "./fixtures";
 import type { Locator, Page } from "@playwright/test";
 
 import messages from "../messages/es.json";
@@ -41,6 +41,7 @@ async function answer(page: Page, word: string): Promise<void> {
   const searchBox = page.getByRole("textbox", { name: messages.search.label });
   await searchBox.fill(word);
   await expect(page.getByRole("heading", { name: word, exact: true })).toBeVisible({ timeout: 5000 });
+  await openRareSenses(page);
 }
 
 // A gloss now lives inside one comma-joined translation line
@@ -95,9 +96,9 @@ test("`row` draws each sense's translations on one comma-separated line", async 
   await answer(page, "row");
 
   for (const line of [
-    "remado, remo",
-    "fila, hilera, línea, pista, registro, renglón",
-    "pelea, riña, cisco, gresca, pelotera, pifostio, barullo, bulla",
+    "remo, remado",
+    "fila, línea, pista",
+    "pelea, cisco, riña",
     "remar, bogar, proejar",
     "pelear, discutir, reñir",
   ]) {
@@ -294,9 +295,10 @@ test("RL-51: a sense draws no IPA line of its own where the sound is the one alr
   await loadDictionary(page);
   await answer(page, "mass");
 
-  // `mass` draws three label rows — adjective, noun, verb — and the asset
-  // writes the noun's stress and the other two without it. One line each,
-  // and no fourth repeating the noun's sound inside a sense.
-  await expect(page.getByText("/mæs/", { exact: true })).toHaveCount(2);
-  await expect(page.getByText("/ˈmæs/", { exact: true })).toHaveCount(1);
+  // `mass` draws three label rows — adjective, noun, verb. The noun's common sense (masa) leads it and
+  // is written without the stress, as the other two are; its liturgical sense (misa, `/ˈmæs/`) is the
+  // same sound and draws no line of its own. One line per row, none repeated inside a sense.
+  // The sound is named once, on the entry's header, and no label row or sense repeats it.
+  await expect(page.getByText("/mæs/", { exact: true })).toHaveCount(1);
+  await expect(page.getByText("/ˈmæs/", { exact: true })).toHaveCount(0);
 });

@@ -1,6 +1,6 @@
 import { useTranslations } from "next-intl";
 
-import { Box, Flex, Separator, Text, VisuallyHidden } from "@/components/ui";
+import { Box, Flex, MarkedWord, Separator, Text, VisuallyHidden } from "@/components/ui";
 import type { WordText } from "@/lib/word/protocol";
 
 // The three shapes module 9's hook resolves a word's decoration to. State
@@ -14,7 +14,7 @@ export type GeneratedTextState =
 // (docs/wordbook/DESIGN.md "Generated text is marked «generada»" — a model
 // mis-defined `abies` in a test of twelve, and the reader has no way to
 // doubt a line that looks like every other one).
-export function GeneratedText({ state }: { state: GeneratedTextState }) {
+export function GeneratedText({ state, headword }: { state: GeneratedTextState; headword?: string }) {
   const t = useTranslations("word");
 
   // `PalabraSinDefinicionOscuroMovil`: no connection, no result, or the
@@ -30,7 +30,7 @@ export function GeneratedText({ state }: { state: GeneratedTextState }) {
       <Flex direction="column" data-generated-block="">
         <Separator size="4" />
         <Box pt="2" pb="1">
-          <Text variant="pendingHint" serif muted>
+          <Text variant="pendingHint" muted>
             {t("definitionGenerating")}
           </Text>
         </Box>
@@ -68,7 +68,7 @@ export function GeneratedText({ state }: { state: GeneratedTextState }) {
           </Flex>
           <Flex direction="column" gap="2">
             {hasDefinition && (
-              <Text variant="generatedProse" serif muted english>
+              <Text variant="generatedProse" muted english>
                 {text.definition}
               </Text>
             )}
@@ -77,11 +77,11 @@ export function GeneratedText({ state }: { state: GeneratedTextState }) {
                   for a screen reader without drawing a fourth caption line —
                   skipped when the heading above already says "Ejemplo". */}
               {hasDefinition && <VisuallyHidden>{t("example")}</VisuallyHidden>}
-              <Text variant="generatedProse" serif english>
-                {text.example.en}
+              <Text variant="generatedProse" english>
+                <MarkedWord text={text.example.en} forms={headword === undefined ? [] : [headword]} />
               </Text>
               <VisuallyHidden>{t("exampleTranslation")}</VisuallyHidden>
-              <Text variant="exampleTranslation" serif muted>
+              <Text variant="exampleTranslation" muted>
                 {text.example.es}
               </Text>
             </Flex>

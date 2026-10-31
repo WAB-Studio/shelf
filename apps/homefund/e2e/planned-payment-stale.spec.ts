@@ -83,7 +83,7 @@ test("an edit saved after another tab changed the payment is refused as stale, k
 
   await expect(dialogA.getByText(messages.errors.stale, { exact: true })).toBeVisible();
   await expect(dialogA).toBeVisible();
-  await expect(amount(dialogA)).toHaveValue("27000");
+  await expect(amount(dialogA)).toHaveValue(/^27\D?000$/);
   await expect(save(dialogA)).toBeEnabled();
   expect(await storedAmount()).toBe("3100000");
   await other.close();

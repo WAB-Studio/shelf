@@ -6,6 +6,8 @@ import { usePathname, useRouter } from "next/navigation";
 import { useFormatter, useTranslations } from "next-intl";
 
 import { readLemmaHistory, readLemmaKey, readWordStudy, type WordHistoryRow } from "@/lib/log/summary";
+import { splitTranslations } from "@/lib/log/translation-line";
+import { answerSenses } from "@/lib/review/sense";
 import { recalledFilter } from "@/lib/log/study-filter";
 import type { LookupOutcome } from "@/lib/log/types";
 import { decodeWordSegment } from "@/lib/word/segment";
@@ -16,9 +18,11 @@ import { InstallStatus } from "@/components/search/install-status";
 import { SenseList } from "@/components/search/sense-list";
 import {
   Button,
+  Card,
   Flex,
   Grid,
   Headword,
+  Panels,
   Link,
   MetaLabel,
   Separator,
@@ -221,9 +225,15 @@ export function WordHistory() {
     unlistedRow !== undefined &&
     ((dictionaryStatus.state === "failed" && unlistedRow.translation !== null) ||
       (answer !== null && answer.exact === null && answer.viaInflection.length === 0));
-  const gloss = isPhrase
+  // Only the lead translation heads the page; the whole list is drawn once, below.
+  const fullGloss = isPhrase
     ? null
     : networkOnly ? null : (unlistedRow ?? state.rows[0]).translation;
+  // The dictionary on the device knows which sense leads today, so an older row that saved a rare
+  // sense first never heads the page; the saved line answers when the dictionary is not at hand.
+  const leadSense = answer === null ? null : answerSenses(answer)[0];
+  const gloss =
+    fullGloss === null ? null : (leadSense?.translations[0] ?? splitTranslations(fullGloss)[0] ?? null);
   // The provider formats in the server's zone; the reader's is the browser's.
   const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const subtitleValues = {
@@ -247,20 +257,57 @@ export function WordHistory() {
   };
 
   return (
-    <Flex direction="column" gap="5">
-      <BackLink label={t("word.back")} />
-
-      <Flex direction="column" gap="1">
-        <Headword>{heading}</Headword>
-        <Text size="2" muted>
-          {gloss === null
-            ? t("word.subtitle", subtitleValues)
-            : t("word.lemmaSubtitle", { ...subtitleValues, translation: gloss })}
+    <Panels
+      top={
+        <>
+          <BackLink label={t("word.back")} />
+          <Flex direction="column" gap="1">
+            <Headword size="hero">{heading}</Headword>
+            <Text size="2" muted>
+              {gloss === null
+                ? t("word.subtitle", subtitleValues)
+                : t("word.lemmaSubtitle", { ...subtitleValues, translation: gloss })}
+            </Text>
+          </Flex>
+        </>
+      }
+      side={
+      <Card>
+      {state.waiting && (
+        <Text variant="definitionLabel" muted>
+          {t("word.searches")}
         </Text>
+      )}
+
+      {/* Every past search, kept below the answer rather than above it or
+          folded away: the answer is why the reader tapped this word, the
+          count and dates in the line above already answer "how many, since
+          when" for a reader who stops there, and this list stays a plain
+          scroll rather than a second tap for the reader who wants every
+          date. Each one now carries its own time, not only its own day —
+          `dateStyle` alone read identically across a same-day run and told
+          the reader nothing the count above had not already said. */}
+      <Flex direction="column" gap="3">
+        {state.rows.map((row, index) => (
+          <Flex direction="column" gap="3" key={`${row.at}-${index}`}>
+            {index > 0 && <Separator size="4" />}
+            <Grid columns="1fr auto" gap="3" align="center">
+              <Flex direction="column" gap="1" minWidth="0">
+                <Text size="2" english>{row.text}</Text>
+                <Text size="2" muted>
+                  {rowTime(row.at)}
+                </Text>
+              </Flex>
+              {!state.waiting && <MetaLabel>{t(`outcome.${outcomeKey(row.outcome)}`)}</MetaLabel>}
+            </Grid>
+          </Flex>
+        ))}
       </Flex>
-
-      <Separator size="4" />
-
+      </Card>
+      }
+      sideLast
+    >
+      <Card>
       {state.waiting ? (
         <Flex direction="column" gap="1">
           <Text size="2" weight="bold">
@@ -318,38 +365,7 @@ export function WordHistory() {
         </Skeleton>
       )}
 
-      <Separator size="4" />
-
-      {state.waiting && (
-        <Text variant="definitionLabel" muted>
-          {t("word.searches")}
-        </Text>
-      )}
-
-      {/* Every past search, kept below the answer rather than above it or
-          folded away: the answer is why the reader tapped this word, the
-          count and dates in the line above already answer "how many, since
-          when" for a reader who stops there, and this list stays a plain
-          scroll rather than a second tap for the reader who wants every
-          date. Each one now carries its own time, not only its own day —
-          `dateStyle` alone read identically across a same-day run and told
-          the reader nothing the count above had not already said. */}
-      <Flex direction="column" gap="3">
-        {state.rows.map((row, index) => (
-          <Flex direction="column" gap="3" key={`${row.at}-${index}`}>
-            {index > 0 && <Separator size="4" />}
-            <Grid columns="1fr auto" gap="3" align="center">
-              <Flex direction="column" gap="1" minWidth="0">
-                <Text size="2" english>{row.text}</Text>
-                <Text size="2" muted>
-                  {rowTime(row.at)}
-                </Text>
-              </Flex>
-              {!state.waiting && <MetaLabel>{t(`outcome.${outcomeKey(row.outcome)}`)}</MetaLabel>}
-            </Grid>
-          </Flex>
-        ))}
-      </Flex>
-    </Flex>
+      </Card>
+    </Panels>
   );
 }

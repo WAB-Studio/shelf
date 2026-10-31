@@ -1,7 +1,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { useAction } from "next-safe-action/hooks";
 import { useEffect, useState } from "react";
 import { Controller, useForm, useWatch, type Resolver } from "react-hook-form";
@@ -27,6 +27,7 @@ import {
   Spinner,
   Text,
   TextField,
+  AmountField,
 } from "@/components/ui";
 import type { BudgetStatus } from "@/db/queries/budgets";
 import type { TransactionFormOptions } from "@/db/queries/transaction-form";
@@ -116,6 +117,7 @@ function BudgetForm({
 }) {
   const t = useTranslations("budgets");
   // Root-scoped: the keys under `common` sit outside the `budgets` namespace.
+  const locale = useLocale();
   const tKey = useTranslations();
 
   const isEdit = !!budget;
@@ -170,7 +172,7 @@ function BudgetForm({
           accountId: budget.accountId,
           labelId: budget.labelId,
           period: budget.period,
-          limit: amountToInput(budget.limitCents, budget.currency),
+          limit: amountToInput(budget.limitCents, budget.currency, locale),
           thresholdPct: budget.thresholdPct,
           name: budget.name,
         }
@@ -390,7 +392,7 @@ function BudgetForm({
             <Field invalid={fieldState.invalid}>
               <FieldLabel htmlFor="budget-limit">{t("limitLabel")}</FieldLabel>
               <FieldControl>
-                <TextField.Root
+                <AmountField
                   {...field}
                   id="budget-limit"
                   size="3"

@@ -4,7 +4,7 @@ import { getReader } from "@/lib/session";
 import { AccountPanel } from "@/components/account/account-panel";
 import { AccountTabs, TabBody } from "@/components/account/tab-body";
 import { AccountInfo } from "@/components/account/account-info";
-import { Flex, Headword, MetaLabel, Page, Separator, Text, ThemeChoice } from "@/components/ui";
+import { PageTitle, Card, Flex, MetaLabel, Page, Panels, Separator, Text, ThemeChoice } from "@/components/ui";
 
 // RL-49: `app/auth/confirm/route.ts` sends a failed link here as
 // `?error=linkTimeout` (the gateway never answered) or `?error=linkInvalid`
@@ -38,11 +38,15 @@ export default async function CuentaPage({
   const linkFailure = resolveLinkFailure(rawError);
 
   return (
-    <Page measure="full">
-      <Flex direction="column" gap="5">
-        <Headword>{t("title")}</Headword>
-
-        <AccountTabs />
+    <Page measure="panels">
+      <Panels
+        top={
+          <>
+            <PageTitle>{t("title")}</PageTitle>
+            <AccountTabs />
+          </>
+        }
+      >
 
         {linkFailure && tab === "account" && (
           // No red in this palette (docs/wordbook/DESIGN.md "Failure"): a
@@ -64,14 +68,16 @@ export default async function CuentaPage({
           </Flex>
         )}
 
-        <TabBody account={<AccountPanel reader={reader} />} info={<AccountInfo />} />
+        <Card>
+          <TabBody account={<AccountPanel reader={reader} />} info={<AccountInfo />} />
+        </Card>
 
         {/* RNL-07 on the phone: the bar has no foot, so the theme lives here; the sidebar carries it from 1024px. */}
         <Flex direction="column" gap="2" align="start" display={{ initial: "flex", md: "none" }}>
           <MetaLabel>{tTheme("label")}</MetaLabel>
           <ThemeChoice />
         </Flex>
-      </Flex>
+      </Panels>
     </Page>
   );
 }

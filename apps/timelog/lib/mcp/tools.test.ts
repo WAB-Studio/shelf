@@ -26,6 +26,14 @@ function fakeReads() {
       asked.push(`days ${from}..${to}`);
       return [{ day: "2026-10-27", seconds: 11560 }];
     },
+    async claudeBetween(from, to) {
+      asked.push(`claude ${from}..${to}`);
+      return [{ day: "2026-10-27", code: 3600, web: 600, desktop: 0 }];
+    },
+    async appsByDay(from, to) {
+      asked.push(`byday ${from}..${to}`);
+      return [{ day: "2026-10-27", app: "Code.exe", seconds: 11520 }];
+    },
   };
   return { reads, asked };
 }
@@ -72,4 +80,32 @@ test("get_range takes up to 366 days, from on or before to", async () => {
   assert.deepEqual(await range.run(reads, { from: "2026-01-01", to: "2027-01-02" }, TODAY), { ok: false, error: "range" });
   assert.deepEqual(await range.run(reads, { from: "2026-10-28", to: "2026-10-27" }, TODAY), { ok: false, error: "range" });
   assert.ok((await range.run(reads, { from: TODAY, to: TODAY }, TODAY)).ok);
+});
+
+test("get_daily answers one row per day with Claude's time and the top app, from the same reads as the export (RT-15)", async () => {
+  const { reads, asked } = fakeReads();
+  const outcome = await tool("get_daily").run(reads, { from: "2026-10-26", to: "2026-10-28" }, TODAY);
+  assert.deepEqual(asked.sort(), ["byday 2026-10-26..2026-10-28", "claude 2026-10-26..2026-10-28", "days 2026-10-26..2026-10-28"]);
+  assert.ok(outcome.ok);
+  const days = outcome.value.days as Record<string, unknown>[];
+  assert.deepEqual(days.map((one) => one.day), ["2026-10-26", "2026-10-27", "2026-10-28"]);
+  assert.deepEqual(days[1], {
+    day: "2026-10-27",
+    total_seconds: 11560,
+    claude_code_seconds: 3600,
+    claude_ai_seconds: 600,
+    claude_desktop_seconds: 0,
+    claude_seconds: 4200,
+    top_app: "VS Code",
+    top_app_seconds: 11520,
+  });
+  assert.equal(days[0].claude_seconds, 0);
+});
+
+test("get_daily refuses a bad day or a range past 366 days before reading", async () => {
+  const { reads, asked } = fakeReads();
+  const daily = tool("get_daily");
+  assert.deepEqual(await daily.run(reads, { from: "2026-02-30", to: "2026-03-01" }, TODAY), { ok: false, error: "day" });
+  assert.deepEqual(await daily.run(reads, { from: "2026-01-01", to: "2027-01-02" }, TODAY), { ok: false, error: "range" });
+  assert.deepEqual(asked, []);
 });

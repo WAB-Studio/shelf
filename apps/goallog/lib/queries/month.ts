@@ -30,7 +30,8 @@ import {
   type GoalRow,
   type TaskRow,
 } from "@/lib/queries/goal";
-import { livedThrough, toCadence, toDeclaredFact } from "@/lib/queries/rows";
+import { dayCounts } from "@/lib/day/constancy";
+import { livedThrough, toCadence, toDeclaredFact, toSatisfiedBy } from "@/lib/queries/rows";
 import { getPerson, withGoalsDb, withReadingDb, type Transaction } from "@/lib/session";
 import { dayBefore } from "@/lib/day/weeks";
 import { civilDateInZone, TIME_ZONE, todayInZone, weekOf } from "@/lib/zone";
@@ -54,6 +55,8 @@ export type MonthAcrossGoal = {
   rootName: string;
   aboveName: string | null;
   holdsGoals: boolean;
+  // The civil day the goal was opened.
+  startedOn: string;
   // Goals under it that measure in another unit and add nothing to its line.
   outOfUnit: { id: string; name: string; unit: string }[];
 };
@@ -71,6 +74,8 @@ export type MonthAcross = {
   // "YYYY-MM": the month the first goal or habit was opened in, and the last «Mes» steps forward to.
   firstMonth: string | null;
   lastMonth: string;
+  // The civil day the earliest open goal was opened: the weeks before it have nothing to show; null with no goal.
+  firstDay: string | null;
   today: string;
   evidence: "read" | "unreadable";
   // In the tree's order: each goal after the one above it.
@@ -79,6 +84,8 @@ export type MonthAcross = {
   groups: { rootId: string; goalIds: string[] }[];
   // Habits with no goal (RP-100), live or retired this month, with the days of the month each was done.
   loose: MonthLooseHabit[];
+  // Commitments met per day of the month through today, for the calendar. Habits with no goal are not counted.
+  intensity: Record<string, number>;
 };
 
 // `asked` is how many days of the month through today the cadence asked on; null for a cadence counted by the week or the month.
@@ -383,6 +390,7 @@ export async function loadMonthAcross(
       plan,
       ...placeOf(tree, id),
       holdsGoals: sum !== undefined,
+      startedOn: civilDateInZone(new Date(row.goal.created_at)),
       outOfUnit: sum?.outOfUnit ?? [],
     };
   });
@@ -400,11 +408,30 @@ export async function loadMonthAcross(
     view,
     firstMonth: rows[0]?.first_month ?? null,
     lastMonth: forwardLimit({ horizons: rows[0]?.horizons ?? [], today }),
+    firstDay: goals.length === 0 ? null : goals.map((goal) => goal.startedOn).sort()[0],
     today,
     evidence: outcome.status === "read" ? "read" : "unreadable",
     goals,
     groups,
     loose,
+    // The goals' own facts of the month and the sources it read, counted once for the calendar.
+    intensity:
+      view === "coming"
+        ? {}
+        : dayCounts(
+            goalRows.flatMap((row) =>
+              row.commitments.map((commitment) => ({
+                id: commitment.id,
+                satisfiedBy: toSatisfiedBy(commitment),
+                sourceKey: commitment.source_key,
+                createdOn: civilDateInZone(new Date(commitment.created_at)),
+              })),
+            ),
+            goalRows.flatMap((row) => row.facts),
+            outcome.bySourceKey,
+            month,
+            until,
+          ),
   };
 }
 

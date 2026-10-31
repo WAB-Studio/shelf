@@ -181,8 +181,9 @@ test("retiring a commitment through the sheet sets retired_at, names its done-da
     }
 
     await page.reload();
-    const row = page.locator("button", { hasText: commitmentName });
-    await row.click();
+    // A live row is a link to the commitment's own screen, whose «Retirarlo o borrarlo» opens the sheet; the retired row is a button.
+    await page.locator("main a", { hasText: commitmentName }).click();
+    await page.getByRole("button", { name: "Retirarlo o borrarlo", exact: true }).click();
 
     const sheet = page.getByRole("dialog");
     await expect(sheet).toBeVisible();
@@ -190,6 +191,7 @@ test("retiring a commitment through the sheet sets retired_at, names its done-da
 
     await sheet.getByRole("button", { name: "Retirarlo" }).click();
     await expect(sheet).toBeHidden();
+    const row = page.locator("main button", { hasText: commitmentName });
 
     await expect(row).toContainText("retirado");
     await expect(row).toBeDisabled();
@@ -218,7 +220,7 @@ test("a goal with no commitment yet draws its own way in solid, the one thing th
   }
 });
 
-test("a goal that already carries a commitment draws its own way in outlined, not the only thing left to do", async ({
+test("a goal that already carries a commitment keeps its own way in as the screen's one pill, every other way in quiet", async ({
   page,
   db,
   personId,
@@ -235,7 +237,9 @@ test("a goal that already carries a commitment draws its own way in outlined, no
 
     const link = page.getByRole("link", { name: "Añadir un compromiso" });
     await expect(link).toBeVisible();
-    await expect(link).toHaveClass(/\boutline\b/);
+    // The pill is the primary act alone (DESIGN «One primary pill per screen»): the phase way in beside it is a quiet row.
+    await expect(link).toHaveClass(/\bsolid\b/);
+    await expect(page.getByRole("link", { name: "Añadir una fase" })).not.toHaveClass(/\bsolid\b/);
   } finally {
     await deleteGoal(db, personId, goalId);
   }

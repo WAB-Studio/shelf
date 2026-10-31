@@ -1,0 +1,59 @@
+.grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.head {
+  padding-block-end: 2px;
+  text-align: center;
+  font-size: 14px;
+  color: var(--pulsar-muted);
+}
+
+.cell {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-block-size: 44px;
+  border-radius: 10px;
+  font-family: var(--font-mono);
+  font-size: 14px;
+  color: var(--pulsar-ink);
+  background: var(--pulsar-line);
+}
+
+.out {
+  background: transparent;
+  color: var(--pulsar-muted);
+  opacity: 0.6;
+}
+
+/* Four steps of the accent over the tile; the busiest day is the full accent with the ground's ink. */
+.level0 {
+  background: var(--pulsar-line);
+}
+
+.level1 {
+  background: color-mix(in srgb, var(--pulsar-accent) 30%, var(--pulsar-line));
+}
+
+.level2 {
+  background: color-mix(in srgb, var(--pulsar-accent) 55%, var(--pulsar-line));
+}
+
+.level3 {
+  background: color-mix(in srgb, var(--pulsar-accent) 80%, var(--pulsar-line));
+  color: var(--pulsar-brand, #0b1f3a);
+}
+
+.level4 {
+  background: var(--pulsar-accent);
+  color: var(--pulsar-brand, #0b1f3a);
+  font-weight: 600;
+}
+
+.today {
+  box-shadow: inset 0 0 0 2px var(--pulsar-ink);
+}

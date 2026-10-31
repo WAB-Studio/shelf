@@ -6,3 +6,19 @@
   min-height: 47px;
   height: auto;
 }
+
+/* The primary action of a form that scrolls inside a sheet: it rides the bottom
+   edge of the sheet over a panel-coloured strip that reaches the sheet's own
+   padding, so «Guardar» is never below the fold. Outside a dialog the padding
+   is unset and the strip is plain. */
+.footer {
+  --footer-pad: var(--dialog-content-padding, 0px);
+  display: flex;
+  flex-direction: column;
+  position: sticky;
+  bottom: calc(-1 * var(--footer-pad));
+  z-index: 1;
+  margin-inline: calc(-1 * var(--footer-pad));
+  padding: var(--space-3) var(--footer-pad) var(--footer-pad);
+  background-color: var(--color-panel-solid);
+}

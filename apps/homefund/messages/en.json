@@ -21,12 +21,14 @@
     "removeFilter": "Remove {label}",
     "fund": "Fund",
     "currencyTotals": "Totals by currency",
-    "optional": "Optional"
+    "optional": "Optional",
+    "openCalendar": "Open calendar"
   },
   "auth": {
     "signOut": "Sign out",
-    "tagline": "The household's accounts, clear and shared.",
+    "tagline": "The household's accounts, <mark>clear</mark> and shared.",
     "passwordlessHint": "We send you a code to sign in without a password.",
+    "invitationOnly": "For now, access is by invitation.",
     "emailLabel": "Email address",
     "emailPlaceholder": "you@example.com",
     "sendLink": "Send code",
@@ -113,7 +115,7 @@
       "addWithoutEmail": "Add without email",
       "toDashboard": "Go to dashboard",
       "skip": "Skip for now",
-      "emailFailed": "We added the person, but could not send the email. Tell them to sign in with that address; if it is already in another group, they will not join this one."
+      "emailFailed": "We added the person, but could not send the email. Tell them to sign in with that address; if it is already in another fund, they will not join this one."
     }
   },
   "dashboard": {
@@ -141,7 +143,24 @@
     "firstAccountTitle": "Open your first account",
     "addAccountKind": "Add",
     "monthAdjustment": "Month gap",
-    "reviewLine": "Review {month} · {count, plural, one {# movement} other {# movements}}"
+    "reviewLine": "Review {month} · {count, plural, one {# movement} other {# movements}}",
+    "asideBudgets": "Close to the limit",
+    "asideBudgetsSee": "See budgets",
+    "budgetOver": "Over",
+    "budgetSpent": "{spent} of {limit}",
+    "asideGoal": "Goal",
+    "goalLeft": "{amount} to go",
+    "goalLeftPace": "{amount} to go · {pace}/mo",
+    "asideDebt": "Next debt payment",
+    "glanceTitle": "The month at a glance",
+    "glanceIncome": "Income",
+    "glanceSpending": "Spending",
+    "glanceSpentOf": "You spent {pct}% of what came in",
+    "glanceNoIncome": "No money has come in this month",
+    "glanceMeterLabel": "Spending against income in {currency}",
+    "glanceByCategory": "Spending by category",
+    "glanceOthers": "Other",
+    "ownerBarLabel": "Net worth by owner in {currency}"
   },
   "reports": {
     "title": "Reports",
@@ -150,12 +169,18 @@
     "byCategoryTitle": "Expenses by category",
     "byCategoryEmpty": "No expenses this month.",
     "comparisonTitle": "Last 6 months",
+    "comparisonEmpty": "No movements in these months.",
+    "comparisonEmptyHint": "Income and expenses in {currency} will show here month by month once you record them.",
     "legendIncome": "Income",
     "legendExpense": "Expenses",
     "contributionsTitle": "Contributions this month",
-    "contributionsEmpty": "No contributions this month.",
+    "contributionsEmpty": "No contributions this month. A contribution is a transfer from a personal account into a fund account, or an income into the fund with «From whom».",
     "noGroup": "Contributions are a fund figure. You have no fund yet.",
-    "monthAdjustment": "Month gap"
+    "monthAdjustment": "Month gap",
+    "shareLabel": "{pct}% of the month's spending",
+    "averageLabel": "Average {amount}",
+    "emptyMonths": "No movements in {months}: the average leaves them out.",
+    "contributionsNote": "Incomes into the fund with no «From whom» are not counted."
   },
   "nav": {
     "title": "Navigation",
@@ -181,7 +206,7 @@
     "labels": "Labels",
     "data": "Data",
     "audit": "Audit log",
-    "webhooks": "Webhooks",
+    "webhooks": "Bank emails",
     "roleLeader": "Owner",
     "roleMember": "Member"
   },
@@ -250,7 +275,7 @@
     "invitationGoneTitle": "This invitation is no longer valid",
     "invitationGoneBody": "{inviter} withdrew it or it has passed. If you want to join “{fund}”, ask them to invite you again.",
     "invitationOtherTitle": "You are already in the fund “{other}”",
-    "invitationOtherBody": "You can be in one fund only. To join “{fund}”, leave “{other}” first from “Group”.",
+    "invitationOtherBody": "You can be in one fund only. To join “{fund}”, leave “{other}” first from “Fund settings”.",
     "invitationGoAccounts": "Go to my accounts",
     "title": "Members",
     "add": "Add member",
@@ -259,7 +284,7 @@
     "nameLabel": "Name",
     "emailLabel": "Email (optional)",
     "emailHint": "If you add it, we send them an invitation to HomeFund.",
-    "editEmailFailed": "We saved the address, but could not send the invitation. Tell them to sign in with it; if it is already in another group, they will not join this one.",
+    "editEmailFailed": "We saved the address, but could not send the invitation. Tell them to sign in with it; if it is already in another fund, they will not join this one.",
     "activeTab": "Active",
     "archivedTab": "Archived",
     "you": "You",
@@ -295,8 +320,8 @@
       "nameRequired": "Enter the member's name.",
       "nameTooLong": "The name cannot exceed 80 characters.",
       "emailInvalid": "Enter a valid email.",
-      "emailTaken": "That email already has an invitation in this group.",
-      "alreadyMember": "That person is already in this group."
+      "emailTaken": "That email already has an invitation in this fund.",
+      "alreadyMember": "That person is already in this fund."
     }
   },
   "bienvenida": {
@@ -311,8 +336,8 @@
     "editTitle": "Edit account",
     "nameLabel": "Name",
     "kindLabel": "Kind",
-    "kindAsset": "Asset",
-    "kindLiability": "Liability",
+    "kindAsset": "What I have",
+    "kindLiability": "What I owe",
     "kindLocked": "The kind cannot be changed after the account is created.",
     "subtypeLabel": "Class",
     "subtypeBancaria": "Bank",
@@ -423,7 +448,7 @@
     "placementLocked": "Where a category goes cannot change after it is created.",
     "personalEmptyTitle": "You have no categories of your own yet",
     "personalEmptyDescription": "Create a category of your own to classify the movements of your personal accounts.",
-    "scopedName": "{name} · fund",
+    "scopedName": "{name}",
     "leaderOnly": "Ask the fund's owner to create or change the fund's categories.",
     "subcategoryCount": "{count, plural, one {# subcategory} other {# subcategories}}",
     "tableCategory": "Category",
@@ -484,6 +509,9 @@
   "transactions": {
     "quickTitle": "New movement",
     "quickPlaceholder": "Jot down an expense…",
+    "quickAction": "Note an expense",
+    "homeEmptyTitle": "No movements yet",
+    "homeEmptyDescription": "Note your first expense and it will show up here.",
     "quickInterpreted": "Interpreted · everything stays editable before saving",
     "quickUnrecognized": "I couldn't read the amount or the category · complete them",
     "quickAskQuestion": "How much is “{token}”?",
@@ -562,6 +590,10 @@
     "splitRowAmount": "Amount {position}",
     "splitRowRemove": "Remove category {position}",
     "splitUnassigned": "Unassigned",
+    "categoryMore": "More",
+    "categoryFewer": "Fewer",
+    "splitDivide": "Split",
+    "splitSingle": "One category",
     "splitsTitle": "Categories",
     "splitsTotal": "<amount></amount> total",
     "saved": "Movement saved",
@@ -594,7 +626,8 @@
       "causeInvalid": "Choose a valid movement.",
       "causeNotFound": "You can't use that movement as a cause.",
       "causeSelf": "A movement can't be its own cause.",
-      "counterpartyComplete": "This movement already has both accounts; there's nothing to complete."
+      "counterpartyComplete": "This movement already has both accounts; there's nothing to complete.",
+      "contributorInvalid": "Pick a fund member"
     },
     "labelsLabel": "Labels",
     "labelsNone": "Create labels in Settings to use them here.",
@@ -602,7 +635,7 @@
     "allLabels": "All labels",
     "typeLabel": "Type",
     "descriptionLabel": "Description",
-    "listMeta": "{count} · net",
+    "listMeta": "{count, plural, =1 {# movement} other {# movements}}",
     "listMetaAdjustments": "{count, plural, =1 {# gap} other {# gaps}}",
     "export": "Export",
     "emptyTitle": "No movements yet",
@@ -614,7 +647,10 @@
     "adjustmentFix": "Fix it by reconciling the account again.",
     "forHousehold": "For the household",
     "forHouseholdHint": "A household bill paid from your account: it counts as your contribution to the fund.",
-    "forHouseholdCounts": "Counts as a contribution by whoever paid it"
+    "forHouseholdCounts": "Counts as a contribution by whoever paid it",
+    "headlineNet": "Net",
+    "contributorLabel": "From whom",
+    "contributorNone": "Unassigned"
   },
   "cash": {
     "withdrawAction": "Withdraw cash",
@@ -651,7 +687,12 @@
     "recurringTitle": "Recurring",
     "recurringSummary": "{count, plural, one {# rule · {concept} on {date}} other {# rules · next {concept} on {date}}}",
     "recurringEmpty": "No active rules",
-    "nav": "Planning sections"
+    "nav": "Planning sections",
+    "over": "Over",
+    "spentOf": "{spent} of {limit}",
+    "goalLeft": "{amount} to go",
+    "goalLeftPace": "{amount} to go · {pace}/mo",
+    "debtsNext": "Next payment on {date}"
   },
   "budgets": {
     "ofLimit": " / {amount}",
@@ -719,7 +760,9 @@
       "periodInvalid": "Choose a valid period.",
       "budgetInvalid": "That budget is not valid.",
       "scopeViolation": "The account or label does not belong to the same scope as the category."
-    }
+    },
+    "headlineLeft": "{left} left of {limit}",
+    "headlineOver": "Over by {over} of {limit}"
   },
   "goals": {
     "title": "Savings goals",
@@ -797,7 +840,8 @@
       "goalInvalid": "That goal is not valid.",
       "contributionInvalid": "That contribution is not valid.",
       "scopeViolation": "The account does not belong to the same scope as the goal."
-    }
+    },
+    "headlineSaved": "Set aside"
   },
   "plannedPayments": {
     "title": "Planned payments",
@@ -994,6 +1038,8 @@
     "tileTotal": "Total debt",
     "tileTotalNote": "{count, plural, =1 {# obligation} other {# obligations}}",
     "tileMonthlyInterest": "Monthly interest",
+    "tileNoInterest": "No interest",
+    "tileNoNextPayment": "No scheduled installments",
     "tileMonthlyInterestNote": "{pct} of the balance",
     "tileNextPayment": "Next payment",
     "tileNextPaymentNote": "{date} · {name}",
@@ -1204,7 +1250,7 @@
     "notLeader": "Only the fund's owner can make this change.",
     "memberHasHistory": "This person has movements. Archive them instead.",
     "invitationGone": "This invitation is no longer valid.",
-    "alreadyInFund": "You are already in another fund. To join this one, leave it first from «Group».",
+    "alreadyInFund": "You are already in another fund. To join this one, leave it first from «Fund settings».",
     "leaderStays": "You cannot leave yet. Before leaving, hand the leadership to another member from «Members».",
     "accountHasMovements": "This account has movements. Archive it instead.",
     "accountHasHistory": "You cannot hand over an account that has movements. Archive it instead.",
@@ -1290,6 +1336,7 @@
       "counterAmount": "Amount in the account's currency",
       "counterIsEstimate": "Estimated amount",
       "forHousehold": "For the household",
+      "contributedBy": "From whom",
       "labels": "Labels",
       "account": "Account",
       "label": "Label",
@@ -1344,12 +1391,13 @@
         "outOfPlace": "This name exists, but not in the placement the row names.",
         "noFund": "The row belongs to a fund and you have none.",
         "repeatedRow": "Another row in the file already carries this for the same account. Keep only one.",
-        "lockedField": "This row changes the category or the place, which cannot change. Add it as a new row instead."
+        "lockedField": "This row changes the category or the place, which cannot change. Add it as a new row instead.",
+        "contributorUnknown": "The «From whom» member is not in the destination account's fund."
       }
     }
   },
   "webhooks": {
-    "title": "Webhooks",
+    "title": "Bank emails",
     "add": "Create credential",
     "emptyTitle": "No credentials",
     "emptyDescription": "Create a credential so a shortcut or a service records movements for you.",
@@ -1415,7 +1463,14 @@
   "ingest": {
     "title": "Inbox",
     "emptyTitle": "Nothing to review",
-    "emptyDescription": "The bank messages you forward land here. Forward one to get started.",
+    "emptyDescription": "Bank messages you forward land here. To start, point your bank at this address.",
+    "emptyAddressLabel": "Receiving address",
+    "emptyStep1": "Create a credential in Settings · Bank emails.",
+    "emptyStep2": "Set your bank's email or rule to send each notice to this address with your token.",
+    "emptyStep3": "When one arrives it shows up here for you to review.",
+    "copy": "Copy",
+    "copied": "Copied",
+    "copyFailed": "Could not copy. Select the text and copy it by hand.",
     "receivedOn": "Arrived on {date}",
     "noMerchant": "No merchant",
     "amountMissing": "Amount missing",
@@ -1527,7 +1582,7 @@
       "listAccounts": "The open accounts the person can see, personal and the fund's, with their balance per currency in cents.",
       "reviewMonth": "«Review the month»: the movements that stand out in a closed month by fixed rules (an amount far above its category's usual, two equal on one day, an amount read from words, a reconciliation gap), and whether each is already marked fine.",
       "monthParam": "The month, YYYY-MM. Absent, the last closed month.",
-      "previewStatement": "Step 1 of importing a bank statement: says what each line would do, writing nothing. Each line: «new» (will be created), «matches» (already recorded by hand or as a transfer's other side; only linked), «already_imported» (skipped) or «invalid» (with its reason). «proposal» is the account the person used before for that description: ask them before passing it as counterAccountId. Show the summary to the person before step 2.",
+      "previewStatement": "Step 1 of importing a bank statement: says what each line would do, writing nothing. Each line: «new» (will be created), «matches» (already recorded by hand or as a transfer's other side; only linked), «already_imported» (skipped) or «invalid» (with its reason). «proposal» is the account the person used before for that description: ask them before passing it as counterAccountId. A transfer with an account in another currency carries «counter»: ask the person how much arrived (or left) in that account, pass it as counterAmountCents and confirm the resulting rate with them. Show the summary to the person before step 2.",
       "importStatement": "Step 2: imports exactly what preview_statement showed, with its previewKey. All or nothing: if a line changed, or what the preview said about it, or one is invalid, nothing is written and it asks for a new preview. Repeating it never duplicates movements: what was imported shows as «already_imported»."
     },
     "errors": {

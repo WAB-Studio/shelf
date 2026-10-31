@@ -58,7 +58,7 @@ test("emptying the reading record empties the evidence mark on Hoy and on Semana
       values (${person.id}, ${deviceId}, 1, ${at}, 'evidencia', 'evidencia', 'word', 'miss', null, null, 0, null, true, null, 2)`;
 
     const page = await context.newPage();
-    const row = page.locator("button", { hasText: commitmentName });
+    const row = page.locator("div:has([data-state])", { hasText: commitmentName }).last();
     const dot = page.getByRole("img", { name: new RegExp(`^${commitmentName}, ${weekLongName(today)}: `) });
 
     await page.goto("/");
@@ -76,8 +76,8 @@ test("emptying the reading record empties the evidence mark on Hoy and on Semana
     await page.goto("/");
     await expect(page.locator("main")).toHaveCount(1);
     await expect(row.locator("[data-state]")).toHaveAttribute("data-state", "empty");
-    await expect(row).not.toContainText("diccionario");
-    expect(metaOf(await row.innerText())).toBe("1 búsqueda");
+    // Emptied, the row reads who notes it again, not a met source.
+    expect(metaOf(await row.innerText())).toBe("lo anota el diccionario · 1 búsqueda");
     await page.goto("/semana");
     await expect(page.locator("main")).toHaveCount(1);
     await expect(dot).toHaveCount(1);

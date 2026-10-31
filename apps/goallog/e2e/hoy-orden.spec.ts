@@ -72,7 +72,7 @@ test("a goal that asks nothing is below the one that asks at 1280 and has no sec
     await expect(sectionOf(quiet)).toHaveCount(0);
     // The month line of the goal with no section is still on screen.
     await expect(seen(quiet)).toHaveCount(1);
-    await expect(seen("este mes")).toHaveCount(1);
+    await expect(seen("Este mes")).toHaveCount(1);
 
     // A one-off of its own makes it ask: its section is back.
     await db`

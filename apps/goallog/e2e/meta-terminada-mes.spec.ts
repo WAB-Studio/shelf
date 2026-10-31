@@ -225,7 +225,7 @@ test("821 · /meses at 1280 of an ended goal shows no «ESTE MES» beside the li
   }
 });
 
-test("824 · «mover el final» of an ended goal is the lowercase link of an open one", async ({ page, db, personId }) => {
+test("824 · «Mover el final» of an ended goal reads as the link of an open one, in sentence case", async ({ page, db, personId }) => {
   const goalId = await seedGoal(db, personId, {
     name: `Terminada ${Date.now()}`,
     horizon: endedOn,
@@ -233,8 +233,8 @@ test("824 · «mover el final» of an ended goal is the lowercase link of an ope
   });
   try {
     await page.goto(`/metas/${goalId}`);
-    await expect(page.getByRole("button", { name: "mover el final", exact: true })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Mover el final", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Mover el final", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "mover el final", exact: true })).toHaveCount(0);
   } finally {
     await drop(db, personId, goalId);
   }

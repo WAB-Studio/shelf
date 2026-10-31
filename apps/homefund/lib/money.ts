@@ -90,6 +90,8 @@ function splitWritten(raw: string): WrittenFigure | null {
   const whole = trimmed.slice(0, cut);
   const tail = trimmed.slice(cut + 1);
   if (tail.length === 0) return null;
+  // «0,125» is no thousands group: a group never follows a lone zero.
+  if (tail.length === 3 && /^0/.test(whole)) return null;
   if (tail.length === 3) return { major: `${whole}${tail}`, fraction: "" };
   return { major: whole, fraction: tail };
 }
@@ -150,11 +152,16 @@ export function parseAmount(raw: string): number | null {
 }
 
 /**
- * What the amount field shows for a stored figure. Writes the decimal mark
- * Spanish uses, the language the copy is written in; `parseAmount` reads either
- * mark back, so a person may still type the other one.
+ * What the amount field shows for a stored figure. Writes the decimal mark of
+ * `locale` (Spanish by default: a comma, English a point); `parseAmount` reads
+ * either mark back, so a person may still type the other one.
  */
-export function amountToInput(minor: number, currency: CurrencyCode): string {
+export function amountToInput(
+  minor: number,
+  currency: CurrencyCode,
+  locale: string = "es",
+): string {
+  const mark = locale.startsWith("en") ? "." : ",";
   const { stored, written } = amountScale(currency);
   const major = Math.trunc(minor / stored);
   const remainder = Math.abs(minor) % stored;
@@ -174,7 +181,7 @@ export function amountToInput(minor: number, currency: CurrencyCode): string {
   const decimals = evenlyWritten ? written : STORAGE_EXPONENT;
   const fraction = evenlyWritten ? remainder / step : remainder;
 
-  return `${major},${String(fraction).padStart(decimals, "0")}`;
+  return `${major}${mark}${String(fraction).padStart(decimals, "0")}`;
 }
 
 /**
@@ -243,6 +250,27 @@ export function formatMoney(
   const value = Math.trunc(Math.abs(minor) / step) / 10 ** written;
 
   return formatter.format(value);
+}
+
+/**
+ * A magnitude in the short form a chart label has room for («$ 2,6 M»): display
+ * only, never read back. Takes the same magnitude `formatMoney` does.
+ */
+export function formatCompactMoney(
+  minor: number,
+  currency: CurrencyCode,
+  locale: Locale,
+): string {
+  const { stored, written } = amountScale(currency);
+  const step = stored / 10 ** written;
+  const value = Math.trunc(Math.abs(minor) / step) / 10 ** written;
+
+  return new Intl.NumberFormat(FORMAT_LOCALE[locale], {
+    style: "currency",
+    currency,
+    notation: "compact",
+    maximumFractionDigits: 1,
+  }).format(value);
 }
 
 // COP-only wrappers, marked to retire. Callers still bound to them date from
@@ -325,4 +353,68 @@ export function convertMinor(amountMinor: number, rate: number): number {
 /** @deprecated Formatting an amount is `Money`'s own business. */
 export function centsToPesos(cents: number): number {
   return cents / 100;
+}
+
+/**
+ * What an amount field shows as a person types: the whole digits grouped by the
+ * language's thousands mark, and the decimals after its decimal mark, so 125000
+ * reads «125.000». The caret travels with the digits it stood among. Every mark
+ * the person typed that is the language's group mark is dropped and regrouped,
+ * which is why deleting inside «1.250» never turns it into a decimal. The text
+ * `parseAmount` reads back is this text, so nothing is stored differently.
+ */
+export function formatAmountTyping(
+  raw: string,
+  caret: number,
+  locale: string,
+): { text: string; caret: number } {
+  const decimalMark = locale.startsWith("en") ? "." : ",";
+  const groupMark = decimalMark === "," ? "." : ",";
+
+  // The digits left of the caret, counted before anything is rewritten.
+  let digitsBefore = raw.slice(0, caret).replace(/\D/g, "").length;
+
+  // The field reformats on every keystroke, so each state must read as the figure the
+  // person means. The language's own decimal mark followed by 1 or 2 digits is the
+  // decimal; its own group mark is a decimal only as the one mark of the text followed
+  // by a single digit («12.5» on a Spanish keypad), never by two («125.00» is what
+  // backspacing «125.000» leaves: a group). Three digits after any mark are a group.
+  // Longer after the only decimal mark is not cut: it stays as typed and `parseAmount`
+  // refuses it with the field's error.
+  const marks: string[] = raw.match(/[.,]/g) ?? [];
+  const lastMark = marks.length === 0 ? -1 : Math.max(raw.lastIndexOf("."), raw.lastIndexOf(","));
+  const tail = lastMark === -1 ? "" : raw.slice(lastMark + 1).replace(/\D/g, "");
+  const head = lastMark === -1 ? raw : raw.slice(0, lastMark);
+  const headDigits = head.replace(/\D/g, "");
+  const ownGroup = lastMark !== -1 && raw[lastMark] === groupMark;
+
+  // Both marks in the text settle it: the last one is the decimal, the other the group.
+  const bothMarks = marks.includes(".") && marks.includes(",");
+
+  let isDecimal = false;
+  if (bothMarks) isDecimal = true;
+  else if (lastMark !== -1) {
+    if (tail.length <= 1) isDecimal = !ownGroup || marks.length === 1;
+    else if (tail.length === 2) isDecimal = !ownGroup;
+    else if (tail.length === 3) isDecimal = headDigits.replace(/^0+/, "") === "";
+    else isDecimal = !ownGroup && marks.length === 1;
+  }
+
+  const whole = (isDecimal ? headDigits : raw.replace(/\D/g, "")).replace(/^0+(?=\d)/, "");
+  const fraction = isDecimal ? tail : null;
+
+  const grouped = whole.replace(/\B(?=(\d{3})+$)/g, groupMark);
+  const text = fraction === null ? grouped : `${grouped || "0"}${decimalMark}${fraction}`;
+
+  // A fraction with no whole digits gains the zero before it, which the caret passes.
+  if (whole === "" && fraction !== null && digitsBefore > 0) digitsBefore += 1;
+
+  // Walk the new text until as many digits as stood left of the caret are behind it.
+  let seen = 0;
+  let position = 0;
+  while (position < text.length && seen < digitsBefore) {
+    if (/\d/.test(text[position])) seen += 1;
+    position += 1;
+  }
+  return { text, caret: position };
 }

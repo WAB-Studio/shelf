@@ -4,7 +4,7 @@ import { authenticatedRole, authUid, authUsers } from "drizzle-orm/supabase";
 
 import { timeSchema } from "./_schema";
 
-// The app-day (RT-01): seconds one app was in front, the person at the computer, on one Bogotá day
+// The app-day (RT-16): seconds one app was in front, the person at the computer, on one Bogotá day
 // from one device. Written only by `timelog.replace_day`; the person reads their own.
 export const appSeconds = timeSchema.table(
   "app_seconds",

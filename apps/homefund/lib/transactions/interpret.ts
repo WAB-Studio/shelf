@@ -7,7 +7,7 @@ import { normalizeAmountInput, parseAmount } from "@/lib/money";
 
 // The first run of digits, optionally carrying the thousands separators a
 // person types by hand; `normalizeAmountInput` strips those to a peso string.
-const AMOUNT_PATTERN = /\d[\d.,]*\d|\d/;
+const AMOUNT_PATTERN = /\d[\d.,]*\d|\d/g;
 // A spoken multiplier right after the amount (RF-22): «mil» and «k» are a
 // thousand, «M», «millón» and «millones» a million. A letter or digit after the
 // token makes it part of a word: «3 milanesas», «4 kg», «4 m2».
@@ -115,6 +115,86 @@ function lowerMChoices(amount: string): AmountAsk["choices"] {
   ];
 }
 
+// Words right before a run that say it is no amount: a reference, an order, an
+// account or a phone. A «factura» only counts when the run is as long as an invoice
+// number, so «Factura 45000» keeps its amount.
+const NOT_AMOUNT_BEFORE =
+  /(?:\b(?:ref|referencia|pedido|no|nro|n[uú]mero|cuenta|tel|tel[eé]fono|cel|celular|nit)\.?|#)\s*:?\s*$/iu;
+const INVOICE_BEFORE = /\bfactura\s*:?\s*$/iu;
+// Words right before a run that say it is the amount.
+const AMOUNT_BEFORE = /(?:\b(?:valor|monto|por|total|pago de|pagu[eé]|pagaste)\s*(?:de\s*)?:?)\s*$/iu;
+
+// A mobile line (10 digits starting with 3) or a toll-free one (01800…).
+function phoneLike(run: string): boolean {
+  const digits = run.replace(/\D/g, "");
+  return (digits.length === 10 && digits.startsWith("3")) || digits.startsWith("01800");
+}
+
+// The standalone number that is the amount: a run glued to a letter («D1», «m2»)
+// or part of a date or a clock («24/08/26», «18:31») or a card mask is left in
+// the note. A run the text marks as money wins; then one the text says is a
+// reference, an account or a phone is set aside, and of the rest the one beside
+// an amount word («valor», «total», «por»), else the first that is no bare
+// quantity («Mercado 2 87500» reads 87500).
+function findAmountToken(text: string): RegExpExecArray | null {
+  // A currency mark right before the run («$», «COP122.000,50») says it is money
+  // whatever else the text holds; the letters glue it to a word only otherwise.
+  const markedBefore = (match: RegExpMatchArray): boolean => {
+    const head = text.slice(0, match.index);
+    return /\$\s*$/.test(head) || /(?<![\p{L}\d])[A-Z]{3}$/u.test(head);
+  };
+  const candidates = [...text.matchAll(AMOUNT_PATTERN)].filter((match) => {
+    const before = text[match.index - 1] ?? "";
+    const after = text[match.index + match[0].length] ?? "";
+    return (
+      (!/[\p{L}_/:*]/u.test(before) || markedBefore(match)) &&
+      !/[/:]/u.test(after)
+    );
+  });
+  const marked = candidates.find(markedBefore);
+  if (marked) return marked as RegExpExecArray;
+
+  const kept = candidates.filter((match) => {
+    const head = text.slice(0, match.index);
+    if (phoneLike(match[0])) return false;
+    if (NOT_AMOUNT_BEFORE.test(head)) return false;
+    return !(INVOICE_BEFORE.test(head) && match[0].replace(/\D/g, "").length >= 7);
+  });
+  const pool = kept.length > 0 ? kept : candidates;
+
+  const named = pool.find((match) => AMOUNT_BEFORE.test(text.slice(0, match.index)));
+  if (named) return named as RegExpExecArray;
+
+  const quantity = (match: RegExpMatchArray) => match[0].replace(/\D/g, "").length <= 2;
+  const first = pool.find((match) => !quantity(match)) ?? pool[0] ?? null;
+  return first as RegExpExecArray | null;
+}
+
+function fold(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/\p{M}/gu, "")
+    .toLowerCase();
+}
+
+const MIN_PREFIX_LENGTH = 4;
+
+// The words of the text that begin a word of the name, ignoring case and
+// accents: «bancolombia» names the account «Bancolombia ahorros». Only words of
+// four letters or more count, so «de» or «la» never name anything.
+function prefixWord(text: string, name: string): string | null {
+  const nameWords = fold(name).split(/[^\p{L}\p{N}]+/u);
+  const words = text.match(/[\p{L}\p{N}]+/gu) ?? [];
+  return (
+    words.find(
+      (word) =>
+        word.length >= MIN_PREFIX_LENGTH &&
+        !/\d/u.test(word) &&
+        nameWords.some((nameWord) => nameWord.startsWith(fold(word))),
+    ) ?? null
+  );
+}
+
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
@@ -128,7 +208,7 @@ export function interpretQuickEntry(
   // The earliest of a digit run, a bare «mil» and a bare «millón» is the amount.
   const amountMatch =
     [
-      AMOUNT_PATTERN.exec(text),
+      findAmountToken(text),
       BARE_THOUSAND_PATTERN.exec(text),
       BARE_MILLION_PATTERN.exec(text),
     ]
@@ -193,16 +273,42 @@ export function interpretQuickEntry(
   const matchedAccounts = ctx.accounts.filter(
     (account) => account.lastFour && mentionedTails.has(account.lastFour),
   );
+  const namedAccounts = ctx.accounts.filter(
+    (account) => prefixWord(text, account.name) !== null,
+  );
   const matchedAccountId =
-    matchedAccounts.length === 1 ? matchedAccounts[0].id : null;
+    matchedAccounts.length === 1
+      ? matchedAccounts[0].id
+      : matchedAccounts.length === 0 && namedAccounts.length === 1
+        ? namedAccounts[0].id
+        : null;
+  // The word leaves the description only when it named the account actually chosen:
+  // a last-four mention can pick one account while another's name is also in the text.
+  const namedAccountWord =
+    matchedAccountId && namedAccounts.length === 1 && namedAccounts[0].id === matchedAccountId
+      ? prefixWord(text, namedAccounts[0].name)
+      : null;
 
   // The first category whose name reads as a substring of the text; the token
   // it matched drops out of the description below.
-  const matchedCategory =
+  const substringCategory =
     ctx.categories.find((category) => {
       const name = category.name.trim().toLowerCase();
       return name.length > 0 && lower.includes(name);
     }) ?? null;
+  // Failing that, the one category a word of the text begins a word of.
+  const namedCategories = substringCategory
+    ? []
+    : ctx.categories.filter(
+        (category) => prefixWord(text, category.name) !== null,
+      );
+  const matchedCategory =
+    substringCategory ??
+    (namedCategories.length === 1 ? namedCategories[0] : null);
+  const namedCategoryWord =
+    !substringCategory && matchedCategory
+      ? prefixWord(text, matchedCategory.name)
+      : null;
 
   // What is left once the amount, its multiplier and any matched category
   // token are removed.
@@ -214,8 +320,14 @@ export function interpretQuickEntry(
     description = `${text.slice(0, amountMatch.index)} ${text.slice(cutEnd)}`;
   }
   if (matchedCategory) {
-    const pattern = new RegExp(escapeRegExp(matchedCategory.name.trim()), "i");
-    description = description.replace(pattern, " ");
+    const token = namedCategoryWord ?? matchedCategory.name.trim();
+    description = description.replace(new RegExp(escapeRegExp(token), "i"), " ");
+  }
+  if (namedAccountWord) {
+    description = description.replace(
+      new RegExp(escapeRegExp(namedAccountWord), "i"),
+      " ",
+    );
   }
   description = description.replace(/\s+/g, " ").trim();
 

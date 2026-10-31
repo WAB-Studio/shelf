@@ -73,11 +73,12 @@ test("at 1280 the goals sit left and the figure, sueltas, «N esperan» and «he
     await page.setViewportSize({ width: 1280, height: 800 });
     await page.goto(`/metas/${measuredId}/revision`);
     // A row still in React's hidden streaming div reads as textContent: «2026» glued to «12».
-    const currentRow = page.locator("tr[data-current]");
+    // The review draws its weeks as bars (DESIGN «Decisión del 2026-10-31»): the current one is the row marked current.
+    const currentRow = page.locator("li[data-current]");
     await expect(currentRow).toBeVisible();
-    // The week's dates carry «en curso»; its total sits in the second cell.
-    await expect(currentRow.getByRole("cell").nth(0)).toContainText("en curso");
-    const revisionNumber = (await currentRow.getByRole("cell").nth(1).innerText()).match(/^(\d+)\s*min$/)?.[1];
+    // The week's dates carry «en curso»; its total ends the row.
+    await expect(currentRow).toContainText("en curso");
+    const revisionNumber = (await currentRow.locator('[class*="total"]').innerText()).match(/^(\d+)\s*min$/)?.[1];
     expect(revisionNumber).toBe("12");
 
     await page.goto("/");
@@ -162,7 +163,9 @@ test("at 360 the sections come in the phone's own order and the figure is not dr
         })
         .filter((entry) => entry.width > 0),
     );
+    // The navy block of the day leads (DESIGN «Naranja y marino»), then the goals, the one-offs and the done ones.
     expect(order.map((entry) => entry.text.slice(0, 7))).toEqual([
+      "Avance ",
       "Meta co",
       "Meta si",
       "Sueltas",

@@ -18,12 +18,13 @@ import {
   FilterField,
   Flex,
   Heading,
+  ScreenHeader,
   Spinner,
   Switch,
   Table,
   TapTarget,
   Text,
-  TextField,
+  DateInput,
 } from "@/components/ui";
 import type { SheetEntity } from "@/lib/spreadsheet/schema";
 import { useActionErrorToast, type MessageKey } from "@/lib/use-action-toast";
@@ -172,7 +173,7 @@ export function DataScreen({
 
   return (
     <Flex direction="column" gap="4">
-      <Heading size="5">{t("screen.title")}</Heading>
+      <ScreenHeader title={t("screen.title")} />
 
       <Card>
         <Flex direction="column" gap="4">
@@ -202,9 +203,9 @@ export function DataScreen({
           <Flex gap="3" wrap="wrap">
             <FilterField label={t("screen.rangeFrom")}>
               {(id) => (
-                <TextField.Root
+                <DateInput
+                  filter
                   id={id}
-                  type="date"
                   value={from}
                   onChange={(event) => setFrom(event.target.value)}
                 />
@@ -212,9 +213,9 @@ export function DataScreen({
             </FilterField>
             <FilterField label={t("screen.rangeTo")}>
               {(id) => (
-                <TextField.Root
+                <DateInput
+                  filter
                   id={id}
-                  type="date"
                   value={to}
                   onChange={(event) => setTo(event.target.value)}
                 />

@@ -53,6 +53,7 @@ function installStubs(cookies: StoredCookie[]): void {
       return { cookies: async () => ({ getAll: () => cookies, set() {} }) };
     }
     if (request === "next/cache") return { revalidatePath() {} };
+    if (request === "./timelog-apps") return { TIMELOG_SOURCES: [], timelogReader: () => async () => [] };
     if (request === "./reading-lookups") {
       return {
         readReadingLookups: async (args: { from: string | SQL; to: string | SQL; tx: ReaderTx }) => {

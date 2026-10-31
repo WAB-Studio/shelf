@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 
+import { countKind } from "@/lib/log/outcome";
 import { readWordStudy } from "@/lib/log/summary";
 import { clearLocalLookups, countRecords, LOG_CLEARED_EVENT, LOG_FLUSHED_EVENT } from "@/lib/log/record";
 import { LOG_DELETED_EVENT } from "@/lib/log/delete";
@@ -10,7 +11,7 @@ import { SYNC_LANDED_EVENT, SYNC_LOCK } from "@/lib/sync/driver";
 import { clearAccountLookups } from "@/lib/sync/clear";
 import { Button, Flex, Link, Separator, TapTarget, Text } from "@/components/ui";
 
-type CountState = { kind: "loading" } | { kind: "ready"; words: number; lookups: number } | { kind: "failed" };
+type CountState = { kind: "loading" } | { kind: "ready"; words: number; lookups: number; entries: "entries" | "words" } | { kind: "failed" };
 
 type Stage =
   | { kind: "idle" }
@@ -68,7 +69,7 @@ export function ClearPanel({ hasReader }: { hasReader: boolean }) {
       Promise.all([readWordStudy(), countRecords()])
         .then(([study, lookups]) => {
           if (!cancelled && requestIdRef.current === requestId) {
-            setCount({ kind: "ready", words: study.total, lookups });
+            setCount({ kind: "ready", words: study.total, lookups, entries: countKind(study.rows) });
           }
         })
         .catch(() => {
@@ -112,7 +113,7 @@ export function ClearPanel({ hasReader }: { hasReader: boolean }) {
     setStage({ kind: "wiping", scope: "local" });
     try {
       await clearLocalUnderLock();
-      setCount({ kind: "ready", words: 0, lookups: 0 });
+      setCount({ kind: "ready", words: 0, lookups: 0, entries: "words" });
       setStage({ kind: "idle" });
     } catch {
       setStage({ kind: "failed", scope: "local" });
@@ -132,7 +133,7 @@ export function ClearPanel({ hasReader }: { hasReader: boolean }) {
     }
     try {
       await clearLocalUnderLock();
-      setCount({ kind: "ready", words: 0, lookups: 0 });
+      setCount({ kind: "ready", words: 0, lookups: 0, entries: "words" });
       setStage({ kind: "idle" });
     } catch {
       setStage({ kind: "failed", scope: "account" });
@@ -168,7 +169,7 @@ export function ClearPanel({ hasReader }: { hasReader: boolean }) {
       <Flex direction="column" gap="2">
         <Text variant="breakTitle">{t("confirmTitle")}</Text>
         <Text variant="breakBody" muted>
-          {t("confirmBody", { words: count.words, lookups: count.lookups })}
+          {t("confirmBody", { kind: count.entries, words: count.words, lookups: count.lookups })}
         </Text>
       </Flex>
 

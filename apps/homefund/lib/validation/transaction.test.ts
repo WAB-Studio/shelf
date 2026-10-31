@@ -5,6 +5,7 @@ import { maxAmountMinor } from "@/lib/money";
 import {
   movementFiltersSchema,
   movementTypeFilter,
+  transactionFields,
   pesoAmountSchema,
 } from "./transaction";
 
@@ -53,4 +54,12 @@ test("the three kinds map one-to-one", () => {
   for (const kind of ["expense", "income", "transfer"] as const) {
     assert.deepEqual(movementTypeFilter(kind), { kind });
   }
+});
+
+test("«De quién» takes a member id or nothing, and refuses anything else", () => {
+  const field = transactionFields.contributedByMemberId;
+  assert.equal(field.safeParse(undefined).success, true);
+  assert.equal(field.safeParse(null).success, true);
+  assert.equal(field.safeParse("0b5f6a52-6f3b-4c4b-9f64-8c1f0f1d7a11").success, true);
+  assert.equal(field.safeParse("not-an-id").success, false);
 });

@@ -20,6 +20,8 @@ flowchart TD
     Dash --> Deu["Debts"]
     Dash --> Rec["Recurring"]
     Dash --> Aju["Settings"]
+    Dash --> Bandeja["Inbox (phone bottom bar tab, with a count)"]
+    Aju --> Plan["Planning (first row, phone)"]
 
     Tx --> TxNew(["Quick entry"])
     Cta --> TxNew
@@ -28,7 +30,6 @@ flowchart TD
     Aju --> Etiq["Labels"]
     Aju --> Datos["Data — phase 2"]
     Aju --> Webhooks["Webhooks"]
-    Aju --> Bandeja["Inbox"]
     Aju --> Audit["Audit — phase 2"]
 ```
 

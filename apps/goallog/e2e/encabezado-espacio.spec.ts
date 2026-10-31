@@ -16,7 +16,7 @@ for (const path of ["/metas/nueva", "/semana"]) {
   });
 }
 
-test("Hoy holds 12 px between its title and the line under it", async ({ person, browser, db }) => {
+test("a goal holds 12 px between its title and the line under it", async ({ person, browser, db }) => {
   const [goal] = await db<{ id: string }[]>`
     insert into goals.goals (user_id, name, horizon)
     values (${person.id}, ${`Meta lead ${Date.now()}`}, (now() + interval '90 days')::date) returning id`;
@@ -30,9 +30,9 @@ test("Hoy holds 12 px between its title and the line under it", async ({ person,
   });
   try {
     const page = await context.newPage();
-    await visit(page, "/");
+    await visit(page, `/metas/${goal.id}`);
     const title = (await boxOf(page.getByRole("heading", { level: 1 })));
-    const lead = (await boxOf(page.getByText(/^hechos \d+ de \d+/)));
+    const lead = (await boxOf(page.getByText(/^meta · abierta el/)));
     expect(lead.y - (title.y + title.height)).toBeCloseTo(12, 0);
   } finally {
     await context.close();

@@ -172,12 +172,13 @@ test("returning through the bar does not record the restored query again", async
   const assetResponse = page.waitForResponse(
     (response) => response.url().includes(manifest.asset.path) && response.ok(),
   );
-  // Opened at the query, the state a reader is in once they have looked a
-  // word up: the bar reads the address bar into its own memory at mount.
-  await page.goto("/?q=manures");
+  // The reader types the word: opening a URL that already carries the query is not a lookup.
+  await page.goto("/");
   await assetResponse;
   // aria-busy turns false once the worker has built its index and the install is done.
   await expect(page.locator('[aria-busy="false"]').first()).toBeAttached();
+  await page.getByRole("textbox", { name: messages.search.label }).fill("manures");
+  await expect(page).toHaveURL(/q=manures/);
 
   const nav = () => page.getByRole("navigation", { name: messages.nav.label });
   for (let trip = 0; trip < 3; trip += 1) {
@@ -219,7 +220,8 @@ test("returning through the bar does not record the restored query again", async
 // RNL-03 / docs/wordbook/DESIGN.md "Viewport": the bar's labels are 11px / 600 /
 // 0.12em / uppercase and read as one even run of letters at both widths — the
 // bar at 360 and the side rail at 1280 draw the same `<span>`.
-const LABEL_WIDTHS = [360, 1280] as const;
+// The bar's labels; the sidebar from 1024px sets its own, tested below.
+const LABEL_WIDTHS = [360] as const;
 
 type LabelMeasure = {
   text: string;
@@ -336,6 +338,25 @@ for (const width of LABEL_WIDTHS) {
     });
   });
 }
+
+test("the sidebar's labels read as 15px sentence-case words and its rows keep 44px", async ({ page }) => {
+  await page.addInitScript(() => {
+    delete (window as unknown as { Translator?: unknown }).Translator;
+  });
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto("/registro");
+  await drawn(page);
+  for (const label of await measureLabels(page)) {
+    expect(label.fontSize, label.text).toBe("15px");
+    expect(label.textTransform, label.text).toBe("none");
+    expect(label.lineTops, label.text).toHaveLength(1);
+  }
+  for (const link of await page.getByRole("navigation", { name: messages.nav.label }).getByRole("link").all()) {
+    expect((await link.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+  }
+  const theme = await page.getByRole("radiogroup", { name: messages.theme.label }).boundingBox();
+  expect(theme!.height).toBeGreaterThanOrEqual(44);
+});
 
 test("RNL-03: at 360px no control overlaps another, at the top or the foot of each route", async ({ page }) => {
   await page.addInitScript(() => {

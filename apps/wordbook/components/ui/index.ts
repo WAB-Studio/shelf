@@ -1,5 +1,4 @@
 // The only door: every screen imports Radix Themes from here, and nowhere else.
-// No `Card`: docs/wordbook/DESIGN.md rules a sense with a hairline, never a box.
 export {
   Flex,
   Grid,
@@ -18,9 +17,29 @@ export { AppTheme } from "./theme";
 
 export { Box } from "./box";
 
+export { BrandBlock } from "./brand-block";
+
+export { Card } from "./card";
+
+export { Figure } from "./figure";
+
+export { PageTitle } from "./page-title";
+
+export { Highlight } from "./highlight";
+
+export { MarkedWord } from "./marked-word";
+
+export { Wordmark } from "./wordmark";
+
 export { Separator } from "./separator";
 
 export { Page } from "./page";
+
+export { Panels } from "./panels";
+
+export { Mosaic, Tile } from "./tile";
+
+export { ActionBar, FlashCard } from "./flash-card";
 
 export { BottomNav } from "./bottom-nav";
 

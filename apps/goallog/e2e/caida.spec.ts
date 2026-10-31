@@ -53,7 +53,7 @@ test.describe("a database outage", () => {
     const nav = page.getByRole("navigation");
     await expect(nav).toBeVisible();
     await expect(nav.getByRole("link")).toHaveCount(4);
-    await expect(nav.getByText("metas abiertas", { exact: true })).toHaveCount(0);
+    await expect(nav.getByText("Metas abiertas", { exact: true })).toHaveCount(0);
   });
 
   for (const width of [390, 1440]) {

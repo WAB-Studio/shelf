@@ -1,0 +1,84 @@
+.card {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 560px;
+  margin-inline: auto;
+  aspect-ratio: 5 / 4;
+  border: 1px solid var(--rl-line);
+  border-radius: var(--radius-5);
+  background: var(--rl-raised);
+  box-shadow: var(--rl-shadow);
+}
+
+@media (min-width: 700px) {
+  .card {
+    aspect-ratio: 4 / 3;
+  }
+}
+
+.face {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  min-height: 100%;
+  padding: var(--space-5);
+  text-align: center;
+  animation: turn-in 320ms ease-out both;
+}
+
+@keyframes turn-in {
+  from {
+    transform: perspective(900px) rotateX(-70deg);
+    opacity: 0;
+  }
+  to {
+    transform: perspective(900px) rotateX(0);
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .face {
+    animation: none;
+  }
+}
+
+/* The grades take the foot of a phone: above the 44px bar and its hairline, clear of the keyboard. */
+.bar {
+  position: fixed;
+  inset-inline: 0;
+  bottom: calc(45px + env(safe-area-inset-bottom, 0px) + var(--rl-keyboard-inset, 0px));
+  z-index: 1;
+  box-sizing: border-box;
+  padding: var(--space-3) var(--space-4);
+  background: var(--rl-ground);
+  border-top: 1px solid var(--rl-line);
+}
+
+/* The page reserves room under the card for the fixed bar. */
+.bar + .spacer {
+  height: 96px;
+}
+
+@media (min-width: 1024px) {
+  .bar {
+    position: static;
+    padding: 0;
+    background: none;
+    border-top: none;
+  }
+
+  .bar + .spacer {
+    display: none;
+  }
+}
+
+@media (min-width: 700px) and (max-width: 1023px) {
+  .bar {
+    max-width: 620px;
+    margin-inline: auto;
+  }
+}

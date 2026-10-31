@@ -378,16 +378,15 @@ test.describe("a category that came from a credential default", () => {
       const amounts = dialog.getByRole("textbox", {
         name: transactions.amountLabel,
       });
-      await expect(amounts).toHaveCount(2);
+      await expect(amounts).toHaveCount(1);
       await expect(amounts.nth(0)).toHaveValue(AMOUNT_PESOS);
-      await expect(amounts.nth(1)).toHaveValue(AMOUNT_PESOS);
 
       await expect(
         dialog.getByRole("combobox", { name: transactions.fromLabel }),
       ).toHaveText(scope.accountName);
       await expect(
-        dialog.getByRole("combobox", { name: transactions.categoryLabel }),
-      ).toHaveText(scope.categoryName);
+        dialog.getByRole("button", { name: scope.categoryName, exact: true, pressed: true }),
+      ).toBeVisible();
     });
   });
 
@@ -415,21 +414,19 @@ test.describe("a category that came from a credential default", () => {
       const dialog = page.getByRole("dialog");
       await expect(dialog).toBeVisible();
 
-      // Two fields carry the amount: the movement's own and the lone split's,
-      // which the editor keeps equal to it (RF-69).
+      // One field carries the amount: the lone split mirrors it behind «Dividir» (RF-69).
       const amounts = dialog.getByRole("textbox", {
         name: transactions.amountLabel,
       });
-      await expect(amounts).toHaveCount(2);
+      await expect(amounts).toHaveCount(1);
       await expect(amounts.nth(0)).toHaveValue(AMOUNT_PESOS);
-      await expect(amounts.nth(1)).toHaveValue(AMOUNT_PESOS);
 
       await expect(
         dialog.getByRole("combobox", { name: transactions.fromLabel }),
       ).toHaveText(scope.accountName);
       await expect(
-        dialog.getByRole("combobox", { name: transactions.categoryLabel }),
-      ).toHaveText(scope.categoryName);
+        dialog.getByRole("button", { name: scope.categoryName, exact: true, pressed: true }),
+      ).toBeVisible();
     });
   });
 });
@@ -515,7 +512,7 @@ test.describe("a notice dated before its account opened", () => {
 
       const dialog = page.getByRole("dialog");
       await expect(dialog).toBeVisible();
-      await expect(dialog.getByLabel(transactions.dateLabel)).toHaveValue(day);
+      await expect(dialog.getByLabel(transactions.dateLabel)).toHaveValue(day.split("-").reverse().join("/"));
       await expect(dialog.getByText(BEFORE_OPENING)).toBeVisible();
       await expect(dialog.getByLabel(transactions.dateLabel)).toBeInViewport();
 
@@ -556,7 +553,7 @@ test.describe("a notice dated before its account opened", () => {
 
       const dialog = page.getByRole("dialog");
       await expect(dialog).toBeVisible();
-      await expect(dialog.getByLabel(transactions.dateLabel)).toHaveValue(day);
+      await expect(dialog.getByLabel(transactions.dateLabel)).toHaveValue(day.split("-").reverse().join("/"));
       await expect(dialog.getByText(BEFORE_OPENING)).toBeVisible();
       await expect(dialog.getByLabel(transactions.dateLabel)).toBeInViewport();
     });

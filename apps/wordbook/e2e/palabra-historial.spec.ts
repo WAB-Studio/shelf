@@ -542,7 +542,7 @@ test("/registro/bed answers with the same senses, translations and IPA /?q=bed d
   // verb sense's two glosses joined (docs/wordbook/DESIGN.md "The
   // translations are one line, separated by commas").
   await expect(
-    page.getByText("encamarse, irse a la cama", { exact: true }),
+    page.getByText("irse a la cama, encamarse", { exact: true }),
   ).toBeVisible();
   // The one heading on the page is the word itself: `SenseList`'s own copy
   // of "bed" stays suppressed, or this locator would be ambiguous.
@@ -565,7 +565,7 @@ test("/registro/bed answers with the same senses, translations and IPA /?q=bed d
   await expect(glossLocator(page, "lecho")).toBeVisible();
   await expect(glossLocator(page, "encamarse")).toBeVisible();
   await expect(
-    page.getByText("encamarse, irse a la cama", { exact: true }),
+    page.getByText("irse a la cama, encamarse", { exact: true }),
   ).toBeVisible();
 });
 
@@ -881,7 +881,9 @@ for (const width of [360, 1280]) {
       const bodyBox = await body.boundingBox();
       const firstRow = await page.getByText("doomscrolling", { exact: true }).last().boundingBox();
       expect(labelBox!.y).toBeLessThan(bodyBox!.y);
-      expect(bodyBox!.y).toBeLessThan(firstRow!.y);
+      // Stacked on a phone; from 1280px the searches sit in the panel beside the answer.
+      if ((page.viewportSize()?.width ?? 0) >= 1280) expect(firstRow!.x).toBeGreaterThan(bodyBox!.x + bodyBox!.width - 1);
+      else expect(bodyBox!.y).toBeLessThan(firstRow!.y);
 
       // A dictionary word page speaks in the serif voice.
       const family = await body.evaluate((el) => getComputedStyle(el).fontFamily);
@@ -921,7 +923,7 @@ for (const width of [360, 1280]) {
       await page.goto("/registro/leave");
       await expect(page.getByRole("heading", { name: "leave", exact: true })).toBeVisible();
       await expect(glossLocator(page, "permiso")).toBeVisible();
-      await expect(page.getByText(/^permiso · 1 búsqueda desde el /)).toBeVisible();
+      await expect(page.getByText(/^dejar · 1 búsqueda desde el /)).toBeVisible();
       await expect(
         page.getByText(messages.word.networkTranslations, { exact: true }),
       ).toHaveCount(0);
@@ -1121,7 +1123,7 @@ test("a form's URL draws its lemma's senses, never the «es una forma de» notic
   ).toBeVisible();
   // `lingered` also reaches this gloss, under the inflection notice, so the
   // sense alone proves nothing: the clause rests on the notice's absence.
-  await expect(glossLocator(page, "persistir")).toBeVisible();
+  await expect(glossLocator(page, "demorar")).toBeVisible();
   await expect(page.getByText(/es una forma de/)).toHaveCount(0);
 });
 
@@ -1225,7 +1227,7 @@ test("an old unlisted row of a form whose lemma the dictionary has draws the lem
   ]);
 
   await page.goto("/registro/lingered");
-  await expect(glossLocator(page, "persistir")).toBeVisible();
+  await expect(glossLocator(page, "demorar")).toBeVisible();
   await expect(
     page.getByText(messages.word.networkTranslations, { exact: true }),
   ).toHaveCount(0);

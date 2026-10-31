@@ -303,6 +303,8 @@ export const transactionRowSchema = z.object({
     .boolean()
     .nullish()
     .transform((cell) => cell ?? false),
+  // The fund member an income into a fund account is credited to (RF-166), by name; blank names nobody.
+  contributedBy: z.string().trim().max(80).nullish(),
   // Every label's name, joined by `LABEL_SEPARATOR`; each resolves like a category.
   labels: z
     .string()
@@ -504,6 +506,7 @@ export const transactionSheetDescriptor = {
     { key: "counterAmount", field: "counterAmountCents", money: moneyBoundary },
     { key: "counterIsEstimate", field: "counterIsEstimate" },
     { key: "forHousehold", field: "forHousehold" },
+    { key: "contributedBy", synthetic: true },
     { key: "category", synthetic: true, ref: { entity: "categories" } },
     { key: "occurredAt", field: "occurredAt" },
     { key: "description", field: "description" },

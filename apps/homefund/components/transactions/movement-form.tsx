@@ -43,6 +43,8 @@ import {
   Text,
   TextField,
   type Responsive,
+  AmountField,
+  DateInput,
 } from "@/components/ui";
 import type { TransactionFormOptions } from "@/db/queries/transaction-form";
 import type { TransactionListRow } from "@/db/queries/transactions";
@@ -87,6 +89,7 @@ type MovementFormValues = {
   counterAmount: string | null;
   counterIsEstimate: boolean;
   forHousehold: boolean;
+  contributedByMemberId: string | null;
   occurredAt: string;
   description: string | null;
   externalRef?: string;
@@ -270,7 +273,7 @@ export function MovementForm({
           transactionId: movement.id,
           fromAccountId: movement.fromAccountId,
           toAccountId: movement.toAccountId,
-          amount: amountToInput(movement.amountCents, movement.currency),
+          amount: amountToInput(movement.amountCents, movement.currency, locale),
           currency: movement.currency,
           counterAmount:
             movement.counterAmountCents === null
@@ -281,14 +284,16 @@ export function MovementForm({
                     from: movement.fromSettlementCurrency,
                     to: movement.toSettlementCurrency,
                   }) ?? movement.currency,
+                  locale,
                 ),
           counterIsEstimate: movement.counterIsEstimate,
           forHousehold: movement.forHousehold,
+          contributedByMemberId: movement.contributedByMemberId,
           occurredAt: movement.occurredAt,
           description: movement.description,
           splits: movement.splits.map((split) => ({
             categoryId: split.categoryId,
-            amount: amountToInput(split.amountCents, movement.currency),
+            amount: amountToInput(split.amountCents, movement.currency, locale),
           })),
           labelIds: movement.labels.map((label) => label.id),
           causedByTransactionId,
@@ -312,6 +317,7 @@ export function MovementForm({
           counterAmount: null,
           counterIsEstimate: false,
           forHousehold: false,
+          contributedByMemberId: options.callerMemberId,
           occurredAt: defaults?.occurredAt ?? todayInBogota(),
           description:
             defaults?.description !== undefined ? defaults.description : null,
@@ -331,6 +337,8 @@ export function MovementForm({
     name: "counterIsEstimate",
   });
   const splits = useWatch({ control: form.control, name: "splits" });
+  // Errors wait for a submit attempt: an untouched form is not a wrong one.
+  const submitted = form.formState.isSubmitted;
 
   const kind = deriveKind(fromAccountId, toAccountId);
 
@@ -403,6 +411,10 @@ export function MovementForm({
     kind === "expense" &&
     scope === "personal" &&
     (movement?.forHousehold === true || options.accounts.some((one) => one.groupId));
+
+  // «De quién» (RF-166) is asked of an income into a fund account, and nowhere else.
+  const offersContributor =
+    kind === "income" && scope === "group" && options.fundMembers.length > 0;
 
   // A movement is never its own cause (RF-132), so the movement under edit is
   // dropped from what the picker offers; the rest arrive already ordered.
@@ -514,7 +526,11 @@ export function MovementForm({
 
   function onSubmit(submitted: MovementFormValues) {
     // A switch hidden by a change of account never sends a mark the person no longer sees.
-    const values = { ...submitted, forHousehold: offersHousehold && submitted.forHousehold };
+    const values = {
+      ...submitted,
+      forHousehold: offersHousehold && submitted.forHousehold,
+      contributedByMemberId: offersContributor ? submitted.contributedByMemberId : null,
+    };
     // The resolver already parsed `values` for this mode, dropping the field the
     // other mode's action refuses: `external_ref` on edit, `transaction_id` on
     // create.
@@ -591,7 +607,7 @@ export function MovementForm({
       setRateUnavailable(false);
       form.setValue(
         "counterAmount",
-        amountToInput(convertMinor(amountMinor, data.rate), foreign),
+        amountToInput(convertMinor(amountMinor, data.rate), foreign, locale),
         { shouldValidate: true },
       );
     },
@@ -728,7 +744,7 @@ export function MovementForm({
                       {t("amountLabel")}
                     </FieldLabel>
                     <FieldControl>
-                      <TextField.Root
+                      <AmountField
                         {...field}
                         id="movement-amount"
                         size="3"
@@ -801,7 +817,7 @@ export function MovementForm({
                   <Flex align="start" gap="3" width="100%">
                     <Box flexGrow="1" minWidth="0">
                       <FieldControl>
-                        <TextField.Root
+                        <AmountField
                           id="movement-counter-amount"
                           size="3"
                           inputMode="numeric"
@@ -882,8 +898,9 @@ export function MovementForm({
               <Controller
                 name="splits"
                 control={form.control}
-                render={({ field, fieldState }) => (
-                  <Field invalid={fieldState.invalid}>
+                // Destructured here, ahead of the submit gate: a field that never reads its error is never told it changed.
+                render={({ field, fieldState: { invalid, error } }) => (
+                  <Field invalid={submitted && invalid}>
                     <FieldLabel>{t("categoryLabel")}</FieldLabel>
                     <SplitEditor
                       total={amount}
@@ -891,10 +908,11 @@ export function MovementForm({
                       scope={scope}
                       kind={kind}
                       categories={options.categories}
+                      frequentIds={options.frequentCategoryIds}
                       value={field.value}
                       onChange={field.onChange}
                     />
-                    <FieldMessage error={fieldState.error} />
+                    <FieldMessage error={submitted ? error : undefined} />
                   </Field>
                 )}
               />
@@ -942,11 +960,10 @@ export function MovementForm({
               <Field invalid={fieldState.invalid}>
                 <FieldLabel htmlFor="movement-date">{t("dateLabel")}</FieldLabel>
                 <FieldControl>
-                  <TextField.Root
+                  <DateInput
                     {...field}
                     id="movement-date"
                     size="3"
-                    type="date"
                     disabled={isPending}
                   />
                 </FieldControl>
@@ -1005,6 +1022,38 @@ export function MovementForm({
                     </Flex>
                   </TapTarget>
                 </Text>
+              )}
+            />
+          )}
+          {offersContributor && (
+            <Controller
+              name="contributedByMemberId"
+              control={form.control}
+              render={({ field, fieldState }) => (
+                <Field invalid={fieldState.invalid}>
+                  <FieldLabel htmlFor="movement-contributor">{t("contributorLabel")}</FieldLabel>
+                  <Select.Root
+                    size="3"
+                    value={field.value ?? NO_ACCOUNT}
+                    onValueChange={(value) =>
+                      field.onChange(value === NO_ACCOUNT ? null : value)
+                    }
+                    disabled={isPending}
+                  >
+                    <FieldControl>
+                      <Select.Trigger id="movement-contributor" />
+                    </FieldControl>
+                    <Select.Content position="popper">
+                      <Select.Item value={NO_ACCOUNT}>{t("contributorNone")}</Select.Item>
+                      {options.fundMembers.map((member) => (
+                        <Select.Item key={member.id} value={member.id}>
+                          {member.name}
+                        </Select.Item>
+                      ))}
+                    </Select.Content>
+                  </Select.Root>
+                  <FieldMessage error={fieldState.error} />
+                </Field>
               )}
             />
           )}

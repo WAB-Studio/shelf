@@ -23,7 +23,6 @@ import {
 } from "@/components/planning/debts-table";
 import type { DebtTableRow } from "@/components/planning/debts-table";
 import { InstallmentPlanDialog } from "@/components/planning/installment-plan-dialog";
-import { PlanningSubNav } from "@/components/planning/planning-sub-nav";
 import {
   Box,
   Button,
@@ -253,21 +252,28 @@ export function DebtsScreen({
       {
         key: "interest",
         label: t("tileMonthlyInterest"),
-        value: (
-          <Money
-            minor={set.monthlyInterestCents}
-            currency={set.currency}
-            signed={false}
-            size="inherit"
-          />
-        ),
-        note: t("tileMonthlyInterestNote", {
-          pct: format.number(set.monthlyRatePct, {
-            style: "percent",
-            minimumFractionDigits: 1,
-            maximumFractionDigits: 1,
-          }),
-        }),
+        // A zero is said, not drawn: no rate on any of these debts.
+        value:
+          set.monthlyInterestCents === 0 ? (
+            t("tileNoInterest")
+          ) : (
+            <Money
+              minor={set.monthlyInterestCents}
+              currency={set.currency}
+              signed={false}
+              size="inherit"
+            />
+          ),
+        note:
+          set.monthlyInterestCents === 0
+            ? undefined
+            : t("tileMonthlyInterestNote", {
+                pct: format.number(set.monthlyRatePct, {
+                  style: "percent",
+                  minimumFractionDigits: 1,
+                  maximumFractionDigits: 1,
+                }),
+              }),
       },
       {
         key: "nextPayment",
@@ -285,7 +291,7 @@ export function DebtsScreen({
           ),
         note:
           nextPayment === null
-            ? undefined
+            ? t("tileNoNextPayment")
             : t("tileNextPaymentNote", {
                 date: shortDate(nextPayment.date),
                 name: nextPayment.name,
@@ -344,9 +350,6 @@ export function DebtsScreen({
             </Button>
           }
         />
-        <Box display={{ initial: "none", md: "block" }}>
-          <PlanningSubNav />
-        </Box>
         {/* One labelled set per currency, none of them summing another: a card
             that bills in pesos and buys in dollars owes in both (RF-124). */}
         <Flex direction="column" gap="3">
@@ -417,17 +420,12 @@ export function DebtsScreen({
 
       <Box display={{ initial: "block", lg: "none" }}>
         <Flex direction="column" gap="4">
-          <Flex justify="between" align="center" gap="3" wrap="wrap">
-            <Flex align="center" gap="2">
-              <Heading size="5">{t("title")}</Heading>
-              {hasGroup && <FundChip label={tKey("fund.label")} />}
-            </Flex>
-            {addButton}
-          </Flex>
+          <ScreenHeader
+            title={t("title")}
+            meta={hasGroup ? <FundChip label={tKey("fund.label")} /> : undefined}
+            actions={addButton}
+          />
 
-          <Box display={{ initial: "none", md: "block" }}>
-            <PlanningSubNav />
-          </Box>
 
           {/* The same labelled sets the laptop's band draws, stacked (RF-124). */}
           <Flex direction="column" gap="4">
@@ -454,6 +452,9 @@ export function DebtsScreen({
                     <Text size="2" color="gray">
                       {NO_VALUE}
                     </Text>
+                    <Text size="2" color="gray">
+                      {t("tileNoNextPayment")}
+                    </Text>
                   </Flex>
                 )}
                 {totals.nextPayment !== null &&
@@ -473,13 +474,15 @@ export function DebtsScreen({
                     </Text>
                   )}
                 <Text size="2" color="gray">
-                  {t("monthlyInterest", {
-                    amount: formatMoney(
-                      set.monthlyInterestCents,
-                      set.currency,
-                      locale,
-                    ),
-                  })}
+                  {set.monthlyInterestCents === 0
+                    ? t("tileNoInterest")
+                    : t("monthlyInterest", {
+                        amount: formatMoney(
+                          set.monthlyInterestCents,
+                          set.currency,
+                          locale,
+                        ),
+                      })}
                 </Text>
               </Flex>
             ))}
@@ -831,6 +834,12 @@ function InstallmentCard({
     position.nextAmountCents !== null
       ? { date: position.nextDueDate, amountCents: position.nextAmountCents }
       : null;
+  // A loan with no counted plan lines still bills its terms' payment: the same
+  // figure the desktop table's «Pago mínimo» column reads.
+  const dueCents =
+    row.dueInstallmentsCents > 0 || row.owedCents === 0
+      ? row.dueInstallmentsCents
+      : (row.minimumPaymentCents ?? 0);
 
   return (
     <Card>
@@ -859,7 +868,7 @@ function InstallmentCard({
         <Flex justify="between" gap="3">
           <Stat
             label={t("dueInstallments")}
-            value={formatMoney(row.dueInstallmentsCents, row.currency, locale)}
+            value={formatMoney(dueCents, row.currency, locale)}
           />
           {row.nextDueDate !== null && (
             <Stat
@@ -934,14 +943,11 @@ function NoTermsCard({
           otherOwed={debt.otherOwed}
         />
         {onComplete && (
-          <Button
-            type="button"
-            variant="soft"
-            color="amber"
-            onClick={onComplete}
-          >
-            {t("completeTerms")}
-          </Button>
+          <Flex>
+            <Button type="button" variant="soft" size="1" onClick={onComplete}>
+              {t("completeTerms")}
+            </Button>
+          </Flex>
         )}
         <CardActions accountId={debt.accountId} onPay={onPay} />
       </Flex>

@@ -10,7 +10,7 @@ export async function EmptyDay() {
   const t = await getTranslations("day.empty");
   return (
     <>
-      <Text as="p" variant="title">
+      <Text as="p" variant="name">
         {t("title")}
       </Text>
       <Text as="p" variant="sentence">

@@ -1,6 +1,7 @@
 import { useTranslations } from "next-intl";
 
-import { Box, Flex, Heading, Text, TextLink } from "@/components/ui";
+import { AppMark, Box, Button, Flex, Heading, Text } from "@/components/ui";
+import { Link as LocaleLink } from "@/i18n/navigation";
 
 export default function NotFound() {
   const t = useTranslations();
@@ -16,7 +17,8 @@ export default function NotFound() {
       p="6"
     >
       <main>
-        <Heading size="6" align="center">
+        <AppMark size={56} />
+        <Heading size="8" align="center">
           {t("errors.notFoundTitle")}
         </Heading>
         <Box maxWidth="65ch">
@@ -24,9 +26,9 @@ export default function NotFound() {
             {t("errors.notFoundDescription")}
           </Text>
         </Box>
-        <TextLink href="/" justify="center" px="2">
-          {t("common.backHome")}
-        </TextLink>
+        <Button asChild size="3">
+          <LocaleLink href="/">{t("common.backHome")}</LocaleLink>
+        </Button>
       </main>
     </Flex>
   );

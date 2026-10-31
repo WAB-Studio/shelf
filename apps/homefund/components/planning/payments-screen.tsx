@@ -13,7 +13,6 @@ import {
 import { PaymentFormDialog } from "@/components/planning/payment-form-dialog";
 import { PaymentsTable } from "@/components/planning/payments-table";
 import { PaymentSettleDialog } from "@/components/planning/payment-settle-dialog";
-import { PlanningSubNav } from "@/components/planning/planning-sub-nav";
 import {
   Box,
   Button,
@@ -27,7 +26,7 @@ import {
   Figure,
   Flex,
   FundChip,
-  Heading,
+  ScreenHeader,
   IconButton,
   MovementRow,
   Text,
@@ -142,17 +141,12 @@ export function PaymentsScreen({
 
   return (
     <Flex direction="column" gap="4">
-      <Flex justify="between" align="center" gap="3" wrap="wrap">
-        <Flex align="center" gap="2">
-          <Heading size="5">{t("title")}</Heading>
-          {hasGroup && <FundChip label={tKey("fund.label")} />}
-        </Flex>
-        {addButton}
-      </Flex>
+      <ScreenHeader
+        title={t("title")}
+        meta={hasGroup ? <FundChip label={tKey("fund.label")} /> : undefined}
+        actions={addButton}
+      />
 
-      <Box display={{ initial: "none", md: "block" }}>
-        <PlanningSubNav />
-      </Box>
 
       <Box display={{ initial: "block", lg: "none" }}>
       {payments.length === 0 ? (
@@ -209,7 +203,7 @@ export function PaymentsScreen({
 
       {/* A planned payment only reminds; the person records the real movement
           when they settle it (RF-74, RF-75). */}
-      <Callout.Root color="jade" variant="soft">
+      <Callout.Root color="gray" variant="soft">
         <Callout.Icon>
           <Info size={16} aria-hidden />
         </Callout.Icon>
@@ -302,6 +296,7 @@ function PaymentCard({
             subtitle={t("reminder")}
             amount={formatMoney(payment.amountCents, payment.currency, locale)}
             tone="transfer"
+            wrap
           />
         </Flex>
         <DropdownMenu.Root>

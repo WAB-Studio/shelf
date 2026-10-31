@@ -5,6 +5,8 @@ import { Plus, X } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Select } from "@radix-ui/themes";
 
+import { DateInput } from "./date-input";
+
 import styles from "./filter-bar.module.css";
 
 /**
@@ -83,10 +85,10 @@ export function FilterDate({
       <label htmlFor={controlId} className={styles.label}>
         {label}
       </label>
-      <input
+      <DateInput
+        filter
         id={controlId}
-        type="date"
-        className={styles.date}
+        size="3"
         value={value}
         onChange={(event) => onValueChange(event.target.value)}
         style={width ? { width } : undefined}

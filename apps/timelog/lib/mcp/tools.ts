@@ -1,9 +1,10 @@
 import { z } from "zod";
 
+import { dailyRows, MAX_EXPORT_DAYS } from "@/lib/daily";
 import { formatDuration } from "@/lib/duration";
 import { fill, sum } from "@/lib/totals";
 import { daysOfWeek, mondayOf } from "@/lib/week";
-import type { AppTime, DayTotal } from "@/lib/queries";
+import type { AppTime, ClaudeDay, DayApp, DayTotal } from "@/lib/queries";
 import { addDays, isCivilDay } from "@/lib/zone";
 
 import mcp from "../../messages/es/mcp.json";
@@ -13,6 +14,8 @@ import time from "../../messages/es/time.json";
 export type Reads = {
   appsBetween(from: string, to: string): Promise<AppTime[]>;
   dayTotals(from: string, to: string): Promise<DayTotal[]>;
+  claudeBetween(from: string, to: string): Promise<ClaudeDay[]>;
+  appsByDay(from: string, to: string): Promise<DayApp[]>;
 };
 
 export type ToolOutcome = { ok: true; value: Record<string, unknown> } | { ok: false; error: keyof typeof mcp.errors };
@@ -24,7 +27,7 @@ export type ToolSpec = {
   run(reads: Reads, input: Record<string, unknown>, today: string): Promise<ToolOutcome>;
 };
 
-const MAX_RANGE_DAYS = 366;
+const MAX_RANGE_DAYS = MAX_EXPORT_DAYS;
 
 const day = z.string().optional();
 
@@ -76,6 +79,18 @@ export const tools: ToolSpec[] = [
       if (!isCivilDay(from) || !isCivilDay(to)) return { ok: false, error: "day" };
       if (from > to || addDays(from, MAX_RANGE_DAYS - 1) < to) return { ok: false, error: "range" };
       return { ok: true, value: { from, to, ...(await span(reads, from, to)) } };
+    },
+  },
+  {
+    name: "get_daily",
+    description: mcp.tools.get_daily,
+    input: z.object({ from: z.string(), to: z.string() }),
+    async run(reads, input) {
+      const { from, to } = input as { from: string; to: string };
+      if (!isCivilDay(from) || !isCivilDay(to)) return { ok: false, error: "day" };
+      if (from > to || addDays(from, MAX_RANGE_DAYS - 1) < to) return { ok: false, error: "range" };
+      const [totals, claude, apps] = await Promise.all([reads.dayTotals(from, to), reads.claudeBetween(from, to), reads.appsByDay(from, to)]);
+      return { ok: true, value: { from, to, days: dailyRows(from, to, totals, claude, apps, time.system) } };
     },
   },
 ];

@@ -1,6 +1,6 @@
 "use client";
 
-import { IBM_Plex_Sans, Newsreader } from "next/font/google";
+import { Fraunces, IBM_Plex_Sans } from "next/font/google";
 import { NextIntlClientProvider, useTranslations } from "next-intl";
 import { THEME_BOOT_SCRIPT } from "@/lib/theme-choice";
 
@@ -22,8 +22,8 @@ const sans = IBM_Plex_Sans({
   display: "swap",
 });
 
-const serif = Newsreader({
-  variable: "--font-serif",
+const display = Fraunces({
+  variable: "--font-display",
   subsets: ["latin"],
   fallback: ["Georgia", "serif"],
   display: "swap",
@@ -52,7 +52,7 @@ function GlobalErrorBody({ reset }: { reset: () => void }) {
 
 export default function GlobalError({ reset }: { error: Error & { digest?: string }; reset: () => void }) {
   return (
-    <html lang="es" className={`${sans.variable} ${serif.variable}`} suppressHydrationWarning>
+    <html lang="es" className={`${sans.variable} ${display.variable}`} suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: THEME_BOOT_SCRIPT }} />
       </head>
