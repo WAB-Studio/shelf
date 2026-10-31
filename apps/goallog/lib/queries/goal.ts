@@ -22,7 +22,7 @@ import { queryEvidenceBySource } from "@/lib/queries/evidence";
 import type { EvidenceOutcome } from "@/lib/queries/evidence";
 import { getPerson, withGoalsDb, withReadingDb, type Transaction } from "@/lib/session";
 import { civilDateInZone, TIME_ZONE, todayInZone } from "@/lib/zone";
-import { dayBefore } from "@/lib/day/weeks";
+import { dayBefore, daysBetween } from "@/lib/day/weeks";
 import { fillPlan, type PlanInput, type PlanTask, type Roadmap } from "@/lib/plan/roadmap";
 import { planMonthList } from "@/lib/plan/roadmap-read";
 import {
@@ -1189,6 +1189,10 @@ export type MetasOpenGoal = MetasSummary & {
   // The unit `month` is drawn in: the goals' own when it holds goals, else its measure's.
   monthUnit: string | null;
   outOfUnit: { id: string; name: string; unit: string }[];
+  // The aim of the phase in effect today, null between phases or with none.
+  phaseAim: string | null;
+  // Whole weeks to the horizon, null for a goal with no end.
+  weeksLeft: number | null;
 };
 
 type MetasRow = GoalRow & {
@@ -1198,6 +1202,7 @@ type MetasRow = GoalRow & {
   budgets: { month: string; amount: number }[];
   tasks: TaskRow[];
   measure_sources: { satisfaction: string; source_key: string | null; source_unit: string | null }[];
+  phase_aim: string | null;
 };
 
 /**
@@ -1241,7 +1246,10 @@ export async function listGoalsForMetas(today: string = todayInZone()): Promise<
                    )), '[]'::json)
              from "goals"."commitments" c
              join "goals"."evidence_sources" s on s.id = c.source_id
-             where c.goal_id = g.id and c.satisfaction = 'evidence') as measure_sources
+             where c.goal_id = g.id and c.satisfaction = 'evidence') as measure_sources,
+          (select p.aim from "goals"."phases" p
+            where p.goal_id = g.id and p.starts_on <= ${today}::date and p.ends_on >= ${today}::date
+            order by p.starts_on limit 1) as phase_aim
         from "goals"."goals" g
         order by g.position, g.created_at, g.id
       `),
@@ -1343,6 +1351,8 @@ export async function listGoalsForMetas(today: string = todayInZone()): Promise<
         month: toMonth(row),
         monthUnit: (holds(row.id) ? rolled.get(row.id)?.unit : null) ?? row.measure_unit,
         outOfUnit: holds(row.id) ? (rolled.get(row.id)?.outOfUnit ?? []) : [],
+        phaseAim: row.phase_aim,
+        weeksLeft: row.horizon === null ? null : Math.max(0, Math.ceil(daysBetween(today, row.horizon) / 7)),
       })),
     ended: [...live.values()].filter((row) => row.horizon !== null && row.horizon <= today).map(placed),
     archived,

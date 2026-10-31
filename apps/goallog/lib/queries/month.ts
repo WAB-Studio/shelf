@@ -456,3 +456,34 @@ function lineOfSum(sum: RolledUp, month: string, today: string, plan: PlanInput)
   });
   return { planned, reached, underPace };
 }
+
+/**
+ * How much was done each day of a month, for the calendar's intensity: the declared facts of the day plus the
+ * days an evidence source saw. A day not lived has no entry. One goals statement beside one reading, fanned
+ * together and read after nothing (RNP-03); an unreadable source counts the declared half alone (RNP-04).
+ */
+export async function loadMonthIntensity(month: string, today: string): Promise<Record<string, number>> {
+  const person = await getPerson();
+  if (!person) throw new Error("loadMonthIntensity called without a verified session");
+  const first = `${month.slice(0, 7)}-01`;
+  const last = dayBefore(nextMonth(first));
+  const until = today < last ? today : last;
+  if (until < first) return {};
+  const [declared, evidence] = await Promise.all([
+    withGoalsDb((tx) =>
+      tx.execute<{ day: string; n: number }>(sql`
+        select f.day::text as day, count(*)::int as n
+          from "goals"."facts" f
+         where f.commitment_id is not null and f.day between ${first}::date and ${until}::date
+         group by f.day
+      `),
+    ),
+    withReadingDb((tx) => queryEvidence(tx, person.id, first, until)).catch(() => ({}) as Record<string, EvidenceDay[]>),
+  ]);
+  const counts: Record<string, number> = {};
+  for (const row of declared) counts[row.day] = row.n;
+  for (const days of Object.values(evidence)) {
+    for (const entry of days) if (entry.quantity > 0) counts[entry.day] = (counts[entry.day] ?? 0) + 1;
+  }
+  return counts;
+}

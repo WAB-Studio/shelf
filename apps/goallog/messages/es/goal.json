@@ -58,6 +58,7 @@
     "title": "Por semana",
     "measure": "mide en {unit}",
     "measureTime": "mide en horas y minutos",
+    "planMark": "Lo planeado por semana",
     "measureNamed": "mide {name}, en {unit}",
     "measureNamedTime": "mide {name}, en horas y minutos",
     "earlier": "{count, plural, one {# semana anterior} other {# semanas anteriores}}",
@@ -163,6 +164,9 @@
   },
   "list": {
     "addAnother": "Abrir otra meta",
+    "phaseNow": "Fase actual: {aim}",
+    "weeksLeft": "{count, plural, =0 {Termina esta semana} one {Falta # semana} other {Faltan # semanas}}",
+    "openGoal": "Abrir {name}",
     "endedTitle": "Terminadas",
     "endedOnShort": "terminó el {date}",
     "archivedTitle": "Archivadas",

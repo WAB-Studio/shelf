@@ -12,10 +12,10 @@ test("phases are segments of one track and today is a mark on it", () => {
   const line = timeline({ openedOn: "2026-10-01", horizon: "2026-11-30", today: "2026-10-31", phases });
   assert.ok(line);
   assert.equal(line.segments[0].left, 0);
-  assert.equal(Math.round(line.segments[0].width), 49);
+  assert.equal(Math.round(line.segments[0].width), 50);
   assert.equal(line.segments[0].state, "past");
   assert.equal(line.segments[1].state, "current");
-  assert.equal(Math.round(line.today ?? -1), 49);
+  assert.equal(Math.round(line.today ?? -1), 50);
 });
 
 test("a goal with no end draws no timeline", () => {

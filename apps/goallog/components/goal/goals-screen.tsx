@@ -9,11 +9,14 @@ import {
   Flex,
   Page,
   Panel,
+  PanelGrid,
+  Progress,
   Row,
   ScreenHeader,
   Section,
   Split,
   Text,
+  TextLink,
 } from "@/components/ui";
 import { SignOutButton } from "@/components/account/sign-out-button";
 import { GoalBranch, type BranchGoal } from "@/components/goal/goal-branch";
@@ -241,6 +244,50 @@ export async function GoalsScreen({
     };
   });
 
+  // A card a goal: the month's figure big, its bar, the phase in effect and the weeks left. A tree of goals
+  // keeps its list, where depth and folding live.
+  const cards =
+    open.length > 0 && inside.size === 0 ? (
+      <PanelGrid>
+        {open.map((goal) => {
+          const month: MetasMonth | null = goal.month;
+          const unit = goal.monthUnit ?? undefined;
+          const percent =
+            month?.kind === "amount" && month.planned ? Math.min(100, Math.floor((month.reached * 100) / month.planned)) : null;
+          return (
+            <Panel as="div" key={goal.id}>
+              <Section label={goal.name}>
+                {month?.kind === "amount" ? (
+                  <Flex align="baseline" gap="2" wrap="wrap">
+                    <Figure variant="big" value={month.reached} unit={unit} bare={month.planned !== null} />
+                    {month.planned !== null ? (
+                      <Text variant="sentence">
+                        {t("day.monthLine.of")} <Figure value={month.planned} unit={unit} variant="meta" />
+                      </Text>
+                    ) : null}
+                  </Flex>
+                ) : month?.kind === "tasks" ? (
+                  <Text as="p" variant="sentence">
+                    {t("goal.list.monthTasks", { month: monthName(month.month), done: month.done, total: month.total })}
+                  </Text>
+                ) : null}
+                {percent !== null ? <Progress percent={percent} size="thick" /> : null}
+                {goal.phaseAim ? (
+                  <Text as="p" variant="sentence">
+                    {t("goal.list.phaseNow", { aim: goal.phaseAim })}
+                  </Text>
+                ) : null}
+                <Text as="p" variant="sentence" tone="muted">
+                  {goal.weeksLeft === null ? t("goal.list.noEnd") : t("goal.list.weeksLeft", { count: goal.weeksLeft })}
+                </Text>
+                <TextLink href={`/metas/${goal.id}`}>{t("goal.list.openGoal", { name: goal.name })}</TextLink>
+              </Section>
+            </Panel>
+          );
+        })}
+      </PanelGrid>
+    ) : null;
+
   return (
     <Page width="full">
       <ScreenHeader chat title={t("common.nav.goals")} />
@@ -248,8 +295,9 @@ export async function GoalsScreen({
         twoFifths
         main={
           <>
+            {cards}
             <Panel as="div">
-              {open.length > 0 ? (
+              {open.length > 0 && !cards ? (
                 <Section label={t("goal.list.openTitle")}>
                   <Flex
                     direction="column"
@@ -262,6 +310,10 @@ export async function GoalsScreen({
                     <Link href="/metas/nueva">{t("goal.list.addAnother")}</Link>
                   </Button>
                 </Section>
+              ) : cards ? (
+                <Button asChild variant="outline" block>
+                  <Link href="/metas/nueva">{t("goal.list.addAnother")}</Link>
+                </Button>
               ) : (
                 <Button asChild block>
                   <Link href="/metas/nueva">{t("goal.none.action")}</Link>

@@ -108,6 +108,15 @@
     "line": "{goal} · {amount}"
   },
   "across": {
+    "hero": {
+      "label": "{month}: lo que hiciste",
+      "figure": "{count, plural, one {# día} other {# días}}",
+      "caption": "con algo hecho"
+    },
+    "grid": {
+      "label": "Los días de {month}, cada uno con lo hecho en él",
+      "day": "{day}: {count, plural, =0 {nada hecho} one {# hecho} other {# hechos}}"
+    },
     "nav": {
       "prev": "mes anterior",
       "next": "mes siguiente"
