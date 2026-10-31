@@ -20,6 +20,7 @@ import {
   Spinner,
   Text,
   TextField,
+  AmountField,
 } from "@/components/ui";
 import {
   BASE_CURRENCY,
@@ -189,7 +190,7 @@ function PlanForm({
                 {t("principalLabel")}
               </FieldLabel>
               <FieldControl>
-                <TextField.Root
+                <AmountField
                   {...field}
                   id="plan-principal"
                   size="3"
@@ -308,7 +309,7 @@ function PlanForm({
                 </Flex>
               </FieldLabel>
               <FieldControl>
-                <TextField.Root
+                <AmountField
                   id="plan-down-payment"
                   size="3"
                   inputMode={amountInputMode(currency)}
@@ -339,7 +340,7 @@ function PlanForm({
                 </Flex>
               </FieldLabel>
               <FieldControl>
-                <TextField.Root
+                <AmountField
                   id="plan-aval"
                   size="3"
                   inputMode={amountInputMode(currency)}

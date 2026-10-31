@@ -21,6 +21,7 @@ export {
   Field,
   FieldControl,
   FieldGroup,
+  FormFooter,
   FieldLabel,
   FieldDescription,
   FieldError,

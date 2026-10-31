@@ -27,6 +27,7 @@
     "signOut": "Sign out",
     "tagline": "The household's accounts, <mark>clear</mark> and shared.",
     "passwordlessHint": "We send you a code to sign in without a password.",
+    "invitationOnly": "For now, access is by invitation.",
     "emailLabel": "Email address",
     "emailPlaceholder": "you@example.com",
     "sendLink": "Send code",
@@ -113,7 +114,7 @@
       "addWithoutEmail": "Add without email",
       "toDashboard": "Go to dashboard",
       "skip": "Skip for now",
-      "emailFailed": "We added the person, but could not send the email. Tell them to sign in with that address; if it is already in another group, they will not join this one."
+      "emailFailed": "We added the person, but could not send the email. Tell them to sign in with that address; if it is already in another fund, they will not join this one."
     }
   },
   "dashboard": {
@@ -155,7 +156,7 @@
     "legendIncome": "Income",
     "legendExpense": "Expenses",
     "contributionsTitle": "Contributions this month",
-    "contributionsEmpty": "No contributions this month.",
+    "contributionsEmpty": "No contributions this month. A contribution is a transfer from a personal account to a fund account.",
     "noGroup": "Contributions are a fund figure. You have no fund yet.",
     "monthAdjustment": "Month gap"
   },
@@ -252,7 +253,7 @@
     "invitationGoneTitle": "This invitation is no longer valid",
     "invitationGoneBody": "{inviter} withdrew it or it has passed. If you want to join “{fund}”, ask them to invite you again.",
     "invitationOtherTitle": "You are already in the fund “{other}”",
-    "invitationOtherBody": "You can be in one fund only. To join “{fund}”, leave “{other}” first from “Group”.",
+    "invitationOtherBody": "You can be in one fund only. To join “{fund}”, leave “{other}” first from “Fund settings”.",
     "invitationGoAccounts": "Go to my accounts",
     "title": "Members",
     "add": "Add member",
@@ -261,7 +262,7 @@
     "nameLabel": "Name",
     "emailLabel": "Email (optional)",
     "emailHint": "If you add it, we send them an invitation to HomeFund.",
-    "editEmailFailed": "We saved the address, but could not send the invitation. Tell them to sign in with it; if it is already in another group, they will not join this one.",
+    "editEmailFailed": "We saved the address, but could not send the invitation. Tell them to sign in with it; if it is already in another fund, they will not join this one.",
     "activeTab": "Active",
     "archivedTab": "Archived",
     "you": "You",
@@ -297,8 +298,8 @@
       "nameRequired": "Enter the member's name.",
       "nameTooLong": "The name cannot exceed 80 characters.",
       "emailInvalid": "Enter a valid email.",
-      "emailTaken": "That email already has an invitation in this group.",
-      "alreadyMember": "That person is already in this group."
+      "emailTaken": "That email already has an invitation in this fund.",
+      "alreadyMember": "That person is already in this fund."
     }
   },
   "bienvenida": {
@@ -1003,6 +1004,8 @@
     "tileTotal": "Total debt",
     "tileTotalNote": "{count, plural, =1 {# obligation} other {# obligations}}",
     "tileMonthlyInterest": "Monthly interest",
+    "tileNoInterest": "No interest",
+    "tileNoNextPayment": "No scheduled installments",
     "tileMonthlyInterestNote": "{pct} of the balance",
     "tileNextPayment": "Next payment",
     "tileNextPaymentNote": "{date} · {name}",
@@ -1213,7 +1216,7 @@
     "notLeader": "Only the fund's owner can make this change.",
     "memberHasHistory": "This person has movements. Archive them instead.",
     "invitationGone": "This invitation is no longer valid.",
-    "alreadyInFund": "You are already in another fund. To join this one, leave it first from «Group».",
+    "alreadyInFund": "You are already in another fund. To join this one, leave it first from «Fund settings».",
     "leaderStays": "You cannot leave yet. Before leaving, hand the leadership to another member from «Members».",
     "accountHasMovements": "This account has movements. Archive it instead.",
     "accountHasHistory": "You cannot hand over an account that has movements. Archive it instead.",

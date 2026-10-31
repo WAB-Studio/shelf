@@ -18,7 +18,7 @@ import {
   Money,
   Spinner,
   Text,
-  TextField,
+  AmountField,
 } from "@/components/ui";
 import type { PendingSettlement } from "@/db/queries/debt-statements";
 import { minorUnitExponent, type CurrencyCode } from "@/lib/currency";
@@ -171,7 +171,7 @@ export function SettlementRow({
                   {t("billedLabel")}
                 </FieldLabel>
                 <FieldControl>
-                  <TextField.Root
+                  <AmountField
                     {...field}
                     id={`billed-${movement.id}`}
                     size="3"

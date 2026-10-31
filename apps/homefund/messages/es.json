@@ -27,6 +27,7 @@
     "signOut": "Cerrar sesión",
     "tagline": "Las cuentas de la casa, <mark>claras</mark> y compartidas.",
     "passwordlessHint": "Te enviamos un código para entrar sin contraseña.",
+    "invitationOnly": "Por ahora se entra por invitación.",
     "emailLabel": "Correo electrónico",
     "emailPlaceholder": "tu@correo.com",
     "sendLink": "Enviar código",
@@ -113,7 +114,7 @@
       "addWithoutEmail": "Agregar sin correo",
       "toDashboard": "Ir al panel",
       "skip": "Omitir por ahora",
-      "emailFailed": "Añadimos a la persona, pero no pudimos enviar el correo. Avísale que entre con ese correo; si ya está en otro grupo, no se unirá a este."
+      "emailFailed": "Añadimos a la persona, pero no pudimos enviar el correo. Avísale que entre con ese correo; si ya está en otro fondo, no se unirá a este."
     }
   },
   "dashboard": {
@@ -155,7 +156,7 @@
     "legendIncome": "Ingresos",
     "legendExpense": "Gastos",
     "contributionsTitle": "Aportes del mes",
-    "contributionsEmpty": "Sin aportes este mes.",
+    "contributionsEmpty": "Sin aportes este mes. Un aporte es un traspaso de una cuenta personal a una del fondo.",
     "noGroup": "Los aportes son una cifra del fondo. Todavía no tienes fondo.",
     "monthAdjustment": "Diferencia del mes"
   },
@@ -252,7 +253,7 @@
     "invitationGoneTitle": "Esta invitación ya no está vigente",
     "invitationGoneBody": "{inviter} la retiró o ya pasó. Si quieres unirte a «{fund}», pídele que te invite otra vez.",
     "invitationOtherTitle": "Ya estás en el fondo «{other}»",
-    "invitationOtherBody": "Se puede estar en un solo fondo. Para unirte a «{fund}», sal primero de «{other}» desde «Grupo».",
+    "invitationOtherBody": "Se puede estar en un solo fondo. Para unirte a «{fund}», sal primero de «{other}» desde «Ajustes del fondo».",
     "invitationGoAccounts": "Ir a mis cuentas",
     "title": "Miembros",
     "add": "Añadir miembro",
@@ -261,7 +262,7 @@
     "nameLabel": "Nombre",
     "emailLabel": "Correo (opcional)",
     "emailHint": "Si lo escribes, le mandamos una invitación para entrar a HomeFund.",
-    "editEmailFailed": "Guardamos el correo, pero no pudimos enviar la invitación. Avísale que entre con ese correo; si ya está en otro grupo, no se unirá a este.",
+    "editEmailFailed": "Guardamos el correo, pero no pudimos enviar la invitación. Avísale que entre con ese correo; si ya está en otro fondo, no se unirá a este.",
     "activeTab": "Activos",
     "archivedTab": "Archivados",
     "you": "Tú",
@@ -297,8 +298,8 @@
       "nameRequired": "Escribe el nombre del miembro.",
       "nameTooLong": "El nombre no puede pasar de 80 caracteres.",
       "emailInvalid": "Escribe un correo válido.",
-      "emailTaken": "Ese correo ya tiene una invitación en este grupo.",
-      "alreadyMember": "Esa persona ya está en este grupo."
+      "emailTaken": "Ese correo ya tiene una invitación en este fondo.",
+      "alreadyMember": "Esa persona ya está en este fondo."
     }
   },
   "bienvenida": {
@@ -1003,6 +1004,8 @@
     "tileTotal": "Deuda total",
     "tileTotalNote": "{count, plural, =1 {# obligación} other {# obligaciones}}",
     "tileMonthlyInterest": "Interés mensual",
+    "tileNoInterest": "Sin interés",
+    "tileNoNextPayment": "Sin cuotas programadas",
     "tileMonthlyInterestNote": "{pct} del saldo",
     "tileNextPayment": "Próximo pago",
     "tileNextPaymentNote": "{date} · {name}",
@@ -1213,7 +1216,7 @@
     "notLeader": "Solo el propietario del fondo puede hacer este cambio.",
     "memberHasHistory": "Esta persona tiene movimientos. Archívala en su lugar.",
     "invitationGone": "Esta invitación ya no está vigente.",
-    "alreadyInFund": "Ya estás en otro fondo. Para unirte a este, sal primero desde «Grupo».",
+    "alreadyInFund": "Ya estás en otro fondo. Para unirte a este, sal primero desde «Ajustes del fondo».",
     "leaderStays": "No puedes salir todavía. Antes de salir, pasa el liderazgo a otro miembro desde «Miembros».",
     "accountHasMovements": "Esta cuenta tiene movimientos. Archívala en su lugar.",
     "accountHasHistory": "No puedes pasar al fondo una cuenta con movimientos. Archívala en su lugar.",

@@ -122,7 +122,7 @@ export function ReportsScreen({ data }: { data: ReportsData }) {
         <Flex direction="column" gap="6">
           <ReportsHead title={t("title")} />
 
-          <Flex direction="column" gap="4">
+          <Flex direction="column" gap="4" px="6">
             <ReportCard>
               <Heading as="h2" size="4">{t("comparisonTitle")}</Heading>
               {byCurrency(sixMonthFlow).map(([currency, months]) => (
@@ -226,7 +226,7 @@ function ExpenseBands({
         </Text>
         {rows.map((row) => (
           <Flex key={row.categoryId} align="center" gap="3">
-            <CategoryTile color={row.color} size={28} />
+            <CategoryTile color={row.color} size={28} name={row.name} />
             <Box asChild flexGrow="1" minWidth="0">
               <Text as="div" size="3" truncate>
                 {scopedCategoryName(row.name, row.scope, (name) =>

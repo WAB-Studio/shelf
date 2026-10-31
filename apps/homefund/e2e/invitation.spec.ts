@@ -244,7 +244,7 @@ test.describe("a person with an invitation", () => {
     await expect(heading(page, `Ya estás en el fondo «${OTHER_FUND}»`)).toBeVisible();
     await expect(
       page.getByText(
-        `Se puede estar en un solo fondo. Para unirte a «${FUND}», sal primero de «${OTHER_FUND}» desde «Grupo».`,
+        `Se puede estar en un solo fondo. Para unirte a «${FUND}», sal primero de «${OTHER_FUND}» desde «Ajustes del fondo».`,
         { exact: true },
       ),
     ).toBeVisible();

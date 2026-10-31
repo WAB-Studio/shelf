@@ -253,21 +253,28 @@ export function DebtsScreen({
       {
         key: "interest",
         label: t("tileMonthlyInterest"),
-        value: (
-          <Money
-            minor={set.monthlyInterestCents}
-            currency={set.currency}
-            signed={false}
-            size="inherit"
-          />
-        ),
-        note: t("tileMonthlyInterestNote", {
-          pct: format.number(set.monthlyRatePct, {
-            style: "percent",
-            minimumFractionDigits: 1,
-            maximumFractionDigits: 1,
-          }),
-        }),
+        // A zero is said, not drawn: no rate on any of these debts.
+        value:
+          set.monthlyInterestCents === 0 ? (
+            t("tileNoInterest")
+          ) : (
+            <Money
+              minor={set.monthlyInterestCents}
+              currency={set.currency}
+              signed={false}
+              size="inherit"
+            />
+          ),
+        note:
+          set.monthlyInterestCents === 0
+            ? undefined
+            : t("tileMonthlyInterestNote", {
+                pct: format.number(set.monthlyRatePct, {
+                  style: "percent",
+                  minimumFractionDigits: 1,
+                  maximumFractionDigits: 1,
+                }),
+              }),
       },
       {
         key: "nextPayment",
@@ -285,7 +292,7 @@ export function DebtsScreen({
           ),
         note:
           nextPayment === null
-            ? undefined
+            ? t("tileNoNextPayment")
             : t("tileNextPaymentNote", {
                 date: shortDate(nextPayment.date),
                 name: nextPayment.name,

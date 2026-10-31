@@ -24,6 +24,7 @@ import {
   Spinner,
   Text,
   TextField,
+  AmountField,
 } from "@/components/ui";
 import type { AccountRow } from "@/db/queries/accounts";
 import { BASE_CURRENCY, OFFERED_CURRENCIES } from "@/lib/currency";
@@ -440,7 +441,7 @@ function AccountForm({
             <Field invalid={fieldState.invalid}>
               <FieldLabel htmlFor="account-amount">{amountLabel}</FieldLabel>
               <FieldControl>
-                <TextField.Root
+                <AmountField
                   {...field}
                   id="account-amount"
                   size="3"

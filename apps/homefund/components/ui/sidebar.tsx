@@ -18,7 +18,7 @@ import styles from "./sidebar.module.css";
  * screen beside it runs. The head and the foot stay in
  * place and the `SidebarBody` between them scrolls, which is what keeps Registrar
  * and the person row on a 720p laptop. `display` is the caller's,
- * because the bottom bar owns navigation below `md` and this must not render
+ * because the bottom bar owns navigation below `sm` and this must not render
  * there.
  */
 export function Sidebar({

@@ -82,9 +82,14 @@ export default async function LoginPage(props: PageProps<"/[locale]/login">) {
               <Card>
                 <LoginForm next={firstValue(searchParams.next)} />
               </Card>
-              <Text size="2" color="gray" align="center">
-                {t("auth.passwordlessHint")}
-              </Text>
+              <Flex direction="column" gap="1">
+                <Text size="2" weight="medium" align="center">
+                  {t("auth.invitationOnly")}
+                </Text>
+                <Text size="2" color="gray" align="center">
+                  {t("auth.passwordlessHint")}
+                </Text>
+              </Flex>
             </Flex>
           </Box>
         </Flex>

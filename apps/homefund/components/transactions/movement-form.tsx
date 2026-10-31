@@ -43,6 +43,7 @@ import {
   Text,
   TextField,
   type Responsive,
+  AmountField,
 } from "@/components/ui";
 import type { TransactionFormOptions } from "@/db/queries/transaction-form";
 import type { TransactionListRow } from "@/db/queries/transactions";
@@ -730,7 +731,7 @@ export function MovementForm({
                       {t("amountLabel")}
                     </FieldLabel>
                     <FieldControl>
-                      <TextField.Root
+                      <AmountField
                         {...field}
                         id="movement-amount"
                         size="3"
@@ -803,7 +804,7 @@ export function MovementForm({
                   <Flex align="start" gap="3" width="100%">
                     <Box flexGrow="1" minWidth="0">
                       <FieldControl>
-                        <TextField.Root
+                        <AmountField
                           id="movement-counter-amount"
                           size="3"
                           inputMode="numeric"

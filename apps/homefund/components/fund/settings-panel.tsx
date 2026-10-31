@@ -55,7 +55,7 @@ export function SettingsPanel({
     }),
   );
 
-  // The phone has no rail; from `md` up the chevron beside the fund name owns this row.
+  // The phone has no rail; from `sm` up the chevron beside the fund name owns this row.
   const fundItems: NavListItem[] = hasGroup
     ? [
         {
@@ -77,11 +77,11 @@ export function SettingsPanel({
       trigger={trigger}
     >
       {fundItems.length > 0 && (
-        <Box display={{ initial: "block", md: "none" }}>
+        <Box display={{ initial: "block", sm: "none" }}>
           <NavList items={fundItems} onNavigate={() => setOpen(false)} />
         </Box>
       )}
-      <Box display={{ initial: "block", md: "none" }}>
+      <Box display={{ initial: "block", sm: "none" }}>
         <NavList items={planningItems} onNavigate={() => setOpen(false)} />
       </Box>
       <NavList items={items} onNavigate={() => setOpen(false)} />

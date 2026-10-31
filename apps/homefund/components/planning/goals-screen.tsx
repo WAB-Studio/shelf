@@ -265,7 +265,7 @@ export function GoalsScreen({
 
       {/* The band the header and the table carry from `lg` up, where the page
           hands the gutter over; below it the page's own padding still holds. */}
-      <Flex direction="column" px={{ initial: "0", lg: "6" }}>
+      <Flex direction="column" px={{ initial: "0", lg: "6" }} align={{ initial: "stretch", sm: "start" }}>
         <SegmentedControl.Root
           value={archived ? "archived" : "active"}
           onValueChange={onTabChange}

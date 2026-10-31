@@ -103,3 +103,16 @@ body {
   --hf-shadow: 0 8px 24px -12px rgb(0 0 0 / 0.5);
 }
 
+
+/* The 44px floor (SPEC-A3) for every field: a text input, a select's trigger and a
+   segmented control reach it by default, whatever size a screen asks for.
+   Doubled to outrank Radix's own size class. */
+.rt-TextFieldRoot.rt-TextFieldRoot,
+.rt-SelectTrigger.rt-SelectTrigger:not(.rt-variant-ghost) {
+  box-sizing: border-box;
+  min-height: 44px;
+}
+
+.rt-SegmentedControlRoot.rt-SegmentedControlRoot {
+  min-height: 44px;
+}

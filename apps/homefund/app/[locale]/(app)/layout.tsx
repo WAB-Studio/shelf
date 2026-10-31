@@ -39,7 +39,7 @@ function routeOf(pathname: string, locale: string): string {
  * under it inherits it without a second check. There is no fund to switch (RF-55):
  * the caller's optional group is resolved once here and named in the shell.
  *
- * The sidebar owns navigation from `md` up and the bottom bar owns it below; the
+ * The sidebar owns navigation from `sm` up and the bottom bar owns it below; the
  * two never render together.
  */
 export default async function AppLayout(props: LayoutProps<"/[locale]">) {
@@ -83,8 +83,8 @@ export default async function AppLayout(props: LayoutProps<"/[locale]">) {
           pendingCount={summary.pendingDeliveries}
         />
         <Flex direction="column" flexGrow="1" minWidth="0">
-          {/* The sidebar names the fund from `md` up, so the bar is the phone's alone. */}
-          <Box display={{ initial: "block", md: "none" }}>
+          {/* The sidebar names the fund from `sm` up, so the bar is the phone's alone. */}
+          <Box display={{ initial: "block", sm: "none" }}>
             <Flex asChild align="center" gap="3" px="4" pt="4" pb="1">
               <header>
                 <AppMark size={28} />
@@ -97,7 +97,7 @@ export default async function AppLayout(props: LayoutProps<"/[locale]">) {
           {props.children}
         </Flex>
       </Flex>
-      <Box display={{ initial: "block", md: "none" }}>
+      <Box display={{ initial: "block", sm: "none" }}>
         <AppTabs
           hasGroup={group !== null}
           inboxCount={summary.pendingDeliveries + summary.awaitingCounterparty}

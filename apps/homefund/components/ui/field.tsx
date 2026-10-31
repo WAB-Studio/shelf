@@ -28,6 +28,11 @@ export function FieldGroup({ children }: { children?: ReactNode }) {
   );
 }
 
+// The form's primary action, held to the bottom edge of the sheet that scrolls it.
+export function FormFooter({ children }: { children?: ReactNode }) {
+  return <div className={styles.footer}>{children}</div>;
+}
+
 // One form row: label, control, description and error stacked together.
 export function Field({
   invalid,

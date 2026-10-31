@@ -603,6 +603,7 @@ export function MovementsScreen({
                           : rowSubtitle(row, accountNames)
                       }
                       color={rowColor(row, categoryColors)}
+                      categoryName={rowTitle(row, categoryNames, t)}
                       amount={
                         row.reconciliationId !== null ? (
                           <Money
@@ -806,6 +807,7 @@ function MovementCard({
   title,
   subtitle,
   color,
+  categoryName,
   amount,
   badge,
   caused,
@@ -814,6 +816,7 @@ function MovementCard({
   title: string;
   subtitle?: string;
   color: string | null;
+  categoryName: string;
   amount: ReactNode;
   badge?: string;
   caused?: string;
@@ -822,7 +825,13 @@ function MovementCard({
     <Card asChild>
       <LocaleLink href={`/movements/${row.id}`}>
         <MovementRow
-          tile={<CategoryTile color={color} />}
+          tile={
+            <CategoryTile
+              color={color}
+              name={categoryName}
+              transfer={row.kind === "transfer" || row.reconciliationId !== null}
+            />
+          }
           title={title}
           subtitle={subtitle}
           amount={amount}

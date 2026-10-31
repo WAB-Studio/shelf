@@ -24,12 +24,12 @@
 .separator {
   width: calc(100% - 20px);
   align-self: center;
-  margin: 16px 0;
+  margin: 8px 0;
 }
 
 .head {
   gap: 8px;
-  padding: 4px 10px 20px;
+  padding: 4px 10px 12px;
 }
 
 /* Doubled, here and below, to outrank Radix's own size and variant classes,

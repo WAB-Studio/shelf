@@ -23,6 +23,7 @@ import {
   Spinner,
   Text,
   TextField,
+  AmountField,
 } from "@/components/ui";
 import type { GoalProgress } from "@/db/queries/savings-goals";
 import type { TransactionFormOptions } from "@/db/queries/transaction-form";
@@ -210,7 +211,7 @@ function GoalForm({
             <Field invalid={fieldState.invalid}>
               <FieldLabel htmlFor="goal-target">{t("targetLabel")}</FieldLabel>
               <FieldControl>
-                <TextField.Root
+                <AmountField
                   {...field}
                   id="goal-target"
                   size="3"
@@ -311,7 +312,7 @@ function GoalForm({
                   </Flex>
                 </FieldLabel>
                 <FieldControl>
-                  <TextField.Root
+                  <AmountField
                     id="goal-initial"
                     size="3"
                     inputMode="numeric"

@@ -4,6 +4,7 @@ import { test } from "node:test";
 import {
   convertMinor,
   deriveRate,
+  formatAmountTyping,
   formatMoney,
   maxAmountMinor,
   parseAmount,
@@ -109,4 +110,20 @@ test("formatMoney draws a magnitude, whatever the sign", () => {
 
 test("deriveRate divides the counter amount by the amount", () => {
   assert.equal(deriveRate(10_000, "USD", 40_000_000, "COP"), 4000);
+});
+
+test("formatAmountTyping groups thousands with the language's mark and keeps the caret among its digits", () => {
+  assert.deepEqual(formatAmountTyping("125000", 6, "es"), { text: "125.000", caret: 7 });
+  assert.deepEqual(formatAmountTyping("1.2500", 3, "es"), { text: "12.500", caret: 2 });
+  assert.deepEqual(formatAmountTyping("1250000", 7, "en"), { text: "1,250,000", caret: 9 });
+  assert.deepEqual(formatAmountTyping("1250,5", 6, "es"), { text: "1.250,5", caret: 7 });
+  assert.deepEqual(formatAmountTyping(",5", 2, "es"), { text: "0,5", caret: 3 });
+  assert.deepEqual(formatAmountTyping("12,345", 6, "es"), { text: "12,34", caret: 5 });
+  assert.deepEqual(formatAmountTyping("", 0, "es"), { text: "", caret: 0 });
+});
+
+test("what formatAmountTyping writes is what parseAmount reads, in integer cents", () => {
+  assert.equal(parseAmount(formatAmountTyping("125000", 6, "es").text), 12_500_000);
+  assert.equal(parseAmount(formatAmountTyping("1250000,5", 9, "es").text), 125_000_050);
+  assert.equal(parseAmount(formatAmountTyping("1250000.5", 9, "en").text), 125_000_050);
 });

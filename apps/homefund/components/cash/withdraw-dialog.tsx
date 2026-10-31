@@ -23,7 +23,7 @@ import {
   Select,
   Spinner,
   Text,
-  TextField,
+  AmountField,
 } from "@/components/ui";
 import type { AccountRow } from "@/db/queries/accounts";
 import { useActionErrorToast } from "@/lib/use-action-toast";
@@ -42,10 +42,13 @@ export function WithdrawCashCard({
   sources,
   destinationName,
   willCreate,
+  variant = "ghost",
 }: {
   sources: AccountRow[];
   destinationName: string;
   willCreate: boolean;
+  // `surface` is the desktop's secondary button beside quick entry.
+  variant?: "ghost" | "surface";
 }) {
   const t = useTranslations("cash");
   const [open, setOpen] = useState(false);
@@ -53,7 +56,7 @@ export function WithdrawCashCard({
   return (
     <Dialog.Root open={open} onOpenChange={setOpen}>
       <Dialog.Trigger>
-        <Button tap variant="ghost" color="gray" size="2">
+        <Button variant={variant} color="gray" size="2">
           <BanknoteArrowDown size={17} strokeWidth={2.2} aria-hidden />
           {t("withdrawAction")}
         </Button>
@@ -174,7 +177,7 @@ function WithdrawForm({
             <Field invalid={fieldState.invalid}>
               <FieldLabel htmlFor="withdraw-amount">{t("amountLabel")}</FieldLabel>
               <FieldControl>
-                <TextField.Root
+                <AmountField
                   {...field}
                   id="withdraw-amount"
                   size="3"

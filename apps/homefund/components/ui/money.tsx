@@ -18,11 +18,11 @@ export type MoneyTone =
   | "plain";
 
 const TONE_COLOR: Record<MoneyTone, string | undefined> = {
-  income: "var(--accent-11)",
+  income: "var(--jade-11)",
   expense: "var(--gray-12)",
   transfer: "var(--gray-11)",
   // A balance in the holder's favour (RF-80): the accent of income, with no sign.
-  credit: "var(--accent-11)",
+  credit: "var(--jade-11)",
   // Inherits the surrounding ink, so a tile or a heading keeps its own colour.
   plain: undefined,
 };

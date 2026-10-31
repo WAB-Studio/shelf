@@ -30,7 +30,7 @@ export function CategoryChoice({
       aria-pressed={pressed}
       onClick={onClick}
     >
-      <CategoryTile color={color} size={32} icon={icon} />
+      <CategoryTile color={color} size={32} icon={icon} name={label} />
       <span className={styles.label}>{label}</span>
     </button>
   );

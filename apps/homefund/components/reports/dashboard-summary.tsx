@@ -1,6 +1,5 @@
 "use client";
 
-import type { ReactNode } from "react";
 import { useTranslations } from "next-intl";
 
 import {
@@ -34,18 +33,11 @@ import type { CurrencyCode } from "@/lib/currency";
  * two net-worth figures, two chips for the owner who holds both, and two sets of
  * month figures — each saying which currency it counts.
  *
- * From `md` up the blocks become the three side-by-side cards of the Inicio
- * artboard, `cash` filling the third; below it the two figure blocks stack as they
- * always have and the cash card, which the phone reaches through its own dialog,
- * is not displayed.
+ * From `md` up the net worth is a band of its own and the month's figures sit in
+ * one compact card under it, as display figures; below it the two blocks stack as
+ * they always have. The cash withdrawal is a button beside quick entry, not a card.
  */
-export function DashboardSummary({
-  data,
-  cash,
-}: {
-  data: DashboardData;
-  cash?: ReactNode;
-}) {
+export function DashboardSummary({ data }: { data: DashboardData }) {
   const t = useTranslations("dashboard");
   const tc = useTranslations("common");
   const tr = useTranslations("reports");
@@ -186,9 +178,6 @@ export function DashboardSummary({
           </Flex>
         </BandCard>
 
-        <BandCard ratio={0.9} hideBelowMd data-card="cash">
-          {cash}
-        </BandCard>
       </BandCards>
 
       <Flex gap="2" wrap="wrap">
@@ -253,7 +242,7 @@ function MonthStat({
       <Text size="2" color="gray">
         {label}
       </Text>
-      <Text size="4" weight="medium">
+      <Text size={{ initial: "4", md: "7" }} weight={{ initial: "medium", md: "bold" }}>
         <Money
           minor={minor}
           currency={currency}

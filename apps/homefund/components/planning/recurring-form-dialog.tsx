@@ -28,6 +28,7 @@ import {
   Spinner,
   Text,
   TextField,
+  AmountField,
 } from "@/components/ui";
 import type { RecurringRuleRow } from "@/db/queries/recurring-rules";
 import type { TransactionFormOptions } from "@/db/queries/transaction-form";
@@ -346,7 +347,7 @@ function RecurringForm({
             <Field invalid={fieldState.invalid}>
               <FieldLabel htmlFor="rule-amount">{t("amountLabel")}</FieldLabel>
               <FieldControl>
-                <TextField.Root
+                <AmountField
                   {...field}
                   id="rule-amount"
                   size="3"

@@ -5,7 +5,6 @@ import { getTranslations } from "next-intl/server";
 import { notFound, unstable_rethrow } from "next/navigation";
 
 import { WithdrawCashCard } from "@/components/cash/withdraw-dialog";
-import { WithdrawPanel } from "@/components/cash/withdraw-panel";
 import { DashboardSummary } from "@/components/reports/dashboard-summary";
 import {
   RecentMovements,
@@ -262,16 +261,7 @@ export default async function HomePage(props: PageProps<"/[locale]">) {
       </Box>
 
       <Flex direction="column" gap="4">
-        <DashboardSummary
-          data={dashboardData}
-          cash={
-            <WithdrawPanel
-              sources={withdrawal.sourceAccounts}
-              destinationName={withdrawDestinationName}
-              willCreate={willCreateCash}
-            />
-          }
-        />
+        <DashboardSummary data={dashboardData} />
 
         {review && (
           <Box px={{ initial: "0", md: "6" }}>
@@ -316,7 +306,13 @@ export default async function HomePage(props: PageProps<"/[locale]">) {
                 <Card key={row.id} asChild>
                   <LocaleLink href={`/movements/${row.id}`}>
                     <MovementRow
-                      tile={<CategoryTile color={rowColor(row, categoryColors)} />}
+                      tile={
+                        <CategoryTile
+                          color={rowColor(row, categoryColors)}
+                          name={rowTitle(row, categoryNames, kindLabels)}
+                          transfer={row.kind === "transfer" || row.reconciliationId !== null}
+                        />
+                      }
                       title={
                         row.description ||
                         rowTitle(row, categoryNames, kindLabels)
@@ -339,7 +335,17 @@ export default async function HomePage(props: PageProps<"/[locale]">) {
 
         <Box display={{ initial: "none", md: "block" }} px="6">
           <Flex direction="column" gap="4">
-            <QuickEntryPill variant="wide" />
+            <Flex align="stretch" gap="3">
+              <Box flexGrow="1" minWidth="0">
+                <QuickEntryPill variant="wide" />
+              </Box>
+              <WithdrawCashCard
+                variant="surface"
+                sources={withdrawal.sourceAccounts}
+                destinationName={withdrawDestinationName}
+                willCreate={willCreateCash}
+              />
+            </Flex>
 
             <RecentMovements
               rows={rows}

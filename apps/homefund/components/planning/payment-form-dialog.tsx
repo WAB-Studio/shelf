@@ -27,6 +27,7 @@ import {
   Spinner,
   Text,
   TextField,
+  AmountField,
 } from "@/components/ui";
 import type { PlannedPaymentRow } from "@/db/queries/planned-payments";
 import type { TransactionFormOptions } from "@/db/queries/transaction-form";
@@ -259,7 +260,7 @@ function PaymentForm({
             <Field invalid={fieldState.invalid}>
               <FieldLabel htmlFor="payment-amount">{t("amountLabel")}</FieldLabel>
               <FieldControl>
-                <TextField.Root
+                <AmountField
                   {...field}
                   id="payment-amount"
                   size="3"

@@ -72,7 +72,12 @@ export function RecentMovements({
             {
               key: "tile",
               content: (
-                <CategoryTile color={rowColor(row, categoryColors)} size={36} />
+                <CategoryTile
+                  color={rowColor(row, categoryColors)}
+                  size={36}
+                  name={rowTitle(row, categoryNames, kindLabels)}
+                  transfer={row.kind === "transfer" || row.reconciliationId !== null}
+                />
               ),
             },
             {
@@ -80,10 +85,10 @@ export function RecentMovements({
               content: (
                 <Flex direction="column" minWidth="0">
                   <Text size="2" weight="medium" truncate>
-                    {rowTitle(row, categoryNames, kindLabels)}
+                    {row.description || rowTitle(row, categoryNames, kindLabels)}
                   </Text>
                   <Text size="1" color="gray" truncate>
-                    {rowSubtitle(row, accountNames)}
+                    {rowCaption(row, categoryNames, accountNames, kindLabels)}
                   </Text>
                 </Flex>
               ),

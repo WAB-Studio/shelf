@@ -37,7 +37,7 @@ const TABLE_COLUMNS: DataColumn<number>[] = [
     key: "tile",
     header: "",
     width: TABLE_WIDTHS.tile,
-    cell: () => <CategoryTile color={null} />,
+    cell: () => <CategoryTile color={null} icon={null} />,
   },
   {
     key: "primary",
@@ -100,7 +100,7 @@ export default function Loading() {
             <Flex key={row} align="center" gap="3">
               {/* The tile a category without a colour already wears: the same
                   neutral the skeleton pulses between, so it reads as one shape. */}
-              <CategoryTile color={null} />
+              <CategoryTile color={null} icon={null} />
               <Flex direction="column" gap="2" flexGrow="1" minWidth="0">
                 <Skeleton width="60%" height="var(--font-size-3)" />
                 <Skeleton width="35%" height="var(--font-size-2)" />

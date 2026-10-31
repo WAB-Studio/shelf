@@ -223,7 +223,13 @@ export function MovementDetail({
 
   function rowTile(row: TransactionListRow) {
     const first = row.kind === "transfer" ? null : row.splits[0]?.categoryId;
-    return <CategoryTile color={(first && categoryColors.get(first)) ?? null} />;
+    return (
+      <CategoryTile
+        color={(first && categoryColors.get(first)) ?? null}
+        name={rowTitle(row)}
+        transfer={row.kind === "transfer"}
+      />
+    );
   }
 
   function rowDate(row: TransactionListRow): string {
@@ -264,7 +270,7 @@ export function MovementDetail({
         </Flex>
 
         <Flex direction="column" align="center" gap="2" py="4">
-          <CategoryTile color={tileColor} size={60} />
+          <CategoryTile color={tileColor} size={60} name={caption} transfer={kind === "transfer" || isAdjustment} />
           <Money
             minor={isAdjustment && movement.toAccountId === null ? -movement.amountCents : movement.amountCents}
             currency={movement.currency}

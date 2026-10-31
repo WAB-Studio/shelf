@@ -27,6 +27,7 @@ import {
   Spinner,
   Text,
   TextField,
+  AmountField,
 } from "@/components/ui";
 import type { BudgetStatus } from "@/db/queries/budgets";
 import type { TransactionFormOptions } from "@/db/queries/transaction-form";
@@ -390,7 +391,7 @@ function BudgetForm({
             <Field invalid={fieldState.invalid}>
               <FieldLabel htmlFor="budget-limit">{t("limitLabel")}</FieldLabel>
               <FieldControl>
-                <TextField.Root
+                <AmountField
                   {...field}
                   id="budget-limit"
                   size="3"

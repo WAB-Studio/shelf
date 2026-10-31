@@ -24,6 +24,7 @@ import {
   Spinner,
   Text,
   TextField,
+  AmountField,
 } from "@/components/ui";
 import type { DebtPocket } from "@/db/queries/debt-overview";
 import {
@@ -265,7 +266,7 @@ function PaymentForm({
                 {t("amountLabel")}
               </FieldLabel>
               <FieldControl>
-                <TextField.Root
+                <AmountField
                   {...field}
                   id="debt-payment-amount"
                   size="3"
