@@ -59,5 +59,16 @@ grotesque, instead of warm sand and generic Inter titles. Dark stays the primary
 | `--tl-muted` | `#8f9aa8` | `#566170` | on ground | 6.77 / 5.91 |
 | `--tl-bar` | `#22d3ee` | `#00687a` | on ground | 10.69 / 6.05 |
 | `--tl-bar` | | | on raised (`#151a20` / `#e8edf2`) | ≥ 9.07 / 5.47 |
-| `--tl-block` / `--tl-block-text` | `#1a2028` / `#f2f6fa` | `#0e1115` / `#f2f6fa` | text on block | 15.09 / 17.43 |
+| `--tl-block` / `--tl-block-text` | `#232c37` / `#f2f6fa` | `#0e1115` / `#f2f6fa` | text on block | 13.01 / 17.43 |
+| `--tl-block` | | | block on ground | 1.37 dark (so it carries a border) |
+| `--tl-block-edge` | `#5d6b7d` | `#0e1115` | border on ground | 3.56 |
+| `--tl-block-muted` | `#b4c0ce` | `#b4c0ce` | on block | 7.65 / 10.25 |
+| `--tl-raised-on-block` | `#2f3b49` | `#1f2630` | text on card / muted on card | 10.49 and 6.17 / 14.03 and 8.25 |
+| `--tl-bar-on-block` | `#22d3ee` | `#22d3ee` | on block / on card | 7.82 and 6.31 / 10.47 and 8.43 |
 | `--tl-mark` / `--tl-mark-ink` | `#ff4d42` / `#0e1115` | same | ink on mark | 5.76 |
+
+Revised 2026-10-30 after the critic: the «Hoy» block is built around the day total (64/72 mono, signal
+red behind it, the date a 14 line, two cards: the top app and the gap to yesterday); «Semana» has a
+block with the week total and seven vertical day columns (a day not reached is dashed and dimmed), the
+top three apps large and the rest compact; every screen shares a header (logo mark, «TimeLog», sections
+as pills); app names read without «.exe», system hosts grouped as «Sistema».

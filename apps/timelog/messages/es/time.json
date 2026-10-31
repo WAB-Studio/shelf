@@ -1,13 +1,35 @@
 {
-  "duration": { "hours": "h", "minutes": "min", "underMinute": "< 1 min" },
-  "nav": { "label": "Secciones", "today": "Hoy", "week": "Semana", "keys": "Llaves" },
+  "duration": {
+    "hours": "h",
+    "minutes": "min",
+    "underMinute": "< 1 min",
+    "ago": {
+      "now": "hace un momento",
+      "minutes": "hace {n} min",
+      "hours": "hace {n} h",
+      "days": "hace {n} d"
+    }
+  },
+  "nav": {
+    "label": "Secciones",
+    "today": "Hoy",
+    "week": "Semana",
+    "keys": "Llaves"
+  },
   "today": {
     "title": "{weekday} {day} de {month}",
-    "total": "En la computadora",
+    "total": "Hoy en la computadora",
     "empty": "Sin datos de hoy",
     "lastUpload": "Última subida: {when}",
     "never": "Todavía no ha llegado ninguna subida. Crea una llave y corre el script en tu PC.",
-    "bar": "{app}: {duration}"
+    "bar": "{app}: {duration}",
+    "updated": "Actualizado {ago}",
+    "topApp": "La que más usaste",
+    "versus": "Frente a ayer",
+    "versusMore": "+{duration}",
+    "versusLess": "−{duration}",
+    "versusSame": "Igual que ayer",
+    "connect": "Conectar mi PC"
   },
   "week": {
     "title": "Del {from} al {to}",
@@ -17,13 +39,15 @@
     "apps": "Apps de la semana",
     "noApps": "Nada esta semana.",
     "none": "—",
-    "bar": "{day}: {duration}"
+    "bar": "{day}: {duration}",
+    "total": "Total de la semana",
+    "upcoming": "{day}: aún no llega"
   },
   "keys": {
     "title": "Llaves",
     "intro": "Una llave deja que el script de tu PC suba el resumen del día y que Claude lo lea. Se muestra una sola vez.",
     "install": "En Windows, instala ActivityWatch + TimeLog y pega la llave en su ícono, junto al reloj: «TimeLog: pegar llave…». Sube solo cada hora.",
-    "download": "Descargar para Windows",
+    "download": "Descargar el instalador para Windows",
     "name": "Nombre de la llave",
     "namePlaceholder": "PC de la casa",
     "create": "Crear llave",
@@ -33,18 +57,24 @@
     "revokeFailed": "No se pudo revocar la llave. Recarga y prueba otra vez.",
     "shown": "Cópiala ahora: no se vuelve a mostrar.",
     "copy": "Copiar",
-    "copied": "Copiada",
+    "copied": "Copiado",
     "command": "Sin el instalador, en la PC con ActivityWatch abierto:",
     "used": "usada {when}",
     "unused": "sin usar",
     "revoked": "revocada",
     "revoke": "Revocar",
     "revokeLabel": "Revocar la llave {name}",
-    "none": "Todavía no hay llaves."
+    "none": "Todavía no hay llaves.",
+    "keyBlock": "Tu llave",
+    "copyKey": "Copiar llave",
+    "copyCommand": "Copiar comando",
+    "confirmRevoke": "¿Revocar «{name}»? Deja de subir y de leer.",
+    "confirmYes": "Sí, revocar",
+    "confirmNo": "Cancelar"
   },
   "signIn": {
     "title": "Entrar",
-    "intro": "Te mandamos un enlace al correo.",
+    "intro": "TimeLog guarda el resumen de cuánto tiempo pasa tu computadora en cada app, día por día. Te mandamos un enlace al correo para entrar.",
     "email": "Correo",
     "send": "Mandar enlace",
     "sending": "Mandando…",
@@ -54,5 +84,6 @@
     "sendFailed": "No se pudo mandar el enlace. Prueba otra vez.",
     "rateLimited": "Ya pediste varios enlaces. Espera unos minutos.",
     "linkInvalid": "El enlace no sirvió o ya venció. Pide otro."
-  }
+  },
+  "system": "Sistema"
 }

@@ -6,8 +6,13 @@
   --tl-muted: #8f9aa8;
   --tl-bar: #22d3ee; /* electric cyan: bars, links, buttons (ink #0c0e11 on it 10.69) */
   --tl-track: #232a33;
-  --tl-block: #1a2028; /* the brand block: text 15.09, cyan 9.07 */
+  --tl-block: #232c37; /* the brand block, lifted off the ground (1.37 on the ground): text 13.01, muted 7.65, cyan 7.82 */
+  --tl-block-edge: #5d6b7d; /* its border, so it reads as a block: 3.56 on the ground */
   --tl-block-text: #f2f6fa;
+  --tl-block-muted: #b4c0ce; /* secondary text on the block */
+  --tl-raised-on-block: #2f3b49; /* cards inside the block: text 10.49, muted 6.17, cyan 6.31 */
+  --tl-track-on-block: #3d4a5a; /* a bar's track on the block */
+  --tl-bar-on-block: #22d3ee; /* the accent on the block, the same in both faces */
   --tl-mark: #ff4d42; /* signal red, one mark per screen; ink #0e1115 on it 5.76 */
   --tl-mark-ink: #0e1115;
 }
@@ -20,7 +25,10 @@
     --tl-muted: #566170;
     --tl-bar: #00687a; /* deep cyan: paper #f6f8fa on it 6.05 */
     --tl-track: #d5dce4;
-    --tl-block: #0e1115; /* graphite in both faces: text 17.43, cyan #22d3ee 10.47 */
+    --tl-block: #0e1115; /* text 17.43, muted 10.25, cyan 10.47 */
+    --tl-block-edge: #0e1115;
+    --tl-raised-on-block: #1f2630; /* text 14.03, muted 8.25 */
+    --tl-track-on-block: #2a333e;
   }
 }
 

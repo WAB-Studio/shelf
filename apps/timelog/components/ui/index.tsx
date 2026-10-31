@@ -18,12 +18,15 @@ export function Between({ children }: { children: ReactNode }) {
   return <div className={styles.between}>{children}</div>;
 }
 
-// A name and its figure over the bar under them, 48 tall at least (DESIGN «Hoy»).
-export function Meter({ name, figure, share, label }: { name: ReactNode; figure: ReactNode; share: number; label: string }) {
+type MeterSize = "large" | "default" | "compact";
+
+// A name and its figure over the bar under them, 48 tall at least (DESIGN «Hoy»). A long name
+// truncates; the figure never wraps.
+export function Meter({ name, figure, share, label, size = "default" }: { name: ReactNode; figure: ReactNode; share: number; label: string; size?: MeterSize }) {
   return (
-    <div className={join(styles.stack, styles.gap1, styles.meter)}>
+    <div className={join(styles.stack, styles.gap1, styles.meter, size === "large" && styles.meterLarge, size === "compact" && styles.meterCompact)}>
       <div className={styles.line}>
-        <Text>{name}</Text>
+        <Text truncate>{name}</Text>
         <Text mono>{figure}</Text>
       </div>
       <Bar share={share} label={label} />
@@ -36,15 +39,79 @@ export function Hero({ children }: { children: ReactNode }) {
   return <section className={styles.hero}>{children}</section>;
 }
 
-export function Title({ children }: { children: ReactNode }) {
-  return <h1 className={styles.title}>{children}</h1>;
+export function Title({ small, children }: { small?: boolean; children: ReactNode }) {
+  return <h1 className={join(styles.title, small && styles.titleSmall)}>{children}</h1>;
+}
+
+// A time set big: its figures large, its units small. `mark` puts the signal highlight behind it.
+export function Figure({ parts, mark }: { parts: { value: string; unit: string }[]; mark?: boolean }) {
+  return (
+    <p className={join(styles.figure, mark && styles.mark)}>
+      {parts.map((part) => (
+        <span key={part.unit}>
+          {part.value}
+          <span className={styles.unit}> {part.unit}</span>
+        </span>
+      ))}
+    </p>
+  );
 }
 
 type TextVariant = "total" | "row" | "meta";
 
-export function Text({ variant = "row", mono, mark, as = "span", children }: { variant?: TextVariant; mono?: boolean; mark?: boolean; as?: "span" | "p"; children: ReactNode }) {
+export function Text({ variant = "row", mono, mark, truncate, as = "span", children }: { variant?: TextVariant; mono?: boolean; mark?: boolean; truncate?: boolean; as?: "span" | "p"; children: ReactNode }) {
   const Tag = as;
-  return <Tag className={join(styles[variant], mono && styles.mono, mark && styles.mark, !mono && styles.name)}>{children}</Tag>;
+  return <Tag className={join(styles[variant], mono && styles.mono, mark && styles.mark, !mono && styles.name, truncate && styles.truncate)}>{children}</Tag>;
+}
+
+// Inside the brand block: a small label over a value.
+export function Cards({ children }: { children: ReactNode }) {
+  return <div className={styles.cards}>{children}</div>;
+}
+
+export function Card({ label, children }: { label: ReactNode; children: ReactNode }) {
+  return (
+    <div className={styles.card}>
+      <Text variant="meta">{label}</Text>
+      {children}
+    </div>
+  );
+}
+
+export type DayColumn = { key: string; label: string; figure: string; share: number; future: boolean; description: string };
+
+// Seven vertical columns, one per day, for the brand block; a day not reached is dimmed and empty.
+export function DayColumns({ days }: { days: DayColumn[] }) {
+  return (
+    <div className={styles.days}>
+      {days.map((day) => (
+        <div key={day.key} className={join(styles.day, day.future && styles.dayFuture)}>
+          <div className={styles.dayTrack} role="img" aria-label={day.description}>
+            <div className={styles.dayFill} style={{ height: `${Math.max(0, Math.min(1, day.share)) * 100}%` }} />
+          </div>
+          <span className={join(styles.dayFigure, styles.mono)}>{day.future ? "" : day.figure}</span>
+          <span className={styles.dayLabel}>{day.label}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// The shared header: the logo mark and name on the left, the sections on the right.
+export function Header({ brand, href, children }: { brand: ReactNode; href: string; children?: ReactNode }) {
+  return (
+    <header className={styles.header}>
+      <Link href={href} className={styles.brand}>
+        <span className={styles.logo} aria-hidden="true">
+          <span />
+          <span />
+          <span />
+        </span>
+        {brand}
+      </Link>
+      {children}
+    </header>
+  );
 }
 
 // One bar, its length a share of the longest (DESIGN: the only graphic).
@@ -57,8 +124,8 @@ export function Bar({ share, label }: { share: number; label: string }) {
   );
 }
 
-export function TextLink({ current, ...props }: ComponentProps<typeof Link> & { current?: boolean }) {
-  return <Link {...props} aria-current={current ? "page" : undefined} className={join(styles.link, current && styles.current)} />;
+export function TextLink({ current, pill, button, ...props }: ComponentProps<typeof Link> & { current?: boolean; pill?: boolean; button?: boolean }) {
+  return <Link {...props} aria-current={current ? "page" : undefined} className={join(styles.link, current && styles.current, pill && styles.pill, button && styles.pillPrimary)} />;
 }
 
 export function Nav({ label, children }: { label: string; children: ReactNode }) {
@@ -69,16 +136,35 @@ export function Nav({ label, children }: { label: string; children: ReactNode })
   );
 }
 
-export function Button({ quiet, ...props }: ComponentProps<"button"> & { quiet?: boolean }) {
-  return <button {...props} className={join(styles.button, quiet && styles.quiet)} />;
+export function Button({ quiet, danger, ...props }: ComponentProps<"button"> & { quiet?: boolean; danger?: boolean }) {
+  return <button {...props} className={join(styles.button, quiet && styles.quiet, danger && styles.danger)} />;
 }
 
 export function Input(props: ComponentProps<"input">) {
   return <input {...props} className={styles.input} />;
 }
 
+// An input with its label always visible above it.
+export function Field({ label, ...props }: ComponentProps<"input"> & { label: string }) {
+  return (
+    <label className={styles.field}>
+      <Text variant="meta">{label}</Text>
+      <Input {...props} />
+    </label>
+  );
+}
+
+// Answers a press in place: «¿Revocar?» and its two ends.
+export function Confirm({ children }: { children: ReactNode }) {
+  return <div className={styles.confirm}>{children}</div>;
+}
+
 export function Form(props: ComponentProps<"form">) {
   return <form {...props} className={styles.form} />;
+}
+
+export function CodeBlock({ children }: { children: ReactNode }) {
+  return <div className={styles.codeBlock}>{children}</div>;
 }
 
 export function Code({ children }: { children: ReactNode }) {

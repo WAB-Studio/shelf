@@ -2,8 +2,10 @@ import "server-only";
 
 import { getTranslations } from "next-intl/server";
 
+import { readableApps } from "@/lib/app-names";
 import type { DurationWords } from "@/lib/duration";
-import { formatDuration } from "@/lib/duration";
+import { clockDuration, durationParts, formatDuration } from "@/lib/duration";
+import type { AppTime } from "@/lib/queries";
 import { weekdayIndex } from "@/lib/week";
 import { TIME_ZONE } from "@/lib/zone";
 
@@ -27,6 +29,18 @@ export async function calendarWords() {
 
   return {
     duration: (seconds: number) => formatDuration(seconds, words),
+    durationParts: (seconds: number) => durationParts(seconds, words),
+    clock: clockDuration,
+    // The day's apps under their readable names, system noise as «Sistema».
+    apps: (apps: AppTime[]) => readableApps(apps, time("system")),
+    // «hace 5 min» by the clock now.
+    ago: (at: Date) => {
+      const minutes = Math.max(0, Math.floor((Date.now() - at.getTime()) / 60_000));
+      if (minutes < 1) return time("duration.ago.now");
+      if (minutes < 60) return time("duration.ago.minutes", { n: minutes });
+      if (minutes < 1440) return time("duration.ago.hours", { n: Math.floor(minutes / 60) });
+      return time("duration.ago.days", { n: Math.floor(minutes / 1440) });
+    },
     weekday: (day: string) => weekdays[weekdayIndex(day)],
     weekdayShort: (day: string) => weekdaysShort[weekdayIndex(day)],
     month: (day: string) => months[Number(day.slice(5, 7)) - 1],

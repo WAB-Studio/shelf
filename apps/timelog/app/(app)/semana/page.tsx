@@ -2,9 +2,9 @@ import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 
 import { BarRows } from "@/components/screens/app-rows";
-import { Between, Stack, Text, TextLink, Title } from "@/components/ui";
+import { Between, DayColumns, Figure, Hero, Stack, Text, TextLink, Title } from "@/components/ui";
 import { appsBetween, dayTotals, uploadSpan } from "@/lib/queries";
-import { fill } from "@/lib/totals";
+import { fill, sum } from "@/lib/totals";
 import { askedWeek, clampWeek, weekSteps } from "@/lib/week";
 import { calendarWords } from "@/lib/words";
 import { addDays, civilDay } from "@/lib/zone";
@@ -25,6 +25,9 @@ export default async function WeekPage({ searchParams }: { searchParams: Promise
   const monday = clampWeek(asked, span.firstDay, today);
   if (monday !== asked) redirect(`/semana?semana=${monday}`);
   const steps = weekSteps(monday, span.firstDay, today);
+  const days = fill(monday, sunday, totals);
+  const longestDay = Math.max(1, ...days.map((one) => one.seconds));
+  const grouped = words.apps(apps);
 
   return (
     <Stack gap={4}>
@@ -35,23 +38,36 @@ export default async function WeekPage({ searchParams }: { searchParams: Promise
           {steps.next ? <TextLink href={`/semana?semana=${steps.next}`}>{t("next")} ›</TextLink> : null}
         </Between>
       </Between>
-      <Stack gap={2}>
-        <Text variant="meta">{t("days")}</Text>
-        <BarRows
-          rows={fill(monday, sunday, totals).map(({ day, seconds }) => {
-            const name = `${words.weekdayShort(day)} ${words.dayOfMonth(day)}`;
-            const figure = seconds === 0 ? t("none") : words.duration(seconds);
-            return { key: day, name, figure, seconds, label: t("bar", { day: name, duration: figure }) };
-          })}
-        />
-      </Stack>
+      <Hero>
+        <Stack gap={3}>
+          <Stack gap={2}>
+            <Text variant="meta">{t("total")}</Text>
+            <Figure parts={words.durationParts(sum(totals))} />
+          </Stack>
+          <DayColumns
+            days={days.map(({ day, seconds }) => {
+              const name = `${words.weekdayShort(day)} ${words.dayOfMonth(day)}`;
+              const future = day > today;
+              return {
+                key: day,
+                label: words.weekdayShort(day),
+                figure: seconds === 0 ? t("none") : words.clock(seconds),
+                share: seconds / longestDay,
+                future,
+                description: future ? t("upcoming", { day: name }) : t("bar", { day: name, duration: seconds === 0 ? t("none") : words.duration(seconds) }),
+              };
+            })}
+          />
+        </Stack>
+      </Hero>
       <Stack gap={2}>
         <Text variant="meta">{t("apps")}</Text>
-        {apps.length === 0 ? (
+        {grouped.length === 0 ? (
           <Text as="p">{t("noApps")}</Text>
         ) : (
           <BarRows
-            rows={apps.map((one) => ({
+            featured={3}
+            rows={grouped.map((one) => ({
               key: one.app,
               name: one.app,
               figure: words.duration(one.seconds),

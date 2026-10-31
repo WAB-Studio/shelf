@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { redirect } from "next/navigation";
 
-import { AppNav } from "@/components/screens/app-nav";
+import { AppHeader } from "@/components/screens/app-header";
 import { Page } from "@/components/ui";
 import { getPerson } from "@/lib/session";
 
@@ -10,7 +10,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   if ((await getPerson()) === null) redirect("/entrar");
   return (
     <Page>
-      <AppNav />
+      <AppHeader signedIn />
       {children}
     </Page>
   );
