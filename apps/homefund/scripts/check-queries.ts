@@ -4274,6 +4274,7 @@ async function main(): Promise<void> {
   await statementImportSuite();
   await incomeContributorSuite();
   await incomeContributorFollowUpSuite();
+  await incomeContributorEditsSuite();
 }
 
 // A member recorded without a login is someone in the fund: a leader whose fund holds one is not alone, so an
@@ -15870,5 +15871,160 @@ async function incomeContributorFollowUpSuite(): Promise<void> {
     next("RF-166: the backup writes «De quién» by the member's name"),
     exportedRow?.contributedBy === "Harness rf166b invitado",
     `contributedBy cell ${JSON.stringify(exportedRow?.contributedBy)}`,
+  );
+}
+
+// RF-166, the writes around it: an import names the member or is refused, a blank cell keeps
+// the stored one, an income leaving its fund drops it, and completing the counterparty clears it.
+async function incomeContributorEditsSuite(): Promise<void> {
+  console.log("");
+  const PAY = 1_500_000;
+  const payer = await createMembershipFreeUser();
+  const ids = {
+    group: randomUUID(),
+    member: randomUUID(),
+    guest: randomUUID(),
+    pot: randomUUID(),
+    mine: randomUUID(),
+    category: randomUUID(),
+    personalCategory: randomUUID(),
+  };
+  await fixtureSql.begin(async (tx) => {
+    await tx`insert into groups (id, name, cash_mode) values (${ids.group}, 'Harness rf166c fondo', 'per_member')`;
+    await tx`
+      insert into group_members (id, group_id, user_id, name, role)
+      values (${ids.member}, ${ids.group}, ${payer.id}, 'Harness rf166c', 'leader'),
+             (${ids.guest}, ${ids.group}, null, 'Harness rf166c invitado', 'member')`;
+    await tx`
+      insert into accounts (id, group_id, is_shared, name, kind, subtype, initial_balance_cents, initial_balance_on)
+      values (${ids.pot}, ${ids.group}, true, 'Harness rf166c fondo', 'asset', 'bank', 0, '2026-01-01')`;
+    await tx`
+      insert into accounts (id, owner_user_id, name, kind, subtype, initial_balance_cents, initial_balance_on)
+      values (${ids.mine}, ${payer.id}, 'Harness rf166c mia', 'asset', 'bank', 0, '2026-01-01')`;
+    await tx`
+      insert into categories (id, group_id, name, kind, color)
+      values (${ids.category}, ${ids.group}, 'Harness rf166c ingreso', 'income', '#4C8C4A')`;
+    await tx`
+      insert into categories (id, owner_user_id, name, kind, color)
+      values (${ids.personalCategory}, ${payer.id}, 'Harness rf166c mi ingreso', 'income', '#4C8C4A')`;
+  });
+  track("groups", ids.group);
+  track("group_members", ids.member);
+  track("group_members", ids.guest);
+  track("accounts", ids.pot);
+  track("accounts", ids.mine);
+  track("categories", ids.category);
+  track("categories", ids.personalCategory);
+
+  const base = {
+    fromAccountId: null,
+    toAccountId: ids.pot,
+    amountCents: PAY,
+    occurredAt: todayInBogota(),
+    description: "Harness rf166c ingreso",
+    splits: [{ categoryId: ids.category, amountCents: PAY }],
+    labelIds: [],
+    externalRef: null,
+  };
+  const contributorOf = async (id: string) =>
+    (await fixtureSql<{ contributed_by_member_id: string | null }[]>`
+      select contributed_by_member_id from transactions where id = ${id}`)[0]?.contributed_by_member_id ?? null;
+
+  const ref = `rf166c-${randomUUID().slice(0, 8)}`;
+  const { transactionId } = await asUser(payer, () =>
+    createTransaction({ ...base, externalRef: ref, contributedByMemberId: ids.guest }),
+  );
+  keep("transactions", transactionId);
+
+  // The import row for the same key, naming nobody: the stored contributor stays.
+  const importRow = (status: "new" | "update", name: string | null | undefined, key: string, sheetRow: number) => ({
+    index: 0,
+    sheetRow,
+    status,
+    externalRef: key,
+    placeholderId: null,
+    object: {
+      ...base,
+      amount: "15000",
+      splits: [{ categoryId: ids.category, amount: "15000" }],
+      externalRef: key,
+      ...(name === undefined ? {} : { contributedByName: name }),
+    } as never,
+  });
+  const commit = async (transactions: ReturnType<typeof importRow>[]) => {
+    try {
+      await asUser(payer, () =>
+        withUserDb((tx) =>
+          commitImport(
+            tx,
+            { members: [], categories: [], accounts: [], recurringRules: [], transactions, adjustments: [] },
+            { userId: payer.id, groupId: ids.group },
+          ),
+        ),
+      );
+      return null;
+    } catch (error) {
+      try {
+        return JSON.parse((error as Error).message) as { reasonKey?: string; sheetRow?: number };
+      } catch {
+        return { reasonKey: String(error) };
+      }
+    }
+  };
+
+  const blank = await commit([importRow("update", undefined, ref, 2)]);
+  const kept = await contributorOf(transactionId);
+  assert(
+    next("RF-166: re-importing a movement whose «De quién» cell is blank keeps the stored contributor"),
+    blank === null && kept === ids.guest,
+    `commit ${JSON.stringify(blank)}; contributor after = ${kept}, expected ${ids.guest}`,
+  );
+
+  const named = await commit([importRow("update", "Harness rf166c", ref, 2)]);
+  const renamed = await contributorOf(transactionId);
+  const unknown = await commit([importRow("new", "Nadie Existe", `${ref}-x`, 7)]);
+  const stranger = await fixtureSql<{ id: string }[]>`select id from transactions where external_ref = ${`${ref}-x`}`;
+  assert(
+    next("RF-166: an import names the member by name; a name that is no member of the fund is a row error and writes nothing"),
+    named === null &&
+      renamed === ids.member &&
+      unknown?.reasonKey === "data.import.errors.contributorUnknown" &&
+      unknown.sheetRow === 7 &&
+      stranger.length === 0,
+    `named ${JSON.stringify(named)} -> ${renamed}; unknown ${JSON.stringify(unknown)}, rows written ${stranger.length}`,
+  );
+
+  await asUser(payer, () =>
+    updateTransaction({
+      ...base,
+      transactionId,
+      toAccountId: ids.mine,
+      splits: [{ categoryId: ids.personalCategory, amountCents: PAY }],
+      contributedByMemberId: undefined,
+    }),
+  );
+  const left = await contributorOf(transactionId);
+  assert(
+    next("RF-166: editing an income into an account outside its fund, sending no contributor, saves and drops it"),
+    left === null,
+    `contributor after the move = ${left}`,
+  );
+
+  const { transactionId: waiting } = await asUser(payer, () =>
+    createTransaction({ ...base, contributedByMemberId: ids.guest, awaitingCounterparty: true }),
+  );
+  keep("transactions", waiting);
+  const before = await contributorOf(waiting);
+  const actions = (await import("@/app/actions/transactions")) as unknown as {
+    completeCounterpartyAction: (input: unknown) => Promise<{ serverError?: string }>;
+  };
+  const completed = await asUser(payer, () =>
+    actions.completeCounterpartyAction({ transactionId: waiting, accountId: ids.mine }),
+  );
+  const after = await contributorOf(waiting);
+  assert(
+    next("RF-166: completing the counterparty of an income gives it a source and clears «De quién»"),
+    before === ids.guest && after === null && completed?.serverError === undefined,
+    `before ${before}, after ${after}, ${completed?.serverError ?? "no error"}`,
   );
 }

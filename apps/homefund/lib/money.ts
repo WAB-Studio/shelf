@@ -381,7 +381,7 @@ export function formatAmountTyping(
   // backspacing «125.000» leaves: a group). Three digits after any mark are a group.
   // Longer after the only decimal mark is not cut: it stays as typed and `parseAmount`
   // refuses it with the field's error.
-  const marks = raw.match(/[.,]/g) ?? [];
+  const marks: string[] = raw.match(/[.,]/g) ?? [];
   const lastMark = marks.length === 0 ? -1 : Math.max(raw.lastIndexOf("."), raw.lastIndexOf(","));
   const tail = lastMark === -1 ? "" : raw.slice(lastMark + 1).replace(/\D/g, "");
   const head = lastMark === -1 ? raw : raw.slice(0, lastMark);
