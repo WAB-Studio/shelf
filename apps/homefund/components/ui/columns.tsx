@@ -5,7 +5,7 @@ import styles from "./columns.module.css";
 /**
  * A desktop screen's reading columns. Below `md` the three areas stack in the
  * order `lead`, `aside`, `main`; from `md` the aside rides sticky beside the
- * other two; from 1600px the three stand side by side. An area left out leaves
+ * other two; an area left out leaves
  * no empty track.
  */
 export function Columns({

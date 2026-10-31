@@ -634,7 +634,7 @@
     "allLabels": "All labels",
     "typeLabel": "Type",
     "descriptionLabel": "Description",
-    "listMeta": "{count} · net",
+    "listMeta": "{count, plural, =1 {# movement} other {# movements}}",
     "listMetaAdjustments": "{count, plural, =1 {# gap} other {# gaps}}",
     "export": "Export",
     "emptyTitle": "No movements yet",
