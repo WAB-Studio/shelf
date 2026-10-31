@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 
 import { BarRows } from "@/components/screens/app-rows";
-import { Between, Card, Cards, DayColumns, Figure, Hero, Split, Stack, Text, TextLink, Title } from "@/components/ui";
+import { Between, Card, Cards, DayColumns, Figure, Hero, HeroColumns, Mosaic, Stack, Text, TextLink, Tile, Title } from "@/components/ui";
 import { claudeTotal } from "@/lib/daily";
 import { appsBetween, claudeBetween, dayTotals, uploadSpan } from "@/lib/queries";
 import { fill, sum } from "@/lib/totals";
@@ -43,7 +43,7 @@ export default async function WeekPage({ searchParams }: { searchParams: Promise
 
   const block = (
     <Hero>
-      <Stack gap={3}>
+      <HeroColumns>
         <Stack gap={2}>
           <Text variant="meta">{t("total")}</Text>
           <Figure parts={words.durationParts(sum(totals))} />
@@ -68,7 +68,7 @@ export default async function WeekPage({ searchParams }: { searchParams: Promise
             <Text mono>{claudeWeek > 0 ? words.duration(claudeWeek) : t("none")}</Text>
           </Card>
         </Cards>
-      </Stack>
+      </HeroColumns>
     </Hero>
   );
 
@@ -81,10 +81,9 @@ export default async function WeekPage({ searchParams }: { searchParams: Promise
           {steps.next ? <TextLink href={`/semana?semana=${steps.next}`}>{t("next")} ›</TextLink> : null}
         </Between>
       </Between>
-      <Split aside={block}>
-        <Stack gap={4}>
-          <Stack gap={2}>
-            <Text variant="meta">{t("apps")}</Text>
+      {block}
+      <Mosaic>
+          <Tile lead title={t("apps")}>
             {grouped.length === 0 ? (
               <Text as="p">{t("noApps")}</Text>
             ) : (
@@ -99,14 +98,11 @@ export default async function WeekPage({ searchParams }: { searchParams: Promise
                 }))}
               />
             )}
-          </Stack>
-          <Stack gap={2}>
-            <Between>
-              <Text variant="meta">{t("claude")}</Text>
-              <TextLink download href={`/api/export?from=${monday}&to=${sunday}`}>
-                {t("export")}
-              </TextLink>
-            </Between>
+          </Tile>
+          <Tile title={t("claude")}>
+            <TextLink download href={`/api/export?from=${monday}&to=${sunday}`}>
+              {t("export")}
+            </TextLink>
             {claudeWeek === 0 ? (
               <Text as="p" variant="meta">{span.hasClaudeCode || span.hasSites ? t("claudeNone") : t("claudeNever")}</Text>
             ) : (
@@ -124,9 +120,8 @@ export default async function WeekPage({ searchParams }: { searchParams: Promise
                 })}
               />
             )}
-          </Stack>
-        </Stack>
-      </Split>
+          </Tile>
+      </Mosaic>
     </Stack>
   );
 }

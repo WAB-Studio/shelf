@@ -1,7 +1,7 @@
 import { getTranslations } from "next-intl/server";
 
 import { BarRows } from "@/components/screens/app-rows";
-import { Between, Stack, Text, TextLink } from "@/components/ui";
+import { Stack, Text, TextLink } from "@/components/ui";
 import { claudeTotal } from "@/lib/daily";
 import { projectName } from "@/lib/claude-project";
 import type { ClaudeDay, ClaudeSessionTime, PageTime, SiteTime } from "@/lib/queries";
@@ -29,10 +29,6 @@ export async function ClaudeBlock({ claude, sessions, hasClaudeCode, hasSites, w
 
   return (
     <Stack gap={2}>
-      <Between>
-        <Text variant="meta">{t("total")}</Text>
-        <Text mono>{total > 0 ? words.duration(total) : "—"}</Text>
-      </Between>
       {total === 0 ? (
         <Text as="p" variant="meta">{t(hasClaudeCode ? "empty" : "never")}</Text>
       ) : (
@@ -84,7 +80,6 @@ export async function InternetBlock({ sites, pages, hasSites, words }: { sites: 
   };
   return (
     <Stack gap={2}>
-      <Text variant="meta">{t("title")}</Text>
       {shown.length > 0 ? (
         <>
           <BarRows rows={shown.map((one) => ({ key: one.host, name: one.host, figure: words.duration(one.seconds), seconds: one.seconds, label: t("bar", { host: one.host, duration: words.duration(one.seconds) }), detail: pages.some((page) => page.host === one.host) ? pagesOf(one.host) : undefined }))} />

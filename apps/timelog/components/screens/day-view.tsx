@@ -3,7 +3,7 @@ import { getTranslations } from "next-intl/server";
 import { BarRows } from "@/components/screens/app-rows";
 import { AutoRefresh } from "@/components/screens/auto-refresh";
 import { ClaudeBlock, InternetBlock } from "@/components/screens/claude-internet";
-import { Between, Card, Cards, Figure, Hero, Split, Stack, Text, TextLink, Title } from "@/components/ui";
+import { Between, Card, Cards, Figure, Hero, HeroColumns, Mosaic, Stack, Text, TextLink, Tile, Title } from "@/components/ui";
 import { readableApp } from "@/lib/app-names";
 import { claudeTotal } from "@/lib/daily";
 import { appsBetween, claudeBetween, claudeSessionsBetween, dayTotals, pagesBetween, sitesBetween, uploadSpan, windowsBetween } from "@/lib/queries";
@@ -19,7 +19,7 @@ export async function DayView({ day }: { day: string }) {
   const today = civilDay();
   const isToday = day === today;
   const before = addDays(day, -1);
-  const [raw, sites, pages, windows, sessions, claudeDays, previous, span, words, t] = await Promise.all([
+  const [raw, sites, pages, windows, sessions, claudeDays, previous, span, words, t, tClaude, tInternet] = await Promise.all([
     appsBetween(day, day),
     sitesBetween(day, day),
     pagesBetween(day, day),
@@ -31,6 +31,8 @@ export async function DayView({ day }: { day: string }) {
     uploadSpan(),
     calendarWords(),
     getTranslations("time.today"),
+    getTranslations("time.claude"),
+    getTranslations("time.internet"),
   ]);
   const claude = claudeDays[0];
   const claudeSeconds = claude === undefined ? 0 : claudeTotal(claude);
@@ -62,82 +64,81 @@ export async function DayView({ day }: { day: string }) {
           {hasNext ? <TextLink href={hrefOf(addDays(day, 1))}>{t("next")} ›</TextLink> : null}
         </Between>
       ) : null}
-      <Split
-        aside={
-          <Stack gap={3}>
-          <Hero>
+      <Hero>
+        {top !== undefined ? (
+          <HeroColumns>
             <Stack gap={3}>
               <Title small>{date}</Title>
-              {top !== undefined ? (
-                <>
-                  <Stack gap={2}>
-                    <Text variant="meta">{t(isToday ? "total" : "totalPast")}</Text>
-                    <Figure parts={words.durationParts(total)} mark />
-                    {isToday && span.lastReceived !== null ? <Text variant="meta">{t("updated", { ago: words.ago(span.lastReceived) })}</Text> : null}
-                  </Stack>
-                  <Cards>
-                    <Card label={t("topApp")}>
-                      <Text truncate>{top.app}</Text>
-                      <Text mono>{words.duration(top.seconds)}</Text>
-                    </Card>
-                    <Card label={t("claudeCard")}>
-                      <Text mono>{claudeSeconds > 0 ? words.duration(claudeSeconds) : "—"}</Text>
-                    </Card>
-                    {!isToday && previousTotal > 0 ? (
-                      <Card label={t("versus")}>
-                        <Text mono>
-                          {delta === 0 ? t("versusSame") : t(delta > 0 ? "versusMore" : "versusLess", { duration: words.duration(Math.abs(delta)) })}
-                        </Text>
-                      </Card>
-                    ) : null}
-                  </Cards>
-                </>
-              ) : (
-                <Stack gap={2}>
-                  <Text as="p">{span.lastReceived === null ? t("never") : t(isToday ? "empty" : "emptyPast")}</Text>
-                  {span.lastReceived === null ? null : <Text as="p" variant="meta">{t(isToday ? "emptyWhy" : "emptyPastWhy")}</Text>}
-                  {span.lastReceived === null ? null : <Text as="p" variant="meta">{t("lastUpload", { when: words.moment(span.lastReceived) })}</Text>}
-                </Stack>
-              )}
+              <Stack gap={2}>
+                <Text variant="meta">{t(isToday ? "total" : "totalPast")}</Text>
+                <Figure parts={words.durationParts(total)} mark />
+                {isToday && span.lastReceived !== null ? <Text variant="meta">{t("updated", { ago: words.ago(span.lastReceived) })}</Text> : null}
+              </Stack>
             </Stack>
-          </Hero>
-            {top === undefined && span.lastReceived === null ? <TextLink button href="/llaves">{t("connect")}</TextLink> : null}
+            <Cards>
+              <Card label={t("topApp")}>
+                <Text truncate>{top.app}</Text>
+                <Text mono>{words.duration(top.seconds)}</Text>
+              </Card>
+              <Card label={t("claudeCard")}>
+                <Text mono>{claudeSeconds > 0 ? words.duration(claudeSeconds) : "—"}</Text>
+              </Card>
+              {!isToday && previousTotal > 0 ? (
+                <Card label={t("versus")}>
+                  <Text mono>{delta === 0 ? t("versusSame") : t(delta > 0 ? "versusMore" : "versusLess", { duration: words.duration(Math.abs(delta)) })}</Text>
+                </Card>
+              ) : null}
+            </Cards>
+          </HeroColumns>
+        ) : (
+          <Stack gap={3}>
+            <Title small>{date}</Title>
+            <Stack gap={2}>
+              <Text as="p">{span.lastReceived === null ? t("never") : t(isToday ? "empty" : "emptyPast")}</Text>
+              {span.lastReceived === null ? null : <Text as="p" variant="meta">{t(isToday ? "emptyWhy" : "emptyPastWhy")}</Text>}
+              {span.lastReceived === null ? null : <Text as="p" variant="meta">{t("lastUpload", { when: words.moment(span.lastReceived) })}</Text>}
+            </Stack>
           </Stack>
-        }
-      >
-        <Stack gap={4}>
+        )}
+      </Hero>
+      {firstUse ? <TextLink button href="/llaves">{t("connect")}</TextLink> : null}
+      {firstUse ? null : (
+        <Mosaic>
           {apps.length > 0 ? (
-          <Stack gap={2}>
-            <Text variant="meta">{t("apps")}</Text>
-            <BarRows
-              rows={apps.map((one) => ({
-                key: one.app,
-                name: one.app,
-                figure: words.duration(one.seconds),
-                seconds: one.seconds,
-                label: t("bar", { app: one.app, duration: words.duration(one.seconds) }),
-                detail: titlesOf.has(one.app) ? (
-                  <>
-                    <BarRows
-                      rows={(titlesOf.get(one.app) ?? []).slice(0, TITLES_SHOWN).map((title) => ({
-                        key: title.app + title.title,
-                        name: title.title,
-                        figure: words.duration(title.seconds),
-                        seconds: title.seconds,
-                        label: t("windowBar", { title: title.title, duration: words.duration(title.seconds) }),
-                      }))}
-                    />
-                    {(titlesOf.get(one.app) ?? []).length > TITLES_SHOWN ? <Text as="p" variant="meta">{t("windowsMore", { n: (titlesOf.get(one.app) ?? []).length - TITLES_SHOWN })}</Text> : null}
-                  </>
-                ) : undefined,
-              }))}
-            />
-          </Stack>
+            <Tile lead title={t("apps")} figure={words.duration(total)}>
+              <BarRows
+                rows={apps.map((one) => ({
+                  key: one.app,
+                  name: one.app,
+                  figure: words.duration(one.seconds),
+                  seconds: one.seconds,
+                  label: t("bar", { app: one.app, duration: words.duration(one.seconds) }),
+                  detail: titlesOf.has(one.app) ? (
+                    <>
+                      <BarRows
+                        rows={(titlesOf.get(one.app) ?? []).slice(0, TITLES_SHOWN).map((title) => ({
+                          key: title.app + title.title,
+                          name: title.title,
+                          figure: words.duration(title.seconds),
+                          seconds: title.seconds,
+                          label: t("windowBar", { title: title.title, duration: words.duration(title.seconds) }),
+                        }))}
+                      />
+                      {(titlesOf.get(one.app) ?? []).length > TITLES_SHOWN ? <Text as="p" variant="meta">{t("windowsMore", { n: (titlesOf.get(one.app) ?? []).length - TITLES_SHOWN })}</Text> : null}
+                    </>
+                  ) : undefined,
+                }))}
+              />
+            </Tile>
           ) : null}
-          {firstUse ? null : <ClaudeBlock claude={claude} sessions={sessions} hasClaudeCode={span.hasClaudeCode} hasSites={span.hasSites} words={words} />}
-          {firstUse ? null : <InternetBlock sites={sites} pages={pages} hasSites={span.hasSites} words={words} />}
-        </Stack>
-      </Split>
+          <Tile title={tClaude("title")} figure={claudeSeconds > 0 ? words.duration(claudeSeconds) : "—"}>
+            <ClaudeBlock claude={claude} sessions={sessions} hasClaudeCode={span.hasClaudeCode} hasSites={span.hasSites} words={words} />
+          </Tile>
+          <Tile title={tInternet("title")} figure={sites.length > 0 ? words.duration(sum(sites)) : "—"}>
+            <InternetBlock sites={sites} pages={pages} hasSites={span.hasSites} words={words} />
+          </Tile>
+        </Mosaic>
+      )}
     </Stack>
   );
 }

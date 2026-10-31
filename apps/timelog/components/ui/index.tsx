@@ -15,17 +15,26 @@ export function Narrow({ children }: { children: ReactNode }) {
   return <div className={styles.narrow}>{children}</div>;
 }
 
-// The brand block beside its rows from 1100 (block sticky on the left), above them below it.
-export function Split({ aside, children }: { aside: ReactNode; children: ReactNode }) {
+// The brand block on top, wide; the cards of the day in a mosaic under it.
+export function Mosaic({ children }: { children: ReactNode }) {
+  return <div className={styles.mosaic}>{children}</div>;
+}
+
+// One card of the mosaic: its title in the display face, its total at the right. `full` takes a whole row; `lead`
+// takes one only where the mosaic has two columns, so the longest list is never squeezed.
+export function Tile({ title, figure, full, lead, children }: { title: ReactNode; figure?: ReactNode; full?: boolean; lead?: boolean; children: ReactNode }) {
   return (
-    <div className={styles.split}>
-      <div className={styles.aside}>{aside}</div>
-      <div className={styles.main}>{children}</div>
-    </div>
+    <section className={join(styles.tile, full && styles.tileFull, lead && styles.tileLead)}>
+      <div className={styles.tileHead}>
+        <h2 className={styles.tileTitle}>{title}</h2>
+        {figure === undefined ? null : <Text mono>{figure}</Text>}
+      </div>
+      {children}
+    </section>
   );
 }
 
-// Rows in one column; in two between 720 and 1099, where there is room for both and no side block.
+// Rows in one column.
 export function Rows({ children }: { children: ReactNode }) {
   return <div className={styles.rows}>{children}</div>;
 }
@@ -71,6 +80,11 @@ export function Disclosure({ summary, children }: { summary: ReactNode; children
 // The brand block: the one dark block on the main screen.
 export function Hero({ children }: { children: ReactNode }) {
   return <section className={styles.hero}>{children}</section>;
+}
+
+// The block's parts side by side where they fit, stacked where they do not.
+export function HeroColumns({ children }: { children: ReactNode }) {
+  return <div className={styles.heroColumns}>{children}</div>;
 }
 
 export function Title({ small, children }: { small?: boolean; children: ReactNode }) {
