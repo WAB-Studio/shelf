@@ -15699,5 +15699,24 @@ async function statementImportSuite(): Promise<void> {
       otherSide.value?.lines?.[0]?.status === "matches",
     `unpriced ${JSON.stringify(unpricedLine)}, priced ${JSON.stringify(pricedLine)}, imported ${JSON.stringify(exchanged.value)}, booked ${JSON.stringify(booked)}, other side ${JSON.stringify(otherSide.value?.lines)}`,
   );
+
+  const inbound = {
+    line: 1, date: "2026-09-18", description: "VENTA DOLARES", amountCents: 3_900_000, counterAccountId: dollars, counterAmountCents: 1_000,
+  };
+  const inboundPreview = await tool("preview_statement", { accountId: ids.bank, rows: [inbound] });
+  const inboundImport = await tool("import_statement", { accountId: ids.bank, rows: [inbound], previewKey: inboundPreview.value?.previewKey });
+  const [received] = await fixtureSql<{ currency: string; counter_amount_cents: string }[]>`
+    select currency, counter_amount_cents::text from transactions
+    where from_account_id = ${dollars} and to_account_id = ${ids.bank} and occurred_at = '2026-09-18'`;
+  const dollarSide = await tool("preview_statement", {
+    accountId: dollars,
+    rows: [{ line: 1, date: "2026-09-18", description: "VENTA A COP", amountCents: -1_000 }],
+  });
+  assert(
+    next("RF-144: a transfer in from an account in another currency is booked with what left there, and that account's statement recognises it"),
+    inboundImport.value?.created === 1 && received?.currency === "COP" && received.counter_amount_cents === "1000" &&
+      dollarSide.value?.lines?.[0]?.status === "matches",
+    `imported ${JSON.stringify(inboundImport.value)}, received ${JSON.stringify(received)}, dollar side ${JSON.stringify(dollarSide.value?.lines)}`,
+  );
 }
 
