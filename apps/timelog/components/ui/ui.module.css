@@ -98,6 +98,7 @@
 .pillPrimary:hover, .pillPrimary:focus-visible { text-decoration: none; filter: brightness(1.1); }
 
 .header { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 48px; }
+.headerEnd { display: flex; align-items: center; gap: 16px; }
 .brand { display: inline-flex; align-items: center; gap: 10px; color: var(--tl-text); text-decoration: none; font-family: var(--font-display), var(--font-sans), sans-serif; font-size: 20px; font-weight: 700; letter-spacing: -0.02em; }
 .logo { width: 28px; height: 28px; box-sizing: border-box; padding: 6px 5px; display: flex; align-items: flex-end; gap: 2px; border-radius: 8px; background: var(--tl-block); border: 1px solid var(--tl-block-edge); }
 .logo > span { flex: 1; border-radius: 1px; background: var(--tl-bar-on-block); }

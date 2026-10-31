@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { Inter, JetBrains_Mono, Space_Grotesk } from "next/font/google";
 import { NextIntlClientProvider } from "next-intl";
-import { getTranslations } from "next-intl/server";
+import { getLocale, getTranslations } from "next-intl/server";
 
 import "./theme.css";
 
@@ -20,9 +20,10 @@ export async function generateMetadata(): Promise<Metadata> {
   return { title: { template: `%s · ${t("brand")}`, default: t("brand") } };
 }
 
-export default function RootLayout({ children }: { children: ReactNode }) {
+export default async function RootLayout({ children }: { children: ReactNode }) {
+  const locale = await getLocale();
   return (
-    <html lang="es" className={`${sans.variable} ${mono.variable} ${display.variable}`}>
+    <html lang={locale} className={`${sans.variable} ${mono.variable} ${display.variable}`}>
       <body>
         <NextIntlClientProvider>{children}</NextIntlClientProvider>
       </body>

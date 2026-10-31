@@ -121,7 +121,7 @@ export function Header({ brand, href, children }: { brand: ReactNode; href: stri
         </span>
         {brand}
       </Link>
-      {children}
+      <div className={styles.headerEnd}>{children}</div>
     </header>
   );
 }

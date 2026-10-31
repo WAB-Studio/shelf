@@ -1,0 +1,98 @@
+{
+  "duration": {
+    "hours": "h",
+    "minutes": "min",
+    "underMinute": "< 1 min",
+    "ago": {
+      "now": "just now",
+      "minutes": "{n} min ago",
+      "hours": "{n} h ago",
+      "days": "{n} d ago"
+    }
+  },
+  "nav": {
+    "label": "Sections",
+    "today": "Today",
+    "week": "Week",
+    "keys": "Keys"
+  },
+  "today": {
+    "title": "{weekday}, {month} {day}",
+    "total": "Today on the computer",
+    "totalPast": "That day on the computer",
+    "empty": "No data for today",
+    "emptyPast": "No data for that day",
+    "lastUpload": "Last upload: {when}",
+    "never": "No upload has arrived yet. Create a key and run the script on your PC.",
+    "bar": "{app}: {duration}",
+    "updated": "Updated {ago}",
+    "topApp": "Most used",
+    "versus": "Against the day before",
+    "versusMore": "+{duration}",
+    "versusLess": "−{duration}",
+    "versusSame": "Same as the day before",
+    "connect": "Connect my PC",
+    "prev": "Previous day",
+    "next": "Next day"
+  },
+  "week": {
+    "title": "{from} to {to}",
+    "prev": "Previous week",
+    "next": "Next week",
+    "days": "Days",
+    "apps": "Apps of the week",
+    "noApps": "Nothing this week.",
+    "none": "—",
+    "bar": "{day}: {duration}",
+    "total": "Total for the week",
+    "upcoming": "{day}: not here yet"
+  },
+  "keys": {
+    "title": "Keys",
+    "intro": "A key lets your PC's script upload the day's summary and lets Claude read it. It is shown only once.",
+    "install": "On Windows, install ActivityWatch + TimeLog and paste the key in its icon, next to the clock: «TimeLog: paste key…». It uploads by itself every hour.",
+    "download": "Download the Windows installer",
+    "name": "Key name",
+    "namePlaceholder": "Home PC",
+    "create": "Create key",
+    "creating": "Creating…",
+    "nameInvalid": "Give it a name of up to 60 characters.",
+    "signedOut": "Your session expired. Sign in again.",
+    "revokeFailed": "The key could not be revoked. Reload and try again.",
+    "shown": "Copy it now: it is not shown again.",
+    "copy": "Copy",
+    "copied": "Copied",
+    "command": "Without the installer, on the PC with ActivityWatch open:",
+    "used": "used {when}",
+    "unused": "unused",
+    "revoked": "revoked",
+    "revoke": "Revoke",
+    "revokeLabel": "Revoke the key {name}",
+    "none": "There are no keys yet.",
+    "keyBlock": "Your key",
+    "copyKey": "Copy key",
+    "copyCommand": "Copy command",
+    "confirmRevoke": "Revoke «{name}»? It stops uploading and reading.",
+    "confirmYes": "Yes, revoke",
+    "confirmNo": "Cancel"
+  },
+  "signIn": {
+    "title": "Sign in",
+    "intro": "TimeLog keeps a summary of how long your computer spends in each app, day by day. We email you a link to sign in.",
+    "email": "Email",
+    "send": "Send link",
+    "sending": "Sending…",
+    "sent": "Check your email: the link brings you back here.",
+    "emailInvalid": "That email does not look right.",
+    "notInvited": "That email is not invited to TimeLog.",
+    "sendFailed": "The link could not be sent. Try again.",
+    "rateLimited": "You have asked for several links. Wait a few minutes.",
+    "linkInvalid": "The link did not work or has expired. Ask for another."
+  },
+  "notFound": {
+    "title": "That page does not exist",
+    "text": "The day you are looking for does not exist or has not arrived yet.",
+    "back": "Go to Today"
+  },
+  "system": "System"
+}
