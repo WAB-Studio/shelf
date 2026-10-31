@@ -158,7 +158,8 @@
     "glanceNoIncome": "Este mes no ha entrado dinero",
     "glanceMeterLabel": "Gastos frente a ingresos en {currency}",
     "glanceByCategory": "Gasto por categoría",
-    "glanceOthers": "Otras"
+    "glanceOthers": "Otras",
+    "ownerBarLabel": "Patrimonio por dueño en {currency}"
   },
   "reports": {
     "title": "Reportes",

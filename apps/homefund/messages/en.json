@@ -158,7 +158,8 @@
     "glanceNoIncome": "No money has come in this month",
     "glanceMeterLabel": "Spending against income in {currency}",
     "glanceByCategory": "Spending by category",
-    "glanceOthers": "Other"
+    "glanceOthers": "Other",
+    "ownerBarLabel": "Net worth by owner in {currency}"
   },
   "reports": {
     "title": "Reports",

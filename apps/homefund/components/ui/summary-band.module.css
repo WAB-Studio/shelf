@@ -124,3 +124,10 @@
   color: var(--brand-lime);
 }
 
+
+/* Dark: the ink card would vanish into the ground, so it lifts to a violet
+   surface with its own border. */
+:global(.dark) .card[data-featured] {
+  background-color: #2a1a5e;
+  border-color: #4b3a8f;
+}

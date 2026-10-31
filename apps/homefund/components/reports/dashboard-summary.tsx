@@ -9,9 +9,11 @@ import {
   BandStats,
   Badge,
   Button,
+  Disc,
   Flex,
   Money,
   PlainLink,
+  ProportionBar,
   SummaryBand,
   TapTarget,
   Text,
@@ -113,23 +115,35 @@ export function DashboardSummary({ data }: { data: DashboardData }) {
               </Flex>
             )}
 
-            <Flex gap="2" wrap="wrap">
-              {buckets.map((bucket) => (
-                <Badge key={bucketKey(bucket)} color="gray" variant="soft" radius="full">
-                  {t.rich("ownerChip", {
-                    name: bucketLabel(bucket, t),
-                    amount: () => (
-                      <Money
-                        minor={bucket.netWorthCents}
-                        currency={bucket.currency}
-                        tone={signTone(bucket.netWorthCents)}
-                        size="inherit"
-                      />
-                    ),
-                  })}
-                </Badge>
-              ))}
-            </Flex>
+            {byCurrencyBuckets(buckets).map(([currency, owners]) => (
+              <Flex key={currency} direction="column" gap="2">
+                <ProportionBar
+                  aria-label={t("ownerBarLabel", { currency })}
+                  segments={owners
+                    .map((bucket, index) => ({
+                      key: bucketKey(bucket),
+                      value: Math.max(0, bucket.netWorthCents),
+                      color: OWNER_COLORS[index % OWNER_COLORS.length],
+                    }))}
+                />
+                <Flex gap="4" wrap="wrap">
+                  {owners.map((bucket, index) => (
+                    <Flex key={bucketKey(bucket)} align="center" gap="2">
+                      <Disc size={10} surface={OWNER_COLORS[index % OWNER_COLORS.length]} />
+                      <Text size="2" color="gray">{bucketLabel(bucket, t)}</Text>
+                      <Text size="2" weight="medium">
+                        <Money
+                          minor={bucket.netWorthCents}
+                          currency={bucket.currency}
+                          tone={signTone(bucket.netWorthCents)}
+                          size="inherit"
+                        />
+                      </Text>
+                    </Flex>
+                  ))}
+                </Flex>
+              </Flex>
+            ))}
           </Flex>
         </BandCard>
 
@@ -191,6 +205,22 @@ export function DashboardSummary({ data }: { data: DashboardData }) {
       </Flex>
     </SummaryBand>
   );
+}
+
+// The owners' colours on the ink card: lime, a light violet, a mint, a peach.
+const OWNER_COLORS = ["#c8f560", "#a78bfa", "#5eead4", "#fdba74"];
+
+// The owner buckets regrouped per currency: a bar never mixes two of them (RF-124).
+function byCurrencyBuckets(
+  buckets: OwnerNetWorthNamed[],
+): [CurrencyCode, OwnerNetWorthNamed[]][] {
+  const groups = new Map<CurrencyCode, OwnerNetWorthNamed[]>();
+  for (const bucket of buckets) {
+    const group = groups.get(bucket.currency);
+    if (group) group.push(bucket);
+    else groups.set(bucket.currency, [bucket]);
+  }
+  return [...groups];
 }
 
 // A figure that can fall either way reads its sign off its own value: below zero
