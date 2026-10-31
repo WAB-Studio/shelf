@@ -4,6 +4,8 @@ import { test } from "node:test";
 import {
   averageOfActive,
   budgetTotals,
+  CHART_PALETTE,
+  chartColor,
   dayNet,
   groupByDay,
   nearestLimit,
@@ -86,4 +88,11 @@ test("dayNet counts income and expense only, per currency", () => {
     [["COP", 300]],
   );
   assert.deepEqual(dayNet([]), []);
+});
+
+test("chartColor is stable per key and stays inside the palette", () => {
+  assert.equal(chartColor("abc"), chartColor("abc"));
+  for (const key of ["a", "b", "Arriendo", "0b5f6a52-6f3b-4c4b-9f64-8c1f0f1d7a11"]) {
+    assert.ok((CHART_PALETTE as readonly string[]).includes(chartColor(key)));
+  }
 });

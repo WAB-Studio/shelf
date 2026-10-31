@@ -139,3 +139,24 @@ export function dayNet(
   }
   return [...nets];
 }
+
+// The chart palette: violets, jade, amber, sky and slate, never red, which a chart
+// keeps for what was exceeded.
+export const CHART_PALETTE = [
+  "#5b2ee5",
+  "#2a9d8f",
+  "#f0a30a",
+  "#8b6cff",
+  "#0ea5e9",
+  "#64748b",
+  "#5eead4",
+  "#c084fc",
+] as const;
+
+// One category's colour on a chart, the same on every screen and every visit: derived
+// from its id, so two categories rarely share one and none turns red.
+export function chartColor(key: string): string {
+  let hash = 0;
+  for (const char of key) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
+  return CHART_PALETTE[hash % CHART_PALETTE.length];
+}
