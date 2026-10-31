@@ -34,8 +34,6 @@
     "versusLess": "−{duration}",
     "versusSame": "Same as the day before",
     "connect": "Connect my PC",
-    "prev": "Previous day",
-    "next": "Next day",
     "apps": "Apps",
     "claudeCard": "Claude",
     "windowBar": "{title}: {duration}",
@@ -45,7 +43,11 @@
     "claudeGlance": "{duration} with Claude · {percent}% of the day",
     "claudeNoneDay": "No Claude that day.",
     "devicesSum": "Sum of {n} devices",
-    "appsMore": "and {n} more apps · {duration}"
+    "appsMore": "and {n} more apps · {duration}",
+    "strip": "Week of the day",
+    "stripDay": "{weekday}, {month} {day}",
+    "stripPrev": "Previous week",
+    "stripNext": "Next week"
   },
   "week": {
     "title": "{from} to {to}",

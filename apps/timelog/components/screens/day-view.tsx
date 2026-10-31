@@ -4,7 +4,7 @@ import { BarRows, type BarRow } from "@/components/screens/app-rows";
 import { AutoRefresh } from "@/components/screens/auto-refresh";
 import { ClaudeBlock, InternetBlock } from "@/components/screens/claude-internet";
 import { Timeline } from "@/components/ui/timeline";
-import { Between, Card, Cards, Composition, Disclosure, Figure, Hero, HeroColumns, Mosaic, Stack, Text, TextLink, Tile, Title } from "@/components/ui";
+import { Card, Cards, Composition, DayStrip, Disclosure, Figure, Hero, HeroColumns, Mosaic, Stack, Text, TextLink, Tile, Title } from "@/components/ui";
 import { appClass, timeByClass } from "@/lib/app-classes";
 import { readableApp } from "@/lib/app-names";
 import { projectName } from "@/lib/claude-project";
@@ -14,6 +14,7 @@ import { appsBetween, claudeBetween, claudeSessionsBetween, dayTotals, devicesBe
 import { focusShare, hourMarks, layoutSessions, minuteOfDay } from "@/lib/timeline";
 import { percent, sum } from "@/lib/totals";
 import { calendarWords } from "@/lib/words";
+import { dayStrip } from "@/lib/week";
 import { addDays, civilDay } from "@/lib/zone";
 
 const TITLES_SHOWN = 8;
@@ -66,8 +67,7 @@ export async function DayView({ day }: { day: string }) {
   const previousTotal = previous[0]?.seconds ?? 0;
   const delta = total - previousTotal;
   const date = t("title", { weekday: words.weekday(day), day: words.dayOfMonth(day), month: words.month(day) });
-  const hasPrev = span.firstDay !== null && day > span.firstDay;
-  const hasNext = day < today;
+  const strip = dayStrip(day, span.firstDay, today);
   const hrefOf = (target: string) => (target === today ? "/" : `/dia/${target}`);
 
   // Before the first upload there is nothing to read: no empty sections stand in for it.
@@ -111,12 +111,19 @@ export async function DayView({ day }: { day: string }) {
   return (
     <Stack gap={4}>
       {isToday ? <AutoRefresh /> : null}
-      {hasPrev || hasNext ? (
-        <Between>
-          {hasPrev ? <TextLink href={hrefOf(before)}>‹ {t("prev")}</TextLink> : <span />}
-          {hasNext ? <TextLink href={hrefOf(addDays(day, 1))}>{t("next")} ›</TextLink> : null}
-        </Between>
-      ) : null}
+      <DayStrip
+        label={`${words.dayShort(strip.monday)} – ${words.dayShort(addDays(strip.monday, 6))}`}
+        prev={strip.prev === null ? undefined : { href: hrefOf(strip.prev), label: t("stripPrev") }}
+        next={strip.next === null ? undefined : { href: hrefOf(strip.next), label: t("stripNext") }}
+        days={strip.days.map((one) => ({
+          key: one.day,
+          initial: words.weekdayInitial(one.day),
+          number: words.dayOfMonth(one.day),
+          current: one.current,
+          href: one.reachable ? hrefOf(one.day) : undefined,
+          description: t("stripDay", { weekday: words.weekday(one.day), day: words.dayOfMonth(one.day), month: words.month(one.day) }),
+        }))}
+      />
       <Hero>
         {top !== undefined ? (
           <HeroColumns>

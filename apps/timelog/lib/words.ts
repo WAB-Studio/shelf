@@ -28,6 +28,7 @@ export async function calendarWords() {
   const months = common.raw("months") as string[];
   const monthsShort = common.raw("monthsShort") as string[];
   const weekdays = common.raw("weekdays") as string[];
+  const weekdaysInitial = common.raw("weekdaysInitial") as string[];
   const weekdaysShort = common.raw("weekdaysShort") as string[];
   const words: DurationWords = {
     hours: time("duration.hours"),
@@ -50,6 +51,7 @@ export async function calendarWords() {
       return time("duration.ago.days", { n: Math.floor(minutes / 1440) });
     },
     weekday: (day: string) => weekdays[weekdayIndex(day)],
+    weekdayInitial: (day: string) => weekdaysInitial[weekdayIndex(day)],
     weekdayShort: (day: string) => weekdaysShort[weekdayIndex(day)],
     month: (day: string) => months[Number(day.slice(5, 7)) - 1],
     dayOfMonth,

@@ -4,6 +4,7 @@
   "monthsShort": ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"],
   "weekdays": ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"],
   "weekdaysShort": ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"],
+  "weekdaysInitial": ["L", "M", "M", "J", "V", "S", "D"],
   "dayShort": "{day} {month}",
   "language": "English",
   "languageLabel": "Cambiar el idioma a inglés"

@@ -11,7 +11,9 @@ look, and these words change with what they say.
 Sand that fell. The screen says how much and where, and judges nothing.
 
 - **No goal, no target, no colour for too much.** An hour on a game and an hour on an editor are
-  drawn the same. Ranking is by length alone.
+  drawn the same length. Ranking is by length alone. Since 2026-10-31 a class (Código, Navegador, Comunicación,
+  Ocio, Sistema, Otras) colours the bar: classes describe where the time went, never grade it, and no class is
+  louder than another.
 - **Dark is the primary face**, as a screen read at the end of a day at the computer. Light is the
   same design inverted.
 - **Every duration is set in mono**: `3 h 12 min`, `45 min`, `< 1 min`. A sentence is set in the
@@ -111,3 +113,42 @@ row opens onto its longest window titles as compact bars; a site opens onto its 
 the page title with its address under it in the meta line. «Claude» ends with «Sesiones de Claude Code»: bars
 named by project, the span «9:12 a. m. – 10:40 a. m.» under each. The privacy line under «Internet» says only the
 person sees it and that the exclusion list never leaves the PC.
+
+## Round 3 (2026-10-31)
+
+The third critique («Creo que podemos mejorar más, ¿no?»), from `private/reportes/timelog-ronda3.md`.
+
+**Decisión del 2026-10-31** (the critic's picks; the user may override any):
+
+- **P1.** The hourly line uses Claude Code sessions alone, the only thing that carries a time of day. No contract
+  change; the apps get no «when» (RT-16).
+- **P2.** Neutral classes with fixed colours: Código (cyan), Navegador (blue), Comunicación (violet), Ocio (pink),
+  Sistema (slate), Otras (sand). Claude keeps its own orange, in three shades for Claude Code, claude.ai and the app.
+  The class is always written (legend, row names, cell figures), never colour alone. This replaces «judges nothing» as
+  «classes describe, never grade».
+- **P3.** When more than one device uploaded a day, the block names its total as a sum and lists each device's total.
+- **P4.** «Exportar» lives inside «Semana» (a link under the heatmap; `/exportar` keeps its address and marks
+  «Semana» current): three tabs, «Hoy», «Semana», «Llaves».
+
+What changed:
+
+- **Mosaic.** Every app screen opens to 1200 so the header never moves; «Llaves» and «Exportar» keep a 720 column
+  inside it. «Hoy» and a day: the brand block on top and wide (total and devices; Claude at a glance; the day by
+  class; the top app and the gap to yesterday), then three cards, Apps, Claude, Internet (radius 20, raised ground, no
+  shadow: a card is the one box allowed, since a screen at 1440 has to hold three columns). Cards are one column
+  below 720, two to 1099 (Apps on a whole row), three from 1100.
+- **Titles.** A section is a title in the display face (24) with its total at the right.
+- **One scale.** A top-level list is measured against its own longest row; a child (a window, a page, a session, a
+  Claude source) against its parent's time. Apps show eight, then «y N apps más · X» opens the rest.
+- **Day line.** Claude Code's sessions as labelled segments from 6:00 to 24:00 (from the hour of the first session if
+  earlier), on lanes where they overlap, an hour ruler every three hours. On the phone it scrolls and opens at the hour
+  now; on a past day at its first session.
+- **Class colours.** Every class is a token pair (on the ground, on the block) in `theme.css`, with its contrast.
+- **Day strip.** L M M J V S D with the day number, the month named («26 oct – 1 nov»), the day shown filled, days
+  with no screen dimmed, ‹ › to the same weekday a week away. It replaces «Día anterior» and «Día siguiente».
+- **Semana.** The block holds the total, the seven day columns and Claude's week. Under it one card: a heatmap of
+  seven days by the top eight apps, each cell with its figure (level 1 to 4 only tints it), then «y N apps más». It
+  replaces the list of apps and the bars of «Claude por día».
+- **Phone.** The bottom bar has a border and a shadow and a 16 gutter; the figures of the seven columns break into
+  value over unit so two never read as one; first use shows only the connect button; «Actualizado hace…» re-reads
+  today every minute and when the tab comes back.

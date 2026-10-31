@@ -197,6 +197,36 @@ export function Heatmap({ columns, rows, label }: { columns: HeatmapColumn[]; ro
   );
 }
 
+export type StripEntry = { key: string; initial: string; number: number; description: string; href?: string; current: boolean };
+
+// The days of one week as touchable tiles, the month named above them and ‹ › to the week before and after.
+export function DayStrip({ label, days, prev, next }: { label: string; days: StripEntry[]; prev?: { href: string; label: string }; next?: { href: string; label: string } }) {
+  return (
+    <nav className={styles.strip} aria-label={label}>
+      <div className={styles.stripHead}>
+        {prev === undefined ? <span className={styles.stripStep} /> : <Link href={prev.href} className={styles.stripStep} aria-label={prev.label}>‹</Link>}
+        <span className={styles.stripLabel}>{label}</span>
+        {next === undefined ? <span className={styles.stripStep} /> : <Link href={next.href} className={styles.stripStep} aria-label={next.label}>›</Link>}
+      </div>
+      <div className={styles.stripDays}>
+        {days.map((one) => {
+          const inside = (
+            <>
+              <span className={styles.stripInitial}>{one.initial}</span>
+              <span className={styles.mono}>{one.number}</span>
+            </>
+          );
+          return one.href === undefined ? (
+            <span key={one.key} className={join(styles.stripDay, styles.stripOff)} aria-hidden="true">{inside}</span>
+          ) : (
+            <Link key={one.key} href={one.href} className={join(styles.stripDay, one.current && styles.stripCurrent)} aria-label={one.description} aria-current={one.current ? "date" : undefined}>{inside}</Link>
+          );
+        })}
+      </div>
+    </nav>
+  );
+}
+
 export type DayColumn = { key: string; label: string; figure: string; share: number; future: boolean; description: string; href?: string };
 
 // Seven vertical columns, one per day, for the brand block; a day not reached is dimmed and empty.
