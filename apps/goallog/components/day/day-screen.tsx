@@ -178,14 +178,17 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
         name: `${weekdayOf(tally.day, t)} ${Number(tally.day.slice(8, 10))}`,
         today: tally.day === today,
         figure: tally.total === 0 || tally.day > today ? undefined : `${tally.done}/${tally.total}`,
+        percent: tally.total === 0 ? 0 : Math.floor((tally.done * 100) / tally.total),
         state:
-          tally.total === 0 || tally.day > today
+          tally.total === 0
             ? ("none" as const)
-            : tally.done >= tally.total
-              ? ("declared" as const)
-              : tally.done > 0 || tally.partial > 0
-                ? ("partial" as const)
-                : ("empty" as const),
+            : tally.day > today
+              ? ("empty" as const)
+              : tally.done >= tally.total
+                ? ("declared" as const)
+                : tally.done > 0
+                  ? ("share" as const)
+                  : ("empty" as const),
       }))
     : undefined;
   // Today's one navy block: how many of what the day asks are done, and the bar of it.
@@ -652,7 +655,7 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
       {figures.map((goal) => (
         <Panel as="div" key={goal.id}>
           <Face on="desktop">
-            <Flex direction="column" gap="4">
+            <Flex direction="column" gap="1">
               <Section label={goal.name}>
                 <Flex align="baseline" gap="2">
                   <Figure variant="big" value={weekMeasure[goal.id]} unit={goal.measureUnit ?? undefined} />

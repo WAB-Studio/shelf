@@ -73,8 +73,19 @@
   color: var(--pulsar-ink);
 }
 
+/* «3 h 34 min»: the units small but readable, a space either side. */
+.big {
+  gap: 6px;
+}
+
 .big .unit {
   font-family: var(--font-sans);
-  font-size: 16px;
+  font-size: 20px;
   letter-spacing: 0;
+}
+
+.money.money {
+  font-family: var(--font-sans);
+  letter-spacing: 0;
+  font-variant-numeric: tabular-nums;
 }

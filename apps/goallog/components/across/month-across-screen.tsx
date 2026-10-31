@@ -17,7 +17,6 @@ import {
   MonthGrid,
   Page,
   Panel,
-  PanelGrid,
   Progress,
   ScreenHeader,
   Section,
@@ -278,19 +277,7 @@ export async function MonthAcrossScreen({ month, today }: { month?: string; toda
               </Flex>
             </h2>
           </Text>
-          {goal.line && !coming ? (
-            <Flex align="baseline" gap="2">
-              <Figure value={goal.line.reached} unit={unit ?? undefined} bare={goal.line.planned !== null} />
-              {goal.line.planned !== null ? (
-                <>
-                  {" "}
-                  <Text variant="sentence">
-                    {t.rich("month.months.ofFigure", { planned: say(goal.line.planned), ...fig })}
-                  </Text>
-                </>
-              ) : null}
-            </Flex>
-          ) : null}
+          {/* The month's figure is in the card above; this one keeps the tasks. */}
           {meta ? (
             <Text as="p" variant="sentence">
               {meta}
@@ -485,7 +472,7 @@ export async function MonthAcrossScreen({ month, today }: { month?: string; toda
         </Hero>
       )}
       {nothingOpen || coming ? null : (
-        <PanelGrid>
+        <Grid columns={{ initial: "1", lg: "3" }} gap="4" align="start">
           {across.goals
             .filter((goal) => goal.line !== null && !goal.holdsGoals)
             .map((goal) => {
@@ -501,12 +488,17 @@ export async function MonthAcrossScreen({ month, today }: { month?: string; toda
                         </Text>
                       ) : null}
                     </Flex>
-                    {planned ? <Progress percent={Math.min(100, Math.floor((goal.line!.reached * 100) / planned))} size="thick" /> : null}
+                    {planned ? <Progress brand percent={Math.min(100, Math.floor((goal.line!.reached * 100) / planned))} size="thick" /> : null}
+                    {planned && goal.line!.reached > planned ? (
+                      <Text as="p" variant="sentence">
+                        {t("month.across.over")} <Figure value={goal.line!.reached - planned} unit={goal.unit ?? undefined} variant="meta" />
+                      </Text>
+                    ) : null}
                   </Section>
                 </Panel>
               );
             })}
-        </PanelGrid>
+        </Grid>
       )}
       {nothingOpen ? null : (
         <Flex align="baseline" gap="3" wrap="wrap">

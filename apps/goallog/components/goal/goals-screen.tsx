@@ -271,7 +271,12 @@ export async function GoalsScreen({
                     {t("goal.list.monthTasks", { month: monthName(month.month), done: month.done, total: month.total })}
                   </Text>
                 ) : null}
-                {percent !== null ? <Progress percent={percent} size="thick" /> : null}
+                {percent !== null ? <Progress brand percent={percent} size="thick" /> : null}
+                {month?.kind === "amount" && month.planned && month.reached > month.planned ? (
+                  <Text as="p" variant="sentence">
+                    {t("month.across.over")} <Figure value={month.reached - month.planned} unit={unit} variant="meta" />
+                  </Text>
+                ) : null}
                 {goal.phaseAim ? (
                   <Text as="p" variant="sentence">
                     {t("goal.list.phaseNow", { aim: goal.phaseAim })}

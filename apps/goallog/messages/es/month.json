@@ -108,6 +108,7 @@
     "line": "{goal} · {amount}"
   },
   "across": {
+    "over": "Por encima de lo planeado:",
     "hero": {
       "label": "{month}: lo que hiciste",
       "figure": "{count, plural, one {# día} other {# días}}",
