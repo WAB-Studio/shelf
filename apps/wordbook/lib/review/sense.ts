@@ -8,7 +8,7 @@ export function answerSenses(answer: WordAnswer): readonly Sense[] {
   return answer.exact?.senses ?? answer.viaInflection[0]?.group.senses ?? [];
 }
 
-// RL-79: a card shows one sense. It is the sense the reader saw, the one sharing the most
+// RL-78: a card shows one sense. It is the sense the reader saw, the one sharing the most
 // translations with the line the record kept; with none in common, the headword's first.
 export function pickSense(senses: readonly Sense[], stored: string | null): Sense | null {
   if (senses.length === 0) return null;

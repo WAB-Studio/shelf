@@ -5,7 +5,7 @@ import { localDay, type ReviewCard } from "./schedule";
 // New entries a day can bring in, so a long record never buries the reader on the first visit.
 export const NEW_PER_DAY = 20;
 
-// An entry with an answer to recall: a word or a translated phrase (RL-79). A row still waiting for its
+// An entry with an answer to recall: a word or a translated phrase (RL-78). A row still waiting for its
 // answer (RL-76), a phrase that never translated or a word the dictionary never answered has nothing on
 // its back.
 export function isReviewable(row: StudyRow): boolean {

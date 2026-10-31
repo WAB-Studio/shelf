@@ -45,7 +45,7 @@ test("RL-68: an interval reads in minutes, then hours, then days", () => {
   assert.deepEqual(intervalUnit(4 * DAY), { unit: "days", count: 4 });
 });
 
-test("RL-79: «Otra vez» stays in the session; «Bien» and «Fácil» on a new entry do not", () => {
+test("RL-78: «Otra vez» stays in the session; «Bien» and «Fácil» on a new entry do not", () => {
   assert.equal(staysInSession(rate("snuff", null, "again", NOW), NOW), true);
   assert.equal(staysInSession(rate("snuff", null, "good", NOW), NOW), false);
   assert.equal(staysInSession(rate("snuff", null, "easy", NOW), NOW), false);

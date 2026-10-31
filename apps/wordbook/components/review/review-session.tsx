@@ -51,7 +51,7 @@ type SessionState =
       clock: number;
     };
 
-// RL-68 and RL-79: one entry at a time — the word or phrase, then its answer on demand, then how well it
+// RL-68 and RL-78: one entry at a time — the word or phrase, then its answer on demand, then how well it
 // was recalled. An entry answered «Otra vez» is due again in a minute, so it joins the end of this
 // session and the session is not over while one waits.
 export function ReviewSession() {

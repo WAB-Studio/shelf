@@ -103,9 +103,9 @@
     "outcome": {
       "exact": "Encontrada",
       "inflected": "Otra forma",
-      "translated": "Frase",
+      "translated": "Traducida",
       "miss": "Sin resultado",
-      "unlisted": "De internet"
+      "unlisted": "De la red"
     },
     "listFailed": "No se pudo cargar el registro",
     "retry": "Reintentar",

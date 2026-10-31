@@ -8,8 +8,8 @@ import { afterFrames, expect, test } from "./fixtures";
 // into /cuenta.
 
 const LINE = "El navegador puede borrar tu registro si te falta espacio.";
-const ASK = "Pedirlo";
-const ASKING = "Pidiéndolo…";
+const ASK = "Pedir al navegador que guarde el registro";
+const ASKING = "Pidiendo permiso…";
 const REFUSED = "El navegador no lo permitió; instala WordBook en tu pantalla de inicio para que lo guarde.";
 
 type Stub = "no-api" | "not-kept" | "kept";

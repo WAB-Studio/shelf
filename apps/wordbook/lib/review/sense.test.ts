@@ -1,4 +1,4 @@
-// RL-79: a card draws one sense, the one the reader saw.
+// RL-78: a card draws one sense, the one the reader saw.
 import assert from "node:assert/strict";
 import { test } from "node:test";
 

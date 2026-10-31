@@ -26,7 +26,7 @@ function row(key: string, overrides: Partial<StudyRow> = {}): StudyRow {
   };
 }
 
-test("RL-79: a translated phrase enters the review; a miss, an untranslated one and a pending word never do", () => {
+test("RL-78: a translated phrase enters the review; a miss, an untranslated one and a pending word never do", () => {
   assert.equal(isReviewable(row("snuff")), true);
   assert.equal(isReviewable(row("give it up", { lastOutcome: "translated" })), true);
   assert.equal(isReviewable(row("give it up", { lastOutcome: "untranslated", lastTranslation: null })), false);

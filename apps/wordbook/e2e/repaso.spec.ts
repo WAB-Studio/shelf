@@ -60,7 +60,7 @@ const RECORD: SeedRow[] = [
   { at: now - 500, text: "give it up", translation: "ríndete", kind: "phrase" },
 ];
 
-test("RL-68, RL-79: /registro opens the review, which asks each word and each translated phrase of the record", async ({ page }) => {
+test("RL-68, RL-78: /registro opens the review, which asks each word and each translated phrase of the record", async ({ page }) => {
   await page.goto("/registro");
   await seedRecord(page, RECORD);
   await page.reload();
@@ -122,7 +122,7 @@ test("RL-68: the answers are kept on the device, so a word put away does not com
   await expect(page.getByText("3 entradas vuelven más adelante.")).toBeVisible();
 });
 
-test("RL-79: «Otra vez» puts the entry back in the same session instead of ending it", async ({ page }) => {
+test("RL-78: «Otra vez» puts the entry back in the same session instead of ending it", async ({ page }) => {
   await page.goto("/registro");
   await seedRecord(page, RECORD.slice(2, 3));
   await page.goto("/repaso");
