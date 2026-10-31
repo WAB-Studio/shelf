@@ -13,6 +13,7 @@ AS $function$
   );
 $function$;--> statement-breakpoint
 REVOKE ALL ON FUNCTION private.contributor_in_fund(uuid, uuid) FROM public, anon, service_role;--> statement-breakpoint
+GRANT EXECUTE ON FUNCTION private.contributor_in_fund(uuid, uuid) TO authenticated;--> statement-breakpoint
 ALTER TABLE "finances"."transactions" ADD COLUMN "contributed_by_member_id" uuid;--> statement-breakpoint
 ALTER TABLE "finances"."transactions" ADD CONSTRAINT "transactions_contributed_by_member_id_group_members_id_fk" FOREIGN KEY ("contributed_by_member_id") REFERENCES "finances"."group_members"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "finances"."transactions" ADD CONSTRAINT "transactions_contributor_income" CHECK ("finances"."transactions"."contributed_by_member_id" is null or "finances"."transactions"."from_account_id" is null);--> statement-breakpoint
