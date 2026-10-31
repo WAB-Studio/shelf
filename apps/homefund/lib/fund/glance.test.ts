@@ -13,6 +13,7 @@ import {
   nearestLimit,
   nextDebtPayment,
   shares,
+  sumByCurrency,
   topWithRest,
 } from "./glance";
 
@@ -32,7 +33,11 @@ test("nextDebtPayment picks the earliest due date among debts that owe", () => {
     { accountId: "y", currency: "COP", owedCents: 9, minimumPaymentCents: 700, nextDueDate: "2026-11-10" },
     { accountId: "z", currency: "COP", owedCents: 9, minimumPaymentCents: null, nextDueDate: "2026-11-20" },
   ]);
-  assert.deepEqual(next, { accountId: "y", currency: "COP", amountCents: 700, date: "2026-11-10" });
+  assert.deepEqual(
+    { ...next, row: undefined },
+    { accountId: "y", currency: "COP", amountCents: 700, date: "2026-11-10", row: undefined },
+  );
+  assert.equal(next?.row.accountId, "y");
   assert.equal(nextDebtPayment([]), null);
 });
 
@@ -107,4 +112,11 @@ test("a stored colour is kept on a chart unless it is red", () => {
   assert.equal(isRedish("#DC2626"), true);
   assert.equal(isRedish("#F97316"), false);
   assert.equal(isRedish("#64748B"), false);
+});
+
+test("sumByCurrency keeps first-seen order and never adds two currencies", () => {
+  assert.deepEqual(
+    sumByCurrency([["COP", 1], ["USD", 2], ["COP", 3]], ([currency, n]) => [currency as string, [n as number]]),
+    [["COP", [4]], ["USD", [2]]],
+  );
 });

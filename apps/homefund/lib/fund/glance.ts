@@ -34,10 +34,12 @@ export type NextDebtPayment = {
   date: string;
 };
 
-// The earliest payment among the debts that owe something; the one the debts
-// screen badges as «próximo pago».
-export function nextDebtPayment(rows: DueDebt[]): NextDebtPayment | null {
-  let next: NextDebtPayment | null = null;
+// The earliest payment among the debts that owe something: the one the debts screen
+// badges as «próximo pago» and Inicio names. `row` is the debt it came from.
+export function nextDebtPayment<T extends DueDebt>(
+  rows: T[],
+): (NextDebtPayment & { row: T }) | null {
+  let next: (NextDebtPayment & { row: T }) | null = null;
   for (const row of rows) {
     if (row.nextDueDate === null || row.owedCents <= 0) continue;
     if (next !== null && next.date <= row.nextDueDate) continue;
@@ -46,6 +48,7 @@ export function nextDebtPayment(rows: DueDebt[]): NextDebtPayment | null {
       currency: row.currency,
       amountCents: row.minimumPaymentCents ?? 0,
       date: row.nextDueDate,
+      row,
     };
   }
   return next;
@@ -105,23 +108,34 @@ export function groupByDay<T extends { occurredAt: string }>(rows: T[]): DayGrou
   return groups;
 }
 
+/**
+ * One running total per currency, in the order the rows introduce them, so a line never
+ * adds two currencies together (RF-124). Every row hands over its currency and the
+ * figures to run up in it.
+ */
+export function sumByCurrency<Row>(
+  rows: Row[],
+  read: (row: Row) => [string, number[]],
+): [string, number[]][] {
+  const totals = new Map<string, number[]>();
+
+  for (const row of rows) {
+    const [currency, figures] = read(row);
+    const running = totals.get(currency);
+    if (running) figures.forEach((figure, index) => (running[index] += figure));
+    else totals.set(currency, [...figures]);
+  }
+
+  return [...totals.entries()];
+}
+
 export type BudgetTotal = { currency: string; limitCents: number; spentCents: number };
 
-// Limit and spend summed per currency, in the order each currency first appears:
-// two currencies are two totals and never one (RF-124).
+// Limit and spend per currency (RF-124).
 export function budgetTotals(rows: LimitBudget[]): BudgetTotal[] {
-  const totals = new Map<string, BudgetTotal>();
-  for (const row of rows) {
-    const total = totals.get(row.currency) ?? {
-      currency: row.currency,
-      limitCents: 0,
-      spentCents: 0,
-    };
-    total.limitCents += row.limitCents;
-    total.spentCents += row.spentCents;
-    totals.set(row.currency, total);
-  }
-  return [...totals.values()];
+  return sumByCurrency(rows, (row) => [row.currency, [row.limitCents, row.spentCents]]).map(
+    ([currency, [limitCents, spentCents]]) => ({ currency, limitCents, spentCents }),
+  );
 }
 
 // A day's net per currency: income in, expense out. A transfer moves money between

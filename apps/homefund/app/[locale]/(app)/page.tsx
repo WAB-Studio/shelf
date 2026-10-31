@@ -80,6 +80,15 @@ const RECENT_LIMIT = 8;
 const PHONE_RECENT_LIMIT = 3;
 // «Por pagar» lists this many reminders; the link carries the rest as a count.
 const DUE_LIMIT = 3;
+// A read the screen can do without: a failure is logged and the block it feeds is dropped.
+function optional<T>(label: string, read: Promise<T>): Promise<T | null> {
+  return read.catch((error: unknown) => {
+    unstable_rethrow(error);
+    console.error(label, error);
+    return null;
+  });
+}
+
 // The budgets the desktop's right column keeps in view: the fullest ones.
 const ASIDE_BUDGETS = 3;
 
@@ -127,11 +136,12 @@ export default async function HomePage(props: PageProps<"/[locale]">) {
         console.error("getMonthReviewPending", error);
         return null;
       }),
-      getExpensesByCategory(currentMonthRange()),
-      // The right column's three reads ride the same fan-out (RNF-09).
-      listBudgetsWithStatus(),
-      listGoalsWithProgress(),
-      getDebtOverview(),
+      // The month glance and the right column ride the same fan-out (RNF-09); each one
+      // is optional, so a failed read drops its block, never Inicio.
+      optional("getExpensesByCategory", getExpensesByCategory(currentMonthRange())),
+      optional("listBudgetsWithStatus", listBudgetsWithStatus()),
+      optional("listGoalsWithProgress", listGoalsWithProgress()),
+      optional("getDebtOverview", getDebtOverview()),
       getTranslations("transactions"),
       getTranslations("dashboard"),
       getTranslations("accounts"),
@@ -270,7 +280,7 @@ export default async function HomePage(props: PageProps<"/[locale]">) {
       accountNames.get(withdrawal.targetCashAccountId)) ||
     PERSONAL_CASH_ACCOUNT_NAME[locale];
 
-  const nextDebt = nextDebtPayment(debts);
+  const nextDebt = nextDebtPayment(debts ?? []);
 
   return (
     <Page gutter="flush-md">
@@ -283,7 +293,7 @@ export default async function HomePage(props: PageProps<"/[locale]">) {
           lead={
             <>
               <DashboardSummary data={dashboardData} />
-              <MonthGlance flows={dashboardData.monthFlow} expenses={monthExpenses} />
+              <MonthGlance flows={dashboardData.monthFlow} expenses={monthExpenses ?? []} />
             </>
           }
           aside={
@@ -295,9 +305,9 @@ export default async function HomePage(props: PageProps<"/[locale]">) {
               <Box display={{ initial: "none", md: "block" }}>
                 <Flex direction="column" gap="4">
                   <HomeAside
-                    budgets={nearestLimit(budgets, ASIDE_BUDGETS)}
+                    budgets={nearestLimit(budgets ?? [], ASIDE_BUDGETS)}
                     budgetNames={categoryNames}
-                    goal={goals[0] ?? null}
+                    goal={goals?.[0] ?? null}
                     debt={nextDebt}
                     debtName={
                       nextDebt ? (accountNames.get(nextDebt.accountId) ?? null) : null

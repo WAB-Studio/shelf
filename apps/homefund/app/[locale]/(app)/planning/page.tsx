@@ -14,30 +14,9 @@ import { listGoalsWithProgress } from "@/db/queries/savings-goals";
 import { getTransactionFormOptions } from "@/db/queries/transaction-form";
 import { civilDateToDate } from "@/lib/dates";
 import { categoryNamesById } from "@/lib/fund/category-names";
-import { nearestLimit } from "@/lib/fund/glance";
+import { nearestLimit, sumByCurrency } from "@/lib/fund/glance";
 import { formatMoney } from "@/lib/money";
 import { routing } from "@/i18n/routing";
-
-/**
- * One running total per currency, in the order the rows introduce them, so a hub
- * line never adds two currencies together (RF-124). Every row hands over its
- * currency and the figures to run up in it.
- */
-function sumByCurrency<Row>(
-  rows: Row[],
-  read: (row: Row) => [string, number[]],
-): [string, number[]][] {
-  const totals = new Map<string, number[]>();
-
-  for (const row of rows) {
-    const [currency, figures] = read(row);
-    const running = totals.get(currency);
-    if (running) figures.forEach((figure, index) => (running[index] += figure));
-    else totals.set(currency, [...figures]);
-  }
-
-  return [...totals.entries()];
-}
 
 export async function generateMetadata(
   props: PageProps<"/[locale]/planning">,
