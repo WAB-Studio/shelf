@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
 
 import { sendSignInLink, type SignInResult } from "@/app/actions/sign-in";
-import { Button, Form, Input, Stack, Text } from "@/components/ui";
+import { Button, Field, Form, Stack, Text } from "@/components/ui";
 import { signInEmailSchema } from "@/lib/forms";
 
 // RT-08: an address, one link.
@@ -28,7 +28,7 @@ export function SignInForm({ linkError }: { linkError: boolean }) {
       <Text as="p" variant="meta">{t("intro")}</Text>
       {linkError && result === null ? <Text as="p">{t("linkInvalid")}</Text> : null}
       <Form onSubmit={submit}>
-        <Input type="email" autoComplete="email" aria-label={t("email")} value={email} onChange={(event) => setEmail(event.target.value)} required />
+        <Field type="email" autoComplete="email" label={t("email")} value={email} onChange={(event) => setEmail(event.target.value)} required />
         <Button type="submit" disabled={pending}>
           {pending ? t("sending") : t("send")}
         </Button>

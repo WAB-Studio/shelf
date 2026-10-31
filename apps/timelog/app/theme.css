@@ -1,21 +1,39 @@
-/* docs/timelog/DESIGN.md "Tokens": dark is the primary face. */
+/* docs/timelog/DESIGN.md "Grafito y señal". Ratios are WCAG 2 contrast, computed with a node script. */
 :root {
-  --tl-bg: #14120f;
-  --tl-raised: #1d1a16;
-  --tl-text: #efe9df;
-  --tl-muted: #9a9184;
-  --tl-bar: #d9a441;
-  --tl-track: #2a2620;
+  --tl-bg: #0c0e11; /* text 17.18, muted 6.77, bar 10.69 */
+  --tl-raised: #151a20; /* muted 6.13 */
+  --tl-text: #eef2f6;
+  --tl-muted: #8f9aa8;
+  --tl-bar: #22d3ee; /* electric cyan: bars, links, buttons (ink #0c0e11 on it 10.69) */
+  --tl-track: #232a33;
+  --tl-block: #232c37; /* the brand block, lifted off the ground (1.37 on the ground): text 13.01, muted 7.65, cyan 7.82 */
+  --tl-block-edge: #5d6b7d; /* its border, so it reads as a block: 3.56 on the ground */
+  --tl-block-text: #f2f6fa;
+  --tl-block-muted: #b4c0ce; /* secondary text on the block */
+  --tl-raised-on-block: #2f3b49; /* cards inside the block: text 10.49, muted 6.17, cyan 6.31 */
+  --tl-track-on-block: #3d4a5a; /* a bar's track on the block */
+  --tl-bar-on-block: #22d3ee; /* the accent on the block, the same in both faces */
+  --tl-mark: #234754; /* the day total's tint: cyan at 16% on the block; block text on it 9.21 */
+  --tl-mark-edge: #22d3ee; /* its 1px border: 5.53 on the tint */
+  --tl-danger: #ff4d42; /* red is for danger alone: the confirmed revoke; ink #0e1115 on it 5.76 */
+  --tl-danger-ink: #0e1115;
+  --tl-danger-text: #ff4d42; /* «Revocar» as text: 5.88 on the ground, 5.32 on raised */
 }
 
 @media (prefers-color-scheme: light) {
   :root {
-    --tl-bg: #f7f3ec;
-    --tl-raised: #efe9df;
-    --tl-text: #1d1a16;
-    --tl-muted: #6f675b;
-    --tl-bar: #a8761a;
-    --tl-track: #e4ddd1;
+    --tl-bg: #f6f8fa; /* text 17.78, muted 5.91, bar 6.05 */
+    --tl-raised: #e8edf2; /* bar 5.47, muted 5.34 */
+    --tl-text: #0e1115;
+    --tl-muted: #566170;
+    --tl-bar: #00687a; /* deep cyan: paper #f6f8fa on it 6.05 */
+    --tl-track: #d5dce4;
+    --tl-block: #0e1115; /* text 17.43, muted 10.25, cyan 10.47 */
+    --tl-block-edge: #0e1115;
+    --tl-raised-on-block: #1f2630; /* text 14.03, muted 8.25 */
+    --tl-track-on-block: #2a333e;
+    --tl-mark: #113038; /* block text on it 12.86, the cyan edge 7.73 */
+    --tl-danger-text: #b3261e; /* 6.14 on the ground, 5.55 on raised */
   }
 }
 
