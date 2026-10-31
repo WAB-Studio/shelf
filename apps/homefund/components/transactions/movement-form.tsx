@@ -273,7 +273,7 @@ export function MovementForm({
           transactionId: movement.id,
           fromAccountId: movement.fromAccountId,
           toAccountId: movement.toAccountId,
-          amount: amountToInput(movement.amountCents, movement.currency),
+          amount: amountToInput(movement.amountCents, movement.currency, locale),
           currency: movement.currency,
           counterAmount:
             movement.counterAmountCents === null
@@ -284,6 +284,7 @@ export function MovementForm({
                     from: movement.fromSettlementCurrency,
                     to: movement.toSettlementCurrency,
                   }) ?? movement.currency,
+                  locale,
                 ),
           counterIsEstimate: movement.counterIsEstimate,
           forHousehold: movement.forHousehold,
@@ -292,7 +293,7 @@ export function MovementForm({
           description: movement.description,
           splits: movement.splits.map((split) => ({
             categoryId: split.categoryId,
-            amount: amountToInput(split.amountCents, movement.currency),
+            amount: amountToInput(split.amountCents, movement.currency, locale),
           })),
           labelIds: movement.labels.map((label) => label.id),
           causedByTransactionId,
@@ -606,7 +607,7 @@ export function MovementForm({
       setRateUnavailable(false);
       form.setValue(
         "counterAmount",
-        amountToInput(convertMinor(amountMinor, data.rate), foreign),
+        amountToInput(convertMinor(amountMinor, data.rate), foreign, locale),
         { shouldValidate: true },
       );
     },

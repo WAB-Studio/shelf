@@ -21,7 +21,8 @@
     "removeFilter": "Remove {label}",
     "fund": "Fund",
     "currencyTotals": "Totals by currency",
-    "optional": "Optional"
+    "optional": "Optional",
+    "openCalendar": "Open calendar"
   },
   "auth": {
     "signOut": "Sign out",

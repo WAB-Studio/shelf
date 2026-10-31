@@ -115,35 +115,46 @@ export function DashboardSummary({ data }: { data: DashboardData }) {
               </Flex>
             )}
 
-            {byCurrencyBuckets(buckets).map(([currency, owners]) => (
-              <Flex key={currency} direction="column" gap="2">
-                <ProportionBar
-                  aria-label={t("ownerBarLabel", { currency })}
-                  segments={owners
-                    .map((bucket, index) => ({
-                      key: bucketKey(bucket),
-                      value: Math.max(0, bucket.netWorthCents),
-                      color: OWNER_COLORS[index % OWNER_COLORS.length],
-                    }))}
-                />
-                <Flex gap="4" wrap="wrap">
-                  {owners.map((bucket, index) => (
-                    <Flex key={bucketKey(bucket)} align="center" gap="2">
-                      <Disc size={10} surface={OWNER_COLORS[index % OWNER_COLORS.length]} />
-                      <Text size="2" color="gray">{bucketLabel(bucket, t)}</Text>
-                      <Text size="2" weight="medium">
-                        <Money
-                          minor={bucket.netWorthCents}
-                          currency={bucket.currency}
-                          tone={signTone(bucket.netWorthCents)}
-                          size="inherit"
-                        />
-                      </Text>
-                    </Flex>
-                  ))}
+            {byCurrencyBuckets(buckets).map(([currency, owners]) => {
+              // Only what is owned has a share of the bar; a bucket below zero is listed
+              // beside it, with its sign.
+              const owned = owners.filter((bucket) => bucket.netWorthCents > 0);
+              const colorOf = (bucket: OwnerNetWorthNamed) =>
+                bucket.netWorthCents > 0
+                  ? OWNER_COLORS[owned.indexOf(bucket) % OWNER_COLORS.length]
+                  : "var(--gray-9)";
+
+              return (
+                <Flex key={currency} direction="column" gap="2">
+                  {owned.length > 0 && (
+                    <ProportionBar
+                      aria-label={t("ownerBarLabel", { currency })}
+                      segments={owned.map((bucket) => ({
+                        key: bucketKey(bucket),
+                        value: bucket.netWorthCents,
+                        color: colorOf(bucket),
+                      }))}
+                    />
+                  )}
+                  <Flex gap="4" wrap="wrap">
+                    {owners.map((bucket) => (
+                      <Flex key={bucketKey(bucket)} align="center" gap="2">
+                        <Disc size={10} surface={colorOf(bucket)} />
+                        <Text size="2" color="gray">{bucketLabel(bucket, t)}</Text>
+                        <Text size="2" weight="medium">
+                          <Money
+                            minor={bucket.netWorthCents}
+                            currency={bucket.currency}
+                            tone={signTone(bucket.netWorthCents)}
+                            size="inherit"
+                          />
+                        </Text>
+                      </Flex>
+                    ))}
+                  </Flex>
                 </Flex>
-              </Flex>
-            ))}
+              );
+            })}
           </Flex>
         </BandCard>
 

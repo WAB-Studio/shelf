@@ -59,3 +59,14 @@
 .tile[data-tone="ink"] h2 {
   color: #ffffff;
 }
+
+/* A tile's last block takes the free height: centred under its heading, and on the
+   ink tile pushed to the foot so the figure stays beside the heading. */
+.tile > :last-child:not(:first-child) {
+  margin-block: auto;
+}
+
+.tile[data-tone="ink"] > :last-child:not(:first-child) {
+  margin-top: auto;
+  margin-bottom: 0;
+}

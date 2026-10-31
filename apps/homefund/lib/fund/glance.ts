@@ -34,10 +34,12 @@ export type NextDebtPayment = {
   date: string;
 };
 
-// The earliest payment among the debts that owe something; the one the debts
-// screen badges as «próximo pago».
-export function nextDebtPayment(rows: DueDebt[]): NextDebtPayment | null {
-  let next: NextDebtPayment | null = null;
+// The earliest payment among the debts that owe something: the one the debts screen
+// badges as «próximo pago» and Inicio names. `row` is the debt it came from.
+export function nextDebtPayment<T extends DueDebt>(
+  rows: T[],
+): (NextDebtPayment & { row: T }) | null {
+  let next: (NextDebtPayment & { row: T }) | null = null;
   for (const row of rows) {
     if (row.nextDueDate === null || row.owedCents <= 0) continue;
     if (next !== null && next.date <= row.nextDueDate) continue;
@@ -46,6 +48,7 @@ export function nextDebtPayment(rows: DueDebt[]): NextDebtPayment | null {
       currency: row.currency,
       amountCents: row.minimumPaymentCents ?? 0,
       date: row.nextDueDate,
+      row,
     };
   }
   return next;
@@ -105,23 +108,34 @@ export function groupByDay<T extends { occurredAt: string }>(rows: T[]): DayGrou
   return groups;
 }
 
+/**
+ * One running total per currency, in the order the rows introduce them, so a line never
+ * adds two currencies together (RF-124). Every row hands over its currency and the
+ * figures to run up in it.
+ */
+export function sumByCurrency<Row>(
+  rows: Row[],
+  read: (row: Row) => [string, number[]],
+): [string, number[]][] {
+  const totals = new Map<string, number[]>();
+
+  for (const row of rows) {
+    const [currency, figures] = read(row);
+    const running = totals.get(currency);
+    if (running) figures.forEach((figure, index) => (running[index] += figure));
+    else totals.set(currency, [...figures]);
+  }
+
+  return [...totals.entries()];
+}
+
 export type BudgetTotal = { currency: string; limitCents: number; spentCents: number };
 
-// Limit and spend summed per currency, in the order each currency first appears:
-// two currencies are two totals and never one (RF-124).
+// Limit and spend per currency (RF-124).
 export function budgetTotals(rows: LimitBudget[]): BudgetTotal[] {
-  const totals = new Map<string, BudgetTotal>();
-  for (const row of rows) {
-    const total = totals.get(row.currency) ?? {
-      currency: row.currency,
-      limitCents: 0,
-      spentCents: 0,
-    };
-    total.limitCents += row.limitCents;
-    total.spentCents += row.spentCents;
-    totals.set(row.currency, total);
-  }
-  return [...totals.values()];
+  return sumByCurrency(rows, (row) => [row.currency, [row.limitCents, row.spentCents]]).map(
+    ([currency, [limitCents, spentCents]]) => ({ currency, limitCents, spentCents }),
+  );
 }
 
 // A day's net per currency: income in, expense out. A transfer moves money between
@@ -138,4 +152,49 @@ export function dayNet(
     nets.set(row.currency, (nets.get(row.currency) ?? 0) + signed);
   }
   return [...nets];
+}
+
+// The chart palette: violets, jade, amber, sky and slate, never red, which a chart
+// keeps for what was exceeded.
+export const CHART_PALETTE = [
+  "#5b2ee5",
+  "#2a9d8f",
+  "#f0a30a",
+  "#8b6cff",
+  "#0ea5e9",
+  "#64748b",
+  "#5eead4",
+  "#c084fc",
+] as const;
+
+// One category's colour on a chart, the same on every screen and every visit: derived
+// from its id, so two categories rarely share one and none turns red.
+export function chartColor(key: string): string {
+  let hash = 0;
+  for (const char of key) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
+  return CHART_PALETTE[hash % CHART_PALETTE.length];
+}
+
+// Whether a stored #rrggbb colour reads as red (hue within 20 degrees of it, and
+// saturated enough to be one): a chart keeps red for what was exceeded.
+export function isRedish(hex: string): boolean {
+  const match = /^#([0-9a-f]{6})$/i.exec(hex);
+  if (!match) return false;
+  const [r, g, b] = [0, 2, 4].map((at) => parseInt(match[1].slice(at, at + 2), 16) / 255);
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const delta = max - min;
+  if (delta < 0.2 || max === 0) return false;
+  let hue: number;
+  if (max === r) hue = ((g - b) / delta + 6) % 6;
+  else if (max === g) hue = (b - r) / delta + 2;
+  else hue = (r - g) / delta + 4;
+  const degrees = hue * 60;
+  return degrees <= 20 || degrees >= 340;
+}
+
+// The colour a category wears on a chart: the one it is stored with, or the palette's
+// when it has none or is red.
+export function categoryChartColor(stored: string | null, key: string): string {
+  return stored && /^#[0-9a-f]{6}$/i.test(stored) && !isRedish(stored) ? stored : chartColor(key);
 }

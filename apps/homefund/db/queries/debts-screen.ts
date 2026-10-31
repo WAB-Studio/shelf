@@ -1,5 +1,7 @@
 import "server-only";
 
+import { nextDebtPayment } from "@/lib/fund/glance";
+
 import { getAccountBalances } from "@/db/queries/account-balances";
 import { listAccounts } from "@/db/queries/accounts";
 import {
@@ -259,21 +261,17 @@ export async function getDebtsScreenData(): Promise<DebtsScreenData> {
   // that carries the badge is named rather than matched back by hand. Only a debt
   // that owes in the pocket it bills in competes: one at zero or in credit has
   // nothing to pay, whatever date its terms name.
-  const nextPayment = withTerms
-    .filter(
-      (row): row is typeof row & { nextDueDate: string } =>
-        row.nextDueDate !== null && row.owedCents > 0,
-    )
-    .reduce<DebtsScreenData["totals"]["nextPayment"]>((earliest, row) => {
-      if (earliest !== null && earliest.date <= row.nextDueDate) return earliest;
-      return {
-        accountId: row.accountId,
-        amountCents: row.minimumPaymentCents ?? 0,
-        currency: row.currency,
-        date: row.nextDueDate,
-        name: row.name,
-      };
-    }, null);
+  const next = nextDebtPayment(withTerms);
+  const nextPayment: DebtsScreenData["totals"]["nextPayment"] =
+    next === null
+      ? null
+      : {
+          accountId: next.accountId,
+          amountCents: next.amountCents,
+          currency: next.row.currency,
+          date: next.date,
+          name: next.row.name,
+        };
 
   // A debt is paid from an asset (RF-16), so the source picker is filtered out of
   // the roster already read — never a fifth round trip, and never a liability.

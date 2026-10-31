@@ -26,7 +26,7 @@ import type { MemberContributionNamed } from "@/db/queries/reports/reports-scree
 import type { CurrencyCode } from "@/lib/currency";
 import { civilDateToDate } from "@/lib/dates";
 import { scopedCategoryName } from "@/lib/fund/category-names";
-import { averageOfActive, shares } from "@/lib/fund/glance";
+import { averageOfActive, categoryChartColor, shares } from "@/lib/fund/glance";
 import type { Locale } from "@/lib/locales";
 import { formatCompactMoney, formatMoney } from "@/lib/money";
 
@@ -263,7 +263,7 @@ function ExpenseBands({
                   <ProportionBar
                     aria-label={t("shareLabel", { pct: percents[index] })}
                     segments={[
-                      { key: row.categoryId, value: percents[index], color: row.color ?? "var(--violet-9)" },
+                      { key: row.categoryId, value: percents[index], color: categoryChartColor(row.color, row.categoryId) },
                     ]}
                     total={100}
                     height={8}

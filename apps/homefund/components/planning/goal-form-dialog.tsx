@@ -2,7 +2,7 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Info } from "lucide-react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { useAction } from "next-safe-action/hooks";
 import { useState } from "react";
 import { Controller, useForm, type Resolver } from "react-hook-form";
@@ -105,6 +105,7 @@ function GoalForm({
 }) {
   const t = useTranslations("goals");
   // Root-scoped: the keys under `common` sit outside the `goals` namespace.
+  const locale = useLocale();
   const tKey = useTranslations();
 
   const isEdit = !!goal;
@@ -134,7 +135,7 @@ function GoalForm({
       ? {
           goalId: goal.id,
           name: goal.name,
-          targetAmount: amountToInput(goal.targetAmountCents, goal.currency),
+          targetAmount: amountToInput(goal.targetAmountCents, goal.currency, locale),
           targetDate: goal.targetDate,
           accountId: goal.accountId,
         }

@@ -115,10 +115,27 @@ function lowerMChoices(amount: string): AmountAsk["choices"] {
   ];
 }
 
+// Words right before a run that say it is no amount: a reference, an order, an
+// account or a phone. A «factura» only counts when the run is as long as an invoice
+// number, so «Factura 45000» keeps its amount.
+const NOT_AMOUNT_BEFORE =
+  /(?:\b(?:ref|referencia|pedido|no|nro|n[uú]mero|cuenta|tel|tel[eé]fono|cel|celular|nit)\.?|#)\s*:?\s*$/iu;
+const INVOICE_BEFORE = /\bfactura\s*:?\s*$/iu;
+// Words right before a run that say it is the amount.
+const AMOUNT_BEFORE = /(?:\b(?:valor|monto|por|total|pago de|pagu[eé]|pagaste)\s*(?:de\s*)?:?)\s*$/iu;
+
+// A mobile line (10 digits starting with 3) or a toll-free one (01800…).
+function phoneLike(run: string): boolean {
+  const digits = run.replace(/\D/g, "");
+  return (digits.length === 10 && digits.startsWith("3")) || digits.startsWith("01800");
+}
+
 // The standalone number that is the amount: a run glued to a letter («D1», «m2»)
 // or part of a date or a clock («24/08/26», «18:31») or a card mask is left in
-// the note. Of the rest the longest wins, the earliest on a tie, so «Mercado 2
-// 87500» reads 87500.
+// the note. A run the text marks as money wins; then one the text says is a
+// reference, an account or a phone is set aside, and of the rest the one beside
+// an amount word («valor», «total», «por»), else the first that is no bare
+// quantity («Mercado 2 87500» reads 87500).
 function findAmountToken(text: string): RegExpExecArray | null {
   // A currency mark right before the run («$», «COP122.000,50») says it is money
   // whatever else the text holds; the letters glue it to a word only otherwise.
@@ -136,11 +153,21 @@ function findAmountToken(text: string): RegExpExecArray | null {
   });
   const marked = candidates.find(markedBefore);
   if (marked) return marked as RegExpExecArray;
-  let best: RegExpMatchArray | null = null;
-  for (const match of candidates) {
-    if (!best || match[0].length > best[0].length) best = match;
-  }
-  return best as RegExpExecArray | null;
+
+  const kept = candidates.filter((match) => {
+    const head = text.slice(0, match.index);
+    if (phoneLike(match[0])) return false;
+    if (NOT_AMOUNT_BEFORE.test(head)) return false;
+    return !(INVOICE_BEFORE.test(head) && match[0].replace(/\D/g, "").length >= 7);
+  });
+  const pool = kept.length > 0 ? kept : candidates;
+
+  const named = pool.find((match) => AMOUNT_BEFORE.test(text.slice(0, match.index)));
+  if (named) return named as RegExpExecArray;
+
+  const quantity = (match: RegExpMatchArray) => match[0].replace(/\D/g, "").length <= 2;
+  const first = pool.find((match) => !quantity(match)) ?? pool[0] ?? null;
+  return first as RegExpExecArray | null;
 }
 
 function fold(value: string): string {
@@ -255,8 +282,10 @@ export function interpretQuickEntry(
       : matchedAccounts.length === 0 && namedAccounts.length === 1
         ? namedAccounts[0].id
         : null;
+  // The word leaves the description only when it named the account actually chosen:
+  // a last-four mention can pick one account while another's name is also in the text.
   const namedAccountWord =
-    matchedAccountId && namedAccounts.length === 1
+    matchedAccountId && namedAccounts.length === 1 && namedAccounts[0].id === matchedAccountId
       ? prefixWord(text, namedAccounts[0].name)
       : null;
 

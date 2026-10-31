@@ -2,7 +2,7 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Info } from "lucide-react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { useAction } from "next-safe-action/hooks";
 import { useEffect, useState } from "react";
 import { Controller, useForm, useWatch, type Resolver } from "react-hook-form";
@@ -106,6 +106,7 @@ function PaymentForm({
 }) {
   const t = useTranslations("plannedPayments");
   // Root-scoped: the keys under `common` sit outside the `plannedPayments` namespace.
+  const locale = useLocale();
   const tKey = useTranslations();
 
   const isEdit = !!payment;
@@ -153,7 +154,7 @@ function PaymentForm({
           plannedPaymentId: payment.id,
           fromAccountId: payment.fromAccountId,
           toAccountId: payment.toAccountId,
-          amount: amountToInput(payment.amountCents, payment.currency),
+          amount: amountToInput(payment.amountCents, payment.currency, locale),
           categoryId: payment.categoryId,
           dueDate: payment.dueDate,
           remindOn: payment.remindOn,

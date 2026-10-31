@@ -2,7 +2,7 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Info } from "lucide-react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { useAction } from "next-safe-action/hooks";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Controller, useForm, useWatch, type Resolver } from "react-hook-form";
@@ -117,6 +117,7 @@ function RecurringForm({
 }) {
   const t = useTranslations("recurringRules");
   // Root-scoped: the keys under `common` sit outside the `recurringRules` namespace.
+  const locale = useLocale();
   const tKey = useTranslations();
 
   const isEdit = !!rule;
@@ -160,7 +161,7 @@ function RecurringForm({
           direction: rule.toAccountId !== null ? "income" : "expense",
           fromAccountId: rule.fromAccountId,
           toAccountId: rule.toAccountId,
-          amount: amountToInput(rule.amountCents, rule.currency),
+          amount: amountToInput(rule.amountCents, rule.currency, locale),
           categoryId: rule.categoryId,
           description: rule.description,
           frequency: rule.frequency,

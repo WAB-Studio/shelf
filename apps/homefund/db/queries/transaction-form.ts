@@ -3,6 +3,8 @@ import "server-only";
 import { desc, eq, sql } from "drizzle-orm";
 import { cache } from "react";
 
+import { addCivilDays, todayInBogota } from "@/lib/dates";
+
 import { listAccounts } from "@/db/queries/accounts";
 import type { AccountRow } from "@/db/queries/accounts";
 import { listScopedCategories } from "@/db/queries/categories";
@@ -121,6 +123,9 @@ export const getTransactionFormOptions = cache(
 // How many categories the grid can ever show before «Más»; the rest of the list
 // is the person's catalogue order.
 const FREQUENT_CATEGORY_LIMIT = 24;
+// Only the recent past counts, so the grid follows what the person spends on now and the
+// read stays bounded as the ledger grows.
+const FREQUENT_WINDOW_DAYS = 90;
 
 // Count of the caller's own movements per category, busiest first.
 async function listFrequentCategoryIds(
@@ -132,6 +137,7 @@ async function listFrequentCategoryIds(
     from transaction_splits s
     join transactions t on t.id = s.transaction_id
     where t.created_by = ${userId}
+      and t.occurred_at >= ${addCivilDays(todayInBogota(), -FREQUENT_WINDOW_DAYS)}
     group by s.category_id
     order by count(*) desc, s.category_id
     limit ${FREQUENT_CATEGORY_LIMIT}

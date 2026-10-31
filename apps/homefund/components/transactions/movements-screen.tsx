@@ -434,6 +434,7 @@ export function MovementsScreen({
                   <FilterField label={t("rangeFrom")}>
                     {(id) => (
                       <DateInput
+                        filter
                         id={id}
                         value={filters.from ?? ""}
                         onChange={(event) =>
@@ -445,6 +446,7 @@ export function MovementsScreen({
                   <FilterField label={t("rangeTo")}>
                     {(id) => (
                       <DateInput
+                        filter
                         id={id}
                         value={filters.to ?? ""}
                         onChange={(event) =>

@@ -90,6 +90,8 @@ function splitWritten(raw: string): WrittenFigure | null {
   const whole = trimmed.slice(0, cut);
   const tail = trimmed.slice(cut + 1);
   if (tail.length === 0) return null;
+  // «0,125» is no thousands group: a group never follows a lone zero.
+  if (tail.length === 3 && /^0/.test(whole)) return null;
   if (tail.length === 3) return { major: `${whole}${tail}`, fraction: "" };
   return { major: whole, fraction: tail };
 }
@@ -150,11 +152,16 @@ export function parseAmount(raw: string): number | null {
 }
 
 /**
- * What the amount field shows for a stored figure. Writes the decimal mark
- * Spanish uses, the language the copy is written in; `parseAmount` reads either
- * mark back, so a person may still type the other one.
+ * What the amount field shows for a stored figure. Writes the decimal mark of
+ * `locale` (Spanish by default: a comma, English a point); `parseAmount` reads
+ * either mark back, so a person may still type the other one.
  */
-export function amountToInput(minor: number, currency: CurrencyCode): string {
+export function amountToInput(
+  minor: number,
+  currency: CurrencyCode,
+  locale: string = "es",
+): string {
+  const mark = locale.startsWith("en") ? "." : ",";
   const { stored, written } = amountScale(currency);
   const major = Math.trunc(minor / stored);
   const remainder = Math.abs(minor) % stored;
@@ -174,7 +181,7 @@ export function amountToInput(minor: number, currency: CurrencyCode): string {
   const decimals = evenlyWritten ? written : STORAGE_EXPONENT;
   const fraction = evenlyWritten ? remainder / step : remainder;
 
-  return `${major},${String(fraction).padStart(decimals, "0")}`;
+  return `${major}${mark}${String(fraction).padStart(decimals, "0")}`;
 }
 
 /**
@@ -367,9 +374,27 @@ export function formatAmountTyping(
   // The digits left of the caret, counted before anything is rewritten.
   let digitsBefore = raw.slice(0, caret).replace(/\D/g, "").length;
 
-  const cut = raw.indexOf(decimalMark);
-  const whole = (cut === -1 ? raw : raw.slice(0, cut)).replace(/\D/g, "").replace(/^0+(?=\d)/, "");
-  const fraction = cut === -1 ? null : raw.slice(cut + 1).replace(/\D/g, "").slice(0, STORAGE_EXPONENT);
+  // Which mark is the decimal does not depend on the language: the last mark, when
+  // 1 or 2 digits follow it (or none yet, mid-typing), is the decimal whatever it
+  // is; exactly 3 digits make it a group. More than 2 after a mark that is not the
+  // language's own group mark is not cut: it stays as typed, and `parseAmount`
+  // refuses it with the field's error.
+  const marks = raw.match(/[.,]/g) ?? [];
+  const lastMark = marks.length === 0 ? -1 : Math.max(raw.lastIndexOf("."), raw.lastIndexOf(","));
+  const tail = lastMark === -1 ? "" : raw.slice(lastMark + 1).replace(/\D/g, "");
+  const head = lastMark === -1 ? raw : raw.slice(0, lastMark);
+  const headDigits = head.replace(/\D/g, "");
+  const markChar = lastMark === -1 ? "" : raw[lastMark];
+
+  let isDecimal = false;
+  if (lastMark !== -1) {
+    if (tail.length <= 2) isDecimal = true;
+    else if (tail.length === 3) isDecimal = headDigits.replace(/^0+/, "") === "";
+    else isDecimal = markChar !== groupMark && marks.length === 1;
+  }
+
+  const whole = (isDecimal ? headDigits : raw.replace(/\D/g, "")).replace(/^0+(?=\d)/, "");
+  const fraction = isDecimal ? tail : null;
 
   const grouped = whole.replace(/\B(?=(\d{3})+$)/g, groupMark);
   const text = fraction === null ? grouped : `${grouped || "0"}${decimalMark}${fraction}`;

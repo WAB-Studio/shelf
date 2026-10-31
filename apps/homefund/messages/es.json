@@ -21,7 +21,8 @@
     "removeFilter": "Quitar {label}",
     "fund": "Fondo",
     "currencyTotals": "Totales por moneda",
-    "optional": "Opcional"
+    "optional": "Opcional",
+    "openCalendar": "Abrir calendario"
   },
   "auth": {
     "signOut": "Cerrar sesión",
