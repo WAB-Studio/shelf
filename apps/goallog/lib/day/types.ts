@@ -73,8 +73,8 @@ export type DaySlot = {
   satisfiedBy: "declared" | "evidence" | null;
   labelKey: SourceKey | null;
   quantity: number | null;
-  // A declared quantity above zero and under its target. Derived beside
-  // `satisfied`, which the target alone decides; evidence is never partial.
+  // A quantity above zero and under its target, declared, or read by the source under its threshold. Derived
+  // beside `satisfied`, which the target or threshold alone decides.
   partial: boolean;
 };
 

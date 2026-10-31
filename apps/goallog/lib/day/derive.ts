@@ -102,7 +102,8 @@ function deriveSlot(
         satisfiedBy: satisfied ? "evidence" : null,
         labelKey: satisfied ? (rows[0]?.labelKey ?? null) : null,
         quantity,
-        partial: false,
+        // A day its source read under the threshold is a day in part, with its minutes.
+        partial: !satisfied && quantity > 0,
       };
     }
   }

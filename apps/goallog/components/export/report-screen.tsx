@@ -18,6 +18,7 @@ import { distinctMeasureName } from "@/lib/export/measure";
 import type { GoalReport, Report, ReportTask } from "@/lib/export/report";
 import { monthWord } from "@/lib/plan/month-name";
 import { screenPlanned } from "@/lib/plan/screen-planned";
+import { evidenceUnitWords } from "@/lib/evidence/unit-words";
 import { formatCount, formatQuantity, isTimeUnit } from "@/lib/units/time";
 import { civilDateToDate, civilDayMonthYear } from "@/lib/zone";
 import {
@@ -265,7 +266,14 @@ function CommitmentLines({ goal, t }: { goal: GoalReport; t: Translator<"export"
               cadence,
               amount: formatQuantity(commitment.targetQuantity, commitment.unit, words),
             })
-          : t("commitmentLine", { name: commitment.name, cadence })}
+          : commitment.evidence
+            ? t("commitmentEvidence", {
+                name: commitment.name,
+                cadence,
+                source: rootT(commitment.evidence.labelKey),
+                amount: `${commitment.evidence.threshold} ${evidenceUnitWords(commitment.evidence, commitment.evidence.threshold, rootT)}`,
+              })
+            : t("commitmentLine", { name: commitment.name, cadence })}
       </Text>
     );
   });

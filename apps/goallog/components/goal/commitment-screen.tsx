@@ -4,7 +4,9 @@ import { Figure, Hero, Page, Row, ScreenHeader, Section, Strip, Text } from "@/c
 import { stripCount, strip } from "@/lib/day/constancy";
 import type { GoalCommitment } from "@/lib/queries/goal";
 import { civilDateToDate, civilDayMonthShort, todayInZone } from "@/lib/zone";
+import { partialPair } from "@/lib/day/row-phrases";
 import { evidenceUnitWords } from "@/lib/evidence/unit-words";
+import { formatTime, type TimeWords } from "@/lib/units/time";
 
 import { CommitmentActions } from "./commitment-actions";
 import { cadenceWords } from "./commitment-list";
@@ -41,6 +43,18 @@ export async function CommitmentScreen({
       : commitment.satisfiedBy.kind === "quantity"
         ? commitment.satisfiedBy.unit
         : undefined;
+
+  // A day its source read under the threshold: «14 de 30 min», the minutes said as every other row says them.
+  const units = await getTranslations("units");
+  const timeWords: TimeWords = {
+    h: (h) => units("h", { h }),
+    min: (min) => units("min", { min }),
+    join: (h, min) => units("join", { h, min }),
+  };
+  const partialOf = (got: number, asks: number): string =>
+    commitment.sourceLabelKey?.startsWith("timelog")
+      ? t("day.row.partialAmount", partialPair(formatTime(got, timeWords), formatTime(asks, timeWords), "minutos"))
+      : t("day.row.partialAmount", { logged: String(got), target: `${asks} ${unitFor(asks)}` });
 
   return (
     <Page>
@@ -83,7 +97,9 @@ export async function CommitmentScreen({
                 day: Number(entry.day.slice(8, 10)),
               })}
               trailing={
-                entry.quantity !== null ? (
+                entry.by === "partial" && evidence && entry.quantity !== null ? (
+                  <Figure variant="meta" value={partialOf(entry.quantity, evidence.threshold)} />
+                ) : entry.quantity !== null ? (
                   <Figure variant="meta" value={entry.quantity} unit={unitFor(entry.quantity)} />
                 ) : (
                   <Text as="span" variant="sentence" tone="muted">

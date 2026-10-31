@@ -253,12 +253,14 @@ test("deriveDay: zero is neither partial nor satisfied", () => {
   }
 });
 
-test("deriveDay: evidence below its threshold and a tap are never partial", () => {
+test("deriveDay: evidence below its threshold is partial with its quantity; nothing read and a tap are not", () => {
   const plan = tapPlan("e", { satisfiedBy: { kind: "evidence", threshold: 1, unit: "páginas" } });
   assert.equal(slotFor(plan, null).partial, false);
   const some = slotFor(plan, null, {
     e: [{ day: "2026-03-01", quantity: 0.5, unit: "páginas", labelKey: "x" }],
   });
-  assert.equal(some.partial, false);
+  assert.equal(some.partial, true);
+  assert.equal(some.satisfied, false);
+  assert.equal(some.quantity, 0.5);
   assert.equal(slotFor(tapPlan("t"), 1).partial, false);
 });

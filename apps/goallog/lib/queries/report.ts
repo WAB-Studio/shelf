@@ -2,6 +2,7 @@ import "server-only";
 
 import { sql } from "drizzle-orm";
 
+import { sourceKey } from "@/i18n/translator";
 import { phaseOn } from "@/lib/day/derive";
 import type { EvidenceDay, Phase, ReviewWeek } from "@/lib/day/types";
 import { measureByWeek } from "@/lib/day/review";
@@ -242,6 +243,10 @@ export async function loadReport(today: string = todayInZone()): Promise<Report>
           cadence: toCadence(commitment),
           targetQuantity: commitment.satisfaction === "quantity" ? commitment.target_quantity : null,
           unit: commitment.satisfaction === "quantity" ? commitment.unit : null,
+          evidence:
+            commitment.satisfaction === "evidence" && commitment.source_label_key
+              ? { labelKey: sourceKey(commitment.source_label_key), unit: commitment.source_unit ?? "", threshold: commitment.threshold ?? 1 }
+              : null,
         })),
       tasks: monthItems.map(toReportTask),
       carried: monthItems

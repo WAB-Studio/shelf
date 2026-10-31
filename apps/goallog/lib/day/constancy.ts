@@ -72,8 +72,16 @@ export function commitmentDays(input: {
     satisfiedBy.kind === "evidence" ? input.evidence : null,
     today,
   );
+  // A day the source read under the threshold is listed with its minutes, in part; it is no day done and never counts as one.
+  const threshold = satisfiedBy.kind === "evidence" ? satisfiedBy.threshold : 1;
+  const inPart =
+    input.sourceKey !== null && satisfiedBy.kind === "evidence"
+      ? (input.evidence?.[input.sourceKey] ?? [])
+          .filter((e) => e.quantity > 0 && e.quantity < threshold && e.day >= (start > input.createdOn ? start : input.createdOn) && e.day <= today)
+          .map((e) => ({ day: e.day, quantity: e.quantity, by: "partial" as const }))
+      : [];
   const byDay = new Map<string, DoneDay>();
-  for (const entry of [...evidence.filter((e) => e.day >= start), ...declaredDays(input.recent, satisfiedBy)]) {
+  for (const entry of [...inPart, ...evidence.filter((e) => e.day >= start), ...declaredDays(input.recent, satisfiedBy)]) {
     byDay.set(entry.day, entry);
   }
   return {

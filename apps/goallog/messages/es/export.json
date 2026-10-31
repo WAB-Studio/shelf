@@ -44,6 +44,7 @@
   },
   "commitmentLine": "{name} · {cadence}",
   "commitmentAmount": "{name} · {cadence} · {amount}",
+  "commitmentEvidence": "{name} · {cadence} · {source}, desde {amount}",
   "ended": "terminada el {date}",
   "monthsCaption": "{count, plural, one {# mes} other {# meses}}",
   "monthsCaptionOf": "{count} de {total} meses",
