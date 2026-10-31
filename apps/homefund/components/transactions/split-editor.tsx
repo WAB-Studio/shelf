@@ -2,11 +2,13 @@
 
 import { PlusIcon, XIcon } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, useState } from "react";
 
 import {
   AmountField,
   Button,
+  CategoryChoice,
+  CategoryChoiceGrid,
   CategoryTile,
   Figure,
   Flex,
@@ -19,6 +21,9 @@ import type { ScopedCategory } from "@/db/queries/transaction-form";
 import type { CurrencyCode } from "@/lib/currency";
 import { scopedCategoryName } from "@/lib/fund/category-names";
 import { formatMoney, parseAmount } from "@/lib/money";
+
+// How many categories the grid shows before «Más».
+const GRID_SIZE = 8;
 
 // A split as the form owns it: a category and a typed string, minor units only
 // under the hood. Kept identical to the form's `splits` element so
@@ -44,6 +49,7 @@ export function SplitEditor({
   scope,
   kind,
   categories,
+  frequentIds = [],
   value,
   onChange,
 }: {
@@ -52,6 +58,8 @@ export function SplitEditor({
   scope: "personal" | "group";
   kind: "expense" | "income";
   categories: ScopedCategory[];
+  // Category ids, busiest first: the grid's order.
+  frequentIds?: string[];
   value: Split[];
   onChange: (splits: Split[]) => void;
 }) {
@@ -86,6 +94,28 @@ export function SplitEditor({
     [categories, scope, kind, mark],
   );
 
+  // One category is the default and one tap: the grid shows the busiest few and
+  // «Más» the rest. Splitting across several is a step behind «Dividir».
+  const [dividing, setDividing] = useState(value.length > 1);
+  const [showAll, setShowAll] = useState(false);
+  const ranked = useMemo(() => {
+    const rank = new Map(frequentIds.map((id, at) => [id, at]));
+    return [...options].sort(
+      (a, b) =>
+        (rank.get(a.id) ?? Number.MAX_SAFE_INTEGER) -
+        (rank.get(b.id) ?? Number.MAX_SAFE_INTEGER),
+    );
+  }, [options, frequentIds]);
+  const chosenId = value[0]?.categoryId ?? "";
+  const top = ranked.slice(0, GRID_SIZE);
+  // The chosen category stays on screen even when it is not among the busiest.
+  const chosenOption = ranked.find((option) => option.id === chosenId);
+  const shown = showAll
+    ? ranked
+    : chosenOption && !top.includes(chosenOption)
+      ? [...top.slice(0, GRID_SIZE - 1), chosenOption]
+      : top;
+
   const remainderMinor =
     toMinor(total) - value.reduce((sum, split) => sum + toMinor(split.amount), 0);
 
@@ -101,6 +131,38 @@ export function SplitEditor({
 
   function addSplit() {
     onChange([...value, { categoryId: "", amount: "" }]);
+  }
+
+  if (!dividing) {
+    const chosen = chosenId;
+
+    return (
+      <Flex direction="column" gap="3" width="100%">
+        <CategoryChoiceGrid>
+          {shown.map((option) => (
+            <CategoryChoice
+              key={option.id}
+              label={option.label}
+              color={option.color}
+              pressed={option.id === chosen}
+              onClick={() =>
+                onChange([{ categoryId: option.id, amount: value[0]?.amount ?? total }])
+              }
+            />
+          ))}
+        </CategoryChoiceGrid>
+        <Flex justify="center" gap="3" wrap="wrap">
+          {ranked.length > GRID_SIZE && (
+            <Button type="button" tap variant="ghost" onClick={() => setShowAll(!showAll)}>
+              {showAll ? t("categoryFewer") : t("categoryMore")}
+            </Button>
+          )}
+          <Button type="button" tap variant="ghost" onClick={() => setDividing(true)}>
+            {t("splitDivide")}
+          </Button>
+        </Flex>
+      </Flex>
+    );
   }
 
   return (
@@ -166,11 +228,16 @@ export function SplitEditor({
         );
       })}
 
-      <Flex justify="center">
+      <Flex justify="center" gap="3" wrap="wrap">
         <Button type="button" tap variant="ghost" onClick={addSplit}>
           <PlusIcon size={16} />
           {t("splitAddCategory")}
         </Button>
+        {value.length <= 1 && (
+          <Button type="button" tap variant="ghost" color="gray" onClick={() => setDividing(false)}>
+            {t("splitSingle")}
+          </Button>
+        )}
       </Flex>
 
       {/* The live gap the schema refuses to let through: green at rest, red the
