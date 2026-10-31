@@ -1,4 +1,4 @@
-import { test, expect } from "./fixtures";
+import { test, expect, todayCount } from "./fixtures";
 import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
 
 // `HoyEnParte.dc.html`, `HoyCuentaEnParte.dc.html` (RP-16): a quantity row
@@ -83,7 +83,7 @@ test("a 29 of 30 min row draws the half mark, its meta line and the count «hech
     );
 
     // The seeded identity's own goal adds its rows; the partial one is the one named.
-    await expect(page.getByText(/^hechos \d+ de \d+ · 1 en parte$/)).toBeVisible();
+    await expect(todayCount(page, "\\d+", "\\d+", 1)).toBeVisible();
 
     // Tapping opens the number sheet like any row that asks a number.
     await row.click();
@@ -94,7 +94,7 @@ test("a 29 of 30 min row draws the half mark, its meta line and the count «hech
     await db`update goals.facts set quantity = 30 where id = ${fact.id}`;
     await page.reload();
     await expect(row.locator("[data-state]")).toHaveAttribute("data-state", "declared");
-    await expect(page.getByText(/^hechos \d+ de \d+$/)).toBeVisible();
+    await expect(todayCount(page, "\\d+", "\\d+")).toBeVisible();
     await expect(page.getByText(/· \d+ en parte/)).toHaveCount(0);
   } finally {
     await context.close();

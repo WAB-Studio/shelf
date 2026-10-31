@@ -194,6 +194,7 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
   const phoneActs = ended ? (
     <Face on="phone">
       <Section as="div">
+        <RenameGoalAction goalId={goal.id} name={goal.name} variant="quiet" />
         {moveAction}
         <ArchiveGoalAction goalId={goal.id} name={goal.name} short {...archiveBranch} />
         {deleteAction(true)}
@@ -781,7 +782,7 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
         actions={
           archived ? null : (
             <Face on="desktop">
-              <Flex gap="3">
+              <Flex gap="4">
                 <RenameGoalAction goalId={goal.id} name={goal.name} />
                 <ArchiveGoalAction goalId={goal.id} name={goal.name} variant="ghost" block={false} short {...archiveBranch} />
                 {deleteAction(false)}

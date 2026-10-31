@@ -105,7 +105,7 @@ test("an archived goal and an ended goal answer not-found on each form", async (
   }
 });
 
-test("the commitment page opens a bare one and refuses a retired one, one a fact names and a foreign one", async ({
+test("the commitment page opens a bare one and one a fact names, and refuses a retired one and a foreign one", async ({
   person,
   browser,
   baseURL,
@@ -134,7 +134,11 @@ test("the commitment page opens a bare one and refuses a retired one, one a fact
     await page.goto(`/metas/${goalId}/compromisos/${bare}`);
     await expect(missing(page)).toHaveCount(0);
     await expect(page.locator("main").getByText(`Libre ${stamp}`).first()).toBeVisible();
-    for (const id of [retired, named, foreign, "00000000-0000-0000-0000-000000000000"]) {
+    // A commitment a fact names opens too (RP-127): its name changes, its cadence reads as it was.
+    await page.goto(`/metas/${goalId}/compromisos/${named}`);
+    await expect(missing(page)).toHaveCount(0);
+    await expect(page.locator("main").getByText(`Con hecho ${stamp}`).first()).toBeVisible();
+    for (const id of [retired, foreign, "00000000-0000-0000-0000-000000000000"]) {
       await page.goto(`/metas/${goalId}/compromisos/${id}`);
       await expect(missing(page), id).toBeVisible();
     }

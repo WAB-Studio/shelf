@@ -227,6 +227,8 @@ test.describe("the delete (RP-127)", () => {
       await expect(confirm).toBeDisabled();
       await expect(keep).toBeDisabled();
       await confirm.click({ force: true });
+      // The delete lands on the goal's screen; until then the row's name is only the commitment screen's title.
+      await expect(page).toHaveURL(new RegExp(`/metas/${goal}$`));
       await expect(rowOnGoal(page, "Estirar")).toHaveCount(0);
       expect(posts).toHaveLength(1);
       expect(await rowsOf(db, id)).toHaveLength(0);
@@ -276,7 +278,7 @@ test.describe("the delete (RP-127)", () => {
       await sheet.getByRole("button", { name: "Borrar el compromiso", exact: true }).click();
       await page.getByRole("button", { name: "Borrarlo", exact: true }).click();
       await expect(dialog(page).getByText(FACT_REFUSAL)).toBeVisible();
-      await expect(page.getByRole("main")).toContainText("Estirar");
+      await expect(page.locator("main")).toContainText("Estirar");
       expect(await rowsOf(db, id)).toHaveLength(1);
     } finally {
       await context.close();
@@ -286,7 +288,8 @@ test.describe("the delete (RP-127)", () => {
 
 test.describe("the cadence page of a commitment (RP-127, RP-12)", () => {
   const path = (goal: string, id: string) => `/metas/${goal}/compromisos/${id}`;
-  const chip = (page: Page, name: string) => page.getByRole("radio", { name, exact: true });
+  // Chips read in sentence case now («Cada tantos días»); the match stays whole, the case free.
+  const chip = (page: Page, name: string) => page.getByRole("radio", { name: new RegExp(`^${name}$`, "i") });
 
   test("opens with the current cadence chosen and its numbers filled", async ({ person, browser, baseURL, db }) => {
     // Kills: chips that default to «todos los días» whatever the row holds; a count field left empty.

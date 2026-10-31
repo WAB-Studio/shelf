@@ -267,12 +267,14 @@ test.describe("the report folds its weeks (RP-49)", () => {
       };
       const closedLabels = new Set(Array.from({ length: 11 }, (_, i) => monthLabel(-(i + 1))));
       const handLabels = new Set(Array.from({ length: 29 }, (_, i) => monthLabel(i + 2)));
+      // A row is one line now, its label with its figures beside it: a line that starts with a label is that row's.
+      const starts = (text: string, labels: Set<string>) => [...labels].some((label) => text === label || text.startsWith(`${label} `));
       const rowsOn = (n: number) => {
         const on = lines.filter((line) => line.page === n);
         const count = (test: (text: string) => boolean) => on.filter((line) => test(line.text)).length;
         return {
-          closedLabels: count((text) => closedLabels.has(text)),
-          labels: count((text) => closedLabels.has(text) || handLabels.has(text)),
+          closedLabels: count((text) => starts(text, closedLabels)),
+          labels: count((text) => starts(text, closedLabels) || starts(text, handLabels)),
           closed: on.flatMap((line) => line.text.split(" ")).filter((word) => word === "cerrado").length,
           planned: on.flatMap((line) => line.text.split(" ")).filter((word) => word === "777").length,
         };

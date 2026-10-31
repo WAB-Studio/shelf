@@ -1,10 +1,10 @@
-import type { Page } from "@playwright/test";
+import type { Locator, Page } from "@playwright/test";
 import type postgres from "postgres";
 
 import { horizonForWeeks } from "@/lib/day/weeks";
 import { civilDateInZone } from "@/lib/zone";
 
-import { test, expect, settled as pageSettled } from "./fixtures";
+import { test, expect, settled as pageSettled, openMore } from "./fixtures";
 import { boxOf as visibleBox } from "./box";
 
 // RNP-17: the goal opens in two columns from 1024 — the commitments left, the
@@ -69,7 +69,7 @@ test("at 1280 the commitments sit left, the end right and the phases under both,
     expect(phase.y).toBeGreaterThan(end.y);
 
     // Each group sits in a bordered white card: commitments, the end, the phases.
-    for (const text of ["Compromiso ancho", "Fase ancha", "el final"]) {
+    for (const text of ["Compromiso ancho", "Fase ancha", "El final"]) {
       const card = await page.getByText(text, { exact: true }).evaluate((el) => {
         for (let node = el.parentElement; node; node = node.parentElement) {
           const style = getComputedStyle(node);
@@ -105,10 +105,10 @@ async function panelCards(page: Page): Promise<number> {
   );
 }
 
-test("at 800 the goal draws no Panel card (RNP-17)", async ({ page, db, personId }) => {
+test("at 767 the goal draws no Panel card (RNP-17)", async ({ page, db, personId }) => {
   const goalId = await seedGoal(db, personId, `Meta media ${Date.now()}`);
   try {
-    await page.setViewportSize({ width: 800, height: 800 });
+    await page.setViewportSize({ width: 767, height: 800 });
     await page.goto(`/metas/${goalId}`);
     await expect(page.getByText("Compromiso ancho", { exact: true })).toBeVisible();
     expect(await panelCards(page)).toBe(0);
@@ -117,7 +117,7 @@ test("at 800 the goal draws no Panel card (RNP-17)", async ({ page, db, personId
   }
 });
 
-test("at 360 the order is the phone's: end, commitments, phases, then «Archivar esta meta» (RNP-17)", async ({
+test("at 360 the order is the phone's: commitments, end, phases, then «Archivar esta meta» (RNP-17)", async ({
   page,
   db,
   personId,
@@ -128,13 +128,17 @@ test("at 360 the order is the phone's: end, commitments, phases, then «Archivar
     await page.goto(`/metas/${goalId}`);
     await settled(page);
 
-    const end = await page.getByText(/^12 semanas · hasta el /).boundingBox();
-    const commitment = await page.getByText("Compromiso ancho", { exact: true }).boundingBox();
-    const phase = await page.getByText("Fase ancha", { exact: true }).boundingBox();
-    const archive = await page.getByRole("button", { name: "Archivar esta meta" }).boundingBox();
-    expect(end!.y).toBeLessThan(commitment!.y);
-    expect(commitment!.y).toBeLessThan(phase!.y);
-    expect(phase!.y).toBeLessThan(archive!.y);
+    await openMore(page);
+    // Opening the fold scrolls the page: read every place from the document's top.
+    const top = (locator: Locator) => locator.evaluate((el) => el.getBoundingClientRect().top + window.scrollY);
+    const end = await top(page.getByText(/^12 semanas · hasta el /));
+    const commitment = await top(page.getByText("Compromiso ancho", { exact: true }));
+    const phase = await top(page.getByText("Fase ancha", { exact: true }));
+    const archive = await top(page.getByRole("button", { name: "Archivar esta meta" }));
+    // The part a person came for leads: the commitments, then the end, the phases and the foot (`Split`'s `mainFirst`).
+    expect(commitment).toBeLessThan(end);
+    expect(end).toBeLessThan(phase);
+    expect(phase).toBeLessThan(archive);
 
     expect(await panelCards(page)).toBe(0);
     await expect(page.getByRole("button", { name: "Renombrar" })).toHaveCount(1);
@@ -154,7 +158,7 @@ test("at 1280 a goal with no measure draws no empty card (RNP-17)", async ({
   try {
     await page.setViewportSize({ width: 1280, height: 800 });
     await page.goto(`/metas/${goalId}`);
-    await expect(page.getByText("cero fases", { exact: true })).toHaveCount(0);
+    await expect(page.getByText("Cero fases", { exact: true })).toHaveCount(0);
     await expect(page.locator("main")).toHaveCount(1);
 
     const cards = await page.locator("main").evaluate((main) =>

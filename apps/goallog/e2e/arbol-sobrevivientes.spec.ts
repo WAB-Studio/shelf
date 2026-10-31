@@ -1,4 +1,4 @@
-import { test, expect } from "./fixtures";
+import { test, expect, openMore } from "./fixtures";
 import {
   archiveTogether,
   flat,
@@ -26,6 +26,7 @@ import { boxOf } from "./box";
 // second large g2 under G.
 
 async function openArchiveSheet(page: import("@playwright/test").Page) {
+  await openMore(page);
   await page.getByRole("button", { name: "Archivar esta meta" }).click();
   const sheet = page.getByRole("dialog");
   await expect(sheet).toBeVisible();

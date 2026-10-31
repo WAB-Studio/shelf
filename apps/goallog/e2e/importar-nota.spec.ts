@@ -52,7 +52,7 @@ test.describe("the review shows each task's note (RP-45)", () => {
       await expect(tutorNote).toBeVisible();
       await expect(tutorNote).toHaveText(TUTOR_NOTE.join("\n"));
       await expect(tutorNote).toHaveCSS("white-space", /pre-line/);
-      await expect(tutorNote).toHaveCSS("font-size", "13px");
+      await expect(tutorNote).toHaveCSS("font-size", "14px");
       // Whole: two lines of text, not clipped to one.
       expect((await boxOf(tutorNote)).height).toBeGreaterThan(2 * 13);
 

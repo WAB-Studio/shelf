@@ -46,9 +46,11 @@ test("a commitment retired today with today's fact stays a done row, one without
 
   try {
     const page = await context.newPage();
-    await page.goto(`/metas/${goal.id}`);
     for (const name of [...cases.map(([n]) => n), "Diaria sin hecho"]) {
-      await page.locator("button", { hasText: name }).click();
+      // A live row is a link to the commitment's own screen, whose «Retirarlo o borrarlo» opens the sheet; the retire lands back on the goal.
+      await page.goto(`/metas/${goal.id}`);
+      await page.locator("main a", { hasText: name }).click();
+      await page.getByRole("button", { name: "Retirarlo o borrarlo", exact: true }).click();
       const sheet = page.getByRole("dialog");
       await sheet.getByRole("button", { name: "Retirarlo" }).click();
       await expect(sheet).toBeHidden();
@@ -109,9 +111,10 @@ test("a commitment retired today reads on a day before as it did then (RP-13)", 
 
   try {
     const page = await context.newPage();
-    await page.goto(`/metas/${goal.id}`);
     for (const name of ["Hecha ayer", "Pendiente ayer"]) {
-      await page.locator("button", { hasText: name }).click();
+      await page.goto(`/metas/${goal.id}`);
+      await page.locator("main a", { hasText: name }).click();
+      await page.getByRole("button", { name: "Retirarlo o borrarlo", exact: true }).click();
       const sheet = page.getByRole("dialog");
       await sheet.getByRole("button", { name: "Retirarlo" }).click();
       await expect(sheet).toBeHidden();
@@ -123,7 +126,8 @@ test("a commitment retired today reads on a day before as it did then (RP-13)", 
     await page.goto(`/dia/${yesterday}`);
     await expect(page.getByText("Hecha ayer", { exact: true })).toBeVisible();
     await expect(page.getByText("Pendiente ayer", { exact: true })).toBeVisible();
-    await expect(page.getByText("todos los días", { exact: true })).toBeVisible();
+    // Both rows say their cadence now: a marked row no longer swaps it for its hour (decided 2026-10-31).
+    await expect(page.getByText("todos los días", { exact: true })).toHaveCount(2);
   } finally {
     await context.close();
     await db`delete from goals.goals where id = ${goal.id} and user_id = ${person.id}`;

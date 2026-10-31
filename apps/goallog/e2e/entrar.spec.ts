@@ -3,7 +3,7 @@ import { randomBytes, randomUUID } from "node:crypto";
 import type { Browser, BrowserContext } from "@playwright/test";
 import type postgres from "postgres";
 
-import { test, expect } from "./fixtures";
+import { test, expect, todayCount } from "./fixtures";
 import account from "../messages/es/account.json";
 import { dayFromToday, noonFromToday } from "./reloj";
 import { boxOf } from "./box";
@@ -105,26 +105,26 @@ test("a valid link lands on Hoy with a session that reads the person's own day, 
     const pageA = await a.newPage();
     await pageA.goto("/");
     await expect(pageA).toHaveURL(/\/$/);
-    await expect(pageA.getByText("hechos 0 de 2", { exact: true })).toBeVisible();
+    await expect(todayCount(pageA, 0, 2)).toBeVisible();
 
     // Device two signs in through its own token — a different session, one person.
     const landingB = await redeem(b, await mintToken(db, personId));
     expect(new URL(landingB.headers()["location"]).pathname).toBe("/");
     const pageB = await b.newPage();
     await pageB.goto("/");
-    await expect(pageB.getByText("hechos 0 de 2", { exact: true })).toBeVisible();
+    await expect(todayCount(pageB, 0, 2)).toBeVisible();
     const [{ sessions }] = await db<{ sessions: number }[]>`
       select count(*)::int as sessions from auth.sessions where user_id = ${personId}`;
     expect(sessions).toBe(2);
 
     await pageA.getByRole("button", { name: new RegExp(`^${first}`) }).click();
-    await expect(pageA.getByText("hechos 1 de 2", { exact: true })).toBeVisible();
+    await expect(todayCount(pageA, 1, 2)).toBeVisible();
     await expect
       .poll(async () => (await db`select id from goals.facts where user_id = ${personId}`).length)
       .toBe(1);
 
     await pageB.reload();
-    await expect(pageB.getByText("hechos 1 de 2", { exact: true })).toBeVisible();
+    await expect(todayCount(pageB, 1, 2)).toBeVisible();
   } finally {
     for (const context of contexts) await context.close();
     await dropPerson(db, personId);

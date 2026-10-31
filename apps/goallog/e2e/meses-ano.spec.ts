@@ -199,9 +199,13 @@ for (const width of [360, 1024]) {
         return { height: Math.round(link.getBoundingClientRect().height), dropped: note ? note.top >= label.bottom - 1 : false };
       }),
     );
+    // A row is a 56px target at least; the 14px floor of reading text (DESIGN «Sentence case») lifts one that holds a state under its
+    // label by a few pixels, and a dropped note by one line more.
+    const held = rows.filter((row) => !row.dropped).map((row) => row.height);
+    expect(Math.min(...held), "a row is a 56px target at least").toBeGreaterThanOrEqual(56);
+    expect(Math.max(...held), "no row grows by a line").toBeLessThanOrEqual(72);
     for (const row of rows) {
-      if (row.dropped) expect(row.height).toBeLessThanOrEqual(80);
-      else expect(row.height).toBe(56);
+      if (row.dropped) expect(row.height).toBeLessThanOrEqual(Math.min(...held) + 32);
     }
 
     // Lines the label's own text occupies: one per row, whatever the month.

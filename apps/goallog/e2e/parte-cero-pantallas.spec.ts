@@ -111,8 +111,8 @@ for (const unit of UNITS) {
         try {
           const row = segment.metasRow(view.text, name);
           expect(row).not.toMatch(ZERO_OF_ZERO);
-          // A month with no amount draws no figure on the row: only the goal's end remains.
-          expect(row, row).not.toMatch(/\d/);
+          // A month with no amount draws no figure on the card: only the goal's end remains (its «Faltan N semanas» count apart).
+          expect(row.replace(/Faltan \d+ semanas?/, ""), row).not.toMatch(/\d/);
         } finally {
           await view.close();
         }
@@ -201,7 +201,8 @@ for (const unit of UNITS) {
         try {
           const line = segment.mes(view.text, name);
           expect(line).not.toMatch(ZERO_OF_ZERO);
-          expect(line).toMatch(/nada planeado todavía/i);
+          // The invitation says what «nada planeado todavía» would: a card holds one of the two (`MonthAcrossScreen`).
+          expect(line).toMatch(/Planear \p{L}+/u);
         } finally {
           await view.close();
         }

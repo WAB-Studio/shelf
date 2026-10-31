@@ -3,7 +3,7 @@ import type postgres from "postgres";
 import { horizonForWeeks } from "@/lib/day/weeks";
 import { civilDateInZone } from "@/lib/zone";
 
-import { test, expect } from "./fixtures";
+import { test, expect, openMore } from "./fixtures";
 import goalMessages from "../messages/es/goal.json";
 import { boxOf } from "./box";
 
@@ -62,8 +62,8 @@ test("at 1024 the phases card is 600 wide and its aim takes 2 lines at most; at 
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto(`/metas/${goalId}`);
     await expect(page.getByText(AIM, { exact: true })).toBeVisible();
-    const phasesLabel = await page.getByText(/^una fase$/).evaluate((el) => el.getBoundingClientRect().left);
-    const commitments = await page.getByText(/^un compromiso$/).evaluate((el) => el.getBoundingClientRect().left);
+    const phasesLabel = await page.getByText(/^Una fase$/).evaluate((el) => el.getBoundingClientRect().left);
+    const commitments = await page.getByText(/^Un compromiso$/).evaluate((el) => el.getBoundingClientRect().left);
     expect(Math.abs(phasesLabel - commitments)).toBeLessThanOrEqual(1);
   } finally {
     await db`delete from goals.goals where id = ${goalId} and user_id = ${personId}`;
@@ -115,6 +115,7 @@ test("at 390 «Renombrar» spans the column", async ({ page, db, personId }) => 
   try {
     await page.setViewportSize({ width: 390, height: 800 });
     await page.goto(`/metas/${goalId}`);
+    await openMore(page);
     const rename = page.getByRole("button", { name: "Renombrar" });
     await expect(rename).toBeVisible();
     const box = (await boxOf(rename));

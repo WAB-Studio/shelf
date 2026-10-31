@@ -131,7 +131,7 @@ test.describe("the review says the rhythm before creating (RP-63, RP-35)", () =>
         await page.getByRole("button", { name: "Crear 3 metas" }).click();
         await expect(page).toHaveURL(/\/metas$/);
         await page.getByRole("link", { name: /Evals y harness/ }).first().click();
-        await expect(page.getByText("el plan", { exact: true })).toBeVisible();
+        await expect(page.getByText("El plan", { exact: true })).toBeVisible();
         const plan = page.getByRole("link", { name: /^A este ritmo terminas el .* Ritmo 12 h al mes/ });
         await expect(plan).toBeVisible();
         await expect(plan).toHaveAttribute("href", /\/metas\/[^/]+\/plan$/);

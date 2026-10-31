@@ -88,7 +88,7 @@ for (const width of [360, 1280]) {
       try {
         await open(page);
         // Header tally of the board: six rows ask today.
-        await expect(page.locator("main")).toContainText(/hechos\s*0\s*de\s*6/);
+        await expect(page.locator("main")).toContainText(/0\s*de\s*6\s*hechos hoy/);
 
         const general = await topOf(page, names.general);
         const own = await topOfRow(page, names.own);
@@ -338,14 +338,14 @@ test("a tap on the small goal's row from the general's block is one POST and the
     await open(page);
     await expect(row(page, names.row)).toContainText(names.small);
     expect(await topOf(page, names.general)).toBeLessThan(await topOfRow(page, names.row));
-    await expect(page.locator("main")).toContainText(/hechos\s*0\s*de\s*2/);
+    await expect(page.locator("main")).toContainText(/0\s*de\s*2\s*hechos hoy/);
 
     const posts: string[] = [];
     page.on("request", (request) => {
       if (request.method() === "POST" && request.headers()["next-action"]) posts.push(request.url());
     });
     await row(page, names.row).click();
-    await expect(page.locator("main")).toContainText(/hechos\s*1\s*de\s*2/);
+    await expect(page.locator("main")).toContainText(/1\s*de\s*2\s*hechos hoy/);
     await expect
       .poll(async () => (await db`select 1 from goals.facts where commitment_id = ${commitment}`).length)
       .toBe(1);

@@ -67,7 +67,8 @@ async function lineParts(line: Locator) {
 }
 
 function totalLine(page: Page): Locator {
-  return page.locator("p", { hasText: LINE }).locator("visible=true");
+  // The line is a block of the navy hero, no paragraph (DESIGN «Naranja y marino»).
+  return page.getByText(LINE).locator("visible=true");
 }
 
 for (const [width, height] of WIDTHS) {

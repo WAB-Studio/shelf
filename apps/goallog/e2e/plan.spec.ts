@@ -225,7 +225,7 @@ for (const width of [390, 1440]) {
         await page.goto(`/metas/${goalId}/plan?todo=1`);
         for (const task of ["D", "E"]) await expect(page.getByText(task, { exact: true })).toHaveCount(1);
         await expect(section(page, "después de tu final").getByText("D", { exact: true })).toHaveCount(1);
-        // No element paints a red: its red channel never leads green and blue by 60.
+        // No element paints a red: its red channel never leads green and blue by 60 while the two stay alike (the accent's orange keeps green well over blue).
         const reds = await page.evaluate(() => {
           const found: string[] = [];
           for (const el of document.querySelectorAll("body *")) {
@@ -234,7 +234,7 @@ for (const width of [390, 1440]) {
               const match = value.match(/rgba?\((\d+), (\d+), (\d+)(?:, ([\d.]+))?\)/);
               if (!match || (match[4] !== undefined && Number(match[4]) === 0)) continue;
               const [r, g, b] = [Number(match[1]), Number(match[2]), Number(match[3])];
-              if (r - g >= 60 && r - b >= 60) found.push(`${el.tagName} ${value}`);
+              if (r - g >= 60 && r - b >= 60 && Math.abs(g - b) < 30) found.push(`${el.tagName} ${value}`);
             }
           }
           return found;

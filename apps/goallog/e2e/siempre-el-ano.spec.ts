@@ -101,7 +101,9 @@ test("/metas names the year of an end date in this year", async ({ page, db, per
   const goalId = await seedOpen(db, personId, name, `${year + 1}-01-01`);
   try {
     await open(page, "/metas");
-    await expect(page.getByRole("link", { name: new RegExp(name) })).toContainText(`hasta el 31 dic ${year}`);
+    // A goal is a card (DESIGN «Naranja y marino»): its weeks left and its end sit in the card, its link only opens it.
+    const card = page.locator("section").filter({ has: page.getByRole("link", { name: new RegExp(name) }) }).last();
+    await expect(card).toContainText(`hasta el 31 dic ${year}`);
   } finally {
     await drop(db, [goalId]);
   }

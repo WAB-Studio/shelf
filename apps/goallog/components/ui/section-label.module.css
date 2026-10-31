@@ -11,6 +11,11 @@
 }
 
 @media print {
+  /* Chrome's PDF of Archivo at 500 leaves a gap after an «f», and a search or a copy reads «Portaf olio»: paper sets the label at 600. */
+  .label {
+    font-weight: 600;
+  }
+
   .label[data-print-suffix]::after {
     content: attr(data-print-suffix);
   }

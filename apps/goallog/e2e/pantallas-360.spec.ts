@@ -2,7 +2,7 @@
 import type { Browser, Page } from "@playwright/test";
 import type postgres from "postgres";
 
-import { test, expect, type Person } from "./fixtures";
+import { test, expect, type Person, openMore } from "./fixtures";
 import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
 import plan from "../messages/es/plan.json";
 
@@ -164,6 +164,7 @@ test("/metas/nueva holds at 360 (RNP-07)", async ({ page }) => {
 test("/metas/<id> holds at 360 (RNP-07)", async ({ page, db, personId }) => {
   await withSeed(db, personId, async ({ goalId }) => {
     await page.goto(`/metas/${goalId}`);
+    await openMore(page);
     await expect(page.getByRole("button", { name: "Renombrar" })).toBeVisible();
     await expectHolds(page, 6);
   });
@@ -222,7 +223,9 @@ test("the quantity sheet holds at 360 (RNP-07)", async ({ page, db, personId }) 
 test("the retire sheet holds at 360 (RNP-07)", async ({ page, db, personId }) => {
   await withSeed(db, personId, async ({ goalId }) => {
     await page.goto(`/metas/${goalId}`);
-    await page.locator("button", { hasText: TAP }).click();
+    // The row opens the commitment's own screen, whose «Retirarlo o borrarlo» opens the sheet.
+    await page.locator("main a", { hasText: TAP }).click();
+    await page.getByRole("button", { name: "Retirarlo o borrarlo", exact: true }).click();
     await openSheet(page);
     await expectHolds(page, 2, '[role="dialog"]');
   });
@@ -240,6 +243,7 @@ test("the delete-one-off sheet holds at 360 (RNP-07)", async ({ page, db, person
 test("the rename sheet holds at 360 (RNP-07)", async ({ page, db, personId }) => {
   await withSeed(db, personId, async ({ goalId }) => {
     await page.goto(`/metas/${goalId}`);
+    await openMore(page);
     await page.getByRole("button", { name: "Renombrar" }).click();
     await openSheet(page);
     await expectHolds(page, 3, '[role="dialog"]');
@@ -249,6 +253,7 @@ test("the rename sheet holds at 360 (RNP-07)", async ({ page, db, personId }) =>
 test("the archive sheet holds at 360 (RNP-07)", async ({ page, db, personId }) => {
   await withSeed(db, personId, async ({ goalId }) => {
     await page.goto(`/metas/${goalId}`);
+    await openMore(page);
     await page.getByRole("button", { name: "Archivar esta meta" }).click();
     await openSheet(page);
     await expectHolds(page, 2, '[role="dialog"]');

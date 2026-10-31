@@ -99,7 +99,7 @@ test.describe("the plan screen at 390 (RoadmapMesCifras, RoadmapMoverFinalFallo)
       expect(style.transform).toBe("none");
       expect(style.spacing).toMatch(/^(normal|0px)$/);
       expect(style.family).not.toMatch(/mono/i);
-      expect(style.size).toBe("13px");
+      expect(style.size).toBe("14px");
       expect(style.rendered).toBe(monthDone);
     } finally {
       await dropGoals(db, person.id, [goalId]);

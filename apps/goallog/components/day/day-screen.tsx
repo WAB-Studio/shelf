@@ -13,7 +13,7 @@ import type { DaySlot } from "@/lib/day/types";
 import { loadWeek } from "@/lib/queries/week";
 import { loadDay, type CommitmentInfo, type OneOffSummary } from "@/lib/queries/day";
 import { PAST_DAY_LIMIT } from "@/lib/validation/fact";
-import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
+import { civilDateToDate, dateToCivilDate, timeInZone, todayInZone } from "@/lib/zone";
 
 import { DayHeader } from "./day-header";
 import { DayRow } from "./day-row";
@@ -622,6 +622,7 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
                 factId={done.factId}
                 name={done.name}
                 oneOffId={done.id}
+                time={timeInZone(done.writtenAt)}
                 note={done.note}
                 noteEyebrow={noteEyebrow(done.goalId)}
                 goalName={goalNameOf(done.goalId)}

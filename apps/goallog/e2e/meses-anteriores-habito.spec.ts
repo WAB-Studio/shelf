@@ -180,7 +180,7 @@ test.describe("«Por semana» of a goal with no end, folded (RP-120, board Meses
       await expect(line).toHaveCount(1);
       await expect(rows(page)).toHaveCount(12);
       await expect(line).toHaveAttribute("href", weekPath(id, "?todo=1"));
-      await expectBetween(page, text(page, "por semana"), line);
+      await expectBetween(page, text(page, "Por semana"), line);
       expect(await overflow(page)).toEqual([]);
     } finally {
       await context.close();

@@ -1,6 +1,6 @@
 import type { Locator } from "@playwright/test";
 
-import { test, expect, visit } from "./fixtures";
+import { test, expect, visit, openMore } from "./fixtures";
 import {
   archiveTogether,
   archivedOf,
@@ -21,6 +21,7 @@ import {
 // one is not reopened alone. Tree: General G > large g1 > small p, and a second large g2 under G.
 
 async function openSheet(page: import("@playwright/test").Page): Promise<Locator> {
+  await openMore(page);
   await page.getByRole("button", { name: "Archivar esta meta" }).click();
   const sheet = page.getByRole("dialog");
   await expect(sheet).toBeVisible();
@@ -210,6 +211,8 @@ test("reopening the general reopens the goals archived with it and leaves the on
   try {
     await expectTitle(page, tree.names.G);
     await page.getByRole("button", { name: "Reabrir" }).click();
+    await expect(page.getByRole("button", { name: "Más sobre la meta" })).toBeVisible();
+    await openMore(page);
     await expect(page.getByRole("button", { name: "Archivar esta meta" })).toBeVisible();
     const archived = await archivedOf(db, [tree.G, tree.g1, tree.p, tree.g2]);
     expect(archived).toEqual({ [tree.G]: false, [tree.g1]: false, [tree.p]: false, [tree.g2]: true });

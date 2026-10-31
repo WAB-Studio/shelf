@@ -137,9 +137,8 @@ for (const tasks of [32, 48])
     expect(rows[0].page, "first row with the label").toBe(label.page);
     expect(label.at, "label never the last line of a sheet").toBeLessThan(pages[label.page].length - 1);
     for (const row of rows) {
-      const next = pages[row.page][row.at + 1];
-      expect(next, `row on sheet ${row.page + 1} has its cells under it`).toBeDefined();
-      expect(isRow(next), "next line is its cells, not another month").toBe(false);
+      // A row is one line, its figures beside the month; a closed or current month adds its state under the name, on the same sheet as the row.
+      expect(pages[row.page][row.at], `row on sheet ${row.page + 1} has its cells beside it`).toMatch(/^\p{L}+ \d{4} \S/u);
     }
     const lines: { page: number; at: number }[] = [];
     pages.forEach((p, page) => p.forEach((text, at) => { if (/\d+ mes(es)? más, hasta el/.test(text)) lines.push({ page, at }); }));

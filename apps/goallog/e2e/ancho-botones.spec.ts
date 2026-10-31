@@ -1,4 +1,4 @@
-import { test, expect, visit } from "./fixtures";
+import { test, expect, visit, openMore } from "./fixtures";
 import { boxOf } from "./box";
 
 // Content stops at 1200 from 1024, and a link shaped as a button
@@ -74,6 +74,8 @@ test("a block button in a sheet's actions follows the width rule: sized to text 
     await page.keyboard.press("Escape");
 
     await page.setViewportSize({ width: 390, height: 800 });
+    await expect(page.getByRole("button", { name: "Más sobre la meta" })).toBeVisible();
+    await openMore(page);
     await page.getByRole("button", { name: "Renombrar" }).click();
     await expect(dialog).toBeVisible();
     await expect

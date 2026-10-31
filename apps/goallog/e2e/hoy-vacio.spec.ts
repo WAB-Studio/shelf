@@ -23,7 +23,7 @@ test("a person with no rows reads the empty day (RP-01)", async ({ person, brows
     await expect(open).toHaveAttribute("href", "/metas/nueva");
     const bring = page.getByRole("link", { name: "Importar un plan" });
     await expect(bring).toHaveAttribute("href", "/metas/importar");
-    await expect(page.getByText(/hechos \d+ de \d+/)).toHaveCount(0);
+    await expect(page.locator('[data-part="hero"]')).toHaveCount(0);
     await expect(page.getByText(" terminó ")).toHaveCount(0);
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(360);
     await bring.click();

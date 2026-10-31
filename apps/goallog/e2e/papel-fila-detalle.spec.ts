@@ -216,7 +216,7 @@ function pdfRow(file: string, stamp: string, label: string, next: string): PdfRo
   expect(to, `row «${next}» in the PDF (${file})`).toBeGreaterThanOrEqual(0);
   const row = words[at];
   const header = (text: string) => {
-    const hit = words.find((w, i) => i > last && w.text === text);
+    const hit = words.find((w, i) => i > last && w.text.toUpperCase() === text);
     expect(hit, `column head «${text}» (${file})`).toBeDefined();
     return hit!.x0;
   };
@@ -353,13 +353,24 @@ test.describe("screen at 1440: the same on the wide face (RP-71)", () => {
     try {
       const page = await context.newPage();
       await page.goto(`/metas/${id}/revision`);
-      await expect(page.getByRole("table")).toBeVisible();
-      const m = await measure(page, null, "semana 1");
+      // The review's weeks are bars, a list (DESIGN «Decisión del 2026-10-31»): each row's name, its dates under it, its total beside the name.
+      const list = page.getByRole("list", { name: "por semana" });
+      await expect(list).toBeVisible();
+      const m = await list.locator("li", { hasText: "semana 1" }).first().evaluate((row) => {
+        const part = (selector: string) => row.querySelector<HTMLElement>(`[class*="${selector}"]`)!.getBoundingClientRect();
+        const detail = row.querySelector<HTMLElement>('[class*="detail"]')!;
+        return {
+          name: part("name"),
+          total: part("total"),
+          detailText: (detail.textContent ?? "").trim(),
+          detailTop: detail.getBoundingClientRect().top,
+        };
+      });
       expect(m.detailText, "the week's dates").toMatch(/\d/);
-      figuresOnFirstLine(m, "goal review week 1");
-      expect(m.figureFont, `week 1's figure «${m.figureText}» is set at ${m.figureFont}px, the measure size is ${m.measureFont}px`)
-        .toBeCloseTo(m.measureFont, 0);
-      expect(m.detailTop!, "dates under the figure").toBeGreaterThan(m.figureBottom - TOLERANCE);
+      // The bars row centres its total on the label's two lines (name over dates): never above the name nor below the dates.
+      expect(m.total.top, "week 1's total is not above its name").toBeGreaterThan(m.name.top - TOLERANCE);
+      expect(m.total.bottom, "week 1's total is not below its dates").toBeLessThan(m.detailTop + m.name.height + TOLERANCE);
+      expect(m.detailTop, "dates under the name").toBeGreaterThan(m.name.bottom - TOLERANCE);
     } finally {
       await context.close();
       await remove(db, person, id);
