@@ -85,7 +85,7 @@ test("a two-token miss draws both headwords, offline, with no request", async ({
   expect(stray).toEqual([]);
 });
 
-// "zzqx" is absent from `eng-spa-2025.11.23-v3.json` as a headword, and no
+// "zzqx" is absent from `eng-spa-2025.11.23-v4.json` as a headword, and no
 // inflection rule in `lib/dictionary/inflect.ts` strips a suffix off it —
 // there is nothing left for `lookupWord` to find under any of its rules.
 // Two tokens now reaches the translator online, like any other phrase
@@ -228,7 +228,7 @@ test("a phrase whose translation fails falls to the per-word breakdown, capped a
 
   // docs/wordbook/DESIGN.md "A word block on `SinEntradaFrase` carries its
   // translations alone": no IPA, no definition anywhere in the breakdown.
-  // "dog" (eng-spa-2025.11.23-v3.json) carries both on a direct lookup —
+  // "dog" (eng-spa-2025.11.23-v4.json) carries both on a direct lookup —
   // "/dɑɡ/" and "(transitive) To pursue with the intent to catch." — and
   // neither draws here.
   await expect(page.getByText("/dɑɡ/")).toHaveCount(0);
@@ -544,9 +544,9 @@ test("in a sentence, left carries the leave block between its first and second g
   const lines = (await blockLines(page, "left", "it")).map((l) => l.text);
   const first = lines.indexOf("sobras, sobrado");
   const via = lines.indexOf(formLine("viaInflectionWithEntry", "left", "leave"));
-  const leaveVerb = lines.indexOf("dejar, abandonar, partir");
-  const leaveNoun = lines.indexOf("permiso, licencia, despedida");
-  const second = lines.indexOf("izquierda, de izquierda, izquierdo");
+  const leaveVerb = lines.indexOf("dejar, irse, abandonar");
+  const leaveNoun = lines.indexOf("permiso, licencia, excedencia");
+  const second = lines.indexOf("izquierda, izquierdo, de izquierda");
   const rest = lines.indexOf("a la izquierda, izquierdo");
   for (const [name, at] of Object.entries({ first, via, leaveVerb, leaveNoun, second, rest })) {
     expect(at, `${name} is in left's block`).toBeGreaterThanOrEqual(0);
@@ -665,7 +665,7 @@ test("offline, a sentence still answers from the device: the lemma block under l
   await expect(visible(page, formLine("viaInflectionWithEntry", "left", "leave"))).toHaveCount(1);
   const lines = (await blockLines(page, "left", "it")).map((l) => l.text);
   expect(lines.indexOf("sobras, sobrado")).toBeLessThan(lines.indexOf(formLine("viaInflectionWithEntry", "left", "leave")));
-  expect(lines.indexOf(formLine("viaInflectionWithEntry", "left", "leave"))).toBeLessThan(lines.indexOf("izquierda, de izquierda, izquierdo"));
+  expect(lines.indexOf(formLine("viaInflectionWithEntry", "left", "leave"))).toBeLessThan(lines.indexOf("izquierda, izquierdo, de izquierda"));
 
   await expect(controlOf(page, "it")).toHaveAttribute("aria-expanded", "false");
   await expect(visible(page, "tecnología de la información")).toHaveCount(0);

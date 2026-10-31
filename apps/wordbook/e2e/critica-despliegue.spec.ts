@@ -35,15 +35,21 @@ async function lookUp(page: Page, words: string[]): Promise<void> {
   }
 }
 
-test("the index of parts of speech names what is visible: blind folds its adjective, so the index names the verb before it", async ({
+test("a rare-labelled sense of the most frequent part of speech stays: blind shows «ciego» with no fold, index first", async ({
   page,
 }) => {
   await open(page, "/", 390);
   await box(page).fill("blind");
   const index = page.locator("main [data-entry-index]").first();
-  await expect(index).toContainText(new RegExp(`^[^]*${messages.word.pos.v}[^]*${messages.word.pos.adj}`, "i"));
-  await page.getByRole("button", { name: /^Ver \d+ sentidos? poco usados?$/ }).click();
-  await expect(page.getByText(messages.word.pos.adj, { exact: true }).last()).toBeVisible();
+  await expect(index).toContainText(new RegExp(`^[^]*${messages.word.pos.adj}[^]*${messages.word.pos.v}`, "i"));
+  await expect(page.getByText("ciego", { exact: false }).first()).toBeVisible();
+});
+
+test("a rare sense of a less frequent part of speech still folds: bleak's river fish", async ({ page }) => {
+  await open(page, "/", 390);
+  await box(page).fill("bleak");
+  await expect(page.getByRole("heading", { name: "bleak" })).toBeVisible();
+  await expect(page.getByRole("button", { name: /^Ver \d+ sentidos? poco usados?$/ })).toBeVisible();
 });
 
 test("at 1280 the box keeps its width from an empty box to a phrase, and the panels do not move", async ({ page }) => {

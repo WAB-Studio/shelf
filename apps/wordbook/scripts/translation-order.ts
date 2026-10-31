@@ -59,9 +59,19 @@ export const LEADING: Readonly<Record<string, readonly string[]>> = {
   "mean|v": ["significar", "querer decir"],
   "fair|adj": ["justo", "razonable"],
   "bleak|adj": ["desolado"],
+  // The model's pick for `it` (ello) is formal; the reviewed lead is what a speaker says.
+  "it|n": ["lo", "eso"],
+  "cup|n": ["vaso", "taza"],
 };
 
-// Frequency demotion first (the dictionary's order stands), then the inflected forms of a sibling go last, then the reviewed leads.
+// The lead translations one offline model pass picked (`pick-translations.ts`), keyed `headword|pos`. Committed
+// output only: the build reads it and never asks a model.
+const PICKS = JSON.parse(readFileSync(path.join(import.meta.dirname, "translation-picks.json"), "utf8")) as Readonly<
+  Record<string, readonly string[]>
+>;
+
+// Frequency demotion first (the dictionary's order stands), then the inflected forms of a sibling go last, then
+// the lead: the one a person reviewed, which outranks the model, else the model's picks.
 export function rankTranslations(headword: string, pos: string, translations: readonly string[]): string[] {
   const key = `${headword.toLowerCase()}|${pos}`;
   const wrong = KNOWN_WRONG[key] ?? [];
@@ -69,7 +79,8 @@ export function rankTranslations(headword: string, pos: string, translations: re
   const ranked = demoteRareTranslations(kept);
   const plain = ranked.filter((gloss) => !isInflectedGloss(gloss, kept, pos));
   const ordered = [...plain, ...ranked.filter((gloss) => isInflectedGloss(gloss, kept, pos))];
-  const lead = (LEADING[key] ?? []).filter((gloss) => ordered.includes(gloss));
+  const reviewed = (LEADING[key] ?? []).filter((gloss) => ordered.includes(gloss));
+  const lead = reviewed.length > 0 ? reviewed : (PICKS[key] ?? []).filter((gloss) => ordered.includes(gloss));
   return [...lead, ...ordered.filter((gloss) => !lead.includes(gloss))];
 }
 

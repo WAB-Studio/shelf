@@ -51,13 +51,21 @@ export function isRareSense(sense: Sense): boolean {
 }
 
 /**
- * The senses an answer stands on and the ones it folds behind a line. Nothing folds when every sense is
- * rare: the reader would meet an empty answer.
+ * The senses an answer stands on and the ones it folds behind a line. A rare sense folds only while a common
+ * one stands, and only when it is also the less frequent one: `groupFor` sorts senses by how often their part
+ * of speech is met (SUBTLEX), so a rare-labelled sense of a part of speech that comes before every common
+ * sense's stays (`blind` as an adjective, `ciego`).
  */
 export function splitRare(senses: readonly Sense[], compact = false): { shown: Sense[]; folded: Sense[] } {
   if (compact) return { shown: [...senses], folded: [] };
-  const rare = senses.filter(isRareSense);
-  const common = senses.filter((sense) => !isRareSense(sense));
-  if (rare.length === 0 || common.length === 0) return { shown: [...senses], folded: [] };
-  return { shown: common, folded: rare };
+  const firstCommon = senses.findIndex((sense) => !isRareSense(sense));
+  if (firstCommon === -1) return { shown: [...senses], folded: [] };
+  const commonPos = senses[firstCommon].pos;
+  const shown: Sense[] = [];
+  const folded: Sense[] = [];
+  senses.forEach((sense, index) => {
+    const moreFrequent = index < firstCommon && sense.pos !== commonPos;
+    (isRareSense(sense) && !moreFrequent ? folded : shown).push(sense);
+  });
+  return { shown, folded };
 }

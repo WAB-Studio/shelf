@@ -1936,7 +1936,7 @@ and width). RL-76 decided by the user 2026-10-18.
 - **Decided by the user: phrases enter `/repaso`** (RL-78), scheduled like words; a card draws one sense of a word. The
   dictionary carries no example sentences, so the card shows the sense's definition where it has one; examples exist only for a
   word the network answered.
-- **Decided by the user: three translations and «ver más»** (RL-79), in the word's answer, its row and its history.
+- **Decided by the user: three translations and «ver más»** (RL-82, successor of RL-79), in the word's answer and its history; the row of `/registro` keeps the main translation alone.
 - **Not a lookup:** opening or reloading `/?q=word` records nothing (RL-80).
 
 ## Decisión del 2026-10-31, after the critic of round 3 (picks of the critic; the user may override)
@@ -1961,3 +1961,11 @@ and width). RL-76 decided by the user 2026-10-18.
 - **`/registro`** is a diary by day («Hoy · 5», «Ayer · 4», «jueves, 29 oct · 2»), a compact row being the word and its main
   translation, the word in ink and mint only under the pointer.
 - **Sidebar.** Labels 15px sentence case, rows and the theme switch 44px. The bar's 11px capitals stay on the phone.
+
+## Decisión del 2026-10-31, after the user's answers on the critic of the deploy
+
+- **Translation order.** The user overrides «no paid pruning»: one offline model pass picks every entry's lead translation and its
+  first three (RL-83), kept in `scripts/translation-picks.json` and written into the asset (payload version 4). A reviewed lead
+  still outranks it.
+- **The row of `/registro`** keeps one translation, the lead (RL-82).
+- **The fold of seldom-used senses** folds a labelled sense only when its part of speech is also the less frequent one (RL-84).

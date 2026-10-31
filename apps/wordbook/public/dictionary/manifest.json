@@ -1,5 +1,5 @@
 {
-  "payloadVersion": 3,
+  "payloadVersion": 4,
   "source": {
     "url": "https://download.freedict.org/dictionaries/eng-spa/2025.11.23/freedict-eng-spa-2025.11.23.src.tar.xz",
     "edition": "2025.11.23",
@@ -7,11 +7,11 @@
     "licenceUrl": "https://creativecommons.org/licenses/by-sa/3.0/legalcode",
     "attribution": "English–Spanish data from the FreeDict eng-spa dictionary, edition 2025.11.23, built by the FreeDict project from WikDict and Wiktionary.org data via DBnary, licensed under CC BY-SA 3.0."
   },
-  "builtAt": "2026-10-31T16:11:14.692Z",
+  "builtAt": "2026-10-31T23:55:41.660Z",
   "asset": {
-    "path": "/dictionary/eng-spa-2025.11.23-v3.json",
+    "path": "/dictionary/eng-spa-2025.11.23-v4.json",
     "bytes": 8389571,
-    "sha256": "5c7a595e0be220aac12f7f0eec57146d64bed16e753e353155e628b48ca8a818"
+    "sha256": "76769f763dd1a6e764437ac63bc4ef92aa0086e65ad4d7cec784b399fe6c3619"
   },
   "counts": {
     "entries": 64258,
