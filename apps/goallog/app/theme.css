@@ -19,7 +19,7 @@ body {
    same design inverted. The class comes from the pre-paint script, never
    from a media query, so a chosen face survives the device's own setting. */
 .light {
-  --pulsar-ground: #edeff2;
+  --pulsar-ground: #f4f5f8;
   --pulsar-raised: #ffffff;
   --pulsar-line: #dce1e7;
   --pulsar-border: #c7ced7;
@@ -28,8 +28,15 @@ body {
   --pulsar-muted: #5e6874;
   --pulsar-quiet: #8a939e;
   --pulsar-control-edge: #8a939e;
-  --pulsar-accent: #1c6e5a;
-  --pulsar-accent-soft: #dceae5;
+  /* Tangerine, burnt enough to carry white: #ffffff on accent 5.18:1; accent
+     on raised 5.18:1, on ground 4.75:1, on soft 4.5+ (ratios in
+     docs/goallog/DESIGN.md "Naranja y marino"). */
+  --pulsar-accent: #c2410c;
+  --pulsar-accent-soft: #fff3ec;
+  /* The brand block: the desktop rail. Both faces share the navy family. */
+  --pulsar-brand: #0b1f3a;
+  --pulsar-brand-soft: #1b3560;
+  --pulsar-brand-line: #26416b;
   --pulsar-today: #e3e8ee;
   --pulsar-on-accent: #ffffff;
   --pulsar-scrim: rgba(18, 23, 28, 0.34);
@@ -45,8 +52,11 @@ body {
   --pulsar-muted: #949ea9;
   --pulsar-quiet: #5c666f;
   --pulsar-control-edge: #626c77;
-  --pulsar-accent: #4fbea0;
-  --pulsar-accent-soft: #17332c;
+  --pulsar-accent: #ff8a4c;
+  --pulsar-accent-soft: #3a2012;
+  --pulsar-brand: #07142a;
+  --pulsar-brand-soft: #17305a;
+  --pulsar-brand-line: #1c3563;
   --pulsar-today: #1e252c;
   --pulsar-on-accent: #0f1317;
   /* Darker than the dark ground on purpose: a sheet is raised, and it has to
@@ -55,16 +65,22 @@ body {
 }
 
 /* docs/goallog/DESIGN.md "Type" — a figure is set in mono, a sentence in
-   Archivo; the section label, screen title, commitment name and measure
+   Archivo; a title is set in Archivo Black (`--font-display`), one weight, so
+   its weights below are 400; the section label, screen title, commitment name and measure
    each carry their own size so no screen invents one. */
 :root {
+  --pulsar-brand-ink: #f1f5fb;
+  --pulsar-brand-ink-secondary: #cbd6e6;
+  --pulsar-brand-muted: #a9b8cf;
+  /* The one highlight: sky, 9.91:1 on the brand navy. Never text on white. */
+  --pulsar-highlight: #7dd3fc;
   --pulsar-text-label-size: 11px;
   --pulsar-text-label-tracking: 0.14em;
-  --pulsar-text-title-size: 27px;
-  --pulsar-text-title-weight: 600;
+  --pulsar-text-title-size: 30px;
+  --pulsar-text-title-weight: 400;
   --pulsar-text-title-tracking: -0.02em;
-  --pulsar-text-title-size-wide: 41px;
-  --pulsar-text-title-weight-wide: 650;
+  --pulsar-text-title-size-wide: 44px;
+  --pulsar-text-title-weight-wide: 400;
   --pulsar-text-title-tracking-wide: -0.03em;
   --pulsar-text-name-size: 16px;
   --pulsar-text-name-weight: 500;
@@ -83,6 +99,7 @@ body {
   background: var(--pulsar-ground);
   color: var(--pulsar-ink);
   font-family: var(--font-sans);
+  font-variant-numeric: tabular-nums;
 }
 
 /* Radix Themes pins `--default-font-family` to its own system stack on the

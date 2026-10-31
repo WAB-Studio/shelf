@@ -14,7 +14,8 @@
   --accent-a11: var(--pulsar-ink);
   --accent-contrast: var(--pulsar-on-accent);
   --focus-8: var(--pulsar-accent);
-  border-radius: 10px;
+  /* The pill: the recipe's primary button. */
+  border-radius: 999px;
   /* Radix sets a control's label from its own scale — 14px at size 2, a size
      docs/goallog/DESIGN.md has no role for. A label on a control reads at the
      same step a commitment name does. */

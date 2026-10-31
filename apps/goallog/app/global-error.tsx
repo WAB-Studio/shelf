@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Archivo, DM_Mono } from "next/font/google";
+import { Archivo, Archivo_Black, DM_Mono } from "next/font/google";
 import { Theme } from "@radix-ui/themes";
 
 import { ThemeScript } from "@/components/theme-script";
@@ -14,6 +14,14 @@ const sans = Archivo({
   variable: "--font-sans",
   subsets: ["latin"],
   fallback: ["system-ui", "sans-serif"],
+  display: "swap",
+});
+
+const display = Archivo_Black({
+  variable: "--font-display",
+  subsets: ["latin"],
+  weight: "400",
+  fallback: ["Archivo", "system-ui", "sans-serif"],
   display: "swap",
 });
 
@@ -44,12 +52,12 @@ export default function GlobalError({
   const t = common.error;
 
   return (
-    <html lang="es" className={`${sans.variable} ${mono.variable}`} suppressHydrationWarning>
+    <html lang="es" className={`${sans.variable} ${display.variable} ${mono.variable}`} suppressHydrationWarning>
       <head>
         <ThemeScript />
       </head>
       <body>
-        <Theme accentColor="teal" grayColor="slate" radius="large" scaling="100%">
+        <Theme accentColor="orange" grayColor="slate" radius="large" scaling="100%">
           <Page>
             <Text asChild variant="title">
               <h1>{t.title}</h1>

@@ -79,7 +79,17 @@
     inline-size: 232px;
     padding-bottom: 0;
     border-block-start: 0;
-    border-inline-end: 1px solid var(--pulsar-line);
+    border-inline-end: 0;
+    /* The brand block: the rail re-speaks the tokens its children read, so
+       every row inside stays on a token and none states a colour. */
+    --pulsar-ink: var(--pulsar-brand-ink);
+    --pulsar-ink-secondary: var(--pulsar-brand-ink-secondary);
+    --pulsar-muted: var(--pulsar-brand-muted);
+    --pulsar-line: var(--pulsar-brand-line);
+    --pulsar-border: var(--pulsar-brand-line);
+    --pulsar-accent: var(--pulsar-highlight);
+    --pulsar-accent-soft: var(--pulsar-brand-soft);
+    background: var(--pulsar-brand);
   }
 
   .inner {
@@ -102,8 +112,9 @@
   }
 
   .appName {
-    font-size: 20px;
-    font-weight: 700;
+    font-family: var(--font-display);
+    font-size: 22px;
+    font-weight: 400;
     letter-spacing: -0.02em;
     color: var(--pulsar-ink);
   }
@@ -257,7 +268,7 @@
     max-inline-size: 320px;
     padding: 8px 12px;
     border-radius: 10px;
-    background: var(--pulsar-raised);
+    background: var(--pulsar-brand-soft);
     color: var(--pulsar-ink);
     border: 1px solid var(--pulsar-border);
     font-size: 14px;

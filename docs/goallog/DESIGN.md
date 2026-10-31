@@ -24,6 +24,41 @@ A ship's log: what happened, when, and who wrote it down.
   a change of fill, or the scrim — never a blur. Checked 2026-09-22 against all seventeen boards:
   they draw **zero**. A library that paints one is painting a decision this design did not take.
 
+## Naranja y marino
+
+Decided by the user 2026-10-30, after the recipe of agendaamiga.com, with GoalLog's own colours. The
+teal looked like HomeFund's old green and is gone. The tables under "Tokens" below keep the grounds,
+lines and inks; this section replaces their accent rows.
+
+- **Accent: tangerine.** Burnt orange, `#C2410C` light, `#FF8A4C` dark. A lighter orange
+  does not carry white at 4.5:1; this step does, so the pill button keeps white ink on the light face
+  and dark ink on the dark one.
+- **Brand block: deep navy `#0B1F3A`** (dark face `#07142A`), the desktop rail. The rail re-speaks the
+  ink, muted, line and accent tokens inside itself, so every row in it stays on a token.
+- **Highlight: sky `#7DD3FC`**, only on the navy (focus ring, the current item's mark). Never text on white.
+- **Titles: Archivo Black** (`--font-display`), one weight, 30px on the phone and 44px from 700. Sentences stay
+  Archivo, figures DM Mono; the body sets tabular figures. Chosen: a heavy sporty grotesque of the
+  family already loaded, so it adds character without a second voice.
+- **Primary buttons are pills** (radius 999px). Fields, rows and sheets keep their 10px.
+
+| pair | ratio |
+|---|---|
+| white on accent `#C2410C` | 5.18 |
+| accent on raised `#FFFFFF` | 5.18 |
+| accent on ground `#F4F5F8` | 4.75 |
+| accent on soft `#FFF3EC` | 4.76 |
+| ink `#12171C` on soft | 16.55 |
+| dark: ink `#0F1317` on accent `#FF8A4C` | 7.99 |
+| dark: accent on ground `#0F1317` / raised `#161B20` | 7.99 / 7.42 |
+| dark: accent on soft `#3A2012` | 6.44 |
+| rail ink `#F1F5FB` / secondary `#CBD6E6` / muted `#A9B8CF` on `#0B1F3A` | 15.10 / 11.25 / 8.22 |
+| rail sky `#7DD3FC` on `#0B1F3A` | 9.91 |
+| rail ink / sky / muted on active `#1B3560` | 11.13 / 7.30 / 6.06 |
+| dark rail ink / muted on `#07142A` | 16.80 / 9.14 |
+| dark rail ink / muted on active `#17305A` | 11.95 / 6.50 |
+
+The ground moves to `#F4F5F8` (muted on it 5.19, secondary ink 10.28).
+
 ## Tokens
 
 Light, the primary:

@@ -3,6 +3,7 @@
 
 /* docs/goallog/DESIGN.md "Type": the screen title on the phone. */
 .title.title {
+  font-family: var(--font-display);
   font-size: var(--pulsar-text-title-size);
   font-weight: var(--pulsar-text-title-weight);
   letter-spacing: var(--pulsar-text-title-tracking);
@@ -20,6 +21,7 @@
 
 /* A group heading inside a screen: the sheet title's step, 21px. */
 .heading.heading {
+  font-family: var(--font-display);
   font-size: var(--pulsar-text-sheet-title-size);
   font-weight: var(--pulsar-text-title-weight);
   letter-spacing: var(--pulsar-text-title-tracking);

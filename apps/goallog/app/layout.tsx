@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
-import { Archivo, DM_Mono } from "next/font/google";
+import { Archivo, Archivo_Black, DM_Mono } from "next/font/google";
 import { NextIntlClientProvider } from "next-intl";
 import { getTranslations } from "next-intl/server";
 import { Theme } from "@radix-ui/themes";
@@ -14,6 +14,15 @@ const sans = Archivo({
   variable: "--font-sans",
   subsets: ["latin"],
   fallback: ["system-ui", "sans-serif"],
+  display: "swap",
+});
+
+// Screen titles and the brand: one heavy weight, set large (docs/goallog/DESIGN.md "Naranja y marino").
+const display = Archivo_Black({
+  variable: "--font-display",
+  subsets: ["latin"],
+  weight: "400",
+  fallback: ["Archivo", "system-ui", "sans-serif"],
   display: "swap",
 });
 
@@ -40,7 +49,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html
       lang="es"
-      className={`${sans.variable} ${mono.variable}`}
+      className={`${sans.variable} ${display.variable} ${mono.variable}`}
       // The inline script below writes the theme class here before hydration.
       suppressHydrationWarning
     >
@@ -49,7 +58,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       </head>
       <body>
         <NextIntlClientProvider>
-          <Theme accentColor="teal" grayColor="slate" radius="large" scaling="100%">
+          <Theme accentColor="orange" grayColor="slate" radius="large" scaling="100%">
             {children}
           </Theme>
         </NextIntlClientProvider>
