@@ -69,33 +69,13 @@ export function AuditScreen({
   const table = useTable({ features, data: rows, columns });
   const pageRows = table.getRowModel().rows.map((row) => row.original);
 
-  // A display name per audited table; an entity outside the known set reads its
-  // raw table name, so a new trigger never leaves a blank cell.
-  const entityLabels: Record<string, string> = {
-    app_users: t("entities.app_users"),
-    groups: t("entities.groups"),
-    group_members: t("entities.group_members"),
-    accounts: t("entities.accounts"),
-    categories: t("entities.categories"),
-    transactions: t("entities.transactions"),
-    transaction_splits: t("entities.transaction_splits"),
-    labels: t("entities.labels"),
-    transaction_labels: t("entities.transaction_labels"),
-    budgets: t("entities.budgets"),
-    planned_payments: t("entities.planned_payments"),
-    recurring_rules: t("entities.recurring_rules"),
-    savings_goals: t("entities.savings_goals"),
-    goal_contributions: t("entities.goal_contributions"),
-    debt_terms: t("entities.debt_terms"),
-    installment_plans: t("entities.installment_plans"),
-    installment_lines: t("entities.installment_lines"),
-    account_statements: t("entities.account_statements"),
-    webhook_credentials: t("entities.webhook_credentials"),
-    ingest_counterparties: t("entities.ingest_counterparties"),
-    ingest_deliveries: t("entities.ingest_deliveries"),
-    ingest_merchants: t("entities.ingest_merchants"),
-    ingest_shapes: t("entities.ingest_shapes"),
-    debt_statements: t("entities.debt_statements"),
+  // A display name per audited table, from the messages; a table with none reads
+  // as «Otro registro», never as its raw name, so a new trigger never leaves a
+  // blank or a column name on screen.
+  const entityLabel = (entity: string) => {
+    // Any table's key is a legal lookup; `has` says whether the messages know it.
+    const key = `entities.${entity}` as "entities.other";
+    return t.has(key) ? t(key) : t("entities.other");
   };
 
   const actionLabels: Record<AuditLogRow["action"], string> = {
@@ -118,7 +98,7 @@ export function AuditScreen({
   const tableRows: AuditTableRow[] = pageRows.map((row) => ({
     id: row.id,
     occurredAt: row.occurredAt,
-    entity: entityLabels[row.entity] ?? row.entity,
+    entity: entityLabel(row.entity),
     action: row.action,
     actionLabel: actionLabels[row.action],
     actor: actorLabel(row.actorUserId),
@@ -195,7 +175,7 @@ export function AuditScreen({
                     <Select.Item value={ANY}>{t("allEntities")}</Select.Item>
                     {options.entities.map((entity) => (
                       <Select.Item key={entity} value={entity}>
-                        {entityLabels[entity] ?? entity}
+                        {entityLabel(entity)}
                       </Select.Item>
                     ))}
                   </Select.Content>

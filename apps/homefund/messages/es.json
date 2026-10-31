@@ -265,7 +265,14 @@
       "ingest_merchants": "Comercios aprendidos",
       "ingest_shapes": "Formatos de correo",
       "debt_statements": "Extractos de deuda",
-      "webhook_credentials": "Credenciales de webhook"
+      "webhook_credentials": "Credenciales de webhook",
+      "account_reconciliations": "Cuadres de cuenta",
+      "transaction_reviews": "Revisiones de movimientos",
+      "transaction_sources": "Orígenes de movimientos",
+      "reminder_mails": "Avisos por correo",
+      "allowed_emails": "Correos permitidos",
+      "sign_in_claims": "Ingresos a la cuenta",
+      "other": "Otro registro"
     }
   },
   "members": {
@@ -894,6 +901,7 @@
     "tableCategory": "Categoría",
     "tableAccount": "Cuenta",
     "tableAmount": "Monto",
+    "overdueReminder": "Vencido · Recordatorio",
     "overdueLabel": "Vencido",
     "settledMarker": "Registrado",
     "cancelledMarker": "Cancelado",

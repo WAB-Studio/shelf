@@ -39,6 +39,7 @@ import type { TransactionFormOptions } from "@/db/queries/transaction-form";
 import type { AwaitingCounterpartyRow } from "@/db/queries/transactions";
 import { todayInBogota } from "@/lib/dates";
 import { categoryNamesById } from "@/lib/fund/category-names";
+import { deliveryCurrency } from "@/lib/fund/glance";
 import { scopeOfAccounts } from "@/lib/fund/category-scope";
 import { centsToPesos } from "@/lib/money";
 import { useActionErrorToast } from "@/lib/use-action-toast";
@@ -206,9 +207,6 @@ export function InboxScreen({
     tKey("categories.scopedName", { name }),
   );
   const accountNames = new Map(options.accounts.map((a) => [a.id, a.name]));
-  const settlementByAccount = new Map(
-    options.accounts.map((a) => [a.id, a.settlementCurrency]),
-  );
 
   const tableRows: InboxTableRow[] = deliveries.map((delivery) => ({
     id: delivery.id,
@@ -225,12 +223,7 @@ export function InboxScreen({
       : null,
     amountMinor: delivery.proposedAmountCents,
     direction: delivery.proposedDirection === "income" ? "income" : "expense",
-    // An account names its own currency; a proposal with none yet falls back
-    // to the fund's, never to pesos (RF-121, RF-124).
-    currency: delivery.proposedAccountId
-      ? (settlementByAccount.get(delivery.proposedAccountId) ??
-        options.scopeCurrency)
-      : options.scopeCurrency,
+    currency: deliveryCurrency(delivery, options),
     isComplete: delivery.isComplete,
     beforeOpeningOn: delivery.beforeOpening ? delivery.proposedOccurredAt : null,
   }));

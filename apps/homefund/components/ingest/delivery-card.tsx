@@ -37,6 +37,7 @@ import type { PendingDeliveryRow } from "@/db/queries/ingest-review";
 import type { TransactionFormOptions } from "@/db/queries/transaction-form";
 import { civilDateToDate, todayInBogota } from "@/lib/dates";
 import { categoryNamesById } from "@/lib/fund/category-names";
+import { deliveryCurrency } from "@/lib/fund/glance";
 import { scopeOfAccounts } from "@/lib/fund/category-scope";
 import { centsToPesos } from "@/lib/money";
 import { useActionErrorToast } from "@/lib/use-action-toast";
@@ -126,10 +127,7 @@ export function DeliveryCard({
   const onActionError = useActionErrorToast();
 
   const isIncome = delivery.proposedDirection === "income";
-  // An account names its own currency; a proposal with none yet falls back to the fund's.
-  const currency =
-    options.accounts.find((a) => a.id === delivery.proposedAccountId)
-      ?.settlementCurrency ?? options.scopeCurrency;
+  const currency = deliveryCurrency(delivery, options);
 
   const [rawTextOpen, setRawTextOpen] = useState(false);
   const [reviewOpen, setReviewOpen] = useState(false);

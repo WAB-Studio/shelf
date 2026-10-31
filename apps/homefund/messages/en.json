@@ -265,7 +265,14 @@
       "ingest_merchants": "Learned merchants",
       "ingest_shapes": "Email formats",
       "debt_statements": "Debt statements",
-      "webhook_credentials": "Webhook credentials"
+      "webhook_credentials": "Webhook credentials",
+      "account_reconciliations": "Account reconciliations",
+      "transaction_reviews": "Movement reviews",
+      "transaction_sources": "Movement sources",
+      "reminder_mails": "Reminder emails",
+      "allowed_emails": "Allowed emails",
+      "sign_in_claims": "Sign-ins",
+      "other": "Other record"
     }
   },
   "members": {
@@ -894,6 +901,7 @@
     "tableCategory": "Category",
     "tableAccount": "Account",
     "tableAmount": "Amount",
+    "overdueReminder": "Overdue · Reminder",
     "overdueLabel": "Overdue",
     "settledMarker": "Recorded",
     "cancelledMarker": "Cancelled",

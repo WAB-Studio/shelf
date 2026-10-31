@@ -14,6 +14,8 @@ import {
 // Under this width two labelled bars no longer fit side by side, so each figure
 // is written upright above its own bar.
 const NARROW_PX = 520;
+// What a character of an 11px label measures, with a little to spare.
+const LABEL_CHAR_PX = 6.5;
 
 export type BarChartSeries = { key: string; valueCents: number };
 
@@ -53,6 +55,18 @@ export function BarChart({
   const keys = Object.keys(seriesColors);
   const [narrow, setNarrow] = useState(false);
 
+  // An upright label grows upward by its own length, so the room above the bars is
+  // the longest label drawn at the font's width, plus the offset from its bar.
+  const longestLabel = formatValue
+    ? Math.max(
+        0,
+        ...data.flatMap((datum) =>
+          datum.series.filter((one) => one.valueCents > 0).map((one) => formatValue(one.valueCents).length),
+        ),
+      )
+    : 0;
+  const topMargin = formatValue ? (narrow ? longestLabel * LABEL_CHAR_PX + 16 : 20) : 5;
+
   return (
     <div role="img" aria-label={ariaLabel} style={{ width: "100%", height }}>
       <ResponsiveContainer
@@ -60,7 +74,7 @@ export function BarChart({
         height={height}
         onResize={(width) => setNarrow(width < NARROW_PX)}
       >
-        <RechartsBarChart data={rows} margin={{ top: formatValue ? (narrow ? 44 : 20) : 5, right: 12 }}>
+        <RechartsBarChart data={rows} margin={{ top: topMargin, right: 12 }}>
           <XAxis dataKey="label" tickLine={false} axisLine={false} />
           <YAxis hide />
           {averageCents != null && averageCents > 0 && (

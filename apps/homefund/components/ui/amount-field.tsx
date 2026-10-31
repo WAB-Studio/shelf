@@ -30,7 +30,7 @@ export function AmountField({ width, onChange, value, ...props }: AmountFieldPro
     const { text, caret } = formatAmountTyping(
       input.value,
       input.selectionStart ?? input.value.length,
-      document.documentElement.lang,
+      locale,
     );
     if (text !== input.value) {
       input.value = text;

@@ -20,8 +20,8 @@ export type SeedCategory = {
 
 // The shared pot's single cash account under `cash_mode = 'shared'` (RF-56).
 export const GROUP_CASH_ACCOUNT_NAME: SeedName = {
-  es: "Efectivo del fondo",
-  en: "Fund cash",
+  es: "Efectivo del grupo",
+  en: "Group cash",
 };
 
 // A member's own cash account under `cash_mode = 'per_member'`; the leader's is

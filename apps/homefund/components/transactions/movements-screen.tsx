@@ -226,7 +226,7 @@ export function MovementsScreen({
 
   // A transfer moves money between the caller's own accounts, so it moves the net
   // by nothing (RF-19). One net per currency, and no figure that adds two of them
-  // (RF-124); each spans every filtered row, not just this page.
+  // (RF-124); each spans the screen's period (`netNets`), not just this page.
   const netByCurrency = new Map<CurrencyCode, number>(
     netNets.map(({ currency, netCents }) => [currency, netCents]),
   );
