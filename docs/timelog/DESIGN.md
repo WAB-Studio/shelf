@@ -93,3 +93,14 @@ The second critique, from the screens at 820, 1440 and 1920:
 - **Brand on every surface**: `icon.svg`, `icon` (PNG), `favicon.ico`, `apple-icon`, `opengraph-image`, the
   three cyan bars on graphite. Each page titles itself («Hoy», «Martes 27 oct», «Del 26 oct al 1 nov», «Llaves»).
 - **Words**: «Entrar» says access is by invitation; an empty day says why it reads 0 and what to do.
+
+## Claude and Internet (2026-10-30)
+
+Same system, no new element. In «Hoy» and any day the main column reads Apps, then Claude, then
+Internet; the brand block gains a third card, «Claude en total». «Claude» is a line of
+`Claude en total` and its time over up to three bars (Claude Code, claude.ai, App de Claude, the last
+only when it exists) and one line saying the three are added as they are. «Internet» is the eight
+longest hostnames as bars, «y N sitios más», and a line saying only the site is kept. A source that never
+arrived says so in a sentence and how to connect it, never a flat zero. «Semana» adds a card
+«Claude en la semana» in its block and, under the apps, «Claude por día»: seven bars and «Exportar esta
+semana». «Exportar» is a narrow screen like «Llaves»: two dates, a pill and three shortcuts.

@@ -6,6 +6,10 @@ import { withTimeDb } from "@/lib/session";
 
 export type AppTime = { app: string; seconds: number };
 export type DayTotal = { day: string; seconds: number };
+export type SiteTime = { host: string; seconds: number };
+// One day's Claude time by where it was spent: the CLI, claude.ai in a browser, the desktop app.
+export type ClaudeDay = { day: string; code: number; web: number; desktop: number };
+export type DayApp = { day: string; app: string; seconds: number };
 
 // Every device added: one app on two PCs is one row. Longest first, then by name.
 export async function appsBetween(from: string, to: string): Promise<AppTime[]> {
@@ -33,17 +37,72 @@ export async function dayTotals(from: string, to: string): Promise<DayTotal[]> {
   return [...rows];
 }
 
-// The first day ever uploaded and the moment of the last upload, in one statement.
-export async function uploadSpan(): Promise<{ firstDay: string | null; lastReceived: Date | null }> {
+// Every device added, longest first, then by name. Hostnames only (RT-13).
+export async function sitesBetween(from: string, to: string): Promise<SiteTime[]> {
   const rows = await withTimeDb((tx) =>
-    tx.execute<{ first_day: string | null; last_received: string | null }>(sql`
-      select to_char(min(day), 'YYYY-MM-DD') as first_day, max(received_at) as last_received
+    tx.execute<{ host: string; seconds: number }>(sql`
+      select host, sum(seconds)::int as seconds
+        from timelog.site_seconds
+       where day between ${from}::date and ${to}::date
+       group by host
+       order by seconds desc, host`),
+  );
+  return [...rows];
+}
+
+// Claude's time per day (RT-14): Claude Code, claude.ai in the browser and the desktop app (a process named
+// Claude), one statement. A day with none of the three is absent.
+export async function claudeBetween(from: string, to: string): Promise<ClaudeDay[]> {
+  const rows = await withTimeDb((tx) =>
+    tx.execute<ClaudeDay>(sql`
+      select to_char(day, 'YYYY-MM-DD') as day, sum(code)::int as code, sum(web)::int as web, sum(desktop)::int as desktop
+        from (
+          select day, seconds as code, 0 as web, 0 as desktop from timelog.claude_code_seconds
+           where day between ${from}::date and ${to}::date
+          union all
+          select day, 0, seconds, 0 from timelog.site_seconds
+           where host = 'claude.ai' and day between ${from}::date and ${to}::date
+          union all
+          select day, 0, 0, seconds from timelog.app_seconds
+           where lower(regexp_replace(app, '[.]exe$', '', 'i')) = 'claude' and day between ${from}::date and ${to}::date
+        ) parts
+       group by day
+       order by day`),
+  );
+  return [...rows];
+}
+
+// Each day's apps over a range, for the export's top app. Rows per day, not a day's whole list at a time.
+export async function appsByDay(from: string, to: string): Promise<DayApp[]> {
+  const rows = await withTimeDb((tx) =>
+    tx.execute<DayApp>(sql`
+      select to_char(day, 'YYYY-MM-DD') as day, app, sum(seconds)::int as seconds
+        from timelog.app_seconds
+       where day between ${from}::date and ${to}::date
+       group by day, app
+       order by day, seconds desc, app`),
+  );
+  return [...rows];
+}
+
+export type UploadSpan = { firstDay: string | null; lastReceived: Date | null; hasSites: boolean; hasClaudeCode: boolean };
+
+// The first day ever uploaded, the moment of the last upload, and whether sites or Claude Code ever arrived,
+// in one statement.
+export async function uploadSpan(): Promise<UploadSpan> {
+  const rows = await withTimeDb((tx) =>
+    tx.execute<{ first_day: string | null; last_received: string | null; has_sites: boolean; has_claude: boolean }>(sql`
+      select to_char(min(day), 'YYYY-MM-DD') as first_day, max(received_at) as last_received,
+             exists (select 1 from timelog.site_seconds) as has_sites,
+             exists (select 1 from timelog.claude_code_seconds) as has_claude
         from timelog.app_seconds`),
   );
   const row = rows[0];
   return {
     firstDay: row?.first_day ?? null,
     lastReceived: row?.last_received ? new Date(row.last_received) : null,
+    hasSites: row?.has_sites ?? false,
+    hasClaudeCode: row?.has_claude ?? false,
   };
 }
 

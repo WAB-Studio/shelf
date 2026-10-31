@@ -129,9 +129,10 @@
     inset: auto 0 0 0;
     justify-content: space-around;
     background: var(--tl-raised);
-    padding: 8px 16px calc(8px + env(safe-area-inset-bottom));
+    padding: 8px 8px calc(8px + env(safe-area-inset-bottom));
+    gap: 4px;
   }
-  .nav .pill { flex: 1; justify-content: center; background: transparent; }
+  .nav .pill { flex: 1; min-width: 0; padding: 0 4px; justify-content: center; background: transparent; }
   .nav .pill.current { background: var(--tl-bar); }
 }
 

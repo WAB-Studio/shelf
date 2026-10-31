@@ -53,3 +53,32 @@ test("a name with a control character is refused before Postgres sees it", () =>
   const upload = { device: "PC", days: [{ day: "2026-10-28", apps: [{ app: "a\u0000b", seconds: 60 }] }] };
   assert.equal(uploadSchema("2026-10-28").safeParse(upload).success, false);
 });
+
+test("sites by hostname and Claude Code's seconds ride along, and an old payload without them still passes (RT-13, RT-14)", () => {
+  const withBoth = parse({
+    device: "pc",
+    days: [{ ...day(today), sites: [{ host: "claude.ai", seconds: 600 }, { host: "github.com", seconds: 60 }], claude_code_seconds: 1800 }],
+  });
+  assert.ok(withBoth.success);
+  assert.equal(withBoth.data.days[0].claude_code_seconds, 1800);
+  const old = parse({ device: "pc", days: [day(today)] });
+  assert.ok(old.success);
+  assert.equal(old.data.days[0].sites, undefined, "left out stays left out: the server keeps what it has");
+  assert.ok(parse({ device: "pc", days: [{ ...day(today), sites: [], claude_code_seconds: 0 }] }).success, "named and empty replaces with nothing");
+});
+
+test("a site is a hostname: a path, a query, a port, a scheme or capitals are refused (RT-13)", () => {
+  for (const host of ["github.com/shelf", "github.com?x=1", "github.com:443", "https://github.com", "GitHub.com", "a b.com", "-x.com", "", "x".repeat(121)]) {
+    assert.equal(parse({ device: "pc", days: [{ ...day(today), sites: [{ host, seconds: 5 }] }] }).success, false, host);
+  }
+  assert.ok(parse({ device: "pc", days: [{ ...day(today), sites: [{ host: "localhost", seconds: 5 }, { host: "xn--bcher-kva.example", seconds: 5 }] }] }).success);
+});
+
+test("a day's sites add up to a day at most, none twice; Claude Code is whole seconds within a day", () => {
+  const sites = (rows: { host: string; seconds: number }[]) => parse({ device: "pc", days: [{ ...day(today), sites: rows }] }).success;
+  assert.equal(sites([{ host: "a.com", seconds: 50_000 }, { host: "b.com", seconds: 40_000 }]), false);
+  assert.equal(sites([{ host: "a.com", seconds: 1 }, { host: "a.com", seconds: 2 }]), false);
+  for (const seconds of [-1, 1.5, 86_401]) {
+    assert.equal(parse({ device: "pc", days: [{ ...day(today), claude_code_seconds: seconds }] }).success, false, String(seconds));
+  }
+});

@@ -8,6 +8,13 @@
       "when": 1793247342439,
       "tag": "0000_first_log",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1793419340320,
+      "tag": "0001_claude_and_sites",
+      "breakpoints": true
     }
   ]
 }

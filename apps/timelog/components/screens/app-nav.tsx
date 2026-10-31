@@ -5,13 +5,14 @@ import { useTranslations } from "next-intl";
 
 import { Nav, TextLink } from "@/components/ui";
 
-// «Hoy», «Semana», «Llaves»: at the foot on the phone, at the right of the header on the desktop.
+// «Hoy», «Semana», «Exportar», «Llaves»: at the foot on the phone, at the right of the header on the desktop.
 export function AppNav() {
   const t = useTranslations("time.nav");
   const path = usePathname();
   const links = [
     { href: "/", label: t("today") },
     { href: "/semana", label: t("week") },
+    { href: "/exportar", label: t("export") },
     { href: "/llaves", label: t("keys") },
   ];
   return (

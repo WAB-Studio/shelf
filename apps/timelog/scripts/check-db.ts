@@ -110,3 +110,79 @@ test("no API role writes an app-day, calls the upload or reads a key's hash", as
   const names = await asPerson(ana, (tx) => tx.execute(sql`select name from timelog.access_keys`).then((rows) => rows.length));
   assert.equal(names, 1, "the person still lists their own keys");
 });
+
+const sitesOf = (who: Person, on: string) =>
+  db<{ host: string; seconds: number }[]>`
+    select host, seconds from timelog.site_seconds where user_id = ${who.id} and day = ${on} order by host collate "C"`.then((rows) => [...rows]);
+
+const claudeOf = (who: Person, on: string) =>
+  db<{ device: string; seconds: number }[]>`
+    select device, seconds from timelog.claude_code_seconds where user_id = ${who.id} and day = ${on} order by device collate "C"`.then((rows) => [...rows]);
+
+test("an upload carries sites and Claude Code's seconds, and a second one replaces them whole (RT-13, RT-14)", async () => {
+  const on = "2026-10-22";
+  const sent = [{ day: on, apps: [{ app: "chrome.exe", seconds: 900 }], sites: [{ host: "claude.ai", seconds: 600 }, { host: "github.com", seconds: 120 }], claude_code_seconds: 1800 }];
+  assert.equal(await upload(ana, "pc", sent), 4, "one app, two sites, one Claude Code row");
+  assert.deepEqual(await sitesOf(ana, on), [{ host: "claude.ai", seconds: 600 }, { host: "github.com", seconds: 120 }]);
+  assert.deepEqual(await claudeOf(ana, on), [{ device: "pc", seconds: 1800 }]);
+
+  assert.equal(await upload(ana, "pc", [{ day: on, apps: [], sites: [{ host: "claude.ai", seconds: 30 }], claude_code_seconds: 60 }]), 2);
+  assert.deepEqual(await sitesOf(ana, on), [{ host: "claude.ai", seconds: 30 }]);
+  assert.deepEqual(await claudeOf(ana, on), [{ device: "pc", seconds: 60 }]);
+});
+
+test("an old payload with no sites or Claude Code leaves what the server has; named and empty clears it (RT-13, RT-14)", async () => {
+  const on = "2026-10-22";
+  assert.equal(await upload(ana, "pc", [{ day: on, apps: [{ app: "Code.exe", seconds: 5 }] }]), 1);
+  assert.deepEqual(await sitesOf(ana, on), [{ host: "claude.ai", seconds: 30 }], "sites untouched");
+  assert.deepEqual(await claudeOf(ana, on), [{ device: "pc", seconds: 60 }], "Claude Code untouched");
+
+  assert.equal(await upload(ana, "pc", [{ day: on, apps: [], sites: [], claude_code_seconds: 0 }]), 0);
+  assert.deepEqual(await sitesOf(ana, on), []);
+  assert.deepEqual(await claudeOf(ana, on), [], "a zero is no row");
+});
+
+test("another device's sites and Claude Code day stay when this device replaces its own", async () => {
+  const on = "2026-10-23";
+  await upload(ana, "pc", [{ day: on, apps: [], sites: [{ host: "a.com", seconds: 9 }], claude_code_seconds: 90 }]);
+  await upload(ana, "laptop", [{ day: on, apps: [], sites: [{ host: "b.com", seconds: 8 }], claude_code_seconds: 80 }]);
+  await upload(ana, "pc", [{ day: on, apps: [], sites: [], claude_code_seconds: 0 }]);
+  assert.deepEqual(await sitesOf(ana, on), [{ host: "b.com", seconds: 8 }]);
+  assert.deepEqual(await claudeOf(ana, on), [{ device: "laptop", seconds: 80 }]);
+});
+
+test("a site that is no hostname rolls the whole upload back (RNT-02)", async () => {
+  const on = "2026-10-24";
+  await upload(ana, "pc", [{ day: on, apps: [{ app: "keep.exe", seconds: 7 }] }]);
+  await assert.rejects(upload(ana, "pc", [{ day: on, apps: [{ app: "other.exe", seconds: 7 }], sites: [{ host: "github.com/path?q=1", seconds: 5 }] }]));
+  assert.deepEqual(await appsOf(ana, on), [{ app: "keep.exe", seconds: 7 }]);
+});
+
+test("a revoked or unknown key writes no site and no Claude Code day (RT-03)", async () => {
+  const on = "2026-10-25";
+  const stranger = { ...ana, hash: fingerprint(mintKey().key) };
+  assert.equal(await upload(stranger, "pc", [{ day: on, apps: [], sites: [{ host: "x.com", seconds: 5 }], claude_code_seconds: 5 }]), null);
+  assert.equal(await upload(beto, "pc", [{ day: on, apps: [], sites: [{ host: "x.com", seconds: 5 }], claude_code_seconds: 5 }]), null);
+  assert.deepEqual(await sitesOf(beto, on), []);
+  assert.deepEqual(await claudeOf(beto, on), []);
+});
+
+test("a person reads their own sites and Claude Code days and none of another's; no API role writes them (RNT-01)", async () => {
+  const on = "2026-10-26";
+  await db`insert into timelog.site_seconds (user_id, device, day, host, seconds) values (${beto.id}, 'pc', ${on}, 'beto.dev', 9), (${ana.id}, 'pc', ${on}, 'ana.dev', 9)`;
+  await db`insert into timelog.claude_code_seconds (user_id, device, day, seconds) values (${beto.id}, 'pc', ${on}, 9), (${ana.id}, 'pc', ${on}, 9)`;
+  const seen = (table: "site_seconds" | "claude_code_seconds") =>
+    asPerson(ana, (tx) => tx.execute<{ user_id: string }>(sql`select distinct user_id from ${sql.identifier("timelog")}.${sql.identifier(table)}`).then((rows) => rows.map((row) => row.user_id)));
+  assert.deepEqual(await seen("site_seconds"), [ana.id]);
+  assert.deepEqual(await seen("claude_code_seconds"), [ana.id]);
+
+  await assert.rejects(
+    asPerson(ana, (tx) => tx.execute(sql`insert into timelog.site_seconds (user_id, device, day, host, seconds) values (${ana.id}, 'pc', ${on}, 'forged.dev', 1)`)),
+    denied,
+  );
+  await assert.rejects(
+    asPerson(ana, (tx) => tx.execute(sql`insert into timelog.claude_code_seconds (user_id, device, day, seconds) values (${ana.id}, 'laptop', ${on}, 1)`)),
+    denied,
+  );
+  await assert.rejects(asPerson(ana, (tx) => tx.execute(sql`delete from timelog.site_seconds`)), denied);
+});

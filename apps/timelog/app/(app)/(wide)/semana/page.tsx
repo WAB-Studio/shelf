@@ -3,8 +3,9 @@ import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 
 import { BarRows } from "@/components/screens/app-rows";
-import { Between, DayColumns, Figure, Hero, Split, Stack, Text, TextLink, Title } from "@/components/ui";
-import { appsBetween, dayTotals, uploadSpan } from "@/lib/queries";
+import { Between, Card, Cards, DayColumns, Figure, Hero, Split, Stack, Text, TextLink, Title } from "@/components/ui";
+import { claudeTotal } from "@/lib/daily";
+import { appsBetween, claudeBetween, dayTotals, uploadSpan } from "@/lib/queries";
 import { fill, sum } from "@/lib/totals";
 import { askedWeek, clampWeek, weekSteps } from "@/lib/week";
 import { calendarWords } from "@/lib/words";
@@ -23,10 +24,11 @@ export default async function WeekPage({ searchParams }: { searchParams: Promise
   const { semana } = await searchParams;
   const asked = askedWeek(semana, today);
   const sunday = addDays(asked, 6);
-  const [span, totals, apps, words, t] = await Promise.all([
+  const [span, totals, apps, claude, words, t] = await Promise.all([
     uploadSpan(),
     dayTotals(asked, sunday),
     appsBetween(asked, sunday),
+    claudeBetween(asked, sunday),
     calendarWords(),
     getTranslations("time.week"),
   ]);
@@ -36,6 +38,8 @@ export default async function WeekPage({ searchParams }: { searchParams: Promise
   const days = fill(monday, sunday, totals);
   const longestDay = Math.max(1, ...days.map((one) => one.seconds));
   const grouped = words.apps(apps);
+  const claudeOn = new Map(claude.map((one) => [one.day, claudeTotal(one)]));
+  const claudeWeek = [...claudeOn.values()].reduce((total, seconds) => total + seconds, 0);
 
   const block = (
     <Hero>
@@ -59,6 +63,11 @@ export default async function WeekPage({ searchParams }: { searchParams: Promise
             };
           })}
         />
+        <Cards>
+          <Card label={t("claudeWeekTotal")}>
+            <Text mono>{claudeWeek > 0 ? words.duration(claudeWeek) : t("none")}</Text>
+          </Card>
+        </Cards>
       </Stack>
     </Hero>
   );
@@ -73,22 +82,49 @@ export default async function WeekPage({ searchParams }: { searchParams: Promise
         </Between>
       </Between>
       <Split aside={block}>
-        <Stack gap={2}>
-          <Text variant="meta">{t("apps")}</Text>
-          {grouped.length === 0 ? (
-            <Text as="p">{t("noApps")}</Text>
-          ) : (
-            <BarRows
-              featured={3}
-              rows={grouped.map((one) => ({
-                key: one.app,
-                name: one.app,
-                figure: words.duration(one.seconds),
-                seconds: one.seconds,
-                label: t("bar", { day: one.app, duration: words.duration(one.seconds) }),
-              }))}
-            />
-          )}
+        <Stack gap={4}>
+          <Stack gap={2}>
+            <Text variant="meta">{t("apps")}</Text>
+            {grouped.length === 0 ? (
+              <Text as="p">{t("noApps")}</Text>
+            ) : (
+              <BarRows
+                featured={3}
+                rows={grouped.map((one) => ({
+                  key: one.app,
+                  name: one.app,
+                  figure: words.duration(one.seconds),
+                  seconds: one.seconds,
+                  label: t("bar", { day: one.app, duration: words.duration(one.seconds) }),
+                }))}
+              />
+            )}
+          </Stack>
+          <Stack gap={2}>
+            <Between>
+              <Text variant="meta">{t("claude")}</Text>
+              <TextLink download href={`/api/export?from=${monday}&to=${sunday}`}>
+                {t("export")}
+              </TextLink>
+            </Between>
+            {claudeWeek === 0 ? (
+              <Text as="p" variant="meta">{span.hasClaudeCode || span.hasSites ? t("claudeNone") : t("claudeNever")}</Text>
+            ) : (
+              <BarRows
+                rows={days.map(({ day }) => {
+                  const seconds = claudeOn.get(day) ?? 0;
+                  const name = `${words.weekdayShort(day)} ${words.dayOfMonth(day)}`;
+                  return {
+                    key: day,
+                    name,
+                    figure: seconds === 0 ? t("none") : words.duration(seconds),
+                    seconds,
+                    label: t("bar", { day: name, duration: seconds === 0 ? t("none") : words.duration(seconds) }),
+                  };
+                })}
+              />
+            )}
+          </Stack>
         </Stack>
       </Split>
     </Stack>

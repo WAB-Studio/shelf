@@ -14,7 +14,8 @@
     "label": "Sections",
     "today": "Today",
     "week": "Week",
-    "keys": "Keys"
+    "keys": "Keys",
+    "export": "Export"
   },
   "today": {
     "title": "{weekday}, {month} {day}",
@@ -35,7 +36,9 @@
     "versusSame": "Same as the day before",
     "connect": "Connect my PC",
     "prev": "Previous day",
-    "next": "Next day"
+    "next": "Next day",
+    "apps": "Apps",
+    "claudeCard": "Claude in total"
   },
   "week": {
     "title": "{from} to {to}",
@@ -47,7 +50,12 @@
     "none": "—",
     "bar": "{day}: {duration}",
     "total": "Total for the week",
-    "upcoming": "{day}: not here yet"
+    "upcoming": "{day}: not here yet",
+    "claude": "Claude by day",
+    "export": "Export this week",
+    "claudeWeekTotal": "Claude this week",
+    "claudeNone": "No Claude time this week.",
+    "claudeNever": "No Claude time has arrived yet. See «Today» for how to connect it."
   },
   "keys": {
     "title": "Keys",
@@ -97,5 +105,37 @@
     "text": "The day you are looking for does not exist or has not arrived yet.",
     "back": "Go to Today"
   },
-  "system": "System"
+  "system": "System",
+  "claude": {
+    "title": "Claude",
+    "code": "Claude Code",
+    "web": "claude.ai",
+    "desktop": "Claude app",
+    "total": "Claude in total",
+    "bar": "{name}: {duration}",
+    "empty": "No Claude time that day.",
+    "never": "No Claude Code time has arrived yet. It is read from its sessions folder on your PC; if you use it in WSL, point to that folder in aw-timelog.toml (claude_dir) and wait for the next upload.",
+    "overlap": "The three add up as they are: if you used two at once, both count."
+  },
+  "internet": {
+    "title": "Internet",
+    "bar": "{host}: {duration}",
+    "empty": "No sites that day.",
+    "never": "No sites have arrived yet. Install ActivityWatch's browser extension and they will show here after the next upload.",
+    "install": "How to install the extension",
+    "more": "and {n} more sites",
+    "privacy": "The site alone (github.com): never the page or the full address."
+  },
+  "export": {
+    "title": "Export",
+    "intro": "A CSV with a row per day: time on the computer, Claude Code, claude.ai, Claude in total and the most used app, all in seconds. Claude reads the same rows with the get_daily tool.",
+    "from": "From",
+    "to": "To",
+    "download": "Download CSV",
+    "quick": "Shortcuts",
+    "thisWeek": "This week",
+    "last30": "Last 30 days",
+    "thisMonth": "This month",
+    "badRange": "That range did not work: «From» is on or before «To», up to 366 days."
+  }
 }

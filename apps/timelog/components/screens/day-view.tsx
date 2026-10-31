@@ -1,8 +1,10 @@
 import { getTranslations } from "next-intl/server";
 
 import { BarRows } from "@/components/screens/app-rows";
+import { ClaudeBlock, InternetBlock } from "@/components/screens/claude-internet";
 import { Between, Card, Cards, Figure, Hero, Split, Stack, Text, TextLink, Title } from "@/components/ui";
-import { appsBetween, dayTotals, uploadSpan } from "@/lib/queries";
+import { claudeTotal } from "@/lib/daily";
+import { appsBetween, claudeBetween, dayTotals, sitesBetween, uploadSpan } from "@/lib/queries";
 import { sum } from "@/lib/totals";
 import { calendarWords } from "@/lib/words";
 import { addDays, civilDay } from "@/lib/zone";
@@ -13,14 +15,18 @@ export async function DayView({ day }: { day: string }) {
   const today = civilDay();
   const isToday = day === today;
   const before = addDays(day, -1);
-  const [raw, previous, span, words, t] = await Promise.all([
+  const [raw, sites, claudeDays, previous, span, words, t] = await Promise.all([
     appsBetween(day, day),
+    sitesBetween(day, day),
+    claudeBetween(day, day),
     // Only a whole day compares: uploads carry day totals, so today so far has no like-for-like yesterday.
     isToday ? Promise.resolve([]) : dayTotals(before, before),
     uploadSpan(),
     calendarWords(),
     getTranslations("time.today"),
   ]);
+  const claude = claudeDays[0];
+  const claudeSeconds = claude === undefined ? 0 : claudeTotal(claude);
   const apps = words.apps(raw);
   const total = sum(apps);
   const top = apps[0];
@@ -57,6 +63,9 @@ export async function DayView({ day }: { day: string }) {
                       <Text truncate>{top.app}</Text>
                       <Text mono>{words.duration(top.seconds)}</Text>
                     </Card>
+                    <Card label={t("claudeCard")}>
+                      <Text mono>{claudeSeconds > 0 ? words.duration(claudeSeconds) : "—"}</Text>
+                    </Card>
                     {!isToday && previousTotal > 0 ? (
                       <Card label={t("versus")}>
                         <Text mono>
@@ -79,15 +88,22 @@ export async function DayView({ day }: { day: string }) {
           </Stack>
         }
       >
-        <BarRows
-          rows={apps.map((one) => ({
-            key: one.app,
-            name: one.app,
-            figure: words.duration(one.seconds),
-            seconds: one.seconds,
-            label: t("bar", { app: one.app, duration: words.duration(one.seconds) }),
-          }))}
-        />
+        <Stack gap={4}>
+          <Stack gap={2}>
+            <Text variant="meta">{t("apps")}</Text>
+            <BarRows
+              rows={apps.map((one) => ({
+                key: one.app,
+                name: one.app,
+                figure: words.duration(one.seconds),
+                seconds: one.seconds,
+                label: t("bar", { app: one.app, duration: words.duration(one.seconds) }),
+              }))}
+            />
+          </Stack>
+          <ClaudeBlock claude={claude} hasClaudeCode={span.hasClaudeCode} hasSites={span.hasSites} words={words} />
+          <InternetBlock sites={sites} hasSites={span.hasSites} words={words} />
+        </Stack>
       </Split>
     </Stack>
   );
