@@ -20,11 +20,13 @@ export function CommitmentActions({
   goalId,
   name,
   factDayCount,
+  evidenceDayCount,
 }: {
   commitmentId: string;
   goalId: string;
   name: string;
   factDayCount: number;
+  evidenceDayCount?: number;
 }) {
   const t = useTranslations();
   const router = useRouter();
@@ -100,6 +102,7 @@ export function CommitmentActions({
         commitmentId={commitmentId}
         name={name}
         factDayCount={factDayCount}
+        evidenceDayCount={evidenceDayCount}
         goalId={goalId}
       />
     </>

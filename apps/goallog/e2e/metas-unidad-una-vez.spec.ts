@@ -99,9 +99,9 @@ for (const width of [360, 1280]) {
       await page.goto("/metas");
       const main = page.locator("main");
       const normal = async (name: string) =>
-        (await main.locator("a", { hasText: name }).innerText()).replace(/\s+/g, " ");
-      expect(await normal(vocabulary)).toContain(`${monthName} · 30 de 60 búsquedas`);
-      expect(await normal(running)).toContain(`${monthName} · 15 de 40 km`);
+        (await main.getByRole("region", { name }).innerText()).replace(/\s+/g, " ");
+      expect(await normal(vocabulary)).toContain(`${monthName} 30 de 60 búsquedas`);
+      expect(await normal(running)).toContain(`${monthName} 15 de 40 km`);
       expect(await normal(vocabulary)).not.toMatch(/30 búsquedas de/);
     } finally {
       await context.close();
@@ -132,15 +132,15 @@ for (const width of [360, 1280]) {
       await page.goto("/metas");
       const main = page.locator("main");
       const normal = async (name: string) =>
-        (await main.locator("a", { hasText: name }).innerText()).replace(/\s+/g, " ");
-      expect(await normal(english)).toContain(`${monthName} · 2 h de 8 h`);
-      expect(await normal(reading)).toContain(`${monthName} · 45 min de 10 h`);
+        (await main.getByRole("region", { name }).innerText()).replace(/\s+/g, " ");
+      expect(await normal(english)).toContain(`${monthName} 2 h de 8 h`);
+      expect(await normal(reading)).toContain(`${monthName} 45 min de 10 h`);
     } finally {
       await context.close();
     }
   });
 
-  test(`/metas at ${width}: a goal with no amount keeps its unit, «${monthName} · 18 búsquedas»`, async ({
+  test(`/metas at ${width}: a goal with no amount keeps its unit, «${monthName} 18 búsquedas»`, async ({
     person,
     browser,
     db,
@@ -156,15 +156,15 @@ for (const width of [360, 1280]) {
     try {
       const page = await context.newPage();
       await page.goto("/metas");
-      const row = (await page.locator("main a", { hasText: name }).innerText()).replace(/\s+/g, " ");
-      expect(row).toContain(`${monthName} · 18 búsquedas`);
+      const row = (await page.locator("main").getByRole("region", { name }).innerText()).replace(/\s+/g, " ");
+      expect(row).toContain(`${monthName} 18 búsquedas`);
       expect(row).not.toContain(" de ");
     } finally {
       await context.close();
     }
   });
 
-  test(`/metas at ${width}: one search with no amount says it in the singular, «${monthName} · 1 búsqueda»`, async ({
+  test(`/metas at ${width}: one search with no amount says it in the singular, «${monthName} 1 búsqueda»`, async ({
     person,
     browser,
     db,
@@ -180,8 +180,8 @@ for (const width of [360, 1280]) {
     try {
       const page = await context.newPage();
       await page.goto("/metas");
-      const row = (await page.locator("main a", { hasText: name }).innerText()).replace(/\s+/g, " ");
-      expect(row).toContain(`${monthName} · 1 búsqueda`);
+      const row = (await page.locator("main").getByRole("region", { name }).innerText()).replace(/\s+/g, " ");
+      expect(row).toContain(`${monthName} 1 búsqueda`);
       expect(row).not.toContain("1 búsquedas");
     } finally {
       await context.close();
@@ -221,16 +221,17 @@ test("/metas at 360: the month figure sits under the name and above «hasta el �
     const page = await context.newPage();
     await page.goto("/metas");
     const main = page.locator("main");
-    const row = main.locator("a", { hasText: measured });
-    const figure = row.getByText(`${monthName} · 30 de 60 búsquedas`).locator("visible=true");
-    const until = row.getByText(/^hasta el /).locator("visible=true");
+    const row = main.getByRole("region", { name: measured });
+    const figure = row.locator('[data-part="figure"]').first();
+    const until = row.getByText(/hasta el /).locator("visible=true");
     const name = row.getByText(measured, { exact: true });
     await expect(figure).toBeVisible();
+    await expect(row).toContainText(`${monthName} 30 de 60 búsquedas`);
     const y = async (locator: typeof figure) => (await boxOf(locator)).y;
     expect(await y(name)).toBeLessThan(await y(figure));
     expect(await y(figure)).toBeLessThan(await y(until));
 
-    const bareText = (await main.locator("a", { hasText: bare }).innerText()).replace(/\s+/g, " ");
+    const bareText = (await main.getByRole("region", { name: bare }).innerText()).replace(/\s+/g, " ");
     expect(bareText).not.toContain(monthName);
     expect(bareText).toContain("hasta el");
     for (const other of [ended, archived]) {

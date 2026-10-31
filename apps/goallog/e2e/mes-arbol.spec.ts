@@ -16,10 +16,11 @@ const DAY_MS = 86_400_000;
 const shift = (day: string, days: number) => new Date(Date.parse(`${day}T12:00:00Z`) + days * DAY_MS).toISOString().slice(0, 10);
 const MONTH_WORD = new Intl.DateTimeFormat("es", { month: "long", timeZone: "UTC" }).format(new Date(`${MONTH}T12:00:00Z`));
 const MONTH_TITLE = MONTH_WORD.charAt(0).toUpperCase() + MONTH_WORD.slice(1);
-// «lunes 12 de octubre»
+// «Lunes 12 de octubre»
 const TODAY_LINE = new Intl.DateTimeFormat("es", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" })
   .format(new Date(`${TODAY}T12:00:00Z`))
-  .replace(",", "");
+  .replace(",", "")
+  .replace(/^./, (letter) => letter.toUpperCase());
 // Seeded relative to the day the app reads: opened 20 days ago, ending in 250.
 const OPENED = shift(TODAY, -20);
 const HORIZON = shift(TODAY, 250);
@@ -119,7 +120,10 @@ const lc = (text: string) => text.toLowerCase();
 async function mainText(page: Page): Promise<string> {
   // The section label («DE OCTUBRE», the month's own word) sits wherever the worker puts it; it is not a row.
   // Lowercase: the screen sets some lines in capitals, and innerText returns what is drawn.
-  return norm((await page.locator("main").innerText()).replace(new RegExp(`DE ${MONTH_WORD}`, "gi"), " ")).toLowerCase();
+  // The goals' blocks, not the calendar and the month's figures above them (decided 2026-10-31).
+  const blocks = page.locator('[data-part="month-blocks"]');
+  const area = (await blocks.count()) > 0 ? blocks : page.locator("main");
+  return norm((await area.innerText()).replace(new RegExp(`DE ${MONTH_WORD}`, "gi"), " ")).toLowerCase();
 }
 
 async function openMes(page: Page) {
@@ -265,9 +269,12 @@ test("a task of the small goal is marked done in one tap from the general's bloc
     if (request.method() === "POST") posts.push(request.url());
   });
   const mark = page.getByRole("button", { name: "Marcar hecha: Entrevistar a 5 usuarios", exact: true });
-  const generalY = (await boxOf(page.getByRole("heading", { level: 2, name: G, exact: true }))).y;
-  const looseY = (await boxOf(page.getByRole("heading", { level: 2, name: LOOSE, exact: true }))).y;
-  const markY = (await boxOf(mark)).y;
+  // Page coordinates: the calendar above makes the screen taller than the viewport, and a viewport-relative box moves with the scroll.
+  const pageY = (locator: import("@playwright/test").Locator) =>
+    locator.evaluate((el) => el.getBoundingClientRect().top + window.scrollY);
+  const generalY = await pageY(page.getByRole("heading", { level: 2, name: G, exact: true }));
+  const looseY = await pageY(page.getByRole("heading", { level: 2, name: LOOSE, exact: true }));
+  const markY = await pageY(mark);
   expect(markY).toBeGreaterThan(generalY);
   expect(markY).toBeLessThan(looseY);
 
@@ -275,7 +282,7 @@ test("a task of the small goal is marked done in one tap from the general's bloc
   const undo = page.getByRole("button", { name: "Deshacer: Entrevistar a 5 usuarios", exact: true });
   await expect(undo).toBeVisible();
   expect(posts).toHaveLength(1);
-  const undoY = (await boxOf(undo)).y;
+  const undoY = await pageY(undo);
   expect(undoY).toBeGreaterThan(generalY);
   expect(undoY).toBeLessThan(looseY);
   const [fact] = await db<{ n: number }[]>`

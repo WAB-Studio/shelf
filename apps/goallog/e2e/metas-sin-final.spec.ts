@@ -128,7 +128,7 @@ for (const width of [360, 1280]) {
       try {
         await expect(page.getByText(ended, { exact: true }).first()).toBeVisible();
         const text = await mainLower(page);
-        const open = between(text, "abiertas", "terminadas");
+        const open = between(text, "", "terminadas");
         const closed = between(text, "terminadas");
         expect(open).toContain(endless.toLowerCase());
         expect(open).toContain("sin final");

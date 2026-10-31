@@ -213,7 +213,8 @@ test("«Mes» draws the «Hábitos» group after the goal blocks, rows without a
       expect(body).toContain(`${idle.toLowerCase()} 1 vez por semana · ${figure(0, month.counted)}`);
     }
     expect(body).not.toMatch(/1 vez por semana · \d+ días?/);
-    expect(body).not.toContain("1 días");
+    // «1 días» as a whole number: «31 días» in the month block is a different figure.
+    expect(body).not.toMatch(/(?<!\d)1 días/);
     // Read-only: Mes counts, it never marks.
     for (const name of [water, call, idle]) {
       await expect(page.getByRole("button", { name: new RegExp(name) })).toHaveCount(0);

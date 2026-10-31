@@ -49,6 +49,8 @@
   "retireSheet": {
     "title": "¿Retirarlo?",
     "descriptionWithDays": "Deja de pedirse desde mañana. Las semanas que ya gobernó siguen leyéndose igual, y {days, plural, one {el día} other {los # días}} en que lo hiciste {days, plural, one {sigue} other {siguen}} ahí.",
+    "evidenceDays": "{days, plural, one {El día} other {Los # días}} que cumplió su fuente {days, plural, one {sigue} other {siguen}} ahí.",
+    "evidenceLocked": "La frecuencia queda como está: {days, plural, one {un día} other {# días}} ya {days, plural, one {lo cumplió} other {lo cumplieron}} su fuente.",
     "descriptionNoDays": "Deja de pedirse desde mañana. Las semanas que ya gobernó siguen leyéndose igual.",
     "confirm": "Retirarlo",
     "cancel": "Dejarlo como está"

@@ -46,7 +46,7 @@ async function seedGoal(
 }
 
 for (const width of [360, 390, 1280, 1440]) {
-  test(`/metas at ${width}: the goals as rows with their last day, «Abrir otra meta» apart, the plan one tap away`, async ({
+  test(`/metas at ${width}: the goals as cards with their last day, «Abrir otra meta» apart, the plan one tap away`, async ({
     person,
     browser,
     db,
@@ -75,23 +75,23 @@ for (const width of [360, 390, 1280, 1440]) {
       await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
       await expect(page.getByRole("heading", { level: 1 })).toHaveText("Metas");
 
-      const group = page.getByRole("group", { name: "abiertas" });
-      const links = group.getByRole("link");
-      await expect(links).toHaveCount(2);
-      await expect(links.nth(0)).toContainText(nearName);
-      await expect(links.nth(0)).toContainText(`hasta el ${lastDay(nearHorizon)}`);
-      await expect(links.nth(1)).toContainText(farName);
-      await expect(links.nth(1)).toContainText(`hasta el ${lastDay(farHorizon)}`);
+      // Each open goal is a card named by the goal, in the list's order, each with a link that opens it.
+      const cards = page.locator("main section[aria-label]").filter({ has: page.getByRole("link", { name: /^Abrir / }) });
+      await expect(cards).toHaveCount(2);
+      await expect(cards.nth(0)).toContainText(nearName);
+      await expect(cards.nth(0)).toContainText(`hasta el ${lastDay(nearHorizon)}`);
+      await expect(cards.nth(1)).toContainText(farName);
+      await expect(cards.nth(1)).toContainText(`hasta el ${lastDay(farHorizon)}`);
       expect(lastDay(farHorizon)).toMatch(/ \d{4}$/);
       for (const index of [0, 1]) {
-        const box = await links.nth(index).boundingBox();
-        expect(box!.height).toBeGreaterThanOrEqual(48);
+        const box = await cards.nth(index).getByRole("link", { name: /^Abrir / }).boundingBox();
+        expect(box!.height).toBeGreaterThanOrEqual(44);
       }
 
-      // «Abrir otra meta» is a link of the page, not one of the goals' rows.
+      // «Abrir otra meta» is a link of the page, not one of the goals' cards.
       const addAnother = page.getByRole("link", { name: "Abrir otra meta" });
       await expect(addAnother).toHaveAttribute("href", "/metas/nueva");
-      await expect(group.getByRole("link", { name: "Abrir otra meta" })).toHaveCount(0);
+      await expect(cards.getByRole("link", { name: "Abrir otra meta" })).toHaveCount(0);
 
       await expect(page.getByRole("link", { name: `${endedName} terminó el 13 sep 2026` })).toBeVisible();
       await expect(page.getByRole("link", { name: new RegExp(`^${archivedName} archivada el \\d+ \\w+ \\d{4}$`) })).toBeVisible();
@@ -99,8 +99,8 @@ for (const width of [360, 390, 1280, 1440]) {
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
 
       if (width >= 1024) {
-        const rowBox = await links.nth(0).boundingBox();
-        const planBox = await page.getByText("el plan", { exact: true }).boundingBox();
+        const rowBox = await cards.nth(0).boundingBox();
+        const planBox = await page.getByText("El plan", { exact: true }).boundingBox();
         expect(planBox!.x).toBeGreaterThan(rowBox!.x + rowBox!.width);
       }
 
@@ -110,7 +110,9 @@ for (const width of [360, 390, 1280, 1440]) {
         [endedId, endedName],
       ]) {
         await page.goto("/metas");
-        await page.locator("main").getByRole("link", { name: new RegExp(`^${name}`) }).click();
+        // An open goal opens from its card's link; an ended one from its row.
+        const link = id === endedId ? new RegExp(`^${name}`) : `Abrir ${name}`;
+        await page.locator("main").getByRole("link", { name: link }).click();
         await page.waitForURL(new RegExp(`/metas/${id}$`));
       }
 
@@ -139,7 +141,7 @@ const MONTH_LONG = [
 ];
 
 for (const width of [390, 1440]) {
-  test(`/metas at ${width}: both rows carry the goal's month and figure, the phone one above its last day, and the plan sits before «Archivadas»`, async ({
+  test(`/metas at ${width}: both cards carry the goal's month and figure and its last day, and the plan sits before «Archivadas»`, async ({
     person,
     browser,
     db,
@@ -207,21 +209,17 @@ for (const width of [390, 1440]) {
       const page = await context.newPage();
       await page.goto("/metas");
       const main = page.locator("main");
-      const measuredRow = main.locator("a", { hasText: measuredName });
-      const taskedRow = main.locator("a", { hasText: taskedName });
+      const measuredRow = main.getByRole("region", { name: measuredName });
+      const taskedRow = main.getByRole("region", { name: taskedName });
 
-      if (width >= 1024) {
-        await expect(measuredRow.getByText(`${monthName} · 2 h 41 min de 12 h`).locator("visible=true")).toBeVisible();
-        await expect(taskedRow.getByText(`${monthName} · 1 de 3 tareas`).locator("visible=true")).toBeVisible();
-        await expect(measuredRow.getByText(`hasta el ${lastDay(horizon)}`).last()).toBeVisible();
-      } else {
-        await expect(measuredRow.getByText(`hasta el ${lastDay(horizon)}`).first()).toBeVisible();
-        await expect(measuredRow.getByText(`${monthName} · 2 h 41 min de 12 h`).locator("visible=true")).toBeVisible();
-        await expect(taskedRow.getByText(`${monthName} · 1 de 3 tareas`).locator("visible=true")).toBeVisible();
+      await expect(measuredRow).toContainText(`${monthName} 2 h 41 min de 12 h`);
+      await expect(taskedRow).toContainText(`${monthName} 1 de 3 tareas`);
+      await expect(measuredRow).toContainText(`hasta el ${lastDay(horizon)}`);
+      if (width < 1024) {
 
         const y = async (locator: ReturnType<typeof page.getByText>) => (await boxOf(locator)).y;
         const addAnother = await y(page.getByRole("link", { name: "Abrir otra meta" }));
-        const plan = await y(page.getByText("el plan", { exact: true }));
+        const plan = await y(page.getByText("El plan", { exact: true }));
         const archived = await y(page.getByText("Archivadas", { exact: true }));
         expect(addAnother).toBeLessThan(plan);
         expect(plan).toBeLessThan(archived);
@@ -273,8 +271,8 @@ test("/metas at 1440: a goal's figure folds in the evidence its source recorded 
   try {
     const page = await context.newPage();
     await page.goto("/metas");
-    const row = page.locator("main").locator("a", { hasText: name });
-    await expect(row).toContainText(new RegExp(`${monthName}\\s+·\\s+3\\s+de\\s+10\\s*búsquedas`));
+    const row = page.locator("main").getByRole("region", { name });
+    await expect(row).toContainText(new RegExp(`${monthName}\\s+3\\s+de\\s+10\\s*búsquedas`));
   } finally {
     await context.close();
     await db`delete from reading.lookups where user_id = ${person.id} and device_id = ${deviceId}`;
@@ -342,15 +340,15 @@ for (const [screen, path] of [
   }
 }
 
-test("the /metas row says the unit once after a figure of 1, «1 de 10 búsquedas»", async ({ person, browser, db }) => {
+test("the /metas card says the unit once after a figure of 1, «1 de 10 búsquedas»", async ({ person, browser, db }) => {
   const name = `Concuerda ${Date.now()}`;
   await seedSearches(db, person.id, name);
   const context = await browser.newContext({ storageState: person.sessionFile, viewport: { width: 390, height: 900 } });
   try {
     const page = await context.newPage();
     await visit(page, "/metas");
-    await expect(page.locator("main").locator("a", { hasText: name })).toContainText(
-      new RegExp(`${MONTH_NAMES[Number(todayInZone().slice(5, 7)) - 1]}\\s+·\\s+1\\s+de\\s+10\\s*búsquedas`),
+    await expect(page.locator("main").getByRole("region", { name })).toContainText(
+      new RegExp(`${MONTH_NAMES[Number(todayInZone().slice(5, 7)) - 1]}\\s+1\\s+de\\s+10\\s*búsquedas`),
     );
   } finally {
     await context.close();

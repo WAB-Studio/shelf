@@ -1,0 +1,65 @@
+.timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  inline-size: 100%;
+  padding-block-start: 22px;
+}
+
+.track {
+  position: relative;
+  display: block;
+  block-size: 14px;
+  border-radius: 7px;
+  background: var(--pulsar-line);
+}
+
+.segment {
+  position: absolute;
+  inset-block: 0;
+  box-sizing: border-box;
+  border-radius: 7px;
+  border: 2px solid var(--pulsar-brand-line, var(--pulsar-line));
+}
+
+/* Lived: the ink, solid. In effect: the accent, solid. To come: a stroke and nothing inside. */
+.past {
+  background: var(--pulsar-ink-secondary);
+  border-color: var(--pulsar-brand);
+}
+
+.current {
+  background: var(--pulsar-accent);
+  border-color: var(--pulsar-brand);
+}
+
+.coming {
+  background: transparent;
+  border-color: var(--pulsar-muted);
+}
+
+.today {
+  position: absolute;
+  inset-block: -4px;
+  inline-size: 2px;
+  margin-inline-start: -1px;
+  background: var(--pulsar-ink);
+}
+
+.todayLabel {
+  position: absolute;
+  inset-block-end: 100%;
+  inset-inline-start: 50%;
+  transform: translateX(-50%);
+  padding-block-end: 2px;
+  font-size: 14px;
+  color: var(--pulsar-ink);
+  white-space: nowrap;
+}
+
+.ends {
+  display: flex;
+  justify-content: space-between;
+  font-size: var(--pulsar-text-meta-size);
+  color: var(--pulsar-muted);
+}

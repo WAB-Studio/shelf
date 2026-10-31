@@ -304,20 +304,25 @@ test("folding one large goal hides only its small goals; the count on its row st
   }
 });
 
-test("three lone goals draw as before: one left edge, no arrow", async ({ person, browser, db }) => {
-  // Kills: indenting every goal, or giving a leaf an arrow.
+test("three lone goals draw as three cards, with no arrow and no count of goals inside", async ({ person, browser, db }) => {
+  // Kills: giving a leaf an arrow, or a card that says «N metas» for a goal holding none.
   const stamp = Date.now();
   const names = [`Uno ${stamp}`, `Dos ${stamp}`, `Tres ${stamp}`];
   for (const [i, name] of names.entries()) await seedGoal(db, person.id, name, null, 60 + i * 10);
   const { context, page } = await open(browser, person.sessionFile, 360);
   try {
+    // On the phone a card is no box of its own, so its edge is its name's.
+    const left = (name: string) => page.locator("main").getByText(name, { exact: true }).first().evaluate((el) => el.getBoundingClientRect().left);
     const lefts = [];
-    for (const name of names) lefts.push(await nameLeft(page, name));
+    for (const name of names) lefts.push(await left(name));
+    // One column at 360: every card on the same left edge, the page's own gutter.
     expect(lefts[1]).toBeCloseTo(lefts[0], 0);
     expect(lefts[2]).toBeCloseTo(lefts[0], 0);
     expect(lefts[0]).toBeCloseTo(20, 0);
     await expect(folds(page)).toHaveCount(0);
-    for (const name of names) expect(norm(await row(page, name).innerText())).not.toMatch(/ metas?\b/);
+    for (const name of names) {
+      expect(norm(await page.locator("main").getByRole("region", { name }).innerText())).not.toMatch(/ metas?\b/);
+    }
   } finally {
     await context.close();
   }

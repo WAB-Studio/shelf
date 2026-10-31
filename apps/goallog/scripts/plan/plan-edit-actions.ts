@@ -219,6 +219,7 @@ after(async () => {
   try {
     if (commitmentIds.length > 0) await sql`delete from goals.commitments where id in ${sql(commitmentIds)}`;
     if (goalIds.length > 0) await sql`delete from goals.goals where id in ${sql(goalIds)}`;
+    await sql`delete from reading.lookups where device_id = ${deviceId}`;
   } finally {
     await sql.end();
   }
@@ -448,6 +449,55 @@ test("editCadence: a commitment a fact names is cadenceHasFacts; the cadence, th
   assert.equal((await day.loadDay(today)).periodDone[id], weekBefore);
   const view = await goalQuery.loadGoal(g);
   assert.equal(view?.commitments.find((entry) => entry.id === id)?.factDayCount, 1);
+});
+
+// An evidence commitment writes no fact (RP-05): the days its source met the threshold, from the day it was
+// written, lock its cadence like a declared fact; a day before it was written, or under the threshold, locks nothing.
+async function evidenceCommitment(name: string, goalId: string, createdDaysAgo: number): Promise<string> {
+  const [row] = await sql<{ id: string }[]>`
+    insert into goals.commitments (user_id, goal_id, name, cadence_kind, satisfaction, source_id, threshold, created_at)
+    values (${me}, ${goalId}, ${`RP-127 ${name}`}, 'daily', 'evidence',
+            (select id from goals.evidence_sources where key = 'reading_lookups'), 2, now() - ${createdDaysAgo} * interval '1 day')
+    returning id`;
+  commitmentIds.push(row.id);
+  return row.id;
+}
+
+const deviceId = "aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa";
+let lookupId = 9000;
+async function lookup(daysAgo: number, count: number): Promise<void> {
+  for (let n = 0; n < count; n++) {
+    lookupId += 1;
+    await sql`insert into reading.lookups
+      (user_id, device_id, local_id, at, text, normalised, kind, outcome, headword, rule, senses, translation, dictionary_ready, origin, record_schema)
+      values (${me}, ${deviceId}, ${lookupId}, now() - ${daysAgo} * interval '1 day', 'x', 'x', 'word', 'miss', null, null, 0, null, true, null, 2)`;
+  }
+}
+
+test("editCadence: an evidence commitment whose source met the threshold since it was written is cadenceHasFacts, with no fact", async () => {
+  const g = await goal("cadencia evidencia");
+  const id = await evidenceCommitment("cadencia evidencia", g, 10);
+  await lookup(3, 2);
+  const before = await commitmentRow(id);
+  const { result } = await run(() => acts.editCadence({ commitmentId: id, cadenceKind: "weekdays", cadenceWeekdays: [1] }));
+  assert.deepEqual(result, { ok: false, error: "plan.errors.cadenceHasFacts" });
+  assert.deepEqual(await commitmentRow(id), before);
+  const view = await goalQuery.loadGoalForm(g, undefined, undefined, { evidence: true });
+  const read = view?.commitments.find((entry) => entry.id === id);
+  assert.equal(read?.factDayCount, 0);
+  assert.equal(read?.evidenceDayCount, 1);
+});
+
+test("editCadence: evidence from before the commitment was written, or under its threshold, locks nothing", async () => {
+  const g = await goal("cadencia evidencia previa");
+  const id = await evidenceCommitment("cadencia evidencia previa", g, 2);
+  await lookup(8, 5);
+  await lookup(1, 1);
+  const form = await goalQuery.loadGoalForm(g, undefined, undefined, { evidence: true });
+  assert.equal(form?.commitments.find((entry) => entry.id === id)?.evidenceDayCount, 0);
+  const { result } = await run(() => acts.editCadence({ commitmentId: id, cadenceKind: "weekdays", cadenceWeekdays: [1] }));
+  assert.deepEqual(result, ok);
+  assert.equal((await commitmentRow(id))?.cadence_kind, "weekdays");
 });
 
 test("editCadence: a retired commitment with no fact is commitmentRetired and keeps its cadence", async () => {
