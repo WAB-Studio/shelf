@@ -1,31 +1,13 @@
-import { sql } from "drizzle-orm";
-import { date, integer, pgSchema, text, uuid } from "drizzle-orm/pg-core";
-
 import type { SourceKey } from "@/i18n/translator";
-import type { Transaction } from "@/lib/session";
 import { sourceKey } from "@/i18n/translator";
 
+import { sharedRows } from "./shared-read";
 import { readableApp } from "./timelog-names";
 import type { EvidenceReader } from "./types";
 
-/**
- * A read-only reference to `apps/timelog`'s `timelog.app_seconds`
- * (apps/timelog/db/schema/app-seconds.ts), narrowed to the columns read here
- * and kept out of `db/schema/index.ts` for the reason `reading-lookups.ts`
- * gives. Same database and same `auth.users` id as GoalLog, so TimeLog's own
- * `app_seconds_select_self` policy narrows the rows to the caller's and no
- * mapping of people is needed. `day` is already a civil day in TimeLog's own
- * zone (RT-01), so no zone conversion happens here.
- */
-const timelog = pgSchema("timelog");
-
-const appSeconds = timelog.table("app_seconds", {
-  userId: uuid().notNull(),
-  day: date().notNull(),
-  app: text().notNull(),
-  seconds: integer().notNull(),
-});
-
+// `timelog.app_seconds` (apps/timelog/db/schema/app-seconds.ts) is read in `shared-read.ts`: same database and
+// `auth.users` id as GoalLog, TimeLog's own `app_seconds_select_self` policy narrows the rows, and its `day` is
+// already a civil day in TimeLog's zone (RT-01).
 const UNIT = "minutos";
 
 /**
@@ -50,29 +32,6 @@ export const TIMELOG_SOURCES: readonly {
 
 type DayApp = { day: string; app: string; seconds: number };
 
-// Every source above asks the same question of the same transaction in the
-// same fan, so the statement runs once per transaction and range and each
-// reader filters its own apps from the answer (RNP-03).
-const asked = new WeakMap<Transaction, { from: unknown; to: unknown; rows: Promise<DayApp[]> }>();
-
-function rowsOf(tx: Transaction, from: Parameters<EvidenceReader>[0]["from"], to: Parameters<EvidenceReader>[0]["to"]) {
-  const earlier = asked.get(tx);
-  if (earlier && earlier.from === from && earlier.to === to) return earlier.rows;
-  // Awaited once inside an async body: the builder is lazy and would run again for every reader that awaits it.
-  const rows: Promise<DayApp[]> = (async () => await tx
-    .select({
-      day: sql<string>`${appSeconds.day}::text`,
-      app: appSeconds.app,
-      seconds: sql<number>`sum(${appSeconds.seconds})::int`,
-    })
-    .from(appSeconds)
-    .where(sql`${appSeconds.day} between ${from} and ${to}`)
-    .groupBy(appSeconds.day, appSeconds.app)
-    .orderBy(appSeconds.day))();
-  asked.set(tx, { from, to, rows });
-  return rows;
-}
-
 /**
  * Seconds to whole minutes, per civil day; a day under thirty seconds is no
  * day of evidence. Pure, so the mapping is tested without a database.
@@ -96,9 +55,9 @@ export function minutesPerDay(
 }
 
 export function timelogReader(source: (typeof TIMELOG_SOURCES)[number]): EvidenceReader {
-  return async ({ from, to, tx }) => {
-    const rows = await rowsOf(tx, from, to);
-    return minutesPerDay(rows, source.apps).map((one) => ({
+  return async ({ from, to, zone, tx }) => {
+    const { timelog } = await sharedRows(tx, from, to, zone);
+    return minutesPerDay(timelog, source.apps).map((one) => ({
       day: one.day,
       quantity: one.minutes,
       unit: UNIT,
