@@ -36,6 +36,13 @@
   --tl-tone-claude-on-block: #fb923c;
   --tl-tone-claude-web-on-block: #fdd0aa;
   --tl-tone-claude-app-on-block: #d9651f;
+  /* One colour per Claude Code project on the day line, in the order the day meets them; ink #0c0e11 on each: 10.69, 8.54, 7.10, 7.30, 12.82, 12.62. */
+  --tl-project-0: #22d3ee;
+  --tl-project-1: #fb923c;
+  --tl-project-2: #a78bfa;
+  --tl-project-3: #f472b6;
+  --tl-project-4: #a3e635;
+  --tl-project-5: #facc15;
   /* A heatmap cell: the tone's share over the track. Text #eef2f6 on the strongest, worst tone: 4.55. */
   --tl-heat-1: 14%;
   --tl-heat-2: 24%;
@@ -65,9 +72,15 @@
     --tl-tone-leisure: #b8226b;
     --tl-tone-system: #566170;
     --tl-tone-other: #8a5a00;
-    --tl-tone-claude: #b4470a;
-    --tl-tone-claude-web: #d1782e;
-    --tl-tone-claude-app: #7a2e05;
+    --tl-tone-claude: #9a3a08; /* the three Claude shades, on raised #e8edf2: 5.98, 3.50, 9.30; the middle one clears 3:1 */
+    --tl-tone-claude-web: #c2631a;
+    --tl-tone-claude-app: #6b2704;
+    --tl-project-0: #00687a; /* ink #f6f8fa on each: 6.05, 5.13, 5.51, 5.67, 6.65, 6.44 */
+    --tl-project-1: #b4470a;
+    --tl-project-2: #6d4bd1;
+    --tl-project-3: #b8226b;
+    --tl-project-4: #3f6212;
+    --tl-project-5: #854d0e;
     --tl-heat-1: 22%; /* text #0e1115 on the strongest, worst tone: 5.06 */
     --tl-heat-2: 36%;
     --tl-heat-3: 50%;

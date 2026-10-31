@@ -35,11 +35,11 @@ test("a very short session keeps a readable width and never runs past midnight",
   assert.ok(segments.every((one) => one.width >= 0.012 && one.left + one.width <= 1 + 1e-9));
 });
 
-test("the line opens at the hour now, else at the first session", () => {
-  const layout = layoutSessions([session("a", "14:00", "15:00")], DAY);
-  assert.ok(Math.abs(focusShare(layout, 12 * 60) - 360 / 1080) < 1e-9);
-  assert.ok(Math.abs(focusShare(layout, null) - (9 * 60 - 360) / 1080) < 1e-9);
-  assert.equal(focusShare(layout, 2 * 60), 0);
+test("the line opens on the latest session today, on the first one another day", () => {
+  const layout = layoutSessions([session("a", "14:00", "15:00"), session("b", "20:00", "21:00")], DAY);
+  assert.ok(Math.abs(focusShare(layout, "first") - (9 * 60 - 360) / 1080) < 1e-9);
+  assert.ok(Math.abs(focusShare(layout, "latest") - (15 * 60 + 30 - 360) / 1080) < 1e-9);
+  assert.equal(focusShare({ startHour: 6, lanes: 1, segments: [] }, "latest"), 0);
 });
 
 test("hour marks run every three hours from the start", () => {
@@ -68,4 +68,23 @@ test("lanes follow the width as drawn: a short session next to another still nee
 test("the first hour mark of a line that starts on 6:00 sits at its edge", () => {
   assert.equal(hourMarks(7)[0].left > 0, true);
   assert.equal(hourMarks(6)[0].left, 0);
+});
+
+test("a label too long for its segment is read beside it, and its lane keeps the room", () => {
+  const { segments } = layoutSessions([session("finances-app", "14:00", "14:04"), session("b", "14:20", "15:20")], DAY);
+  assert.deepEqual(segments.map((one) => one.place), ["after", "inside"]);
+  assert.equal(segments[0].lane, 0);
+  assert.equal(segments[1].lane, 1);
+  assert.equal(layoutSessions([session("a", "14:00", "16:00")], DAY).segments[0].place, "inside");
+});
+
+test("a short session at the end of the line reads its label on the left", () => {
+  const late = { key: "late", label: "finances-app", first: new Date("2026-10-31T04:30:00Z"), last: new Date("2026-10-31T04:31:00Z") };
+  const { segments } = layoutSessions([late], DAY);
+  assert.equal(segments[0].place, "before");
+});
+
+test("each project has its own hue and two sessions of one project share it", () => {
+  const { segments } = layoutSessions([session("finances-app", "14:00", "15:00"), session("finances-app-l4", "15:10", "16:00"), session("finances-app", "16:10", "17:00")], DAY);
+  assert.deepEqual(segments.map((one) => one.hue), [0, 1, 0]);
 });

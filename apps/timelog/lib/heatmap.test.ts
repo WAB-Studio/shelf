@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { buildHeatmap } from "./heatmap";
+import { buildHeatmap, claudeHeatRow, heatLevel } from "./heatmap";
 
 const days = ["2026-10-26", "2026-10-27", "2026-10-28"];
 
@@ -38,5 +38,13 @@ test("past the top, the rest is counted and its time added; system noise is one 
   assert.deepEqual(map.rows.map((row) => row.app), ["VS Code", "Chrome"]);
   assert.equal(map.restCount, 1);
   assert.equal(map.restSeconds, 150);
+  assert.deepEqual(map.rest, [{ app: "Sistema", kind: "system", total: 150 }]);
   assert.equal(buildHeatmap([], days, "Sistema", 8).rows.length, 0);
+});
+
+test("Claude's week is one more row, a cell per day levelled against the grid", () => {
+  const row = claudeHeatRow([{ day: "2026-10-26", code: 1000, web: 500, desktop: 500 }, { day: "2026-10-28", code: 4000, web: 0, desktop: 0 }], days, 4000);
+  assert.deepEqual(row.cells, [{ seconds: 2000, level: 2 }, { seconds: 0, level: 0 }, { seconds: 4000, level: 4 }]);
+  assert.equal(row.total, 6000);
+  assert.equal(heatLevel(0, 0), 0);
 });

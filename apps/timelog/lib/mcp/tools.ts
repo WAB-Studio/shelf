@@ -85,12 +85,12 @@ export const tools: ToolSpec[] = [
     name: "get_daily",
     description: mcp.tools.get_daily,
     input: z.object({ from: z.string(), to: z.string() }),
-    async run(reads, input) {
+    async run(reads, input, today) {
       const { from, to } = input as { from: string; to: string };
       if (!isCivilDay(from) || !isCivilDay(to)) return { ok: false, error: "day" };
       if (from > to || addDays(from, MAX_RANGE_DAYS - 1) < to) return { ok: false, error: "range" };
       const [totals, claude, apps] = await Promise.all([reads.dayTotals(from, to), reads.claudeBetween(from, to), reads.appsByDay(from, to)]);
-      return { ok: true, value: { from, to, days: dailyRows(from, to, totals, claude, apps, time.system) } };
+      return { ok: true, value: { from, to, days: dailyRows(from, to, totals, claude, apps, time.system, today) } };
     },
   },
 ];
