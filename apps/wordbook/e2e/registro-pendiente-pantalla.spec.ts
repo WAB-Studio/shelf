@@ -178,7 +178,7 @@ test("RL-76: an answered row beside them is unchanged, and the order is the usua
 
 test("RL-76: tapping a pending word opens its word page", async ({ page }) => {
   await openRegistro(page, ROWS());
-  await rowOf(page, "zzorble").click();
+  await rowOf(page, "zzorble").getByRole("link").click();
   await expect(page).toHaveURL(/\/registro\/zzorble$/);
 });
 

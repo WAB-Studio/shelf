@@ -505,14 +505,14 @@ test("Filtered: deleting while filtering keeps the filter and updates «N de M»
   await openRegistro(page, { lookups: leaveRows() });
   const filter = page.getByRole("textbox", { name: study("filterLabel") });
   await filter.fill("lea");
-  await expect(page.getByText(study("filterCount", { shown: 2, total: 3 }), { exact: true })).toBeVisible();
+  await expect(page.getByText(study("filterCount", { shown: 2, total: 3, kind: "words" }), { exact: true })).toBeVisible();
   await expect(rowLink(page, "left")).toHaveCount(0);
 
   await deleteViaUi(page, "leave");
   await expect(rowLink(page, "leave")).toHaveCount(0);
   await expect(filter).toHaveValue("lea");
   await expect(page).toHaveURL(/filtro=lea/);
-  await expect(page.getByText(study("filterCount", { shown: 1, total: 2 }), { exact: true })).toBeVisible();
+  await expect(page.getByText(study("filterCount", { shown: 1, total: 2, kind: "words" }), { exact: true })).toBeVisible();
   await expect(rowLink(page, "leaf")).toBeVisible();
   await expect(rowLink(page, "left"), "the filter was reset").toHaveCount(0);
 });

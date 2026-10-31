@@ -64,7 +64,8 @@ test("the reading column on / keeps its 620px measure and clears the sidebar", a
   expect(viewport).not.toBeNull();
 
   const navBox = await page.getByRole("navigation", { name: messages.nav.label }).boundingBox();
-  const mainBox = await page.locator("main").boundingBox();
+  // `main` also holds the side column; the reading column is the 620px one.
+  const mainBox = await page.locator("main [data-reading-column]").boundingBox();
   expect(navBox).not.toBeNull();
   expect(mainBox).not.toBeNull();
 
@@ -77,7 +78,8 @@ test("the reading column on / keeps its 620px measure and clears the sidebar", a
   // 620px column on the full 1280px viewport instead (x≈330, gap≈90) and
   // clears 20px by coincidence. Pinning the exact x this formula produces
   // is what tells the two apart.
-  const expectedX = 240 + (viewport!.width - 240 - 620) / 2;
+  // The 620px column, the 32px gap and the 300px side column are centred together.
+  const expectedX = 240 + (viewport!.width - 240 - 952) / 2;
   expect(mainBox!.x).toBeGreaterThan(expectedX - 2);
   expect(mainBox!.x).toBeLessThan(expectedX + 2);
 
@@ -125,7 +127,8 @@ test("RNL-03: at 1440px the box and the answer read as a centred 620px column", 
   await expect(page.getByRole("heading", { name: "throughout" })).toBeVisible({ timeout: 10000 });
   await page.evaluate(() => document.fonts.ready);
 
-  const mainBox = await page.locator("main").boundingBox();
+  // `main` also holds the side column; the reading column is the 620px one.
+  const mainBox = await page.locator("main [data-reading-column]").boundingBox();
   const searchBox = await page.getByRole("textbox", { name: messages.search.label }).boundingBox();
   const answer = await page.getByRole("heading", { name: "throughout" }).boundingBox();
   expect(mainBox).not.toBeNull();
@@ -133,7 +136,8 @@ test("RNL-03: at 1440px the box and the answer read as a centred 620px column", 
   expect(answer).not.toBeNull();
 
   expect(mainBox!.width).toBeLessThanOrEqual(620.5);
-  const expectedX = 240 + (1440 - 240 - 620) / 2;
+  // The 620px column, the 32px gap and the 300px side column are centred together.
+  const expectedX = 240 + (1440 - 240 - 952) / 2;
   expect(mainBox!.x).toBeGreaterThan(expectedX - 2);
   expect(mainBox!.x).toBeLessThan(expectedX + 2);
   // The box and the answer live inside that column, not across the viewport.

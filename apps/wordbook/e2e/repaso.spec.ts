@@ -129,7 +129,7 @@ test("RL-78: «Otra vez» puts the entry back in the same session instead of end
   await page.getByRole("button", { name: messages.review.show }).click();
   await page.getByRole("button", { name: new RegExp(`^${messages.review.grade.again}`) }).click();
 
-  await expect(page.getByText("Queda 1 entrada para repetir en un momento.")).toBeVisible();
+  await expect(page.getByText("Queda 1 palabra para repetir en un momento.")).toBeVisible();
   await expect(page.getByText(/Terminaste por hoy/)).toHaveCount(0);
   await page.getByRole("button", { name: messages.review.reviewNow }).click();
   await expect(page.getByRole("heading", { name: "frisk" })).toBeVisible();

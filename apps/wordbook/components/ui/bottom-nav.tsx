@@ -164,7 +164,9 @@ export function BottomNav() {
             underline="none"
             className={`${styles.item} ${selected ? styles.selected : styles.unselected}`}
           >
-            <NextLink href={href} aria-current={selected ? "page" : undefined}>
+            {/* The search link's address changes with every query typed; prefetching each one would ask the
+                  server on a keystroke's settle. */}
+            <NextLink href={href} prefetch={key === "search" ? false : undefined} aria-current={selected ? "page" : undefined}>
               {/* Radix's own `md` breakpoint is 1024px (`--md` in
                   breakpoints.css), the same one bottom-nav.module.css
                   switches on: icon above label on the bar, icon beside

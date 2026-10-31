@@ -255,7 +255,8 @@ test("a miss and a phrase each keep their own row, beside a lemma's", async ({ p
   await page.reload();
 
   await expect(page.locator('a[href^="/registro/"]')).toHaveCount(3);
-  const rows = await page.locator('a[href^="/registro/"]').allInnerTexts();
+  // A row is a card: its translation sits beside the link.
+  const rows = await page.locator("section").filter({ has: page.locator('a[href^="/registro/"]') }).allInnerTexts();
   const miss = rows.find((t) => t.includes("asdkjh"));
   expect(miss).toMatch(/\b1\b/);
   const phraseRow = rows.find((t) => t.includes(phrase));
@@ -275,7 +276,9 @@ test("a search with no result says «sin resultado» in its own row", async ({ p
   await page.reload();
 
   await expect(page.locator('a[href^="/registro/"]')).toHaveCount(1);
-  expect(await page.locator('a[href^="/registro/"]').innerText()).toContain("sin resultado");
+  expect(await page.locator("section").filter({ has: page.locator('a[href^="/registro/"]') }).innerText()).toContain(
+    "sin resultado",
+  );
 });
 
 test("rows order by the count of the whole lemma, ties broken by the most recent search", async ({ page }) => {

@@ -1,6 +1,5 @@
 import { randomUUID } from "node:crypto";
 
-import { createTranslator } from "next-intl";
 import type { Page, Route } from "@playwright/test";
 
 import messages from "../messages/es.json";
@@ -14,7 +13,6 @@ import { expect, studyHeader, test } from "./fixtures";
 // marks and no row. Every answer of the route is the test's own: no session,
 // no address, no database row.
 
-const t = createTranslator({ locale: "es", messages });
 
 type SeedLookup = Omit<LookupRecord, "id">;
 

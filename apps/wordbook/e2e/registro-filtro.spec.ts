@@ -173,7 +173,7 @@ test("failed: the failure shows and the filter field is absent", async ({ page }
 test("ready with no text: the field is there, all 800 rows and today's header, no count line", async ({ page }) => {
   await open800(page);
   await expect(field(page)).toBeVisible();
-  await expect(field(page)).toHaveAttribute("placeholder", LABEL);
+  await expect(field(page)).toHaveAttribute("placeholder", messages.log.study.filterPlaceholder);
   await expect(field(page)).toHaveValue("");
   await expect(rows(page)).toHaveCount(FIRST_PAGE);
   await expect(page.getByText(/ de \d+ palabras/)).toHaveCount(0);

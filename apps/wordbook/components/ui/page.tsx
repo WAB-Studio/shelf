@@ -35,7 +35,9 @@ export function Page({
             children
           ) : (
             <div className={styles.columns}>
-              <div className={styles.body}>{children}</div>
+              <div className={styles.body} data-reading-column="">
+                {children}
+              </div>
               <aside className={styles.aside}>{aside}</aside>
             </div>
           )}

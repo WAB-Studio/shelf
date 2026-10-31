@@ -2,7 +2,6 @@ import { randomBytes, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
-import { createTranslator } from "next-intl";
 import { confirmCopy, expect, studyHeader, test } from "./fixtures";
 import type { Locator, Page } from "@playwright/test";
 import postgres from "postgres";
@@ -14,10 +13,6 @@ import type { DictionaryPayload } from "../lib/dictionary/format";
 import type { LookupRecord, SyncState } from "../lib/log/types";
 import { closeRun, openRun } from "@repo/harness-registry";
 
-// The same runtime `next-intl` renders with: `log.study.header` is an ICU
-// plural, so a literal `"{lookups}"` substring never appears in the
-// rendered text and a naive `.replace` against it always misses.
-const t = createTranslator({ locale: "es", messages });
 
 // `check:e2e` runs the bare Playwright CLI, no `--env-file`: the direct
 // Postgres access the «vaciar aquí y en mi cuenta» tests need is not there
