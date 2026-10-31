@@ -42,6 +42,10 @@ export type TransactionFormOptions = {
   categories: ScopedCategory[];
   labels: ScopedLabel[];
   members: { userId: string; name: string }[];
+  // Every active member of the fund, login or not, for «De quién» on an income into a fund
+  // account (RF-166); `callerMemberId` is the one the form opens on.
+  fundMembers: { id: string; name: string }[];
+  callerMemberId: string | null;
   lastUsedAccountId: string | null;
   // What each selectable account settles in (RF-121), so the form knows when to
   // ask for the second amount without going back to the server for it.
@@ -105,6 +109,8 @@ export const getTransactionFormOptions = cache(
       members: members.flatMap((member) =>
         member.userId ? [{ userId: member.userId, name: member.name }] : [],
       ),
+      fundMembers: members.map((member) => ({ id: member.id, name: member.name })),
+      callerMemberId: members.find((member) => member.userId === user.id)?.id ?? null,
       lastUsedAccountId,
       accountCurrencies: currencies.accountCurrencies,
       scopeCurrency: currencies.scopeCurrency,

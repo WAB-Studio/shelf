@@ -198,6 +198,8 @@ export const transactionFields = {
   counterIsEstimate: z.boolean().optional(),
   // «Del hogar» (RF-139): a household bill paid from a personal account. Read only on an expense.
   forHousehold: z.boolean().optional(),
+  // «De quién» (RF-166): the fund member an income into a fund account is credited to. Read only there.
+  contributedByMemberId: z.uuid({ error: "transactions.errors.contributorInvalid" }).nullish(),
   occurredAt: occurredAtSchema,
   description: z
     .string()

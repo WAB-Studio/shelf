@@ -52,6 +52,8 @@ export type CreateTransactionArgs = {
   amountFromWords?: boolean;
   // «Del hogar» (RF-139): stored only on an expense from a personal account (`householdMark`).
   forHousehold?: boolean;
+  // «De quién» (RF-166): stored only on an income into a fund account (`contributorMark`).
+  contributedByMemberId?: string | null;
   // RF-133: one side is not known yet and waits for a person; insert only.
   awaitingCounterparty?: boolean;
   occurredAt: string;
@@ -72,6 +74,8 @@ export type UpdateTransactionArgs = {
   counterIsEstimate?: boolean;
   // `undefined` leaves the «del hogar» mark alone (RF-139).
   forHousehold?: boolean;
+  // `undefined` leaves the contributor alone (RF-166).
+  contributedByMemberId?: string | null;
   occurredAt: string;
   description: string | null;
   splits: TransactionSplitInput[];
@@ -115,6 +119,8 @@ export type TransactionListRow = {
   counterIsEstimate: boolean;
   // Marked «del hogar»: counts as its payer's contribution to the fund (RF-139).
   forHousehold: boolean;
+  // The member an income into a fund account is credited to (RF-166).
+  contributedByMemberId: string | null;
   occurredAt: string;
   description: string | null;
   fromAccountId: string | null;
@@ -230,6 +236,7 @@ export async function insertTransaction(
     counterIsEstimate = false,
     amountFromWords = false,
     forHousehold = false,
+    contributedByMemberId = null,
     awaitingCounterparty = false,
     occurredAt,
     description,
@@ -248,6 +255,7 @@ export async function insertTransaction(
       counter_is_estimate,
       amount_from_words,
       for_household,
+      contributed_by_member_id,
       awaiting_counterparty,
       occurred_at,
       description,
@@ -261,6 +269,7 @@ export async function insertTransaction(
       ${counterIsEstimate},
       ${amountFromWords},
       ${householdMark(sql`${fromAccountId}::uuid`, sql`${toAccountId}::uuid`, sql`${forHousehold}`)},
+      ${contributorMark(sql`${fromAccountId}::uuid`, sql`${toAccountId}::uuid`, sql`${contributedByMemberId}::uuid`)},
       ${awaitingCounterparty},
       ${occurredAt},
       ${description},
@@ -309,6 +318,26 @@ export function householdMark(from: SQL, to: SQL, mark: SQL): SQL {
     and exists (select 1 from accounts a where a.id = ${from} and a.owner_user_id is not null))`;
 }
 
+/**
+ * «De quién» as stored (RF-166): it holds only on an income into a fund account, whatever the
+ * caller asked, so every write that sets the accounts states it again.
+ */
+export function contributorMark(from: SQL, to: SQL, member: SQL): SQL {
+  return sql`(case when ${from} is null
+    and exists (select 1 from accounts a where a.id = ${to} and a.group_id is not null)
+    then ${member} end)`;
+}
+
+/**
+ * A member already stored on a movement, kept only while the movement's destination is still
+ * in that member's fund: an income moved into another fund (or out of any) drops it instead
+ * of failing the policy (RF-166).
+ */
+export function contributorStillInFund(member: SQL, to: SQL): SQL {
+  return sql`(select m.id from group_members m join accounts a on a.group_id = m.group_id
+    where m.id = ${member} and a.id = ${to})`;
+}
+
 function stampMatches(expectedUpdatedAt: string) {
   return stampIs(transactions.updatedAt, expectedUpdatedAt);
 }
@@ -349,6 +378,7 @@ export async function updateTransaction({
   counterAmountCents = null,
   counterIsEstimate = false,
   forHousehold,
+  contributedByMemberId,
   occurredAt,
   description,
   splits,
@@ -376,6 +406,16 @@ export async function updateTransaction({
           sql`${fromAccountId}::uuid`,
           sql`${toAccountId}::uuid`,
           forHousehold === undefined ? sql`${transactions.forHousehold}` : sql`${forHousehold}`,
+        ),
+        contributedByMemberId: contributorMark(
+          sql`${fromAccountId}::uuid`,
+          sql`${toAccountId}::uuid`,
+          contributedByMemberId === undefined
+            ? contributorStillInFund(
+                sql`${transactions.contributedByMemberId}`,
+                sql`${toAccountId}::uuid`,
+              )
+            : sql`${contributedByMemberId}::uuid`,
         ),
         occurredAt,
         description,
@@ -596,6 +636,7 @@ export async function listTransactions(
         counterAmountCents: transactions.counterAmountCents,
         counterIsEstimate: transactions.counterIsEstimate,
         forHousehold: transactions.forHousehold,
+        contributedByMemberId: transactions.contributedByMemberId,
         occurredAt: transactions.occurredAt,
         description: transactions.description,
         fromAccountId: transactions.fromAccountId,

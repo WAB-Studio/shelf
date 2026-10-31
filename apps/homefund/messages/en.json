@@ -174,12 +174,13 @@
     "legendIncome": "Income",
     "legendExpense": "Expenses",
     "contributionsTitle": "Contributions this month",
-    "contributionsEmpty": "No contributions this month. A contribution is a transfer from a personal account to a fund account.",
+    "contributionsEmpty": "No contributions this month. A contribution is a transfer from a personal account into a fund account, or an income into the fund with «From whom».",
     "noGroup": "Contributions are a fund figure. You have no fund yet.",
     "monthAdjustment": "Month gap",
     "shareLabel": "{pct}% of the month's spending",
     "averageLabel": "Average {amount}",
-    "emptyMonths": "No movements in {months}: the average leaves them out."
+    "emptyMonths": "No movements in {months}: the average leaves them out.",
+    "contributionsNote": "Incomes into the fund with no «From whom» are not counted."
   },
   "nav": {
     "title": "Navigation",
@@ -625,7 +626,8 @@
       "causeInvalid": "Choose a valid movement.",
       "causeNotFound": "You can't use that movement as a cause.",
       "causeSelf": "A movement can't be its own cause.",
-      "counterpartyComplete": "This movement already has both accounts; there's nothing to complete."
+      "counterpartyComplete": "This movement already has both accounts; there's nothing to complete.",
+      "contributorInvalid": "Pick a fund member"
     },
     "labelsLabel": "Labels",
     "labelsNone": "Create labels in Settings to use them here.",
@@ -646,7 +648,9 @@
     "forHousehold": "For the household",
     "forHouseholdHint": "A household bill paid from your account: it counts as your contribution to the fund.",
     "forHouseholdCounts": "Counts as a contribution by whoever paid it",
-    "headlineNet": "Net"
+    "headlineNet": "Net",
+    "contributorLabel": "From whom",
+    "contributorNone": "Unassigned"
   },
   "cash": {
     "withdrawAction": "Withdraw cash",
@@ -1332,6 +1336,7 @@
       "counterAmount": "Amount in the account's currency",
       "counterIsEstimate": "Estimated amount",
       "forHousehold": "For the household",
+      "contributedBy": "From whom",
       "labels": "Labels",
       "account": "Account",
       "label": "Label",
@@ -1386,7 +1391,8 @@
         "outOfPlace": "This name exists, but not in the placement the row names.",
         "noFund": "The row belongs to a fund and you have none.",
         "repeatedRow": "Another row in the file already carries this for the same account. Keep only one.",
-        "lockedField": "This row changes the category or the place, which cannot change. Add it as a new row instead."
+        "lockedField": "This row changes the category or the place, which cannot change. Add it as a new row instead.",
+        "contributorUnknown": "The «From whom» member is not in the destination account's fund."
       }
     }
   },

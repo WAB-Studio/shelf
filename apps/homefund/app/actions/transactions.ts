@@ -168,6 +168,7 @@ export const createTransactionAction = authActionClient
         ...counter,
         amountFromWords: parsedInput.amountFromWords ?? false,
         forHousehold: parsedInput.forHousehold ?? false,
+        contributedByMemberId: parsedInput.contributedByMemberId ?? null,
         occurredAt: parsedInput.occurredAt,
         description: parsedInput.description,
         externalRef: parsedInput.externalRef ?? null,
@@ -208,6 +209,7 @@ export const updateTransactionAction = authActionClient
         currency: parsedInput.currency ?? null,
         ...counter,
         forHousehold: parsedInput.forHousehold,
+        contributedByMemberId: parsedInput.contributedByMemberId,
         occurredAt: parsedInput.occurredAt,
         description: parsedInput.description,
         splits: toSplitMinor(parsedInput.splits),
@@ -321,7 +323,9 @@ export const completeCounterpartyAction = authActionClient
               -- Naming the other account clears the mark, not only the review
               -- stamp: the mark is the fact, and a later reader must not find
               -- it still set on a movement that now names both sides.
-              awaiting_counterparty = false
+              awaiting_counterparty = false,
+              -- A movement that gains a source is no income: «De quién» goes with it.
+              contributed_by_member_id = case when ${side} = 'from' then null else contributed_by_member_id end
             where id = ${transactionId}
               and (case when ${side} = 'from' then from_account_id else to_account_id end) is null
             returning id
