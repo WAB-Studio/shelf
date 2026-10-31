@@ -2,7 +2,7 @@ import { getTranslations } from "next-intl/server";
 
 import { dailyRows, toCsv } from "@/lib/daily";
 import { exportRange, rangeRetry } from "@/lib/export-range";
-import { appsByDay, claudeBetween, dayTotals } from "@/lib/queries";
+import { appsByDay, claudeBetween, dayTotals, uploadedDays } from "@/lib/queries";
 import { getPerson } from "@/lib/session";
 import { civilDay } from "@/lib/zone";
 
@@ -20,13 +20,14 @@ export async function GET(request: Request): Promise<Response> {
   if (!range.success) return to(request, rangeRetry(params.get("from"), params.get("to")));
 
   const { from, to: until } = range.data;
-  const [totals, claude, apps, t] = await Promise.all([
+  const [totals, claude, apps, uploaded, t] = await Promise.all([
     dayTotals(from, until),
     claudeBetween(from, until),
     appsByDay(from, until),
+    uploadedDays(from, until),
     getTranslations("time"),
   ]);
-  return new Response(toCsv(dailyRows(from, until, totals, claude, apps, t("system"), civilDay())), {
+  return new Response(toCsv(dailyRows(from, until, totals, claude, apps, t("system"), civilDay(), new Set(uploaded))), {
     headers: {
       "Content-Type": "text/csv; charset=utf-8",
       "Content-Disposition": `attachment; filename="timelog-${from}_${until}.csv"`,

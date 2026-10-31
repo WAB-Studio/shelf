@@ -4,7 +4,7 @@ import { getTranslations } from "next-intl/server";
 
 import { BarRows } from "@/components/screens/app-rows";
 import { Between, Card, Cards, DayColumns, Disclosure, Figure, Heatmap, Hero, HeroColumns, Stack, Text, TextLink, Tile, Title, ToneLegend } from "@/components/ui";
-import { claudeTotal, claudeWeekHint } from "@/lib/daily";
+import { claudeWeekHint } from "@/lib/daily";
 import { appTone } from "@/lib/app-classes";
 import { buildHeatmap, claudeHeatRow } from "@/lib/heatmap";
 import { appsByDay, claudeBetween, dayTotals, uploadSpan } from "@/lib/queries";
@@ -46,8 +46,7 @@ export default async function WeekPage({ searchParams }: { searchParams: Promise
   const heat = buildHeatmap(byDay, days.map((one) => one.day), words.system, APPS_SHOWN);
   const hint = claudeWeekHint(span);
   // Claude's total is the grid's first row, levelled against its largest app cell; every tone in it is also written, in the row and in the legend.
-  const largest = Math.max(1, ...heat.rows.flatMap((row) => row.cells.map((cell) => cell.seconds)));
-  const claudeRow = claudeHeatRow(claude, days.map((one) => one.day), largest);
+  const claudeRow = claudeHeatRow(claude, days.map((one) => one.day), heat.largest);
   const toneName = (tone: ReturnType<typeof appTone> | "claude") => (tone === "claude" ? tClaude("title") : tone === "claudeApp" ? tClaude("desktop") : tClass(tone));
   const cellOf = (app: string, day: string, cell: { seconds: number; level: number }) => ({
     figure: cell.seconds === 0 ? null : words.heat(cell.seconds),
@@ -63,7 +62,6 @@ export default async function WeekPage({ searchParams }: { searchParams: Promise
   ];
   const restTones = heat.rest.map((one) => appTone(one.app, words.system));
   const legend = [...new Map([...heatRows.map((row) => row.tone), ...restTones].map((tone) => [tone, { key: tone, tone, name: toneName(tone) }])).values()];
-  const claudeWeek = claude.reduce((total, one) => total + claudeTotal(one), 0);
 
   const block = (
     <Hero>
@@ -89,9 +87,9 @@ export default async function WeekPage({ searchParams }: { searchParams: Promise
         />
         <Cards>
           <Card label={t("claudeWeekTotal")}>
-            <Text mono>{claudeWeek > 0 ? words.duration(claudeWeek) : t("none")}</Text>
-            {claudeWeek === 0 ? <Text variant="meta">{t(`claudeHint.${hint}`)}</Text> : null}
-            {claudeWeek === 0 && hint === "connect" ? <TextLink href="/llaves">{t("connect")} ›</TextLink> : null}
+            <Text mono>{claudeRow.total > 0 ? words.duration(claudeRow.total) : t("none")}</Text>
+            {claudeRow.total === 0 ? <Text variant="meta">{t(`claudeHint.${hint}`)}</Text> : null}
+            {claudeRow.total === 0 && hint === "connect" ? <TextLink href="/llaves">{t("connect")} ›</TextLink> : null}
           </Card>
         </Cards>
       </HeroColumns>

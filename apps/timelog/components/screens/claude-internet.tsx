@@ -1,7 +1,7 @@
 import { getTranslations } from "next-intl/server";
 
 import { BarRows, type BarRow } from "@/components/screens/app-rows";
-import { Disclosure, Stack, Text, TextLink } from "@/components/ui";
+import { Stack, Text, TextLink } from "@/components/ui";
 import { claudeSources, claudeTotal, sourcesOverlap } from "@/lib/daily";
 import { projectName } from "@/lib/claude-project";
 import type { ClaudeDay, ClaudeSessionTime, PageTime, SiteTime } from "@/lib/queries";
@@ -71,14 +71,12 @@ export async function InternetBlock({ isToday, sites, pages, hasSites, words }: 
     const mine = pages.filter((page) => page.host === host);
     const of = sites.find((one) => one.host === host)?.seconds;
     return (
-      <>
-        <BarRows tone="browser" of={of} rows={mine.slice(0, PAGES_SHOWN).map(pageRow)} />
-        {mine.length > PAGES_SHOWN ? (
-          <Disclosure summary={<Text variant="meta">{t("pagesMore", { n: mine.length - PAGES_SHOWN })}</Text>}>
-            <BarRows tone="browser" of={of} rows={mine.slice(PAGES_SHOWN).map(pageRow)} />
-          </Disclosure>
-        ) : null}
-      </>
+      <BarRows
+        tone="browser"
+        of={of}
+        rows={mine.slice(0, PAGES_SHOWN).map(pageRow)}
+        overflow={mine.length > PAGES_SHOWN ? { summary: t("pagesMore", { n: mine.length - PAGES_SHOWN }), rows: mine.slice(PAGES_SHOWN).map(pageRow) } : undefined}
+      />
     );
   };
   const siteRow = (one: SiteTime): BarRow => ({ key: one.host, name: one.host, figure: words.duration(one.seconds), seconds: one.seconds, label: t("bar", { host: one.host, duration: words.duration(one.seconds) }), detail: pages.some((page) => page.host === one.host) ? pagesOf(one.host) : undefined });
@@ -86,12 +84,12 @@ export async function InternetBlock({ isToday, sites, pages, hasSites, words }: 
     <Stack gap={2}>
       {sites.length > 0 ? (
         <>
-          <BarRows tone="browser" of={sites[0].seconds} rows={sites.slice(0, SITES_SHOWN).map(siteRow)} />
-          {sites.length > SITES_SHOWN ? (
-            <Disclosure summary={<Text variant="meta">{t("more", { n: sites.length - SITES_SHOWN })}</Text>}>
-              <BarRows tone="browser" of={sites[0].seconds} rows={sites.slice(SITES_SHOWN).map(siteRow)} />
-            </Disclosure>
-          ) : null}
+          <BarRows
+            tone="browser"
+            of={sites[0].seconds}
+            rows={sites.slice(0, SITES_SHOWN).map(siteRow)}
+            overflow={sites.length > SITES_SHOWN ? { summary: t("more", { n: sites.length - SITES_SHOWN }), rows: sites.slice(SITES_SHOWN).map(siteRow) } : undefined}
+          />
           <Text as="p" variant="meta">{t("privacy")}</Text>
         </>
       ) : (

@@ -109,11 +109,11 @@ export function Figure({ parts, mark }: { parts: { value: string; unit: string }
 
 type TextVariant = "total" | "row" | "meta";
 
-// `wrap` lets a long text take two lines before it is cut.
-export function Text({ variant = "row", mono, mark, truncate, wrap, as = "span", children }: { variant?: TextVariant; mono?: boolean; mark?: boolean; truncate?: boolean; wrap?: boolean; as?: "span" | "p"; children: ReactNode }) {
+// `wrap` lets a long text take two lines before it is cut. `untitled` leaves the title to a parent that already has one.
+export function Text({ variant = "row", mono, mark, truncate, wrap, untitled, as = "span", children }: { variant?: TextVariant; mono?: boolean; mark?: boolean; truncate?: boolean; wrap?: boolean; untitled?: boolean; as?: "span" | "p"; children: ReactNode }) {
   const Tag = as;
   // A cut text carries its whole self as a hover and long-press title.
-  const title = (truncate || wrap) && typeof children === "string" ? children : undefined;
+  const title = !untitled && (truncate || wrap) && typeof children === "string" ? children : undefined;
   return <Tag title={title} className={join(styles[variant], mono && styles.mono, mark && styles.mark, !mono && styles.name, truncate && styles.truncate, wrap && styles.clamp)}>{children}</Tag>;
 }
 
@@ -140,27 +140,25 @@ function FigureParts({ text }: { text: string }) {
 export type CompositionPart = { key: string; tone: Tone; seconds: number; name: string; figure: string };
 
 // A whole in parts on the brand block: one stacked bar and, under it, each part's name and figure in words, so no
-// part is told by colour alone. `thin` leaves the legend to the text around it.
-export function Composition({ parts, label, thin }: { parts: CompositionPart[]; label: string; thin?: boolean }) {
+// part is told by colour alone.
+export function Composition({ parts, label }: { parts: CompositionPart[]; label: string }) {
   const total = Math.max(1, parts.reduce((sum, part) => sum + part.seconds, 0));
   return (
     <div className={styles.composition}>
-      <div className={join(styles.stacked, thin && styles.stackedThin)} role="img" aria-label={label}>
+      <div className={styles.stacked} role="img" aria-label={label}>
         {parts.map((part) => (
           <div key={part.key} className={join(styles.part, styles[`tone_${part.tone}`])} style={{ flexGrow: part.seconds / total }} />
         ))}
       </div>
-      {thin ? null : (
-        <ul className={styles.legend}>
-          {parts.map((part) => (
-            <li key={part.key} className={styles[`tone_${part.tone}`]}>
-              <span className={styles.swatch} aria-hidden="true" />
-              <Text truncate>{part.name}</Text>
-              <Text mono>{part.figure}</Text>
-            </li>
-          ))}
-        </ul>
-      )}
+      <ul className={styles.legend}>
+        {parts.map((part) => (
+          <li key={part.key} className={styles[`tone_${part.tone}`]}>
+            <span className={styles.swatch} aria-hidden="true" />
+            <Text truncate>{part.name}</Text>
+            <Text mono>{part.figure}</Text>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
@@ -201,8 +199,8 @@ export function Heatmap({ columns, rows, label }: { columns: HeatmapColumn[]; ro
         {rows.map((row) => (
           <tr key={row.key} className={styles[`tone_${row.tone}`]}>
             <th scope="row" className={styles.heatName} title={`${row.name} · ${row.kind}: ${row.total}`}>
-              <Text truncate>{row.name}</Text>
-              <Text variant="meta" truncate>{row.kind}</Text>
+              <Text truncate untitled>{row.name}</Text>
+              <Text variant="meta" truncate untitled>{row.kind}</Text>
             </th>
             {row.cells.map((cell, index) => (
               <td key={columns[index].key} className={join(styles.heatCell, styles.mono)} data-level={cell.level} aria-label={cell.label}>
