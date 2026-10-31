@@ -144,5 +144,10 @@
     "last30": "Last 30 days",
     "thisMonth": "This month",
     "badRange": "That range did not work: «From» is on or before «To», up to 366 days."
+  },
+  "timeline": {
+    "title": "Claude Code through the day",
+    "label": "Claude Code sessions along the day",
+    "session": "{project}: from {from} to {to}"
   }
 }

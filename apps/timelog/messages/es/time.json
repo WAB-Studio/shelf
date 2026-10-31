@@ -144,5 +144,10 @@
     "last30": "Últimos 30 días",
     "thisMonth": "Este mes",
     "badRange": "El rango no sirvió: «Desde» va antes o el mismo día que «Hasta», con hasta 366 días."
+  },
+  "timeline": {
+    "title": "Claude Code durante el día",
+    "label": "Sesiones de Claude Code a lo largo del día",
+    "session": "{project}: de {from} a {to}"
   }
 }

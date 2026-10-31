@@ -3,10 +3,13 @@ import { getTranslations } from "next-intl/server";
 import { BarRows } from "@/components/screens/app-rows";
 import { AutoRefresh } from "@/components/screens/auto-refresh";
 import { ClaudeBlock, InternetBlock } from "@/components/screens/claude-internet";
+import { Timeline } from "@/components/ui/timeline";
 import { Between, Card, Cards, Figure, Hero, HeroColumns, Mosaic, Stack, Text, TextLink, Tile, Title } from "@/components/ui";
 import { readableApp } from "@/lib/app-names";
+import { projectName } from "@/lib/claude-project";
 import { claudeTotal } from "@/lib/daily";
 import { appsBetween, claudeBetween, claudeSessionsBetween, dayTotals, pagesBetween, sitesBetween, uploadSpan, windowsBetween } from "@/lib/queries";
+import { focusShare, hourMarks, layoutSessions, minuteOfDay } from "@/lib/timeline";
 import { sum } from "@/lib/totals";
 import { calendarWords } from "@/lib/words";
 import { addDays, civilDay } from "@/lib/zone";
@@ -19,7 +22,7 @@ export async function DayView({ day }: { day: string }) {
   const today = civilDay();
   const isToday = day === today;
   const before = addDays(day, -1);
-  const [raw, sites, pages, windows, sessions, claudeDays, previous, span, words, t, tClaude, tInternet] = await Promise.all([
+  const [raw, sites, pages, windows, sessions, claudeDays, previous, span, words, t, tClaude, tInternet, tTimeline] = await Promise.all([
     appsBetween(day, day),
     sitesBetween(day, day),
     pagesBetween(day, day),
@@ -33,6 +36,7 @@ export async function DayView({ day }: { day: string }) {
     getTranslations("time.today"),
     getTranslations("time.claude"),
     getTranslations("time.internet"),
+    getTranslations("time.timeline"),
   ]);
   const claude = claudeDays[0];
   const claudeSeconds = claude === undefined ? 0 : claudeTotal(claude);
@@ -54,6 +58,10 @@ export async function DayView({ day }: { day: string }) {
 
   // Before the first upload there is nothing to read: no empty sections stand in for it.
   const firstUse = top === undefined && span.lastReceived === null;
+
+  // Claude Code's sessions are all that carries a time of day: they lay along the day, which opens at the hour now.
+  const line = layoutSessions(sessions.map((one) => ({ key: one.session, label: projectName(one.project), first: one.first, last: one.last })));
+  const clockOf = (minute: number) => words.clock(new Date(Date.UTC(2026, 0, 1, Math.floor(minute / 60) + 5, minute % 60)));
 
   return (
     <Stack gap={4}>
@@ -101,6 +109,17 @@ export async function DayView({ day }: { day: string }) {
           </Stack>
         )}
       </Hero>
+      {line.segments.length > 0 ? (
+        <Tile full title={tTimeline("title")}>
+          <Timeline
+            label={tTimeline("label")}
+            lanes={line.lanes}
+            focus={focusShare(line, isToday ? minuteOfDay(new Date()) : null)}
+            marks={hourMarks(line.startHour).map((mark) => ({ key: String(mark.hour), label: `${mark.hour % 24}:00`, left: mark.left }))}
+            segments={line.segments.map((one) => ({ key: one.key, label: one.label, left: one.left, width: one.width, lane: one.lane, description: tTimeline("session", { project: one.label, from: clockOf(one.from), to: clockOf(one.to) }) }))}
+          />
+        </Tile>
+      ) : null}
       {firstUse ? <TextLink button href="/llaves">{t("connect")}</TextLink> : null}
       {firstUse ? null : (
         <Mosaic>
