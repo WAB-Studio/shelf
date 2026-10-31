@@ -180,8 +180,9 @@ async function listCurrencyOptions(outerTx?: Transaction): Promise<{
 }
 
 // The account the quick-entry field defaults to (RF-22): the source of the
-// caller's most recent movement, or its destination for an income, or null when
-// they have recorded nothing yet.
+// caller's most recent expense (or transfer), since an income's account is rarely
+// the one the next spending leaves from. With no such movement, the destination of
+// their latest income; null when they have recorded nothing yet.
 export async function getLastUsedAccountId(
   outerTx?: Transaction,
 ): Promise<string | null> {
@@ -197,7 +198,11 @@ export async function getLastUsedAccountId(
       })
       .from(transactions)
       .where(eq(transactions.createdBy, user.id))
-      .orderBy(desc(transactions.occurredAt), desc(transactions.createdAt))
+      .orderBy(
+        sql`${transactions.fromAccountId} is null`,
+        desc(transactions.occurredAt),
+        desc(transactions.createdAt),
+      )
       .limit(1);
 
     return row?.accountId ?? null;

@@ -366,9 +366,9 @@ function QuickEntryForm({
     <form onSubmit={form.handleSubmit(onSubmit)} noValidate>
       <FieldGroup>
         <Field>
-          <FieldLabel htmlFor="quick-text">{t("quickTitle")}</FieldLabel>
           <TextField.Root
             id="quick-text"
+            aria-label={t("quickTitle")}
             value={text}
             onChange={(event) => handleText(event.target.value)}
             placeholder={t("quickPlaceholder")}
