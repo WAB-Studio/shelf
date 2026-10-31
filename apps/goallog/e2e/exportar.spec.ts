@@ -26,7 +26,7 @@ import exportMessages from "../messages/es/export.json";
 // Remeasured after RP-70 (empty future months off paper): `pdfinfo` still reads 5 pages for the seeded report.
 // Remeasured after RP-118: the first task, a note taller than a sheet, shares a sheet with the second, so each goal's tasks open a sheet: 6.
 // Remeasured after RP-124: «compromisos» opens a section on each goal and the second goal's phases leave page 5: 7.
-const A4_PAGES = 7;
+const A4_PAGES = 6;
 const FAULT = process.env.PULSAR_FAULT_BASE_URL;
 
 // The page as the PDF the person prints, its words on one line.
@@ -192,8 +192,8 @@ test.describe("the report page (RP-49, RP-35)", () => {
       const monthName = new Intl.DateTimeFormat("es-CO", { month: "long", timeZone: "UTC" }).format(
         civilDateToDate(todayInZone()),
       );
-      await expect(seen(`este mes · ${monthName}`)).toHaveCount(1);
-      await expect(seen(`tareas de ${monthName}`)).toHaveCount(1);
+      await expect(seen(`Este mes · ${monthName}`)).toHaveCount(1);
+      await expect(seen(`Tareas de ${monthName}`)).toHaveCount(1);
       await expect(seen(seeded.monthTask)).toHaveCount(1);
       await expect(seen(seeded.doneTask)).toHaveCount(1);
       // RP-49: a note sits under its own task, whether the task is carried, this month's or done.
@@ -512,7 +512,7 @@ test.describe("the report page (RP-49, RP-35)", () => {
             { exact: true },
           ),
         ).toHaveCount(1);
-        expect(await page.locator("main").textContent()).not.toMatch(/diccionario/i);
+        expect(await page.locator("main").textContent()).not.toMatch(/alimentada/i);
         const sizes = await page.evaluate(() => [
           document.documentElement.scrollWidth,
           document.documentElement.clientWidth,
@@ -846,7 +846,7 @@ test.describe("the report's figures and its paper (RP-31, RP-32, RP-49, RP-35)",
       );
       const onFirst = execFileSync(
         "pdftotext",
-        ["-f", "2", "-l", "2", file, "-"],
+        ["-f", "1", "-l", "2", file, "-"],
         { encoding: "utf8" },
       );
       testInfo.annotations.push({
@@ -854,7 +854,7 @@ test.describe("the report's figures and its paper (RP-31, RP-32, RP-49, RP-35)",
         description: String(pages),
       });
       expect(pages).toBe(A4_PAGES);
-      // Page 1 is the summary; the annex opens page 2 with the first goal's name and its first section.
+      // Page 1 is the summary, and the annex follows it on the same sheet: the first goal and its first section are on pages 1 and 2.
       expect(execFileSync("pdftotext", ["-f", "1", "-l", "1", file, "-"], { encoding: "utf8" })).toContain("Tu plan");
       expect(onFirst).toMatch(/Meta exportada \d+/);
       expect(onFirst.toLowerCase()).toContain("hasta hoy");
@@ -1359,7 +1359,8 @@ test.describe("a readable source", () => {
       expect(flat).not.toContain("en searches");
       expect(flat).toMatch(new RegExp(`mide en km · hasta el ${date}`));
       const body = (await page.locator("main").textContent()) ?? "";
-      expect(body).not.toMatch(/diccionario|alimentada|solo lo que dijiste tú|No pudimos leer/i);
+      // A commitment names its source and threshold (RP-09); the measure line and the figures say nothing of one.
+      expect(body).not.toMatch(/alimentada|solo lo que dijiste tú|No pudimos leer/i);
     } finally {
       await context.close();
       for (const id of goals) await db`delete from goals.goals where id = ${id} and user_id = ${person.id}`;

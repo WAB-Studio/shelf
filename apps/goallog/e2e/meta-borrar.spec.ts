@@ -171,7 +171,7 @@ test("a goal that holds a goal, open or archived, offers no «Borrar la meta» (
     try {
       await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
       await expect(deleteButton(page)).toHaveCount(0);
-      await expect(page.getByText("Tiene metas dentro: muévelas o bórralas primero.", { exact: true })).toBeVisible();
+      await expect(page.getByText("Tiene metas dentro: muévelas o bórralas primero.", { exact: true }).locator("visible=true")).toHaveCount(1);
     } finally {
       await context.close();
     }
