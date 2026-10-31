@@ -240,15 +240,15 @@ async function queryGoalsRow(
          from "goals"."commitments" c
          join "goals"."evidence_sources" s on s.id = c.source_id
          where c.satisfaction = 'evidence') as measure_sources,
-      (select coalesce(json_agg(to_jsonb(p)), '[]'::json)
+      (select coalesce(json_agg(to_jsonb(p) order by p.starts_on, p.created_at, p.id), '[]'::json)
          from "goals"."phases" p) as phases,
       (select coalesce(json_agg(to_jsonb(f) || jsonb_build_object(
                  'commitment_unit', c.unit
-               )), '[]'::json)
+               ) order by f.day, f.written_at, f.id), '[]'::json)
          from "goals"."facts" f
          left join "goals"."commitments" c on c.id = f.commitment_id
          where f.day between least(${weekStart}::date, date_trunc('month', ${day}::date)::date) and ${day}::date) as facts,
-      (select coalesce(json_agg(to_jsonb(b)), '[]'::json)
+      (select coalesce(json_agg(to_jsonb(b) order by b.month), '[]'::json)
          from "goals"."month_budgets" b
          join "goals"."goals" g on g.id = b.goal_id
            and ${openGoal("g", weekStart)}
@@ -283,7 +283,7 @@ async function queryGoalsRow(
                  'position', o.position,
                  'created_at', o.created_at,
                  'done_on', (select min(f.day) from "goals"."facts" f where f.one_off_id = o.id)
-               )), '[]'::json)
+               ) order by o.position, o.created_at, o.id), '[]'::json)
          from "goals"."one_offs" o
          join "goals"."goals" g on g.id = o.goal_id and ${openGoal("g", day)}
          where ${isToday}::boolean) as goal_tasks,

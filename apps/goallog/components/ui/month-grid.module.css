@@ -30,7 +30,8 @@
   opacity: 0.6;
 }
 
-/* Four steps of the accent over the tile; the busiest day is the full accent with the ground's ink. */
+/* Four steps of the sky over the tile. The number is light on the first step and navy from the second: light ink on the
+   second step measured 3.11:1 (2.99 dark), navy is 4.85:1 (4.76). */
 .level0 {
   background: var(--pulsar-line);
 }
@@ -41,6 +42,7 @@
 
 .level2 {
   background: color-mix(in srgb, var(--pulsar-accent) 55%, var(--pulsar-line));
+  color: var(--pulsar-brand, #0b1f3a);
 }
 
 .level3 {

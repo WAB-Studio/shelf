@@ -335,7 +335,7 @@ async function queryGoalRow(tx: Transaction, goalId: string): Promise<GoalQueryR
   const [row] = await tx.execute<GoalQueryRow>(sql`
     select
       (select to_jsonb(g) from "goals"."goals" g where g.id = ${goalId}) as goal,
-      (select coalesce(json_agg(to_jsonb(p)), '[]'::json)
+      (select coalesce(json_agg(to_jsonb(p) order by p.starts_on, p.created_at, p.id), '[]'::json)
          from "goals"."phases" p
          where p.goal_id = ${goalId}) as phases,
       (select coalesce(json_agg(to_jsonb(c) || jsonb_build_object(
@@ -348,7 +348,7 @@ async function queryGoalRow(tx: Transaction, goalId: string): Promise<GoalQueryR
          where c.goal_id = ${goalId}) as commitments,
       (select coalesce(json_agg(to_jsonb(f) || jsonb_build_object(
                  'commitment_unit', c.unit
-               )), '[]'::json)
+               ) order by f.day, f.written_at, f.id), '[]'::json)
          from "goals"."facts" f
          left join "goals"."commitments" c on c.id = f.commitment_id
          where f.goal_id = ${goalId}) as facts,
@@ -362,7 +362,7 @@ async function queryGoalRow(tx: Transaction, goalId: string): Promise<GoalQueryR
                ) order by o.position, o.created_at, o.id), '[]'::json)
          from "goals"."one_offs" o
          where o.goal_id = ${goalId}) as tasks,
-      (select coalesce(json_agg(${TREE_COLUMNS}), '[]'::json)
+      (select coalesce(json_agg(${TREE_COLUMNS} order by g.position, g.created_at, g.id), '[]'::json)
          from "goals"."goals" g) as tree,
       (with recursive down(id, n) as (
            select g.id, 1 from "goals"."goals" g where g.parent_id = ${goalId}
@@ -382,7 +382,7 @@ async function queryGoalRow(tx: Transaction, goalId: string): Promise<GoalQueryR
                                   where c.goal_id = d.id),
                 'facts', (select coalesce(json_agg(to_jsonb(f) || jsonb_build_object(
                                     'commitment_unit', c.unit
-                                  )), '[]'::json)
+                                  ) order by f.day, f.written_at, f.id), '[]'::json)
                                   from "goals"."facts" f
                                   left join "goals"."commitments" c on c.id = f.commitment_id
                                   where f.goal_id = d.id),
@@ -927,7 +927,7 @@ export async function loadGoalPlace(goalId: string): Promise<GoalPlace | null> {
         (select jsonb_build_object('id', g.id, 'name', g.name, 'horizon', g.horizon,
                                    'created_at', g.created_at, 'archived_at', g.archived_at)
            from "goals"."goals" g where g.id = ${goalId}) as goal,
-        (select coalesce(json_agg(${TREE_COLUMNS}), '[]'::json) from "goals"."goals" g) as tree
+        (select coalesce(json_agg(${TREE_COLUMNS} order by g.position, g.created_at, g.id), '[]'::json) from "goals"."goals" g) as tree
     `),
   );
   if (!row.goal) return null;
@@ -1005,7 +1005,7 @@ export async function loadGoalForm(
     }>(sql`
       select
         (select to_jsonb(g) from "goals"."goals" g where g.id = ${goalId}) as goal,
-        (select coalesce(json_agg(to_jsonb(p)), '[]'::json)
+        (select coalesce(json_agg(to_jsonb(p) order by p.starts_on, p.created_at, p.id), '[]'::json)
            from "goals"."phases" p
            where p.goal_id = ${goalId}) as phases,
         (select coalesce(json_agg(to_jsonb(c) || jsonb_build_object(
@@ -1013,7 +1013,7 @@ export async function loadGoalForm(
                    'source_unit', s.unit,
                    'source_label_key', s.label_key,
                    'fact_day_count', (select count(distinct f.day)::int from "goals"."facts" f where f.commitment_id = c.id),
-                   'recent', (select coalesce(json_agg(json_build_object('day', r.day::text, 'quantity', r.quantity)), '[]'::json)
+                   'recent', (select coalesce(json_agg(json_build_object('day', r.day::text, 'quantity', r.quantity) order by r.day), '[]'::json)
                                 from (select f.day, sum(f.quantity)::int as quantity from "goals"."facts" f
                                        where f.commitment_id = c.id and f.day >= ${stripStart}::date group by f.day) r)
                  ) order by c.position, c.created_at, c.id), '[]'::json)
@@ -1021,7 +1021,7 @@ export async function loadGoalForm(
            left join "goals"."evidence_sources" s on s.id = c.source_id
            where c.goal_id = ${goalId}) as commitments,
         ${tasks} as tasks,
-        (select coalesce(json_agg(${TREE_COLUMNS}), '[]'::json) from "goals"."goals" g) as tree
+        (select coalesce(json_agg(${TREE_COLUMNS} order by g.position, g.created_at, g.id), '[]'::json) from "goals"."goals" g) as tree
     `),
     ),
     person
@@ -1207,12 +1207,12 @@ export async function listGoalsForMetas(today: string = todayInZone()): Promise<
           g.rhythm, g.created_at, g.parent_id, g.note, g.position,
           (select coalesce(json_agg(to_jsonb(f) || jsonb_build_object(
                      'commitment_unit', c.unit
-                   )), '[]'::json)
+                   ) order by f.day, f.written_at, f.id), '[]'::json)
              from "goals"."facts" f
              left join "goals"."commitments" c on c.id = f.commitment_id
              where f.goal_id = g.id
                and f.day between ${month}::date and ${today}::date) as facts,
-          (select coalesce(json_agg(jsonb_build_object('month', b.month, 'amount', b.amount)), '[]'::json)
+          (select coalesce(json_agg(jsonb_build_object('month', b.month, 'amount', b.amount) order by b.month), '[]'::json)
              from "goals"."month_budgets" b
              where b.goal_id = g.id) as budgets,
           (select coalesce(json_agg(to_jsonb(o) || jsonb_build_object(

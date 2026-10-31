@@ -514,10 +514,10 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
       {story ? (
         <Timeline
           line={story}
-          label={t("goal.detail.timelineAria", { from: civilDateLabel(openedOn), to: civilDateLabel(goal.horizon as string) })}
+          label={t("goal.detail.timelineAria", { from: civilDateLabel(openedOn), to: civilDateLabel(endDay as string) })}
           today={t("goal.detail.timelineToday")}
           from={civilDateLabel(openedOn)}
-          to={civilDateLabel(goal.horizon as string)}
+          to={civilDateLabel(endDay as string)}
         />
       ) : null}
       {month && planned ? (

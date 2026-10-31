@@ -1002,7 +1002,7 @@ function ReportSummary({ report, t }: { report: Report; t: Translator<"export"> 
         unit === null
           ? null
           : screenPlanned(goal.thisMonth.planned, (goal.ownMonths ?? []).includes(`${report.today.slice(0, 7)}-01`));
-      if (unit === null || planned === null) return { goal, month: null, week: null };
+      if (unit === null) return { goal, month: null, week: null };
       const quantity = (value: number) => formatQuantity(value, unit, words);
       // «2.100 de 6.000 palabras»: the unit once, after the planned figure; time keeps its own words each side.
       const pair = (done: number, of: number) =>
@@ -1011,12 +1011,14 @@ function ReportSummary({ report, t }: { report: Report; t: Translator<"export"> 
           : t("summary.of", { done: formatCount(done), planned: quantity(of) });
       const done = goal.weeks.find((w) => w.current)?.total ?? 0;
       const weekPlanned = goal.weekPlanned ?? null;
+      // With no amount for the month the line says what was done and nothing of a plan; the week never waits on it.
+      // Nothing done and nothing planned stays empty: «—», not a zero.
+      const reached = goal.thisMonth.reached;
       return {
         goal,
-        month: pair(goal.thisMonth.reached, planned),
-        week: weekPlanned === null ? quantity(done) : pair(done, weekPlanned),
-      };
-    });
+        month: planned !== null ? pair(reached, planned) : reached > 0 ? quantity(reached) : null,
+        week: weekPlanned !== null ? pair(done, weekPlanned) : done > 0 || planned !== null ? quantity(done) : null,
+      };    });
   const depth = new Map<string, 0 | 1 | 2>();
   const levelOf = (goal: GoalReport): 0 | 1 | 2 => {
     const above = goal.parentId ? depth.get(goal.parentId) : undefined;
@@ -1132,9 +1134,7 @@ export async function ReportScreen({ report, showAll = false }: { report: Report
           ) : null}
         </Flex>
         <ReportSummary report={report} t={t} />
-        <PrintBlock newPage>
-          <Section label={t("summary.annex")} />
-        </PrintBlock>
+        <Section label={t("summary.annex")} />
         <PanelGrid print="stack">
           {groups.map(({ root, inside }) => (
             <Panel key={root.id} print="plain">

@@ -148,7 +148,7 @@ async function queryGoalsRow(
          from "goals"."commitments" c
          left join "goals"."evidence_sources" s on s.id = c.source_id
          where c.retired_at is null or (c.retired_at at time zone ${TIME_ZONE})::date >= ${weekStart}::date) as commitments,
-      (select coalesce(json_agg(to_jsonb(p)), '[]'::json)
+      (select coalesce(json_agg(to_jsonb(p) order by p.starts_on, p.created_at, p.id), '[]'::json)
          from "goals"."phases" p
          where p.starts_on <= ${weekEnd}::date
            and p.ends_on >= ${weekStart}::date) as phases,
@@ -156,7 +156,7 @@ async function queryGoalsRow(
                  'commitment_unit', c.unit,
                  'one_off_name', o.name,
                  'one_off_parent_name', p.name
-               )), '[]'::json)
+               ) order by f.day, f.written_at, f.id), '[]'::json)
          from "goals"."facts" f
          left join "goals"."commitments" c on c.id = f.commitment_id
          left join "goals"."one_offs" o on o.id = f.one_off_id

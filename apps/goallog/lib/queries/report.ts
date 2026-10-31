@@ -44,7 +44,7 @@ async function queryReportRows(tx: Transaction): Promise<ReportRow[]> {
   const rows = await tx.execute<ReportRow>(sql`
     select
       to_jsonb(g) as goal,
-      (select coalesce(json_agg(to_jsonb(p)), '[]'::json)
+      (select coalesce(json_agg(to_jsonb(p) order by p.starts_on, p.created_at, p.id), '[]'::json)
          from "goals"."phases" p where p.goal_id = g.id) as phases,
       (select coalesce(json_agg(to_jsonb(c) || jsonb_build_object(
                  'source_key', s.key,
@@ -56,7 +56,7 @@ async function queryReportRows(tx: Transaction): Promise<ReportRow[]> {
          where c.goal_id = g.id) as commitments,
       (select coalesce(json_agg(to_jsonb(f) || jsonb_build_object(
                  'commitment_unit', c.unit
-               )), '[]'::json)
+               ) order by f.day, f.written_at, f.id), '[]'::json)
          from "goals"."facts" f
          left join "goals"."commitments" c on c.id = f.commitment_id
          where f.goal_id = g.id) as facts,

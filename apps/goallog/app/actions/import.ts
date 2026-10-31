@@ -318,7 +318,7 @@ export async function confirmImport(input: unknown): Promise<ConfirmImportResult
       if (horizon) {
         // RP-25: no phase may outlast the goal, its phases counted as this import leaves them.
         const ends = snapshot.phases.map((have) => goal.phases.find((p) => nameKey(p.aim) === nameKey(have.aim))?.endsOn ?? have.endsOn);
-        if (ends.some((endsOn) => endsOn > horizon.to)) {
+        if (ends.some((endsOn) => endsOn >= horizon.to)) {
           plan.failed.push({ path: `${at}.horizon`, name: horizon.to, reason: "goal.errors.horizonBeforePhase" });
         } else {
           plan.horizonRows.push({ g, row: sql`${id}::uuid, ${horizon.to}::date`, path: `${at}.horizon`, name: horizon.to });
@@ -582,7 +582,7 @@ export async function confirmImport(input: unknown): Promise<ConfirmImportResult
       // A matched goal's phase stays inside the horizon it keeps: the new one, or the old one when refused.
       const fits = (g: number, endsOn: string): boolean => {
         const horizon = movedHorizon.has(g) ? plan.newHorizon.get(g) : plan.oldHorizon.get(g);
-        return horizon === null || horizon === undefined || endsOn <= horizon;
+        return horizon === null || horizon === undefined || endsOn < horizon;
       };
       const inside = <P extends Part>(parts: P[], check: (part: P) => { g: number; endsOn: string } | undefined): P[] =>
         parts.filter((part) => {

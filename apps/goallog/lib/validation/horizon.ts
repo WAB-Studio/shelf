@@ -15,7 +15,7 @@ export type MoveHorizonInput = z.infer<typeof moveHorizonSchema>;
 export type HorizonRefusal = "goal.errors.horizonPast" | "goal.errors.horizonBeforePhase";
 
 // The mirror of `phaseWithinHorizon`: a horizon is the first day after the
-// goal, so it must be after today, and no phase may end past it. Pure, so the
+// goal, so it must be after today, and no phase may end on it or past it. Pure, so the
 // client runs the same rule before the round trip.
 export function horizonRefusal({
   horizon,
@@ -28,6 +28,6 @@ export function horizonRefusal({
 }): HorizonRefusal | null {
   if (horizon === null) return null;
   if (horizon <= today) return "goal.errors.horizonPast";
-  if (lastPhaseEndsOn != null && lastPhaseEndsOn > horizon) return "goal.errors.horizonBeforePhase";
+  if (lastPhaseEndsOn != null && lastPhaseEndsOn >= horizon) return "goal.errors.horizonBeforePhase";
   return null;
 }

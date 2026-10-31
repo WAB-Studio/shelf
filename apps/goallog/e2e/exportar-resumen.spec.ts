@@ -6,7 +6,7 @@ import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
 
 // `ExportarResumen` (approved 2026-10-13): `/exportar` opens with a summary, one line per open goal in the tree's order —
 // name, this month's figure, this week's — then «EL DETALLE DE CADA META», the annex, whole. On paper the summary is a table
-// (Meta | month | Semana del …) with «—» where a goal has no amount, and the annex's first block opens a new page.
+// (Meta | month | Semana del …) with «—» where a goal has no amount and nothing done; the annex follows on the same sheet.
 const MONTHS = [
   "enero", "febrero", "marzo", "abril", "mayo", "junio",
   "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
@@ -240,45 +240,65 @@ test("on paper the summary is a table: Meta | month | Semana del…, a row per o
   }
 });
 
-test("on paper the annex's first block starts a new page, and the summary does not", async ({ person, browser, baseURL, db }) => {
+test("on paper the annex follows the summary on its sheet: no break between them", async ({ person, browser, baseURL, db }) => {
   const n = await seedTree(db, person);
   const { context, page } = await open(browser, baseURL!, person, 794, "print", n.general);
   try {
     const breaks = await page.evaluate(
-      ([summaryLabel, annexLabel, name]) => {
-        const leaves = (text: string) =>
-          [...document.querySelectorAll("main *")].filter(
-            (el) => el.children.length === 0 && el.textContent?.trim().toLowerCase() === text.toLowerCase(),
-          );
-        const summary = leaves(summaryLabel)[0];
-        const annexLabelEl = leaves(annexLabel)[0];
-        const card = leaves(name).at(-1);
-        if (!summary || !annexLabelEl || !card) throw new Error("labels or card missing");
-        const breaksBefore = (el: Element) => {
-          const style = getComputedStyle(el);
-          return ["page", "always", "left", "right"].includes(style.breakBefore) || style.pageBreakBefore === "always";
-        };
-        // From a node of the annex up to, never into, what also holds the summary.
-        const climbs = (from: Element) => {
-          const found: boolean[] = [];
-          for (let node: Element | null = from; node && !node.contains(summary); node = node.parentElement) found.push(breaksBefore(node));
-          return found.some(Boolean);
-        };
-        const summaryBreaks = (() => {
-          for (let node: Element | null = summary; node && node.tagName !== "MAIN"; node = node.parentElement) {
-            if (node.contains(annexLabelEl)) break;
-            if (breaksBefore(node)) return true;
-          }
-          return false;
-        })();
-        return { annex: climbs(annexLabelEl) || climbs(card), summaryBreaks };
+      ([annexLabel]) => {
+        const label = [...document.querySelectorAll("main *")].find(
+          (el) => el.children.length === 0 && el.textContent?.trim().toLowerCase() === annexLabel,
+        );
+        if (!label) throw new Error("no annex label");
+        const found: boolean[] = [];
+        for (let node: Element | null = label; node && node.tagName !== "MAIN"; node = node.parentElement) {
+          const style = getComputedStyle(node);
+          found.push(["page", "always", "left", "right"].includes(style.breakBefore) || style.pageBreakBefore === "always");
+        }
+        return found.some(Boolean);
       },
-      [SUMMARY, ANNEX, n.general],
+      [ANNEX],
     );
-    expect(breaks.annex, "the annex opens a new page").toBe(true);
-    expect(breaks.summaryBreaks, "the summary opens no page of its own").toBe(false);
+    expect(breaks, "the annex label opens no sheet of its own").toBe(false);
   } finally {
     await context.close();
+    await clear(db, person);
+  }
+});
+
+test("a goal with hours done and no amount for the month prints what was done, on screen and on paper; the week never waits on the month", async ({
+  person, browser, baseURL, db,
+}) => {
+  const stamp = Date.now();
+  const name = `Sin monto ${stamp}`;
+  const [goal] = await db<{ id: string }[]>`
+    insert into goals.goals (user_id, name, horizon, measure_name, measure_unit, created_at)
+    values (${person.id}, ${name}, ${startOf(12)}::date, 'minutos', 'minutos', ${`${startOf(0)}T12:00:00Z`}::timestamptz)
+    returning id
+  `;
+  const [block] = await db<{ id: string }[]>`
+    insert into goals.commitments (user_id, goal_id, name, cadence_kind, satisfaction, target_quantity, unit)
+    values (${person.id}, ${goal.id}, ${`Bloque ${stamp}`}, 'daily', 'quantity', 10, 'minutos') returning id
+  `;
+  await db`
+    insert into goals.facts (user_id, goal_id, commitment_id, day, quantity)
+    values (${person.id}, ${goal.id}, ${block.id}, ${todayInZone()}::date, 90)
+  `;
+  try {
+    for (const media of ["screen", "print"] as const) {
+      const { context, page } = await open(browser, baseURL!, person, media === "print" ? 794 : 1280, media, name);
+      try {
+        const { summary } = await split(page);
+        const row = flat(summary).slice(flat(summary).indexOf(name.toLowerCase()));
+        expect(row, `${media}: the month says what was done`).toContain("1 h 30 min");
+        expect(row, `${media}: the week says what was done`).toContain("1 h 30 min");
+        expect(row, `${media}: no dash for a goal with hours done`).not.toContain("—");
+        expect(row).not.toContain("sin monto este mes");
+      } finally {
+        await context.close();
+      }
+    }
+  } finally {
     await clear(db, person);
   }
 });
