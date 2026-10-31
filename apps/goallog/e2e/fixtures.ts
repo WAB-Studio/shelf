@@ -171,6 +171,15 @@ export async function settled(page: Page): Promise<void> {
   await page.evaluate(() => document.fonts.ready);
 }
 
+// Hoy's count: the navy block's figure «N de M» over its caption «hechos hoy», which adds «· k en parte» while a row is partial
+// (docs/goallog/DESIGN.md «Naranja y marino»). Past days keep the tally line, which is text.
+export function todayCount(page: Page, done: number | string, total: number | string, partial?: number): Locator {
+  const hero = page
+    .locator('[data-part="hero"]')
+    .filter({ has: page.locator('[data-part="hero-figure"]', { hasText: new RegExp(`^${done} de ${total}$`) }) });
+  return partial === undefined ? hero.filter({ hasNotText: "en parte" }) : hero.filter({ hasText: `hechos hoy · ${partial} en parte` });
+}
+
 export async function visit(page: Page, url: string): Promise<void> {
   await page.goto(url);
   await settled(page);

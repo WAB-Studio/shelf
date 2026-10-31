@@ -1,4 +1,4 @@
-import { test, expect } from "./fixtures";
+import { test, expect, todayCount } from "./fixtures";
 import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
 
 // What Hoy's rows and goal lines say (`HoyEscritorio.dc.html`): the
@@ -64,7 +64,7 @@ test("Hoy says how many it asks, each row's cadence, the hour of a done one and 
     await expect(page.locator("main")).toHaveCount(1);
     await expect(page.getByText("Anki", { exact: true })).toBeVisible();
 
-    await expect(page.getByText("hechos 1 de 3", { exact: true })).toBeVisible();
+    await expect(todayCount(page, 1, 3)).toBeVisible();
     await expect(page.getByText("fase 2 de 3 · desbloquear la boca", { exact: true })).toBeVisible();
     await expect(page.getByText("fase única", { exact: true })).toBeVisible();
     await expect(page.getByText(`solo los ${WEEKDAYS_PLURAL[isoWeekday - 1]}`, { exact: true })).toBeVisible();

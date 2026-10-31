@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import type { Page } from "@playwright/test";
 import type postgres from "postgres";
 
-import { test, expect, type Person } from "./fixtures";
+import { test, expect, todayCount, type Person } from "./fixtures";
 import { civilDateToDate, dateToCivilDate, todayInZone, weekOf } from "@/lib/zone";
 import { boxOf } from "./box";
 import { noonFromToday } from "./reloj";
@@ -85,12 +85,12 @@ test("«hechos» moves as a row is tapped and matches the Semana's cell; a met f
     await page.goto("/");
     await expect(page.locator("main")).toHaveCount(1);
     await expect(page.getByRole("main").getByText(goalName, { exact: true })).toBeVisible();
-    await expect(page.getByText(`hechos 0 de ${asked}`, { exact: true })).toBeVisible();
+    await expect(todayCount(page, 0, asked)).toBeVisible();
 
     await page.getByRole("button", { name: new RegExp(`^${first}`) }).click();
-    await expect(page.getByText(`hechos 1 de ${asked}`, { exact: true })).toBeVisible();
+    await expect(todayCount(page, 1, asked)).toBeVisible();
     await page.getByRole("button", { name: new RegExp(`^${second}`) }).click();
-    await expect(page.getByText(`hechos 2 de ${asked}`, { exact: true })).toBeVisible();
+    await expect(todayCount(page, 2, asked)).toBeVisible();
 
     // A flexible with progress says only its progress, on one line.
     const partialRow = page.getByRole("button", { name: new RegExp(`^${partial}`) });
@@ -113,12 +113,12 @@ test("«hechos» moves as a row is tapped and matches the Semana's cell; a met f
     await expect(page.locator("main")).toHaveCount(1);
     const quiet = page.getByRole("button", { name: new RegExp(`^${met}`) });
     await expect(quiet).toContainText(monthlyMet ? "cumplida este mes · 1 de 1" : "0 de 1 este mes");
-    await expect(page.getByText(`hechos 2 de ${asked}`, { exact: true })).toBeVisible();
+    await expect(todayCount(page, 2, asked)).toBeVisible();
 
     if (monthlyMet) {
       await quiet.click();
       await expect(quiet).toContainText("cumplida este mes · 2 veces");
-      await expect(page.getByText(`hechos 2 de ${asked}`, { exact: true })).toBeVisible();
+      await expect(todayCount(page, 2, asked)).toBeVisible();
       const [{ count }] = await db<{ count: number }[]>`
         select count(*)::int as count from goals.facts where user_id = ${person.id} and day = ${today}
       `;
@@ -162,7 +162,7 @@ test("an open goal that counts nothing draws no «hechos» line, and one counted
     await page.goto("/");
     await expect(page.locator("main")).toHaveCount(1);
     await expect(page.getByRole("heading", { name: "Hoy", exact: true })).toBeVisible();
-    await expect(page.getByText(/hechos \d+ de \d+/)).toHaveCount(0);
+    await expect(page.locator('[data-part="hero"]')).toHaveCount(0);
 
     await db`
       insert into goals.commitments (user_id, goal_id, name, cadence_kind, satisfaction, created_at)
@@ -170,7 +170,7 @@ test("an open goal that counts nothing draws no «hechos» line, and one counted
     `;
     await page.goto("/");
     await expect(page.getByRole("button", { name: new RegExp(`^${row}`) })).toBeVisible();
-    await expect(page.getByText("hechos 0 de 1", { exact: true })).toBeVisible();
+    await expect(todayCount(page, 0, 1)).toBeVisible();
   } finally {
     await context.close();
     await db`delete from goals.commitments where goal_id = ${goal.id}`;
@@ -248,7 +248,7 @@ test("three fixed, one flexible and one evidence row, nothing done, read «hecho
     await page.goto("/");
     await expect(page.locator("main")).toHaveCount(1);
     await expect(page.getByRole("button", { name: new RegExp(`^${seeded.names.flexible}`) })).toBeVisible();
-    await expect(page.getByText("hechos 0 de 5", { exact: true })).toBeVisible();
+    await expect(todayCount(page, 0, 5)).toBeVisible();
 
     expect(await todayCell(page, weekOf(todayInZone()).indexOf(todayInZone()))).toBe("0 de 5");
   } finally {
@@ -267,7 +267,7 @@ test("the evidence row met by its source moves the count to «hechos 1 de 5», o
   try {
     await page.goto("/");
     await expect(page.locator("main")).toHaveCount(1);
-    await expect(page.getByText("hechos 1 de 5", { exact: true })).toBeVisible();
+    await expect(todayCount(page, 1, 5)).toBeVisible();
 
     expect(await todayCell(page, weekOf(todayInZone()).indexOf(todayInZone()))).toBe("1 de 5");
   } finally {
@@ -313,11 +313,11 @@ test(`at 360 the header holds eyebrow, «Hoy», the count, «ayer» and the them
     await expect(page.locator("main")).toHaveCount(1);
     await page.evaluate(() => document.fonts.ready);
     const h1 = page.getByRole("heading", { name: "Hoy", exact: true, level: 1 });
-    const count = page.getByText("hechos 0 de 5", { exact: true });
+    const count = todayCount(page, 0, 5);
     const link = page.locator(`main a[href="/dia/${plusDays(-1)}"]`);
     const theme = page.getByRole("button", { name: THEME });
     await expect(link).toHaveText("ayer");
-    const eyebrow = page.locator("main > header:visible").getByText(/^[a-zñáéíóú]+ \d{1,2} de [a-zñ]+$/).first();
+    const eyebrow = page.locator("main > header:visible").getByText(/^\p{L}+ \d{1,2} de \p{L}+$/u).first();
     if (longest) await eyebrow.evaluate((node, text) => void (node.textContent = text), LONGEST_DATE);
     const boxes = {
       eyebrow: (await boxOf(eyebrow)),
@@ -357,7 +357,7 @@ test("a person whose first goal opened today reads «hechos 0 de 3» and no link
   try {
     await page.goto("/");
     await expect(page.locator("main")).toHaveCount(1);
-    await expect(page.getByText("hechos 0 de 3", { exact: true })).toBeVisible();
+    await expect(todayCount(page, 0, 3)).toBeVisible();
     await expect(page.getByRole("heading", { name: "Hoy", exact: true, level: 1 })).toBeVisible();
     await expect(page.getByRole("button", { name: THEME })).toBeVisible();
     await expect(page.locator('main a[href^="/dia/"]')).toHaveCount(0);

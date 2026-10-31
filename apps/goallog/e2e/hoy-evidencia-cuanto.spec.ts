@@ -9,10 +9,12 @@ import sources from "../messages/es/sources.json";
 import { boxOf } from "./box";
 
 // RP-08, RP-09, board `HoyDia`: an evidence row's one meta line says how much
-// it asks until it is met, and what it got plus its source once met. The
-// source never shows before it is met, and the row has no tap (RP-05).
+// it asks until it is met, and what it got plus its source once met. Unmet it
+// is named by who notes it, and the row has no tap (RP-05).
 
 const SOURCE = sources.readingLookups;
+// An evidence row reads automatic (DESIGN «An evidence row reads automatic»): who notes it, then what it asks.
+const NOTED = `lo anota el ${SOURCE}`;
 
 type Seed = { goalId: string; name: string; deviceId: string; commitmentId: string };
 
@@ -64,9 +66,14 @@ async function clean(db: postgres.Sql, person: Person, seeded: Seed): Promise<vo
 }
 
 // Everything the row draws besides its name, whitespace folded: the meta line.
+// An evidence row is text, never a control (DESIGN «An act that cannot be done is plain text»): a block holding its mark and its name.
+function rowOf(page: Page, name: string) {
+  return page.locator("div:has([data-state])", { hasText: name }).last();
+}
+
 async function metaOf(page: Page, name: string): Promise<string> {
-  const row = page.locator("button", { hasText: name });
-  await expect(row).toHaveCount(1);
+  const row = rowOf(page, name);
+  await expect(row).toBeVisible();
   const text = await row.innerText();
   return text.replace(name, "").replace(/\s+/g, " ").trim();
 }
@@ -99,10 +106,10 @@ for (const width of [390, 1440]) {
       const { context, page } = await open(browser, baseURL!, person, width);
       try {
         await visit(page, "/");
-        expect(await metaOf(page, seeded.name)).toBe("1 búsqueda");
-        const row = page.locator("button", { hasText: seeded.name });
+        expect(await metaOf(page, seeded.name)).toBe(`${NOTED} · 1 búsqueda`);
+        const row = rowOf(page, seeded.name);
         await expect(row.locator("[data-state]")).toHaveAttribute("data-state", "empty");
-        await expect(row).not.toContainText(SOURCE);
+        await expect(row, "named as the one that notes it, not as a met source").not.toContainText(`· ${SOURCE}`);
       } finally {
         await context.close();
         await clean(db, person, seeded);
@@ -119,10 +126,10 @@ for (const width of [390, 1440]) {
       const { context, page } = await open(browser, baseURL!, person, width);
       try {
         await visit(page, "/");
-        expect(await metaOf(page, seeded.name)).toBe("3 búsquedas");
-        const row = page.locator("button", { hasText: seeded.name });
+        expect(await metaOf(page, seeded.name)).toBe(`${NOTED} · 3 búsquedas`);
+        const row = rowOf(page, seeded.name);
         await expect(row.locator("[data-state]")).toHaveAttribute("data-state", "empty");
-        await expect(row).not.toContainText(SOURCE);
+        await expect(row, "named as the one that notes it, not as a met source").not.toContainText(`· ${SOURCE}`);
       } finally {
         await context.close();
         await clean(db, person, seeded);
@@ -140,9 +147,9 @@ for (const width of [390, 1440]) {
       try {
         await visit(page, "/");
         expect(await metaOf(page, seeded.name)).toBe(`3 búsquedas · ${SOURCE}`);
-        const row = page.locator("button", { hasText: seeded.name });
+        const row = rowOf(page, seeded.name);
         await expect(row.locator("[data-state]")).toHaveAttribute("data-state", "evidence");
-        await expect(row).toBeDisabled();
+        await expect(page.getByRole("button", { name: new RegExp(seeded.name) }), "no control for the row").toHaveCount(0);
 
         // A real pointer press on the row's box: it opens nothing and writes nothing (RP-05).
         const box = (await boxOf(row));
@@ -174,7 +181,7 @@ test("at 360 the longest evidence line fits: a long name, a three-digit count, t
   try {
     await visit(page, "/");
     expect(await metaOf(page, seeded.name)).toBe(`120 búsquedas · ${SOURCE}`);
-    const row = page.locator("button", { hasText: seeded.name });
+    const row = rowOf(page, seeded.name);
     const fits = await row.evaluate((el) => {
       const box = el.getBoundingClientRect();
       const inner = [...el.querySelectorAll("*")].map((child) => child.getBoundingClientRect());

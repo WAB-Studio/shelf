@@ -69,7 +69,7 @@ test("at 1280 the commitments sit left, the end right and the phases under both,
     expect(phase.y).toBeGreaterThan(end.y);
 
     // Each group sits in a bordered white card: commitments, the end, the phases.
-    for (const text of ["Compromiso ancho", "Fase ancha", "el final"]) {
+    for (const text of ["Compromiso ancho", "Fase ancha", "El final"]) {
       const card = await page.getByText(text, { exact: true }).evaluate((el) => {
         for (let node = el.parentElement; node; node = node.parentElement) {
           const style = getComputedStyle(node);

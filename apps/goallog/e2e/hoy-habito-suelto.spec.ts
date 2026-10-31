@@ -1,4 +1,4 @@
-import { test, expect, visit } from "./fixtures";
+import { test, expect, todayCount, visit } from "./fixtures";
 import {
   TODAY,
   TODAY_INDEX,
@@ -90,7 +90,7 @@ for (const width of FACES) {
       await expect(page.getByRole("link", { name: "Abrir una meta" })).toHaveCount(0);
       for (const name of names) await expect(page.getByRole("button", { name: new RegExp(`^${name}`) })).toBeVisible();
       expect(await mainText(page)).toContain(GROUP);
-      await expect(page.getByText("hechos 0 de 3", { exact: true })).toBeVisible();
+      await expect(todayCount(page, 0, 3)).toBeVisible();
     } finally {
       await context.close();
     }
@@ -145,11 +145,11 @@ test("a loose tap habit is one tap to done, writes a fact with no goal, and the 
     const page = await context.newPage();
     await visit(page, "/");
     const row = page.getByRole("button", { name: new RegExp(`^${name}`) });
-    await expect(page.getByText("hechos 0 de 1", { exact: true })).toBeVisible();
+    await expect(todayCount(page, 0, 1)).toBeVisible();
 
     await row.click();
     await expect(row.locator("svg")).toBeVisible();
-    await expect(page.getByText("hechos 1 de 1", { exact: true })).toBeVisible();
+    await expect(todayCount(page, 1, 1)).toBeVisible();
     await expect.poll(async () => (await facts()).length).toBe(1);
     const [fact] = await facts();
     expect(fact.goal_id).toBeNull();
@@ -157,7 +157,7 @@ test("a loose tap habit is one tap to done, writes a fact with no goal, and the 
 
     await row.click();
     await expect(row.locator("svg")).toHaveCount(0);
-    await expect(page.getByText("hechos 0 de 1", { exact: true })).toBeVisible();
+    await expect(todayCount(page, 0, 1)).toBeVisible();
     await expect.poll(async () => (await facts()).length).toBe(0);
   } finally {
     await context.close();
@@ -227,9 +227,9 @@ test("«hechos N de M» of Hoy counts the habits and is the number Semana shows 
     const page = await context.newPage();
     await visit(page, "/");
     await expect(page.getByRole("button", { name: new RegExp(`^${water}`) })).toBeVisible();
-    await expect(page.getByText("hechos 0 de 3", { exact: true })).toBeVisible();
+    await expect(todayCount(page, 0, 3)).toBeVisible();
     await page.getByRole("button", { name: new RegExp(`^${water}`) }).click();
-    await expect(page.getByText("hechos 1 de 3", { exact: true })).toBeVisible();
+    await expect(todayCount(page, 1, 3)).toBeVisible();
 
     await page.setViewportSize({ width: 1280, height: 800 });
     await visit(page, "/semana");
