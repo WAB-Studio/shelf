@@ -14,7 +14,7 @@ export type DailyRow = {
   claude_seconds: number;
   top_app: string;
   top_app_seconds: number;
-  // 1 when the PC uploaded that day, 0 when nothing arrived: a day of zeros is then a day unseen, not a real zero.
+  // 1 when an upload reached that day in any table, 0 when nothing arrived: a day of zeros is then a day unseen, not a real zero.
   uploaded: number;
 };
 
@@ -35,8 +35,8 @@ export const sourcesOverlap = (sources: ClaudeSource[]) => sources.filter((one) 
 export const claudeTotal = (one: Pick<ClaudeDay, "code" | "web" | "desktop">) => one.code + one.web + one.desktop;
 
 // Every day from `from` to `to`, cut at `today` (a day that has not happened has no row), a day with nothing at zero and
-// no top app. The top app is the longest one a person opened: Windows' own background hosts (`systemName`) never take it.
-export function dailyRows(from: string, to: string, totals: DayTotal[], claude: ClaudeDay[], apps: DayApp[], systemName: string, today: string): DailyRow[] {
+// no top app; `uploaded` holds the days any upload reached. The top app is the longest one a person opened: Windows' own background hosts (`systemName`) never take it.
+export function dailyRows(from: string, to: string, totals: DayTotal[], claude: ClaudeDay[], apps: DayApp[], systemName: string, today: string, uploaded: ReadonlySet<string>): DailyRow[] {
   const totalOf = new Map(totals.map((one) => [one.day, one.seconds]));
   const claudeOf = new Map(claude.map((one) => [one.day, one]));
   const appsOf = new Map<string, DayApp[]>();
@@ -55,7 +55,7 @@ export function dailyRows(from: string, to: string, totals: DayTotal[], claude: 
       claude_seconds: claudeTotal(parts),
       top_app: top?.app ?? "",
       top_app_seconds: top?.seconds ?? 0,
-      uploaded: totalOf.has(day) ? 1 : 0,
+      uploaded: uploaded.has(day) ? 1 : 0,
     });
   }
   return rows;

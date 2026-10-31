@@ -12,10 +12,14 @@ test("a project outside those folders is named by what follows the home folder a
   assert.equal(projectName("C--Users-wilson-Documents-un-proyecto-largo"), "un-proyecto-largo");
   assert.equal(projectName("-home-cxrkeyb-Desktop-notas"), "notas");
   assert.equal(projectName("-Users-ana-mi-app"), "mi-app");
+  assert.equal(projectName("C--Users-ana-OneDrive-Documents-mi-app"), "mi-app");
+  assert.equal(projectName("C--Users-ana-OneDrive-Acme-Documents-mi-app"), "mi-app");
+  assert.equal(projectName("C--Users-ana-OneDrive-mi-app"), "mi-app");
 });
 
-test("a folder with no such parent is named by its last piece", () => {
-  assert.equal(projectName("-tmp-scratch"), "scratch");
+test("a folder with no such parent keeps its whole name without the leading separators", () => {
+  assert.equal(projectName("-tmp-scratch"), "tmp-scratch");
+  assert.equal(projectName("-opt-finances-app"), "opt-finances-app");
   assert.equal(projectName("shelf"), "shelf");
   assert.equal(projectName("---"), "---");
 });

@@ -4,13 +4,13 @@ import { BarRows, type BarRow } from "@/components/screens/app-rows";
 import { AutoRefresh } from "@/components/screens/auto-refresh";
 import { ClaudeBlock, InternetBlock } from "@/components/screens/claude-internet";
 import { Timeline } from "@/components/ui/timeline";
-import { Card, Cards, Composition, DayStrip, Disclosure, Figure, Hero, HeroColumns, Mosaic, Stack, Text, TextLink, Tile, Title } from "@/components/ui";
+import { Card, Cards, Composition, DayStrip, Figure, Hero, HeroColumns, Mosaic, Stack, Text, TextLink, Tile, Title } from "@/components/ui";
 import { appTone, timeByClass } from "@/lib/app-classes";
 import { readableApp } from "@/lib/app-names";
 import { projectName } from "@/lib/claude-project";
 import { claudeSources, claudeTotal } from "@/lib/daily";
 import type { AppTime } from "@/lib/queries";
-import { appsBetween, claudeBetween, claudeSessionsBetween, dayTotals, devicesBetween, pagesBetween, sitesBetween, uploadSpan, windowsBetween } from "@/lib/queries";
+import { appsBetween, claudeBetween, claudeSessionsBetween, dayTotals, devicesBetween, pagesBetween, sitesBetween, uploadedDays, uploadSpan, windowsBetween } from "@/lib/queries";
 import { focusShare, hourMarks, layoutSessions } from "@/lib/timeline";
 import { percent, sum } from "@/lib/totals";
 import { calendarWords } from "@/lib/words";
@@ -29,8 +29,8 @@ export async function DayView({ day }: { day: string }) {
   const monday = mondayOf(day);
   const [raw, weekDays, sites, pages, windows, sessions, claudeDays, previous, devices, span, words, t, tClaude, tInternet, tTimeline, tClass] = await Promise.all([
     appsBetween(day, day),
-    // Which days of the strip's week an upload reached.
-    dayTotals(monday, addDays(monday, 6)),
+    // Which days of the strip's week an upload reached, in any table.
+    uploadedDays(monday, addDays(monday, 6)),
     sitesBetween(day, day),
     pagesBetween(day, day),
     windowsBetween(day, day),
@@ -67,7 +67,7 @@ export async function DayView({ day }: { day: string }) {
   const previousTotal = previous[0]?.seconds ?? 0;
   const delta = total - previousTotal;
   const date = t("title", { weekday: words.weekday(day), day: words.dayOfMonth(day), month: words.month(day) });
-  const strip = dayStrip(day, span.firstDay, today, new Set(weekDays.map((one) => one.day)));
+  const strip = dayStrip(day, span.firstDay, today, new Set(weekDays));
   const hrefOf = (target: string) => (target === today ? "/" : `/dia/${target}`);
 
   // Before the first upload there is nothing to read: no empty sections stand in for it.
@@ -97,14 +97,12 @@ export async function DayView({ day }: { day: string }) {
       label: t("bar", { app: one.app, duration: words.duration(one.seconds) }),
       detail:
         mine.length === 0 ? undefined : (
-          <>
-            <BarRows tone={tone} of={one.seconds} rows={mine.slice(0, TITLES_SHOWN).map(windowRow)} />
-            {mine.length > TITLES_SHOWN ? (
-              <Disclosure summary={<Text variant="meta">{t("windowsMore", { n: mine.length - TITLES_SHOWN })}</Text>}>
-                <BarRows tone={tone} of={one.seconds} rows={mine.slice(TITLES_SHOWN).map(windowRow)} />
-              </Disclosure>
-            ) : null}
-          </>
+          <BarRows
+            tone={tone}
+            of={one.seconds}
+            rows={mine.slice(0, TITLES_SHOWN).map(windowRow)}
+            overflow={mine.length > TITLES_SHOWN ? { summary: t("windowsMore", { n: mine.length - TITLES_SHOWN }), rows: mine.slice(TITLES_SHOWN).map(windowRow) } : undefined}
+          />
         ),
     };
   };
@@ -126,9 +124,9 @@ export async function DayView({ day }: { day: string }) {
           initial: words.weekdayInitial(one.day),
           number: words.dayOfMonth(one.day),
           current: one.current,
-          empty: one.reachable && !one.uploaded,
+          empty: one.reachable && !one.uploaded && one.day !== today,
           href: one.reachable ? hrefOf(one.day) : undefined,
-          description: t(one.reachable && !one.uploaded ? "stripDayEmpty" : "stripDay", { weekday: words.weekday(one.day), day: words.dayOfMonth(one.day), month: words.month(one.day) }),
+          description: t(one.reachable && !one.uploaded && one.day !== today ? "stripDayEmpty" : "stripDay", { weekday: words.weekday(one.day), day: words.dayOfMonth(one.day), month: words.month(one.day) }),
         }))}
       />
       <Hero>
@@ -211,12 +209,11 @@ export async function DayView({ day }: { day: string }) {
         <Mosaic>
           {apps.length > 0 ? (
             <Tile lead title={t("apps")} figure={words.duration(total)}>
-              <BarRows of={top?.seconds} rows={apps.slice(0, APPS_SHOWN).map(appRow)} />
-              {apps.length > APPS_SHOWN ? (
-                <Disclosure summary={<Text variant="meta">{t("appsMore", { n: apps.length - APPS_SHOWN, duration: words.duration(sum(apps.slice(APPS_SHOWN))) })}</Text>}>
-                  <BarRows of={top?.seconds} rows={apps.slice(APPS_SHOWN).map(appRow)} />
-                </Disclosure>
-              ) : null}
+              <BarRows
+                of={top?.seconds}
+                rows={apps.slice(0, APPS_SHOWN).map(appRow)}
+                overflow={apps.length > APPS_SHOWN ? { summary: t("appsMore", { n: apps.length - APPS_SHOWN, duration: words.duration(sum(apps.slice(APPS_SHOWN))) }), rows: apps.slice(APPS_SHOWN).map(appRow) } : undefined}
+              />
             </Tile>
           ) : null}
           <Tile title={tClaude("title")} figure={claudeSeconds > 0 ? words.duration(claudeSeconds) : "—"}>

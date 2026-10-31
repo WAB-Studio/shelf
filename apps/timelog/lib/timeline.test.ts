@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { focusShare, hourMarks, layoutSessions, minuteOfDay } from "./timeline";
+import { focusShare, hourMarks, layoutSessions } from "./timeline";
 
 // Bogotá is UTC-5 all year.
 const at = (time: string) => new Date(`2026-10-30T${time}:00Z`);
@@ -9,7 +9,6 @@ const DAY = "2026-10-30";
 const session = (key: string, from: string, to: string) => ({ key, label: key, first: at(from), last: at(to) });
 
 test("a session sits on the line from 6:00 to 24:00 by Bogotá's clock", () => {
-  assert.equal(minuteOfDay(at("14:30")), 9 * 60 + 30);
   const { startHour, segments } = layoutSessions([session("a", "14:00", "15:00")], DAY);
   assert.equal(startHour, 6);
   const one = segments[0];

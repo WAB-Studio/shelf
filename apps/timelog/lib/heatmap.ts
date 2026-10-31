@@ -1,13 +1,15 @@
 import { appClass, type AppClass } from "@/lib/app-classes";
 import { appName } from "@/lib/app-names";
-import type { DayApp } from "@/lib/queries";
+import { claudeTotal } from "@/lib/daily";
+import type { ClaudeDay, DayApp } from "@/lib/queries";
 
 export const HEAT_LEVELS = 4;
 
 export type HeatCell = { seconds: number; level: number };
 export type HeatRow = { app: string; kind: AppClass; total: number; cells: HeatCell[] };
 export type RestApp = { app: string; kind: AppClass; total: number };
-export type Heatmap = { rows: HeatRow[]; restCount: number; restSeconds: number; rest: RestApp[] };
+// `largest` is the longest cell of the grid, what every other row (Claude's) is levelled against.
+export type Heatmap = { rows: HeatRow[]; largest: number; restCount: number; restSeconds: number; rest: RestApp[] };
 
 // A cell's level, 1 to 4, is its share of `largest`; nothing is level 0.
 export function heatLevel(seconds: number, largest: number): number {
@@ -15,10 +17,10 @@ export function heatLevel(seconds: number, largest: number): number {
 }
 
 // Claude's total per day as one more row of the week's grid (RT-17), levelled against the grid's largest cell.
-export function claudeHeatRow(claude: { day: string; code: number; web: number; desktop: number }[], days: string[], largest: number): { total: number; cells: HeatCell[] } {
+export function claudeHeatRow(claude: ClaudeDay[], days: string[], largest: number): { total: number; cells: HeatCell[] } {
   const cells = days.map((day) => {
     const one = claude.find((row) => row.day === day);
-    const seconds = one === undefined ? 0 : one.code + one.web + one.desktop;
+    const seconds = one === undefined ? 0 : claudeTotal(one);
     return { seconds, level: heatLevel(seconds, largest) };
   });
   return { total: cells.reduce((sum, cell) => sum + cell.seconds, 0), cells };
@@ -53,6 +55,7 @@ export function buildHeatmap(rows: DayApp[], days: string[], systemName: string,
       }),
     })),
     rest: rest.map((one) => ({ app: one.app, kind: appClass(one.app, systemName), total: one.total })),
+    largest,
     restCount: rest.length,
     restSeconds: rest.reduce((sum, one) => sum + one.total, 0),
   };

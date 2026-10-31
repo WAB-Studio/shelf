@@ -34,6 +34,10 @@ function fakeReads() {
       asked.push(`byday ${from}..${to}`);
       return [{ day: "2026-10-27", app: "Code.exe", seconds: 11520 }];
     },
+    async uploadedDays(from, to) {
+      asked.push(`uploaded ${from}..${to}`);
+      return ["2026-10-27", "2026-10-28"];
+    },
   };
   return { reads, asked };
 }
@@ -85,7 +89,7 @@ test("get_range takes up to 366 days, from on or before to", async () => {
 test("get_daily answers one row per day with Claude's time and the top app, from the same reads as the export (RT-15)", async () => {
   const { reads, asked } = fakeReads();
   const outcome = await tool("get_daily").run(reads, { from: "2026-10-26", to: "2026-10-28" }, TODAY);
-  assert.deepEqual(asked.sort(), ["byday 2026-10-26..2026-10-28", "claude 2026-10-26..2026-10-28", "days 2026-10-26..2026-10-28"]);
+  assert.deepEqual(asked.sort(), ["byday 2026-10-26..2026-10-28", "claude 2026-10-26..2026-10-28", "days 2026-10-26..2026-10-28", "uploaded 2026-10-26..2026-10-28"]);
   assert.ok(outcome.ok);
   const days = outcome.value.days as Record<string, unknown>[];
   assert.deepEqual(days.map((one) => one.day), ["2026-10-26", "2026-10-27", "2026-10-28"]);
@@ -101,6 +105,7 @@ test("get_daily answers one row per day with Claude's time and the top app, from
     uploaded: 1,
   });
   assert.equal(days[0].claude_seconds, 0);
+  assert.deepEqual(days.map((one) => one.uploaded), [0, 1, 1]);
 });
 
 test("get_daily refuses a bad day or a range past 366 days before reading", async () => {
