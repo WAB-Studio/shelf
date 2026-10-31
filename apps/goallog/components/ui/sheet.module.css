@@ -68,12 +68,12 @@
   margin-block-start: 20px;
 }
 
-/* RNP-17, `HojaEscritorio.dc.html`: from 1024px a sheet is a dialog, centred,
+/* RNP-17, `HojaEscritorio.dc.html`: from 768px a sheet is a dialog, centred,
    over the same scrim. The board's drop shadow stays out (docs/goallog/
    DESIGN.md "No shadow anywhere"): the border is what lifts it. Insets at
    zero with `margin: auto` centre it on both axes without a transform, so
    Radix's own open animation never fights the position. */
-@media (min-width: 1024px) {
+@media (min-width: 768px) {
   .sheet.sheet {
     inset: 0;
     inline-size: 480px;

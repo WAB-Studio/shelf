@@ -141,7 +141,7 @@ export async function CommitmentList({
         );
       })}
       {!archived ? (
-        <Button asChild variant={commitments.length > 0 ? "outline" : "solid"} block>
+        <Button asChild variant="solid" block>
           <Link href={`/metas/${goalId}/compromisos/nuevo`}>{t("goal.commitments.add")}</Link>
         </Button>
       ) : null}

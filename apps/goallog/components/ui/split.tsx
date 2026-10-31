@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import styles from "./split.module.css";
 
 // The desktop screen's two columns (RNP-17): `main` on the left, `before` over
-// `after` on the right. Below 1024px the three parts are plain siblings in the
+// `after` on the right. Below 768px the three parts are plain siblings in the
 // page's own column, in the order `before`, `main`, `after`.
 export function Split({
   main,
@@ -25,13 +25,13 @@ export function Split({
   tail?: ReactNode;
   // The right column's width: Hoy draws 360, the goal 380.
   aside?: 360 | 380;
-  // Keeps the right column at two parts of five at every width from 1024px,
+  // Keeps the right column at two parts of five at every width from 768px,
   // where `aside` would fix it at a number of pixels from 1280.
   twoFifths?: boolean;
-  // `main` alone, its children in two equal columns from 1024: the past day
+  // `main` alone, its children in two equal columns from 768: the past day
   // (`DiaPasadoEscritorio.dc.html`), which never narrows as the screen widens.
   even?: boolean;
-  // From 1024 `after` leaves the right column and stands under both, at the
+  // From 768 `after` leaves the right column and stands under both, at the
   // content's full width: a part whose text needs more than the aside gives.
   afterBelow?: boolean;
   // On a phone `main` comes first, then `before`, `after` and `foot`: the part a person came for leads.

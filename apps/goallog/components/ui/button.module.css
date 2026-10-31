@@ -50,11 +50,11 @@
   min-block-size: 52px;
 }
 
-/* Full width on the phone comes from the column's own stretch. From 1024 a
+/* Full width on the phone comes from the column's own stretch. From 768 a
    block button is sized to its text, 160 at least, wherever it sits (a sheet's
    actions row included); a flex column (Split from 301) would stretch it, so
    the width is set, not left to the parent. */
-@media (min-width: 1024px) {
+@media (min-width: 768px) {
   .block.block {
     inline-size: fit-content;
     min-inline-size: 160px;

@@ -54,7 +54,7 @@
   color: var(--pulsar-brand-ink-secondary);
 }
 
-@media (min-width: 1024px) {
+@media (min-width: 768px) {
   .hero {
     padding: 28px 32px;
   }

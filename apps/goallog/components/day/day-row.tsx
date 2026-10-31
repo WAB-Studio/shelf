@@ -135,7 +135,7 @@ export function DayRow({
     quiet: Boolean(quiet),
     cadenceText: progress ? null : cadenceText,
     amount,
-    evidence,
+    evidence: evidence ? { ...evidence, noted: evidence.got === null && evidence.source ? t("day.row.notedBy", { source: evidence.source }) : null } : undefined,
     status: metWords ?? progress,
     writtenTime,
     writtenLabel,
@@ -188,7 +188,8 @@ export function DayRow({
         meta={metaNodes}
         metaVariant="sentence"
         onClick={handleTap}
-        disabled={!tappable || pending}
+        still={!tappable}
+        disabled={pending}
       />
       {note ? (
         <Text as="p" variant="sentence">

@@ -31,7 +31,7 @@ function yearLabel(month: string): string {
  * `MesesFilas.dc.html` (RP-32): one whole-row link per month of the goal's
  * span from `loadGoal`'s own `months`, the month open beside the list marked.
  * The phone's stack is drawn at every width: the list lives in a 320px column
- * from 1024. A month's amount is set from its own page, never from the row.
+ * from 768. A month's amount is set from its own page, never from the row.
  */
 export async function MonthsList({
   goal: loaded,
@@ -242,7 +242,7 @@ export async function MonthsList({
 /**
  * `MesesFilas.dc.html` / `MesesListaDetalle.dc.html` / `MesesVacio.dc.html` /
  * `MesesSinMedida.dc.html` (RP-28, RP-31, RP-32, RP-50): the goal's months, and
- * from 1024 the month beside them — the current one, or the first outside the
+ * from 768 the month beside them — the current one, or the first outside the
  * span. The amount of a month still to be planned opens the amount sheet
  * through `?planear=`; an ended or archived goal offers no sheet.
  */

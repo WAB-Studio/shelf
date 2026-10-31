@@ -45,7 +45,7 @@
   color: var(--pulsar-muted);
 }
 
-/* The quiet sentence: Archivo 13 / 1.5 in muted. Mono is for figures and dates. */
+/* The quiet sentence: Archivo 14 / 1.5 in muted. Mono is for figures and dates. */
 .sentence.sentence {
   font-family: var(--font-sans);
   font-size: var(--pulsar-text-small-size);
@@ -87,8 +87,8 @@
   margin-inline-start: auto;
 }
 
-/* Body text from 1024: the size and weight a paragraph in a card reads at. */
-@media (min-width: 1024px) {
+/* Body text from 768: the size and weight a paragraph in a card reads at. */
+@media (min-width: 768px) {
   .plainWide.plainWide.title.title {
     font-size: var(--pulsar-text-line-size);
     font-weight: 400;
@@ -103,7 +103,7 @@
   border-block-start: 2px solid var(--pulsar-ink);
 }
 
-@media (min-width: 1024px) {
+@media (min-width: 768px) {
   .rule.rule {
     padding-block-start: 0;
     border-block-start: 0;

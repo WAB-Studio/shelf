@@ -330,7 +330,7 @@ export async function MonthDetail({
 
 /**
  * `ArmazonEncabezado.dc.html` case 2 (RP-31, RP-32): the month screen. The
- * header names the month and leads back to the goal, its one way out; from 1024 `ListDetail` draws the goal's months beside it, the
+ * header names the month and leads back to the goal, its one way out; from 768 `ListDetail` draws the goal's months beside it, the
  * month open.
  */
 export async function MonthScreen({ goalId, month }: { goalId: string; month: string }) {

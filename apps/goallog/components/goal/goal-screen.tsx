@@ -172,9 +172,9 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
   const deleteRefusal =
     goal.deletable || goal.deleteBlock === null ? null : (
       <Section as="div">
-        <Button variant="quiet" tone="danger" block disabled aria-describedby="delete-goal-reason">
+        <Text as="p" variant="name" tone="muted">
           {t("goal.delete.action")}
-        </Button>
+        </Text>
         <Text as="p" id="delete-goal-reason" variant="sentence" tone="muted">
           {t(
             goal.deleteBlock === "goals"
@@ -421,7 +421,7 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
           </Text>
         ) : null}
         {planned === null && !holds && !archived && !ended ? (
-          <Button asChild variant="outline">
+          <Button asChild variant="quiet">
             <Link href={planHrefFrom(goal.id, today.slice(0, 7), `/metas/${goal.id}`)}>
               {t("goal.detail.monthPlanLink", { month: monthName })}
             </Link>
@@ -667,7 +667,7 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
         ))}
         {archived || ended ? null : (
           <Face on="phone">
-            <Button asChild variant="outline" block>
+            <Button asChild variant="quiet" block>
               <Link href={`/metas/${goal.id}/fases/nueva`}>
                 {t("goal.phases.add")}
               </Link>
@@ -696,6 +696,7 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
 
   const foot = (
     <>
+      {holds ? null : <Face on="desktop">{insideAction}</Face>}
       {archived || ended ? null : (
         <Face on="desktop">
           <MoveGoalAction goalId={goal.id} name={goal.name} tree={goal.tree} today={today} />
@@ -714,7 +715,7 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
               {t("goal.claude.open")}
             </a>
           </Button>
-          <Text as="p" variant="meta">
+          <Text as="p" variant="sentence">
             {t("goal.claude.hint")}
           </Text>
         </Flex>
@@ -756,7 +757,7 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
             <Face on="desktop">
               <Flex gap="3">
                 <RenameGoalAction goalId={goal.id} name={goal.name} />
-                <ArchiveGoalAction goalId={goal.id} name={goal.name} block={false} short {...archiveBranch} />
+                <ArchiveGoalAction goalId={goal.id} name={goal.name} variant="ghost" block={false} short {...archiveBranch} />
                 {deleteAction(false)}
               </Flex>
             </Face>
@@ -764,8 +765,6 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
         }
       />
       {hero}
-
-      {holds ? null : <Face on="desktop">{insideAction}</Face>}
 
       <Split before={before} main={main} after={after} aside={380} afterBelow mainFirst foot={foot} />
     </Page>

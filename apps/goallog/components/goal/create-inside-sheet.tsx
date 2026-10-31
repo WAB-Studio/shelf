@@ -32,7 +32,7 @@ export type CreateInsideActionProps = {
  * the count runs from today's week; one that ends after the upper goal is
  * refused here with the room left, before any request leaves.
  */
-export function CreateInsideAction({ goalId, name, horizon, kind, variant = "outline", rhythm = false }: CreateInsideActionProps) {
+export function CreateInsideAction({ goalId, name, horizon, kind, variant = "quiet", rhythm = false }: CreateInsideActionProps) {
   const t = useTranslations();
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -103,10 +103,13 @@ export function CreateInsideAction({ goalId, name, horizon, kind, variant = "out
       <Button variant={variant} block tap={44} onClick={openSheet}>
         {t(kind === "big" ? "tree.goal.addBig" : "tree.goal.addSmall")}
       </Button>
+      <Text as="p" variant="sentence">
+        {t(kind === "big" ? "tree.goal.addBigHint" : "tree.goal.addSmallHint")}
+      </Text>
       <Sheet
         open={open}
         onOpenChange={setOpen}
-        label={name.toLocaleUpperCase("es")}
+        label={name}
         title={t(kind === "big" ? "tree.create.titleBig" : "tree.create.titleSmall")}
       >
         <Field label={t("tree.create.name")} value={title} onChange={(event) => setTitle(event.target.value)} autoFocus />

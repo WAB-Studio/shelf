@@ -96,7 +96,7 @@ export function DayHeader({
         title={title ?? date}
         eyebrow={
           title ? (
-            // The rail already says the date from 1024.
+            // The rail already says the date from 768.
             <Face on="phone">
               <SectionLabel>{date}</SectionLabel>
             </Face>

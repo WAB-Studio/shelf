@@ -1,4 +1,4 @@
-/* Below 1024: four tabs fixed to the foot of the viewport, over the content.
+/* Below 768: four tabs fixed to the foot of the viewport, over the content.
    `app/theme.css` reserves their height under the page so the last control of a
    screen scrolls clear of them. A sheet is a portal after this in the tree and
    stands over it. */
@@ -29,7 +29,7 @@
   justify-content: center;
   min-block-size: 56px;
   box-sizing: border-box;
-  font-size: 13px;
+  font-size: 14px;
   color: var(--pulsar-muted);
   text-decoration: none;
   /* Transparent by default so the current tab's accent rule does not shift
@@ -67,10 +67,10 @@
   display: none;
 }
 
-/* RNP-17, `ArmazonRiel.dc.html`: from 1024px the four tabs are a rail down the
+/* RNP-17, `ArmazonRiel.dc.html`: from 768px the four tabs are a rail down the
    screen's left edge. The nav is the rail's ground and stretches the page's whole
    height; `.inner` is what sticks to the viewport while the screen scrolls. */
-@media (min-width: 1024px) {
+@media (min-width: 768px) {
   .nav {
     position: static;
     inset: auto;
@@ -275,5 +275,12 @@
     font-weight: 500;
     pointer-events: none;
     overflow-wrap: anywhere;
+  }
+}
+
+/* A tablet leaves the screen the room its two columns need: a narrower rail. */
+@media (min-width: 768px) and (max-width: 1023.98px) {
+  .nav {
+    inline-size: 176px;
   }
 }

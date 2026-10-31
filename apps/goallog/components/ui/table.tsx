@@ -68,7 +68,7 @@ type TableProps = {
   // Keeps the wide face's label column on one line (`ReporteMesesSemanas.dc.html`'s
   // «sem 1 · 28 jul–2 ago 2026»): the column grows to its text rather than wrap it.
   nowrapLabel?: boolean;
-  // Draws the phone's stack from 1024 to 1279px, where the shell's rail leaves
+  // Draws the phone's stack from 768 to 1279px, where the shell's rail leaves
   // a two-column card too narrow for the wide face; the wide face returns at 1280.
   stackInCard?: boolean;
   // Lets a row's `detail` wrap, for a state line longer than its label column.

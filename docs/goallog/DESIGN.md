@@ -19,7 +19,7 @@ A ship's log: what happened, when, and who wrote it down.
   are the log's substance: they read as a log or they read as decoration.
 - **Writing a fact costs one tap.** No form stands on the day's path. What needs a number offers it
   already filled.
-- Rule between rows with a hairline. Never a card, never a border box.
+- Rule between rows with a hairline. On the phone there is no card and no border box. From 768px the groups sit in `Panel` cards (raised ground, 1px line, radius 14), the brand surfaces the restyle of 2026-10-30 chose; a row inside a card is still ruled by a hairline.
 - **No shadow anywhere.** Not on a sheet, not on a button, not on a field. Separation is a hairline,
   a change of fill, or the scrim — never a blur. Checked 2026-09-22 against all seventeen boards:
   they draw **zero**. A library that paints one is painting a decision this design did not take.
@@ -2013,3 +2013,12 @@ Canvas «Bitácora de metas», page «Armazón», from y=16500. 360, two states.
 - **Decided by the user 2026-10-28, on oleada-7's critic** (RP-143): a past
   month is read-only everywhere, the goal's own month screen included, once seven days have passed since it closed;
   until then its tasks still mark and unmark, for a task done on the 31st and logged on the 2nd.
+
+## Decisions of 2026-10-30, second critique round
+
+- **The rail and the two columns start at 768px**, not 1024; the rail is 176px from 768 to 1023 and 232 from 1024. The phone's bottom bar hides from 768.
+- **Cards on desktop.** The restyle chose cards over bare rules from 768px (brand surfaces); the rule «Never a card» holds on the phone.
+- **Section labels, field labels and sheet headers are Archivo 14px in sentence case**, never uppercase and never mono. Reading text is never under 14px at any width.
+- **One primary pill per screen**; every other act is a quiet row. An act that cannot be done is plain text with its reason, never a disabled button.
+- **An evidence row reads automatic**: «lo anota el diccionario · 1 búsqueda», in the ink of any row.
+- **«Añadir meta grande» says what it is** in one line under it and sits at the foot of the goal's page on desktop, not under the hero.

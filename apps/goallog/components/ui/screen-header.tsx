@@ -35,7 +35,7 @@ export function ScreenHeader({
   eyebrowFill?: boolean;
   // A row on the eyebrow's line: the steps, the way back, the theme toggle.
   controls?: ReactNode;
-  // Beside the title from 1024, under it below.
+  // Beside the title from 768, under it below.
   actions?: ReactNode;
   // One line under the title: mono figures by default, the quiet sentence when it reads as one.
   meta?: ReactNode;
@@ -156,7 +156,7 @@ export function ScreenHeaderSkeleton() {
 
 // What a screen that has nothing to show says and offers
 // (`ArmazonFallo.dc.html`, `ArmazonNoEncontrada.dc.html`): an optional line and
-// its exits, stacked full width on the phone, a row capped at 560px from 1024.
+// its exits, stacked full width on the phone, a row capped at 560px from 768.
 export function ScreenExit({ message, children }: { message?: string; children: ReactNode }) {
   return (
     <div className={styles.exit}>

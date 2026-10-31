@@ -24,7 +24,7 @@
   },
   "sheet": {
     "title": "Editarlo",
-    "nameLabel": "nombre",
+    "nameLabel": "Nombre",
     "noteLabel": "nota, si quieres",
     "save": "Guardarlo",
     "saving": "Guardando…",

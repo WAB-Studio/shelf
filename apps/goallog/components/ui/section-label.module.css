@@ -1,7 +1,7 @@
-/* docs/goallog/DESIGN.md "Type": 12px mono, sentence case, 0.02em, in muted. */
+/* docs/goallog/DESIGN.md "Type": 14px Archivo, sentence case, 0.02em, in muted. */
 .label {
   display: block;
-  font-family: var(--font-mono);
+  font-family: var(--font-sans);
   font-size: var(--pulsar-text-label-size);
   font-weight: 500;
   letter-spacing: var(--pulsar-text-label-tracking);

@@ -40,7 +40,9 @@
     "levelNoEnd": "{level} · sin final",
     "addBig": "Añadir meta grande",
     "addSmall": "Añadir meta pequeña",
-    "moveEnd": "mover el final",
+    "addBigHint": "Una meta grande reúne metas más pequeñas, cada una con su propio final.",
+    "addSmallHint": "Una meta pequeña cuelga de esta y lleva su propio final.",
+    "moveEnd": "Mover el final",
     "move": "Mover bajo otra meta",
     "archive": "Archivar esta meta"
   },
@@ -70,7 +72,7 @@
   "create": {
     "titleSmall": "Una meta pequeña dentro",
     "titleBig": "Una meta grande dentro",
-    "name": "nombre",
+    "name": "Nombre",
     "weeksFrom": "semanas, contando la del {date}",
     "ends": "termina el {date}",
     "upTo": "Hasta {weeks, plural, one {# semana} other {# semanas}}.",

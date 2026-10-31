@@ -81,7 +81,7 @@ body {
   --pulsar-brand-muted: #a9b8cf;
   /* The one highlight: sky, 9.91:1 on the brand navy. Never text on white. */
   --pulsar-highlight: #7dd3fc;
-  --pulsar-text-label-size: 12px;
+  --pulsar-text-label-size: 14px;
   --pulsar-text-label-tracking: 0.02em;
   --pulsar-text-title-size: 30px;
   --pulsar-text-title-weight: 400;
@@ -91,24 +91,17 @@ body {
   --pulsar-text-title-tracking-wide: -0.03em;
   --pulsar-text-name-size: 16px;
   --pulsar-text-name-weight: 500;
-  --pulsar-text-meta-size: 12px;
-  /* A quiet sentence or a note: 13px on the phone, 14px from 1024 where body text goes no lower. */
-  --pulsar-text-small-size: 13px;
+  --pulsar-text-meta-size: 14px;
+  /* A quiet sentence or a note: reading text goes no lower than 14px at any width. */
+  --pulsar-text-small-size: 14px;
   --pulsar-text-measure-size: 26px;
   --pulsar-text-measure-weight: 500;
-  --pulsar-text-unit-size: 11px;
+  --pulsar-text-unit-size: 14px;
   --pulsar-text-measure-tracking: 0.02em;
   --pulsar-text-sheet-title-size: 21px;
   --pulsar-text-sheet-title-size-wide: 24px;
   --pulsar-text-line-size: 15px;
   --pulsar-text-line-leading: 1.6;
-}
-
-@media (min-width: 1024px) {
-  :root {
-    --pulsar-text-small-size: 14px;
-    --pulsar-text-meta-size: 14px;
-  }
 }
 
 body {
@@ -143,11 +136,11 @@ body {
   min-height: 0;
 }
 
-/* RNP-16, `ArmazonPestanas.dc.html`: below 1024px the tabs are fixed over the
+/* RNP-16, `ArmazonPestanas.dc.html`: below 768px the tabs are fixed over the
    foot of the viewport (components/ui/bottom-nav), so the shell keeps their
    height clear under the content: 56px of tab, the nav's 1px rule, and the
    home-area inset the nav pads itself with. Print draws no tabs and no gap. */
-@media screen and (max-width: 1023.98px) {
+@media screen and (max-width: 767.98px) {
   body > .radix-themes {
     /* Grows with its content, so the reserved padding is scrollable height
        and not an overflow the root's flex shrink clips short. */
@@ -156,11 +149,11 @@ body {
   }
 }
 
-/* RNP-17, `HoyEscritorio.dc.html`: from 1024px the shell is a row. The rail
+/* RNP-17, `HoyEscritorio.dc.html`: from 768px the shell is a row. The rail
    (`components/ui/bottom-nav`) stands first and sticks to the viewport; the
    screen takes the rest. The root grows with its content so the rail has the
    whole scroll to stick through. */
-@media (min-width: 1024px) {
+@media (min-width: 768px) {
   body > .radix-themes {
     flex-direction: row;
     flex: 1 0 auto;

@@ -85,7 +85,7 @@ export function ScheduleSheet({
     <Sheet
       open={open}
       onOpenChange={onOpenChange}
-      label={name.toLocaleUpperCase("es")}
+      label={name}
       title={t("oneOffs.schedule.title")}
       description={current ? t("oneOffs.schedule.now", { when: current.label }) : undefined}
     >
