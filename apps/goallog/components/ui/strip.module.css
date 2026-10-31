@@ -30,6 +30,19 @@
   box-shadow: inset 0 0 0 1.5px var(--pulsar-accent);
 }
 
+/* Written short of its target: the accent as a half bar, never as done. */
+.partial {
+  block-size: 60%;
+  background: var(--pulsar-accent-soft);
+  box-shadow: inset 0 0 0 1.5px var(--pulsar-accent);
+}
+
+/* A day the cadence does not ask: a dot, like a day before the commitment. */
+.neutral {
+  block-size: 3px;
+  background: var(--pulsar-line);
+}
+
 .open {
   block-size: 30%;
   box-shadow: inset 0 0 0 1.5px var(--pulsar-quiet);
@@ -61,7 +74,8 @@
   border-radius: 1px;
 }
 
-.mini .open {
+.mini .open,
+.mini .partial {
   box-shadow: none;
   background: var(--pulsar-line);
 }

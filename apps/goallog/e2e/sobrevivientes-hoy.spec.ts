@@ -111,9 +111,9 @@ test("a row's second line reads cadence, amount, count, hour, in that order", as
     await page.goto("/");
     await settled(page);
     await expect(page.getByText(`Un día ${stamp}`, { exact: true })).toBeVisible();
-    await expect(page.getByText(`solo los ${plural} · 10 min · 07:40 · lo dijiste tú`, { exact: true })).toBeVisible();
+    await expect(page.getByText(`solo los ${plural} · 10 min`, { exact: true })).toBeVisible();
     await expect(page.getByText(`solo los ${plural} · 20 páginas`, { exact: true })).toBeVisible();
-    await expect(page.getByText("10 min · 1 de 3 esta semana · 07:40 · lo dijiste tú", { exact: true })).toBeVisible();
+    await expect(page.getByText("10 min · 1 de 3 esta semana", { exact: true })).toBeVisible();
 
     // Written another day than the one on the page: the day closes the line.
     const yesterday = shift(today, -1);
@@ -129,7 +129,7 @@ test("a row's second line reads cadence, amount, count, hour, in that order", as
     `;
     await page.goto(`/dia/${yesterday}`);
     await settled(page);
-    await expect(page.getByText(/^todos los días · 5 min · 07:40 · lo dijiste tú · anotado el /)).toBeVisible();
+    await expect(page.getByText(/^todos los días · 5 min · anotado el /)).toBeVisible();
   } finally {
     await context.close();
     await db`delete from goals.goals where user_id = ${person.id}`;

@@ -26,7 +26,6 @@ import {
   TextLink,
 } from "@/components/ui";
 import { monthGrid } from "@/lib/day/month-grid";
-import { screenPlanned } from "@/lib/plan/screen-planned";
 import { sentenceCase } from "@/lib/day/day-words";
 import { cadencePhrase } from "@/lib/day/row-phrases";
 import { closedMonthMarkDay } from "@/lib/plan/closed-month-marks";
@@ -274,7 +273,32 @@ export async function MonthAcrossScreen({ month, today }: { month?: string; toda
               </Flex>
             </h2>
           </Text>
-          {/* The month's figure is in the card above; this one keeps the tasks. */}
+          {goal.line && !coming ? (
+            <>
+              <Flex align="baseline" gap="2">
+                <Figure value={goal.line.reached} unit={unit ?? undefined} bare={goal.line.planned !== null} />
+                {goal.line.planned !== null ? (
+                  <>
+                    {" "}
+                    <Text variant="sentence">
+                      {t.rich("month.months.ofFigure", { planned: say(goal.line.planned), ...fig })}
+                    </Text>
+                  </>
+                ) : null}
+              </Flex>
+              {/* Over its plan the bar is full and the excess is said, never hidden. */}
+              {goal.line.planned ? (
+                <>
+                  <Progress brand size="thick" percent={Math.min(100, Math.floor((goal.line.reached * 100) / goal.line.planned))} />
+                  {goal.line.reached > goal.line.planned ? (
+                    <Text as="p" variant="sentence">
+                      {t("month.across.over")} <Figure value={goal.line.reached - goal.line.planned} unit={unit ?? undefined} variant="meta" />
+                    </Text>
+                  ) : null}
+                </>
+              ) : null}
+            </>
+          ) : null}
           {meta ? (
             <Text as="p" variant="sentence">
               {meta}
@@ -468,35 +492,6 @@ export async function MonthAcrossScreen({ month, today }: { month?: string; toda
           />
         </Hero>
       )}
-      {nothingOpen || coming ? null : (
-        <Grid columns={{ initial: "1", lg: "3" }} gap="4" align="start">
-          {across.goals
-            .filter((goal) => goal.line !== null && !goal.holdsGoals)
-            .map((goal) => {
-              const planned = screenPlanned(goal.line!.planned, goal.plan.budgets.some((b) => b.month === across.month));
-              return (
-                <Panel as="div" key={goal.id}>
-                  <Section label={goal.name}>
-                    <Flex align="baseline" gap="2" wrap="wrap">
-                      <Figure variant="big" value={goal.line!.reached} unit={goal.unit ?? undefined} bare={planned !== null} />
-                      {planned !== null ? (
-                        <Text variant="sentence">
-                          {t("day.monthLine.of")} <Figure value={planned} unit={goal.unit ?? undefined} variant="meta" />
-                        </Text>
-                      ) : null}
-                    </Flex>
-                    {planned ? <Progress brand percent={Math.min(100, Math.floor((goal.line!.reached * 100) / planned))} size="thick" /> : null}
-                    {planned && goal.line!.reached > planned ? (
-                      <Text as="p" variant="sentence">
-                        {t("month.across.over")} <Figure value={goal.line!.reached - planned} unit={goal.unit ?? undefined} variant="meta" />
-                      </Text>
-                    ) : null}
-                  </Section>
-                </Panel>
-              );
-            })}
-        </Grid>
-      )}
       {nothingOpen ? null : (
         <Flex align="baseline" gap="3" wrap="wrap">
           <Text as="span" variant="meta">
@@ -538,7 +533,7 @@ export async function MonthAcrossScreen({ month, today }: { month?: string; toda
           {across.evidence === "unreadable" ? (
             <EvidenceNote title={t("month.across.unreadableTitle")} body={t("month.across.unreadableBody")} />
           ) : null}
-          <Grid columns={{ initial: "1", lg: String(Math.min(3, Math.max(1, drawnCount))) as "1" | "2" | "3" }} gap={{ initial: "6", md: "4" }} align="start">
+          <Grid columns={{ initial: "1", lg: String(Math.min(3, Math.max(1, drawnCount))) as "1" | "2" | "3" }} gap={{ initial: "6", md: "4" }} align="start" data-part="month-blocks">
             {blocks}
             {habitsGroup}
           </Grid>

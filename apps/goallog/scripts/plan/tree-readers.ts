@@ -500,6 +500,7 @@ const GOLDEN_VIEW: unknown = {
       "retiredAt": null,
       "sourceLabelKey": null,
       "factDayCount": 1,
+      "evidenceDayCount": 0,
       "createdOn": "2026-09-21",
       "done": [
         {

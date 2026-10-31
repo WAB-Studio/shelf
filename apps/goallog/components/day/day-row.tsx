@@ -184,6 +184,8 @@ export function DayRow({
         meta={metaNodes}
         metaVariant="sentence"
         onClick={handleTap}
+        // A tap row is a toggle: its mark is drawn, never read, so done is said here instead of in a phrase.
+        aria-pressed={kind === "tap" && tappable ? markState === "declared" : undefined}
         still={!tappable}
         disabled={pending}
       />

@@ -1027,7 +1027,11 @@ export async function loadGoalForm(
     person
       ? withReadingDb((tx) => {
           const { from, to } = goalSpan(goalId, today);
-          return queryEvidenceBySource(tx, person.id, from, to);
+          // From the earliest of the goal's span and its commitments' own creation, so every day `editCadence`
+          // counts (from a commitment's creation) is read here too.
+          const first = sql`least(${from}, (select (min(c.created_at) at time zone ${TIME_ZONE})::date
+                                              from "goals"."commitments" c where c.goal_id = ${goalId}))`;
+          return queryEvidenceBySource(tx, person.id, first, to);
         }).catch(() => null)
       : null,
   ]);

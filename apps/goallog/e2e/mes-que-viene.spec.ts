@@ -105,7 +105,7 @@ for (const width of [390, 1280]) {
       await next(page).click();
       await expect(page).toHaveURL(new RegExp(`/mes\\?mes=${key(comingMonth)}$`));
       await expect(page.getByRole("heading", { level: 1 })).toHaveText(title(comingMonth));
-      await expect(page.getByText("el plan de ese mes", { exact: true }).locator("visible=true")).toHaveCount(1);
+      await expect(page.getByText("El plan de ese mes", { exact: true }).locator("visible=true")).toHaveCount(1);
       await expect(prev(page)).toHaveAttribute("href", "/mes");
 
       const english = page.locator("section", { has: page.getByRole("heading", { name: `Inglés ${stamp}` }) });
@@ -146,7 +146,7 @@ test("‹ leads to last month, the first one: its tasks as they stood, marked on
     await prev(page).click();
     await expect(page).toHaveURL(new RegExp(`/mes\\?mes=${key(lastMonth)}$`));
     await expect(page.getByRole("heading", { level: 1 })).toHaveText(title(lastMonth));
-    await expect(page.getByText("el primero", { exact: true }).locator("visible=true")).toHaveCount(1);
+    await expect(page.getByText("El primero", { exact: true }).locator("visible=true")).toHaveCount(1);
     await expect(prev(page)).toHaveCount(0);
     await expect(next(page)).toHaveAttribute("href", "/mes");
 

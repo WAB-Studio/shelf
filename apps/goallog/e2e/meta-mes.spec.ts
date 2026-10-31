@@ -129,9 +129,9 @@ test("the goal says the month's amount, never moves with a done task, and links 
       await db`delete from goals.facts where one_off_id = ${task.id}`;
       await page.goto(`/metas/${goalId}`);
       await expect(seen(page, monthName)).toHaveCount(1);
-      // The total and the month's reached figure both say 6 h 30 min.
+      // The total, the navy block's month line and the month block's reached figure all say 6 h 30 min.
       // The month line is one sentence; from the 20th the pace line replaces it.
-      await expect(seen(page, "6 h 30 min")).toHaveCount(2);
+      await expect(seen(page, "6 h 30 min")).toHaveCount(3);
       await expect(seen(page, "6 h 30 min de 12 h")).toHaveCount(late ? 0 : 1);
       await expect(seen(page, line(54, "6 h 30 min"))).toHaveCount(1);
 
@@ -140,7 +140,7 @@ test("the goal says the month's amount, never moves with a done task, and links 
         values (${person.id}, ${goalId}, ${task.id}, ${monthStart}::date)
       `;
       await page.goto(`/metas/${goalId}`);
-      await expect(seen(page, "6 h 30 min")).toHaveCount(2);
+      await expect(seen(page, "6 h 30 min")).toHaveCount(3);
       await expect(seen(page, "6 h 45 min")).toHaveCount(0);
       await expect(seen(page, line(54, "6 h 30 min"))).toHaveCount(1);
       // Pace speaks from the 20th alone, in ink words, never before.
@@ -272,7 +272,7 @@ test("an archived or ended goal reads its month and offers no way to plan it (RP
     for (const width of [360, 1280]) {
       await page.setViewportSize({ width, height: 800 });
       await page.goto(`/metas/${archived}`);
-      await expect(seen(page, "5 h")).toHaveCount(2);
+      await expect(seen(page, "5 h")).toHaveCount(3);
       await expect(seen(page, "5 h de 12 h")).toHaveCount(late ? 0 : 1);
       if (late) await expect(seen(page, `día ${day} · 5 h de 12 h, bajo el 60 %`)).toHaveCount(1);
       await expect(page.getByRole("link", { name: "Ver por mes", exact: true })).toBeVisible();
@@ -391,7 +391,7 @@ test("a goal with a rhythm leads to its plan: «el plan», the end, the rhythm a
     for (const width of [360, 1280]) {
       await page.setViewportSize({ width, height: 800 });
       await page.goto(`/metas/${id}`);
-      await expect(seen(page, "el plan")).toHaveCount(1);
+      await expect(seen(page, "El plan")).toHaveCount(1);
       const row = page.locator(`a[href="/metas/${id}/plan"]`);
       await expect(row).toHaveCount(1);
       await expect(row).toContainText(/^A este ritmo terminas el \d+ de \p{L}+/u);
@@ -437,7 +437,7 @@ test("a goal with tasks and no rhythm reads «Armar el plan» with no second lin
     const row = page.locator(`a[href="/metas/${bare}/plan"]`);
     await expect(row).toHaveText("Armar el plan");
     await page.goto(`/metas/${empty}`);
-    await expect(seen(page, "el plan")).toHaveCount(0);
+    await expect(seen(page, "El plan")).toHaveCount(0);
     await expect(page.locator(`a[href="/metas/${empty}/plan"]`)).toHaveCount(0);
   } finally {
     await context.close();
