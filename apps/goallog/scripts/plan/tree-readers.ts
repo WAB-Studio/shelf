@@ -496,7 +496,16 @@ const GOLDEN_VIEW: unknown = {
       },
       "retiredAt": null,
       "sourceLabelKey": null,
-      "factDayCount": 1
+      "factDayCount": 1,
+      "createdOn": "2026-09-21",
+      "done": [
+        {
+          "day": "2026-10-05",
+          "quantity": 45,
+          "by": "declared"
+        }
+      ],
+      "sourceKey": null
     }
   ],
   "weeks": [
