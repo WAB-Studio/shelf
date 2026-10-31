@@ -230,3 +230,19 @@
 .legend li { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 14px; }
 .legend li > :last-child { margin-left: auto; }
 .swatch { flex: none; width: 10px; height: 10px; border-radius: 3px; background: var(--tone-block); }
+
+.heat { width: 100%; table-layout: fixed; border-collapse: separate; border-spacing: 3px; }
+.heat .heatName { width: 28%; max-width: 0; padding: 0 4px 0 0; text-align: left; font-weight: 400; }
+@media (min-width: 720px) { .heat .heatName { width: 18%; } .heat { border-spacing: 4px; } }
+.heatHead { padding: 4px 0; font-size: 14px; font-weight: 500; color: var(--tl-muted); text-align: center; }
+.heatLink { color: inherit; text-decoration: none; }
+.heatLink:hover, .heatLink:focus-visible { text-decoration: underline; color: var(--tl-text); }
+.heatCell { height: 48px; padding: 0; text-align: center; vertical-align: middle; border-radius: 8px; background: var(--tl-track); }
+.heatCell[data-level="1"] { background: color-mix(in srgb, var(--tone) var(--tl-heat-1), var(--tl-track)); }
+.heatCell[data-level="2"] { background: color-mix(in srgb, var(--tone) var(--tl-heat-2), var(--tl-track)); }
+.heatCell[data-level="3"] { background: color-mix(in srgb, var(--tone) var(--tl-heat-3), var(--tl-track)); }
+.heatCell[data-level="4"] { background: color-mix(in srgb, var(--tone) var(--tl-heat-4), var(--tl-track)); }
+.heatCell .dayFigure { align-items: center; justify-content: center; min-height: 0; color: var(--tl-text); }
+.heatCell .dayUnit { color: inherit; opacity: 0.85; }
+.heatNone { color: var(--tl-muted); }
+@media (max-width: 719px) { .heatHead { font-size: 12px; } }

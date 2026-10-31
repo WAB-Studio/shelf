@@ -162,6 +162,41 @@ export function Composition({ parts, label, thin }: { parts: CompositionPart[]; 
   );
 }
 
+export type HeatmapColumn = { key: string; label: string; href?: string; future?: boolean };
+export type HeatmapRow = { key: string; name: string; tone: Tone; total: string; cells: { figure: string | null; level: number; label: string }[] };
+
+// A grid of rows by days, a cell tinted by its level and always carrying its figure (a level only helps the eye find it).
+export function Heatmap({ columns, rows, label }: { columns: HeatmapColumn[]; rows: HeatmapRow[]; label: string }) {
+  return (
+    <table className={styles.heat} aria-label={label}>
+      <thead>
+        <tr>
+          <th scope="col" className={styles.heatName} />
+          {columns.map((column) => (
+            <th key={column.key} scope="col" className={join(styles.heatHead, column.future && styles.dayFuture)}>
+              {column.href === undefined || column.future ? column.label : <Link href={column.href} className={styles.heatLink}>{column.label}</Link>}
+            </th>
+          ))}
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((row) => (
+          <tr key={row.key} className={styles[`tone_${row.tone}`]}>
+            <th scope="row" className={styles.heatName} title={`${row.name}: ${row.total}`}>
+              <Text truncate>{row.name}</Text>
+            </th>
+            {row.cells.map((cell, index) => (
+              <td key={columns[index].key} className={join(styles.heatCell, styles.mono)} data-level={cell.level} aria-label={cell.label}>
+                {cell.figure === null ? <span className={styles.heatNone}>—</span> : <span className={styles.dayFigure}><FigureParts text={cell.figure} /></span>}
+              </td>
+            ))}
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
 export type DayColumn = { key: string; label: string; figure: string; share: number; future: boolean; description: string; href?: string };
 
 // Seven vertical columns, one per day, for the brand block; a day not reached is dimmed and empty.

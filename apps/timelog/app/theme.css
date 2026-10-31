@@ -36,6 +36,11 @@
   --tl-tone-claude-on-block: #fb923c;
   --tl-tone-claude-web-on-block: #fdd0aa;
   --tl-tone-claude-app-on-block: #d9651f;
+  /* A heatmap cell: the tone's share over the track. Text #eef2f6 on the strongest, worst tone: 4.55. */
+  --tl-heat-1: 14%;
+  --tl-heat-2: 24%;
+  --tl-heat-3: 35%;
+  --tl-heat-4: 46%;
   --tl-danger: #ff4d42; /* red is for danger alone: the confirmed revoke; ink #0e1115 on it 5.76 */
   --tl-danger-ink: #0e1115;
   --tl-danger-text: #ff4d42; /* «Revocar» as text: 5.88 on the ground, 5.32 on raised */
@@ -63,6 +68,10 @@
     --tl-tone-claude: #b4470a;
     --tl-tone-claude-web: #d1782e;
     --tl-tone-claude-app: #7a2e05;
+    --tl-heat-1: 22%; /* text #0e1115 on the strongest, worst tone: 5.06 */
+    --tl-heat-2: 36%;
+    --tl-heat-3: 50%;
+    --tl-heat-4: 64%;
     --tl-danger-text: #b3261e; /* 6.14 on the ground, 5.55 on raised */
   }
 }

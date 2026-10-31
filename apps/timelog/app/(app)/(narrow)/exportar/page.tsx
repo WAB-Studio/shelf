@@ -22,6 +22,7 @@ export default async function ExportPage({ searchParams }: { searchParams: Promi
   ];
   return (
     <Stack gap={4}>
+      <TextLink href="/semana">‹ {t("back")}</TextLink>
       <Title>{t("title")}</Title>
       <Text as="p">{t("intro")}</Text>
       <Form action="/api/export" method="get">

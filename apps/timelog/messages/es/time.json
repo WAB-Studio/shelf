@@ -14,8 +14,7 @@
     "label": "Secciones",
     "today": "Hoy",
     "week": "Semana",
-    "keys": "Llaves",
-    "export": "Exportar"
+    "keys": "Llaves"
   },
   "today": {
     "title": "{weekday} {day} de {month}",
@@ -48,18 +47,20 @@
     "title": "Del {from} al {to}",
     "prev": "Semana anterior",
     "next": "Semana siguiente",
-    "days": "Días",
     "apps": "Apps de la semana",
     "noApps": "Nada esta semana.",
     "none": "—",
     "bar": "{day}: {duration}",
     "total": "Total de la semana",
     "upcoming": "{day}: aún no llega",
-    "claude": "Claude por día",
     "export": "Exportar esta semana",
     "claudeWeekTotal": "Claude en la semana",
     "claudeNone": "Sin tiempo de Claude esta semana.",
-    "claudeNever": "Todavía no llega tiempo de Claude. Mira «Hoy» para ver cómo conectarlo."
+    "claudeNever": "Todavía no llega tiempo de Claude. Mira «Hoy» para ver cómo conectarlo.",
+    "heatmap": "Tiempo de cada app, día por día",
+    "cell": "{app}, {day}: {duration}",
+    "appsMore": "y {n} apps más · {duration}",
+    "exportMore": "Exportar otras fechas"
   },
   "keys": {
     "title": "Llaves",
@@ -145,7 +146,8 @@
     "thisWeek": "Esta semana",
     "last30": "Últimos 30 días",
     "thisMonth": "Este mes",
-    "badRange": "El rango no sirvió: «Desde» va antes o el mismo día que «Hasta», con hasta 366 días."
+    "badRange": "El rango no sirvió: «Desde» va antes o el mismo día que «Hasta», con hasta 366 días.",
+    "back": "Semana"
   },
   "timeline": {
     "title": "Claude Code durante el día",
