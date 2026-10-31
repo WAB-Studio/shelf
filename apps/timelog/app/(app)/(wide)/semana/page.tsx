@@ -26,21 +26,20 @@ export default async function WeekPage({ searchParams }: { searchParams: Promise
   const { semana } = await searchParams;
   const asked = askedWeek(semana, today);
   const sunday = addDays(asked, 6);
-  const [span, totals, byDay, claude, words, t, tAll] = await Promise.all([
+  const [span, totals, byDay, claude, words, t] = await Promise.all([
     uploadSpan(),
     dayTotals(asked, sunday),
     appsByDay(asked, sunday),
     claudeBetween(asked, sunday),
     calendarWords(),
     getTranslations("time.week"),
-    getTranslations("time"),
   ]);
   const monday = clampWeek(asked, span.firstDay, today);
   if (monday !== asked) redirect(`/semana?semana=${monday}`);
   const steps = weekSteps(monday, span.firstDay, today);
   const days = fill(monday, sunday, totals);
   const longestDay = Math.max(1, ...days.map((one) => one.seconds));
-  const heat = buildHeatmap(byDay, days.map((one) => one.day), tAll("system"), APPS_SHOWN);
+  const heat = buildHeatmap(byDay, days.map((one) => one.day), words.system, APPS_SHOWN);
   const claudeWeek = claude.reduce((total, one) => total + claudeTotal(one), 0);
 
   const block = (

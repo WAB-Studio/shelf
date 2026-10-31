@@ -52,15 +52,28 @@ const SYSTEM = new Set([
   "taskmgr",
   "widgets",
   "openconsole",
+  "svchost",
+  "conhost",
+  "dllhost",
+  "sihost",
+  "taskhost",
+  "taskhostw",
+  "nvsphelper64",
 ]);
 
 // Updaters, helpers, services, hosts and brokers: background processes nobody opened. Whole words only, split at
 // punctuation and at a capital after a lower-case letter: «RuntimeBroker» is one, «GhostOfTsushima» is none.
 const BACKGROUND = new Set(["updater", "helper", "service", "host", "broker"]);
 
+// A lower-case compound that ends in one of these is a host or helper of something («nvsphelper64», «wudfhost»);
+// three letters ahead of «host» keep «ghost» out. Games are named in capitals or by a known name, never this way.
+const COMPOUND = /^[a-z0-9]{3,}(host|helper|svc)\d*$/;
+
 function isBackground(bare: string): boolean {
+  if (COMPOUND.test(bare)) return true;
   return bare
     .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/([A-Z])([A-Z][a-z])/g, "$1 $2")
     .toLowerCase()
     .split(/[^a-z0-9]+/)
     .some((word) => BACKGROUND.has(word));
@@ -79,12 +92,17 @@ export function readableApp(raw: string): string | null {
   return isBackground(bare) ? null : bare;
 }
 
+// The name a row of raw process names is counted under: its readable name, or `systemName` for Windows' noise.
+export function appName(raw: string, systemName: string): string {
+  return readableApp(raw) ?? systemName;
+}
+
 // The day's apps under their readable names: two processes with one name add up, system noise becomes
 // one row named `systemName`. Longest first, then by name, as the query returns them.
 export function readableApps(apps: AppTime[], systemName: string): AppTime[] {
   const seconds = new Map<string, number>();
   for (const one of apps) {
-    const name = readableApp(one.app) ?? systemName;
+    const name = appName(one.app, systemName);
     seconds.set(name, (seconds.get(name) ?? 0) + one.seconds);
   }
   return [...seconds].map(([app, total]) => ({ app, seconds: total })).sort((a, b) => b.seconds - a.seconds || a.app.localeCompare(b.app));

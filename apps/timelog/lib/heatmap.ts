@@ -1,5 +1,5 @@
 import { appClass, type AppClass } from "@/lib/app-classes";
-import { readableApp } from "@/lib/app-names";
+import { appName } from "@/lib/app-names";
 import type { DayApp } from "@/lib/queries";
 
 export const HEAT_LEVELS = 4;
@@ -14,7 +14,7 @@ export type Heatmap = { rows: HeatRow[]; restCount: number; restSeconds: number 
 export function buildHeatmap(rows: DayApp[], days: string[], systemName: string, top: number): Heatmap {
   const byApp = new Map<string, Map<string, number>>();
   for (const one of rows) {
-    const name = readableApp(one.app) ?? systemName;
+    const name = appName(one.app, systemName);
     const mine = byApp.get(name) ?? new Map<string, number>();
     mine.set(one.day, (mine.get(one.day) ?? 0) + one.seconds);
     byApp.set(name, mine);

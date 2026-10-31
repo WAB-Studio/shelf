@@ -43,6 +43,7 @@ export async function calendarWords() {
     heat: (seconds: number) => heatFigure(seconds, words, { hours: time("duration.tinyHours"), minutes: time("duration.tinyMinutes") }),
     // The day's apps under their readable names, system noise as «Sistema».
     apps: (apps: AppTime[]) => readableApps(apps, time("system")),
+    system: time("system"),
     // «hace 5 min» by the clock now.
     ago: (at: Date) => {
       const minutes = Math.max(0, Math.floor((Date.now() - at.getTime()) / 60_000));

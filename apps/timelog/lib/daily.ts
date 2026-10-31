@@ -16,6 +16,20 @@ export type DailyRow = {
   top_app_seconds: number;
 };
 
+export type ClaudeSource = { key: "code" | "web" | "desktop"; tone: "claude" | "claudeWeb" | "claudeApp"; name: string; seconds: number };
+
+// Claude Code, claude.ai and the desktop app of a day, in that order, each under its name.
+export function claudeSources(claude: Pick<ClaudeDay, "code" | "web" | "desktop"> | undefined, names: { code: string; web: string; desktop: string }): ClaudeSource[] {
+  return [
+    { key: "code", tone: "claude", name: names.code, seconds: claude?.code ?? 0 },
+    { key: "web", tone: "claudeWeb", name: names.web, seconds: claude?.web ?? 0 },
+    { key: "desktop", tone: "claudeApp", name: names.desktop, seconds: claude?.desktop ?? 0 },
+  ];
+}
+
+// Two sources with time at once are both counted, which is what the note under them says.
+export const sourcesOverlap = (sources: ClaudeSource[]) => sources.filter((one) => one.seconds > 0).length >= 2;
+
 export const claudeTotal = (one: Pick<ClaudeDay, "code" | "web" | "desktop">) => one.code + one.web + one.desktop;
 
 // Every day from `from` to `to`, a day with nothing at zero and no top app. The top app is the longest one a person

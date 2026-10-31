@@ -8,7 +8,7 @@ import { Card, Cards, Composition, DayStrip, Disclosure, Figure, Hero, HeroColum
 import { appClass, timeByClass } from "@/lib/app-classes";
 import { readableApp } from "@/lib/app-names";
 import { projectName } from "@/lib/claude-project";
-import { claudeTotal } from "@/lib/daily";
+import { claudeSources, claudeTotal } from "@/lib/daily";
 import type { AppTime } from "@/lib/queries";
 import { appsBetween, claudeBetween, claudeSessionsBetween, dayTotals, devicesBetween, pagesBetween, sitesBetween, uploadSpan, windowsBetween } from "@/lib/queries";
 import { focusShare, hourMarks, layoutSessions, minuteOfDay } from "@/lib/timeline";
@@ -26,7 +26,7 @@ export async function DayView({ day }: { day: string }) {
   const today = civilDay();
   const isToday = day === today;
   const before = addDays(day, -1);
-  const [raw, sites, pages, windows, sessions, claudeDays, previous, devices, span, words, t, tClaude, tInternet, tTimeline, tClass, tAll] = await Promise.all([
+  const [raw, sites, pages, windows, sessions, claudeDays, previous, devices, span, words, t, tClaude, tInternet, tTimeline, tClass] = await Promise.all([
     appsBetween(day, day),
     sitesBetween(day, day),
     pagesBetween(day, day),
@@ -43,7 +43,6 @@ export async function DayView({ day }: { day: string }) {
     getTranslations("time.internet"),
     getTranslations("time.timeline"),
     getTranslations("time.classes"),
-    getTranslations("time"),
   ]);
   const claude = claudeDays[0];
   const claudeSeconds = claude === undefined ? 0 : claudeTotal(claude);
@@ -54,15 +53,13 @@ export async function DayView({ day }: { day: string }) {
     const name = readableApp(one.app);
     if (name !== null) titlesOf.set(name, [...(titlesOf.get(name) ?? []), one]);
   }
-  const claudeParts = [
-    { key: "code", tone: "claude" as const, seconds: claude?.code ?? 0, name: tClaude("code"), figure: words.duration(claude?.code ?? 0) },
-    { key: "web", tone: "claudeWeb" as const, seconds: claude?.web ?? 0, name: tClaude("web"), figure: words.duration(claude?.web ?? 0) },
-    { key: "desktop", tone: "claudeApp" as const, seconds: claude?.desktop ?? 0, name: tClaude("desktop"), figure: words.duration(claude?.desktop ?? 0) },
-  ];
-  const claudeLabel = claudeParts.filter((one) => one.seconds > 0).map((one) => `${one.name}: ${one.figure}`).join(", ");
+  const claudeParts = claudeSources(claude, { code: tClaude("code"), web: tClaude("web"), desktop: tClaude("desktop") })
+    .filter((one) => one.seconds > 0)
+    .map((one) => ({ ...one, figure: words.duration(one.seconds) }));
+  const claudeLabel = claudeParts.map((one) => `${one.name}: ${one.figure}`).join(", ");
   const total = sum(apps);
   const top = apps[0];
-  const tSystem = tAll("system");
+  const tSystem = words.system;
   const classes = timeByClass(apps, tSystem);
   const previousTotal = previous[0]?.seconds ?? 0;
   const delta = total - previousTotal;
@@ -105,8 +102,7 @@ export async function DayView({ day }: { day: string }) {
   };
 
   // Claude Code's sessions are all that carries a time of day: they lay along the day, which opens at the hour now.
-  const line = layoutSessions(sessions.map((one) => ({ key: one.session, label: projectName(one.project), first: one.first, last: one.last })));
-  const clockOf = (minute: number) => words.clock(new Date(Date.UTC(2026, 0, 1, Math.floor(minute / 60) + 5, minute % 60)));
+  const line = layoutSessions(sessions.map((one) => ({ key: one.session, label: projectName(one.project), first: one.first, last: one.last })), day);
 
   return (
     <Stack gap={4}>
@@ -154,7 +150,7 @@ export async function DayView({ day }: { day: string }) {
                   <Composition
                     thin
                     label={claudeLabel}
-                    parts={claudeParts.filter((one) => one.seconds > 0)}
+                    parts={claudeParts}
                   />
                 ) : null}
               </Stack>
@@ -195,9 +191,10 @@ export async function DayView({ day }: { day: string }) {
           <Timeline
             label={tTimeline("label")}
             lanes={line.lanes}
+            openKey={day}
             focus={focusShare(line, isToday ? minuteOfDay(new Date()) : null)}
             marks={hourMarks(line.startHour).map((mark) => ({ key: String(mark.hour), label: `${mark.hour % 24}:00`, left: mark.left }))}
-            segments={line.segments.map((one) => ({ key: one.key, label: one.label, left: one.left, width: one.width, lane: one.lane, description: tTimeline("session", { project: one.label, from: clockOf(one.from), to: clockOf(one.to) }) }))}
+            segments={line.segments.map((one) => ({ key: one.key, label: one.label, left: one.left, width: one.width, lane: one.lane, description: tTimeline("session", { project: one.label, from: words.clock(one.first), to: words.clock(one.last) }) }))}
           />
         </Tile>
       ) : null}

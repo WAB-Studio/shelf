@@ -15,7 +15,7 @@
   --tl-bar-on-block: #22d3ee; /* the accent on the block, the same in both faces */
   --tl-mark: #234754; /* the day total's tint: cyan at 16% on the block; block text on it 9.21 */
   --tl-mark-edge: #22d3ee; /* its 1px border: 5.53 on the tint */
-  /* One colour per class of app, fixed (docs/timelog/DESIGN.md, 2026-10-31). Contrast on the ground / on raised, ink #0c0e11 on it:
+  /* One colour per class of app, fixed (docs/timelog/DESIGN.md). Contrast on the ground / on raised, ink #0c0e11 on it:
      code 10.69/9.68, browser 7.60/6.88, comms 7.10/6.43, leisure 7.30/6.60, system 6.77/6.13, other 8.59/7.78, claude 8.54/7.73. */
   --tl-tone-code: #22d3ee;
   --tl-tone-browser: #60a5fa;

@@ -19,3 +19,14 @@ export function addDays(day: string, days: number): string {
   date.setUTCDate(date.getUTCDate() + days);
   return date.toISOString().slice(0, 10);
 }
+
+const WALL_CLOCK = new Intl.DateTimeFormat("en-GB", { timeZone: TIME_ZONE, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23" });
+
+// The instant a civil day begins on Bogotá's clock.
+export function dayStart(day: string): Date {
+  const guess = Date.parse(`${day}T00:00:00Z`);
+  const parts = WALL_CLOCK.formatToParts(new Date(guess));
+  const part = (type: string) => Number(parts.find((one) => one.type === type)?.value ?? 0);
+  const wall = Date.UTC(part("year"), part("month") - 1, part("day"), part("hour"), part("minute"), part("second"));
+  return new Date(guess - (wall - guess));
+}

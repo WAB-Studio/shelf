@@ -2,7 +2,7 @@ import { getTranslations } from "next-intl/server";
 
 import { BarRows } from "@/components/screens/app-rows";
 import { Stack, Text, TextLink } from "@/components/ui";
-import { claudeTotal } from "@/lib/daily";
+import { claudeSources, claudeTotal, sourcesOverlap } from "@/lib/daily";
 import { projectName } from "@/lib/claude-project";
 import type { ClaudeDay, ClaudeSessionTime, PageTime, SiteTime } from "@/lib/queries";
 import type { calendarWords } from "@/lib/words";
@@ -21,11 +21,9 @@ export async function ClaudeBlock({ claude, sessions, hasClaudeCode, hasSites, w
   const t = await getTranslations("time.claude");
   const parts = claude ?? { day: "", code: 0, web: 0, desktop: 0 };
   const total = claudeTotal(parts);
-  const rows = [
-    { key: "code", tone: "claude" as const, name: t("code"), seconds: parts.code, shown: hasClaudeCode || parts.code > 0 },
-    { key: "web", tone: "claudeWeb" as const, name: t("web"), seconds: parts.web, shown: hasSites || parts.web > 0 },
-    { key: "desktop", tone: "claudeApp" as const, name: t("desktop"), seconds: parts.desktop, shown: parts.desktop > 0 },
-  ].filter((row) => row.shown);
+  const sources = claudeSources(parts, { code: t("code"), web: t("web"), desktop: t("desktop") });
+  const shown = { code: hasClaudeCode, web: hasSites, desktop: false };
+  const rows = sources.filter((row) => shown[row.key] || row.seconds > 0);
 
   return (
     <Stack gap={2}>
@@ -34,7 +32,7 @@ export async function ClaudeBlock({ claude, sessions, hasClaudeCode, hasSites, w
       ) : (
         <>
           <BarRows of={total} rows={rows.map((row) => ({ key: row.key, tone: row.tone, name: row.name, figure: words.duration(row.seconds), seconds: row.seconds, label: t("bar", { name: row.name, duration: words.duration(row.seconds) }) }))} />
-          {rows.length === 3 ? <Text as="p" variant="meta">{t("overlap")}</Text> : null}
+          {sourcesOverlap(rows) ? <Text as="p" variant="meta">{t("overlap")}</Text> : null}
         </>
       )}
       {sessions.length > 0 ? (
