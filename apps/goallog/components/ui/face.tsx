@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import styles from "./face.module.css";
 
 // One screen, two faces (RNP-17): both are in the markup and the CSS shows one,
-// so a screen never asks the width itself. `phone` draws below 1024px,
+// so a screen never asks the width itself. `phone` draws below 768px,
 // `desktop` from it.
 export function Face({
   on,

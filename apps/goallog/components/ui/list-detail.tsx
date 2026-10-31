@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 
 import styles from "./list-detail.module.css";
 
-// `ArmazonListaDetalle.dc.html`: from 1024 the list sits in a 320px column
+// `ArmazonListaDetalle.dc.html`: from 768 the list sits in a 320px column
 // beside its item; below, only the side `show` names is drawn. It sets no
 // width on the page: a screen using it passes `Page width="full"`.
 export function ListDetail({

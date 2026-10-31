@@ -156,8 +156,8 @@ for (const width of [390, 1280]) {
             marginTop: own.marginTop,
           };
         });
-        // `/mono/` also matches the fallback `monospace`; DM Mono is the resolved `--font-mono`.
-        expect(style.mono).toMatch(/^"?dm[ _]mono/i);
+        // `/mono/` also matches the fallback `monospace`; Chivo Mono is the resolved `--font-mono`.
+        expect(style.mono).toMatch(/^"?chivo[ _]mono/i);
         expect(style.family).toBe(style.mono);
         expect(style.hostFamily).toBe(style.mono);
         expect(style.size).toBe("13px");

@@ -127,7 +127,7 @@ const BOARD_WORDS = [
   "Chat", "Hoy", "TÚ", "GOALLOG", "Hacer", "Hacer todo", "Enviar", "Mensaje",
   "Pide un cambio o pregunta por tu plan",
   "Tu mensaje y las partes de tu plan que lee se envían a OpenAI.",
-  "PRUEBA CON", "¿Cómo voy este mes?", "Pon 4 h de inglés para noviembre",
+  "Prueba con", "¿Cómo voy este mes?", "Pon 4 h de inglés para noviembre",
   "Pensando tu mensaje…", "Esto cambiaría tu plan:", "hecho", "sin hacer",
   "No pudimos responder. Tu mensaje sigue aquí.", "Intentar otra vez",
   "Ya enviaste 50 mensajes hoy. Mañana puedes enviar otros 50. Lo que pedías aquí también se hace desde las pantallas.",

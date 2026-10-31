@@ -12,7 +12,7 @@ import { messageKey, type MessageKey } from "@/i18n/translator";
 export type RenameGoalActionProps = {
   goalId: string;
   name: string;
-  variant?: "ghost" | "outline";
+  variant?: "ghost" | "outline" | "quiet";
 };
 
 /**

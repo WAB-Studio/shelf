@@ -130,7 +130,7 @@ export function CheckRow({
 }
 
 // The review's confirm, held at the foot above the nav.
-// `column` stands one card wide from 1024px, for a review of one goal.
+// `column` stands one card wide from 768px, for a review of one goal.
 export function ActionBar({
   children,
   span = "full",

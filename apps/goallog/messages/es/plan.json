@@ -1,8 +1,8 @@
 {
   "commitmentForm": {
     "title": "Compromiso nuevo",
-    "whatLabel": "qué es",
-    "whenLabel": "cada cuándo",
+    "whatLabel": "Qué es",
+    "whenLabel": "Cada cuándo",
     "cadence": {
       "daily": "todos los días",
       "weekdays": "días sueltos",

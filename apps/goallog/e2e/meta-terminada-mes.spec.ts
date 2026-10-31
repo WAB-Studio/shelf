@@ -233,7 +233,7 @@ test("824 · «mover el final» of an ended goal is the lowercase link of an ope
   });
   try {
     await page.goto(`/metas/${goalId}`);
-    await expect(page.getByRole("button", { name: "mover el final", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Mover el final", exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: "Mover el final", exact: true })).toHaveCount(0);
   } finally {
     await drop(db, personId, goalId);

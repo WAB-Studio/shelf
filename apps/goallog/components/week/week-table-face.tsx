@@ -19,7 +19,7 @@ const PAST_KEY: Partial<Record<FlexibleKey, MessageKey>> = {
 };
 
 /**
- * `SemanaEscritorio.dc.html` from 1024, `SemanaPlegada.dc.html` below it: the
+ * `SemanaEscritorio.dc.html` from 768, `SemanaPlegada.dc.html` below it: the
  * week as commitments down and days across, one set of groups drawn twice.
  * A day on or after a goal's horizon asks nothing of it, and neither does a
  * day before its commitment was written; each such day reads «no pedía».

@@ -1,5 +1,5 @@
 /* docs/goallog/DESIGN.md "The space system": label → content 12. The gap to
-   the next section (32, 40 from 1024) belongs to the parent, never a margin. */
+   the next section (32, 40 from 768) belongs to the parent, never a margin. */
 .section {
   display: flex;
   flex-direction: column;

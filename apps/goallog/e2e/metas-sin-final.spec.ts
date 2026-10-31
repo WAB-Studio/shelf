@@ -47,7 +47,7 @@ for (const width of [360, 1280]) {
       const { page, context } = await visit(browser, baseURL, person, "/metas/nueva", width);
       try {
         const name = `Cuidado ${Date.now()}`;
-        await page.getByLabel("nombre", { exact: true }).fill(name);
+        await page.getByLabel("Nombre", { exact: true }).fill(name);
         await page.getByRole("radio", { name: "sin final", exact: true }).click();
         await expect(page.getByText(NO_END_SENTENCE)).toBeVisible();
         await expect(page.getByLabel(/^semanas/)).toHaveCount(0);
@@ -69,7 +69,7 @@ for (const width of [360, 1280]) {
       const { page, context } = await visit(browser, baseURL, person, "/metas/nueva", width);
       try {
         const name = `Con final ${Date.now()}`;
-        await page.getByLabel("nombre", { exact: true }).fill(name);
+        await page.getByLabel("Nombre", { exact: true }).fill(name);
         await page.getByLabel(/^semanas|final/i).first().fill("12");
         await page.getByRole("button", { name: "Abrirla", exact: true }).click();
         await expect(page).toHaveURL(/\/metas\/[0-9a-f-]{36}$/);
@@ -89,7 +89,7 @@ for (const width of [360, 1280]) {
         await page.getByRole("radio", { name: "sin final", exact: true }).click();
         await page.getByRole("button", { name: "Abrirla", exact: true }).click();
         await expect(page.getByText("Escribe un nombre.", { exact: true })).toBeVisible();
-        await expect(page.getByLabel("nombre", { exact: true })).toHaveAttribute("aria-invalid", "true");
+        await expect(page.getByLabel("Nombre", { exact: true })).toHaveAttribute("aria-invalid", "true");
         await expect(page).toHaveURL(/\/metas\/nueva$/);
         const [{ n }] = await db<{ n: string }[]>`select count(*)::text as n from goals.goals where user_id = ${person.id}`;
         expect(Number(n)).toBe(0);
@@ -104,7 +104,7 @@ for (const width of [360, 1280]) {
       const { page, context } = await visit(browser, baseURL, person, "/metas/nueva", width);
       try {
         await holdActions(page, 1500);
-        await page.getByLabel("nombre", { exact: true }).fill(`Pendiente ${Date.now()}`);
+        await page.getByLabel("Nombre", { exact: true }).fill(`Pendiente ${Date.now()}`);
         await page.getByRole("radio", { name: "sin final", exact: true }).click();
         await page.getByRole("button", { name: "Abrirla", exact: true }).click();
         const pending = page.getByRole("button", { name: "Abriéndola…", exact: true });

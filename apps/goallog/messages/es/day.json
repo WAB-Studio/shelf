@@ -77,7 +77,7 @@
     "tomorrow": "mañana",
     "other": "otro día",
     "none": "sin día",
-    "dateLabel": "qué día"
+    "dateLabel": "Qué día"
   },
   "newOneOff": {
     "label": "Algo suelto",
@@ -87,8 +87,8 @@
     "placeholderForGoalShort": "Una tarea de {goal}…",
     "placeholderOne": "Escribe una tarea…",
     "nameEmptyOne": "Escribe el nombre de la tarea.",
-    "when": "para cuándo",
-    "whichGoal": "de qué meta",
+    "when": "Para cuándo",
+    "whichGoal": "De qué meta",
     "loose": "Suelta",
     "savedGoalToday": "Anotada en {goal}.",
     "savedPlanChosen": "Quedó en el plan de {goal}.",
@@ -130,6 +130,7 @@
   },
   "row": {
     "saidByYou": "lo dijiste tú",
+    "notedBy": "lo anota el {source}",
     "partialAmount": "{logged} de {target}",
     "evidenceAmount": "{count} {unit}",
     "unreadSourceAsks": "sin leer la fuente · pide {asks}"
@@ -146,6 +147,12 @@
     "nextPart": "Siguiente del plan · <fig>{hours}</fig> este mes",
     "pace": "día {day} ·",
     "paceUnder": ", bajo el {threshold} %"
+  },
+  "hero": {
+    "label": "Avance de hoy",
+    "figure": "{done} de {total}",
+    "caption": "hechos hoy",
+    "captionPartial": "hechos hoy · {partial} en parte"
   },
   "tally": "hechos <fig>{done}</fig> de <fig>{total}</fig>",
   "tallyPartial": "hechos <fig>{done}</fig> de <fig>{total}</fig> · <fig>{partial}</fig> en parte",

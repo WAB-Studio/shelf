@@ -1,13 +1,13 @@
 "use client";
 
-import { type ReactNode, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 
 import { retireCommitment } from "@/app/actions/plan";
 import { deleteCommitment } from "@/app/actions/plan-edit";
-import { Button, Flex, Row, Sheet, SheetActions, Text } from "@/components/ui";
+import { Button, Flex, Sheet, SheetActions, Text } from "@/components/ui";
 import { type MessageKey } from "@/i18n/translator";
 
 export type RetireSheetProps = {
@@ -32,6 +32,8 @@ export type DeleteSheetProps = {
   name: string;
   // A habit has no list to return to: deleted, it leaves its own screen for /metas.
   habit: boolean;
+  // A goal's commitment: deleted, it leaves its own screen for the goal's.
+  goalId?: string;
 };
 
 /**
@@ -39,7 +41,7 @@ export type DeleteSheetProps = {
  * sheet's «Retirarlo» is the act that keeps the row. A fact that landed while it was open comes back as
  * the act's own sentence and the row stays.
  */
-export function DeleteCommitmentSheet({ open, onOpenChange, commitmentId, name, habit }: DeleteSheetProps) {
+export function DeleteCommitmentSheet({ open, onOpenChange, commitmentId, name, habit, goalId }: DeleteSheetProps) {
   const t = useTranslations();
   const router = useRouter();
   const [pending, setPending] = useState(false);
@@ -54,6 +56,7 @@ export function DeleteCommitmentSheet({ open, onOpenChange, commitmentId, name, 
     if (result.ok) {
       onOpenChange(false);
       if (habit) router.push("/metas");
+      else if (goalId) router.push(`/metas/${goalId}`);
       router.refresh();
     } else {
       setError(result.error);
@@ -121,6 +124,8 @@ export function RetireSheet({ open, onOpenChange, commitmentId, name, factDayCou
     setPending(false);
     if (result.ok) {
       onOpenChange(false);
+      // A goal's commitment is retired from its own screen, which then has nothing to show.
+      if (goalId) router.push(`/metas/${goalId}`);
       router.refresh();
     } else {
       setError(result.error);
@@ -192,6 +197,7 @@ export function RetireSheet({ open, onOpenChange, commitmentId, name, factDayCou
         commitmentId={commitmentId}
         name={name}
         habit={false}
+        goalId={goalId}
       />
     ) : null}
     </>
@@ -230,45 +236,6 @@ export function RetireAction({ label, ...sheet }: Omit<RetireSheetProps, "open" 
         {label}
       </Button>
       <RetireSheet open={open} onOpenChange={setOpen} goalId={null} {...sheet} />
-    </>
-  );
-}
-
-export type CommitmentRowProps = {
-  commitmentId: string;
-  name: string;
-  retired: boolean;
-  retiredLabel: string;
-  factDayCount: number;
-  goalId: string | null;
-  trailing?: ReactNode;
-  // A habit with no goal says its cadence under the name and its note under that.
-  meta?: ReactNode;
-  preview?: string | null;
-};
-
-/**
- * The goal screen's own commitment row: a retired one stays disabled — never
- * hidden, never tappable (RP-13) — an active one opens `RetireSheet`.
- */
-export function CommitmentRow({ commitmentId, name, retired, retiredLabel, factDayCount, goalId, trailing, meta, preview }: CommitmentRowProps) {
-  const [open, setOpen] = useState(false);
-
-  if (retired) {
-    return <Row name={name} meta={retiredLabel} trailing={trailing} disabled />;
-  }
-
-  return (
-    <>
-      <Row name={name} meta={meta} metaVariant="sentence" preview={preview} trailing={trailing} onClick={() => setOpen(true)} />
-      <RetireSheet
-        open={open}
-        onOpenChange={setOpen}
-        commitmentId={commitmentId}
-        name={name}
-        factDayCount={factDayCount}
-        goalId={goalId}
-      />
     </>
   );
 }
