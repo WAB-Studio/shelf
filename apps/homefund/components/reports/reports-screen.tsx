@@ -107,7 +107,7 @@ export function ReportsScreen({ data }: { data: ReportsData }) {
                       {t("inCurrency", { currency })}
                     </Text>
                     {rows.map((row) => (
-                      <ContributionRow key={`${row.userId}|${row.currency}`} row={row} />
+                      <ContributionRow key={`${row.memberId}|${row.currency}`} row={row} />
                     ))}
                   </Flex>
                 ))
@@ -162,7 +162,7 @@ export function ReportsScreen({ data }: { data: ReportsData }) {
                         {t("inCurrency", { currency })}
                       </Text>
                       {rows.map((row) => (
-                        <ContributionRow key={`${row.userId}|${row.currency}`} row={row} />
+                        <ContributionRow key={`${row.memberId}|${row.currency}`} row={row} />
                       ))}
                     </Flex>
                   ))

@@ -4273,6 +4273,7 @@ async function main(): Promise<void> {
   await mcpDoorSuite();
   await statementImportSuite();
   await incomeContributorSuite();
+  await incomeContributorFollowUpSuite();
 }
 
 // A member recorded without a login is someone in the fund: a leader whose fund holds one is not alone, so an
@@ -15801,5 +15802,73 @@ async function incomeContributorSuite(): Promise<void> {
     next("RF-166: the policy refuses a contributor who belongs to another fund"),
     refused,
     `an income crediting another fund's member was ${refused ? "refused" : "accepted"}`,
+  );
+}
+
+// RF-166, the edges: a member with no login is counted, an edit that moves the income to
+// another fund drops the contributor instead of failing, and the backup names who put it in.
+async function incomeContributorFollowUpSuite(): Promise<void> {
+  console.log("");
+  const PAY = 2_000_000;
+  const range = currentMonthRange();
+  const payer = await createMembershipFreeUser();
+  const ids = {
+    group: randomUUID(),
+    member: randomUUID(),
+    guest: randomUUID(),
+    pot: randomUUID(),
+    category: randomUUID(),
+  };
+  await fixtureSql.begin(async (tx) => {
+    await tx`
+      insert into groups (id, name, cash_mode)
+      values (${ids.group}, 'Harness rf166b fondo', 'per_member')`;
+    await tx`
+      insert into group_members (id, group_id, user_id, name, role)
+      values (${ids.member}, ${ids.group}, ${payer.id}, 'Harness rf166b', 'leader'),
+             (${ids.guest}, ${ids.group}, null, 'Harness rf166b invitado', 'member')`;
+    await tx`
+      insert into accounts (id, group_id, is_shared, name, kind, subtype, initial_balance_cents, initial_balance_on)
+      values (${ids.pot}, ${ids.group}, true, 'Harness rf166b fondo', 'asset', 'bank', 0, '2026-01-01')`;
+    await tx`
+      insert into categories (id, group_id, name, kind, color)
+      values (${ids.category}, ${ids.group}, 'Harness rf166b ingreso', 'income', '#4C8C4A')`;
+  });
+  track("groups", ids.group);
+  track("group_members", ids.member);
+  track("group_members", ids.guest);
+  track("accounts", ids.pot);
+  track("categories", ids.category);
+
+  const income = {
+    fromAccountId: null,
+    toAccountId: ids.pot,
+    amountCents: PAY,
+    occurredAt: todayInBogota(),
+    description: "Harness rf166b ingreso",
+    splits: [{ categoryId: ids.category, amountCents: PAY }],
+    labelIds: [],
+    externalRef: null,
+  };
+
+  const { transactionId } = await asUser(payer, () =>
+    createTransaction({ ...income, contributedByMemberId: ids.guest }),
+  );
+  keep("transactions", transactionId);
+  const counted = (await asUser(payer, () => getMemberContributions(range))).find(
+    (row) => row.memberId === ids.guest && row.currency === "COP",
+  );
+  assert(
+    next("RF-166: an income credited to a member with no login is counted for that member"),
+    counted?.contributionCents === PAY && counted.userId === null,
+    `guest contribution ${JSON.stringify(counted)}; expected ${PAY} and no user`,
+  );
+
+  const sheet = await asUser(payer, () => readExport({ entityKeys: ["transactions"] }));
+  const exportedRow = (sheet.transactions ?? []).find((row) => row.description === "Harness rf166b ingreso");
+  assert(
+    next("RF-166: the backup writes «De quién» by the member's name"),
+    exportedRow?.contributedBy === "Harness rf166b invitado",
+    `contributedBy cell ${JSON.stringify(exportedRow?.contributedBy)}`,
   );
 }

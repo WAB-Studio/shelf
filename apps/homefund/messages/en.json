@@ -1391,7 +1391,8 @@
         "outOfPlace": "This name exists, but not in the placement the row names.",
         "noFund": "The row belongs to a fund and you have none.",
         "repeatedRow": "Another row in the file already carries this for the same account. Keep only one.",
-        "lockedField": "This row changes the category or the place, which cannot change. Add it as a new row instead."
+        "lockedField": "This row changes the category or the place, which cannot change. Add it as a new row instead.",
+        "contributorUnknown": "The «From whom» member is not in the destination account's fund."
       }
     }
   },

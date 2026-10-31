@@ -328,6 +328,16 @@ export function contributorMark(from: SQL, to: SQL, member: SQL): SQL {
     then ${member} end)`;
 }
 
+/**
+ * A member already stored on a movement, kept only while the movement's destination is still
+ * in that member's fund: an income moved into another fund (or out of any) drops it instead
+ * of failing the policy (RF-166).
+ */
+export function contributorStillInFund(member: SQL, to: SQL): SQL {
+  return sql`(select m.id from group_members m join accounts a on a.group_id = m.group_id
+    where m.id = ${member} and a.id = ${to})`;
+}
+
 function stampMatches(expectedUpdatedAt: string) {
   return stampIs(transactions.updatedAt, expectedUpdatedAt);
 }
@@ -401,7 +411,10 @@ export async function updateTransaction({
           sql`${fromAccountId}::uuid`,
           sql`${toAccountId}::uuid`,
           contributedByMemberId === undefined
-            ? sql`${transactions.contributedByMemberId}`
+            ? contributorStillInFund(
+                sql`${transactions.contributedByMemberId}`,
+                sql`${toAccountId}::uuid`,
+              )
             : sql`${contributedByMemberId}::uuid`,
         ),
         occurredAt,

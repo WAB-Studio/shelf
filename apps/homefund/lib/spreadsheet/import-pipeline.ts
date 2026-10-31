@@ -1021,7 +1021,13 @@ export function processRow(
   // The authoritative schema keeps the second amount as the string it judged; its integer, read once
   // in the account's currency, rides back beside it for the commit.
   const counter = (resolved.object as { counterAmountCents?: number }).counterAmountCents;
-  const object = counter !== undefined ? { ...checked.data, counterAmountCents: counter } : checked.data;
+  // «De quién» (RF-166) is a name the commit resolves; the schema has no field for it, so it rides back too.
+  const contributor = (resolved.object as { contributedByName?: string }).contributedByName;
+  const object = {
+    ...checked.data,
+    ...(counter !== undefined ? { counterAmountCents: counter } : {}),
+    ...(contributor !== undefined ? { contributedByName: contributor } : {}),
+  };
   const owned = ownedKey(entity, object);
   const ownedStatus = owned === null ? status : existingRefs.has(owned) ? "update" : "new";
   return { ...carried, status: ownedStatus, errors: [], object };

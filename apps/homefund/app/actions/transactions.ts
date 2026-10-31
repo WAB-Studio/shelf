@@ -323,7 +323,9 @@ export const completeCounterpartyAction = authActionClient
               -- Naming the other account clears the mark, not only the review
               -- stamp: the mark is the fact, and a later reader must not find
               -- it still set on a movement that now names both sides.
-              awaiting_counterparty = false
+              awaiting_counterparty = false,
+              -- A movement that gains a source is no income: «De quién» goes with it.
+              contributed_by_member_id = case when ${side} = 'from' then null else contributed_by_member_id end
             where id = ${transactionId}
               and (case when ${side} = 'from' then from_account_id else to_account_id end) is null
             returning id

@@ -49,15 +49,12 @@ export async function getReportsData(): Promise<ReportsData> {
 
   // Only a grouped caller has both contributions and a roster to name them.
   const members = group ? await listMembers(group.id, { archived: false }) : [];
-  const nameByUserId = new Map(
-    members
-      .filter((member) => member.userId !== null)
-      .map((member) => [member.userId as string, member.name]),
-  );
+  const nameByMemberId = new Map(members.map((member) => [member.id, member.name]));
+
 
   const contributions: MemberContributionNamed[] = contributionRows.map((row) => ({
     ...row,
-    name: nameByUserId.get(row.userId) ?? null,
+    name: nameByMemberId.get(row.memberId) ?? null,
     isSelf: row.userId === sessionUser?.id,
   }));
 

@@ -140,7 +140,11 @@ async function readEntityRows<E extends SheetEntity>(
 
   // No descriptor names a transaction's id anymore, yet the category fill matches
   // a split back to its row by it; carry it so `toExportRows` can look it up.
-  if (entity === "transactions") projection["id"] = columns["id"];
+  // «De quién» (RF-166) is a name in the sheet, read off the member id the row carries.
+  if (entity === "transactions") {
+    projection["id"] = columns["id"];
+    projection["contributedByMemberId"] = columns["contributedByMemberId"];
+  }
 
   const bound = dateColumn[entity];
   const conditions: SQL[] = [...extra];

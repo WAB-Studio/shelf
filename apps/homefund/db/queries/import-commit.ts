@@ -21,7 +21,7 @@ import type { Transaction } from "@/db/session";
 import { BASE_CURRENCY } from "@/lib/currency";
 import { insertRow } from "@/db/insert-row";
 import { jsonbParam } from "@/db/jsonb-param";
-import { householdMark } from "@/db/queries/transactions";
+import { contributorMark, contributorStillInFund, householdMark } from "@/db/queries/transactions";
 import { pgConstraintName, pgErrorCode } from "@/lib/db-error";
 import { ActionError } from "@/lib/errors";
 import { parseAmount } from "@/lib/money";
@@ -152,6 +152,12 @@ function transactionReasonKey(error: unknown): string {
   return "errors.unexpected";
 }
 
+// A movement as the import hands it on: the form's own shape, plus the member named in
+// «De quién» (RF-166), which the commit resolves inside the destination account's fund.
+export type ImportedTransactionInput = CreateTransactionInput & {
+  contributedByName?: string | null;
+};
+
 // The whole file's passing rows, in the entity buckets the pipeline produced. The
 // commit walks them in dependency order (RF-51): members, categories and labels, then
 // accounts, rules and movements, then goals, contributions, budgets, debts and statements.
@@ -161,7 +167,7 @@ export type CommitInput = {
   labels?: CommitRow<CreateLabelInput>[];
   accounts: CommitRow<CreateAccountInput>[];
   recurringRules: CommitRow<CreateRecurringRuleInput>[];
-  transactions: CommitRow<CreateTransactionInput>[];
+  transactions: CommitRow<ImportedTransactionInput>[];
   // A backup's reconciliation adjustments (RF-50): booked as reconciliations, never as movements.
   adjustments?: CommitRow<ImportedAdjustment>[];
   budgets?: CommitRow<RestoredBudget>[];
@@ -776,7 +782,7 @@ function inScope(scope: CommitScope): SQL {
 // stood for, the cents its amount and splits parse to. Shared by the batch attempt
 // and the serial fallback so the two write the exact same values.
 type ResolvedTransaction = {
-  row: CommitRow<CreateTransactionInput>;
+  row: CommitRow<ImportedTransactionInput>;
   fromAccountId: string | null;
   toAccountId: string | null;
   amountCents: number;
@@ -785,13 +791,15 @@ type ResolvedTransaction = {
   counterAmountCents: number | null;
   counterIsEstimate: boolean;
   forHousehold: boolean;
-  // The member named in «De quién», resolved by name inside the destination account's fund (RF-166).
+  // The member named in «De quién» (RF-166) and, once `resolveContributors` has read the
+  // destination's fund, the member row it points at.
   contributedByName: string | null;
+  contributedByMemberId: string | null;
   splits: { categoryId: string; amountCents: number }[];
 };
 
 function resolveTransaction(
-  row: CommitRow<CreateTransactionInput>,
+  row: CommitRow<ImportedTransactionInput>,
   accountMap: Map<string, string>,
   categoryMap: Map<string, string>,
   placeholders: Set<string>,
@@ -823,14 +831,15 @@ function resolveTransaction(
     counterAmountCents,
     counterIsEstimate: object.counterIsEstimate ?? false,
     forHousehold: object.forHousehold ?? false,
-    contributedByName: (object as { contributedByName?: string }).contributedByName ?? null,
+    contributedByName: object.contributedByName?.trim() || null,
+    contributedByMemberId: null,
     splits,
   };
 }
 
 // A row resolved for the write, or the row failure naming it (RF-51).
 function resolveRows(
-  rows: CommitRow<CreateTransactionInput>[],
+  rows: CommitRow<ImportedTransactionInput>[],
   accountMap: Map<string, string>,
   categoryMap: Map<string, string>,
   placeholders: Set<string>,
@@ -844,12 +853,43 @@ function resolveRows(
   });
 }
 
+// Reads, in one statement, the members of each destination account's fund and points every
+// named «De quién» at its member row. A name that points at none (a stranger, or an account
+// outside a fund) is a row failure like an unresolved category (RF-166). Only an income
+// carries one; on any other movement the name is ignored, as the mark is on a bill.
+async function resolveContributors(
+  tx: Transaction,
+  items: ResolvedTransaction[],
+): Promise<void> {
+  const named = items.filter(
+    (item) => item.contributedByName !== null && item.fromAccountId === null && item.toAccountId !== null,
+  );
+  if (named.length === 0) return;
+
+  const accountIds = [...new Set(named.map((item) => item.toAccountId as string))];
+  const found = (await tx.execute(sql`
+    select a.id as account_id, m.id as member_id, m.name
+    from accounts a
+    join group_members m on m.group_id = a.group_id
+    where a.id in (select value::uuid from jsonb_array_elements_text(${jsonbParam(accountIds)}))
+  `)) as unknown as { account_id: string; member_id: string; name: string }[];
+  const members = new Map(found.map((row) => [`${row.account_id}|${row.name}`, row.member_id]));
+
+  for (const item of named) {
+    const memberId = members.get(`${item.toAccountId}|${item.contributedByName}`);
+    if (memberId === undefined) {
+      throw rowFailure("transactions", item.row.sheetRow, "data.import.errors.contributorUnknown", null);
+    }
+    item.contributedByMemberId = memberId;
+  }
+}
+
 // Transactions carry a child split, so a new row writes the movement then its splits,
 // and an update overwrites the row and replaces the split wholesale (delete + insert),
 // mirroring `updateTransaction`. Both batch (RNF-15).
 async function commitTransactions(
   tx: Transaction,
-  rows: CommitRow<CreateTransactionInput>[],
+  rows: CommitRow<ImportedTransactionInput>[],
   accountMap: Map<string, string>,
   categoryMap: Map<string, string>,
   placeholders: Set<string>,
@@ -867,7 +907,7 @@ async function commitTransactions(
 // the row an ordinary commit would have refused.
 async function commitUpdatedTransactions(
   tx: Transaction,
-  rows: CommitRow<CreateTransactionInput>[],
+  rows: CommitRow<ImportedTransactionInput>[],
   accountMap: Map<string, string>,
   categoryMap: Map<string, string>,
   placeholders: Set<string>,
@@ -875,6 +915,7 @@ async function commitUpdatedTransactions(
 ): Promise<void> {
   if (rows.length === 0) return;
   const resolved = resolveRows(rows, accountMap, categoryMap, placeholders);
+  await resolveContributors(tx, resolved);
 
   try {
     await tx.transaction(async (sp) => {
@@ -907,7 +948,7 @@ async function updateTransactionsBatch(
     counter_amount_cents: item.counterAmountCents,
     counter_is_estimate: item.counterIsEstimate,
     for_household: item.forHousehold,
-    contributed_by_name: item.contributedByName,
+    contributed_by_member_id: item.contributedByMemberId,
     occurred_at: item.row.object.occurredAt,
     description: item.row.object.description,
   }));
@@ -922,14 +963,19 @@ async function updateTransactionsBatch(
       counter_amount_cents = case when r.currency is null then t.counter_amount_cents else r.counter_amount_cents end,
       counter_is_estimate = case when r.currency is null then t.counter_is_estimate else r.counter_is_estimate end,
       for_household = ${householdMark(sql`r.from_account_id`, sql`r.to_account_id`, sql`r.for_household`)},
-      contributed_by_member_id = (case when r.from_account_id is null and r.contributed_by_name is not null then
-        (select m.id from group_members m join accounts a on a.id = r.to_account_id
-          where m.group_id = a.group_id and m.name = r.contributed_by_name limit 1) end),
+      contributed_by_member_id = ${contributorMark(
+        sql`r.from_account_id`,
+        sql`r.to_account_id`,
+        sql`coalesce(r.contributed_by_member_id, ${contributorStillInFund(
+          sql`t.contributed_by_member_id`,
+          sql`r.to_account_id`,
+        )})`,
+      )},
       occurred_at = r.occurred_at, description = r.description,
       reviewed_at = case when t.recurring_rule_id is not null and t.reviewed_at is null then now() else t.reviewed_at end
     from jsonb_to_recordset(${jsonbParam(records)}) as r(
       external_ref text, from_account_id uuid, to_account_id uuid, amount_cents bigint, currency text,
-      counter_amount_cents bigint, counter_is_estimate boolean, for_household boolean, contributed_by_name text, occurred_at date, description text)
+      counter_amount_cents bigint, counter_is_estimate boolean, for_household boolean, contributed_by_member_id uuid, occurred_at date, description text)
     where t.external_ref = r.external_ref and ${inScope(scope)}
     returning t.id, t.external_ref`)) as unknown as { id: string; external_ref: string }[];
   if (updated.length === 0) return;
@@ -962,7 +1008,7 @@ async function updateTransactionsBatch(
 // A file with no bad row never pays for that fallback; only a bad file does.
 async function commitNewTransactions(
   tx: Transaction,
-  rows: CommitRow<CreateTransactionInput>[],
+  rows: CommitRow<ImportedTransactionInput>[],
   accountMap: Map<string, string>,
   categoryMap: Map<string, string>,
   placeholders: Set<string>,
@@ -970,6 +1016,7 @@ async function commitNewTransactions(
   if (rows.length === 0) return;
 
   const resolved = resolveRows(rows, accountMap, categoryMap, placeholders);
+  await resolveContributors(tx, resolved);
 
   try {
     await tx.transaction(async (sp) => {
@@ -985,12 +1032,12 @@ async function commitNewTransactions(
 // One multi-row insert for the movements, one for every split any of them carries —
 // two round trips per chunk instead of two per row. RETURNING rides in VALUES order,
 // same assumption `insertChunked` already leans on for every other entity.
-// The member row a name points at inside the fund that owns the destination account; no match
-// (or an account outside a fund) stores nothing.
 const contributorSql = (item: ResolvedTransaction) =>
-  sql`(case when ${item.fromAccountId}::uuid is null and ${item.contributedByName}::text is not null then
-    (select m.id from group_members m join accounts a on a.id = ${item.toAccountId}::uuid
-      where m.group_id = a.group_id and m.name = ${item.contributedByName}::text limit 1) end)`;
+  contributorMark(
+    sql`${item.fromAccountId}::uuid`,
+    sql`${item.toAccountId}::uuid`,
+    sql`${item.contributedByMemberId}::uuid`,
+  );
 
 const householdSql = (item: ResolvedTransaction) =>
   householdMark(sql`${item.fromAccountId}::uuid`, sql`${item.toAccountId}::uuid`, sql`${item.forHousehold}`);
@@ -1375,7 +1422,7 @@ async function commitStatements(
 // update already lost its old labels with its old splits, so this only ever adds.
 async function commitTransactionLabels(
   tx: Transaction,
-  rows: CommitRow<CreateTransactionInput>[],
+  rows: CommitRow<ImportedTransactionInput>[],
   labelMap: Map<string, string>,
   placeholders: Set<string>,
   scope: CommitScope,
