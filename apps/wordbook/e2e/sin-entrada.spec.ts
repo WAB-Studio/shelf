@@ -85,7 +85,7 @@ test("a two-token miss draws both headwords, offline, with no request", async ({
   expect(stray).toEqual([]);
 });
 
-// "zzqx" is absent from `eng-spa-2025.11.23.json` as a headword, and no
+// "zzqx" is absent from `eng-spa-2025.11.23-v3.json` as a headword, and no
 // inflection rule in `lib/dictionary/inflect.ts` strips a suffix off it —
 // there is nothing left for `lookupWord` to find under any of its rules.
 // Two tokens now reaches the translator online, like any other phrase
@@ -228,7 +228,7 @@ test("a phrase whose translation fails falls to the per-word breakdown, capped a
 
   // docs/wordbook/DESIGN.md "A word block on `SinEntradaFrase` carries its
   // translations alone": no IPA, no definition anywhere in the breakdown.
-  // "dog" (eng-spa-2025.11.23.json) carries both on a direct lookup —
+  // "dog" (eng-spa-2025.11.23-v3.json) carries both on a direct lookup —
   // "/dɑɡ/" and "(transitive) To pursue with the intent to catch." — and
   // neither draws here.
   await expect(page.getByText("/dɑɡ/")).toHaveCount(0);

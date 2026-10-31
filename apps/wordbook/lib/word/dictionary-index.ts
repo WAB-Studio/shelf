@@ -10,7 +10,7 @@ const DICTIONARY_ASSET = path.join(
   process.cwd(),
   "public",
   "dictionary",
-  "eng-spa-2025.11.23.json",
+  "eng-spa-2025.11.23-v3.json",
 );
 
 // The 8 MiB asset the client installs, parsed once per server process for

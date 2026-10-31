@@ -404,7 +404,7 @@ function leadTranslation(index: DictionaryIndex, headword: string): string {
 test("the common sense leads where the measured order has no row: bleak, cup and the initialism IT", () => {
   const index = shippedIndex();
   // `bleak` listed a river fish (alburno) before its adjective; `it` listed the initialism (IT) first.
-  assert.equal(leadTranslation(index, "bleak"), "pálido");
+  assert.equal(leadTranslation(index, "bleak"), "desolado");
   assert.equal(leadTranslation(index, "it"), "lo");
   // `cup` led with an informal trophy sense, `Copa`.
   assert.equal(leadTranslation(index, "cup"), "vaso");

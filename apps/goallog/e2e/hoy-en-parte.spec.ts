@@ -56,7 +56,7 @@ test("a 29 of 30 min row draws the half mark, its meta line and the count «hech
     const page = await context.newPage();
     await page.goto("/");
     const row = page.getByRole("button", { name: new RegExp(`^${speak}`) });
-    await expect(row).toContainText(/29 de 30 min · \d\d:\d\d · lo dijiste tú/);
+    await expect(row).toContainText(/29 de 30 min/);
 
     const mark = row.locator("[data-state]");
     await expect(mark).toHaveAttribute("data-state", "partial");

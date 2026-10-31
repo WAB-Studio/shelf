@@ -31,7 +31,10 @@
   order: 1;
 }
 
-@media (min-width: 768px) {
+/* Tablet is one column beside the rail (docs/goallog/DESIGN.md «Decisión del
+   2026-10-31»): the two columns wait for 1024, where the rail and the aside
+   both fit. */
+@media (min-width: 1024px) {
   .mainFirst .before > *,
   .mainFirst .before > * > *,
   .mainFirst .after > *,

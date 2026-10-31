@@ -1,0 +1,8 @@
+/* Ink on marigold, never marigold as text (docs/wordbook/DESIGN.md "Verde botella"): the one
+   key word a line is about. Ratio 10.22:1. */
+.mark {
+  padding: 0 0.16em;
+  border-radius: 0.2em;
+  background: var(--rl-highlight);
+  color: var(--rl-highlight-ink);
+}

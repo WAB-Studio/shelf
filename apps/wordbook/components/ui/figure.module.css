@@ -17,3 +17,9 @@
   font-size: 14px;
   color: var(--rl-muted);
 }
+
+/* Doubled to outrank `.value`. */
+.hero.hero {
+  font-size: 64px;
+  line-height: 1;
+}

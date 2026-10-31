@@ -49,93 +49,71 @@ async function seedWeeks(db: Db, person: Person, name: string, weeks: number, wi
 }
 
 const path = (id: string) => `/metas/${id}/revision`;
-const headers = (page: Page) => page.locator("main table thead th:visible");
-const currentRow = (page: Page) => page.locator("main tbody tr[data-current]:visible");
-
-// A column whose cells are all empty is the gap the contract forbids: every drawn header has a non-empty cell under it.
-async function expectNoEmptyColumn(page: Page) {
-  const count = await headers(page).count();
-  const rows = page.locator("main tbody tr:visible");
-  const total = await rows.count();
-  for (let column = 0; column < count; column++) {
-    let filled = 0;
-    for (let row = 0; row < total; row++) {
-      if (((await rows.nth(row).locator("td, th").nth(column).innerText()) ?? "").trim() !== "") filled++;
-    }
-    const name = await headers(page).nth(column).innerText();
-    expect(filled, `column «${name}» has at least one cell with data`).toBeGreaterThan(0);
-  }
-}
+// «Por semana» is one list of weeks drawn as bars (decided 2026-10-31): no table, no header, no column.
+const weeks = (page: Page) => page.locator("main ol:visible > li");
+const currentRow = (page: Page) => page.locator("main ol:visible > li[data-current]");
 
 test.describe("«Por semana» at 1280", () => {
-  test("a goal with no phases and no notes draws SEMANA and TOTAL only", async ({ person, browser, baseURL, db }) => {
-    // Kills: FASE or NOTA drawn whatever the data (columns fixed at four, as on 55fe164f).
+  test("a goal with no phases draws one row per week, each with its bar and its total, and no phase and no table", async ({ person, browser, baseURL, db }) => {
+    // Kills: a table left under the bars; a phase name drawn for a goal that has none; a week with no bar or no total.
     const id = await seedWeeks(db, person, "Escribir", 14, false);
     const { page, context } = await visit(browser, baseURL, person, path(id), 1280);
     try {
-      await expect(headers(page)).toHaveCount(2);
-      await expect(headers(page).nth(0)).toHaveText(/semana/i);
-      await expect(headers(page).nth(1)).toHaveText(/total/i);
-      await expect(page.locator("main thead").getByText(/^fase$/i)).toHaveCount(0);
-      await expect(page.locator("main thead").getByText(/^nota$/i)).toHaveCount(0);
-      await expectNoEmptyColumn(page);
+      await expect(page.locator("main table")).toHaveCount(0);
+      // A goal with no end lists its last 12 weeks, the current one last.
+      await expect(weeks(page)).toHaveCount(12);
+      for (const index of [0, 6, 11]) {
+        const row = weeks(page).nth(index);
+        await expect(row).toContainText(new RegExp(`^semana ${index + 3}`));
+        await expect(row.locator('[data-part="progress-track"], span[aria-hidden]').first()).toBeAttached();
+        await expect(row).toContainText(/\d/);
+      }
+      await expect(page.getByText(/^fase$/i)).toHaveCount(0);
     } finally {
       await context.close();
     }
   });
 
-  test("a goal with phases draws FASE, names each phase on the week it starts, and still no NOTA", async ({ person, browser, baseURL, db }) => {
-    // Kills: FASE left out when the goal has phases; a phase repeated on every week it spans; NOTA drawn though no week has a note.
+  test("a goal with phases names each phase on the week it starts, once, and the rule runs down its weeks", async ({ person, browser, baseURL, db }) => {
+    // Kills: a phase repeated on every week it spans; a phase never named.
     const id = await seedWeeks(db, person, "Novela", 14, true);
     const { page, context } = await visit(browser, baseURL, person, path(id), 1280);
     try {
-      await expect(headers(page)).toHaveCount(3);
-      await expect(headers(page).nth(2)).toHaveText(/fase/i);
-      await expect(page.locator("main thead").getByText(/^nota$/i)).toHaveCount(0);
-      const body = page.locator("main tbody");
-      await expect(body.getByText("Primer borrador", { exact: true })).toHaveCount(1);
-      await expect(body.getByText("Revisión", { exact: true })).toHaveCount(1);
-      await expectNoEmptyColumn(page);
+      const list = page.locator("main ol:visible");
+      await expect(list.getByText("Primer borrador", { exact: true })).toHaveCount(1);
+      await expect(list.getByText("Revisión", { exact: true })).toHaveCount(1);
     } finally {
       await context.close();
     }
   });
 
-  test("«en curso» is a mark after the current week's dates, in the first column, not a column of its own", async ({ person, browser, baseURL, db }) => {
-    // Kills: «en curso» kept as the note column's cell (it then sits at TOTAL's right, in a column of its own).
+  test("«en curso» is a mark after the current week's dates, in the label, not a column of its own", async ({ person, browser, baseURL, db }) => {
+    // Kills: «en curso» dropped with the table, or drawn at the total's side.
     const id = await seedWeeks(db, person, "Escribir", 14, false);
     const { page, context } = await visit(browser, baseURL, person, path(id), 1280);
     try {
       const row = currentRow(page);
       await expect(row).toHaveCount(1);
-      const mark = row.getByText("en curso");
+      const mark = row.getByText(/ · en curso$/);
       const markBox = await boxOf(mark);
-      const total = await boxOf(headers(page).nth(1));
-      const first = await boxOf(headers(page).nth(0));
-      expect(markBox.x, "the mark starts inside SEMANA's column, left of TOTAL's").toBeLessThan(total.x);
-      expect(markBox.x).toBeGreaterThanOrEqual(first.x);
-      // On the dates' own line: the mark's vertical middle is the line of «dd-dd mmm yyyy», the row's last line of text.
-      const dates = row.getByText(/\d{1,2}(?:\s\w{3})?\s?[-–]\s?\d{1,2}\s\w{3}\s\d{4}/);
-      const datesBox = await boxOf(dates.first());
-      expect(Math.abs(markBox.y + markBox.height / 2 - (datesBox.y + datesBox.height / 2))).toBeLessThan(datesBox.height);
-      expect(markBox.x, "after the dates' start: the mark follows them on their line").toBeGreaterThan(datesBox.x);
-      // The other rows carry no mark.
-      await expect(page.locator("main tbody").getByText("en curso")).toHaveCount(1);
+      const first = await boxOf(row.getByText(/^semana \d+/).first());
+      const total = await boxOf(row.locator("span").last());
+      expect(markBox.x, "the mark starts inside the label, left of the total").toBeLessThan(total.x);
+      expect(markBox.x).toBeGreaterThanOrEqual(first.x - 1);
+      await expect(page.locator("main ol:visible").getByText(/en curso/)).toHaveCount(1);
     } finally {
       await context.close();
     }
   });
 
-  test("with SEMANA and TOTAL alone, TOTAL runs to the table's right edge and no column is empty", async ({ person, browser, baseURL, db }) => {
-    // Kills: two drawn columns left at their fixed widths with the empty space at the right, as an invisible NOTA column would leave it.
+  test("the total of each week runs to the list's right edge", async ({ person, browser, baseURL, db }) => {
+    // Kills: the totals left beside their bars with the empty space at the right.
     const id = await seedWeeks(db, person, "Escribir", 14, false);
     const { page, context } = await visit(browser, baseURL, person, path(id), 1280);
     try {
-      const table = await boxOf(page.locator("main table:visible").first());
-      const lastHeader = await boxOf(headers(page).last());
-      expect(lastHeader.x + lastHeader.width).toBeGreaterThanOrEqual(table.x + table.width - 2);
-      const cells = await page.locator("main tbody tr:visible").first().locator("td, th").count();
-      expect(cells).toBe(2);
+      const list = await boxOf(page.locator("main ol:visible").first());
+      const total = await boxOf(weeks(page).first().locator("span").last());
+      expect(total.x + total.width).toBeGreaterThanOrEqual(list.x + list.width - 2);
     } finally {
       await context.close();
     }
@@ -143,16 +121,15 @@ test.describe("«Por semana» at 1280", () => {
 });
 
 test.describe("«Por semana» at 360", () => {
-  test("the stack draws no header; «en curso» rides the dates' line under the last row's label (PorSemanaTelefono)", async ({ person, browser, baseURL, db }) => {
-    // Kills: the wide face's columns leaking into the phone's stack; «en curso» left in a note of its own.
+  test("«en curso» rides the dates' line under the last row's label (PorSemanaTelefono)", async ({ person, browser, baseURL, db }) => {
+    // Kills: «en curso» left in a note of its own.
     const id = await seedWeeks(db, person, "Escribir", 14, true);
     const { page, context } = await visit(browser, baseURL, person, path(id), 360);
     try {
-      await expect(headers(page)).toHaveCount(0);
+      await expect(page.locator("main table")).toHaveCount(0);
       const row = page.locator("main ol > li[data-current]:visible");
       await expect(row).toHaveCount(1);
       await expect(row.getByText("en curso", { exact: true })).toHaveCount(0);
-      // The label holds «semana N» and, under it, the dates: the mark sits inside it, below its first line.
       const label = await boxOf(row.getByText(/^semana \d+/).first());
       const mark = await boxOf(row.getByText(/ · en curso$/));
       expect(mark.x).toBeGreaterThanOrEqual(label.x - 1);

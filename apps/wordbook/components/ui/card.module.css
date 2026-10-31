@@ -22,3 +22,8 @@
     padding: var(--space-6);
   }
 }
+
+.tint {
+  background: var(--rl-tint-3);
+  border-color: var(--rl-tint-4);
+}

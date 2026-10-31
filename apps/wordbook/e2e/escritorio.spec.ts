@@ -54,39 +54,33 @@ test("one <nav> at the side on every route, never a bar at the foot", async ({ p
   }
 });
 
-test("the reading column on / keeps its 620px measure and clears the sidebar", async ({ page }) => {
+test("from 1280px the main screen is two panels in what the sidebar leaves: the entry and a 380px side", async ({ page }) => {
   await disableTranslator(page);
-  await page.goto("/");
-  await expect(page.locator("main")).toBeVisible();
+  // An answer keeps its second panel; the empty screen draws one only once the record has a review to offer.
+  await page.goto("/?q=throughout");
+  await expect(page.getByRole("heading", { name: "throughout" })).toBeVisible({ timeout: 10000 });
   await page.evaluate(() => document.fonts.ready);
 
   const viewport = page.viewportSize();
   expect(viewport).not.toBeNull();
 
   const navBox = await page.getByRole("navigation", { name: messages.nav.label }).boundingBox();
-  // `main` also holds the side column; the reading column is the 620px one.
-  const mainBox = await page.locator("main [data-reading-column]").boundingBox();
+  const panels = await page.locator("main > div").first().boundingBox();
+  const side = await page.locator("main aside").boundingBox();
+  const field = await page.getByRole("textbox", { name: messages.search.label }).boundingBox();
   expect(navBox).not.toBeNull();
-  expect(mainBox).not.toBeNull();
+  expect(panels).not.toBeNull();
+  expect(side).not.toBeNull();
+  expect(field).not.toBeNull();
 
-  expect(mainBox!.width).toBeLessThanOrEqual(620.5);
-
-  // page.module.css's own 1024px block: the sidebar's 240px plus half of
-  // whatever the viewport, the sidebar and the 620px column leave over. A
-  // floor alone — "a gap bigger than 20px" — also passes if that block
-  // never fires: the 660px rule's plain `margin-inline: auto` centres the
-  // 620px column on the full 1280px viewport instead (x≈330, gap≈90) and
-  // clears 20px by coincidence. Pinning the exact x this formula produces
-  // is what tells the two apart.
-  // The 620px column, the 32px gap and the 300px side column are centred together.
-  const expectedX = 240 + (viewport!.width - 240 - 952) / 2;
-  expect(mainBox!.x).toBeGreaterThan(expectedX - 2);
-  expect(mainBox!.x).toBeLessThan(expectedX + 2);
-
-  // Centred in what is left of the viewport, not stuck to the sidebar's
-  // own right edge — a real gap, not a hairline.
-  const gap = mainBox!.x - (navBox!.x + navBox!.width);
-  expect(gap).toBeGreaterThan(20);
+  // The sidebar's 240px and the page's 32px padding on both sides; the panels keep 1120px at most.
+  const room = viewport!.width - 240 - 64;
+  expect(Math.abs(panels!.width - Math.min(1120, room))).toBeLessThan(2);
+  expect(panels!.x).toBeGreaterThanOrEqual(navBox!.x + navBox!.width);
+  expect(Math.abs(side!.width - 380)).toBeLessThan(1);
+  expect(side!.x + side!.width).toBeLessThanOrEqual(panels!.x + panels!.width + 1);
+  // The box lives in the entry's panel, left of the side.
+  expect(field!.x + field!.width).toBeLessThanOrEqual(side!.x);
 });
 
 // `measure="full"` shipped with the 660px rule's `width: 100%` still in
@@ -120,30 +114,29 @@ for (const route of ["/registro", "/registro/apple", "/cuenta"]) {
   });
 }
 
-test("RNL-03: at 1440px the box and the answer read as a centred 620px column", async ({ page }) => {
+test("RNL-03: at 1440px the box and the answer sit in the left panel, beside the 380px side", async ({ page }) => {
   await disableTranslator(page);
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/?q=throughout");
   await expect(page.getByRole("heading", { name: "throughout" })).toBeVisible({ timeout: 10000 });
   await page.evaluate(() => document.fonts.ready);
 
-  // `main` also holds the side column; the reading column is the 620px one.
-  const mainBox = await page.locator("main [data-reading-column]").boundingBox();
+  const panels = await page.locator("main > div").first().boundingBox();
+  const side = await page.locator("main aside").boundingBox();
   const searchBox = await page.getByRole("textbox", { name: messages.search.label }).boundingBox();
   const answer = await page.getByRole("heading", { name: "throughout" }).boundingBox();
-  expect(mainBox).not.toBeNull();
+  expect(panels).not.toBeNull();
+  expect(side).not.toBeNull();
   expect(searchBox).not.toBeNull();
   expect(answer).not.toBeNull();
 
-  expect(mainBox!.width).toBeLessThanOrEqual(620.5);
-  // The 620px column, the 32px gap and the 300px side column are centred together.
-  const expectedX = 240 + (1440 - 240 - 952) / 2;
-  expect(mainBox!.x).toBeGreaterThan(expectedX - 2);
-  expect(mainBox!.x).toBeLessThan(expectedX + 2);
-  // The box and the answer live inside that column, not across the viewport.
+  // 1120px centred in what the sidebar leaves.
+  expect(Math.abs(panels!.width - 1120)).toBeLessThan(2);
+  expect(Math.abs(panels!.x - (240 + (1200 - 1120) / 2))).toBeLessThan(2);
+  expect(Math.abs(side!.width - 380)).toBeLessThan(1);
   for (const inner of [searchBox!, answer!]) {
-    expect(inner.x).toBeGreaterThanOrEqual(mainBox!.x - 1);
-    expect(inner.x + inner.width).toBeLessThanOrEqual(mainBox!.x + mainBox!.width + 1);
+    expect(inner.x).toBeGreaterThanOrEqual(panels!.x - 1);
+    expect(inner.x + inner.width).toBeLessThanOrEqual(side!.x);
   }
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(1440);
 });

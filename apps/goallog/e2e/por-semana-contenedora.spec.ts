@@ -60,7 +60,7 @@ for (const width of [360, 1280]) {
     try {
       await expect(page.getByText(NO_FIGURE)).toHaveCount(0);
       await expect(page.getByText("mide en horas y minutos", { exact: true })).toBeVisible();
-      const current = page.locator(width === 1280 ? "main tbody tr[data-current]:visible" : "main ol > li[data-current]:visible");
+      const current = page.locator("main ol > li[data-current]:visible");
       await expect(current).toHaveCount(1);
       await expect(current).toContainText(/^semana 1/);
       await expect(current).toContainText(/(?<![\d.])4\s?h\b/);

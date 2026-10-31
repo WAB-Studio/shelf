@@ -145,15 +145,14 @@ const base = {
   cadenceText: null,
   amount: "10 min",
   status: null,
-  writtenTime: undefined,
   writtenLabel: undefined,
 };
 
-test("a done tap or quantity row says «lo dijiste tú» after its hour", () => {
-  assert.equal(line(rowMeta(rowTranslate, { ...base, done: true, writtenTime: "07:40" })), "10 min · 07:40 · lo dijiste tú");
+test("a done tap or quantity row says neither its hour nor «lo dijiste tú»", () => {
+  assert.equal(line(rowMeta(rowTranslate, { ...base, done: true })), "10 min");
   assert.equal(
-    line(rowMeta(rowTranslate, { ...base, kind: "quantity", done: true, amount: "25 minutos", writtenTime: "07:40", writtenLabel: "anotado el lunes 21" })),
-    "25 minutos · 07:40 · lo dijiste tú · anotado el lunes 21",
+    line(rowMeta(rowTranslate, { ...base, kind: "quantity", done: true, amount: "25 minutos", writtenLabel: "anotado el lunes 21" })),
+    "25 minutos · anotado el lunes 21",
   );
 });
 
@@ -170,8 +169,8 @@ test("an unmarked tap row says neither", () => {
   assert.equal(line(rowMeta(rowTranslate, base)), "10 min");
 });
 
-test("an evidence row says neither, done or not", () => {
-  assert.equal(line(rowMeta(rowTranslate, { ...base, kind: "evidence", amount: "Anki", done: true, writtenTime: "07:40" })), "Anki · 07:40");
+test("an evidence row never draws the hour, done or not", () => {
+  assert.equal(line(rowMeta(rowTranslate, { ...base, kind: "evidence", amount: "Anki", done: true })), "Anki");
   assert.equal(line(rowMeta(rowTranslate, { ...base, kind: "evidence", amount: "Anki" })), "Anki");
 });
 
@@ -200,17 +199,17 @@ test("a quiet row says neither", () => {
 
 const partial = { logged: "1 min", target: "3 min" };
 
-test("a quantity row logged under its target reads what it holds, its hour and «lo dijiste tú»", () => {
-  const row = { ...base, kind: "quantity" as const, amount: "3 min", writtenTime: "09:22", partial };
-  assert.equal(line(rowMeta(rowTranslate, row)), "1 min de 3 min · 09:22 · lo dijiste tú");
+test("a quantity row logged under its target reads what it holds and no hour", () => {
+  const row = { ...base, kind: "quantity" as const, amount: "3 min", partial };
+  assert.equal(line(rowMeta(rowTranslate, row)), "1 min de 3 min");
   assert.equal(
     line(rowMeta(rowTranslate, { ...row, writtenLabel: "anotado el lunes 21" })),
-    "1 min de 3 min · 09:22 · lo dijiste tú · anotado el lunes 21",
+    "1 min de 3 min · anotado el lunes 21",
   );
 });
 
 test("a partial row never asks for the number again", () => {
-  const meta = line(rowMeta(rowTranslate, { ...base, kind: "quantity", amount: "3 min", writtenTime: "09:22", partial }));
+  const meta = line(rowMeta(rowTranslate, { ...base, kind: "quantity", amount: "3 min", partial }));
   assert.equal(meta?.includes("pide el número"), false);
 });
 
@@ -219,16 +218,13 @@ test("a partial quiet or evidence row keeps its own line", () => {
   assert.equal(line(rowMeta(rowTranslate, { ...base, kind: "evidence", amount: "Anki", partial })), "Anki");
 });
 
-test("a partial row sets only its figures and times apart: the words stay text", () => {
-  const row = { ...base, kind: "quantity" as const, amount: "10 min", writtenTime: "17:15", partial: { logged: "5", target: "10 min" } };
+test("a partial row sets only its figures apart: the words stay text", () => {
+  const row = { ...base, kind: "quantity" as const, amount: "10 min", partial: { logged: "5", target: "10 min" } };
   const parts = rowMeta(rowTranslate, row);
-  assert.deepEqual(figures(parts), ["5", "10 min", "17:15"]);
-  assert.equal(line(parts), "5 de 10 min · 17:15 · lo dijiste tú");
+  assert.deepEqual(figures(parts), ["5", "10 min"]);
+  assert.equal(line(parts), "5 de 10 min");
   assert.deepEqual(parts?.filter((part) => "text" in part).map((part) => (part as { text: string }).text), [
     " de ",
-    " · ",
-    " · ",
-    "lo dijiste tú",
   ]);
 });
 

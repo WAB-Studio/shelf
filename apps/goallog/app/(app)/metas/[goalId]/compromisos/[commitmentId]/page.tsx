@@ -28,10 +28,12 @@ export default async function CommitmentCadencePage({
   if (!person) redirect("/entrar");
 
   const { goalId, commitmentId } = await params;
-  const goal = await loadGoalForm(goalId);
+  // The evidence rides beside the statement inside the loader, never after it (RNP-03).
+  const goal = await loadGoalForm(goalId, undefined, undefined, { evidence: true });
   const commitment = goal?.commitments.find((candidate) => candidate.id === commitmentId);
   if (!goal || !commitment || commitment.retiredAt !== null) notFound();
-  if (commitment.factDayCount > 0) {
+  // A day the source met counts like a day written: the frequency is as locked as a declared one's.
+  if (commitment.factDayCount + commitment.evidenceDayCount > 0) {
     return <CommitmentScreen goalId={goal.id} goalName={goal.name} commitment={commitment} />;
   }
 
@@ -42,13 +44,22 @@ export default async function CommitmentCadencePage({
       hasMeasure={goal.measureUnit !== null}
       measureUnit={goal.measureUnit}
       sources={[]}
-      edit={{ commitmentId: commitment.id, cadence: commitment.cadence, name: commitment.name }}
+      edit={{
+        commitmentId: commitment.id,
+        cadence: commitment.cadence,
+        name: commitment.name,
+        fulfils:
+          commitment.satisfiedBy.kind === "evidence" && commitment.sourceLabelKey
+            ? { labelKey: commitment.sourceLabelKey, threshold: commitment.satisfiedBy.threshold, unit: commitment.satisfiedBy.unit }
+            : undefined,
+      }}
       foot={
         <CommitmentActions
           commitmentId={commitment.id}
           goalId={goal.id}
           name={commitment.name}
           factDayCount={commitment.factDayCount}
+          evidenceDayCount={commitment.evidenceDayCount}
         />
       }
     />

@@ -10,10 +10,10 @@ import { DATABASE_VERSION } from "../lib/log/record";
 // of 2026-10-18). The sentences below are the board's, character for character,
 // not the catalog's keys: a renamed key must not move what the reader reads.
 const WAITING = "Sin respuesta todavía";
-const WORD_LINE = "Se responde sola cuando vuelva la conexión.";
-const PHRASE_LINE = "Se traduce sola cuando vuelva la conexión.";
+const WORD_LINE = "El diccionario no la tiene y aún no hay respuesta. Se vuelve a pedir una vez al día, con conexión.";
+const PHRASE_LINE = "La traducción no llegó. Se vuelve a pedir una vez al día, con conexión.";
 const PAGE_TITLE = "Esta búsqueda espera respuesta";
-const PAGE_BODY = "No había conexión cuando la buscaste. Se responde sola cuando vuelva, y su traducción aparece aquí.";
+const PAGE_BODY = "No hubo respuesta cuando la buscaste: faltaba la conexión o el servicio no contestó. Se vuelve a pedir una vez al día, con conexión, y su traducción aparece aquí.";
 const SEARCHES = "Búsquedas";
 
 type Seed = Omit<LookupRecord, "id">;

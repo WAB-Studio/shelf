@@ -44,6 +44,14 @@ export { Figure } from "./figure";
 
 export { Progress } from "./progress";
 
+export { Strip } from "./strip";
+
+export { Timeline } from "./timeline";
+
+export { MonthGrid } from "./month-grid";
+
+export { WeekBars, type WeekBar } from "./week-bars";
+
 export { Hero } from "./hero";
 
 export { Sheet } from "./sheet";

@@ -122,7 +122,7 @@ test.describe("the sheet of a live commitment (RP-127)", () => {
     await db`update goals.commitments set retired_at = now() where id = ${gone}`;
     const { page, context } = await visit(browser, baseURL, person, `/metas/${goal}`, 360);
     try {
-      await expect(page.getByRole("main")).toContainText("tres compromisos, 1 retirado");
+      await expect(page.getByRole("main")).toContainText("Tres compromisos, 1 retirado");
       await page.goto(`/metas/${goal}/compromisos/${id}`);
       await expect(page.getByRole("heading", { level: 1, name: "¿Cada cuánto?" })).toBeVisible();
       await expect(page.getByRole("main")).toContainText("Estirar");

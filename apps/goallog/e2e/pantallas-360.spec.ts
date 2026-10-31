@@ -314,7 +314,7 @@ test("an ended goal holds at 360 (RNP-07)", async ({ browser, baseURL, person, d
 test("/metas with «terminadas» holds at 360 (RNP-07)", async ({ browser, baseURL, person, db }) => {
   await withNewStates(browser, baseURL, person, db, async (page) => {
     await page.goto("/metas");
-    await expect(page.getByText("terminadas", { exact: false }).first()).toBeVisible();
+    await expect(page.getByText("Terminadas", { exact: false }).first()).toBeVisible();
     await expectHolds(page, 3);
   });
 });

@@ -129,14 +129,13 @@
     "of": "fase {ordinal} de {total} · {name}"
   },
   "row": {
-    "saidByYou": "lo dijiste tú",
     "notedBy": "lo anota el {source}",
     "partialAmount": "{logged} de {target}",
     "evidenceAmount": "{count} {unit}",
     "unreadSourceAsks": "sin leer la fuente · pide {asks}"
   },
   "monthLine": {
-    "title": "este mes",
+    "title": "Este mes",
     "markTask": "Marcar hecha: {name}",
     "of": "de",
     "tasksOf": "{total, plural, one {de # tarea} other {de # tareas}}",

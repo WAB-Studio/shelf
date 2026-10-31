@@ -58,10 +58,10 @@ test("the signed-in link-refused body exists, quotes «» only and points at no 
 // names are the worker's; the catalog must hold each sentence under some key.
 const PENDING_STRINGS = [
   "Sin respuesta todavía",
-  "Se responde sola cuando vuelva la conexión.",
-  "Se traduce sola cuando vuelva la conexión.",
+  "El diccionario no la tiene y aún no hay respuesta. Se vuelve a pedir una vez al día, con conexión.",
+  "La traducción no llegó. Se vuelve a pedir una vez al día, con conexión.",
   "Esta búsqueda espera respuesta",
-  "No había conexión cuando la buscaste. Se responde sola cuando vuelva, y su traducción aparece aquí.",
+  "No hubo respuesta cuando la buscaste: faltaba la conexión o el servicio no contestó. Se vuelve a pedir una vez al día, con conexión, y su traducción aparece aquí.",
   "Búsquedas",
 ];
 

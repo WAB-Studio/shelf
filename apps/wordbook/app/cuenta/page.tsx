@@ -4,7 +4,7 @@ import { getReader } from "@/lib/session";
 import { AccountPanel } from "@/components/account/account-panel";
 import { AccountTabs, TabBody } from "@/components/account/tab-body";
 import { AccountInfo } from "@/components/account/account-info";
-import { Band, Card, Flex, MetaLabel, Page, Separator, Text, ThemeChoice } from "@/components/ui";
+import { PageTitle, Card, Flex, MetaLabel, Page, Panels, Separator, Text, ThemeChoice } from "@/components/ui";
 
 // RL-49: `app/auth/confirm/route.ts` sends a failed link here as
 // `?error=linkTimeout` (the gateway never answered) or `?error=linkInvalid`
@@ -38,11 +38,15 @@ export default async function CuentaPage({
   const linkFailure = resolveLinkFailure(rawError);
 
   return (
-    <Page measure="full">
-      <Flex direction="column" gap="5">
-        <Band>{t("title")}</Band>
-
-        <AccountTabs />
+    <Page measure="panels">
+      <Panels
+        top={
+          <>
+            <PageTitle>{t("title")}</PageTitle>
+            <AccountTabs />
+          </>
+        }
+      >
 
         {linkFailure && tab === "account" && (
           // No red in this palette (docs/wordbook/DESIGN.md "Failure"): a
@@ -73,7 +77,7 @@ export default async function CuentaPage({
           <MetaLabel>{tTheme("label")}</MetaLabel>
           <ThemeChoice />
         </Flex>
-      </Flex>
+      </Panels>
     </Page>
   );
 }

@@ -5,13 +5,15 @@ import { getTranslations } from "next-intl/server";
 import { Button, Face, Figure, Flex, Hero, Page, Panel, Progress, Section, SectionLabel, Split, Text, TextLink } from "@/components/ui";
 import type { Translator } from "@/i18n/translator";
 import { dayPhrase as dayPhraseOf, endedPhrase, type DayPhraseKey } from "@/lib/day/day-phrase";
+import { sentenceCase } from "@/lib/day/day-words";
 import { metPhrase, phaseLine } from "@/lib/day/row-phrases";
-import { tallyDay } from "@/lib/day/tally";
+import { tallyDay, tallyDays } from "@/lib/day/tally";
 import { phaseOn } from "@/lib/day/derive";
 import type { DaySlot } from "@/lib/day/types";
+import { loadWeek } from "@/lib/queries/week";
 import { loadDay, type CommitmentInfo, type OneOffSummary } from "@/lib/queries/day";
 import { PAST_DAY_LIMIT } from "@/lib/validation/fact";
-import { civilDateToDate, dateToCivilDate, timeInZone, todayInZone } from "@/lib/zone";
+import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
 
 import { DayHeader } from "./day-header";
 import { DayRow } from "./day-row";
@@ -108,7 +110,8 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
   const today = todayInZone();
   const day = requested ?? today;
   const past = day < today;
-  const loaded = await loadDay(day);
+  // The week rides beside the day, for the seven marks in the navy block (never after it, RNP-03).
+  const [loaded, week] = await Promise.all([loadDay(day), past ? null : loadWeek(day, today)]);
   const {
     view,
     evidence,
@@ -167,6 +170,27 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
       : counted.partial > 0
         ? t.rich("day.tallyPartial", { done: counted.done, total: counted.total, partial: counted.partial, ...fig })
         : t.rich("day.tally", { done: counted.done, total: counted.total, ...fig });
+  const weekShort = t.raw("day.cadence.weekdayName") as string[];
+  const weekDays = week
+    ? tallyDays(week).map((tally, index) => ({
+        key: tally.day,
+        label: weekShort[index],
+        name: `${weekdayOf(tally.day, t)} ${Number(tally.day.slice(8, 10))}`,
+        today: tally.day === today,
+        figure: tally.total === 0 || tally.day > today ? undefined : `${tally.done}/${tally.total}`,
+        percent: tally.total === 0 ? 0 : Math.floor((tally.done * 100) / tally.total),
+        state:
+          tally.total === 0
+            ? ("none" as const)
+            : tally.day > today
+              ? ("empty" as const)
+              : tally.done >= tally.total
+                ? ("declared" as const)
+                : tally.done > 0
+                  ? ("share" as const)
+                  : ("empty" as const),
+      }))
+    : undefined;
   // Today's one navy block: how many of what the day asks are done, and the bar of it.
   const hero =
     past || lastEnded || counted.total === 0 ? null : (
@@ -174,6 +198,8 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
         label={t("day.hero.label")}
         figure={t("day.hero.figure", { done: counted.done, total: counted.total })}
         caption={counted.partial > 0 ? t("day.hero.captionPartial", { partial: counted.partial }) : t("day.hero.caption")}
+        highlight
+        days={weekDays}
       >
         <Progress percent={Math.floor((counted.done * 100) / counted.total)} />
       </Hero>
@@ -345,11 +371,6 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
               writtenLabel={
                 logged && logged.writtenOn !== day
                   ? dayPhrase("day.past.writtenOn", logged.writtenOn, t)
-                  : undefined
-              }
-              writtenTime={
-                logged && slot.satisfiedBy !== "evidence" && (slot.satisfied || commitment.kind === "quantity")
-                  ? timeInZone(logged.writtenAt)
                   : undefined
               }
             />
@@ -604,7 +625,6 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
                 note={done.note}
                 noteEyebrow={noteEyebrow(done.goalId)}
                 goalName={goalNameOf(done.goalId)}
-                time={timeInZone(done.writtenAt)}
               />
             ))}
           </Flex>
@@ -630,10 +650,10 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
       {figures.map((goal) => (
         <Panel as="div" key={goal.id}>
           <Face on="desktop">
-            <Flex direction="column" gap={{ initial: "6", lg: "7" }}>
+            <Flex direction="column" gap="1">
               <Section label={goal.name}>
                 <Flex align="baseline" gap="2">
-                  <Figure value={weekMeasure[goal.id]} unit={goal.measureUnit ?? undefined} />
+                  <Figure variant="big" value={weekMeasure[goal.id]} unit={goal.measureUnit ?? undefined} />
                   <Text variant="sentence">{t("day.weekFigure.caption")}</Text>
                 </Flex>
               </Section>
@@ -730,7 +750,7 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
     <Page width="full">
       {past ? (
         <DayHeader
-          date={dateLabel(day, t)}
+          date={sentenceCase(dateLabel(day, t))}
           forward={{
             href: shiftCivilDay(day, 1) === today ? "/" : `/dia/${shiftCivilDay(day, 1)}`,
             label: t("day.nav.dayAfter"),
@@ -746,7 +766,7 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
         />
       ) : (
         <DayHeader
-          date={dateLabel(day, t)}
+          date={sentenceCase(dateLabel(day, t))}
           title={t("day.title")}
           back={
             loaded.firstGoalDay !== null && shiftCivilDay(day, -1) >= loaded.firstGoalDay

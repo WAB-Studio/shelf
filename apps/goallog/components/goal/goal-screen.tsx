@@ -41,6 +41,7 @@ import {
   Page,
   Panel,
   Progress,
+  Timeline,
   Row,
   ScreenHeader,
   Section,
@@ -49,6 +50,9 @@ import {
   Text,
   TextLink,
 } from "@/components/ui";
+
+import { timeline } from "@/lib/goals/timeline";
+import { sentenceCase } from "@/lib/day/day-words";
 
 import { CommitmentList, countWord } from "./commitment-list";
 import { horizonWeeks, weekIndex } from "./phase-weeks";
@@ -490,6 +494,8 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
   const measureName = goal.measureUnit
     ? distinctMeasureName(goal.measureName, goal.measureUnit, [unitWord(goal.measureUnit)])
     : null;
+  // The goal's span as a track of its phases with «hoy» on it, and the month's figure against its plan.
+  const story = timeline({ openedOn, horizon: goal.horizon, today, phases: goal.phases });
   // The goal's one navy block: what it has counted so far, in the title face.
   const hero = goal.measureUnit ? (
     <Hero
@@ -502,7 +508,27 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
             : t("goal.detail.measureSinceYear", { date: civilDateLabel(openedOn), year: openedOn.slice(0, 4) }),
         fig: (chunks) => <Figure variant="meta" value={chunks} />,
       })}
-    />
+      highlight
+    >
+      {story ? (
+        <Timeline
+          line={story}
+          label={t("goal.detail.timelineAria", { from: civilDateLabel(openedOn), to: civilDateLabel(goal.horizon as string) })}
+          today={t("goal.detail.timelineToday")}
+          from={civilDateLabel(openedOn)}
+          to={civilDateLabel(goal.horizon as string)}
+        />
+      ) : null}
+      {month && planned ? (
+        <>
+          <Text as="p" variant="sentence">
+            {monthName} · <Figure value={month.reached} unit={figureUnit} variant="meta" bare />{" "}
+            {t("day.monthLine.of")} <Figure value={planned} unit={figureUnit} variant="meta" />
+          </Text>
+          <Progress percent={percent} />
+        </>
+      ) : null}
+    </Hero>
   ) : null;
   const measurePanel = (
       goal.measureUnit ? (
@@ -631,7 +657,7 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
           {goal.phases.length > 0 ? (
             <SectionLabel>
               {t("goal.detail.phasesCount", {
-                word: countWord(goal.phases.length, t, true),
+                word: sentenceCase(countWord(goal.phases.length, t, true)),
                 count: goal.phases.length,
               })}
             </SectionLabel>

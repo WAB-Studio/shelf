@@ -77,7 +77,7 @@ async function seed(db: postgres.Sql, person: Person) {
   return deviceId;
 }
 
-type Looks = { dot: string; ring: string; cell: string; own: string };
+type Looks = { dot: string; ring: string; cell: string; own: string; tile: string };
 
 // What the browser resolves a token to, on the page's current colour scheme.
 async function tokens(page: Page) {
@@ -96,23 +96,26 @@ async function tokens(page: Page) {
       quiet: resolve("color", "--pulsar-quiet"),
       raised: resolve("backgroundColor", "--pulsar-raised"),
       today: resolve("backgroundColor", "--pulsar-today"),
+      ground: resolve("backgroundColor", "--pulsar-ground"),
     };
   });
 }
 
-// The mark's own fill and stroke, and the fill of the nearest ancestor that
-// paints one: the mark's cell in the table and in the phone's list alike.
+// The mark's own fill and stroke, the 44px tile it stands in, and the fill of the nearest ancestor of that
+// tile that paints one: the day's column in the table and in the phone's list alike.
 async function looks(mark: Locator): Promise<Looks> {
   return mark.evaluate((el) => {
     const dot = getComputedStyle(el);
-    let cell = el.parentElement;
+    const tile = el.parentElement;
+    let cell = tile?.parentElement ?? null;
     while (cell) {
       const bg = getComputedStyle(cell).backgroundColor;
       if (bg !== "rgba(0, 0, 0, 0)" && bg !== "transparent") break;
       cell = cell.parentElement;
     }
     return {
-      own: el.parentElement ? getComputedStyle(el.parentElement).backgroundColor : "rgba(0, 0, 0, 0)",
+      tile: tile ? getComputedStyle(tile).backgroundColor : "rgba(0, 0, 0, 0)",
+      own: tile?.parentElement ? getComputedStyle(tile.parentElement).backgroundColor : "rgba(0, 0, 0, 0)",
       dot: dot.backgroundColor,
       ring: `${dot.boxShadow}|${dot.borderTopColor}:${dot.borderTopWidth}`,
       cell: cell ? getComputedStyle(cell).backgroundColor : "rgba(0, 0, 0, 0)",
@@ -158,6 +161,10 @@ for (const scheme of ["light", "dark"] as const) {
 
         // The defect: the mark and the column shared one fill and the mark vanished.
         expect(seen.dot).not.toBe(seen.cell);
+        // The mark stands in its own 44px tile, the ground's colour, distinct from the column's fill.
+        // On the phone the fold's own column fill shows through; the table's tile is the ground.
+        expect(seen.tile).toBe(width >= 1024 ? token.ground : "rgba(0, 0, 0, 0)");
+        expect(seen.dot).not.toBe(seen.tile);
         // Today stays a fill the column draws, never removed to escape the clash.
         expect(alpha(seen.cell)).toBeGreaterThan(0);
         // The desktop column is tinted, the phone's fold raises; each scheme its own token.

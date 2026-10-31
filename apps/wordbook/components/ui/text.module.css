@@ -86,3 +86,11 @@
   font-size: 14px;
   font-style: italic;
 }
+
+/* The entry's main translation: Fraunces 30px, the line the reader came for. */
+.lead.lead {
+  font-size: 30px;
+  font-weight: 600;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+}

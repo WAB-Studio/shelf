@@ -6,3 +6,11 @@
   color: var(--rl-muted);
   text-decoration-color: var(--rl-muted);
 }
+
+.ink.ink {
+  color: var(--rl-ink);
+}
+
+.ink.ink:hover {
+  color: var(--rl-accent);
+}

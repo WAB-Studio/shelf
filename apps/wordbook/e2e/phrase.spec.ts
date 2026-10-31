@@ -136,8 +136,17 @@ test("the sentence path debounces, dedupes, and never raises the word UI", async
   // its own — it is a distinct phrase, so RNL-05's cache owes it nothing.
   await searchBox.fill("");
   await searchBox.fill("I left");
-  await page.clock.runFor(PHRASE_DEBOUNCE_MS + 300);
-  await expect.poll(translated.count, "a fresh two-token phrase reaches the translator on its own").toBe(2);
+  // The dictionary worker answers `has` after the fill returns, and only then is the debounce armed on the
+  // frozen clock: a single `runFor` ahead of that reply runs no timer. Step the clock until it is asked.
+  await expect
+    .poll(
+      async () => {
+        await page.clock.runFor(PHRASE_DEBOUNCE_MS + 300);
+        return translated.count();
+      },
+      { message: "a fresh two-token phrase reaches the translator on its own" },
+    )
+    .toBe(2);
   await expect(page.getByText("Me fui de mi casa ayer")).toBeVisible();
 
   // "give up" is a headword in its own right (RL-03): answered as a word,

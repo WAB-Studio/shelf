@@ -25,10 +25,10 @@
   padding: 0 16px;
 }
 
-/* A choice among a few, set in mono (`HoySueltaDia.dc.html`): a pill 40px tall
+/* A choice among a few, set in mono (`HoySueltaDia.dc.html`): a pill 44px tall
    with a full radius. */
 .choice {
-  min-block-size: 40px;
+  min-block-size: 44px;
   padding: 0 14px;
   border-radius: 20px;
   border-width: 1.5px;
@@ -39,13 +39,13 @@
 }
 
 /* One of seven in a row. At 360px the page leaves a 320px column, so seven of
-   these take 280 and the row that holds them has 40px to spend on gaps. Never
-   shrinks below its floor — a row with a wider gap overflows visibly rather
-   than handing back a 38px target. */
+   these take 280 and the row that holds them has 40px to spend on gaps; the
+   target is 44px tall and from 40px wide, 47 and more from 390. Never shrinks
+   below its floor — a row with a wider gap overflows visibly. */
 .day {
   flex: 1 0 40px;
   min-inline-size: 40px;
-  block-size: 40px;
+  block-size: 44px;
   padding: 0;
 }
 

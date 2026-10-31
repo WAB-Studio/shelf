@@ -166,7 +166,7 @@ test("a quantity row on a past day asks for that day and writes its number there
 
     expect(await factsFor(db, commitmentId)).toEqual([{ day, quantity: 10 }]);
     await expect(page.locator("button", { hasText: name })).toContainText(
-      new RegExp(`10 min · \\d{2}:\\d{2} · lo dijiste tú · ${writtenLabel(todayInZone())}`),
+      new RegExp(`10 min · ${writtenLabel(todayInZone())}`),
     );
   } finally {
     await deleteGoal(db, personId, goalId);
@@ -375,7 +375,7 @@ test("a past day draws the half mark, «ese día pedía» and the count with «e
   try {
     await page.goto(`/dia/${pastDay(2)}`);
     const row = page.getByRole("button", { name: new RegExp(`^${name}`) });
-    await expect(row).toContainText(/2 de 3 min · \d\d:\d\d · lo dijiste tú/);
+    await expect(row).toContainText(/2 de 3 min/);
     await expect(row.locator("[data-state]")).toHaveAttribute("data-state", "partial");
     await expect(page.getByText(/^hechos \d+ de \d+ · 1 en parte$/)).toBeVisible();
     await expect(page.getByText(/Meta día pasado \d+ · ese día pedía uno/)).toBeVisible();
@@ -419,7 +419,7 @@ for (const width of [360, 390, 1280, 1440]) {
       await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
       const date = civilDateToDate(pastDay(1));
       const weekday = new Intl.DateTimeFormat("es", { weekday: "long", timeZone: "UTC" }).format(date);
-      await expect(page.getByRole("heading", { level: 1 })).toContainText(`${weekday} ${date.getUTCDate()}`);
+      await expect(page.getByRole("heading", { level: 1 })).toContainText(`${weekday.charAt(0).toUpperCase()}${weekday.slice(1)} ${date.getUTCDate()}`);
 
       if (width >= 1024) {
         const boxes = async () => {

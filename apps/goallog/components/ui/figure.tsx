@@ -26,6 +26,17 @@ export function useTimeWords(): TimeWords {
   };
 }
 
+// A mono point takes a full cell: «500.000» reads «500 . 000». The thousands
+// point is cut out of the run and drawn narrow.
+function Grouped({ text }: { text: string }) {
+  return text.split(/(?<=\d)\.(?=\d{3}(?!\d))/).map((piece, index) => (
+    <Fragment key={index}>
+      {index > 0 ? <span className={styles.point}>.</span> : null}
+      {piece}
+    </Fragment>
+  ));
+}
+
 // Each figure in mono, each word after it in the caller's quiet class. The
 // spaces are flex-collapsed where the parent is a flex box and keep the
 // text reading «12 h 30 min» wherever it is copied or read aloud.
@@ -55,7 +66,7 @@ export function Figure({
 }: {
   value: ReactNode;
   unit?: string;
-  variant?: "measure" | "meta";
+  variant?: "measure" | "meta" | "big";
   bare?: boolean;
   // Lets a word unit drop under its figure when the line runs out («de 60 /
   // búsquedas»): the figure flows as text, so a no-break space before it keeps
@@ -65,13 +76,21 @@ export function Figure({
   breakValue?: boolean;
 }) {
   const words = useTimeWords();
-  const size = variant === "meta" ? styles.meta : styles.measure;
+  const size = variant === "meta" ? styles.meta : variant === "big" ? styles.big : styles.measure;
   const formatted = formatFigureValue(value, unit, words);
   const wordUnit = unit && !bare && !isTimeFigure(formatted) ? unit : null;
   const breaks = Boolean(breakUnit && wordUnit);
+  // Money reads in the body face with tabular numerals: a mono point takes a whole cell and opens «500 . 000».
+  const money = unit !== undefined && /^[A-Z]{3}$/.test(unit);
   return (
-    <span data-part="figure" className={`${styles.figure} ${size} ${wordUnit ? styles.worded : ""} ${breaks ? styles.breaks : ""} ${breakValue ? styles.breaksValue : ""}`}>
-      {isTimeFigure(formatted) ? <TimeParts time={formatted} unitClass={styles.unit} unitPart="figure-unit" /> : formatted}
+    <span data-part="figure" className={`${styles.figure} ${size} ${wordUnit ? styles.worded : ""} ${breaks ? styles.breaks : ""} ${breakValue ? styles.breaksValue : ""} ${money ? styles.money : ""}`}>
+      {isTimeFigure(formatted) ? (
+        <TimeParts time={formatted} unitClass={styles.unit} unitPart="figure-unit" />
+      ) : typeof formatted === "string" && !money ? (
+        <Grouped text={formatted} />
+      ) : (
+        formatted
+      )}
       {/* A no-break space for copy and a screen reader to hear «20 páginas»; it draws no width, the spacer's padding does. */}
       {wordUnit ? <span className={styles.space}>{breaks ? " " : "\u00a0"}</span> : null}
       {wordUnit ? (

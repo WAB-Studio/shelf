@@ -57,8 +57,6 @@ export type DayRowProps = {
   // than the one drawn: the day it counts for and the day it was written are
   // never read as one (RP-06).
   writtenLabel?: string;
-  // «07:40»: the hour a done commitment was written.
-  writtenTime?: string;
   // A flexible commitment already met in its period, asking nothing today:
   // drawn muted, tappable all the same. `periodDone` says how far it went.
   quiet?: boolean;
@@ -93,7 +91,6 @@ export function DayRow({
   day,
   drawnToday,
   writtenLabel,
-  writtenTime,
   quiet,
 }: DayRowProps) {
   const t = useTranslations();
@@ -137,7 +134,6 @@ export function DayRow({
     amount,
     evidence: evidence ? { ...evidence, noted: evidence.got === null && evidence.source ? t("day.row.notedBy", { source: evidence.source }) : null } : undefined,
     status: metWords ?? progress,
-    writtenTime,
     writtenLabel,
     partial:
       kind === "quantity" && loggedQuantity != null && factId !== undefined && target != null && unit != null
@@ -188,6 +184,8 @@ export function DayRow({
         meta={metaNodes}
         metaVariant="sentence"
         onClick={handleTap}
+        // A tap row is a toggle: its mark is drawn, never read, so done is said here instead of in a phrase.
+        aria-pressed={kind === "tap" && tappable ? markState === "declared" : undefined}
         still={!tappable}
         disabled={pending}
       />

@@ -72,14 +72,18 @@ test("Hoy says «lo dijiste tú» on a marked row and nothing more on an unmarke
     await expect(page.locator("main")).toHaveCount(1);
     await expect(page.getByText("Marcada", { exact: true })).toBeVisible();
 
-    await expect(page.getByText("todos los días · 07:40 · lo dijiste tú", { exact: true })).toBeVisible();
-    await expect(page.getByText("todos los días · 10 min · 07:40 · lo dijiste tú", { exact: true })).toBeVisible();
+    // A marked row says no hour and no «lo dijiste tú» (decided 2026-10-31); a tap row says it is done as a pressed toggle.
+    await expect(page.getByText("todos los días", { exact: true })).toHaveCount(2);
+    await expect(page.getByRole("button", { name: /^Marcada/ })).toHaveAttribute("aria-pressed", "true");
+    await expect(page.getByRole("button", { name: /^Sin marcar/ })).toHaveAttribute("aria-pressed", "false");
+    await expect(page.getByText("todos los días · 10 min", { exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: /^Sin número/ }).getByText("3 min", { exact: true })).toBeVisible();
     // Logged under its target: what it holds, never a second ask.
-    await expect(page.getByText("todos los días · 1 de 3 min · 09:22 · lo dijiste tú", { exact: true })).toBeVisible();
+    await expect(page.getByText("todos los días · 1 de 3 min", { exact: true })).toBeVisible();
     // No row says «pide el número» any more (`HoyDia`).
     await expect(page.getByText("pide el número")).toHaveCount(0);
-    await expect(page.getByText("lo dijiste tú")).toHaveCount(3);
+    await expect(page.getByText("lo dijiste tú")).toHaveCount(0);
+    await expect(page.getByText(/\d\d:\d\d/)).toHaveCount(0);
     // A flexible row met earlier in its period stays quiet.
     const metPhrase = period === "week" ? "cumplida esta semana · 1 de 1" : "cumplida este mes · 1 de 1";
     await expect(page.getByText(metPhrase, { exact: true })).toHaveCount(met ? 1 : 0);
