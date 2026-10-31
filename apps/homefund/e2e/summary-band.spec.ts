@@ -140,7 +140,7 @@ test.describe("dashboard band with a gap", () => {
 });
 
 test.describe("reports cards", () => {
-  test("at 1280 the cards sit on the panel background with a 16 px radius", async ({
+  test("at 1280 the cards sit on the panel background with a 20 px radius", async ({
     page,
   }, testInfo) => {
     test.skip(testInfo.project.name !== "desktop", "the laptop's cards");
@@ -158,7 +158,7 @@ test.describe("reports cards", () => {
     const panel = await resolved(page, "background-color", "var(--color-panel-solid)");
     for (const cardLocator of [trend, lower]) {
       expect(await computed(cardLocator, "background-color")).toBe(panel);
-      expect(await computed(cardLocator, "border-top-left-radius")).toBe("16px");
+      expect(await computed(cardLocator, "border-top-left-radius")).toBe("20px");
     }
 
     expect(await computed(lower.locator(".."), "display")).toBe("grid");
