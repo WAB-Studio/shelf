@@ -1,13 +1,13 @@
 import { getTranslations } from "next-intl/server";
 
 import { BarRows } from "@/components/screens/app-rows";
-import { Between, Card, Cards, Figure, Hero, Stack, Text, TextLink, Title } from "@/components/ui";
+import { Between, Card, Cards, Figure, Hero, Split, Stack, Text, TextLink, Title } from "@/components/ui";
 import { appsBetween, dayTotals, uploadSpan } from "@/lib/queries";
 import { sum } from "@/lib/totals";
 import { calendarWords } from "@/lib/words";
 import { addDays, civilDay } from "@/lib/zone";
 
-// One day (RT-04, RT-11): the total in the brand block, the top app and the gap to the day before, then the apps.
+// One day (RT-04, RT-11): the total in the brand block, the top app and, on a past day, the gap to the day before, then the apps.
 // «Hoy» is this screen for today; any past day opens on `/dia/AAAA-MM-DD`.
 export async function DayView({ day }: { day: string }) {
   const today = civilDay();
@@ -15,7 +15,8 @@ export async function DayView({ day }: { day: string }) {
   const before = addDays(day, -1);
   const [raw, previous, span, words, t] = await Promise.all([
     appsBetween(day, day),
-    dayTotals(before, before),
+    // Only a whole day compares: uploads carry day totals, so today so far has no like-for-like yesterday.
+    isToday ? Promise.resolve([]) : dayTotals(before, before),
     uploadSpan(),
     calendarWords(),
     getTranslations("time.today"),
@@ -38,47 +39,56 @@ export async function DayView({ day }: { day: string }) {
           {hasNext ? <TextLink href={hrefOf(addDays(day, 1))}>{t("next")} ›</TextLink> : null}
         </Between>
       ) : null}
-      <Hero>
-        <Stack gap={3}>
-          <Title small>{date}</Title>
-          {top !== undefined ? (
-            <>
-              <Stack gap={2}>
-                <Text variant="meta">{t(isToday ? "total" : "totalPast")}</Text>
-                <Figure parts={words.durationParts(total)} mark />
-                {isToday && span.lastReceived !== null ? <Text variant="meta">{t("updated", { ago: words.ago(span.lastReceived) })}</Text> : null}
-              </Stack>
-              <Cards>
-                <Card label={t("topApp")}>
-                  <Text truncate>{top.app}</Text>
-                  <Text mono>{words.duration(top.seconds)}</Text>
-                </Card>
-                {previousTotal > 0 ? (
-                  <Card label={t("versus")}>
-                    <Text mono>
-                      {delta === 0 ? t("versusSame") : t(delta > 0 ? "versusMore" : "versusLess", { duration: words.duration(Math.abs(delta)) })}
-                    </Text>
-                  </Card>
-                ) : null}
-              </Cards>
-            </>
-          ) : (
-            <Text as="p">
-              {span.lastReceived === null ? t("never") : `${t(isToday ? "empty" : "emptyPast")} · ${t("lastUpload", { when: words.moment(span.lastReceived) })}`}
-            </Text>
-          )}
-        </Stack>
-      </Hero>
-      {top === undefined && span.lastReceived === null ? <TextLink button href="/llaves">{t("connect")}</TextLink> : null}
-      <BarRows
-        rows={apps.map((one) => ({
-          key: one.app,
-          name: one.app,
-          figure: words.duration(one.seconds),
-          seconds: one.seconds,
-          label: t("bar", { app: one.app, duration: words.duration(one.seconds) }),
-        }))}
-      />
+      <Split
+        aside={
+          <Stack gap={3}>
+          <Hero>
+            <Stack gap={3}>
+              <Title small>{date}</Title>
+              {top !== undefined ? (
+                <>
+                  <Stack gap={2}>
+                    <Text variant="meta">{t(isToday ? "total" : "totalPast")}</Text>
+                    <Figure parts={words.durationParts(total)} mark />
+                    {isToday && span.lastReceived !== null ? <Text variant="meta">{t("updated", { ago: words.ago(span.lastReceived) })}</Text> : null}
+                  </Stack>
+                  <Cards>
+                    <Card label={t("topApp")}>
+                      <Text truncate>{top.app}</Text>
+                      <Text mono>{words.duration(top.seconds)}</Text>
+                    </Card>
+                    {!isToday && previousTotal > 0 ? (
+                      <Card label={t("versus")}>
+                        <Text mono>
+                          {delta === 0 ? t("versusSame") : t(delta > 0 ? "versusMore" : "versusLess", { duration: words.duration(Math.abs(delta)) })}
+                        </Text>
+                      </Card>
+                    ) : null}
+                  </Cards>
+                </>
+              ) : (
+                <Stack gap={2}>
+                  <Text as="p">{span.lastReceived === null ? t("never") : t(isToday ? "empty" : "emptyPast")}</Text>
+                  {span.lastReceived === null ? null : <Text as="p" variant="meta">{t(isToday ? "emptyWhy" : "emptyPastWhy")}</Text>}
+                  {span.lastReceived === null ? null : <Text as="p" variant="meta">{t("lastUpload", { when: words.moment(span.lastReceived) })}</Text>}
+                </Stack>
+              )}
+            </Stack>
+          </Hero>
+            {top === undefined && span.lastReceived === null ? <TextLink button href="/llaves">{t("connect")}</TextLink> : null}
+          </Stack>
+        }
+      >
+        <BarRows
+          rows={apps.map((one) => ({
+            key: one.app,
+            name: one.app,
+            figure: words.duration(one.seconds),
+            seconds: one.seconds,
+            label: t("bar", { app: one.app, duration: words.duration(one.seconds) }),
+          }))}
+        />
+      </Split>
     </Stack>
   );
 }

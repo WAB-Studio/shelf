@@ -93,7 +93,7 @@ export function KeysPanel({ keys, siteUrl }: { keys: KeyLine[]; siteUrl: string 
                   </Button>
                 </Confirm>
               ) : (
-                <Button type="button" quiet aria-label={t("revokeLabel", { name: key.name })} onClick={() => setConfirming(key.id)}>
+                <Button type="button" quietDanger aria-label={t("revokeLabel", { name: key.name })} onClick={() => setConfirming(key.id)}>
                   {t("revoke")}
                 </Button>
               )}
@@ -108,11 +108,16 @@ export function KeysPanel({ keys, siteUrl }: { keys: KeyLine[]; siteUrl: string 
 // One block and the button that copies exactly it.
 function CopyBlock({ label, action, value }: { label: string; action: string; value: string }) {
   const t = useTranslations("time.keys");
-  const [copied, setCopied] = useState(false);
+  const [copied, setCopied] = useState<boolean | "failed">(false);
 
+  // The clipboard refuses outside a secure page or when the browser denies it.
   async function copy() {
-    await navigator.clipboard.writeText(value);
-    setCopied(true);
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopied(true);
+    } catch {
+      setCopied("failed");
+    }
   }
 
   return (
@@ -120,10 +125,11 @@ function CopyBlock({ label, action, value }: { label: string; action: string; va
       <Between>
         <Text variant="meta">{label}</Text>
         <Button type="button" quiet onClick={copy} aria-label={action}>
-          {copied ? t("copied") : t("copy")}
+          {copied === true ? t("copied") : t("copy")}
         </Button>
       </Between>
       <Code>{value}</Code>
+      {copied === "failed" ? <Text as="p">{t("copyFailed")}</Text> : null}
     </CodeBlock>
   );
 }

@@ -48,8 +48,8 @@ tabular figures. It replaces the sand tokens above. Why: a computer's time is re
 screen, so graphite with electric cyan (instrument panel) and Space Grotesk, a technical
 grotesque, instead of warm sand and generic Inter titles. Dark stays the primary face.
 
-- Accent: cyan, on the bars, links and primary buttons. Highlight: signal red, only behind the day
-  total on «Hoy», never as text. Brand block: «Hoy» title and total in a graphite block with
+- Accent: cyan, on the bars, links and primary buttons. Highlight: the same cyan, tinted, behind the
+  day total (see round 2 below). Red is for danger alone. Brand block: «Hoy» title and total in a graphite block with
   radius 20, graphite in both faces.
 - Primary buttons are pills. Titles are 36/44 bold, tracking -0.02em. Durations stay mono, tabular.
 
@@ -65,10 +65,31 @@ grotesque, instead of warm sand and generic Inter titles. Dark stays the primary
 | `--tl-block-muted` | `#b4c0ce` | `#b4c0ce` | on block | 7.65 / 10.25 |
 | `--tl-raised-on-block` | `#2f3b49` | `#1f2630` | text on card / muted on card | 10.49 and 6.17 / 14.03 and 8.25 |
 | `--tl-bar-on-block` | `#22d3ee` | `#22d3ee` | on block / on card | 7.82 and 6.31 / 10.47 and 8.43 |
-| `--tl-mark` / `--tl-mark-ink` | `#ff4d42` / `#0e1115` | same | ink on mark | 5.76 |
+| `--tl-mark` / `--tl-mark-edge` | `#234754` / `#22d3ee` | `#113038` / `#22d3ee` | block text on the tint / edge on the tint | 9.21 and 5.53 / 12.86 and 7.73 |
+| `--tl-danger` / `--tl-danger-ink` | `#ff4d42` / `#0e1115` | same | ink on the solid red («Sí, revocar») | 5.76 |
+| `--tl-danger-text` | `#ff4d42` | `#b3261e` | «Revocar» as text on ground / on raised | 5.88 and 5.32 / 6.14 and 5.55 |
 
 Revised 2026-10-30 after the critic: the «Hoy» block is built around the day total (64/72 mono, signal
 red behind it, the date a 14 line, two cards: the top app and the gap to yesterday); «Semana» has a
 block with the week total and seven vertical day columns (a day not reached is dashed and dimmed), the
 top three apps large and the rest compact; every screen shares a header (logo mark, «TimeLog», sections
 as pills); app names read without «.exe», system hosts grouped as «Sistema».
+
+## Round 2 (2026-10-30)
+
+The second critique, from the screens at 820, 1440 and 1920:
+
+- **Width.** «Hoy», a day and «Semana» open the page to 1200 (`Page wide`). From 1100 a grid
+  `minmax(340px, 400px) 1fr`: the brand block sticky on the left (top 24), the bar rows on the right.
+  From 720 to 1099 the block sits on top at full width and the rows run in two columns. Below 720
+  one column as before. «Llaves» stays one 720 column.
+- **The total is not an alarm.** It sat on solid signal red, the colour of «Sí, revocar». It is now cyan at
+  16% over the block with a 1px cyan border (`--tl-mark`, `--tl-mark-edge`); red is kept for danger. «Revocar»
+  is red text with no fill; «Sí, revocar» is the solid red.
+- **Week figures** are 14 and carry their unit («12 h», «45 min»), never «12:59», which reads as a clock;
+  the exact time stays in the bar's label. The largest unit alone, floored.
+- **«Frente al día anterior»** shows on past days only: an upload carries a day's total, so today so
+  far cannot be set against yesterday up to the same hour.
+- **Brand on every surface**: `icon.svg`, `icon` (PNG), `favicon.ico`, `apple-icon`, `opengraph-image`, the
+  three cyan bars on graphite. Each page titles itself («Hoy», «Martes 27 oct», «Del 26 oct al 1 nov», «Llaves»).
+- **Words**: «Entrar» says access is by invitation; an empty day says why it reads 0 and what to do.
