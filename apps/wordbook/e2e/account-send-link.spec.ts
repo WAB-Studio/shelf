@@ -11,7 +11,10 @@ import messages from "../messages/es.json";
 // would spend the address's real send quota (RL-22's own action already
 // logs and classifies the real thing; this proves what the reader sees for
 // each of the three outcomes `SignedOutForm` can render).
-async function mockSendSignInLinkResult(page: Page, result: { ok: true } | { ok: false; error: string }): Promise<void> {
+async function mockSendSignInLinkResult(
+  page: Page,
+  result: { ok: true; maybe?: true } | { ok: false; error: string },
+): Promise<void> {
   await page.route("**/cuenta", async (route) => {
     const request = route.request();
     if (request.method() !== "POST") {
@@ -204,6 +207,16 @@ test("a request that never settles still gives up, on the clock rather than the 
 
   await expect(page.getByText(messages.account.errors.offline, { exact: true })).toBeVisible({ timeout: 15_000 });
   console.log(`account-send-link never-settles: failure line after ${Date.now() - tappedAt}ms`);
+});
+
+test("RL-67: Auth timing out opens the code step with the may-have-left line, never the failure", async ({ page }) => {
+  await mockSendSignInLinkResult(page, { ok: true, maybe: true });
+  const email = "reader@example.com";
+  await submit(page, email);
+
+  await expect(page.getByText(messages.account.maybeSent.replace("{email}", email))).toBeVisible();
+  await expect(page.getByText(messages.account.sent.replace("{email}", email))).toHaveCount(0);
+  await expect(page.getByText(messages.account.errors.sendFailed, { exact: true })).toHaveCount(0);
 });
 
 test("on a real connection the happy path is unchanged: no wait for the offline clock", async ({ page }) => {

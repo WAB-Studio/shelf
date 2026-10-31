@@ -18,7 +18,7 @@ import { withUserDb } from "@/db/session";
 import { BASE_CURRENCY, type CurrencyCode } from "@/lib/currency";
 import { pgErrorCode } from "@/lib/db-error";
 import { ActionError } from "@/lib/errors";
-import { counterpartyPatternKey } from "@/lib/ingest/counterparty-pattern";
+import { learnedPattern } from "@/lib/ingest/counterparty-pattern";
 import { parseAmount } from "@/lib/money";
 import { authActionClient } from "@/lib/safe-action";
 import {
@@ -29,11 +29,6 @@ import {
   refineSettlement,
   updateTransactionSchema,
 } from "@/lib/validation/transaction";
-
-// `ingest_counterparties.pattern_key`/`pattern_label` both cap at 120 (migration
-// 0041); a movement's own description can run to 200, so the span is capped
-// here rather than let a long note refuse the very completion that produced it.
-const PATTERN_FIELD_MAX = 120;
 
 type SplitInput = { categoryId: string; amount: string };
 
@@ -172,6 +167,7 @@ export const createTransactionAction = authActionClient
         currency: parsedInput.currency ?? null,
         ...counter,
         amountFromWords: parsedInput.amountFromWords ?? false,
+        forHousehold: parsedInput.forHousehold ?? false,
         occurredAt: parsedInput.occurredAt,
         description: parsedInput.description,
         externalRef: parsedInput.externalRef ?? null,
@@ -211,6 +207,7 @@ export const updateTransactionAction = authActionClient
         amountCents: toMinor(parsedInput.amount),
         currency: parsedInput.currency ?? null,
         ...counter,
+        forHousehold: parsedInput.forHousehold,
         occurredAt: parsedInput.occurredAt,
         description: parsedInput.description,
         splits: toSplitMinor(parsedInput.splits),
@@ -290,8 +287,7 @@ export const completeCounterpartyAction = authActionClient
       }
 
       const description = row.description?.trim() ?? "";
-      const patternKey = counterpartyPatternKey(description).slice(0, PATTERN_FIELD_MAX);
-      const patternLabel = description.slice(0, PATTERN_FIELD_MAX);
+      const { key: patternKey, label: patternLabel } = learnedPattern(description);
 
       // A movement with no description carries no span to learn from: the
       // completion still lands, only nothing teaches `ingest_counterparties`,

@@ -24,6 +24,8 @@ export { Page } from "./page";
 
 export { BottomNav } from "./bottom-nav";
 
+export { ThemeChoice } from "./theme-choice";
+
 export { TapTarget } from "./tap-target";
 
 export { Button, IconButton } from "./button";

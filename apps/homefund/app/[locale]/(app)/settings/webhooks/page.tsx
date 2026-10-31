@@ -47,6 +47,7 @@ export default async function WebhooksPage(
         credentials={credentials}
         options={options}
         ingestUrl={ingestUrl}
+        mcpUrl={new URL("/mcp", env.NEXT_PUBLIC_SITE_URL).toString()}
       />
     </Page>
   );

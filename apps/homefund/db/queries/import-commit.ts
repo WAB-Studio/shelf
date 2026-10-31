@@ -20,6 +20,8 @@ import {
 import type { Transaction } from "@/db/session";
 import { BASE_CURRENCY } from "@/lib/currency";
 import { insertRow } from "@/db/insert-row";
+import { jsonbParam } from "@/db/jsonb-param";
+import { householdMark } from "@/db/queries/transactions";
 import { pgConstraintName, pgErrorCode } from "@/lib/db-error";
 import { ActionError } from "@/lib/errors";
 import { parseAmount } from "@/lib/money";
@@ -267,12 +269,6 @@ function chunked<T>(rows: T[]): T[][] {
   const out: T[][] = [];
   for (let start = 0; start < rows.length; start += CHUNK_SIZE) out.push(rows.slice(start, start + CHUNK_SIZE));
   return out;
-}
-
-// A set of records as ONE jsonb parameter for `jsonb_to_recordset` / `jsonb_array_elements_text`:
-// Drizzle expands a JS array into a parenthesised list, never an array (docs/TRAPS.md).
-function jsonbParam(value: unknown): SQL {
-  return sql`${JSON.stringify(value)}::jsonb`;
 }
 
 /**
@@ -788,6 +784,7 @@ type ResolvedTransaction = {
   currency: string | null;
   counterAmountCents: number | null;
   counterIsEstimate: boolean;
+  forHousehold: boolean;
   splits: { categoryId: string; amountCents: number }[];
 };
 
@@ -823,6 +820,7 @@ function resolveTransaction(
     currency: object.currency ?? null,
     counterAmountCents,
     counterIsEstimate: object.counterIsEstimate ?? false,
+    forHousehold: object.forHousehold ?? false,
     splits,
   };
 }
@@ -905,6 +903,7 @@ async function updateTransactionsBatch(
     currency: item.currency,
     counter_amount_cents: item.counterAmountCents,
     counter_is_estimate: item.counterIsEstimate,
+    for_household: item.forHousehold,
     occurred_at: item.row.object.occurredAt,
     description: item.row.object.description,
   }));
@@ -918,11 +917,12 @@ async function updateTransactionsBatch(
       currency = coalesce(r.currency, t.currency),
       counter_amount_cents = case when r.currency is null then t.counter_amount_cents else r.counter_amount_cents end,
       counter_is_estimate = case when r.currency is null then t.counter_is_estimate else r.counter_is_estimate end,
+      for_household = ${householdMark(sql`r.from_account_id`, sql`r.to_account_id`, sql`r.for_household`)},
       occurred_at = r.occurred_at, description = r.description,
       reviewed_at = case when t.recurring_rule_id is not null and t.reviewed_at is null then now() else t.reviewed_at end
     from jsonb_to_recordset(${jsonbParam(records)}) as r(
       external_ref text, from_account_id uuid, to_account_id uuid, amount_cents bigint, currency text,
-      counter_amount_cents bigint, counter_is_estimate boolean, occurred_at date, description text)
+      counter_amount_cents bigint, counter_is_estimate boolean, for_household boolean, occurred_at date, description text)
     where t.external_ref = r.external_ref and ${inScope(scope)}
     returning t.id, t.external_ref`)) as unknown as { id: string; external_ref: string }[];
   if (updated.length === 0) return;
@@ -978,6 +978,9 @@ async function commitNewTransactions(
 // One multi-row insert for the movements, one for every split any of them carries —
 // two round trips per chunk instead of two per row. RETURNING rides in VALUES order,
 // same assumption `insertChunked` already leans on for every other entity.
+const householdSql = (item: ResolvedTransaction) =>
+  householdMark(sql`${item.fromAccountId}::uuid`, sql`${item.toAccountId}::uuid`, sql`${item.forHousehold}`);
+
 async function insertNewTransactionsBatch(
   tx: Transaction,
   chunk: ResolvedTransaction[],
@@ -986,7 +989,7 @@ async function insertNewTransactionsBatch(
     chunk.map(
       (item) =>
         sql`(${item.fromAccountId}, ${item.toAccountId}, ${item.amountCents}, ${item.currency},
-          ${item.counterAmountCents}, ${item.counterIsEstimate},
+          ${item.counterAmountCents}, ${item.counterIsEstimate}, ${householdSql(item)},
           ${item.row.object.occurredAt}, ${item.row.object.description}, ${item.row.externalRef})`,
     ),
     sql`, `,
@@ -994,7 +997,7 @@ async function insertNewTransactionsBatch(
   const inserted = (await tx.execute(
     sql`insert into ${transactions}
       (from_account_id, to_account_id, amount_cents, currency, counter_amount_cents, counter_is_estimate,
-        occurred_at, description, external_ref)
+        for_household, occurred_at, description, external_ref)
       values ${rowValues}
       returning id`,
   )) as unknown as { id: string }[];
@@ -1025,9 +1028,9 @@ async function insertNewTransactionsSerially(
       const [inserted] = (await tx.execute(
         sql`insert into ${transactions}
           (from_account_id, to_account_id, amount_cents, currency, counter_amount_cents, counter_is_estimate,
-            occurred_at, description, external_ref)
+            for_household, occurred_at, description, external_ref)
           values (${item.fromAccountId}, ${item.toAccountId}, ${item.amountCents}, ${item.currency},
-            ${item.counterAmountCents}, ${item.counterIsEstimate}, ${item.row.object.occurredAt}, ${item.row.object.description}, ${item.row.externalRef})
+            ${item.counterAmountCents}, ${item.counterIsEstimate}, ${householdSql(item)}, ${item.row.object.occurredAt}, ${item.row.object.description}, ${item.row.externalRef})
           returning id`,
       )) as unknown as { id: string }[];
       await writeSplits(tx, inserted.id, item.splits);

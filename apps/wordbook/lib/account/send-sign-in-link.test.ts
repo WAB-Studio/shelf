@@ -185,10 +185,10 @@ test("Auth answering 500 releases the claimed keys and the result stays sendFail
   assert.deepEqual(released, [CLAIMED_KEYS]);
 });
 
-test("a timeout from Auth keeps the allowance: Auth may have sent the mail", async () => {
+test("RL-67: a timeout from Auth keeps the allowance and opens the code step, the mail maybe sent", async () => {
   otpError = new AuthRetryableFetchError("fetch failed", 0) as unknown as { status: number };
   const result = await (await getAction()).sendSignInLink("reader@live.test");
-  assert.deepEqual(result, { ok: false, error: "sendFailed" });
+  assert.deepEqual(result, { ok: true, maybe: true });
   assert.deepEqual(released, []);
 });
 

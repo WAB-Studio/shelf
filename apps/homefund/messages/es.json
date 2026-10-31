@@ -611,7 +611,10 @@
     "chipFrom": "Desde {date}",
     "chipTo": "Hasta {date}",
     "kindAdjustment": "Descuadre",
-    "adjustmentFix": "Se corrige cuadrando la cuenta de nuevo."
+    "adjustmentFix": "Se corrige cuadrando la cuenta de nuevo.",
+    "forHousehold": "Del hogar",
+    "forHouseholdHint": "Un gasto del hogar pagado con tu cuenta: cuenta como tu aporte al fondo.",
+    "forHouseholdCounts": "Cuenta como aporte de quien lo pagó"
   },
   "cash": {
     "withdrawAction": "Retirar efectivo",
@@ -1286,6 +1289,7 @@
       "occurredAt": "Fecha",
       "counterAmount": "Monto en la moneda de la cuenta",
       "counterIsEstimate": "Monto estimado",
+      "forHousehold": "Del hogar",
       "labels": "Etiquetas",
       "account": "Cuenta",
       "label": "Etiqueta",
@@ -1403,7 +1407,10 @@
       "amountTooLarge": "El monto es demasiado alto.",
       "directionInvalid": "El campo «direction» solo acepta «expense» o «income».",
       "scopeViolation": "Esa categoría es de otro ámbito que la cuenta. Elige una del fondo para una cuenta del fondo, o una tuya para una cuenta tuya."
-    }
+    },
+    "mcpHeading": "Conectar con Claude",
+    "mcpDescription": "Agrega HomeFund como conector MCP de tipo HTTP con esta URL y una clave para Claude en la cabecera «Authorization: Bearer». Una clave de webhook no abre esta puerta. Claude ve tus cuentas y «Revisar el mes» con tus mismos permisos; revocar la clave lo desconecta.",
+    "mcpIssue": "Crear clave para Claude"
   },
   "ingest": {
     "title": "Bandeja",
@@ -1460,6 +1467,19 @@
       "deliveryInvalid": "Elige un mensaje válido.",
       "merchantInvalid": "Elige un comercio válido.",
       "shapeInvalid": "Elige un mensaje silenciado válido."
+    },
+    "awaiting": {
+      "title": "Por completar ({count})",
+      "description": "Movimientos de los que se sabe un solo lado. Ya cuentan en los saldos; nombra la otra cuenta para completarlos.",
+      "noDescription": "Sin descripción",
+      "intoKnown": "Entró a {account} · {date}",
+      "outOfKnown": "Salió de {account} · {date}",
+      "fromLabel": "¿De qué cuenta vino?",
+      "toLabel": "¿A qué cuenta fue?",
+      "pick": "Elige una cuenta",
+      "proposed": "Sugerida: la usaste antes con esta descripción.",
+      "complete": "Completar",
+      "completed": "Movimiento completado"
     }
   },
   "review": {
@@ -1492,5 +1512,35 @@
     "back": "Volver a Reportes",
     "readerOnly": "Lo corrige quien maneja {account}.",
     "undo": "Deshacer"
+  },
+  "reminderMail": {
+    "subject": "Recordatorio: {name} vence el {due}",
+    "greeting": "Hola,",
+    "body": "Te recordamos que {name} por {amount} vence el {due}.",
+    "action": "Cuando lo pagues, regístralo en Pagos: {url}",
+    "unnamed": "un pago planeado",
+    "footer": "Te llega porque pusiste una fecha de recordatorio en HomeFund."
+  },
+  "mcp": {
+    "instructions": "HomeFund es la contabilidad de un hogar: cuentas, movimientos y un fondo compartido. Los montos van en centavos enteros, con su moneda. Lee con las herramientas; no inventes movimientos.",
+    "tools": {
+      "listAccounts": "Las cuentas abiertas que la persona puede ver: personales y del fondo, con su saldo por moneda en centavos.",
+      "reviewMonth": "«Revisar el mes»: los movimientos que destacan en un mes cerrado según reglas fijas (monto muy por encima de lo usual en su categoría, dos iguales el mismo día, monto leído de palabras, diferencia de una conciliación), con si ya se marcó «Está bien».",
+      "monthParam": "El mes, AAAA-MM. Si falta, el último mes cerrado.",
+      "previewStatement": "Paso 1 de importar un extracto bancario: dice qué haría cada línea sin escribir nada. Cada línea: «new» (se creará), «matches» (ya está registrada a mano o como el otro lado de una transferencia; solo se enlaza), «already_imported» (se omite) o «invalid» (con su motivo). «proposal» es la cuenta que la persona usó antes para esa descripción: pregúntale antes de pasarla como counterAccountId. Muestra el resumen a la persona antes del paso 2.",
+      "importStatement": "Paso 2: importa exactamente lo que mostró preview_statement, con su previewKey. Todo o nada: si una línea cambió, o lo que la vista previa dijo de ella, o queda una inválida, no escribe nada y pide previsualizar de nuevo. Repetirlo nunca duplica movimientos: lo ya importado sale como «already_imported»."
+    },
+    "errors": {
+      "unauthorized": "La clave no es válida o fue revocada.",
+      "unknown": "No se pudo completar. Inténtalo de nuevo.",
+      "openMonth": "Solo se revisa un mes cerrado: pide uno anterior al mes en curso.",
+      "statement": {
+        "notFound": "La cuenta no existe, está archivada o no la puedes ver.",
+        "readOnly": "No puedes registrar movimientos en esa cuenta.",
+        "previewChanged": "Las líneas no son las de la vista previa: vuelve a llamar preview_statement.",
+        "invalidLines": "Hay líneas inválidas: corrígelas o quítalas y vuelve a previsualizar.",
+        "lineRefused": "Una línea no se pudo registrar; no se importó nada."
+      }
+    }
   }
 }

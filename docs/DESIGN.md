@@ -103,7 +103,7 @@ RNF-08 sets the requirement. This is how it shows in the interface.
 ## Decisions of 2026-10-15 (pending list), by the user
 
 - **A dollar purchase on a peso card is exported and re-imported in dollars** in the backup (RF-50), with its currency, never converted to pesos. Not built yet.
-- **A household bill paid from a personal card can be marked «del hogar»** and counts as a contribution to the fund. It is a mark on the movement; the contributions report (RF-66) changes. New requirement. Not built yet.
+- **A household bill paid from a personal card can be marked «del hogar»** and counts as a contribution to the fund. It is a mark on the movement; the contributions report (RF-66) changes. Built 2026-10-30 (RF-139): a «Del hogar» switch on the movement form, offered on an expense from a personal account to someone with a fund; or kept visible on a movement that carries it so it can be cleared. The bill books as its account settled it, an archived member keeps their past bills, and the mark travels in the backup's «Del hogar» column.
 - **Seeded categories keep both sets, personal and fund.** Every screen that names a category shows its scope («Mercado · fondo»), and the importer resolves a category name by the scope of the account it lands in. Not built yet.
 - **Each member keeps seeing the other's personal accounts and movements** (RF-58 stays).
 - **A planned payment's reminder notifies by email** (RF-74's reminder date). It spends the free Auth email quota. Not built yet.
@@ -372,8 +372,9 @@ Board C1h corrected the same day: a card in credit reads «Según HomeFund −$ 
     contigo.» and the fund leaves the shell. The leader with other members: «No puedes salir todavía» · «Eres el líder de
     «Casa». Antes de salir, pasa el liderazgo a otro miembro desde «Miembros».» · «Entendido» (RF-59). A leader alone in
     the fund leaves like anyone. No desktop face for either.
-- **Planned payments promise no notice** (Q4 a): «Son recordatorios: aparecen aquí en su fecha, y tú registras el gasto
-  cuando lo pagas.» «te avisan» comes back with RF-141.
+- **A planned payment's reminder mails its author** (RF-141): at 7:00 Bogotá on the reminder date, one plain-text mail
+  «Recordatorio: <nombre> vence el <fecha>» with the amount and a link to «Pagos». A fund payment mails its author only
+  while they are in the fund; moving the reminder date mails again; a payment past its due date is not mailed.
 - **The five open debt cases** of the 2026-10-15 audit (Q7 a) are settled one by one in a question session before their
   module; the rest of the debt fixes do not wait.
 - **Deleting what an ingest rule learned from keeps the rule** (Q8 a), its target set to null: the next delivery proposes
@@ -391,7 +392,7 @@ Board C1h corrected the same day: a card in credit reads «Según HomeFund −$ 
 - **Region** (Q13 b): HomeFund's and WordBook's Vercel region is measured with `vercel inspect` before anything is pinned.
 - **«Revisar el mes»** (2026-10-18, the user's idea): RF-155 opened. A screen and an MCP tool list the month's anomalies
   by fixed rules; Claude does any AI review through MCP. The screen ships in oleada-7; the MCP tool `review_month`
-  lands with RF-144's server, reading the same query, and RF-155 stays open until then (O7-Q4 a, 2026-10-24).
+  lands with RF-144's server, reading the same query, and RF-155 stays open until then (O7-Q4 a, 2026-10-24). Built 2026-10-30: `review_month` on `/mcp`, closed months only.
   Shipped on oleada-7: `/reports/review` (from «Reportes» and Inicio's «Revisar <mes> · N movimientos», which counts
   movements, a twin pair as two) and quick entry's `amount_from_words`. The MCP tool still waits for RF-144.
 - **Quick entry, lowercase «m»** (critic C2 b, later the same day): a lowercase «m» is never a million; only «M» or
@@ -420,7 +421,7 @@ Board C1h corrected the same day: a card in credit reads «Según HomeFund −$ 
   «Movimientos», one row per payment: its name, «Vence el 15 dic» (or «Venció el 15 oct» in red once the due date has
   passed) and its amount; oldest due first; at most three, the link reads «Ver los 5» when there are more, else «Ver
   pagos». A row leaves when the payment is paid or archived; a payment with no reminder, or whose reminder date has not
-  come, is not shown; none, and the card does not exist. A row opens that payment in «Pagos». RF-141's email stays unbuilt.
+  come, is not shown; none, and the card does not exist. A row opens that payment in «Pagos». RF-141's email goes out the same morning.
 - **A sign-out Auth refuses leaves this device signed out** (Q30 a): the session is never restored; the login says
   «Cerraste sesión aquí, pero no pudimos cerrarla en tus otros dispositivos.»
 
@@ -493,3 +494,16 @@ Board C1h corrected the same day: a card in credit reads «Según HomeFund −$ 
   - A movement's `amount_from_words` clears when an edit changes its amount: a typed amount is the person's own.
   - Still to fix from the same critic, no decision needed: the row names the movement's description; «Corregir» comes back
     to the review; the debt detail's header reads the Q9 line as its «Saldo» tile does (Q18 left the header in pesos).
+
+## Decisions of 2026-10-30: a bank statement through Claude, by the user («dejala ya funcional»)
+
+- «Ajustes · Webhooks» has a «Conectar con Claude» card: the `/mcp` address and «Crear clave para Claude». The key opens
+  `/mcp` alone and shows once, under the same warning as a webhook token. A webhook key never opens `/mcp`.
+- Claude imports in two calls: `preview_statement` writes nothing and names each line «new», «matches», «already_imported»
+  or «invalid»; `import_statement` quotes the preview's key and writes all or nothing. The person confirms in the
+  conversation between the two.
+- «Bandeja» lists «Por completar (n)» under the deliveries: one card per movement with one side known. The card reads
+  the description, «Salió de / Entró a <cuenta> · <fecha>» and the amount; one account select («¿A qué cuenta fue?» or
+  «¿De qué cuenta vino?») and «Completar». A remembered account prefills the select with «Sugerida: la usaste antes con
+  esta descripción.»; it never completes on its own.
+

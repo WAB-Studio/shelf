@@ -115,5 +115,5 @@ export async function proxy(request: NextRequest) {
 export const config = {
   // Route handlers under `/auth` and `/api` own their cookies and must never be
   // locale-prefixed; the rest is static assets.
-  matcher: ["/((?!api|auth|_next|_vercel|.*\\..*).*)"],
+  matcher: ["/((?!api|auth|mcp|_next|_vercel|.*\\..*).*)"],
 };

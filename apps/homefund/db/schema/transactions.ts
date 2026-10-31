@@ -47,6 +47,9 @@ export const transactions = finances.table(
     // Quick entry read the amount from words («25 mil») and the person did not retype it (RF-155).
     // Set on insert only; an edit never changes it.
     amountFromWords: boolean().notNull().default(false),
+    // A household bill paid from a personal account, marked «del hogar»: it counts as its payer's
+    // contribution to the fund (RF-139). Only an expense carries it; set and cleared by the person.
+    forHousehold: boolean().notNull().default(false),
     // The type is derived, never chosen (RF-18): a stored generated column no INSERT can target.
     kind: text().generatedAlwaysAs(
       sql`case when from_account_id is null then 'income' when to_account_id is null then 'expense' else 'transfer' end`,
@@ -82,6 +85,10 @@ export const transactions = finances.table(
   (table) => [
     // The amount is always positive; direction supplies the sign (RF-20).
     check("transactions_amount_positive", sql`${table.amountCents} > 0`),
+    check(
+      "transactions_for_household_expense",
+      sql`not ${table.forHousehold} or ${table.toAccountId} is null`,
+    ),
     // At least one account, so income and expense stay one-sided and a transfer keeps both (RF-20).
     check(
       "transactions_at_least_one_account",

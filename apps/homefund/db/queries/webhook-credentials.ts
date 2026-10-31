@@ -19,8 +19,12 @@ function tokenHashOf(token: string): string {
   return createHash("sha256").update(token).digest("hex");
 }
 
+export type CredentialPurpose = "ingest" | "mcp";
+
 export type IssueWebhookCredentialArgs = {
   name: string;
+  // What the key opens (RF-144); a webhook key unless named.
+  purpose?: CredentialPurpose;
   defaultAccountId: string | null;
   defaultCategoryId: string | null;
   rateLimitPerMin?: number;
@@ -37,6 +41,7 @@ export async function issueWebhookCredential({
   defaultAccountId,
   defaultCategoryId,
   rateLimitPerMin = 60,
+  purpose = "ingest",
 }: IssueWebhookCredentialArgs): Promise<{ id: string; token: string }> {
   const token = `whk_${randomBytes(32).toString("base64url")}`;
   const tokenHash = tokenHashOf(token);
@@ -47,7 +52,7 @@ export async function issueWebhookCredential({
     const [row] = await insertRow(
       tx,
       webhookCredentials,
-      { name, tokenHash, defaultAccountId, defaultCategoryId, rateLimitPerMin },
+      { name, tokenHash, defaultAccountId, defaultCategoryId, rateLimitPerMin, purpose },
       { returning: { id: webhookCredentials.id } },
     );
 
@@ -61,6 +66,7 @@ export type WebhookCredentialRow = {
   defaultAccountId: string | null;
   defaultCategoryId: string | null;
   rateLimitPerMin: number;
+  purpose: CredentialPurpose;
   lastUsedAt: Date | null;
   revokedAt: Date | null;
   createdAt: Date;
@@ -78,6 +84,7 @@ export async function listWebhookCredentials(): Promise<WebhookCredentialRow[]> 
         defaultAccountId: webhookCredentials.defaultAccountId,
         defaultCategoryId: webhookCredentials.defaultCategoryId,
         rateLimitPerMin: webhookCredentials.rateLimitPerMin,
+        purpose: sql<CredentialPurpose>`${webhookCredentials.purpose}`,
         lastUsedAt: webhookCredentials.lastUsedAt,
         revokedAt: webhookCredentials.revokedAt,
         createdAt: webhookCredentials.createdAt,
@@ -122,6 +129,7 @@ export type ResolvedWebhookCredential = {
  */
 export async function resolveWebhookCredential(
   token: string,
+  purpose: CredentialPurpose,
 ): Promise<ResolvedWebhookCredential | null> {
   const tokenHash = tokenHashOf(token);
 
@@ -133,7 +141,7 @@ export async function resolveWebhookCredential(
     throttled: boolean;
   }>(
     sql`select id, owner_user_id, default_account_id, default_category_id, throttled
-      from private.resolve_webhook_credential(${tokenHash})`,
+      from private.resolve_webhook_credential(${tokenHash}, ${purpose})`,
   );
 
   const row = rows[0];

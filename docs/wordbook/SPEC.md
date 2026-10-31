@@ -154,9 +154,8 @@ this gets built, and no schema, table or column is "prepared for" it.
   screen never calls a link invalid on the strength of a timeout, and nothing verifies again on the
   reader's behalf: `verifyOtp` is not idempotent and a timeout says nothing about whether the token
   was spent.
-- [ ] **RL-67** — When sending a sign-in link times out, the screen says the link may have been sent, before the reader asks for another. A board is drawn before it is built. Decided by the user 2026-10-15.
-- [ ] **RL-69** — Access is by invitation only. Public sign-ups are off in Supabase Auth and the app keeps a list of allowed emails; the server refuses a sign-in link for an email not on the list before any email is sent. PKCE applies: a link only works in the browser that asked for it. Decided by the user 2026-10-15.
-  - Open, 2026-10-16: the template still sends `token_hash` and public sign-ups are still on.
+- [x] **RL-67** — When sending a sign-in link times out, the screen says the link may have been sent, before the reader asks for another. A board is drawn before it is built. Decided by the user 2026-10-15.
+- [x] **RL-69** — Access is by invitation only. Public sign-ups are off in Supabase Auth and the app keeps a list of allowed emails; the server refuses a sign-in link for an email not on the list before any email is sent. PKCE applies: a link only works in the browser that asked for it. Decided by the user 2026-10-15.
 
 - [x] **RL-07** — Autocomplete appears only while the string is being treated as a word. A sentence never raises it.
 - [x] **RL-26** — A headword's answer can be heard. The device speaks it with the voice the browser
@@ -304,13 +303,14 @@ this gets built, and no schema, table or column is "prepared for" it.
 - [x] **RL-34** — The record keeps, for every lookup, the word, its translation cut to 120
   characters and at most 3 senses, and how the answer was reached; and the reader reads it inside
   the app.
-- [ ] **RL-27** — A local server, which the reader starts on their own machine, offers the exported
+- [x] **RL-27** — A local server, which the reader starts on their own machine, offers the exported
   file to an MCP client: the most looked-up words, the most recent ones, and the full history of one
   word. It only ever reads the file; no tool modifies it. The server is not part of the deployed app.
-  - Open, 2026-10-16: `scripts/mcp/server.ts` has no test: the MCP protocol, the tools it offers and its reading of the file are undriven. Only the queries are (`scripts/mcp/aggregate.test.ts:40,67,76,85`).
+  - Driven 2026-10-30 by `scripts/mcp/server.test.ts`, over the server's own stdio: the protocol and its errors, the three tools, and the file left byte for byte as it was.
 - [x] **RL-72** *(successor of RL-65)* — The log can be exported from the app as a file the reader saves onto their device: every recorded search, with its date and the headword it reached, in a documented and versioned JSON shape, which is the complete copy. The export also offers a CSV for Anki beside it: one card per row of `/registro`, its word on the front and on the back its latest translation or, when it has none and the network answered, that answer's definition. A row with neither gives no card; after a download the export says how many words stayed out and why, and with no card to give it offers no CSV and says so. The export is deliberate: it is reached from outside the search screen and nothing triggers it on its own. Decided by the user 2026-10-16.
   - Proved 2026-10-17, CI run 38992454179 on 3cec823e: `apps/wordbook/e2e/export.spec.ts:666,673,679,687,697,704,739` (no card: no CSV and why; the definition on the back; the words left out named; the link follows a delete and a sync) and `apps/wordbook/lib/log/anki.test.ts:106,116,123,131`, green.
-- [ ] **RL-68** — The reader reviews the words in their record inside the app, scheduled by spaced repetition (FSRS). Boards are drawn before any work. Decided by the user 2026-10-15.
+- [x] **RL-68** — The reader reviews the words in their record inside the app, scheduled by spaced repetition (FSRS). Decided by the user 2026-10-15; built straight from these words, no boards, decided by the user 2026-10-30.
+  - `/repaso`, reached from `/registro`: the words already learning whose time came, then up to 20 new ones a day, the most looked up first; a sentence, a miss and a pending row stay out. The word, «Mostrar respuesta», then «Otra vez» · «Difícil» · «Bien» · «Fácil», each naming its interval. The cards live on the device (`reading-review`); the copy (RL-22) does not carry them yet.
 - [x] **RL-28** — When a search finds nothing and the word looks like a typo of one the dictionary
   has, the answer offers the words it might have been, and reaching one of them is a tap. The
   suggestion is computed on the device and touches the network on no keystroke.
@@ -360,15 +360,14 @@ this gets built, and no schema, table or column is "prepared for" it.
     through Playwright — because it also carries React's render and commit and the driver's own
     dispatch. It is recorded here so nobody reads one number and cites the other. This requirement
     governs the first; no assertion anywhere enforces the second.
-- [ ] **RNL-02** — Every string a person reads comes from the message catalogue. The interface is Spanish.
-  - Open, 2026-10-16: nothing drives «every string comes from the catalogue»: `lib/catalog.test.ts` checks the catalogue's own quoting, not that components carry no literal.
+- [x] **RNL-02** — Every string a person reads comes from the message catalogue. The interface is Spanish.
+  - Driven 2026-10-30 by `eslint.config.mjs`'s `copySyntax`, over screens, primitives and the layout: no letter in JSX text, in a string child, or in a prop a person reads (`aria-label`, `title`, `placeholder`, `alt`…).
 - [x] **RNL-03** — The app holds at a 360 px viewport: no horizontal overflow, no overlapping control, no tap target under 32 px on its shorter side. It is used one-handed, standing, holding a book. It also holds at a wide viewport: the reading column keeps a maximum measure and centres, so at 1440 px the box and the answer read as a column rather than stretching the full width. The phone is the case the app is designed for; the desktop is the case it must not look neglected in.
   - Widened 2026-09-07 from the 360 px case alone. The code was unticked and nothing had been verified against it, so no tick is invalidated; the alternative was retiring it for a successor, which buys nothing here.
 - [x] **RNL-04** — The dictionary asset is built from its source by a script kept in the repository, and the build records the source URL, the edition, the licence and the entry counts beside the asset.
 - [x] **RNL-05** — The sentence path never fires on a keystroke: it waits for the typing to settle, does not fire below a minimum number of tokens, never fires twice for the same text, and cancels a request already in flight when the text changes. The word path is never throttled and never delayed.
 - [x] **RNL-06** — Recording a lookup never delays, blocks or fails a lookup. The write is never awaited on the path that produces an answer, a failure to write is swallowed, and the log's storage is a separate database from the dictionary's, so a write can never contend with a read of the payload.
-- [ ] **RNL-07** — The reader chooses light or dark, and the choice is remembered on the device. The app opens in the system's mode until a choice is made. Dark is the design's primary look; light is the same design inverted, and both carry the palettes in `docs/wordbook/DESIGN.md`.
-  - Open, 2026-10-16: no toggle is built; `app/theme.css` follows `prefers-color-scheme` alone and nothing remembers a choice on the device.
+- [x] **RNL-07** — The reader chooses light or dark, and the choice is remembered on the device. The app opens in the system's mode until a choice is made. Dark is the design's primary look; light is the same design inverted, and both carry the palettes in `docs/wordbook/DESIGN.md`.
 - [x] **RNL-08** — Exporting never touches the read path: building the file happens on a screen that
   is not the box, mounts no dictionary Worker, and with the export never opened the app behaves
   exactly as before.
@@ -703,7 +702,7 @@ Principles, not recipes:
   exactly what RL-09 already does for the sentence path, and it is what keeps a third party from
   learning which word a reader is looking up. The request reaches the network only as the answer
   draws and only with a connection, and never blocks or delays the text.
-- **The server surface is eight route handlers and four pages, and nothing else.** Counted
+- **The server surface is eight route handlers and five pages, and nothing else** (`/repaso` added 2026-10-30, RL-68). Counted
   2026-09-14 against the files `apps/wordbook/app` serves, correcting a figure stale since before this
   slice: the text here read «five route handlers and one page … becoming seven» and had fallen three
   handlers and three pages behind what had already shipped.
@@ -724,6 +723,7 @@ Principles, not recipes:
   - `app/cuenta/page.tsx` — a server component that reads the session and queries nothing.
   - `app/page.tsx`, `app/registro/page.tsx` and `app/registro/[palabra]/page.tsx` — the box and the
     reader's own record.
+  - `app/repaso/page.tsx` — the review (RL-68): a shell; the record and its cards are read on the device.
 - **The word's text never passes through any of them.** That is the claim "no backend" actually
   protects, and it is the one to check before adding a ninth: not how many handlers exist, but whether
   the answer's text still touches none of them (RL-35, RNL-11). The word's decoration — its
@@ -768,6 +768,7 @@ Principles, not recipes:
 | Harness registry | **@repo/harness-registry** (workspace `*`, dev) | Records every identity and run a suite creates, so a purge names only its own rows. |
 | Script runner | **tsx** (`^4.23.12`, dev) | Runs the dictionary build, the checks and the harness scripts under `node --import tsx`. |
 | Type packages | **@types/node** (`^22`), **@types/react**, **@types/react-dom** (`^19`, dev) | The types `tsgo` and `eslint` read. |
+| Spaced repetition | **ts-fsrs 5** (`^5.4.2`) | The FSRS scheduler RL-68 reviews with; 6.0.0 was two days old when chosen. |
 | TEI parse | **fast-xml-parser** (`^5.11.1`, dev) | Streams the source TEI into the payload; the build script's only dependency. |
 
 Playwright and `fast-xml-parser` are development dependencies. `fast-xml-parser`

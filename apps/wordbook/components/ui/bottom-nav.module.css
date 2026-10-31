@@ -65,7 +65,8 @@
   display: none;
 }
 
-.spacer {
+.spacer,
+.foot {
   display: none;
 }
 
@@ -111,5 +112,10 @@
   .spacer {
     display: block;
     flex: 1 1 auto;
+  }
+
+  .foot {
+    display: block;
+    padding-inline: 18px;
   }
 }

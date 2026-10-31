@@ -2401,7 +2401,7 @@ async function checkWebhookCredentialPolicies() {
             throttled: boolean;
           }[]
         >`select owner_user_id, default_account_id, default_category_id, throttled
-          from private.resolve_webhook_credential(${hash})`;
+          from private.resolve_webhook_credential(${hash}, 'ingest')`;
 
       await enterUserContext(tx, subject);
 
@@ -4525,7 +4525,7 @@ async function checkWebhookCredentialOwnerWrites() {
       // and the resolver on the base connection stops answering for the hash either way.
       await tx`reset role`;
       const resolved = await tx<{ owner_user_id: string }[]>`
-        select owner_user_id from private.resolve_webhook_credential(${ownerHash})`;
+        select owner_user_id from private.resolve_webhook_credential(${ownerHash}, 'ingest')`;
       assert(labels[3], resolved.length === 0, `resolver rows = ${resolved.length}`);
 
       // 156: the UPDATE grant lists name, the defaults, the rate limit and revoked_at and nothing else.
@@ -4956,7 +4956,7 @@ async function checkIngestMerchantTrust() {
         values ('rls ingest resolver id', ${tokenHash}) returning id`;
       await tx`reset role`;
       const resolved = await tx<{ id: string; owner_user_id: string }[]>`
-        select id, owner_user_id from private.resolve_webhook_credential(${tokenHash})`;
+        select id, owner_user_id from private.resolve_webhook_credential(${tokenHash}, 'ingest')`;
       assert(
         labels[6],
         resolved.length === 1 &&
@@ -5122,6 +5122,7 @@ const INSERT_GRANT_GAPS: Record<string, string[]> = {
     "updated_at",
   ],
   savings_goals: ["archived_at", "created_at", "id", "updated_at"],
+  reminder_mails: ["id", "mailed_at", "planned_payment_id", "remind_on"],
   sign_in_claims: ["client_key", "count", "day"],
   transaction_labels: [],
   // `marked_by` is stamped by the trigger from auth.uid(); the movement and the rule are the input.
@@ -5276,6 +5277,7 @@ const UPDATE_GRANT_GAPS: Record<string, string[]> = {
   planned_payments: ["created_at", "created_by", "group_id", "id", "owner_user_id", "updated_at"],
   recurring_rules: ["created_at", "created_by", "group_id", "id", "owner_user_id", "paused_reason", "updated_at"],
   savings_goals: ["created_at", "external_ref", "group_id", "id", "owner_user_id", "updated_at"],
+  reminder_mails: ["id", "mailed_at", "planned_payment_id", "remind_on"],
   sign_in_claims: ["client_key", "count", "day"],
   transaction_labels: ["label_id", "transaction_id"],
   // A mark is final: no column is writable.
@@ -5309,6 +5311,8 @@ const UPDATE_GRANT_GAPS: Record<string, string[]> = {
     "id",
     "last_used_at",
     "owner_user_id",
+    // Fixed at minting: a key never changes what it opens.
+    "purpose",
     "rate_count",
     "rate_window_started_at",
     "token_hash",

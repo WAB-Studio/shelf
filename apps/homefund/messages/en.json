@@ -611,7 +611,10 @@
     "chipFrom": "From {date}",
     "chipTo": "To {date}",
     "kindAdjustment": "Gap",
-    "adjustmentFix": "Fix it by reconciling the account again."
+    "adjustmentFix": "Fix it by reconciling the account again.",
+    "forHousehold": "For the household",
+    "forHouseholdHint": "A household bill paid from your account: it counts as your contribution to the fund.",
+    "forHouseholdCounts": "Counts as a contribution by whoever paid it"
   },
   "cash": {
     "withdrawAction": "Withdraw cash",
@@ -1286,6 +1289,7 @@
       "occurredAt": "Date",
       "counterAmount": "Amount in the account's currency",
       "counterIsEstimate": "Estimated amount",
+      "forHousehold": "For the household",
       "labels": "Labels",
       "account": "Account",
       "label": "Label",
@@ -1403,7 +1407,10 @@
       "amountTooLarge": "The amount is too large.",
       "directionInvalid": "The «direction» field only accepts «expense» or «income».",
       "scopeViolation": "That category belongs to another scope than the account. Pick a fund category for a fund account, or one of yours for your own account."
-    }
+    },
+    "mcpHeading": "Connect Claude",
+    "mcpDescription": "Add HomeFund as an HTTP MCP connector with this URL and a key for Claude in the «Authorization: Bearer» header. A webhook key does not open this door. Claude sees your accounts and «Review the month» with your own permissions; revoking the key disconnects it.",
+    "mcpIssue": "Create a key for Claude"
   },
   "ingest": {
     "title": "Inbox",
@@ -1460,6 +1467,19 @@
       "deliveryInvalid": "Choose a valid message.",
       "merchantInvalid": "Choose a valid merchant.",
       "shapeInvalid": "Choose a valid silenced message."
+    },
+    "awaiting": {
+      "title": "To complete ({count})",
+      "description": "Movements with only one side known. They already count in the balances; name the other account to complete them.",
+      "noDescription": "No description",
+      "intoKnown": "Came into {account} · {date}",
+      "outOfKnown": "Left {account} · {date}",
+      "fromLabel": "Which account did it come from?",
+      "toLabel": "Which account did it go to?",
+      "pick": "Pick an account",
+      "proposed": "Suggested: you used it before with this description.",
+      "complete": "Complete",
+      "completed": "Movement completed"
     }
   },
   "review": {
@@ -1492,5 +1512,35 @@
     "back": "Back to Reports",
     "readerOnly": "Whoever manages {account} fixes it.",
     "undo": "Undo"
+  },
+  "reminderMail": {
+    "subject": "Reminder: {name} is due on {due}",
+    "greeting": "Hi,",
+    "body": "A reminder that {name} for {amount} is due on {due}.",
+    "action": "Once you pay it, record it in Payments: {url}",
+    "unnamed": "a planned payment",
+    "footer": "You are getting this because you set a reminder date in HomeFund."
+  },
+  "mcp": {
+    "instructions": "HomeFund is a household's books: accounts, movements and a shared fund. Amounts are whole cents with their currency. Read with the tools; never invent movements.",
+    "tools": {
+      "listAccounts": "The open accounts the person can see, personal and the fund's, with their balance per currency in cents.",
+      "reviewMonth": "«Review the month»: the movements that stand out in a closed month by fixed rules (an amount far above its category's usual, two equal on one day, an amount read from words, a reconciliation gap), and whether each is already marked fine.",
+      "monthParam": "The month, YYYY-MM. Absent, the last closed month.",
+      "previewStatement": "Step 1 of importing a bank statement: says what each line would do, writing nothing. Each line: «new» (will be created), «matches» (already recorded by hand or as a transfer's other side; only linked), «already_imported» (skipped) or «invalid» (with its reason). «proposal» is the account the person used before for that description: ask them before passing it as counterAccountId. Show the summary to the person before step 2.",
+      "importStatement": "Step 2: imports exactly what preview_statement showed, with its previewKey. All or nothing: if a line changed, or what the preview said about it, or one is invalid, nothing is written and it asks for a new preview. Repeating it never duplicates movements: what was imported shows as «already_imported»."
+    },
+    "errors": {
+      "unauthorized": "The key is not valid or was revoked.",
+      "unknown": "It could not be done. Try again.",
+      "openMonth": "Only a closed month is reviewed: ask for one before the current month.",
+      "statement": {
+        "notFound": "The account does not exist, is archived or you cannot see it.",
+        "readOnly": "You cannot record movements in that account.",
+        "previewChanged": "The lines are not the preview's: call preview_statement again.",
+        "invalidLines": "Some lines are invalid: fix or remove them and preview again.",
+        "lineRefused": "A line could not be recorded; nothing was imported."
+      }
+    }
   }
 }

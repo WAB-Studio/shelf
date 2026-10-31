@@ -493,9 +493,9 @@ Measured over the built asset, 64,258 entries. Design for these, not for the rar
 - **The theme control has two homes, one per shape of the navigation.** Decided by the user
   2026-09-08, looking at the `BarraSidebar` board: the sidebar's foot on desktop, inside `/cuenta`
   on the phone. Two surfaces, not one, because the bar that carries the phone's navigation has no
-  foot to put a control in and the sidebar does. **This gives RNL-07 a home; it does not build it —
-  RNL-07 stays unticked.** `app/theme.css:14-17` admits today that the reader does not choose: the
-  OS preference alone picks the mode, and no toggle lives there yet.
+  foot to put a control in and the sidebar does. Built 2026-10-30: «Tema» · «Claro» · «Oscuro», a segmented
+  control showing the mode on screen; the system's until one is chosen, which is kept on the device and
+  applied before the first paint.
 
 - **A word's photo is online-only, and it never sits behind a tap.** Decided by the user 2026-09-08,
   on their own words: **«las fotos no es obligatorio para sesiones offline»**. Embedding one photo
@@ -1708,7 +1708,7 @@ Taken by the user («2. b 3. b»).
 - **A row of `/registro` can be deleted with a ✕ per row.** Replaces the premise that the record only gains rows. Not built yet.
 - **When sending a sign-in link times out, the screen says it may have been sent:** a new line, with a board drawn before it is built. Not built yet.
 - **The dead RL-45 «swishing» path is deleted.** No visible behaviour changes.
-- **Words are reviewed inside WordBook with spaced repetition (FSRS),** not in Anki; the CSV for Anki stays as an export. Overturns the scope line of `docs/wordbook/SPEC.md` that leaves spaced repetition out (no earlier decision in this file declined it). Needs boards before any work. Not built yet.
+- **Words are reviewed inside WordBook with spaced repetition (FSRS),** not in Anki; the CSV for Anki stays as an export. Overturns the scope line of `docs/wordbook/SPEC.md` that leaves spaced repetition out (no earlier decision in this file declined it). Built 2026-10-30 without boards, by the user's decision that day: `/repaso`, one word at a time, answer on demand, four grades with their intervals, the «Bien» grade drawn solid in the accent.
 - **Access is by invitation only.** Public sign-ups are off in Supabase Auth and the app keeps a list of allowed emails; the server refuses a sign-in link for an email not on the list before any email is sent. PKCE applies: a link only works in the browser that asked for it. Not built yet.
 
 ## Decisions of 2026-10-16: the seven boards of «cuenta», approved by the user
@@ -1796,6 +1796,10 @@ Board «CuentaCódigo», WordBook, dark 360 primary and 1280, under the Copia bl
 - **Offline (`CuentaCódigoSinRed`):** `CuentaSinRed`'s glyph + «Sin conexión. No se pudo comprobar el código.»; the
   button reads «Reintentar», block width.
 - **Done:** no board; `CuentaCopiaConfirmar` follows.
+- **A send Auth timed out on may have left (RL-67):** the code step opens with «Tardó en responder, pero puede que el
+  código ya haya salido a {email}. Revisa tu correo antes de pedir otro.» in place of «Revisa tu correo…», the wait for
+  another already counting; a resend that times out says the same. The 8 s clock on a request that never settles keeps
+  «Sin conexión»: the server's own refusal may still be on its way.
 - **«Entrar con mi correo» keeps its words.**
 - **An interrupted code step comes back:** the address is kept on the device for the code's hour; «Usar otro correo» or a code that lands clears it.
 

@@ -28,7 +28,7 @@ import { withUserDb, withUserDbOrTx } from "@/db/session";
 import { stampIs } from "@/db/queries/stamp";
 import type { CurrencyCode } from "@/lib/currency";
 import { pgConstraintName, pgErrorCode } from "@/lib/db-error";
-import { counterpartyPatternKey } from "@/lib/ingest/counterparty-pattern";
+import { learnedPattern, proposalFor, type TrustedPattern } from "@/lib/ingest/counterparty-pattern";
 import type { SettlementCurrencies } from "@/lib/validation/transaction";
 
 export type TransactionSplitInput = { categoryId: string; amountCents: number };
@@ -50,6 +50,10 @@ export type CreateTransactionArgs = {
   counterIsEstimate?: boolean;
   // Quick entry read the amount from words and the person kept it (RF-155); insert only.
   amountFromWords?: boolean;
+  // «Del hogar» (RF-139): stored only on an expense from a personal account (`householdMark`).
+  forHousehold?: boolean;
+  // RF-133: one side is not known yet and waits for a person; insert only.
+  awaitingCounterparty?: boolean;
   occurredAt: string;
   description: string | null;
   externalRef: string | null;
@@ -66,6 +70,8 @@ export type UpdateTransactionArgs = {
   currency?: CurrencyCode | null;
   counterAmountCents?: number | null;
   counterIsEstimate?: boolean;
+  // `undefined` leaves the «del hogar» mark alone (RF-139).
+  forHousehold?: boolean;
   occurredAt: string;
   description: string | null;
   splits: TransactionSplitInput[];
@@ -107,6 +113,8 @@ export type TransactionListRow = {
   currency: CurrencyCode;
   counterAmountCents: number | null;
   counterIsEstimate: boolean;
+  // Marked «del hogar»: counts as its payer's contribution to the fund (RF-139).
+  forHousehold: boolean;
   occurredAt: string;
   description: string | null;
   fromAccountId: string | null;
@@ -221,6 +229,8 @@ export async function insertTransaction(
     counterAmountCents = null,
     counterIsEstimate = false,
     amountFromWords = false,
+    forHousehold = false,
+    awaitingCounterparty = false,
     occurredAt,
     description,
     externalRef,
@@ -237,6 +247,8 @@ export async function insertTransaction(
       counter_amount_cents,
       counter_is_estimate,
       amount_from_words,
+      for_household,
+      awaiting_counterparty,
       occurred_at,
       description,
       external_ref
@@ -248,6 +260,8 @@ export async function insertTransaction(
       ${counterAmountCents},
       ${counterIsEstimate},
       ${amountFromWords},
+      ${householdMark(sql`${fromAccountId}::uuid`, sql`${toAccountId}::uuid`, sql`${forHousehold}`)},
+      ${awaitingCounterparty},
       ${occurredAt},
       ${description},
       ${externalRef}
@@ -285,6 +299,15 @@ export async function insertTransaction(
 // and the row stays readable, so a screen can say why instead of reporting it gone (RF-138).
 // `stale` is an edit whose form loaded the movement before someone else saved it: nothing written.
 export type TransactionWriteOutcome = "done" | "missing" | "adjustment" | "stale";
+
+/**
+ * The «del hogar» mark as stored (RF-139): it holds only on an expense paid from a personal
+ * account, whatever the caller asked, so every write that sets the accounts states it again.
+ */
+export function householdMark(from: SQL, to: SQL, mark: SQL): SQL {
+  return sql`(${mark} and ${to} is null
+    and exists (select 1 from accounts a where a.id = ${from} and a.owner_user_id is not null))`;
+}
 
 function stampMatches(expectedUpdatedAt: string) {
   return stampIs(transactions.updatedAt, expectedUpdatedAt);
@@ -325,6 +348,7 @@ export async function updateTransaction({
   currency,
   counterAmountCents = null,
   counterIsEstimate = false,
+  forHousehold,
   occurredAt,
   description,
   splits,
@@ -347,6 +371,12 @@ export async function updateTransaction({
         ...(currency ? { currency } : {}),
         counterAmountCents,
         counterIsEstimate,
+        // Absent keeps the stored mark, but only while the movement is still a personal expense.
+        forHousehold: householdMark(
+          sql`${fromAccountId}::uuid`,
+          sql`${toAccountId}::uuid`,
+          forHousehold === undefined ? sql`${transactions.forHousehold}` : sql`${forHousehold}`,
+        ),
         occurredAt,
         description,
         reviewedAt: sql`case when ${transactions.recurringRuleId} is not null and ${transactions.reviewedAt} is null then now() else ${transactions.reviewedAt} end`,
@@ -565,6 +595,7 @@ export async function listTransactions(
         currency: transactions.currency,
         counterAmountCents: transactions.counterAmountCents,
         counterIsEstimate: transactions.counterIsEstimate,
+        forHousehold: transactions.forHousehold,
         occurredAt: transactions.occurredAt,
         description: transactions.description,
         fromAccountId: transactions.fromAccountId,
@@ -678,12 +709,22 @@ export type AwaitingCounterpartyRow = {
   proposedAccountLabel: string | null;
 };
 
-type TrustedPattern = {
-  patternKey: string;
-  side: "from" | "to";
-  accountId: string;
-  accountLabel: string;
-};
+/**
+ * The caller's trusted patterns as one JSON value (RF-135): `learning` and `ambiguous` propose
+ * nothing. RLS scopes `ingest_counterparties` and `accounts` to the caller, so it needs no owner
+ * predicate; an archived account is never proposed. Matched in JS by `proposalFor`.
+ */
+export const trustedPatternsSql = sql<TrustedPattern[]>`coalesce((
+  select jsonb_agg(jsonb_build_object(
+    'patternKey', c.pattern_key,
+    'side', c.side,
+    'accountId', c.trusted_account_id,
+    'accountLabel', a.name
+  ))
+  from ${ingestCounterparties} c
+  join ${accounts} a on a.id = c.trusted_account_id and a.archived_at is null
+  where c.state = 'trusted'
+), '[]'::jsonb)`;
 
 /**
  * Movements waiting for a person (RF-133): `awaiting_counterparty` and
@@ -724,22 +765,6 @@ export async function listAwaitingCounterparty(
     conditions.push(eq(transactions.createdBy, filters.memberUserId));
   }
 
-  // Trusted only: `learning` and `ambiguous` propose nothing (RF-135). RLS
-  // already scopes `ingest_counterparties` and `accounts` to the caller, so
-  // this needs no owner predicate of its own — the same shape `listSilencedShapes`
-  // already leans on for a subquery over an RLS-scoped table.
-  const trustedPatternsJson = sql<TrustedPattern[]>`coalesce((
-    select jsonb_agg(jsonb_build_object(
-      'patternKey', c.pattern_key,
-      'side', c.side,
-      'accountId', c.trusted_account_id,
-      'accountLabel', a.name
-    ))
-    from ${ingestCounterparties} c
-    join ${accounts} a on a.id = c.trusted_account_id
-    where c.state = 'trusted'
-  ), '[]'::jsonb)`;
-
   const rows = await withUserDb((tx) =>
     tx
       .select({
@@ -752,7 +777,7 @@ export async function listAwaitingCounterparty(
         fromAccountId: transactions.fromAccountId,
         toAccountId: transactions.toAccountId,
         createdBy: transactions.createdBy,
-        trustedPatterns: trustedPatternsJson,
+        trustedPatterns: trustedPatternsSql,
       })
       .from(transactions)
       .where(and(...conditions))
@@ -761,10 +786,8 @@ export async function listAwaitingCounterparty(
 
   return rows.map((row) => {
     const missingSide: "from" | "to" = row.fromAccountId === null ? "from" : "to";
-    const patternKey = counterpartyPatternKey(row.description ?? "");
-    const proposal = row.trustedPatterns.find(
-      (pattern) => pattern.side === missingSide && pattern.patternKey === patternKey,
-    );
+    const patternKey = learnedPattern(row.description ?? "").key;
+    const proposal = proposalFor(row.trustedPatterns, missingSide, patternKey);
 
     return {
       id: row.id,

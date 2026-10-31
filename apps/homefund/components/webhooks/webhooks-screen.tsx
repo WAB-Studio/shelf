@@ -7,6 +7,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 
 import { revokeWebhookCredentialAction } from "@/app/actions/webhook-credentials";
+import { ClaudeKey } from "@/components/webhooks/claude-key";
 import { WebhookCredentialDialog } from "@/components/webhooks/webhook-credential-dialog";
 import { WebhooksTable } from "@/components/webhooks/webhooks-table";
 import {
@@ -61,10 +62,12 @@ export function WebhooksScreen({
   credentials,
   options,
   ingestUrl,
+  mcpUrl,
 }: {
   credentials: WebhookCredentialRow[];
   options: WebhookCredentialOptions;
   ingestUrl: string;
+  mcpUrl: string;
 }) {
   const t = useTranslations("webhooks");
   // Root-scoped: `common`'s labels are full catalogue paths.
@@ -264,6 +267,25 @@ export function WebhooksScreen({
           <Text size="2" color="gray">
             {t("endpointFieldsDescription")}
           </Text>
+        </Flex>
+      </Card>
+
+      {/* RF-144: the same key opens HomeFund to Claude, which reads and imports through `/mcp`. */}
+      <Card>
+        <Flex direction="column" gap="4">
+          <Heading as="h2" size="3">{t("mcpHeading")}</Heading>
+          <CopyField
+            id="webhook-mcp-url"
+            label={t("endpointUrlLabel")}
+            value={mcpUrl}
+            copyLabel={t("copy")}
+            copiedLabel={t("copied")}
+            failedLabel={t("copyFailed")}
+          />
+          <Text size="2" color="gray">
+            {t("mcpDescription")}
+          </Text>
+          <ClaudeKey />
         </Flex>
       </Card>
 

@@ -15,14 +15,15 @@ export type MemberContribution = {
 
 /**
  * Each member's net contribution to the group's accounts for one window, per
- * currency, in ONE round trip (RF-66). A contribution is a transfer from a
+ * currency, in ONE round trip (RF-66), plus the household bills they paid from
+ * a personal account and marked «del hogar» (RF-139). A contribution is a transfer from a
  * member's personal account into a group account, credited to that member; a
  * return is the mirror, debited back. Only transfers touch the pot (RF-19), so
  * the join reads both sides of every transfer and nets `Σ contributions −
  * Σ returns` per member and currency. The group's own accounts are the pot, never
  * a contributor, so no group row appears (RF-67). A caller with no group has no
- * group account on either side of any transfer, so the same statement returns
- * nothing — no membership read first.
+ * group account on either side of any transfer; the household branch, which
+ * touches no group account, asks for the payer's membership itself.
  *
  * `booked` is the three-branch rule `account_balances` applies to a leg
  * (`0032_one_balance_per_currency.sql`), read against the POT's settlement
@@ -80,6 +81,23 @@ export async function getMemberContributions(range: {
         )) as booked(currency, amount_cents)
         where t.kind = 'transfer'
           and t.occurred_at >= ${range.start} and t.occurred_at < ${range.endExclusive}
+        union all
+        -- RF-139: a household bill paid from a member's personal account and marked «del hogar»
+        -- counts as that member's contribution, booked as its account settled it, like a leg.
+        -- A member archived since keeps it, as their transfers stay.
+        select
+          fa.owner_user_id,
+          case when t.currency <> fa.settlement_currency
+            and t.counter_amount_cents is not null and not t.counter_is_estimate
+          then fa.settlement_currency else t.currency end,
+          case when t.currency <> fa.settlement_currency
+            and t.counter_amount_cents is not null and not t.counter_is_estimate
+          then t.counter_amount_cents else t.amount_cents end
+        from transactions t
+        join accounts fa on fa.id = t.from_account_id
+        where t.for_household
+          and t.occurred_at >= ${range.start} and t.occurred_at < ${range.endExclusive}
+          and exists (select 1 from group_members m where m.user_id = fa.owner_user_id)
       ) member
       where member.user_id is not null
       group by member.user_id, member.currency

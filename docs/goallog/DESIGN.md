@@ -1787,8 +1787,8 @@ Approved by the user 2026-10-14 («todo a») on the canvas «Bitácora de metas�
 - **An act that cannot be done is shown disabled with one line saying why, never hidden** («Borrar la meta», «Cambiar la medida», «Cambiar la frecuencia», «Borrar el compromiso»). A removal's sentence sits with its own removal control, never above the sheet's primary button.
 - **A past day lists the dated tasks it owed and the tasks done on it;** month tasks stay on Hoy.
 - **An import merges and never removes:** open goals only, matched by name; two goals of one name are not updated.
-- **Sign-ups stay on in Supabase Auth** until WordBook's and HomeFund's lists are built. Nothing to code.
-- **GoalLog's sign-in route accepts `code` and still `token_hash`;** RP-131 stays unticked until the email template moves.
+- **Sign-ups are off in Supabase Auth.** An invited address gets its account from `allow-email` or an invitation.
+- **Every sign-in mail carries a `code` link and the six-digit code;** `token_hash` reaches the route only from links the server mints.
 - **A stranger reads «Este correo no tiene invitación a GoalLog.»**
 - **The allowed list seeds everyone who owns a GoalLog row;** new people enter by `npm run allow-email` plus a dashboard invite.
 - **Two phases of one goal may share a calendar week when their dates do not overlap;** the person's dates are kept and both phases show that week number. Overlap is judged on dates in the form, the server and the import, never on weeks. Saving an unchanged phase moves no date. Decided by the user 2026-10-15.

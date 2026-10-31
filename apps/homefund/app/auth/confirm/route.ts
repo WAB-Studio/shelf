@@ -11,8 +11,8 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 const LOCALE_COOKIE_MAX_AGE = 60 * 60 * 24 * 365;
 
-// `code` is the PKCE link `signInWithOtp` now sends. `token_hash` stays for the
-// invitation mail and any link already in an inbox. `magiclink` and `signup` are
+// `code` is the PKCE link every sign-in mail carries (RF-145). `token_hash` is for
+// the invitation mail and the links the server mints itself, never a sign-in mail. `magiclink` and `signup` are
 // what the current email templates send. `email` is the single value the
 // documented templates use, accepted so that editing a template later needs no
 // code change.

@@ -3,8 +3,8 @@ import "server-only";
 import { and, asc, eq, isNotNull, lte, sql } from "drizzle-orm";
 
 import { accounts, plannedPayments } from "@/db/schema";
+import { settledIn } from "@/db/queries/planned-payments";
 import { withUserDb } from "@/db/session";
-import { BASE_CURRENCY } from "@/lib/currency";
 import { todayInBogota } from "@/lib/dates";
 
 export type DueReminder = {
@@ -28,9 +28,7 @@ export async function listDueReminders(
         id: plannedPayments.id,
         description: plannedPayments.description,
         amountCents: plannedPayments.amountCents,
-        currency: sql<string>`coalesce(
-          from_account.settlement_currency, to_account.settlement_currency, ${BASE_CURRENCY}
-        )`,
+        currency: settledIn,
         dueDate: plannedPayments.dueDate,
         total: sql<number>`(count(*) over ())::int`,
       })

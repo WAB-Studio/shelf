@@ -13,8 +13,8 @@ const supabaseConfig = {
 
 // `magiclink` and `signup` are what `signInWithOtp` sends depending on
 // whether the address already had an account; `email` covers a custom
-// template that names the OTP type directly. `code` is the PKCE link (RP-131);
-// `token_hash` stays until the template shared with the other apps moves.
+// template that names the OTP type directly. `code` is the PKCE link every
+// sign-in mail carries (RP-131); `token_hash` is for the links the server mints itself.
 const confirmSchema = z
   .object({
     code: z.string().min(1).optional(),
