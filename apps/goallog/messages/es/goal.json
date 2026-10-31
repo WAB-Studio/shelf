@@ -34,6 +34,8 @@
     "rename": "Renombrar",
     "more": "Más sobre la meta",
     "heroLabel": "Lo que llevas",
+    "timelineAria": "Las fases de la meta, del {from} al {to}",
+    "timelineToday": "hoy",
     "archive": "Archivar esta meta",
     "archiveShort": "Archivar",
     "endedOn": "terminó el {weekday} {day} de {month} de {year}",
