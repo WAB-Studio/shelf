@@ -13,8 +13,6 @@ export type Timeline = {
   segments: TimelineSegment[];
   // Where «hoy» stands, or null before the goal opened or after it ended.
   today: number | null;
-  // The share of the span already lived, 0 to 100.
-  lived: number;
 };
 
 const clamp = (value: number) => Math.min(100, Math.max(0, value));
@@ -47,6 +45,5 @@ export function timeline(input: {
   return {
     segments: segments.sort((a, b) => a.left - b.left),
     today: today < openedOn || today >= horizon ? null : at(today),
-    lived: at(today),
   };
 }

@@ -28,5 +28,4 @@ test("today outside the span is no mark, and a coming phase is coming", () => {
   assert.equal(before?.segments[0].state, "coming");
   const after = timeline({ openedOn: "2026-10-01", horizon: "2026-11-30", today: "2026-12-05", phases });
   assert.equal(after?.today, null);
-  assert.equal(after?.lived, 100);
 });

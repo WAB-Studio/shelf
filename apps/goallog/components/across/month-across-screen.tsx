@@ -36,7 +36,7 @@ import { mondaysTouching } from "@/lib/day/habit-weeks";
 import { weekHref } from "@/lib/day/week-href";
 import { planHrefFrom } from "@/lib/plan/return-to";
 import { openMonthsOf, planMonthOf } from "@/lib/plan/roadmap-read";
-import { loadMonthAcross, loadMonthIntensity, type MonthAcrossGoal, type MonthAcrossItem } from "@/lib/queries/month";
+import { loadMonthAcross, type MonthAcrossGoal, type MonthAcrossItem } from "@/lib/queries/month";
 import { listComingDayless } from "@/lib/queries/one-offs";
 import { formatQuantity, isTimeUnit } from "@/lib/units/time";
 import { timeWordsOf } from "@/lib/units/time-words";
@@ -66,11 +66,8 @@ export async function MonthAcrossScreen({ month, today }: { month?: string; toda
   const thisMonth = today.slice(0, 7);
   const coming = month !== undefined && month > thisMonth;
   // A coming month also offers the tasks that wait with no day: read beside the month, never after it.
-  const [across, dayless, intensity] = await Promise.all([
-    loadMonthAcross({ month, today }),
-    coming ? listComingDayless(today) : [],
-    loadMonthIntensity(month ?? thisMonth, today),
-  ]);
+  const [across, dayless] = await Promise.all([loadMonthAcross({ month, today }), coming ? listComingDayless(today) : []]);
+  const intensity = across.intensity;
   const seg = across.month.slice(0, 7);
   // The page cannot know the bounds before the read: a month past them lands on the nearer one; with no goal, on this one.
   const asked = parseMonthParam(seg, today, across.firstMonth, across.lastMonth);

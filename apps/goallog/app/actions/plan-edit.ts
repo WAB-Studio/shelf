@@ -148,8 +148,9 @@ export async function deletePhase(input: unknown): Promise<DeletePhaseResult> {
 }
 
 /**
- * Changes the cadence of a commitment or a loose habit no fact names (RP-127, RP-135). One statement
- * reads the row and writes it only while it is live and no fact names it; the guard trigger of 0025
+ * Changes the cadence of a commitment or a loose habit no fact names (RP-127, RP-135), and no day of its
+ * evidence source counts as done. One statement reads the row and writes it only while it is live and no
+ * fact names it (an evidence commitment reads its source between, then writes in a guarded statement of its own); the guard trigger of 0025
  * answers the same (`42501`) if a fact arrives between the read and the write. What satisfies the
  * commitment and its amount are not columns of this statement.
  */
@@ -198,23 +199,27 @@ export async function editCadence(input: unknown): Promise<EditCadenceResult> {
     if (row.retired) return { ok: false, error: "plan.errors.commitmentRetired" };
     if (row.facts) return { ok: false, error: "plan.errors.cadenceHasFacts" };
     if (row.evidence) {
-      // Evidence writes no fact (RP-05): the days its source met the threshold are days done all the same,
-      // so the same refusal stands. An unreadable source cannot say there are none, so it refuses too.
-      const days = await withReadingDb((tx) =>
-        queryEvidenceBySource(tx, person.id, civilDateInZone(new Date(row.created_at)), todayInZone()),
-      ).then(
-        (bySourceKey) => evidenceDoneDays({ sourceKey: row.source_key, threshold: row.threshold ?? 1 }, bySourceKey).length,
+      // Evidence writes no fact (RP-05): the days its source met the threshold, from the day the commitment was
+      // written, are days done all the same, so the same refusal stands. An unreadable source cannot say there
+      // are none, so it refuses too.
+      const createdOn = civilDateInZone(new Date(row.created_at));
+      const today = todayInZone();
+      const days = await withReadingDb((tx) => queryEvidenceBySource(tx, person.id, createdOn, today)).then(
+        (bySourceKey) => evidenceDoneDays({ sourceKey: row.source_key, threshold: row.threshold ?? 1, createdOn }, bySourceKey, today).length,
         () => null,
       );
       if (days === null || days > 0) return { ok: false, error: "plan.errors.cadenceHasFacts" };
-      await withGoalsDb((tx) =>
-        tx.execute(sql`
+      // The write re-checks the declared facts in its own statement and says so when it changed nothing.
+      const written = await withGoalsDb((tx) =>
+        tx.execute<{ id: string }>(sql`
           update "goals"."commitments"
           set cadence_kind = ${data.cadenceKind}, cadence_n = ${cadenceN}, cadence_weekdays = ${cadenceWeekdays}
           where id = ${commitmentId} and user_id = ${person.id} and retired_at is null
             and not exists (select 1 from "goals"."facts" f where f.commitment_id = ${commitmentId})
+          returning id
         `),
       );
+      if (written.length === 0) return { ok: false, error: "plan.errors.cadenceHasFacts" };
     }
 
     revalidateScreens(row.goal_id, commitmentId);

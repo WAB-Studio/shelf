@@ -135,7 +135,6 @@ export type RowMetaPieces = {
   amount: string | undefined;
   // The met phrase of a quiet row, or the progress of a flexible one.
   status: string | null;
-  writtenTime: string | undefined;
   writtenLabel: string | undefined;
   // A `quantity` row with a fact that day under its target: not done, yet the
   // person wrote a number. Both already formatted, a time as «45 min».

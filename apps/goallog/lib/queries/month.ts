@@ -30,7 +30,8 @@ import {
   type GoalRow,
   type TaskRow,
 } from "@/lib/queries/goal";
-import { livedThrough, toCadence, toDeclaredFact } from "@/lib/queries/rows";
+import { dayCounts } from "@/lib/day/constancy";
+import { livedThrough, toCadence, toDeclaredFact, toSatisfiedBy } from "@/lib/queries/rows";
 import { getPerson, withGoalsDb, withReadingDb, type Transaction } from "@/lib/session";
 import { dayBefore } from "@/lib/day/weeks";
 import { civilDateInZone, TIME_ZONE, todayInZone, weekOf } from "@/lib/zone";
@@ -83,6 +84,8 @@ export type MonthAcross = {
   groups: { rootId: string; goalIds: string[] }[];
   // Habits with no goal (RP-100), live or retired this month, with the days of the month each was done.
   loose: MonthLooseHabit[];
+  // Commitments met per day of the month through today, for the calendar. Habits with no goal are not counted.
+  intensity: Record<string, number>;
 };
 
 // `asked` is how many days of the month through today the cadence asked on; null for a cadence counted by the week or the month.
@@ -411,6 +414,24 @@ export async function loadMonthAcross(
     goals,
     groups,
     loose,
+    // The goals' own facts of the month and the sources it read, counted once for the calendar.
+    intensity:
+      view === "coming"
+        ? {}
+        : dayCounts(
+            goalRows.flatMap((row) =>
+              row.commitments.map((commitment) => ({
+                id: commitment.id,
+                satisfiedBy: toSatisfiedBy(commitment),
+                sourceKey: commitment.source_key,
+                createdOn: civilDateInZone(new Date(commitment.created_at)),
+              })),
+            ),
+            goalRows.flatMap((row) => row.facts),
+            outcome.bySourceKey,
+            month,
+            until,
+          ),
   };
 }
 
@@ -455,35 +476,4 @@ function lineOfSum(sum: RolledUp, month: string, today: string, plan: PlanInput)
     horizon: plan.horizon,
   });
   return { planned, reached, underPace };
-}
-
-/**
- * How much was done each day of a month, for the calendar's intensity: the declared facts of the day plus the
- * days an evidence source saw. A day not lived has no entry. One goals statement beside one reading, fanned
- * together and read after nothing (RNP-03); an unreadable source counts the declared half alone (RNP-04).
- */
-export async function loadMonthIntensity(month: string, today: string): Promise<Record<string, number>> {
-  const person = await getPerson();
-  if (!person) throw new Error("loadMonthIntensity called without a verified session");
-  const first = `${month.slice(0, 7)}-01`;
-  const last = dayBefore(nextMonth(first));
-  const until = today < last ? today : last;
-  if (until < first) return {};
-  const [declared, evidence] = await Promise.all([
-    withGoalsDb((tx) =>
-      tx.execute<{ day: string; n: number }>(sql`
-        select f.day::text as day, count(*)::int as n
-          from "goals"."facts" f
-         where f.commitment_id is not null and f.day between ${first}::date and ${until}::date
-         group by f.day
-      `),
-    ),
-    withReadingDb((tx) => queryEvidence(tx, person.id, first, until)).catch(() => ({}) as Record<string, EvidenceDay[]>),
-  ]);
-  const counts: Record<string, number> = {};
-  for (const row of declared) counts[row.day] = row.n;
-  for (const days of Object.values(evidence)) {
-    for (const entry of days) if (entry.quantity > 0) counts[entry.day] = (counts[entry.day] ?? 0) + 1;
-  }
-  return counts;
 }

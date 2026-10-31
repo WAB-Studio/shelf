@@ -20,6 +20,8 @@ export type RetireSheetProps = {
   // than say "0 días" (RP-13's own "what it leaves intact" is nothing to
   // name when nothing has been done yet).
   factDayCount: number;
+  // Days its source met the threshold: days done, but never declared, so they never lock a deletion.
+  evidenceDayCount?: number;
   // The goal the commitment belongs to. While no fact names it (RP-127) the sheet also offers its cadence page
   // and the delete; null is a loose habit, which offers both on its own screen instead.
   goalId: string | null;
@@ -100,20 +102,27 @@ export function DeleteCommitmentSheet({ open, onOpenChange, commitmentId, name, 
  * (`private/measure-retire.ts` proved it against a real `loadDay` call
  * before and after retiring one).
  */
-export function RetireSheet({ open, onOpenChange, commitmentId, name, factDayCount, goalId }: RetireSheetProps) {
+export function RetireSheet({ open, onOpenChange, commitmentId, name, factDayCount, evidenceDayCount = 0, goalId }: RetireSheetProps) {
   const t = useTranslations();
   const router = useRouter();
   const [pending, setPending] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  // The server refuses a delete by declared facts alone, and a cadence change by those and the source's days.
   const editable = factDayCount === 0 && goalId !== null;
+  const cadenceOpen = editable && evidenceDayCount === 0;
   // Facts name it: the cadence and the delete stay in view, disabled, with their reason. A loose habit says it on its own screen.
   const locked = factDayCount > 0 && goalId !== null;
+  const evidenceLocked = editable && evidenceDayCount > 0;
   const [error, setError] = useState<MessageKey | null>(null);
 
-  const description =
+  const description = [
     factDayCount > 0
       ? t("plan.retireSheet.descriptionWithDays", { days: factDayCount })
-      : t("plan.retireSheet.descriptionNoDays");
+      : t("plan.retireSheet.descriptionNoDays"),
+    evidenceDayCount > 0 ? t("plan.retireSheet.evidenceDays", { days: evidenceDayCount }) : null,
+  ]
+    .filter(Boolean)
+    .join(" ");
 
   async function handleRetire() {
     if (pending) return;
@@ -150,11 +159,11 @@ export function RetireSheet({ open, onOpenChange, commitmentId, name, factDayCou
         <Button block onClick={handleRetire} disabled={pending}>
           {t("plan.retireSheet.confirm")}
         </Button>
-        {editable ? (
+        {cadenceOpen ? (
           <Button asChild block variant="outline">
             <Link href={`/metas/${goalId}/compromisos/${commitmentId}`}>{t("goal.commitments.changeCadence")}</Link>
           </Button>
-        ) : locked ? (
+        ) : locked || evidenceLocked ? (
           <Button block variant="outline" disabled aria-describedby="cadence-locked-reason">
             {t("goal.commitments.changeCadence")}
           </Button>
@@ -176,6 +185,11 @@ export function RetireSheet({ open, onOpenChange, commitmentId, name, factDayCou
             {t("goal.commitments.delete")}
           </Button>
         </Flex>
+      ) : null}
+      {evidenceLocked ? (
+        <Text as="p" id="cadence-locked-reason" variant="sentence" tone="muted">
+          {t("plan.retireSheet.evidenceLocked", { days: evidenceDayCount })}
+        </Text>
       ) : null}
       {locked ? (
         <>

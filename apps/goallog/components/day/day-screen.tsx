@@ -13,7 +13,7 @@ import type { DaySlot } from "@/lib/day/types";
 import { loadWeek } from "@/lib/queries/week";
 import { loadDay, type CommitmentInfo, type OneOffSummary } from "@/lib/queries/day";
 import { PAST_DAY_LIMIT } from "@/lib/validation/fact";
-import { civilDateToDate, dateToCivilDate, timeInZone, todayInZone } from "@/lib/zone";
+import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
 
 import { DayHeader } from "./day-header";
 import { DayRow } from "./day-row";
@@ -371,11 +371,6 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
               writtenLabel={
                 logged && logged.writtenOn !== day
                   ? dayPhrase("day.past.writtenOn", logged.writtenOn, t)
-                  : undefined
-              }
-              writtenTime={
-                logged && slot.satisfiedBy !== "evidence" && (slot.satisfied || commitment.kind === "quantity")
-                  ? timeInZone(logged.writtenAt)
                   : undefined
               }
             />

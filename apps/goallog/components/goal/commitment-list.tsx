@@ -81,9 +81,9 @@ function satisfactionWords(commitment: GoalCommitment, t: Translator): ReactNode
 
 // The row's thirty days, small, with its «26 de 30» said to a screen reader.
 function MiniStrip({ commitment, today, t }: { commitment: GoalCommitment; today: string; t: Translator }) {
-  const cells = strip(today, commitment.createdOn, commitment.done);
-  const { done, of } = stripCount(cells);
-  return <Strip size="mini" cells={cells} label={t("goal.commitments.stripAria", { done, of })} />;
+  const cells = strip(today, commitment, commitment.done);
+  const { done, of } = stripCount(cells, commitment.cadence);
+  return <Strip size="mini" cells={cells} label={of === null ? t("goal.commitments.stripAriaDays", { done }) : t("goal.commitments.stripAria", { done, of })} />;
 }
 
 /**

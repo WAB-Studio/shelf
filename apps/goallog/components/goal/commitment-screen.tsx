@@ -29,8 +29,8 @@ export async function CommitmentScreen({
 }) {
   const t = await getTranslations();
   const today = todayInZone();
-  const cells = strip(today, commitment.createdOn, commitment.done);
-  const { done, of } = stripCount(cells);
+  const cells = strip(today, commitment, commitment.done);
+  const { done, of } = stripCount(cells, commitment.cadence);
   const weekdays = t.raw("day.weekdayLong") as string[];
   const evidence = commitment.satisfiedBy.kind === "evidence" ? commitment.satisfiedBy : null;
   const unitFor = (amount: number): string | undefined =>
@@ -53,13 +53,13 @@ export async function CommitmentScreen({
       />
       <Hero
         label={t("goal.commitments.stripLabel")}
-        figure={t("goal.commitments.stripFigure", { done, of })}
+        figure={of === null ? t("goal.commitments.stripFigureDays", { done }) : t("goal.commitments.stripFigure", { done, of })}
         caption={t("goal.commitments.stripCaption")}
         highlight
       >
         <Strip
           cells={cells}
-          label={t("goal.commitments.stripAria", { done, of })}
+          label={of === null ? t("goal.commitments.stripAriaDays", { done }) : t("goal.commitments.stripAria", { done, of })}
           from={civilDayMonthShort(cells[0].day)}
           to={t("goal.commitments.stripToday")}
         />
@@ -103,6 +103,7 @@ export async function CommitmentScreen({
         goalId={goalId}
         name={commitment.name}
         factDayCount={commitment.factDayCount}
+        evidenceDayCount={commitment.evidenceDayCount}
       />
     </Page>
   );

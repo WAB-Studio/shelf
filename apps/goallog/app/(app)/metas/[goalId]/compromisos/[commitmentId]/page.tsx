@@ -5,8 +5,7 @@ import { notFound, redirect } from "next/navigation";
 import { CommitmentActions } from "@/components/goal/commitment-actions";
 import { CommitmentForm } from "@/components/goal/commitment-form";
 import { CommitmentScreen } from "@/components/goal/commitment-screen";
-import { loadGoalEvidence, loadGoalForm, withEvidenceDays } from "@/lib/queries/goal";
-import { todayInZone } from "@/lib/zone";
+import { loadGoalForm } from "@/lib/queries/goal";
 import { getPerson } from "@/lib/session";
 
 // Static per route: no title reads a goal or costs a statement (RNP-01).
@@ -29,13 +28,12 @@ export default async function CommitmentCadencePage({
   if (!person) redirect("/entrar");
 
   const { goalId, commitmentId } = await params;
-  // The evidence read rides beside the form, never after it (RNP-03).
-  const [goal, evidence] = await Promise.all([loadGoalForm(goalId), loadGoalEvidence(goalId)]);
-  const found = goal?.commitments.find((candidate) => candidate.id === commitmentId);
-  if (!goal || !found || found.retiredAt !== null) notFound();
+  // The evidence rides beside the statement inside the loader, never after it (RNP-03).
+  const goal = await loadGoalForm(goalId, undefined, undefined, { evidence: true });
+  const commitment = goal?.commitments.find((candidate) => candidate.id === commitmentId);
+  if (!goal || !commitment || commitment.retiredAt !== null) notFound();
   // A day the source met counts like a day written: the frequency is as locked as a declared one's.
-  const commitment = withEvidenceDays(found, evidence, todayInZone());
-  if (commitment.factDayCount > 0) {
+  if (commitment.factDayCount + commitment.evidenceDayCount > 0) {
     return <CommitmentScreen goalId={goal.id} goalName={goal.name} commitment={commitment} />;
   }
 
@@ -61,6 +59,7 @@ export default async function CommitmentCadencePage({
           goalId={goal.id}
           name={commitment.name}
           factDayCount={commitment.factDayCount}
+          evidenceDayCount={commitment.evidenceDayCount}
         />
       }
     />
