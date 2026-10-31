@@ -1,4 +1,4 @@
-import { expect, test } from "./fixtures";
+import { expect, openRareSenses, test } from "./fixtures";
 import type { Locator, Page } from "@playwright/test";
 
 import { FUNCTION_WORDS, functionWordTranslation } from "../lib/phrase/function-words";
@@ -88,6 +88,8 @@ for (const width of [360, 1280]) {
         await toggle.click();
         await expect(toggle).toHaveAttribute("aria-expanded", "true");
         await expect(toggle).toHaveText(OPEN_LABEL);
+        // The initialism sense a reader meets seldom folds under the entry's own line.
+        await openRareSenses(page);
         await expect(visible(page, dictionary, false)).toHaveCount(1);
         expect(await top(visible(page, table as string)), "and still above the dictionary").toBeLessThan(
           await top(visible(page, dictionary, false)),

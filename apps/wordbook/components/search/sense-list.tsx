@@ -260,6 +260,7 @@ function PosSegment({
   shownIpa: string | null;
   // The group's first segment: its first sense carries the «Traducciones» label.
   first: boolean;
+  // The entry's first segment: its category is the first of the header's index, so it draws no label of its own.
   lead: boolean;
   example?: ReactNode;
   // True inside a pronunciation block (RL-51): the block's head already
@@ -274,7 +275,7 @@ function PosSegment({
   return (
     <Flex direction="column" gap="3">
       <Flex align="center" gap="2">
-        <PosLabel>{t(`pos.${segment.pos}`)}</PosLabel>
+        {!lead && <PosLabel>{t(`pos.${segment.pos}`)}</PosLabel>}
         {!compact && !ipaHeaded && segmentIpa !== null && !ipaRepeated && (
           // IPA runs past 120 characters with no space to break on, and it is
           // metadata beside the headword, not the headword itself — one

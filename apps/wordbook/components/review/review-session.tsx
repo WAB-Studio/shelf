@@ -338,7 +338,7 @@ export function ReviewSession() {
                 <Button
                   key={grade}
                   ref={grade === "good" ? goodRef : undefined}
-                  size="3"
+                  size="2"
                   variant={grade === "good" ? "solid" : "soft"}
                   disabled={saving}
                   onClick={() => void answer(grade, Date.now())}

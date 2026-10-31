@@ -77,3 +77,10 @@
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
+
+.note {
+  font-size: 15px;
+  line-height: 1.4;
+  color: var(--rl-ink-secondary);
+  overflow-wrap: anywhere;
+}

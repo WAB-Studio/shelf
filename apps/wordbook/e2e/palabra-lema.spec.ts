@@ -100,7 +100,10 @@ test("RL-58: only the first group sits above the offer, never a second one", asy
       )
       .map((n) => n.textContent);
   }, OFFER);
-  expect(labelsAbove).toEqual(["verbo"]);
+  // The first group's category is the first of the entry's index, which the filter above leaves out; no
+  // second group's label sits above the offer.
+  expect(labelsAbove).toEqual([]);
+  await expect(page.locator("main [data-entry-index]").first()).toContainText("verbo");
 });
 
 test("RL-58: at 360 the top of the leave block is less than one viewport from the start of the answer", async ({

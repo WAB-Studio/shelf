@@ -757,7 +757,8 @@ test("RL-51: a headword with one pronunciation draws no block, and keeps its IPA
       .filter((text) => text === "verbo" || text === "sustantivo");
     return labels;
   });
-  expect(order).toEqual(["verbo", "sustantivo"]);
+  // The verb is the first of the header's index and draws no label of its own beneath it.
+  expect(order).toEqual(["sustantivo"]);
 });
 
 // `lib/dictionary/pos-frequency.ts` scores "p" for proper noun and

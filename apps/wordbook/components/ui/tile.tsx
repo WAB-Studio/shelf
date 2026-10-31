@@ -11,11 +11,14 @@ export function Tile({
   word,
   gloss,
   big,
+  note,
   onClick,
 }: {
   word: string;
   gloss: string | null;
   big?: boolean;
+  // A line under the large tile's gloss: the reader's own phrase with the word, or how often it was looked up.
+  note?: string | null;
   onClick: () => void;
 }) {
   return (
@@ -24,6 +27,11 @@ export function Tile({
       {gloss !== null && (
         <span className={styles.gloss} lang="es">
           {gloss}
+        </span>
+      )}
+      {big && note != null && (
+        <span className={styles.note} lang="en">
+          {note}
         </span>
       )}
     </button>

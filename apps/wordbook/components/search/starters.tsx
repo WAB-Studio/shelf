@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 
 import { cardFront } from "@/lib/log/anki";
+import { readWordStory } from "@/lib/log/story";
 import { readWordStudy } from "@/lib/log/summary";
 import { splitTranslations } from "@/lib/log/translation-line";
 import { Button, Card, Flex, MetaLabel, Mosaic, Tile } from "@/components/ui";
@@ -19,6 +20,8 @@ const EXAMPLE_KEYS = ["one", "two", "three", "four"] as const;
 export function Starters({ onPick }: { onPick: (text: string) => void }) {
   const t = useTranslations("search");
   const [recent, setRecent] = useState<Recent[] | null>(null);
+  // What the large tile adds under its word: the reader's own phrase holding it, else nothing.
+  const [note, setNote] = useState<string | null>(null);
 
   useEffect(() => {
     let live = true;
@@ -42,6 +45,20 @@ export function Starters({ onPick }: { onPick: (text: string) => void }) {
     };
   }, []);
 
+  const lead = recent?.[0]?.word;
+  useEffect(() => {
+    if (lead === undefined) return;
+    let live = true;
+    readWordStory(lead)
+      .then((story) => {
+        if (live) setNote(story.phrases[0] ?? null);
+      })
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [lead]);
+
   if (recent === null) return null;
 
   if (recent.length > 0) {
@@ -50,7 +67,7 @@ export function Starters({ onPick }: { onPick: (text: string) => void }) {
         <MetaLabel>{t("recentTitle")}</MetaLabel>
         <Mosaic>
           {recent.map(({ word, gloss }, index) => (
-            <Tile key={word} word={word} gloss={gloss} big={index === 0} onClick={() => onPick(word)} />
+            <Tile key={word} word={word} gloss={gloss} big={index === 0 && note !== null} note={index === 0 ? note : null} onClick={() => onPick(word)} />
           ))}
         </Mosaic>
       </Flex>

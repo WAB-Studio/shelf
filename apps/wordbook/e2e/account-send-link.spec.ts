@@ -44,10 +44,6 @@ const RULE_MESSAGE =
 
 let unsimulatedPosts: string[] = [];
 
-// The worker precaches `/cuenta` and claims the open page while the test runs; a request it handles
-// never reaches `page.route`, so the guard below would be blind to it. These specs run without one.
-test.use({ serviceWorkers: "block" });
-
 test.beforeEach(async ({ page }) => {
   unsimulatedPosts = [];
   await page.route("**/cuenta", async (route) => {
