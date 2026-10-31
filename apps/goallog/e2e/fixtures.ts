@@ -183,7 +183,8 @@ export function todayCount(page: Page, done: number | string, total: number | st
 // On the phone a goal's own acts (rename, move, archive, delete, add inside) fold into one row at the foot, «Más sobre la meta»; from
 // 768 they stand in the header and the foot. Open the fold where it is there and shut.
 export async function openMore(page: Page): Promise<void> {
-  await expect(page.locator("main").first()).toBeVisible();
+  // `load` fires with the loading fallback standing: the fold is in the streamed page, so wait for the one real `main`.
+  await settled(page);
   const more = page.getByRole("button", { name: "Más sobre la meta" });
   if (!(await more.isVisible())) return;
   // A press before the page hydrates does nothing: press again until the row reads open.

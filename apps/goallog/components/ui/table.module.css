@@ -157,6 +157,8 @@
 .narrow.wholeNote .rowLink {
   position: relative;
   flex-wrap: wrap;
+  /* A list in a 320px column leaves 251px: the 128px label, a figure and a short note fit it only with a gap under 12. */
+  column-gap: 8px;
   row-gap: 4px;
   padding-inline-end: 32px;
 }
@@ -337,7 +339,7 @@
 }
 
 .cell {
-  padding: 18px 0;
+  padding: 18px 16px 18px 0;
   border-block-start: 1px solid var(--pulsar-line);
   text-align: start;
   vertical-align: baseline;

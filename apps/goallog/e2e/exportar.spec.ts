@@ -1771,7 +1771,7 @@ test.describe("the report on A4, compact", () => {
           const found = span.filter((entry) => entry.line.startsWith(label));
           expect(found.length, `${goal.name} ${label}: lines starting with it`).toBe(1);
           // The figures print beside the label; a closed or current month adds its state on the next line, and a row cut in two leaves that line on another page.
-          expect(found[0].line, `${goal.name} ${label}: cells beside its label`).toMatch(/^\S+ \d{4} \S/);
+          expect(found[0].line, `${goal.name} ${label}: cells beside its label`).toMatch(/^\S+ \d{4}\s+\S/);
           const at = span.indexOf(found[0]);
           const under = span[at + 1];
           if (under && !goal.months.some((month) => under.line.startsWith(month))) {
