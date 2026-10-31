@@ -91,6 +91,8 @@ export { CategoryTile } from "./category-tile";
 
 export { AppMark } from "./app-mark";
 
+export { Highlight } from "./highlight";
+
 export { FundChip } from "./fund-chip";
 
 export {

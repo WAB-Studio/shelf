@@ -25,7 +25,7 @@
   },
   "auth": {
     "signOut": "Cerrar sesión",
-    "tagline": "Las cuentas de la casa, claras y compartidas.",
+    "tagline": "Las cuentas de la casa, <mark>claras</mark> y compartidas.",
     "passwordlessHint": "Te enviamos un código para entrar sin contraseña.",
     "emailLabel": "Correo electrónico",
     "emailPlaceholder": "tu@correo.com",
@@ -150,6 +150,8 @@
     "byCategoryTitle": "Gastos por categoría",
     "byCategoryEmpty": "Sin gastos este mes.",
     "comparisonTitle": "Últimos 6 meses",
+    "comparisonEmpty": "Sin movimientos en estos meses.",
+    "comparisonEmptyHint": "Cuando anotes ingresos o gastos en {currency}, los verás aquí mes a mes.",
     "legendIncome": "Ingresos",
     "legendExpense": "Gastos",
     "contributionsTitle": "Aportes del mes",

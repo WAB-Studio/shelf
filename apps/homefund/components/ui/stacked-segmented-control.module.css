@@ -1,24 +1,41 @@
 /* Radix Themes ships a fixed height and `min-width: max-content` on
    `.rt-SegmentedControlRoot`, so it refuses to shrink below both option
    labels on one line: doubled to outrank Radix's own same-specificity
-   `:where()`-zeroed rules whichever stylesheet loads last. */
+   `:where()`-zeroed rules whichever stylesheet loads last. On the phone the
+   five options are one scrollable row of pills instead of five rows. */
 .root.root {
-  display: grid;
-  grid-auto-flow: row;
+  display: flex;
+  flex-direction: row;
+  gap: var(--space-2);
   min-width: 0;
   width: 100%;
   height: auto;
+  overflow-x: auto;
+  background: none;
+  scrollbar-width: none;
 }
 
-/* One row per option, each a full-width tap target of at least 44px. */
+.root.root::-webkit-scrollbar {
+  display: none;
+}
+
+/* Each chip keeps its label on one line and is at least 44px tall. */
 .item.item {
+  flex: 0 0 auto;
   min-height: 44px;
+  white-space: nowrap;
 }
 
-/* Stacked rows are not adjoining segments, so the tick Radix draws between
+/* The pills are not adjoining segments, so the tick Radix draws between
    segments has nothing to divide. */
 .root :global(.rt-SegmentedControlItemSeparator) {
   display: none;
+}
+
+.item :global(.rt-SegmentedControlItemLabel) {
+  border-radius: var(--radius-full);
+  padding-inline: var(--space-4);
+  background-color: var(--gray-a3);
 }
 
 /* The sliding indicator computes its width and its translateX from a
@@ -29,9 +46,9 @@
   display: none;
 }
 
-/* Stacked, the picked row has no grey track behind it to read as "raised",
-   so it paints the app's own accent instead of Radix's white indicator: a
-   tinted fill plus a bolder glyph, not a hue swap, carries the selection. */
+/* A chip has no grey track behind it to read as "raised", so the picked one
+   paints the app's own violet instead of Radix's white indicator: a solid fill
+   plus a bolder glyph, not a hue swap, carries the selection. */
 .item[data-state="on"] :global(.rt-SegmentedControlItemLabel) {
   background-color: var(--accent-9);
 }
@@ -49,10 +66,18 @@
     min-width: max-content;
     width: auto;
     height: var(--space-6);
+    overflow-x: visible;
+    background-color: var(--color-surface);
+    background-image: linear-gradient(var(--gray-a3), var(--gray-a3));
   }
 
   .item.item {
     min-height: 0;
+  }
+
+  .item :global(.rt-SegmentedControlItemLabel) {
+    padding-inline: revert;
+    background-color: transparent;
   }
 
   .root :global(.rt-SegmentedControlItemSeparator) {

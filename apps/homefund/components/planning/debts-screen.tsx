@@ -934,14 +934,11 @@ function NoTermsCard({
           otherOwed={debt.otherOwed}
         />
         {onComplete && (
-          <Button
-            type="button"
-            variant="soft"
-            color="amber"
-            onClick={onComplete}
-          >
-            {t("completeTerms")}
-          </Button>
+          <Flex>
+            <Button type="button" variant="soft" size="1" onClick={onComplete}>
+              {t("completeTerms")}
+            </Button>
+          </Flex>
         )}
         <CardActions accountId={debt.accountId} onPay={onPay} />
       </Flex>

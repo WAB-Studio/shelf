@@ -1,0 +1,10 @@
+/* The brand's one highlight: ink on lime, 14.31:1 (DESIGN.md «Violeta y lima»).
+   Cloned across line breaks so a wrapped word keeps its own band. */
+.highlight {
+  background-color: var(--brand-lime);
+  color: var(--brand-ink);
+  padding: 0 0.25em;
+  border-radius: 0.3em;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}

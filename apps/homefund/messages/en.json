@@ -25,7 +25,7 @@
   },
   "auth": {
     "signOut": "Sign out",
-    "tagline": "The household's accounts, clear and shared.",
+    "tagline": "The household's accounts, <mark>clear</mark> and shared.",
     "passwordlessHint": "We send you a code to sign in without a password.",
     "emailLabel": "Email address",
     "emailPlaceholder": "you@example.com",
@@ -150,6 +150,8 @@
     "byCategoryTitle": "Expenses by category",
     "byCategoryEmpty": "No expenses this month.",
     "comparisonTitle": "Last 6 months",
+    "comparisonEmpty": "No movements in these months.",
+    "comparisonEmptyHint": "Income and expenses in {currency} will show here month by month once you record them.",
     "legendIncome": "Income",
     "legendExpense": "Expenses",
     "contributionsTitle": "Contributions this month",

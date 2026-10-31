@@ -6,6 +6,7 @@ import {
   BarChart,
   Box,
   CategoryTile,
+  EmptyState,
   Flex,
   Heading,
   Disc,
@@ -288,6 +289,17 @@ function CurrencyTrend({
       { key: "expense", valueCents: month.expenseCents },
     ],
   }));
+
+  // A window with nothing in it would draw axes and no bar.
+  if (months.every((month) => month.incomeCents === 0 && month.expenseCents === 0)) {
+    return (
+      <EmptyState
+        variant="filtered"
+        title={t("comparisonEmpty")}
+        description={t("comparisonEmptyHint", { currency })}
+      />
+    );
+  }
 
   return (
     <Flex direction="column" gap="3">
