@@ -200,7 +200,8 @@ for (const width of [360, 1024]) {
       }),
     );
     for (const row of rows) {
-      if (row.dropped) expect(row.height).toBeLessThanOrEqual(80);
+      // One line more is 86 now: the note's line is 14px at least (DESIGN «Sentence case»), no longer 12.
+      if (row.dropped) expect(row.height).toBeLessThanOrEqual(88);
       else expect(row.height).toBe(56);
     }
 

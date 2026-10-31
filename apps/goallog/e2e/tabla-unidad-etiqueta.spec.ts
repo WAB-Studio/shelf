@@ -9,7 +9,7 @@ import { boxOf } from "./box";
 
 // Module 813 (RP-71, RP-32, RP-17, RP-35), `MesesFuturoYTareas` 6a and `MesesConAño` option B: no `Table` prints a
 // unit the catalogue translates («searches»), a unit other than time is said once, and the phone's label column is
-// 132px in every table so a month with its year never breaks in two lines.
+// 128px in every table so a month with its year never breaks in two lines.
 
 const thisMonth = monthOf(todayInZone());
 const today = todayInZone();
@@ -235,7 +235,7 @@ test("a month not reached draws «—» alone: no unit word beside the dash", as
 });
 
 for (const width of [360, 1024]) {
-  test(`exportar at ${width}: each of 16 month labels is one line, 132px wide, and the page does not overflow`, async ({
+  test(`exportar at ${width}: each of 16 month labels is one line, 128px wide, and the page does not overflow`, async ({
     person,
     browser,
     baseURL,
@@ -268,7 +268,7 @@ for (const width of [360, 1024]) {
       );
       expect(boxes.length, "month labels drawn").toBe(16);
       for (const box of boxes) expect(box.height, `«${box.text}» height`).toBeLessThanOrEqual(box.line * 1.5);
-      for (const box of boxes) expect(box.width, `«${box.text}» width`).toBeCloseTo(132, 0);
+      for (const box of boxes) expect(box.width, `«${box.text}» width`).toBeCloseTo(128, 0);
       const scroll = await page.evaluate(() => document.documentElement.scrollWidth);
       expect(scroll).toBeLessThanOrEqual(width);
     } finally {
@@ -335,8 +335,8 @@ test("a unit typed capitalised («Searches») still reads the catalogue's word i
 });
 
 // A closed month that carried a task over says «cerrado · N % pasó a <mes>» under its label: a line that does not
-// break, whose width must never widen the 132px label.
-test("exportar at 360: a closed month with «cerrado · N % pasó a …» under it keeps its label 132px and the figures where they were", async ({
+// break, whose width must never widen the 128px label.
+test("exportar at 360: a closed month with «cerrado · N % pasó a …» under it keeps its label 128px and the figures where they were", async ({
   person,
   browser,
   baseURL,
@@ -363,7 +363,7 @@ test("exportar at 360: a closed month with «cerrado · N % pasó a …» under 
     await expect(closed).toBeVisible();
     expect(flat(await closed.innerText())).toMatch(/pasó a/);
     const label = closed.locator(":scope > span").first();
-    expect((await boxOf(label)).width).toBeCloseTo(132, 0);
+    expect((await boxOf(label)).width).toBeCloseTo(128, 0);
     const scroll = await page.evaluate(() => document.documentElement.scrollWidth);
     expect(scroll).toBeLessThanOrEqual(360);
   } finally {

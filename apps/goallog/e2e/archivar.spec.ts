@@ -71,10 +71,10 @@ test("renaming a goal on screen reads everywhere: its own screen, Hoy and Semana
     await sheet.getByRole("button", { name: "Guardarlo" }).click();
     await expect(sheet).toBeHidden();
 
-    await expect(page.getByRole("main").getByText(renamed, { exact: true })).toBeVisible();
+    await expect(page.getByRole("main").getByText(renamed, { exact: true }).first()).toBeVisible();
 
     await page.goto("/");
-    await expect(page.getByRole("main").getByText(renamed, { exact: true })).toBeVisible();
+    await expect(page.getByRole("main").getByText(renamed, { exact: true }).first()).toBeVisible();
 
     await page.goto("/semana");
     // A goal that asks today heads the wide table (hidden on a phone) and its
@@ -183,7 +183,7 @@ test("reopening an archived goal through its own screen brings it back to Hoy (R
     await expect(page.getByRole("button", { name: "Reabrir" })).toHaveCount(0);
 
     await page.goto("/");
-    await expect(page.getByRole("main").getByText(marker, { exact: true })).toBeVisible();
+    await expect(page.getByRole("main").getByText(marker, { exact: true }).first()).toBeVisible();
   } finally {
     await db`delete from goals.commitments where id = ${commitmentId}`;
   }

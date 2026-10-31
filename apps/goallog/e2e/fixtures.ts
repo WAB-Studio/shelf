@@ -185,7 +185,12 @@ export function todayCount(page: Page, done: number | string, total: number | st
 export async function openMore(page: Page): Promise<void> {
   await expect(page.locator("main").first()).toBeVisible();
   const more = page.getByRole("button", { name: "Más sobre la meta" });
-  if ((await more.isVisible()) && (await more.getAttribute("aria-expanded")) === "false") await more.click();
+  if (!(await more.isVisible())) return;
+  // A press before the page hydrates does nothing: press again until the row reads open.
+  await expect(async () => {
+    if ((await more.getAttribute("aria-expanded")) === "false") await more.click({ timeout: 1000 });
+    await expect(more).toHaveAttribute("aria-expanded", "true", { timeout: 1000 });
+  }).toPass({ timeout: 10_000 });
 }
 
 export async function visit(page: Page, url: string): Promise<void> {

@@ -47,7 +47,8 @@ test("a completed one-off moves to «hechas hoy» with a filled mark, survives a
     await markOf(page, name).click();
     await expect(page.getByRole("button", { name: `Deshacer: ${name}` })).toBeVisible();
     await expect(page.getByText("Hechas hoy")).toBeVisible();
-    await expect(page.getByRole("button", { name, exact: true })).toHaveCount(0);
+    // The done row keeps its name as a button (it opens the sheet): what has left is the open row's mark.
+    await expect(markOf(page, name)).toHaveCount(0);
     expect(await factCount(db, oneOffId)).toBe(1);
 
     await page.reload();

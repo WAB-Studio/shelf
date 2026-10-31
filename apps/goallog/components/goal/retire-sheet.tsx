@@ -160,8 +160,11 @@ export function RetireSheet({ open, onOpenChange, commitmentId, name, factDayCou
           {t("plan.retireSheet.confirm")}
         </Button>
         {cadenceOpen ? (
+          // The sheet opens on this commitment's own screen, where the link points: pressing it closes the sheet over it.
           <Button asChild block variant="outline">
-            <Link href={`/metas/${goalId}/compromisos/${commitmentId}`}>{t("goal.commitments.changeCadence")}</Link>
+            <Link href={`/metas/${goalId}/compromisos/${commitmentId}`} onClick={() => onOpenChange(false)}>
+              {t("goal.commitments.changeCadence")}
+            </Link>
           </Button>
         ) : locked || evidenceLocked ? (
           <Button block variant="outline" disabled aria-describedby="cadence-locked-reason">
