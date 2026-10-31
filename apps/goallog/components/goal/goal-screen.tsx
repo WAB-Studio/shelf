@@ -172,7 +172,7 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
       <DeleteGoalSheet goalId={goal.id} name={goal.name} above={goal.parent?.id ?? null} block={block} />
     ) : null;
 
-  // A delete that cannot be done stays, disabled, with the reason and the way out (user, 2026-10-15).
+  // A delete that cannot be done is plain text with its reason and the way out (user, 2026-10-15).
   const deleteRefusal =
     goal.deletable || goal.deleteBlock === null ? null : (
       <Section as="div">
@@ -716,6 +716,7 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
             <MoveGoalAction goalId={goal.id} name={goal.name} tree={goal.tree} today={today} />
             <ArchiveGoalAction goalId={goal.id} name={goal.name} variant="quiet" {...archiveBranch} />
             {deleteAction(true)}
+            {deleteRefusal}
           </Flex>
         </Fold>
       </Face>
@@ -754,7 +755,8 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
         </>
       ) : null}
       {phoneMenu}
-      {deleteRefusal}
+      {/* On the phone the refusal sits in the fold beside «Archivar», which it points to. */}
+      {archived || ended ? deleteRefusal : <Face on="desktop">{deleteRefusal}</Face>}
     </>
   );
 

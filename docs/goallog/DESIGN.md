@@ -750,12 +750,12 @@ Say what is missing, so a gap nobody drew reads as a gap nobody needed.
   on the user's delegation. Over its quota the row reads «cumplida esta semana · 2 veces», never «2 de 1».
 - **The goal's measure line reads «mide en {unidad}»** (in time, «mide en horas y minutos»: see below), and the review's measure column is headed
   «total» beside the table's own unit. Decided 2026-09-29 by the coordinator, wording module 89.
-- **A row the person marked says «lo dijiste tú» after its hour; a `quantity` row not yet marked
+- **Replaced 2026-10-31 (see «Decisiones del 2026-10-31, after the critic of the deploy 5f8fd352»): a marked row no longer says its hour or «lo dijiste tú».** Original text: **A row the person marked says «lo dijiste tú» after its hour; a `quantity` row not yet marked
   says «pide el número» after its target.** «Anki · 10 min · 07:40 · lo dijiste tú», «Monólogo
   grabado · 3 min · pide el número». An evidence row keeps its source and never says either; a quiet
   row met in its period says neither. Drawn on `HoyEscritorio.dc.html` and `HoyHechas.dc.html`
   since the first boards; decided 2026-09-30 by the user, module 100.
-- **A quantity row logged under its target reads «1 de 3 min · 09:22 · lo dijiste tú»**, the mark still empty (superseded 2026-10-06: the mark is «done in part», `HoyEnParte`); «pide el número» is only for a row with nothing logged that day. «lo dijiste tú» stays on every row the person marked, whether or not the day has evidence. Decided 2026-09-30 by the user, after the critic of module 100.
+- **A quantity row logged under its target reads «1 de 3 min · 09:22 · lo dijiste tú»**, the mark still empty (superseded 2026-10-06: the mark is «done in part», `HoyEnParte`); «pide el número» is only for a row with nothing logged that day. «lo dijiste tú» stayed on every row the person marked (replaced 2026-10-31, as above). Decided 2026-09-30 by the user, after the critic of module 100.
 - **The plan by month is built as the 21 boards of «El plan» draw it.** Approved by the user 2026-09-30.
 - **A time is written «12 h 30 min»** and stored in whole minutes (RP-35). Decided 2026-09-30 by the user.
 - **A done task adds its estimate to the measure** (RP-36), knowing the same hours may count twice if
@@ -2033,3 +2033,22 @@ The critic of round 3 asked four things of the user («Creo que podemos mejorar 
 - **An evidence commitment with days done cannot change its frequency.** The days its source met the threshold count as days done, exactly like a declared fact (RP-127): the page says what fulfils it and the minutes of each day instead of opening the editor. The server act refuses the same: `editCadence` reads the source from the day the commitment was written and refuses on any day it met the threshold, as on a declared fact; an unreadable source refuses too.
 - **Semana is a grid.** A day asked is a 44px square tile holding one of the four marks (check inside «hecho» and «por evidencia»), day headers are 14px over two lines, the day's total is a figure with a bar. The table never scrolls sideways at 390, 820 or 1440.
 - **A control that cannot be pressed is no pill**: disabled draws the 10px radius.
+
+## Decisiones del 2026-10-31, after the critic of the deploy 5f8fd352
+
+The user accepted the critic's recommendations on 2026-10-31.
+
+- **A marked row says neither its hour nor «lo dijiste tú»**; it replaces the 2026-09-30 rule. A tap row is a toggle: the row carries `aria-pressed` and the mark's fill says done; a declared mark is the accent filled, an evidence mark the soft fill with its ring, a quantity under its target the half mark. An evidence row still names its source, and its minutes are a figure in mono like every other row's («1 h 28 min»).
+- **«Planear <mes>» stands in place of «sin monto este mes».** On Mes a goal with no amount for the month shows the act, one tap opens the amount sheet over /meses, and «Guardar» returns to /mes. From the 25th of the month being lived the card offers the next month too, «Planear noviembre», while the goal's span holds it.
+- **On the phone the goal's rare acts fold into «Más sobre la meta»**: «Renombrar», «Añadir meta grande», «Mover la meta», «Archivar esta meta», «Borrar la meta» and, when facts forbid the delete, its reason as plain text beside «Archivar», never outside the fold.
+- **On the phone a goal's commitments come first**, straight under the hero; the plan, the month and the phases follow.
+- **The Mes calendar stays.** Every day up to today is a tile that opens that day (today opens Hoy); a day still to come is plain. A legend under it says what a shade means («menos» to «más», and a line: each day is painted by what was done in it against the month's busiest day). The number on every tile reaches 4.5:1 in both faces: light ink on the first step, navy from the second.
+- **Sky is for any data on the navy block, wherever every surface passes contrast** (it widens «only the key figure» of 2026-10-31): the figure, the pies, the track, the strip's bars and the calendar. Sky is still never text on white and no surface off the navy carries it.
+- **The horizon is the first day after the goal; the goal's last day is the day before it, and that is the date every screen says.** The timeline's end, «hasta el …», the phases and the export read the last day. A phase ends on the last day at the latest; one ending on the horizon is refused.
+- **An evidence commitment names its source and its threshold wherever it is drawn**, the export included: «Programar en VS Code · todos los días · TimeLog · VS Code, desde 30 min».
+- **A day its source read under the threshold is a day in part**, with its minutes («14 de 30 min»), on the past day, in the week and in «Últimos días». It counts as no day done.
+- **A destructive quiet act is ink with a small red mark before it**, never red text. /metas holds one pill, «Abrir otra meta»; «Añadir un hábito» and «Cerrar sesión» are quiet rows. An act that cannot be done (change the frequency, delete) is one line of text with its reason, in the retire sheet and on a habit's screen.
+- **A note written in the quantity sheet shows in its row**, under the name and its line, wherever the day's facts show: Hoy, a past day and the commitment's «Últimos días».
+- **The past day, the commitment's page and the export of one goal use the desktop width**: one block alone takes the row, and the commitment's page is the days beside its actions in two columns from 1024.
+- **The printed report keeps months only** (RP-125, 2026-10-14): paper does not print the weeks. The critic's request to print them is open with the user.
+- **«Abrir una meta» is the one verb** for creating a goal; the Semana legend says «sin hacer» for a past day left open.

@@ -187,7 +187,7 @@ test.describe("the report page (RP-49, RP-35)", () => {
       await expect(seen(seeded.phaseName)).toHaveCount(1);
       await expect(seen("Tu plan")).toHaveCount(1);
       await expect(seen("1 meta")).toHaveCount(1);
-      await expect(seen("hasta hoy")).toHaveCount(1);
+      await expect(seen("Hasta hoy")).toHaveCount(1);
       // RP-49: the first figure is named, the month's tasks listed done and not.
       const monthName = new Intl.DateTimeFormat("es-CO", { month: "long", timeZone: "UTC" }).format(
         civilDateToDate(todayInZone()),
@@ -1219,9 +1219,9 @@ test.describe("the report's head, its ended goals and its width (RP-49)", () => 
       const page = await context.newPage();
       await page.goto("/exportar");
       await expect(page.getByRole("main").getByText(seeded.name, { exact: true }).first()).toBeVisible();
-      await expect(page.getByText("hasta hoy", { exact: true })).toBeVisible();
+      await expect(page.getByText("Hasta hoy", { exact: true })).toBeVisible();
       // The block's own text: «de» and the figure may share no space in the DOM.
-      const block = page.getByText("hasta hoy", { exact: true }).locator("xpath=..");
+      const block = page.getByText("Hasta hoy", { exact: true }).locator("xpath=..");
       await expect(block).toContainText("50 min");
       await expect(block).not.toContainText(/de\s*0/);
 

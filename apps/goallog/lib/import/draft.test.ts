@@ -98,8 +98,11 @@ test("draftRefusals: a horizon on or before today, and the goal's months are not
 test("draftRefusals: a phase past the horizon", () => {
   const g = goal({ horizon: "2027-01-01", phases: [{ aim: "x", startsOn: "2026-12-01", endsOn: "2027-01-02" }] });
   assert.deepEqual(draftRefusals(draft(g), TODAY), [{ path: "goals.0.phases.0", key: "plan.errors.phasePastHorizon" }]);
-  const edge = goal({ horizon: "2027-01-01", phases: [{ aim: "x", startsOn: "2026-12-01", endsOn: "2027-01-01" }] });
+  // The horizon is the first day after the goal: a phase ends the day before it at the latest.
+  const edge = goal({ horizon: "2027-01-01", phases: [{ aim: "x", startsOn: "2026-12-01", endsOn: "2026-12-31" }] });
   assert.deepEqual(draftRefusals(draft(edge), TODAY), []);
+  const on = goal({ horizon: "2027-01-01", phases: [{ aim: "x", startsOn: "2026-12-01", endsOn: "2027-01-01" }] });
+  assert.deepEqual(draftRefusals(draft(on), TODAY), [{ path: "goals.0.phases.0", key: "plan.errors.phasePastHorizon" }]);
 });
 
 test("draftRefusals: two phases sharing a day", () => {

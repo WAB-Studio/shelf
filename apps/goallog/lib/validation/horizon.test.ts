@@ -11,13 +11,14 @@ test("horizonRefusal: today and earlier are past, the day after is not", () => {
   assert.equal(horizonRefusal({ horizon: "2026-09-29", today, lastPhaseEndsOn: null }), null);
 });
 
-test("horizonRefusal: a phase ending after the horizon refuses it, one ending on it does not", () => {
+test("horizonRefusal: a phase ending on or after the horizon refuses it, one ending the day before does not", () => {
   const horizon = "2026-10-11";
   assert.equal(
     horizonRefusal({ horizon, today, lastPhaseEndsOn: "2026-10-12" }),
     "goal.errors.horizonBeforePhase",
   );
-  assert.equal(horizonRefusal({ horizon, today, lastPhaseEndsOn: horizon }), null);
+  assert.equal(horizonRefusal({ horizon, today, lastPhaseEndsOn: horizon }), "goal.errors.horizonBeforePhase");
+  assert.equal(horizonRefusal({ horizon, today, lastPhaseEndsOn: "2026-10-10" }), null);
 });
 
 test("horizonRefusal: past wins over a stranded phase", () => {

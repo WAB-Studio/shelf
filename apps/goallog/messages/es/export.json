@@ -35,12 +35,12 @@
   "continuesIn": "sigue en {month} · <total>x</total> en total",
   "noMeasure": "no mide nada",
   "sections": {
-    "month": "este mes · {month}",
-    "toDate": "hasta hoy",
+    "month": "Este mes · {month}",
+    "toDate": "Hasta hoy",
     "atEnd": "al terminar",
-    "commitments": "compromisos",
-    "phases": "fases",
-    "tasks": "tareas de {month}"
+    "commitments": "Compromisos",
+    "phases": "Fases",
+    "tasks": "Tareas de {month}"
   },
   "commitmentLine": "{name} · {cadence}",
   "commitmentAmount": "{name} · {cadence} · {amount}",
@@ -59,7 +59,7 @@
     "status": "estado"
   },
   "summary": {
-    "title": "resumen",
+    "title": "Resumen",
     "annex": "el detalle de cada meta",
     "goal": "Meta",
     "weekHead": "Semana del {from}{crosses, select, yes { {fromMonth}} other {}} al {to}{crosses, select, yes { {toMonth} {year}} other {}}",
@@ -74,7 +74,7 @@
   "current": "en curso",
   "weekLabel": "sem {n}",
   "byMonth": "{goal} · por mes",
-  "byWeek": "por semana",
+  "byWeek": "Por semana",
   "closed": "cerrado",
   "weekDays": ["lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"],
   "thisWeekDone": "Esta semana{edges, select, from {, desde el {from}} to {, hasta el {to}} both {, del {from} al {to}} day {, el {from}} other {}}: <fig>{done}</fig>.",

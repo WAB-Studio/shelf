@@ -12,7 +12,7 @@
     "done": "hecho",
     "evidence": "por evidencia",
     "partial": "en parte",
-    "pending": "pendiente"
+    "pending": "sin hacer"
   },
   "flexible": {
     "week": "{count, plural, one {# vez por semana} other {# veces por semana}}",
@@ -47,7 +47,7 @@
   },
   "empty": {
     "title": "Todavía no tienes una meta abierta.",
-    "action": "Crear una meta"
+    "action": "Abrir una meta"
   },
   "archivedOn": "{label} · archivada el {date}",
   "ratioOf": "de {total}",

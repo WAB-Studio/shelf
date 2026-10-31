@@ -243,7 +243,8 @@ export async function MonthAcrossScreen({ month, today }: { month?: string; toda
           ? t("month.across.comingNothingPlanned", { month: thisName })
           : t.rich("month.across.comingPlanned", { planned: say(goal.line.planned), month: thisName, ...fig });
     } else if (goal.line.planned === null) {
-      meta = t(goal.items.length === 0 ? "month.across.nothingPlanned" : "month.across.noAmount", {
+      // A closed month is never «todavía»: nothing more will be planned in it.
+      meta = t(goal.items.length === 0 ? (past ? "month.across.nothingPlannedPast" : "month.across.nothingPlanned") : "month.across.noAmount", {
         month: thisName,
       });
     } else if (across.evidence === "unreadable") {
@@ -502,7 +503,7 @@ export async function MonthAcrossScreen({ month, today }: { month?: string; toda
       )}
       {nothingOpen ? null : (
         <Flex align="baseline" gap="3" wrap="wrap">
-          <Text as="span" variant="meta">
+          <Text as="span" variant="sentence">
             {t("month.across.weeks.label")}
           </Text>
           {mondaysTouching(across.month).map((monday) => (
