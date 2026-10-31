@@ -45,6 +45,26 @@ Light, the same design inverted:
 - The accent is a different hex per mode, not one colour at two opacities. `#9A3B24` has too little
   contrast on the dark ground; `#D9805F` has too little on the light one.
 
+## Decision of 2026-10-30: «Verde botella», the restyle after Agenda Amiga's recipe
+
+- Keep the warm ink grounds and neutral tokens above. Change the accent, the title face and the shape of controls.
+- Accent: bottle green. Highlight: marigold, only behind a key word or on the brand block, never as text on a ground.
+  Green over coral because a reading app wants calm; marigold gives the one warm spark.
+- Titles and headwords: **Fraunces** 700 (40 px; the offered lemma 30 px / 600), a soft serif with character. Newsreader
+  keeps translations and definitions. Interface stays IBM Plex Sans.
+- `AppTheme` sets `radius="full"`: every button and the search field is a pill. Figures are tabular on `body`.
+- The main screen holds one dark brand block (`BrandBlock`): the name with «Book» on the highlight, a line, the search box.
+- Radix scale is `green`, not `indigo`; `theme.css` overrides its steps with the tokens below.
+
+| role | value | ratio |
+|---|---|---|
+| accent, light | `#0C5A43` | 7.73 on `#FAF8F2`, 8.21 on `#FFFFFF` |
+| accent, dark | `#5FCFA3` | 9.68 on `#14130F`, 8.98 on `#1C1B16` |
+| brand block | `#0A3D2E` | ink `#F3EFE2` 10.61; soft text `#B9D6C9` 7.86; field edge `#9FC4B4` 6.41 |
+| highlight | `#F6B83A` | 6.88 on the block; ink `#17160F` on it 10.22 |
+
+The older accent hexes in «Tokens» (`#D9805F`, `#9A3B24`) are superseded by this table.
+
 ## Type
 
 - Headwords, translations and definitions: **Newsreader**, fallback `Georgia, serif`.

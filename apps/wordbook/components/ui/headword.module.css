@@ -1,23 +1,23 @@
-/* docs/wordbook/DESIGN.md: 34px / 500 / -0.02em, none of which is a Radix step.
+/* docs/wordbook/DESIGN.md: 40px / 700 / -0.02em, none of which is a Radix step.
    Doubled to outrank `.rt-Heading:where(.rt-r-size-N)`. A headword reaching
    85 characters with no space to break on stays readable by breaking mid-word
    instead — the alternative, truncation, would hide most of the only word on
    the screen the reader came to read. */
 .headword.headword {
-  font-family: var(--font-serif);
-  font-size: 34px;
-  font-weight: 500;
+  font-family: var(--font-display);
+  font-size: 40px;
+  font-weight: 700;
   letter-spacing: -0.02em;
   overflow-wrap: anywhere;
 }
 
 /* docs/wordbook/DESIGN.md "PalabraConFlexion": the lemma offered beneath a
-   word's own entry, 27px/500 — smaller than `.headword`'s 34px, which is
+   word's own entry, 30px/600 — smaller than `.headword`'s 40px, which is
    the only thing that ranks the two. */
 .offer.offer {
-  font-family: var(--font-serif);
-  font-size: 27px;
-  font-weight: 500;
+  font-family: var(--font-display);
+  font-size: 30px;
+  font-weight: 600;
   letter-spacing: -0.02em;
   overflow-wrap: anywhere;
 }

@@ -11,6 +11,8 @@
     "account": "Cuenta"
   },
   "search": {
+    "brand": "Word<mark>Book</mark>",
+    "brandLine": "Busca una palabra y léela en español.",
     "placeholder": "Escribe una palabra o una frase",
     "label": "Buscar",
     "clear": "Borrar",

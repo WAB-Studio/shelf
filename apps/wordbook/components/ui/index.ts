@@ -18,6 +18,8 @@ export { AppTheme } from "./theme";
 
 export { Box } from "./box";
 
+export { BrandBlock } from "./brand-block";
+
 export { Separator } from "./separator";
 
 export { Page } from "./page";

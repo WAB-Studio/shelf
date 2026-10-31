@@ -1,0 +1,41 @@
+/* The one dark surface of the main screen: bottle green, the same in both
+   modes, holding the app's name and the search box. */
+.block {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-5);
+  border-radius: var(--radius-5);
+  background: var(--rl-brand);
+  color: var(--rl-brand-ink);
+}
+
+.title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 34px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.05;
+}
+
+/* The highlight sits behind the key word, ink on marigold — never as text on a
+   ground. */
+.title mark {
+  padding: 0 0.14em;
+  border-radius: 0.2em;
+  background: var(--rl-highlight);
+  color: var(--rl-highlight-ink);
+}
+
+.line {
+  margin: 0;
+  font-size: 15px;
+  color: var(--rl-brand-soft);
+}
+
+/* The field keeps its raised ground on the block; its edge is lifted to the
+   block's own soft tone so it still reads at 3:1 against the green. */
+.block :global(.rt-TextFieldRoot) {
+  --rl-control-edge: var(--rl-brand-edge);
+}

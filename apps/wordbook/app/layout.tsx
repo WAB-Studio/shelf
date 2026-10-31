@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import type { Metadata, Viewport } from "next";
 import { headers } from "next/headers";
-import { IBM_Plex_Sans, Newsreader } from "next/font/google";
+import { Fraunces, IBM_Plex_Sans, Newsreader } from "next/font/google";
 import { NextIntlClientProvider } from "next-intl";
 import { getTranslations } from "next-intl/server";
 import { THEME_BOOT_SCRIPT } from "@/lib/theme-choice";
@@ -26,6 +26,14 @@ const sans = IBM_Plex_Sans({
 // Headwords, translations and definitions (docs/wordbook/DESIGN.md "Type").
 const serif = Newsreader({
   variable: "--font-serif",
+  subsets: ["latin"],
+  fallback: ["Georgia", "serif"],
+  display: "swap",
+});
+
+// Titles and headwords: a soft, characterful serif set bold (docs/wordbook/DESIGN.md "Verde botella").
+const display = Fraunces({
+  variable: "--font-display",
   subsets: ["latin"],
   fallback: ["Georgia", "serif"],
   display: "swap",
@@ -75,7 +83,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
 
   return (
     // `data-theme` is set by the script below before hydration (RNL-07), so the server's <html> never carries it.
-    <html lang="es" className={`${sans.variable} ${serif.variable}`} suppressHydrationWarning>
+    <html lang="es" className={`${sans.variable} ${serif.variable} ${display.variable}`} suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: THEME_BOOT_SCRIPT }} />
       </head>
