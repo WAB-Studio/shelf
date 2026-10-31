@@ -1,8 +1,11 @@
-import { expect, test } from "./fixtures";
+import { expect, openRareSenses, test } from "./fixtures";
 import type { Locator, Page } from "@playwright/test";
 
 import { FUNCTION_WORDS, functionWordTranslation } from "../lib/phrase/function-words";
 import messages from "../messages/es.json";
+
+// The headline carries its key word in a tag the screen turns into the marigold.
+const BRAND_LINE = messages.search.brandLine.replace(/<\/?mark>/g, "");
 import manifest from "../public/dictionary/manifest.json";
 
 // Module 690 (RL-59, which succeeds RL-57): a function word typed alone leads
@@ -85,6 +88,8 @@ for (const width of [360, 1280]) {
         await toggle.click();
         await expect(toggle).toHaveAttribute("aria-expanded", "true");
         await expect(toggle).toHaveText(OPEN_LABEL);
+        // The initialism sense a reader meets seldom folds under the entry's own line.
+        await openRareSenses(page);
         await expect(visible(page, dictionary, false)).toHaveCount(1);
         expect(await top(visible(page, table as string)), "and still above the dictionary").toBeLessThan(
           await top(visible(page, dictionary, false)),
@@ -123,7 +128,7 @@ test("every word of the table, typed alone, shows its own table translation and 
     // Clear first: two words share a gloss ("su"), and the last word's line
     // must not stand in for this one's.
     await searchBox(page).fill("");
-    await expect(page.locator("main").getByText(messages.search.brandLine)).toBeVisible();
+    await expect(page.locator("main").getByText(BRAND_LINE)).toBeVisible();
     await searchBox(page).fill(word);
     const ok = await visible(page, table)
       .first()

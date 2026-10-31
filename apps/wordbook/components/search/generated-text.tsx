@@ -1,6 +1,6 @@
 import { useTranslations } from "next-intl";
 
-import { Box, Flex, Separator, Text, VisuallyHidden } from "@/components/ui";
+import { Box, Flex, MarkedWord, Separator, Text, VisuallyHidden } from "@/components/ui";
 import type { WordText } from "@/lib/word/protocol";
 
 // The three shapes module 9's hook resolves a word's decoration to. State
@@ -14,7 +14,7 @@ export type GeneratedTextState =
 // (docs/wordbook/DESIGN.md "Generated text is marked «generada»" — a model
 // mis-defined `abies` in a test of twelve, and the reader has no way to
 // doubt a line that looks like every other one).
-export function GeneratedText({ state }: { state: GeneratedTextState }) {
+export function GeneratedText({ state, headword }: { state: GeneratedTextState; headword?: string }) {
   const t = useTranslations("word");
 
   // `PalabraSinDefinicionOscuroMovil`: no connection, no result, or the
@@ -78,7 +78,7 @@ export function GeneratedText({ state }: { state: GeneratedTextState }) {
                   skipped when the heading above already says "Ejemplo". */}
               {hasDefinition && <VisuallyHidden>{t("example")}</VisuallyHidden>}
               <Text variant="generatedProse" english>
-                {text.example.en}
+                <MarkedWord text={text.example.en} forms={headword === undefined ? [] : [headword]} />
               </Text>
               <VisuallyHidden>{t("exampleTranslation")}</VisuallyHidden>
               <Text variant="exampleTranslation" muted>

@@ -317,7 +317,7 @@ test("a lookup's row lists the typed word, its count and the dictionary's own tr
 
   const link = page.locator('a[href="/registro/apple"]');
   await expect(link).toBeVisible();
-  // The row is a card: the link holds the word and its count, the translations sit beside it.
+  // The row is a card: the link holds the word and its count, its main translation sits under it.
   const rowText = await link.locator("xpath=ancestor::section[1]").innerText();
   expect(rowText).toContain("apple");
   expect(rowText).toContain("1");
@@ -330,7 +330,8 @@ test("a lookup's row lists the typed word, its count and the dictionary's own tr
   // non-empty check but fails each of these.
   const wordTranslations = dictionaryTranslations("apple");
   expect(wordTranslations.length, 'the shipped dictionary carries no entry for "apple"').toBeGreaterThan(0);
-  for (const translation of wordTranslations) {
+  // The row is compact (decision of 2026-10-31): the main translation only, the rest on the word's own page.
+  for (const translation of wordTranslations.slice(0, 1)) {
     expect(rowText, `the row for "apple" never shows its dictionary translation "${translation}"`).toContain(
       translation,
     );

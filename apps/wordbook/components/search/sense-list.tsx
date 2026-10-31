@@ -1,10 +1,11 @@
 "use client";
 
-import { useSyncExternalStore, type ReactNode } from "react";
+import { useState, useSyncExternalStore, type ReactNode } from "react";
 import NextLink from "next/link";
 import { useTranslations } from "next-intl";
 
 import { ipaKey, pronunciationBlocks, type Sense } from "@/lib/dictionary/index-build";
+import { isRareSense } from "@/lib/dictionary/rare-sense";
 import type { WordAnswer } from "@/lib/dictionary/lookup";
 import { speak, speechSupported } from "@/lib/speech/speak";
 import {
@@ -67,7 +68,7 @@ function BlockHeading({
 }: {
   word: string;
   wordHref?: string;
-  headwordSize?: "default" | "offer";
+  headwordSize?: "default" | "offer" | "hero";
 }) {
   if (!wordHref) return <Headword size={headwordSize}>{word}</Headword>;
   return (
@@ -185,11 +186,20 @@ function SenseDetail({
   sense,
   segmentIpa,
   compact,
+  label,
+  lead,
+  example,
   t,
 }: {
   sense: Sense;
   segmentIpa: string | null;
   compact: boolean;
+  // «Traducciones» heads the entry's translations once, not each sense.
+  label: boolean;
+  // The entry's main translation, set large (the first sense of the first group).
+  lead: boolean;
+  // The generated definition and example, which belong to the sense the entry opens with.
+  example?: ReactNode;
   t: ReturnType<typeof useTranslations>;
 }) {
   const ownSound = sense.ipa !== null && (segmentIpa === null || ipaKey(sense.ipa) !== ipaKey(segmentIpa));
@@ -203,10 +213,12 @@ function SenseDetail({
             {ownIpa}
           </Text>
         )}
-        <Text size="1" color="gray">
-          {t("translations")}
-        </Text>
-        <TranslationList items={sense.translations} />
+        {label && (
+          <Text size="1" color="gray">
+            {t("translations")}
+          </Text>
+        )}
+        <TranslationList items={sense.translations} lead={lead} />
       </Flex>
       {!compact && sense.definition !== null && (
         <Flex direction="column" data-definition-block="">
@@ -224,6 +236,7 @@ function SenseDetail({
           <Separator size="4" />
         </Flex>
       )}
+      {example}
     </Flex>
   );
 }
@@ -235,10 +248,21 @@ function PosSegment({
   segment,
   compact,
   ipaHeaded,
+  shownIpa,
+  first,
+  lead,
+  example,
   t,
 }: {
   segment: SenseSegment;
   compact: boolean;
+  // The IPA the entry's header already shows: a label row repeats no sound it has.
+  shownIpa: string | null;
+  // The group's first segment: its first sense carries the «Traducciones» label.
+  first: boolean;
+  // The entry's first segment: its category is the first of the header's index, so it draws no label of its own.
+  lead: boolean;
+  example?: ReactNode;
   // True inside a pronunciation block (RL-51): the block's head already
   // named the IPA, so the label row stops carrying one of its own
   // (docs/wordbook/DESIGN.md "The pronunciation groups the entry").
@@ -246,12 +270,13 @@ function PosSegment({
   t: ReturnType<typeof useTranslations>;
 }) {
   const segmentIpa = segment.senses[0].ipa;
+  const ipaRepeated = segmentIpa !== null && shownIpa !== null && ipaKey(segmentIpa) === ipaKey(shownIpa);
 
   return (
     <Flex direction="column" gap="3">
       <Flex align="center" gap="2">
-        <PosLabel>{t(`pos.${segment.pos}`)}</PosLabel>
-        {!compact && !ipaHeaded && segmentIpa !== null && (
+        {!lead && <PosLabel>{t(`pos.${segment.pos}`)}</PosLabel>}
+        {!compact && !ipaHeaded && segmentIpa !== null && !ipaRepeated && (
           // IPA runs past 120 characters with no space to break on, and it is
           // metadata beside the headword, not the headword itself — one
           // clamped line reads better than four wrapped ones. `PosLabel` has
@@ -269,7 +294,15 @@ function PosSegment({
       {segment.senses.map((sense, index) => (
         <Flex direction="column" gap="3" key={index}>
           {index > 0 && <Separator size="4" />}
-          <SenseDetail sense={sense} segmentIpa={segmentIpa} compact={compact} t={t} />
+          <SenseDetail
+            sense={sense}
+            segmentIpa={segmentIpa}
+            compact={compact}
+            label={first && index === 0}
+            lead={lead && index === 0}
+            example={index === 0 ? example : undefined}
+            t={t}
+          />
         </Flex>
       ))}
     </Flex>
@@ -298,28 +331,78 @@ function PosSegments({
   senses,
   compact,
   ipaHeaded,
+  shownIpa,
   interlude,
+  lead,
+  example,
   t,
 }: {
   senses: readonly Sense[];
   compact: boolean;
   ipaHeaded: boolean;
+  shownIpa: string | null;
   // Drawn right under the first segment (RL-58): the group the entry opens
   // with stays above it, every other segment below.
   interlude?: ReactNode;
+  lead: boolean;
+  example?: ReactNode;
   t: ReturnType<typeof useTranslations>;
 }) {
-  const segments = segmentByPos(senses);
+  // A sense the reader meets seldom folds behind one line while a common one stands.
+  const rare = compact ? [] : senses.filter(isRareSense);
+  const common = senses.filter((sense) => compact || !isRareSense(sense));
+  const fold = rare.length > 0 && common.length > 0;
+  const segments = segmentByPos(fold ? common : senses);
 
   return (
     <Flex direction="column" gap="3">
       {segments.map((segment, index) => (
         <Flex direction="column" gap="3" key={index}>
           {index > 0 && <Separator size="4" />}
-          <PosSegment segment={segment} compact={compact} ipaHeaded={ipaHeaded} t={t} />
+          <PosSegment
+            segment={segment}
+            compact={compact}
+            ipaHeaded={ipaHeaded}
+            shownIpa={shownIpa}
+            first={index === 0}
+            lead={lead && index === 0}
+            example={index === 0 ? example : undefined}
+            t={t}
+          />
           {index === 0 && interlude}
         </Flex>
       ))}
+      {fold && <RareFold senses={rare} ipaHeaded={ipaHeaded} shownIpa={shownIpa} t={t} />}
+    </Flex>
+  );
+}
+
+// The senses a dictionary lists beside the common one without saying which is which, folded
+// behind a line of their own (`bleak`'s river fish).
+function RareFold({
+  senses,
+  ipaHeaded,
+  shownIpa,
+  t,
+}: {
+  senses: readonly Sense[];
+  ipaHeaded: boolean;
+  shownIpa: string | null;
+  t: ReturnType<typeof useTranslations>;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <Flex direction="column" gap="3" align="start">
+      <Link asChild underline="always" muted>
+        <button type="button" aria-expanded={open} onClick={() => setOpen(!open)}>
+          <TapTarget align="center" px="1">
+            <Text size="2">{open ? t("rareLess") : t("rareMore", { count: senses.length })}</Text>
+          </TapTarget>
+        </button>
+      </Link>
+      {open && (
+        <PosSegments senses={senses} compact={false} ipaHeaded={ipaHeaded} shownIpa={shownIpa} lead={false} t={t} />
+      )}
     </Flex>
   );
 }
@@ -341,18 +424,36 @@ function SenseGroup({
   senses,
   compact,
   interlude,
+  lead = false,
+  example,
+  shownIpa = null,
   t,
 }: {
   senses: readonly Sense[];
   compact: boolean;
   // Lands under the first category of the first pronunciation block.
   interlude?: ReactNode;
+  // The entry's own group: its first sense leads large and carries the example.
+  lead?: boolean;
+  example?: ReactNode;
+  shownIpa?: string | null;
   t: ReturnType<typeof useTranslations>;
 }) {
   const blocks = compact ? null : pronunciationBlocks(senses);
 
   if (blocks === null) {
-    return <PosSegments senses={senses} compact={compact} ipaHeaded={false} interlude={interlude} t={t} />;
+    return (
+      <PosSegments
+        senses={senses}
+        compact={compact}
+        ipaHeaded={false}
+        shownIpa={shownIpa}
+        interlude={interlude}
+        lead={lead}
+        example={example}
+        t={t}
+      />
+    );
   }
 
   return (
@@ -375,7 +476,10 @@ function SenseGroup({
             senses={block.senses}
             compact={compact}
             ipaHeaded
+            shownIpa={null}
             interlude={index === 0 ? interlude : undefined}
+            lead={lead && index === 0}
+            example={index === 0 ? example : undefined}
             t={t}
           />
         </Flex>
@@ -414,6 +518,44 @@ function CorrectionOffer({ words, t }: { words: readonly string[]; t: ReturnType
               </TapTarget>
             </NextLink>
           </Link>
+        ))}
+      </Flex>
+    </Flex>
+  );
+}
+
+// Under the entry's headword, on one line: its sound, the voice and an index of the parts of speech
+// it comes in. The sound shows here only when one pronunciation heads the whole entry; with several,
+// each block carries its own head.
+function EntryMeta({
+  senses,
+  headword,
+  speaker,
+  t,
+}: {
+  senses: readonly Sense[];
+  headword: string;
+  speaker: boolean;
+  t: ReturnType<typeof useTranslations>;
+}) {
+  const ipa = pronunciationBlocks(senses) === null ? senses[0].ipa : null;
+  const parts = [...new Set(senses.map((sense) => sense.pos))];
+  return (
+    <Flex align="center" gap="3" wrap="wrap" data-entry-index="">
+      {ipa !== null && (
+        <Grid minWidth="0" flexShrink="1">
+          <Text size="3" muted truncate>
+            {ipa}
+          </Text>
+        </Grid>
+      )}
+      {speaker && <SpeakButton headword={headword} ipa={leadPronunciation(senses)} t={t} />}
+      <Flex align="center" gap="2" wrap="wrap">
+        {parts.map((pos, index) => (
+          <Flex key={pos} align="center" gap="2">
+            {index > 0 && <PosLabel muted>·</PosLabel>}
+            <PosLabel>{t(`pos.${pos}`)}</PosLabel>
+          </Flex>
         ))}
       </Flex>
     </Flex>
@@ -550,26 +692,30 @@ export function SenseList({
     <Flex direction="column" gap="4">
       {answer.exact !== null && (
         <Flex direction="column" gap="3">
-          <Flex align="center" gap="1">
-            {showExactHeadword && <BlockHeading word={answer.exact.headword} wordHref={wordHref} />}
-            {!compact && showSpeaker && <SpeakButton headword={answer.exact.headword} ipa={exactLead} t={t} />}
-          </Flex>
-          <SenseGroup
-            senses={answer.exact.senses}
-            compact={compact}
-            interlude={offerInside ? offer : undefined}
-            t={t}
-          />
-          {!compact && generated && <GeneratedText state={generated} />}
+          {showExactHeadword && (
+            <BlockHeading word={answer.exact.headword} wordHref={wordHref} headwordSize={compact ? undefined : "hero"} />
+          )}
+          {compact ? (
+            <SenseGroup senses={answer.exact.senses} compact interlude={offerInside ? offer : undefined} t={t} />
+          ) : (
+            <>
+              <EntryMeta senses={answer.exact.senses} headword={answer.exact.headword} speaker={showSpeaker} t={t} />
+              <SenseGroup
+                senses={answer.exact.senses}
+                compact={false}
+                interlude={offerInside ? offer : undefined}
+                lead
+                example={generated && <GeneratedText state={generated} headword={answer.exact.headword} />}
+                shownIpa={answer.exact.senses[0].ipa}
+                t={t}
+              />
+            </>
+          )}
           {/* RL-51: the example is decoration resolved from the spelling
-              alone (RL-42), so it lands under whichever block the entry
-              draws last and reads as that block's own — `row` closed with
-              «Me gusta remar el bote» beneath /ɹaʊ/, `tear` with «no rasgar
-              el vestido» beneath /tiə/, 5 of 5 measured. The foot line says
-              which pronunciation it is about: the entry's leading one, the
-              sense the model writes for and the sound «Escuchar» speaks. An
-              entry that draws no block reads unchanged — there is no other
-              block for it to be mistaken for. */}
+              alone (RL-42), so it reads as the entry's own. The foot line
+              says which pronunciation it is about: the entry's leading one,
+              the sense the model writes for and the sound «Escuchar» speaks.
+              An entry that draws no block reads unchanged. */}
           {!compact && generated?.kind === "resolved" && exactLead !== null && (
             <Text size="1" color="gray" data-generated-pronunciation={exactLead}>
               {t("examplePronunciation", { ipa: exactLead })}

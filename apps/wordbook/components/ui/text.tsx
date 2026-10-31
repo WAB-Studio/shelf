@@ -21,7 +21,8 @@ type SerifProps = {
   // `exampleTranslation`: the example's Spanish line beneath it, 15px, no
   // Radix step. `generatedMark`: the small «GENERADA» pill beside the
   // generated label — bordered, never a coloured badge
-  // (docs/wordbook/DESIGN.md "Metadata labels"). `pendingHint`: the one line
+  // (docs/wordbook/DESIGN.md "Metadata labels"). `lead`: the entry's main
+  // translation, Fraunces 30px. `pendingHint`: the one line
   // `PalabraGenerandoOscuroMovil` draws while the network is still out,
   // 14px italic — the translation above is already whole and this line
   // only holds the block's place.
@@ -34,7 +35,8 @@ type SerifProps = {
     | "generatedProse"
     | "exampleTranslation"
     | "generatedMark"
-    | "pendingHint";
+    | "pendingHint"
+    | "lead";
   // The muted tone every caption, status line and secondary link takes
   // (docs/wordbook/DESIGN.md "Tokens"), so a screen never reaches for Radix's
   // own `color="gray"`. `"quietest"` is the second, dimmer muted role the
@@ -51,7 +53,7 @@ function withSerif(
   className: string | undefined,
 ): string | undefined {
   const classes = [
-    serif || variant === "translation" ? styles.serif : undefined,
+    serif || variant === "translation" || variant === "lead" ? styles.serif : undefined,
     variant === "translation" ? styles.translation : undefined,
     variant === "breakTitle" ? styles.breakTitle : undefined,
     variant === "breakBody" ? styles.breakBody : undefined,
@@ -61,6 +63,7 @@ function withSerif(
     variant === "exampleTranslation" ? styles.exampleTranslation : undefined,
     variant === "generatedMark" ? styles.generatedMark : undefined,
     variant === "pendingHint" ? styles.pendingHint : undefined,
+    variant === "lead" ? styles.lead : undefined,
     muted === true ? styles.muted : undefined,
     muted === "quietest" ? styles.mutedQuietest : undefined,
     className,

@@ -1938,3 +1938,26 @@ and width). RL-76 decided by the user 2026-10-18.
   word the network answered.
 - **Decided by the user: three translations and «ver más»** (RL-79), in the word's answer, its row and its history.
 - **Not a lookup:** opening or reloading `/?q=word` records nothing (RL-80).
+
+## Decisión del 2026-10-31, after the critic of round 3 (picks of the critic; the user may override)
+
+- **Translation order.** Keep RL-81's frequency demotion, and at build drop the inflected forms of a sibling gloss and a verb's bare
+  first-person forms behind the rest (`libros`, `digo`), plus a small reviewed list of known-wrong glosses removed (`alegría` for
+  bleak) and reviewed leads (`significar`, `querer decir`, `justo`, `desolado`), all in `scripts/translation-order.ts`. No paid
+  pruning. The payload version is 3, so an installed copy refreshes.
+- **Examples.** The example of a word is the reader's own logged phrases containing it: free and offline. No paid generation.
+- **Review on the phone.** A card with the figure on the main screen (`ReviewCard`); the bar keeps three sections.
+- **Desktop.** From 1280px a screen is two panels (`Panels`): the entry on the left, a sticky «Tu historia con esta palabra» on the
+  right (380px, in a 1120px whole). This replaces the 620px measure rule for the main screen, a word's history and `/cuenta`.
+- **The entry.** The headword is Fraunces 48 to 64 with its sound, the voice and an index of its parts of speech on one line; the main
+  translation is Fraunces 30, the rest smaller; «Traducciones» heads the entry once; the example sits inside its sense with the
+  word on the marigold (`Highlight`); senses a reader meets seldom fold behind one line.
+- **The green band** is the main screen's brand block alone, whose headline is one sentence with its key word on the marigold. Every
+  other screen titles in Fraunces 40 in ink on the ground (`PageTitle`).
+- **Main screen.** «N para repasar hoy» is a figure card at every width; the recent words are a mosaic of tiles, each with its main
+  translation.
+- **Review.** A flashcard of fixed proportion: the word centred, the reader's own phrase with a gap as the hint, a flip on reveal
+  (none under `prefers-reduced-motion`), a progress bar, the four grades fixed at the foot of a phone, keys 1 to 4 on a desktop.
+- **`/registro`** is a diary by day («Hoy · 5», «Ayer · 4», «jueves, 29 oct · 2»), a compact row being the word and its main
+  translation, the word in ink and mint only under the pointer.
+- **Sidebar.** Labels 15px sentence case, rows and the theme switch 44px. The bar's 11px capitals stay on the phone.

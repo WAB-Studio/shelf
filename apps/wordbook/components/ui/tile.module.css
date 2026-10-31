@@ -1,0 +1,86 @@
+/* One recent word of the mosaic: the word, then its main translation. */
+.tile {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: var(--space-2);
+  min-width: 0;
+  min-height: 88px;
+  padding: var(--space-3);
+  border: 1px solid var(--rl-line);
+  border-radius: var(--radius-5);
+  background: var(--rl-raised);
+  box-shadow: var(--rl-shadow);
+  color: var(--rl-ink);
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+.tile:hover {
+  border-color: var(--rl-accent);
+}
+
+.tile:focus-visible {
+  outline: 2px solid var(--rl-accent);
+  outline-offset: 2px;
+}
+
+.big {
+  grid-column: span 2;
+  min-height: 120px;
+  background: var(--rl-tint-3);
+  border-color: var(--rl-tint-4);
+}
+
+@media (min-width: 700px) {
+  .big {
+    grid-row: span 2;
+  }
+}
+
+.word {
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+
+.big .word {
+  font-size: 36px;
+}
+
+.gloss {
+  font-family: var(--font-display);
+  font-size: 16px;
+  line-height: 1.3;
+  color: var(--rl-muted);
+  overflow-wrap: anywhere;
+}
+
+.big .gloss {
+  font-size: 22px;
+}
+
+.mosaic {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-auto-flow: dense;
+  gap: var(--space-3);
+}
+
+@media (min-width: 700px) {
+  .mosaic {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.note {
+  font-size: 15px;
+  line-height: 1.4;
+  color: var(--rl-ink-secondary);
+  overflow-wrap: anywhere;
+}
