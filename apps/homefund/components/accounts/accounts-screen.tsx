@@ -34,6 +34,7 @@ import {
   Flex,
   IconButton,
   Money,
+  PersonalMark,
   ScreenHeader,
   SegmentedControl,
   Separator,
@@ -546,6 +547,7 @@ function AccountCard({
         <Flex direction="column" gap="1" flexGrow="1" minWidth="0">
           <Flex align="center" gap="2" wrap="wrap">
             <Text weight="medium">{account.name}</Text>
+            {account.ownerUserId && <PersonalMark label={t("ownerPersonal")} />}
             <Badge color={account.kind === "liability" ? "red" : "green"}>
               {t(account.kind === "liability" ? "kindLiability" : "kindAsset")}
             </Badge>

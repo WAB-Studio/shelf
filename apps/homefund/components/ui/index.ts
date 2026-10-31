@@ -86,6 +86,7 @@ export { TextLink } from "./text-link";
 
 export { Page } from "./page";
 
+export { PersonalMark } from "./personal-mark";
 export { MovementRow } from "./movement-row";
 
 export { CategoryTile } from "./category-tile";

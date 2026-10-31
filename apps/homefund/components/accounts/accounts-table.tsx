@@ -7,6 +7,7 @@ import {
   Badge,
   DataTable,
   Flex,
+  PersonalMark,
   Money,
   RowMenu,
   Text,
@@ -78,9 +79,12 @@ export function AccountsTable({
       width: WIDTHS.name,
       cell: (row) => (
         <Flex direction="column" gap="1" minWidth="0">
-          <Text size="2" weight="medium" truncate>
-            {row.name}
-          </Text>
+          <Flex align="center" gap="2" minWidth="0">
+            <Text size="2" weight="medium" truncate>
+              {row.name}
+            </Text>
+            {row.ownerUserId && <PersonalMark label={t("ownerPersonal")} />}
+          </Flex>
           {/* One scope, never both: a personal account names its owner, a
               group account the group (RF-60). */}
           <Text size="2" color="gray">

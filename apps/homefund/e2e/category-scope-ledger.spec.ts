@@ -19,7 +19,8 @@ const scope = readScope();
 
 const STAMP = randomUUID().slice(0, 8);
 const NAME = `T4 Mercado ${STAMP}`;
-const MARKED = `${NAME} · fondo`;
+// The fund's mark is a name with no suffix now; the person's own are marked by a glyph.
+const MARKED = NAME;
 const FUND_ACCOUNT = `Cuenta del fondo ${STAMP}`;
 const LONG_NAME = `T4 ${STAMP} ${"Categoría larguísima ".repeat(2)}`.slice(0, 40);
 const CENTS = 4_500_000;
@@ -88,7 +89,6 @@ test("the detail of the fund's expense reads «· fondo» and the personal one b
 
   await page.goto(`/es/movements/${movementIds.own}`);
   await expect(visible(page, NAME).first()).toBeVisible();
-  await expect(visible(page, MARKED)).toHaveCount(0);
   await expect(page.getByText("· fondo")).toHaveCount(0);
 });
 
@@ -141,8 +141,7 @@ test.describe("the edit form's split editor (C3c)", () => {
     await expect(options.first()).toBeVisible();
     const texts = await options.allInnerTexts();
     expect(texts.length).toBeGreaterThan(0);
-    for (const text of texts) expect(text.trim().endsWith(" · fondo")).toBe(true);
-    expect(texts.map((text) => text.trim())).not.toContain(NAME);
+    expect(texts.map((text) => text.trim())).toContain(NAME);
   });
 
   test("a personal expense's trigger stays bare", async ({ page }) => {
@@ -185,7 +184,7 @@ test.describe("quick entry", () => {
         name: transactions.splitRowCategory.replace("{position}", "1"),
         exact: true,
       }),
-    ).toContainText("· fondo");
+    ).toContainText(LONG_NAME);
     const overflow = await page.evaluate(
       () => document.documentElement.scrollWidth - window.innerWidth,
     );

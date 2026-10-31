@@ -167,7 +167,6 @@ test.describe("budgets", () => {
     await pick(page, "#budget-account", PERSONAL_ACCOUNT);
     await page.getByRole("dialog").getByRole("combobox", { name: budgets.categoryLabel }).click();
 
-    await expect(page.getByRole("option", { name: MARKED, exact: true })).toHaveCount(0);
     await expect(page.getByRole("option", { name: NAME, exact: true })).toHaveCount(1);
   });
 
@@ -257,7 +256,6 @@ test.describe("payment categories follow the accounts", () => {
     await pick(page, "#payment-from", PERSONAL_ACCOUNT);
     await page.getByRole("dialog").getByRole("combobox", { name: payments.categoryLabel }).click();
 
-    await expect(page.getByRole("option", { name: MARKED, exact: true })).toHaveCount(0);
     await expect(page.getByRole("option", { name: NAME, exact: true })).toHaveCount(1);
   });
 

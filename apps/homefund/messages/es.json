@@ -423,7 +423,7 @@
     "placementLocked": "El lugar no se puede cambiar después de crear la categoría.",
     "personalEmptyTitle": "Todavía no tienes categorías propias",
     "personalEmptyDescription": "Crea una categoría tuya para clasificar los movimientos de tus cuentas personales.",
-    "scopedName": "{name} · fondo",
+    "scopedName": "{name}",
     "leaderOnly": "Pide al propietario del fondo que cree o cambie las categorías del fondo.",
     "subcategoryCount": "{count, plural, one {# subcategoría} other {# subcategorías}}",
     "tableCategory": "Categoría",

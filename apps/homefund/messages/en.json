@@ -423,7 +423,7 @@
     "placementLocked": "Where a category goes cannot change after it is created.",
     "personalEmptyTitle": "You have no categories of your own yet",
     "personalEmptyDescription": "Create a category of your own to classify the movements of your personal accounts.",
-    "scopedName": "{name} · fund",
+    "scopedName": "{name}",
     "leaderOnly": "Ask the fund's owner to create or change the fund's categories.",
     "subcategoryCount": "{count, plural, one {# subcategory} other {# subcategories}}",
     "tableCategory": "Category",
