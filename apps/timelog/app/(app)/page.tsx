@@ -1,7 +1,7 @@
 import { getTranslations } from "next-intl/server";
 
 import { BarRows } from "@/components/screens/app-rows";
-import { Stack, Text, Title } from "@/components/ui";
+import { Hero, Stack, Text, Title } from "@/components/ui";
 import { appsBetween, uploadSpan } from "@/lib/queries";
 import { sum } from "@/lib/totals";
 import { calendarWords } from "@/lib/words";
@@ -15,18 +15,20 @@ export default async function TodayPage() {
 
   return (
     <Stack gap={4}>
-      <Stack gap={1}>
-        <Title>{t("title", { weekday: words.weekday(today), day: words.dayOfMonth(today), month: words.month(today) })}</Title>
-        {apps.length > 0 ? (
-          <Text variant="meta">
-            {t("total")} <Text variant="total" mono>{words.duration(total)}</Text>
-          </Text>
-        ) : (
-          <Text variant="meta" as="p">
-            {span.lastReceived === null ? t("never") : `${t("empty")} · ${t("lastUpload", { when: words.moment(span.lastReceived) })}`}
-          </Text>
-        )}
-      </Stack>
+      <Hero>
+        <Stack gap={2}>
+          <Title>{t("title", { weekday: words.weekday(today), day: words.dayOfMonth(today), month: words.month(today) })}</Title>
+          {apps.length > 0 ? (
+            <Text variant="meta">
+              {t("total")} <Text variant="total" mono mark>{words.duration(total)}</Text>
+            </Text>
+          ) : (
+            <Text variant="meta" as="p">
+              {span.lastReceived === null ? t("never") : `${t("empty")} · ${t("lastUpload", { when: words.moment(span.lastReceived) })}`}
+            </Text>
+          )}
+        </Stack>
+      </Hero>
       <BarRows
         rows={apps.map((one) => ({
           key: one.app,

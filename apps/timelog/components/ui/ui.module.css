@@ -33,15 +33,20 @@
 
 .meter { min-height: 48px; justify-content: center; }
 
-.title { margin: 0; font-size: 28px; font-weight: 600; line-height: 1.2; }
+.title { margin: 0; font-family: var(--font-display), var(--font-sans), sans-serif; font-size: 36px; font-weight: 700; line-height: 1.1; letter-spacing: -0.02em; }
+@media (min-width: 720px) { .title { font-size: 44px; } }
+
+.hero { padding: 24px 20px; border-radius: 20px; background: var(--tl-block); color: var(--tl-block-text); }
+.hero .meta { color: var(--tl-block-text); opacity: 0.75; }
+.mark { padding: 0 8px; border-radius: 6px; background: var(--tl-mark); color: var(--tl-mark-ink); font-weight: 500; }
 .total { font-size: 22px; }
 .row { font-size: 16px; }
 .meta { font-size: 14px; color: var(--tl-muted); }
 .mono { font-family: var(--font-mono), ui-monospace, monospace; font-variant-numeric: tabular-nums; }
 .name { overflow-wrap: anywhere; }
 
-.track { height: 6px; border-radius: 3px; background: var(--tl-track); overflow: hidden; }
-.fill { height: 100%; border-radius: 3px; background: var(--tl-bar); }
+.track { height: 8px; border-radius: 4px; background: var(--tl-track); overflow: hidden; }
+.fill { height: 100%; border-radius: 4px; background: var(--tl-bar); }
 
 .link {
   color: var(--tl-bar);
@@ -71,9 +76,9 @@
 
 .button {
   min-height: 48px;
-  padding: 0 16px;
+  padding: 0 24px;
   border: 0;
-  border-radius: 8px;
+  border-radius: 999px;
   background: var(--tl-bar);
   color: var(--tl-bg);
   font: inherit;

@@ -25,7 +25,7 @@ Sand that fell. The screen says how much and where, and judges nothing.
 - Background `#14120f`, raised `#1d1a16`, text `#efe9df`, muted `#9a9184`, bar `#d9a441` (sand),
   bar track `#2a2620`. Light: background `#f7f3ec`, raised `#efe9df`, text `#1d1a16`, muted
   `#6f675b`, bar `#a8761a`, track `#e4ddd1`.
-- Sans: Inter. Mono: JetBrains Mono. Sizes 14 (meta), 16 (row), 22 (day total), 28 (title).
+- Sans: Inter. Mono: JetBrains Mono. Titles: Space Grotesk 700. Sizes 14 (meta), 16 (row), 22 (day total), 36 (title; 44 on the desktop).
 - Gutter 16 on the phone, content 720 max on the desktop. A row is 48 tall at least.
 
 ## Screens
@@ -39,3 +39,25 @@ Sand that fell. The screen says how much and where, and judges nothing.
   and the command line that uses it; then the keys as rows (name, «usada <cuándo>», «Revocar»).
 - The nav: «Hoy», «Semana», «Llaves», a bar at the foot on the phone, a row above the title on
   the desktop. A day with nothing reads «—».
+
+## Grafito y señal (2026-10-30)
+
+Restyle by the recipe the user took from agendaamiga.com, with TimeLog's own colours: a title face
+with character, one accent, one highlight used sparingly, one dark brand block, pill buttons,
+tabular figures. It replaces the sand tokens above. Why: a computer's time is read off a
+screen, so graphite with electric cyan (instrument panel) and Space Grotesk, a technical
+grotesque, instead of warm sand and generic Inter titles. Dark stays the primary face.
+
+- Accent: cyan, on the bars, links and primary buttons. Highlight: signal red, only behind the day
+  total on «Hoy», never as text. Brand block: «Hoy» title and total in a graphite block with
+  radius 20, graphite in both faces.
+- Primary buttons are pills. Titles are 36/44 bold, tracking -0.02em. Durations stay mono, tabular.
+
+| Token | Dark | Light | Pair | Ratio |
+|---|---|---|---|---|
+| `--tl-bg` / `--tl-text` | `#0c0e11` / `#eef2f6` | `#f6f8fa` / `#0e1115` | text on ground | 17.18 / 17.78 |
+| `--tl-muted` | `#8f9aa8` | `#566170` | on ground | 6.77 / 5.91 |
+| `--tl-bar` | `#22d3ee` | `#00687a` | on ground | 10.69 / 6.05 |
+| `--tl-bar` | | | on raised (`#151a20` / `#e8edf2`) | ≥ 9.07 / 5.47 |
+| `--tl-block` / `--tl-block-text` | `#1a2028` / `#f2f6fa` | `#0e1115` / `#f2f6fa` | text on block | 15.09 / 17.43 |
+| `--tl-mark` / `--tl-mark-ink` | `#ff4d42` / `#0e1115` | same | ink on mark | 5.76 |

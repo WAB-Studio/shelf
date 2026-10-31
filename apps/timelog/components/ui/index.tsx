@@ -31,15 +31,20 @@ export function Meter({ name, figure, share, label }: { name: ReactNode; figure:
   );
 }
 
+// The brand block: the one dark block on the main screen.
+export function Hero({ children }: { children: ReactNode }) {
+  return <section className={styles.hero}>{children}</section>;
+}
+
 export function Title({ children }: { children: ReactNode }) {
   return <h1 className={styles.title}>{children}</h1>;
 }
 
 type TextVariant = "total" | "row" | "meta";
 
-export function Text({ variant = "row", mono, as = "span", children }: { variant?: TextVariant; mono?: boolean; as?: "span" | "p"; children: ReactNode }) {
+export function Text({ variant = "row", mono, mark, as = "span", children }: { variant?: TextVariant; mono?: boolean; mark?: boolean; as?: "span" | "p"; children: ReactNode }) {
   const Tag = as;
-  return <Tag className={join(styles[variant], mono && styles.mono, !mono && styles.name)}>{children}</Tag>;
+  return <Tag className={join(styles[variant], mono && styles.mono, mark && styles.mark, !mono && styles.name)}>{children}</Tag>;
 }
 
 // One bar, its length a share of the longest (DESIGN: the only graphic).

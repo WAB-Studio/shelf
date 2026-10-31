@@ -1,21 +1,26 @@
-/* docs/timelog/DESIGN.md "Tokens": dark is the primary face. */
+/* docs/timelog/DESIGN.md "Grafito y señal". Ratios are WCAG 2 contrast, computed with a node script. */
 :root {
-  --tl-bg: #14120f;
-  --tl-raised: #1d1a16;
-  --tl-text: #efe9df;
-  --tl-muted: #9a9184;
-  --tl-bar: #d9a441;
-  --tl-track: #2a2620;
+  --tl-bg: #0c0e11; /* text 17.18, muted 6.77, bar 10.69 */
+  --tl-raised: #151a20; /* muted 6.13 */
+  --tl-text: #eef2f6;
+  --tl-muted: #8f9aa8;
+  --tl-bar: #22d3ee; /* electric cyan: bars, links, buttons (ink #0c0e11 on it 10.69) */
+  --tl-track: #232a33;
+  --tl-block: #1a2028; /* the brand block: text 15.09, cyan 9.07 */
+  --tl-block-text: #f2f6fa;
+  --tl-mark: #ff4d42; /* signal red, one mark per screen; ink #0e1115 on it 5.76 */
+  --tl-mark-ink: #0e1115;
 }
 
 @media (prefers-color-scheme: light) {
   :root {
-    --tl-bg: #f7f3ec;
-    --tl-raised: #efe9df;
-    --tl-text: #1d1a16;
-    --tl-muted: #6f675b;
-    --tl-bar: #a8761a;
-    --tl-track: #e4ddd1;
+    --tl-bg: #f6f8fa; /* text 17.78, muted 5.91, bar 6.05 */
+    --tl-raised: #e8edf2; /* bar 5.47, muted 5.34 */
+    --tl-text: #0e1115;
+    --tl-muted: #566170;
+    --tl-bar: #00687a; /* deep cyan: paper #f6f8fa on it 6.05 */
+    --tl-track: #d5dce4;
+    --tl-block: #0e1115; /* graphite in both faces: text 17.43, cyan #22d3ee 10.47 */
   }
 }
 
