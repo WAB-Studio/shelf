@@ -3314,3 +3314,53 @@ every GoalLog page reloaded itself ~10 times a second (`[HMR] connected` → `[F
 - Count main-frame navigations of one page for 4 s: more than 2 is this.
 - Stop the server, move `apps/<app>/.next/dev` into the lane's `private/`, start again. 31/31 green after.
 - Stop the dev server before checking out another commit in its worktree.
+
+
+## The deploy merge deletes `integracion`
+
+Measured 2026-10-31, PR #730 (integracion → main).
+
+The repo has `delete_branch_on_merge` on, so merging the deploy PR deleted `integracion` on GitHub.
+The next branch could not be cut from it (`couldn't find remote ref integracion`).
+
+- Right after a deploy merge, recreate it from main: `git push origin <main sha>:refs/heads/integracion`.
+- Merge the deploy PR with `--merge`, never `--squash`: a squashed main forgets integracion's history,
+  and the next deploy conflicts on every file.
+
+## A branch cut from a branch conflicts after the parent squash-merges
+
+Measured 2026-10-31, PRs #726 and #727 against #711.
+
+`homefund-ronda3` was cut from `homefund-estilo`. Once #711 squash-merged `homefund-estilo`,
+GitHub marked #726 `CONFLICTING` on 28 files and CI never started. The squash commit is no ancestor
+of the child, so git saw two edits of the same lines. The content was identical:
+`git diff origin/homefund-estilo origin/integracion -- apps/homefund` was empty.
+
+- Check that diff is empty, then `git merge -X ours origin/integracion` on the child.
+- Then `git diff HEAD^1 HEAD -- apps/<app>` must be empty. On 2026-10-31 it was not: two
+  non-conflicting hunks came back from the parent (`reports-screen.tsx`, `filter-bar.tsx`) and had to be
+  restored with `git checkout HEAD^1 -- <file>`.
+
+## GoalLog's browser suite does not run on a pull request
+
+Measured 2026-10-31, runs 41166595127 and 41225242801.
+
+`pulsar-e2e` in `.github/workflows/ci.yml` runs on push to integracion or main and on
+`workflow_dispatch`, never on `pull_request`. #709 and #715 merged green on their PRs and left about
+560 GoalLog specs red on integracion; nobody saw it until #718. #729 repaired them.
+
+- Before merging a GoalLog PR, run `gh workflow run ci.yml -R WAB-Studio/shelf --ref <branch>` and wait
+  for every `pulsar-e2e (n)` shard.
+
+## Production migrations do not run with the deploy
+
+Measured 2026-10-31, deploy 5f8fd352.
+
+Vercel builds the apps; nothing applies `db/migrations`. After #730 shipped, HomeFund's code read
+`transactions.contributed_by_member_id`, which production did not have, and TimeLog lacked 0001 and 0002.
+
+- The person runs `npm run db:migrate` in each app from a checkout of **main**. On 2026-10-31 the first
+  run came from a stale branch without 0079 and reported «migrations applied successfully» with nothing applied.
+- `apps/timelog/.env.local` points to 127.0.0.1. Production TimeLog migrates with
+  `node --env-file=../homefund/.env.local ../../node_modules/drizzle-kit/bin.cjs migrate` from `apps/timelog`.
+- Confirm in the database afterwards: count `drizzle.__drizzle_migrations*` rows against each journal.
