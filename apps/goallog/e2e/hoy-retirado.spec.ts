@@ -126,7 +126,8 @@ test("a commitment retired today reads on a day before as it did then (RP-13)", 
     await page.goto(`/dia/${yesterday}`);
     await expect(page.getByText("Hecha ayer", { exact: true })).toBeVisible();
     await expect(page.getByText("Pendiente ayer", { exact: true })).toBeVisible();
-    await expect(page.getByText("todos los días", { exact: true })).toBeVisible();
+    // Both rows say their cadence now: a marked row no longer swaps it for its hour (decided 2026-10-31).
+    await expect(page.getByText("todos los días", { exact: true })).toHaveCount(2);
   } finally {
     await context.close();
     await db`delete from goals.goals where id = ${goal.id} and user_id = ${person.id}`;

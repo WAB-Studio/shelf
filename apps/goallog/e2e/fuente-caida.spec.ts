@@ -98,7 +98,7 @@ test.describe("an evidence source that cannot be read (RNP-04)", () => {
       // never names a source it could not read. Literals on purpose.
       for (const width of [390, 1440]) {
         await page.setViewportSize({ width, height: 844 });
-        const evidence = page.locator("button", { hasText: seeded.evidenceName }).locator("visible=true");
+        const evidence = page.locator("div:has([data-state])", { hasText: seeded.evidenceName }).last().locator("visible=true");
         const meta = (await evidence.innerText()).replace(seeded.evidenceName, "").replace(/\s+/g, " ").trim();
         expect(meta, `at ${width}`).toBe("sin leer la fuente · pide 3 búsquedas");
         expect(meta).not.toMatch(/diccionario|lectura|Reading/i);
@@ -142,7 +142,7 @@ test.describe("an evidence source that cannot be read (RNP-04)", () => {
       await expect(page.getByText(FAILURE)).toHaveCount(0);
 
       // `MetaTotal` (399): the total's own line stays, and today's note sits under it.
-      const since = page.locator("p", { hasText: /^en total, desde el / }).locator("visible=true");
+      const since = page.getByText(/^en total, desde el /).locator("visible=true");
       await expect(since).toHaveCount(1);
       const sinceBox = (await boxOf(since));
       const noteBox = (await boxOf(page.getByRole("status").filter({ hasText: NOTE_TITLE })));
@@ -237,7 +237,7 @@ test.describe("an evidence source that cannot be read (RNP-04)", () => {
           // Source read: the same figure, with no «sin leer».
           for (const width of [390, 1440]) {
             await page.setViewportSize({ width, height: 844 });
-            const row = page.locator("button", { hasText: seeded.evidenceName }).locator("visible=true");
+            const row = page.locator("div:has([data-state])", { hasText: seeded.evidenceName }).last().locator("visible=true");
             const meta = (await row.innerText()).replace(seeded.evidenceName, "").replace(/\s+/g, " ").trim();
             expect(meta, `at ${width}`).toContain("3 búsquedas");
             expect(meta).not.toContain("sin leer");
