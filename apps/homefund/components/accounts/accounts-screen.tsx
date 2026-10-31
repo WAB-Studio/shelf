@@ -32,7 +32,6 @@ import {
   FilterBar,
   FilterSelect,
   Flex,
-  Heading,
   IconButton,
   Money,
   ScreenHeader,
@@ -362,10 +361,7 @@ export function AccountsScreen({
 
       <Box display={{ initial: "block", lg: "none" }}>
         <Flex direction="column" gap="4">
-          <Flex justify="between" align="center" gap="3" wrap="wrap">
-            <Heading size="5">{t("title")}</Heading>
-            {!archived && addButton}
-          </Flex>
+          <ScreenHeader title={t("title")} actions={!archived ? addButton : undefined} />
           <SegmentedControl.Root
             value={archived ? "archived" : "active"}
             onValueChange={onTabChange}

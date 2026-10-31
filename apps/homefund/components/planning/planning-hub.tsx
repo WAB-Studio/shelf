@@ -10,7 +10,7 @@ import {
   Flex,
   FundChip,
   Grid,
-  Heading,
+  ScreenHeader,
   PlainLink,
   Text,
 } from "@/components/ui";
@@ -82,10 +82,10 @@ export async function PlanningHub({
 
   return (
     <Flex direction="column" gap="4">
-      <Flex align="center" gap="2">
-        <Heading size="6">{t("title")}</Heading>
-        {groupName !== null && <FundChip label={tKey("fund.label")} />}
-      </Flex>
+      <ScreenHeader
+        title={t("title")}
+        meta={groupName !== null ? <FundChip label={tKey("fund.label")} /> : undefined}
+      />
 
       <Flex direction="column" gap="3">
         {HUB_ORDER.map((key) => {

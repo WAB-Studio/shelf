@@ -67,6 +67,7 @@ export {
   Sidebar,
   SidebarSeparator,
   SidebarHead,
+  SidebarBody,
   SidebarFoot,
   SidebarAction,
   SidebarPerson,

@@ -26,7 +26,6 @@ import {
   Dialog,
   EmptyState,
   Flex,
-  Heading,
   ScreenHeader,
   Spinner,
   Text,
@@ -285,7 +284,7 @@ export function InboxScreen({
 
       <Box display={{ initial: "block", lg: "none" }}>
         <Flex direction="column" gap="4">
-          <Heading size="5">{t("title")}</Heading>
+          <ScreenHeader title={t("title")} />
 
           {deliveries.length === 0 ? (
             emptyState

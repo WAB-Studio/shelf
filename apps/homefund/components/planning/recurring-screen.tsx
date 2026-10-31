@@ -27,7 +27,7 @@ import {
   Figure,
   Flex,
   FundChip,
-  Heading,
+  ScreenHeader,
   IconButton,
   PlainLink,
   RowMenu,
@@ -135,13 +135,11 @@ export function RecurringScreen({
 
   return (
     <Flex direction="column" gap="4">
-      <Flex justify="between" align="center" gap="3" wrap="wrap">
-        <Flex align="center" gap="2">
-          <Heading size="5">{t("title")}</Heading>
-          {hasGroup && <FundChip label={tKey("fund.label")} />}
-        </Flex>
-        {addButton}
-      </Flex>
+      <ScreenHeader
+        title={t("title")}
+        meta={hasGroup ? <FundChip label={tKey("fund.label")} /> : undefined}
+        actions={addButton}
+      />
 
       <Box display={{ initial: "none", md: "block" }}>
         <PlanningSubNav />

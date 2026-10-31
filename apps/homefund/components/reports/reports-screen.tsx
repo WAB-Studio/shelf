@@ -8,6 +8,7 @@ import {
   CategoryTile,
   Flex,
   Heading,
+  ScreenHeader,
   Disc,
   Money,
   ReportCard,
@@ -35,10 +36,10 @@ const SERIES_COLORS = {
 function ReportsHead({ title }: { title: string }) {
   const t = useTranslations("review");
   return (
-    <Flex justify="between" align="center" gap="3" wrap="wrap">
-      <Heading size="6">{title}</Heading>
-      <TextLink href="/reports/review" size="2" weight="medium">{t("entry")}</TextLink>
-    </Flex>
+    <ScreenHeader
+      title={title}
+      actions={<TextLink href="/reports/review" size="2" weight="medium">{t("entry")}</TextLink>}
+    />
   );
 }
 

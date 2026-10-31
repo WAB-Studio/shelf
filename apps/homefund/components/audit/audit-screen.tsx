@@ -16,7 +16,7 @@ import {
   EmptyState,
   FilterField,
   Flex,
-  Heading,
+  ScreenHeader,
   IconButton,
   Select,
   TextField,
@@ -156,8 +156,9 @@ export function AuditScreen({
 
   return (
     <Flex direction="column" gap="4">
-      <Flex justify="between" align="center" gap="3">
-        <Heading size="5">{t("title")}</Heading>
+      <ScreenHeader
+        title={t("title")}
+        actions={
         <IconButton
           type="button"
           variant={showFilters || filtersActive ? "soft" : "ghost"}
@@ -169,7 +170,8 @@ export function AuditScreen({
         >
           <SlidersHorizontal size={18} />
         </IconButton>
-      </Flex>
+        }
+      />
 
       {showFilters && (
         <Card>
