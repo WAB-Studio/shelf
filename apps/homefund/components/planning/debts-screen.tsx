@@ -841,6 +841,12 @@ function InstallmentCard({
     position.nextAmountCents !== null
       ? { date: position.nextDueDate, amountCents: position.nextAmountCents }
       : null;
+  // A loan with no counted plan lines still bills its terms' payment: the same
+  // figure the desktop table's «Pago mínimo» column reads.
+  const dueCents =
+    row.dueInstallmentsCents > 0 || row.owedCents === 0
+      ? row.dueInstallmentsCents
+      : (row.minimumPaymentCents ?? 0);
 
   return (
     <Card>
@@ -869,7 +875,7 @@ function InstallmentCard({
         <Flex justify="between" gap="3">
           <Stat
             label={t("dueInstallments")}
-            value={formatMoney(row.dueInstallmentsCents, row.currency, locale)}
+            value={formatMoney(dueCents, row.currency, locale)}
           />
           {row.nextDueDate !== null && (
             <Stat
