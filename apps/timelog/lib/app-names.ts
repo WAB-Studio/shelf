@@ -23,6 +23,8 @@ const KNOWN: Record<string, string> = {
   steam: "Steam",
   obs64: "OBS",
   whatsapp: "WhatsApp",
+  javaw: "Java",
+  java: "Java",
 };
 
 // Windows' own background hosts: noise on a day's list, kept together.
@@ -44,6 +46,9 @@ const SYSTEM = new Set([
   "openconsole",
 ]);
 
+// Updaters, helpers, services, hosts and brokers: background processes nobody opened.
+const BACKGROUND = /(updater|helper|service|host|broker)/;
+
 const TEAMS = /^(ms-?teams|teams|microsoft\.teams.*)$/;
 
 // «Code.exe» to «VS Code»; a process not known keeps its name without the extension. `null` is system noise.
@@ -52,7 +57,9 @@ export function readableApp(raw: string): string | null {
   const key = bare.toLowerCase();
   if (SYSTEM.has(key)) return null;
   if (TEAMS.test(key)) return "Teams";
-  return KNOWN[key] ?? bare;
+  const known = KNOWN[key];
+  if (known !== undefined) return known;
+  return BACKGROUND.test(key) ? null : bare;
 }
 
 // The day's apps under their readable names: two processes with one name add up, system noise becomes

@@ -68,6 +68,7 @@
 .card .row { font-weight: 500; }
 
 .days { display: flex; align-items: stretch; gap: 8px; }
+@media (max-width: 719px) { .days { gap: 2px; } .hero { padding: 24px 16px; } }
 .day { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 6px; }
 .dayTrack { width: 100%; max-width: 40px; height: 112px; display: flex; align-items: flex-end; border-radius: 10px; background: var(--tl-track-on-block); overflow: hidden; }
 .dayFill { width: 100%; border-radius: 10px; background: var(--tl-bar-on-block); }

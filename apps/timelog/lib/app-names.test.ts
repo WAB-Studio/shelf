@@ -16,6 +16,12 @@ test("Windows background hosts are system noise", () => {
   for (const raw of ["LockApp.exe", "SearchHost.exe", "msedgewebview2.exe", "ShellExperienceHost.exe"]) assert.equal(readableApp(raw), null);
 });
 
+test("updaters, helpers and services are system noise; javaw reads Java", () => {
+  for (const raw of ["AdobeAcrobatReaderDCUpdaterServiceHelper64.exe", "GoogleUpdate Broker.exe", "OneDriveStandaloneUpdater.exe", "RuntimeBroker.exe"]) assert.equal(readableApp(raw), null);
+  assert.equal(readableApp("javaw.exe"), "Java");
+  assert.equal(readableApp("Obscure Tool.exe"), "Obscure Tool");
+});
+
 test("apps group under their readable names, system noise as one row", () => {
   const rows = readableApps(
     [
