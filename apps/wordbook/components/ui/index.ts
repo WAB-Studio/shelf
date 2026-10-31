@@ -23,13 +23,23 @@ export { Card } from "./card";
 
 export { Figure } from "./figure";
 
-export { Band } from "./band";
+export { PageTitle } from "./page-title";
+
+export { Highlight } from "./highlight";
+
+export { MarkedWord } from "./marked-word";
 
 export { Wordmark } from "./wordmark";
 
 export { Separator } from "./separator";
 
 export { Page } from "./page";
+
+export { Panels } from "./panels";
+
+export { Mosaic, Tile } from "./tile";
+
+export { ActionBar, FlashCard } from "./flash-card";
 
 export { BottomNav } from "./bottom-nav";
 

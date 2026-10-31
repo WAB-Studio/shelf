@@ -11,19 +11,30 @@ import { Flex, Link, TapTarget, Text } from "@/components/ui";
 export function TranslationList({
   items,
   muted,
+  lead,
 }: {
   items: readonly string[];
   muted?: boolean;
+  // The first translation set large, as the entry's main one; the rest follow on the same line.
+  lead?: boolean;
 }) {
   const t = useTranslations("word");
   const [open, setOpen] = useState(false);
   const { shown, hidden } = previewTranslations(items);
   const line = open ? items : shown;
+  const [first, ...rest] = line;
 
   return (
     <Flex direction="column" gap="1" align="start">
       <Text variant="translation" muted={muted}>
-        {line.join(", ")}
+        {lead && first !== undefined ? (
+          <>
+            <Text variant="lead">{rest.length > 0 ? `${first},` : first}</Text>
+            {rest.length > 0 && ` ${rest.join(", ")}`}
+          </>
+        ) : (
+          line.join(", ")
+        )}
       </Text>
       {hidden > 0 && (
         <Link asChild underline="always" muted>

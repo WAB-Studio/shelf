@@ -75,7 +75,9 @@ const CACHE_DIR = path.join(APP_DIR, ".cache");
 const TARBALL_PATH = path.join(CACHE_DIR, `freedict-eng-spa-${EDITION}.src.tar.xz`);
 const EXTRACT_DIR = path.join(CACHE_DIR, "extracted");
 const OUTPUT_DIR = path.join(APP_DIR, "public", "dictionary");
-const JSON_FILENAME = `eng-spa-${EDITION}.json`;
+// The payload version is in the name: a new payload is a new URL, so the year-long cache never hands an
+// installed copy the body of the version it replaces.
+const JSON_FILENAME = `eng-spa-${EDITION}-v${PAYLOAD_VERSION}.json`;
 const MANIFEST_FILENAME = "manifest.json";
 const LICENSE_FILENAME = "LICENSE.txt";
 

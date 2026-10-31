@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 import { useSyncExternalStore } from "react";
 
 import { chooseTheme, currentTheme, subscribeTheme, type ThemeChoice as Mode } from "@/lib/theme-choice";
+import styles from "./theme-choice.module.css";
 
 // RNL-07's control, «Claro» · «Oscuro», showing the mode on screen now: the system's until one is chosen.
 // Each item saves on its own tap, so the mode already showing can be kept too: the root fires nothing then.
@@ -15,6 +16,7 @@ export function ThemeChoice() {
   return (
     <SegmentedControl.Root
       size="3"
+      className={styles.root}
       aria-label={t("label")}
       value={mode}
     >

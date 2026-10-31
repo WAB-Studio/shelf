@@ -881,7 +881,9 @@ for (const width of [360, 1280]) {
       const bodyBox = await body.boundingBox();
       const firstRow = await page.getByText("doomscrolling", { exact: true }).last().boundingBox();
       expect(labelBox!.y).toBeLessThan(bodyBox!.y);
-      expect(bodyBox!.y).toBeLessThan(firstRow!.y);
+      // Stacked on a phone; from 1280px the searches sit in the panel beside the answer.
+      if ((page.viewportSize()?.width ?? 0) >= 1280) expect(firstRow!.x).toBeGreaterThan(bodyBox!.x + bodyBox!.width - 1);
+      else expect(bodyBox!.y).toBeLessThan(firstRow!.y);
 
       // A dictionary word page speaks in the serif voice.
       const family = await body.evaluate((el) => getComputedStyle(el).fontFamily);

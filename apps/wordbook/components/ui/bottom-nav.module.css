@@ -109,6 +109,15 @@
     border-inline-start-color: var(--rl-accent);
   }
 
+  /* docs/wordbook/DESIGN.md: the sidebar has room, so its labels read as words,
+     15px sentence case, and not as the bar's 11px capitals. */
+  .label {
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: 0;
+    text-transform: none;
+  }
+
   .spacer {
     display: block;
     flex: 1 1 auto;

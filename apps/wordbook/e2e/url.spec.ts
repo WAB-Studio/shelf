@@ -2,6 +2,9 @@ import { expect, freezeTimers, pageTasks, runClock, test } from "./fixtures";
 import type { Page } from "@playwright/test";
 
 import messages from "../messages/es.json";
+
+// The headline carries its key word in a tag the screen turns into the marigold.
+const BRAND_LINE = messages.search.brandLine.replace(/<\/?mark>/g, "");
 import manifest from "../public/dictionary/manifest.json";
 
 // Chromium's built-in `Translator` hangs `availability()` forever
@@ -42,7 +45,7 @@ test("pressing back after one lookup keeps the app open and empties the box", as
   expect(page.url()).not.toBe("about:blank");
   await expect(searchBox).toBeVisible();
   await expect(searchBox).toHaveValue("");
-  await expect(page.getByText(messages.search.brandLine)).toBeVisible();
+  await expect(page.getByText(BRAND_LINE)).toBeVisible();
 });
 
 test("three lookups in a row leave three stops for back to walk, in order", async ({ page }) => {
@@ -75,7 +78,7 @@ test("three lookups in a row leave three stops for back to walk, in order", asyn
 
   await page.goBack();
   await expect(searchBox).toHaveValue("");
-  await expect(page.getByText(messages.search.brandLine)).toBeVisible();
+  await expect(page.getByText(BRAND_LINE)).toBeVisible();
 });
 
 test("opening /?q=serendipity cold answers it with no typing", async ({ page }) => {

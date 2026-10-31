@@ -37,8 +37,44 @@ export function cleanGloss(gloss: string): string {
   return wrapped !== null && !/["“”]/.test(wrapped[1]) ? wrapped[1].trim() : gloss;
 }
 
+const INFINITIVE = /(ar|er|ir|ár|ér|ír|arse|erse|irse)$/u;
+
+// A gloss that is only another gloss of the same list inflected -- `libros` beside `libro` -- or, in a verb's
+// entry, a bare first-person form (`digo`, `miento`) where infinitives stand: it names no meaning of its own.
+export function isInflectedGloss(gloss: string, siblings: readonly string[], pos: string): boolean {
+  if (/\s/u.test(gloss)) return false;
+  if (gloss.endsWith("s") && siblings.includes(gloss.slice(0, -1))) return true;
+  if (gloss.endsWith("es") && siblings.includes(gloss.slice(0, -2))) return true;
+  return pos === "v" && gloss.endsWith("o") && siblings.some((other) => other !== gloss && INFINITIVE.test(other));
+}
+
+// Reviewed by hand against the shipped asset: a gloss the source gets wrong (`alegría` for bleak) leaves, and
+// the sense a reader means leads. Keyed `headword|pos`.
+export const KNOWN_WRONG: Readonly<Record<string, readonly string[]>> = {
+  "mean|v": ["intencionar decir", "intencionar"],
+  "fair|adj": ["pastel", "viento de popa"],
+  "bleak|adj": ["alegría"],
+};
+export const LEADING: Readonly<Record<string, readonly string[]>> = {
+  "mean|v": ["significar", "querer decir"],
+  "fair|adj": ["justo", "razonable"],
+  "bleak|adj": ["desolado"],
+};
+
+// Frequency demotion first (the dictionary's order stands), then the inflected forms of a sibling go last, then the reviewed leads.
+export function rankTranslations(headword: string, pos: string, translations: readonly string[]): string[] {
+  const key = `${headword.toLowerCase()}|${pos}`;
+  const wrong = KNOWN_WRONG[key] ?? [];
+  const kept = translations.filter((gloss) => !wrong.includes(gloss));
+  const ranked = demoteRareTranslations(kept);
+  const plain = ranked.filter((gloss) => !isInflectedGloss(gloss, kept, pos));
+  const ordered = [...plain, ...ranked.filter((gloss) => isInflectedGloss(gloss, kept, pos))];
+  const lead = (LEADING[key] ?? []).filter((gloss) => ordered.includes(gloss));
+  return [...lead, ...ordered.filter((gloss) => !lead.includes(gloss))];
+}
+
 export function orderEntryTranslations(entry: RawEntry): RawEntry {
   const [headword, pos, ipa, translations, definition] = entry;
   const cleaned = [...new Set(translations.map(cleanGloss))];
-  return [headword, pos, ipa, demoteRareTranslations(cleaned), definition];
+  return [headword, pos, ipa, rankTranslations(headword, pos, cleaned), definition];
 }

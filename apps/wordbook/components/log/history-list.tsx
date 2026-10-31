@@ -4,16 +4,16 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import NextLink from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { X } from "lucide-react";
-import { useTranslations } from "next-intl";
+import { useFormatter, useTranslations } from "next-intl";
 
 import { readWordStudy, type StudyRow } from "@/lib/log/summary";
 import { countRecords, LOG_CLEARED_EVENT, LOG_FLUSHED_EVENT, readSyncState } from "@/lib/log/record";
 import { deleteStudyGroup, LOG_DELETED_EVENT } from "@/lib/log/delete";
 import { countKind } from "@/lib/log/outcome";
+import { groupByDay, newestRows } from "@/lib/log/diary";
 import { filterStudyRows, rememberFilter } from "@/lib/log/study-filter";
 import { splitTranslations } from "@/lib/log/translation-line";
 import { SYNC_LANDED_EVENT } from "@/lib/sync/driver";
-import { TranslationList } from "@/components/translations/translation-list";
 import {
   Button,
   Card,
@@ -83,11 +83,11 @@ const StudyRowItem = memo(function StudyRowItem({
       : row.forms.map((form) => form.text).join(", ");
   return (
     // The row is a card. The word and its count are the link; the ✕ sits in a track of its own
-    // beside it, so a tap on it can never navigate (`RegistroBorrarFila`). The translations sit
-    // under both, outside the link, because their «ver más» is a control of its own.
+    // beside it, so a tap on it can never navigate (`RegistroBorrarFila`). The main translation sits
+    // under both, outside the link.
     <Card padding="3">
       <Grid columns="minmax(0, 1fr) 44px" gapY="2" align="center">
-        <Link asChild underline="none">
+        <Link asChild underline="none" ink>
           <NextLink href={`/registro/${encodeURIComponent(row.key)}`} prefetch={false}>
             <TapTarget width="100%" align="center" justify="between" gap="3">
               {/* `Text truncate` needs a flex container of its own to clip (docs/wordbook/DESIGN.md
@@ -132,7 +132,9 @@ const StudyRowItem = memo(function StudyRowItem({
             </Text>
           </>
         ) : row.lastTranslation !== null ? (
-          <TranslationList items={splitTranslations(row.lastTranslation)} muted />
+          <Text variant="translation" muted truncate>
+            {splitTranslations(row.lastTranslation)[0]}
+          </Text>
         ) : row.lastOutcome === "unlisted" ? (
           <Text variant="translation" muted>
             {t("study.noResult")}
@@ -334,6 +336,11 @@ export function HistoryList() {
     [readyRows, query],
   );
 
+  const format = useFormatter();
+  // The day «today» means is the one the screen opened on.
+  const [openedAt] = useState(() => Date.now());
+  const days = useMemo(() => groupByDay(newestRows(visible, shownRows), openedAt), [visible, shownRows, openedAt]);
+
   const remove = useCallback(async (key: string): Promise<void> => {
     if (inFlightRef.current.has(key)) return;
     inFlightRef.current.add(key);
@@ -482,20 +489,33 @@ export function HistoryList() {
         </Text>
       ) : (
         <Flex direction="column" gap="4">
-          {/* One column on the phone, two and three as the screen widens: a row is a card, so the
-              desktop's width fills with cards and not with a void beside one. */}
-          <Grid columns={{ initial: "1", lg: "2", xl: "3" }} gap="3" align="start">
-            {visible.slice(0, shownRows).map((row) => (
-              <StudyRowItem
-                key={row.key}
-                row={row}
-                phase={target?.key === row.key ? target.phase : undefined}
-                local={target?.key === row.key && target.local}
-                note={target?.key === row.key && target.note}
-                actions={actions}
-              />
-            ))}
-          </Grid>
+          {/* A diary: the days newest first, each with its rows in compact cards. */}
+          {days.map((day) => (
+            <Flex key={`${day.when}-${day.at}`} direction="column" gap="3">
+              <MetaLabel>
+                {day.when === "today"
+                  ? t("study.dayToday", { count: day.rows.length })
+                  : day.when === "yesterday"
+                    ? t("study.dayYesterday", { count: day.rows.length })
+                    : t("study.dayOther", {
+                        count: day.rows.length,
+                        date: format.dateTime(day.at, { weekday: "long", day: "numeric", month: "short" }),
+                      })}
+              </MetaLabel>
+              <Grid columns={{ initial: "1", lg: "2", xl: "3" }} gap="3" align="start">
+                {day.rows.map((row) => (
+                  <StudyRowItem
+                    key={row.key}
+                    row={row}
+                    phase={target?.key === row.key ? target.phase : undefined}
+                    local={target?.key === row.key && target.local}
+                    note={target?.key === row.key && target.note}
+                    actions={actions}
+                  />
+                ))}
+              </Grid>
+            </Flex>
+          ))}
           {visible.length > shownRows && (
             <Flex justify="center">
               <Button size="3" variant="soft" onClick={() => setShownRows(shownRows + PAGE_ROWS)}>

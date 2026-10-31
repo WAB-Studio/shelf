@@ -170,7 +170,7 @@ async function main() {
     providerReply = modelSays(STUB_ANSWER);
 
     const assetPayload = JSON.parse(
-      readFileSync(path.join(APP_DIR, "public", "dictionary", "eng-spa-2025.11.23.json"), "utf8"),
+      readFileSync(path.join(APP_DIR, "public", "dictionary", "eng-spa-2025.11.23-v3.json"), "utf8"),
     ) as DictionaryPayload;
     const index = buildIndex(assetPayload);
     const unlistedLookup = lookupWord(index, admitWord(UNLISTED_WORD) ?? UNLISTED_WORD);

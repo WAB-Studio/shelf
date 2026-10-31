@@ -22,3 +22,14 @@
   letter-spacing: -0.02em;
   overflow-wrap: anywhere;
 }
+
+/* The headword of a dictionary entry: the largest thing on the screen, 48px on a phone and 64px from
+   about 700px of width. */
+.hero.hero {
+  font-family: var(--font-display);
+  font-size: clamp(48px, 9vw, 64px);
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  line-height: 1.05;
+  overflow-wrap: anywhere;
+}

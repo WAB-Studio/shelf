@@ -286,3 +286,10 @@ export function studyHeader(page: Page, lookups: number, words: number, kind: "w
     .filter({ has: page.getByRole("group", { name: lookupsLabel, exact: true }) })
     .filter({ has: page.getByRole("group", { name: wordsLabel, exact: true }) });
 }
+
+// Opens the fold under an entry that lists senses a reader meets seldom, when it has one. A spec that
+// reads every sense of a word calls this first.
+export async function openRareSenses(page: Page): Promise<void> {
+  const fold = page.getByRole("button", { name: /^Ver \d+ sentidos? poco usados?$/ });
+  if ((await fold.count()) > 0) await fold.first().click();
+}
