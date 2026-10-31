@@ -23,7 +23,7 @@ const NO_VALUE = "—";
 const WIDTHS = {
   name: "minmax(0, 1fr)",
   institution: "196px",
-  lastFour: "132px",
+  lastFour: "148px",
   kind: "108px",
   balance: "168px",
   menu: "36px",
@@ -110,7 +110,6 @@ export function AccountsTable({
       key: "lastFour",
       header: t("lastFourLabel"),
       width: WIDTHS.lastFour,
-      align: "end",
       numeric: true,
       cell: (row) =>
         row.lastFour ? (

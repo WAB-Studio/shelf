@@ -151,7 +151,7 @@ function HubCard({
       </Box>
 
       <Box display={{ initial: "none", md: "block" }}>
-        <Grid columns="1fr 220px 210px" gap="4" align="center">
+        <Grid columns="minmax(180px, 1fr) minmax(0, 2fr) 24px" gap="4" align="center">
           <Flex align="center" gap="3" minWidth="0">
             {disc}
             {titleText}
