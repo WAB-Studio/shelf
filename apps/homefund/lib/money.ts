@@ -374,23 +374,26 @@ export function formatAmountTyping(
   // The digits left of the caret, counted before anything is rewritten.
   let digitsBefore = raw.slice(0, caret).replace(/\D/g, "").length;
 
-  // Which mark is the decimal does not depend on the language: the last mark, when
-  // 1 or 2 digits follow it (or none yet, mid-typing), is the decimal whatever it
-  // is; exactly 3 digits make it a group. More than 2 after a mark that is not the
-  // language's own group mark is not cut: it stays as typed, and `parseAmount`
+  // The field reformats on every keystroke, so each state must read as the figure the
+  // person means. The language's own decimal mark followed by 1 or 2 digits is the
+  // decimal; its own group mark is a decimal only as the one mark of the text followed
+  // by a single digit («12.5» on a Spanish keypad), never by two («125.00» is what
+  // backspacing «125.000» leaves: a group). Three digits after any mark are a group.
+  // Longer after the only decimal mark is not cut: it stays as typed and `parseAmount`
   // refuses it with the field's error.
   const marks = raw.match(/[.,]/g) ?? [];
   const lastMark = marks.length === 0 ? -1 : Math.max(raw.lastIndexOf("."), raw.lastIndexOf(","));
   const tail = lastMark === -1 ? "" : raw.slice(lastMark + 1).replace(/\D/g, "");
   const head = lastMark === -1 ? raw : raw.slice(0, lastMark);
   const headDigits = head.replace(/\D/g, "");
-  const markChar = lastMark === -1 ? "" : raw[lastMark];
+  const ownGroup = lastMark !== -1 && raw[lastMark] === groupMark;
 
   let isDecimal = false;
   if (lastMark !== -1) {
-    if (tail.length <= 2) isDecimal = true;
+    if (tail.length <= 1) isDecimal = !ownGroup || marks.length === 1;
+    else if (tail.length === 2) isDecimal = !ownGroup;
     else if (tail.length === 3) isDecimal = headDigits.replace(/^0+/, "") === "";
-    else isDecimal = markChar !== groupMark && marks.length === 1;
+    else isDecimal = !ownGroup && marks.length === 1;
   }
 
   const whole = (isDecimal ? headDigits : raw.replace(/\D/g, "")).replace(/^0+(?=\d)/, "");
