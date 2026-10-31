@@ -20,8 +20,8 @@ import {
   Flex,
   Spinner,
   Text,
-  TextField,
   AmountField,
+  DateInput,
 } from "@/components/ui";
 import { minorUnitExponent, type CurrencyCode } from "@/lib/currency";
 import { todayInBogota } from "@/lib/dates";
@@ -136,11 +136,10 @@ function StatementForm({
                 {t("statementPeriodStartLabel")}
               </FieldLabel>
               <FieldControl>
-                <TextField.Root
+                <DateInput
                   {...field}
                   id="statement-period-start"
                   size="3"
-                  type="date"
                   autoFocus
                   disabled={isPending}
                 />
@@ -159,11 +158,10 @@ function StatementForm({
                 {t("statementCutOffLabel")}
               </FieldLabel>
               <FieldControl>
-                <TextField.Root
+                <DateInput
                   {...field}
                   id="statement-cut-off"
                   size="3"
-                  type="date"
                   disabled={isPending}
                 />
               </FieldControl>
@@ -189,10 +187,9 @@ function StatementForm({
                   </Flex>
                 </FieldLabel>
                 <FieldControl>
-                  <TextField.Root
+                  <DateInput
                     id="statement-due-date"
                     size="3"
-                    type="date"
                     value={field.value ?? ""}
                     onChange={(event) =>
                       field.onChange(event.target.value || null)

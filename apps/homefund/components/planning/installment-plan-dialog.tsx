@@ -21,6 +21,7 @@ import {
   Text,
   TextField,
   AmountField,
+  DateInput,
 } from "@/components/ui";
 import {
   BASE_CURRENCY,
@@ -364,11 +365,10 @@ function PlanForm({
             <Field invalid={fieldState.invalid}>
               <FieldLabel htmlFor="plan-start">{t("startDateLabel")}</FieldLabel>
               <FieldControl>
-                <TextField.Root
+                <DateInput
                   {...field}
                   id="plan-start"
                   size="3"
-                  type="date"
                   disabled={isPending}
                 />
               </FieldControl>

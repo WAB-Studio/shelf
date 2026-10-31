@@ -44,6 +44,7 @@ import {
   TextField,
   type Responsive,
   AmountField,
+  DateInput,
 } from "@/components/ui";
 import type { TransactionFormOptions } from "@/db/queries/transaction-form";
 import type { TransactionListRow } from "@/db/queries/transactions";
@@ -947,11 +948,10 @@ export function MovementForm({
               <Field invalid={fieldState.invalid}>
                 <FieldLabel htmlFor="movement-date">{t("dateLabel")}</FieldLabel>
                 <FieldControl>
-                  <TextField.Root
+                  <DateInput
                     {...field}
                     id="movement-date"
                     size="3"
-                    type="date"
                     disabled={isPending}
                   />
                 </FieldControl>

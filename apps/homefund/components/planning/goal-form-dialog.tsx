@@ -24,6 +24,7 @@ import {
   Text,
   TextField,
   AmountField,
+  DateInput,
 } from "@/components/ui";
 import type { GoalProgress } from "@/db/queries/savings-goals";
 import type { TransactionFormOptions } from "@/db/queries/transaction-form";
@@ -240,10 +241,9 @@ function GoalForm({
                 </Flex>
               </FieldLabel>
               <FieldControl>
-                <TextField.Root
+                <DateInput
                   id="goal-date"
                   size="3"
-                  type="date"
                   value={field.value ?? ""}
                   onChange={(event) => field.onChange(event.target.value || null)}
                   onBlur={field.onBlur}

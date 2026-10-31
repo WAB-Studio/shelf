@@ -33,6 +33,7 @@ import {
   Text,
   TextField,
   AmountField,
+  DateInput,
 } from "@/components/ui";
 import type {
   OfferedCurrency,
@@ -515,11 +516,10 @@ function QuickEntryForm({
               <Field invalid={fieldState.invalid}>
                 <FieldLabel htmlFor="quick-date">{t("dateLabel")}</FieldLabel>
                 <FieldControl>
-                  <TextField.Root
+                  <DateInput
                     {...field}
                     id="quick-date"
                     size="3"
-                    type="date"
                     disabled={create.isPending}
                   />
                 </FieldControl>
