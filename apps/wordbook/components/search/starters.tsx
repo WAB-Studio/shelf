@@ -33,7 +33,7 @@ export function Starters({ onPick }: { onPick: (text: string) => void }) {
           .filter((row) => row.pending !== true)
           .sort((a, b) => b.lastAt - a.lastAt)
           .slice(0, RECENT_SHOWN)
-          .map((row): Recent => ({ word: cardFront(row), gloss: splitTranslations(row.lastTranslation ?? "")[0] ?? null, phrase: isPhraseRow(row) }))
+          .map((row): Recent => ({ word: cardFront(row), gloss: isPhraseRow(row) ? null : (splitTranslations(row.lastTranslation ?? "")[0] ?? null), phrase: isPhraseRow(row) }))
           // A row whose text is not a string would make the whole screen throw; it is simply not offered.
           .filter((entry) => typeof entry.word === "string");
         setRecent(latest);
