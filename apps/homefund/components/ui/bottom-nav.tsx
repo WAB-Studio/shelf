@@ -14,6 +14,8 @@ export type BottomNavTab = {
   href?: string;
   active?: boolean;
   disabled?: boolean;
+  // A count over the icon; `label` is the whole spoken name, number included.
+  badge?: { count: number; label: string };
 };
 
 // A tab renders its icon over its label. A live tab is a link; a disabled one is
@@ -21,7 +23,14 @@ export type BottomNavTab = {
 function Tab({ tab }: { tab: BottomNavTab }) {
   const body = (
     <Flex direction="column" align="center" gap="1">
-      {tab.icon}
+      <span className={styles.iconSlot}>
+        {tab.icon}
+        {tab.badge && (
+          <span aria-hidden className={styles.badge}>
+            {tab.badge.count > 99 ? "99+" : tab.badge.count}
+          </span>
+        )}
+      </span>
       <Text size="1" weight={tab.active ? "bold" : "medium"}>
         {tab.label}
       </Text>
@@ -45,6 +54,7 @@ function Tab({ tab }: { tab: BottomNavTab }) {
       <LocaleLink
         href={tab.href}
         aria-current={tab.active ? "page" : undefined}
+        aria-label={tab.badge?.label}
       >
         <TapTarget align="center" justify="center">
           {body}

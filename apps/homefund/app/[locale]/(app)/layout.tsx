@@ -98,7 +98,10 @@ export default async function AppLayout(props: LayoutProps<"/[locale]">) {
         </Flex>
       </Flex>
       <Box display={{ initial: "block", md: "none" }}>
-        <AppTabs hasGroup={group !== null} />
+        <AppTabs
+          hasGroup={group !== null}
+          inboxCount={summary.pendingDeliveries + summary.awaitingCounterparty}
+        />
       </Box>
     </QuickEntryProvider>
   );

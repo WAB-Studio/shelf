@@ -49,6 +49,7 @@ export function DashboardSummary({
   const t = useTranslations("dashboard");
   const tc = useTranslations("common");
   const tr = useTranslations("reports");
+  const tn = useTranslations("nav");
 
   const {
     netWorth,
@@ -190,9 +191,13 @@ export function DashboardSummary({
         </BandCard>
       </BandCards>
 
-      <Flex>
+      <Flex gap="2" wrap="wrap">
         <Button asChild tap variant="ghost">
           <LocaleLink href="/reports">{t("viewReports")}</LocaleLink>
+        </Button>
+        {/* The phone's bar gave Planeación's tab to Bandeja; this is its way in. */}
+        <Button asChild tap variant="ghost">
+          <LocaleLink href="/planning">{tn("planning")}</LocaleLink>
         </Button>
       </Flex>
     </SummaryBand>

@@ -14,7 +14,13 @@ import {
 } from "@/components/ui";
 import { usePathname } from "@/i18n/navigation";
 
-export function AppTabs({ hasGroup }: { hasGroup: boolean }) {
+export function AppTabs({
+  hasGroup,
+  inboxCount,
+}: {
+  hasGroup: boolean;
+  inboxCount: number;
+}) {
   const t = useTranslations("nav");
   const { openQuick } = useQuickEntry();
   const pathname = usePathname();
@@ -26,6 +32,10 @@ export function AppTabs({ hasGroup }: { hasGroup: boolean }) {
       active: isCurrent(pathname, href),
       icon: <Icon size={22} />,
       label: t(key),
+      badge:
+        key === "inbox" && inboxCount > 0
+          ? { count: inboxCount, label: `${t(key)}, ${t("pending", { count: inboxCount })}` }
+          : undefined,
     }),
   );
 
