@@ -128,6 +128,7 @@ export async function DayView({ day }: { day: string }) {
       />
       <Hero>
         {top !== undefined ? (
+          <Stack gap={4}>
           <HeroColumns>
             <Stack gap={3}>
               <Title small>{date}</Title>
@@ -165,18 +166,19 @@ export async function DayView({ day }: { day: string }) {
               />
               </Stack>
             </Stack>
-            <Cards>
-              <Card label={t("topApp")}>
-                <Text truncate>{top.app}</Text>
-                <Text mono>{words.duration(top.seconds)}</Text>
-              </Card>
-              {!isToday && previousTotal > 0 ? (
-                <Card label={t("versus")}>
-                  <Text mono>{delta === 0 ? t("versusSame") : t(delta > 0 ? "versusMore" : "versusLess", { duration: words.duration(Math.abs(delta)) })}</Text>
-                </Card>
-              ) : null}
-            </Cards>
           </HeroColumns>
+          <Cards>
+            <Card label={t("topApp")}>
+              <Text truncate>{top.app}</Text>
+              <Text mono>{words.duration(top.seconds)}</Text>
+            </Card>
+            {!isToday && previousTotal > 0 ? (
+              <Card label={t("versus")}>
+                <Text mono>{delta === 0 ? t("versusSame") : t(delta > 0 ? "versusMore" : "versusLess", { duration: words.duration(Math.abs(delta)) })}</Text>
+              </Card>
+            ) : null}
+          </Cards>
+          </Stack>
         ) : (
           <Stack gap={3}>
             <Title small>{date}</Title>
