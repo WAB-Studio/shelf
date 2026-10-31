@@ -60,37 +60,13 @@
   }
 }
 
-/* A page with a side column: the reading column and the aside sit side by side in what the sidebar
-   leaves, centred together. Below 1024px the aside is not drawn at all. */
-.columns {
-  display: block;
-}
-
-.aside {
-  display: none;
-}
-
-@media (min-width: 1024px) {
-  .page.page.withAside {
+/* docs/wordbook/DESIGN.md, decision of 2026-10-31: from 1280px a screen of two panels takes everything
+   the sidebar leaves; `Panels` centres its own 1120px inside it. Three classes to outrank the
+   centred reading column above. */
+@media (min-width: 1280px) {
+  .page.page.panels {
     margin-inline-start: 240px;
     width: auto;
     max-width: none;
-  }
-
-  .columns {
-    display: grid;
-    grid-template-columns: minmax(0, 620px) 300px;
-    gap: var(--space-6);
-    justify-content: center;
-    align-items: start;
-    flex-grow: 1;
-  }
-
-  .aside {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-4);
-    position: sticky;
-    top: var(--space-6);
   }
 }

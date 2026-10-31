@@ -9,14 +9,18 @@ export function Card({
   children,
   padding = "4",
   tall,
+  tone,
 }: {
   children?: ReactNode;
   // `"none"` for a list whose rows pad themselves.
   padding?: "none" | "3" | "4";
   // From 1024px the card takes the screen's height instead of hugging its lines.
   tall?: boolean;
+  // `"tint"`: the soft green ground a card that holds a figure sits on.
+  tone?: "tint";
 }) {
   const base = padding === "4" ? styles.card : `${styles.card} ${padding === "3" ? styles.snug : styles.flush}`;
-  const className = tall ? `${base} ${styles.tall}` : base;
+  const sized = tall ? `${base} ${styles.tall}` : base;
+  const className = tone === "tint" ? `${sized} ${styles.tint}` : sized;
   return <section className={className}>{children}</section>;
 }

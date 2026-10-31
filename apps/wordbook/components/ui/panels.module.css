@@ -1,0 +1,68 @@
+.panels {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  min-width: 0;
+}
+
+.top,
+.rest,
+.side {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  min-width: 0;
+}
+
+.top {
+  gap: var(--space-2);
+}
+
+.rest:empty {
+  display: none;
+}
+
+.deskOnly {
+  display: none;
+}
+
+@media (min-width: 1280px) {
+  .panels {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 380px;
+    grid-template-areas:
+      "top side"
+      "rest side";
+    grid-template-rows: auto 1fr;
+    column-gap: var(--space-6);
+    row-gap: var(--space-5);
+    align-items: start;
+    width: 100%;
+    max-width: 1120px;
+    margin-inline: auto;
+  }
+
+  .top {
+    grid-area: top;
+  }
+
+  .rest {
+    grid-area: rest;
+  }
+
+  .side {
+    grid-area: side;
+    position: sticky;
+    top: var(--space-6);
+  }
+
+  .deskOnly {
+    display: flex;
+  }
+
+  /* No second panel: the entry keeps a reading measure instead of the whole width. */
+  .solo {
+    display: flex;
+    max-width: 720px;
+  }
+}

@@ -82,6 +82,18 @@
     "translationsMore": "ver {count} más",
     "translationsLess": "ver menos"
   },
+  "story": {
+    "title": "Tu historia con esta palabra",
+    "neverSearched": "Aún no la habías buscado",
+    "searched": "{count, plural, one {Buscada # vez} other {Buscada # veces}}",
+    "first": "La primera vez fue el {date}.",
+    "phrasesTitle": "Tus frases con ella",
+    "noPhrases": "Aún no has buscado una frase que la tenga.",
+    "reviewNew": "Todavía no la repasas.",
+    "reviewDue": "Toca repasarla hoy.",
+    "reviewLater": "{when, select, today {La repasas hoy más tarde.} tomorrow {La repasas mañana.} other {La repasas el {date}.}}",
+    "reviewNow": "Repasar ahora"
+  },
   "phrase": {
     "translating": "Traduciendo…",
     "originDevice": "Traducido en el dispositivo",
@@ -354,6 +366,8 @@
     "open": "Repasar",
     "sideTitle": "Para repasar hoy",
     "sideNone": "Nada por repasar hoy.",
+    "dueToday": "{kind, select, words {{count, plural, one {palabra} other {palabras}}} phrases {{count, plural, one {frase} other {frases}}} other {{count, plural, one {entrada} other {entradas}}}} para repasar hoy",
+    "reviewNowHome": "Repasar ahora",
     "dueUnit": "{kind, select, words {{count, plural, one {palabra} other {palabras}}} phrases {{count, plural, one {frase} other {frases}}} other {{count, plural, one {entrada} other {entradas}}}}",
     "openKind": "{kind, select, words {Repasar palabras} phrases {Repasar frases} other {Repasar entradas}}",
     "loadFailed": "No se pudo abrir el repaso en este dispositivo.",

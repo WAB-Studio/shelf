@@ -33,6 +33,8 @@ export { Separator } from "./separator";
 
 export { Page } from "./page";
 
+export { Panels } from "./panels";
+
 export { BottomNav } from "./bottom-nav";
 
 export { ThemeChoice } from "./theme-choice";

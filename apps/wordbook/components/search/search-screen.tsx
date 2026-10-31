@@ -20,7 +20,8 @@ import type { TranslationResult } from "@/lib/translate/types";
 import { flushPendingLookup, recordLookup } from "@/lib/log/record";
 import { cutTranslation, formatSenseTranslations } from "@/lib/log/translation-line";
 import type { LookupOutcome, LookupRecord } from "@/lib/log/types";
-import { BrandBlock, Flex, Live } from "@/components/ui";
+import { BrandBlock, Flex, Live, Panels } from "@/components/ui";
+import { ReviewCard } from "@/components/review/review-card";
 import { InstallStatus } from "./install-status";
 import { FunctionWordBlock, NoEntryAnswer, type NoEntryPart, type NoEntryReason, type NoEntryState } from "./no-entry-answer";
 import { PhraseAnswer, type DeviceOffer, type PhraseState } from "./phrase-answer";
@@ -29,6 +30,7 @@ import { SenseList } from "./sense-list";
 import { functionWordTranslation } from "@/lib/phrase/function-words";
 import { Starters } from "./starters";
 import { Suggestions } from "./suggestions";
+import { WordStoryPanel } from "./word-story-panel";
 
 // The query string's own name: `/?q=book`.
 const QUERY_PARAM = "q";
@@ -578,54 +580,67 @@ export function SearchScreen({ initialQuery }: { initialQuery?: string }) {
     phrase: phraseState.kind,
   });
 
+  // The word the answer on screen is about, for the second panel on a wide screen.
+  const storyWord = kind.kind === "word" && wordAnswer !== null && wordFound && tableLine === null
+    ? (wordAnswer.exact?.headword ?? wordAnswer.viaInflection[0].lemma)
+    : null;
+  // A word keeps its second panel even while it has no answer, so the layout does not jump as the reader types.
+  const side =
+    kind.kind === "empty" ? <ReviewCard /> : kind.kind === "word" ? storyWord !== null ? <WordStoryPanel headword={storyWord} /> : <></> : undefined;
+
   return (
-    <Flex direction="column" gap="5">
+    <>
       <Live>{announcement.polite ? tLive(announcement.polite.key, { count: announcement.polite.count ?? 0 }) : ""}</Live>
       <Live assertive>{announcement.assertive ? tLive(announcement.assertive) : ""}</Live>
-      <Flex direction="column" gap="2">
-        <BrandBlock title={tSearch.rich("brand", { mark: (chunks) => <mark>{chunks}</mark> })} line={tSearch("brandLine")} compact={kind.kind !== "empty"}>
-          <SearchBox value={text} onChange={handleTextChange} />
-        </BrandBlock>
-        <InstallStatus status={status} onRetry={retry} query={text} />
-      </Flex>
+      <Panels
+        top={
+          <>
+            <BrandBlock title={tSearch.rich("brand", { mark: (chunks) => <mark>{chunks}</mark> })} line={tSearch("brandLine")} compact={kind.kind !== "empty"}>
+              <SearchBox value={text} onChange={handleTextChange} />
+            </BrandBlock>
+            <InstallStatus status={status} onRetry={retry} query={text} />
+          </>
+        }
+        side={side}
+        sideOnPhone={kind.kind === "empty"}
+      >
+        {kind.kind === "empty" && <Starters onPick={handleTextChange} />}
+        {kind.kind === "word" && (
+          <Flex direction="column" gap="4">
+            {!wordFound && tableLine === null && <Suggestions items={suggestions} onPick={handleTextChange} />}
+            {wordAnswer && tableLine !== null && (
+              <FunctionWordBlock
+                part={{ token: text, answer: wordAnswer }}
+                answer={wordAnswer}
+                heading={wordAnswer.exact?.headword ?? normaliseHeadword(text)}
+                table={tableLine}
+                t={tSearch}
+                alone
+                generated={decoration}
+                networkAnswer={networkAnswer}
+              />
+            )}
+            {wordAnswer && !suppressNotFound && tableLine === null && (
+              <SenseList
+                answer={wordAnswer}
+                generated={decoration}
+                networkAnswer={networkAnswer}
+              />
+            )}
+          </Flex>
+        )}
 
-      {kind.kind === "empty" && <Starters onPick={handleTextChange} />}
-
-      {kind.kind === "word" && (
-        <Flex direction="column" gap="4">
-          {!wordFound && tableLine === null && <Suggestions items={suggestions} onPick={handleTextChange} />}
-          {wordAnswer && tableLine !== null && (
-            <FunctionWordBlock
-              part={{ token: text, answer: wordAnswer }}
-              answer={wordAnswer}
-              heading={wordAnswer.exact?.headword ?? normaliseHeadword(text)}
-              table={tableLine}
-              t={tSearch}
-              alone
-              generated={decoration}
-              networkAnswer={networkAnswer}
+        {kind.kind === "phrase" &&
+          (kind.tokens > PHRASE_MAX_TOKENS || phraseState.kind === "failed" ? (
+            noEntryState && <NoEntryAnswer state={noEntryState} />
+          ) : (
+            <PhraseAnswer
+              state={phraseState}
+              offer={deviceOffer}
+              onEnableDevice={handleEnableDevice}
             />
-          )}
-          {wordAnswer && !suppressNotFound && tableLine === null && (
-            <SenseList
-              answer={wordAnswer}
-              generated={decoration}
-              networkAnswer={networkAnswer}
-            />
-          )}
-        </Flex>
-      )}
-
-      {kind.kind === "phrase" &&
-        (kind.tokens > PHRASE_MAX_TOKENS || phraseState.kind === "failed" ? (
-          noEntryState && <NoEntryAnswer state={noEntryState} />
-        ) : (
-          <PhraseAnswer
-            state={phraseState}
-            offer={deviceOffer}
-            onEnableDevice={handleEnableDevice}
-          />
-        ))}
-    </Flex>
+          ))}
+      </Panels>
+    </>
   );
 }

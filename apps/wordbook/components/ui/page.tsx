@@ -15,33 +15,18 @@ export function Page({
   // controls (docs/wordbook/DESIGN.md "Viewport": Registro, Cuenta and
   // Dispositivos take the width they need, decided 2026-09-08).
   measure = "reading",
-  // A column beside the screen from 1024px up, where the reading measure would leave the desktop
-  // empty; it is never drawn on the phone.
-  aside,
 }: {
   children?: ReactNode;
-  measure?: "reading" | "full";
-  aside?: ReactNode;
+  // `"panels"` keeps the reading measure up to 1280px and from there hands the whole width to `Panels`.
+  measure?: "reading" | "full" | "panels";
 }) {
-  const full = measure === "full";
-  const className = [styles.page, full ? styles.full : undefined, aside === undefined ? undefined : styles.withAside]
+  const className = [styles.page, measure === "full" ? styles.full : undefined, measure === "panels" ? styles.panels : undefined]
     .filter(Boolean)
     .join(" ");
   return (
     <>
       <Flex asChild direction="column" flexGrow="1" p="6" className={className}>
-        <main>
-          {aside === undefined ? (
-            children
-          ) : (
-            <div className={styles.columns}>
-              <div className={styles.body} data-reading-column="">
-                {children}
-              </div>
-              <aside className={styles.aside}>{aside}</aside>
-            </div>
-          )}
-        </main>
+        <main>{children}</main>
       </Flex>
       <BottomNav />
     </>
