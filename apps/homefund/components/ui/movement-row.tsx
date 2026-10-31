@@ -19,6 +19,7 @@ export function MovementRow({
   tone = "expense",
   badge,
   caused,
+  wrap = false,
 }: {
   tile: ReactNode;
   title: string;
@@ -28,13 +29,21 @@ export function MovementRow({
   badge?: string;
   // The marker a charge wears; the screen passes the word, never the style.
   caused?: string;
+  // Lets a long title run on to as many lines as it needs instead of clamping.
+  wrap?: boolean;
 }) {
   return (
     <Flex align="center" gap="3">
       {tile}
       <Box flexGrow="1" minWidth="0">
         <Flex align="center" gap="2">
-          <Text as="div" size="3" weight="medium" className={styles.title}>
+          <Text
+            as="div"
+            size="3"
+            weight="medium"
+            className={styles.title}
+            data-wrap={wrap || undefined}
+          >
             {title}
           </Text>
           {badge && (

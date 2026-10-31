@@ -207,7 +207,7 @@ export function PaymentsScreen({
 
       {/* A planned payment only reminds; the person records the real movement
           when they settle it (RF-74, RF-75). */}
-      <Callout.Root color="jade" variant="soft">
+      <Callout.Root color="gray" variant="soft">
         <Callout.Icon>
           <Info size={16} aria-hidden />
         </Callout.Icon>
@@ -300,6 +300,7 @@ function PaymentCard({
             subtitle={t("reminder")}
             amount={formatMoney(payment.amountCents, payment.currency, locale)}
             tone="transfer"
+            wrap
           />
         </Flex>
         <DropdownMenu.Root>

@@ -8,7 +8,7 @@ import {
   useTable,
 } from "@tanstack/react-table";
 import { EllipsisVertical, Plus } from "lucide-react";
-import { useLocale, useTranslations } from "next-intl";
+import { useFormatter, useLocale, useTranslations } from "next-intl";
 import { useAction } from "next-safe-action/hooks";
 import { Fragment, useState } from "react";
 import { toast } from "sonner";
@@ -44,6 +44,7 @@ import {
 import type { GoalProgress } from "@/db/queries/savings-goals";
 import type { TransactionFormOptions } from "@/db/queries/transaction-form";
 import { usePathname, useRouter } from "@/i18n/navigation";
+import { civilDateToDate } from "@/lib/dates";
 import { formatMoney } from "@/lib/money";
 import { useActionErrorToast } from "@/lib/use-action-toast";
 
@@ -407,6 +408,7 @@ function GoalCard({
   const t = useTranslations("goals");
   const tKey = useTranslations();
   const locale = useLocale();
+  const format = useFormatter();
 
   return (
     <Card>
@@ -513,6 +515,24 @@ function GoalCard({
             </Button>
           )}
         </Flex>
+
+        {/* The same date and monthly pace the desktop table reads. */}
+        {!archived && goal.targetDate !== null && !goal.reachedTarget && (
+          <Text size="1" color={goal.behindPace ? "amber" : "gray"}>
+            {format.dateTime(civilDateToDate(goal.targetDate), {
+              day: "numeric",
+              month: "short",
+              year: "numeric",
+            })}
+            {goal.requiredMonthlyCents !== null && (
+              <>
+                {" · "}
+                {formatMoney(goal.requiredMonthlyCents, goal.currency, locale)}
+                {t("perMonth")}
+              </>
+            )}
+          </Text>
+        )}
       </Flex>
     </Card>
   );

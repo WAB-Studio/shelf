@@ -9,6 +9,12 @@
   overflow-wrap: anywhere;
 }
 
+.title[data-wrap] {
+  display: block;
+  -webkit-line-clamp: unset;
+  line-clamp: unset;
+}
+
 /* The amount keeps every digit and the room it needs; the title gives way. */
 .amount {
   flex-shrink: 0;
