@@ -895,7 +895,7 @@ export async function moveHorizon(input: MoveHorizonInput): Promise<MoveHorizonR
           const lastEnd = new Map(ends.map((e) => [e.goalId, e.endsOn]));
           for (const g of later) {
             const endsOn = lastEnd.get(g.id) ?? null;
-            if (endsOn !== null && endsOn >= horizon) {
+            if (endsOn !== null && endsOn > horizon) {
               return { ok: false, error: "tree.errors.branchPhaseAfter", values: { name: g.name, date: endsOn } };
             }
           }

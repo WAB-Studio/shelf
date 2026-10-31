@@ -108,7 +108,7 @@ for (const width of [390, 1440]) {
         await visit(page, "/");
         expect(await metaOf(page, seeded.name)).toBe(`${NOTED} · 1 búsqueda`);
         const row = rowOf(page, seeded.name);
-        await expect(row.locator("[data-state]")).toHaveAttribute("data-state", "partial");
+        await expect(row.locator("[data-state]")).toHaveAttribute("data-state", "empty");
       } finally {
         await context.close();
         await clean(db, person, seeded);

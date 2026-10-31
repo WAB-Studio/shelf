@@ -35,7 +35,7 @@ export function declaredDays(
   return [...byDay].map(([day, quantity]) => ({
     day,
     quantity,
-    note: notes.get(day) ?? null,
+    ...(notes.has(day) ? { note: notes.get(day) } : {}),
     by: satisfiedBy.kind === "quantity" && (quantity ?? 0) < satisfiedBy.target ? ("partial" as const) : ("declared" as const),
   }));
 }
