@@ -15664,5 +15664,40 @@ async function statementImportSuite(): Promise<void> {
       lonely?.n === 1,
     `third ${JSON.stringify(thirdLines)}, concurrent ${JSON.stringify(both.map((one) => one.value))}, written ${lonely?.n}`,
   );
+
+  const dollars = randomUUID();
+  await fixtureSql.begin(async (tx) => {
+    const claims = JSON.stringify({ sub: owner.id, role: "authenticated", aud: "authenticated" });
+    await tx`select set_config('request.jwt.claims', ${claims}, true)`;
+    await tx`
+      insert into accounts (id, owner_user_id, name, kind, subtype, settlement_currency, initial_balance_cents, initial_balance_on)
+      values (${dollars}, ${owner.id}, ${`Harness rf144 dolares ${tag}`}, 'asset', 'bank', 'USD', 0, '2026-01-01')`;
+  });
+  track("accounts", dollars);
+  const exchange = { line: 1, date: "2026-09-17", description: "COMPRA DOLARES", amountCents: -4_000_000, counterAccountId: dollars };
+  const unpriced = await tool("preview_statement", { accountId: ids.bank, rows: [exchange] });
+  const priced = { ...exchange, counterAmountCents: 1_000 };
+  const pricedPreview = await tool("preview_statement", { accountId: ids.bank, rows: [priced] });
+  const exchanged = await tool("import_statement", { accountId: ids.bank, rows: [priced], previewKey: pricedPreview.value?.previewKey });
+  const [booked] = await fixtureSql<{ currency: string; amount_cents: string; counter_amount_cents: string }[]>`
+    select currency, amount_cents::text, counter_amount_cents::text from transactions
+    where from_account_id = ${ids.bank} and to_account_id = ${dollars}`;
+  const otherSide = await tool("preview_statement", {
+    accountId: dollars,
+    rows: [{ line: 1, date: "2026-09-17", description: "ABONO DESDE COP", amountCents: 1_000 }],
+  });
+  type Counter = { status: string; reason?: string; counter?: { currency: string; amountCents: number | null } };
+  const unpricedLine = unpriced.value?.lines?.[0] as Counter | undefined;
+  const pricedLine = pricedPreview.value?.lines?.[0] as Counter | undefined;
+  assert(
+    next("RF-144: a transfer to an account in another currency asks for what arrived there, is booked with it, and that account's statement recognises it"),
+    unpricedLine?.status === "invalid" && unpricedLine.reason === "needs_counter_amount" &&
+      unpricedLine.counter?.currency === "USD" && unpricedLine.counter.amountCents === null &&
+      pricedLine?.status === "new" && pricedLine.counter?.amountCents === 1_000 &&
+      exchanged.value?.created === 1 &&
+      booked?.currency === "COP" && booked.amount_cents === "4000000" && booked.counter_amount_cents === "1000" &&
+      otherSide.value?.lines?.[0]?.status === "matches",
+    `unpriced ${JSON.stringify(unpricedLine)}, priced ${JSON.stringify(pricedLine)}, imported ${JSON.stringify(exchanged.value)}, booked ${JSON.stringify(booked)}, other side ${JSON.stringify(otherSide.value?.lines)}`,
+  );
 }
 

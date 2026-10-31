@@ -17,6 +17,9 @@ export const statementRowSchema = z.object({
   // What the money was for, or the other account it came from or went to (a transfer).
   categoryId: z.uuid().optional(),
   counterAccountId: z.uuid().optional(),
+  // A transfer to or from an account in another currency: what moved on that account, in its own
+  // currency, as the person confirms it («¿cuánto te llegó?»). The two amounts are the rate (TRM).
+  counterAmountCents: z.number().int().positive().max(Number.MAX_SAFE_INTEGER).optional(),
   // The other side is not known: the movement waits for a person to name it (RF-133).
   unsure: z.boolean().optional(),
 });
