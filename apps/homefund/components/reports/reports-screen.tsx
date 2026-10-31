@@ -126,7 +126,7 @@ export function ReportsScreen({ data }: { data: ReportsData }) {
         <Flex direction="column" gap="6">
           <ReportsHead title={t("title")} />
 
-          <Flex direction="column" gap="4" px="6">
+          <Flex direction="column" gap="4">
             <ReportCard>
               <Heading as="h2" size="4">{t("comparisonTitle")}</Heading>
               {byCurrency(sixMonthFlow).map(([currency, months]) => (
