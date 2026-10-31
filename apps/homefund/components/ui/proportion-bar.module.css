@@ -1,0 +1,13 @@
+.bar {
+  display: flex;
+  gap: 2px;
+  width: 100%;
+  overflow: hidden;
+  border-radius: 9999px;
+  background-color: var(--gray-a4);
+}
+
+.segment {
+  min-width: 4px;
+  height: 100%;
+}

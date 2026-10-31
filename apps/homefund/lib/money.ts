@@ -245,6 +245,27 @@ export function formatMoney(
   return formatter.format(value);
 }
 
+/**
+ * A magnitude in the short form a chart label has room for («$ 2,6 M»): display
+ * only, never read back. Takes the same magnitude `formatMoney` does.
+ */
+export function formatCompactMoney(
+  minor: number,
+  currency: CurrencyCode,
+  locale: Locale,
+): string {
+  const { stored, written } = amountScale(currency);
+  const step = stored / 10 ** written;
+  const value = Math.trunc(Math.abs(minor) / step) / 10 ** written;
+
+  return new Intl.NumberFormat(FORMAT_LOCALE[locale], {
+    style: "currency",
+    currency,
+    notation: "compact",
+    maximumFractionDigits: 1,
+  }).format(value);
+}
+
 // COP-only wrappers, marked to retire. Callers still bound to them date from
 // when every amount was a peso stored as a hundredth of itself. Each caller
 // drops its own as the screen it serves starts carrying a currency (RF-121).

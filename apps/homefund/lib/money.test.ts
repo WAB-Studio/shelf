@@ -5,6 +5,7 @@ import {
   convertMinor,
   deriveRate,
   formatAmountTyping,
+  formatCompactMoney,
   formatMoney,
   maxAmountMinor,
   parseAmount,
@@ -126,4 +127,10 @@ test("what formatAmountTyping writes is what parseAmount reads, in integer cents
   assert.equal(parseAmount(formatAmountTyping("125000", 6, "es").text), 12_500_000);
   assert.equal(parseAmount(formatAmountTyping("1250000,5", 9, "es").text), 125_000_050);
   assert.equal(parseAmount(formatAmountTyping("1250000.5", 9, "en").text), 125_000_050);
+});
+
+test("formatCompactMoney shortens a magnitude and drops the sign", () => {
+  const short = formatCompactMoney(-260_000_000, "COP", "es");
+  assert.ok(!short.includes("-") && short.length < formatMoney(260_000_000, "COP", "es").length);
+  assert.equal(formatCompactMoney(0, "COP", "es").includes("0"), true);
 });

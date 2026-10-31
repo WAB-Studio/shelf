@@ -6,6 +6,7 @@ import { notFound, unstable_rethrow } from "next/navigation";
 
 import { WithdrawCashCard } from "@/components/cash/withdraw-dialog";
 import { DashboardSummary } from "@/components/reports/dashboard-summary";
+import { MonthGlance } from "@/components/reports/month-glance";
 import { HomeAside } from "@/components/reports/home-aside";
 import {
   RecentMovements,
@@ -45,10 +46,12 @@ import { listGoalsWithProgress } from "@/db/queries/savings-goals";
 import { getPendingInvitation } from "@/db/queries/group-members";
 import { getUserGroup } from "@/db/queries/groups";
 import { getDashboardData } from "@/db/queries/reports/dashboard";
+import { getExpensesByCategory } from "@/db/queries/reports/expenses-by-category";
 import { getTransactionFormOptions } from "@/db/queries/transaction-form";
 import { listTransactions } from "@/db/queries/transactions";
 import type { TransactionListRow } from "@/db/queries/transactions";
 import { requireUser } from "@/db/session";
+import { currentMonthRange } from "@/lib/dates";
 import { Link as LocaleLink } from "@/i18n/navigation";
 import { routing } from "@/i18n/routing";
 import { PERSONAL_CASH_ACCOUNT_NAME } from "@/lib/fund/seed";
@@ -108,7 +111,7 @@ export default async function HomePage(props: PageProps<"/[locale]">) {
   // requireUser stays the auth guard. The form options carry the account and
   // category names a row reads for its title and subtitle, the same pairing the
   // movements list fans out (RF-23); the amount is formatted for display only.
-  const [, group, invitation, dashboardData, rows, options, withdrawal, due, review, budgets, goals, debts, t, td, ta, tc] =
+  const [, group, invitation, dashboardData, rows, options, withdrawal, due, review, monthExpenses, budgets, goals, debts, t, td, ta, tc] =
     await Promise.all([
       requireUser(),
       getUserGroup(),
@@ -124,6 +127,7 @@ export default async function HomePage(props: PageProps<"/[locale]">) {
         console.error("getMonthReviewPending", error);
         return null;
       }),
+      getExpensesByCategory(currentMonthRange()),
       // The right column's three reads ride the same fan-out (RNF-09).
       listBudgetsWithStatus(),
       listGoalsWithProgress(),
@@ -276,7 +280,12 @@ export default async function HomePage(props: PageProps<"/[locale]">) {
 
       <Box px={{ initial: "0", md: "6" }}>
         <Columns
-          lead={<DashboardSummary data={dashboardData} />}
+          lead={
+            <>
+              <DashboardSummary data={dashboardData} />
+              <MonthGlance flows={dashboardData.monthFlow} expenses={monthExpenses} />
+            </>
+          }
           aside={
             <>
               {review && <MonthReviewLine month={review.month} count={review.count} />}

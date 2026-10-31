@@ -19,6 +19,7 @@ export {
 
 export { Columns } from "./columns";
 export { DateInput } from "./date-input";
+export { ProportionBar, type ProportionSegment } from "./proportion-bar";
 
 export {
   Field,

@@ -150,7 +150,15 @@
     "asideGoal": "Goal",
     "goalLeft": "{amount} to go",
     "goalLeftPace": "{amount} to go · {pace}/mo",
-    "asideDebt": "Next debt payment"
+    "asideDebt": "Next debt payment",
+    "glanceTitle": "The month at a glance",
+    "glanceIncome": "Income",
+    "glanceSpending": "Spending",
+    "glanceSpentOf": "You spent {pct}% of what came in",
+    "glanceNoIncome": "No money has come in this month",
+    "glanceMeterLabel": "Spending against income in {currency}",
+    "glanceByCategory": "Spending by category",
+    "glanceOthers": "Other"
   },
   "reports": {
     "title": "Reports",
@@ -166,7 +174,10 @@
     "contributionsTitle": "Contributions this month",
     "contributionsEmpty": "No contributions this month. A contribution is a transfer from a personal account to a fund account.",
     "noGroup": "Contributions are a fund figure. You have no fund yet.",
-    "monthAdjustment": "Month gap"
+    "monthAdjustment": "Month gap",
+    "shareLabel": "{pct}% of the month's spending",
+    "averageLabel": "Average {amount}",
+    "emptyMonths": "No movements in {months}: the average leaves them out."
   },
   "nav": {
     "title": "Navigation",
