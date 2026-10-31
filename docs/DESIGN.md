@@ -524,4 +524,14 @@ Board C1h corrected the same day: a card in credit reads «Según HomeFund −$ 
   trm, se confirma con el usuario cuánto le llegó»). The preview marks it `needs_counter_amount` and names the other
   account's currency; Claude asks how much arrived or left there and confirms the resulting TRM. It is booked in the
   statement's currency with that amount as `counter_amount_cents`, and the other account's statement links to it.
+- Choosing a category when noting an expense is a grid of the person's most frequent categories (`CategoryTile`, one tap
+  selects, «Más» shows all); splitting across several categories sits behind «Dividir» and opens the split editor. No
+  validation message shows before a submit attempt. Frequency is the count of the person's movements per category, read
+  in the form options' one fan-out (the user, 2026-10-30).
+- A fund category no longer reads «· fondo»: its name is bare everywhere. A personal account (and a personal category
+  where a component, not a string, draws it) wears a small `User` glyph with an aria-label (the user, 2026-10-30).
+- The phone's bottom bar reads Inicio · Movimientos · [+] · Bandeja · Ajustes: Bandeja (the `Inbox` icon) replaces
+  Planeación and carries a count of pending deliveries plus «Por completar», hidden at zero, its aria-label naming the
+  number. Planeación stays one tap away from a row beside «Ver reportes» on Inicio and the first row of the Ajustes
+  panel. The desktop sidebar is unchanged (the usability critic, delegated by the user, 2026-10-30).
 
