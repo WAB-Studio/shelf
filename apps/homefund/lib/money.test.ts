@@ -167,7 +167,7 @@ test("backspacing «1.250.000» in Spanish keeps every state a whole figure", ()
     text = formatAmountTyping(text.slice(0, -1), text.length - 1, "es").text;
     seen.push(text);
   }
-  assert.deepEqual(seen, ["12.500", "1.250", "125", "12", "1"]);
+  assert.deepEqual(seen, ["125.000", "12.500", "1.250", "125", "12"]);
   // «125.000» backspaced is «125.00»: the group, not 125 with two decimals.
   assert.equal(formatAmountTyping("125.00", 6, "es").text, "12.500");
   assert.equal(parseAmount(formatAmountTyping("125.00", 6, "es").text), 1_250_000);
