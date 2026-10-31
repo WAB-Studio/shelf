@@ -176,8 +176,13 @@ export function SearchScreen({ initialQuery }: { initialQuery?: string }) {
     latestTextRef.current = resolvedQuery;
     void runQuery(resolvedQuery, status.state === "ready");
   });
+  // The cleanup re-arms the guard: a dev remount terminates the worker the first run asked, and the
+  // question would otherwise never be asked again.
   useEffect(() => {
     runInitialQuery();
+    return () => {
+      initialQueryRanRef.current = false;
+    };
   }, []);
 
   // A block of the breakdown links to `/?q=<word>` while this very screen
