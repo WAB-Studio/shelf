@@ -36,13 +36,6 @@ const PHRASE_CACHE_LIMIT = 20;
 
 type LogPayload = Omit<LookupRecord, "id" | "schema">;
 
-// Module scope on purpose: it survives client-side navigation inside the tab
-// but not a reload. Tapping "Registro" unmounts this screen, and coming back
-// lands on `/?q=<word>` — the URL keeps the query — so the mount effect
-// answers it again. Answering again is right; recording it again is not.
-// A reader who walks to the log and back five times looked the word up once.
-let lastLoggedText: string | null = null;
-
 // RL-41: "a word that already has a definition never asks for one" — true
 // only when none of the exact match's own senses carry one.
 function needsDefinition(group: SenseGroup): boolean {
@@ -153,7 +146,9 @@ export function SearchScreen({ initialQuery }: { initialQuery?: string }) {
   const boundaryRef = useRef(resolvedQuery === "");
   const urlSettleRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const initialQueryRanRef = useRef(false);
-  // True when this mount is restoring a query this tab already recorded.
+  // True while the box still holds the query the address bar carried at mount: opening, reloading or
+  // coming back to `/?q=book` answers it again but is not a lookup, so it is never recorded. Typing or
+  // following a link clears it.
   const restoringRef = useRef(false);
 
   useEffect(() => {
@@ -175,7 +170,7 @@ export function SearchScreen({ initialQuery }: { initialQuery?: string }) {
   const runInitialQuery = useEffectEvent(() => {
     if (initialQueryRanRef.current || !resolvedQuery) return;
     initialQueryRanRef.current = true;
-    restoringRef.current = resolvedQuery === lastLoggedText;
+    restoringRef.current = true;
     latestTextRef.current = resolvedQuery;
     void runQuery(resolvedQuery, status.state === "ready");
   });
@@ -194,6 +189,7 @@ export function SearchScreen({ initialQuery }: { initialQuery?: string }) {
     if (!initialQuery || initialQuery === committedTextRef.current) return;
     committedTextRef.current = initialQuery;
     boundaryRef.current = false;
+    restoringRef.current = false;
     applyText(initialQuery, { schedule: false });
   });
   useEffect(() => {
@@ -458,6 +454,7 @@ export function SearchScreen({ initialQuery }: { initialQuery?: string }) {
     // writes nothing itself (no entry for "nothing found"), but the word
     // that follows it opens a fresh entry rather than replacing the last one.
     if (nextText === "") boundaryRef.current = true;
+    restoringRef.current = false;
     applyText(nextText, { schedule: true });
   }
 
@@ -559,12 +556,8 @@ export function SearchScreen({ initialQuery }: { initialQuery?: string }) {
     recordedRef.current = recordable;
     // Conditioned on both the flag and the text, so a restore can never
     // swallow the next genuine lookup, whatever order the two arrive in.
-    if (restoringRef.current && recordable.text === lastLoggedText) {
-      restoringRef.current = false;
-      return;
-    }
+    if (restoringRef.current && recordable.text === resolvedQuery) return;
     recordLookup(recordable);
-    lastLoggedText = recordable.text;
   }, [recordable]);
 
   const announcement = announce({

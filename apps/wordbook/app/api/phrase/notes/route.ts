@@ -12,7 +12,7 @@ import { loadDictionaryIndex } from "@/lib/word/dictionary-index";
 import { claimDailyCall } from "@/lib/word/spend";
 import { generateNotes, NOTES_MODEL_NAME } from "@/lib/phrase/notes-model";
 import { phraseHash, readCachedNotes, writeCachedNotes } from "@/lib/phrase/notes-cache";
-import { admitPhrase, notesRequestSchema, notesResponseSchema, tokenisePhrase } from "@/lib/phrase/notes-protocol";
+import { admitPhrase, notesRequestSchema, notesResponseSchema, isOneLetterWord, tokenisePhrase } from "@/lib/phrase/notes-protocol";
 
 // This is the first route in the app that sends a reader's own free text to
 // a paid provider (every earlier one sends a headword `admitWord` already
@@ -33,7 +33,7 @@ function survivingTokens(sourceTokens: string[], translation: string): string[] 
 }
 
 function unindexedTokens(index: DictionaryIndex, sourceTokens: string[]): string[] {
-  return sourceTokens.filter((token) => groupFor(index, normaliseHeadword(token)) === null);
+  return sourceTokens.filter((token) => !isOneLetterWord(token) && groupFor(index, normaliseHeadword(token)) === null);
 }
 
 export async function POST(request: Request): Promise<Response> {
