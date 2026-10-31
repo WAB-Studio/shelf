@@ -6,11 +6,13 @@ import { getTranslations } from "next-intl/server";
 import type { Translator } from "@/i18n/translator";
 import type { Cadence } from "@/lib/day/types";
 import type { GoalCommitment } from "@/lib/queries/goal";
+import { strip, stripCount } from "@/lib/day/constancy";
+import { todayInZone } from "@/lib/zone";
 import { sentenceCase } from "@/lib/day/day-words";
 import { weekdaysSentence } from "@/lib/day/row-phrases";
 import { evidenceUnitWords } from "@/lib/evidence/unit-words";
 
-import { Button, Figure, Flex, Row, Section, Text } from "@/components/ui";
+import { Button, Figure, Flex, Row, Section, Strip, Text } from "@/components/ui";
 
 
 // The count in words, section-label style ("ocho compromisos", "tres
@@ -77,6 +79,13 @@ function satisfactionWords(commitment: GoalCommitment, t: Translator): ReactNode
   }
 }
 
+// The row's thirty days, small, with its «26 de 30» said to a screen reader.
+function MiniStrip({ commitment, today, t }: { commitment: GoalCommitment; today: string; t: Translator }) {
+  const cells = strip(today, commitment.createdOn, commitment.done);
+  const { done, of } = stripCount(cells);
+  return <Strip size="mini" cells={cells} label={t("goal.commitments.stripAria", { done, of })} />;
+}
+
 /**
  * `Meta.dc.html`'s commitment rows (RP-12, RP-13, RP-14): the name on the
  * left, the cadence over the satisfaction right-aligned in mono. A retired
@@ -102,6 +111,7 @@ export async function CommitmentList({
   // A retired commitment stays in the list — never hidden (RP-13) — but it
   // no longer asks anything of the goal, so the count above it names what is
   // still active and adds the retired ones apart: it always matches the rows.
+  const today = todayInZone();
   const activeCount = commitments.filter((commitment) => commitment.retiredAt === null).length;
 
   return (
@@ -122,6 +132,7 @@ export async function CommitmentList({
             <Text as="span" variant="sentence" tone="muted">
               {satisfactionWords(commitment, t)}
             </Text>
+            {retired ? null : <MiniStrip commitment={commitment} today={today} t={t} />}
           </Flex>
         );
         // A retired one stays in the list and goes nowhere (RP-13); a live one opens its own screen.
