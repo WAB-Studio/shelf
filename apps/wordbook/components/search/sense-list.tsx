@@ -522,11 +522,14 @@ function CorrectionOffer({ words, t }: { words: readonly string[]; t: ReturnType
   );
 }
 
-// The senses the answer draws before any fold opens, so the index names what the labels below name.
-function visibleSenses(senses: readonly Sense[]): Sense[] {
+// The parts of speech in the order the answer draws them: those standing before any fold opens, so the
+// first of the index is the first label-free block, then those only the fold holds.
+function indexParts(senses: readonly Sense[]): Sense["pos"][] {
   const blocks = pronunciationBlocks(senses);
-  if (blocks === null) return splitRare(senses).shown;
-  return blocks.flatMap((block) => splitRare(block.senses).shown);
+  const groups = blocks === null ? [senses] : blocks.map((block) => block.senses);
+  const split = groups.map((group) => splitRare(group));
+  const ordered = [...split.flatMap(({ shown }) => shown), ...split.flatMap(({ folded }) => folded)];
+  return [...new Set(ordered.map((sense) => sense.pos))];
 }
 
 // Under the entry's headword, on one line: its sound, the voice and an index of the parts of speech
@@ -544,7 +547,7 @@ function EntryMeta({
   t: ReturnType<typeof useTranslations>;
 }) {
   const ipa = pronunciationBlocks(senses) === null ? senses[0].ipa : null;
-  const parts = [...new Set(visibleSenses(senses).map((sense) => sense.pos))];
+  const parts = indexParts(senses);
   return (
     <Flex align="center" gap="3" wrap="wrap" data-entry-index="">
       {ipa !== null && (

@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useSyncExternalStore, type ReactNode } from "react";
 import NextLink from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
@@ -48,8 +48,23 @@ export function TabBody({ account, info }: { account: ReactNode; info: ReactNode
   return useInfoTab() ? info : account;
 }
 
+const TWO_PANELS = "(min-width: 1280px)";
+
+function subscribeToWidth(onChange: () => void): () => void {
+  const query = window.matchMedia(TWO_PANELS);
+  query.addEventListener("change", onChange);
+  return () => query.removeEventListener("change", onChange);
+}
+
 // The second panel from 1280px: the credits stand beside the account tab, and the panel stays empty
-// on the information tab, which already shows them, so the layout does not move between tabs.
+// on the information tab, which already shows them, so the layout does not move between tabs. Drawn
+// only where it shows, so a narrower screen holds no second copy of the credits.
 export function InfoSide({ info }: { info: ReactNode }) {
-  return useInfoTab() ? null : <Card>{info}</Card>;
+  const wide = useSyncExternalStore(
+    subscribeToWidth,
+    () => window.matchMedia(TWO_PANELS).matches,
+    () => false,
+  );
+  const infoTab = useInfoTab();
+  return wide && !infoTab ? <Card>{info}</Card> : null;
 }
