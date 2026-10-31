@@ -362,6 +362,20 @@ export function flushPendingLookup(): void {
   }
 }
 
+/**
+ * The lookups a flush would write now: the one on screen has settled in memory but not in IndexedDB, and a
+ * count of the reader's searches that leaves it out reads one short of the record beside it.
+ */
+export function openLookups(): LookupRecord[] {
+  const candidate = latestCandidate;
+  const supersedes =
+    pending !== null &&
+    candidate !== null &&
+    ((pending.at === candidate.at && pending.normalised === candidate.normalised) ||
+      isStrictPrefix(pending.normalised, candidate.normalised));
+  return [supersedes ? null : pending, candidate].filter((row): row is LookupRecord => row !== null && isRecordedLookup(row));
+}
+
 if (typeof document !== "undefined") {
   document.addEventListener("visibilitychange", () => {
     if (document.hidden) flushPendingLookup();

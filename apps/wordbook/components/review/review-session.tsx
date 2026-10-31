@@ -10,7 +10,7 @@ import { cardBack, cardFront } from "@/lib/log/anki";
 import { contentUnit, isPhraseRow } from "@/lib/log/outcome";
 import { readWordStudy } from "@/lib/log/summary";
 import { readWordStory, type WordStory } from "@/lib/log/story";
-import { buildQueue, isReviewable, type ReviewQueue } from "@/lib/review/deck";
+import { buildQueue, buildQueueFor, isReviewable, type ReviewQueue } from "@/lib/review/deck";
 import { dueWhen, GRADES, intervals, intervalUnit, rate, staysInSession, type ReviewGrade } from "@/lib/review/schedule";
 import { answerSenses, pickSense } from "@/lib/review/sense";
 import { readCards, saveCard } from "@/lib/review/store";
@@ -84,7 +84,10 @@ export function ReviewSession() {
     Promise.all([readWordStudy(), readCards()])
       .then(([{ rows }, cards]) => {
         if (!live) return;
-        const queue = buildQueue(rows, cards, Date.now());
+        // `/repaso?palabra=<key>` asks that entry alone, read here because the page itself stays static.
+        const only = new URLSearchParams(window.location.search).get("palabra");
+        const now = Date.now();
+        const queue = only === null ? buildQueue(rows, cards, now) : buildQueueFor(rows, cards, only, now);
         setState({
           kind: "ready",
           items: queue.items,

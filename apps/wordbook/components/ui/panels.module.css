@@ -27,6 +27,11 @@
   display: none;
 }
 
+/* A reserved side with nothing in it keeps its room on a wide screen alone. */
+.side.reserved:empty {
+  display: none;
+}
+
 .deskOnly {
   display: none;
 }
@@ -65,18 +70,18 @@
     top: var(--space-6);
   }
 
-  .deskOnly {
+  .deskOnly,
+  .side.reserved:empty {
     display: flex;
   }
 
-  .panels:has(> .side:empty:not(.reserved)) {
-    display: flex;
-    max-width: 720px;
-  }
-
-  /* No second panel: the entry keeps a reading measure instead of the whole width. */
+  /* No second panel: the entry keeps a reading measure instead of the whole width, on the same left
+     edge as the screens beside it, and the full width of that measure however short its content. */
+  .panels:has(> .side:empty:not(.reserved)),
   .solo {
     display: flex;
+    width: 100%;
     max-width: 720px;
+    margin-inline: 0;
   }
 }

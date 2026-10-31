@@ -5,7 +5,7 @@ import NextLink from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 
-import { Flex, Link, TapTarget, Text } from "@/components/ui";
+import { Card, Flex, Link, TapTarget, Text } from "@/components/ui";
 
 // The tab is read from the address on the client: a cached copy of /cuenta
 // answers every `?tab=`, and the server's own choice would hydrate as the
@@ -46,4 +46,10 @@ export function AccountTabs() {
 
 export function TabBody({ account, info }: { account: ReactNode; info: ReactNode }) {
   return useInfoTab() ? info : account;
+}
+
+// The second panel from 1280px: the credits stand beside the account tab, and the panel stays empty
+// on the information tab, which already shows them, so the layout does not move between tabs.
+export function InfoSide({ info }: { info: ReactNode }) {
+  return useInfoTab() ? null : <Card>{info}</Card>;
 }

@@ -5,7 +5,7 @@ import NextLink from "next/link";
 import { useTranslations } from "next-intl";
 
 import { ipaKey, pronunciationBlocks, type Sense } from "@/lib/dictionary/index-build";
-import { isRareSense } from "@/lib/dictionary/rare-sense";
+import { splitRare } from "@/lib/dictionary/rare-sense";
 import type { WordAnswer } from "@/lib/dictionary/lookup";
 import { speak, speechSupported } from "@/lib/speech/speak";
 import {
@@ -349,10 +349,8 @@ function PosSegments({
   t: ReturnType<typeof useTranslations>;
 }) {
   // A sense the reader meets seldom folds behind one line while a common one stands.
-  const rare = compact ? [] : senses.filter(isRareSense);
-  const common = senses.filter((sense) => compact || !isRareSense(sense));
-  const fold = rare.length > 0 && common.length > 0;
-  const segments = segmentByPos(fold ? common : senses);
+  const { shown, folded } = splitRare(senses, compact);
+  const segments = segmentByPos(shown);
 
   return (
     <Flex direction="column" gap="3">
@@ -372,7 +370,7 @@ function PosSegments({
           {index === 0 && interlude}
         </Flex>
       ))}
-      {fold && <RareFold senses={rare} ipaHeaded={ipaHeaded} shownIpa={shownIpa} t={t} />}
+      {folded.length > 0 && <RareFold senses={folded} ipaHeaded={ipaHeaded} shownIpa={shownIpa} t={t} />}
     </Flex>
   );
 }
@@ -524,6 +522,13 @@ function CorrectionOffer({ words, t }: { words: readonly string[]; t: ReturnType
   );
 }
 
+// The senses the answer draws before any fold opens, so the index names what the labels below name.
+function visibleSenses(senses: readonly Sense[]): Sense[] {
+  const blocks = pronunciationBlocks(senses);
+  if (blocks === null) return splitRare(senses).shown;
+  return blocks.flatMap((block) => splitRare(block.senses).shown);
+}
+
 // Under the entry's headword, on one line: its sound, the voice and an index of the parts of speech
 // it comes in. The sound shows here only when one pronunciation heads the whole entry; with several,
 // each block carries its own head.
@@ -539,7 +544,7 @@ function EntryMeta({
   t: ReturnType<typeof useTranslations>;
 }) {
   const ipa = pronunciationBlocks(senses) === null ? senses[0].ipa : null;
-  const parts = [...new Set(senses.map((sense) => sense.pos))];
+  const parts = [...new Set(visibleSenses(senses).map((sense) => sense.pos))];
   return (
     <Flex align="center" gap="3" wrap="wrap" data-entry-index="">
       {ipa !== null && (

@@ -38,3 +38,9 @@ test("a longer word matches its real inflections, never a longer word that merel
   assert.deepEqual(hits("the books were old", ["book"]), ["books"]);
   assert.deepEqual(hits("a bookmark", ["book"]), []);
 });
+
+test("a three-letter word matches its inflections: «run» finds «running» and «runs»", () => {
+  assert.deepEqual(hits("I'm running out of time", ["run"]), ["running"]);
+  assert.deepEqual(hits("she runs home", ["run"]), ["runs"]);
+  assert.deepEqual(hits("a rung of the ladder", ["run"]), []);
+});

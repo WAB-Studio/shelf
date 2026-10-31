@@ -602,7 +602,7 @@ export function SearchScreen({ initialQuery }: { initialQuery?: string }) {
           </>
         }
         side={side}
-        reserveSide={kind.kind === "word"}
+        reserveSide
         sideOnPhone={kind.kind === "empty"}
       >
         {kind.kind === "empty" && <Starters onPick={handleTextChange} />}

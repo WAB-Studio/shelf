@@ -2,8 +2,8 @@ import { lemmaCandidates } from "@/lib/dictionary/inflect";
 
 export type Piece = { text: string; hit: boolean };
 
-// A lemma shorter than this is matched as written: «a», «I» and «be» would otherwise hit «and», «it» and «been».
-const MIN_INFLECTED_LENGTH = 4;
+// A lemma shorter than this is matched as written: «a», «I» and «be» would otherwise hit «and», «it» and «been»; three letters is the shortest verb a record holds («run», «get»).
+const MIN_INFLECTED_LENGTH = 3;
 
 function isFormOf(token: string, forms: ReadonlySet<string>): boolean {
   const lower = token.toLowerCase();

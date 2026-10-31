@@ -4,7 +4,7 @@ import { test } from "node:test";
 
 import type { StudyRow } from "@/lib/log/summary";
 
-import { buildQueue, isReviewable, NEW_PER_DAY } from "./deck";
+import { buildQueue, buildQueueFor, isReviewable, NEW_PER_DAY } from "./deck";
 import { localDay, rate } from "./schedule";
 
 const NOW = new Date(2026, 9, 30, 9, 0).getTime();
@@ -75,4 +75,13 @@ test("RL-68: a card introduced today whose word left the record does not spend t
     introducedOn: localDay(NOW),
   }));
   assert.equal(buildQueue(rows, orphans, NOW).items.length, NEW_PER_DAY);
+});
+
+test("one entry on demand: asked now whether or not it is due, and nothing else of the day's queue", () => {
+  const later = { ...rate("frisk", null, "good", NOW), due: NOW + 3 * DAY };
+  const queue = buildQueueFor([row("frisk"), row("snuff")], [later], "frisk", NOW);
+  assert.deepEqual(queue.items.map((item) => item.row.key), ["frisk"]);
+  assert.ok(queue.items[0].card !== null && queue.items[0].card.due <= NOW);
+  assert.deepEqual(buildQueueFor([row("snuff")], [], "frisk", NOW).items, []);
+  assert.deepEqual(buildQueueFor([row("snuff", { pending: true })], [], "snuff", NOW).items, []);
 });

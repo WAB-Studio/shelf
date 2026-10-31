@@ -23,7 +23,7 @@ test("RL-33: the credit, its source url and its edition are reachable from /cuen
   await page.goto("/cuenta");
   await expect(page.getByRole("heading", { name: messages.account.title })).toBeVisible();
 
-  await page.getByRole("link", { name: messages.account.info.tabs.info }).click();
+  await page.getByRole("link", { name: messages.account.info.tabs.info, exact: true }).click();
 
   // The dictionary's name doubles as the link to its source.
   const sourceLink = page.getByRole("link", { name: messages.account.info.dictionaryName });
@@ -57,7 +57,7 @@ for (const width of WIDTHS) {
         delete (window as unknown as { Translator?: unknown }).Translator;
       });
       await page.goto("/cuenta");
-      await page.getByRole("link", { name: messages.account.info.tabs.info }).click();
+      await page.getByRole("link", { name: messages.account.info.tabs.info, exact: true }).click();
       await expect(page.getByText(manifest.source.edition)).toBeVisible();
     });
 
