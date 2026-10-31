@@ -1774,7 +1774,7 @@ test.describe("the report on A4, compact", () => {
           expect(found[0].line, `${goal.name} ${label}: cells beside its label`).toMatch(/^\S+ \d{4}\s+\S/);
           const at = span.indexOf(found[0]);
           const under = span[at + 1];
-          if (under && !goal.months.some((month) => under.line.startsWith(month))) {
+          if (under && /^(cerrado|en curso|planeado)/.test(under.line)) {
             expect(under.page, `${goal.name} ${label}: label on page ${found[0].page + 1}, its state on ${under.page + 1}`).toBe(found[0].page);
           }
           where.push(found[0].page);
