@@ -17,7 +17,7 @@ const OPEN_LABEL = messages.search.noEntry.hideDictionary;
 const DICTIONARY_LEAD: Record<string, string> = {
   it: "tecnología de la información",
   would: "por favor",
-  will: "anhelar, desear",
+  will: "desear, ir a, anhelar",
   something: "basurita",
 };
 

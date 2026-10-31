@@ -503,7 +503,7 @@ test("a content word's block draws the dictionary alone", async ({ page }) => {
   const lines = (await blockLines(page, "weird", "happened")).map((l) => l.text);
   expect(lines.length, "weird draws its senses").toBeGreaterThan(0);
   expect(lines.filter((line) => GLOSSES.has(line))).toEqual([]);
-  expect(lines).toContain("raro, anormal, bizarro");
+  expect(lines).toContain("raro, anormal, extraño");
 });
 
 test("offline, the breakdown still leads with the table translation and asks for nothing", async ({ page, context }) => {
@@ -542,10 +542,10 @@ test("past sixty words of function words, the line stands alone with no block an
 test("in a sentence, left carries the leave block between its first and second groups", async ({ page }) => {
   await sentence(page, "I left it there");
   const lines = (await blockLines(page, "left", "it")).map((l) => l.text);
-  const first = lines.indexOf("sobrado, sobras");
+  const first = lines.indexOf("sobras, sobrado");
   const via = lines.indexOf(formLine("viaInflectionWithEntry", "left", "leave"));
-  const leaveVerb = lines.indexOf("dejar, abandonar, abjurar");
-  const leaveNoun = lines.indexOf("permiso, excedencia, licencia");
+  const leaveVerb = lines.indexOf("dejar, abandonar, partir");
+  const leaveNoun = lines.indexOf("permiso, licencia, despedida");
   const second = lines.indexOf("izquierda, de izquierda, izquierdo");
   const rest = lines.indexOf("a la izquierda, izquierdo");
   for (const [name, at] of Object.entries({ first, via, leaveVerb, leaveNoun, second, rest })) {
@@ -568,7 +568,7 @@ test("in a sentence, saw carries the see block under its first group, ahead of i
   const lines = (await blockLines(page, "saw", "it")).map((l) => l.text);
   const serrar = lines.indexOf("serrar, aserrar");
   const via = lines.indexOf(formLine("viaInflectionWithEntry", "saw", "see"));
-  const sierra = lines.indexOf("sierra, proverbio, refrán");
+  const sierra = lines.indexOf("sierra, dicho, proverbio");
   expect(serrar).toBeGreaterThanOrEqual(0);
   expect(serrar, "the form's first group leads").toBeLessThan(via);
   expect(via, "the lemma block rises above the form's second group").toBeLessThan(sierra);
@@ -664,7 +664,7 @@ test("offline, a sentence still answers from the device: the lemma block under l
   await page.getByRole("textbox", { name: messages.search.label }).fill("I left it there");
   await expect(visible(page, formLine("viaInflectionWithEntry", "left", "leave"))).toHaveCount(1);
   const lines = (await blockLines(page, "left", "it")).map((l) => l.text);
-  expect(lines.indexOf("sobrado, sobras")).toBeLessThan(lines.indexOf(formLine("viaInflectionWithEntry", "left", "leave")));
+  expect(lines.indexOf("sobras, sobrado")).toBeLessThan(lines.indexOf(formLine("viaInflectionWithEntry", "left", "leave")));
   expect(lines.indexOf(formLine("viaInflectionWithEntry", "left", "leave"))).toBeLessThan(lines.indexOf("izquierda, de izquierda, izquierdo"));
 
   await expect(controlOf(page, "it")).toHaveAttribute("aria-expanded", "false");

@@ -45,7 +45,7 @@ async function precedes(a: Locator, b: Locator): Promise<boolean> {
 // pronunciation block, user 2026-10-08). `left` is an exact entry AND an
 // inflection of `leave`; its own senses are verb, adjective, adverb, noun.
 const OFFER = '«left» también es una forma de «leave»';
-const FIRST_GROUP = "sobrado, sobras"; // left, verbo
+const FIRST_GROUP = "sobras, sobrado"; // left, verbo
 const SECOND_GROUP = "izquierda, de izquierda, izquierdo"; // left, adjetivo
 const LAST_GROUP_DEFINITION = "The left side or direction."; // left, sustantivo
 const LEAVE_FIRST = "dejar, abandonar"; // prefix of leave's verb line

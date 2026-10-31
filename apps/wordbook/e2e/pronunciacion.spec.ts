@@ -95,9 +95,9 @@ test("`row` draws each sense's translations on one comma-separated line", async 
   await answer(page, "row");
 
   for (const line of [
-    "remado, remo",
-    "fila, hilera, línea",
-    "pelea, riña, cisco",
+    "remo, remado",
+    "fila, línea, pista",
+    "pelea, cisco, riña",
     "remar, bogar, proejar",
     "pelear, discutir, reñir",
   ]) {

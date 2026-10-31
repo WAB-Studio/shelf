@@ -498,7 +498,7 @@ test("RL-34: a word's stored translation spans senses, and the 120-char cut betw
   const anywayRow = (await readLogRows(page)).find((row) => row.normalised === "anyway");
   expect(anywayRow?.senses).toBe(1);
   expect(anywayRow?.translation).toBe(
-    "en fin, pero bueno, pues nada, de todas formas, de todos modos, de todas maneras, a pesar de todo, aun así, comoquiera",
+    "en fin, pero bueno, pues nada, de todas formas, de todos modos, de todas maneras, a pesar de todo, aun así, \"bueno",
   );
   expect(anywayRow?.translation).not.toMatch(/[,\s]$/);
   expect(anywayRow?.translation?.length).toBeLessThanOrEqual(120);

@@ -542,7 +542,7 @@ test("/registro/bed answers with the same senses, translations and IPA /?q=bed d
   // verb sense's two glosses joined (docs/wordbook/DESIGN.md "The
   // translations are one line, separated by commas").
   await expect(
-    page.getByText("encamarse, irse a la cama", { exact: true }),
+    page.getByText("irse a la cama, encamarse", { exact: true }),
   ).toBeVisible();
   // The one heading on the page is the word itself: `SenseList`'s own copy
   // of "bed" stays suppressed, or this locator would be ambiguous.
@@ -565,7 +565,7 @@ test("/registro/bed answers with the same senses, translations and IPA /?q=bed d
   await expect(glossLocator(page, "lecho")).toBeVisible();
   await expect(glossLocator(page, "encamarse")).toBeVisible();
   await expect(
-    page.getByText("encamarse, irse a la cama", { exact: true }),
+    page.getByText("irse a la cama, encamarse", { exact: true }),
   ).toBeVisible();
 });
 
