@@ -66,7 +66,7 @@ export function Figure({
 }: {
   value: ReactNode;
   unit?: string;
-  variant?: "measure" | "meta";
+  variant?: "measure" | "meta" | "big";
   bare?: boolean;
   // Lets a word unit drop under its figure when the line runs out («de 60 /
   // búsquedas»): the figure flows as text, so a no-break space before it keeps
@@ -76,7 +76,7 @@ export function Figure({
   breakValue?: boolean;
 }) {
   const words = useTimeWords();
-  const size = variant === "meta" ? styles.meta : styles.measure;
+  const size = variant === "meta" ? styles.meta : variant === "big" ? styles.big : styles.measure;
   const formatted = formatFigureValue(value, unit, words);
   const wordUnit = unit && !bare && !isTimeFigure(formatted) ? unit : null;
   const breaks = Boolean(breakUnit && wordUnit);

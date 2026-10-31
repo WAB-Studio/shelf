@@ -54,6 +54,60 @@
   color: var(--pulsar-highlight);
 }
 
+/* The week: seven columns, the letter over its mark; today is a fill. */
+.days {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 4px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.day {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 0;
+  border-radius: 10px;
+}
+
+.dayToday {
+  background: var(--pulsar-brand-soft);
+}
+
+.dayLabel {
+  font-size: 14px;
+  color: var(--pulsar-brand-muted);
+}
+
+.dayToday .dayLabel {
+  color: var(--pulsar-brand-ink);
+  font-weight: 600;
+}
+
+.dayFigure {
+  min-block-size: 1.3em;
+  font-family: var(--font-mono);
+  font-size: 14px;
+  color: var(--pulsar-brand-ink-secondary);
+}
+
+.dayNone {
+  display: block;
+  inline-size: 24px;
+  block-size: 24px;
+}
+
+.dayNone::before {
+  content: "·";
+  display: block;
+  text-align: center;
+  line-height: 24px;
+  color: var(--pulsar-brand-muted);
+}
+
 .caption {
   font-size: 15px;
   line-height: 1.5;
