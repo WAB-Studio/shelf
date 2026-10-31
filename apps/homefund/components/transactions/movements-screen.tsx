@@ -18,7 +18,7 @@ import {
 } from "lucide-react";
 import { useFormatter, useLocale, useTranslations } from "next-intl";
 import { useAction } from "next-safe-action/hooks";
-import { useState, type ReactNode } from "react";
+import { Fragment, useState, type ReactNode } from "react";
 
 import { deleteTransactionAction } from "@/app/actions/transactions";
 import {
@@ -39,6 +39,8 @@ import {
   Box,
   Button,
   Card,
+  PlainLink,
+  Separator,
   CategoryTile,
   ColorSwatch,
   ConfirmDialog,
@@ -54,15 +56,16 @@ import {
   Select,
   StackedSegmentedControl,
   Text,
-  TextField,
   VisuallyHidden,
+  DateInput,
 } from "@/components/ui";
 import type { TransactionFormOptions } from "@/db/queries/transaction-form";
 import type { TransactionListRow } from "@/db/queries/transactions";
-import { usePathname, useRouter, Link as LocaleLink } from "@/i18n/navigation";
+import { usePathname, useRouter } from "@/i18n/navigation";
 import { BASE_CURRENCY, type CurrencyCode } from "@/lib/currency";
 import { addCivilDays, civilDateToDate, todayInBogota } from "@/lib/dates";
 import { categoryNamesById } from "@/lib/fund/category-names";
+import { dayNet } from "@/lib/fund/glance";
 import { useActionErrorToast } from "@/lib/use-action-toast";
 
 // A Radix Select item may not carry an empty value, so the "any" option rides
@@ -160,10 +163,11 @@ export function MovementsScreen({
   function dayLabel(occurredAt: string): string {
     if (occurredAt === today) return t("today");
     if (occurredAt === yesterday) return t("yesterday");
+    // The year only appears for a day outside the current one.
     return format.dateTime(civilDateToDate(occurredAt), {
       day: "numeric",
       month: "long",
-      year: "numeric",
+      ...(occurredAt.slice(0, 4) === today.slice(0, 4) ? {} : { year: "numeric" }),
     });
   }
 
@@ -317,6 +321,24 @@ export function MovementsScreen({
       <Box display={{ initial: "none", lg: "block" }}>
         <ScreenHeader
           title={t("listTitle")}
+          figure={
+            filters.type === "adjustment" || nets.length === 0 ? undefined : (
+              <>
+                {t("headlineNet")}{" "}
+                {nets.map(([currency, net], index) => (
+                  <span key={currency}>
+                    {index > 0 && " · "}
+                    <Money
+                      minor={net}
+                      currency={currency}
+                      tone={net < 0 ? "expense" : "income"}
+                      size="inherit"
+                    />
+                  </span>
+                ))}
+              </>
+            )
+          }
           meta={
             filters.type === "adjustment" ? (
               t("listMetaAdjustments", { count: totals.count })
@@ -365,7 +387,25 @@ export function MovementsScreen({
       <Box display={{ initial: "block", lg: "none" }}>
         <Flex direction="column" gap="4">
           <Flex justify="between" align="center" gap="3">
-            <Heading size="5">{t("listTitle")}</Heading>
+            <Flex direction="column">
+              <Heading size="5">{t("listTitle")}</Heading>
+              {filters.type !== "adjustment" && nets.length > 0 && (
+                <Text size="4" weight="medium">
+                  {t("headlineNet")}{" "}
+                  {nets.map(([currency, net], index) => (
+                    <span key={currency}>
+                      {index > 0 && " · "}
+                      <Money
+                        minor={net}
+                        currency={currency}
+                        tone={net < 0 ? "expense" : "income"}
+                        size="inherit"
+                      />
+                    </span>
+                  ))}
+                </Text>
+              )}
+            </Flex>
             <IconButton
               type="button"
               variant={showFilters || filtersActive ? "soft" : "ghost"}
@@ -411,9 +451,8 @@ export function MovementsScreen({
                 <Flex gap="3" wrap="wrap">
                   <FilterField label={t("rangeFrom")}>
                     {(id) => (
-                      <TextField.Root
+                      <DateInput
                         id={id}
-                        type="date"
                         value={filters.from ?? ""}
                         onChange={(event) =>
                           patchFilters({ from: event.target.value || null })
@@ -423,9 +462,8 @@ export function MovementsScreen({
                   </FilterField>
                   <FilterField label={t("rangeTo")}>
                     {(id) => (
-                      <TextField.Root
+                      <DateInput
                         id={id}
-                        type="date"
                         value={filters.to ?? ""}
                         onChange={(event) =>
                           patchFilters({ to: event.target.value || null })
@@ -582,64 +620,80 @@ export function MovementsScreen({
         ) : (
           <Flex direction="column" gap="5">
             {groups.map((group) => (
-              <Flex key={group.key} direction="column" gap="2">
-                <Text size="1" weight="bold" color="gray">
-                  {group.label.toUpperCase()}
-                </Text>
-                <Flex direction="column" gap="2">
-                  {group.rows.map((row) => (
-                    <MovementCard
-                      key={row.id}
-                      row={row}
-                      title={row.description || rowTitle(row, categoryNames, t)}
-                      subtitle={
-                        row.description
-                          ? [
-                              rowTitle(row, categoryNames, t),
-                              rowSubtitle(row, accountNames),
-                            ]
-                              .filter(Boolean)
-                              .join(" · ")
-                          : rowSubtitle(row, accountNames)
-                      }
-                      color={rowColor(row, categoryColors)}
-                      categoryName={rowTitle(row, categoryNames, t)}
-                      amount={
-                        row.reconciliationId !== null ? (
+              <Card key={group.key}>
+                <Flex direction="column" gap="3">
+                  <Flex justify="between" align="baseline" gap="3">
+                    <Text size="1" weight="bold" color="gray">
+                      {group.label.toUpperCase()}
+                    </Text>
+                    <Text size="2" color="gray">
+                      {dayNet(group.rows).map(([currency, net], index) => (
+                        <span key={currency}>
+                          {index > 0 && " · "}
                           <Money
-                            minor={
-                              row.toAccountId !== null
-                                ? row.amountCents
-                                : -row.amountCents
-                            }
-                            currency={row.currency}
-                            tone="transfer"
+                            minor={net}
+                            currency={currency as CurrencyCode}
+                            tone="plain"
                             signed="always"
                             size="inherit"
                           />
-                        ) : (
-                          <Money
-                            minor={row.amountCents}
-                            currency={row.currency}
-                            tone={rowTone(row)}
-                            size="inherit"
-                          />
-                        )
-                      }
-                      badge={
-                        row.recurringRuleId !== null
-                          ? t("autoBadge")
-                          : undefined
-                      }
-                      caused={
-                        row.causedByTransactionId !== null
-                          ? t("causedBadge")
-                          : undefined
-                      }
-                    />
+                        </span>
+                      ))}
+                    </Text>
+                  </Flex>
+                  {group.rows.map((row) => (
+                    <Fragment key={row.id}>
+                      <Separator size="4" />
+                      <MovementCard
+                        row={row}
+                        title={row.description || rowTitle(row, categoryNames, t)}
+                        subtitle={
+                          row.description
+                            ? [
+                                rowTitle(row, categoryNames, t),
+                                rowSubtitle(row, accountNames),
+                              ]
+                                .filter(Boolean)
+                                .join(" · ")
+                            : rowSubtitle(row, accountNames)
+                        }
+                        color={rowColor(row, categoryColors)}
+                        categoryName={rowTitle(row, categoryNames, t)}
+                        amount={
+                          row.reconciliationId !== null ? (
+                            <Money
+                              minor={
+                                row.toAccountId !== null
+                                  ? row.amountCents
+                                  : -row.amountCents
+                              }
+                              currency={row.currency}
+                              tone="transfer"
+                              signed="always"
+                              size="inherit"
+                            />
+                          ) : (
+                            <Money
+                              minor={row.amountCents}
+                              currency={row.currency}
+                              tone={rowTone(row)}
+                              size="inherit"
+                            />
+                          )
+                        }
+                        badge={
+                          row.recurringRuleId !== null ? t("autoBadge") : undefined
+                        }
+                        caused={
+                          row.causedByTransactionId !== null
+                            ? t("causedBadge")
+                            : undefined
+                        }
+                      />
+                    </Fragment>
                   ))}
                 </Flex>
-              </Flex>
+              </Card>
             ))}
 
             {table.getPageCount() > 1 && (
@@ -822,24 +876,22 @@ function MovementCard({
   caused?: string;
 }) {
   return (
-    <Card asChild>
-      <LocaleLink href={`/movements/${row.id}`}>
-        <MovementRow
-          tile={
-            <CategoryTile
-              color={color}
-              name={categoryName}
-              transfer={row.kind === "transfer" || row.reconciliationId !== null}
-            />
-          }
-          title={title}
-          subtitle={subtitle}
-          amount={amount}
-          tone={rowTone(row)}
-          badge={badge}
-          caused={caused}
-        />
-      </LocaleLink>
-    </Card>
+    <PlainLink href={`/movements/${row.id}`}>
+      <MovementRow
+        tile={
+          <CategoryTile
+            color={color}
+            name={categoryName}
+            transfer={row.kind === "transfer" || row.reconciliationId !== null}
+          />
+        }
+        title={title}
+        subtitle={subtitle}
+        amount={amount}
+        tone={rowTone(row)}
+        badge={badge}
+        caused={caused}
+      />
+    </PlainLink>
   );
 }
