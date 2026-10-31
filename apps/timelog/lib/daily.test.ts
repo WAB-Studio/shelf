@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { claudeTotal, dailyRows, toCsv } from "./daily";
+import { claudeSources, claudeTotal, dailyRows, sourcesOverlap, toCsv } from "./daily";
 
 const totals = [
   { day: "2026-10-27", seconds: 20_000 },
@@ -43,4 +43,13 @@ test("the CSV quotes what needs it and defuses a formula in an app's name", () =
   assert.equal(lines[2], "2026-10-29,3600,0,0,0,0,'=HYPERLINK(1),3600");
   assert.equal(lines[3], "");
   assert.equal(toCsv([{ ...dailyRows("2026-10-28", "2026-10-28", [], [], [], "S")[0], top_app: 'a, "b"' }]).split("\r\n")[1], '2026-10-28,0,0,0,0,0,"a, ""b""",0');
+});
+
+test("Claude's sources keep their order and the overlap note shows from two sources with time", () => {
+  const names = { code: "Claude Code", web: "claude.ai", desktop: "App" };
+  const sources = claudeSources({ code: 600, web: 0, desktop: 0 }, names);
+  assert.deepEqual(sources.map((one) => one.key), ["code", "web", "desktop"]);
+  assert.equal(sourcesOverlap(sources), false);
+  assert.equal(sourcesOverlap(claudeSources({ code: 600, web: 60, desktop: 0 }, names)), true);
+  assert.equal(sourcesOverlap(claudeSources(undefined, names)), false);
 });

@@ -1,13 +1,15 @@
 import type { ReactNode } from "react";
 
-import { Disclosure, Meter, Rows, Text } from "@/components/ui";
+import { Disclosure, Meter, Rows, Text, type Tone } from "@/components/ui";
 
 // `detail` opens under the row; `note` is a small line under it.
-export type BarRow = { key: string; name: string; figure: string; seconds: number; label: string; detail?: ReactNode; note?: string };
+export type BarRow = { key: string; name: string; figure: string; seconds: number; label: string; detail?: ReactNode; note?: string; tone?: Tone };
 
 // One meter per item, each bar a share of the longest. `featured` makes the first rows large and the rest compact.
-export function BarRows({ rows, featured }: { rows: BarRow[]; featured?: number }) {
-  const longest = Math.max(1, ...rows.map((row) => row.seconds));
+// `tone` colours every row that names none of its own. `of` is the whole a bar is a share of: a child row names its
+// parent's time, so a window never draws as long as the app it sits in; without it, the longest row.
+export function BarRows({ rows, featured, tone, of }: { rows: BarRow[]; featured?: number; tone?: Tone; of?: number }) {
+  const longest = Math.max(1, of ?? 0, ...(of === undefined ? rows.map((row) => row.seconds) : []));
   return (
     <Rows>
       {rows.map((row, index) => {
@@ -17,6 +19,7 @@ export function BarRows({ rows, featured }: { rows: BarRow[]; featured?: number 
             figure={row.figure}
             share={row.seconds / longest}
             label={row.label}
+            tone={row.tone ?? tone}
             size={featured === undefined ? "default" : index < featured ? "large" : "compact"}
           />
         );

@@ -1,8 +1,8 @@
 import { getTranslations } from "next-intl/server";
 
 import { BarRows } from "@/components/screens/app-rows";
-import { Between, Stack, Text, TextLink } from "@/components/ui";
-import { claudeTotal } from "@/lib/daily";
+import { Stack, Text, TextLink } from "@/components/ui";
+import { claudeSources, claudeTotal, sourcesOverlap } from "@/lib/daily";
 import { projectName } from "@/lib/claude-project";
 import type { ClaudeDay, ClaudeSessionTime, PageTime, SiteTime } from "@/lib/queries";
 import type { calendarWords } from "@/lib/words";
@@ -21,30 +21,26 @@ export async function ClaudeBlock({ claude, sessions, hasClaudeCode, hasSites, w
   const t = await getTranslations("time.claude");
   const parts = claude ?? { day: "", code: 0, web: 0, desktop: 0 };
   const total = claudeTotal(parts);
-  const rows = [
-    { key: "code", name: t("code"), seconds: parts.code, shown: hasClaudeCode || parts.code > 0 },
-    { key: "web", name: t("web"), seconds: parts.web, shown: hasSites || parts.web > 0 },
-    { key: "desktop", name: t("desktop"), seconds: parts.desktop, shown: parts.desktop > 0 },
-  ].filter((row) => row.shown);
+  const sources = claudeSources(parts, { code: t("code"), web: t("web"), desktop: t("desktop") });
+  const shown = { code: hasClaudeCode, web: hasSites, desktop: false };
+  const rows = sources.filter((row) => shown[row.key] || row.seconds > 0);
 
   return (
     <Stack gap={2}>
-      <Between>
-        <Text variant="meta">{t("total")}</Text>
-        <Text mono>{total > 0 ? words.duration(total) : "—"}</Text>
-      </Between>
       {total === 0 ? (
         <Text as="p" variant="meta">{t(hasClaudeCode ? "empty" : "never")}</Text>
       ) : (
         <>
-          <BarRows rows={rows.map((row) => ({ key: row.key, name: row.name, figure: words.duration(row.seconds), seconds: row.seconds, label: t("bar", { name: row.name, duration: words.duration(row.seconds) }) }))} />
-          <Text as="p" variant="meta">{t("overlap")}</Text>
+          <BarRows of={total} rows={rows.map((row) => ({ key: row.key, tone: row.tone, name: row.name, figure: words.duration(row.seconds), seconds: row.seconds, label: t("bar", { name: row.name, duration: words.duration(row.seconds) }) }))} />
+          {sourcesOverlap(rows) ? <Text as="p" variant="meta">{t("overlap")}</Text> : null}
         </>
       )}
       {sessions.length > 0 ? (
         <Stack gap={2}>
           <Text variant="meta">{t("sessions")}</Text>
           <BarRows
+            tone="claude"
+            of={Math.max(parts.code, ...sessions.map((one) => one.seconds))}
             rows={sessions.slice(0, SESSIONS_SHOWN).map((one) => {
               const project = projectName(one.project);
               return {
@@ -73,6 +69,8 @@ export async function InternetBlock({ sites, pages, hasSites, words }: { sites: 
     return (
       <>
         <BarRows
+          tone="browser"
+          of={sites.find((one) => one.host === host)?.seconds}
           rows={mine.slice(0, PAGES_SHOWN).map((page) => {
             const name = page.title === "" ? page.url : page.title;
             return { key: `${page.url}\n${page.title}`, name, figure: words.duration(page.seconds), seconds: page.seconds, label: t("pageBar", { title: name, duration: words.duration(page.seconds) }), note: page.url };
@@ -84,10 +82,9 @@ export async function InternetBlock({ sites, pages, hasSites, words }: { sites: 
   };
   return (
     <Stack gap={2}>
-      <Text variant="meta">{t("title")}</Text>
       {shown.length > 0 ? (
         <>
-          <BarRows rows={shown.map((one) => ({ key: one.host, name: one.host, figure: words.duration(one.seconds), seconds: one.seconds, label: t("bar", { host: one.host, duration: words.duration(one.seconds) }), detail: pages.some((page) => page.host === one.host) ? pagesOf(one.host) : undefined }))} />
+          <BarRows tone="browser" rows={shown.map((one) => ({ key: one.host, name: one.host, figure: words.duration(one.seconds), seconds: one.seconds, label: t("bar", { host: one.host, duration: words.duration(one.seconds) }), detail: pages.some((page) => page.host === one.host) ? pagesOf(one.host) : undefined }))} />
           {sites.length > shown.length ? <Text as="p" variant="meta">{t("more", { n: sites.length - shown.length })}</Text> : null}
           <Text as="p" variant="meta">{t("privacy")}</Text>
         </>

@@ -2,14 +2,16 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 
-import { BarRows } from "@/components/screens/app-rows";
-import { Between, Card, Cards, DayColumns, Figure, Hero, Split, Stack, Text, TextLink, Title } from "@/components/ui";
+import { Between, Card, Cards, DayColumns, Figure, Heatmap, Hero, HeroColumns, Stack, Text, TextLink, Tile, Title } from "@/components/ui";
 import { claudeTotal } from "@/lib/daily";
-import { appsBetween, claudeBetween, dayTotals, uploadSpan } from "@/lib/queries";
+import { buildHeatmap } from "@/lib/heatmap";
+import { appsByDay, claudeBetween, dayTotals, uploadSpan } from "@/lib/queries";
 import { fill, sum } from "@/lib/totals";
 import { askedWeek, clampWeek, weekSteps } from "@/lib/week";
 import { calendarWords } from "@/lib/words";
 import { addDays, civilDay } from "@/lib/zone";
+
+const APPS_SHOWN = 8;
 
 export async function generateMetadata({ searchParams }: { searchParams: Promise<{ semana?: string }> }): Promise<Metadata> {
   const { semana } = await searchParams;
@@ -24,10 +26,10 @@ export default async function WeekPage({ searchParams }: { searchParams: Promise
   const { semana } = await searchParams;
   const asked = askedWeek(semana, today);
   const sunday = addDays(asked, 6);
-  const [span, totals, apps, claude, words, t] = await Promise.all([
+  const [span, totals, byDay, claude, words, t] = await Promise.all([
     uploadSpan(),
     dayTotals(asked, sunday),
-    appsBetween(asked, sunday),
+    appsByDay(asked, sunday),
     claudeBetween(asked, sunday),
     calendarWords(),
     getTranslations("time.week"),
@@ -37,13 +39,12 @@ export default async function WeekPage({ searchParams }: { searchParams: Promise
   const steps = weekSteps(monday, span.firstDay, today);
   const days = fill(monday, sunday, totals);
   const longestDay = Math.max(1, ...days.map((one) => one.seconds));
-  const grouped = words.apps(apps);
-  const claudeOn = new Map(claude.map((one) => [one.day, claudeTotal(one)]));
-  const claudeWeek = [...claudeOn.values()].reduce((total, seconds) => total + seconds, 0);
+  const heat = buildHeatmap(byDay, days.map((one) => one.day), words.system, APPS_SHOWN);
+  const claudeWeek = claude.reduce((total, one) => total + claudeTotal(one), 0);
 
   const block = (
     <Hero>
-      <Stack gap={3}>
+      <HeroColumns>
         <Stack gap={2}>
           <Text variant="meta">{t("total")}</Text>
           <Figure parts={words.durationParts(sum(totals))} />
@@ -66,9 +67,10 @@ export default async function WeekPage({ searchParams }: { searchParams: Promise
         <Cards>
           <Card label={t("claudeWeekTotal")}>
             <Text mono>{claudeWeek > 0 ? words.duration(claudeWeek) : t("none")}</Text>
+            {claudeWeek === 0 ? <Text variant="meta">{span.hasClaudeCode || span.hasSites ? t("claudeNone") : t("claudeNever")}</Text> : null}
           </Card>
         </Cards>
-      </Stack>
+      </HeroColumns>
     </Hero>
   );
 
@@ -81,52 +83,41 @@ export default async function WeekPage({ searchParams }: { searchParams: Promise
           {steps.next ? <TextLink href={`/semana?semana=${steps.next}`}>{t("next")} ›</TextLink> : null}
         </Between>
       </Between>
-      <Split aside={block}>
-        <Stack gap={4}>
-          <Stack gap={2}>
-            <Text variant="meta">{t("apps")}</Text>
-            {grouped.length === 0 ? (
-              <Text as="p">{t("noApps")}</Text>
-            ) : (
-              <BarRows
-                featured={3}
-                rows={grouped.map((one) => ({
-                  key: one.app,
-                  name: one.app,
-                  figure: words.duration(one.seconds),
-                  seconds: one.seconds,
-                  label: t("bar", { day: one.app, duration: words.duration(one.seconds) }),
-                }))}
-              />
-            )}
-          </Stack>
-          <Stack gap={2}>
-            <Between>
-              <Text variant="meta">{t("claude")}</Text>
-              <TextLink download href={`/api/export?from=${monday}&to=${sunday}`}>
-                {t("export")}
-              </TextLink>
-            </Between>
-            {claudeWeek === 0 ? (
-              <Text as="p" variant="meta">{span.hasClaudeCode || span.hasSites ? t("claudeNone") : t("claudeNever")}</Text>
-            ) : (
-              <BarRows
-                rows={days.map(({ day }) => {
-                  const seconds = claudeOn.get(day) ?? 0;
-                  const name = `${words.weekdayShort(day)} ${words.dayOfMonth(day)}`;
+      {block}
+      <Tile full title={t("apps")} figure={words.duration(sum(totals))}>
+        {heat.rows.length === 0 ? (
+          <Text as="p">{t("noApps")}</Text>
+        ) : (
+          <>
+            <Heatmap
+              label={t("heatmap")}
+              columns={days.map(({ day }) => ({ key: day, label: words.weekdayShort(day), href: day === today ? "/" : `/dia/${day}`, future: day > today }))}
+              rows={heat.rows.map((row) => ({
+                key: row.app,
+                name: row.app,
+                tone: row.kind,
+                total: words.duration(row.total),
+                cells: row.cells.map((cell, index) => {
+                  const day = days[index].day;
+                  const when = `${words.weekdayShort(day)} ${words.dayOfMonth(day)}`;
                   return {
-                    key: day,
-                    name,
-                    figure: seconds === 0 ? t("none") : words.duration(seconds),
-                    seconds,
-                    label: t("bar", { day: name, duration: seconds === 0 ? t("none") : words.duration(seconds) }),
+                    figure: cell.seconds === 0 ? null : words.heat(cell.seconds),
+                    level: cell.level,
+                    label: t("cell", { app: row.app, day: when, duration: cell.seconds === 0 ? t("none") : words.duration(cell.seconds) }),
                   };
-                })}
-              />
-            )}
-          </Stack>
-        </Stack>
-      </Split>
+                }),
+              }))}
+            />
+            {heat.restCount > 0 ? <Text as="p" variant="meta">{t("appsMore", { n: heat.restCount, duration: words.duration(heat.restSeconds) })}</Text> : null}
+          </>
+        )}
+        <Between>
+          <TextLink download href={`/api/export?from=${monday}&to=${sunday}`}>
+            {t("export")}
+          </TextLink>
+          <TextLink href="/exportar">{t("exportMore")} ›</TextLink>
+        </Between>
+      </Tile>
     </Stack>
   );
 }

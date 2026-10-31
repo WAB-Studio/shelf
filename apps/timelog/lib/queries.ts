@@ -13,6 +13,7 @@ export type WindowTime = { app: string; title: string; seconds: number };
 export type PageTime = { host: string; url: string; title: string; seconds: number };
 // A Claude Code session on the days asked: its project folder as Claude Code named it, the first and last message, the seconds.
 export type ClaudeSessionTime = { session: string; project: string; first: Date; last: Date; seconds: number };
+export type DeviceTime = { device: string; seconds: number };
 export type DayApp = { day: string; app: string; seconds: number };
 
 // Every device added: one app on two PCs is one row. Longest first, then by name.
@@ -24,6 +25,19 @@ export async function appsBetween(from: string, to: string): Promise<AppTime[]> 
        where day between ${from}::date and ${to}::date
        group by app
        order by seconds desc, app`),
+  );
+  return [...rows];
+}
+
+// Each device's total in the range, longest first. Two PCs on at once add up in every other total here.
+export async function devicesBetween(from: string, to: string): Promise<DeviceTime[]> {
+  const rows = await withTimeDb((tx) =>
+    tx.execute<DeviceTime>(sql`
+      select device, sum(seconds)::int as seconds
+        from timelog.app_seconds
+       where day between ${from}::date and ${to}::date
+       group by device
+       order by seconds desc, device`),
   );
   return [...rows];
 }

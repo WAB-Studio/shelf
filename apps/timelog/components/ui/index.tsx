@@ -10,17 +10,31 @@ export function Page({ wide, children }: { wide?: boolean; children: ReactNode }
   return <main className={join(styles.page, wide && styles.pageWide)}>{children}</main>;
 }
 
-// The brand block beside its rows from 1100 (block sticky on the left), above them below it.
-export function Split({ aside, children }: { aside: ReactNode; children: ReactNode }) {
+// A form's column inside the wide page: the header keeps its place from one screen to the next.
+export function Narrow({ children }: { children: ReactNode }) {
+  return <div className={styles.narrow}>{children}</div>;
+}
+
+// The brand block on top, wide; the cards of the day in a mosaic under it.
+export function Mosaic({ children }: { children: ReactNode }) {
+  return <div className={styles.mosaic}>{children}</div>;
+}
+
+// One card of the mosaic: its title in the display face, its total at the right. `full` takes a whole row; `lead`
+// takes one only where the mosaic has two columns, so the longest list is never squeezed.
+export function Tile({ title, figure, full, lead, children }: { title: ReactNode; figure?: ReactNode; full?: boolean; lead?: boolean; children: ReactNode }) {
   return (
-    <div className={styles.split}>
-      <div className={styles.aside}>{aside}</div>
-      <div className={styles.main}>{children}</div>
-    </div>
+    <section className={join(styles.tile, full && styles.tileFull, lead && styles.tileLead)}>
+      <div className={styles.tileHead}>
+        <h2 className={styles.tileTitle}>{title}</h2>
+        {figure === undefined ? null : <Text mono>{figure}</Text>}
+      </div>
+      {children}
+    </section>
   );
 }
 
-// Rows in one column; in two between 720 and 1099, where there is room for both and no side block.
+// Rows in one column.
 export function Rows({ children }: { children: ReactNode }) {
   return <div className={styles.rows}>{children}</div>;
 }
@@ -34,18 +48,20 @@ export function Between({ children }: { children: ReactNode }) {
   return <div className={styles.between}>{children}</div>;
 }
 
+export type Tone = "code" | "browser" | "comms" | "leisure" | "system" | "other" | "claude" | "claudeWeb" | "claudeApp";
+
 type MeterSize = "large" | "default" | "compact";
 
 // A name and its figure over the bar under them, 48 tall at least (DESIGN «Hoy»). A long name
 // truncates; the figure never wraps.
-export function Meter({ name, figure, share, label, size = "default" }: { name: ReactNode; figure: ReactNode; share: number; label: string; size?: MeterSize }) {
+export function Meter({ name, figure, share, label, size = "default", tone }: { name: ReactNode; figure: ReactNode; share: number; label: string; size?: MeterSize; tone?: Tone }) {
   return (
     <div className={join(styles.stack, styles.gap1, styles.meter, size === "large" && styles.meterLarge, size === "compact" && styles.meterCompact)}>
       <div className={styles.line}>
         <Text truncate>{name}</Text>
         <Text mono>{figure}</Text>
       </div>
-      <Bar share={share} label={label} />
+      <Bar share={share} label={label} tone={tone} />
     </div>
   );
 }
@@ -66,6 +82,11 @@ export function Disclosure({ summary, children }: { summary: ReactNode; children
 // The brand block: the one dark block on the main screen.
 export function Hero({ children }: { children: ReactNode }) {
   return <section className={styles.hero}>{children}</section>;
+}
+
+// The block's parts side by side where they fit, stacked where they do not.
+export function HeroColumns({ children }: { children: ReactNode }) {
+  return <div className={styles.heroColumns}>{children}</div>;
 }
 
 export function Title({ small, children }: { small?: boolean; children: ReactNode }) {
@@ -107,6 +128,113 @@ export function Card({ label, children }: { label: ReactNode; children: ReactNod
   );
 }
 
+// «13 h» as «13» over «h», so two neighbours never read as one run of figures.
+function FigureParts({ text }: { text: string }) {
+  const at = text.indexOf(" ");
+  return at < 0 ? text : <><span>{text.slice(0, at)}</span><span className={styles.dayUnit}>{text.slice(at + 1)}</span></>;
+}
+
+export type CompositionPart = { key: string; tone: Tone; seconds: number; name: string; figure: string };
+
+// A whole in parts on the brand block: one stacked bar and, under it, each part's name and figure in words, so no
+// part is told by colour alone. `thin` leaves the legend to the text around it.
+export function Composition({ parts, label, thin }: { parts: CompositionPart[]; label: string; thin?: boolean }) {
+  const total = Math.max(1, parts.reduce((sum, part) => sum + part.seconds, 0));
+  return (
+    <div className={styles.composition}>
+      <div className={join(styles.stacked, thin && styles.stackedThin)} role="img" aria-label={label}>
+        {parts.map((part) => (
+          <div key={part.key} className={join(styles.part, styles[`tone_${part.tone}`])} style={{ flexGrow: part.seconds / total }} />
+        ))}
+      </div>
+      {thin ? null : (
+        <ul className={styles.legend}>
+          {parts.map((part) => (
+            <li key={part.key} className={styles[`tone_${part.tone}`]}>
+              <span className={styles.swatch} aria-hidden="true" />
+              <Text truncate>{part.name}</Text>
+              <Text mono>{part.figure}</Text>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+export type HeatmapColumn = { key: string; label: string; href?: string; future?: boolean };
+export type HeatmapRow = { key: string; name: string; tone: Tone; total: string; cells: { figure: { wide: string; narrow: string } | null; level: number; label: string }[] };
+
+// A grid of rows by days, a cell tinted by its level and always carrying its figure (a level only helps the eye find it).
+export function Heatmap({ columns, rows, label }: { columns: HeatmapColumn[]; rows: HeatmapRow[]; label: string }) {
+  return (
+    <table className={styles.heat} aria-label={label}>
+      <thead>
+        <tr>
+          <th scope="col" className={styles.heatName} />
+          {columns.map((column) => (
+            <th key={column.key} scope="col" className={join(styles.heatHead, column.future && styles.dayFuture)}>
+              {column.href === undefined || column.future ? column.label : <Link href={column.href} className={styles.heatLink}>{column.label}</Link>}
+            </th>
+          ))}
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((row) => (
+          <tr key={row.key} className={styles[`tone_${row.tone}`]}>
+            <th scope="row" className={styles.heatName} title={`${row.name}: ${row.total}`}>
+              <Text truncate>{row.name}</Text>
+            </th>
+            {row.cells.map((cell, index) => (
+              <td key={columns[index].key} className={join(styles.heatCell, styles.mono)} data-level={cell.level} aria-label={cell.label}>
+                {cell.figure === null ? <span className={styles.heatNone}>—</span> : <><span className={styles.heatWide}>{cell.figure.wide}</span><span className={styles.heatNarrow}>{cell.figure.narrow}</span></>}
+              </td>
+            ))}
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+export type StripEntry = { key: string; initial: string; number: number; description: string; href?: string; current: boolean };
+
+// The days of one week as touchable tiles, the month named above them, ‹ › one day away and « » one week away.
+type StripStep = { href: string; label: string };
+
+function StripArrow({ step, glyph }: { step?: StripStep; glyph: string }) {
+  return step === undefined ? <span className={styles.stripStep} /> : <Link href={step.href} className={styles.stripStep} aria-label={step.label}>{glyph}</Link>;
+}
+
+export function DayStrip({ label, days, weekPrev, dayPrev, dayNext, weekNext }: { label: string; days: StripEntry[]; weekPrev?: StripStep; dayPrev?: StripStep; dayNext?: StripStep; weekNext?: StripStep }) {
+  return (
+    <nav className={styles.strip} aria-label={label}>
+      <div className={styles.stripHead}>
+        <StripArrow step={weekPrev} glyph="«" />
+        <StripArrow step={dayPrev} glyph="‹" />
+        <span className={styles.stripLabel}>{label}</span>
+        <StripArrow step={dayNext} glyph="›" />
+        <StripArrow step={weekNext} glyph="»" />
+      </div>
+      <div className={styles.stripDays}>
+        {days.map((one) => {
+          const inside = (
+            <>
+              <span className={styles.stripInitial}>{one.initial}</span>
+              <span className={styles.mono}>{one.number}</span>
+            </>
+          );
+          return one.href === undefined ? (
+            <span key={one.key} className={join(styles.stripDay, styles.stripOff)} aria-hidden="true">{inside}</span>
+          ) : (
+            <Link key={one.key} href={one.href} className={join(styles.stripDay, one.current && styles.stripCurrent)} aria-label={one.description} aria-current={one.current ? "date" : undefined}>{inside}</Link>
+          );
+        })}
+      </div>
+    </nav>
+  );
+}
+
 export type DayColumn = { key: string; label: string; figure: string; share: number; future: boolean; description: string; href?: string };
 
 // Seven vertical columns, one per day, for the brand block; a day not reached is dimmed and empty.
@@ -117,9 +245,11 @@ export function DayColumns({ days }: { days: DayColumn[] }) {
         const column = (
           <>
             <div className={styles.dayTrack} role="img" aria-label={day.description}>
-              <div className={styles.dayFill} style={{ height: `${Math.max(0, Math.min(1, day.share)) * 100}%` }} />
+              <div className={styles.dayFill} style={{ height: day.share > 0 ? `max(4px, ${Math.min(1, day.share) * 100}%)` : "0" }} />
             </div>
-            <span className={join(styles.dayFigure, styles.mono)}>{day.future ? "" : day.figure}</span>
+            <span className={join(styles.dayFigure, styles.mono)}>
+              {day.future ? "" : <FigureParts text={day.figure} />}
+            </span>
             <span className={styles.dayLabel}>{day.label}</span>
           </>
         );
@@ -156,10 +286,10 @@ export function Header({ brand, href, children }: { brand: ReactNode; href: stri
 }
 
 // One bar, its length a share of the longest (DESIGN: the only graphic).
-export function Bar({ share, label }: { share: number; label: string }) {
+export function Bar({ share, label, tone }: { share: number; label: string; tone?: Tone }) {
   const percent = Math.max(0, Math.min(1, share)) * 100;
   return (
-    <div className={styles.track} role="img" aria-label={label}>
+    <div className={join(styles.track, tone && styles[`tone_${tone}`])} role="img" aria-label={label}>
       <div className={styles.fill} style={{ width: `${percent}%` }} />
     </div>
   );

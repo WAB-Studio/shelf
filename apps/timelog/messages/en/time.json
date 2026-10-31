@@ -8,14 +8,15 @@
       "minutes": "{n} min ago",
       "hours": "{n} h ago",
       "days": "{n} d ago"
-    }
+    },
+    "tinyHours": "h",
+    "tinyMinutes": "m"
   },
   "nav": {
     "label": "Sections",
     "today": "Today",
     "week": "Week",
-    "keys": "Keys",
-    "export": "Export"
+    "keys": "Keys"
   },
   "today": {
     "title": "{weekday}, {month} {day}",
@@ -35,29 +36,41 @@
     "versusLess": "−{duration}",
     "versusSame": "Same as the day before",
     "connect": "Connect my PC",
-    "prev": "Previous day",
-    "next": "Next day",
     "apps": "Apps",
-    "claudeCard": "Claude in total",
+    "claudeCard": "Claude",
     "windowBar": "{title}: {duration}",
-    "windowsMore": "and {n} more windows"
+    "windowsMore": "and {n} more windows",
+    "byClass": "Where it went",
+    "byClassLabel": "The day split by class of app",
+    "claudeGlance": "{duration} with Claude · {percent}% of the day",
+    "claudeNoneDay": "No Claude that day.",
+    "devicesSum": "Sum of {n} devices",
+    "appsMore": "and {n} more apps · {duration}",
+    "strip": "Week of the day",
+    "stripDay": "{weekday}, {month} {day}",
+    "stripPrev": "Previous week",
+    "stripNext": "Next week",
+    "stripDayPrev": "Previous day",
+    "stripDayNext": "Next day"
   },
   "week": {
     "title": "{from} to {to}",
     "prev": "Previous week",
     "next": "Next week",
-    "days": "Days",
     "apps": "Apps of the week",
     "noApps": "Nothing this week.",
     "none": "—",
     "bar": "{day}: {duration}",
     "total": "Total for the week",
     "upcoming": "{day}: not here yet",
-    "claude": "Claude by day",
     "export": "Export this week",
     "claudeWeekTotal": "Claude this week",
     "claudeNone": "No Claude time this week.",
-    "claudeNever": "No Claude time has arrived yet. See «Today» for how to connect it."
+    "claudeNever": "No Claude time has arrived yet. See «Today» for how to connect it.",
+    "heatmap": "Each app's time, day by day",
+    "cell": "{app}, {day}: {duration}",
+    "appsMore": "and {n} more apps · {duration}",
+    "exportMore": "Export other dates"
   },
   "keys": {
     "title": "Keys",
@@ -143,6 +156,20 @@
     "thisWeek": "This week",
     "last30": "Last 30 days",
     "thisMonth": "This month",
-    "badRange": "That range did not work: «From» is on or before «To», up to 366 days."
+    "badRange": "That range did not work: «From» is on or before «To», up to 366 days.",
+    "back": "Week"
+  },
+  "timeline": {
+    "title": "Claude Code through the day",
+    "label": "Claude Code sessions along the day",
+    "session": "{project}: from {from} to {to}"
+  },
+  "classes": {
+    "code": "Code",
+    "browser": "Browser",
+    "comms": "Communication",
+    "leisure": "Leisure",
+    "system": "System",
+    "other": "Other"
   }
 }

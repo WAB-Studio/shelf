@@ -22,6 +22,26 @@ test("updaters, helpers and services are system noise; javaw reads Java", () => 
   assert.equal(readableApp("Obscure Tool.exe"), "Obscure Tool");
 });
 
+test("a game or launcher is no background process for holding a word inside its name", () => {
+  for (const raw of ["GhostOfTsushima.exe", "RiotClientServices.exe", "Hostess.exe", "Shostakovich Player.exe"]) assert.notEqual(readableApp(raw), null);
+  assert.equal(readableApp("GhostOfTsushima.exe"), "GhostOfTsushima");
+  assert.equal(readableApp("steamwebhelper.exe"), "Steam");
+  assert.equal(readableApp("RiotClientServices.exe"), "Riot Client");
+  assert.equal(readableApp("OneDriveStandaloneUpdater.exe"), null);
+  assert.equal(readableApp("Some Update.Service.exe"), null);
+});
+
+test("Windows hosts and vendor helpers are system noise, a game or the Steam client is not", () => {
+  for (const raw of ["svchost.exe", "conhost.exe", "dllhost.exe", "sihost.exe", "taskhostw.exe", "nvsphelper64.exe", "AdobeARMHelper.exe", "wudfhost.exe", "SecurityHealthService.exe"]) assert.equal(readableApp(raw), null, raw);
+  for (const raw of ["ghost.exe", "GhostOfTsushima.exe", "steamwebhelper.exe", "Ghostrunner.exe", "RiotClientServices.exe"]) assert.notEqual(readableApp(raw), null, raw);
+  assert.equal(readableApp("steamwebhelper.exe"), "Steam");
+});
+
+test("raw process names read as people say them", () => {
+  const names: Record<string, string> = { "WhatsApp.Root.exe": "WhatsApp", "idea64.exe": "IntelliJ IDEA", "vlc.exe": "VLC", "mpc-hc64.exe": "MPC-HC", "PowerToys.PowerLauncher.exe": "PowerToys" };
+  for (const [raw, name] of Object.entries(names)) assert.equal(readableApp(raw), name);
+});
+
 test("apps group under their readable names, system noise as one row", () => {
   const rows = readableApps(
     [

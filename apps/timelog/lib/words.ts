@@ -4,7 +4,7 @@ import { getLocale, getTranslations } from "next-intl/server";
 
 import { readableApps } from "@/lib/app-names";
 import type { DurationWords } from "@/lib/duration";
-import { briefDuration, durationParts, formatDuration } from "@/lib/duration";
+import { briefDuration, durationParts, formatDuration, heatFigure } from "@/lib/duration";
 import type { AppTime } from "@/lib/queries";
 import { weekdayIndex } from "@/lib/week";
 import { TIME_ZONE } from "@/lib/zone";
@@ -28,6 +28,7 @@ export async function calendarWords() {
   const months = common.raw("months") as string[];
   const monthsShort = common.raw("monthsShort") as string[];
   const weekdays = common.raw("weekdays") as string[];
+  const weekdaysInitial = common.raw("weekdaysInitial") as string[];
   const weekdaysShort = common.raw("weekdaysShort") as string[];
   const words: DurationWords = {
     hours: time("duration.hours"),
@@ -39,8 +40,10 @@ export async function calendarWords() {
     duration: (seconds: number) => formatDuration(seconds, words),
     durationParts: (seconds: number) => durationParts(seconds, words),
     brief: (seconds: number) => briefDuration(seconds, words),
+    heat: (seconds: number) => heatFigure(seconds, words, { hours: time("duration.tinyHours"), minutes: time("duration.tinyMinutes") }),
     // The day's apps under their readable names, system noise as «Sistema».
     apps: (apps: AppTime[]) => readableApps(apps, time("system")),
+    system: time("system"),
     // «hace 5 min» by the clock now.
     ago: (at: Date) => {
       const minutes = Math.max(0, Math.floor((Date.now() - at.getTime()) / 60_000));
@@ -50,6 +53,7 @@ export async function calendarWords() {
       return time("duration.ago.days", { n: Math.floor(minutes / 1440) });
     },
     weekday: (day: string) => weekdays[weekdayIndex(day)],
+    weekdayInitial: (day: string) => weekdaysInitial[weekdayIndex(day)],
     weekdayShort: (day: string) => weekdaysShort[weekdayIndex(day)],
     month: (day: string) => months[Number(day.slice(5, 7)) - 1],
     dayOfMonth,
