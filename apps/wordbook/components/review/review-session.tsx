@@ -231,7 +231,7 @@ export function ReviewSession() {
     row.forms.length === 1 && row.forms[0]?.text === row.key ? null : row.forms.map((form) => form.text).join(", ");
 
   return (
-    <Card>
+    <Card tall>
       <Flex direction="column" gap="5">
         <MetaLabel>{t("progress", { current: repeat ? Math.min(answered.length, total) : state.index + 1, total })}</MetaLabel>
         <Flex direction="column" gap="2">

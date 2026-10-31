@@ -19,7 +19,7 @@ import type { TranslationResult } from "@/lib/translate/types";
 import { flushPendingLookup, recordLookup } from "@/lib/log/record";
 import { cutTranslation, formatSenseTranslations } from "@/lib/log/translation-line";
 import type { LookupOutcome, LookupRecord } from "@/lib/log/types";
-import { BrandBlock, Flex, Live, Text } from "@/components/ui";
+import { BrandBlock, Flex, Live } from "@/components/ui";
 import { InstallStatus } from "./install-status";
 import { FunctionWordBlock, NoEntryAnswer, type NoEntryPart, type NoEntryReason, type NoEntryState } from "./no-entry-answer";
 import { PhraseAnswer, type DeviceOffer, type PhraseState } from "./phrase-answer";
@@ -581,20 +581,13 @@ export function SearchScreen({ initialQuery }: { initialQuery?: string }) {
       <Live>{announcement.polite ? tLive(announcement.polite.key, { count: announcement.polite.count ?? 0 }) : ""}</Live>
       <Live assertive>{announcement.assertive ? tLive(announcement.assertive) : ""}</Live>
       <Flex direction="column" gap="2">
-        <BrandBlock title={tSearch.rich("brand", { mark: (chunks) => <mark>{chunks}</mark> })} line={tSearch("brandLine")}>
+        <BrandBlock title={tSearch.rich("brand", { mark: (chunks) => <mark>{chunks}</mark> })} line={tSearch("brandLine")} compact={kind.kind !== "empty"}>
           <SearchBox value={text} onChange={handleTextChange} />
         </BrandBlock>
         <InstallStatus status={status} onRetry={retry} query={text} />
       </Flex>
 
-      {kind.kind === "empty" && (
-        <Flex direction="column" gap="4">
-          <Text size="2" color="gray">
-            {tSearch("empty")}
-          </Text>
-          <Starters onPick={handleTextChange} />
-        </Flex>
-      )}
+      {kind.kind === "empty" && <Starters onPick={handleTextChange} />}
 
       {kind.kind === "word" && (
         <Flex direction="column" gap="4">

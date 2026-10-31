@@ -1,4 +1,5 @@
 import { Page } from "@/components/ui";
+import { SideColumn } from "@/components/review/side-column";
 import { SearchScreen } from "@/components/search/search-screen";
 
 // Server-rendered shell alone: the box, the worker and every promise it
@@ -14,7 +15,7 @@ export default async function HomePage({
   const initialQuery = Array.isArray(q) ? q[0] : q;
 
   return (
-    <Page>
+    <Page aside={<SideColumn section="search" />}>
       <SearchScreen initialQuery={initialQuery} />
     </Page>
   );

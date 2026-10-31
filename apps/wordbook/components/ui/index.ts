@@ -21,6 +21,8 @@ export { BrandBlock } from "./brand-block";
 
 export { Card } from "./card";
 
+export { Figure } from "./figure";
+
 export { Band } from "./band";
 
 export { Wordmark } from "./wordmark";

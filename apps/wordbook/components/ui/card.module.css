@@ -15,3 +15,10 @@
 .flush {
   padding: 0;
 }
+
+@media (min-width: 1024px) {
+  .tall {
+    min-height: min(560px, calc(100vh - 220px));
+    padding: var(--space-6);
+  }
+}

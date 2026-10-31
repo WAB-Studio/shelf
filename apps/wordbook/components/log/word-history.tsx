@@ -7,6 +7,7 @@ import { useFormatter, useTranslations } from "next-intl";
 
 import { readLemmaHistory, readLemmaKey, readWordStudy, type WordHistoryRow } from "@/lib/log/summary";
 import { splitTranslations } from "@/lib/log/translation-line";
+import { answerSenses } from "@/lib/review/sense";
 import { recalledFilter } from "@/lib/log/study-filter";
 import type { LookupOutcome } from "@/lib/log/types";
 import { decodeWordSegment } from "@/lib/word/segment";
@@ -227,7 +228,11 @@ export function WordHistory() {
   const fullGloss = isPhrase
     ? null
     : networkOnly ? null : (unlistedRow ?? state.rows[0]).translation;
-  const gloss = fullGloss === null ? null : (splitTranslations(fullGloss)[0] ?? null);
+  // The dictionary on the device knows which sense leads today, so an older row that saved a rare
+  // sense first never heads the page; the saved line answers when the dictionary is not at hand.
+  const leadSense = answer === null ? null : answerSenses(answer)[0];
+  const gloss =
+    fullGloss === null ? null : (leadSense?.translations[0] ?? splitTranslations(fullGloss)[0] ?? null);
   // The provider formats in the server's zone; the reader's is the browser's.
   const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const subtitleValues = {

@@ -5,7 +5,7 @@ import { useTranslations } from "next-intl";
 
 import { cardFront } from "@/lib/log/anki";
 import { readWordStudy } from "@/lib/log/summary";
-import { Button, Card, Flex, MetaLabel } from "@/components/ui";
+import { Box, Button, Card, Flex, MetaLabel } from "@/components/ui";
 
 const RECENT_SHOWN = 6;
 const EXAMPLE_KEYS = ["one", "two", "three", "four"] as const;
@@ -39,7 +39,9 @@ export function Starters({ onPick }: { onPick: (text: string) => void }) {
   if (recent === null) return null;
   const words = recent.length > 0 ? recent : EXAMPLE_KEYS.map((key) => t(`examples.${key}`));
 
+  // From 1024px the side column lists the reader's own latest searches, so the card gives way there.
   return (
+    <Box display={recent.length > 0 ? { initial: "block", md: "none" } : "block"}>
     <Card>
       <Flex direction="column" gap="3">
         <MetaLabel>{t(recent.length > 0 ? "recentTitle" : "tryTitle")}</MetaLabel>
@@ -52,5 +54,6 @@ export function Starters({ onPick }: { onPick: (text: string) => void }) {
         </Flex>
       </Flex>
     </Card>
+    </Box>
   );
 }

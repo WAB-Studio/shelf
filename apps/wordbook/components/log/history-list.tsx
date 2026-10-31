@@ -17,6 +17,7 @@ import { TranslationList } from "@/components/translations/translation-list";
 import {
   Button,
   Card,
+  Figure,
   Flex,
   Grid,
   IconButton,
@@ -96,7 +97,9 @@ const StudyRowItem = memo(function StudyRowItem({
                   {word}
                 </Text>
               </Flex>
-              <MetaLabel>{row.count}</MetaLabel>
+              <MetaLabel aria-label={t("study.rowCountLabel", { count: row.count })}>
+                {t("study.rowCount", { count: row.count })}
+              </MetaLabel>
             </TapTarget>
           </NextLink>
         </Link>
@@ -437,8 +440,8 @@ export function HistoryList() {
           size="3"
           value={query}
           onChange={(event) => change(event.target.value)}
-          placeholder={t("study.filterLabel")}
-          aria-label={t("study.filterLabel")}
+          label={t("study.filterLabel")}
+          placeholder={t("study.filterPlaceholder")}
           autoCapitalize="none"
           autoCorrect="off"
           spellCheck={false}
@@ -468,9 +471,10 @@ export function HistoryList() {
         )}
       </Flex>
 
-      <Text size="2" muted>
-        {t("study.header", { lookups: state.totalLookups, words: state.totalWords, kind })}
-      </Text>
+      <Flex gap="6" wrap="wrap">
+        <Figure value={state.totalLookups} label={t("study.figureLookups", { count: state.totalLookups })} />
+        <Figure value={state.totalWords} label={t("study.figureWords", { count: state.totalWords, kind })} />
+      </Flex>
 
       {visible.length === 0 ? (
         <Text size="2" muted>
