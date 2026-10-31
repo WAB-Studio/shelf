@@ -91,6 +91,11 @@ export function AuditScreen({
     installment_lines: t("entities.installment_lines"),
     account_statements: t("entities.account_statements"),
     webhook_credentials: t("entities.webhook_credentials"),
+    ingest_counterparties: t("entities.ingest_counterparties"),
+    ingest_deliveries: t("entities.ingest_deliveries"),
+    ingest_merchants: t("entities.ingest_merchants"),
+    ingest_shapes: t("entities.ingest_shapes"),
+    debt_statements: t("entities.debt_statements"),
   };
 
   const actionLabels: Record<AuditLogRow["action"], string> = {
@@ -101,10 +106,11 @@ export function AuditScreen({
 
   const actorNames = new Map(options.actors.map((a) => [a.userId, a.name]));
 
-  // A null actor marks a system write; an id outside the roster reads raw.
+  // A null actor marks a system write; an id outside the roster is someone who
+  // is no longer on it, and a key is no name for them.
   function actorLabel(actorUserId: string | null): string {
     if (actorUserId === null) return t("systemActor");
-    return actorNames.get(actorUserId) ?? actorUserId;
+    return actorNames.get(actorUserId) ?? t("unknownActor");
   }
 
   const pageCount = Math.max(1, Math.ceil(total / pageSize));

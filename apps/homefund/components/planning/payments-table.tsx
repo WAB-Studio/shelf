@@ -26,10 +26,10 @@ const NO_VALUE = "—";
 // The tracks of the Pagos planificados artboard, in order.
 const WIDTHS = {
   due: "86px",
-  concept: "minmax(0, 1fr)",
-  remind: "100px",
-  category: "158px",
-  account: "176px",
+  concept: "minmax(160px, 1fr)",
+  remind: "88px",
+  category: "130px",
+  account: "140px",
   amount: "124px",
   settle: "138px",
   menu: "36px",

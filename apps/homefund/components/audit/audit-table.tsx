@@ -6,6 +6,8 @@ import { useState, type ReactNode } from "react";
 import {
   Badge,
   type BadgeProps,
+  Box,
+  Card,
   DataTable,
   Dialog,
   Flex,
@@ -180,27 +182,81 @@ export function AuditTable({
     },
   ];
 
+  const pagination = pageCount > 1 && (
+    <TablePagination
+      caption={t("pageStatus", { page, pages: pageCount })}
+      onPrev={page > 1 ? onPrev : undefined}
+      onNext={page < pageCount ? onNext : undefined}
+      prevLabel={t("previousPage")}
+      nextLabel={t("nextPage")}
+    />
+  );
+
   return (
     <>
-      <DataTable
-        label={t("title")}
-        columns={columns}
-        rows={rows}
-        rowKey={(row) => String(row.id)}
-        minWidth={MIN_WIDTH}
-        empty={empty}
-        footer={
-          pageCount > 1 && (
-            <TablePagination
-              caption={t("pageStatus", { page, pages: pageCount })}
-              onPrev={page > 1 ? onPrev : undefined}
-              onNext={page < pageCount ? onNext : undefined}
-              prevLabel={t("previousPage")}
-              nextLabel={t("nextPage")}
-            />
-          )
-        }
-      />
+      <Box display={{ initial: "none", lg: "block" }}>
+        <DataTable
+          label={t("title")}
+          columns={columns}
+          rows={rows}
+          rowKey={(row) => String(row.id)}
+          minWidth={MIN_WIDTH}
+          empty={empty}
+          footer={pagination}
+        />
+      </Box>
+
+      {/* The phone reads a change as a card: the five tracks do not fit. */}
+      <Box display={{ initial: "block", lg: "none" }}>
+        <Flex direction="column" gap="3">
+          {rows.map((row) => (
+            <Card key={row.id}>
+              <Flex direction="column" gap="1">
+                <Flex justify="between" align="center" gap="2">
+                  <Text size="3" weight="medium" truncate>
+                    {row.entity}
+                  </Text>
+                  <Badge color={ACTION_COLOR[row.action]}>{row.actionLabel}</Badge>
+                </Flex>
+                <Text size="2" color="gray">
+                  {row.actor} ·{" "}
+                  {format.dateTime(row.occurredAt, {
+                    day: "numeric",
+                    month: "short",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                    timeZone: TIME_ZONE,
+                  })}
+                </Text>
+                <Flex align="center" justify="between" gap="2" minWidth="0">
+                  <Text size="1" color="gray" truncate>
+                    {row.recordId}
+                  </Text>
+                  <RowMenu
+                    rowName={row.entity}
+                    items={[
+                      {
+                        key: "details",
+                        label: t("viewDetails"),
+                        onSelect: () => setDetailsId(row.id),
+                      },
+                      {
+                        key: "copy",
+                        label:
+                          copiedId === row.id
+                            ? t("recordIdCopied")
+                            : t("copyRecordId"),
+                        onSelect: () => copyRecordId(row),
+                      },
+                    ]}
+                  />
+                </Flex>
+              </Flex>
+            </Card>
+          ))}
+          {pagination}
+        </Flex>
+      </Box>
 
       <Dialog.Root
         open={details !== null}

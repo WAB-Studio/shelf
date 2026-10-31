@@ -34,7 +34,7 @@ import {
 } from "@/components/ui";
 import type { PlannedPaymentRow } from "@/db/queries/planned-payments";
 import type { TransactionFormOptions } from "@/db/queries/transaction-form";
-import { civilDateToDate } from "@/lib/dates";
+import { civilDateToDate, todayInBogota } from "@/lib/dates";
 import { categoryNamesById } from "@/lib/fund/category-names";
 import { formatMoney } from "@/lib/money";
 import { useActionErrorToast } from "@/lib/use-action-toast";
@@ -280,9 +280,12 @@ function PaymentCard({
   const locale = useLocale();
 
   const due = civilDateToDate(payment.dueDate);
+  const pending = payment.status === "pending";
+  const overdue = pending && payment.dueDate < todayInBogota();
 
   return (
     <Card>
+      <Flex direction="column" gap="2">
       <Flex align="center" gap="2">
         <Flex flexGrow="1" minWidth="0">
           <MovementRow
@@ -293,7 +296,7 @@ function PaymentCard({
               />
             }
             title={payment.description ?? t("noConcept")}
-            subtitle={t("reminder")}
+            subtitle={overdue ? `${t("overdueLabel")} · ${t("reminder")}` : t("reminder")}
             amount={formatMoney(payment.amountCents, payment.currency, locale)}
             tone="transfer"
             wrap
@@ -328,6 +331,12 @@ function PaymentCard({
             </DropdownMenu.Item>
           </DropdownMenu.Content>
         </DropdownMenu.Root>
+      </Flex>
+      {pending && (
+        <Button type="button" variant="surface" color={overdue ? "amber" : "gray"} onClick={onSettle}>
+          {t("settle")}
+        </Button>
+      )}
       </Flex>
     </Card>
   );

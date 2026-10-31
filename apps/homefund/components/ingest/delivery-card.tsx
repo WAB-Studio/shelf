@@ -27,6 +27,7 @@ import {
   Flex,
   Heading,
   IconButton,
+  Money,
   RawText,
   Spinner,
   Text,
@@ -123,6 +124,12 @@ export function DeliveryCard({
   const tKey = useTranslations();
   const format = useFormatter();
   const onActionError = useActionErrorToast();
+
+  const isIncome = delivery.proposedDirection === "income";
+  // An account names its own currency; a proposal with none yet falls back to the fund's.
+  const currency =
+    options.accounts.find((a) => a.id === delivery.proposedAccountId)
+      ?.settlementCurrency ?? options.scopeCurrency;
 
   const [rawTextOpen, setRawTextOpen] = useState(false);
   const [reviewOpen, setReviewOpen] = useState(false);
@@ -242,12 +249,19 @@ export function DeliveryCard({
             {t("amountMissing")}
           </Heading>
         ) : (
-          <Heading as="h3" size="6">
-            {format.number(
-              centsToPesos(delivery.proposedAmountCents),
-              "currency",
-            )}
-          </Heading>
+          <Flex align="baseline" gap="2">
+            <Heading as="h3" size="6">
+              <Money
+                minor={delivery.proposedAmountCents}
+                currency={currency}
+                tone="plain"
+                size="inherit"
+              />
+            </Heading>
+            <Badge color={isIncome ? "jade" : "gray"} variant="soft" radius="full">
+              {t(isIncome ? "kindIncome" : "kindExpense")}
+            </Badge>
+          </Flex>
         )}
 
         <Flex direction="column" gap="2">

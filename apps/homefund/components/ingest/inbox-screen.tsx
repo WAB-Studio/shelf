@@ -224,6 +224,7 @@ export function InboxScreen({
       ? (accountNames.get(delivery.proposedAccountId) ?? null)
       : null,
     amountMinor: delivery.proposedAmountCents,
+    direction: delivery.proposedDirection === "income" ? "income" : "expense",
     // An account names its own currency; a proposal with none yet falls back
     // to the fund's, never to pesos (RF-121, RF-124).
     currency: delivery.proposedAccountId

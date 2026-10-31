@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import {
   Bar,
   BarChart as RechartsBarChart,
@@ -9,6 +10,10 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+
+// Under this width two labelled bars no longer fit side by side, so each figure
+// is written upright above its own bar.
+const NARROW_PX = 520;
 
 export type BarChartSeries = { key: string; valueCents: number };
 
@@ -46,11 +51,16 @@ export function BarChart({
   });
 
   const keys = Object.keys(seriesColors);
+  const [narrow, setNarrow] = useState(false);
 
   return (
     <div role="img" aria-label={ariaLabel} style={{ width: "100%", height }}>
-      <ResponsiveContainer width="100%" height={height}>
-        <RechartsBarChart data={rows} margin={{ top: formatValue ? 20 : 5 }}>
+      <ResponsiveContainer
+        width="100%"
+        height={height}
+        onResize={(width) => setNarrow(width < NARROW_PX)}
+      >
+        <RechartsBarChart data={rows} margin={{ top: formatValue ? (narrow ? 44 : 20) : 5, right: 12 }}>
           <XAxis dataKey="label" tickLine={false} axisLine={false} />
           <YAxis hide />
           {averageCents != null && averageCents > 0 && (
@@ -74,6 +84,7 @@ export function BarChart({
                   position="top"
                   fill="var(--gray-11)"
                   fontSize={11}
+                  {...(narrow ? { angle: -90, textAnchor: "start" as const, offset: 8 } : {})}
                   formatter={(value: unknown) =>
                     typeof value === "number" && value > 0 ? formatValue(value) : ""
                   }

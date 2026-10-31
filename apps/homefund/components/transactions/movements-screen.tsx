@@ -97,6 +97,8 @@ type DayGroup = { key: string; label: string; rows: TransactionListRow[] };
 export function MovementsScreen({
   rows,
   totals,
+  netNets,
+  netMonthStart,
   options,
   filters,
   ruleName,
@@ -108,6 +110,10 @@ export function MovementsScreen({
     count: number;
     nets: { currency: CurrencyCode; netCents: number }[];
   };
+  // The headline net is over the screen's period, which is not the whole list:
+  // the filtered dates, or the month `netMonthStart` opens when none is set.
+  netNets: { currency: CurrencyCode; netCents: number }[];
+  netMonthStart: string | null;
   options: TransactionFormOptions;
   filters: MovementsFilters;
   ruleName: string | null;
@@ -158,6 +164,17 @@ export function MovementsScreen({
   }
 
   const today = todayInBogota();
+  const shortDate = (value: string) =>
+    format.dateTime(civilDateToDate(value), { day: "numeric", month: "short" });
+  const netTitle = netMonthStart
+    ? t("headlineNetMonth", {
+        month: format.dateTime(civilDateToDate(netMonthStart), { month: "long", year: "numeric" }),
+      })
+    : filters.from && filters.to
+      ? t("headlineNetRange", { from: shortDate(filters.from), to: shortDate(filters.to) })
+      : filters.from
+        ? t("headlineNetFrom", { from: shortDate(filters.from) })
+        : t("headlineNetTo", { to: shortDate(filters.to ?? today) });
   const yesterday = addCivilDays(today, -1);
 
   function dayLabel(occurredAt: string): string {
@@ -211,7 +228,7 @@ export function MovementsScreen({
   // by nothing (RF-19). One net per currency, and no figure that adds two of them
   // (RF-124); each spans every filtered row, not just this page.
   const netByCurrency = new Map<CurrencyCode, number>(
-    totals.nets.map(({ currency, netCents }) => [currency, netCents]),
+    netNets.map(({ currency, netCents }) => [currency, netCents]),
   );
   const nets: [CurrencyCode, number][] =
     netByCurrency.size === 0
@@ -324,7 +341,7 @@ export function MovementsScreen({
           figure={
             filters.type === "adjustment" || nets.length === 0 ? undefined : (
               <>
-                {t("headlineNet")}{" "}
+                {netTitle}{" "}
                 {nets.map(([currency, net], index) => (
                   <span key={currency}>
                     {index > 0 && " · "}
@@ -373,7 +390,7 @@ export function MovementsScreen({
               <Heading size="5">{t("listTitle")}</Heading>
               {filters.type !== "adjustment" && nets.length > 0 && (
                 <Text size="4" weight="medium">
-                  {t("headlineNet")}{" "}
+                  {netTitle}{" "}
                   {nets.map(([currency, net], index) => (
                     <span key={currency}>
                       {index > 0 && " · "}

@@ -11,6 +11,7 @@ import { getTransactionTotals, listTransactions } from "@/db/queries/transaction
 import type { TransactionListFilters } from "@/db/queries/transactions";
 import { movementFiltersSchema, movementTypeFilter } from "@/lib/validation/transaction";
 import { routing } from "@/i18n/routing";
+import { addCivilDays, currentMonthRange } from "@/lib/dates";
 
 // Server-side ceiling: the screen pages the rows on the client but counts and
 // nets every row it receives, so an unbounded read grows with the ledger's whole
@@ -53,9 +54,21 @@ export default async function MovementsPage(
     recurringRuleId: parsed.rule,
   };
 
-  const [rows, totals, options, ruleName] = await Promise.all([
+  // The headline net follows the screen's period: the dates the filters name, or
+  // this month when they name none. The count stays over the whole list.
+  const ranged = Boolean(parsed.from || parsed.to);
+  const month = currentMonthRange();
+
+  const [rows, totals, monthTotals, options, ruleName] = await Promise.all([
     listTransactions(filters, { limit: MOVEMENTS_LIMIT }),
     getTransactionTotals(filters),
+    ranged
+      ? Promise.resolve(null)
+      : getTransactionTotals({
+          ...filters,
+          from: month.start,
+          to: addCivilDays(month.endExclusive, -1),
+        }),
     getTransactionFormOptions(),
     parsed.rule ? getRecurringRuleName({ id: parsed.rule }) : Promise.resolve(null),
   ]);
@@ -65,6 +78,8 @@ export default async function MovementsPage(
       <MovementsScreen
         rows={rows}
         totals={totals}
+        netNets={(monthTotals ?? totals).nets}
+        netMonthStart={ranged ? null : month.start}
         options={options}
         ruleName={ruleName}
         filters={{

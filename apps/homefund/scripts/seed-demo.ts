@@ -64,6 +64,7 @@ import type { Account } from "@/db/schema";
 import { withUserDb } from "@/db/session";
 import { BASE_CURRENCY, type OfferedCurrency } from "@/lib/currency";
 import { addCivilDays, addCivilMonths, todayInBogota } from "@/lib/dates";
+import { SEED_CATEGORIES } from "@/lib/fund/seed";
 import { pesosToCents } from "@/lib/money";
 
 import { asOwner, fixtureSql, findUserByEmail, purgeAuditTrail } from "./harness/fixtures";
@@ -994,7 +995,9 @@ async function ensureScaffold(userId: string): Promise<Scaffold> {
 
   const accountIdByName = new Map(accounts.map((account) => [account.name, account.id]));
   const categoryIdByName = new Map<string, string>();
-  for (const parent of categories) {
+  // The seeded accounts are personal, so only the personal tree is theirs: a
+  // fund category of the same name would carry a split the scope rule refuses.
+  for (const parent of categories.filter((one) => one.scope === "personal")) {
     categoryIdByName.set(parent.name, parent.id);
     for (const child of parent.children) categoryIdByName.set(child.name, child.id);
   }
@@ -1029,6 +1032,33 @@ async function ensureScaffold(userId: string): Promise<Scaffold> {
     });
 
     accountIds[account.key] = accountId;
+  }
+
+  // A user who leads a fund keeps the default catalogue in the fund, not in their
+  // own scope: the personal one the accounts above need is written here.
+  for (const seed of SEED_CATEGORIES) {
+    if (!categoryIdByName.has(seed.name.es)) {
+      const { categoryId: parentId } = await createCategory({
+        scope: { ownerUserId: userId },
+        name: seed.name.es,
+        kind: seed.kind,
+        parentId: null,
+        color: seed.color,
+      });
+      categoryIdByName.set(seed.name.es, parentId);
+    }
+
+    for (const child of seed.children ?? []) {
+      if (categoryIdByName.has(child.name.es)) continue;
+      const { categoryId: childId } = await createCategory({
+        scope: { ownerUserId: userId },
+        name: child.name.es,
+        kind: seed.kind,
+        parentId: categoryIdByName.get(seed.name.es) ?? null,
+        color: null,
+      });
+      categoryIdByName.set(child.name.es, childId);
+    }
   }
 
   for (const subcategory of DEMO_SUBCATEGORIES) {
@@ -1577,7 +1607,8 @@ async function drop(user: HarnessUser): Promise<void> {
 }
 
 async function main(): Promise<void> {
-  const command = process.argv[2] ?? "seed";
+  // The first argument that is not a `--name=value` flag, so `-- --email=` alone still seeds.
+  const command = process.argv.slice(2).find((one) => !one.startsWith("--")) ?? "seed";
   if (!["seed", "drop", "count"].includes(command)) {
     throw new Error(`unknown command "${command}" — use seed, drop or count`);
   }
