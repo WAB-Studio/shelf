@@ -26,6 +26,10 @@
   display: none;
 }
 
+.sideLast {
+  order: 1;
+}
+
 @media (min-width: 1280px) {
   .panels {
     display: grid;

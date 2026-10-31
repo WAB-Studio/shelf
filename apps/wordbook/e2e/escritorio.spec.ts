@@ -72,8 +72,8 @@ test("from 1280px the main screen is two panels in what the sidebar leaves: the 
   expect(side).not.toBeNull();
   expect(field).not.toBeNull();
 
-  // The sidebar's 240px and the page's 24px padding on both sides; the panels keep 1120px at most.
-  const room = viewport!.width - 240 - 48;
+  // The sidebar's 240px and the page's 32px padding on both sides; the panels keep 1120px at most.
+  const room = viewport!.width - 240 - 64;
   expect(Math.abs(panels!.width - Math.min(1120, room))).toBeLessThan(2);
   expect(panels!.x).toBeGreaterThanOrEqual(navBox!.x + navBox!.width);
   expect(Math.abs(side!.width - 380)).toBeLessThan(1);

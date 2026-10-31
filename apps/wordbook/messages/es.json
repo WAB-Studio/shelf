@@ -125,6 +125,9 @@
     "study": {
       "figureLookups": "{count, plural, one {búsqueda} other {búsquedas}}",
       "figureWords": "{kind, select, entries {{count, plural, one {entrada} other {entradas}}} other {{count, plural, one {palabra} other {palabras}}}}",
+      "dayToday": "Hoy · {count}",
+      "dayYesterday": "Ayer · {count}",
+      "dayOther": "{date} · {count}",
       "rowCount": "{count, plural, one {# vez} other {# veces}}",
       "rowCountLabel": "Buscada {count, plural, one {# vez} other {# veces}}",
       "emptyTitle": "Todavía no has buscado nada",

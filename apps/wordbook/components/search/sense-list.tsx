@@ -540,7 +540,7 @@ function EntryMeta({
   const ipa = pronunciationBlocks(senses) === null ? senses[0].ipa : null;
   const parts = [...new Set(senses.map((sense) => sense.pos))];
   return (
-    <Flex align="center" gap="3" wrap="wrap">
+    <Flex align="center" gap="3" wrap="wrap" data-entry-index="">
       {ipa !== null && (
         <Grid minWidth="0" flexShrink="1">
           <Text size="3" muted truncate>

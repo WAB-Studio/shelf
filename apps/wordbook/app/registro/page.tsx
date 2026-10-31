@@ -7,7 +7,7 @@ import { ReviewLink } from "@/components/review/review-link";
 import { SyncOnDelete } from "@/components/sync/sync-on-delete";
 import { SyncOnOpen } from "@/components/sync/sync-on-open";
 import { getReader } from "@/lib/session";
-import { Band, Box, Flex, Page, Separator } from "@/components/ui";
+import { PageTitle, Box, Flex, Page, Separator } from "@/components/ui";
 
 // Server-rendered shell alone, like `/fuente`: the study and the two actions
 // under it belong to the client components this mounts, in the order the
@@ -28,7 +28,7 @@ export default async function RegistroPage() {
       <Flex direction="column" gap="5">
         <Flex justify="between" align="center" gap="3" wrap="wrap">
           <Box flexGrow="1">
-            <Band>{t("title")}</Band>
+            <PageTitle>{t("title")}</PageTitle>
           </Box>
           {/* RL-68: the review draws its words from this record. */}
           <ReviewLink />

@@ -94,6 +94,7 @@ test("RL-58: only the first group sits above the offer, never a second one", asy
       .filter(
         (n) =>
           n.children.length === 0 &&
+          n.closest("[data-entry-index]") === null &&
           pos.includes(n.textContent ?? "") &&
           Boolean(n.compareDocumentPosition(headerEl) & Node.DOCUMENT_POSITION_FOLLOWING),
       )

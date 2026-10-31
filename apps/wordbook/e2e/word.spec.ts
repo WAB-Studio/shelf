@@ -1,4 +1,4 @@
-import { expect, freezeTimers, pageTasks, runClock, test } from "./fixtures";
+import { expect, freezeTimers, openRareSenses, pageTasks, runClock, test } from "./fixtures";
 import type { Locator, Page } from "@playwright/test";
 
 import messages from "../messages/es.json";
@@ -493,6 +493,7 @@ test("the English definition draws open with no interaction, and stays inside th
   const searchBox = page.getByRole("textbox", { name: messages.search.label });
   await searchBox.fill("bitter");
   await expect(page.getByRole("heading", { name: "bitter", exact: true })).toBeVisible({ timeout: 5000 });
+  await openRareSenses(page);
 
   const englishText = "(usually in the plural bitters) A liquid or powder, made from bitter herbs, used in mixed drinks or as a tonic.";
 
@@ -746,12 +747,12 @@ test("RL-51: a headword with one pronunciation draws no block, and keeps its IPA
 
   await expect(page.locator("main [data-pronunciation-block]")).toHaveCount(0);
 
-  // One IPA per label row, both of them: what a block head would have
-  // replaced with a single line above the two.
-  await expect(page.getByText("/liv/", { exact: true })).toHaveCount(2);
+  // The entry's header names the sound once; the two label rows beneath carry none of their own.
+  await expect(page.getByText("/liv/", { exact: true })).toHaveCount(1);
 
   const order = await page.evaluate(() => {
     const labels = Array.from(document.querySelectorAll("main span"))
+      .filter((node) => node.closest("[data-entry-index]") === null)
       .map((node) => node.textContent)
       .filter((text) => text === "verbo" || text === "sustantivo");
     return labels;

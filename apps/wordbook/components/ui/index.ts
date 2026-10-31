@@ -23,7 +23,7 @@ export { Card } from "./card";
 
 export { Figure } from "./figure";
 
-export { Band } from "./band";
+export { PageTitle } from "./page-title";
 
 export { Highlight } from "./highlight";
 

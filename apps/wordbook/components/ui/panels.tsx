@@ -9,11 +9,14 @@ export function Panels({
   top,
   side,
   sideOnPhone = true,
+  sideLast = false,
   children,
 }: {
   top?: ReactNode;
   side?: ReactNode;
   sideOnPhone?: boolean;
+  // On a phone the side follows `children` instead of preceding them.
+  sideLast?: boolean;
   children?: ReactNode;
 }) {
   const hasSide = side !== undefined && side !== null && side !== false;
@@ -21,7 +24,11 @@ export function Panels({
   return (
     <div className={className}>
       <div className={styles.top}>{top}</div>
-      {hasSide && <aside className={sideOnPhone ? styles.side : `${styles.side} ${styles.deskOnly}`}>{side}</aside>}
+      {hasSide && <aside
+          className={[styles.side, sideOnPhone ? undefined : styles.deskOnly, sideLast ? styles.sideLast : undefined]
+            .filter(Boolean)
+            .join(" ")}
+        >{side}</aside>}
       <div className={styles.rest}>{children}</div>
     </div>
   );
