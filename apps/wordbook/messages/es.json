@@ -262,7 +262,7 @@
       "frequencySource": "SUBTLEX-US con información gramatical",
       "frequencyLicence": "CC BY-NC-SA 4.0",
       "translationOrderLabel": "Orden de las traducciones",
-      "translationOrderBody": "Dentro de una acepción, la traducción más usada va primero. El orden viene de una lista de frecuencia del español, de los subtítulos de OpenSubtitles, de hermitdave. Esta app distribuye esa lista bajo la misma licencia.",
+      "translationOrderBody": "Dentro de una acepción, las traducciones poco usadas van al final. Se decide con una lista de frecuencia del español, de los subtítulos de OpenSubtitles, de hermitdave. El diccionario de esta app, ordenado así, se distribuye bajo la misma licencia.",
       "translationOrderSource": "FrequencyWords, de hermitdave",
       "translationOrderLicence": "CC BY-SA 4.0"
     },

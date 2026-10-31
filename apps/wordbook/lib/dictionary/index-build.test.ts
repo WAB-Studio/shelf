@@ -404,13 +404,10 @@ function leadTranslation(index: DictionaryIndex, headword: string): string {
 test("the common sense leads where the measured order has no row: bleak, cup and the initialism IT", () => {
   const index = shippedIndex();
   // `bleak` listed a river fish (alburno) before its adjective; `it` listed the initialism (IT) first.
-  // Its first translation is now «alegría», a stray gloss the frequency list ranks above «pálido»; the sense is what leads.
-  assert.equal(sensesOf(index, "bleak")[0].pos, "adj");
-  assert.ok(sensesOf(index, "bleak")[0].translations.includes("pálido"));
+  assert.equal(leadTranslation(index, "bleak"), "pálido");
   assert.equal(leadTranslation(index, "it"), "lo");
   // `cup` led with an informal trophy sense, `Copa`.
-  // The frequency list now puts «copa» ahead of «vaso» inside that sense; the trophy sense is the one that must not lead.
-  assert.deepEqual(sensesOf(index, "cup")[0].translations.slice(0, 3), ["copa", "taza", "vaso"]);
+  assert.equal(leadTranslation(index, "cup"), "vaso");
 });
 
 test("a slang sense sits last: hinder answers as a verb, «nalgas» after it", () => {
@@ -425,10 +422,10 @@ test("a headword with a measured order keeps it: leave is a verb before its noun
   assert.equal(sensesOf(shippedIndex(), "grudge")[0].pos, "n");
 });
 
-test("translations inside a sense lead with the commonest Spanish word: say is «decir» before «poner»", () => {
+test("a translation the Spanish frequency list lacks sits last in its sense, the rest keep the dictionary's order", () => {
   const index = shippedIndex();
   assert.deepEqual(sensesOf(index, "say")[0].translations.slice(0, 2), ["decir", "poner"]);
-  // «engorroso» is not in the frequency list, so it cannot lead; the ranked words do, the unranked keep their order.
-  const cumbersome = sensesOf(index, "cumbersome")[0].translations;
-  assert.deepEqual(cumbersome.slice(0, 3), ["pesado", "penoso", "cargante"]);
+  // «cargante» and the others the list lacks stand behind «penoso» and «pesado», which it knows.
+  assert.deepEqual(sensesOf(index, "cumbersome")[0].translations.slice(0, 3), ["penoso", "pesado", "cargante"]);
+  assert.equal(sensesOf(index, "cup")[0].translations.at(-1), "coquilla");
 });

@@ -2,7 +2,6 @@ import { normaliseHeadword, type DictionaryPayload, type PartOfSpeech, type RawE
 import type { InflectionRule } from "./inflect";
 import { POS_FREQUENCY_ORDER } from "./pos-frequency";
 import { isRareSense } from "./rare-sense";
-import { orderTranslations } from "./translation-order";
 
 export type Sense = {
   pos: PartOfSpeech;
@@ -117,7 +116,7 @@ function meaningfulDefinition(definition: string | null): string | null {
 
 function senseFromEntry(entry: RawEntry): Sense {
   const [, pos, ipa, translations, definition] = entry;
-  return { pos, ipa, translations: orderTranslations(translations), definition: meaningfulDefinition(definition) };
+  return { pos, ipa, translations, definition: meaningfulDefinition(definition) };
 }
 
 export function buildIndex(payload: DictionaryPayload): DictionaryIndex {

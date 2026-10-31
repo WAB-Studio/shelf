@@ -16,7 +16,6 @@
     "check:unit": "node --experimental-test-module-mocks --import tsx --test \"{app,lib,scripts}/**/*.test.ts\"",
     "check:mutants": "node --import tsx scripts/check-mutants.ts",
     "pos:build": "node --import tsx scripts/build-pos-frequency.ts",
-    "es-frequency:build": "node --import tsx scripts/build-spanish-frequency.ts",
     "check:e2e": "node ../../node_modules/@playwright/test/cli.js test",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "node --env-file=.env.local ../../node_modules/drizzle-kit/bin.cjs migrate",

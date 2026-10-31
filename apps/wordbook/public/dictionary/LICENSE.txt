@@ -47,4 +47,7 @@ are never run together into one string; part of speech is folded onto the
 six values apps/wordbook/lib/dictionary/format.ts declares, mapping the
 source's thirteen further categories and its unlabelled entries onto the
 closest of the six. It changed nothing else: no headword, translation or
-definition text was altered beyond those two cuts.
+definition text was altered beyond those two cuts, except that inside a
+sense a translation absent from the 20,000 commonest Spanish words
+(scripts/spanish-frequency.txt, CC BY-SA 4.0, hermitdave/FrequencyWords)
+moves behind the rest, in the order it had.
