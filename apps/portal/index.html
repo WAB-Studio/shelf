@@ -3,128 +3,171 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#C9A8D8">
+<meta name="theme-color" content="#f5f3ee">
 <title>Shelf</title>
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="icon" href="/favicon-32.png" type="image/png" sizes="32x32">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
-<meta name="description" content="HomeFund, WordBook y GoalLog, en un solo lugar.">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600&display=swap" rel="stylesheet">
+<meta name="description" content="Cuatro apps para el día a día: la plata de la casa, las palabras, las metas y el tiempo.">
 <style>
-/* Layout: a phone's home screen scaled to the window — soft colour wallpaper, the time large, four white app cards filling the middle. One look for both themes. */
+/* Layout: one card per app. Phone: stacked, phone frame. Tablet (640-1099): a row per app, browser frame beside the text. Desktop (1100+): 2 by 2, browser frame with the phone overlapping its corner. Each card wears its app's own colours; the page itself stays warm paper and ink. */
 :root {
-  --card: rgba(255, 255, 255, .92);
-  --card-ink: #1D1D1F;
-  --card-muted: #6E6E73;
-  --link: #0066CC;
-  --sans: -apple-system, "SF Pro Display", "Inter Tight", "Segoe UI", system-ui, sans-serif;
-  /* one unit that grows with the window's height and is held back by its width */
-  --u: min(1vh, .62vw);
+  --paper: #f5f3ee;
+  --card: #fffefb;
+  --line: #e2ded3;
+  --ink: #23211d;
+  --muted: #5f5a50;
+  --sans: -apple-system, "Segoe UI", Roboto, "Helvetica Neue", system-ui, sans-serif;
   color-scheme: light;
 }
 * { box-sizing: border-box; }
-html { min-height: 100%; background-color: #C9A8D8; }
+html { background: var(--paper); }
 body {
-  margin: 0;
-  min-height: 100vh; min-height: 100dvh;
-  background-color: #C9A8D8;
-  background-image:
-    radial-gradient(120% 90% at 10% 0%, #F7B98B 0%, transparent 55%),
-    radial-gradient(120% 90% at 100% 100%, #7E9BF0 0%, transparent 55%),
-    radial-gradient(90% 80% at 80% 10%, #74D8BD 0%, transparent 50%);
-  background-attachment: fixed;
-  color: #fff;
-  font-family: var(--sans);
-  padding-inline: 20px;
-  padding-block: max(44px, calc(var(--u) * 8)) max(32px, calc(var(--u) * 6));
-  display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: calc(var(--u) * 5);
+  margin: 0; min-height: 100vh; min-height: 100dvh;
+  background: var(--paper); color: var(--ink);
+  font-family: var(--sans); font-size: 16px; line-height: 1.5;
+  padding: 40px 20px 56px;
 }
-.clock { text-align: center; text-shadow: 0 1px 14px rgba(0, 0, 0, .12); }
-.clock b { display: block; font-size: max(64px, calc(var(--u) * 12)); font-weight: 600; letter-spacing: -.035em; line-height: 1; font-variant-numeric: tabular-nums; }
-.clock span { display: block; margin-top: calc(var(--u) * 1); font-size: max(17px, calc(var(--u) * 2.1)); font-weight: 500; }
-h1 { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+main { width: 100%; max-width: 1240px; margin: 0 auto; }
+header { max-width: 640px; margin-bottom: 32px; }
+h1 { margin: 0 0 8px; font-size: 44px; line-height: 1.05; font-weight: 700; letter-spacing: -.03em; }
+header p { margin: 0; color: var(--muted); font-size: 18px; }
 
-.row { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: max(16px, calc(var(--u) * 2)); width: 100%; max-width: calc(var(--u) * 148); }
-@media (max-width: 1100px) { .row { grid-template-columns: repeat(2, minmax(0, 1fr)); max-width: 760px; } }
-@media (max-width: 760px) { .row { grid-template-columns: 1fr; max-width: 420px; } }
+.shelf { list-style: none; margin: 0; padding: 0; display: grid; gap: 20px; }
 
-.card {
+.app {
+  --tint: #eee; --btn: #222; --btn-ink: #fff;
+  position: relative;
+  display: flex; flex-direction: column; gap: 20px;
   height: 100%;
-  min-height: max(200px, calc(var(--u) * 28));
-  background: var(--card); color: var(--card-ink);
-  border-radius: max(22px, calc(var(--u) * 2.8)); padding: max(22px, calc(var(--u) * 3));
-  display: flex; flex-direction: column; gap: max(12px, calc(var(--u) * 1.4));
-  text-decoration: none;
-  box-shadow: 0 10px 30px rgba(40, 20, 60, .12);
-  transition: transform .25s ease, box-shadow .25s ease;
+  background: var(--card); border: 1px solid var(--line); border-radius: 22px;
+  padding: 24px; overflow: hidden;
 }
-.card:hover { transform: translateY(-6px); box-shadow: 0 22px 50px rgba(40, 20, 60, .2); }
-.card:focus-visible { outline: 3px solid #fff; outline-offset: 3px; }
-.ico { width: max(56px, calc(var(--u) * 7)); height: max(56px, calc(var(--u) * 7)); border-radius: 23%; display: grid; place-items: center; box-shadow: 0 6px 16px rgba(0, 0, 0, .12); }
-.ico svg { width: 54%; height: 54%; }
-.card h2 { margin: calc(var(--u) * 1) 0 0; font-size: max(22px, calc(var(--u) * 3)); font-weight: 600; letter-spacing: -.02em; }
-.card p { margin: 0; color: var(--card-muted); font-size: max(15px, calc(var(--u) * 1.75)); line-height: 1.4; }
-.more { margin-top: auto; padding-top: 4px; color: var(--link); font-size: max(15px, calc(var(--u) * 1.75)); }
-@media (max-width: 760px) { .card { min-height: 0; } }
+.app[data-app="homefund"] { --tint: #ece6fc; --btn: #5b2ee5; --btn-ink: #c8f560; }
+.app[data-app="wordbook"] { --tint: #e1efe8; --btn: #0c5a43; --btn-ink: #f6b83a; }
+.app[data-app="goallog"] { --tint: #fbe6da; --btn: #c2410c; --btn-ink: #ffffff; }
+.app[data-app="timelog"] { --tint: #e3e8ee; --btn: #232c37; --btn-ink: #22d3ee; }
 
-@media (prefers-reduced-motion: reduce) { .card { transition: none; } .card:hover { transform: none; } }
+.who { display: flex; flex-direction: column; gap: 12px; align-items: flex-start; }
+.mark { width: 52px; height: 52px; display: block; }
+.app h2 { margin: 0; font-size: 26px; line-height: 1.15; font-weight: 700; letter-spacing: -.02em; }
+.app p { margin: 0; color: var(--muted); font-size: 17px; max-width: 30ch; }
+.open {
+  display: inline-flex; align-items: center; min-height: 48px; padding: 0 22px; margin-top: 4px;
+  border-radius: 999px; background: var(--btn); color: var(--btn-ink);
+  font-size: 16px; font-weight: 600; text-decoration: none;
+}
+/* the whole card is the target; the button is its name */
+.open::after { content: ""; position: absolute; inset: 0; border-radius: inherit; }
+.open:focus-visible { outline: 3px solid var(--btn); outline-offset: 3px; }
+.app:hover { border-color: var(--btn); }
+
+.view { margin: 0 -24px -24px; padding: 28px 24px 0; background: var(--tint); display: flex; justify-content: center; align-items: flex-end; overflow: hidden; }
+.phone { width: 250px; flex: none; margin: 0; background: #17161a; padding: 7px 7px 0; border-radius: 30px 30px 0 0; }
+.phone img { display: block; width: 100%; height: auto; border-radius: 24px 24px 0 0; background: #fff; }
+.browser { display: none; margin: 0; background: #d9d6cd; border-radius: 12px 12px 0 0; overflow: hidden; flex: none; }
+.browser::before { content: ""; display: block; height: 26px; background:
+  radial-gradient(circle at 14px 13px, #b9b5aa 4px, transparent 5px),
+  radial-gradient(circle at 30px 13px, #b9b5aa 4px, transparent 5px),
+  radial-gradient(circle at 46px 13px, #b9b5aa 4px, transparent 5px); }
+.browser img { display: block; width: 100%; height: auto; background: #fff; }
+
+@media (min-width: 640px) {
+  body { padding: 56px 32px 72px; }
+  h1 { font-size: 56px; }
+  header { margin-bottom: 40px; }
+  .app { flex-direction: row; align-items: stretch; gap: 0; padding: 0; min-height: 280px; }
+  .who { flex: 0 0 300px; justify-content: center; padding: 32px; }
+  .view { flex: 1; margin: 0; padding: 32px 0 0 32px; justify-content: flex-start; min-width: 0; }
+  .phone { display: none; }
+  .browser { display: block; width: 100%; border-radius: 12px 0 0 0; }
+}
+
+@media (min-width: 1100px) {
+  body { padding: 72px 40px 88px; }
+  h1 { font-size: 64px; }
+  .shelf { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; }
+  .app { flex-direction: column; gap: 0; min-height: 0; }
+  .who { flex: none; padding: 32px 32px 28px; }
+  .view { position: relative; padding: 0 0 0 32px; flex: 1; align-items: flex-end; }
+  .browser { width: 84%; flex: none; margin-top: 28px; border-radius: 12px 0 0 0; }
+  .phone { display: block; position: absolute; right: 28px; bottom: 0; width: 150px; padding: 5px 5px 0; border-radius: 22px 22px 0 0; }
+  .phone img { border-radius: 17px 17px 0 0; }
+}
+
+@media (min-width: 1700px) {
+  main { max-width: 1400px; }
+  .phone { width: 170px; right: 36px; }
+}
+
+@media (prefers-reduced-motion: no-preference) { .app { transition: border-color .2s ease; } }
 </style>
 </head>
 <body>
-<h1>Shelf</h1>
-<div class="clock" aria-hidden="true"><b id="time">9:41</b><span id="date">hoy</span></div>
+<main>
+<header>
+  <h1>Shelf</h1>
+  <p>Cuatro apps que hice para mi día a día: la plata de la casa, las palabras, las metas y el tiempo.</p>
+</header>
 
-<ul class="row">
+<ul class="shelf">
   <li>
-    <a class="card" href="https://our-piggy-bank.vercel.app">
-      <span class="ico" style="background:#2F5BEA" aria-hidden="true"><svg viewBox="0 0 34 34" fill="none" stroke="#fff" stroke-width="2.2"><circle cx="17" cy="17" r="5" fill="#fff"/><ellipse cx="17" cy="17" rx="14" ry="6" transform="rotate(-25 17 17)"/></svg></span>
-      <h2>HomeFund</h2>
-      <p>El fondo compartido: cuentas y saldos entre varias personas.</p>
-      <span class="more" aria-hidden="true">Abrir ›</span>
-    </a>
+    <article class="app" data-app="homefund">
+      <div class="who">
+        <svg class="mark" viewBox="0 0 48 48" aria-hidden="true"><rect width="48" height="48" rx="13" fill="#5b2ee5"/><g transform="translate(9 9) scale(1.25)" fill="none" stroke="#c8f560" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M11 17h3v2a1 1 0 0 0 1 1h2a1 1 0 0 0 1-1v-3a3.16 3.16 0 0 0 2-2h1a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1h-1a5 5 0 0 0-2-4V3a4 4 0 0 0-3.2 1.6l-.3.4H11a6 6 0 0 0-6 6v1a5 5 0 0 0 2 4v3a1 1 0 0 0 1 1h2a1 1 0 0 0 1-1z"/><path d="M16 10h.01"/><path d="M2 8v1a2 2 0 0 0 2 2h1"/></g></svg>
+        <h2>HomeFund</h2>
+        <p>La plata de la casa: quién puso qué y cuánto nos queda.</p>
+        <a class="open" href="https://homefundapp.vercel.app">Abrir ›</a>
+      </div>
+      <div class="view">
+        <figure class="browser"><img src="shots/homefund-desktop.webp" width="1440" height="820" loading="lazy" decoding="async" alt="HomeFund en escritorio: la lista de movimientos de Casa Parada Ruiz, con un aporte de 3.000.000 pesos y gastos de mercado y restaurantes."></figure>
+        <figure class="phone"><img src="shots/homefund-phone.webp" width="390" height="720" loading="lazy" decoding="async" alt="HomeFund en el celular: el patrimonio de la casa, 10.020.050 pesos, y los últimos movimientos."></figure>
+      </div>
+    </article>
   </li>
   <li>
-    <a class="card" href="https://reading-neon.vercel.app">
-      <span class="ico" style="background:#1C1B16" aria-hidden="true"><svg viewBox="0 0 34 34" fill="none" stroke="#D9805F" stroke-width="2.2"><path d="M6 8h9a3 3 0 0 1 3 3v15a2 2 0 0 0-2-2H6zM28 8h-9a3 3 0 0 0-3 3v15a2 2 0 0 1 2-2h10z"/></svg></span>
-      <h2>WordBook</h2>
-      <p>El diccionario de lectura: una palabra sin soltar el libro.</p>
-      <span class="more" aria-hidden="true">Abrir ›</span>
-    </a>
+    <article class="app" data-app="wordbook">
+      <div class="who">
+        <svg class="mark" viewBox="0 0 48 48" aria-hidden="true"><rect width="48" height="48" rx="13" fill="#0c5a43"/><path d="M24 15c-3-2.2-7-3.2-10-3.2v20.4c3 0 7 1 10 3.2 3-2.2 7-3.2 10-3.2V11.8c-3 0-7 1-10 3.2z" fill="#f6b83a"/><line x1="24" y1="15" x2="24" y2="35.4" stroke="#0c5a43" stroke-width="1.4"/></svg>
+        <h2>WordBook</h2>
+        <p>Busco una palabra mientras leo y sigo con el libro.</p>
+        <a class="open" href="https://wordbookapp.vercel.app">Abrir ›</a>
+      </div>
+      <div class="view">
+        <figure class="browser"><img src="shots/wordbook-desktop.webp" width="1440" height="820" loading="lazy" decoding="async" alt="WordBook en escritorio: la caja de búsqueda y las últimas palabras consultadas, como nevertheless, sheer y hinder."></figure>
+        <figure class="phone"><img src="shots/wordbook-phone.webp" width="390" height="720" loading="lazy" decoding="async" alt="WordBook en el celular: la caja para escribir una palabra o frase y tus últimas búsquedas."></figure>
+      </div>
+    </article>
   </li>
   <li>
-    <a class="card" href="https://pulsar-psi-six.vercel.app">
-      <span class="ico" style="background:#1C6E5A" aria-hidden="true"><svg viewBox="0 0 34 34" fill="none" stroke="#fff" stroke-width="2.2"><circle cx="17" cy="17" r="3" fill="#fff"/><circle cx="17" cy="17" r="8" opacity=".7"/><circle cx="17" cy="17" r="13" opacity=".4"/></svg></span>
-      <h2>GoalLog</h2>
-      <p>La bitácora de metas: hoy, la semana y el plan del mes.</p>
-      <span class="more" aria-hidden="true">Abrir ›</span>
-    </a>
+    <article class="app" data-app="goallog">
+      <div class="who">
+        <svg class="mark" viewBox="0 0 48 48" aria-hidden="true"><rect width="48" height="48" rx="13" fill="#0b1f3a"/><circle cx="24" cy="24" r="12" fill="#c2410c"/><path d="M18.5 24.5l4 4 7.5-8.5" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <h2>GoalLog</h2>
+        <p>Mis metas del mes, partidas en lo que toca hacer hoy.</p>
+        <a class="open" href="https://goallogapp.vercel.app">Abrir ›</a>
+      </div>
+      <div class="view">
+        <figure class="browser"><img src="shots/goallog-desktop.webp" width="1440" height="820" loading="lazy" decoding="async" alt="GoalLog en escritorio: la pantalla Hoy con 4 de 8 tareas hechas, entre ellas Anki, Shadowing y Salir a correr."></figure>
+        <figure class="phone"><img src="shots/goallog-phone.webp" width="390" height="720" loading="lazy" decoding="async" alt="GoalLog en el celular: Hoy, con 4 de 8 hechos y la lista de tareas del inglés."></figure>
+      </div>
+    </article>
   </li>
   <li>
-    <a class="card" href="https://timelog-delta.vercel.app">
-      <span class="ico" style="background:#14120f" aria-hidden="true"><svg viewBox="0 0 34 34" fill="none" stroke="#d9a441" stroke-width="2.6" stroke-linecap="round"><path d="M7 10h20M7 17h13M7 24h7"/></svg></span>
-      <h2>TimeLog</h2>
-      <p>El registro de tiempo: cuánto estuvo abierta cada app del PC.</p>
-      <span class="more" aria-hidden="true">Abrir ›</span>
-    </a>
+    <article class="app" data-app="timelog">
+      <div class="who">
+        <svg class="mark" viewBox="0 0 48 48" aria-hidden="true"><rect width="48" height="48" rx="13" fill="#232c37"/><rect x="9" y="22" width="7.5" height="16.5" rx="1.5" fill="#22d3ee"/><rect x="20.25" y="9" width="7.5" height="29.5" rx="1.5" fill="#22d3ee"/><rect x="31.5" y="16.5" width="7.5" height="22" rx="1.5" fill="#22d3ee"/></svg>
+        <h2>TimeLog</h2>
+        <p>En qué se me fue el día frente al computador.</p>
+        <a class="open" href="https://timelogapp.vercel.app">Abrir ›</a>
+      </div>
+      <div class="view">
+        <figure class="browser"><img src="shots/timelog-desktop.webp" width="1440" height="820" loading="lazy" decoding="async" alt="TimeLog en escritorio: 7 h 56 min en el computador hoy, con VS Code, Chrome y Terminal como lo más usado."></figure>
+        <figure class="phone"><img src="shots/timelog-phone.webp" width="390" height="720" loading="lazy" decoding="async" alt="TimeLog en el celular: 7 h 56 min hoy y las barras por aplicación."></figure>
+      </div>
+    </article>
   </li>
 </ul>
-
-<script>
-(() => {
-  const time = document.getElementById("time"), date = document.getElementById("date");
-  const tick = () => {
-    try {
-      const now = new Date();
-      time.textContent = new Intl.DateTimeFormat("es-CO", { hour: "numeric", minute: "2-digit" }).formatToParts(now).filter((p) => p.type === "hour" || p.type === "minute" || (p.type === "literal" && p.value === ":")).map((p) => p.value).join("");
-      date.textContent = new Intl.DateTimeFormat("es-CO", { weekday: "long", day: "numeric", month: "long" }).format(now).replace(",", "");
-    } catch (e) {}
-  };
-  tick();
-  setInterval(tick, 15000);
-})();
-</script>
+</main>
 </body>
 </html>
