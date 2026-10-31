@@ -17,7 +17,7 @@ export function AppNav() {
   return (
     <Nav label={t("label")}>
       {links.map((link) => (
-        <TextLink key={link.href} pill href={link.href} current={path === link.href}>
+        <TextLink key={link.href} pill href={link.href} current={path === link.href || (link.href === "/" && path.startsWith("/dia/"))}>
           {link.label}
         </TextLink>
       ))}

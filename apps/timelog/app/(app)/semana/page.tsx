@@ -54,6 +54,7 @@ export default async function WeekPage({ searchParams }: { searchParams: Promise
                 figure: seconds === 0 ? t("none") : words.clock(seconds),
                 share: seconds / longestDay,
                 future,
+                href: day === today ? "/" : `/dia/${day}`,
                 description: future ? t("upcoming", { day: name }) : t("bar", { day: name, duration: seconds === 0 ? t("none") : words.duration(seconds) }),
               };
             })}

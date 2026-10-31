@@ -61,6 +61,8 @@
 .dayFill { width: 100%; border-radius: 10px; background: var(--tl-bar-on-block); }
 .dayLabel { font-size: 14px; color: var(--tl-block-muted); }
 .dayFigure { font-size: 12px; color: var(--tl-block-text); min-height: 16px; }
+.dayLink { color: inherit; text-decoration: none; }
+.dayLink:hover .dayLabel, .dayLink:focus-visible .dayLabel { text-decoration: underline; }
 .dayFuture .dayTrack { background: transparent; border: 1px dashed var(--tl-track-on-block); }
 .dayFuture .dayLabel { opacity: 0.5; }
 .row { font-size: 16px; }

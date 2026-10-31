@@ -78,21 +78,33 @@ export function Card({ label, children }: { label: ReactNode; children: ReactNod
   );
 }
 
-export type DayColumn = { key: string; label: string; figure: string; share: number; future: boolean; description: string };
+export type DayColumn = { key: string; label: string; figure: string; share: number; future: boolean; description: string; href?: string };
 
 // Seven vertical columns, one per day, for the brand block; a day not reached is dimmed and empty.
 export function DayColumns({ days }: { days: DayColumn[] }) {
   return (
     <div className={styles.days}>
-      {days.map((day) => (
-        <div key={day.key} className={join(styles.day, day.future && styles.dayFuture)}>
-          <div className={styles.dayTrack} role="img" aria-label={day.description}>
-            <div className={styles.dayFill} style={{ height: `${Math.max(0, Math.min(1, day.share)) * 100}%` }} />
+      {days.map((day) => {
+        const column = (
+          <>
+            <div className={styles.dayTrack} role="img" aria-label={day.description}>
+              <div className={styles.dayFill} style={{ height: `${Math.max(0, Math.min(1, day.share)) * 100}%` }} />
+            </div>
+            <span className={join(styles.dayFigure, styles.mono)}>{day.future ? "" : day.figure}</span>
+            <span className={styles.dayLabel}>{day.label}</span>
+          </>
+        );
+        // A day reached opens on its own screen; one not reached stays a plain column.
+        return day.href === undefined || day.future ? (
+          <div key={day.key} className={join(styles.day, day.future && styles.dayFuture)}>
+            {column}
           </div>
-          <span className={join(styles.dayFigure, styles.mono)}>{day.future ? "" : day.figure}</span>
-          <span className={styles.dayLabel}>{day.label}</span>
-        </div>
-      ))}
+        ) : (
+          <Link key={day.key} href={day.href} className={join(styles.day, styles.dayLink)}>
+            {column}
+          </Link>
+        );
+      })}
     </div>
   );
 }
