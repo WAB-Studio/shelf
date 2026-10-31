@@ -6,6 +6,18 @@ body {
   margin: 0;
 }
 
+/* The ground is painted on the document itself: a screen taller than the
+   window would otherwise show the browser's own colour below the 100vh theme. */
+html.light,
+html.light body {
+  background: #ffffff;
+}
+
+html.dark,
+html.dark body {
+  background: #110c20;
+}
+
 /* Every portalled surface (menu, listbox, dialog) wraps in its own nested
    `Theme`, another `.radix-themes` node that re-declares these variables from
    Radix's own stylesheet: doubled to outrank that same-specificity rule
