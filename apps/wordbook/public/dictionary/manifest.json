@@ -1,5 +1,5 @@
 {
-  "payloadVersion": 1,
+  "payloadVersion": 2,
   "source": {
     "url": "https://download.freedict.org/dictionaries/eng-spa/2025.11.23/freedict-eng-spa-2025.11.23.src.tar.xz",
     "edition": "2025.11.23",
@@ -11,7 +11,7 @@
   "asset": {
     "path": "/dictionary/eng-spa-2025.11.23.json",
     "bytes": 8389666,
-    "sha256": "f071a672e8501b27392055dc9d33d0f593bb6ba63f74c7e574efc12228658c5a"
+    "sha256": "8089616f0e545cde0753b9fc0bad9a7bd65cb8422c0d3ce19fb91ef4127d181d"
   },
   "counts": {
     "entries": 64258,
