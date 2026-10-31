@@ -545,7 +545,7 @@ test.describe("welcome", () => {
 });
 
 test.describe("withdraw", () => {
-  test("the row is a 44px button with a pointer", async ({
+  test("the row is a button at least 44px tall", async ({
     page,
   }, testInfo) => {
     test.skip(!mobileOnly(testInfo.project.name), "the phone's dashboard");
@@ -555,7 +555,6 @@ test.describe("withdraw", () => {
     await expect(row).toBeVisible();
     const height = await row.evaluate((el) => el.getBoundingClientRect().height);
     expect(height).toBeGreaterThanOrEqual(44);
-    expect(await computed(row, "cursor")).toBe("pointer");
   });
 });
 

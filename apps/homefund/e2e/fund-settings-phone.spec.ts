@@ -148,12 +148,13 @@ test.describe("at 360, a person with no fund", () => {
   test("sees no «Ajustes del fondo» and no «Miembros» on the screen or in the sheet", async ({
     page,
   }) => {
-    for (const open of [openScreen, openSheet]) {
+    // The screen's list leads on Bandeja, the sheet's on Planeación.
+    for (const [open, first] of [[openScreen, nav.inbox], [openSheet, nav.planning]] as const) {
       const surface = await open(page);
       await expectNoRow(surface);
       await expect(surface.getByRole("link", { name: nav.members, exact: true })).toHaveCount(0);
       // The list is still there: the first row is the one it always had.
-      expect((await rows(surface))[0]?.name).toBe(nav.inbox);
+      expect((await rows(surface))[0]?.name).toBe(first);
     }
   });
 });

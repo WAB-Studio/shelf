@@ -425,8 +425,8 @@ test.describe("a category that came from a credential default", () => {
         dialog.getByRole("combobox", { name: transactions.fromLabel }),
       ).toHaveText(scope.accountName);
       await expect(
-        dialog.getByRole("combobox", { name: transactions.categoryLabel }),
-      ).toHaveText(scope.categoryName);
+        dialog.getByRole("button", { name: scope.categoryName, exact: true, pressed: true }),
+      ).toBeVisible();
     });
   });
 });
