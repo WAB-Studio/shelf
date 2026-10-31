@@ -8,7 +8,9 @@
       "minutes": "hace {n} min",
       "hours": "hace {n} h",
       "days": "hace {n} d"
-    }
+    },
+    "tinyHours": "h",
+    "tinyMinutes": "m"
   },
   "nav": {
     "label": "Secciones",
@@ -47,7 +49,9 @@
     "strip": "Semana del día",
     "stripDay": "{weekday} {day} de {month}",
     "stripPrev": "Semana anterior",
-    "stripNext": "Semana siguiente"
+    "stripNext": "Semana siguiente",
+    "stripDayPrev": "Día anterior",
+    "stripDayNext": "Día siguiente"
   },
   "week": {
     "title": "Del {from} al {to}",

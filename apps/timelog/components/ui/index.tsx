@@ -163,7 +163,7 @@ export function Composition({ parts, label, thin }: { parts: CompositionPart[]; 
 }
 
 export type HeatmapColumn = { key: string; label: string; href?: string; future?: boolean };
-export type HeatmapRow = { key: string; name: string; tone: Tone; total: string; cells: { figure: string | null; level: number; label: string }[] };
+export type HeatmapRow = { key: string; name: string; tone: Tone; total: string; cells: { figure: { wide: string; narrow: string } | null; level: number; label: string }[] };
 
 // A grid of rows by days, a cell tinted by its level and always carrying its figure (a level only helps the eye find it).
 export function Heatmap({ columns, rows, label }: { columns: HeatmapColumn[]; rows: HeatmapRow[]; label: string }) {
@@ -187,7 +187,7 @@ export function Heatmap({ columns, rows, label }: { columns: HeatmapColumn[]; ro
             </th>
             {row.cells.map((cell, index) => (
               <td key={columns[index].key} className={join(styles.heatCell, styles.mono)} data-level={cell.level} aria-label={cell.label}>
-                {cell.figure === null ? <span className={styles.heatNone}>—</span> : <span className={styles.dayFigure}><FigureParts text={cell.figure} /></span>}
+                {cell.figure === null ? <span className={styles.heatNone}>—</span> : <><span className={styles.heatWide}>{cell.figure.wide}</span><span className={styles.heatNarrow}>{cell.figure.narrow}</span></>}
               </td>
             ))}
           </tr>
@@ -199,14 +199,22 @@ export function Heatmap({ columns, rows, label }: { columns: HeatmapColumn[]; ro
 
 export type StripEntry = { key: string; initial: string; number: number; description: string; href?: string; current: boolean };
 
-// The days of one week as touchable tiles, the month named above them and ‹ › to the week before and after.
-export function DayStrip({ label, days, prev, next }: { label: string; days: StripEntry[]; prev?: { href: string; label: string }; next?: { href: string; label: string } }) {
+// The days of one week as touchable tiles, the month named above them, ‹ › one day away and « » one week away.
+type StripStep = { href: string; label: string };
+
+function StripArrow({ step, glyph }: { step?: StripStep; glyph: string }) {
+  return step === undefined ? <span className={styles.stripStep} /> : <Link href={step.href} className={styles.stripStep} aria-label={step.label}>{glyph}</Link>;
+}
+
+export function DayStrip({ label, days, weekPrev, dayPrev, dayNext, weekNext }: { label: string; days: StripEntry[]; weekPrev?: StripStep; dayPrev?: StripStep; dayNext?: StripStep; weekNext?: StripStep }) {
   return (
     <nav className={styles.strip} aria-label={label}>
       <div className={styles.stripHead}>
-        {prev === undefined ? <span className={styles.stripStep} /> : <Link href={prev.href} className={styles.stripStep} aria-label={prev.label}>‹</Link>}
+        <StripArrow step={weekPrev} glyph="«" />
+        <StripArrow step={dayPrev} glyph="‹" />
         <span className={styles.stripLabel}>{label}</span>
-        {next === undefined ? <span className={styles.stripStep} /> : <Link href={next.href} className={styles.stripStep} aria-label={next.label}>›</Link>}
+        <StripArrow step={dayNext} glyph="›" />
+        <StripArrow step={weekNext} glyph="»" />
       </div>
       <div className={styles.stripDays}>
         {days.map((one) => {
@@ -237,7 +245,7 @@ export function DayColumns({ days }: { days: DayColumn[] }) {
         const column = (
           <>
             <div className={styles.dayTrack} role="img" aria-label={day.description}>
-              <div className={styles.dayFill} style={{ height: `${Math.max(0, Math.min(1, day.share)) * 100}%` }} />
+              <div className={styles.dayFill} style={{ height: day.share > 0 ? `max(4px, ${Math.min(1, day.share) * 100}%)` : "0" }} />
             </div>
             <span className={join(styles.dayFigure, styles.mono)}>
               {day.future ? "" : <FigureParts text={day.figure} />}

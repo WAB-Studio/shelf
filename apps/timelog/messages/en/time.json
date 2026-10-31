@@ -8,7 +8,9 @@
       "minutes": "{n} min ago",
       "hours": "{n} h ago",
       "days": "{n} d ago"
-    }
+    },
+    "tinyHours": "h",
+    "tinyMinutes": "m"
   },
   "nav": {
     "label": "Sections",
@@ -47,7 +49,9 @@
     "strip": "Week of the day",
     "stripDay": "{weekday}, {month} {day}",
     "stripPrev": "Previous week",
-    "stripNext": "Next week"
+    "stripNext": "Next week",
+    "stripDayPrev": "Previous day",
+    "stripDayNext": "Next day"
   },
   "week": {
     "title": "{from} to {to}",

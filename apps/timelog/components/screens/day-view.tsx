@@ -113,8 +113,10 @@ export async function DayView({ day }: { day: string }) {
       {isToday ? <AutoRefresh /> : null}
       <DayStrip
         label={`${words.dayShort(strip.monday)} – ${words.dayShort(addDays(strip.monday, 6))}`}
-        prev={strip.prev === null ? undefined : { href: hrefOf(strip.prev), label: t("stripPrev") }}
-        next={strip.next === null ? undefined : { href: hrefOf(strip.next), label: t("stripNext") }}
+        weekPrev={strip.prev === null ? undefined : { href: hrefOf(strip.prev), label: t("stripPrev") }}
+        dayPrev={span.firstDay !== null && day > span.firstDay ? { href: hrefOf(before), label: t("stripDayPrev") } : undefined}
+        dayNext={day < today ? { href: hrefOf(addDays(day, 1)), label: t("stripDayNext") } : undefined}
+        weekNext={strip.next === null ? undefined : { href: hrefOf(strip.next), label: t("stripNext") }}
         days={strip.days.map((one) => ({
           key: one.day,
           initial: words.weekdayInitial(one.day),

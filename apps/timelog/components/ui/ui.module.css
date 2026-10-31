@@ -19,7 +19,8 @@
 .tileFull { grid-column: 1 / -1; }
 .tileHead { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; }
 .tileTitle { margin: 0; font-family: var(--font-display), var(--font-sans), sans-serif; font-size: 24px; font-weight: 700; line-height: 1.2; letter-spacing: -0.02em; }
-.heroColumns { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: 24px; align-items: start; }
+.heroColumns { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: 24px; align-items: stretch; }
+.heroColumns > .cards { grid-template-columns: minmax(0, 1fr); grid-auto-rows: 1fr; }
 @media (min-width: 1100px) { .hero { padding: 28px 32px; } }
 
 .rows { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; }
@@ -84,7 +85,7 @@
 .days { display: flex; align-items: stretch; gap: 8px; }
 @media (max-width: 719px) { .days { gap: 4px; } .hero { padding: 24px 16px; } }
 .day { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 6px; }
-.dayTrack { width: 100%; max-width: 40px; height: 112px; display: flex; align-items: flex-end; border-radius: 10px; background: var(--tl-track-on-block); overflow: hidden; }
+.dayTrack { width: 100%; max-width: 40px; height: 112px; display: flex; align-items: flex-end; border-radius: 10px; background: color-mix(in srgb, var(--tl-track-on-block) 35%, transparent); overflow: hidden; }
 .dayFill { width: 100%; border-radius: 10px; background: var(--tl-bar-on-block); }
 .dayLabel { font-size: 14px; color: var(--tl-block-muted); }
 .dayFigure { display: flex; flex-direction: column; align-items: center; font-size: 14px; line-height: 1.2; text-align: center; color: var(--tl-block-text); min-height: 34px; }
@@ -242,15 +243,17 @@
 .heatCell[data-level="2"] { background: color-mix(in srgb, var(--tone) var(--tl-heat-2), var(--tl-track)); }
 .heatCell[data-level="3"] { background: color-mix(in srgb, var(--tone) var(--tl-heat-3), var(--tl-track)); }
 .heatCell[data-level="4"] { background: color-mix(in srgb, var(--tone) var(--tl-heat-4), var(--tl-track)); }
-.heatCell .dayFigure { align-items: center; justify-content: center; min-height: 0; color: var(--tl-text); }
-.heatCell .dayUnit { color: inherit; opacity: 0.85; }
+.heatCell { color: var(--tl-text); white-space: nowrap; font-size: 12px; }
+.heatNarrow { display: inline; }
+.heatWide { display: none; }
+@media (min-width: 720px) { .heatCell { font-size: 14px; } .heatNarrow { display: none; } .heatWide { display: inline; } }
 .heatNone { color: var(--tl-muted); }
 @media (max-width: 719px) { .heatHead { font-size: 12px; } }
 
 .strip { display: flex; flex-direction: column; gap: 8px; }
-.stripHead { display: flex; align-items: center; justify-content: center; gap: 8px; }
+.stripHead { display: flex; align-items: center; justify-content: center; gap: 4px; }
 .stripLabel { min-width: 8em; text-align: center; font-size: 16px; font-weight: 500; }
-.stripStep { width: 44px; height: 44px; display: inline-flex; align-items: center; justify-content: center; border-radius: 999px; color: var(--tl-bar); font-size: 22px; text-decoration: none; }
+.stripStep { width: 40px; height: 44px; display: inline-flex; align-items: center; justify-content: center; border-radius: 999px; color: var(--tl-bar); font-size: 22px; text-decoration: none; }
 a.stripStep:hover, a.stripStep:focus-visible { background: var(--tl-raised); }
 .stripDays { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; max-width: 520px; width: 100%; margin: 0 auto; }
 .stripDay { min-height: 56px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; border-radius: 14px; background: var(--tl-raised); color: var(--tl-text); text-decoration: none; font-size: 16px; }

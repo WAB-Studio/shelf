@@ -102,7 +102,7 @@ export default async function WeekPage({ searchParams }: { searchParams: Promise
                   const day = days[index].day;
                   const when = `${words.weekdayShort(day)} ${words.dayOfMonth(day)}`;
                   return {
-                    figure: cell.seconds === 0 ? null : words.brief(cell.seconds),
+                    figure: cell.seconds === 0 ? null : words.heat(cell.seconds),
                     level: cell.level,
                     label: t("cell", { app: row.app, day: when, duration: cell.seconds === 0 ? t("none") : words.duration(cell.seconds) }),
                   };
