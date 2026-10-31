@@ -112,11 +112,9 @@ export function MeasureAction({
   if (current && fed) {
     return (
       <>
-        <Flex>
-          <Button variant="ghost" tone="accent" tap={44} disabled aria-describedby="measure-fed-reason">
-            {t("goal.measure.change")}
-          </Button>
-        </Flex>
+        <Text as="p" variant="name" tone="muted">
+          {t("goal.measure.change")}
+        </Text>
         <Text as="p" id="measure-fed-reason" variant="sentence" tone="muted">
           {t("goal.measure.fedReason")}
         </Text>
@@ -127,7 +125,7 @@ export function MeasureAction({
   return (
     <>
       <Flex>
-        <Button variant="ghost" tone="accent" tap={44} onClick={openSheet}>
+        <Button variant="quiet" onClick={openSheet}>
           {t(current ? "goal.measure.change" : "goal.measure.offer")}
         </Button>
       </Flex>

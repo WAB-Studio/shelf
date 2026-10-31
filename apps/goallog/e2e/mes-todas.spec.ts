@@ -125,7 +125,8 @@ test("each open goal draws its month: the line, the carried task first, the task
     await expect(timedBlock.getByText(owesLine(label(lastMonth), "3 h"))).toBeVisible();
 
     const pagesBlock = page.locator("section", { has: page.getByRole("heading", { name: `Libros ${stamp}` }) });
-    await expect(pagesBlock.getByText(`en ${label(thisMonth)} · sin monto este mes`)).toBeVisible();
+    // The invitation says it; the line «sin monto este mes» would repeat it.
+    await expect(pagesBlock.getByText(/sin monto este mes/)).toHaveCount(0);
     await expect(pagesBlock.getByRole("link", { name: `Planear ${label(thisMonth)}` })).toHaveAttribute(
       "href",
       `/metas/${pages}/meses?planear=${seg}&volver=${encodeURIComponent("/mes")}`,

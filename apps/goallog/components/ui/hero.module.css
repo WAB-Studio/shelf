@@ -1,0 +1,72 @@
+/* The navy brand block: ink 15.10, muted 8.22 and sky 9.91 on #0B1F3A light;
+   14.22, 7.74 and 9.33 on #0E2347 dark (docs/goallog/DESIGN.md). */
+.hero {
+  --pulsar-ink: var(--pulsar-brand-ink);
+  --pulsar-ink-secondary: var(--pulsar-brand-ink-secondary);
+  --pulsar-muted: var(--pulsar-brand-muted);
+  --pulsar-line: var(--pulsar-brand-line);
+  --pulsar-border: var(--pulsar-brand-line);
+  --pulsar-accent: var(--pulsar-highlight);
+  --pulsar-accent-soft: var(--pulsar-brand-soft);
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 20px;
+  border-radius: 14px;
+  background: var(--pulsar-brand);
+  color: var(--pulsar-brand-ink);
+}
+
+.label {
+  font-family: var(--font-mono);
+  font-size: var(--pulsar-text-label-size);
+  letter-spacing: var(--pulsar-text-label-tracking);
+  color: var(--pulsar-brand-muted);
+}
+
+/* The title face, one weight. A `Figure` inside speaks the same face, its unit a step down. */
+.figure.figure,
+.figure.figure * {
+  font-family: var(--font-display), var(--font-sans), sans-serif;
+  font-weight: 400;
+  letter-spacing: -0.02em;
+  color: var(--pulsar-brand-ink);
+}
+
+.figure.figure {
+  font-size: 44px;
+  line-height: 1.05;
+}
+
+.figure.figure :is([data-part="figure"], [data-part="figure-unit"]) {
+  font-size: inherit;
+}
+
+.figure.figure [data-part="figure-unit"] {
+  font-size: 18px;
+  color: var(--pulsar-brand-muted);
+}
+
+.caption {
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--pulsar-brand-ink-secondary);
+}
+
+@media (min-width: 768px) {
+  .hero {
+    padding: 28px 32px;
+  }
+
+  .figure.figure {
+    font-size: 56px;
+  }
+}
+
+@media print {
+  .hero {
+    background: none;
+    color: inherit;
+  }
+}

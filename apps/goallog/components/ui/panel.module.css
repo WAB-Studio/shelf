@@ -1,10 +1,10 @@
-/* Below 1024px the panel is not there: its children are the page's own flex
+/* Below 768px the panel is not there: its children are the page's own flex
    items and take its gap. */
 .panel {
   display: contents;
 }
 
-@media (min-width: 1024px) {
+@media (min-width: 768px) {
   .panel {
     display: flex;
     flex-direction: column;
@@ -17,7 +17,7 @@
   }
 }
 
-@media (min-width: 1024px) {
+@media (min-width: 768px) {
   .row {
     flex-direction: row;
     align-items: center;
@@ -46,7 +46,7 @@
   display: block;
 }
 
-@media (min-width: 1024px) {
+@media (min-width: 768px) {
   .stacked.panel {
     display: flex;
     gap: 0;
@@ -57,7 +57,7 @@
   display: contents;
 }
 
-@media (min-width: 1024px) {
+@media (min-width: 768px) {
   .grid {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -66,8 +66,8 @@
   }
 }
 
-/* `from="wide"`: from 1024 to 1279px the cards stay the parent's own items. */
-@media (min-width: 1024px) and (max-width: 1279.98px) {
+/* `from="wide"`: from 768 to 1279px the cards stay the parent's own items. */
+@media (min-width: 768px) and (max-width: 1279.98px) {
   .grid.fromWide {
     display: contents;
   }

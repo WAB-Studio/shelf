@@ -190,7 +190,7 @@
   display: none;
 }
 
-@media (min-width: 1024px) {
+@media (min-width: 768px) {
   .narrowOnly.narrowOnly.narrowOnly {
     display: none;
   }
@@ -213,7 +213,7 @@
   overflow: hidden;
   white-space: pre-line;
   font-family: inherit;
-  font-size: 13px;
+  font-size: 14px;
 }
 
 /* A control at the row's end, centred against a row that stretches its parts. */

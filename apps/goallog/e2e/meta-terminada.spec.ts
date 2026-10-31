@@ -58,7 +58,7 @@ test("an ended goal reads «terminó el» and yesterday, offers both acts and ne
       page.getByText(`terminó el ${part("weekday")} ${part("day")} de ${part("month")} de ${part("year")}`, { exact: true }),
     ).toBeVisible();
     await expect(page.getByText(/semanas? · hasta el /)).toHaveCount(0);
-    await expect(page.getByRole("button", { name: "mover el final", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Mover el final", exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: "Archivar", exact: true })).toBeVisible();
     await expect(page.getByRole("link", { name: "Añadir un compromiso" })).toHaveCount(0);
     await expect(page.getByRole("link", { name: "Añadir una fase" })).toHaveCount(0);
@@ -76,7 +76,7 @@ test("moving the end of an ended goal opens on a count that ends this Sunday and
   const { goalId } = await seedEnded(db, personId, `Meta mover ${Date.now()}`);
   try {
     await page.goto(`/metas/${goalId}`);
-    await page.getByRole("button", { name: "mover el final", exact: true }).click();
+    await page.getByRole("button", { name: "Mover el final", exact: true }).click();
     const sheet = page.getByRole("dialog");
     // RP-108: counted from this week, so an ended goal reopens on 1 however long ago it opened.
     const field = sheet.getByLabel(/^semanas, contando esta$/);

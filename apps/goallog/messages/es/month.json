@@ -62,8 +62,7 @@
     "closedNote": "Un mes cerrado no toma tareas nuevas.",
     "noMeasure": "esta meta no mide nada",
     "emptyNoMeasure": "{month} no tiene tareas. Escribe las que quieras hacer este mes.",
-    "emptyNoMeasureLater": "{month} no tiene tareas. Escribe las que quieras hacer en {name}.",
-    "allMonths": "Todos los meses"
+    "emptyNoMeasureLater": "{month} no tiene tareas. Escribe las que quieras hacer en {name}."
   },
   "task": {
     "eyebrow": "{goal} · {month}",

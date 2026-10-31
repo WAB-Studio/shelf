@@ -32,7 +32,7 @@ export function SearchBox({
       value={value}
       onChange={(event) => onChange(event.target.value)}
       placeholder={t("placeholder")}
-      aria-label={t("label")}
+      label={t("label")}
       lang="en"
       autoCapitalize="none"
       autoCorrect="off"

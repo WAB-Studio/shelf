@@ -1,4 +1,5 @@
 import type { Sense } from "@/lib/dictionary/index-build";
+import { isRareSense } from "@/lib/dictionary/rare-sense";
 
 // The module 27 wire schema and the row this fills agree on the same 120.
 const TRANSLATION_MAX_CHARS = 120;
@@ -15,10 +16,25 @@ export function cutTranslation(text: string): string {
   return text.slice(0, atSpace > 0 ? atSpace : TRANSLATION_MAX_CHARS);
 }
 
-// The first three senses, in order; a translation said twice keeps its first place.
+// The first three senses, in order, leaving out a rare one while a common one stands; a translation said
+// twice keeps its first place.
 export function formatSenseTranslations(senses: readonly Sense[]): string {
+  const common = senses.filter((sense) => !isRareSense(sense));
   const unique = new Set(
-    senses.slice(0, TRANSLATION_MAX_SENSES).flatMap((sense) => sense.translations),
+    (common.length > 0 ? common : senses).slice(0, TRANSLATION_MAX_SENSES).flatMap((sense) => sense.translations),
   );
   return cutTranslation([...unique].join(SEPARATOR));
+}
+
+// A stored line back into its translations: the senses joined them with the same separator.
+export function splitTranslations(text: string): string[] {
+  return text.split(SEPARATOR).filter((part) => part !== "");
+}
+
+// The translations a reader sees before asking for the rest.
+export const TRANSLATIONS_SHOWN = 3;
+
+// The first `TRANSLATIONS_SHOWN`, and how many wait behind «ver más».
+export function previewTranslations(items: readonly string[]): { shown: string[]; hidden: number } {
+  return { shown: items.slice(0, TRANSLATIONS_SHOWN), hidden: Math.max(0, items.length - TRANSLATIONS_SHOWN) };
 }

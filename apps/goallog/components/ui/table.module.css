@@ -20,7 +20,7 @@
   font-size: var(--pulsar-text-label-size);
   letter-spacing: var(--pulsar-text-label-tracking);
   line-height: 1.3;
-  text-transform: uppercase;
+  text-transform: none;
   color: var(--pulsar-muted);
 }
 
@@ -79,6 +79,16 @@
   margin-block-start: 3px;
   font-size: var(--pulsar-text-unit-size);
   white-space: nowrap;
+  color: var(--pulsar-muted);
+}
+
+/* The phone's line under the label (a plan's note): it wraps, so a long one
+   cannot push the page past the viewport. */
+.detailWrap {
+  display: block;
+  margin-block-start: 3px;
+  font-size: var(--pulsar-text-unit-size);
+  overflow-wrap: anywhere;
   color: var(--pulsar-muted);
 }
 
@@ -233,7 +243,7 @@
   display: none;
 }
 
-@media (min-width: 1024px) and (max-width: 1279px) {
+@media (min-width: 768px) and (max-width: 1279px) {
   .stackInCard .phone {
     display: block;
   }
@@ -253,7 +263,7 @@
   font-size: var(--pulsar-text-label-size);
   letter-spacing: var(--pulsar-text-label-tracking);
   line-height: 1.3;
-  text-transform: uppercase;
+  text-transform: none;
   color: var(--pulsar-muted);
 }
 
@@ -294,7 +304,7 @@
   font-weight: 400;
   letter-spacing: var(--pulsar-text-label-tracking);
   text-align: start;
-  text-transform: uppercase;
+  text-transform: none;
   color: var(--pulsar-muted);
 }
 
@@ -434,9 +444,9 @@
   min-block-size: 48px;
 }
 
-/* The month open beside the list is marked from 1024, where a list sits beside
+/* The month open beside the list is marked from 768, where a list sits beside
    its item. */
-@media (min-width: 1024px) {
+@media (min-width: 768px) {
   .stackRow.open {
     background: var(--pulsar-accent-soft);
     border-radius: 10px;

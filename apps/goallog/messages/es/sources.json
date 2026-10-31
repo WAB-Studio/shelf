@@ -1,4 +1,18 @@
 {
   "readingLookups": "diccionario",
-  "readingLookupsUnit": "{count, plural, one {búsqueda} other {búsquedas}}"
+  "readingLookupsUnit": "{count, plural, one {búsqueda} other {búsquedas}}",
+  "timelogTotal": "TimeLog · todo el computador",
+  "timelogTotalUnit": "{count, plural, one {minuto} other {minutos}}",
+  "timelogVsCode": "TimeLog · VS Code",
+  "timelogVsCodeUnit": "{count, plural, one {minuto} other {minutos}}",
+  "timelogTerminal": "TimeLog · Terminal",
+  "timelogTerminalUnit": "{count, plural, one {minuto} other {minutos}}",
+  "timelogBrowsers": "TimeLog · navegadores",
+  "timelogBrowsersUnit": "{count, plural, one {minuto} other {minutos}}",
+  "timelogWord": "TimeLog · Word",
+  "timelogWordUnit": "{count, plural, one {minuto} other {minutos}}",
+  "timelogExcel": "TimeLog · Excel",
+  "timelogExcelUnit": "{count, plural, one {minuto} other {minutos}}",
+  "timelogFigma": "TimeLog · Figma",
+  "timelogFigmaUnit": "{count, plural, one {minuto} other {minutos}}"
 }

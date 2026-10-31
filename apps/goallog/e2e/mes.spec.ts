@@ -247,7 +247,7 @@ test("a carried task with no estimate reads «de <mes>» alone and one with time
   }
 });
 
-test("a goal with no measure's empty month promises no time; the back and «Todos los meses» each reach their page (RP-30, RP-31)", async ({
+test("a goal with no measure's empty month promises no time; the back reaches the goal (RP-30, RP-31)", async ({
   person,
   browser,
   baseURL,
@@ -271,14 +271,10 @@ test("a goal with no measure's empty month promises no time; the back and «Todo
       const arrow = (await boxOf(back));
       expect(arrow.width).toBeGreaterThanOrEqual(44);
       expect(arrow.height).toBeGreaterThanOrEqual(44);
-      const all = page.getByRole("link", { name: "Todos los meses" });
-      expect((await boxOf(all)).height).toBeGreaterThanOrEqual(44);
+      await expect(page.getByRole("link", { name: "Todos los meses" })).toHaveCount(0);
 
       await back.click();
       await expect(page).toHaveURL(new RegExp(`/metas/${goalId}$`));
-      await page.goto(url);
-      await all.click();
-      await expect(page).toHaveURL(new RegExp(`/metas/${goalId}/meses$`));
     }
   } finally {
     await context.close();

@@ -341,7 +341,8 @@ test("RL-51: the census docs/wordbook/SPEC.md records is the one the app's own i
   }
 
   assert.equal(multiple, 171, "headwords carrying more than one named pronunciation");
-  assert.equal(interleaved, 23, "of those, the ones whose senses the gathering really moves");
+  // 23 before a rarely met sense stopped leading its entry: `mow` left, `angle` and `sob` joined.
+  assert.equal(interleaved, 24, "of those, the ones whose senses the gathering really moves");
   assert.equal(nameless, 2, "of those, the ones carrying a sense with no pronunciation (`can`, `pace`)");
   assert.equal(defectOf(index, "row"), null);
 });
@@ -392,4 +393,39 @@ test("RL-51: the homographs a stress inside the word really separates still answ
     assert.ok(blocks !== null, `${headword} stopped grouping`);
     assert.equal(blocks.length, 2, `${headword} drew ${blocks.length} blocks`);
   }
+});
+
+// --- the common sense leads (RL-43's rarity tiebreak, on the shipped asset) ---
+
+function leadTranslation(index: DictionaryIndex, headword: string): string {
+  return sensesOf(index, headword)[0].translations[0];
+}
+
+test("the common sense leads where the measured order has no row: bleak, cup and the initialism IT", () => {
+  const index = shippedIndex();
+  // `bleak` listed a river fish (alburno) before its adjective; `it` listed the initialism (IT) first.
+  assert.equal(leadTranslation(index, "bleak"), "pálido");
+  assert.equal(leadTranslation(index, "it"), "lo");
+  // `cup` led with an informal trophy sense, `Copa`.
+  assert.equal(leadTranslation(index, "cup"), "vaso");
+});
+
+test("a slang sense sits last: hinder answers as a verb, «nalgas» after it", () => {
+  const index = shippedIndex();
+  const senses = sensesOf(index, "hinder");
+  assert.equal(senses[0].pos, "v");
+  assert.equal(senses.at(-1)?.translations[0], "nalgas");
+});
+
+test("a headword with a measured order keeps it: leave is a verb before its noun", () => {
+  assert.equal(sensesOf(shippedIndex(), "leave")[0].pos, "v");
+  assert.equal(sensesOf(shippedIndex(), "grudge")[0].pos, "n");
+});
+
+test("a translation the Spanish frequency list lacks sits last in its sense, the rest keep the dictionary's order", () => {
+  const index = shippedIndex();
+  assert.deepEqual(sensesOf(index, "say")[0].translations.slice(0, 2), ["decir", "poner"]);
+  // «cargante» and the others the list lacks stand behind «penoso» and «pesado», which it knows.
+  assert.deepEqual(sensesOf(index, "cumbersome")[0].translations.slice(0, 3), ["penoso", "pesado", "cargante"]);
+  assert.equal(sensesOf(index, "cup")[0].translations.at(-1), "coquilla");
 });

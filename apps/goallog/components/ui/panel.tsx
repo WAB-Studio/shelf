@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import styles from "./panel.module.css";
 
 // The desktop card that groups one part of a screen (RNP-17): white ground,
-// 1px line, radius 14. Below 1024px it draws nothing, so the phone face is the
+// 1px line, radius 14. Below 768px it draws nothing, so the phone face is the
 // page's own column. Stack panels as siblings: the column's gap sets the space between them.
 export function Panel({
   children,
@@ -16,12 +16,12 @@ export function Panel({
 }: {
   children?: ReactNode;
   as?: "section" | "div";
-  // From 1024px a plain row of its children, no card: a title beside its acts.
+  // From 768px a plain row of its children, no card: a title beside its acts.
   row?: boolean;
   // A box at every width, for a note that stands apart on the phone too.
   bordered?: boolean;
   // A plain block on the phone, its rows touching, so the phone face keeps its
-  // own stacking; from 1024px the card, without the gap between rows.
+  // own stacking; from 768px the card, without the gap between rows.
   stacked?: boolean;
   label?: string;
   // `plain`: on paper no card, only what it holds.
@@ -43,7 +43,7 @@ export function Panel({
   );
 }
 
-// Cards side by side from 1024px, tops aligned, two columns at every width;
+// Cards side by side from 768px, tops aligned, two columns at every width;
 // below, the children stay the parent's own items.
 // `from="wide"`: side by side only from 1280px, for cards that share the
 // screen with another column; below, one full-width card under the other.

@@ -2,7 +2,7 @@
 
 import { useId, type ReactNode } from "react";
 import { Plus, X } from "lucide-react";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { Select } from "@radix-ui/themes";
 
 import { DateInput } from "./date-input";
@@ -78,6 +78,7 @@ export function FilterDate({
   onValueChange: (v: string) => void;
   width?: number;
 }) {
+  const locale = useLocale();
   const controlId = useId();
 
   return (

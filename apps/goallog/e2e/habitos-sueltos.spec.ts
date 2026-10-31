@@ -86,7 +86,7 @@ for (const width of [360, 1280]) {
         await page.getByRole("link", { name: "Añadir un hábito", exact: true }).or(page.getByRole("button", { name: "Añadir un hábito", exact: true })).click();
         await expect(page).toHaveURL(/\/metas\/habitos\/nuevo$/);
         await expect(page.getByRole("heading", { level: 1, name: "Hábito nuevo" })).toBeVisible();
-        await expect(page.getByLabel("qué es", { exact: true })).toBeVisible();
+        await expect(page.getByLabel("Qué es", { exact: true })).toBeVisible();
         await expect(page.getByLabel("nota, si quieres")).toBeVisible();
         const text = await mainLower(page);
         for (const part of ["cada cuándo", "qué lo da por hecho", "una vez", "un número"]) expect(text).toContain(part);
@@ -107,7 +107,7 @@ test.describe("the habit form", () => {
     // Kills: writing the habit under a goal id; dropping the note; not revalidating the list.
     const { page, context } = await visit(browser, baseURL, person, "/metas/habitos/nuevo", 360);
     try {
-      await page.getByLabel("qué es", { exact: true }).fill("Bañarse");
+      await page.getByLabel("Qué es", { exact: true }).fill("Bañarse");
       await page.getByLabel("nota, si quieres").fill("Con agua fría.");
       await page.getByRole("button", { name: "Añadirlo", exact: true }).click();
       await expect(page).toHaveURL(/\/metas$/);
@@ -127,7 +127,7 @@ test.describe("the habit form", () => {
     // Kills: storing an empty string for an absent note (the CHECK would refuse it, or a blank row would draw).
     const { page, context } = await visit(browser, baseURL, person, "/metas/habitos/nuevo", 360);
     try {
-      await page.getByLabel("qué es", { exact: true }).fill("Estirar");
+      await page.getByLabel("Qué es", { exact: true }).fill("Estirar");
       await page.getByRole("button", { name: "Añadirlo", exact: true }).click();
       await expect(page).toHaveURL(/\/metas$/);
       const rows = await habitRows(db, person, "Estirar");
@@ -143,7 +143,7 @@ test.describe("the habit form", () => {
     // Kills: a form that sends what the schema refuses; a sentence away from its field.
     const { page, context } = await visit(browser, baseURL, person, "/metas/habitos/nuevo", 360);
     try {
-      await page.getByLabel("qué es", { exact: true }).fill("Correr");
+      await page.getByLabel("Qué es", { exact: true }).fill("Correr");
       await page.getByRole("radio", { name: /veces por semana/ }).or(page.getByRole("button", { name: /veces por semana/ })).first().click();
       await page.getByLabel("veces por semana", { exact: true }).fill("9");
       await page.getByRole("button", { name: "Añadirlo", exact: true }).click();
@@ -174,7 +174,7 @@ test.describe("the habit form", () => {
     const { page, context } = await visit(browser, baseURL, person, "/metas/habitos/nuevo", 360);
     try {
       await holdActions(page, 1500);
-      await page.getByLabel("qué es", { exact: true }).fill("Meditar");
+      await page.getByLabel("Qué es", { exact: true }).fill("Meditar");
       await page.getByRole("button", { name: "Añadirlo", exact: true }).click();
       const pending = page.getByRole("button", { name: "Añadiéndolo…", exact: true });
       await expect(pending).toBeVisible();
@@ -191,7 +191,7 @@ test.describe("the habit form", () => {
     const { page, context } = await visit(browser, baseURL, person, "/metas/habitos/nuevo", 360);
     try {
       const posts = postCounter(page);
-      await page.getByLabel("qué es", { exact: true }).fill("No lo escribas");
+      await page.getByLabel("Qué es", { exact: true }).fill("No lo escribas");
       await page.getByRole("link", { name: /Metas/ }).first().click();
       await expect(page).toHaveURL(/\/metas$/);
       expect(posts).toEqual([]);

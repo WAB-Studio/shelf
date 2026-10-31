@@ -98,9 +98,11 @@ this gets built, and no schema, table or column is "prepared for" it.
     they fold.
   - Measured 2026-09-20 through the app's own `buildIndex` and `groupFor`: of **58,944** indexed
     headwords, **171 carry more than one pronunciation**, and **23 of those interleave** in the order
-    the screen really draws, after RL-43's sort. They are `a`, `bass`, `bow`, `desert`, `earth`,
-    `english`, `flush`, `frank`, `italic`, `job`, `lead`, `less`, `minute`, `mow`, `mush`,
-    `parmesan`, `polish`, `renaissance`, `row`, `second`, `subject`, `sun` and `tear`: the
+    the screen really draws, after RL-43's sort (**24** since 2026-10-30, when a rarely met sense — a
+    species, a trade label, an initialism — stopped leading: `mow` left the list, `angle` and `sob` joined
+    it). They are `a`, `angle`, `bass`, `bow`, `desert`, `earth`,
+    `english`, `flush`, `frank`, `italic`, `job`, `lead`, `less`, `minute`, `mush`,
+    `parmesan`, `polish`, `renaissance`, `row`, `second`, `sob`, `subject`, `sun` and `tear`: the
     homographs a reader of English actually meets.
   - **19 headwords split on a notation accident alone and stop splitting**: `buffalo`, `calliope`,
     `canton`, `daisy`, `facebook`, `flora`, `god`, `ham`, `hope`, `iron curtain`, `john`, `majesty`,
@@ -311,6 +313,10 @@ this gets built, and no schema, table or column is "prepared for" it.
   - Proved 2026-10-17, CI run 38992454179 on 3cec823e: `apps/wordbook/e2e/export.spec.ts:666,673,679,687,697,704,739` (no card: no CSV and why; the definition on the back; the words left out named; the link follows a delete and a sync) and `apps/wordbook/lib/log/anki.test.ts:106,116,123,131`, green.
 - [x] **RL-68** — The reader reviews the words in their record inside the app, scheduled by spaced repetition (FSRS). Decided by the user 2026-10-15; built straight from these words, no boards, decided by the user 2026-10-30.
   - `/repaso`, reached from `/registro`: the words already learning whose time came, then up to 20 new ones a day, the most looked up first; a sentence, a miss and a pending row stay out. The word, «Mostrar respuesta», then «Otra vez» · «Difícil» · «Bien» · «Fácil», each naming its interval. The cards live on the device (`reading-review`); the copy (RL-22) does not carry them yet.
+- [ ] **RL-78** *(supersedes the sentence clause of RL-68; RL-68 stays standing until the user retires it)* — The review also asks a phrase the reader translated, scheduled by the same FSRS logic as a word; a phrase still waiting for its answer or never translated stays out. A card shows one sense of a word, the one the reader saw, with its part of speech and its definition when it has one; a phrase shows its translation. An entry answered «Otra vez» comes back in the same session once it is due: the session is not finished while one waits, and says so. Where the review mixes words and phrases it counts «entradas», not «palabras». Decided by the user 2026-10-30.
+- [ ] **RL-79** *(supersedes the «all of its Spanish translations» clause of RL-04)* — A word's translations show the first three on one comma-separated line and «ver N más» for the rest, in the answer to a word, in its row of `/registro` and in its history. Decided by the user 2026-10-30.
+- [ ] **RL-80** *(refines RL-76)* — Opening, reloading or returning to an address that already carries the query (`/?q=book`) answers it again but records no lookup; only what the reader types or follows a link to is a lookup. Decided 2026-10-30 after the critic: a reload inflated the count.
+- [ ] **RL-81** *(refines RL-43 and RL-79)* — Inside a sense, a translation that a Spanish word-frequency list does not vouch for (none of its content words among the 20,000 commonest) moves behind the rest; the dictionary's order stands for every other and nothing is promoted over a sibling. The order is written into the dictionary asset when it is built, so the answer, the three shown with «ver N más» and the line saved for a new lookup all follow it and the device receives no list. The list is hermitdave/FrequencyWords, OpenSubtitles 2018 Spanish, CC BY-SA 4.0; its credit is on `/cuenta`. Decided by the user 2026-10-30.
 - [x] **RL-28** — When a search finds nothing and the word looks like a typo of one the dictionary
   has, the answer offers the words it might have been, and reaching one of them is a tap. The
   suggestion is computed on the device and touches the network on no keystroke.

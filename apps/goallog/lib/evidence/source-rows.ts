@@ -1,5 +1,7 @@
 import type { SourceKey } from "@/i18n/translator";
 
+import { TIMELOG_SOURCES, TIMELOG_UNIT } from "./timelog-apps";
+
 
 /**
  * Every `goals.evidence_sources` row the app declares, next to the readers
@@ -15,4 +17,5 @@ export type EvidenceSourceRow = {
 
 export const SOURCE_ROWS: readonly EvidenceSourceRow[] = [
   { key: "reading_lookups", labelKey: "sources.readingLookups", unit: "searches" },
+  ...TIMELOG_SOURCES.map((source) => ({ key: source.key, labelKey: source.labelKey, unit: TIMELOG_UNIT })),
 ];

@@ -1,0 +1,11 @@
+{
+  "brand": "TimeLog",
+  "months": ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"],
+  "monthsShort": ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"],
+  "weekdays": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"],
+  "weekdaysShort": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+  "weekdaysInitial": ["M", "T", "W", "T", "F", "S", "S"],
+  "dayShort": "{month} {day}",
+  "language": "Español",
+  "languageLabel": "Switch the language to Spanish"
+}

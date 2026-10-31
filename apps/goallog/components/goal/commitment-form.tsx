@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 
@@ -31,6 +31,8 @@ export type CommitmentFormProps = {
   // Cadence-only edit (RP-127): the form opens on the row's cadence, asks for nothing else and saves
   // through `editCadence`. `goalName` then names the place the way back and «Cancelar» return to.
   edit?: { commitmentId: string; cadence: Cadence; name?: string };
+  // What the edit screen offers under its buttons: the commitment's name, retirement and delete.
+  foot?: ReactNode;
 };
 
 // RP-12's five cadences (`lib/day/types.ts`'s `Cadence`), in the order of
@@ -63,7 +65,7 @@ const THRESHOLD_ERRORS: MessageKey[] = ["plan.errors.thresholdInvalid"];
  * refuse never leaves the device — the same shape `NewGoalForm` already
  * takes. No new server code.
  */
-export function CommitmentForm({ goalId, goalName, hasMeasure, measureUnit, sources, edit }: CommitmentFormProps) {
+export function CommitmentForm({ goalId, goalName, hasMeasure, measureUnit, sources, edit, foot }: CommitmentFormProps) {
   const t = useTranslations();
   const router = useRouter();
   // Held until the answer: a transition would end before it, and a second tap would write a second row.
@@ -91,6 +93,12 @@ export function CommitmentForm({ goalId, goalName, hasMeasure, measureUnit, sour
 
   const weekdayShort = t.raw("day.cadence.weekdayShort") as string[];
   const weekdayFull = t.raw("day.cadence.weekdayFull") as string[];
+
+  // A source counted in time is not satisfied by one minute: offer half an hour until the person writes their own.
+  function pickSource(source: CommitmentFormProps["sources"][number]) {
+    setSourceKey(source.key);
+    setThreshold((current) => (current === "1" || current === "30" ? (source.unit === "minutos" ? "30" : "1") : current));
+  }
 
   function toggleWeekday(day: number) {
     setWeekdays((current) =>
@@ -347,7 +355,7 @@ export function CommitmentForm({ goalId, goalName, hasMeasure, measureUnit, sour
           <>
             <ChipRow>
               {sources.map((source) => (
-                <Chip key={source.key} selected={sourceKey === source.key} onClick={() => setSourceKey(source.key)}>
+                <Chip key={source.key} selected={sourceKey === source.key} onClick={() => pickSource(source)}>
                   {t(source.labelKey)}
                 </Chip>
               ))}
@@ -390,6 +398,7 @@ export function CommitmentForm({ goalId, goalName, hasMeasure, measureUnit, sour
           <Link href={returnTo}>{t("plan.commitmentForm.cancel")}</Link>
         </Button>
       ) : null}
+      {foot}
     </Page>
   );
 }

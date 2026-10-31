@@ -302,9 +302,9 @@ test.describe("«Editar» (RP-104)", () => {
     try {
       await mainLower(page);
       const sheet = await openSheet(page);
-      await expect(sheet.getByLabel("nombre", { exact: true })).toHaveValue("Meditar");
+      await expect(sheet.getByLabel("Nombre", { exact: true })).toHaveValue("Meditar");
       await expect(sheet.getByLabel("nota, si quieres", { exact: true })).toHaveValue("Cinco minutos.");
-      await sheet.getByLabel("nombre", { exact: true }).fill("Meditar al despertar");
+      await sheet.getByLabel("Nombre", { exact: true }).fill("Meditar al despertar");
       await sheet.getByLabel("nota, si quieres", { exact: true }).fill("Diez minutos, sin celular.");
       await sheet.getByRole("button", { name: "Guardarlo", exact: true }).click();
       await expect(dialog(page)).toHaveCount(0);
@@ -350,7 +350,7 @@ test.describe("«Editar» (RP-104)", () => {
       const sheet = await openSheet(page);
       await holdActions(page, 1500);
       const posts = postCounter(page);
-      await sheet.getByLabel("nombre", { exact: true }).fill("Meditar al despertar");
+      await sheet.getByLabel("Nombre", { exact: true }).fill("Meditar al despertar");
       await sheet.getByRole("button", { name: "Guardarlo", exact: true }).click();
       const pending = sheet.getByRole("button", { name: "Guardando…", exact: true });
       await expect(pending).toBeVisible();
@@ -374,10 +374,10 @@ test.describe("«Editar» (RP-104)", () => {
       await mainLower(page);
       const sheet = await openSheet(page);
       const posts = postCounter(page);
-      await sheet.getByLabel("nombre", { exact: true }).fill("");
+      await sheet.getByLabel("Nombre", { exact: true }).fill("");
       await sheet.getByRole("button", { name: "Guardarlo", exact: true }).click();
       await expect(sheet.getByText("Escribe un nombre.", { exact: true })).toBeVisible();
-      await sheet.getByLabel("nombre", { exact: true }).fill("Meditar");
+      await sheet.getByLabel("Nombre", { exact: true }).fill("Meditar");
       await sheet.getByLabel("nota, si quieres", { exact: true }).fill("x".repeat(2001));
       await sheet.getByRole("button", { name: "Guardarlo", exact: true }).click();
       await expect(sheet.getByText("La nota pasa de 2 000 caracteres.", { exact: true })).toBeVisible();
@@ -398,7 +398,7 @@ test.describe("«Editar» (RP-104)", () => {
       await mainLower(page);
       const sheet = await openSheet(page);
       await db`update goals.commitments set retired_at = now() where id = ${id}`;
-      await sheet.getByLabel("nombre", { exact: true }).fill("Otro nombre");
+      await sheet.getByLabel("Nombre", { exact: true }).fill("Otro nombre");
       await sheet.getByRole("button", { name: "Guardarlo", exact: true }).click();
       await expect(sheet.getByText("Ese hábito ya está retirado.", { exact: true })).toBeVisible();
       await expect(dialog(page)).toHaveCount(1);
@@ -417,7 +417,7 @@ test.describe("«Editar» (RP-104)", () => {
       await mainLower(page);
       const sheet = await openSheet(page);
       const posts = postCounter(page);
-      await sheet.getByLabel("nombre", { exact: true }).fill("No lo guardes");
+      await sheet.getByLabel("Nombre", { exact: true }).fill("No lo guardes");
       await sheet.getByRole("button", { name: "Cancelar", exact: true }).click();
       await expect(dialog(page)).toHaveCount(0);
       await expect(page.getByRole("heading", { level: 1, name: "Meditar" })).toBeVisible();

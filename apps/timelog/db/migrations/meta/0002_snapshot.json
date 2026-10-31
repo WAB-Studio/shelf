@@ -1,0 +1,817 @@
+{
+  "id": "2757f133-bafc-44b4-9821-29fefa516e3b",
+  "prevId": "ecb7be3a-da34-466c-9315-ef85431f8790",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "timelog.access_keys": {
+      "name": "access_keys",
+      "schema": "timelog",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "key_hash": {
+          "name": "key_hash",
+          "type": "bytea",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "hint": {
+          "name": "hint",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "last_used_at": {
+          "name": "last_used_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "revoked_at": {
+          "name": "revoked_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "access_keys_user_id_idx": {
+          "name": "access_keys_user_id_idx",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "access_keys_user_id_users_id_fk": {
+          "name": "access_keys_user_id_users_id_fk",
+          "tableFrom": "access_keys",
+          "tableTo": "users",
+          "schemaTo": "auth",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "access_keys_key_hash_unique": {
+          "name": "access_keys_key_hash_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "key_hash"
+          ]
+        }
+      },
+      "policies": {
+        "access_keys_select_self": {
+          "name": "access_keys_select_self",
+          "as": "PERMISSIVE",
+          "for": "SELECT",
+          "to": [
+            "authenticated"
+          ],
+          "using": "(select auth.uid()) = \"timelog\".\"access_keys\".\"user_id\""
+        },
+        "access_keys_insert_self": {
+          "name": "access_keys_insert_self",
+          "as": "PERMISSIVE",
+          "for": "INSERT",
+          "to": [
+            "authenticated"
+          ],
+          "withCheck": "(select auth.uid()) = \"timelog\".\"access_keys\".\"user_id\""
+        },
+        "access_keys_update_self": {
+          "name": "access_keys_update_self",
+          "as": "PERMISSIVE",
+          "for": "UPDATE",
+          "to": [
+            "authenticated"
+          ],
+          "using": "(select auth.uid()) = \"timelog\".\"access_keys\".\"user_id\" and \"timelog\".\"access_keys\".\"revoked_at\" is null",
+          "withCheck": "(select auth.uid()) = \"timelog\".\"access_keys\".\"user_id\""
+        }
+      },
+      "checkConstraints": {
+        "access_keys_name_length": {
+          "name": "access_keys_name_length",
+          "value": "char_length(\"timelog\".\"access_keys\".\"name\") between 1 and 60"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "timelog.app_seconds": {
+      "name": "app_seconds",
+      "schema": "timelog",
+      "columns": {
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "device": {
+          "name": "device",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "day": {
+          "name": "day",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "app": {
+          "name": "app",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "seconds": {
+          "name": "seconds",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "received_at": {
+          "name": "received_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "app_seconds_user_id_users_id_fk": {
+          "name": "app_seconds_user_id_users_id_fk",
+          "tableFrom": "app_seconds",
+          "tableTo": "users",
+          "schemaTo": "auth",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "app_seconds_user_id_device_day_app_pk": {
+          "name": "app_seconds_user_id_device_day_app_pk",
+          "columns": [
+            "user_id",
+            "device",
+            "day",
+            "app"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {
+        "app_seconds_select_self": {
+          "name": "app_seconds_select_self",
+          "as": "PERMISSIVE",
+          "for": "SELECT",
+          "to": [
+            "authenticated"
+          ],
+          "using": "(select auth.uid()) = \"timelog\".\"app_seconds\".\"user_id\""
+        }
+      },
+      "checkConstraints": {
+        "app_seconds_seconds_range": {
+          "name": "app_seconds_seconds_range",
+          "value": "\"timelog\".\"app_seconds\".\"seconds\" between 1 and 86400"
+        },
+        "app_seconds_device_length": {
+          "name": "app_seconds_device_length",
+          "value": "char_length(\"timelog\".\"app_seconds\".\"device\") between 1 and 80"
+        },
+        "app_seconds_app_length": {
+          "name": "app_seconds_app_length",
+          "value": "char_length(\"timelog\".\"app_seconds\".\"app\") between 1 and 120"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "timelog.claude_code_seconds": {
+      "name": "claude_code_seconds",
+      "schema": "timelog",
+      "columns": {
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "device": {
+          "name": "device",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "day": {
+          "name": "day",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "seconds": {
+          "name": "seconds",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "received_at": {
+          "name": "received_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "claude_code_seconds_user_id_users_id_fk": {
+          "name": "claude_code_seconds_user_id_users_id_fk",
+          "tableFrom": "claude_code_seconds",
+          "tableTo": "users",
+          "schemaTo": "auth",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "claude_code_seconds_user_id_device_day_pk": {
+          "name": "claude_code_seconds_user_id_device_day_pk",
+          "columns": [
+            "user_id",
+            "device",
+            "day"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {
+        "claude_code_seconds_select_self": {
+          "name": "claude_code_seconds_select_self",
+          "as": "PERMISSIVE",
+          "for": "SELECT",
+          "to": [
+            "authenticated"
+          ],
+          "using": "(select auth.uid()) = \"timelog\".\"claude_code_seconds\".\"user_id\""
+        }
+      },
+      "checkConstraints": {
+        "claude_code_seconds_seconds_range": {
+          "name": "claude_code_seconds_seconds_range",
+          "value": "\"timelog\".\"claude_code_seconds\".\"seconds\" between 1 and 86400"
+        },
+        "claude_code_seconds_device_length": {
+          "name": "claude_code_seconds_device_length",
+          "value": "char_length(\"timelog\".\"claude_code_seconds\".\"device\") between 1 and 80"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "timelog.claude_sessions": {
+      "name": "claude_sessions",
+      "schema": "timelog",
+      "columns": {
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "device": {
+          "name": "device",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "day": {
+          "name": "day",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "session": {
+          "name": "session",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "project": {
+          "name": "project",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "first_at": {
+          "name": "first_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "last_at": {
+          "name": "last_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "seconds": {
+          "name": "seconds",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "received_at": {
+          "name": "received_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "claude_sessions_user_id_users_id_fk": {
+          "name": "claude_sessions_user_id_users_id_fk",
+          "tableFrom": "claude_sessions",
+          "tableTo": "users",
+          "schemaTo": "auth",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "claude_sessions_user_id_device_day_session_pk": {
+          "name": "claude_sessions_user_id_device_day_session_pk",
+          "columns": [
+            "user_id",
+            "device",
+            "day",
+            "session"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {
+        "claude_sessions_select_self": {
+          "name": "claude_sessions_select_self",
+          "as": "PERMISSIVE",
+          "for": "SELECT",
+          "to": [
+            "authenticated"
+          ],
+          "using": "(select auth.uid()) = \"timelog\".\"claude_sessions\".\"user_id\""
+        }
+      },
+      "checkConstraints": {
+        "claude_sessions_seconds_range": {
+          "name": "claude_sessions_seconds_range",
+          "value": "\"timelog\".\"claude_sessions\".\"seconds\" between 1 and 86400"
+        },
+        "claude_sessions_device_length": {
+          "name": "claude_sessions_device_length",
+          "value": "char_length(\"timelog\".\"claude_sessions\".\"device\") between 1 and 80"
+        },
+        "claude_sessions_session_length": {
+          "name": "claude_sessions_session_length",
+          "value": "char_length(\"timelog\".\"claude_sessions\".\"session\") between 1 and 80"
+        },
+        "claude_sessions_project_length": {
+          "name": "claude_sessions_project_length",
+          "value": "char_length(\"timelog\".\"claude_sessions\".\"project\") between 1 and 200"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "timelog.page_seconds": {
+      "name": "page_seconds",
+      "schema": "timelog",
+      "columns": {
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "device": {
+          "name": "device",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "day": {
+          "name": "day",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "host": {
+          "name": "host",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "url": {
+          "name": "url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "title": {
+          "name": "title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "seconds": {
+          "name": "seconds",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "received_at": {
+          "name": "received_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "page_seconds_user_id_users_id_fk": {
+          "name": "page_seconds_user_id_users_id_fk",
+          "tableFrom": "page_seconds",
+          "tableTo": "users",
+          "schemaTo": "auth",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "page_seconds_user_id_device_day_url_title_pk": {
+          "name": "page_seconds_user_id_device_day_url_title_pk",
+          "columns": [
+            "user_id",
+            "device",
+            "day",
+            "url",
+            "title"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {
+        "page_seconds_select_self": {
+          "name": "page_seconds_select_self",
+          "as": "PERMISSIVE",
+          "for": "SELECT",
+          "to": [
+            "authenticated"
+          ],
+          "using": "(select auth.uid()) = \"timelog\".\"page_seconds\".\"user_id\""
+        }
+      },
+      "checkConstraints": {
+        "page_seconds_seconds_range": {
+          "name": "page_seconds_seconds_range",
+          "value": "\"timelog\".\"page_seconds\".\"seconds\" between 1 and 86400"
+        },
+        "page_seconds_device_length": {
+          "name": "page_seconds_device_length",
+          "value": "char_length(\"timelog\".\"page_seconds\".\"device\") between 1 and 80"
+        },
+        "page_seconds_host_shape": {
+          "name": "page_seconds_host_shape",
+          "value": "\"timelog\".\"page_seconds\".\"host\" ~ '^[a-z0-9]([a-z0-9.-]{0,118}[a-z0-9])?$'"
+        },
+        "page_seconds_url_shape": {
+          "name": "page_seconds_url_shape",
+          "value": "\"timelog\".\"page_seconds\".\"url\" ~ '^https?://' and \"timelog\".\"page_seconds\".\"url\" !~ '[?#]' and char_length(\"timelog\".\"page_seconds\".\"url\") <= 500"
+        },
+        "page_seconds_title_length": {
+          "name": "page_seconds_title_length",
+          "value": "char_length(\"timelog\".\"page_seconds\".\"title\") <= 300"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "timelog.site_seconds": {
+      "name": "site_seconds",
+      "schema": "timelog",
+      "columns": {
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "device": {
+          "name": "device",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "day": {
+          "name": "day",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "host": {
+          "name": "host",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "seconds": {
+          "name": "seconds",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "received_at": {
+          "name": "received_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "site_seconds_user_id_users_id_fk": {
+          "name": "site_seconds_user_id_users_id_fk",
+          "tableFrom": "site_seconds",
+          "tableTo": "users",
+          "schemaTo": "auth",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "site_seconds_user_id_device_day_host_pk": {
+          "name": "site_seconds_user_id_device_day_host_pk",
+          "columns": [
+            "user_id",
+            "device",
+            "day",
+            "host"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {
+        "site_seconds_select_self": {
+          "name": "site_seconds_select_self",
+          "as": "PERMISSIVE",
+          "for": "SELECT",
+          "to": [
+            "authenticated"
+          ],
+          "using": "(select auth.uid()) = \"timelog\".\"site_seconds\".\"user_id\""
+        }
+      },
+      "checkConstraints": {
+        "site_seconds_seconds_range": {
+          "name": "site_seconds_seconds_range",
+          "value": "\"timelog\".\"site_seconds\".\"seconds\" between 1 and 86400"
+        },
+        "site_seconds_device_length": {
+          "name": "site_seconds_device_length",
+          "value": "char_length(\"timelog\".\"site_seconds\".\"device\") between 1 and 80"
+        },
+        "site_seconds_host_shape": {
+          "name": "site_seconds_host_shape",
+          "value": "\"timelog\".\"site_seconds\".\"host\" ~ '^[a-z0-9]([a-z0-9.-]{0,118}[a-z0-9])?$'"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "timelog.window_seconds": {
+      "name": "window_seconds",
+      "schema": "timelog",
+      "columns": {
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "device": {
+          "name": "device",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "day": {
+          "name": "day",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "app": {
+          "name": "app",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "title": {
+          "name": "title",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "seconds": {
+          "name": "seconds",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "received_at": {
+          "name": "received_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "window_seconds_user_id_users_id_fk": {
+          "name": "window_seconds_user_id_users_id_fk",
+          "tableFrom": "window_seconds",
+          "tableTo": "users",
+          "schemaTo": "auth",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "window_seconds_user_id_device_day_app_title_pk": {
+          "name": "window_seconds_user_id_device_day_app_title_pk",
+          "columns": [
+            "user_id",
+            "device",
+            "day",
+            "app",
+            "title"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {
+        "window_seconds_select_self": {
+          "name": "window_seconds_select_self",
+          "as": "PERMISSIVE",
+          "for": "SELECT",
+          "to": [
+            "authenticated"
+          ],
+          "using": "(select auth.uid()) = \"timelog\".\"window_seconds\".\"user_id\""
+        }
+      },
+      "checkConstraints": {
+        "window_seconds_seconds_range": {
+          "name": "window_seconds_seconds_range",
+          "value": "\"timelog\".\"window_seconds\".\"seconds\" between 1 and 86400"
+        },
+        "window_seconds_device_length": {
+          "name": "window_seconds_device_length",
+          "value": "char_length(\"timelog\".\"window_seconds\".\"device\") between 1 and 80"
+        },
+        "window_seconds_app_length": {
+          "name": "window_seconds_app_length",
+          "value": "char_length(\"timelog\".\"window_seconds\".\"app\") between 1 and 120"
+        },
+        "window_seconds_title_length": {
+          "name": "window_seconds_title_length",
+          "value": "char_length(\"timelog\".\"window_seconds\".\"title\") between 1 and 300"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "timelog.allowed_emails": {
+      "name": "allowed_emails",
+      "schema": "timelog",
+      "columns": {
+        "email": {
+          "name": "email",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "added_at": {
+          "name": "added_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "allowed_emails_email_shape": {
+          "name": "allowed_emails_email_shape",
+          "value": "\"timelog\".\"allowed_emails\".\"email\" = lower(btrim(\"timelog\".\"allowed_emails\".\"email\")) and position('@' in \"timelog\".\"allowed_emails\".\"email\") > 1"
+        }
+      },
+      "isRLSEnabled": true
+    }
+  },
+  "enums": {},
+  "schemas": {},
+  "sequences": {},
+  "roles": {},
+  "policies": {},
+  "views": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}

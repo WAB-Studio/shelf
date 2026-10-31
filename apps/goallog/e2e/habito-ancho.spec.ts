@@ -97,7 +97,7 @@ for (const width of WIDTHS) {
         await centred(page, width, 900);
         const sheet = dialog(page);
         await expect(sheet.getByRole("button", { name: "Guardarlo", exact: true })).toBeVisible();
-        await sheet.getByLabel("nombre", { exact: true }).fill("Otro nombre");
+        await sheet.getByLabel("Nombre", { exact: true }).fill("Otro nombre");
         await sheet.getByLabel("nota, si quieres", { exact: true }).fill("Otra nota");
         await sheet.getByRole("button", { name: "Cancelar", exact: true }).click();
         await expect(dialog(page)).toHaveCount(0);
