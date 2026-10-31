@@ -632,7 +632,7 @@
     "allLabels": "Todas las etiquetas",
     "typeLabel": "Tipo",
     "descriptionLabel": "Descripción",
-    "listMeta": "{count} · neto",
+    "listMeta": "{count, plural, =1 {# movimiento} other {# movimientos}}",
     "listMetaAdjustments": "{count, plural, =1 {# diferencia} other {# diferencias}}",
     "export": "Exportar",
     "emptyTitle": "Todavía no hay movimientos",
