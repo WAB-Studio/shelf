@@ -158,7 +158,7 @@ test("at 1280 a goal with no measure draws no empty card (RNP-17)", async ({
   try {
     await page.setViewportSize({ width: 1280, height: 800 });
     await page.goto(`/metas/${goalId}`);
-    await expect(page.getByText("cero fases", { exact: true })).toHaveCount(0);
+    await expect(page.getByText("Cero fases", { exact: true })).toHaveCount(0);
     await expect(page.locator("main")).toHaveCount(1);
 
     const cards = await page.locator("main").evaluate((main) =>

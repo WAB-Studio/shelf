@@ -351,8 +351,9 @@ test.describe("pestañas y riel", () => {
         return { background: style.backgroundColor, ink: style.color };
       });
       expect(colours.background).not.toBe("rgb(255, 255, 255)");
-      expect(colours.background).toBe("rgb(22, 27, 32)");
-      expect(colours.ink).toBe("rgb(231, 236, 241)");
+      // The balloon wears the brand's soft navy (DESIGN «Naranja y marino»), the dark rail's own active fill.
+      expect(colours.background).toBe("rgb(31, 65, 128)");
+      expect(colours.ink).toBe("rgb(241, 245, 251)");
     } finally {
       await context.close();
     }

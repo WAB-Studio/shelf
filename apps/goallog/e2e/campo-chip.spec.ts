@@ -1,9 +1,9 @@
 import { test, expect, settled, visit } from "./fixtures";
 
-// UX 303 and 307: a field's label is Archivo 13 in ink secondary, the hint keeps
+// UX 303 and 307: a field's label is Archivo 14 in ink secondary, the hint keeps
 // 20 px before the next control, and a selected chip is the soft accent fill,
 // never the solid fill of the primary button.
-test("a field label is Archivo 13 and a selected cadence chip is not the primary button's fill", async ({ page }) => {
+test("a field label is Archivo 14 and a selected cadence chip is not the primary button's fill", async ({ page }) => {
   await page.goto("/metas/nueva");
   await page.getByLabel("nombre").fill(`Meta campo ${Date.now()}`);
   await page.getByRole("button", { name: "Abrirla" }).click();
@@ -20,7 +20,7 @@ test("a field label is Archivo 13 and a selected cadence chip is not the primary
   });
   expect(label.family).toMatch(/archivo/i);
   expect(label.family).not.toMatch(/mono/i);
-  expect(label.size).toBe("13px");
+  expect(label.size).toBe("14px");
   expect(label.transform).toBe("none");
 
   const chip = page.getByRole("button", { pressed: true }).first();

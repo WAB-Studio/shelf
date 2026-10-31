@@ -108,6 +108,6 @@ for (const scheme of ["light", "dark"] as const) {
     expect(mark.declared.image).toBe("none");
     expect(mark.declared.backgroundColor).toBe(accent);
     expect(mark.evidence.ring).toContain(accent);
-    expect(rgb(scheme === "light" ? "#1C6E5A" : "#4FBEA0")).toBe(accent);
+    expect(rgb(scheme === "light" ? "#C2410C" : "#FF8A4C")).toBe(accent);
   });
 }

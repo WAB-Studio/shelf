@@ -58,7 +58,7 @@ function token(page: Page, name: "--pulsar-muted" | "--pulsar-quiet"): Promise<s
   }, name);
 }
 
-type Seen = { text: string; color: string; ratio: number };
+type Seen = { text: string; color: string; muted: string; ratio: number };
 
 // Every visible element of one primitive's unit part, its colour and its contrast against the first painted ground.
 function seen(page: Page, part: "figure-unit" | "table-unit" | "table-header-unit" | "table-chevron"): Promise<Seen[]> {
@@ -82,11 +82,18 @@ function seen(page: Page, part: "figure-unit" | "table-unit" | "table-header-uni
         .filter((el) => el.getClientRects().length > 0)
         .map((el) => {
           const color = getComputedStyle(el).color;
+          // The navy block re-speaks `--pulsar-muted` inside itself (DESIGN «Naranja y marino»): the token is read where the unit stands.
+          const probe = document.createElement("i");
+          probe.style.color = "var(--pulsar-muted)";
+          el.append(probe);
+          const muted = getComputedStyle(probe).color;
+          probe.remove();
           const a = luminance(channels(color));
           const b = luminance(ground(el));
           return {
             text: (el.textContent ?? "").trim(),
             color,
+            muted,
             ratio: (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05),
           };
         });
@@ -95,9 +102,10 @@ function seen(page: Page, part: "figure-unit" | "table-unit" | "table-header-uni
   );
 }
 
-function allPaint(units: Seen[], color: string, what: string) {
+// `color` null: the unit takes the muted token as it resolves where the unit stands.
+function allPaint(units: Seen[], color: string | null, what: string) {
   expect(units.length, `${what}: at least one is on screen`).toBeGreaterThan(0);
-  for (const unit of units) expect(unit.color, `${what} «${unit.text}»`).toBe(color);
+  for (const unit of units) expect(unit.color, `${what} «${unit.text}»`).toBe(color ?? unit.muted);
 }
 
 for (const face of FACES) {
@@ -110,7 +118,7 @@ for (const face of FACES) {
       expect(muted, "the face has two different tokens").not.toBe(quiet);
       const units = await seen(page, "figure-unit");
       expect(units.map((u) => u.text)).toContain("búsquedas");
-      allPaint(units, muted, "Figure unit");
+      allPaint(units, null, "Figure unit");
     } finally {
       await close();
     }
@@ -127,8 +135,9 @@ for (const [width, where] of [[360, "/exportar"], [1280, "/metas/<id>/revision"]
     const { page, close } = await open(browser, baseURL, person, path, width, "light");
     try {
       const muted = await token(page, "--pulsar-muted");
-      const units = await seen(page, "table-unit");
-      allPaint(units, muted, "table cell unit");
+      // The weekly review draws its weeks as bars, each total a Figure (DESIGN «Decisión del 2026-10-31»): no table cell there.
+      const units = await seen(page, where === "/exportar" ? "table-unit" : "figure-unit");
+      allPaint(units, null, "table cell unit");
     } finally {
       await close();
     }
@@ -142,7 +151,7 @@ test("/exportar at 1280: the «km» in the header of a measured column is --puls
     const muted = await token(page, "--pulsar-muted");
     const units = await seen(page, "table-header-unit");
     expect(units.map((u) => u.text)).toContain("km");
-    allPaint(units, muted, "header unit");
+    allPaint(units, null, "header unit");
   } finally {
     await close();
   }

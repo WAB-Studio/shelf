@@ -28,13 +28,20 @@ export function useTimeWords(): TimeWords {
 
 // A mono point takes a full cell: «500.000» reads «500 . 000». The thousands
 // point is cut out of the run and drawn narrow.
+// One span holds the run: under a flex parent each loose piece would be its own item, and a copy or a PDF would read «2 . 100».
 function Grouped({ text }: { text: string }) {
-  return text.split(/(?<=\d)\.(?=\d{3}(?!\d))/).map((piece, index) => (
-    <Fragment key={index}>
-      {index > 0 ? <span className={styles.point}>.</span> : null}
-      {piece}
-    </Fragment>
-  ));
+  const pieces = text.split(/(?<=\d)\.(?=\d{3}(?!\d))/);
+  if (pieces.length === 1) return text;
+  return (
+    <span>
+      {pieces.map((piece, index) => (
+        <Fragment key={index}>
+          {index > 0 ? <span className={styles.point}>.</span> : null}
+          {piece}
+        </Fragment>
+      ))}
+    </span>
+  );
 }
 
 // Each figure in mono, each word after it in the caller's quiet class. The

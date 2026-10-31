@@ -110,7 +110,9 @@ test.describe("mixed lines are Archivo with figures in mono (RP-38, RP-43, RP-53
           const style = getComputedStyle(el);
           return { family: style.fontFamily, transform: style.textTransform };
         });
-        expect(set.family).toMatch(/mono/i);
+        // The name is the section's label, and a label is Archivo in sentence case, never mono (DESIGN «Sentence case»).
+        expect(set.family).toMatch(/archivo/i);
+        expect(set.family).not.toMatch(/mono/i);
         expect(set.transform).toBe("none");
         const sentence = page.getByText("Prueba: «lee mis metas y dime qué sigue».", { exact: true });
         expect(await sentence.evaluate((el) => getComputedStyle(el).fontFamily)).not.toMatch(/mono/i);

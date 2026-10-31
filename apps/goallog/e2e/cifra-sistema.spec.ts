@@ -43,7 +43,8 @@ for (const [width, height] of [
 
       const measured = await page.evaluate(() => {
         const visible = (el: Element) => (el as HTMLElement).getClientRects().length > 0;
-        const figures = [...document.querySelectorAll<HTMLElement>("[data-part='figure']")].filter(visible);
+        // The navy block's key figure and a card's big one are set in the title face by design (DESIGN «Naranja y marino»): neither is a row figure.
+        const figures = [...document.querySelectorAll<HTMLElement>("[data-part='figure']")].filter((figure) => visible(figure) && !figure.closest("[data-part='hero']") && ![...figure.classList].some((name) => /_big$/.test(name)));
         return figures.flatMap((figure) => {
           const unit = figure.querySelector<HTMLElement>("[data-part='figure-unit']");
           if (!unit) return [];

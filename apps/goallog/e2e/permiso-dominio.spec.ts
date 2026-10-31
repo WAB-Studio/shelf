@@ -121,7 +121,7 @@ for (const width of [390, 1280]) {
       }
     });
 
-    test("the line is DM Mono 13px in ink and its host is bolder than the rest", async ({
+    test("the line is Chivo Mono 14px in ink and its host is bolder than the rest", async ({
       person,
       browser,
       baseURL,
@@ -160,7 +160,7 @@ for (const width of [390, 1280]) {
         expect(style.mono).toMatch(/^"?chivo[ _]mono/i);
         expect(style.family).toBe(style.mono);
         expect(style.hostFamily).toBe(style.mono);
-        expect(style.size).toBe("13px");
+        expect(style.size).toBe("14px");
         expect(style.color).toBe(style.titleColor);
         expect(style.color).not.toBe(style.leadColor);
         expect(style.hostWeight).toBeGreaterThan(style.weight);
@@ -279,7 +279,7 @@ test("at 360 a 63-character host breaks inside the column", async ({ person, bro
     expect(host.x + host.width).toBeLessThanOrEqual(360);
     // Broken onto more than one line, not shrunk to fit.
     expect(host.height).toBeGreaterThan(30);
-    expect(await line.evaluate((el) => getComputedStyle(el).fontSize)).toBe("13px");
+    expect(await line.evaluate((el) => getComputedStyle(el).fontSize)).toBe("14px");
   } finally {
     await context.close();
   }
