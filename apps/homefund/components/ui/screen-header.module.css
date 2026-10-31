@@ -54,7 +54,7 @@
 
 @media (min-width: 1024px) {
   .header {
-    padding: 24px 32px 16px;
+    padding: 24px var(--band-gutter, 32px) 16px;
   }
 
   /* Doubled to outrank Radix's own size class, which lands in another sheet at

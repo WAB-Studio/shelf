@@ -90,6 +90,6 @@ button.chip {
 
 @media (min-width: 1024px) {
   .bar {
-    padding: 0 32px 16px;
+    padding: 0 var(--band-gutter, 32px) 16px;
   }
 }

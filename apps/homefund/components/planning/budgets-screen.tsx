@@ -224,7 +224,7 @@ export function BudgetsScreen({
 
 
       {/* One left edge with the header and the table: the band they carry from `md`. */}
-      <Flex direction="column" gap="4" px={{ initial: "0", md: "6" }} align={{ initial: "stretch", sm: "start" }}>
+      <Flex direction="column" gap="4" align={{ initial: "stretch", sm: "start" }}>
         <SegmentedControl.Root
           value={archived ? "archived" : "active"}
           onValueChange={(value) => pushQuery(month, value === "archived")}
