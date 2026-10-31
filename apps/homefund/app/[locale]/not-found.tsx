@@ -1,7 +1,6 @@
 import { useTranslations } from "next-intl";
 
-import { AppMark, Box, Button, Flex, Heading, Text } from "@/components/ui";
-import { Link as LocaleLink } from "@/i18n/navigation";
+import { AppMark, Box, ButtonLink, Flex, Heading, Text } from "@/components/ui";
 
 export default function NotFound() {
   const t = useTranslations();
@@ -26,9 +25,9 @@ export default function NotFound() {
             {t("errors.notFoundDescription")}
           </Text>
         </Box>
-        <Button asChild size="3">
-          <LocaleLink href="/">{t("common.backHome")}</LocaleLink>
-        </Button>
+        <ButtonLink href="/" size="3">
+          {t("common.backHome")}
+        </ButtonLink>
       </main>
     </Flex>
   );
