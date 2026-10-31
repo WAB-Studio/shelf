@@ -1,4 +1,4 @@
-import { test, expect, visit } from "./fixtures";
+import { test, expect, visit, openMore } from "./fixtures";
 import {
   countActionPosts,
   expectTitle,
@@ -186,6 +186,7 @@ test("«Arriba, sin meta encima» leaves the goal at the top: parent_id is null 
     await visit(page, `/metas/${tree.G}`);
     await expect(page.locator(`main a[href="/metas/${tree.g2}"]`)).toHaveCount(0);
     await visit(page, `/metas/${tree.g2}`);
+    await openMore(page);
     await expect(page.getByRole("button", { name: "Mover bajo otra meta" })).toBeVisible();
     const again = await openMoveSheet(page);
     await expect(topDestination(again)).toHaveCount(0);

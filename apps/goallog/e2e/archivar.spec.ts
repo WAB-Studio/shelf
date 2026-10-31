@@ -2,7 +2,7 @@ import type { Page } from "@playwright/test";
 import type postgres from "postgres";
 
 import { todayInZone } from "../lib/zone";
-import { test, expect, laneNumber } from "./fixtures";
+import { test, expect, laneNumber, openMore } from "./fixtures";
 import plan from "../messages/es/plan.json";
 
 // Reused per lane, never one per run (RP-23, RP-24): `goals.goals` grants no
@@ -63,6 +63,7 @@ test("renaming a goal on screen reads everywhere: its own screen, Hoy and Semana
 
   try {
     await page.goto(`/metas/${goalId}`);
+    await openMore(page);
     await page.getByRole("button", { name: "Renombrar" }).click();
     const sheet = page.getByRole("dialog");
     await expect(sheet).toBeVisible();
@@ -119,6 +120,7 @@ test("archiving a goal drops it from Hoy and Semana, lists it under Archivadas, 
 
   try {
     await page.goto(`/metas/${goalId}`);
+    await openMore(page);
     await page.getByRole("button", { name: "Archivar esta meta" }).click();
     const sheet = page.getByRole("dialog");
     await expect(sheet).toBeVisible();
@@ -175,6 +177,8 @@ test("reopening an archived goal through its own screen brings it back to Hoy (R
     await expect(page.getByRole("button", { name: "Reabrir" })).toBeVisible();
     await page.getByRole("button", { name: "Reabrir" }).click();
 
+    await expect(page.getByRole("button", { name: "Más sobre la meta" })).toBeVisible();
+    await openMore(page);
     await expect(page.getByRole("button", { name: "Archivar esta meta" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Reabrir" })).toHaveCount(0);
 

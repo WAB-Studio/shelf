@@ -1,6 +1,6 @@
 import type postgres from "postgres";
 
-import { test, expect, visit } from "./fixtures";
+import { test, expect, visit, openMore } from "./fixtures";
 import { todayInZone } from "@/lib/zone";
 
 // The sweep of `/metas` and the goal screen (RNP-07, RNP-17).
@@ -69,6 +69,7 @@ for (const width of [360, 1280]) {
       expect(mono).toMatch(/mono/i);
       expect(family).not.toBe(mono);
 
+      await openMore(page);
       await page.getByRole("button", { name: "Renombrar" }).first().click();
       const sheet = page.getByRole("dialog");
       await sheet.getByRole("textbox").fill("");

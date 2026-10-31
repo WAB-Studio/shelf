@@ -21,10 +21,6 @@ import type { Person } from "./fixtures";
 
 const A4 = { width: 794, height: 1123 };
 const ABBR = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
-const NAMES = [
-  "enero", "febrero", "marzo", "abril", "mayo", "junio",
-  "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
-];
 const wordsOf = (day: string) => `${Number(day.slice(8, 10))} ${ABBR[Number(day.slice(5, 7)) - 1]} ${day.slice(0, 4)}`;
 const horizonIn = (offset: number): string => {
   let day = shift(monthStartOf(offset), 1);

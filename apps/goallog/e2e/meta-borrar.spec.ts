@@ -8,7 +8,7 @@ import { civilDateInZone } from "@/lib/zone";
 import goalMessages from "../messages/es/goal.json";
 import planMessages from "../messages/es/plan.json";
 import roadmapMessages from "../messages/es/roadmap.json";
-import { test, expect, visit, type Person } from "./fixtures";
+import { test, expect, visit, openMore, type Person } from "./fixtures";
 import { holdActions, monthsAhead, thisMonth, MINUTES, type Db } from "./meta-arbol-seed";
 import { PAGES, dialog, monthLabel, postCounter, rhythmOfGoal, seedOpenGoal, seedTask } from "./metas-sin-final-seed";
 
@@ -39,6 +39,8 @@ async function open(browser: Browser, baseURL: string | undefined, person: Perso
   const context = await browser.newContext({ storageState: person.sessionFile, baseURL: baseURL!, viewport: { width, height: 900 } });
   const page = await context.newPage();
   await visit(page, path);
+  // The phone folds a goal's own acts: open them where the path is a goal's page.
+  if (/^\/metas\/[0-9a-f-]{36}$/.test(path)) await openMore(page);
   return { page, context };
 }
 

@@ -4,7 +4,7 @@ import type postgres from "postgres";
 import { horizonForWeeks } from "@/lib/day/weeks";
 import { todayInZone } from "@/lib/zone";
 
-import { test, expect } from "./fixtures";
+import { test, expect, openMore } from "./fixtures";
 
 // RP-82, RP-79: a goal is created inside another from that goal's own screen,
 // in a sheet, and lives inside the upper goal's span. Every row is seeded under
@@ -71,6 +71,7 @@ test("from a large goal, «Añadir meta pequeña» opens the sheet and saving la
   const { largeId, largeName } = await seedLarge(db, person.id, stamp);
   const { context, page } = await open(browser, baseURL!, person.sessionFile, `/metas/${largeId}`);
   try {
+    await openMore(page);
     const add = page.getByRole("button", { name: "Añadir meta pequeña" });
     await expect(add).toBeVisible();
     await add.click();
@@ -102,6 +103,7 @@ test("while saving, «Abrirla» cannot fire a second time (RP-82)", async ({ per
   const { largeId } = await seedLarge(db, person.id, stamp);
   const { context, page } = await open(browser, baseURL!, person.sessionFile, `/metas/${largeId}`);
   try {
+    await openMore(page);
     const add = page.getByRole("button", { name: "Añadir meta pequeña" });
     await expect(add).toBeVisible();
     await add.click();
@@ -144,6 +146,7 @@ test("weeks past the upper goal's end are refused on the client, naming it, with
   const { largeId, largeName } = await seedLarge(db, person.id, stamp);
   const { context, page } = await open(browser, baseURL!, person.sessionFile, `/metas/${largeId}`, true);
   try {
+    await openMore(page);
     const add = page.getByRole("button", { name: "Añadir meta pequeña" });
     await expect(add).toBeVisible();
     await add.click();
@@ -186,6 +189,7 @@ test("the upper goal archived while the sheet is open: saving says so under the 
   const { largeId, largeName } = await seedLarge(db, person.id, stamp);
   const { context, page } = await open(browser, baseURL!, person.sessionFile, `/metas/${largeId}`);
   try {
+    await openMore(page);
     const add = page.getByRole("button", { name: "Añadir meta pequeña" });
     await expect(add).toBeVisible();
     await add.click();
@@ -211,6 +215,7 @@ test("«No abrirla» closes the sheet and creates nothing (RP-82)", async ({ per
   const { largeId } = await seedLarge(db, person.id, stamp);
   const { context, page } = await open(browser, baseURL!, person.sessionFile, `/metas/${largeId}`, true);
   try {
+    await openMore(page);
     const add = page.getByRole("button", { name: "Añadir meta pequeña" });
     await expect(add).toBeVisible();
     await add.click();

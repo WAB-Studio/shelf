@@ -194,6 +194,7 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
   const phoneActs = ended ? (
     <Face on="phone">
       <Section as="div">
+        <RenameGoalAction goalId={goal.id} name={goal.name} variant="quiet" />
         {moveAction}
         <ArchiveGoalAction goalId={goal.id} name={goal.name} short {...archiveBranch} />
         {deleteAction(true)}
