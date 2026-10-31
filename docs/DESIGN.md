@@ -520,4 +520,8 @@ Board C1h corrected the same day: a card in credit reads «Según HomeFund −$ 
   the description, «Salió de / Entró a <cuenta> · <fecha>» and the amount; one account select («¿A qué cuenta fue?» or
   «¿De qué cuenta vino?») and «Completar». A remembered account prefills the select with «Sugerida: la usaste antes con
   esta descripción.»; it never completes on its own.
+- A transfer between two currencies is imported at the rate the person confirms (the user, 2026-10-30: «deben ser por
+  trm, se confirma con el usuario cuánto le llegó»). The preview marks it `needs_counter_amount` and names the other
+  account's currency; Claude asks how much arrived or left there and confirms the resulting TRM. It is booked in the
+  statement's currency with that amount as `counter_amount_cents`, and the other account's statement links to it.
 

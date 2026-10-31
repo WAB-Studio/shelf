@@ -24,7 +24,7 @@ export type InvalidReason =
   | "unknown_category"
   | "category_mismatch"
   | "unknown_account"
-  | "other_currency"
+  | "needs_counter_amount"
   | "before_opening";
 
 export type PreviewLine = {
@@ -36,6 +36,9 @@ export type PreviewLine = {
   // RF-135: the other account a remembered pattern names for the missing side. A proposal only: the
   // import never fills it on its own; Claude passes it as `counterAccountId` once the person agrees.
   proposal?: { accountId: string; accountName: string };
+  // A transfer across currencies: the other account's side, so the person confirms the rate.
+  // `amountCents` is null while the line still lacks it (`needs_counter_amount`).
+  counter?: { currency: string; amountCents: number | null };
   // Only on a new line the person marked unsure: it is written waiting for its other side (RF-133).
   awaitsCounterparty?: true;
 };
@@ -127,8 +130,8 @@ async function readContext(tx: Transaction, input: StatementInput): Promise<Cont
 }
 
 // Why the import could not write this line, mirroring the triggers that would refuse it: a split's
-// category shares the movement's kind and scope, and a transfer stays in one currency (a statement
-// line carries no counter amount).
+// category shares the movement's kind and scope, and a transfer across currencies carries what moved
+// on the other account.
 function invalidReason(
   row: StatementRow,
   account: NonNullable<Context["account"]>,
@@ -138,7 +141,7 @@ function invalidReason(
   if (row.counterAccountId) {
     const other = context.accounts.find((one) => one.id === row.counterAccountId);
     if (!other) return "unknown_account";
-    return other.currency === account.currency ? null : "other_currency";
+    return other.currency === account.currency || row.counterAmountCents !== undefined ? null : "needs_counter_amount";
   }
   if (!row.categoryId) return "needs_category_or_account";
   const category = context.categories.find((one) => one.id === row.categoryId);
@@ -183,14 +186,20 @@ function classify(rows: StatementRow[], context: Context): PreviewLine[] {
       taken.add(match.id);
       return { ...base, status: match.sourced ? "already_imported" : "matches", matchedTransactionId: match.id };
     }
+    const otherCurrency = context.accounts.find((one) => one.id === row.counterAccountId)?.currency;
+    const counter =
+      otherCurrency !== undefined && otherCurrency !== account.currency
+        ? { counter: { currency: otherCurrency, amountCents: row.counterAmountCents ?? null } }
+        : {};
     const reason = invalidReason(row, account, context);
-    if (reason) return { ...base, status: "invalid", reason };
+    if (reason) return { ...base, status: "invalid", reason, ...counter };
     const remembered = row.counterAccountId
       ? undefined
       : proposalFor(context.trusted, out ? "to" : "from", learnedPattern(row.description).key);
     return {
       ...base,
       status: "new",
+      ...counter,
       ...(!row.counterAccountId && row.unsure ? { awaitsCounterparty: true } : {}),
       ...(remembered ? { proposal: { accountId: remembered.accountId, accountName: remembered.accountLabel } } : {}),
     };
@@ -258,10 +267,12 @@ export async function importStatement(
         const out = row.amountCents < 0;
         const amountCents = Math.abs(row.amountCents);
         const other = row.counterAccountId ?? null;
+        // Booked in this statement's currency; the other account's side rides as the counter amount.
         const { transactionId } = await insertTransaction(tx, {
           fromAccountId: out ? input.accountId : other,
           toAccountId: out ? other : input.accountId,
           amountCents,
+          ...(line.counter ? { currency: preview.account.currency, counterAmountCents: line.counter.amountCents } : {}),
           awaitingCounterparty: line.awaitsCounterparty === true,
           occurredAt: row.date,
           description: row.description,
