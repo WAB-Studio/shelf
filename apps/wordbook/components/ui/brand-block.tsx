@@ -6,7 +6,7 @@ import styles from "./brand-block.module.css";
 // The main screen's brand block (docs/wordbook/DESIGN.md "Verde botella"):
 // `title` carries a `<mark>` around its key word, which the stylesheet sets on
 // the marigold highlight. The sidebar already carries the name from 1024px, so
-// the block drops its own there. `compact` keeps the search box alone, for a
+// the block drops its own there. `line` is the one-sentence headline, its key word on the marigold. `compact` keeps the search box alone, for a
 // screen that has an answer to show and wants it near the top.
 export function BrandBlock({
   title,
@@ -15,7 +15,7 @@ export function BrandBlock({
   children,
 }: {
   title: ReactNode;
-  line: string;
+  line: ReactNode;
   compact?: boolean;
   children?: ReactNode;
 }) {
@@ -26,7 +26,7 @@ export function BrandBlock({
           <p className={styles.title}>
             <Wordmark size="lg">{title}</Wordmark>
           </p>
-          <p className={styles.line}>{line}</p>
+          <h1 className={styles.line}>{line}</h1>
         </>
       )}
       {children}

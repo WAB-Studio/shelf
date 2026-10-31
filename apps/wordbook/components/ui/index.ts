@@ -35,6 +35,8 @@ export { Page } from "./page";
 
 export { Panels } from "./panels";
 
+export { Mosaic, Tile } from "./tile";
+
 export { BottomNav } from "./bottom-nav";
 
 export { ThemeChoice } from "./theme-choice";

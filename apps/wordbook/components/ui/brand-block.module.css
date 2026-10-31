@@ -28,8 +28,12 @@
 
 .line {
   margin: 0;
-  font-size: 15px;
-  color: var(--rl-brand-soft);
+  font-family: var(--font-display);
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  line-height: 1.2;
+  color: var(--rl-brand-ink);
 }
 
 /* The field keeps its raised ground on the block; its edge is lifted to the

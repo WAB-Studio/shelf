@@ -13,7 +13,7 @@
   },
   "search": {
     "brand": "Word<mark>Book</mark>",
-    "brandLine": "Busca una palabra en inglés y léela en español, incluso sin conexión.",
+    "brandLine": "Busca una palabra en inglés y <mark>léela</mark> en español, incluso sin conexión.",
     "placeholder": "Escribe una palabra o frase",
     "label": "Buscar",
     "clear": "Borrar",

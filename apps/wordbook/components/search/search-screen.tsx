@@ -20,7 +20,7 @@ import type { TranslationResult } from "@/lib/translate/types";
 import { flushPendingLookup, recordLookup } from "@/lib/log/record";
 import { cutTranslation, formatSenseTranslations } from "@/lib/log/translation-line";
 import type { LookupOutcome, LookupRecord } from "@/lib/log/types";
-import { BrandBlock, Flex, Live, Panels } from "@/components/ui";
+import { BrandBlock, Flex, Highlight, Live, Panels } from "@/components/ui";
 import { ReviewCard } from "@/components/review/review-card";
 import { InstallStatus } from "./install-status";
 import { FunctionWordBlock, NoEntryAnswer, type NoEntryPart, type NoEntryReason, type NoEntryState } from "./no-entry-answer";
@@ -595,7 +595,7 @@ export function SearchScreen({ initialQuery }: { initialQuery?: string }) {
       <Panels
         top={
           <>
-            <BrandBlock title={tSearch.rich("brand", { mark: (chunks) => <mark>{chunks}</mark> })} line={tSearch("brandLine")} compact={kind.kind !== "empty"}>
+            <BrandBlock title={tSearch.rich("brand", { mark: (chunks) => <mark>{chunks}</mark> })} line={tSearch.rich("brandLine", { mark: (chunks) => <Highlight>{chunks}</Highlight> })} compact={kind.kind !== "empty"}>
               <SearchBox value={text} onChange={handleTextChange} />
             </BrandBlock>
             <InstallStatus status={status} onRetry={retry} query={text} />
