@@ -94,6 +94,12 @@ export function CommitmentForm({ goalId, goalName, hasMeasure, measureUnit, sour
   const weekdayShort = t.raw("day.cadence.weekdayShort") as string[];
   const weekdayFull = t.raw("day.cadence.weekdayFull") as string[];
 
+  // A source counted in time is not satisfied by one minute: offer half an hour until the person writes their own.
+  function pickSource(source: CommitmentFormProps["sources"][number]) {
+    setSourceKey(source.key);
+    setThreshold((current) => (current === "1" || current === "30" ? (source.unit === "minutos" ? "30" : "1") : current));
+  }
+
   function toggleWeekday(day: number) {
     setWeekdays((current) =>
       current.includes(day) ? current.filter((value) => value !== day) : [...current, day].sort(),
@@ -349,7 +355,7 @@ export function CommitmentForm({ goalId, goalName, hasMeasure, measureUnit, sour
           <>
             <ChipRow>
               {sources.map((source) => (
-                <Chip key={source.key} selected={sourceKey === source.key} onClick={() => setSourceKey(source.key)}>
+                <Chip key={source.key} selected={sourceKey === source.key} onClick={() => pickSource(source)}>
                   {t(source.labelKey)}
                 </Chip>
               ))}
