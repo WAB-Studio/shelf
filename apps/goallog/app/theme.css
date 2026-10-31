@@ -104,6 +104,17 @@ body {
   --pulsar-text-line-leading: 1.6;
 }
 
+/* A PDF keeps tracked text as loose glyphs, and a reader or a search then finds
+   «oct ubre», or «Portaf olio» where a kern pair opens a gap: paper sets its
+   labels and figures untracked and unkerned. */
+@media print {
+  :root {
+    font-kerning: none;
+    --pulsar-text-label-tracking: 0;
+    --pulsar-text-measure-tracking: 0;
+  }
+}
+
 body {
   background: var(--pulsar-ground);
   color: var(--pulsar-ink);

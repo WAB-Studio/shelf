@@ -83,7 +83,6 @@ async function printedPages(browser: Browser, baseURL: string | undefined, perso
 // A header set in tracked capitals comes out of the PDF with a space between letters: «h e c h o».
 const spaced = (word: string) => word.split("").join(" ?");
 const HEAD = new RegExp(`^${spaced("mes")} .*${spaced("hecho")}.*${spaced("planeado")}`, "i");
-const ROW = new RegExp(`^(${NAMES.join("|")}) \\d{4}\\b`);
 const TASKS_LABEL = new RegExp(`^${spaced("tareas")} ${spaced("de")} `, "i");
 const LABEL = "leer · por mes · 14 de 27 meses";
 const MONTHS_LEFT = lineWords();
@@ -162,9 +161,10 @@ function checkPaper(pages: string[][], tag: string, tasks: number) {
   });
   // The table breaks between rows: each row whole (its cells under it), in order, none lost.
   w.rows.forEach((row, index) => {
-    const cells = pages[row.page][row.at + 1];
-    expect(cells, `${tag}: ${monthLabel(index - 11)} has its cells under it on sheet ${row.page + 1}`).toBeDefined();
-    expect(cells, `${tag}: ${monthLabel(index - 11)}: the next line is its cells, not another month`).not.toMatch(ROW);
+    // A row is one line: the month, then its figures beside it (a closed or current month adds its state under the name).
+    expect(pages[row.page][row.at], `${tag}: ${monthLabel(index - 11)} has its cells beside it on sheet ${row.page + 1}`).toMatch(
+      new RegExp(`^${monthLabel(index - 11)} \\S`),
+    );
     if (index > 0) {
       const before = w.rows[index - 1];
       expect(row.page > before.page || (row.page === before.page && row.at > before.at), `${tag}: order at ${monthLabel(index - 11)}`).toBe(true);

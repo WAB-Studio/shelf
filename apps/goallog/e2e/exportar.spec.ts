@@ -562,7 +562,7 @@ test.describe("the report page (RP-49, RP-35)", () => {
 });
 
 // `Exportar.dc.html` (RP-49, RP-37): `/metas` offers the export
-// beside the import under «el plan».
+// beside the import under «El plan».
 test.describe("the way in from /metas (RP-49, RP-37)", () => {
   test("«Exportar» opens the report; «Importar un plan» points at its page", async ({
     person,
@@ -578,7 +578,7 @@ test.describe("the way in from /metas (RP-49, RP-37)", () => {
     try {
       const page = await context.newPage();
       await page.goto("/metas");
-      await expect(page.getByText("el plan", { exact: true })).toBeVisible();
+      await expect(page.getByText("El plan", { exact: true })).toBeVisible();
       const exportLink = page.getByRole("link", { name: /^Exportar/ });
       await expect(exportLink).toContainText(
         "cómo va cada meta, en PDF",
@@ -1770,14 +1770,13 @@ test.describe("the report on A4, compact", () => {
         for (const label of goal.months) {
           const found = span.filter((entry) => entry.line.startsWith(label));
           expect(found.length, `${goal.name} ${label}: lines starting with it`).toBe(1);
-          // The label prints on a line of its own and its cells on the next line: a row cut in two leaves them on another page.
+          // The figures print beside the label; a closed or current month adds its state on the next line, and a row cut in two leaves that line on another page.
+          expect(found[0].line, `${goal.name} ${label}: cells beside its label`).toMatch(/^\S+ \d{4} \S/);
           const at = span.indexOf(found[0]);
-          const cells = span.slice(at + 1, at + 2);
-          expect(cells.length, `${goal.name} ${label}: cells after its label`).toBe(1);
-          expect(
-            cells.map((cell) => cell.page),
-            `${goal.name} ${label}: label on page ${found[0].page + 1}, cells on ${cells.map((cell) => cell.page + 1)}`,
-          ).toEqual([found[0].page]);
+          const under = span[at + 1];
+          if (under && !goal.months.some((month) => under.line.startsWith(month))) {
+            expect(under.page, `${goal.name} ${label}: label on page ${found[0].page + 1}, its state on ${under.page + 1}`).toBe(found[0].page);
+          }
           where.push(found[0].page);
         }
         // The rows keep their order across pages.

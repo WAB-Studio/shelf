@@ -9,7 +9,7 @@ import { boxOf } from "./box";
 
 // RNP-17 across the app (`HoyEscritorio`, `SemanaEscritorio`, `MetaEscritorio`,
 // `RevisionEscritorio`, `HojaEscritorio`): at 1280 × 800 every route is the
-// desktop face, at 1023 the phone face. Nothing scrolls sideways, the rail is
+// desktop face, at 767 the phone face. Nothing scrolls sideways, the rail is
 // there and no bottom nav, no two visible controls overlap and each one's
 // shorter side reaches 32 px. «Visible control» is what the query below
 // selects: a link, button, field, select, role=button or role=tab with a box
@@ -314,23 +314,23 @@ worldTest("the move sheet on /sueltas opens centred at 480 px at 1280 (RNP-17)",
   }
 });
 
-// The phone face runs to 1023: the nav four tabs fixed at the foot, no table, one toggle.
+// The phone face runs to 767: the nav four tabs fixed at the foot, no table, one toggle.
 for (const path of ["/", "/semana", "/sueltas", "/metas"]) {
-  worldTest(`${path} is still the phone face at 1023 (RNP-17)`, async ({ browser, baseURL, world }) => {
-    const { context, page } = await signedIn(browser, baseURL, world, 1023, 740);
+  worldTest(`${path} is still the phone face at 767 (RNP-17)`, async ({ browser, baseURL, world }) => {
+    const { context, page } = await signedIn(browser, baseURL, world, 767, 740);
     try {
       await page.goto(path);
       await expect(page.locator("main")).toHaveCount(1);
 
       const nav = await railBox(page);
-      expect(nav).toMatchObject({ x: 0, width: 1023 });
+      expect(nav).toMatchObject({ x: 0, width: 767 });
       // The bar is fixed to the viewport's foot, under the screen, never beside it.
       expect(nav.y + nav.height).toBe(740);
       expect(nav.height).toBeLessThan(100);
       await expect(page.getByRole("table")).toHaveCount(0);
       await expect(page.getByRole("navigation").getByText("GoalLog")).toBeHidden();
       await expect(page.getByRole("button", { name: /^Cambiar a modo/ })).toHaveCount(path === "/" ? 1 : 0);
-      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(1023);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(767);
     } finally {
       await context.close();
     }
@@ -426,14 +426,15 @@ deskTest("at 1024 the main column is the wider one on Hoy and on the goal, and t
     await page.goto(`/metas/${desk.layoutGoalId}`);
     await expect(page.locator("main")).toHaveCount(1);
     const commitments = await cardWidth(page.getByText(LONG_COMMITMENT, { exact: true }));
-    const end = page.getByText("el final", { exact: true });
+    const end = page.getByText("El final", { exact: true });
     const side = await cardWidth(end);
     expect(commitments).toBeGreaterThan(side);
     // «Dormir ocho horas antes de un día de entrenamiento fuerte» took five lines in the narrow column.
+    // The row's 30-day strip (DESIGN «Constancy is a 30-day strip») takes 120 px of the trailing block, so three is the most.
     const lines = await page.getByText(LONG_COMMITMENT, { exact: true }).evaluate(
       (el) => Math.round(el.getBoundingClientRect().height / parseFloat(getComputedStyle(el).lineHeight)),
     );
-    expect(lines).toBeLessThanOrEqual(2);
+    expect(lines).toBeLessThanOrEqual(3);
 
     // The phases card stands under both columns (DESIGN «The goal at 1024 draws
     // its phases on a full-width row»): it follows the lower of the commitments
@@ -445,7 +446,7 @@ deskTest("at 1024 the main column is the wider one on Hoy and on the goal, and t
         while (node && getComputedStyle(node).borderTopLeftRadius !== "14px") node = node.parentElement;
         return node!.getBoundingClientRect();
       };
-      return card("una fase").top - Math.max(card(longCommitment).bottom, card("ver por semana").bottom);
+      return card("una fase").top - Math.max(card(longCommitment).bottom, card("el final").bottom);
     }, LONG_COMMITMENT);
     expect(gap).toBeGreaterThanOrEqual(0);
     expect(gap).toBeLessThanOrEqual(60);
@@ -462,7 +463,7 @@ deskTest("at 1280 the side column keeps its drawn widths, 360 on Hoy and 380 on 
     expect(await cardWidth(page.getByText("Sueltas", { exact: true }).first())).toBe(360);
     await page.goto(`/metas/${desk.layoutGoalId}`);
     await expect(page.locator("main")).toHaveCount(1);
-    expect(await cardWidth(page.getByText("el final", { exact: true }))).toBe(380);
+    expect(await cardWidth(page.getByText("El final", { exact: true }))).toBe(380);
   } finally {
     await context.close();
   }
@@ -532,7 +533,9 @@ deskTest("at 1024 no day header and no tally on Semana wraps", async ({ browser,
     );
     // Seven day headers and the tallies of the days up to and including today.
     expect(lines.length).toBeGreaterThanOrEqual(7 + daysBehind + 1);
-    expect(lines.filter((entry) => entry.lines > 1)).toEqual([]);
+    // The grid draws a header over two lines (the day's name over its number) and a tally as a
+    // figure over its bar (DESIGN «Semana is a grid»); a third line is a wrap.
+    expect(lines.filter((entry) => entry.lines > 2)).toEqual([]);
   } finally {
     await context.close();
   }
@@ -559,7 +562,7 @@ deskTest("Hoy with every goal ended drops «Hoy no pide nada.» while a one-off 
     await expect(wide.page.getByText(sentence)).toBeVisible();
     await expect(wide.page.getByText(sentence)).toHaveCSS("font-size", "15px");
     await expect(phone.page.getByText(sentence)).toBeVisible();
-    await expect(phone.page.getByText(sentence)).toHaveCSS("font-size", "27px");
+    await expect(phone.page.getByText(sentence)).toHaveCSS("font-size", "30px");
   } finally {
     await wide.context.close();
     await phone.context.close();
