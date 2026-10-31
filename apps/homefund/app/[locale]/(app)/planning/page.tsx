@@ -7,7 +7,6 @@ import { PlanningHub } from "@/components/planning/planning-hub";
 import { Page } from "@/components/ui";
 import { listBudgetsWithStatus } from "@/db/queries/budgets";
 import { getDebtsScreenData } from "@/db/queries/debts-screen";
-import { getUserGroup } from "@/db/queries/groups";
 import { listPlannedPayments } from "@/db/queries/planned-payments";
 import { listRecurringRules } from "@/db/queries/recurring-rules";
 import { listGoalsWithProgress } from "@/db/queries/savings-goals";
@@ -36,14 +35,13 @@ export default async function PlanningPage(
   if (!hasLocale(routing.locales, locale)) notFound();
 
 
-  const [budgets, goals, payments, debts, rules, group, options, t, format, tc] =
+  const [budgets, goals, payments, debts, rules, options, t, format, tc] =
     await Promise.all([
       listBudgetsWithStatus(),
       listGoalsWithProgress(),
       listPlannedPayments({ status: "pending" }),
       getDebtsScreenData(),
       listRecurringRules(),
-      getUserGroup(),
       getTransactionFormOptions(),
       getTranslations({ locale, namespace: "planning" }),
       getFormatter({ locale }),
@@ -136,7 +134,6 @@ export default async function PlanningPage(
   return (
     <Page>
       <PlanningHub
-        groupName={group?.name ?? null}
         budgetsSummary={budgetsSummary}
         goalsSummary={goalsSummary}
         paymentsSummary={paymentsSummary}

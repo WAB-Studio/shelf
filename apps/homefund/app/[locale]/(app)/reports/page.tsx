@@ -2,11 +2,19 @@ import { hasLocale } from "next-intl";
 import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
 import { notFound } from "next/navigation";
+import { z } from "zod";
 
 import { ReportsScreen } from "@/components/reports/reports-screen";
 import { Page } from "@/components/ui";
 import { getReportsData } from "@/db/queries/reports/reports-screen";
 import { routing } from "@/i18n/routing";
+import { MONTH_PATTERN, todayInBogota } from "@/lib/dates";
+
+// A malformed `?month` falls back to the current Bogotá month, as Presupuestos does.
+const monthSchema = z
+  .string()
+  .regex(MONTH_PATTERN)
+  .catch(() => todayInBogota().slice(0, 7));
 
 export async function generateMetadata(
   props: PageProps<"/[locale]/reports">,
@@ -26,11 +34,13 @@ export default async function ReportsPage(
   if (!hasLocale(routing.locales, locale)) notFound();
 
 
-  const [data] = await Promise.all([getReportsData()]);
+  const month = monthSchema.parse((await props.searchParams).month);
+
+  const [data] = await Promise.all([getReportsData(`${month}-01`)]);
 
   return (
     <Page>
-      <ReportsScreen data={data} />
+      <ReportsScreen data={data} month={month} />
     </Page>
   );
 }

@@ -50,12 +50,15 @@ export type DebtsScreenData = {
   };
   withTerms: (DebtOverviewRow & {
     name: string;
+    // A debt of the caller's own, not the fund's: its row wears the personal mark.
+    personal: boolean;
     planPosition: PlanPosition | null;
     canWrite: boolean;
   })[];
   withoutTerms: {
     accountId: string;
     name: string;
+    personal: boolean;
     // The same pair the overview carries: the pocket the debt settles in, and
     // the ones it does not (RF-121).
     currency: CurrencyCode;
@@ -135,6 +138,9 @@ export async function getDebtsScreenData(): Promise<DebtsScreenData> {
   const nameById = new Map(accounts.map((account) => [account.id, account.name]));
   // The roster's own projection carries the write privilege, so no debt costs a
   // second statement to learn what its caller may do to it.
+  const personalById = new Map(
+    accounts.map((account) => [account.id, account.ownerUserId !== null]),
+  );
   const writableById = new Map(
     accounts.map((account) => [account.id, account.canWrite]),
   );
@@ -162,6 +168,7 @@ export async function getDebtsScreenData(): Promise<DebtsScreenData> {
       {
         ...row,
         name,
+        personal: personalById.get(row.accountId) ?? false,
         planPosition: positionById.get(row.accountId) ?? null,
         // Absent from the roster is a debt the caller may not write.
         canWrite: writableById.get(row.accountId) ?? false,
@@ -183,6 +190,7 @@ export async function getDebtsScreenData(): Promise<DebtsScreenData> {
       return {
         accountId: account.id,
         name: account.name,
+        personal: account.ownerUserId !== null,
         currency: account.settlementCurrency,
         owedCents: owedOf(settlementCents),
         creditCents: creditOf(settlementCents),

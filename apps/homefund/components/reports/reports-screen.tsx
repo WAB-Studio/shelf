@@ -1,6 +1,8 @@
 "use client";
 
 import { useFormatter, useLocale, useTranslations } from "next-intl";
+import { addCivilMonths, civilDateToDate, todayInBogota } from "@/lib/dates";
+import { usePathname, useRouter } from "@/i18n/navigation";
 
 import {
   BarChart,
@@ -11,6 +13,7 @@ import {
   Heading,
   ScreenHeader,
   Disc,
+  MonthStepper,
   Money,
   ProportionBar,
   ReportCard,
@@ -24,7 +27,6 @@ import type { MonthFlow } from "@/db/queries/reports/monthly-flow";
 import type { ReportsData } from "@/db/queries/reports/reports-screen";
 import type { MemberContributionNamed } from "@/db/queries/reports/reports-screen";
 import type { CurrencyCode } from "@/lib/currency";
-import { civilDateToDate } from "@/lib/dates";
 import { scopedCategoryName } from "@/lib/fund/category-names";
 import { averageOfActive, categoryChartColor, shares } from "@/lib/fund/glance";
 import type { Locale } from "@/lib/locales";
@@ -38,13 +40,37 @@ const SERIES_COLORS = {
 } as const;
 
 // The title and the way into «Revisar el mes» (RF-155), on both faces.
-function ReportsHead({ title }: { title: string }) {
+function ReportsHead({ title, month }: { title: string; month: string }) {
   const t = useTranslations("review");
+  const tr = useTranslations("reports");
+  const format = useFormatter();
+  const locale = useLocale();
+  const pathname = usePathname();
+  const router = useRouter();
+
+  const anchor = `${month}-01`;
+  const name = format.dateTime(civilDateToDate(anchor), { month: "long", year: "numeric" });
+  const go = (delta: number) =>
+    router.push(
+      { pathname, query: { month: addCivilMonths(anchor, delta).slice(0, 7) } },
+      { scroll: false },
+    );
+
   return (
-    <ScreenHeader
-      title={title}
-      actions={<TextLink href="/reports/review" size="2" weight="medium">{t("entry")}</TextLink>}
-    />
+    <Flex direction="column" gap="4">
+      <ScreenHeader
+        title={title}
+        actions={<TextLink href="/reports/review" size="2" weight="medium">{t("entry")}</TextLink>}
+      />
+      <MonthStepper
+        label={name.charAt(0).toLocaleUpperCase(locale) + name.slice(1)}
+        previousLabel={tr("previousMonth")}
+        nextLabel={tr("nextMonth")}
+        onPrevious={() => go(-1)}
+        onNext={() => go(1)}
+        nextDisabled={month >= todayInBogota().slice(0, 7)}
+      />
+    </Flex>
   );
 }
 
@@ -59,7 +85,7 @@ function ReportsHead({ title }: { title: string }) {
  * counts (RF-124): two currencies are two breakdowns, two charts and two
  * contribution lists, and no series ever holds a bar from both.
  */
-export function ReportsScreen({ data }: { data: ReportsData }) {
+export function ReportsScreen({ data, month }: { data: ReportsData; month: string }) {
   const t = useTranslations("reports");
 
   const { expensesByCategory, sixMonthFlow, contributions, hasGroup } = data;
@@ -71,7 +97,7 @@ export function ReportsScreen({ data }: { data: ReportsData }) {
           below takes over (RF-19). */}
       <Box display={{ initial: "block", md: "none" }}>
         <Flex direction="column" gap="6">
-          <ReportsHead title={t("title")} />
+          <ReportsHead title={t("title")} month={month} />
 
           <Flex direction="column" gap="3" asChild>
             <section>
@@ -129,7 +155,7 @@ export function ReportsScreen({ data }: { data: ReportsData }) {
           RF-67). */}
       <Box display={{ initial: "none", md: "block" }}>
         <Flex direction="column" gap="6">
-          <ReportsHead title={t("title")} />
+          <ReportsHead title={t("title")} month={month} />
 
           <Flex direction="column" gap="4">
             <ReportCard>

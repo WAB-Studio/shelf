@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronLeft, ChevronRight, EllipsisVertical, Plus } from "lucide-react";
+import { EllipsisVertical, Plus } from "lucide-react";
 import { useFormatter, useLocale, useTranslations } from "next-intl";
 import { useAction } from "next-safe-action/hooks";
 import { useState } from "react";
@@ -27,6 +27,7 @@ import {
   FundChip,
   ScreenHeader,
   IconButton,
+  MonthStepper,
   Progress,
   SegmentedControl,
   Text,
@@ -237,31 +238,13 @@ export function BudgetsScreen({
           </SegmentedControl.Item>
         </SegmentedControl.Root>
 
-        <Flex align="center" justify="center" gap="4" width="100%">
-          <IconButton
-            type="button"
-            variant="ghost"
-            color="gray"
-            size="3"
-            aria-label={t("previousMonth")}
-            onClick={() => goToMonth(-1)}
-          >
-            <ChevronLeft size={18} />
-          </IconButton>
-          <Text weight="bold">
-            {monthLabel}
-          </Text>
-          <IconButton
-            type="button"
-            variant="ghost"
-            color="gray"
-            size="3"
-            aria-label={t("nextMonth")}
-            onClick={() => goToMonth(1)}
-          >
-            <ChevronRight size={18} />
-          </IconButton>
-        </Flex>
+        <MonthStepper
+          label={monthLabel}
+          previousLabel={t("previousMonth")}
+          nextLabel={t("nextMonth")}
+          onPrevious={() => goToMonth(-1)}
+          onNext={() => goToMonth(1)}
+        />
       </Flex>
 
       <Box display={{ initial: "block", lg: "none" }}>

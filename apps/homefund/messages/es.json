@@ -163,6 +163,8 @@
     "ownerBarLabel": "Patrimonio por dueño en {currency}"
   },
   "reports": {
+    "previousMonth": "Mes anterior",
+    "nextMonth": "Mes siguiente",
     "title": "Reportes",
     "inCurrency": "en {currency}",
     "nav": "Reportes",

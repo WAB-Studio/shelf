@@ -86,6 +86,7 @@ export { ChipMultiSelect, type ChipOption } from "./chip-multi-select";
 
 export { CopyField } from "./copy-field";
 
+export { MonthStepper } from "./month-stepper";
 export { StackedSegmentedControl } from "./stacked-segmented-control";
 
 export { TapTarget } from "./tap-target";

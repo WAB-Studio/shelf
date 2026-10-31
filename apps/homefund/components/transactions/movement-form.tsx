@@ -54,6 +54,7 @@ import {
   OFFERED_CURRENCIES,
 } from "@/lib/currency";
 import { civilDateToDate, todayInBogota } from "@/lib/dates";
+import { SEED_CATEGORIES } from "@/lib/fund/seed";
 import {
   amountToInput,
   convertMinor,
@@ -137,6 +138,11 @@ const RATE_FORMAT = { maximumSignificantDigits: 6 } as const;
 // A sentinel the account selects use for "no account", since a Radix item may
 // not carry an empty value; it maps back to null the moment it is picked.
 const NO_ACCOUNT = "none";
+
+// The seeded income category a salary is booked under, in each language.
+const SALARY_NAMES: string[] = Object.values(
+  SEED_CATEGORIES.find((one) => one.name.es === "Salario")?.name ?? {},
+);
 
 // The same trick for the cause picker: nothing chosen is a movement that names
 // no cause, which is every movement most days (RF-132).
@@ -317,7 +323,7 @@ export function MovementForm({
           counterAmount: null,
           counterIsEstimate: false,
           forHousehold: false,
-          contributedByMemberId: options.callerMemberId,
+          contributedByMemberId: null,
           occurredAt: defaults?.occurredAt ?? todayInBogota(),
           description:
             defaults?.description !== undefined ? defaults.description : null,
@@ -415,6 +421,32 @@ export function MovementForm({
   // «De quién» (RF-166) is asked of an income into a fund account, and nowhere else.
   const offersContributor =
     kind === "income" && scope === "group" && options.fundMembers.length > 0;
+
+  // Only a salary is presumed to be the writer's own contribution; any other income
+  // starts unassigned, since a refund or a gift from someone else is no one's aporte.
+  // A choice the person made is never overwritten.
+  const salaryCategoryIds = useMemo(() => {
+    const names: string[] = SALARY_NAMES;
+    const ids = new Set<string>();
+    for (const category of options.categories) {
+      if (names.includes(category.name)) ids.add(category.id);
+      for (const child of category.children) {
+        if (names.includes(child.name)) ids.add(child.id);
+      }
+    }
+    return ids;
+  }, [options.categories]);
+  const contributorChosen = useRef(false);
+  const firstCategoryId = splits[0]?.categoryId;
+  useEffect(() => {
+    if (isEdit || !offersContributor || contributorChosen.current) return;
+    form.setValue(
+      "contributedByMemberId",
+      firstCategoryId && salaryCategoryIds.has(firstCategoryId)
+        ? options.callerMemberId
+        : null,
+    );
+  }, [isEdit, offersContributor, firstCategoryId, salaryCategoryIds, options.callerMemberId, form]);
 
   // A movement is never its own cause (RF-132), so the movement under edit is
   // dropped from what the picker offers; the rest arrive already ordered.
@@ -1035,9 +1067,10 @@ export function MovementForm({
                   <Select.Root
                     size="3"
                     value={field.value ?? NO_ACCOUNT}
-                    onValueChange={(value) =>
-                      field.onChange(value === NO_ACCOUNT ? null : value)
-                    }
+                    onValueChange={(value) => {
+                      contributorChosen.current = true;
+                      field.onChange(value === NO_ACCOUNT ? null : value);
+                    }}
                     disabled={isPending}
                   >
                     <FieldControl>

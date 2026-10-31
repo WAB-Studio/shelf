@@ -1,8 +1,14 @@
 .mosaic {
   display: grid;
   gap: 16px;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  grid-auto-flow: row dense;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+@media (min-width: 768px) {
+  .mosaic {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-auto-flow: row dense;
+  }
 }
 
 .tile {
@@ -23,13 +29,15 @@
   border-color: var(--violet-8);
 }
 
-.tile[data-size="large"] {
-  grid-column: span 2;
-  grid-row: span 2;
-}
+@media (min-width: 768px) {
+  .tile[data-size="large"] {
+    grid-column: span 2;
+    grid-row: span 2;
+  }
 
-.tile[data-size="wide"] {
-  grid-column: span 2;
+  .tile[data-size="wide"] {
+    grid-column: span 2;
+  }
 }
 
 /* The ink tile reads the dark tokens, so its gray text keeps its contrast; its

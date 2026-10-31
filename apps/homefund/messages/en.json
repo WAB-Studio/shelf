@@ -163,6 +163,8 @@
     "ownerBarLabel": "Net worth by owner in {currency}"
   },
   "reports": {
+    "previousMonth": "Previous month",
+    "nextMonth": "Next month",
     "title": "Reports",
     "inCurrency": "in {currency}",
     "nav": "Reports",
