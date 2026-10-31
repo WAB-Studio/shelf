@@ -1,4 +1,4 @@
-import { Meter, Stack } from "@/components/ui";
+import { Meter, Rows } from "@/components/ui";
 
 export type BarRow = { key: string; name: string; figure: string; seconds: number; label: string };
 
@@ -6,7 +6,7 @@ export type BarRow = { key: string; name: string; figure: string; seconds: numbe
 export function BarRows({ rows, featured }: { rows: BarRow[]; featured?: number }) {
   const longest = Math.max(1, ...rows.map((row) => row.seconds));
   return (
-    <Stack gap={2}>
+    <Rows>
       {rows.map((row, index) => (
         <Meter
           key={row.key}
@@ -17,6 +17,6 @@ export function BarRows({ rows, featured }: { rows: BarRow[]; featured?: number 
           size={featured === undefined ? "default" : index < featured ? "large" : "compact"}
         />
       ))}
-    </Stack>
+    </Rows>
   );
 }

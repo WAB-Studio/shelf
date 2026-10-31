@@ -25,8 +25,9 @@ export function durationParts(seconds: number, words: DurationWords): { value: s
       ];
 }
 
-// «5:03», for a column too narrow for words; whole minutes, never rounded up.
-export function clockDuration(seconds: number): string {
+// «12 h», «45 min», «< 1 min»: the largest unit alone, for a column too narrow for both. Floored, never rounded up.
+export function briefDuration(seconds: number, words: DurationWords): string {
   const minutes = Math.floor(seconds / 60);
-  return `${Math.floor(minutes / 60)}:${String(minutes % 60).padStart(2, "0")}`;
+  if (minutes === 0) return words.underMinute;
+  return minutes < 60 ? `${minutes} ${words.minutes}` : `${Math.floor(minutes / 60)} ${words.hours}`;
 }

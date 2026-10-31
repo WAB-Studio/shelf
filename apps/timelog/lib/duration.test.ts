@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { clockDuration, durationParts, formatDuration } from "./duration";
+import { briefDuration, durationParts, formatDuration } from "./duration";
 
 const words = { hours: "h", minutes: "min", underMinute: "< 1 min" };
 
@@ -24,8 +24,9 @@ test("a duration splits into figure and unit pairs", () => {
   ]);
 });
 
-test("a clock duration reads hours and padded minutes", () => {
-  assert.equal(clockDuration(0), "0:00");
-  assert.equal(clockDuration(32 * 60 + 59), "0:32");
-  assert.equal(clockDuration(5 * 3600 + 3 * 60), "5:03");
+test("a brief duration keeps the largest unit, floored", () => {
+  assert.equal(briefDuration(30, words), "< 1 min");
+  assert.equal(briefDuration(45 * 60 + 59, words), "45 min");
+  assert.equal(briefDuration(3600, words), "1 h");
+  assert.equal(briefDuration(12 * 3600 + 59 * 60, words), "12 h");
 });

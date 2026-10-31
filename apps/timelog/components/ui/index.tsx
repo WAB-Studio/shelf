@@ -5,8 +5,24 @@ import styles from "./ui.module.css";
 
 const join = (...names: (string | false | undefined)[]) => names.filter(Boolean).join(" ");
 
-export function Page({ children }: { children: ReactNode }) {
-  return <main className={styles.page}>{children}</main>;
+// `wide` opens the page to 1200 for the screens that split into a block and its rows.
+export function Page({ wide, children }: { wide?: boolean; children: ReactNode }) {
+  return <main className={join(styles.page, wide && styles.pageWide)}>{children}</main>;
+}
+
+// The brand block beside its rows from 1100 (block sticky on the left), above them below it.
+export function Split({ aside, children }: { aside: ReactNode; children: ReactNode }) {
+  return (
+    <div className={styles.split}>
+      <div className={styles.aside}>{aside}</div>
+      <div className={styles.main}>{children}</div>
+    </div>
+  );
+}
+
+// Rows in one column; in two between 720 and 1099, where there is room for both and no side block.
+export function Rows({ children }: { children: ReactNode }) {
+  return <div className={styles.rows}>{children}</div>;
 }
 
 export function Stack({ gap = 2, children }: { gap?: 1 | 2 | 3 | 4; children: ReactNode }) {
@@ -43,7 +59,7 @@ export function Title({ small, children }: { small?: boolean; children: ReactNod
   return <h1 className={join(styles.title, small && styles.titleSmall)}>{children}</h1>;
 }
 
-// A time set big: its figures large, its units small. `mark` puts the signal highlight behind it.
+// A time set big: its figures large, its units small. `mark` sets it on a cyan tint with a cyan edge.
 export function Figure({ parts, mark }: { parts: { value: string; unit: string }[]; mark?: boolean }) {
   return (
     <p className={join(styles.figure, mark && styles.mark)}>
@@ -148,8 +164,9 @@ export function Nav({ label, children }: { label: string; children: ReactNode })
   );
 }
 
-export function Button({ quiet, danger, ...props }: ComponentProps<"button"> & { quiet?: boolean; danger?: boolean }) {
-  return <button {...props} className={join(styles.button, quiet && styles.quiet, danger && styles.danger)} />;
+// `danger` is the solid red of a confirmed destructive press; `quietDanger` is red text alone, the way in.
+export function Button({ quiet, danger, quietDanger, ...props }: ComponentProps<"button"> & { quiet?: boolean; danger?: boolean; quietDanger?: boolean }) {
+  return <button {...props} className={join(styles.button, quiet && styles.quiet, danger && styles.danger, quietDanger && styles.quietDanger)} />;
 }
 
 export function Input(props: ComponentProps<"input">) {

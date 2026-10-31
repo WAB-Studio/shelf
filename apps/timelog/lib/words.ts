@@ -4,7 +4,7 @@ import { getLocale, getTranslations } from "next-intl/server";
 
 import { readableApps } from "@/lib/app-names";
 import type { DurationWords } from "@/lib/duration";
-import { clockDuration, durationParts, formatDuration } from "@/lib/duration";
+import { briefDuration, durationParts, formatDuration } from "@/lib/duration";
 import type { AppTime } from "@/lib/queries";
 import { weekdayIndex } from "@/lib/week";
 import { TIME_ZONE } from "@/lib/zone";
@@ -33,7 +33,7 @@ export async function calendarWords() {
   return {
     duration: (seconds: number) => formatDuration(seconds, words),
     durationParts: (seconds: number) => durationParts(seconds, words),
-    clock: clockDuration,
+    brief: (seconds: number) => briefDuration(seconds, words),
     // The day's apps under their readable names, system noise as «Sistema».
     apps: (apps: AppTime[]) => readableApps(apps, time("system")),
     // «hace 5 min» by the clock now.
