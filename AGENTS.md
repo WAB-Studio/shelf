@@ -33,6 +33,7 @@ This file is the core every agent loads. Read the file the index names before th
 - `docs/agentes/lanes.md`: opening, working in and dropping a lane; `HARNESS_LANE`; the harness.
 - `docs/agentes/verificacion.md`: suites, judges, CI, what a session spends.
 - `docs/agentes/canvas.md`: the canvases, when the user asks for a drawing.
+- `docs/agentes/lecciones-agenda-amiga.md`: the user's design critiques, as rules. Read it before a critique or a restyle.
 - `docs/agentes/wordbook.md`: WordBook's `/cuenta`, auth, keys and census.
 - `docs/agentes/historia.md`: the measurements and decisions behind these rules.
 - `docs/TRAPS.md`: read it before writing a query, a migration or a spec.
