@@ -40,7 +40,9 @@
     "apps": "Apps",
     "claudeCard": "Claude en total",
     "windowBar": "{title}: {duration}",
-    "windowsMore": "y {n} ventanas más"
+    "windowsMore": "y {n} ventanas más",
+    "byClass": "En qué se fue",
+    "byClassLabel": "El día repartido por clase de app"
   },
   "week": {
     "title": "Del {from} al {to}",
@@ -149,5 +151,13 @@
     "title": "Claude Code durante el día",
     "label": "Sesiones de Claude Code a lo largo del día",
     "session": "{project}: de {from} a {to}"
+  },
+  "classes": {
+    "code": "Código",
+    "browser": "Navegador",
+    "comms": "Comunicación",
+    "leisure": "Ocio",
+    "system": "Sistema",
+    "other": "Otras"
   }
 }

@@ -110,8 +110,19 @@
 .truncate { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; overflow-wrap: normal; }
 .mono { flex-shrink: 0; white-space: nowrap; }
 
+/* A tone sets the colour of what it holds; on the brand block it reads its on-block value. */
+.tone_code { --tone: var(--tl-tone-code); --tone-block: var(--tl-tone-code-on-block); }
+.tone_browser { --tone: var(--tl-tone-browser); --tone-block: var(--tl-tone-browser-on-block); }
+.tone_comms { --tone: var(--tl-tone-comms); --tone-block: var(--tl-tone-comms-on-block); }
+.tone_leisure { --tone: var(--tl-tone-leisure); --tone-block: var(--tl-tone-leisure-on-block); }
+.tone_system { --tone: var(--tl-tone-system); --tone-block: var(--tl-tone-system-on-block); }
+.tone_other { --tone: var(--tl-tone-other); --tone-block: var(--tl-tone-other-on-block); }
+.tone_claude { --tone: var(--tl-tone-claude); --tone-block: var(--tl-tone-claude-on-block); }
+.tone_claudeWeb { --tone: var(--tl-tone-claude-web); --tone-block: var(--tl-tone-claude-web-on-block); }
+.tone_claudeApp { --tone: var(--tl-tone-claude-app); --tone-block: var(--tl-tone-claude-app-on-block); }
+
 .track { height: 12px; border-radius: 6px; background: var(--tl-track); overflow: hidden; }
-.fill { height: 100%; border-radius: 6px; background: var(--tl-bar); }
+.fill { height: 100%; border-radius: 6px; background: var(--tone, var(--tl-bar)); }
 .meterLarge .track { height: 14px; border-radius: 7px; }
 .meterLarge .fill { border-radius: 7px; }
 .meterCompact .track { height: 6px; border-radius: 3px; }
@@ -210,3 +221,12 @@
 .danger { background: var(--tl-danger); color: var(--tl-danger-ink); }
 .quietDanger { background: transparent; color: var(--tl-danger-text); }
 .quietDanger:hover, .quietDanger:focus-visible { background: var(--tl-raised); }
+
+.composition { display: flex; flex-direction: column; gap: 12px; }
+.stacked { display: flex; gap: 2px; height: 16px; border-radius: 8px; overflow: hidden; background: var(--tl-track-on-block); }
+.stackedThin { height: 8px; border-radius: 4px; }
+.part { min-width: 3px; background: var(--tone-block); }
+.legend { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 4px; }
+.legend li { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 14px; }
+.legend li > :last-child { margin-left: auto; }
+.swatch { flex: none; width: 10px; height: 10px; border-radius: 3px; background: var(--tone-block); }

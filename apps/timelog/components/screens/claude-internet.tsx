@@ -22,9 +22,9 @@ export async function ClaudeBlock({ claude, sessions, hasClaudeCode, hasSites, w
   const parts = claude ?? { day: "", code: 0, web: 0, desktop: 0 };
   const total = claudeTotal(parts);
   const rows = [
-    { key: "code", name: t("code"), seconds: parts.code, shown: hasClaudeCode || parts.code > 0 },
-    { key: "web", name: t("web"), seconds: parts.web, shown: hasSites || parts.web > 0 },
-    { key: "desktop", name: t("desktop"), seconds: parts.desktop, shown: parts.desktop > 0 },
+    { key: "code", tone: "claude" as const, name: t("code"), seconds: parts.code, shown: hasClaudeCode || parts.code > 0 },
+    { key: "web", tone: "claudeWeb" as const, name: t("web"), seconds: parts.web, shown: hasSites || parts.web > 0 },
+    { key: "desktop", tone: "claudeApp" as const, name: t("desktop"), seconds: parts.desktop, shown: parts.desktop > 0 },
   ].filter((row) => row.shown);
 
   return (
@@ -33,7 +33,7 @@ export async function ClaudeBlock({ claude, sessions, hasClaudeCode, hasSites, w
         <Text as="p" variant="meta">{t(hasClaudeCode ? "empty" : "never")}</Text>
       ) : (
         <>
-          <BarRows rows={rows.map((row) => ({ key: row.key, name: row.name, figure: words.duration(row.seconds), seconds: row.seconds, label: t("bar", { name: row.name, duration: words.duration(row.seconds) }) }))} />
+          <BarRows rows={rows.map((row) => ({ key: row.key, tone: row.tone, name: row.name, figure: words.duration(row.seconds), seconds: row.seconds, label: t("bar", { name: row.name, duration: words.duration(row.seconds) }) }))} />
           {rows.length === 3 ? <Text as="p" variant="meta">{t("overlap")}</Text> : null}
         </>
       )}
@@ -41,6 +41,7 @@ export async function ClaudeBlock({ claude, sessions, hasClaudeCode, hasSites, w
         <Stack gap={2}>
           <Text variant="meta">{t("sessions")}</Text>
           <BarRows
+            tone="claude"
             rows={sessions.slice(0, SESSIONS_SHOWN).map((one) => {
               const project = projectName(one.project);
               return {
@@ -69,6 +70,7 @@ export async function InternetBlock({ sites, pages, hasSites, words }: { sites: 
     return (
       <>
         <BarRows
+          tone="browser"
           rows={mine.slice(0, PAGES_SHOWN).map((page) => {
             const name = page.title === "" ? page.url : page.title;
             return { key: `${page.url}\n${page.title}`, name, figure: words.duration(page.seconds), seconds: page.seconds, label: t("pageBar", { title: name, duration: words.duration(page.seconds) }), note: page.url };
@@ -82,7 +84,7 @@ export async function InternetBlock({ sites, pages, hasSites, words }: { sites: 
     <Stack gap={2}>
       {shown.length > 0 ? (
         <>
-          <BarRows rows={shown.map((one) => ({ key: one.host, name: one.host, figure: words.duration(one.seconds), seconds: one.seconds, label: t("bar", { host: one.host, duration: words.duration(one.seconds) }), detail: pages.some((page) => page.host === one.host) ? pagesOf(one.host) : undefined }))} />
+          <BarRows tone="browser" rows={shown.map((one) => ({ key: one.host, name: one.host, figure: words.duration(one.seconds), seconds: one.seconds, label: t("bar", { host: one.host, duration: words.duration(one.seconds) }), detail: pages.some((page) => page.host === one.host) ? pagesOf(one.host) : undefined }))} />
           {sites.length > shown.length ? <Text as="p" variant="meta">{t("more", { n: sites.length - shown.length })}</Text> : null}
           <Text as="p" variant="meta">{t("privacy")}</Text>
         </>

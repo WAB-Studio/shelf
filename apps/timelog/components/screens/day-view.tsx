@@ -4,7 +4,8 @@ import { BarRows } from "@/components/screens/app-rows";
 import { AutoRefresh } from "@/components/screens/auto-refresh";
 import { ClaudeBlock, InternetBlock } from "@/components/screens/claude-internet";
 import { Timeline } from "@/components/ui/timeline";
-import { Between, Card, Cards, Figure, Hero, HeroColumns, Mosaic, Stack, Text, TextLink, Tile, Title } from "@/components/ui";
+import { Between, Card, Cards, Composition, Figure, Hero, HeroColumns, Mosaic, Stack, Text, TextLink, Tile, Title } from "@/components/ui";
+import { appClass, timeByClass } from "@/lib/app-classes";
 import { readableApp } from "@/lib/app-names";
 import { projectName } from "@/lib/claude-project";
 import { claudeTotal } from "@/lib/daily";
@@ -22,7 +23,7 @@ export async function DayView({ day }: { day: string }) {
   const today = civilDay();
   const isToday = day === today;
   const before = addDays(day, -1);
-  const [raw, sites, pages, windows, sessions, claudeDays, previous, span, words, t, tClaude, tInternet, tTimeline] = await Promise.all([
+  const [raw, sites, pages, windows, sessions, claudeDays, previous, span, words, t, tClaude, tInternet, tTimeline, tClass, tAll] = await Promise.all([
     appsBetween(day, day),
     sitesBetween(day, day),
     pagesBetween(day, day),
@@ -37,6 +38,8 @@ export async function DayView({ day }: { day: string }) {
     getTranslations("time.claude"),
     getTranslations("time.internet"),
     getTranslations("time.timeline"),
+    getTranslations("time.classes"),
+    getTranslations("time"),
   ]);
   const claude = claudeDays[0];
   const claudeSeconds = claude === undefined ? 0 : claudeTotal(claude);
@@ -49,6 +52,8 @@ export async function DayView({ day }: { day: string }) {
   }
   const total = sum(apps);
   const top = apps[0];
+  const tSystem = tAll("system");
+  const classes = timeByClass(apps, tSystem);
   const previousTotal = previous[0]?.seconds ?? 0;
   const delta = total - previousTotal;
   const date = t("title", { weekday: words.weekday(day), day: words.dayOfMonth(day), month: words.month(day) });
@@ -82,6 +87,13 @@ export async function DayView({ day }: { day: string }) {
                 <Figure parts={words.durationParts(total)} mark />
                 {isToday && span.lastReceived !== null ? <Text variant="meta">{t("updated", { ago: words.ago(span.lastReceived) })}</Text> : null}
               </Stack>
+            </Stack>
+            <Stack gap={2}>
+              <Text variant="meta">{t("byClass")}</Text>
+              <Composition
+                label={t("byClassLabel")}
+                parts={classes.map((one) => ({ key: one.kind, tone: one.kind, seconds: one.seconds, name: tClass(one.kind), figure: words.duration(one.seconds) }))}
+              />
             </Stack>
             <Cards>
               <Card label={t("topApp")}>
@@ -129,12 +141,14 @@ export async function DayView({ day }: { day: string }) {
                 rows={apps.map((one) => ({
                   key: one.app,
                   name: one.app,
+                  tone: appClass(one.app, tSystem),
                   figure: words.duration(one.seconds),
                   seconds: one.seconds,
                   label: t("bar", { app: one.app, duration: words.duration(one.seconds) }),
                   detail: titlesOf.has(one.app) ? (
                     <>
                       <BarRows
+                        tone={appClass(one.app, tSystem)}
                         rows={(titlesOf.get(one.app) ?? []).slice(0, TITLES_SHOWN).map((title) => ({
                           key: title.app + title.title,
                           name: title.title,

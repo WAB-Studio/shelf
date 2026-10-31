@@ -48,18 +48,20 @@ export function Between({ children }: { children: ReactNode }) {
   return <div className={styles.between}>{children}</div>;
 }
 
+export type Tone = "code" | "browser" | "comms" | "leisure" | "system" | "other" | "claude" | "claudeWeb" | "claudeApp";
+
 type MeterSize = "large" | "default" | "compact";
 
 // A name and its figure over the bar under them, 48 tall at least (DESIGN «Hoy»). A long name
 // truncates; the figure never wraps.
-export function Meter({ name, figure, share, label, size = "default" }: { name: ReactNode; figure: ReactNode; share: number; label: string; size?: MeterSize }) {
+export function Meter({ name, figure, share, label, size = "default", tone }: { name: ReactNode; figure: ReactNode; share: number; label: string; size?: MeterSize; tone?: Tone }) {
   return (
     <div className={join(styles.stack, styles.gap1, styles.meter, size === "large" && styles.meterLarge, size === "compact" && styles.meterCompact)}>
       <div className={styles.line}>
         <Text truncate>{name}</Text>
         <Text mono>{figure}</Text>
       </div>
-      <Bar share={share} label={label} />
+      <Bar share={share} label={label} tone={tone} />
     </div>
   );
 }
@@ -132,6 +134,34 @@ function FigureParts({ text }: { text: string }) {
   return at < 0 ? text : <><span>{text.slice(0, at)}</span><span className={styles.dayUnit}>{text.slice(at + 1)}</span></>;
 }
 
+export type CompositionPart = { key: string; tone: Tone; seconds: number; name: string; figure: string };
+
+// A whole in parts on the brand block: one stacked bar and, under it, each part's name and figure in words, so no
+// part is told by colour alone. `thin` leaves the legend to the text around it.
+export function Composition({ parts, label, thin }: { parts: CompositionPart[]; label: string; thin?: boolean }) {
+  const total = Math.max(1, parts.reduce((sum, part) => sum + part.seconds, 0));
+  return (
+    <div className={styles.composition}>
+      <div className={join(styles.stacked, thin && styles.stackedThin)} role="img" aria-label={label}>
+        {parts.map((part) => (
+          <div key={part.key} className={join(styles.part, styles[`tone_${part.tone}`])} style={{ flexGrow: part.seconds / total }} />
+        ))}
+      </div>
+      {thin ? null : (
+        <ul className={styles.legend}>
+          {parts.map((part) => (
+            <li key={part.key} className={styles[`tone_${part.tone}`]}>
+              <span className={styles.swatch} aria-hidden="true" />
+              <Text truncate>{part.name}</Text>
+              <Text mono>{part.figure}</Text>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 export type DayColumn = { key: string; label: string; figure: string; share: number; future: boolean; description: string; href?: string };
 
 // Seven vertical columns, one per day, for the brand block; a day not reached is dimmed and empty.
@@ -183,10 +213,10 @@ export function Header({ brand, href, children }: { brand: ReactNode; href: stri
 }
 
 // One bar, its length a share of the longest (DESIGN: the only graphic).
-export function Bar({ share, label }: { share: number; label: string }) {
+export function Bar({ share, label, tone }: { share: number; label: string; tone?: Tone }) {
   const percent = Math.max(0, Math.min(1, share)) * 100;
   return (
-    <div className={styles.track} role="img" aria-label={label}>
+    <div className={join(styles.track, tone && styles[`tone_${tone}`])} role="img" aria-label={label}>
       <div className={styles.fill} style={{ width: `${percent}%` }} />
     </div>
   );

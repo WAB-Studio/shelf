@@ -16,7 +16,7 @@ export function Timeline({ segments, lanes, marks, focus, label }: { segments: T
     if (box !== null) box.scrollLeft = focus * box.scrollWidth - box.clientWidth / 2;
   }, [focus]);
   return (
-    <div ref={scroller} className={styles.timeline} role="group" aria-label={label} tabIndex={0}>
+    <div ref={scroller} className={`${styles.timeline} ${styles.tone_claude}`} role="group" aria-label={label} tabIndex={0}>
       <div className={styles.timelineLine}>
         <div className={styles.timelineLanes} style={{ height: `${lanes * 40 - 4}px` }}>
           {segments.map((one) => (
