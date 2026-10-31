@@ -512,7 +512,7 @@ test.describe("a notice dated before its account opened", () => {
 
       const dialog = page.getByRole("dialog");
       await expect(dialog).toBeVisible();
-      await expect(dialog.getByLabel(transactions.dateLabel)).toHaveValue(day);
+      await expect(dialog.getByLabel(transactions.dateLabel)).toHaveValue(day.split("-").reverse().join("/"));
       await expect(dialog.getByText(BEFORE_OPENING)).toBeVisible();
       await expect(dialog.getByLabel(transactions.dateLabel)).toBeInViewport();
 
@@ -553,7 +553,7 @@ test.describe("a notice dated before its account opened", () => {
 
       const dialog = page.getByRole("dialog");
       await expect(dialog).toBeVisible();
-      await expect(dialog.getByLabel(transactions.dateLabel)).toHaveValue(day);
+      await expect(dialog.getByLabel(transactions.dateLabel)).toHaveValue(day.split("-").reverse().join("/"));
       await expect(dialog.getByText(BEFORE_OPENING)).toBeVisible();
       await expect(dialog.getByLabel(transactions.dateLabel)).toBeInViewport();
     });
