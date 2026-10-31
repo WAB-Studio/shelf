@@ -432,8 +432,9 @@ function QuickEntryForm({
         <Controller
           name="splits"
           control={form.control}
-          render={({ field, fieldState }) => (
-            <Field invalid={submitted && fieldState.invalid}>
+          // Destructured here, ahead of the submit gate: a field that never reads its error is never told it changed.
+          render={({ field, fieldState: { invalid, error } }) => (
+            <Field invalid={submitted && invalid}>
               <FieldLabel>{t("categoryLabel")}</FieldLabel>
               <SplitEditor
                 total={amount}
@@ -445,7 +446,7 @@ function QuickEntryForm({
                 value={field.value}
                 onChange={field.onChange}
               />
-              <FieldMessage error={submitted ? fieldState.error : undefined} />
+              <FieldMessage error={submitted ? error : undefined} />
             </Field>
           )}
         />
