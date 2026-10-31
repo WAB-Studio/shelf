@@ -30,8 +30,9 @@
     min-width: 0;
     padding: 18px 20px;
     background-color: var(--color-panel-solid);
-    border: 1px solid var(--gray-a4);
-    border-radius: 16px;
+    border: 1px solid var(--hf-line);
+    box-shadow: var(--hf-shadow);
+    border-radius: var(--hf-card-radius);
   }
 
   /* The 1.35 / 1 / 0.9 of the Inicio artboard, off a zero basis so the ratio is
@@ -55,7 +56,7 @@
   /* Doubled to outrank Radix's own size class, which lands in another sheet at
      the same specificity and whichever order the bundler chose. */
   .figure.figure {
-    font-size: 40px;
+    font-size: clamp(44px, 4.4vw, 64px);
     line-height: 1;
     letter-spacing: -0.03em;
   }
@@ -87,8 +88,9 @@
   min-width: 0;
   padding: 18px 20px;
   background-color: var(--color-panel-solid);
-  border: 1px solid var(--gray-a4);
-  border-radius: 16px;
+  border: 1px solid var(--hf-line);
+  box-shadow: var(--hf-shadow);
+  border-radius: var(--hf-card-radius);
 }
 
 /* Gastos por categoría and aportes del mes share this row. The artboard gives
@@ -100,7 +102,20 @@
   gap: 16px;
 }
 
-/* The featured card is a box below `md` too, unlike its siblings. */
+/* The featured card is a box below `md` too, unlike its siblings; from `md`
+   it takes the whole first row and the others share the next. */
+@media (min-width: 1024px) {
+  .cards {
+    flex-wrap: wrap;
+  }
+
+  /* Doubled to outrank the base rule below, which sets the phone's padding. */
+  .card.card[data-featured] {
+    flex-basis: 100%;
+    padding: 28px 32px;
+  }
+}
+
 .card[data-featured] {
   display: flex;
   flex-direction: column;

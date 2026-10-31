@@ -20,7 +20,7 @@ body {
    violet ring. Keyed off the class the pre-paint script already wrote, so the
    tone lands on first paint with no flash. The doubled class outranks Radix's
    own token. */
-.light .radix-themes.radix-themes {
+.light .radix-themes.radix-themes:not(.dark) {
   --color-background: #ffffff;
   --gray-12: #1a1033;
   /* The brand violet as Radix's own step 11, so a `color="violet"` text and the
@@ -42,8 +42,11 @@ body {
   outline-color: var(--accent-11);
 }
 
-.dark .radix-themes.radix-themes {
+.dark .radix-themes.radix-themes,
+.radix-themes.radix-themes.dark {
   --color-background: #110c20;
+  /* The panel takes the violet of the ground instead of Radix's neutral gray. */
+  --color-panel-solid: #1b1530;
   /* 8.50:1 on the ground: the violet text and ring on dark. */
   --violet-11: #b8a3ff;
   --focus-8: var(--violet-11);
@@ -84,5 +87,19 @@ body {
 /* Money and dates line up in columns wherever they are read. */
 .radix-themes {
   font-variant-numeric: tabular-nums;
+}
+
+/* The surface finish (DESIGN.md «Violeta y lima»): a tinted violet line and a
+   soft ink shadow instead of Radix's gray hairline; every card primitive reads these. */
+.radix-themes.radix-themes {
+  --hf-line: #e4dcff;
+  --hf-shadow: 0 1px 2px rgb(26 16 51 / 0.04), 0 8px 24px -12px rgb(26 16 51 / 0.12);
+  --hf-card-radius: 20px;
+}
+
+.dark .radix-themes.radix-themes,
+.radix-themes.radix-themes.dark {
+  --hf-line: #2d2450;
+  --hf-shadow: 0 8px 24px -12px rgb(0 0 0 / 0.5);
 }
 

@@ -5,8 +5,9 @@
 
 .container {
   background-color: var(--color-panel-solid);
-  border: 1px solid var(--gray-a4);
-  border-radius: 14px;
+  border: 1px solid var(--hf-line);
+  box-shadow: var(--hf-shadow);
+  border-radius: var(--hf-card-radius);
   /* A row narrower than its tracks scrolls to reach them; the axis that never
      needs to (the vertical one, against the rounded corners) stays clipped. */
   overflow-x: auto;
