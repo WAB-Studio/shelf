@@ -627,7 +627,6 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
                 note={done.note}
                 noteEyebrow={noteEyebrow(done.goalId)}
                 goalName={goalNameOf(done.goalId)}
-                time={timeInZone(done.writtenAt)}
               />
             ))}
           </Flex>

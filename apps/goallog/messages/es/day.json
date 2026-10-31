@@ -129,7 +129,6 @@
     "of": "fase {ordinal} de {total} · {name}"
   },
   "row": {
-    "saidByYou": "lo dijiste tú",
     "notedBy": "lo anota el {source}",
     "partialAmount": "{logged} de {target}",
     "evidenceAmount": "{count} {unit}",

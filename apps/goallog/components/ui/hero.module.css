@@ -19,7 +19,8 @@
 }
 
 .label {
-  font-family: var(--font-mono);
+  font-family: var(--font-sans);
+  font-weight: 500;
   font-size: var(--pulsar-text-label-size);
   letter-spacing: var(--pulsar-text-label-tracking);
   color: var(--pulsar-brand-muted);
