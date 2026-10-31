@@ -1,7 +1,7 @@
 "use client";
 
 import { useFormatter, useLocale, useTranslations } from "next-intl";
-import { addCivilMonths, civilDateToDate, todayInBogota } from "@/lib/dates";
+import { civilDateToDate, todayInBogota } from "@/lib/dates";
 import { usePathname, useRouter } from "@/i18n/navigation";
 
 import {
@@ -42,19 +42,8 @@ const SERIES_COLORS = {
 // The title and the way into «Revisar el mes» (RF-155), on both faces.
 function ReportsHead({ title, month }: { title: string; month: string }) {
   const t = useTranslations("review");
-  const tr = useTranslations("reports");
-  const format = useFormatter();
-  const locale = useLocale();
   const pathname = usePathname();
   const router = useRouter();
-
-  const anchor = `${month}-01`;
-  const name = format.dateTime(civilDateToDate(anchor), { month: "long", year: "numeric" });
-  const go = (delta: number) =>
-    router.push(
-      { pathname, query: { month: addCivilMonths(anchor, delta).slice(0, 7) } },
-      { scroll: false },
-    );
 
   return (
     <Flex direction="column" gap="4">
@@ -63,11 +52,8 @@ function ReportsHead({ title, month }: { title: string; month: string }) {
         actions={<TextLink href="/reports/review" size="2" weight="medium">{t("entry")}</TextLink>}
       />
       <MonthStepper
-        label={name.charAt(0).toLocaleUpperCase(locale) + name.slice(1)}
-        previousLabel={tr("previousMonth")}
-        nextLabel={tr("nextMonth")}
-        onPrevious={() => go(-1)}
-        onNext={() => go(1)}
+        month={month}
+        onChange={(next) => router.push({ pathname, query: { month: next } }, { scroll: false })}
         nextDisabled={month >= todayInBogota().slice(0, 7)}
       />
     </Flex>
@@ -102,7 +88,7 @@ export function ReportsScreen({ data, month }: { data: ReportsData; month: strin
           <Flex direction="column" gap="3" asChild>
             <section>
               <Heading as="h2" size="4">{t("byCategoryTitle")}</Heading>
-              <ExpenseBands expenses={expensesByCategory} months={sixMonthFlow} />
+              <ExpenseBands expenses={expensesByCategory} months={sixMonthFlow} monthStart={`${month}-01`} />
             </section>
           </Flex>
 
@@ -168,7 +154,7 @@ export function ReportsScreen({ data, month }: { data: ReportsData; month: strin
             <ReportRow>
               <ReportCard>
                 <Heading as="h2" size="4">{t("byCategoryTitle")}</Heading>
-                <ExpenseBands expenses={expensesByCategory} months={sixMonthFlow} />
+                <ExpenseBands expenses={expensesByCategory} months={sixMonthFlow} monthStart={`${month}-01`} />
               </ReportCard>
 
               <ReportCard>
@@ -229,18 +215,21 @@ function byCurrency<T extends { currency: CurrencyCode }>(
 function ExpenseBands({
   expenses,
   months,
+  monthStart,
 }: {
   expenses: CategoryExpense[];
   months: MonthFlow[];
+  // The chosen month, whose adjustment closes each band.
+  monthStart: string;
 }) {
   const t = useTranslations("reports");
   const tKey = useTranslations();
 
-  // The window's last month per currency; the chart never draws the adjustment.
+  // The chosen month per currency; the chart never draws the adjustment.
   const adjustments = new Map<CurrencyCode, MonthFlow>();
   for (const [currency, rows] of byCurrency(months)) {
-    const last = rows[rows.length - 1];
-    if (last && last.adjustmentCents !== 0) adjustments.set(currency, last);
+    const chosen = rows.find((row) => row.monthStart === monthStart);
+    if (chosen && chosen.adjustmentCents !== 0) adjustments.set(currency, chosen);
   }
 
   const bands = new Map<CurrencyCode, CategoryExpense[]>(byCurrency(expenses));

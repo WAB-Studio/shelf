@@ -5200,7 +5200,7 @@ const UPDATE_GRANT_GAPS: Record<string, string[]> = {
     "record_id",
   ],
   budgets: ["category_id", "created_at", "external_ref", "group_id", "id", "owner_user_id", "updated_at"],
-  categories: ["created_at", "group_id", "id", "kind", "owner_user_id", "updated_at"],
+  categories: ["created_at", "group_id", "id", "kind", "owner_user_id", "seed_key", "updated_at"],
   debt_terms: ["account_id", "created_at", "updated_at"],
   goal_contributions: ["amount_cents", "created_at", "external_ref", "goal_id", "id", "transaction_id"],
   group_members: [

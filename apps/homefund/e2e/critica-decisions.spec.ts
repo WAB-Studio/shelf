@@ -10,10 +10,10 @@ import { test } from "./global-setup";
 
 test("Reportes steps back a month and names it", async ({ page }) => {
   await page.goto("/es/reports");
-  const previous = page.getByRole("button", { name: messages.reports.previousMonth }).locator("visible=true").first();
+  const previous = page.getByRole("button", { name: messages.common.previousMonth }).locator("visible=true").first();
   await previous.click();
   await expect(page).toHaveURL(/month=\d{4}-\d{2}/);
-  await expect(page.getByRole("button", { name: messages.reports.nextMonth }).locator("visible=true").first()).toBeEnabled();
+  await expect(page.getByRole("button", { name: messages.common.nextMonth }).locator("visible=true").first()).toBeEnabled();
 });
 
 test("Planeación draws its tiles in one column on the phone", async ({ page }) => {

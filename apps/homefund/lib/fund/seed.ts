@@ -12,6 +12,8 @@ export type SeedChild = {
 // A child carries neither `kind` nor `color`: a subcategory is the same kind as
 // its parent (RF-27), and the writer copies both down.
 export type SeedCategory = {
+  // The identity a rule keys on, which survives a rename.
+  key?: "salary";
   kind: "expense" | "income";
   color: string;
   name: SeedName;
@@ -104,6 +106,7 @@ export const SEED_CATEGORIES: readonly SeedCategory[] = [
     name: { es: "Otros gastos", en: "Other expenses" },
   },
   {
+    key: "salary",
     kind: "income",
     color: "#16A34A",
     name: { es: "Salario", en: "Salary" },

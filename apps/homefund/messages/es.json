@@ -8,6 +8,8 @@
     "onboardingDescription": "Un fondo es el bote común: sus cuentas, sus miembros y su historial."
   },
   "common": {
+    "previousMonth": "Mes anterior",
+    "nextMonth": "Mes siguiente",
     "appName": "HomeFund",
     "backHome": "Volver al inicio",
     "retry": "Reintentar",
@@ -163,8 +165,6 @@
     "ownerBarLabel": "Patrimonio por dueño en {currency}"
   },
   "reports": {
-    "previousMonth": "Mes anterior",
-    "nextMonth": "Mes siguiente",
     "title": "Reportes",
     "inCurrency": "en {currency}",
     "nav": "Reportes",
@@ -718,8 +718,6 @@
     "accountAny": "Todas las cuentas",
     "labelLabel": "Etiqueta",
     "labelAny": "Todas las etiquetas",
-    "previousMonth": "Mes anterior",
-    "nextMonth": "Mes siguiente",
     "remaining": "Quedan {amount} · {pct}%",
     "overspent": "Superado en {amount}",
     "nearLimit": "Cerca del límite · {pct}% (aviso al {threshold}%)",

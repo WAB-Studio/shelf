@@ -34,9 +34,12 @@ export default async function ReportsPage(
   if (!hasLocale(routing.locales, locale)) notFound();
 
 
-  const month = monthSchema.parse((await props.searchParams).month);
+  // A month that has not begun has nothing to read: it clamps to the current one.
+  const requested = monthSchema.parse((await props.searchParams).month);
+  const current = todayInBogota().slice(0, 7);
+  const month = requested > current ? current : requested;
 
-  const [data] = await Promise.all([getReportsData(`${month}-01`)]);
+  const data = await getReportsData(`${month}-01`);
 
   return (
     <Page>

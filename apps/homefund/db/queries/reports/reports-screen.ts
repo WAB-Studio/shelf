@@ -41,7 +41,7 @@ export async function getReportsData(monthStart: string = currentMonthStart()): 
   const [expensesByCategory, sixMonthFlow, contributionRows, group, sessionUser] =
     await Promise.all([
       getExpensesByCategory(monthRange(monthStart)),
-      getSixMonthFlow(),
+      getSixMonthFlow(monthStart),
       getMemberContributions(monthRange(monthStart)),
       getUserGroup(),
       getSessionUser(),

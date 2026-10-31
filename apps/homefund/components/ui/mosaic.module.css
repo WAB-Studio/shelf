@@ -4,7 +4,7 @@
   grid-template-columns: minmax(0, 1fr);
 }
 
-@media (min-width: 768px) {
+@media (min-width: 1024px) {
   .mosaic {
     grid-template-columns: repeat(3, minmax(0, 1fr));
     grid-auto-flow: row dense;
@@ -29,7 +29,7 @@
   border-color: var(--violet-8);
 }
 
-@media (min-width: 768px) {
+@media (min-width: 1024px) {
   .tile[data-size="large"] {
     grid-column: span 2;
     grid-row: span 2;

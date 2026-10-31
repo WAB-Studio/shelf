@@ -138,11 +138,11 @@ export async function getDebtsScreenData(): Promise<DebtsScreenData> {
   const nameById = new Map(accounts.map((account) => [account.id, account.name]));
   // The roster's own projection carries the write privilege, so no debt costs a
   // second statement to learn what its caller may do to it.
-  const personalById = new Map(
-    accounts.map((account) => [account.id, account.ownerUserId !== null]),
-  );
   const writableById = new Map(
     accounts.map((account) => [account.id, account.canWrite]),
+  );
+  const personalById = new Map(
+    accounts.map((account) => [account.id, account.ownerUserId !== null]),
   );
   // The view answers one row per account AND currency, so the key is the pair:
   // keyed by the account alone, the last currency read would win and a card's

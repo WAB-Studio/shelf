@@ -367,7 +367,7 @@ test.describe("budgets", () => {
     await page.goto("/es/planning/budgets");
 
     const label = page
-      .getByRole("button", { name: messages.budgets.previousMonth })
+      .getByRole("button", { name: messages.common.previousMonth })
       .locator("xpath=following-sibling::*[1]");
     const text = (await label.textContent()) ?? "";
     expect(text.charAt(0)).toBe(text.charAt(0).toLocaleUpperCase("es"));
