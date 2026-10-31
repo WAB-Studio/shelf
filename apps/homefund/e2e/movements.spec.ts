@@ -909,10 +909,10 @@ test.describe("the «Descuadre» filter (RF-138, boards C2a-C2e)", () => {
     // Kills: `listMeta` and the nets kept for every type.
     await page.goto("/es/movements?type=adjustment");
 
-    const meta = metaOf(page, /descuadres/);
+    const meta = metaOf(page, /diferencias/);
     await expect(meta).toBeVisible();
     const text = flat(await meta.innerText());
-    expect(text).toContain("2 descuadres");
+    expect(text).toContain("2 diferencias");
     expect(text).not.toContain("$");
     expect(text).not.toContain("neto");
   });
@@ -925,9 +925,9 @@ test.describe("the «Descuadre» filter (RF-138, boards C2a-C2e)", () => {
       where reconciliation_id is not null and from_account_id = ${accountId}`;
     await page.goto("/es/movements?type=adjustment");
 
-    const meta = metaOf(page, /1 descuadre/);
+    const meta = metaOf(page, /1 diferencia/);
     await expect(meta).toBeVisible();
-    expect(flat(await meta.innerText())).not.toContain("descuadres");
+    expect(flat(await meta.innerText())).not.toContain("diferencias");
   });
 
   test("every other type keeps the count and the net", async ({ page }, testInfo) => {
@@ -940,7 +940,7 @@ test.describe("the «Descuadre» filter (RF-138, boards C2a-C2e)", () => {
     const text = flat(await meta.innerText());
     expect(text).toContain("1 · neto");
     expect(text).toContain("−$ 32.000");
-    expect(text).not.toContain("descuadre");
+    expect(text).not.toContain("diferencia");
   });
 
   test("no adjustment: the filtered-empty state offers Quitar filtros, which returns to Todos (C2c)", async ({

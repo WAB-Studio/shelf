@@ -236,7 +236,7 @@ export function GoalsScreen({
             </>
           }
           actions={
-            !archived && (
+            !archived && goals.length > 0 && (
               <Button
                 type="button"
                 variant="surface"
@@ -255,7 +255,7 @@ export function GoalsScreen({
         <ScreenHeader
           title={t("title")}
           meta={hasGroup ? <FundChip label={tKey("fund.label")} /> : undefined}
-          actions={!archived ? addButton : undefined}
+          actions={!archived && goals.length > 0 ? addButton : undefined}
         />
       </Box>
 

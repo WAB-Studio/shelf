@@ -181,7 +181,7 @@
     "labels": "Labels",
     "data": "Data",
     "audit": "Audit log",
-    "webhooks": "Webhooks",
+    "webhooks": "Bank emails",
     "roleLeader": "Owner",
     "roleMember": "Member"
   },
@@ -311,8 +311,8 @@
     "editTitle": "Edit account",
     "nameLabel": "Name",
     "kindLabel": "Kind",
-    "kindAsset": "Asset",
-    "kindLiability": "Liability",
+    "kindAsset": "What I have",
+    "kindLiability": "What I owe",
     "kindLocked": "The kind cannot be changed after the account is created.",
     "subtypeLabel": "Class",
     "subtypeBancaria": "Bank",
@@ -1352,7 +1352,7 @@
     }
   },
   "webhooks": {
-    "title": "Webhooks",
+    "title": "Bank emails",
     "add": "Create credential",
     "emptyTitle": "No credentials",
     "emptyDescription": "Create a credential so a shortcut or a service records movements for you.",

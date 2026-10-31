@@ -835,7 +835,7 @@ test.describe("confirming (B7)", () => {
         page
           .getByRole("row")
           .or(page.locator('a[href*="/movements/"]'))
-          .getByText("Descuadre", { exact: true }),
+          .getByText("Diferencia", { exact: true }),
       ).toHaveCount(0);
     } finally {
       await dropAccount(account.id);

@@ -196,7 +196,8 @@ export function BudgetsScreen({
       <ScreenHeader
         title={t("title")}
         meta={hasGroup ? <FundChip label={tKey("fund.label")} /> : undefined}
-        actions={!archived ? addButton : undefined}
+        // The empty state carries its own «add», so the header's would be a second.
+        actions={!archived && budgets.length > 0 ? addButton : undefined}
       />
 
       <Box display={{ initial: "none", md: "block" }}>
