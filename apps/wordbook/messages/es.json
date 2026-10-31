@@ -8,15 +8,16 @@
     "label": "Secciones",
     "search": "Buscar",
     "log": "Registro",
-    "account": "Cuenta"
+    "account": "Cuenta",
+    "brand": "Word<mark>Book</mark>"
   },
   "search": {
     "brand": "Word<mark>Book</mark>",
     "brandLine": "Busca una palabra y léela en español.",
-    "placeholder": "Escribe una palabra o una frase",
+    "placeholder": "Escribe una palabra o frase",
     "label": "Buscar",
     "clear": "Borrar",
-    "empty": "Escribe una palabra o una frase en inglés",
+    "empty": "En inglés. Se traduce al español, sin conexión.",
     "notFound": "El diccionario no tiene esa palabra",
     "notFoundHint": "Revisa la ortografía o prueba con otra forma de la palabra",
     "correctionTitle": "¿Quisiste decir…?",
@@ -29,6 +30,14 @@
       "wordMiss": "El diccionario tampoco tiene esta palabra.",
       "tooLong": "Eso son {count} palabras. Busca una, o una frase de hasta sesenta.",
       "more": "…y {count, plural, one {# palabra más: {words}} other {# palabras más: {words}}}."
+    },
+    "tryTitle": "Prueba con",
+    "recentTitle": "Tus últimas búsquedas",
+    "examples": {
+      "one": "serendipity",
+      "two": "give up",
+      "three": "look forward to",
+      "four": "I'm running out of time"
     }
   },
   "install": {
@@ -68,7 +77,9 @@
       "pn": "nombre propio",
       "adv": "adverbio",
       "phraseologicalUnit": "locución"
-    }
+    },
+    "translationsMore": "ver {count} más",
+    "translationsLess": "ver menos"
   },
   "phrase": {
     "translating": "Traduciendo…",
@@ -90,16 +101,16 @@
     "exported": "Registro exportado",
     "exportFailed": "No se pudo exportar el registro",
     "outcome": {
-      "exact": "Exacta",
-      "inflected": "Flexionada",
-      "translated": "Traducida",
+      "exact": "Encontrada",
+      "inflected": "Otra forma",
+      "translated": "Frase",
       "miss": "Sin resultado",
-      "unlisted": "De la red"
+      "unlisted": "De internet"
     },
     "listFailed": "No se pudo cargar el registro",
     "retry": "Reintentar",
     "study": {
-      "header": "{lookups, plural, one {# búsqueda} other {# búsquedas}} · {words, plural, one {# palabra} other {# palabras}}.",
+      "header": "{lookups, plural, one {# búsqueda} other {# búsquedas}} · {kind, select, entries {{words, plural, one {# entrada} other {# entradas}}} other {{words, plural, one {# palabra} other {# palabras}}}}.",
       "emptyTitle": "Todavía no has buscado nada",
       "emptyBody": "Cada palabra que busques aparece aquí, con las veces que la miraste.",
       "emptyAction": "Buscar una palabra",
@@ -115,7 +126,7 @@
       "pendingPhrase": "Se traduce sola cuando vuelva la conexión.",
       "filterLabel": "Buscar en el registro",
       "filterClear": "Borrar el filtro",
-      "filterCount": "{shown} de {total} palabras",
+      "filterCount": "{shown} de {total} {kind, select, entries {entradas} other {palabras}}",
       "downloadAnki": "Descargar para Anki",
       "ankiPreparing": "Preparando las tarjetas…",
       "ankiDone": "{cards, plural, one {# tarjeta para Anki descargada} other {# tarjetas para Anki descargadas}}",
@@ -133,7 +144,9 @@
       "deleting": "Borrando…",
       "deleteFailedTitle": "No se pudo borrar «{word}»",
       "deleteFailedBody": "No se tocó nada: {count, plural, one {su # búsqueda sigue aquí} other {sus # búsquedas siguen aquí}}.",
-      "filterNone": "Ninguna palabra con «{query}»"
+      "filterNone": "Ninguna {kind, select, entries {entrada} other {palabra}} con «{query}»",
+      "more": "Ver más ({count} restantes)",
+      "downloadsTitle": "Descargas"
     },
     "word": {
       "back": "Registro",
@@ -156,7 +169,7 @@
     "clear": {
       "trigger": "Vaciar el registro",
       "confirmTitle": "¿Vaciar el registro?",
-      "confirmBody": "Se borran {words, plural, one {la # palabra} other {las # palabras}} que has buscado, con {lookups, plural, one {su # búsqueda} other {sus # búsquedas}}. No se puede deshacer.",
+      "confirmBody": "Se borran {kind, select, entries {{words, plural, one {la # entrada} other {las # entradas}}} other {{words, plural, one {la # palabra} other {las # palabras}}}} que has buscado, con {lookups, plural, one {su # búsqueda} other {sus # búsquedas}}. No se puede deshacer.",
       "keep": "Conservarlo",
       "soleAction": "Vaciar el registro",
       "localAction": "Vaciar solo en este dispositivo",
@@ -201,8 +214,8 @@
     "copy": {
       "label": "Copia",
       "keepLine": "El navegador puede borrar tu registro si te falta espacio.",
-      "keepAction": "Pedirlo",
-      "keepAsking": "Pidiéndolo…",
+      "keepAction": "Pedir al navegador que guarde el registro",
+      "keepAsking": "Pidiendo permiso…",
       "keepRefused": "El navegador no lo permitió; instala WordBook en tu pantalla de inicio para que lo guarde.",
       "neverSynced": "Aún no ha habido una copia.",
       "failedTitle": "La copia no salió",
@@ -333,8 +346,8 @@
     "loadFailed": "No se pudo abrir el repaso en este dispositivo.",
     "saveFailed": "No se pudo guardar la respuesta. Vuelve a intentarlo.",
     "nothingDue": "Hoy no tienes palabras por repasar.",
-    "finished": "{count, plural, one {Repasaste # palabra. Terminaste por hoy.} other {Repasaste # palabras. Terminaste por hoy.}}",
-    "later": "{count, plural, one {# palabra vuelve más adelante.} other {# palabras vuelven más adelante.}}",
+    "finished": "{kind, select, entries {{count, plural, one {Repasaste # entrada. Terminaste por hoy.} other {Repasaste # entradas. Terminaste por hoy.}}} other {{count, plural, one {Repasaste # palabra. Terminaste por hoy.} other {Repasaste # palabras. Terminaste por hoy.}}}}",
+    "later": "{kind, select, entries {{count, plural, one {# entrada vuelve más adelante.} other {# entradas vuelven más adelante.}}} other {{count, plural, one {# palabra vuelve más adelante.} other {# palabras vuelven más adelante.}}}}",
     "empty": "Las palabras que buscas aparecen aquí para repasarlas.",
     "backToRecord": "Ir al registro",
     "progress": "{current} de {total}",
@@ -351,6 +364,9 @@
       "minutes": "{count} min",
       "hours": "{count} h",
       "days": "{count, plural, one {# día} other {# días}}"
-    }
+    },
+    "waiting": "{count, plural, one {Queda # entrada para repetir en un momento.} other {Quedan # entradas para repetir en un momento.}}",
+    "waitingIn": "Vuelve en {minutes} min",
+    "reviewNow": "Repasar ya"
   }
 }

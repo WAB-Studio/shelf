@@ -12,20 +12,6 @@
 
 .title {
   margin: 0;
-  font-family: var(--font-display);
-  font-size: 34px;
-  font-weight: 800;
-  letter-spacing: -0.02em;
-  line-height: 1.05;
-}
-
-/* The highlight sits behind the key word, ink on marigold — never as text on a
-   ground. */
-.title mark {
-  padding: 0 0.14em;
-  border-radius: 0.2em;
-  background: var(--rl-highlight);
-  color: var(--rl-highlight-ink);
 }
 
 .line {

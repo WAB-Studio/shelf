@@ -93,3 +93,10 @@ export function intervalUnit(ms: number): { unit: "minutes" | "hours" | "days"; 
   if (hours < 24) return { unit: "hours", count: hours };
   return { unit: "days", count: Math.round(hours / 24) };
 }
+
+// RL-79: an answer that puts the entry away for less than this brings it back in the same session.
+const SESSION_REQUEUE_MS = 5 * 60_000;
+
+export function staysInSession(card: ReviewCard, now: number): boolean {
+  return card.due - now <= SESSION_REQUEUE_MS;
+}

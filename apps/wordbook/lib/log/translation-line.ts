@@ -22,3 +22,16 @@ export function formatSenseTranslations(senses: readonly Sense[]): string {
   );
   return cutTranslation([...unique].join(SEPARATOR));
 }
+
+// A stored line back into its translations: the senses joined them with the same separator.
+export function splitTranslations(text: string): string[] {
+  return text.split(SEPARATOR).filter((part) => part !== "");
+}
+
+// The translations a reader sees before asking for the rest.
+export const TRANSLATIONS_SHOWN = 3;
+
+// The first `TRANSLATIONS_SHOWN`, and how many wait behind «ver más».
+export function previewTranslations(items: readonly string[]): { shown: string[]; hidden: number } {
+  return { shown: items.slice(0, TRANSLATIONS_SHOWN), hidden: Math.max(0, items.length - TRANSLATIONS_SHOWN) };
+}

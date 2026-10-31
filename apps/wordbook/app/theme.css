@@ -18,6 +18,8 @@ body {
    #0a3d2e: ink #f3efe2 10.61, marigold #f6b83a 6.88, soft text #b9d6c9 7.86,
    field edge #9fc4b4 6.41; ink #17160f on marigold 10.22. */
 :root {
+  /* One serif: Fraunces for titles, headwords and translations; no second face competes. */
+  --font-serif: var(--font-display);
   --rl-brand: #0a3d2e;
   --rl-brand-ink: #f3efe2;
   --rl-brand-soft: #b9d6c9;
@@ -47,6 +49,19 @@ body {
   /* Bottle green, 7.73:1 on #faf8f2 and 8.21:1 on #fff; #faf8f2 on it is 7.73:1. */
   --rl-accent: #0c5a43;
   --rl-accent-contrast: #faf8f2;
+  /* The filled button: the same bottle green in both modes, cream text on it
+     (light 7.73:1, hover #094835 with #faf8f2 9.94:1). */
+  --rl-solid: #0c5a43;
+  --rl-solid-hover: #094835;
+  --rl-solid-ink: #faf8f2;
+  /* Soft green tints, steps 3 to 5: the soft button's rest, hover and press.
+     #0c5a43 on them is 6.95, 6.15 and 5.25:1. */
+  --rl-tint-3: #e3efe8;
+  --rl-tint-4: #cfe4d8;
+  --rl-tint-5: #b7d6c4;
+  /* The soft card: a hairline and a low shadow, the surface every screen's
+     section sits on. */
+  --rl-shadow: 0 1px 2px rgb(23 22 15 / 6%), 0 6px 18px rgb(23 22 15 / 6%);
   /* Native controls, scrollbars and autofill follow the mode on screen. */
   color-scheme: light;
 }
@@ -64,6 +79,13 @@ body {
     --rl-muted-quiet: #898271;
     --rl-accent: #5fcfa3; /* 9.68:1 on #14130f, 8.98:1 on #1c1b16; #14130f on it 9.68:1 */
     --rl-accent-contrast: #14130f;
+    --rl-solid: #0c5a43; /* the filled button stays bottle green; mint is for text and icons only */
+    --rl-solid-hover: #0f6c51; /* cream #f3efe2 on it 5.56:1; on #0c5a43 7.13:1. The fill is 2.27:1 on the ground, the label names the control */
+    --rl-solid-ink: #f3efe2;
+    --rl-tint-3: #123226; /* #5fcfa3 on the three tints: 7.25, 6.02, 5.09:1 */
+    --rl-tint-4: #174033;
+    --rl-tint-5: #1c4c3c;
+    --rl-shadow: 0 1px 2px rgb(0 0 0 / 35%), 0 6px 18px rgb(0 0 0 / 30%);
     color-scheme: dark;
   }
 }
@@ -81,6 +103,13 @@ body {
   --rl-muted-quiet: #898271;
   --rl-accent: #5fcfa3;
   --rl-accent-contrast: #14130f;
+  --rl-solid: #0c5a43; /* the filled button stays bottle green; mint is for text and icons only */
+  --rl-solid-hover: #0f6c51; /* cream #f3efe2 on it 5.56:1; on #0c5a43 7.13:1. The fill is 2.27:1 on the ground, the label names the control */
+  --rl-solid-ink: #f3efe2;
+  --rl-tint-3: #123226; /* #5fcfa3 on the three tints: 7.25, 6.02, 5.09:1 */
+  --rl-tint-4: #174033;
+  --rl-tint-5: #1c4c3c;
+  --rl-shadow: 0 1px 2px rgb(0 0 0 / 35%), 0 6px 18px rgb(0 0 0 / 30%);
   color-scheme: dark;
 }
 
@@ -122,34 +151,34 @@ body {
 
   --green-1: var(--rl-raised);
   --green-2: var(--rl-raised);
-  --green-3: var(--rl-raised);
-  --green-4: var(--rl-border);
-  --green-5: var(--rl-border);
+  --green-3: var(--rl-tint-3);
+  --green-4: var(--rl-tint-4);
+  --green-5: var(--rl-tint-5);
   --green-6: var(--rl-border);
   --green-7: var(--rl-border);
   --green-8: var(--rl-accent);
-  --green-9: var(--rl-accent);
-  --green-10: var(--rl-accent);
+  --green-9: var(--rl-solid);
+  --green-10: var(--rl-solid-hover);
   --green-11: var(--rl-accent);
   --green-12: var(--rl-accent);
   --green-a1: var(--rl-raised);
   --green-a2: var(--rl-raised);
-  --green-a3: var(--rl-raised);
-  --green-a4: var(--rl-border);
-  --green-a5: var(--rl-border);
+  --green-a3: var(--rl-tint-3);
+  --green-a4: var(--rl-tint-4);
+  --green-a5: var(--rl-tint-5);
   --green-a6: var(--rl-border);
   --green-a7: var(--rl-border);
   --green-a8: var(--rl-accent);
-  --green-a9: var(--rl-accent);
-  --green-a10: var(--rl-accent);
+  --green-a9: var(--rl-solid);
+  --green-a10: var(--rl-solid-hover);
   --green-a11: var(--rl-accent);
   --green-a12: var(--rl-accent);
-  --green-contrast: var(--rl-accent-contrast);
+  --green-contrast: var(--rl-solid-ink);
   --green-surface: var(--rl-raised);
-  --green-indicator: var(--rl-accent);
-  --green-track: var(--rl-accent);
+  --green-indicator: var(--rl-solid);
+  --green-track: var(--rl-solid);
 
   /* Interface copy stays sans by default; Headword and the serif Text variant
-     opt into Newsreader for headwords, translations and definitions. */
+     opt into Fraunces, the app's one serif. */
   --default-font-family: var(--font-sans);
 }

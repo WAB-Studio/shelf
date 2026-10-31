@@ -3,10 +3,10 @@ import { Text as ThemesText, type TextProps } from "@radix-ui/themes";
 import styles from "./text.module.css";
 
 // The one door onto Radix Themes' Text, so a headword's translation or
-// definition can opt into Newsreader without a screen writing its own class
+// definition can opt into Fraunces without a screen writing its own class
 // (docs/wordbook/DESIGN.md "Type").
 type SerifProps = {
-  // Sets the family to Newsreader; the size and weight stay whatever `size`
+  // Sets the family to Fraunces, the app's one serif; the size and weight stay whatever `size`
   // and `weight` already say.
   serif?: boolean;
   // `translation`: 21px / 1.5, a translation line. `breakTitle`/`breakBody`:

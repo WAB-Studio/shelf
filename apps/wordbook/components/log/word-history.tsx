@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useFormatter, useTranslations } from "next-intl";
 
 import { readLemmaHistory, readLemmaKey, readWordStudy, type WordHistoryRow } from "@/lib/log/summary";
+import { splitTranslations } from "@/lib/log/translation-line";
 import { recalledFilter } from "@/lib/log/study-filter";
 import type { LookupOutcome } from "@/lib/log/types";
 import { decodeWordSegment } from "@/lib/word/segment";
@@ -16,6 +17,7 @@ import { InstallStatus } from "@/components/search/install-status";
 import { SenseList } from "@/components/search/sense-list";
 import {
   Button,
+  Card,
   Flex,
   Grid,
   Headword,
@@ -221,9 +223,11 @@ export function WordHistory() {
     unlistedRow !== undefined &&
     ((dictionaryStatus.state === "failed" && unlistedRow.translation !== null) ||
       (answer !== null && answer.exact === null && answer.viaInflection.length === 0));
-  const gloss = isPhrase
+  // Only the lead translation heads the page; the whole list is drawn once, below.
+  const fullGloss = isPhrase
     ? null
     : networkOnly ? null : (unlistedRow ?? state.rows[0]).translation;
+  const gloss = fullGloss === null ? null : (splitTranslations(fullGloss)[0] ?? null);
   // The provider formats in the server's zone; the reader's is the browser's.
   const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const subtitleValues = {
@@ -259,8 +263,7 @@ export function WordHistory() {
         </Text>
       </Flex>
 
-      <Separator size="4" />
-
+      <Card>
       {state.waiting ? (
         <Flex direction="column" gap="1">
           <Text size="2" weight="bold">
@@ -318,8 +321,9 @@ export function WordHistory() {
         </Skeleton>
       )}
 
-      <Separator size="4" />
+      </Card>
 
+      <Card>
       {state.waiting && (
         <Text variant="definitionLabel" muted>
           {t("word.searches")}
@@ -350,6 +354,7 @@ export function WordHistory() {
           </Flex>
         ))}
       </Flex>
+      </Card>
     </Flex>
   );
 }

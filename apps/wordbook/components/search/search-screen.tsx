@@ -26,6 +26,7 @@ import { PhraseAnswer, type DeviceOffer, type PhraseState } from "./phrase-answe
 import { SearchBox } from "./search-box";
 import { SenseList } from "./sense-list";
 import { functionWordTranslation } from "@/lib/phrase/function-words";
+import { Starters } from "./starters";
 import { Suggestions } from "./suggestions";
 
 // The query string's own name: `/?q=book`.
@@ -150,6 +151,7 @@ export function SearchScreen({ initialQuery }: { initialQuery?: string }) {
   // coming back to `/?q=book` answers it again but is not a lookup, so it is never recorded. Typing or
   // following a link clears it.
   const restoringRef = useRef(false);
+  const loadedQueryRef = useRef(resolvedQuery);
 
   useEffect(() => {
     return () => {
@@ -556,7 +558,7 @@ export function SearchScreen({ initialQuery }: { initialQuery?: string }) {
     recordedRef.current = recordable;
     // Conditioned on both the flag and the text, so a restore can never
     // swallow the next genuine lookup, whatever order the two arrive in.
-    if (restoringRef.current && recordable.text === resolvedQuery) return;
+    if (restoringRef.current && recordable.text === loadedQueryRef.current) return;
     recordLookup(recordable);
   }, [recordable]);
 
@@ -581,9 +583,12 @@ export function SearchScreen({ initialQuery }: { initialQuery?: string }) {
       </Flex>
 
       {kind.kind === "empty" && (
-        <Text size="2" color="gray">
-          {tSearch("empty")}
-        </Text>
+        <Flex direction="column" gap="4">
+          <Text size="2" color="gray">
+            {tSearch("empty")}
+          </Text>
+          <Starters onPick={handleTextChange} />
+        </Flex>
       )}
 
       {kind.kind === "word" && (

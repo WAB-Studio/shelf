@@ -1,0 +1,17 @@
+.card {
+  box-sizing: border-box;
+  min-width: 0;
+  padding: var(--space-4);
+  border: 1px solid var(--rl-line);
+  border-radius: var(--radius-5);
+  background: var(--rl-raised);
+  box-shadow: var(--rl-shadow);
+}
+
+.snug {
+  padding: var(--space-3);
+}
+
+.flush {
+  padding: 0;
+}

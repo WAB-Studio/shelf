@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { isPendingLookup, isRecordedLookup, RECORDED_OUTCOMES } from "./outcome";
+import { countKind, isPendingLookup, isRecordedLookup, RECORDED_OUTCOMES } from "./outcome";
 import { LOOKUP_SCHEMA } from "./types";
 
 const settled = (kind: "word" | "phrase", outcome: (typeof RECORDED_OUTCOMES)[number] | "miss" | "untranslated") => ({
@@ -35,4 +35,9 @@ test("isPendingLookup: a schema 3 miss and another device's miss never wait", ()
   assert.equal(isPendingLookup({ ...settled("word", "miss"), schema: 3 }), false);
   assert.equal(isPendingLookup({ ...settled("word", "miss"), device: "other" }), false);
   assert.equal(isPendingLookup({ ...settled("word", "unlisted") }), false);
+});
+
+test("a count reads entries once a phrase is among the rows", () => {
+  assert.equal(countKind([{ lastOutcome: "exact" }, { lastOutcome: "translated" }]), "entries");
+  assert.equal(countKind([{ lastOutcome: "exact" }, { lastOutcome: "unlisted" }]), "words");
 });

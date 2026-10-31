@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 
+import { Wordmark } from "./wordmark";
 import styles from "./brand-block.module.css";
 
 // The main screen's brand block (docs/wordbook/DESIGN.md "Verde botella"):
@@ -16,7 +17,9 @@ export function BrandBlock({
 }) {
   return (
     <div className={styles.block}>
-      <p className={styles.title}>{title}</p>
+      <p className={styles.title}>
+        <Wordmark size="lg">{title}</Wordmark>
+      </p>
       <p className={styles.line}>{line}</p>
       {children}
     </div>

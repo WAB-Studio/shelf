@@ -26,9 +26,10 @@ function row(key: string, overrides: Partial<StudyRow> = {}): StudyRow {
   };
 }
 
-test("RL-68: a sentence, a miss and a word still waiting for its answer never enter the review", () => {
+test("RL-79: a translated phrase enters the review; a miss, an untranslated one and a pending word never do", () => {
   assert.equal(isReviewable(row("snuff")), true);
-  assert.equal(isReviewable(row("give it up", { lastOutcome: "translated" })), false);
+  assert.equal(isReviewable(row("give it up", { lastOutcome: "translated" })), true);
+  assert.equal(isReviewable(row("give it up", { lastOutcome: "untranslated", lastTranslation: null })), false);
   assert.equal(isReviewable(row("zzz", { lastOutcome: "miss", lastTranslation: null })), false);
   assert.equal(isReviewable(row("frisk", { pending: true })), false);
   assert.equal(isReviewable(row("gloam", { lastOutcome: "unlisted", lastTranslation: null, lastDefinition: "dusk" })), true);

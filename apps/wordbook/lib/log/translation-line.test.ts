@@ -5,7 +5,7 @@ import { test } from "node:test";
 
 import type { Sense } from "@/lib/dictionary/index-build";
 
-import { cutTranslation, formatSenseTranslations } from "./translation-line";
+import { cutTranslation, formatSenseTranslations, previewTranslations, splitTranslations } from "./translation-line";
 
 const LIMIT = 120;
 
@@ -122,4 +122,10 @@ test("cutTranslation: a space at index 121 is past the cap and never the cut", (
   const cut = cutTranslation(text);
   assert.ok(cut.length <= LIMIT, `got ${cut.length}`);
   assert.equal(cut, "x".repeat(LIMIT));
+});
+
+test("previewTranslations: three show, the rest wait behind a count", () => {
+  const items = splitTranslations("a, b, c, d, e");
+  assert.deepEqual(previewTranslations(items), { shown: ["a", "b", "c"], hidden: 2 });
+  assert.deepEqual(previewTranslations(["a", "b"]), { shown: ["a", "b"], hidden: 0 });
 });

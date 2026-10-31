@@ -6,9 +6,11 @@ import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Heading, Link } from "@radix-ui/themes";
 
+
 import { readNavQuery, writeNavQuery } from "@/lib/nav/query-storage";
 
 import { TapTarget } from "./tap-target";
+import { Wordmark } from "./wordmark";
 import { ThemeChoice } from "./theme-choice";
 import styles from "./bottom-nav.module.css";
 
@@ -144,7 +146,9 @@ export function BottomNav() {
 
   return (
     <nav className={styles.nav} aria-label={t("label")}>
-      <Heading as="h2" className={styles.title}>{tMeta("title")}</Heading>
+      <Heading as="h2" className={styles.title} aria-label={tMeta("title")}>
+        <Wordmark>{t.rich("brand", { mark: (chunks) => <mark>{chunks}</mark> })}</Wordmark>
+      </Heading>
       {items.map(({ route, key }) => {
         const selected = pathname === route;
         const Glyph = GLYPHS[key];
