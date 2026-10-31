@@ -17,6 +17,10 @@ A person wants to know where the computer's hours go. ActivityWatch already reco
 minute by minute, and never leaves the machine. TimeLog keeps a daily summary of it where the other
 apps and Claude can read it: which app, how long, on which day.
 
+Since 2026-10-30 the same upload also carries the **site-day** (seconds per website hostname), the
+**page-day** and **window-day** (per page and per window title), the **Claude Code day** and its sessions, with
+the same rule: seconds per day, classified on the PC, with private windows and an exclusion list left behind.
+
 The unit is the **app-day**: the seconds one app was in front while the person was at the
 computer, on one civil day in Bogotá, from one device. Nothing finer is ever sent or stored.
 
@@ -24,9 +28,6 @@ Interface language: Spanish or English, the person's choice (RT-12). A person re
 
 ### Functional requirements
 
-- [x] **RT-01** An upload carries, per device and day, the seconds each app was active with the person
-  at the computer (ActivityWatch's AFK watcher says not-afk). It never carries a window title, a URL
-  or an event. (P5, 1a)
 - [x] **RT-02** An upload replaces that device's day whole: sending the same day twice leaves one copy,
   and a later upload of a day already sent corrects it.
 - [x] **RT-03** An upload names its person by a key, never by a session. A key is shown once, kept as
@@ -50,6 +51,41 @@ Interface language: Spanish or English, the person's choice (RT-12). A person re
   and the day after. A day that is not a real date, or has not arrived, is a 404. (2026-10-30)
 - [x] **RT-12** The interface is served in Spanish and in English. The language is the person's choice,
   kept in a cookie, else the browser's, else Spanish; no address changes with it. (2026-10-30)
+- [x] **RT-13** An upload may carry, per device and day, the seconds each website was in front with the
+  person at the computer, by hostname alone (`github.com`, `claude.ai`; no `www.`). A day that names its
+  sites replaces them whole for that device; a day that does not leaves them as they are. (2026-10-30,
+  «añadir tiempo de Claude Code, sesión, internet»)
+- [x] **RT-14** An upload may carry, per device and day, the seconds Claude Code was working: the
+  stretches between consecutive messages of its session logs at most five minutes apart (a lone message
+  one minute), merged across sessions and cut at the Bogotá day. A day naming it replaces it whole; a
+  zero stores no row. (2026-10-30)
+- [x] **RT-15** «Exportar» downloads a CSV with a row per day of a range of up to 366 days: seconds at
+  the computer, in Claude Code, on claude.ai, in the Claude app, Claude's total (the three added) and the
+  top app. The MCP server answers the same rows (`get_daily`), read-only, with the same key.
+  (2026-10-30, «si todos los días se exporta cuánto estuve trabajando en general sería bueno para mis métricas»)
+- [x] **RT-16** An upload is classified on the PC and carries, per device and day, only seconds in buckets: per
+  app; per window title inside an app (never a browser's: its titles are its pages); per website hostname and
+  per page (its address without credentials, query and fragment, and its title); and Claude Code's seconds per
+  day and per session (id, project folder, first and last message of the day). It never carries an event, a
+  URL's query or fragment, or the content of a Claude Code message. The person's own rows are read only by them
+  (RNT-01). Successor of RT-01. (2026-10-30, «Me gustaría que rastree todo más detallado»)
+- [x] **RT-18** A day may carry the person's window titles per app and their pages; each part a day names
+  replaces that device's day whole, a part it does not name is left alone. The server refuses a page that is
+  not a bare `http(s)` address under its own hostname. Kept as long as app-days. (2026-10-30)
+- [x] **RT-19** A day may carry its Claude Code sessions: id, project folder, first and last message and active
+  seconds, on the same replace rule. «Hoy» and a day list them, longest first, with project and time span.
+  (2026-10-30)
+- [x] **RT-20** The PC drops, before building anything, private windows (the browser watcher's incognito mark and
+  a window title naming a private window) and everything on a local exclusion list of hosts (with their
+  subdomains) and apps. The list ships with Colombian banks (bancolombia.com, davivienda.com, bbva.com.co,
+  nequi.com.co, daviplata.com) and password managers, and the person edits it in `aw-timelog.toml`
+  (`exclude`), by `--exclude`, or from the tray. Excluded hosts and apps leave the PC as nothing, not even as
+  seconds. (2026-10-30)
+- [x] **RT-17** «Hoy» and any day show «Claude» (Claude Code, claude.ai and the Claude app, and
+  «Claude en total» as their sum, then Claude Code's sessions) and «Internet» (the longest sites, each opening
+  onto its pages); an app's row opens onto its longest window titles. «Semana» shows Claude's week
+  total and a bar per day. Where a source never arrived the screen says how to connect it: the browser
+  extension for sites, the Claude folder for Claude Code. (2026-10-30)
 
 ### Non-functional requirements
 
@@ -62,7 +98,7 @@ Interface language: Spanish or English, the person's choice (RT-12). A person re
 
 ### Retired
 
-None.
+- [x] **RT-01** — An upload carries, per device and day, the seconds each app was active with the person at the computer (ActivityWatch's AFK watcher says not-afk). It never carries a window title, a URL or an event. (P5, 1a) _Retired 2026-10-30, by the user («Me gustaría que rastree todo más detallado»). Successor: RT-16 (window titles, pages and Claude Code sessions join the upload, still never an event or a query; RT-20 drops private windows and an exclusion list on the PC)._
 
 ---
 

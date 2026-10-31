@@ -15,6 +15,11 @@ const MOMENT = {
   en: new Intl.DateTimeFormat("en-US", { timeZone: TIME_ZONE, day: "numeric", month: "short", hour: "numeric", minute: "2-digit" }),
 };
 
+const CLOCK = {
+  es: new Intl.DateTimeFormat("es-CO", { timeZone: TIME_ZONE, hour: "numeric", minute: "2-digit" }),
+  en: new Intl.DateTimeFormat("en-US", { timeZone: TIME_ZONE, hour: "numeric", minute: "2-digit" }),
+};
+
 const dayOfMonth = (day: string) => Number(day.slice(8, 10));
 
 // The calendar words and the duration a screen reads, from the catalogue.
@@ -50,6 +55,8 @@ export async function calendarWords() {
     dayOfMonth,
     // «26 oct», «Oct 26»
     dayShort: (day: string) => common("dayShort", { day: dayOfMonth(day), month: monthsShort[Number(day.slice(5, 7)) - 1] }),
+    // «9:14 p. m.» on Bogotá's clock.
+    clock: (at: Date) => CLOCK[locale === "en" ? "en" : "es"].format(at),
     // «28 oct, 9:14 p. m.» on Bogotá's clock.
     moment: (at: Date) => MOMENT[locale === "en" ? "en" : "es"].format(at),
   };

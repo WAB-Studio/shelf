@@ -50,6 +50,19 @@ export function Meter({ name, figure, share, label, size = "default" }: { name: 
   );
 }
 
+// A row that opens onto its detail: the native <details>, so it works without a script and by keyboard.
+export function Disclosure({ summary, children }: { summary: ReactNode; children: ReactNode }) {
+  return (
+    <details className={styles.disclosure}>
+      <summary className={styles.summary}>
+        <span className={styles.chevron} aria-hidden="true">›</span>
+        <div className={styles.summaryRow}>{summary}</div>
+      </summary>
+      <div className={styles.disclosureBody}>{children}</div>
+    </details>
+  );
+}
+
 // The brand block: the one dark block on the main screen.
 export function Hero({ children }: { children: ReactNode }) {
   return <section className={styles.hero}>{children}</section>;

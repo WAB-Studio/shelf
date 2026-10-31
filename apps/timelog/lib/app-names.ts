@@ -2,6 +2,7 @@ import type { AppTime } from "@/lib/queries";
 
 // Well-known processes by their lower-cased name without «.exe».
 const KNOWN: Record<string, string> = {
+  claude: "Claude",
   code: "VS Code",
   devenv: "Visual Studio",
   msedge: "Edge",

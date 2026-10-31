@@ -1,11 +1,16 @@
 import { getTranslations } from "next-intl/server";
 
 import { BarRows } from "@/components/screens/app-rows";
+import { ClaudeBlock, InternetBlock } from "@/components/screens/claude-internet";
 import { Between, Card, Cards, Figure, Hero, Split, Stack, Text, TextLink, Title } from "@/components/ui";
-import { appsBetween, dayTotals, uploadSpan } from "@/lib/queries";
+import { readableApp } from "@/lib/app-names";
+import { claudeTotal } from "@/lib/daily";
+import { appsBetween, claudeBetween, claudeSessionsBetween, dayTotals, pagesBetween, sitesBetween, uploadSpan, windowsBetween } from "@/lib/queries";
 import { sum } from "@/lib/totals";
 import { calendarWords } from "@/lib/words";
 import { addDays, civilDay } from "@/lib/zone";
+
+const TITLES_SHOWN = 8;
 
 // One day (RT-04, RT-11): the total in the brand block, the top app and, on a past day, the gap to the day before, then the apps.
 // «Hoy» is this screen for today; any past day opens on `/dia/AAAA-MM-DD`.
@@ -13,15 +18,28 @@ export async function DayView({ day }: { day: string }) {
   const today = civilDay();
   const isToday = day === today;
   const before = addDays(day, -1);
-  const [raw, previous, span, words, t] = await Promise.all([
+  const [raw, sites, pages, windows, sessions, claudeDays, previous, span, words, t] = await Promise.all([
     appsBetween(day, day),
+    sitesBetween(day, day),
+    pagesBetween(day, day),
+    windowsBetween(day, day),
+    claudeSessionsBetween(day, day),
+    claudeBetween(day, day),
     // Only a whole day compares: uploads carry day totals, so today so far has no like-for-like yesterday.
     isToday ? Promise.resolve([]) : dayTotals(before, before),
     uploadSpan(),
     calendarWords(),
     getTranslations("time.today"),
   ]);
+  const claude = claudeDays[0];
+  const claudeSeconds = claude === undefined ? 0 : claudeTotal(claude);
   const apps = words.apps(raw);
+  // Windows come under the readable name of their app, two processes with one name together.
+  const titlesOf = new Map<string, typeof windows>();
+  for (const one of windows) {
+    const name = readableApp(one.app);
+    if (name !== null) titlesOf.set(name, [...(titlesOf.get(name) ?? []), one]);
+  }
   const total = sum(apps);
   const top = apps[0];
   const previousTotal = previous[0]?.seconds ?? 0;
@@ -57,6 +75,9 @@ export async function DayView({ day }: { day: string }) {
                       <Text truncate>{top.app}</Text>
                       <Text mono>{words.duration(top.seconds)}</Text>
                     </Card>
+                    <Card label={t("claudeCard")}>
+                      <Text mono>{claudeSeconds > 0 ? words.duration(claudeSeconds) : "—"}</Text>
+                    </Card>
                     {!isToday && previousTotal > 0 ? (
                       <Card label={t("versus")}>
                         <Text mono>
@@ -79,15 +100,36 @@ export async function DayView({ day }: { day: string }) {
           </Stack>
         }
       >
-        <BarRows
-          rows={apps.map((one) => ({
-            key: one.app,
-            name: one.app,
-            figure: words.duration(one.seconds),
-            seconds: one.seconds,
-            label: t("bar", { app: one.app, duration: words.duration(one.seconds) }),
-          }))}
-        />
+        <Stack gap={4}>
+          <Stack gap={2}>
+            <Text variant="meta">{t("apps")}</Text>
+            <BarRows
+              rows={apps.map((one) => ({
+                key: one.app,
+                name: one.app,
+                figure: words.duration(one.seconds),
+                seconds: one.seconds,
+                label: t("bar", { app: one.app, duration: words.duration(one.seconds) }),
+                detail: titlesOf.has(one.app) ? (
+                  <>
+                    <BarRows
+                      rows={(titlesOf.get(one.app) ?? []).slice(0, TITLES_SHOWN).map((title) => ({
+                        key: title.app + title.title,
+                        name: title.title,
+                        figure: words.duration(title.seconds),
+                        seconds: title.seconds,
+                        label: t("windowBar", { title: title.title, duration: words.duration(title.seconds) }),
+                      }))}
+                    />
+                    {(titlesOf.get(one.app) ?? []).length > TITLES_SHOWN ? <Text as="p" variant="meta">{t("windowsMore", { n: (titlesOf.get(one.app) ?? []).length - TITLES_SHOWN })}</Text> : null}
+                  </>
+                ) : undefined,
+              }))}
+            />
+          </Stack>
+          <ClaudeBlock claude={claude} sessions={sessions} hasClaudeCode={span.hasClaudeCode} hasSites={span.hasSites} words={words} />
+          <InternetBlock sites={sites} pages={pages} hasSites={span.hasSites} words={words} />
+        </Stack>
       </Split>
     </Stack>
   );

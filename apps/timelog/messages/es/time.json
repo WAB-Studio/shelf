@@ -14,7 +14,8 @@
     "label": "Secciones",
     "today": "Hoy",
     "week": "Semana",
-    "keys": "Llaves"
+    "keys": "Llaves",
+    "export": "Exportar"
   },
   "today": {
     "title": "{weekday} {day} de {month}",
@@ -35,7 +36,11 @@
     "connect": "Conectar mi PC",
     "versusSame": "Igual que el día anterior",
     "prev": "Día anterior",
-    "next": "Día siguiente"
+    "next": "Día siguiente",
+    "apps": "Apps",
+    "claudeCard": "Claude en total",
+    "windowBar": "{title}: {duration}",
+    "windowsMore": "y {n} ventanas más"
   },
   "week": {
     "title": "Del {from} al {to}",
@@ -47,7 +52,12 @@
     "none": "—",
     "bar": "{day}: {duration}",
     "total": "Total de la semana",
-    "upcoming": "{day}: aún no llega"
+    "upcoming": "{day}: aún no llega",
+    "claude": "Claude por día",
+    "export": "Exportar esta semana",
+    "claudeWeekTotal": "Claude en la semana",
+    "claudeNone": "Sin tiempo de Claude esta semana.",
+    "claudeNever": "Todavía no llega tiempo de Claude. Mira «Hoy» para ver cómo conectarlo."
   },
   "keys": {
     "title": "Llaves",
@@ -97,5 +107,42 @@
     "title": "Esa página no existe",
     "text": "El día que buscas no existe o todavía no llega.",
     "back": "Ir a Hoy"
+  },
+  "claude": {
+    "title": "Claude",
+    "code": "Claude Code",
+    "web": "claude.ai",
+    "desktop": "App de Claude",
+    "total": "Claude en total",
+    "bar": "{name}: {duration}",
+    "empty": "Sin tiempo de Claude ese día.",
+    "never": "Todavía no llega tiempo de Claude Code. Se lee de su carpeta de sesiones en tu PC; si lo usas en WSL, indica esa carpeta en aw-timelog.toml (claude_dir) y espera la próxima subida.",
+    "overlap": "Los tres se suman tal cual: si usaste dos a la vez, cuentan los dos.",
+    "sessions": "Sesiones de Claude Code",
+    "session": "{project}: {duration}",
+    "span": "{from} – {to}"
+  },
+  "internet": {
+    "title": "Internet",
+    "bar": "{host}: {duration}",
+    "empty": "Sin sitios ese día.",
+    "never": "Todavía no llegan sitios. Instala la extensión de ActivityWatch en tu navegador y se verán aquí tras la próxima subida.",
+    "install": "Cómo instalar la extensión",
+    "more": "y {n} sitios más",
+    "privacy": "Solo tú lo ves. Los sitios y apps de tu lista de exclusión (bancos y gestores de contraseñas, por defecto) nunca salen de tu PC.",
+    "pageBar": "{title}: {duration}",
+    "pagesMore": "y {n} páginas más"
+  },
+  "export": {
+    "title": "Exportar",
+    "intro": "Un CSV con una fila por día: tiempo en la computadora, Claude Code, claude.ai, Claude en total y la app más usada, todo en segundos. Claude lee las mismas filas con la herramienta get_daily.",
+    "from": "Desde",
+    "to": "Hasta",
+    "download": "Descargar CSV",
+    "quick": "Atajos",
+    "thisWeek": "Esta semana",
+    "last30": "Últimos 30 días",
+    "thisMonth": "Este mes",
+    "badRange": "El rango no sirvió: «Desde» va antes o el mismo día que «Hasta», con hasta 366 días."
   }
 }
