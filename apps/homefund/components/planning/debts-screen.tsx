@@ -459,6 +459,9 @@ export function DebtsScreen({
                     <Text size="2" color="gray">
                       {NO_VALUE}
                     </Text>
+                    <Text size="2" color="gray">
+                      {t("tileNoNextPayment")}
+                    </Text>
                   </Flex>
                 )}
                 {totals.nextPayment !== null &&
@@ -478,13 +481,15 @@ export function DebtsScreen({
                     </Text>
                   )}
                 <Text size="2" color="gray">
-                  {t("monthlyInterest", {
-                    amount: formatMoney(
-                      set.monthlyInterestCents,
-                      set.currency,
-                      locale,
-                    ),
-                  })}
+                  {set.monthlyInterestCents === 0
+                    ? t("tileNoInterest")
+                    : t("monthlyInterest", {
+                        amount: formatMoney(
+                          set.monthlyInterestCents,
+                          set.currency,
+                          locale,
+                        ),
+                      })}
                 </Text>
               </Flex>
             ))}

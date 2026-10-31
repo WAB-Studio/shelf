@@ -139,6 +139,27 @@ test.describe("dashboard band with a gap", () => {
 });
 
 test.describe("reports cards", () => {
+  // The trend draws its legend only over a window that holds something.
+  const flowIds = [randomUUID(), randomUUID()];
+
+  test.beforeAll(async () => {
+    await asHarnessUser(async (tx) => {
+      await tx`
+        insert into transactions (id, from_account_id, amount_cents, occurred_at, description)
+        values (${flowIds[0]}, ${scope.accountId}, 1_000_000, ${todayInBogota()}, ${`Gasto ${stamp}`})`;
+      await tx`
+        insert into transactions (id, from_account_id, amount_cents, occurred_at, description)
+        values (${flowIds[1]}, ${scope.accountId}, 2_000_000, ${todayInBogota()}, ${`Gasto dos ${stamp}`})`;
+      await tx`
+        insert into transaction_splits (transaction_id, category_id, amount_cents)
+        values (${flowIds[0]}, ${scope.categoryId}, 1_000_000), (${flowIds[1]}, ${scope.categoryId}, 2_000_000)`;
+    });
+  });
+
+  test.afterAll(async () => {
+    await fixtureSql`delete from transactions where id in ${fixtureSql(flowIds)}`;
+  });
+
   test("at 1280 the cards sit on the panel background with a 20 px radius", async ({
     page,
   }, testInfo) => {
