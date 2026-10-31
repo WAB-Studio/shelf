@@ -1,5 +1,6 @@
 import { unreadableSources } from "./fault-seam";
 import { readReadingLookups } from "./reading-lookups";
+import { TIMELOG_SOURCES, timelogReader } from "./timelog-apps";
 import type { EvidenceReader } from "./types";
 
 /**
@@ -9,6 +10,7 @@ import type { EvidenceReader } from "./types";
  */
 const READERS: Record<string, EvidenceReader> = {
   reading_lookups: readReadingLookups,
+  ...Object.fromEntries(TIMELOG_SOURCES.map((source) => [source.key, timelogReader(source)])),
 };
 
 // Read per call, never at import: the seam is a property of the process a

@@ -128,6 +128,11 @@ function installStubs(cookies: StoredCookie[], mode: StubMode): void {
         },
       };
     }
+    // TimeLog's readers share the reading statement (`lib/evidence/shared-read.ts`); with the reader replaced they
+    // would still send it, and this mode proves no reading statement reaches the wire.
+    if (mode === "stub" && request === "./timelog-apps") {
+      return { TIMELOG_SOURCES: [], timelogReader: () => async () => [] };
+    }
     if (mode === "stub" && request === "./reading-lookups") {
       return {
         readReadingLookups: async () => {
