@@ -14,7 +14,7 @@ test("a gloss wrapped whole in quotation marks loses them; quotes inside a gloss
 });
 
 test("the shipped asset carries no gloss that wears a wrapping or unmatched quotation mark", () => {
-  const asset = path.join(import.meta.dirname, "../public/dictionary/eng-spa-2025.11.23.json");
+  const asset = path.join(import.meta.dirname, "../public/dictionary/eng-spa-2025.11.23-v3.json");
   const entries = (JSON.parse(readFileSync(asset, "utf8")) as { entries: [string, string, unknown, string[]][] }).entries;
   const bad = entries.flatMap(([headword, , , glosses]) => glosses.filter((g) => (g.match(/["“”]/g) ?? []).length % 2 === 1 || /^["“]/.test(g)).map((g) => `${headword}: ${g}`));
   assert.deepEqual(bad, []);
@@ -26,7 +26,7 @@ test("the shipped asset carries no gloss that wears a wrapping or unmatched quot
 type AssetEntry = [string, string, unknown, string[]];
 
 function assetGlosses(headword: string, pos: string): string[] {
-  const asset = path.join(import.meta.dirname, "../public/dictionary/eng-spa-2025.11.23.json");
+  const asset = path.join(import.meta.dirname, "../public/dictionary/eng-spa-2025.11.23-v3.json");
   const entries = (JSON.parse(readFileSync(asset, "utf8")) as { entries: AssetEntry[] }).entries;
   const entry = entries.find(([word, entryPos]) => word === headword && entryPos === pos);
   assert.ok(entry !== undefined, `${headword} ${pos} is in the asset`);

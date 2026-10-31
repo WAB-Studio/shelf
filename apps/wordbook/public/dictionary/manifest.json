@@ -7,9 +7,9 @@
     "licenceUrl": "https://creativecommons.org/licenses/by-sa/3.0/legalcode",
     "attribution": "English–Spanish data from the FreeDict eng-spa dictionary, edition 2025.11.23, built by the FreeDict project from WikDict and Wiktionary.org data via DBnary, licensed under CC BY-SA 3.0."
   },
-  "builtAt": "2026-10-31T05:32:31.536Z",
+  "builtAt": "2026-10-31T16:11:14.692Z",
   "asset": {
-    "path": "/dictionary/eng-spa-2025.11.23.json",
+    "path": "/dictionary/eng-spa-2025.11.23-v3.json",
     "bytes": 8389571,
     "sha256": "5c7a595e0be220aac12f7f0eec57146d64bed16e753e353155e628b48ca8a818"
   },
