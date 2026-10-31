@@ -173,12 +173,13 @@
     "legendIncome": "Ingresos",
     "legendExpense": "Gastos",
     "contributionsTitle": "Aportes del mes",
-    "contributionsEmpty": "Sin aportes este mes. Un aporte es un traspaso de una cuenta personal a una del fondo.",
+    "contributionsEmpty": "Sin aportes este mes. Un aporte es un traspaso de una cuenta personal a una del fondo, o un ingreso al fondo con «De quién».",
     "noGroup": "Los aportes son una cifra del fondo. Todavía no tienes fondo.",
     "monthAdjustment": "Diferencia del mes",
     "shareLabel": "{pct}% del gasto del mes",
     "averageLabel": "Promedio {amount}",
-    "emptyMonths": "Sin movimientos en {months}: el promedio no los cuenta."
+    "emptyMonths": "Sin movimientos en {months}: el promedio no los cuenta.",
+    "contributionsNote": "Los ingresos al fondo sin «De quién» no cuentan como aporte."
   },
   "nav": {
     "title": "Navegación",
@@ -624,7 +625,8 @@
       "causeInvalid": "Elige un movimiento válido.",
       "causeNotFound": "No puedes usar ese movimiento como causa.",
       "causeSelf": "Un movimiento no puede ser su propia causa.",
-      "counterpartyComplete": "Este movimiento ya tiene las dos cuentas; no hay nada que completar."
+      "counterpartyComplete": "Este movimiento ya tiene las dos cuentas; no hay nada que completar.",
+      "contributorInvalid": "Elige un miembro del fondo"
     },
     "labelsLabel": "Etiquetas",
     "labelsNone": "Crea etiquetas en Ajustes para usarlas aquí.",
@@ -645,7 +647,9 @@
     "forHousehold": "Del hogar",
     "forHouseholdHint": "Un gasto del hogar pagado con tu cuenta: cuenta como tu aporte al fondo.",
     "forHouseholdCounts": "Cuenta como aporte de quien lo pagó",
-    "headlineNet": "Neto"
+    "headlineNet": "Neto",
+    "contributorLabel": "De quién",
+    "contributorNone": "Sin asignar"
   },
   "cash": {
     "withdrawAction": "Retirar efectivo",
@@ -1331,6 +1335,7 @@
       "counterAmount": "Monto en la moneda de la cuenta",
       "counterIsEstimate": "Monto estimado",
       "forHousehold": "Del hogar",
+      "contributedBy": "De quién",
       "labels": "Etiquetas",
       "account": "Cuenta",
       "label": "Etiqueta",

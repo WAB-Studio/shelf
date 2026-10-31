@@ -112,6 +112,11 @@ export function ReportsScreen({ data }: { data: ReportsData }) {
                   </Flex>
                 ))
               )}
+              {hasGroup && (
+                <Text size="1" color="gray">
+                  {t("contributionsNote")}
+                </Text>
+              )}
             </section>
           </Flex>
         </Flex>
@@ -161,6 +166,11 @@ export function ReportsScreen({ data }: { data: ReportsData }) {
                       ))}
                     </Flex>
                   ))
+                )}
+                {hasGroup && (
+                  <Text size="1" color="gray">
+                    {t("contributionsNote")}
+                  </Text>
                 )}
               </ReportCard>
             </ReportRow>

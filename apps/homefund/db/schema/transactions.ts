@@ -18,6 +18,7 @@ import { finances } from "./_schema";
 import { accountReconciliations } from "./account-reconciliations";
 import { accounts } from "./accounts";
 import { appUsers } from "./app-users";
+import { groupMembers } from "./group-members";
 import { groups } from "./groups";
 import { recurringRules } from "./recurring-rules";
 
@@ -50,6 +51,9 @@ export const transactions = finances.table(
     // A household bill paid from a personal account, marked «del hogar»: it counts as its payer's
     // contribution to the fund (RF-139). Only an expense carries it; set and cleared by the person.
     forHousehold: boolean().notNull().default(false),
+    // Which member of the fund put this income in (RF-166): only an income into a fund account carries it,
+    // and the policy keeps the member inside that account's fund.
+    contributedByMemberId: uuid().references(() => groupMembers.id, { onDelete: "set null" }),
     // The type is derived, never chosen (RF-18): a stored generated column no INSERT can target.
     kind: text().generatedAlwaysAs(
       sql`case when from_account_id is null then 'income' when to_account_id is null then 'expense' else 'transfer' end`,
@@ -85,6 +89,10 @@ export const transactions = finances.table(
   (table) => [
     // The amount is always positive; direction supplies the sign (RF-20).
     check("transactions_amount_positive", sql`${table.amountCents} > 0`),
+    check(
+      "transactions_contributor_income",
+      sql`${table.contributedByMemberId} is null or ${table.fromAccountId} is null`,
+    ),
     check(
       "transactions_for_household_expense",
       sql`not ${table.forHousehold} or ${table.toAccountId} is null`,
@@ -195,7 +203,7 @@ export const transactions = finances.table(
     pgPolicy("transactions_insert_writable", {
       for: "insert",
       to: authenticatedRole,
-      withCheck: sql`(select private.can_write_transaction(${table.fromAccountId}, ${table.toAccountId}))`,
+      withCheck: sql`(select private.can_write_transaction(${table.fromAccountId}, ${table.toAccountId})) and (select private.contributor_in_fund(${table.contributedByMemberId}, ${table.toAccountId}))`,
     }),
     // An adjustment is refused here, never by a trigger: the harness deletes ledgers as the owner
     // role, and a trigger would strand its rows.
@@ -203,7 +211,7 @@ export const transactions = finances.table(
       for: "update",
       to: authenticatedRole,
       using: sql`(select private.can_write_transaction(${table.fromAccountId}, ${table.toAccountId})) and ${table.reconciliationId} is null`,
-      withCheck: sql`(select private.can_write_transaction(${table.fromAccountId}, ${table.toAccountId}))`,
+      withCheck: sql`(select private.can_write_transaction(${table.fromAccountId}, ${table.toAccountId})) and (select private.contributor_in_fund(${table.contributedByMemberId}, ${table.toAccountId}))`,
     }),
     pgPolicy("transactions_delete_writable", {
       for: "delete",

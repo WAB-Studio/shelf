@@ -4272,6 +4272,7 @@ async function main(): Promise<void> {
   await householdContributionSuite();
   await mcpDoorSuite();
   await statementImportSuite();
+  await incomeContributorSuite();
 }
 
 // A member recorded without a login is someone in the fund: a leader whose fund holds one is not alone, so an
@@ -15720,3 +15721,85 @@ async function statementImportSuite(): Promise<void> {
   );
 }
 
+
+// RF-166: an income into a fund account names who put it in; «Aportes del mes» counts it for them.
+async function incomeContributorSuite(): Promise<void> {
+  console.log("");
+  const PAY = 3_000_000;
+  const range = currentMonthRange();
+  const payer = await createMembershipFreeUser();
+  const stranger = await createMembershipFreeUser();
+  const ids = {
+    group: randomUUID(),
+    member: randomUUID(),
+    otherGroup: randomUUID(),
+    otherMember: randomUUID(),
+    pot: randomUUID(),
+    category: randomUUID(),
+  };
+  await fixtureSql.begin(async (tx) => {
+    await tx`
+      insert into groups (id, name, cash_mode)
+      values (${ids.group}, 'Harness rf166 fondo', 'per_member'), (${ids.otherGroup}, 'Harness rf166 otro', 'per_member')`;
+    await tx`
+      insert into group_members (id, group_id, user_id, name, role)
+      values (${ids.member}, ${ids.group}, ${payer.id}, 'Harness rf166', 'leader'),
+             (${ids.otherMember}, ${ids.otherGroup}, ${stranger.id}, 'Harness rf166 otro', 'leader')`;
+    await tx`
+      insert into accounts (id, group_id, is_shared, name, kind, subtype, initial_balance_cents, initial_balance_on)
+      values (${ids.pot}, ${ids.group}, true, 'Harness rf166 fondo', 'asset', 'bank', 0, '2026-01-01')`;
+    await tx`
+      insert into categories (id, group_id, name, kind, color)
+      values (${ids.category}, ${ids.group}, 'Harness rf166 ingreso', 'income', '#4C8C4A')`;
+  });
+  track("groups", ids.group);
+  track("groups", ids.otherGroup);
+  track("group_members", ids.member);
+  track("group_members", ids.otherMember);
+  track("accounts", ids.pot);
+  track("categories", ids.category);
+
+  const mine = async () =>
+    (await asUser(payer, () => getMemberContributions(range))).find(
+      (row) => row.userId === payer.id && row.currency === "COP",
+    )?.contributionCents ?? 0;
+  const income = {
+    fromAccountId: null,
+    toAccountId: ids.pot,
+    amountCents: PAY,
+    occurredAt: todayInBogota(),
+    description: "Harness rf166 ingreso",
+    splits: [{ categoryId: ids.category, amountCents: PAY }],
+    labelIds: [],
+    externalRef: null,
+  };
+
+  const unnamed = await asUser(payer, () => createTransaction(income));
+  keep("transactions", unnamed.transactionId);
+  const withoutName = await mine();
+  const named = await asUser(payer, () =>
+    createTransaction({ ...income, contributedByMemberId: ids.member }),
+  );
+  keep("transactions", named.transactionId);
+  const withName = await mine();
+  assert(
+    next("RF-166: an income into a fund account counts as an aporte for the member it names; one naming nobody counts for no one"),
+    withoutName === 0 && withName === PAY,
+    `contribution ${withoutName} with only the unnamed income, ${withName} after the named one; expected 0 and ${PAY}`,
+  );
+
+  let refused = false;
+  try {
+    const foreign = await asUser(payer, () =>
+      createTransaction({ ...income, contributedByMemberId: ids.otherMember }),
+    );
+    keep("transactions", foreign.transactionId);
+  } catch {
+    refused = true;
+  }
+  assert(
+    next("RF-166: the policy refuses a contributor who belongs to another fund"),
+    refused,
+    `an income crediting another fund's member was ${refused ? "refused" : "accepted"}`,
+  );
+}

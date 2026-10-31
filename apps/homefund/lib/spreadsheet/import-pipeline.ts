@@ -931,6 +931,7 @@ function resolveAndShape(
               ? { counterIsEstimate: true }
               : {}),
           ...(data.forHousehold ? { forHousehold: true } : {}),
+          ...(data.contributedBy ? { contributedByName: data.contributedBy } : {}),
           occurredAt: data.occurredAt,
           description: data.description,
           externalRef: data.externalRef,

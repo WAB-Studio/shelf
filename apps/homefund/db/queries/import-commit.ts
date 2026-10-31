@@ -785,6 +785,8 @@ type ResolvedTransaction = {
   counterAmountCents: number | null;
   counterIsEstimate: boolean;
   forHousehold: boolean;
+  // The member named in «De quién», resolved by name inside the destination account's fund (RF-166).
+  contributedByName: string | null;
   splits: { categoryId: string; amountCents: number }[];
 };
 
@@ -821,6 +823,7 @@ function resolveTransaction(
     counterAmountCents,
     counterIsEstimate: object.counterIsEstimate ?? false,
     forHousehold: object.forHousehold ?? false,
+    contributedByName: (object as { contributedByName?: string }).contributedByName ?? null,
     splits,
   };
 }
@@ -904,6 +907,7 @@ async function updateTransactionsBatch(
     counter_amount_cents: item.counterAmountCents,
     counter_is_estimate: item.counterIsEstimate,
     for_household: item.forHousehold,
+    contributed_by_name: item.contributedByName,
     occurred_at: item.row.object.occurredAt,
     description: item.row.object.description,
   }));
@@ -918,11 +922,14 @@ async function updateTransactionsBatch(
       counter_amount_cents = case when r.currency is null then t.counter_amount_cents else r.counter_amount_cents end,
       counter_is_estimate = case when r.currency is null then t.counter_is_estimate else r.counter_is_estimate end,
       for_household = ${householdMark(sql`r.from_account_id`, sql`r.to_account_id`, sql`r.for_household`)},
+      contributed_by_member_id = (case when r.from_account_id is null and r.contributed_by_name is not null then
+        (select m.id from group_members m join accounts a on a.id = r.to_account_id
+          where m.group_id = a.group_id and m.name = r.contributed_by_name limit 1) end),
       occurred_at = r.occurred_at, description = r.description,
       reviewed_at = case when t.recurring_rule_id is not null and t.reviewed_at is null then now() else t.reviewed_at end
     from jsonb_to_recordset(${jsonbParam(records)}) as r(
       external_ref text, from_account_id uuid, to_account_id uuid, amount_cents bigint, currency text,
-      counter_amount_cents bigint, counter_is_estimate boolean, for_household boolean, occurred_at date, description text)
+      counter_amount_cents bigint, counter_is_estimate boolean, for_household boolean, contributed_by_name text, occurred_at date, description text)
     where t.external_ref = r.external_ref and ${inScope(scope)}
     returning t.id, t.external_ref`)) as unknown as { id: string; external_ref: string }[];
   if (updated.length === 0) return;
@@ -978,6 +985,13 @@ async function commitNewTransactions(
 // One multi-row insert for the movements, one for every split any of them carries —
 // two round trips per chunk instead of two per row. RETURNING rides in VALUES order,
 // same assumption `insertChunked` already leans on for every other entity.
+// The member row a name points at inside the fund that owns the destination account; no match
+// (or an account outside a fund) stores nothing.
+const contributorSql = (item: ResolvedTransaction) =>
+  sql`(case when ${item.fromAccountId}::uuid is null and ${item.contributedByName}::text is not null then
+    (select m.id from group_members m join accounts a on a.id = ${item.toAccountId}::uuid
+      where m.group_id = a.group_id and m.name = ${item.contributedByName}::text limit 1) end)`;
+
 const householdSql = (item: ResolvedTransaction) =>
   householdMark(sql`${item.fromAccountId}::uuid`, sql`${item.toAccountId}::uuid`, sql`${item.forHousehold}`);
 
@@ -989,7 +1003,7 @@ async function insertNewTransactionsBatch(
     chunk.map(
       (item) =>
         sql`(${item.fromAccountId}, ${item.toAccountId}, ${item.amountCents}, ${item.currency},
-          ${item.counterAmountCents}, ${item.counterIsEstimate}, ${householdSql(item)},
+          ${item.counterAmountCents}, ${item.counterIsEstimate}, ${householdSql(item)}, ${contributorSql(item)},
           ${item.row.object.occurredAt}, ${item.row.object.description}, ${item.row.externalRef})`,
     ),
     sql`, `,
@@ -997,7 +1011,7 @@ async function insertNewTransactionsBatch(
   const inserted = (await tx.execute(
     sql`insert into ${transactions}
       (from_account_id, to_account_id, amount_cents, currency, counter_amount_cents, counter_is_estimate,
-        for_household, occurred_at, description, external_ref)
+        for_household, contributed_by_member_id, occurred_at, description, external_ref)
       values ${rowValues}
       returning id`,
   )) as unknown as { id: string }[];
@@ -1028,9 +1042,9 @@ async function insertNewTransactionsSerially(
       const [inserted] = (await tx.execute(
         sql`insert into ${transactions}
           (from_account_id, to_account_id, amount_cents, currency, counter_amount_cents, counter_is_estimate,
-            for_household, occurred_at, description, external_ref)
+            for_household, contributed_by_member_id, occurred_at, description, external_ref)
           values (${item.fromAccountId}, ${item.toAccountId}, ${item.amountCents}, ${item.currency},
-            ${item.counterAmountCents}, ${item.counterIsEstimate}, ${householdSql(item)}, ${item.row.object.occurredAt}, ${item.row.object.description}, ${item.row.externalRef})
+            ${item.counterAmountCents}, ${item.counterIsEstimate}, ${householdSql(item)}, ${contributorSql(item)}, ${item.row.object.occurredAt}, ${item.row.object.description}, ${item.row.externalRef})
           returning id`,
       )) as unknown as { id: string }[];
       await writeSplits(tx, inserted.id, item.splits);

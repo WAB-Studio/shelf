@@ -165,7 +165,7 @@ async function readEntityRows<E extends SheetEntity>(
 // The caller's id→name map for one referenced entity, read in the caller's RLS
 // scope so a reference resolves to a name the same scope can read back.
 async function readNameMap(
-  table: typeof accounts | typeof categories | typeof labels | typeof savingsGoals,
+  table: typeof accounts | typeof categories | typeof labels | typeof savingsGoals | typeof groupMembers,
 ): Promise<Map<string, string>> {
   return withUserDb(async (tx) => {
     const rows = await tx.select({ id: table.id, name: table.name }).from(table as typeof accounts);
@@ -229,7 +229,12 @@ const emptyLinkMap = new Map<string, string[]>();
 type NameMaps = Record<RefEntity, Map<string, string>>;
 
 // A transaction's children, by transaction id.
-type Children = { splitCategoryIds: Map<string, string[]>; labelIds: Map<string, string[]> };
+type Children = {
+  splitCategoryIds: Map<string, string[]>;
+  labelIds: Map<string, string[]>;
+  // Member id to name, for «De quién» (RF-166).
+  memberNames: Map<string, string>;
+};
 
 // One raw row turned into its sheet shape: a reference to its name, `placement` to
 // a personal/group indicator, money left in integer cents (RNF-05), scalars as is.
@@ -245,6 +250,12 @@ function toExportRows<E extends SheetEntity>(
     const cell: Record<string, CellValue> = {};
 
     for (const column of columns) {
+      if ("synthetic" in column && column.key === "contributedBy") {
+        const memberId = row.contributedByMemberId as string | null | undefined;
+        cell[column.key] = memberId ? children.memberNames.get(memberId) ?? null : null;
+        continue;
+      }
+
       if ("synthetic" in column && column.key === "labels") {
         // Every label the movement carries, by name, in one cell; none leaves it blank.
         const named = (children.labelIds.get(row.id as string) ?? []).flatMap((id) => names.labels.get(id) ?? []);
@@ -337,7 +348,7 @@ export async function readExport(input: ExportInput): Promise<ExportResult> {
     ? transactionListConditions(input.transactionFilters)
     : [];
 
-  const [sets, accountNames, categoryNames, labelNames, goalNames, movementKeys, splitCategoryIds, labelIds] = await Promise.all([
+  const [sets, accountNames, categoryNames, labelNames, goalNames, movementKeys, splitCategoryIds, labelIds, memberNames] = await Promise.all([
     Promise.all(
       requested.map((entity) =>
         readEntityRows(
@@ -357,6 +368,7 @@ export async function readExport(input: ExportInput): Promise<ExportResult> {
     needsMovementKeys ? readMovementKeys() : Promise.resolve(emptyNameMap),
     needsSplits ? readLinkedIds(transactionSplits, transactionSplits.categoryId, listed) : Promise.resolve(emptyLinkMap),
     needsSplits ? readLinkedIds(transactionLabels, transactionLabels.labelId, listed) : Promise.resolve(emptyLinkMap),
+    requested.includes("transactions") ? readNameMap(groupMembers) : Promise.resolve(emptyNameMap),
   ]);
 
   const names: NameMaps = {
@@ -366,7 +378,7 @@ export async function readExport(input: ExportInput): Promise<ExportResult> {
     goals: goalNames,
     transactions: movementKeys,
   };
-  const children: Children = { splitCategoryIds, labelIds };
+  const children: Children = { splitCategoryIds, labelIds, memberNames };
 
   const result: ExportResult = {};
   requested.forEach((entity, index) => {

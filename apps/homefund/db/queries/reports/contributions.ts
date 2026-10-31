@@ -23,7 +23,9 @@ export type MemberContribution = {
  * Σ returns` per member and currency. The group's own accounts are the pot, never
  * a contributor, so no group row appears (RF-67). A caller with no group has no
  * group account on either side of any transfer; the household branch, which
- * touches no group account, asks for the payer's membership itself.
+ * touches no group account, asks for the payer's membership itself. An income into a group
+ * account counts for the member it names in «De quién» (RF-166); an income that names nobody
+ * counts for no one.
  *
  * `booked` is the three-branch rule `account_balances` applies to a leg
  * (`0032_one_balance_per_currency.sql`), read against the POT's settlement
@@ -98,6 +100,25 @@ export async function getMemberContributions(range: {
         where t.for_household
           and t.occurred_at >= ${range.start} and t.occurred_at < ${range.endExclusive}
           and exists (select 1 from group_members m where m.user_id = fa.owner_user_id)
+        union all
+        -- RF-166: an income into a fund account credited to the member who put it in, booked as the
+        -- account settled it. An income naming nobody (every one before the field) stays out.
+        select
+          cm.user_id,
+          case when t.currency <> ta.settlement_currency
+            and t.counter_amount_cents is not null and not t.counter_is_estimate
+          then ta.settlement_currency else t.currency end,
+          case when t.currency <> ta.settlement_currency
+            and t.counter_amount_cents is not null and not t.counter_is_estimate
+          then t.counter_amount_cents else t.amount_cents end
+        from transactions t
+        join accounts ta on ta.id = t.to_account_id
+        join group_members cm on cm.id = t.contributed_by_member_id
+        where t.from_account_id is null
+          and ta.group_id is not null
+          and t.reconciliation_id is null
+          and cm.user_id is not null
+          and t.occurred_at >= ${range.start} and t.occurred_at < ${range.endExclusive}
       ) member
       where member.user_id is not null
       group by member.user_id, member.currency

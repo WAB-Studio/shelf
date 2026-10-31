@@ -89,6 +89,7 @@ type MovementFormValues = {
   counterAmount: string | null;
   counterIsEstimate: boolean;
   forHousehold: boolean;
+  contributedByMemberId: string | null;
   occurredAt: string;
   description: string | null;
   externalRef?: string;
@@ -286,6 +287,7 @@ export function MovementForm({
                 ),
           counterIsEstimate: movement.counterIsEstimate,
           forHousehold: movement.forHousehold,
+          contributedByMemberId: movement.contributedByMemberId,
           occurredAt: movement.occurredAt,
           description: movement.description,
           splits: movement.splits.map((split) => ({
@@ -314,6 +316,7 @@ export function MovementForm({
           counterAmount: null,
           counterIsEstimate: false,
           forHousehold: false,
+          contributedByMemberId: options.callerMemberId,
           occurredAt: defaults?.occurredAt ?? todayInBogota(),
           description:
             defaults?.description !== undefined ? defaults.description : null,
@@ -407,6 +410,10 @@ export function MovementForm({
     kind === "expense" &&
     scope === "personal" &&
     (movement?.forHousehold === true || options.accounts.some((one) => one.groupId));
+
+  // «De quién» (RF-166) is asked of an income into a fund account, and nowhere else.
+  const offersContributor =
+    kind === "income" && scope === "group" && options.fundMembers.length > 0;
 
   // A movement is never its own cause (RF-132), so the movement under edit is
   // dropped from what the picker offers; the rest arrive already ordered.
@@ -518,7 +525,11 @@ export function MovementForm({
 
   function onSubmit(submitted: MovementFormValues) {
     // A switch hidden by a change of account never sends a mark the person no longer sees.
-    const values = { ...submitted, forHousehold: offersHousehold && submitted.forHousehold };
+    const values = {
+      ...submitted,
+      forHousehold: offersHousehold && submitted.forHousehold,
+      contributedByMemberId: offersContributor ? submitted.contributedByMemberId : null,
+    };
     // The resolver already parsed `values` for this mode, dropping the field the
     // other mode's action refuses: `external_ref` on edit, `transaction_id` on
     // create.
@@ -1010,6 +1021,38 @@ export function MovementForm({
                     </Flex>
                   </TapTarget>
                 </Text>
+              )}
+            />
+          )}
+          {offersContributor && (
+            <Controller
+              name="contributedByMemberId"
+              control={form.control}
+              render={({ field, fieldState }) => (
+                <Field invalid={fieldState.invalid}>
+                  <FieldLabel htmlFor="movement-contributor">{t("contributorLabel")}</FieldLabel>
+                  <Select.Root
+                    size="3"
+                    value={field.value ?? NO_ACCOUNT}
+                    onValueChange={(value) =>
+                      field.onChange(value === NO_ACCOUNT ? null : value)
+                    }
+                    disabled={isPending}
+                  >
+                    <FieldControl>
+                      <Select.Trigger id="movement-contributor" />
+                    </FieldControl>
+                    <Select.Content position="popper">
+                      <Select.Item value={NO_ACCOUNT}>{t("contributorNone")}</Select.Item>
+                      {options.fundMembers.map((member) => (
+                        <Select.Item key={member.id} value={member.id}>
+                          {member.name}
+                        </Select.Item>
+                      ))}
+                    </Select.Content>
+                  </Select.Root>
+                  <FieldMessage error={fieldState.error} />
+                </Field>
               )}
             />
           )}
