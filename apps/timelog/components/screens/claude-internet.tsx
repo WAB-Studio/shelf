@@ -33,7 +33,7 @@ export async function ClaudeBlock({ claude, sessions, hasClaudeCode, hasSites, w
         <Text as="p" variant="meta">{t(hasClaudeCode ? "empty" : "never")}</Text>
       ) : (
         <>
-          <BarRows rows={rows.map((row) => ({ key: row.key, tone: row.tone, name: row.name, figure: words.duration(row.seconds), seconds: row.seconds, label: t("bar", { name: row.name, duration: words.duration(row.seconds) }) }))} />
+          <BarRows of={total} rows={rows.map((row) => ({ key: row.key, tone: row.tone, name: row.name, figure: words.duration(row.seconds), seconds: row.seconds, label: t("bar", { name: row.name, duration: words.duration(row.seconds) }) }))} />
           {rows.length === 3 ? <Text as="p" variant="meta">{t("overlap")}</Text> : null}
         </>
       )}
@@ -42,6 +42,7 @@ export async function ClaudeBlock({ claude, sessions, hasClaudeCode, hasSites, w
           <Text variant="meta">{t("sessions")}</Text>
           <BarRows
             tone="claude"
+            of={Math.max(parts.code, ...sessions.map((one) => one.seconds))}
             rows={sessions.slice(0, SESSIONS_SHOWN).map((one) => {
               const project = projectName(one.project);
               return {
@@ -71,6 +72,7 @@ export async function InternetBlock({ sites, pages, hasSites, words }: { sites: 
       <>
         <BarRows
           tone="browser"
+          of={sites.find((one) => one.host === host)?.seconds}
           rows={mine.slice(0, PAGES_SHOWN).map((page) => {
             const name = page.title === "" ? page.url : page.title;
             return { key: `${page.url}\n${page.title}`, name, figure: words.duration(page.seconds), seconds: page.seconds, label: t("pageBar", { title: name, duration: words.duration(page.seconds) }), note: page.url };

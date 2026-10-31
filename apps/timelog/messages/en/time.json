@@ -44,7 +44,8 @@
     "byClassLabel": "The day split by class of app",
     "claudeGlance": "{duration} with Claude · {percent}% of the day",
     "claudeNoneDay": "No Claude that day.",
-    "devicesSum": "Sum of {n} devices"
+    "devicesSum": "Sum of {n} devices",
+    "appsMore": "and {n} more apps · {duration}"
   },
   "week": {
     "title": "{from} to {to}",

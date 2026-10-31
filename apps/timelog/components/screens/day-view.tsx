@@ -1,14 +1,15 @@
 import { getTranslations } from "next-intl/server";
 
-import { BarRows } from "@/components/screens/app-rows";
+import { BarRows, type BarRow } from "@/components/screens/app-rows";
 import { AutoRefresh } from "@/components/screens/auto-refresh";
 import { ClaudeBlock, InternetBlock } from "@/components/screens/claude-internet";
 import { Timeline } from "@/components/ui/timeline";
-import { Between, Card, Cards, Composition, Figure, Hero, HeroColumns, Mosaic, Stack, Text, TextLink, Tile, Title } from "@/components/ui";
+import { Between, Card, Cards, Composition, Disclosure, Figure, Hero, HeroColumns, Mosaic, Stack, Text, TextLink, Tile, Title } from "@/components/ui";
 import { appClass, timeByClass } from "@/lib/app-classes";
 import { readableApp } from "@/lib/app-names";
 import { projectName } from "@/lib/claude-project";
 import { claudeTotal } from "@/lib/daily";
+import type { AppTime } from "@/lib/queries";
 import { appsBetween, claudeBetween, claudeSessionsBetween, dayTotals, devicesBetween, pagesBetween, sitesBetween, uploadSpan, windowsBetween } from "@/lib/queries";
 import { focusShare, hourMarks, layoutSessions, minuteOfDay } from "@/lib/timeline";
 import { percent, sum } from "@/lib/totals";
@@ -16,6 +17,7 @@ import { calendarWords } from "@/lib/words";
 import { addDays, civilDay } from "@/lib/zone";
 
 const TITLES_SHOWN = 8;
+const APPS_SHOWN = 8;
 
 // One day (RT-04, RT-11): the total in the brand block, the top app and, on a past day, the gap to the day before, then the apps.
 // «Hoy» is this screen for today; any past day opens on `/dia/AAAA-MM-DD`.
@@ -70,6 +72,37 @@ export async function DayView({ day }: { day: string }) {
 
   // Before the first upload there is nothing to read: no empty sections stand in for it.
   const firstUse = top === undefined && span.lastReceived === null;
+
+  // An app's row opens onto its longest windows, each measured against the app's own time.
+  const appRow = (one: AppTime): BarRow => {
+    const tone = appClass(one.app, tSystem);
+    const mine = titlesOf.get(one.app) ?? [];
+    return {
+      key: one.app,
+      name: one.app,
+      tone,
+      figure: words.duration(one.seconds),
+      seconds: one.seconds,
+      label: t("bar", { app: one.app, duration: words.duration(one.seconds) }),
+      detail:
+        mine.length === 0 ? undefined : (
+          <>
+            <BarRows
+              tone={tone}
+              of={one.seconds}
+              rows={mine.slice(0, TITLES_SHOWN).map((title) => ({
+                key: title.app + title.title,
+                name: title.title,
+                figure: words.duration(title.seconds),
+                seconds: title.seconds,
+                label: t("windowBar", { title: title.title, duration: words.duration(title.seconds) }),
+              }))}
+            />
+            {mine.length > TITLES_SHOWN ? <Text as="p" variant="meta">{t("windowsMore", { n: mine.length - TITLES_SHOWN })}</Text> : null}
+          </>
+        ),
+    };
+  };
 
   // Claude Code's sessions are all that carries a time of day: they lay along the day, which opens at the hour now.
   const line = layoutSessions(sessions.map((one) => ({ key: one.session, label: projectName(one.project), first: one.first, last: one.last })));
@@ -162,31 +195,12 @@ export async function DayView({ day }: { day: string }) {
         <Mosaic>
           {apps.length > 0 ? (
             <Tile lead title={t("apps")} figure={words.duration(total)}>
-              <BarRows
-                rows={apps.map((one) => ({
-                  key: one.app,
-                  name: one.app,
-                  tone: appClass(one.app, tSystem),
-                  figure: words.duration(one.seconds),
-                  seconds: one.seconds,
-                  label: t("bar", { app: one.app, duration: words.duration(one.seconds) }),
-                  detail: titlesOf.has(one.app) ? (
-                    <>
-                      <BarRows
-                        tone={appClass(one.app, tSystem)}
-                        rows={(titlesOf.get(one.app) ?? []).slice(0, TITLES_SHOWN).map((title) => ({
-                          key: title.app + title.title,
-                          name: title.title,
-                          figure: words.duration(title.seconds),
-                          seconds: title.seconds,
-                          label: t("windowBar", { title: title.title, duration: words.duration(title.seconds) }),
-                        }))}
-                      />
-                      {(titlesOf.get(one.app) ?? []).length > TITLES_SHOWN ? <Text as="p" variant="meta">{t("windowsMore", { n: (titlesOf.get(one.app) ?? []).length - TITLES_SHOWN })}</Text> : null}
-                    </>
-                  ) : undefined,
-                }))}
-              />
+              <BarRows of={top?.seconds} rows={apps.slice(0, APPS_SHOWN).map(appRow)} />
+              {apps.length > APPS_SHOWN ? (
+                <Disclosure summary={<Text variant="meta">{t("appsMore", { n: apps.length - APPS_SHOWN, duration: words.duration(sum(apps.slice(APPS_SHOWN))) })}</Text>}>
+                  <BarRows of={top?.seconds} rows={apps.slice(APPS_SHOWN).map(appRow)} />
+                </Disclosure>
+              ) : null}
             </Tile>
           ) : null}
           <Tile title={tClaude("title")} figure={claudeSeconds > 0 ? words.duration(claudeSeconds) : "—"}>
