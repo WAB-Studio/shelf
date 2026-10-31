@@ -484,6 +484,9 @@
   "transactions": {
     "quickTitle": "Nuevo movimiento",
     "quickPlaceholder": "Anota un gasto…",
+    "quickAction": "Anotar un gasto",
+    "homeEmptyTitle": "Todavía no hay movimientos",
+    "homeEmptyDescription": "Anota el primer gasto y aparecerá aquí.",
     "quickInterpreted": "Interpretado · todo queda editable antes de guardar",
     "quickUnrecognized": "No reconocí el monto ni la categoría · complétalos",
     "quickAskQuestion": "¿Cuánto es «{token}»?",

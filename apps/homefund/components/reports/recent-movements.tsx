@@ -141,6 +141,21 @@ export function rowTitle(
   return (first && categoryNames.get(first)) || fallback;
 }
 
+// The phone's second line when the person wrote a description: it takes the
+// title, so the category the title would have been moves down beside the account.
+export function rowCaption(
+  row: TransactionListRow,
+  categoryNames: Map<string, string>,
+  accountNames: Map<string, string>,
+  kindLabels: KindLabels,
+): string | undefined {
+  const account = rowSubtitle(row, accountNames);
+  if (!row.description) return account;
+  return [rowTitle(row, categoryNames, kindLabels), account]
+    .filter(Boolean)
+    .join(" · ");
+}
+
 // A transfer reads "origin → destination"; an income names its destination, an
 // expense its source.
 export function rowSubtitle(

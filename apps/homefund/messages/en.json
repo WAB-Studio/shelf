@@ -484,6 +484,9 @@
   "transactions": {
     "quickTitle": "New movement",
     "quickPlaceholder": "Jot down an expense…",
+    "quickAction": "Note an expense",
+    "homeEmptyTitle": "No movements yet",
+    "homeEmptyDescription": "Note your first expense and it will show up here.",
     "quickInterpreted": "Interpreted · everything stays editable before saving",
     "quickUnrecognized": "I couldn't read the amount or the category · complete them",
     "quickAskQuestion": "How much is “{token}”?",

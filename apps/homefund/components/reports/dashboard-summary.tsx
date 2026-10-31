@@ -140,13 +140,16 @@ export function DashboardSummary({
           </Flex>
         </BandCard>
 
-        <BandCard ratio={1} centered data-card="month">
+        <BandCard ratio={1} data-card="month">
           <Flex direction="column" gap="4">
             {monthFlow.map((flow) => (
               <Flex key={flow.currency} direction="column" gap="2">
-                <Text size="2" color="gray">
-                  {tr("inCurrency", { currency: flow.currency })}
-                </Text>
+                {/* One currency is already named by the net-worth label beside. */}
+                {monthFlow.length > 1 && (
+                  <Text size="2" color="gray">
+                    {tr("inCurrency", { currency: flow.currency })}
+                  </Text>
+                )}
                 <BandStats count={flow.adjustmentCents !== 0 ? 4 : 3}>
                   <MonthStat
                     label={t("monthIncome")}
@@ -159,6 +162,7 @@ export function DashboardSummary({
                     minor={flow.expenseCents}
                     currency={flow.currency}
                     tone="expense"
+                    signed={false}
                   />
                   <MonthStat
                     label={t("monthNet")}
@@ -237,7 +241,7 @@ function MonthStat({
   minor: number;
   currency: CurrencyCode;
   tone: MoneyTone;
-  signed?: "always";
+  signed?: boolean | "always";
 }) {
   return (
     <Flex direction="column" gap="1">
