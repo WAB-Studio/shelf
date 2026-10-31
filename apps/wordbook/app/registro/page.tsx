@@ -1,13 +1,13 @@
-import NextLink from "next/link";
 import { getTranslations } from "next-intl/server";
 
 import { ClearPanel } from "@/components/log/clear-panel";
 import { ExportPanel } from "@/components/log/export-panel";
 import { HistoryList } from "@/components/log/history-list";
+import { ReviewLink } from "@/components/review/review-link";
 import { SyncOnDelete } from "@/components/sync/sync-on-delete";
 import { SyncOnOpen } from "@/components/sync/sync-on-open";
 import { getReader } from "@/lib/session";
-import { Band, Box, Button, Flex, Page, Separator } from "@/components/ui";
+import { Band, Box, Flex, Page, Separator } from "@/components/ui";
 
 // Server-rendered shell alone, like `/fuente`: the study and the two actions
 // under it belong to the client components this mounts, in the order the
@@ -19,7 +19,7 @@ import { Band, Box, Button, Flex, Page, Separator } from "@/components/ui";
 export default async function RegistroPage() {
   // `reader`: a boolean only, never the reader itself: `ClearPanel` decides whether
   // to draw the account option from this alone (`RegistroVaciarConfirmarSinCuenta`).
-  const [t, tReview, reader] = await Promise.all([getTranslations("log"), getTranslations("review"), getReader()]);
+  const [t, reader] = await Promise.all([getTranslations("log"), getReader()]);
 
   return (
     <Page measure="full">
@@ -31,9 +31,7 @@ export default async function RegistroPage() {
             <Band>{t("title")}</Band>
           </Box>
           {/* RL-68: the review draws its words from this record. */}
-          <Button asChild size="3" variant="soft">
-            <NextLink href="/repaso">{tReview("open")}</NextLink>
-          </Button>
+          <ReviewLink />
         </Flex>
 
         <HistoryList />

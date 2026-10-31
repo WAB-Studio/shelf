@@ -2,15 +2,15 @@
 
 import { useEffect, useRef, useState } from "react";
 import NextLink from "next/link";
-import { useTranslations } from "next-intl";
+import { useFormatter, useTranslations } from "next-intl";
 
 import { useDictionary } from "@/lib/dictionary/use-dictionary";
 import type { Sense } from "@/lib/dictionary/index-build";
 import { cardBack, cardFront } from "@/lib/log/anki";
-import { countKind, isPhraseRow } from "@/lib/log/outcome";
+import { contentUnit, isPhraseRow } from "@/lib/log/outcome";
 import { readWordStudy } from "@/lib/log/summary";
 import { buildQueue, isReviewable, type ReviewQueue } from "@/lib/review/deck";
-import { GRADES, intervals, intervalUnit, rate, staysInSession, type ReviewGrade } from "@/lib/review/schedule";
+import { dueWhen, GRADES, intervals, intervalUnit, rate, staysInSession, type ReviewGrade } from "@/lib/review/schedule";
 import { answerSenses, pickSense } from "@/lib/review/sense";
 import { readCards, saveCard } from "@/lib/review/store";
 import { TranslationList } from "@/components/translations/translation-list";
@@ -39,8 +39,12 @@ type SessionState =
       // The queue as the screen opened, then every «Otra vez» answer appended behind it.
       items: Item[];
       later: number;
-      // «entradas» once a phrase is among the reviewable rows, «palabras» before.
-      unit: "entries" | "words";
+      // The distinct entries the session opened with: a requeued answer never grows it.
+      total: number;
+      // When the earliest entry put away comes due, or null with none put away.
+      nextDue: number | null;
+      // What the reviewable rows are called: «palabras», «frases», or «entradas» once both are among them.
+      unit: "entries" | "words" | "phrases";
       index: number;
       saving: boolean;
       // The keys answered so far: an entry answered twice counts once.
@@ -56,6 +60,7 @@ type SessionState =
 // session and the session is not over while one waits.
 export function ReviewSession() {
   const t = useTranslations("review");
+  const format = useFormatter();
   const tWord = useTranslations("word");
   const { lookup } = useDictionary();
   const [state, setState] = useState<SessionState>({ kind: "loading" });
@@ -75,7 +80,9 @@ export function ReviewSession() {
           kind: "ready",
           items: queue.items,
           later: queue.later,
-          unit: countKind(rows.filter(isReviewable)),
+          total: queue.items.length,
+          nextDue: queue.nextDue,
+          unit: contentUnit(rows.filter(isReviewable)),
           index: 0,
           saving: false,
           answered: [],
@@ -147,6 +154,7 @@ export function ReviewSession() {
               items: staysInSession(next, now) ? [...prev.items, { row: item.row, card: next }] : prev.items,
               index: prev.index + 1,
               saving: false,
+              nextDue: staysInSession(next, now) ? prev.nextDue : Math.min(prev.nextDue ?? next.due, next.due),
               answered: prev.answered.includes(item.row.key) ? prev.answered : [...prev.answered, item.row.key],
               revealedAt: null,
               clock: Date.now(),
@@ -162,7 +170,7 @@ export function ReviewSession() {
   if (state.kind === "loading") return <Skeleton height="160px" />;
   if (state.kind === "failed") return <Text muted>{t("loadFailed")}</Text>;
 
-  const { items, saving, answered, revealedAt, clock } = state;
+  const { items, saving, answered, revealedAt, clock, total } = state;
   const kind = state.unit;
   const item = items[state.index];
 
@@ -176,6 +184,15 @@ export function ReviewSession() {
             {answered.length === 0 ? t("nothingDue") : t("finished", { count: answered.length, kind })}
           </Text>
           {later > 0 && <Text muted>{t("later", { count: later, kind })}</Text>}
+          {later > 0 && state.nextDue !== null && (
+            <Text muted>
+              {t("nextDue", {
+                when: dueWhen(state.nextDue, clock),
+                time: format.dateTime(state.nextDue, { hour: "numeric", minute: "2-digit" }),
+                date: format.dateTime(state.nextDue, { day: "numeric", month: "long" }),
+              })}
+            </Text>
+          )}
           {later === 0 && <Text muted>{t("empty")}</Text>}
           <Link asChild>
             <NextLink href="/registro">{t("backToRecord")}</NextLink>
@@ -191,7 +208,7 @@ export function ReviewSession() {
     return (
       <Card>
         <Flex direction="column" gap="3" align="start">
-          <Text size="4">{t("waiting", { count: waiting })}</Text>
+          <Text size="4">{t("waiting", { count: waiting, kind })}</Text>
           <Text muted>{t("waitingIn", { minutes })}</Text>
           <Button
             ref={showRef}
@@ -206,6 +223,8 @@ export function ReviewSession() {
   }
 
   const { row, card } = item;
+  // Entries past the session's opening count are «Otra vez» answers coming round again.
+  const repeat = state.index >= total;
   const back = cardBack(row);
   const drawn = sense !== null && sense.key === row.key && !isPhraseRow(row) ? sense.sense : null;
   const formsLine =
@@ -214,12 +233,12 @@ export function ReviewSession() {
   return (
     <Card>
       <Flex direction="column" gap="5">
-        <MetaLabel>{t("progress", { current: state.index + 1, total: items.length })}</MetaLabel>
+        <MetaLabel>{t("progress", { current: repeat ? Math.min(answered.length, total) : state.index + 1, total })}</MetaLabel>
         <Flex direction="column" gap="2">
           <Headword>{cardFront(row)}</Headword>
-          {card === null && (
+          {(card === null || repeat) && (
             <Text size="2" muted>
-              {t("newWord")}
+              {repeat ? t("repeat") : t(isPhraseRow(row) ? "newPhrase" : "newWord")}
             </Text>
           )}
         </Flex>
@@ -275,7 +294,16 @@ export function ReviewSession() {
             </Grid>
           </>
         )}
-        {failedSave && <Text color="red">{t("saveFailed")}</Text>}
+        {failedSave && (
+          // «Failure» in docs/wordbook/DESIGN.md: a hairline and the line in full ink. The grades above
+          // are the retry, still pressable.
+          <Flex direction="column" gap="3">
+            <Separator size="4" />
+            <Text weight="bold" role="alert">
+              {t("saveFailed")}
+            </Text>
+          </Flex>
+        )}
       </Flex>
     </Card>
   );

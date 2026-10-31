@@ -29,3 +29,10 @@ export function isPhraseRow(row: { lastOutcome: LookupOutcome }): boolean {
 export function countKind(rows: readonly { lastOutcome: LookupOutcome }[]): "entries" | "words" {
   return rows.some(isPhraseRow) ? "entries" : "words";
 }
+
+/** What to call a set of rows by their content: «palabras», «frases», or «entradas» once both are among them. */
+export function contentUnit(rows: readonly { lastOutcome: LookupOutcome }[]): "words" | "phrases" | "entries" {
+  const phrases = rows.filter(isPhraseRow).length;
+  if (phrases === 0) return "words";
+  return phrases === rows.length ? "phrases" : "entries";
+}

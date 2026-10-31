@@ -342,16 +342,20 @@
   },
   "review": {
     "title": "Repaso",
-    "open": "Repasar palabras",
+    "open": "Repasar",
+    "openKind": "{kind, select, words {Repasar palabras} phrases {Repasar frases} other {Repasar entradas}}",
     "loadFailed": "No se pudo abrir el repaso en este dispositivo.",
     "saveFailed": "No se pudo guardar la respuesta. Vuelve a intentarlo.",
-    "nothingDue": "Hoy no tienes palabras por repasar.",
-    "finished": "{kind, select, entries {{count, plural, one {Repasaste # entrada. Terminaste por hoy.} other {Repasaste # entradas. Terminaste por hoy.}}} other {{count, plural, one {Repasaste # palabra. Terminaste por hoy.} other {Repasaste # palabras. Terminaste por hoy.}}}}",
-    "later": "{kind, select, entries {{count, plural, one {# entrada vuelve más adelante.} other {# entradas vuelven más adelante.}}} other {{count, plural, one {# palabra vuelve más adelante.} other {# palabras vuelven más adelante.}}}}",
-    "empty": "Las palabras que buscas aparecen aquí para repasarlas.",
+    "nothingDue": "{kind, select, words {Hoy no tienes palabras por repasar.} phrases {Hoy no tienes frases por repasar.} other {Hoy no tienes entradas por repasar.}}",
+    "finished": "{kind, select, entries {{count, plural, one {Repasaste # entrada. Terminaste por hoy.} other {Repasaste # entradas. Terminaste por hoy.}}} phrases {{count, plural, one {Repasaste # frase. Terminaste por hoy.} other {Repasaste # frases. Terminaste por hoy.}}} other {{count, plural, one {Repasaste # palabra. Terminaste por hoy.} other {Repasaste # palabras. Terminaste por hoy.}}}}",
+    "later": "{kind, select, entries {{count, plural, one {# entrada vuelve más adelante.} other {# entradas vuelven más adelante.}}} phrases {{count, plural, one {# frase vuelve más adelante.} other {# frases vuelven más adelante.}}} other {{count, plural, one {# palabra vuelve más adelante.} other {# palabras vuelven más adelante.}}}}",
+    "nextDue": "{when, select, today {La próxima vuelve hoy a las {time}.} tomorrow {La próxima vuelve mañana.} other {La próxima vuelve el {date}.}}",
+    "empty": "Lo que busques aparece aquí para repasarlo.",
     "backToRecord": "Ir al registro",
     "progress": "{current} de {total}",
     "newWord": "Palabra nueva",
+    "newPhrase": "Frase nueva",
+    "repeat": "Repaso",
     "show": "Mostrar respuesta",
     "forms": "Buscada como: {forms}",
     "grade": {
@@ -365,7 +369,7 @@
       "hours": "{count} h",
       "days": "{count, plural, one {# día} other {# días}}"
     },
-    "waiting": "{count, plural, one {Queda # entrada para repetir en un momento.} other {Quedan # entradas para repetir en un momento.}}",
+    "waiting": "{kind, select, words {{count, plural, one {Queda # palabra para repetir en un momento.} other {Quedan # palabras para repetir en un momento.}}} phrases {{count, plural, one {Queda # frase para repetir en un momento.} other {Quedan # frases para repetir en un momento.}}} other {{count, plural, one {Queda # entrada para repetir en un momento.} other {Quedan # entradas para repetir en un momento.}}}}",
     "waitingIn": "Vuelve en {minutes} min",
     "reviewNow": "Repasar ya"
   }

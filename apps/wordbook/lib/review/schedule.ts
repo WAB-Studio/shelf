@@ -100,3 +100,12 @@ const SESSION_REQUEUE_MS = 5 * 60_000;
 export function staysInSession(card: ReviewCard, now: number): boolean {
   return card.due - now <= SESSION_REQUEUE_MS;
 }
+
+// Where a due moment falls from the reader's own calendar: later today, tomorrow or past that.
+export function dueWhen(due: number, now: number): "today" | "tomorrow" | "later" {
+  const day = localDay(due);
+  if (day === localDay(now)) return "today";
+  const tomorrow = new Date(now);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  return day === localDay(tomorrow.getTime()) ? "tomorrow" : "later";
+}

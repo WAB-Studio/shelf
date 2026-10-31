@@ -49,6 +49,7 @@ test("RL-68: due words come first, earliest first; then new ones, the most looke
     ["frisk", "snuff", "gust", "lull"],
   );
   assert.equal(queue.later, 1);
+  assert.equal(queue.nextDue, future.due);
 });
 
 test("RL-68: new words stop at the day's cap, counting the ones already introduced today", () => {
