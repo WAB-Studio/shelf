@@ -26,6 +26,13 @@ const KNOWN: Record<string, string> = {
   whatsapp: "WhatsApp",
   javaw: "Java",
   java: "Java",
+  steamwebhelper: "Steam",
+  riotclientservices: "Riot Client",
+  "whatsapp.root": "WhatsApp",
+  idea64: "IntelliJ IDEA",
+  vlc: "VLC",
+  "mpc-hc64": "MPC-HC",
+  "powertoys.powerlauncher": "PowerToys",
 };
 
 // Windows' own background hosts: noise on a day's list, kept together.
@@ -47,8 +54,17 @@ const SYSTEM = new Set([
   "openconsole",
 ]);
 
-// Updaters, helpers, services, hosts and brokers: background processes nobody opened.
-const BACKGROUND = /(updater|helper|service|host|broker)/;
+// Updaters, helpers, services, hosts and brokers: background processes nobody opened. Whole words only, split at
+// punctuation and at a capital after a lower-case letter: «RuntimeBroker» is one, «GhostOfTsushima» is none.
+const BACKGROUND = new Set(["updater", "helper", "service", "host", "broker"]);
+
+function isBackground(bare: string): boolean {
+  return bare
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .some((word) => BACKGROUND.has(word));
+}
 
 const TEAMS = /^(ms-?teams|teams|microsoft\.teams.*)$/;
 
@@ -60,7 +76,7 @@ export function readableApp(raw: string): string | null {
   if (TEAMS.test(key)) return "Teams";
   const known = KNOWN[key];
   if (known !== undefined) return known;
-  return BACKGROUND.test(key) ? null : bare;
+  return isBackground(bare) ? null : bare;
 }
 
 // The day's apps under their readable names: two processes with one name add up, system noise becomes

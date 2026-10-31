@@ -38,7 +38,7 @@ export async function ClaudeBlock({ claude, sessions, hasClaudeCode, hasSites, w
       ) : (
         <>
           <BarRows rows={rows.map((row) => ({ key: row.key, name: row.name, figure: words.duration(row.seconds), seconds: row.seconds, label: t("bar", { name: row.name, duration: words.duration(row.seconds) }) }))} />
-          <Text as="p" variant="meta">{t("overlap")}</Text>
+          {rows.length === 3 ? <Text as="p" variant="meta">{t("overlap")}</Text> : null}
         </>
       )}
       {sessions.length > 0 ? (

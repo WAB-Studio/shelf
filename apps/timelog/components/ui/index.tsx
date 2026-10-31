@@ -10,6 +10,11 @@ export function Page({ wide, children }: { wide?: boolean; children: ReactNode }
   return <main className={join(styles.page, wide && styles.pageWide)}>{children}</main>;
 }
 
+// A form's column inside the wide page: the header keeps its place from one screen to the next.
+export function Narrow({ children }: { children: ReactNode }) {
+  return <div className={styles.narrow}>{children}</div>;
+}
+
 // The brand block beside its rows from 1100 (block sticky on the left), above them below it.
 export function Split({ aside, children }: { aside: ReactNode; children: ReactNode }) {
   return (
@@ -107,6 +112,12 @@ export function Card({ label, children }: { label: ReactNode; children: ReactNod
   );
 }
 
+// «13 h» as «13» over «h», so two neighbours never read as one run of figures.
+function FigureParts({ text }: { text: string }) {
+  const at = text.indexOf(" ");
+  return at < 0 ? text : <><span>{text.slice(0, at)}</span><span className={styles.dayUnit}>{text.slice(at + 1)}</span></>;
+}
+
 export type DayColumn = { key: string; label: string; figure: string; share: number; future: boolean; description: string; href?: string };
 
 // Seven vertical columns, one per day, for the brand block; a day not reached is dimmed and empty.
@@ -119,7 +130,9 @@ export function DayColumns({ days }: { days: DayColumn[] }) {
             <div className={styles.dayTrack} role="img" aria-label={day.description}>
               <div className={styles.dayFill} style={{ height: `${Math.max(0, Math.min(1, day.share)) * 100}%` }} />
             </div>
-            <span className={join(styles.dayFigure, styles.mono)}>{day.future ? "" : day.figure}</span>
+            <span className={join(styles.dayFigure, styles.mono)}>
+              {day.future ? "" : <FigureParts text={day.figure} />}
+            </span>
             <span className={styles.dayLabel}>{day.label}</span>
           </>
         );

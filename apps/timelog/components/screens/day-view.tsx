@@ -1,6 +1,7 @@
 import { getTranslations } from "next-intl/server";
 
 import { BarRows } from "@/components/screens/app-rows";
+import { AutoRefresh } from "@/components/screens/auto-refresh";
 import { ClaudeBlock, InternetBlock } from "@/components/screens/claude-internet";
 import { Between, Card, Cards, Figure, Hero, Split, Stack, Text, TextLink, Title } from "@/components/ui";
 import { readableApp } from "@/lib/app-names";
@@ -49,8 +50,12 @@ export async function DayView({ day }: { day: string }) {
   const hasNext = day < today;
   const hrefOf = (target: string) => (target === today ? "/" : `/dia/${target}`);
 
+  // Before the first upload there is nothing to read: no empty sections stand in for it.
+  const firstUse = top === undefined && span.lastReceived === null;
+
   return (
     <Stack gap={4}>
+      {isToday ? <AutoRefresh /> : null}
       {hasPrev || hasNext ? (
         <Between>
           {hasPrev ? <TextLink href={hrefOf(before)}>‹ {t("prev")}</TextLink> : <span />}
@@ -101,6 +106,7 @@ export async function DayView({ day }: { day: string }) {
         }
       >
         <Stack gap={4}>
+          {apps.length > 0 ? (
           <Stack gap={2}>
             <Text variant="meta">{t("apps")}</Text>
             <BarRows
@@ -127,8 +133,9 @@ export async function DayView({ day }: { day: string }) {
               }))}
             />
           </Stack>
-          <ClaudeBlock claude={claude} sessions={sessions} hasClaudeCode={span.hasClaudeCode} hasSites={span.hasSites} words={words} />
-          <InternetBlock sites={sites} pages={pages} hasSites={span.hasSites} words={words} />
+          ) : null}
+          {firstUse ? null : <ClaudeBlock claude={claude} sessions={sessions} hasClaudeCode={span.hasClaudeCode} hasSites={span.hasSites} words={words} />}
+          {firstUse ? null : <InternetBlock sites={sites} pages={pages} hasSites={span.hasSites} words={words} />}
         </Stack>
       </Split>
     </Stack>
