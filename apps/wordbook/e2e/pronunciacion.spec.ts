@@ -96,8 +96,8 @@ test("`row` draws each sense's translations on one comma-separated line", async 
 
   for (const line of [
     "remado, remo",
-    "fila, hilera, línea, pista, registro, renglón",
-    "pelea, riña, cisco, gresca, pelotera, pifostio, barullo, bulla",
+    "fila, hilera, línea",
+    "pelea, riña, cisco",
     "remar, bogar, proejar",
     "pelear, discutir, reñir",
   ]) {
@@ -294,9 +294,9 @@ test("RL-51: a sense draws no IPA line of its own where the sound is the one alr
   await loadDictionary(page);
   await answer(page, "mass");
 
-  // `mass` draws three label rows — adjective, noun, verb — and the asset
-  // writes the noun's stress and the other two without it. One line each,
-  // and no fourth repeating the noun's sound inside a sense.
-  await expect(page.getByText("/mæs/", { exact: true })).toHaveCount(2);
-  await expect(page.getByText("/ˈmæs/", { exact: true })).toHaveCount(1);
+  // `mass` draws three label rows — adjective, noun, verb. The noun's common sense (masa) leads it and
+  // is written without the stress, as the other two are; its liturgical sense (misa, `/ˈmæs/`) is the
+  // same sound and draws no line of its own. One line per row, none repeated inside a sense.
+  await expect(page.getByText("/mæs/", { exact: true })).toHaveCount(3);
+  await expect(page.getByText("/ˈmæs/", { exact: true })).toHaveCount(0);
 });

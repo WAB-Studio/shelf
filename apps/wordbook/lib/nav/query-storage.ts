@@ -33,3 +33,7 @@ export function clearNavQuery(): void {
     // Same as `writeNavQuery`.
   }
 }
+
+// Fired once the search screen has written its query to the address bar: `history.pushState` tells
+// no one, so the bar's own «Buscar» link listens for this to learn the query it must return to.
+export const QUERY_COMMITTED_EVENT = "voyager:query-committed";

@@ -921,7 +921,7 @@ for (const width of [360, 1280]) {
       await page.goto("/registro/leave");
       await expect(page.getByRole("heading", { name: "leave", exact: true })).toBeVisible();
       await expect(glossLocator(page, "permiso")).toBeVisible();
-      await expect(page.getByText(/^permiso · 1 búsqueda desde el /)).toBeVisible();
+      await expect(page.getByText(/^dejar · 1 búsqueda desde el /)).toBeVisible();
       await expect(
         page.getByText(messages.word.networkTranslations, { exact: true }),
       ).toHaveCount(0);
@@ -1121,7 +1121,7 @@ test("a form's URL draws its lemma's senses, never the «es una forma de» notic
   ).toBeVisible();
   // `lingered` also reaches this gloss, under the inflection notice, so the
   // sense alone proves nothing: the clause rests on the notice's absence.
-  await expect(glossLocator(page, "persistir")).toBeVisible();
+  await expect(glossLocator(page, "demorar")).toBeVisible();
   await expect(page.getByText(/es una forma de/)).toHaveCount(0);
 });
 
@@ -1225,7 +1225,7 @@ test("an old unlisted row of a form whose lemma the dictionary has draws the lem
   ]);
 
   await page.goto("/registro/lingered");
-  await expect(glossLocator(page, "persistir")).toBeVisible();
+  await expect(glossLocator(page, "demorar")).toBeVisible();
   await expect(
     page.getByText(messages.word.networkTranslations, { exact: true }),
   ).toHaveCount(0);

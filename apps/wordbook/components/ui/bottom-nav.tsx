@@ -7,7 +7,7 @@ import { useTranslations } from "next-intl";
 import { Heading, Link } from "@radix-ui/themes";
 
 
-import { readNavQuery, writeNavQuery } from "@/lib/nav/query-storage";
+import { QUERY_COMMITTED_EVENT, readNavQuery, writeNavQuery } from "@/lib/nav/query-storage";
 
 import { TapTarget } from "./tap-target";
 import { Wordmark } from "./wordmark";
@@ -26,11 +26,15 @@ function searchHref(query: string): string {
   return query ? `/?${QUERY_PARAM}=${encodeURIComponent(query)}` : "/";
 }
 
-// Nothing here ever pushes a re-render on its own (mirrors sense-list.tsx's
-// own `subscribeNever`): the value this reads only changes across a mount,
-// which a route change already forces by remounting `BottomNav` fresh.
-function subscribeNever(): () => void {
-  return () => {};
+// The address bar's query changes under a mounted bar when the search screen writes it
+// (`history.pushState` tells no one) or the browser walks its history.
+function subscribeToQuery(onChange: () => void): () => void {
+  window.addEventListener(QUERY_COMMITTED_EVENT, onChange);
+  window.addEventListener("popstate", onChange);
+  return () => {
+    window.removeEventListener(QUERY_COMMITTED_EVENT, onChange);
+    window.removeEventListener("popstate", onChange);
+  };
 }
 
 function getServerQuery(): string {
@@ -108,7 +112,7 @@ export function BottomNav() {
   // paint — the real value lands one commit later, the way sense-list.tsx's
   // `speechSupported` already does.
   const query = useSyncExternalStore(
-    subscribeNever,
+    subscribeToQuery,
     () => (pathname === "/" ? readAddressBarQuery() : readNavQuery()),
     getServerQuery,
   );

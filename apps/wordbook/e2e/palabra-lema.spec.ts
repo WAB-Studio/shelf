@@ -167,7 +167,7 @@ test("RL-58: with two pronunciation blocks the offer sits under block 1's first 
   const header = page.getByText('«said» también es una forma de «say»', { exact: true });
   await expect(header).toBeVisible({ timeout: 5000 });
   const blockOneGroup = line(page, "dicho");
-  const lemmaVerb = line(page, "decir, poner, digamos, se dice");
+  const lemmaVerb = line(page, "decir, poner, digamos");
   const blockTwoGroup = line(page, "Saíd");
   await expect(blockOneGroup).toBeVisible();
   await expect(lemmaVerb).toBeVisible();

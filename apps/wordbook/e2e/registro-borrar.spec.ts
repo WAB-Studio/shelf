@@ -10,7 +10,7 @@ import { DATABASE_VERSION } from "../lib/log/record";
 import { LOG_DELETED_EVENT } from "../lib/log/delete";
 import type { LookupRecord, SyncState } from "../lib/log/types";
 import { closeRun, openRun } from "@repo/harness-registry";
-import { afterFrames, expect, freezeTimers, runClock, test } from "./fixtures";
+import { afterFrames, expect, freezeTimers, runClock, studyHeader, test } from "./fixtures";
 
 // K10, RL-66, RL-70, RNL-11: each /registro row carries a ✕ that deletes its
 // group. Written from SPEC RL-66/RL-70, RNL-11 (successor of RNL-09, approved
@@ -201,8 +201,7 @@ const action = (page: Page, name: string) =>
   page.getByRole("button", { name, exact: true }).or(page.getByRole("link", { name, exact: true }));
 const confirmTitle = (page: Page, word: string) =>
   page.getByText(study("deleteConfirmTitle", { word }), { exact: true });
-const header = (page: Page, lookups: number, words: number) =>
-  page.getByText(study("header", { lookups, words }), { exact: true });
+const header = (page: Page, lookups: number, words: number) => studyHeader(page, lookups, words);
 // The two bodies differ only by « en todos tus dispositivos»: exact or nothing.
 const bodyEveryDevice = (page: Page, count: number) =>
   page.getByText(study("deleteConfirmBody", { count }), { exact: true });

@@ -42,7 +42,9 @@ function visible(page: Page, text: string, exact = true): Locator {
 }
 
 function control(page: Page): Locator {
-  return page.locator("main").locator("button[aria-expanded]");
+  // «ver N más» under a translation line is a toggle too; this one folds the dictionary.
+  const { showDictionary, hideDictionary } = messages.search.noEntry;
+  return page.locator("main").getByRole("button", { name: new RegExp(`^(${showDictionary}|${hideDictionary})$`) });
 }
 
 async function top(locator: Locator): Promise<number> {
@@ -121,7 +123,7 @@ test("every word of the table, typed alone, shows its own table translation and 
     // Clear first: two words share a gloss ("su"), and the last word's line
     // must not stand in for this one's.
     await searchBox(page).fill("");
-    await expect(page.locator("main").getByText(messages.search.empty)).toBeVisible();
+    await expect(page.locator("main").getByText(messages.search.brandLine)).toBeVisible();
     await searchBox(page).fill(word);
     const ok = await visible(page, table)
       .first()

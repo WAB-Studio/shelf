@@ -9,6 +9,7 @@ import { normaliseHeadword } from "@/lib/dictionary/format";
 import type { SenseGroup } from "@/lib/dictionary/index-build";
 import { useDictionary } from "@/lib/dictionary/use-dictionary";
 import type { WordAnswer } from "@/lib/dictionary/lookup";
+import { QUERY_COMMITTED_EVENT } from "@/lib/nav/query-storage";
 import { announce } from "@/lib/word/announce";
 import { useDecoration } from "@/lib/word/use-decoration";
 import { useNetworkAnswer } from "@/lib/word/use-network-answer";
@@ -235,6 +236,7 @@ export function SearchScreen({ initialQuery }: { initialQuery?: string }) {
       window.history.replaceState(null, "", url);
     }
     committedTextRef.current = committedText;
+    window.dispatchEvent(new Event(QUERY_COMMITTED_EVENT));
   }
 
   useEffect(() => {

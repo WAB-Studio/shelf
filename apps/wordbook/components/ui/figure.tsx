@@ -4,7 +4,7 @@ import styles from "./figure.module.css";
 // (docs/wordbook/DESIGN.md "Verde botella"). Numbers are tabular on `body` already.
 export function Figure({ value, label }: { value: number; label: string }) {
   return (
-    <div className={styles.figure}>
+    <div className={styles.figure} role="group" aria-label={`${value} ${label}`}>
       <span className={styles.value}>{value}</span>
       <span className={styles.label}>{label}</span>
     </div>
