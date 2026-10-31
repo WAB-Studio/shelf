@@ -340,7 +340,7 @@ function QuickEntryForm({
     proposedAmount.current = null;
     // The choices follow from the token alone, and a new token clears the pick: the index is always current.
     const choice = ask.choices[Number(index)];
-    const picked = amountToInput(choice.cents, accountCurrency);
+    const picked = amountToInput(choice.cents, accountCurrency, locale);
     pickedAmount.current = picked;
     setWordsAmount(choice.fromWords ? picked : null);
     form.setValue("amount", picked, { shouldValidate: true });
