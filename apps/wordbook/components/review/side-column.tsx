@@ -35,7 +35,8 @@ export function SideColumn({ section }: { section: "search" | "review" }) {
             .filter((row) => row.pending !== true)
             .sort((a, b) => b.lastAt - a.lastAt)
             .slice(0, RECENT_SHOWN)
-            .map(cardFront),
+            .map(cardFront)
+            .filter((word): word is string => typeof word === "string"),
         });
       })
       .catch(() => {});

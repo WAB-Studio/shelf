@@ -25,7 +25,9 @@ export function Starters({ onPick }: { onPick: (text: string) => void }) {
           .filter((row) => row.pending !== true)
           .sort((a, b) => b.lastAt - a.lastAt)
           .slice(0, RECENT_SHOWN)
-          .map(cardFront);
+          .map(cardFront)
+          // A row whose text is not a string would make the whole screen throw; it is simply not offered.
+          .filter((word): word is string => typeof word === "string");
         setRecent(latest);
       })
       .catch(() => {
