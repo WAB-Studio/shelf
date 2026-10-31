@@ -12,6 +12,8 @@ import {
   FundChip,
   Money,
   Mosaic,
+  MosaicFigure,
+  MosaicNote,
   MosaicTile,
   Progress,
   Ring,
@@ -169,10 +171,8 @@ export async function PlanningHub({
 
           <MosaicTile href="/planning/debts" size="medium" tone="ink">
             <Heading as="h2" size="5">{titles.debts}</Heading>
-            <Text size="7" weight="bold" style={{ color: "var(--brand-lime)" }}>
-              {debtsTotal}
-            </Text>
-            <Text size="2" style={{ color: "var(--gray-a11)" }}>{debtsNext ?? debtsSummary}</Text>
+            <MosaicFigure>{debtsTotal}</MosaicFigure>
+            <MosaicNote>{debtsNext ?? debtsSummary}</MosaicNote>
           </MosaicTile>
 
           <MosaicTile href="/planning/payments" size="wide">

@@ -29,3 +29,12 @@ export function MosaicTile({
     </Link>
   );
 }
+
+// The ink tile's headline figure (lime) and its quiet note.
+export function MosaicFigure({ children }: { children: ReactNode }) {
+  return <span className={styles.figure}>{children}</span>;
+}
+
+export function MosaicNote({ children }: { children: ReactNode }) {
+  return <span className={styles.note}>{children}</span>;
+}

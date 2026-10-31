@@ -40,6 +40,22 @@
   color: #ffffff;
 }
 
-.tile[data-tone="ink"] :where(.figure) {
+.figure {
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
   color: var(--brand-lime);
+}
+
+.note {
+  font-size: 14px;
+  color: var(--gray-a11);
+}
+
+.tile[data-tone="ink"] .note {
+  color: #c9c2e0;
+}
+
+.tile[data-tone="ink"] h2 {
+  color: #ffffff;
 }
