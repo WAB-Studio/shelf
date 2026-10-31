@@ -222,6 +222,7 @@ export function AuditScreen({
               <FilterField label={t("rangeFrom")}>
                 {(id) => (
                   <DateInput
+                    filter
                     id={id}
                     value={filters.from ?? ""}
                     onChange={(event) =>
@@ -233,6 +234,7 @@ export function AuditScreen({
               <FilterField label={t("rangeTo")}>
                 {(id) => (
                   <DateInput
+                    filter
                     id={id}
                     value={filters.to ?? ""}
                     onChange={(event) =>

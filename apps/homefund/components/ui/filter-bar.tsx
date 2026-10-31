@@ -86,6 +86,7 @@ export function FilterDate({
         {label}
       </label>
       <DateInput
+        filter
         id={controlId}
         size="3"
         value={value}

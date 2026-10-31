@@ -20,15 +20,19 @@ export function isoToText(iso: string, order: DateOrder): string {
 }
 
 // What a person typed, back to the civil date the form holds: «31/10/2026» (or the
-// order's own), «31-10-2026», or the ISO form itself. Null when it names no real day.
+// order's own), «31-10-26» (a two-digit year is 20xx), digits alone («31102026»,
+// «311026»), or the ISO form itself. Null when it names no real day.
 export function textToIso(text: string, order: DateOrder): string | null {
   const value = text.trim();
   if (isCivilDate(value)) return value;
 
-  const match = /^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})$/.exec(value);
+  const match =
+    /^(\d{1,2})[/.\-\s](\d{1,2})[/.\-\s](\d{4}|\d{2})$/.exec(value) ??
+    /^(\d{2})(\d{2})(\d{4}|\d{2})$/.exec(value);
   if (!match) return null;
 
-  const [, first, second, year] = match;
+  const [, first, second, short] = match;
+  const year = short.length === 2 ? `20${short}` : short;
   const day = order === "dmy" ? first : second;
   const month = order === "dmy" ? second : first;
   const iso = `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;

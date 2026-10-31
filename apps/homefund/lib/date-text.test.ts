@@ -18,3 +18,13 @@ test("the ISO form is always accepted and a day that does not exist is refused",
   assert.equal(textToIso("31/10", "dmy"), null);
   assert.equal(textToIso("", "dmy"), null);
 });
+
+test("a two-digit year is 20xx and digits alone are read as day, month, year", () => {
+  assert.equal(textToIso("31/10/26", "dmy"), "2026-10-31");
+  assert.equal(textToIso("31102026", "dmy"), "2026-10-31");
+  assert.equal(textToIso("311026", "dmy"), "2026-10-31");
+  assert.equal(textToIso("10312026", "mdy"), "2026-10-31");
+  assert.equal(textToIso("31 10 2026", "dmy"), "2026-10-31");
+  assert.equal(textToIso("3110", "dmy"), null);
+  assert.equal(textToIso("32102026", "dmy"), null);
+});

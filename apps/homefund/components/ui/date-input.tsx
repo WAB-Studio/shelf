@@ -7,6 +7,7 @@ import { TextField } from "@radix-ui/themes";
 
 import { IconButton } from "./button";
 
+import { isCivilDate } from "@/lib/dates";
 import { dateOrderOf, datePlaceholder, isoToText, textToIso } from "@/lib/date-text";
 import styles from "./date-input.module.css";
 
@@ -20,12 +21,14 @@ type DateInputProps = Omit<
   // controller and a plain handler read it as they read a native field.
   onChange?: (event: ChangeEvent<HTMLInputElement>) => void;
   calendarLabel?: string;
+  // A filter has no schema to name a half-typed date: it only ever reports a real day or empty.
+  filter?: boolean;
 };
 
 // A date field that reads «dd/mm/aaaa» in Spanish and «mm/dd/yyyy» in English whatever
 // the browser or the OS prefers, with a calendar button for the picker. Underneath it
 // holds and emits the civil date, so no form or schema changes.
-export function DateInput({ value = "", onChange, onBlur, calendarLabel, name, ...rest }: DateInputProps) {
+export function DateInput({ value = "", onChange, onBlur, calendarLabel, name, filter, ...rest }: DateInputProps) {
   const locale = useLocale();
   const t = useTranslations("common");
   const order = dateOrderOf(locale);
@@ -42,15 +45,19 @@ export function DateInput({ value = "", onChange, onBlur, calendarLabel, name, .
       {...rest}
       name={name}
       type="text"
-      inputMode="numeric"
+      inputMode="decimal"
       autoComplete="off"
       placeholder={datePlaceholder(locale)}
-      value={draft ?? isoToText(value, order)}
+      // A value that is no civil date is what the person typed, kept so the form's own
+      // error can name it; it never turns back into a date they did not write.
+      value={draft ?? (isCivilDate(value) ? isoToText(value, order) : value)}
       onChange={(event) => {
         const text = event.target.value;
         setDraft(text);
+        // Text that names no day reaches the form as typed, so its schema refuses it.
         const iso = textToIso(text, order);
         if (iso !== null) emit(iso);
+        else if (!filter) emit(text.trim());
         else if (text.trim() === "") emit("");
       }}
       onBlur={(event) => {
@@ -68,7 +75,19 @@ export function DateInput({ value = "", onChange, onBlur, calendarLabel, name, .
           color="gray"
           disabled={rest.disabled}
           aria-label={calendarLabel ?? t("openCalendar")}
-          onClick={() => picker.current?.showPicker?.()}
+          onClick={() => {
+            const native = picker.current;
+            if (!native) return;
+            try {
+              if (typeof native.showPicker === "function") native.showPicker();
+              else {
+                native.focus();
+                native.click();
+              }
+            } catch {
+              native.focus();
+            }
+          }}
         >
           <CalendarDays size={16} />
         </IconButton>

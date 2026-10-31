@@ -204,6 +204,7 @@ export function DataScreen({
             <FilterField label={t("screen.rangeFrom")}>
               {(id) => (
                 <DateInput
+                  filter
                   id={id}
                   value={from}
                   onChange={(event) => setFrom(event.target.value)}
@@ -213,6 +214,7 @@ export function DataScreen({
             <FilterField label={t("screen.rangeTo")}>
               {(id) => (
                 <DateInput
+                  filter
                   id={id}
                   value={to}
                   onChange={(event) => setTo(event.target.value)}
