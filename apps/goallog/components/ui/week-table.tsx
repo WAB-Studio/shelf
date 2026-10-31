@@ -1,3 +1,4 @@
+import { Check } from "lucide-react";
 import Link from "next/link";
 import { Fragment, type ReactNode } from "react";
 
@@ -23,7 +24,7 @@ export type WeekTableCell = { state: MarkState | "none"; label: string };
 
 // The «hechos» of a day, split where the phone's narrow cell breaks it:
 // «3» over «de 8».
-export type WeekTableTally = { figure: string; rest: string };
+export type WeekTableTally = { figure: string; rest: string; percent: number };
 
 type WeekTableGroup = {
   key: string;
@@ -44,15 +45,54 @@ function join(...names: (string | undefined)[]): string {
   return names.filter(Boolean).join(" ");
 }
 
-function Dot({ cell, fold }: { cell: WeekTableCell; fold?: boolean }) {
+// A day asked is a 44px square tile with one of the four marks in it; a day nothing asked is a quiet «·».
+function Dot({ cell }: { cell: WeekTableCell }) {
+  if (cell.state === "none") {
+    return <span className={styles.none} role="img" aria-label={cell.label} data-part="week-dot" data-state="none" />;
+  }
   return (
-    <span
-      className={join(cell.state === "none" ? styles.none : join(styles.dot, styles[cell.state]), fold ? styles.foldDot : undefined)}
-      role="img"
-      aria-label={cell.label}
-      data-part="week-dot"
-      data-state={cell.state}
-    />
+    <span className={styles.tile}>
+      <span
+        className={join(styles.dot, styles[cell.state])}
+        role="img"
+        aria-label={cell.label}
+        data-part="week-dot"
+        data-state={cell.state}
+      >
+        {cell.state === "declared" || cell.state === "evidence" ? <Check className={styles.check} strokeWidth={3} aria-hidden /> : null}
+      </span>
+    </span>
+  );
+}
+
+// The day's «5 de 6» with its bar under it: the share done, drawn as length.
+function Tally({ cell }: { cell: WeekTableTally }) {
+  return (
+    <>
+      <span className={styles.tallyFigure}>{cell.figure}</span>
+      <span className={styles.tallyRest}>{cell.rest}</span>
+      <span className={styles.tallyBar} aria-hidden>
+        <span className={styles.tallyFill} style={{ inlineSize: `${cell.percent}%` }} />
+      </span>
+    </>
+  );
+}
+
+// «lun 26» as two lines, «lun» over «26».
+function DayHead({ column }: { column: WeekTableColumn }) {
+  const [weekday, date] = column.label.split(" ");
+  const stack = (
+    <>
+      <span>{weekday}</span>
+      <span>{date}</span>
+    </>
+  );
+  return column.href ? (
+    <Link href={column.href} aria-label={column.hrefLabel} className={styles.dayLink}>
+      {stack}
+    </Link>
+  ) : (
+    <span className={styles.dayLink}>{stack}</span>
   );
 }
 
@@ -79,13 +119,7 @@ export function WeekTable({
           {columns.map((column, index) => (
             <th key={column.key} scope="col" className={join(styles.day, shade(index), styles.head)}>
               <span className={styles.headBox}>
-                {column.href ? (
-                  <Link href={column.href} aria-label={column.hrefLabel} className={styles.dayLink}>
-                    {column.label}
-                  </Link>
-                ) : (
-                  column.label
-                )}
+                <DayHead column={column} />
                 {column.mark ? <span className={styles.mark}> {column.mark}</span> : null}
               </span>
             </th>
@@ -141,7 +175,7 @@ export function WeekTable({
             </th>
             {columns.map((column, index) => (
               <td key={column.key} className={join(styles.footCell, shade(index))}>
-                {footer.cells[index] ? `${footer.cells[index].figure} ${footer.cells[index].rest}` : null}
+                {footer.cells[index] ? <Tally cell={footer.cells[index]} /> : null}
               </td>
             ))}
           </tr>
@@ -168,27 +202,12 @@ export function WeekFold({
   return (
     <div className={styles.fold}>
       <div className={styles.foldHead}>
-        {columns.map((column, index) => {
-          const [weekday, date] = column.label.split(" ");
-          const stack = (
-            <>
-              <span>{weekday}</span>
-              <span>{date}</span>
-            </>
-          );
-          return (
-            <div key={column.key} className={join(styles.foldDay, shade(index), columns[index]?.today ? styles.foldTop : undefined)}>
-              {column.href ? (
-                <Link href={column.href} aria-label={column.hrefLabel} className={join(styles.foldDayBox, styles.dayLink)}>
-                  {stack}
-                </Link>
-              ) : (
-                <span className={styles.foldDayBox}>{stack}</span>
-              )}
-              {column.mark ? <span className={styles.hidden}>{column.mark}</span> : null}
-            </div>
-          );
-        })}
+        {columns.map((column, index) => (
+          <div key={column.key} className={join(styles.foldDay, shade(index), columns[index]?.today ? styles.foldTop : undefined)}>
+            <DayHead column={column} />
+            {column.mark ? <span className={styles.hidden}>{column.mark}</span> : null}
+          </div>
+        ))}
       </div>
       {groups.map((group) => (
         <section key={group.key} className={styles.foldGroup}>
@@ -203,7 +222,7 @@ export function WeekFold({
                   const cell = row.cells[index] ?? null;
                   return (
                     <div key={column.key} className={join(styles.foldCell, shade(index))}>
-                      {cell ? <Dot cell={cell} fold /> : <span className={styles.none} aria-hidden />}
+                      {cell ? <Dot cell={cell} /> : <span className={styles.none} aria-hidden />}
                     </div>
                   );
                 })}
@@ -220,12 +239,7 @@ export function WeekFold({
               const cell = footer.cells[index];
               return (
                 <div key={column.key} className={join(styles.foldTally, shade(index), columns[index]?.today ? styles.foldBottom : undefined)}>
-                  {cell ? (
-                    <>
-                      <span className={styles.foldFigure}>{cell.figure}</span>
-                      <span>{cell.rest}</span>
-                    </>
-                  ) : null}
+                  {cell ? <Tally cell={cell} /> : null}
                 </div>
               );
             })}

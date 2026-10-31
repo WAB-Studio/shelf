@@ -113,10 +113,10 @@
       "next": "mes siguiente"
     },
     "eyebrow": {
-      "this": "este mes",
-      "coming": "el plan de ese mes",
-      "past": "como fue",
-      "first": "el primero"
+      "this": "Este mes",
+      "coming": "El plan de ese mes",
+      "past": "Como fue",
+      "first": "El primero"
     },
     "comingEmpty": "Ninguna meta está abierta en {month}.",
     "pastEmpty": "Ninguna meta estaba abierta en {month}.",

@@ -44,6 +44,8 @@ export { Figure } from "./figure";
 
 export { Progress } from "./progress";
 
+export { Strip } from "./strip";
+
 export { Hero } from "./hero";
 
 export { Sheet } from "./sheet";

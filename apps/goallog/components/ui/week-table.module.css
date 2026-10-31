@@ -1,8 +1,12 @@
-/* `SemanaEscritorio.dc.html`. Rules are hairlines, today is a fill: no border
-   box, no red. */
+/* The week as a grid (docs/goallog/DESIGN.md «Decisión del 2026-10-31»):
+   commitments down, days across, each day asked a 44px square tile holding one
+   of the four marks. Rules are hairlines, today is a fill: no border box, no
+   red. */
 .table {
   inline-size: 100%;
   border-collapse: collapse;
+  /* The seven days keep their 44px; the name takes what is left and wraps. */
+  table-layout: fixed;
 }
 
 .hidden {
@@ -14,20 +18,27 @@
   white-space: nowrap;
 }
 
-/* The name column is as wide as the longest name on one line
-   (`SemanaPasadaEscritorio.dc.html`); the days share what is left. */
 .nameColumn {
-  inline-size: 1%;
+  inline-size: auto;
 }
 
+/* 44 for the tile and 4 either side; where the card is wide the seven share a tenth each. */
 .day {
-  padding: 8px 4px;
+  box-sizing: border-box;
+  inline-size: 52px;
+  padding: 0 4px;
   text-align: center;
   white-space: nowrap;
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 400;
   color: var(--pulsar-muted);
+}
+
+@media (min-width: 1100px) {
+  .day {
+    inline-size: 10%;
+  }
 }
 
 /* Today's column, header to footer. */
@@ -55,13 +66,11 @@
   font-weight: 600;
 }
 
-/* The width the header's own text has to draw in: «hoy» rides beside the day
-   only where the column holds the whole label. */
 .headBox {
   display: block;
-  container-type: inline-size;
 }
 
+/* «hoy» is said to a screen reader; the fill marks the day for the eye. */
 .mark {
   position: absolute;
   inline-size: 1px;
@@ -70,31 +79,29 @@
   clip-path: inset(50%);
 }
 
-@container (min-width: 89px) {
-  .mark {
-    position: static;
-    inline-size: auto;
-    block-size: auto;
-    overflow: visible;
-    clip-path: none;
-  }
-}
-
-/* The link fills the header cell: its 8px padding is taken back by a negative
-   margin, so the 33px box is the row's own height and the target clears 32. */
+/* The day's header is a link of 52px by 56px: the weekday over the date. */
 .dayLink {
-  display: inline-flex;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  min-block-size: 33px;
-  margin-block: -8px;
+  min-block-size: 56px;
+  min-inline-size: 44px;
+  line-height: 1.3;
   color: inherit;
+  text-decoration: none;
+}
+
+a.dayLink {
   text-decoration: underline;
+  text-underline-offset: 3px;
 }
 
 .dayLink:focus-visible {
   outline: 2px solid var(--pulsar-accent);
-  outline-offset: 2px;
+  outline-offset: -2px;
+  border-radius: 10px;
 }
 
 .group {
@@ -103,9 +110,9 @@
   white-space: nowrap;
   padding: 22px 0 8px;
   text-align: start;
-  font-family: var(--font-mono);
+  font-family: var(--font-sans);
   font-size: var(--pulsar-text-label-size);
-  font-weight: 400;
+  font-weight: 500;
   letter-spacing: var(--pulsar-text-label-tracking);
   text-transform: none;
   color: var(--pulsar-muted);
@@ -119,8 +126,8 @@
 }
 
 .name {
-  white-space: nowrap;
-  padding: 14px 32px 14px 0;
+  white-space: normal;
+  padding: 10px 16px 10px 0;
   border-block-start: 1px solid var(--pulsar-line);
   text-align: start;
   font-size: 15px;
@@ -135,45 +142,72 @@
   gap: 2px;
 }
 
-.detail {
-  font-family: var(--font-mono);
-  font-size: 12px;
+.detail,
+.sentence {
+  font-family: var(--font-sans);
+  font-size: 14px;
   font-weight: 400;
-  letter-spacing: var(--pulsar-text-label-tracking);
   color: var(--pulsar-muted);
 }
 
 .cell {
-  padding: 14px 8px;
+  padding: 4px;
   border-block-start: 1px solid var(--pulsar-line);
   text-align: center;
 }
 
-.dot {
-  display: inline-block;
+/* The 44px square a day asked sits in. */
+.tile {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   box-sizing: border-box;
-  inline-size: 12px;
-  block-size: 12px;
-  vertical-align: middle;
+  inline-size: 44px;
+  block-size: 44px;
+  border-radius: 10px;
+  background: var(--pulsar-ground);
+}
+
+.dot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  inline-size: 28px;
+  block-size: 28px;
   border-radius: 50%;
+}
+
+/* A check inside the two marks that mean done, so «hecho» and «pendiente» never differ by hue alone. */
+.check {
+  inline-size: 16px;
+  block-size: 16px;
 }
 
 .declared {
   background: var(--pulsar-accent);
+  color: var(--pulsar-on-accent);
 }
 
 .evidence {
   background: var(--pulsar-accent-soft);
-  box-shadow: inset 0 0 0 1.5px var(--pulsar-accent);
+  box-shadow: inset 0 0 0 2px var(--pulsar-accent);
+  color: var(--pulsar-accent);
 }
 
 .empty {
-  box-shadow: inset 0 0 0 1.5px var(--pulsar-quiet);
+  box-shadow: inset 0 0 0 2px var(--pulsar-quiet);
 }
 
 .partial {
   background: linear-gradient(to top, var(--pulsar-accent) 50%, transparent 50%);
-  box-shadow: inset 0 0 0 1.5px var(--pulsar-accent);
+  box-shadow: inset 0 0 0 2px var(--pulsar-accent);
+}
+
+.none {
+  display: inline-block;
+  min-block-size: 44px;
+  line-height: 44px;
 }
 
 .none::before {
@@ -181,27 +215,23 @@
   color: var(--pulsar-quiet);
 }
 
-.fold .none {
-  font-family: var(--font-mono);
-  font-size: 13px;
-  line-height: 14px;
-}
-
+/* The day's total: the figure, what it is of, and a bar of the share. */
 .footLabel {
   padding: 14px 0;
   border-block-start: 1px solid var(--pulsar-line);
   text-align: start;
-  font-family: var(--font-mono);
+  font-family: var(--font-sans);
   font-size: var(--pulsar-text-meta-size);
-  font-weight: 400;
+  font-weight: 500;
   color: var(--pulsar-muted);
 }
 
 .footCell {
-  padding: 14px 4px;
+  padding: 10px 4px;
   white-space: nowrap;
   border-block-start: 1px solid var(--pulsar-line);
   text-align: center;
+  vertical-align: top;
   font-family: var(--font-mono);
   font-size: var(--pulsar-text-meta-size);
   color: var(--pulsar-muted);
@@ -211,8 +241,34 @@
   border-radius: 0 0 10px 10px;
 }
 
-/* `SemanaPlegada.dc.html`: the table folded for the phone. Today is a fill
-   from the header to the tally, the way the table draws it. */
+.tallyFigure,
+.tallyRest {
+  display: block;
+  line-height: 1.3;
+}
+
+.tallyFigure {
+  color: var(--pulsar-ink);
+}
+
+.tallyBar {
+  display: block;
+  inline-size: 100%;
+  block-size: 4px;
+  margin-block-start: 6px;
+  border-radius: 2px;
+  background: var(--pulsar-line);
+  overflow: hidden;
+}
+
+.tallyFill {
+  display: block;
+  block-size: 100%;
+  background: var(--pulsar-accent);
+}
+
+/* The table folded for the phone: today is a fill from the header to the
+   tally, the way the table draws it. */
 .fold {
   display: flex;
   flex-direction: column;
@@ -229,6 +285,9 @@
 
 .foldDay {
   min-inline-size: 0;
+  font-family: var(--font-mono);
+  font-size: 14px;
+  color: var(--pulsar-muted);
 }
 
 .foldTop {
@@ -237,23 +296,6 @@
 
 .foldToday {
   background: var(--pulsar-raised);
-}
-
-.foldDayBox {
-  box-sizing: border-box;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  min-block-size: 48px;
-  font-family: var(--font-mono);
-  font-size: 12px;
-  line-height: 1.35;
-  color: var(--pulsar-muted);
-  text-decoration: none;
-}
-
-.foldToday .foldDayBox {
   color: var(--pulsar-ink);
   font-weight: 600;
 }
@@ -266,9 +308,9 @@
 .foldGroupLabel {
   margin: 0;
   padding: 18px 4px 8px;
-  font-family: var(--font-mono);
+  font-family: var(--font-sans);
   font-size: var(--pulsar-text-label-size);
-  font-weight: 400;
+  font-weight: 500;
   letter-spacing: var(--pulsar-text-label-tracking);
   text-transform: none;
   color: var(--pulsar-muted);
@@ -292,24 +334,12 @@
   color: var(--pulsar-ink);
 }
 
-.sentence {
-  font-size: 12px;
-  font-weight: 400;
-  color: var(--pulsar-muted);
-}
-
-.foldSentence {
-  margin: 3px 0 0;
-  padding-inline: 4px;
-  font-size: 12px;
-  color: var(--pulsar-muted);
-}
-
+.foldSentence,
 .foldDetail {
   margin: 3px 0 0;
   padding-inline: 4px;
-  font-family: var(--font-mono);
-  font-size: 12px;
+  font-family: var(--font-sans);
+  font-size: 14px;
   color: var(--pulsar-muted);
 }
 
@@ -324,12 +354,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  block-size: 28px;
-}
-
-.foldDot.foldDot {
-  inline-size: 14px;
-  block-size: 14px;
+  block-size: 44px;
 }
 
 .foldFoot {
@@ -359,19 +384,26 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  min-block-size: 44px;
+  justify-content: flex-start;
+  min-block-size: 56px;
+  padding: 6px 4px 8px;
+  box-sizing: border-box;
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 14px;
   line-height: 1.3;
   color: var(--pulsar-muted);
 }
 
-.foldFigure {
-  font-size: 13px;
-  color: var(--pulsar-ink);
+.foldTally .tallyBar {
+  margin-block-start: 6px;
 }
 
 .foldBottom {
   border-radius: 0 0 10px 10px;
+}
+
+/* The phone's seven columns are 50px and its ground is the tile's own: the
+   mark stands alone there, as the fold has always drawn it. */
+.foldCell .tile {
+  background: transparent;
 }

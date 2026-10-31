@@ -22,6 +22,7 @@ import {
   Text,
   TextLink,
 } from "@/components/ui";
+import { sentenceCase } from "@/lib/day/day-words";
 import { cadencePhrase } from "@/lib/day/row-phrases";
 import { closedMonthMarkDay } from "@/lib/plan/closed-month-marks";
 import { monthSteps, parseMonthParam } from "@/lib/plan/month-param";
@@ -436,7 +437,7 @@ export async function MonthAcrossScreen({ month, today }: { month?: string; toda
         chat
         steps
         title={seg.slice(0, 4) === thisMonth.slice(0, 4) ? title : t("month.across.titleYear", { month: title, year: seg.slice(0, 4) })}
-        meta={across.view === "this" ? dateLine : undefined}
+        meta={across.view === "this" ? sentenceCase(dateLine) : undefined}
         eyebrowFill
         eyebrow={
           <>

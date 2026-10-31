@@ -3,8 +3,8 @@ import type postgres from "postgres";
 import { test, expect, settled } from "./fixtures";
 import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
 
-// `Chip day` is 40 px (decided 2026-10-13): the seven weekdays of «Compromiso nuevo» fit one row at 360
-// (7 × 40 + 6 × 4 = 304), each at least 32 px, never the 44 px that dropped the D to a second row.
+// `Chip day` is 40 px wide and 44 tall: the seven weekdays of «Compromiso nuevo» fit one row at 360
+// (7 × 40 + 6 × 4 = 304), each at least 32 px wide; the 44 px width dropped the D to a second row.
 const DAYS = ["L", "M", "X", "J", "V", "S", "D"];
 
 async function goalOf(db: postgres.Sql, personId: string): Promise<string> {
@@ -46,10 +46,10 @@ for (const width of [360]) {
       expect(new Set(boxes.map((b) => Math.round(b.top))).size, `one row: ${JSON.stringify(boxes.map((b) => b.top))}`).toBe(1);
       for (const b of boxes) {
         expect(b.width, `${b.name} wide`).toBeGreaterThanOrEqual(32);
-        expect(b.height, `${b.name} tall`).toBeGreaterThanOrEqual(32);
+        expect(b.height, `${b.name} tall`).toBeGreaterThanOrEqual(44);
         expect(b.right, `${b.name} inside the page`).toBeLessThanOrEqual(width);
       }
-      expect(Math.round(boxes[0].width), "the chip is 40, no longer 44").toBeLessThanOrEqual(42);
+      expect(Math.round(boxes[0].width), "the chip stays 40 wide so seven fit one row").toBeLessThanOrEqual(42);
     } finally {
       await context.close();
       await db`delete from goals.goals where id = ${goal} and user_id = ${person.id}`;

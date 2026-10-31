@@ -50,6 +50,8 @@ import {
   TextLink,
 } from "@/components/ui";
 
+import { sentenceCase } from "@/lib/day/day-words";
+
 import { CommitmentList, countWord } from "./commitment-list";
 import { horizonWeeks, weekIndex } from "./phase-weeks";
 import { CreateInsideAction } from "./create-inside-sheet";
@@ -631,7 +633,7 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
           {goal.phases.length > 0 ? (
             <SectionLabel>
               {t("goal.detail.phasesCount", {
-                word: countWord(goal.phases.length, t, true),
+                word: sentenceCase(countWord(goal.phases.length, t, true)),
                 count: goal.phases.length,
               })}
             </SectionLabel>

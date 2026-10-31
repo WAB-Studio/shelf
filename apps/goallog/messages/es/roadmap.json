@@ -98,12 +98,12 @@
     "removeBodyPlan": "Los meses que ya pasaron guardan lo que planeaban. Sus tareas se quedan sin mes hasta que le pongas otro ritmo."
   },
   "meta": {
-    "planLabel": "el plan",
+    "planLabel": "El plan",
     "rhythmLine": "Ritmo <fig>{amount}</fig> al mes",
     "rhythmLineDone": "Ritmo <fig>{amount}</fig> al mes · en {month}, <fig>{done}</fig> de <fig>{total}</fig> {total, plural, one {tarea hecha} other {tareas hechas}}",
     "finish": "A este ritmo terminas el {date}",
     "build": "Armar el plan",
-    "rhythmLabel": "el ritmo",
+    "rhythmLabel": "El ritmo",
     "rhythmOffer": "Poner un ritmo",
     "rhythmOfferHint": "cuánto al mes, en {unit}; cada mes sin monto lo toma",
     "rhythmOtherLine": "{amount} al mes",

@@ -1,0 +1,67 @@
+.strip {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  inline-size: 100%;
+}
+
+.bars {
+  display: grid;
+  grid-template-columns: repeat(30, minmax(0, 1fr));
+  align-items: end;
+  gap: 2px;
+  block-size: 36px;
+}
+
+.bar {
+  display: block;
+  box-sizing: border-box;
+  border-radius: 3px;
+}
+
+.declared {
+  block-size: 100%;
+  background: var(--pulsar-accent);
+}
+
+.evidence {
+  block-size: 100%;
+  background: var(--pulsar-accent-soft);
+  box-shadow: inset 0 0 0 1.5px var(--pulsar-accent);
+}
+
+.open {
+  block-size: 30%;
+  box-shadow: inset 0 0 0 1.5px var(--pulsar-quiet);
+}
+
+.before {
+  block-size: 3px;
+  background: var(--pulsar-line);
+}
+
+.ends {
+  display: flex;
+  justify-content: space-between;
+  font-size: var(--pulsar-text-meta-size);
+  color: var(--pulsar-muted);
+}
+
+/* The goal's row: a strip the width of the row's trailing block, no ends under it. */
+.mini {
+  inline-size: 120px;
+}
+
+.mini .bars {
+  gap: 1px;
+  block-size: 18px;
+}
+
+.mini .bar {
+  border-radius: 1px;
+}
+
+.mini .open {
+  box-shadow: none;
+  background: var(--pulsar-line);
+}

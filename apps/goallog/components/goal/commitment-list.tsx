@@ -6,6 +6,7 @@ import { getTranslations } from "next-intl/server";
 import type { Translator } from "@/i18n/translator";
 import type { Cadence } from "@/lib/day/types";
 import type { GoalCommitment } from "@/lib/queries/goal";
+import { sentenceCase } from "@/lib/day/day-words";
 import { weekdaysSentence } from "@/lib/day/row-phrases";
 import { evidenceUnitWords } from "@/lib/evidence/unit-words";
 
@@ -106,7 +107,7 @@ export async function CommitmentList({
   return (
     <Section
       label={t("goal.detail.commitmentsCount", {
-        word: countWord(activeCount, t),
+        word: sentenceCase(countWord(activeCount, t)),
         count: activeCount,
         retired: commitments.length - activeCount,
       })}

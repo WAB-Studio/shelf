@@ -136,7 +136,7 @@
     "unreadSourceAsks": "sin leer la fuente · pide {asks}"
   },
   "monthLine": {
-    "title": "este mes",
+    "title": "Este mes",
     "markTask": "Marcar hecha: {name}",
     "of": "de",
     "tasksOf": "{total, plural, one {de # tarea} other {de # tareas}}",

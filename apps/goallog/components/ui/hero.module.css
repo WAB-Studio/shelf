@@ -48,6 +48,12 @@
   color: var(--pulsar-brand-muted);
 }
 
+/* Sky on navy, 9.91:1 (9.33 dark): the one realce. The unit stays muted. */
+.figure.figure.highlight,
+.figure.figure.highlight :is([data-part="figure"], [data-part="hero-figure"]) {
+  color: var(--pulsar-highlight);
+}
+
 .caption {
   font-size: 15px;
   line-height: 1.5;

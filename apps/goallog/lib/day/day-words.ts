@@ -14,3 +14,8 @@ export function dayWords(
     month: weekOf(today).includes(day) ? null : date.getUTCMonth(),
   };
 }
+
+// A label opens with a capital: «Cuatro compromisos», never «cuatro compromisos».
+export function sentenceCase(text: string): string {
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}

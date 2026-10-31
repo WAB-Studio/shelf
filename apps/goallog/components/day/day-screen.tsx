@@ -5,6 +5,7 @@ import { getTranslations } from "next-intl/server";
 import { Button, Face, Figure, Flex, Hero, Page, Panel, Progress, Section, SectionLabel, Split, Text, TextLink } from "@/components/ui";
 import type { Translator } from "@/i18n/translator";
 import { dayPhrase as dayPhraseOf, endedPhrase, type DayPhraseKey } from "@/lib/day/day-phrase";
+import { sentenceCase } from "@/lib/day/day-words";
 import { metPhrase, phaseLine } from "@/lib/day/row-phrases";
 import { tallyDay } from "@/lib/day/tally";
 import { phaseOn } from "@/lib/day/derive";
@@ -730,7 +731,7 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
     <Page width="full">
       {past ? (
         <DayHeader
-          date={dateLabel(day, t)}
+          date={sentenceCase(dateLabel(day, t))}
           forward={{
             href: shiftCivilDay(day, 1) === today ? "/" : `/dia/${shiftCivilDay(day, 1)}`,
             label: t("day.nav.dayAfter"),
@@ -746,7 +747,7 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
         />
       ) : (
         <DayHeader
-          date={dateLabel(day, t)}
+          date={sentenceCase(dateLabel(day, t))}
           title={t("day.title")}
           back={
             loaded.firstGoalDay !== null && shiftCivilDay(day, -1) >= loaded.firstGoalDay

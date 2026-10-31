@@ -26,6 +26,17 @@ export function useTimeWords(): TimeWords {
   };
 }
 
+// A mono point takes a full cell: «500.000» reads «500 . 000». The thousands
+// point is cut out of the run and drawn narrow.
+function Grouped({ text }: { text: string }) {
+  return text.split(/(?<=\d)\.(?=\d{3}(?!\d))/).map((piece, index) => (
+    <Fragment key={index}>
+      {index > 0 ? <span className={styles.point}>.</span> : null}
+      {piece}
+    </Fragment>
+  ));
+}
+
 // Each figure in mono, each word after it in the caller's quiet class. The
 // spaces are flex-collapsed where the parent is a flex box and keep the
 // text reading «12 h 30 min» wherever it is copied or read aloud.
@@ -71,7 +82,13 @@ export function Figure({
   const breaks = Boolean(breakUnit && wordUnit);
   return (
     <span data-part="figure" className={`${styles.figure} ${size} ${wordUnit ? styles.worded : ""} ${breaks ? styles.breaks : ""} ${breakValue ? styles.breaksValue : ""}`}>
-      {isTimeFigure(formatted) ? <TimeParts time={formatted} unitClass={styles.unit} unitPart="figure-unit" /> : formatted}
+      {isTimeFigure(formatted) ? (
+        <TimeParts time={formatted} unitClass={styles.unit} unitPart="figure-unit" />
+      ) : typeof formatted === "string" ? (
+        <Grouped text={formatted} />
+      ) : (
+        formatted
+      )}
       {/* A no-break space for copy and a screen reader to hear «20 páginas»; it draws no width, the spacer's padding does. */}
       {wordUnit ? <span className={styles.space}>{breaks ? " " : "\u00a0"}</span> : null}
       {wordUnit ? (

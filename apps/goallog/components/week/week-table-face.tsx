@@ -162,7 +162,7 @@ export function WeekTableFace({
   if (foldGroups.length === 0) return null;
 
   const cells = tallyDays(week).map(({ day, done, total }) =>
-    day > today || total === 0 ? null : { figure: String(done), rest: t("week.ratioOf", { total }) },
+    day > today || total === 0 ? null : { figure: String(done), rest: t("week.ratioOf", { total }), percent: Math.floor((done * 100) / total) },
   );
   const footer = coming ? undefined : { label: t("week.table.footer"), cells };
 

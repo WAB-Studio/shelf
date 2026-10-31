@@ -5,6 +5,7 @@ import { cache } from "react";
 import { z } from "zod";
 
 import { measureOf } from "@/lib/day/derive";
+import { evidenceDoneDays, mergeDoneDays, stripDays, type DoneDay } from "@/lib/day/constancy";
 import { evidenceDaysFor } from "@/lib/day/measure-inputs";
 import { measureByWeek, totalInSpan } from "@/lib/day/review";
 import type { Cadence, EvidenceDay, Phase, ReviewWeek, SatisfiedBy } from "@/lib/day/types";
@@ -198,6 +199,12 @@ export type GoalCommitment = {
   // evidence-satisfied commitment writes no fact of its own (RP-05), so this
   // is 0 for one and the screen drops the clause rather than say "0 días".
   factDayCount: number;
+  // The civil day it was written: the strip counts nothing before it.
+  createdOn: string;
+  // The days of the last thirty it was done, declared or by evidence, newest first (constancy).
+  done: DoneDay[];
+  // The catalogue key of the evidence source, to read its days by.
+  sourceKey: string | null;
 };
 
 export type GoalView = {
@@ -402,7 +409,17 @@ async function queryGoalRow(tx: Transaction, goalId: string): Promise<GoalQueryR
   return row;
 }
 
-function toGoalCommitment(row: CommitmentRow, factDayCount: number): GoalCommitment {
+function toGoalCommitment(
+  row: CommitmentRow,
+  factDayCount: number,
+  today: string,
+  declared: DoneDay[] = [],
+  evidence: Record<string, EvidenceDay[]> | null = null,
+): GoalCommitment {
+  const satisfiedBy = toSatisfiedBy(row);
+  const source = { sourceKey: row.source_key, threshold: satisfiedBy.kind === "evidence" ? satisfiedBy.threshold : 1 };
+  const read = row.satisfaction === "evidence" && evidence !== null ? evidenceDoneDays(source, evidence) : [];
+  const start = stripDays(today)[0];
   return {
     id: row.id,
     name: row.name,
@@ -410,8 +427,30 @@ function toGoalCommitment(row: CommitmentRow, factDayCount: number): GoalCommitm
     satisfiedBy: toSatisfiedBy(row),
     retiredAt: row.retired_at,
     sourceLabelKey: row.satisfaction === "evidence" && row.source_label_key ? sourceKey(row.source_label_key) : null,
-    factDayCount,
+    // Evidence writes no fact (RP-05): its days count as the days done all the same.
+    factDayCount: factDayCount + read.length,
+    createdOn: civilDateInZone(new Date(row.created_at)),
+    done: mergeDoneDays(declared, read.filter((entry) => entry.day >= start)),
+    sourceKey: row.source_key,
   };
+}
+
+// Per commitment, the days of the last thirty it has a declared fact on, with the quantity written.
+function declaredRecent(facts: FactRow[], today: string): Map<string, DoneDay[]> {
+  const start = stripDays(today)[0];
+  const byCommitment = new Map<string, Map<string, number | null>>();
+  for (const fact of facts) {
+    if (!fact.commitment_id || fact.day < start) continue;
+    const days = byCommitment.get(fact.commitment_id) ?? new Map<string, number | null>();
+    days.set(fact.day, fact.quantity === null ? (days.get(fact.day) ?? null) : (days.get(fact.day) ?? 0) + fact.quantity);
+    byCommitment.set(fact.commitment_id, days);
+  }
+  return new Map(
+    [...byCommitment].map(([id, days]) => [
+      id,
+      [...days].map(([day, quantity]) => ({ day, quantity, by: "declared" as const })),
+    ]),
+  );
 }
 
 // Distinct fact days per commitment, from the goal statement's own
@@ -654,8 +693,9 @@ export async function loadGoal(
   const evidence = evidenceOutcome.status === "read" ? evidenceOutcome.bySourceKey : null;
   const phases = row.phases.map(toPhase);
   const dayCounts = factDayCounts(row.facts);
+  const recent = declaredRecent(row.facts, today);
   const commitments = row.commitments.map((commitment) =>
-    toGoalCommitment(commitment, dayCounts.get(commitment.id) ?? 0),
+    toGoalCommitment(commitment, dayCounts.get(commitment.id) ?? 0, today, recent.get(commitment.id), evidence),
   );
 
   const tree = buildTree(row.tree.map(toTreeRow));
@@ -930,6 +970,7 @@ export async function loadGoalForm(
 ): Promise<GoalForm | null> {
   if (!z.uuid().safeParse(goalId).success) return null;
   const asked = month !== undefined && /^\d{4}-(0[1-9]|1[0-2])$/.test(month) ? `${month}-01` : null;
+  const stripStart = stripDays(today)[0];
 
   const tasks =
     asked === null
@@ -950,7 +991,7 @@ export async function loadGoalForm(
     tx.execute<{
       goal: GoalRow | null;
       phases: PhaseRow[];
-      commitments: (CommitmentRow & { fact_day_count: number })[];
+      commitments: (CommitmentRow & { fact_day_count: number; recent: { day: string; quantity: number | null }[] })[];
       tasks: TaskRow[];
       tree: TreeSqlRow[];
     }>(sql`
@@ -963,7 +1004,10 @@ export async function loadGoalForm(
                    'source_key', s.key,
                    'source_unit', s.unit,
                    'source_label_key', s.label_key,
-                   'fact_day_count', (select count(distinct f.day)::int from "goals"."facts" f where f.commitment_id = c.id)
+                   'fact_day_count', (select count(distinct f.day)::int from "goals"."facts" f where f.commitment_id = c.id),
+                   'recent', (select coalesce(json_agg(json_build_object('day', r.day::text, 'quantity', r.quantity)), '[]'::json)
+                                from (select f.day, sum(f.quantity)::int as quantity from "goals"."facts" f
+                                       where f.commitment_id = c.id and f.day >= ${stripStart}::date group by f.day) r)
                  ) order by c.position, c.created_at, c.id), '[]'::json)
            from "goals"."commitments" c
            left join "goals"."evidence_sources" s on s.id = c.source_id
@@ -993,9 +1037,51 @@ export async function loadGoalForm(
     endedOn: goal.horizon !== null && goal.horizon <= today ? dayBefore(goal.horizon) : null,
     measureUnit,
     phases: row.phases.map(toPhase),
-    commitments: row.commitments.map((commitment) => toGoalCommitment(commitment, commitment.fact_day_count)),
+    commitments: row.commitments.map((commitment) =>
+      toGoalCommitment(
+        commitment,
+        commitment.fact_day_count,
+        today,
+        commitment.recent.map((entry) => ({ day: entry.day, quantity: entry.quantity, by: "declared" as const })),
+      ),
+    ),
     month: inSpan ? { month: asked, past: asked < monthOf(today) } : null,
     tasks: row.tasks.map((task) => toPlanTask(task, openedOn)),
+  };
+}
+
+/**
+ * What the evidence sources read over the goal's span, for a screen that loads the goal as a form.
+ * Fanned beside `loadGoalForm`, never after it. `null` is a source that could not be read (RNP-04):
+ * the screen then counts the declared days alone.
+ */
+export async function loadGoalEvidence(
+  goalId: string,
+  today: string = todayInZone(),
+): Promise<Record<string, EvidenceDay[]> | null> {
+  if (!z.uuid().safeParse(goalId).success) return null;
+  const person = await getPerson();
+  if (!person) return null;
+  return withReadingDb((tx) => {
+    const { from, to } = goalSpan(goalId, today);
+    return queryEvidenceBySource(tx, person.id, from, to);
+  }).catch(() => null);
+}
+
+// An evidence commitment writes no fact (RP-05): the days its source met the threshold are days done,
+// so they count toward what the screen refuses to change (RP-127) and fill the strip.
+export function withEvidenceDays(
+  commitment: GoalCommitment,
+  evidence: Record<string, EvidenceDay[]> | null,
+  today: string,
+): GoalCommitment {
+  if (commitment.satisfiedBy.kind !== "evidence" || evidence === null) return commitment;
+  const read = evidenceDoneDays({ sourceKey: commitment.sourceKey, threshold: commitment.satisfiedBy.threshold }, evidence);
+  const start = stripDays(today)[0];
+  return {
+    ...commitment,
+    factDayCount: commitment.factDayCount + read.length,
+    done: mergeDoneDays(commitment.done, read.filter((entry) => entry.day >= start)),
   };
 }
 
@@ -1021,7 +1107,7 @@ export async function listLooseCommitments(): Promise<LooseCommitment[]> {
         order by c.position, c.created_at, c.id
     `),
   );
-  return rows.map(({ row }) => ({ ...toGoalCommitment(row, row.fact_day_count), note: row.note ?? null }));
+  return rows.map(({ row }) => ({ ...toGoalCommitment(row, row.fact_day_count, todayInZone()), note: row.note ?? null }));
 }
 
 function toGoalSummary(row: GoalRow): GoalSummary {

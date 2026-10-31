@@ -54,3 +54,11 @@
   font-weight: 400;
   color: var(--pulsar-muted);
 }
+
+/* The thousands point of a grouped count: mono gives it a whole cell, and the
+   tracking around it opens «500 . 000». */
+.point {
+  display: inline-block;
+  margin-inline: -0.16em;
+  letter-spacing: 0;
+}
