@@ -118,7 +118,7 @@ test("RL-68: the answers are kept on the device, so a word put away does not com
   }
 
   await page.reload();
-  await expect(page.getByText(messages.review.nothingDue)).toBeVisible();
+  await expect(page.getByText("Hoy no tienes palabras por repasar.")).toBeVisible();
   await expect(page.getByText("3 entradas vuelven más adelante.")).toBeVisible();
 });
 
@@ -150,7 +150,7 @@ test("RL-68: each answer names how long it puts the word away before it is press
 
 test("RL-68: with an empty record the review says where its words come from", async ({ page }) => {
   await page.goto("/repaso");
-  await expect(page.getByText(messages.review.nothingDue)).toBeVisible();
+  await expect(page.getByText("Hoy no tienes palabras por repasar.")).toBeVisible();
   await expect(page.getByText(messages.review.empty)).toBeVisible();
   await expect(page.getByRole("link", { name: messages.review.backToRecord })).toHaveAttribute("href", "/registro");
 });

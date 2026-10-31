@@ -181,7 +181,7 @@ export function ReviewSession() {
       <Card>
         <Flex direction="column" gap="3" align="start">
           <Text size="4">
-            {answered.length === 0 ? t("nothingDue") : t("finished", { count: answered.length, kind })}
+            {answered.length === 0 ? t("nothingDue", { kind }) : t("finished", { count: answered.length, kind })}
           </Text>
           {later > 0 && <Text muted>{t("later", { count: later, kind })}</Text>}
           {later > 0 && state.nextDue !== null && (

@@ -9,7 +9,7 @@ import { contentUnit } from "@/lib/log/outcome";
 import { readWordStudy } from "@/lib/log/summary";
 import { buildQueue, isReviewable } from "@/lib/review/deck";
 import { readCards } from "@/lib/review/store";
-import { Button, Card, Figure, Flex, Link, MetaLabel, Text } from "@/components/ui";
+import { Button, Card, Figure, Flex, Link, MetaLabel, TapTarget, Text } from "@/components/ui";
 
 const RECENT_SHOWN = 8;
 
@@ -70,12 +70,12 @@ export function SideColumn({ section }: { section: "search" | "review" }) {
       )}
       {side.recent.length > 0 && (
         <Card>
-          <Flex direction="column" gap="2" align="start">
+          <Flex direction="column" gap="1" align="start">
             <MetaLabel>{tSearch("recentTitle")}</MetaLabel>
             {side.recent.map((word) => (
               <Link key={word} asChild underline="none">
                 <NextLink href={`/?q=${encodeURIComponent(word)}`} prefetch={false} lang="en">
-                  {word}
+                  <TapTarget align="center">{word}</TapTarget>
                 </NextLink>
               </Link>
             ))}

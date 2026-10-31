@@ -1,0 +1,5 @@
+/* Radix sizes the control from this variable (40px at size 3); the 44px floor is the app's.
+   Doubled to outrank `.rt-SegmentedControlRoot:where(.rt-r-size-3)`. */
+.root.root {
+  --segmented-control-height: 44px;
+}
