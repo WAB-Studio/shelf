@@ -30,7 +30,15 @@ export function demoteRareTranslations(translations: readonly string[]): string[
   return [...translations.filter(isCommonTranslation), ...translations.filter((t) => !isCommonTranslation(t))];
 }
 
+// A gloss the source wraps whole in quotation marks (`"bueno, por lo menos"`) loses them: the screen cuts a
+// line between glosses and would leave one quote dangling. Quotes inside a gloss (`hora "peak"`) stay.
+export function cleanGloss(gloss: string): string {
+  const wrapped = gloss.match(/^["“](.*)["”]$/s);
+  return wrapped !== null && !/["“”]/.test(wrapped[1]) ? wrapped[1].trim() : gloss;
+}
+
 export function orderEntryTranslations(entry: RawEntry): RawEntry {
   const [headword, pos, ipa, translations, definition] = entry;
-  return [headword, pos, ipa, demoteRareTranslations(translations), definition];
+  const cleaned = [...new Set(translations.map(cleanGloss))];
+  return [headword, pos, ipa, demoteRareTranslations(cleaned), definition];
 }
