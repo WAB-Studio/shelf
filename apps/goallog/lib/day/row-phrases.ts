@@ -176,7 +176,6 @@ export function rowMeta(translate: Translate, pieces: RowMetaPieces): RowMetaPar
   }
   const loud = !quiet && kind !== "evidence";
   const partial = loud && !done && kind === "quantity" ? (pieces.partial ?? null) : null;
-  const said = loud && (done || partial) ? translate("day.row.saidByYou") : null;
 
   const amount: RowMetaPart[] | undefined = partial
     ? partialParts(translate("day.row.partialAmount", { logged: LOGGED, target: TARGET }), partial)
@@ -187,8 +186,6 @@ export function rowMeta(translate: Translate, pieces: RowMetaPieces): RowMetaPar
     pieces.cadenceText ? [{ text: pieces.cadenceText }] : null,
     amount,
     status ? [{ text: status }] : null,
-    pieces.writtenTime ? [{ figure: pieces.writtenTime }] : null,
-    said ? [{ text: said }] : null,
     pieces.writtenLabel ? [{ text: pieces.writtenLabel }] : null,
   ];
   const parts = pieceParts

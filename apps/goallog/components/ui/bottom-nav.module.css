@@ -150,8 +150,9 @@
     display: block;
     flex: none;
     padding: 24px 14px 8px;
-    font-family: var(--font-mono);
+    font-family: var(--font-sans);
     font-size: var(--pulsar-text-label-size);
+    font-weight: 500;
     letter-spacing: 0.02em;
     text-transform: none;
     color: var(--pulsar-ink-secondary);

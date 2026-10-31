@@ -1,0 +1,103 @@
+.list {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: 6px minmax(110px, 200px) minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 12px;
+  padding-block: 8px;
+  border-block-end: 1px solid var(--pulsar-line);
+}
+
+.current .name {
+  font-weight: 600;
+}
+
+.rule {
+  align-self: stretch;
+  margin-block: -8px;
+  background: var(--pulsar-accent);
+}
+
+.start {
+  margin-block-start: 8px;
+  border-radius: 3px 3px 0 0;
+}
+
+.end {
+  margin-block-end: 8px;
+  border-radius: 0 0 3px 3px;
+}
+
+.only {
+  margin-block: 8px;
+  border-radius: 3px;
+}
+
+.label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-inline-size: 0;
+}
+
+.name {
+  font-size: 15px;
+  color: var(--pulsar-ink);
+}
+
+.detail,
+.phase {
+  font-size: 14px;
+  color: var(--pulsar-muted);
+}
+
+.phase {
+  color: var(--pulsar-accent);
+}
+
+.track {
+  position: relative;
+  display: block;
+  block-size: 16px;
+  border-radius: 8px;
+  background: var(--pulsar-line);
+}
+
+.bar {
+  display: block;
+  block-size: 100%;
+  border-radius: 8px;
+  background: var(--pulsar-ink);
+}
+
+/* The plan's pace: a line through the track, taller than it. */
+.plan {
+  position: absolute;
+  inset-block: -4px;
+  inline-size: 2px;
+  margin-inline-start: -1px;
+  background: var(--pulsar-accent);
+}
+
+.total {
+  min-inline-size: 72px;
+  text-align: end;
+}
+
+@media (max-width: 599.98px) {
+  .row {
+    grid-template-columns: 6px minmax(0, 1fr) auto;
+    row-gap: 6px;
+  }
+
+  .track {
+    grid-column: 2 / -1;
+  }
+}

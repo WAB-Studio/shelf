@@ -7,7 +7,7 @@ import { civilSpan } from "@/lib/export/sections";
 import { LIST_TAIL, tailOf } from "@/lib/lists/tail";
 import { loadGoal } from "@/lib/queries/goal";
 import { isTimeUnit } from "@/lib/units/time";
-import { Page, ScreenHeader, Section, Table, Text, TextLink, type TableRow } from "@/components/ui";
+import { Figure, Page, ScreenHeader, Section, Text, TextLink, WeekBars, type WeekBar } from "@/components/ui";
 
 /**
  * `RevisionAncha.dc.html` (RP-17): the goal's own
@@ -54,32 +54,37 @@ export async function ReviewScreen({ goalId, all = false }: { goalId: string; al
   // A goal with no end shows its last 12 weeks, the current one last, unless asked for all.
   const { shown, hidden } = goal.horizon === null ? tailOf(goal.weeks, all) : { shown: goal.weeks, hidden: 0 };
 
-  // A column shows only when some row has something in it; the current week's mark rides its label.
-  // Weeks carry no note today, so NOTA never draws until `ReviewWeek` does.
-  const phases = shown.map((week, index) => (week.phaseName !== shown[index - 1]?.phaseName ? (week.phaseName ?? "") : ""));
-  const notes = shown.map(() => "");
-  const hasPhase = phases.some(Boolean);
-  const hasNote = notes.some(Boolean);
-  const columns = [
-    t("goal.review.columns.week"),
-    t("goal.review.columns.total"),
-    ...(hasPhase ? [t("goal.review.columns.phase")] : []),
-    ...(hasNote ? [t("goal.review.columns.note")] : []),
-  ];
-
-  const rows: TableRow[] = shown.map((week, index) => {
-    const mark = week.current ? t("goal.review.current") : "";
+  // The longest week sets the scale; the plan's weekly pace is the monthly rhythm over the weeks of a month.
+  const longest = Math.max(1, ...shown.map((week) => week.total));
+  const pace = goal.rhythm === null ? null : (goal.rhythm * 12) / 52;
+  const scale = Math.max(longest, pace ?? 0);
+  const bars: WeekBar[] = shown.map((week, index) => {
+    const before = shown[index - 1]?.phaseName ?? null;
+    const after = shown[index + 1]?.phaseName ?? null;
+    const same = (name: string | null) => name !== null && name === week.phaseName;
     return {
       key: String(week.index),
-      cells: [t("goal.review.weekLabel", { n: week.index }), week.total, ...(hasPhase ? [phases[index]] : []), ...(hasNote ? [notes[index]] : [])],
-      wideMark: mark || undefined,
-      phoneMark: mark || undefined,
-      phoneUnder: phases[index] || undefined,
+      label: t("goal.review.weekLabel", { n: week.index }),
       detail: civilSpan(week.startsOn, week.endsOn),
+      total: <Figure variant="meta" value={week.total} unit={goal.measureUnit ?? undefined} />,
+      percent: (week.total * 100) / scale,
+      plan: pace === null ? null : (pace * 100) / scale,
+      current: week.current,
+      mark: week.current ? t("goal.review.current") : undefined,
+      phase: week.phaseName !== before ? (week.phaseName ?? undefined) : undefined,
+      phaseRun:
+        week.phaseName === null
+          ? null
+          : same(before) && same(after)
+            ? "middle"
+            : same(before)
+              ? "end"
+              : same(after)
+                ? "start"
+                : "only",
     };
   });
 
-  const currentIndex = shown.findIndex((week) => week.current);
   const seeLess =
     all && goal.horizon === null && goal.weeks.length > LIST_TAIL ? (
       <TextLink href={`/metas/${goal.id}/revision`}>{t("common.seeLess")}</TextLink>
@@ -100,16 +105,8 @@ export async function ReviewScreen({ goalId, all = false }: { goalId: string; al
             ? t("goal.review.measureTime")
             : t("goal.review.measure", { unit: unitWord(goal.measureUnit) })}
       </Text>
-      <Table
-        caption={t("goal.review.caption")}
-        columns={columns}
-        rows={rows}
-        figures={[1]}
-        unit={goal.measureUnit}
-        current={currentIndex === -1 ? undefined : currentIndex}
-        fitDetail
-        above={seeLess ?? earlier}
-      />
+      {seeLess ?? earlier}
+      <WeekBars caption={t("goal.review.caption")} bars={bars} planLabel={t("goal.review.planMark")} />
       {hidden > 0 ? (
         <TextLink href={`/metas/${goal.id}/revision?todo=1`}>{t("common.seeAll")}</TextLink>
       ) : null}

@@ -11,7 +11,8 @@ import { editCadence } from "@/app/actions/plan-edit";
 import type { Cadence } from "@/lib/day/types";
 import { addCommitmentSchema, type AddCommitmentInput } from "@/lib/validation/plan";
 import { editCadenceSchema } from "@/lib/validation/plan-edit";
-import { Button, Chip, ChipRow, Field, FieldPair, Page, ScreenHeader, Section, Text, TextArea } from "@/components/ui";
+import { Button, Chip, ChipRow, Field, FieldPair, Figure, Page, ScreenHeader, Section, Text, TextArea } from "@/components/ui";
+import { evidenceUnitWords } from "@/lib/evidence/unit-words";
 import { messageKey, type MessageKey, type SourceKey } from "@/i18n/translator";
 
 export type CommitmentFormProps = {
@@ -30,7 +31,13 @@ export type CommitmentFormProps = {
   sources: { key: string; labelKey: SourceKey; unit: string }[];
   // Cadence-only edit (RP-127): the form opens on the row's cadence, asks for nothing else and saves
   // through `editCadence`. `goalName` then names the place the way back and «Cancelar» return to.
-  edit?: { commitmentId: string; cadence: Cadence; name?: string };
+  // `fulfils` names what makes an evidence commitment done, said under the title: «Lo cumple TimeLog · VS Code: 1 h 30 min o más».
+  edit?: {
+    commitmentId: string;
+    cadence: Cadence;
+    name?: string;
+    fulfils?: { labelKey: SourceKey; threshold: number; unit: string };
+  };
   // What the edit screen offers under its buttons: the commitment's name, retirement and delete.
   foot?: ReactNode;
 };
@@ -206,6 +213,22 @@ export function CommitmentForm({ goalId, goalName, hasMeasure, measureUnit, sour
         back={{ href: returnTo, place: goalName }}
         eyebrow={edit?.name}
       />
+
+      {edit?.fulfils ? (
+        <Text as="p" variant="sentence">
+          {t.rich("goal.commitments.fulfils", {
+            source: t(edit.fulfils.labelKey),
+            threshold: edit.fulfils.threshold,
+            fig: () => (
+              <Figure
+                variant="meta"
+                value={edit.fulfils!.threshold}
+                unit={evidenceUnitWords({ labelKey: edit.fulfils!.labelKey, unit: edit.fulfils!.unit }, edit.fulfils!.threshold, t)}
+              />
+            ),
+          })}
+        </Text>
+      ) : null}
 
       {edit ? null : (
         <Field
@@ -394,7 +417,7 @@ export function CommitmentForm({ goalId, goalName, hasMeasure, measureUnit, sour
         )}
       </Button>
       {edit ? (
-        <Button asChild block variant="outline">
+        <Button asChild block variant="ghost">
           <Link href={returnTo}>{t("plan.commitmentForm.cancel")}</Link>
         </Button>
       ) : null}

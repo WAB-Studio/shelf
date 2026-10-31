@@ -13,8 +13,11 @@ import {
   Flex,
   Figure,
   Grid,
+  Hero,
+  MonthGrid,
   Page,
   Panel,
+  Progress,
   ScreenHeader,
   Section,
   SectionLabel,
@@ -22,6 +25,9 @@ import {
   Text,
   TextLink,
 } from "@/components/ui";
+import { monthGrid } from "@/lib/day/month-grid";
+import { screenPlanned } from "@/lib/plan/screen-planned";
+import { sentenceCase } from "@/lib/day/day-words";
 import { cadencePhrase } from "@/lib/day/row-phrases";
 import { closedMonthMarkDay } from "@/lib/plan/closed-month-marks";
 import { monthSteps, parseMonthParam } from "@/lib/plan/month-param";
@@ -30,7 +36,7 @@ import { mondaysTouching } from "@/lib/day/habit-weeks";
 import { weekHref } from "@/lib/day/week-href";
 import { planHrefFrom } from "@/lib/plan/return-to";
 import { openMonthsOf, planMonthOf } from "@/lib/plan/roadmap-read";
-import { loadMonthAcross, type MonthAcrossGoal, type MonthAcrossItem } from "@/lib/queries/month";
+import { loadMonthAcross, loadMonthIntensity, type MonthAcrossGoal, type MonthAcrossItem } from "@/lib/queries/month";
 import { listComingDayless } from "@/lib/queries/one-offs";
 import { formatQuantity, isTimeUnit } from "@/lib/units/time";
 import { timeWordsOf } from "@/lib/units/time-words";
@@ -60,7 +66,11 @@ export async function MonthAcrossScreen({ month, today }: { month?: string; toda
   const thisMonth = today.slice(0, 7);
   const coming = month !== undefined && month > thisMonth;
   // A coming month also offers the tasks that wait with no day: read beside the month, never after it.
-  const [across, dayless] = await Promise.all([loadMonthAcross({ month, today }), coming ? listComingDayless(today) : []]);
+  const [across, dayless, intensity] = await Promise.all([
+    loadMonthAcross({ month, today }),
+    coming ? listComingDayless(today) : [],
+    loadMonthIntensity(month ?? thisMonth, today),
+  ]);
   const seg = across.month.slice(0, 7);
   // The page cannot know the bounds before the read: a month past them lands on the nearer one; with no goal, on this one.
   const asked = parseMonthParam(seg, today, across.firstMonth, across.lastMonth);
@@ -267,19 +277,7 @@ export async function MonthAcrossScreen({ month, today }: { month?: string; toda
               </Flex>
             </h2>
           </Text>
-          {goal.line && !coming ? (
-            <Flex align="baseline" gap="2">
-              <Figure value={goal.line.reached} unit={unit ?? undefined} bare={goal.line.planned !== null} />
-              {goal.line.planned !== null ? (
-                <>
-                  {" "}
-                  <Text variant="sentence">
-                    {t.rich("month.months.ofFigure", { planned: say(goal.line.planned), ...fig })}
-                  </Text>
-                </>
-              ) : null}
-            </Flex>
-          ) : null}
+          {/* The month's figure is in the card above; this one keeps the tasks. */}
           {meta ? (
             <Text as="p" variant="sentence">
               {meta}
@@ -436,7 +434,8 @@ export async function MonthAcrossScreen({ month, today }: { month?: string; toda
         chat
         steps
         title={seg.slice(0, 4) === thisMonth.slice(0, 4) ? title : t("month.across.titleYear", { month: title, year: seg.slice(0, 4) })}
-        meta={across.view === "this" ? dateLine : undefined}
+        metaVariant="sentence"
+        meta={across.view === "this" ? sentenceCase(dateLine) : undefined}
         eyebrowFill
         eyebrow={
           <>
@@ -456,6 +455,51 @@ export async function MonthAcrossScreen({ month, today }: { month?: string; toda
           </Face>
         }
       />
+      {nothingOpen || coming ? null : (
+        <Hero
+          label={t("month.across.hero.label", { month: sentenceCase(thisName) })}
+          figure={t("month.across.hero.figure", { count: Object.values(intensity).filter((n) => n > 0).length })}
+          caption={t("month.across.hero.caption")}
+          highlight
+        >
+          <MonthGrid
+            weeks={monthGrid(seg, intensity)}
+            weekdays={t.raw("week.weekdayShort") as string[]}
+            today={today}
+            label={t("month.across.grid.label", { month: thisName })}
+            dayLabel={(cell) => t("month.across.grid.day", { day: Number(cell.day.slice(8, 10)), count: cell.count })}
+          />
+        </Hero>
+      )}
+      {nothingOpen || coming ? null : (
+        <Grid columns={{ initial: "1", lg: "3" }} gap="4" align="start">
+          {across.goals
+            .filter((goal) => goal.line !== null && !goal.holdsGoals)
+            .map((goal) => {
+              const planned = screenPlanned(goal.line!.planned, goal.plan.budgets.some((b) => b.month === across.month));
+              return (
+                <Panel as="div" key={goal.id}>
+                  <Section label={goal.name}>
+                    <Flex align="baseline" gap="2" wrap="wrap">
+                      <Figure variant="big" value={goal.line!.reached} unit={goal.unit ?? undefined} bare={planned !== null} />
+                      {planned !== null ? (
+                        <Text variant="sentence">
+                          {t("day.monthLine.of")} <Figure value={planned} unit={goal.unit ?? undefined} variant="meta" />
+                        </Text>
+                      ) : null}
+                    </Flex>
+                    {planned ? <Progress brand percent={Math.min(100, Math.floor((goal.line!.reached * 100) / planned))} size="thick" /> : null}
+                    {planned && goal.line!.reached > planned ? (
+                      <Text as="p" variant="sentence">
+                        {t("month.across.over")} <Figure value={goal.line!.reached - planned} unit={goal.unit ?? undefined} variant="meta" />
+                      </Text>
+                    ) : null}
+                  </Section>
+                </Panel>
+              );
+            })}
+        </Grid>
+      )}
       {nothingOpen ? null : (
         <Flex align="baseline" gap="3" wrap="wrap">
           <Text as="span" variant="meta">

@@ -5,7 +5,7 @@ import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
 
 import { test, expect } from "./fixtures";
 
-// `/metas` lists an ended goal apart, under «terminadas», between the open
+// `/metas` lists an ended goal apart, under «Terminadas», between the open
 // ones and «Archivadas» (RP-27, RP-24, RNP-07).
 
 function plusDays(days: number): string {
@@ -52,11 +52,11 @@ test("one open, one ended and one archived goal list each under its heading, in 
     const archivedId = await seedGoal(db, person.id, archived, plusDays(60), true);
 
     await page.goto("/metas");
-    const terminadas = page.getByText("terminadas", { exact: true });
+    const terminadas = page.getByText("Terminadas", { exact: true });
     const archivadas = page.getByText("Archivadas", { exact: true });
     await expect(terminadas).toBeVisible();
 
-    // Document order: open, «Abrir otra meta», «terminadas», ended, «Archivadas», archived.
+    // Document order: open, «Abrir otra meta», «Terminadas», ended, «Archivadas», archived.
     const order = await page.evaluate(() =>
       Array.from(document.querySelectorAll("main a, main h2, main section *"))
         .map((el) => el.textContent?.trim() ?? ""),
@@ -64,8 +64,8 @@ test("one open, one ended and one archived goal list each under its heading, in 
     const at = (needle: string) => order.findIndex((text) => text.startsWith(needle));
     expect(at(open)).toBeGreaterThanOrEqual(0);
     expect(at(open)).toBeLessThan(at("Abrir otra meta"));
-    expect(at("Abrir otra meta")).toBeLessThan(at("terminadas"));
-    expect(at("terminadas")).toBeLessThan(at(ended));
+    expect(at("Abrir otra meta")).toBeLessThan(at("Terminadas"));
+    expect(at("Terminadas")).toBeLessThan(at(ended));
     expect(at(ended)).toBeLessThan(at("Archivadas"));
     expect(at("Archivadas")).toBeLessThan(at(archived));
     await expect(archivadas).toBeVisible();
@@ -88,7 +88,8 @@ test("one open, one ended and one archived goal list each under its heading, in 
       [archived, archivedId],
     ]) {
       await page.goto("/metas");
-      await page.getByRole("link", { name: new RegExp(`^${name}`) }).click();
+      // An open goal opens from its card's link; an ended or archived one from its row.
+      await page.getByRole("link", { name: name === open ? `Abrir ${name}` : new RegExp(`^${name}`) }).click();
       await page.waitForURL(new RegExp(`/metas/${id}$`));
     }
   } finally {
@@ -109,7 +110,7 @@ test("a person whose only goal ended lands on the list, not on /metas/nueva", as
 
     await page.goto("/metas");
     await expect(page).toHaveURL(/\/metas$/);
-    await expect(page.getByText("terminadas", { exact: true })).toBeVisible();
+    await expect(page.getByText("Terminadas", { exact: true })).toBeVisible();
     await expect(page.getByRole("link", { name: new RegExp(`^${ended}`) })).toBeVisible();
   } finally {
     await context.close();

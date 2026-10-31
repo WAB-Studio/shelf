@@ -8,7 +8,10 @@ import { goals, phases } from "@/db/schema";
 import { messageKey, type MessageKey } from "@/i18n/translator";
 import { NamedError } from "@/lib/actions/named-error";
 import { pgCode } from "@/lib/db-error";
-import { getPerson, withGoalsDb } from "@/lib/session";
+import { evidenceDoneDays } from "@/lib/day/constancy";
+import { queryEvidenceBySource } from "@/lib/queries/evidence";
+import { getPerson, withGoalsDb, withReadingDb } from "@/lib/session";
+import { civilDateInZone, todayInZone } from "@/lib/zone";
 import { isClosed } from "@/lib/validation/closed";
 import { phasesOverlap, phaseWithinHorizon } from "@/lib/validation/plan";
 import {
@@ -164,25 +167,55 @@ export async function editCadence(input: unknown): Promise<EditCadenceResult> {
 
   try {
     const [row] = await withGoalsDb((tx) =>
-      tx.execute<{ goal_id: string | null; retired: boolean; facts: boolean }>(sql`
+      tx.execute<{
+        goal_id: string | null;
+        retired: boolean;
+        facts: boolean;
+        evidence: boolean;
+        source_key: string | null;
+        threshold: number | null;
+        created_at: string;
+      }>(sql`
         with t as (
-          select id, goal_id, retired_at is not null as retired,
-                 exists (select 1 from "goals"."facts" f where f.commitment_id = c.id) as facts
-          from "goals"."commitments" c where c.id = ${commitmentId} and c.user_id = ${person.id}
+          select c.id, c.goal_id, c.retired_at is not null as retired,
+                 exists (select 1 from "goals"."facts" f where f.commitment_id = c.id) as facts,
+                 c.satisfaction = 'evidence' as evidence, s.key as source_key, c.threshold, c.created_at
+          from "goals"."commitments" c
+          left join "goals"."evidence_sources" s on s.id = c.source_id
+          where c.id = ${commitmentId} and c.user_id = ${person.id}
         ),
         upd as (
           update "goals"."commitments"
           set cadence_kind = ${data.cadenceKind}, cadence_n = ${cadenceN}, cadence_weekdays = ${cadenceWeekdays}
-          where id in (select id from t where not retired and not facts)
+          where id in (select id from t where not retired and not facts and not evidence)
           returning id
         )
-        select goal_id, retired, facts from t
+        select goal_id, retired, facts, evidence, source_key, threshold, created_at from t
       `),
     );
 
     if (!row) return { ok: false, error: "plan.errors.commitmentNotFound" };
     if (row.retired) return { ok: false, error: "plan.errors.commitmentRetired" };
     if (row.facts) return { ok: false, error: "plan.errors.cadenceHasFacts" };
+    if (row.evidence) {
+      // Evidence writes no fact (RP-05): the days its source met the threshold are days done all the same,
+      // so the same refusal stands. An unreadable source cannot say there are none, so it refuses too.
+      const days = await withReadingDb((tx) =>
+        queryEvidenceBySource(tx, person.id, civilDateInZone(new Date(row.created_at)), todayInZone()),
+      ).then(
+        (bySourceKey) => evidenceDoneDays({ sourceKey: row.source_key, threshold: row.threshold ?? 1 }, bySourceKey).length,
+        () => null,
+      );
+      if (days === null || days > 0) return { ok: false, error: "plan.errors.cadenceHasFacts" };
+      await withGoalsDb((tx) =>
+        tx.execute(sql`
+          update "goals"."commitments"
+          set cadence_kind = ${data.cadenceKind}, cadence_n = ${cadenceN}, cadence_weekdays = ${cadenceWeekdays}
+          where id = ${commitmentId} and user_id = ${person.id} and retired_at is null
+            and not exists (select 1 from "goals"."facts" f where f.commitment_id = ${commitmentId})
+        `),
+      );
+    }
 
     revalidateScreens(row.goal_id, commitmentId);
     return { ok: true };

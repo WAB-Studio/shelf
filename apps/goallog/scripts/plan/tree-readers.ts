@@ -399,12 +399,15 @@ test("a goal alone has no tree figures and the same old fields", async () => {
 
   const metas = await as(single, () => goalQueries.listGoalsForMetas("2026-10-12"));
   const bare = (row: Record<string, unknown>) => {
-    const { parentId, level, outOfUnit, monthUnit, ...rest } = row;
+    const { parentId, level, outOfUnit, monthUnit, phaseAim, weeksLeft, ...rest } = row;
     assert.equal(parentId, null);
     assert.equal(level, null);
     if (outOfUnit !== undefined) assert.deepEqual(outOfUnit, []);
     // A goal alone draws its month in its own measure's unit.
     if (monthUnit !== undefined) assert.equal(monthUnit, rest.measureUnit ?? null);
+    // The /metas card reads the phase in effect and the weeks left to the horizon.
+    if (phaseAim !== undefined) assert.equal(phaseAim, null);
+    if (weeksLeft !== undefined) assert.equal(weeksLeft, 16);
     return rest;
   };
   assert.deepEqual(JSON.parse(JSON.stringify({
@@ -496,7 +499,16 @@ const GOLDEN_VIEW: unknown = {
       },
       "retiredAt": null,
       "sourceLabelKey": null,
-      "factDayCount": 1
+      "factDayCount": 1,
+      "createdOn": "2026-09-21",
+      "done": [
+        {
+          "day": "2026-10-05",
+          "quantity": 45,
+          "by": "declared"
+        }
+      ],
+      "sourceKey": null
     }
   ],
   "weeks": [

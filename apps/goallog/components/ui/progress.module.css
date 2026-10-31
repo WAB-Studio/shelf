@@ -14,3 +14,14 @@
 .thick {
   block-size: 6px;
 }
+
+/* A goal's card: the accent fills a track of the brand navy, never ink. */
+.brand {
+  background: color-mix(in srgb, var(--pulsar-brand) 14%, var(--pulsar-raised));
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.brand .fill {
+  background: var(--pulsar-accent);
+}
