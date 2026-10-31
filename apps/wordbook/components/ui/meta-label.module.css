@@ -7,3 +7,8 @@
   text-transform: uppercase;
   color: var(--rl-muted);
 }
+
+/* A count beside a truncating headword keeps to one line. */
+.nowrap.nowrap {
+  white-space: nowrap;
+}

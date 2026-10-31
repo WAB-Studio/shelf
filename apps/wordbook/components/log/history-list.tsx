@@ -97,7 +97,7 @@ const StudyRowItem = memo(function StudyRowItem({
                   {word}
                 </Text>
               </Flex>
-              <MetaLabel aria-label={t("study.rowCountLabel", { count: row.count })}>
+              <MetaLabel nowrap aria-label={t("study.rowCountLabel", { count: row.count })}>
                 {t("study.rowCount", { count: row.count })}
               </MetaLabel>
             </TapTarget>
