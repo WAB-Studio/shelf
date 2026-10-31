@@ -60,7 +60,7 @@
   }
 }
 
-/* docs/wordbook/DESIGN.md, decision of 2026-10-31: from 1280px a screen of two panels takes everything
+/* docs/wordbook/DESIGN.md: from 1280px a screen of two panels takes everything
    the sidebar leaves; `Panels` centres its own 1120px inside it. Three classes to outrank the
    centred reading column above. */
 @media (min-width: 1280px) {

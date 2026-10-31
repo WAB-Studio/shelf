@@ -164,7 +164,10 @@ export function ReviewSession() {
   // Keys 1 to 4 grade the answer on a keyboard, in the order of the buttons.
   const gradeByKey = useEffectEvent((event: KeyboardEvent) => {
     const grade = GRADES[Number(event.key) - 1];
-    if (grade === undefined || event.altKey || event.ctrlKey || event.metaKey) return;
+    if (grade === undefined || event.repeat || event.altKey || event.ctrlKey || event.metaKey) return;
+    // A key typed into a field, or pressed on a control, is that control's own.
+    const target = event.target instanceof HTMLElement ? event.target : null;
+    if (target?.closest("input, textarea, select, [contenteditable], a[href]") != null) return;
     if (state.kind !== "ready" || state.revealedAt === null || state.saving) return;
     void answer(grade, Date.now());
   });

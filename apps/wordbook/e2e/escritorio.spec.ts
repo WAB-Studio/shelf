@@ -56,8 +56,9 @@ test("one <nav> at the side on every route, never a bar at the foot", async ({ p
 
 test("from 1280px the main screen is two panels in what the sidebar leaves: the entry and a 380px side", async ({ page }) => {
   await disableTranslator(page);
-  await page.goto("/");
-  await expect(page.locator("main")).toBeVisible();
+  // An answer keeps its second panel; the empty screen draws one only once the record has a review to offer.
+  await page.goto("/?q=throughout");
+  await expect(page.getByRole("heading", { name: "throughout" })).toBeVisible({ timeout: 10000 });
   await page.evaluate(() => document.fonts.ready);
 
   const viewport = page.viewportSize();

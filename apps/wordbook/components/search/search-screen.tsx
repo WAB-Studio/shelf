@@ -586,7 +586,7 @@ export function SearchScreen({ initialQuery }: { initialQuery?: string }) {
     : null;
   // A word keeps its second panel even while it has no answer, so the layout does not jump as the reader types.
   const side =
-    kind.kind === "empty" ? <ReviewCard /> : kind.kind === "word" ? storyWord !== null ? <WordStoryPanel headword={storyWord} /> : <></> : undefined;
+    kind.kind === "empty" ? <ReviewCard /> : kind.kind === "word" && storyWord !== null ? <WordStoryPanel headword={storyWord} /> : undefined;
 
   return (
     <>
@@ -602,6 +602,7 @@ export function SearchScreen({ initialQuery }: { initialQuery?: string }) {
           </>
         }
         side={side}
+        reserveSide={kind.kind === "word"}
         sideOnPhone={kind.kind === "empty"}
       >
         {kind.kind === "empty" && <Starters onPick={handleTextChange} />}
