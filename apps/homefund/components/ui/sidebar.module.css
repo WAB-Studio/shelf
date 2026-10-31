@@ -87,3 +87,59 @@
   margin-left: auto;
   flex-shrink: 0;
 }
+
+/* The rail: from `sm` to `lg` the column is an 88px strip, each destination an
+   icon with its label under it, so nothing waits on a hover to be named. From
+   1280px the 248px column above takes over. */
+.mark {
+  display: none;
+}
+
+@media (max-width: 1279.98px) {
+  .sidebar {
+    width: 88px;
+    padding: 16px 6px 14px;
+  }
+
+  .mark {
+    display: grid;
+    place-items: center;
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+    background-color: var(--accent-9);
+    color: var(--accent-contrast);
+    font-size: 18px;
+    font-weight: 700;
+  }
+
+  .head {
+    justify-content: center;
+    padding: 0 0 12px;
+  }
+
+  .head > :not(.mark) {
+    display: none;
+  }
+
+  .foot {
+    gap: 10px;
+  }
+
+  .action.action {
+    flex-direction: column;
+    gap: 4px;
+    padding: 10px 2px;
+    font-size: 11px;
+    line-height: 1.15;
+  }
+
+  .person.person {
+    justify-content: center;
+    padding: 4px 0;
+  }
+
+  .person > :not(.avatar) {
+    display: none;
+  }
+}

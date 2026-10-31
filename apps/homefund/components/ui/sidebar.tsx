@@ -62,6 +62,10 @@ export function SidebarHead({
 }) {
   return (
     <Flex align="center" className={styles.head}>
+      {/* The rail has no room for the name: the fund's initial stands for it. */}
+      <span aria-hidden className={styles.mark}>
+        {title.slice(0, 1).toUpperCase()}
+      </span>
       <Text truncate className={styles.fund}>
         {title}
       </Text>
