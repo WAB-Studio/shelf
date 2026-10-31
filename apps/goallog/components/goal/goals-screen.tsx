@@ -255,11 +255,14 @@ export async function GoalsScreen({
           const percent =
             month?.kind === "amount" && month.planned ? Math.min(100, Math.floor((month.reached * 100) / month.planned)) : null;
           return (
-            <Panel as="div" key={goal.id}>
+            <Panel key={goal.id} label={goal.name}>
               <Section label={goal.name}>
+                {month ? <Text variant="sentence">{monthName(month.month)}</Text> : null}
+                {" "}
                 {month?.kind === "amount" ? (
                   <Flex align="baseline" gap="2" wrap="wrap">
                     <Figure variant="big" value={month.reached} unit={unit} bare={month.planned !== null} />
+                    {" "}
                     {month.planned !== null ? (
                       <Text variant="sentence">
                         {t("day.monthLine.of")} <Figure value={month.planned} unit={unit} variant="meta" />
@@ -268,7 +271,7 @@ export async function GoalsScreen({
                   </Flex>
                 ) : month?.kind === "tasks" ? (
                   <Text as="p" variant="sentence">
-                    {t("goal.list.monthTasks", { month: monthName(month.month), done: month.done, total: month.total })}
+                    {t("goal.list.tasksDone", { done: month.done, total: month.total })}
                   </Text>
                 ) : null}
                 {percent !== null ? <Progress brand percent={percent} size="thick" /> : null}
@@ -283,7 +286,9 @@ export async function GoalsScreen({
                   </Text>
                 ) : null}
                 <Text as="p" variant="sentence" tone="muted">
-                  {goal.weeksLeft === null ? t("goal.list.noEnd") : t("goal.list.weeksLeft", { count: goal.weeksLeft })}
+                  {goal.weeksLeft === null
+                    ? t("goal.list.noEnd")
+                    : `${t("goal.list.weeksLeft", { count: goal.weeksLeft })} · ${t("goal.list.untilShort", { date: lastDay(goal) ?? "" })}`}
                 </Text>
                 <TextLink href={`/metas/${goal.id}`}>{t("goal.list.openGoal", { name: goal.name })}</TextLink>
               </Section>

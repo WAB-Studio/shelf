@@ -70,6 +70,7 @@ export async function ReviewScreen({ goalId, all = false }: { goalId: string; al
       percent: (week.total * 100) / scale,
       plan: pace === null ? null : (pace * 100) / scale,
       current: week.current,
+      mark: week.current ? t("goal.review.current") : undefined,
       phase: week.phaseName !== before ? (week.phaseName ?? undefined) : undefined,
       phaseRun:
         week.phaseName === null

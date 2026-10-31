@@ -14,6 +14,8 @@ export type WeekBar = {
   // Where the plan's weekly pace falls on the same scale; null with no rhythm.
   plan: number | null;
   current?: boolean;
+  // «en curso»: said after the dates on the current week, as a mark and never a column.
+  mark?: string;
   // The phase in effect that week, named on the first row of its run.
   phase?: string;
   phaseRun: "start" | "middle" | "end" | "only" | null;
@@ -25,11 +27,11 @@ export function WeekBars({ caption, bars, planLabel }: { caption: string; bars: 
   return (
     <ol className={styles.list} aria-label={caption} data-part="week-bars">
       {bars.map((bar) => (
-        <li key={bar.key} className={bar.current ? `${styles.row} ${styles.current}` : styles.row} aria-current={bar.current ? "true" : undefined}>
+        <li key={bar.key} className={bar.current ? `${styles.row} ${styles.current}` : styles.row} aria-current={bar.current ? "true" : undefined} data-current={bar.current ? "" : undefined}>
           <span className={bar.phaseRun ? `${styles.rule} ${styles[bar.phaseRun]}` : styles.rule} aria-hidden />
           <span className={styles.label}>
             <span className={styles.name}>{bar.label}</span>
-            {bar.detail ? <span className={styles.detail}>{bar.detail}</span> : null}
+            {bar.detail ? <span className={styles.detail}>{bar.mark ? `${bar.detail} · ${bar.mark}` : bar.detail}</span> : null}
             {bar.phase ? <span className={styles.phase}>{bar.phase}</span> : null}
           </span>
           <span className={styles.track} aria-hidden>

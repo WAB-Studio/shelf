@@ -62,16 +62,16 @@ test("each review row prints its dates, week 1 from the opening day to its Sunda
     expect(scrollWidth).toBeLessThanOrEqual(360);
 
     await page.setViewportSize({ width: 1280, height: 900 });
-    const rows = page.getByRole("table").getByRole("row");
-    await expect(rows.nth(1).getByRole("cell").nth(0)).toContainText(week1);
-    await expect(rows.nth(2).getByRole("cell").nth(0)).toContainText(week2);
-    await expect(rows.nth(3).getByRole("cell").nth(0)).toContainText(week3);
-    const labelWidth = await rows
-      .nth(0)
-      .getByRole("columnheader")
-      .nth(0)
-      .evaluate((el) => el.getBoundingClientRect().width);
-    expect(labelWidth).toBeGreaterThanOrEqual(150);
+    await expect(page.getByRole("table")).toHaveCount(0);
+    await expect(items.nth(0)).toContainText(week1);
+    await expect(items.nth(1)).toContainText(week2);
+    await expect(items.nth(2)).toContainText(week3);
+    // The label column is one width on every row, the longest range included.
+    const labelWidths = await items.evaluateAll((els) =>
+      els.map((el) => (el.children[1] as HTMLElement).getBoundingClientRect().width),
+    );
+    expect(new Set(labelWidths.map(Math.round)).size).toBe(1);
+    expect(labelWidths[0]).toBeGreaterThanOrEqual(110);
   } finally {
     await db`delete from goals.goals where id = ${goalId} and user_id = ${personId}`;
   }

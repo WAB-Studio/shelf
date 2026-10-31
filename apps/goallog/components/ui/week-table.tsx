@@ -70,6 +70,7 @@ function Tally({ cell }: { cell: WeekTableTally }) {
   return (
     <>
       <span className={styles.tallyFigure}>{cell.figure}</span>
+      {" "}
       <span className={styles.tallyRest}>{cell.rest}</span>
       <span className={styles.tallyBar} aria-hidden>
         <span className={styles.tallyFill} style={{ inlineSize: `${cell.percent}%` }} />
@@ -84,6 +85,7 @@ function DayHead({ column }: { column: WeekTableColumn }) {
   const stack = (
     <>
       <span>{weekday}</span>
+      {" "}
       <span>{date}</span>
     </>
   );

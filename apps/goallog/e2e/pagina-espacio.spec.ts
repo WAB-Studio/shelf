@@ -58,7 +58,7 @@ for (const [width, expected] of [
 
 // `\w` is ASCII: on a miércoles or a sábado it skips the date and lands on the tally.
 const WEEKDAY_DATE = /^(Lunes|Martes|Miércoles|Jueves|Viernes|Sábado|Domingo) \d+ de \p{L}+$/u;
-const LONGEST_DATE = "miércoles 30 de septiembre";
+const LONGEST_DATE = "Miércoles 30 de septiembre";
 
 // `longest` swaps the date's words in the page, so the line is measured on the
 // widest date the app can draw whatever day the suite runs.

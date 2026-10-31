@@ -164,6 +164,7 @@
   },
   "list": {
     "addAnother": "Abrir otra meta",
+    "tasksDone": "{done} de {total} tareas",
     "phaseNow": "Fase actual: {aim}",
     "weeksLeft": "{count, plural, =0 {Termina esta semana} one {Falta # semana} other {Faltan # semanas}}",
     "openGoal": "Abrir {name}",
