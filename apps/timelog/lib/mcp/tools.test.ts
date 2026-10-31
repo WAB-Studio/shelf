@@ -98,6 +98,7 @@ test("get_daily answers one row per day with Claude's time and the top app, from
     claude_seconds: 4200,
     top_app: "VS Code",
     top_app_seconds: 11520,
+    uploaded: 1,
   });
   assert.equal(days[0].claude_seconds, 0);
 });

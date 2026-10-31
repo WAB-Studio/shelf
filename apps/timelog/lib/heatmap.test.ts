@@ -38,5 +38,6 @@ test("past the top, the rest is counted and its time added; system noise is one 
   assert.deepEqual(map.rows.map((row) => row.app), ["VS Code", "Chrome"]);
   assert.equal(map.restCount, 1);
   assert.equal(map.restSeconds, 150);
+  assert.deepEqual(map.rest, [{ app: "Sistema", kind: "system", total: 150 }]);
   assert.equal(buildHeatmap([], days, "Sistema", 8).rows.length, 0);
 });

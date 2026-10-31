@@ -4,7 +4,10 @@ import { useEffect, useRef } from "react";
 
 import styles from "./ui.module.css";
 
-export type TimelineSegment = { key: string; label: string; description: string; left: number; width: number; lane: number };
+export type TimelineSegment = { key: string; label: string; description: string; left: number; width: number; lane: number; hue: number; place: "inside" | "after" | "before" };
+// How many project colours the stylesheet holds; a seventh project in one day starts the colours over.
+const PROJECT_HUES = 6;
+
 export type TimelineMark = { key: string; label: string; left: number };
 
 // A day laid along a line: each stretch a labelled segment on its lane, an hour ruler under it. The line is wider than a
@@ -25,7 +28,7 @@ export function Timeline({ segments, lanes, marks, focus, openKey, label }: { se
       <div className={styles.timelineLine}>
         <div className={styles.timelineLanes} style={{ height: `${lanes * 40 - 4}px` }}>
           {segments.map((one) => (
-            <div key={one.key} className={styles.segment} role="img" aria-label={one.description} title={one.description} style={{ left: `${one.left * 100}%`, width: `${one.width * 100}%`, top: `${one.lane * 40}px` }}>
+            <div key={one.key} className={`${styles.segment} ${styles[`project_${one.hue % PROJECT_HUES}`]}`} data-label={one.place === "inside" ? undefined : one.place} role="img" aria-label={one.description} title={one.description} style={{ left: `${one.left * 100}%`, width: `${one.width * 100}%`, top: `${one.lane * 40}px` }}>
               <span>{one.label}</span>
             </div>
           ))}

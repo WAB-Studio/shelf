@@ -5,7 +5,7 @@ import { AutoRefresh } from "@/components/screens/auto-refresh";
 import { ClaudeBlock, InternetBlock } from "@/components/screens/claude-internet";
 import { Timeline } from "@/components/ui/timeline";
 import { Card, Cards, Composition, DayStrip, Disclosure, Figure, Hero, HeroColumns, Mosaic, Stack, Text, TextLink, Tile, Title } from "@/components/ui";
-import { appClass, timeByClass } from "@/lib/app-classes";
+import { appTone, timeByClass } from "@/lib/app-classes";
 import { readableApp } from "@/lib/app-names";
 import { projectName } from "@/lib/claude-project";
 import { claudeSources, claudeTotal } from "@/lib/daily";
@@ -14,7 +14,7 @@ import { appsBetween, claudeBetween, claudeSessionsBetween, dayTotals, devicesBe
 import { focusShare, hourMarks, layoutSessions, minuteOfDay } from "@/lib/timeline";
 import { percent, sum } from "@/lib/totals";
 import { calendarWords } from "@/lib/words";
-import { dayStrip } from "@/lib/week";
+import { dayStrip, mondayOf } from "@/lib/week";
 import { addDays, civilDay } from "@/lib/zone";
 
 const TITLES_SHOWN = 8;
@@ -26,8 +26,11 @@ export async function DayView({ day }: { day: string }) {
   const today = civilDay();
   const isToday = day === today;
   const before = addDays(day, -1);
-  const [raw, sites, pages, windows, sessions, claudeDays, previous, devices, span, words, t, tClaude, tInternet, tTimeline, tClass] = await Promise.all([
+  const monday = mondayOf(day);
+  const [raw, weekDays, sites, pages, windows, sessions, claudeDays, previous, devices, span, words, t, tClaude, tInternet, tTimeline, tClass] = await Promise.all([
     appsBetween(day, day),
+    // Which days of the strip's week an upload reached.
+    dayTotals(monday, addDays(monday, 6)),
     sitesBetween(day, day),
     pagesBetween(day, day),
     windowsBetween(day, day),
@@ -64,15 +67,25 @@ export async function DayView({ day }: { day: string }) {
   const previousTotal = previous[0]?.seconds ?? 0;
   const delta = total - previousTotal;
   const date = t("title", { weekday: words.weekday(day), day: words.dayOfMonth(day), month: words.month(day) });
-  const strip = dayStrip(day, span.firstDay, today);
+  const strip = dayStrip(day, span.firstDay, today, new Set(weekDays.map((one) => one.day)));
   const hrefOf = (target: string) => (target === today ? "/" : `/dia/${target}`);
 
   // Before the first upload there is nothing to read: no empty sections stand in for it.
   const firstUse = top === undefined && span.lastReceived === null;
+  // A past day nothing arrived on has nothing to open: no empty Claude and Internet cards stand in for it.
+  const emptyPast = !isToday && apps.length === 0 && claudeSeconds === 0 && sites.length === 0;
+
+  const windowRow = (title: (typeof windows)[number]): BarRow => ({
+    key: title.app + title.title,
+    name: title.title,
+    figure: words.duration(title.seconds),
+    seconds: title.seconds,
+    label: t("windowBar", { title: title.title, duration: words.duration(title.seconds) }),
+  });
 
   // An app's row opens onto its longest windows, each measured against the app's own time.
   const appRow = (one: AppTime): BarRow => {
-    const tone = appClass(one.app, tSystem);
+    const tone = appTone(one.app, tSystem);
     const mine = titlesOf.get(one.app) ?? [];
     return {
       key: one.app,
@@ -84,18 +97,12 @@ export async function DayView({ day }: { day: string }) {
       detail:
         mine.length === 0 ? undefined : (
           <>
-            <BarRows
-              tone={tone}
-              of={one.seconds}
-              rows={mine.slice(0, TITLES_SHOWN).map((title) => ({
-                key: title.app + title.title,
-                name: title.title,
-                figure: words.duration(title.seconds),
-                seconds: title.seconds,
-                label: t("windowBar", { title: title.title, duration: words.duration(title.seconds) }),
-              }))}
-            />
-            {mine.length > TITLES_SHOWN ? <Text as="p" variant="meta">{t("windowsMore", { n: mine.length - TITLES_SHOWN })}</Text> : null}
+            <BarRows tone={tone} of={one.seconds} rows={mine.slice(0, TITLES_SHOWN).map(windowRow)} />
+            {mine.length > TITLES_SHOWN ? (
+              <Disclosure summary={<Text variant="meta">{t("windowsMore", { n: mine.length - TITLES_SHOWN })}</Text>}>
+                <BarRows tone={tone} of={one.seconds} rows={mine.slice(TITLES_SHOWN).map(windowRow)} />
+              </Disclosure>
+            ) : null}
           </>
         ),
     };
@@ -118,8 +125,9 @@ export async function DayView({ day }: { day: string }) {
           initial: words.weekdayInitial(one.day),
           number: words.dayOfMonth(one.day),
           current: one.current,
+          empty: one.reachable && !one.uploaded,
           href: one.reachable ? hrefOf(one.day) : undefined,
-          description: t("stripDay", { weekday: words.weekday(one.day), day: words.dayOfMonth(one.day), month: words.month(one.day) }),
+          description: t(one.reachable && !one.uploaded ? "stripDayEmpty" : "stripDay", { weekday: words.weekday(one.day), day: words.dayOfMonth(one.day), month: words.month(one.day) }),
         }))}
       />
       <Hero>
@@ -135,7 +143,7 @@ export async function DayView({ day }: { day: string }) {
                   <Stack gap={1}>
                     <Text variant="meta">{t("devicesSum", { n: devices.length })}</Text>
                     {devices.map((one) => (
-                      <Text key={one.device} variant="meta" truncate>{one.device} · {words.duration(one.seconds)}</Text>
+                      <Text key={one.device} variant="meta" truncate>{`${one.device} · ${words.duration(one.seconds)}`}</Text>
                     ))}
                   </Stack>
                 ) : null}
@@ -145,7 +153,7 @@ export async function DayView({ day }: { day: string }) {
             <Stack gap={4}>
               <Stack gap={2}>
                 <Text variant="meta">{t("claudeCard")}</Text>
-                <Text as="p">{claudeSeconds > 0 ? t("claudeGlance", { duration: words.duration(claudeSeconds), percent: percent(claudeSeconds, total) }) : t("claudeNoneDay")}</Text>
+                <Text as="p">{claudeSeconds > 0 ? t("claudeGlance", { duration: words.duration(claudeSeconds), percent: percent(claudeSeconds, total) }) : t(isToday ? "claudeNoneToday" : "claudeNoneDay")}</Text>
                 {claudeSeconds > 0 ? (
                   <Composition
                     thin
@@ -181,7 +189,7 @@ export async function DayView({ day }: { day: string }) {
             <Stack gap={2}>
               <Text as="p">{span.lastReceived === null ? t("never") : t(isToday ? "empty" : "emptyPast")}</Text>
               {span.lastReceived === null ? null : <Text as="p" variant="meta">{t(isToday ? "emptyWhy" : "emptyPastWhy")}</Text>}
-              {span.lastReceived === null ? null : <Text as="p" variant="meta">{t("lastUpload", { when: words.moment(span.lastReceived) })}</Text>}
+              {span.lastReceived === null || !isToday ? null : <Text as="p" variant="meta">{t("lastUpload", { when: words.moment(span.lastReceived) })}</Text>}
             </Stack>
           </Stack>
         )}
@@ -193,13 +201,13 @@ export async function DayView({ day }: { day: string }) {
             lanes={line.lanes}
             openKey={day}
             focus={focusShare(line, isToday ? minuteOfDay(new Date()) : null)}
-            marks={hourMarks(line.startHour).map((mark) => ({ key: String(mark.hour), label: `${mark.hour % 24}:00`, left: mark.left }))}
-            segments={line.segments.map((one) => ({ key: one.key, label: one.label, left: one.left, width: one.width, lane: one.lane, description: tTimeline("session", { project: one.label, from: words.clock(one.first), to: words.clock(one.last) }) }))}
+            marks={hourMarks(line.startHour).map((mark) => ({ key: String(mark.hour), label: words.hour(mark.hour), left: mark.left }))}
+            segments={line.segments.map((one) => ({ key: one.key, label: one.label, left: one.left, width: one.width, lane: one.lane, hue: one.hue, place: one.place, description: tTimeline("session", { project: one.label, from: words.clock(one.first), to: words.clock(one.last) }) }))}
           />
         </Tile>
       ) : null}
       {firstUse ? <TextLink button href="/llaves">{t("connect")}</TextLink> : null}
-      {firstUse ? null : (
+      {firstUse || emptyPast ? null : (
         <Mosaic>
           {apps.length > 0 ? (
             <Tile lead title={t("apps")} figure={words.duration(total)}>
@@ -212,10 +220,10 @@ export async function DayView({ day }: { day: string }) {
             </Tile>
           ) : null}
           <Tile title={tClaude("title")} figure={claudeSeconds > 0 ? words.duration(claudeSeconds) : "—"}>
-            <ClaudeBlock claude={claude} sessions={sessions} hasClaudeCode={span.hasClaudeCode} hasSites={span.hasSites} words={words} />
+            <ClaudeBlock isToday={isToday} claude={claude} sessions={sessions} hasClaudeCode={span.hasClaudeCode} hasSites={span.hasSites} words={words} />
           </Tile>
           <Tile title={tInternet("title")} figure={sites.length > 0 ? words.duration(sum(sites)) : "—"}>
-            <InternetBlock sites={sites} pages={pages} hasSites={span.hasSites} words={words} />
+            <InternetBlock isToday={isToday} sites={sites} pages={pages} hasSites={span.hasSites} words={words} />
           </Tile>
         </Mosaic>
       )}

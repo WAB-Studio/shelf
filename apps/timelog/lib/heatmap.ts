@@ -6,7 +6,8 @@ export const HEAT_LEVELS = 4;
 
 export type HeatCell = { seconds: number; level: number };
 export type HeatRow = { app: string; kind: AppClass; total: number; cells: HeatCell[] };
-export type Heatmap = { rows: HeatRow[]; restCount: number; restSeconds: number };
+export type RestApp = { app: string; kind: AppClass; total: number };
+export type Heatmap = { rows: HeatRow[]; restCount: number; restSeconds: number; rest: RestApp[] };
 
 // The week as a grid: the `top` apps of the week by total, a cell per day. An app is its readable name (two processes
 // with one name add up, Windows' own noise is `systemName`). A cell's level, 1 to 4, is its share of the largest cell
@@ -36,6 +37,7 @@ export function buildHeatmap(rows: DayApp[], days: string[], systemName: string,
         return { seconds, level: level(seconds) };
       }),
     })),
+    rest: rest.map((one) => ({ app: one.app, kind: appClass(one.app, systemName), total: one.total })),
     restCount: rest.length,
     restSeconds: rest.reduce((sum, one) => sum + one.total, 0),
   };

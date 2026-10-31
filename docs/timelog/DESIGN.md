@@ -152,3 +152,12 @@ What changed:
 - **Phone.** The bottom bar has a border and a shadow and a 16 gutter; the figures of the seven columns break into
   value over unit so two never read as one; first use shows only the connect button; «Actualizado hace…» re-reads
   today every minute and when the tab comes back.
+
+## Critic's pass on the deploy (2026-10-31)
+
+- Zero is «0 min», never «< 1 min». The day strip dashes and strikes a reached day nothing arrived on. A past day with nothing
+  shows its own sentence and no empty Claude and Internet cards. «Hoy» is current on today alone.
+- Day line: one colour per project (six tokens, `--tl-project-*`), the label beside a segment too short for it, the ruler on
+  the same 12-hour clock as the spans. The Claude desktop app draws in Claude's orange everywhere.
+- Every «y N más» (apps, windows, sites, pages) opens. Every cut text carries a `title`.
+- The CSV stops at today and ends with `uploaded` (1 or 0), so a day unseen is told from a real zero.

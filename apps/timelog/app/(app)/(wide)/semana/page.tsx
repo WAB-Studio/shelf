@@ -2,8 +2,10 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 
-import { Between, Card, Cards, DayColumns, Figure, Heatmap, Hero, HeroColumns, Stack, Text, TextLink, Tile, Title } from "@/components/ui";
-import { claudeTotal } from "@/lib/daily";
+import { BarRows } from "@/components/screens/app-rows";
+import { Between, Card, Cards, DayColumns, Disclosure, Figure, Heatmap, Hero, HeroColumns, Stack, Text, TextLink, Tile, Title } from "@/components/ui";
+import { claudeTotal, claudeWeekHint } from "@/lib/daily";
+import { appTone } from "@/lib/app-classes";
 import { buildHeatmap } from "@/lib/heatmap";
 import { appsByDay, claudeBetween, dayTotals, uploadSpan } from "@/lib/queries";
 import { fill, sum } from "@/lib/totals";
@@ -40,6 +42,7 @@ export default async function WeekPage({ searchParams }: { searchParams: Promise
   const days = fill(monday, sunday, totals);
   const longestDay = Math.max(1, ...days.map((one) => one.seconds));
   const heat = buildHeatmap(byDay, days.map((one) => one.day), words.system, APPS_SHOWN);
+  const hint = claudeWeekHint(span);
   const claudeWeek = claude.reduce((total, one) => total + claudeTotal(one), 0);
 
   const block = (
@@ -67,7 +70,8 @@ export default async function WeekPage({ searchParams }: { searchParams: Promise
         <Cards>
           <Card label={t("claudeWeekTotal")}>
             <Text mono>{claudeWeek > 0 ? words.duration(claudeWeek) : t("none")}</Text>
-            {claudeWeek === 0 ? <Text variant="meta">{span.hasClaudeCode || span.hasSites ? t("claudeNone") : t("claudeNever")}</Text> : null}
+            {claudeWeek === 0 ? <Text variant="meta">{t(`claudeHint.${hint}`)}</Text> : null}
+            {claudeWeek === 0 && hint === "connect" ? <TextLink href="/llaves">{t("connect")} ›</TextLink> : null}
           </Card>
         </Cards>
       </HeroColumns>
@@ -95,7 +99,7 @@ export default async function WeekPage({ searchParams }: { searchParams: Promise
               rows={heat.rows.map((row) => ({
                 key: row.app,
                 name: row.app,
-                tone: row.kind,
+                tone: appTone(row.app, words.system),
                 total: words.duration(row.total),
                 cells: row.cells.map((cell, index) => {
                   const day = days[index].day;
@@ -108,7 +112,14 @@ export default async function WeekPage({ searchParams }: { searchParams: Promise
                 }),
               }))}
             />
-            {heat.restCount > 0 ? <Text as="p" variant="meta">{t("appsMore", { n: heat.restCount, duration: words.duration(heat.restSeconds) })}</Text> : null}
+            {heat.restCount > 0 ? (
+              <Disclosure summary={<Text variant="meta">{t("appsMore", { n: heat.restCount, duration: words.duration(heat.restSeconds) })}</Text>}>
+                <BarRows
+                  of={heat.rows[0]?.total}
+                  rows={heat.rest.map((one) => ({ key: one.app, name: one.app, tone: appTone(one.app, words.system), figure: words.duration(one.total), seconds: one.total, label: t("restBar", { app: one.app, duration: words.duration(one.total) }) }))}
+                />
+              </Disclosure>
+            ) : null}
           </>
         )}
         <Between>

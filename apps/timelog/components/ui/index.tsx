@@ -111,7 +111,9 @@ type TextVariant = "total" | "row" | "meta";
 
 export function Text({ variant = "row", mono, mark, truncate, as = "span", children }: { variant?: TextVariant; mono?: boolean; mark?: boolean; truncate?: boolean; as?: "span" | "p"; children: ReactNode }) {
   const Tag = as;
-  return <Tag className={join(styles[variant], mono && styles.mono, mark && styles.mark, !mono && styles.name, truncate && styles.truncate)}>{children}</Tag>;
+  // A cut text carries its whole self as a hover and long-press title.
+  const title = truncate && typeof children === "string" ? children : undefined;
+  return <Tag title={title} className={join(styles[variant], mono && styles.mono, mark && styles.mark, !mono && styles.name, truncate && styles.truncate)}>{children}</Tag>;
 }
 
 // Inside the brand block: a small label over a value.
@@ -197,7 +199,8 @@ export function Heatmap({ columns, rows, label }: { columns: HeatmapColumn[]; ro
   );
 }
 
-export type StripEntry = { key: string; initial: string; number: number; description: string; href?: string; current: boolean };
+// `empty` is a day reached with no upload: it reads as a dashed tile and its number is struck by a dash, never colour alone.
+export type StripEntry = { key: string; initial: string; number: number; description: string; href?: string; current: boolean; empty?: boolean };
 
 // The days of one week as touchable tiles, the month named above them, ‹ › one day away and « » one week away.
 type StripStep = { href: string; label: string };
@@ -222,12 +225,13 @@ export function DayStrip({ label, days, weekPrev, dayPrev, dayNext, weekNext }: 
             <>
               <span className={styles.stripInitial}>{one.initial}</span>
               <span className={styles.mono}>{one.number}</span>
+              {one.empty ? <span className={styles.stripNone} aria-hidden="true">—</span> : null}
             </>
           );
           return one.href === undefined ? (
             <span key={one.key} className={join(styles.stripDay, styles.stripOff)} aria-hidden="true">{inside}</span>
           ) : (
-            <Link key={one.key} href={one.href} className={join(styles.stripDay, one.current && styles.stripCurrent)} aria-label={one.description} aria-current={one.current ? "date" : undefined}>{inside}</Link>
+            <Link key={one.key} href={one.href} className={join(styles.stripDay, one.current && styles.stripCurrent, one.empty && styles.stripEmpty)} aria-label={one.description} aria-current={one.current ? "date" : undefined}>{inside}</Link>
           );
         })}
       </div>

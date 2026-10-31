@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { appClass, timeByClass } from "./app-classes";
+import { appClass, appTone, timeByClass } from "./app-classes";
 
 test("an app takes its class by its readable name; Sistema is its own and an unknown app is «other»", () => {
   assert.equal(appClass("VS Code", "Sistema"), "code");
@@ -28,4 +28,10 @@ test("time adds up by class, longest first, and a class with nothing is left out
     { kind: "browser", seconds: 800 },
     { kind: "other", seconds: 100 },
   ]);
+});
+
+test("the Claude desktop app draws in Claude's orange, any other app in its class", () => {
+  assert.equal(appTone("Claude", "Sistema"), "claudeApp");
+  assert.equal(appTone("VS Code", "Sistema"), "code");
+  assert.equal(appTone("Sistema", "Sistema"), "system");
 });
