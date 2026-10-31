@@ -52,14 +52,14 @@ function card(page: Page, name: "net" | "month" | "cash"): Locator {
 }
 
 test.describe("dashboard band", () => {
-  test("at 360 the band and its cards are not boxes and the cash card is hidden", async ({
+  test("at 360 the net card is the one box, the rest are not and the cash card is hidden", async ({
     page,
   }, testInfo) => {
     test.skip(testInfo.project.name !== "mobile", "the phone's column");
     await page.goto("/es");
     await expect(card(page, "month")).toBeAttached();
 
-    expect(await computed(card(page, "net"), "display")).toBe("contents");
+    expect(await computed(card(page, "net"), "display")).toBe("flex");
     expect(await computed(card(page, "month"), "display")).toBe("contents");
     expect(await computed(card(page, "net").locator(".."), "display")).toBe("contents");
     expect(await computed(card(page, "cash"), "display")).toBe("none");
@@ -76,8 +76,7 @@ test.describe("dashboard band", () => {
     expect(await computed(card(page, "month"), "flex-grow")).toBe("1");
     expect(await computed(card(page, "cash"), "flex-grow")).toBe("0.9");
 
-    const radius = await resolved(page, "border-top-left-radius", "16px");
-    expect(await computed(card(page, "net"), "border-top-left-radius")).toBe(radius);
+    expect(await computed(card(page, "net"), "border-top-left-radius")).toBe("20px");
 
     const figure = card(page, "net").locator(".rt-Heading").first();
     await expect(figure).toBeVisible();
@@ -85,31 +84,22 @@ test.describe("dashboard band", () => {
     expect(await computed(figure, "letter-spacing")).toBe("-1.2px");
   });
 
-  test("the month stats are three equal columns split by a hairline", async ({ page }, testInfo) => {
+  test("the month stats wrap into a grid and no figure runs into the next", async ({ page }, testInfo) => {
     test.skip(testInfo.project.name !== "desktop", "the laptop's row");
     await page.goto("/es");
     const stats = page.locator('[data-stats="3"]').first();
     await expect(stats).toBeVisible();
+    expect(await computed(stats, "display")).toBe("grid");
 
-    const columns = stats.locator("> *");
-    expect(await columns.count()).toBe(3);
-    const widths = await columns.evaluateAll((els) =>
-      els.map((el) => {
-        const style = getComputedStyle(el);
-        return (
-          el.getBoundingClientRect().width -
-          parseFloat(style.paddingLeft) -
-          parseFloat(style.borderLeftWidth)
-        );
-      }),
+    const boxes = await stats.locator("> *").evaluateAll((els) =>
+      els.map((el) => el.getBoundingClientRect()),
     );
-    // Equal shares of the row: what each column holds, less its padding and seam.
-    expect(Math.abs(widths[0] - widths[1])).toBeLessThan(1);
-    expect(Math.abs(widths[1] - widths[2])).toBeLessThan(1);
-
-    expect(await computed(columns.nth(0), "border-left-width")).toBe("0px");
-    expect(await computed(columns.nth(1), "border-left-width")).toBe("1px");
-    expect(await computed(columns.nth(2), "border-left-width")).toBe("1px");
+    expect(boxes).toHaveLength(3);
+    // Two boxes on one line never overlap; a wrapped one starts below.
+    for (let i = 1; i < boxes.length; i++) {
+      const [a, b] = [boxes[i - 1], boxes[i]];
+      expect(b.left >= a.right - 0.5 || b.top >= a.bottom - 0.5).toBe(true);
+    }
   });
 });
 
@@ -146,7 +136,6 @@ test.describe("dashboard band with a gap", () => {
     await expect(stats.getByText(messages.dashboard.monthAdjustment, { exact: true })).toBeVisible();
     expect(await stats.locator("> *").count()).toBe(4);
     expect(await computed(stats, "display")).toBe("grid");
-    expect(await computed(stats.locator("> *").nth(1), "border-left-width")).toBe("0px");
   });
 });
 

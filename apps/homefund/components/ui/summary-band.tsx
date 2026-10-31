@@ -1,5 +1,5 @@
 import type { ComponentProps, ReactNode } from "react";
-import { Flex, Heading } from "@radix-ui/themes";
+import { Flex, Heading, Theme } from "@radix-ui/themes";
 
 import styles from "./summary-band.module.css";
 
@@ -36,6 +36,7 @@ export function BandCard({
   ratio,
   hideBelowMd,
   centered,
+  featured,
   children,
   ...data
 }: {
@@ -43,6 +44,9 @@ export function BandCard({
   hideBelowMd?: boolean;
   // Centres the content on the card's cross axis from `md`.
   centered?: boolean;
+  // The brand block: a box at every width, deep ink with its figure in lime.
+  // Its content reads the dark tokens, so gray labels and badges keep their contrast.
+  featured?: boolean;
   children?: ReactNode;
 } & DataAttributes) {
   return (
@@ -52,8 +56,15 @@ export function BandCard({
       data-ratio={ratio}
       data-hide-below-md={hideBelowMd ? "" : undefined}
       data-centered={centered ? "" : undefined}
+      data-featured={featured ? "" : undefined}
     >
-      {children}
+      {featured ? (
+        <Theme appearance="dark" hasBackground={false}>
+          {children}
+        </Theme>
+      ) : (
+        children
+      )}
     </div>
   );
 }

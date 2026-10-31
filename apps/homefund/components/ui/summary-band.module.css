@@ -60,38 +60,13 @@
     letter-spacing: -0.03em;
   }
 
-  /* The card's figures share it in equal columns, split by the hairline the
-     artboard draws between them. */
+  /* The card's figures wrap into as many columns as the card is wide enough
+     for, so a seven-digit figure never runs into its neighbour. Doubled to
+     outrank the Flex's own display. */
   .stats.stats {
-    gap: 0;
-  }
-
-  .stats > * {
-    flex: 1 1 0;
-    min-width: 0;
-    padding-left: 18px;
-  }
-
-  .stats > *:first-child {
-    padding-left: 0;
-  }
-
-  .stats > * + * {
-    border-left: 1px solid var(--gray-a3);
-  }
-
-  /* A fourth figure no longer fits the row beside the other three: the figures
-     wrap into as many columns as the card is wide enough for, one at the
-     narrowest, with no hairline since a wrapped row has no fixed seam. */
-  .stats[data-stats="4"] {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
     gap: 14px 20px;
-  }
-
-  .stats[data-stats="4"] > * {
-    padding-left: 0;
-    border-left: 0;
   }
 
   /* A card hidden below `md` is a card again from here. */
@@ -124,3 +99,19 @@
   align-items: stretch;
   gap: 16px;
 }
+
+/* The featured card is a box below `md` too, unlike its siblings. */
+.card[data-featured] {
+  display: flex;
+  flex-direction: column;
+  padding: 20px;
+  background-color: var(--brand-ink);
+  border: 1px solid transparent;
+  border-radius: 20px;
+}
+
+/* Lime on the ink: 14.31:1. */
+.card[data-featured] .figure {
+  color: var(--brand-lime);
+}
+

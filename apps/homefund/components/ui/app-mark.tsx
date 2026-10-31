@@ -1,7 +1,7 @@
 import { PiggyBank } from "lucide-react";
 import { Flex } from "@radix-ui/themes";
 
-// The app's logo tile: the accent rounded square with the piggy-bank glyph. Sized
+// The app's logo tile: the violet rounded square with the lime piggy bank. Sized
 // from one prop so the login screen and any header share the same mark.
 export function AppMark({ size = 60 }: { size?: number }) {
   return (
@@ -17,7 +17,7 @@ export function AppMark({ size = 60 }: { size?: number }) {
     >
       <PiggyBank
         size={size * 0.5}
-        color="var(--accent-contrast)"
+        color="var(--brand-lime)"
         strokeWidth={1.9}
         aria-hidden
       />

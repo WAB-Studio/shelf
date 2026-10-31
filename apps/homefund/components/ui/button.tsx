@@ -29,10 +29,12 @@ function withTap(tap: boolean | undefined, className: string | undefined): strin
 }
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps & TapProp>(
-  function Button({ tap, grow, className, style, ...props }, ref) {
+  function Button({ tap, grow, className, style, radius = "full", ...props }, ref) {
+    // Pill-shaped by default: the brand's button (DESIGN.md «Violeta y lima»).
     return (
       <ThemesButton
         ref={ref}
+        radius={radius}
         {...props}
         style={grow ? { flex: 1, ...style } : style}
         className={withTap(tap, className)}
@@ -42,7 +44,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps & TapProp>(
 );
 
 export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps & TapProp>(
-  function IconButton({ tap, className, ...props }, ref) {
-    return <ThemesIconButton ref={ref} {...props} className={withTap(tap, className)} />;
+  function IconButton({ tap, className, radius = "full", ...props }, ref) {
+    return <ThemesIconButton ref={ref} radius={radius} {...props} className={withTap(tap, className)} />;
   },
 );

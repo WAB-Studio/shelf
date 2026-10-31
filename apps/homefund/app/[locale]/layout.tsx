@@ -1,7 +1,7 @@
 import { hasLocale, NextIntlClientProvider } from "next-intl";
 import { getTranslations } from "next-intl/server";
 import type { Metadata, Viewport } from "next";
-import { Geist_Mono, Instrument_Sans } from "next/font/google";
+import { Bricolage_Grotesque, Figtree, Geist_Mono } from "next/font/google";
 import { notFound } from "next/navigation";
 
 import { ThemeScript } from "@/components/theme-script";
@@ -10,9 +10,15 @@ import { routing } from "@/i18n/routing";
 import "@radix-ui/themes/styles.css";
 import "../theme.css";
 
-const sans = Instrument_Sans({
-  // The name `AppTheme` reads for its sans stack.
+// The text and its figures (DESIGN.md «Violeta y lima»).
+const sans = Figtree({
   variable: "--font-sans",
+  subsets: ["latin"],
+});
+
+// The titles: a grotesque with character, where the screen names itself.
+const heading = Bricolage_Grotesque({
+  variable: "--font-heading",
   subsets: ["latin"],
 });
 
@@ -36,8 +42,8 @@ export const viewport: Viewport = {
    * system preference, which is what that choice defaults to.
    */
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#f5f3ef" },
-    { media: "(prefers-color-scheme: dark)", color: "#141310" },
+    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
+    { media: "(prefers-color-scheme: dark)", color: "#110c20" },
   ],
 };
 
@@ -79,7 +85,7 @@ export default async function LocaleLayout(props: LayoutProps<"/[locale]">) {
   return (
     <html
       lang={locale}
-      className={`${sans.variable} ${geistMono.variable}`}
+      className={`${sans.variable} ${heading.variable} ${geistMono.variable}`}
       // The inline script below writes the theme class here before hydration.
       suppressHydrationWarning
     >

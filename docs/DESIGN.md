@@ -21,13 +21,27 @@ RNF-08 sets the requirement. This is how it shows in the interface.
 - Hold the floor at 44 px (decided by the user 2026-10-15, raised from 32 px). Enforce it in the `components/ui` primitives, never in a screen.
 - `TapTarget` in `components/ui` owns that floor for a link's content.
 
+## Violeta y lima
+
+Decided by the user 2026-10-30: the recipe of Agenda Amiga (a title face with character, one strong colour and one
+highlight, a white ground, pill buttons), with HomeFund's own palette and faces.
+
+- Ground: white in light, `#110c20` in dark. Text ink: `--brand-ink` `#1a1033`.
+- Accent: Radix `violet` with steps 9 to 11 replaced in `app/theme.css`. Gray: `mauve`.
+- Highlight: `--brand-lime` `#c8f560`. Use it only on the ink or the violet, never as text on white.
+- The net-worth card is the brand block: ink ground, its figure in lime, its content on Radix's dark tokens.
+- Titles: Bricolage Grotesque 700, tracking −0.025em. Text and figures: Figtree with tabular numbers.
+- Buttons and icon buttons are pills (`radius="full"` by default in `Button`).
+- Success stays `jade` (paid, reached, income bars): a state, never the brand.
+
 ## Tokens
 
 | Token | Light | Dark | Ratio |
 |---|---|---|---|
-| `--focus-8` (ring) | `--jade-11` `#208368` | the control's `--accent-11` (Radix's step 8 was 2.80:1 on the panel) | light 4.20:1 on `#f5f3ef`; dark 8.39:1 gray and 8.35:1 red on `#191918`, 8.86:1 and 8.82:1 on `#141310` |
-| `--accent-9` (primary button) | `#1f7a62` | `#1f7a62` (Radix `#29a383` was 3.15:1) | 5.23:1 with white |
-| `--accent-10` (primary hover) | `#1b6e57` | `#1b6e57` (Radix `#27b08b` was 2.74:1) | 6.15:1 with white |
+| `--focus-8` (ring) | `--violet-11` `#5b2ee5` | `--violet-11` `#b8a3ff`; a control with its own colour rings at its `--accent-11` | light 7.08:1 on white; dark 8.50:1 on `#110c20` |
+| `--violet-9` (primary button) | `#5b2ee5` | `#5b2ee5` | 7.08:1 with white |
+| `--violet-10` (primary hover) | `#4a22c4` | `#4a22c4` | 9.06:1 with white |
+| `--brand-lime` on `--brand-ink` | `#c8f560` on `#1a1033` | same | 14.31:1 |
 | `--red-9` (danger button) | `#d13a3f` (Radix `#e5484d` was 3.91:1) | `#d13a3f` | 4.79:1 with white |
 | `--red-10` (danger hover) | `#c42a2f` (Radix `#dc3e42` was 4.37:1) | `#c42a2f` (Radix `#ec5d5e`) | 5.65:1 with white |
 

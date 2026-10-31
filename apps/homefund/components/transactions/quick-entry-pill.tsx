@@ -46,7 +46,7 @@ export function QuickEntryPill({
         </Flex>
         <PanelButton onClick={openFull}>
           <TapTarget align="center" px="1">
-            <Text size="2" weight="medium" color="jade">
+            <Text size="2" weight="medium" color="violet">
               {t("quickTypeLink")}
             </Text>
           </TapTarget>

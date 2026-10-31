@@ -67,7 +67,7 @@ export function DashboardSummary({
   return (
     <SummaryBand>
       <BandCards>
-        <BandCard ratio={1.35} data-card="net">
+        <BandCard ratio={1.35} featured data-card="net">
           <Flex direction="column" gap="2">
             {/* Two figures are two totals, so the stack takes a name of its own;
                 one figure is already named by the label under it. */}
