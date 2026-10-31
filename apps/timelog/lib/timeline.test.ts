@@ -35,11 +35,11 @@ test("a very short session keeps a readable width and never runs past midnight",
   assert.ok(segments.every((one) => one.width >= 0.012 && one.left + one.width <= 1 + 1e-9));
 });
 
-test("the line opens at the hour now, else at the first session", () => {
-  const layout = layoutSessions([session("a", "14:00", "15:00")], DAY);
-  assert.ok(Math.abs(focusShare(layout, 12 * 60) - 360 / 1080) < 1e-9);
-  assert.ok(Math.abs(focusShare(layout, null) - (9 * 60 - 360) / 1080) < 1e-9);
-  assert.equal(focusShare(layout, 2 * 60), 0);
+test("the line opens on the latest session today, on the first one another day", () => {
+  const layout = layoutSessions([session("a", "14:00", "15:00"), session("b", "20:00", "21:00")], DAY);
+  assert.ok(Math.abs(focusShare(layout, "first") - (9 * 60 - 360) / 1080) < 1e-9);
+  assert.ok(Math.abs(focusShare(layout, "latest") - (15 * 60 + 30 - 360) / 1080) < 1e-9);
+  assert.equal(focusShare({ startHour: 6, lanes: 1, segments: [] }, "latest"), 0);
 });
 
 test("hour marks run every three hours from the start", () => {

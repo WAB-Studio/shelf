@@ -11,7 +11,7 @@ import { projectName } from "@/lib/claude-project";
 import { claudeSources, claudeTotal } from "@/lib/daily";
 import type { AppTime } from "@/lib/queries";
 import { appsBetween, claudeBetween, claudeSessionsBetween, dayTotals, devicesBetween, pagesBetween, sitesBetween, uploadSpan, windowsBetween } from "@/lib/queries";
-import { focusShare, hourMarks, layoutSessions, minuteOfDay } from "@/lib/timeline";
+import { focusShare, hourMarks, layoutSessions } from "@/lib/timeline";
 import { percent, sum } from "@/lib/totals";
 import { calendarWords } from "@/lib/words";
 import { dayStrip, mondayOf } from "@/lib/week";
@@ -80,6 +80,7 @@ export async function DayView({ day }: { day: string }) {
     name: title.title,
     figure: words.duration(title.seconds),
     seconds: title.seconds,
+    wrap: true,
     label: t("windowBar", { title: title.title, duration: words.duration(title.seconds) }),
   });
 
@@ -108,7 +109,7 @@ export async function DayView({ day }: { day: string }) {
     };
   };
 
-  // Claude Code's sessions are all that carries a time of day: they lay along the day, which opens at the hour now.
+  // Claude Code's sessions are all that carries a time of day: they lay along the day, which opens on its latest session today and its first on a past day.
   const line = layoutSessions(sessions.map((one) => ({ key: one.session, label: projectName(one.project), first: one.first, last: one.last })), day);
 
   return (
@@ -156,7 +157,6 @@ export async function DayView({ day }: { day: string }) {
                 <Text as="p">{claudeSeconds > 0 ? t("claudeGlance", { duration: words.duration(claudeSeconds), percent: percent(claudeSeconds, total) }) : t(isToday ? "claudeNoneToday" : "claudeNoneDay")}</Text>
                 {claudeSeconds > 0 ? (
                   <Composition
-                    thin
                     label={claudeLabel}
                     parts={claudeParts}
                   />
@@ -200,7 +200,7 @@ export async function DayView({ day }: { day: string }) {
             label={tTimeline("label")}
             lanes={line.lanes}
             openKey={day}
-            focus={focusShare(line, isToday ? minuteOfDay(new Date()) : null)}
+            focus={focusShare(line, isToday ? "latest" : "first")}
             marks={hourMarks(line.startHour).map((mark) => ({ key: String(mark.hour), label: words.hour(mark.hour), left: mark.left }))}
             segments={line.segments.map((one) => ({ key: one.key, label: one.label, left: one.left, width: one.width, lane: one.lane, hue: one.hue, place: one.place, description: tTimeline("session", { project: one.label, from: words.clock(one.first), to: words.clock(one.last) }) }))}
           />

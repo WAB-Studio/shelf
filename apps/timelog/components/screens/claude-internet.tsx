@@ -64,7 +64,7 @@ export async function InternetBlock({ isToday, sites, pages, hasSites, words }: 
   const t = await getTranslations("time.internet");
   const pageRow = (page: PageTime): BarRow => {
     const name = page.title === "" ? page.url : page.title;
-    return { key: `${page.url}\n${page.title}`, name, figure: words.duration(page.seconds), seconds: page.seconds, label: t("pageBar", { title: name, duration: words.duration(page.seconds) }), note: page.url };
+    return { key: `${page.url}\n${page.title}`, name, figure: words.duration(page.seconds), seconds: page.seconds, wrap: true, label: t("pageBar", { title: name, duration: words.duration(page.seconds) }), note: page.url };
   };
   // A site opens onto its longest pages: the title, and the address under it.
   const pagesOf = (host: string) => {

@@ -54,11 +54,11 @@ type MeterSize = "large" | "default" | "compact";
 
 // A name and its figure over the bar under them, 48 tall at least (DESIGN «Hoy»). A long name
 // truncates; the figure never wraps.
-export function Meter({ name, figure, share, label, size = "default", tone }: { name: ReactNode; figure: ReactNode; share: number; label: string; size?: MeterSize; tone?: Tone }) {
+export function Meter({ name, figure, share, label, size = "default", tone, wrap }: { name: ReactNode; figure: ReactNode; share: number; label: string; size?: MeterSize; tone?: Tone; wrap?: boolean }) {
   return (
     <div className={join(styles.stack, styles.gap1, styles.meter, size === "large" && styles.meterLarge, size === "compact" && styles.meterCompact)}>
       <div className={styles.line}>
-        <Text truncate>{name}</Text>
+        <Text truncate={!wrap} wrap={wrap}>{name}</Text>
         <Text mono>{figure}</Text>
       </div>
       <Bar share={share} label={label} tone={tone} />
@@ -109,11 +109,12 @@ export function Figure({ parts, mark }: { parts: { value: string; unit: string }
 
 type TextVariant = "total" | "row" | "meta";
 
-export function Text({ variant = "row", mono, mark, truncate, as = "span", children }: { variant?: TextVariant; mono?: boolean; mark?: boolean; truncate?: boolean; as?: "span" | "p"; children: ReactNode }) {
+// `wrap` lets a long text take two lines before it is cut.
+export function Text({ variant = "row", mono, mark, truncate, wrap, as = "span", children }: { variant?: TextVariant; mono?: boolean; mark?: boolean; truncate?: boolean; wrap?: boolean; as?: "span" | "p"; children: ReactNode }) {
   const Tag = as;
   // A cut text carries its whole self as a hover and long-press title.
-  const title = truncate && typeof children === "string" ? children : undefined;
-  return <Tag title={title} className={join(styles[variant], mono && styles.mono, mark && styles.mark, !mono && styles.name, truncate && styles.truncate)}>{children}</Tag>;
+  const title = (truncate || wrap) && typeof children === "string" ? children : undefined;
+  return <Tag title={title} className={join(styles[variant], mono && styles.mono, mark && styles.mark, !mono && styles.name, truncate && styles.truncate, wrap && styles.clamp)}>{children}</Tag>;
 }
 
 // Inside the brand block: a small label over a value.
@@ -164,8 +165,23 @@ export function Composition({ parts, label, thin }: { parts: CompositionPart[]; 
   );
 }
 
+// The tones a grid uses, each with its name: the legend of a colour that is also written in the rows.
+export function ToneLegend({ items }: { items: { key: string; tone: Tone; name: string }[] }) {
+  return (
+    <ul className={styles.toneLegend}>
+      {items.map((item) => (
+        <li key={item.key} className={styles[`tone_${item.tone}`]}>
+          <span className={styles.swatchGround} aria-hidden="true" />
+          <Text>{item.name}</Text>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 export type HeatmapColumn = { key: string; label: string; href?: string; future?: boolean };
-export type HeatmapRow = { key: string; name: string; tone: Tone; total: string; cells: { figure: { wide: string; narrow: string } | null; level: number; label: string }[] };
+// `kind` is the class written under the name, so a colour is never the only word for it.
+export type HeatmapRow = { key: string; name: string; kind: string; tone: Tone; total: string; cells: { figure: { wide: string; narrow: string } | null; level: number; label: string }[] };
 
 // A grid of rows by days, a cell tinted by its level and always carrying its figure (a level only helps the eye find it).
 export function Heatmap({ columns, rows, label }: { columns: HeatmapColumn[]; rows: HeatmapRow[]; label: string }) {
@@ -184,8 +200,9 @@ export function Heatmap({ columns, rows, label }: { columns: HeatmapColumn[]; ro
       <tbody>
         {rows.map((row) => (
           <tr key={row.key} className={styles[`tone_${row.tone}`]}>
-            <th scope="row" className={styles.heatName} title={`${row.name}: ${row.total}`}>
+            <th scope="row" className={styles.heatName} title={`${row.name} · ${row.kind}: ${row.total}`}>
               <Text truncate>{row.name}</Text>
+              <Text variant="meta" truncate>{row.kind}</Text>
             </th>
             {row.cells.map((cell, index) => (
               <td key={columns[index].key} className={join(styles.heatCell, styles.mono)} data-level={cell.level} aria-label={cell.label}>

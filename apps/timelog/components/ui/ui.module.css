@@ -120,6 +120,7 @@
 .meta { font-size: 14px; color: var(--tl-muted); }
 .mono { font-family: var(--font-mono), ui-monospace, monospace; font-variant-numeric: tabular-nums; }
 .name { overflow-wrap: anywhere; }
+.clamp { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; min-width: 0; overflow: hidden; overflow-wrap: anywhere; }
 .truncate { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; overflow-wrap: normal; }
 .mono { flex-shrink: 0; white-space: nowrap; }
 
@@ -242,6 +243,9 @@
 .legend { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 4px; }
 .legend li { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 14px; }
 .legend li > :last-child { margin-left: auto; }
+.toneLegend { margin: 0; padding: 0; list-style: none; display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 14px; }
+.toneLegend li { display: flex; align-items: center; gap: 8px; }
+.swatchGround { flex: none; width: 10px; height: 10px; border-radius: 3px; background: var(--tone); }
 .swatch { flex: none; width: 10px; height: 10px; border-radius: 3px; background: var(--tone-block); }
 
 .heat { width: 100%; table-layout: fixed; border-collapse: separate; border-spacing: 3px; }

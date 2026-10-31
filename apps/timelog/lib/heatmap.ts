@@ -9,6 +9,21 @@ export type HeatRow = { app: string; kind: AppClass; total: number; cells: HeatC
 export type RestApp = { app: string; kind: AppClass; total: number };
 export type Heatmap = { rows: HeatRow[]; restCount: number; restSeconds: number; rest: RestApp[] };
 
+// A cell's level, 1 to 4, is its share of `largest`; nothing is level 0.
+export function heatLevel(seconds: number, largest: number): number {
+  return seconds <= 0 ? 0 : Math.min(HEAT_LEVELS, Math.max(1, Math.ceil((seconds / Math.max(1, largest)) * HEAT_LEVELS)));
+}
+
+// Claude's total per day as one more row of the week's grid (RT-17), levelled against the grid's largest cell.
+export function claudeHeatRow(claude: { day: string; code: number; web: number; desktop: number }[], days: string[], largest: number): { total: number; cells: HeatCell[] } {
+  const cells = days.map((day) => {
+    const one = claude.find((row) => row.day === day);
+    const seconds = one === undefined ? 0 : one.code + one.web + one.desktop;
+    return { seconds, level: heatLevel(seconds, largest) };
+  });
+  return { total: cells.reduce((sum, cell) => sum + cell.seconds, 0), cells };
+}
+
 // The week as a grid: the `top` apps of the week by total, a cell per day. An app is its readable name (two processes
 // with one name add up, Windows' own noise is `systemName`). A cell's level, 1 to 4, is its share of the largest cell
 // in the grid; a day with nothing is level 0.
@@ -25,7 +40,7 @@ export function buildHeatmap(rows: DayApp[], days: string[], systemName: string,
     .sort((a, b) => b.total - a.total || a.app.localeCompare(b.app));
   const shown = apps.slice(0, top);
   const largest = Math.max(1, ...shown.flatMap((one) => days.map((day) => one.perDay.get(day) ?? 0)));
-  const level = (seconds: number) => (seconds <= 0 ? 0 : Math.min(HEAT_LEVELS, Math.max(1, Math.ceil((seconds / largest) * HEAT_LEVELS))));
+  const level = (seconds: number) => heatLevel(seconds, largest);
   const rest = apps.slice(top);
   return {
     rows: shown.map((one) => ({

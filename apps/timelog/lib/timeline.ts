@@ -65,11 +65,12 @@ export function layoutSessions(sessions: TimedSession[], day: string): Layout {
   return { startHour, lanes: Math.max(1, laneEnds.length), segments };
 }
 
-// Where the line opens: the share of its length to bring to the middle of the screen. Today, the hour it is now;
-// another day, the start of its first session.
-export function focusShare(layout: Layout, nowMinute: number | null): number {
+// Where the line opens: the share of its length to bring to the middle of the screen. Today it is the latest session, the
+// one the person is most likely still in; another day, the start of its first.
+export function focusShare(layout: Layout, which: "first" | "latest"): number {
   const start = layout.startHour * 60;
-  const minute = nowMinute ?? layout.segments[0]?.from ?? start;
+  const latest = layout.segments.reduce<Segment | undefined>((best, one) => (best === undefined || one.to > best.to ? one : best), undefined);
+  const minute = which === "latest" && latest !== undefined ? (latest.from + latest.to) / 2 : (layout.segments[0]?.from ?? start);
   return Math.max(0, Math.min(1, (minute - start) / (DAY_MINUTES - start)));
 }
 

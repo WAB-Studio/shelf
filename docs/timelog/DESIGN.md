@@ -141,8 +141,8 @@ What changed:
 - **One scale.** A top-level list is measured against its own longest row; a child (a window, a page, a session, a
   Claude source) against its parent's time. Apps show eight, then «y N apps más · X» opens the rest.
 - **Day line.** Claude Code's sessions as labelled segments from 6:00 to 24:00 (from the hour of the first session if
-  earlier), on lanes where they overlap, an hour ruler every three hours. On the phone it scrolls and opens at the hour
-  now; on a past day at its first session.
+  earlier), on lanes where they overlap, an hour ruler every three hours. On the phone it scrolls and opens on the latest
+  session; on a past day at its first session.
 - **Class colours.** Every class is a token pair (on the ground, on the block) in `theme.css`, with its contrast.
 - **Day strip.** L M M J V S D with the day number, the month named («26 oct – 1 nov»), the day shown filled, days
   with no screen dimmed, ‹ › to the same weekday a week away. It replaces «Día anterior» and «Día siguiente».
@@ -161,3 +161,6 @@ What changed:
   the same 12-hour clock as the spans. The Claude desktop app draws in Claude's orange everywhere.
 - Every «y N más» (apps, windows, sites, pages) opens. Every cut text carries a `title`.
 - The CSV stops at today and ends with `uploaded` (1 or 0), so a day unseen is told from a real zero.
+- Decided by the user (the critic's picks): the day line opens on the latest session on Hoy; «Semana»'s heatmap carries a
+  first row, Claude in total, a cell per day (RT-17); every heatmap row writes its class under its name, with a legend
+  under the grid; the block's Claude bar carries its legend of names; a window or page title in a detail wraps to two lines.
