@@ -76,7 +76,13 @@ function byteLength(text: string): number {
 
 // Absent, whole or an error — never a fourth. Anything short of "whole" is
 // treated as absent and swept away so the next open starts clean.
-export async function readInstalled(): Promise<{ manifest: DictionaryManifest; payload: DictionaryPayload } | null> {
+// A copy from an older payload version is returned too, flagged `stale`: it still answers while a new one
+// downloads. Only a copy from a newer version than this build understands is swept away.
+export async function readInstalled(): Promise<{
+  manifest: DictionaryManifest;
+  payload: DictionaryPayload;
+  stale: boolean;
+} | null> {
   const db = await openDatabase();
   let manifest: unknown;
   let payloadText: unknown;
@@ -97,7 +103,8 @@ export async function readInstalled(): Promise<{ manifest: DictionaryManifest; p
     manifest !== undefined &&
     manifest !== null &&
     typeof manifest === "object" &&
-    (manifest as DictionaryManifest).payloadVersion === PAYLOAD_VERSION &&
+    typeof (manifest as { payloadVersion: unknown }).payloadVersion === "number" &&
+    (manifest as { payloadVersion: number }).payloadVersion <= PAYLOAD_VERSION &&
     typeof payloadText === "string" &&
     byteLength(payloadText) === (manifest as DictionaryManifest).asset.bytes;
 
@@ -108,7 +115,8 @@ export async function readInstalled(): Promise<{ manifest: DictionaryManifest; p
 
   try {
     const payload = JSON.parse(payloadText as string) as DictionaryPayload;
-    return { manifest: manifest as DictionaryManifest, payload };
+    const stale = (manifest as { payloadVersion: number }).payloadVersion < PAYLOAD_VERSION;
+    return { manifest: manifest as DictionaryManifest, payload, stale };
   } catch {
     await clearInstalled();
     return null;

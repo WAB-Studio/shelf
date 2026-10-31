@@ -3,6 +3,7 @@ import "server-only";
 import { env } from "@/lib/env";
 import { refuseCrossSiteRequest } from "@/lib/word/same-origin";
 import { providerFetch } from "@/lib/provider/fetch";
+import { isEcho } from "@/lib/translate/echo";
 import { containsBlockedTerm } from "@/lib/translate/blocklist";
 import { translateRequestSchema, type TranslationResult } from "@/lib/translate/types";
 import { claimCallerShare } from "@/lib/word/caller-share";
@@ -44,24 +45,6 @@ type MyMemoryResponse = {
 // belt-and-braces check alongside `responseStatus`, in case a future warning
 // ships a status this file has not seen.
 const MYMEMORY_WARNING_PREFIX = "MYMEMORY WARNING";
-
-// Trim, case-fold, and collapse inner whitespace — the differences a reader
-// never notices between what they typed and what came back. Punctuation is
-// left alone: a reader who typed a trailing "?" and got one back said
-// something, even if the words never moved.
-function foldForComparison(s: string): string {
-  return s.trim().replace(/\s+/g, " ").toLowerCase();
-}
-
-// MyMemory echoes a string it cannot place in either language straight
-// back — gibberish included — with `responseStatus: "200"` and no warning:
-// the two checks below never catch it. The same fold also refuses a proper
-// noun, a brand name or a number that legitimately holds still across `en`
-// and `es`; RL-59's per-word breakdown is what that reply lands on instead,
-// an honest "could not answer" rather than a false badge.
-function isEcho(source: string, translated: string): boolean {
-  return foldForComparison(translated) === foldForComparison(source);
-}
 
 // The one gate both `responseData.translatedText` and every `matches` entry
 // answer to: not empty, not the quota warning, not an echo of what was

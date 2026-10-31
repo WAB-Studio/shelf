@@ -9,6 +9,7 @@ import { normaliseHeadword } from "@/lib/dictionary/format";
 import type { SenseGroup } from "@/lib/dictionary/index-build";
 import { useDictionary } from "@/lib/dictionary/use-dictionary";
 import type { WordAnswer } from "@/lib/dictionary/lookup";
+import { QUERY_COMMITTED_EVENT } from "@/lib/nav/query-storage";
 import { announce } from "@/lib/word/announce";
 import { useDecoration } from "@/lib/word/use-decoration";
 import { useNetworkAnswer } from "@/lib/word/use-network-answer";
@@ -19,13 +20,14 @@ import type { TranslationResult } from "@/lib/translate/types";
 import { flushPendingLookup, recordLookup } from "@/lib/log/record";
 import { cutTranslation, formatSenseTranslations } from "@/lib/log/translation-line";
 import type { LookupOutcome, LookupRecord } from "@/lib/log/types";
-import { Flex, Live, Text } from "@/components/ui";
+import { BrandBlock, Flex, Live } from "@/components/ui";
 import { InstallStatus } from "./install-status";
 import { FunctionWordBlock, NoEntryAnswer, type NoEntryPart, type NoEntryReason, type NoEntryState } from "./no-entry-answer";
 import { PhraseAnswer, type DeviceOffer, type PhraseState } from "./phrase-answer";
 import { SearchBox } from "./search-box";
 import { SenseList } from "./sense-list";
 import { functionWordTranslation } from "@/lib/phrase/function-words";
+import { Starters } from "./starters";
 import { Suggestions } from "./suggestions";
 
 // The query string's own name: `/?q=book`.
@@ -35,13 +37,6 @@ const QUERY_PARAM = "q";
 const PHRASE_CACHE_LIMIT = 20;
 
 type LogPayload = Omit<LookupRecord, "id" | "schema">;
-
-// Module scope on purpose: it survives client-side navigation inside the tab
-// but not a reload. Tapping "Registro" unmounts this screen, and coming back
-// lands on `/?q=<word>` — the URL keeps the query — so the mount effect
-// answers it again. Answering again is right; recording it again is not.
-// A reader who walks to the log and back five times looked the word up once.
-let lastLoggedText: string | null = null;
 
 // RL-41: "a word that already has a definition never asks for one" — true
 // only when none of the exact match's own senses carry one.
@@ -153,8 +148,11 @@ export function SearchScreen({ initialQuery }: { initialQuery?: string }) {
   const boundaryRef = useRef(resolvedQuery === "");
   const urlSettleRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const initialQueryRanRef = useRef(false);
-  // True when this mount is restoring a query this tab already recorded.
+  // True while the box still holds the query the address bar carried at mount: opening, reloading or
+  // coming back to `/?q=book` answers it again but is not a lookup, so it is never recorded. Typing or
+  // following a link clears it.
   const restoringRef = useRef(false);
+  const loadedQueryRef = useRef(resolvedQuery);
 
   useEffect(() => {
     return () => {
@@ -175,12 +173,17 @@ export function SearchScreen({ initialQuery }: { initialQuery?: string }) {
   const runInitialQuery = useEffectEvent(() => {
     if (initialQueryRanRef.current || !resolvedQuery) return;
     initialQueryRanRef.current = true;
-    restoringRef.current = resolvedQuery === lastLoggedText;
+    restoringRef.current = true;
     latestTextRef.current = resolvedQuery;
     void runQuery(resolvedQuery, status.state === "ready");
   });
+  // The cleanup re-arms the guard: a dev remount terminates the worker the first run asked, and the
+  // question would otherwise never be asked again.
   useEffect(() => {
     runInitialQuery();
+    return () => {
+      initialQueryRanRef.current = false;
+    };
   }, []);
 
   // A block of the breakdown links to `/?q=<word>` while this very screen
@@ -194,6 +197,7 @@ export function SearchScreen({ initialQuery }: { initialQuery?: string }) {
     if (!initialQuery || initialQuery === committedTextRef.current) return;
     committedTextRef.current = initialQuery;
     boundaryRef.current = false;
+    restoringRef.current = false;
     applyText(initialQuery, { schedule: false });
   });
   useEffect(() => {
@@ -232,6 +236,7 @@ export function SearchScreen({ initialQuery }: { initialQuery?: string }) {
       window.history.replaceState(null, "", url);
     }
     committedTextRef.current = committedText;
+    window.dispatchEvent(new Event(QUERY_COMMITTED_EVENT));
   }
 
   useEffect(() => {
@@ -458,6 +463,7 @@ export function SearchScreen({ initialQuery }: { initialQuery?: string }) {
     // writes nothing itself (no entry for "nothing found"), but the word
     // that follows it opens a fresh entry rather than replacing the last one.
     if (nextText === "") boundaryRef.current = true;
+    restoringRef.current = false;
     applyText(nextText, { schedule: true });
   }
 
@@ -559,12 +565,8 @@ export function SearchScreen({ initialQuery }: { initialQuery?: string }) {
     recordedRef.current = recordable;
     // Conditioned on both the flag and the text, so a restore can never
     // swallow the next genuine lookup, whatever order the two arrive in.
-    if (restoringRef.current && recordable.text === lastLoggedText) {
-      restoringRef.current = false;
-      return;
-    }
+    if (restoringRef.current && recordable.text === loadedQueryRef.current) return;
     recordLookup(recordable);
-    lastLoggedText = recordable.text;
   }, [recordable]);
 
   const announcement = announce({
@@ -581,15 +583,13 @@ export function SearchScreen({ initialQuery }: { initialQuery?: string }) {
       <Live>{announcement.polite ? tLive(announcement.polite.key, { count: announcement.polite.count ?? 0 }) : ""}</Live>
       <Live assertive>{announcement.assertive ? tLive(announcement.assertive) : ""}</Live>
       <Flex direction="column" gap="2">
-        <SearchBox value={text} onChange={handleTextChange} />
+        <BrandBlock title={tSearch.rich("brand", { mark: (chunks) => <mark>{chunks}</mark> })} line={tSearch("brandLine")} compact={kind.kind !== "empty"}>
+          <SearchBox value={text} onChange={handleTextChange} />
+        </BrandBlock>
         <InstallStatus status={status} onRetry={retry} query={text} />
       </Flex>
 
-      {kind.kind === "empty" && (
-        <Text size="2" color="gray">
-          {tSearch("empty")}
-        </Text>
-      )}
+      {kind.kind === "empty" && <Starters onPick={handleTextChange} />}
 
       {kind.kind === "word" && (
         <Flex direction="column" gap="4">

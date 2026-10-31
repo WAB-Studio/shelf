@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { intervals, intervalUnit, localDay, rate } from "./schedule";
+import { dueWhen, intervals, intervalUnit, localDay, rate, staysInSession } from "./schedule";
 
 const NOW = new Date(2026, 9, 30, 9, 0).getTime();
 const DAY = 86_400_000;
@@ -43,4 +43,16 @@ test("RL-68: an interval reads in minutes, then hours, then days", () => {
   assert.deepEqual(intervalUnit(10 * 60_000), { unit: "minutes", count: 10 });
   assert.deepEqual(intervalUnit(3 * 3_600_000), { unit: "hours", count: 3 });
   assert.deepEqual(intervalUnit(4 * DAY), { unit: "days", count: 4 });
+});
+
+test("RL-78: «Otra vez» stays in the session; «Bien» and «Fácil» on a new entry do not", () => {
+  assert.equal(staysInSession(rate("snuff", null, "again", NOW), NOW), true);
+  assert.equal(staysInSession(rate("snuff", null, "good", NOW), NOW), false);
+  assert.equal(staysInSession(rate("snuff", null, "easy", NOW), NOW), false);
+});
+
+test("a due moment is named by the reader's own day: today, tomorrow, or a date", () => {
+  assert.equal(dueWhen(NOW + 3_600_000, NOW), "today");
+  assert.equal(dueWhen(NOW + DAY, NOW), "tomorrow");
+  assert.equal(dueWhen(NOW + 3 * DAY, NOW), "later");
 });

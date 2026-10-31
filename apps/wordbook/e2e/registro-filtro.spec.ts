@@ -2,7 +2,7 @@ import type { Page } from "@playwright/test";
 
 import messages from "../messages/es.json";
 import { DATABASE_VERSION } from "../lib/log/record";
-import { expect, test } from "./fixtures";
+import { expect, studyHeader, test } from "./fixtures";
 
 // Module 704, RL-63 (and RL-56 for the forms line): /registro filters its
 // rows by what is typed. Written from `private/despacho/704.md` and the
@@ -87,8 +87,10 @@ async function seedRows(page: Page, rows: SeedRow[]): Promise<void> {
 // 800 words, 803 searches. Fillers are spelled from a-j only, so none holds
 // «ling», «went» or «zzz» and no filler translation does either.
 const WORDS = 800;
+// The rows drawn before «Ver más» (`PAGE_ROWS` in history-list.tsx).
+const FIRST_PAGE = 50;
 const SEARCHES = 803;
-const HEADER = `${SEARCHES} búsquedas · ${WORDS} palabras.`;
+const header = (page: Page, searches = SEARCHES, words = WORDS) => studyHeader(page, searches, words);
 
 function fillerName(i: number): string {
   return "pal" + String(i).padStart(3, "0").replace(/\d/g, (d) => "abcdefghij"[Number(d)]!);
@@ -118,7 +120,7 @@ async function open800(page: Page, url = "/registro"): Promise<void> {
   await page.goto("/registro");
   await seedRows(page, corpus());
   await page.goto(url);
-  await expect(page.getByText(HEADER)).toBeVisible();
+  await expect(header(page)).toBeVisible();
 }
 
 const rows = (page: Page) => page.locator('a[href^="/registro/"]');
@@ -171,9 +173,9 @@ test("failed: the failure shows and the filter field is absent", async ({ page }
 test("ready with no text: the field is there, all 800 rows and today's header, no count line", async ({ page }) => {
   await open800(page);
   await expect(field(page)).toBeVisible();
-  await expect(field(page)).toHaveAttribute("placeholder", LABEL);
+  await expect(field(page)).toHaveAttribute("placeholder", messages.log.study.filterPlaceholder);
   await expect(field(page)).toHaveValue("");
-  await expect(rows(page)).toHaveCount(WORDS);
+  await expect(rows(page)).toHaveCount(FIRST_PAGE);
   await expect(page.getByText(/ de \d+ palabras/)).toHaveCount(0);
   await expect(page.getByRole("button", { name: CLEAR })).toHaveCount(0);
 });
@@ -185,7 +187,7 @@ test("typing «ling» leaves only the rows holding it and says «2 de 800 palabr
   const hrefs = await rows(page).evaluateAll((els) => els.map((e) => e.getAttribute("href")).sort());
   expect(hrefs).toEqual(["/registro/linger", "/registro/sibling"]);
   await expect(page.getByText(count(2, WORDS), { exact: true })).toBeVisible();
-  await expect(page.getByText(HEADER)).toBeVisible();
+  await expect(header(page)).toBeVisible();
 });
 
 test("typing a form that is not the key («went») leaves the row of its lemma «go»", async ({ page }) => {
@@ -216,7 +218,7 @@ test("emptying the field brings back all 800 rows and drops the count line", asy
   await field(page).fill("ling");
   await expect(rows(page)).toHaveCount(2);
   await field(page).fill("");
-  await expect(rows(page)).toHaveCount(WORDS);
+  await expect(rows(page)).toHaveCount(FIRST_PAGE);
   await expect(page.getByText(/ de \d+ palabras/)).toHaveCount(0);
 });
 
@@ -225,7 +227,7 @@ test("the × button «Borrar el filtro» clears the field and restores the list"
   await field(page).fill("ling");
   await page.getByRole("button", { name: CLEAR }).click();
   await expect(field(page)).toHaveValue("");
-  await expect(rows(page)).toHaveCount(WORDS);
+  await expect(rows(page)).toHaveCount(FIRST_PAGE);
   await expect(page.getByRole("button", { name: CLEAR })).toHaveCount(0);
 });
 
@@ -320,7 +322,7 @@ test("each key of «ling» over 800 rows paints the filtered list in under 100 m
   await page.goto("/registro");
   await seedRows(page, corpus());
   await page.goto("/registro");
-  await expect(page.getByText(HEADER)).toBeVisible();
+  await expect(header(page)).toBeVisible();
   await expect(field(page)).toBeVisible();
 
   const readsBefore = await page.evaluate(() => (window as unknown as { __reads: number }).__reads);
@@ -351,7 +353,7 @@ test("each key of «ling» over 800 rows paints the filtered list in under 100 m
 
 test("the forms line of «linger» reads at 14px", async ({ page }) => {
   await open800(page);
-  const line = page.locator('a[href="/registro/linger"]').getByText("linger, lingered", { exact: true });
+  const line = page.getByText("linger, lingered", { exact: true });
   await expect(line).toBeVisible();
   expect(await line.evaluate((el) => getComputedStyle(el).fontSize)).toBe("14px");
 });
@@ -373,7 +375,7 @@ for (const text of ["ice&fire", "50%", "a#b"]) {
     await open800(page);
     await seedRows(page, [{ at: Date.now(), text, normalised: text, translation: "reservado" }]);
     await page.reload();
-    await expect(page.getByText(HEADER.replace("803", "804").replace("800", "801"))).toBeVisible();
+    await expect(header(page, 804, 801)).toBeVisible();
 
     await field(page).fill(text);
     await expect(rows(page)).toHaveCount(1);
@@ -392,26 +394,21 @@ for (const text of ["ice&fire", "50%", "a#b"]) {
   });
 }
 
-test("n rows show n-1 separators: none above the first row", async ({ page }) => {
+test("rows are cards: no hairline sits between them, filtered or not", async ({ page }) => {
   await open800(page, "/registro?filtro=ling");
   await expect(rows(page)).toHaveCount(2);
-  const above = await rows(page).evaluateAll((els) =>
-    els.map((el) => el.previousElementSibling?.classList.contains("rt-Separator") === true),
-  );
-  expect(above).toEqual([false, true]);
+  const hairlines = (els: Element[]) =>
+    els.map((el) => el.previousElementSibling?.classList.contains("rt-Separator") === true);
+  expect(await rows(page).evaluateAll(hairlines)).toEqual([false, false]);
   await field(page).fill("");
-  await expect(rows(page)).toHaveCount(WORDS);
-  const all = await rows(page).evaluateAll((els) =>
-    els.map((el) => el.previousElementSibling?.classList.contains("rt-Separator") === true),
-  );
-  expect(all[0]).toBe(false);
-  expect(all.slice(1).every(Boolean)).toBe(true);
+  await expect(rows(page)).toHaveCount(FIRST_PAGE);
+  expect((await rows(page).evaluateAll(hairlines)).some(Boolean)).toBe(false);
 });
 
 test("typing only spaces filters nothing: all rows and no count line", async ({ page }) => {
   await open800(page);
   await field(page).fill("   ");
-  await expect(rows(page)).toHaveCount(WORDS);
+  await expect(rows(page)).toHaveCount(FIRST_PAGE);
   await expect(page.getByText(/ de \d+ palabras/)).toHaveCount(0);
 });
 
@@ -426,7 +423,7 @@ test("clearing the field leaves the address at exactly /registro", async ({ page
   await field(page).fill("ling");
   await expect(page).toHaveURL(/\/registro\?filtro=ling$/);
   await field(page).fill("");
-  await expect(rows(page)).toHaveCount(WORDS);
+  await expect(rows(page)).toHaveCount(FIRST_PAGE);
   expect(await page.evaluate(() => location.pathname + location.search + location.hash)).toBe("/registro");
 });
 
@@ -435,7 +432,7 @@ test("the × button hands focus back to the filter field", async ({ page }) => {
   await field(page).fill("ling");
   await page.getByRole("button", { name: CLEAR }).click();
   await expect(field(page)).toBeFocused();
-  await expect(rows(page)).toHaveCount(WORDS);
+  await expect(rows(page)).toHaveCount(FIRST_PAGE);
 });
 
 test("the × button pressed by key hands focus back to the filter field", async ({ page }) => {

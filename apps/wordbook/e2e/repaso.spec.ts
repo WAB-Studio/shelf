@@ -60,15 +60,15 @@ const RECORD: SeedRow[] = [
   { at: now - 500, text: "give it up", translation: "ríndete", kind: "phrase" },
 ];
 
-test("RL-68: /registro opens the review, which asks each word of the record and never a sentence", async ({ page }) => {
+test("RL-68, RL-78: /registro opens the review, which asks each word and each translated phrase of the record", async ({ page }) => {
   await page.goto("/registro");
   await seedRecord(page, RECORD);
   await page.reload();
   await page.getByRole("link", { name: messages.review.open }).click();
   await expect(page).toHaveURL(/\/repaso$/);
 
-  // The most looked-up word first, and two words in all: the sentence stays out.
-  await expect(page.getByText("1 de 2")).toBeVisible();
+  // The most looked-up word first, then the newest entries: three in all, the phrase among them.
+  await expect(page.getByText("1 de 3")).toBeVisible();
   await expect(page.getByRole("heading", { name: "snuff" })).toBeVisible();
   await expect(page.getByText(messages.review.newWord)).toBeVisible();
   await expect(page.getByText("rapé", { exact: true })).toHaveCount(0);
@@ -77,14 +77,20 @@ test("RL-68: /registro opens the review, which asks each word of the record and 
   await expect(page.getByText("rapé", { exact: true }).last()).toBeVisible();
   await page.getByRole("button", { name: new RegExp(`^${messages.review.grade.good}`) }).click();
 
-  await expect(page.getByText("2 de 2")).toBeVisible();
+  await expect(page.getByText("2 de 3")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "give it up" })).toBeVisible();
+  await page.getByRole("button", { name: messages.review.show }).click();
+  await expect(page.getByText("ríndete", { exact: true }).last()).toBeVisible();
+  await page.getByRole("button", { name: new RegExp(`^${messages.review.grade.good}`) }).click();
+
+  await expect(page.getByText("3 de 3")).toBeVisible();
   await expect(page.getByRole("heading", { name: "frisk" })).toBeVisible();
   await page.getByRole("button", { name: messages.review.show }).click();
   await page.getByRole("button", { name: new RegExp(`^${messages.review.grade.easy}`) }).click();
 
-  await expect(page.getByText("Repasaste 2 palabras. Terminaste por hoy.")).toBeVisible();
-  // Both words just answered come back later, so the screen counts them.
-  await expect(page.getByText("2 palabras vuelven más adelante.")).toBeVisible();
+  // A phrase is among them, so the screen counts entries, not words.
+  await expect(page.getByText("Repasaste 3 entradas. Terminaste por hoy.")).toBeVisible();
+  await expect(page.getByText("3 entradas vuelven más adelante.")).toBeVisible();
 });
 
 test("RL-68: a keyboard keeps its place: showing the answer focuses «Bien», a grade focuses the next «Mostrar respuesta»", async ({
@@ -97,7 +103,7 @@ test("RL-68: a keyboard keeps its place: showing the answer focuses «Bien», a 
   await page.keyboard.press("Enter");
   await expect(page.getByRole("button", { name: new RegExp(`^${messages.review.grade.good}`) })).toBeFocused();
   await page.keyboard.press("Enter");
-  await expect(page.getByRole("heading", { name: "frisk" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "give it up" })).toBeVisible();
   await expect(page.getByRole("button", { name: messages.review.show })).toBeFocused();
 });
 
@@ -105,7 +111,7 @@ test("RL-68: the answers are kept on the device, so a word put away does not com
   await page.goto("/registro");
   await seedRecord(page, RECORD);
   await page.goto("/repaso");
-  for (const name of ["snuff", "frisk"]) {
+  for (const name of ["snuff", "give it up", "frisk"]) {
     await expect(page.getByRole("heading", { name })).toBeVisible();
     await page.getByRole("button", { name: messages.review.show }).click();
     await page.getByRole("button", { name: new RegExp(`^${messages.review.grade.easy}`) }).click();
@@ -113,7 +119,23 @@ test("RL-68: the answers are kept on the device, so a word put away does not com
 
   await page.reload();
   await expect(page.getByText(messages.review.nothingDue)).toBeVisible();
-  await expect(page.getByText("2 palabras vuelven más adelante.")).toBeVisible();
+  await expect(page.getByText("3 entradas vuelven más adelante.")).toBeVisible();
+});
+
+test("RL-78: «Otra vez» puts the entry back in the same session instead of ending it", async ({ page }) => {
+  await page.goto("/registro");
+  await seedRecord(page, RECORD.slice(2, 3));
+  await page.goto("/repaso");
+  await page.getByRole("button", { name: messages.review.show }).click();
+  await page.getByRole("button", { name: new RegExp(`^${messages.review.grade.again}`) }).click();
+
+  await expect(page.getByText("Queda 1 palabra para repetir en un momento.")).toBeVisible();
+  await expect(page.getByText(/Terminaste por hoy/)).toHaveCount(0);
+  await page.getByRole("button", { name: messages.review.reviewNow }).click();
+  await expect(page.getByRole("heading", { name: "frisk" })).toBeVisible();
+  await page.getByRole("button", { name: messages.review.show }).click();
+  await page.getByRole("button", { name: new RegExp(`^${messages.review.grade.easy}`) }).click();
+  await expect(page.getByText("Repasaste 1 palabra. Terminaste por hoy.")).toBeVisible();
 });
 
 test("RL-68: each answer names how long it puts the word away before it is pressed", async ({ page }) => {

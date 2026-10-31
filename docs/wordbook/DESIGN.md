@@ -45,6 +45,26 @@ Light, the same design inverted:
 - The accent is a different hex per mode, not one colour at two opacities. `#9A3B24` has too little
   contrast on the dark ground; `#D9805F` has too little on the light one.
 
+## Decision of 2026-10-30: «Verde botella», the restyle after Agenda Amiga's recipe
+
+- Keep the warm ink grounds and neutral tokens above. Change the accent, the title face and the shape of controls.
+- Accent: bottle green. Highlight: marigold, only behind a key word or on the brand block, never as text on a ground.
+  Green over coral because a reading app wants calm; marigold gives the one warm spark.
+- Titles and headwords: **Fraunces** 700 (40 px; the offered lemma 30 px / 600), a soft serif with character. Newsreader
+  keeps translations and definitions. Interface stays IBM Plex Sans.
+- `AppTheme` sets `radius="full"`: every button and the search field is a pill. Figures are tabular on `body`.
+- The main screen holds one dark brand block (`BrandBlock`): the name with «Book» on the highlight, a line, the search box.
+- Radix scale is `green`, not `indigo`; `theme.css` overrides its steps with the tokens below.
+
+| role | value | ratio |
+|---|---|---|
+| accent, light | `#0C5A43` | 7.73 on `#FAF8F2`, 8.21 on `#FFFFFF` |
+| accent, dark | `#5FCFA3` | 9.68 on `#14130F`, 8.98 on `#1C1B16` |
+| brand block | `#0A3D2E` | ink `#F3EFE2` 10.61; soft text `#B9D6C9` 7.86; field edge `#9FC4B4` 6.41 |
+| highlight | `#F6B83A` | 6.88 on the block; ink `#17160F` on it 10.22 |
+
+The older accent hexes in «Tokens» (`#D9805F`, `#9A3B24`) are superseded by this table.
+
 ## Type
 
 - Headwords, translations and definitions: **Newsreader**, fallback `Georgia, serif`.
@@ -1888,3 +1908,33 @@ and width). RL-76 decided by the user 2026-10-18.
   once installing starts. No board for that silence.
 - **Not drawn:** a pending row on desktop, in light, and while the network is answering it (it changes in place to an
   answered row, as `RegistroClaroMovil` draws); a pending sentence's own page (a sentence has no word page).
+
+## Decisions of 2026-10-30, after the critic of «Verde botella» (PR #710)
+
+- **Every screen carries the brand.** `Card` (raised ground, a hairline, `--radius-5`, a soft shadow `--rl-shadow`) holds a
+  screen's section on `/registro`, `/repaso`, `/cuenta` and a word's history; `Band` sets each screen's title on a small
+  bottle-green band, cream on `#0A3D2E`, Fraunces 24 px / 700 / line-height 1.12. This supersedes «never a card» for a whole
+  section; a sense inside one is still ruled with a hairline, never boxed. Headwords take line-height 1.12, not 1.05.
+- **The filled button is bottle green in both modes.** `#0C5A43` with cream text: light `#FAF8F2` 7.73:1, dark `#F3EFE2`
+  7.13:1; hover `#094835` (9.94:1 light) and `#0F6C51` (5.56:1 dark). Mint `#5FCFA3` is only text and icons. The dark fill is
+  2.27:1 on the ground; the label names the control, so the edge carries no meaning.
+- **The soft button is tinted.** Radix green steps 3 to 5: light `#E3EFE8`, `#CFE4D8`, `#B7D6C4` (`#0C5A43` on them 6.95, 6.15,
+  5.25:1); dark `#123226`, `#174033`, `#1C4C3C` (`#5FCFA3` on them 7.25, 6.02, 5.09:1).
+- **One serif.** Fraunces sets titles, headwords and translations; Newsreader is dropped. Definitions, examples and hints are
+  IBM Plex Sans. `--font-serif` is an alias of `--font-display`. This supersedes «Newsreader» in «Type» and in «Verde botella».
+- **The lockup.** `Wordmark`: a book glyph, then «Word» and «Book» on the highlight, with room before the mark so the «d»
+  never touches it. It heads the brand block (34 px) and the sidebar (22 px).
+- **`/registro`.** A row is a card: the English word leads in Fraunces 700, its count beside it, the translations below
+  (three, then «ver N más»). Rows run in one, two (from 1024 px) or three columns (from 1640 px), so a wide screen is filled,
+  and the list draws 50 rows with «Ver más». Downloads sit together in one card; «Vaciar el registro» sits apart under a
+  hairline, a quiet muted link (no red in this palette). The count says «entradas» once a phrase is among the rows.
+- **A word's history** names the lead translation in its subtitle and the full list once, below; the outcome labels are
+  «Encontrada» (was «Exacta») and «Otra forma» (was «Flexionada»); the others stand.
+- **First visit.** The placeholder is «Escribe una palabra o frase»; the line under the block says what the app does and does
+  not repeat it; the empty screen offers four example searches, or the reader's own six latest once there are any.
+- **`/cuenta`.** «Pedirlo» reads «Pedir al navegador que guarde el registro», and «Pidiendo permiso…» while it asks.
+- **Decided by the user: phrases enter `/repaso`** (RL-78), scheduled like words; a card draws one sense of a word. The
+  dictionary carries no example sentences, so the card shows the sense's definition where it has one; examples exist only for a
+  word the network answered.
+- **Decided by the user: three translations and «ver más»** (RL-79), in the word's answer, its row and its history.
+- **Not a lookup:** opening or reloading `/?q=word` records nothing (RL-80).

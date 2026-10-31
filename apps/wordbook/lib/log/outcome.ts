@@ -19,3 +19,20 @@ export function isPendingLookup(row: Gated): boolean {
 export function isRecordedLookup(row: Gated): boolean {
   return RECORDED_OUTCOMES.includes(row.outcome) || isPendingLookup(row);
 }
+
+/** A study row is a phrase when its newest answer is a sentence's: answered or still waiting. */
+export function isPhraseRow(row: { lastOutcome: LookupOutcome }): boolean {
+  return row.lastOutcome === "translated" || row.lastOutcome === "untranslated";
+}
+
+/** The word the interface uses for a count of rows: «entradas» once a phrase is among them. */
+export function countKind(rows: readonly { lastOutcome: LookupOutcome }[]): "entries" | "words" {
+  return rows.some(isPhraseRow) ? "entries" : "words";
+}
+
+/** What to call a set of rows by their content: «palabras», «frases», or «entradas» once both are among them. */
+export function contentUnit(rows: readonly { lastOutcome: LookupOutcome }[]): "words" | "phrases" | "entries" {
+  const phrases = rows.filter(isPhraseRow).length;
+  if (phrases === 0) return "words";
+  return phrases === rows.length ? "phrases" : "entries";
+}

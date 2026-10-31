@@ -8,7 +8,7 @@ import { LOG_DELETED_EVENT } from "@/lib/log/delete";
 import { buildExport } from "@/lib/log/export";
 import { countRecords, LOG_CLEARED_EVENT, LOG_FLUSHED_EVENT } from "@/lib/log/record";
 import { SYNC_LANDED_EVENT } from "@/lib/sync/driver";
-import { Button, Flex, Link, Separator, Spinner, TapTarget, Text } from "@/components/ui";
+import { Button, Card, Flex, Link, MetaLabel, Separator, Spinner, TapTarget, Text } from "@/components/ui";
 
 type CountState = { kind: "loading" } | { kind: "ready"; count: number } | { kind: "failed" };
 type ExportState = { kind: "idle" } | { kind: "building" } | { kind: "done" } | { kind: "failed" };
@@ -118,8 +118,13 @@ export function ExportPanel() {
     }
   }
 
+  // An empty record has no file worth offering: no card either.
+  if (countState.kind === "ready" && countState.count === 0) return null;
+
   return (
-    <Flex direction="column" gap="4">
+    <Card>
+    <Flex direction="column" gap="3" align="start">
+      <MetaLabel>{t("study.downloadsTitle")}</MetaLabel>
       {countState.kind === "loading" && (
         <Flex align="center" gap="2">
           <Spinner />
@@ -231,5 +236,6 @@ export function ExportPanel() {
         </>
       ) : null}
     </Flex>
+    </Card>
   );
 }

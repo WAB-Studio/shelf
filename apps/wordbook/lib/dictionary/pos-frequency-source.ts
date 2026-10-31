@@ -4,3 +4,5 @@
 export const POS_FREQUENCY_SOURCE_URL =
   "https://www.ugent.be/pp/experimentele-psychologie/en/research/documents/subtlexus";
 export const POS_FREQUENCY_LICENCE_URL = "https://creativecommons.org/licenses/by-nc-sa/4.0/";
+export const SPANISH_FREQUENCY_SOURCE_URL = "https://github.com/hermitdave/FrequencyWords";
+export const SPANISH_FREQUENCY_LICENCE_URL = "https://creativecommons.org/licenses/by-sa/4.0/";

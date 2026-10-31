@@ -117,8 +117,11 @@ async function openRegistro(page: Page, rows: Seed[]): Promise<void> {
   await expect(page.getByRole("heading", { name: messages.log.title })).toBeVisible();
 }
 
+// A row is a card holding the word's link, its translation and its waiting lines.
 const rowOf = (page: Page, text: string): Locator =>
-  page.getByRole("link").filter({ has: page.getByText(text, { exact: true }) });
+  page
+    .locator("section")
+    .filter({ has: page.getByRole("link").filter({ has: page.getByText(text, { exact: true }) }) });
 
 // Study order: count desc, then most recent. zzorble twice, then the sentence,
 // alpha, mango: a waiting group sits among the answered ones, not after them.
@@ -138,7 +141,7 @@ test("RL-76: a pending word reads «Sin respuesta todavía» and «Se responde s
   await expect(row).toHaveCount(1);
   await expect(row.getByText(WAITING, { exact: true })).toBeVisible();
   await expect(row.getByText(WORD_LINE, { exact: true })).toBeVisible();
-  await expect(row.getByText("2", { exact: true })).toBeVisible();
+  await expect(row.getByText("2 veces", { exact: true })).toBeVisible();
   await expect(row.getByText(PHRASE_LINE)).toHaveCount(0);
   // It is not drawn as a miss: no «sin resultado», no form list.
   await expect(row.getByText(messages.log.study.noResult)).toHaveCount(0);
@@ -175,7 +178,7 @@ test("RL-76: an answered row beside them is unchanged, and the order is the usua
 
 test("RL-76: tapping a pending word opens its word page", async ({ page }) => {
   await openRegistro(page, ROWS());
-  await rowOf(page, "zzorble").click();
+  await rowOf(page, "zzorble").getByRole("link").click();
   await expect(page).toHaveURL(/\/registro\/zzorble$/);
 });
 

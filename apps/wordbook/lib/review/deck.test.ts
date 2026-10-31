@@ -26,9 +26,10 @@ function row(key: string, overrides: Partial<StudyRow> = {}): StudyRow {
   };
 }
 
-test("RL-68: a sentence, a miss and a word still waiting for its answer never enter the review", () => {
+test("RL-78: a translated phrase enters the review; a miss, an untranslated one and a pending word never do", () => {
   assert.equal(isReviewable(row("snuff")), true);
-  assert.equal(isReviewable(row("give it up", { lastOutcome: "translated" })), false);
+  assert.equal(isReviewable(row("give it up", { lastOutcome: "translated" })), true);
+  assert.equal(isReviewable(row("give it up", { lastOutcome: "untranslated", lastTranslation: null })), false);
   assert.equal(isReviewable(row("zzz", { lastOutcome: "miss", lastTranslation: null })), false);
   assert.equal(isReviewable(row("frisk", { pending: true })), false);
   assert.equal(isReviewable(row("gloam", { lastOutcome: "unlisted", lastTranslation: null, lastDefinition: "dusk" })), true);
@@ -48,6 +49,7 @@ test("RL-68: due words come first, earliest first; then new ones, the most looke
     ["frisk", "snuff", "gust", "lull"],
   );
   assert.equal(queue.later, 1);
+  assert.equal(queue.nextDue, future.due);
 });
 
 test("RL-68: new words stop at the day's cap, counting the ones already introduced today", () => {
