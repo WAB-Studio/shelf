@@ -299,7 +299,7 @@ test("with no goal the screen is today's empty one (RP-43)", async ({ person, br
   await expect(page.getByRole("heading", { level: 1 })).toHaveText(MONTH_TITLE);
   await expect(page.getByText(TODAY_LINE, { exact: true })).toBeVisible();
   await expect(page.getByText("Todavía no tienes una meta abierta.")).toBeVisible();
-  await expect(page.getByRole("link", { name: "Crear una meta" })).toHaveAttribute("href", "/metas/nueva");
+  await expect(page.getByRole("link", { name: "Abrir una meta" })).toHaveAttribute("href", "/metas/nueva");
   await expect(page.getByRole("link", { name: "Importar un plan" })).toHaveAttribute("href", "/metas/importar");
   await expect(page.getByRole("heading", { level: 2 })).toHaveCount(0);
 });

@@ -171,7 +171,9 @@ export function rowMeta(translate: Translate, pieces: RowMetaPieces): RowMetaPar
   const { kind, done, quiet, status } = pieces;
   if (pieces.evidence) {
     const { asks, got, source, noted } = pieces.evidence;
-    return [{ text: got === null ? (noted ? `${noted} · ${asks}` : asks) : source ? `${got} · ${source}` : got }];
+    // The amounts are figures, in mono like every other row's; the source and its words stay text.
+    if (got === null) return noted ? [{ text: `${noted} · ` }, { figure: asks }] : [{ figure: asks }];
+    return source ? [{ figure: got }, { text: ` · ${source}` }] : [{ figure: got }];
   }
   const loud = !quiet && kind !== "evidence";
   const partial = loud && !done && kind === "quantity" ? (pieces.partial ?? null) : null;

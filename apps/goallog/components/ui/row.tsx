@@ -61,6 +61,9 @@ type RowProps = Omit<ComponentPropsWithoutRef<"button">, "children" | "name"> & 
   // Up to two lines of free text under the name and its meta, line breaks
   // kept, clipped with an ellipsis (`TareaNotaGuardada`).
   preview?: string | null;
+  // A line the person wrote, whole, under the row and aligned with its name: a quantity's note. It sits outside the
+  // button, so it is neither part of its accessible name nor of its tap target. Plain rows only.
+  note?: string | null;
   // A control of its own at the row's end, a sibling of the row's button
   // because a button cannot hold one (`TareaNotaGuardada`'s note button).
   end?: ReactNode;
@@ -94,6 +97,7 @@ export const Row = forwardRef<HTMLButtonElement, RowProps>(function Row(
     wideTrailing,
     narrowMetaAbove,
     preview,
+    note,
     end,
     card,
     still,
@@ -236,10 +240,19 @@ export const Row = forwardRef<HTMLButtonElement, RowProps>(function Row(
   }
 
 
-  return (
-    <button ref={ref} type={type} className={merged} disabled={disabled} onClick={onClick} {...props}>
+  const button = (
+    <button ref={ref} type={type} className={note ? `${merged} ${styles.flush}` : merged} disabled={disabled} onClick={onClick} {...props}>
       {leading ? <span className={styles.leading}>{leading}</span> : null}
       {body}
     </button>
+  );
+  if (!note) return button;
+  return (
+    <div className={rule ? `${styles.noted} ${styles.ruled}` : styles.noted}>
+      {button}
+      <Text as="p" variant="sentence" tone="secondary" className={leading ? `${styles.note} ${styles.noteLead}` : styles.note} data-part="row-note">
+        {note}
+      </Text>
+    </div>
   );
 });

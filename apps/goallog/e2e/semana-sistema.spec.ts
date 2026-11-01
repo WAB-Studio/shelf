@@ -60,7 +60,7 @@ test("the phone footer's words are Archivo and its figures mono; the legend word
       expect(await font(sum)).not.toMatch(/mono/i);
       await expect(sum.locator("span")).toHaveCount(3);
       for (const figure of await sum.locator("span").all()) expect(await font(figure)).toMatch(/mono/i);
-      const legendWord = page.getByTestId("week-legend").getByText("pendiente", { exact: true });
+      const legendWord = page.getByTestId("week-legend").getByText("sin hacer", { exact: true });
       expect(await font(legendWord)).not.toMatch(/mono/i);
     });
   } finally {

@@ -240,15 +240,15 @@ async function queryGoalsRow(
          from "goals"."commitments" c
          join "goals"."evidence_sources" s on s.id = c.source_id
          where c.satisfaction = 'evidence') as measure_sources,
-      (select coalesce(json_agg(to_jsonb(p)), '[]'::json)
+      (select coalesce(json_agg(to_jsonb(p) order by p.starts_on, p.created_at, p.id), '[]'::json)
          from "goals"."phases" p) as phases,
       (select coalesce(json_agg(to_jsonb(f) || jsonb_build_object(
                  'commitment_unit', c.unit
-               )), '[]'::json)
+               ) order by f.day, f.written_at, f.id), '[]'::json)
          from "goals"."facts" f
          left join "goals"."commitments" c on c.id = f.commitment_id
          where f.day between least(${weekStart}::date, date_trunc('month', ${day}::date)::date) and ${day}::date) as facts,
-      (select coalesce(json_agg(to_jsonb(b)), '[]'::json)
+      (select coalesce(json_agg(to_jsonb(b) order by b.month), '[]'::json)
          from "goals"."month_budgets" b
          join "goals"."goals" g on g.id = b.goal_id
            and ${openGoal("g", weekStart)}
@@ -283,7 +283,7 @@ async function queryGoalsRow(
                  'position', o.position,
                  'created_at', o.created_at,
                  'done_on', (select min(f.day) from "goals"."facts" f where f.one_off_id = o.id)
-               )), '[]'::json)
+               ) order by o.position, o.created_at, o.id), '[]'::json)
          from "goals"."one_offs" o
          join "goals"."goals" g on g.id = o.goal_id and ${openGoal("g", day)}
          where ${isToday}::boolean) as goal_tasks,
@@ -499,7 +499,7 @@ export type CommitmentInfo = {
   cadence: Cadence;
   // Evidence commitments only: how many readings satisfy the day, and the
   // catalogue keys naming the source and its unit (RNP-10).
-  evidence: { threshold: number; labelKey: SourceKey; unitKey: SourceKey } | null;
+  evidence: { threshold: number; unit: string; labelKey: SourceKey; unitKey: SourceKey } | null;
 };
 
 function toCommitmentInfo(row: CommitmentRow): CommitmentInfo {
@@ -515,6 +515,7 @@ function toCommitmentInfo(row: CommitmentRow): CommitmentInfo {
       row.satisfaction === "evidence" && row.source_label_key
         ? {
             threshold: row.threshold ?? 1,
+            unit: row.source_unit ?? "",
             labelKey: sourceKey(row.source_label_key),
             unitKey: sourceKey(`${row.source_label_key}Unit`),
           }
@@ -828,7 +829,7 @@ export async function loadDay(day: string): Promise<{
 
   const monthItems = isToday ? monthItemsOf(goals, row, day) : null;
 
-  const view = deriveDay({ commitments, phases, facts, evidence, day });
+  const view = deriveDay({ commitments, phases, facts, evidence, day, today: todayInZone() });
   const infos = row.commitments.map(toCommitmentInfo);
   const looseIds = new Set(infos.filter((info) => info.goalId === null).map((info) => info.id));
   const periodDone: Record<string, number> = {};
