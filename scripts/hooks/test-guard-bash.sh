@@ -188,8 +188,10 @@ passes "gh api repos/WAB-Studio/shelf/pulls -f base=integracion -f head=x -F bod
 blocks "gh api repos/WAB-Studio/shelf/pulls -f base=integracion -f head=x -F body=@$TMPD/missing.md"
 # gh-rest.sh refuses a trailer before any network call
 GHR="$HERE/../gh-rest.sh"
-"$GHR" pr-create x --title t --body-file "$TMPD/bad.md" >/dev/null 2>&1 && { echo "FAIL: gh-rest trailer"; FAILS=$((FAILS+1)); }
-"$GHR" pr-create x --base main >/dev/null 2>&1 && { echo "FAIL: gh-rest base"; FAILS=$((FAILS+1)); }
+# A refusal is exit 1 with gh-rest's own message; any other failure (not executable, gh missing) is no proof.
+refused() { local err; err="$("$GHR" "$@" 2>&1 >/dev/null)"; [ $? -eq 1 ] && [[ $err == gh-rest:* ]]; }
+refused pr-create x --title t --body-file "$TMPD/bad.md" || { echo "FAIL: gh-rest trailer"; FAILS=$((FAILS+1)); }
+refused pr-create x --base main || { echo "FAIL: gh-rest base"; FAILS=$((FAILS+1)); }
 rm -rf "$TMPD"
 passes 'scripts/gh-rest.sh pr-create nube --title t'
 
