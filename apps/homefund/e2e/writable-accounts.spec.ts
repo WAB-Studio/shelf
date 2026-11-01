@@ -299,7 +299,7 @@ test.describe("as a plain member", () => {
       .getByRole("textbox", { name: transactions.quickTitle, exact: true })
       .fill(`20000 mercado ${LEADER_ACCOUNT}`);
     await expect(sheet.getByRole("textbox", { name: transactions.amountLabel, exact: true }).first()).toHaveValue(
-      "20000",
+      "20.000",
     );
 
     await expect(sheet.locator("#quick-account")).not.toHaveText(LEADER_ACCOUNT);

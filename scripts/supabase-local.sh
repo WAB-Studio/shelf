@@ -11,7 +11,19 @@ API_URL="http://127.0.0.1:44321"
 
 cli() { (cd "$ROOT" && npx --yes "supabase@${SUPABASE_VERSION}" "$@"); }
 
-is_up() { docker ps --format '{{.Names}}' | grep -q '^supabase_db_shelf$'; }
+# A cloud VM starts with Docker stopped; start it only when the stack is asked for.
+ensure_docker() {
+  docker info >/dev/null 2>&1 && return 0
+  [ "${CLAUDE_CODE_REMOTE:-}" = true ] || return 0
+  echo "supabase-local: starting the Docker daemon" >&2
+  { sudo -n service docker start || sudo -n dockerd >/dev/null 2>&1 & } >/dev/null 2>&1
+  local i
+  for i in $(seq 1 30); do docker info >/dev/null 2>&1 && return 0; sleep 1; done
+  echo "supabase-local: Docker did not come up" >&2
+  return 1
+}
+
+is_up() { ensure_docker || return 1; docker ps --format '{{.Names}}' | grep -q '^supabase_db_shelf$'; }
 
 # Reads one KEY="value" line out of `status -o env` text on stdin.
 status_value() { sed -n "s/^$1=\"\(.*\)\"\$/\1/p" | head -1; }

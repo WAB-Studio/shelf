@@ -101,7 +101,13 @@ test("ToneSurface fades without a tone and keeps its own background", () => {
 });
 
 test("AmountField is tabular and takes a fixed width", () => {
-  const out = html(createElement(AmountField, { width: 110 }));
+  const out = html(
+    createElement(
+      NextIntlClientProvider,
+      { locale: "es", messages: {} } as ComponentProps<typeof NextIntlClientProvider>,
+      createElement(AmountField, { width: 110 }),
+    ),
+  );
   assert.match(out, /width:110px/);
   assert.match(out, /font-variant-numeric:tabular-nums/);
 });

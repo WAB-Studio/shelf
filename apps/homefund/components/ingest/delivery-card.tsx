@@ -27,6 +27,7 @@ import {
   Flex,
   Heading,
   IconButton,
+  Money,
   RawText,
   Spinner,
   Text,
@@ -36,6 +37,7 @@ import type { PendingDeliveryRow } from "@/db/queries/ingest-review";
 import type { TransactionFormOptions } from "@/db/queries/transaction-form";
 import { civilDateToDate, todayInBogota } from "@/lib/dates";
 import { categoryNamesById } from "@/lib/fund/category-names";
+import { deliveryCurrency } from "@/lib/fund/glance";
 import { scopeOfAccounts } from "@/lib/fund/category-scope";
 import { centsToPesos } from "@/lib/money";
 import { useActionErrorToast } from "@/lib/use-action-toast";
@@ -123,6 +125,9 @@ export function DeliveryCard({
   const tKey = useTranslations();
   const format = useFormatter();
   const onActionError = useActionErrorToast();
+
+  const isIncome = delivery.proposedDirection === "income";
+  const currency = deliveryCurrency(delivery, options);
 
   const [rawTextOpen, setRawTextOpen] = useState(false);
   const [reviewOpen, setReviewOpen] = useState(false);
@@ -242,12 +247,19 @@ export function DeliveryCard({
             {t("amountMissing")}
           </Heading>
         ) : (
-          <Heading as="h3" size="6">
-            {format.number(
-              centsToPesos(delivery.proposedAmountCents),
-              "currency",
-            )}
-          </Heading>
+          <Flex align="baseline" gap="2">
+            <Heading as="h3" size="6">
+              <Money
+                minor={delivery.proposedAmountCents}
+                currency={currency}
+                tone="plain"
+                size="inherit"
+              />
+            </Heading>
+            <Badge color={isIncome ? "jade" : "gray"} variant="soft" radius="full">
+              {t(isIncome ? "kindIncome" : "kindExpense")}
+            </Badge>
+          </Flex>
         )}
 
         <Flex direction="column" gap="2">

@@ -25,7 +25,8 @@ const BEFORE_OPENING_NOTE = /anterior a la apertura de la cuenta/;
 
 // 45.000 pesos, as the card reads it and as the prefilled form carries it.
 const AMOUNT_CENTS = 4500000;
-const AMOUNT_PESOS = "45000";
+// The form groups thousands as they are written into the field.
+const AMOUNT_PESOS = "45.000";
 
 const TRUSTED = "Exito Poblado";
 const UNREADABLE = "Comercio sin datos";
