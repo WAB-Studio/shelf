@@ -109,13 +109,14 @@ for (const width of [390, 1440]) {
         expect(await metaOf(page, seeded.name)).toBe(`${NOTED} · 1 búsqueda`);
         const row = rowOf(page, seeded.name);
         await expect(row.locator("[data-state]")).toHaveAttribute("data-state", "empty");
+        await expect(row, "named as the one that notes it, not as a met source").not.toContainText(`· ${SOURCE}`);
       } finally {
         await context.close();
         await clean(db, person, seeded);
       }
     });
 
-    test(`below the threshold: the day is in part, says what was read of the threshold and names the source (partial)`, async ({
+    test(`below the threshold: it still asks the whole threshold and does not name the source (partial)`, async ({
       person,
       browser,
       baseURL,
@@ -125,9 +126,10 @@ for (const width of [390, 1440]) {
       const { context, page } = await open(browser, baseURL!, person, width);
       try {
         await visit(page, "/");
-        expect(await metaOf(page, seeded.name)).toBe(`2 de 3 búsquedas · ${SOURCE}`);
+        expect(await metaOf(page, seeded.name)).toBe(`${NOTED} · 3 búsquedas`);
         const row = rowOf(page, seeded.name);
-        await expect(row.locator("[data-state]")).toHaveAttribute("data-state", "partial");
+        await expect(row.locator("[data-state]")).toHaveAttribute("data-state", "empty");
+        await expect(row, "named as the one that notes it, not as a met source").not.toContainText(`· ${SOURCE}`);
       } finally {
         await context.close();
         await clean(db, person, seeded);

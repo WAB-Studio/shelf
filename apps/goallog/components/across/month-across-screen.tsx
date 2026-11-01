@@ -85,9 +85,9 @@ export async function MonthAcrossScreen({ month, today }: { month?: string; toda
   const weekdayNames = t.raw("day.weekdayLong") as string[];
   const monthName = (month: string) => monthNames[Number(month.slice(5, 7)) - 1];
   const thisName = monthName(across.month);
-  // From the 25th of the month being lived the next one is offered too, while a goal's span still holds it.
+  // From the 25th of the month being lived the next one is offered too, to each goal that lasts into it.
   const nextSeg = nextMonth(`${seg}-01`).slice(0, 7);
-  const offersNext = !past && !coming && Number(today.slice(8, 10)) >= 25 && nextSeg <= across.lastMonth.slice(0, 7);
+  const offersNext = !past && !coming && Number(today.slice(8, 10)) >= 25;
   const nextLink = offersNext ? t("month.planMonth", { month: monthName(`${nextSeg}-01`) }) : null;
   const weekday = weekdayNames[(new Date(`${across.today}T12:00:00Z`).getUTCDay() + 6) % 7];
   const dateLine = t("day.date", {
@@ -310,7 +310,7 @@ export async function MonthAcrossScreen({ month, today }: { month?: string; toda
             </Text>
           ) : null}
           {planLink ? <TextLink href={planLink.href}>{planLink.label}</TextLink> : null}
-          {nextLink && goal.line && !collapsed && goal.open ? (
+          {nextLink && goal.line && !collapsed && carriesOn(goal) ? (
             <TextLink href={planHrefFrom(goal.id, nextSeg, "/mes")}>{nextLink}</TextLink>
           ) : null}
         </Section>

@@ -175,9 +175,8 @@ test("an evidence commitment names diccionario at creation, stays empty below it
     // One fewer than the threshold, stamped at 23:30 Bogotá: still empty.
     await insertLookup(db, personId, deviceId, 1, eveningInBogota(day));
     await page.reload();
-    // Under the threshold the day is in part, with what the source read.
-    await expect(row.locator("[data-state]")).toHaveAttribute("data-state", "partial");
-    expect(await metaOf(row, commitmentName)).toBe(`1 de ${threshold} búsquedas · ${sources.readingLookups}`);
+    await expect(row.locator("[data-state]")).toHaveAttribute("data-state", "empty");
+    expect(await metaOf(row, commitmentName)).toBe(`lo anota el ${sources.readingLookups} · ${threshold} búsquedas`);
 
     // The threshold itself, stamped the same evening: the evidence mark
     // (never the declared one), named, and still nothing to undo — the same

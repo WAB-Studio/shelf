@@ -172,7 +172,7 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
       <DeleteGoalSheet goalId={goal.id} name={goal.name} above={goal.parent?.id ?? null} block={block} />
     ) : null;
 
-  // A delete that cannot be done is plain text with its reason and the way out (user, 2026-10-15).
+  // A delete that cannot be done is plain text with its reason and the way out.
   const deleteRefusal =
     goal.deletable || goal.deleteBlock === null ? null : (
       <Section as="div">

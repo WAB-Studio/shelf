@@ -499,7 +499,7 @@ export type CommitmentInfo = {
   cadence: Cadence;
   // Evidence commitments only: how many readings satisfy the day, and the
   // catalogue keys naming the source and its unit (RNP-10).
-  evidence: { threshold: number; labelKey: SourceKey; unitKey: SourceKey } | null;
+  evidence: { threshold: number; unit: string; labelKey: SourceKey; unitKey: SourceKey } | null;
 };
 
 function toCommitmentInfo(row: CommitmentRow): CommitmentInfo {
@@ -515,6 +515,7 @@ function toCommitmentInfo(row: CommitmentRow): CommitmentInfo {
       row.satisfaction === "evidence" && row.source_label_key
         ? {
             threshold: row.threshold ?? 1,
+            unit: row.source_unit ?? "",
             labelKey: sourceKey(row.source_label_key),
             unitKey: sourceKey(`${row.source_label_key}Unit`),
           }
@@ -828,7 +829,7 @@ export async function loadDay(day: string): Promise<{
 
   const monthItems = isToday ? monthItemsOf(goals, row, day) : null;
 
-  const view = deriveDay({ commitments, phases, facts, evidence, day });
+  const view = deriveDay({ commitments, phases, facts, evidence, day, today: todayInZone() });
   const infos = row.commitments.map(toCommitmentInfo);
   const looseIds = new Set(infos.filter((info) => info.goalId === null).map((info) => info.id));
   const periodDone: Record<string, number> = {};

@@ -19,7 +19,7 @@ import type { GoalReport, Report, ReportTask } from "@/lib/export/report";
 import { monthWord } from "@/lib/plan/month-name";
 import { screenPlanned } from "@/lib/plan/screen-planned";
 import { evidenceUnitWords } from "@/lib/evidence/unit-words";
-import { formatCount, formatQuantity, isTimeUnit } from "@/lib/units/time";
+import { formatCount, formatQuantity, formatTime, isTimeUnit } from "@/lib/units/time";
 import { civilDateToDate, civilDayMonthYear } from "@/lib/zone";
 import {
   Figure,
@@ -271,7 +271,9 @@ function CommitmentLines({ goal, t }: { goal: GoalReport; t: Translator<"export"
                 name: commitment.name,
                 cadence,
                 source: rootT(commitment.evidence.labelKey),
-                amount: `${commitment.evidence.threshold} ${evidenceUnitWords(commitment.evidence, commitment.evidence.threshold, rootT)}`,
+                amount: isTimeUnit(commitment.evidence.unit)
+                  ? formatTime(commitment.evidence.threshold, words)
+                  : `${commitment.evidence.threshold} ${evidenceUnitWords(commitment.evidence, commitment.evidence.threshold, rootT)}`,
               })
             : t("commitmentLine", { name: commitment.name, cadence })}
       </Text>
@@ -1026,7 +1028,8 @@ function ReportSummary({ report, t }: { report: Report; t: Translator<"export"> 
         goal,
         month: planned !== null ? pair(reached, planned) : reached > 0 ? quantity(reached) : null,
         week: weekPlanned !== null ? pair(done, weekPlanned) : done > 0 || planned !== null ? quantity(done) : null,
-      };    });
+      };
+    });
   const depth = new Map<string, 0 | 1 | 2>();
   const levelOf = (goal: GoalReport): 0 | 1 | 2 => {
     const above = goal.parentId ? depth.get(goal.parentId) : undefined;

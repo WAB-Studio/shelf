@@ -6,7 +6,8 @@ import type { GoalCommitment } from "@/lib/queries/goal";
 import { civilDateToDate, civilDayMonthShort, todayInZone } from "@/lib/zone";
 import { partialPair } from "@/lib/day/row-phrases";
 import { evidenceUnitWords } from "@/lib/evidence/unit-words";
-import { formatTime, type TimeWords } from "@/lib/units/time";
+import { formatTime, isTimeUnit } from "@/lib/units/time";
+import { timeWordsOf } from "@/lib/units/time-words";
 
 import { CommitmentActions } from "./commitment-actions";
 import { cadenceWords } from "./commitment-list";
@@ -44,15 +45,11 @@ export async function CommitmentScreen({
         ? commitment.satisfiedBy.unit
         : undefined;
 
-  // A day its source read under the threshold: «14 de 30 min», the minutes said as every other row says them.
-  const units = await getTranslations("units");
-  const timeWords: TimeWords = {
-    h: (h) => units("h", { h }),
-    min: (min) => units("min", { min }),
-    join: (h, min) => units("join", { h, min }),
-  };
+  // Minutes read as every other row says them, «1 h 30 min»; a day under the threshold says «14 de 30 min».
+  const timeWords = timeWordsOf(t as unknown as Parameters<typeof timeWordsOf>[0]);
+  const timed = evidence !== null && isTimeUnit(evidence.unit);
   const partialOf = (got: number, asks: number): string =>
-    commitment.sourceLabelKey?.startsWith("timelog")
+    timed
       ? t("day.row.partialAmount", partialPair(formatTime(got, timeWords), formatTime(asks, timeWords), "minutos"))
       : t("day.row.partialAmount", { logged: String(got), target: `${asks} ${unitFor(asks)}` });
 
@@ -94,23 +91,27 @@ export async function CommitmentScreen({
               <Section label={t("goal.commitments.daysTitle")}>
                 {commitment.done.slice(0, LISTED_DAYS).map((entry) => (
                   <Row
-                      key={entry.day}
+                    key={entry.day}
                     note={entry.note}
-                      name={t("goal.commitments.dayName", {
-                        weekday: weekdays[(civilDateToDate(entry.day).getUTCDay() + 6) % 7],
-                        day: Number(entry.day.slice(8, 10)),
-                      })}
-                      trailing={
-                        entry.by === "partial" && evidence && entry.quantity !== null ? (
-                          <Figure variant="meta" value={partialOf(entry.quantity, evidence.threshold)} />
-                        ) : entry.quantity !== null ? (
-                          <Figure variant="meta" value={entry.quantity} unit={unitFor(entry.quantity)} />
-                        ) : (
-                          <Text as="span" variant="sentence" tone="muted">
-                            {t("goal.commitments.dayTap")}
-                          </Text>
-                        )
-                      }
+                    name={t("goal.commitments.dayName", {
+                      weekday: weekdays[(civilDateToDate(entry.day).getUTCDay() + 6) % 7],
+                      day: Number(entry.day.slice(8, 10)),
+                    })}
+                    trailing={
+                      entry.by === "partial" && evidence && entry.quantity !== null ? (
+                        <Figure variant="meta" value={partialOf(entry.quantity, evidence.threshold)} />
+                      ) : entry.quantity !== null ? (
+                        <Figure
+                          variant="meta"
+                          value={timed ? formatTime(entry.quantity, timeWords) : entry.quantity}
+                          unit={timed ? undefined : unitFor(entry.quantity)}
+                        />
+                      ) : (
+                        <Text as="span" variant="sentence" tone="muted">
+                          {t("goal.commitments.dayTap")}
+                        </Text>
+                      )
+                    }
                   />
                 ))}
               </Section>

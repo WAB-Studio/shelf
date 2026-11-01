@@ -262,5 +262,15 @@ test("deriveDay: evidence below its threshold is partial with its quantity; noth
   assert.equal(some.partial, true);
   assert.equal(some.satisfied, false);
   assert.equal(some.quantity, 0.5);
+  // The day still under way may yet read more: it is never in part.
+  const live = deriveDay({
+    commitments: [plan],
+    phases: [],
+    facts: [],
+    evidence: { e: [{ day: "2026-03-01", quantity: 0.5, unit: "páginas", labelKey: "x" as never }] },
+    day: "2026-03-01",
+    today: "2026-03-01",
+  });
+  assert.equal(live.slots[0].partial, false);
   assert.equal(slotFor(tapPlan("t"), 1).partial, false);
 });
