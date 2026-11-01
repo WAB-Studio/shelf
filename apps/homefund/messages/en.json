@@ -8,6 +8,8 @@
     "onboardingDescription": "A fund is the shared pot: its accounts, its members and its history."
   },
   "common": {
+    "previousMonth": "Previous month",
+    "nextMonth": "Next month",
     "appName": "HomeFund",
     "backHome": "Back to home",
     "retry": "Try again",
@@ -732,8 +734,6 @@
     "accountAny": "All accounts",
     "labelLabel": "Label",
     "labelAny": "All labels",
-    "previousMonth": "Previous month",
-    "nextMonth": "Next month",
     "remaining": "{amount} left · {pct}%",
     "overspent": "Over by {amount}",
     "nearLimit": "Close to the limit · {pct}% (warns at {threshold}%)",

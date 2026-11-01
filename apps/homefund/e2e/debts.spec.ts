@@ -331,12 +331,12 @@ function cardDetailLink(page: Page, accountId: string): Locator {
     .and(page.locator(`a[href="/es/planning/debts/${accountId}"]`));
 }
 
-// The owed a phone card states: the head puts the name in a column and the
-// amount right after it.
+// The owed a phone card states: the name sits in a row with its personal mark,
+// inside a column, and the amount follows that column.
 function cardOwed(page: Page, name: string): Locator {
   return band(page)
     .getByText(name, { exact: true })
-    .locator("xpath=../following-sibling::*[1]");
+    .locator("xpath=../../following-sibling::*[1]");
 }
 
 /**
@@ -3058,7 +3058,7 @@ test.describe("a card in credit with a dollar purchase, and the next payment", (
           ? rowOf(page, card.name, card.id).getByRole("cell").nth(6)
           : band(page)
               .getByText(card.name, { exact: true })
-              .locator("xpath=../following-sibling::*[1]");
+              .locator("xpath=../../following-sibling::*[1]");
         await expect(figure).toBeVisible();
         const lines = (await figure.innerText())
           .split("\n")

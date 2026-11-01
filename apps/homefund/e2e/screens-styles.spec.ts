@@ -272,38 +272,20 @@ function mobileOnly(project: string): boolean {
 
 
 test.describe("planning hub", () => {
-  test("a destination row is a plain link and its disc is 44 square with the fifth radius", async ({
+  test("on the phone a destination is a plain link tile and none overflows", async ({
     page,
   }, testInfo) => {
-    test.skip(!mobileOnly(testInfo.project.name), "the phone's row");
+    test.skip(!mobileOnly(testInfo.project.name), "the phone's one column");
     await page.goto("/es/planning");
 
     const link = page.locator("main a[href*='/planning/debts']").locator("visible=true").first();
     await expect(link).toBeVisible();
     expect(await computed(link, "text-decoration-line")).toBe("none");
 
-    const disc = await squares(link, 44);
-    expect(await computed(disc, "border-top-left-radius")).toBe(
-      await resolved(page, "border-top-left-radius", "var(--radius-5)"),
-    );
-    expect(await computed(disc, "flex-shrink")).toBe("0");
-  });
-
-  test("a summary line truncates and the row does not overflow", async ({ page }, testInfo) => {
-    test.skip(!mobileOnly(testInfo.project.name), "the phone's row");
-    await page.goto("/es/planning");
-
-    const link = page.locator("main a[href*='/planning/']").locator("visible=true").first();
-    const truncating = link.locator("span.rt-truncate:visible");
-    await expect(truncating.first()).toBeVisible();
-    for (const node of await truncating.all()) {
-      expect(await computed(node, "text-overflow")).toBe("ellipsis");
+    for (const tile of await page.locator("main a[href*='/planning/']").locator("visible=true").all()) {
+      const [scrollWidth, clientWidth] = await tile.evaluate((el) => [el.scrollWidth, el.clientWidth]);
+      expect(scrollWidth).toBeLessThanOrEqual(clientWidth);
     }
-    const [scrollWidth, clientWidth] = await link.evaluate((el) => [
-      el.scrollWidth,
-      el.clientWidth,
-    ]);
-    expect(scrollWidth).toBeLessThanOrEqual(clientWidth);
   });
 });
 
@@ -385,7 +367,7 @@ test.describe("budgets", () => {
     await page.goto("/es/planning/budgets");
 
     const label = page
-      .getByRole("button", { name: messages.budgets.previousMonth })
+      .getByRole("button", { name: messages.common.previousMonth })
       .locator("xpath=following-sibling::*[1]");
     const text = (await label.textContent()) ?? "";
     expect(text.charAt(0)).toBe(text.charAt(0).toLocaleUpperCase("es"));

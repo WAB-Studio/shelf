@@ -103,8 +103,8 @@ export async function getMonthlyFlow(range: {
  * `occurred_at` is a `date`, so the key comes from `to_char`: no text function
  * can read the column.
  */
-export async function getSixMonthFlow(): Promise<MonthFlow[]> {
-  const monthStarts = lastSixMonthStarts();
+export async function getSixMonthFlow(endMonthStart?: string): Promise<MonthFlow[]> {
+  const monthStarts = lastSixMonthStarts(endMonthStart);
   const sixMonthStart = monthStarts[0];
   const endExclusive = monthRange(monthStarts[monthStarts.length - 1]).endExclusive;
 
