@@ -3206,9 +3206,9 @@ async function runEvidenceInfoAndFirstGoalDayCheck(): Promise<void> {
     const loaded = await loadDay(today);
     const mine = (name: string) => loaded.commitments.find((c) => c.name === name);
     assert(
-      "an evidence commitment carries its threshold and its source's label and unit keys",
+      "an evidence commitment carries its threshold, its source's unit and its label and unit keys",
       JSON.stringify(mine("check-571 evidence")?.evidence) ===
-        JSON.stringify({ threshold: 3, labelKey: "sources.readingLookups", unitKey: "sources.readingLookupsUnit" }),
+        JSON.stringify({ threshold: 3, unit: "searches", labelKey: "sources.readingLookups", unitKey: "sources.readingLookupsUnit" }),
       `evidence = ${JSON.stringify(mine("check-571 evidence")?.evidence)}`,
     );
     assert(

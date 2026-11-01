@@ -112,7 +112,7 @@ export async function GoalsScreen({
             />
           </Flex>
         ) : null}
-        <Button asChild variant="outline" block>
+        <Button asChild variant="quiet" block>
           <Link href="/metas/habitos/nuevo">{t("goal.habits.add")}</Link>
         </Button>
       </Section>
@@ -316,12 +316,12 @@ export async function GoalsScreen({
                   >
                     <GoalBranch goals={branch} />
                   </Flex>
-                  <Button asChild variant="outline" block>
+                  <Button asChild block>
                     <Link href="/metas/nueva">{t("goal.list.addAnother")}</Link>
                   </Button>
                 </Section>
               ) : cards ? (
-                <Button asChild variant="outline" block>
+                <Button asChild block>
                   <Link href="/metas/nueva">{t("goal.list.addAnother")}</Link>
                 </Button>
               ) : (

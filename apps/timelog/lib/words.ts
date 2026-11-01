@@ -20,6 +20,11 @@ const CLOCK = {
   en: new Intl.DateTimeFormat("en-US", { timeZone: TIME_ZONE, hour: "numeric", minute: "2-digit" }),
 };
 
+const HOUR = {
+  es: new Intl.DateTimeFormat("es-CO", { timeZone: "UTC", hour: "numeric" }),
+  en: new Intl.DateTimeFormat("en-US", { timeZone: "UTC", hour: "numeric" }),
+};
+
 const dayOfMonth = (day: string) => Number(day.slice(8, 10));
 
 // The calendar words and the duration a screen reads, from the catalogue.
@@ -61,6 +66,8 @@ export async function calendarWords() {
     dayShort: (day: string) => common("dayShort", { day: dayOfMonth(day), month: monthsShort[Number(day.slice(5, 7)) - 1] }),
     // «9:14 p. m.» on Bogotá's clock.
     clock: (at: Date) => CLOCK[locale === "en" ? "en" : "es"].format(at),
+    // «3 p. m.», the ruler's hour on the same 12-hour clock as the spans; 24 is midnight.
+    hour: (hour: number) => HOUR[locale === "en" ? "en" : "es"].format(new Date(Date.UTC(2000, 0, 1, hour % 24))),
     // «28 oct, 9:14 p. m.» on Bogotá's clock.
     moment: (at: Date) => MOMENT[locale === "en" ? "en" : "es"].format(at),
   };

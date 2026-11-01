@@ -85,6 +85,10 @@ export async function MonthAcrossScreen({ month, today }: { month?: string; toda
   const weekdayNames = t.raw("day.weekdayLong") as string[];
   const monthName = (month: string) => monthNames[Number(month.slice(5, 7)) - 1];
   const thisName = monthName(across.month);
+  // From the 25th of the month being lived the next one is offered too, to each goal that lasts into it.
+  const nextSeg = nextMonth(`${seg}-01`).slice(0, 7);
+  const offersNext = !past && !coming && Number(today.slice(8, 10)) >= 25;
+  const nextLink = offersNext ? t("month.planMonth", { month: monthName(`${nextSeg}-01`) }) : null;
   const weekday = weekdayNames[(new Date(`${across.today}T12:00:00Z`).getUTCDay() + 6) % 7];
   const dateLine = t("day.date", {
     weekday,
@@ -239,7 +243,8 @@ export async function MonthAcrossScreen({ month, today }: { month?: string; toda
           ? t("month.across.comingNothingPlanned", { month: thisName })
           : t.rich("month.across.comingPlanned", { planned: say(goal.line.planned), month: thisName, ...fig });
     } else if (goal.line.planned === null) {
-      meta = t(goal.items.length === 0 ? "month.across.nothingPlanned" : "month.across.noAmount", {
+      // A closed month is never «todavía»: nothing more will be planned in it.
+      meta = t(goal.items.length === 0 ? (past ? "month.across.nothingPlannedPast" : "month.across.nothingPlanned") : "month.across.noAmount", {
         month: thisName,
       });
     } else if (across.evidence === "unreadable") {
@@ -305,6 +310,9 @@ export async function MonthAcrossScreen({ month, today }: { month?: string; toda
             </Text>
           ) : null}
           {planLink ? <TextLink href={planLink.href}>{planLink.label}</TextLink> : null}
+          {nextLink && goal.line && !collapsed && carriesOn(goal) ? (
+            <TextLink href={planHrefFrom(goal.id, nextSeg, "/mes")}>{nextLink}</TextLink>
+          ) : null}
         </Section>
         {collapsed ? null : carriedMonths.map((from) => (
           <Section key={from} as="div" label={t("month.list.fromMonth", { month: monthName(from) })}>
@@ -489,12 +497,13 @@ export async function MonthAcrossScreen({ month, today }: { month?: string; toda
             today={today}
             label={t("month.across.grid.label", { month: thisName })}
             dayLabel={(cell) => t("month.across.grid.day", { day: Number(cell.day.slice(8, 10)), count: cell.count })}
+            legend={{ less: t("month.across.grid.legendLess"), more: t("month.across.grid.legendMore"), note: t("month.across.grid.legendNote") }}
           />
         </Hero>
       )}
       {nothingOpen ? null : (
         <Flex align="baseline" gap="3" wrap="wrap">
-          <Text as="span" variant="meta">
+          <Text as="span" variant="sentence">
             {t("month.across.weeks.label")}
           </Text>
           {mondaysTouching(across.month).map((monday) => (

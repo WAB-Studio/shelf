@@ -109,7 +109,7 @@ test("Hoy and the week with no goal hold at 1280, the week unchanged (RP-37)", a
 
     await page.goto("/semana");
     await expect(page.getByText("Todavía no tienes una meta abierta.")).toBeVisible();
-    await expect(page.getByRole("link", { name: "Crear una meta" })).toHaveAttribute("href", "/metas/nueva");
+    await expect(page.getByRole("link", { name: "Abrir una meta" })).toHaveAttribute("href", "/metas/nueva");
     await expect(page.getByRole("link", { name: "Importar un plan" })).toHaveCount(0);
   } finally {
     await context.close();

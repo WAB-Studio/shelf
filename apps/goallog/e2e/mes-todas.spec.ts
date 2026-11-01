@@ -171,7 +171,7 @@ test("with no open goal the page says so and offers two ways in (RP-43)", async 
       await page.setViewportSize({ width, height: 800 });
       await page.goto("/mes");
       await expect(page.getByText("Todavía no tienes una meta abierta.")).toBeVisible();
-      await expect(page.getByRole("link", { name: "Crear una meta" })).toHaveAttribute("href", "/metas/nueva");
+      await expect(page.getByRole("link", { name: "Abrir una meta" })).toHaveAttribute("href", "/metas/nueva");
       await expect(page.getByRole("link", { name: "Importar un plan" })).toHaveAttribute("href", "/metas/importar");
       await expect(page.getByRole("heading", { level: 2 })).toHaveCount(0);
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
