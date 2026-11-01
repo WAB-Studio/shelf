@@ -84,8 +84,12 @@ Interface language: Spanish or English, the person's choice (RT-12). A person re
 - [x] **RT-17** «Hoy» and any day show «Claude» (Claude Code, claude.ai and the Claude app, and
   «Claude en total» as their sum, then Claude Code's sessions) and «Internet» (the longest sites, each opening
   onto its pages); an app's row opens onto its longest window titles. «Semana» shows Claude's week
-  total and a bar per day. Where a source never arrived the screen says how to connect it: a browser used
-  once for sites (they come from the browser's history and the focused window, no extension), the Claude folder for Claude Code. (2026-10-30)
+  total and a bar per day. Where a source never arrived the screen says how to connect it: the browser
+  extension for sites, the Claude folder for Claude Code. (2026-10-30)
+- [ ] **RT-22** (draft, pending the user's approval to retire RT-17) «Hoy» and any day show «Claude» and
+  «Internet» as RT-17 does, but sites and pages come from the uploader reading the focused browser's address bar
+  (Windows) or the browser's own history, never from a browser extension. Where sites never arrived the screen tells
+  the person to update the program on the PC, with a link to its install steps.
 
 ### Non-functional requirements
 
