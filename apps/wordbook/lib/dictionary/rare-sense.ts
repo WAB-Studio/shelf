@@ -49,3 +49,15 @@ export function isRareSense(sense: Sense): boolean {
   if (label === null) return false;
   return label[1].split(/,\s*/).some((part) => !NEUTRAL_LABELS.has(part));
 }
+
+/**
+ * The senses an answer stands on and the ones it folds behind a line. Nothing folds when every sense is
+ * rare: the reader would meet an empty answer.
+ */
+export function splitRare(senses: readonly Sense[], compact = false): { shown: Sense[]; folded: Sense[] } {
+  if (compact) return { shown: [...senses], folded: [] };
+  const shown: Sense[] = [];
+  const folded: Sense[] = [];
+  for (const sense of senses) (isRareSense(sense) ? folded : shown).push(sense);
+  return shown.length === 0 || folded.length === 0 ? { shown: [...senses], folded: [] } : { shown, folded };
+}
