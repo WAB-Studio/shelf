@@ -1,7 +1,7 @@
 import { getTranslations } from "next-intl/server";
 
 import { BarRows, type BarRow } from "@/components/screens/app-rows";
-import { Stack, Text, TextLink } from "@/components/ui";
+import { Stack, Text } from "@/components/ui";
 import { claudeSources, claudeTotal, sourcesOverlap } from "@/lib/daily";
 import { projectName } from "@/lib/claude-project";
 import type { ClaudeDay, ClaudeSessionTime, PageTime, SiteTime } from "@/lib/queries";
@@ -12,8 +12,6 @@ type Words = Awaited<ReturnType<typeof calendarWords>>;
 const SITES_SHOWN = 8;
 const PAGES_SHOWN = 8;
 const SESSIONS_SHOWN = 8;
-// ActivityWatch's page on the browser extension that records the tab in front.
-const EXTENSION_URL = "https://docs.activitywatch.net/en/latest/watchers.html#web-watchers";
 
 // «Claude» of one day (RT-14): Claude Code, claude.ai and the desktop app, and what they add up to. A row shows once
 // its source has ever sent anything, so a PC with no Claude folder is told so rather than shown a flat zero.
@@ -93,14 +91,7 @@ export async function InternetBlock({ isToday, sites, pages, hasSites, words }: 
           <Text as="p" variant="meta">{t("privacy")}</Text>
         </>
       ) : (
-        <>
-          <Text as="p" variant="meta">{t(hasSites ? (isToday ? "emptyToday" : "empty") : "never")}</Text>
-          {hasSites ? null : (
-            <TextLink href={EXTENSION_URL} target="_blank" rel="noreferrer">
-              {t("install")} ›
-            </TextLink>
-          )}
-        </>
+        <Text as="p" variant="meta">{t(hasSites ? (isToday ? "emptyToday" : "empty") : "never")}</Text>
       )}
     </Stack>
   );

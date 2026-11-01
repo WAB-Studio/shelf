@@ -84,8 +84,8 @@ Interface language: Spanish or English, the person's choice (RT-12). A person re
 - [x] **RT-17** «Hoy» and any day show «Claude» (Claude Code, claude.ai and the Claude app, and
   «Claude en total» as their sum, then Claude Code's sessions) and «Internet» (the longest sites, each opening
   onto its pages); an app's row opens onto its longest window titles. «Semana» shows Claude's week
-  total and a bar per day. Where a source never arrived the screen says how to connect it: the browser
-  extension for sites, the Claude folder for Claude Code. (2026-10-30)
+  total and a bar per day. Where a source never arrived the screen says how to connect it: a browser used
+  once for sites (they come from the browser's history and the focused window, no extension), the Claude folder for Claude Code. (2026-10-30)
 
 ### Non-functional requirements
 
