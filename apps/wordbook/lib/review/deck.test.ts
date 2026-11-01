@@ -85,3 +85,13 @@ test("one entry on demand: asked now whether or not it is due, and nothing else 
   assert.deepEqual(buildQueueFor([row("snuff")], [], "frisk", NOW).items, []);
   assert.deepEqual(buildQueueFor([row("snuff", { pending: true })], [], "snuff", NOW).items, []);
 });
+
+test("a word reviewed on demand takes no slot of the day's new entries", () => {
+  const rows = Array.from({ length: NEW_PER_DAY + 1 }, (_, i) => row(`word${i}`, { count: 100 - i }));
+  const onDemand = rate("word0", null, "good", NOW, "");
+  assert.equal(onDemand.introducedOn, "");
+  const fresh = buildQueue(rows, [onDemand], NOW).items.filter((item) => item.card === null);
+  assert.equal(fresh.length, NEW_PER_DAY);
+  const counted = rate("word0", null, "good", NOW);
+  assert.equal(buildQueue(rows, [counted], NOW).items.filter((item) => item.card === null).length, NEW_PER_DAY - 1);
+});

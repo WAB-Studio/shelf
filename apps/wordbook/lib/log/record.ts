@@ -295,6 +295,13 @@ function isStrictPrefix(previous: string, next: string): boolean {
   return next !== previous && next.startsWith(previous);
 }
 
+// The candidate replaces the pending row instead of displacing it: the same settle answered late, or the
+// same word grown by a keystroke.
+function supersedes(held: LookupRecord, candidate: LookupRecord): boolean {
+  const sameSettle = held.at === candidate.at && held.normalised === candidate.normalised;
+  return sameSettle || isStrictPrefix(held.normalised, candidate.normalised);
+}
+
 // The one pending row this module ever holds, and the timer that governs it.
 let pending: LookupRecord | null = null;
 let latestCandidate: LookupRecord | null = null;
@@ -313,8 +320,7 @@ function settleCandidate(): void {
   // The same `at` and text is the same settle, answered late: the network's
   // answer to a word with no entry arrives after its miss has settled, and
   // must replace that miss rather than land beside it as a second lookup.
-  const sameSettle = pending && pending.at === candidate.at && pending.normalised === candidate.normalised;
-  if (pending && (sameSettle || isStrictPrefix(pending.normalised, candidate.normalised))) {
+  if (pending && supersedes(pending, candidate)) {
     pending = candidate;
     return;
   }
@@ -368,12 +374,8 @@ export function flushPendingLookup(): void {
  */
 export function openLookups(): LookupRecord[] {
   const candidate = latestCandidate;
-  const supersedes =
-    pending !== null &&
-    candidate !== null &&
-    ((pending.at === candidate.at && pending.normalised === candidate.normalised) ||
-      isStrictPrefix(pending.normalised, candidate.normalised));
-  return [supersedes ? null : pending, candidate].filter((row): row is LookupRecord => row !== null && isRecordedLookup(row));
+  const replaced = pending !== null && candidate !== null && supersedes(pending, candidate);
+  return [replaced ? null : pending, candidate].filter((row): row is LookupRecord => row !== null && isRecordedLookup(row));
 }
 
 if (typeof document !== "undefined") {

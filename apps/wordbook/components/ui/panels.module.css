@@ -22,13 +22,8 @@
   display: none;
 }
 
-/* A side with nothing in it takes no room, unless the screen reserved it. */
-.side:empty:not(.reserved) {
-  display: none;
-}
-
-/* A reserved side with nothing in it keeps its room on a wide screen alone. */
-.side.reserved:empty {
+/* A side with nothing in it takes no room; a reserved one keeps its room on a wide screen alone. */
+.side:empty {
   display: none;
 }
 
@@ -53,7 +48,7 @@
     align-items: start;
     width: 100%;
     max-width: 1120px;
-    margin-inline: auto;
+    margin-inline: 0;
   }
 
   .top {

@@ -100,7 +100,7 @@ const StudyRowItem = memo(function StudyRowItem({
             <TapTarget width="100%" align="center" gap="3">
               {/* `Text truncate` needs a flex container of its own to clip (docs/wordbook/DESIGN.md
                   "What the data forces"). */}
-              <Flex minWidth="0" maxWidth="60%" overflow="hidden">
+              <Flex minWidth="0" maxWidth={inline === null ? undefined : "60%"} overflow="hidden">
                 <Text size="5" weight="bold" serif truncate english>
                   {word}
                 </Text>

@@ -61,6 +61,11 @@ function isUsableTranslation(source: string, candidate: string | undefined): can
   );
 }
 
+// The provider's JSON is not trusted: anything but a string says nothing, and a string is cleaned of its entities.
+function cleanCandidate(value: unknown): string | undefined {
+  return typeof value === "string" ? cleanProviderText(value) : undefined;
+}
+
 // MyMemory's top pick can come back empty — measured live for "the cat sat
 // on the mat" — while `matches` still holds one that answers the sentence.
 // Ranked by `match`, not by array position: the reply is not contractually
@@ -115,14 +120,16 @@ async function translateWithProvider(text: string): Promise<string> {
   }
 
   // Cleaned before the gate, so an echo or a blocked term hiding behind an entity is still caught.
-  const translated = cleanProviderText(payload.responseData?.translatedText ?? "");
+  const translated = cleanCandidate(payload.responseData?.translatedText);
   if (isUsableTranslation(text, translated)) {
     return translated;
   }
 
   const alternative = bestAlternativeTranslation(
     text,
-    payload.matches?.map((match) => ({ ...match, translation: cleanProviderText(match.translation ?? "") })),
+    Array.isArray(payload.matches)
+      ? payload.matches.map((match) => ({ ...match, translation: cleanCandidate(match?.translation) }))
+      : undefined,
   );
   if (alternative) {
     return alternative;

@@ -56,8 +56,8 @@ export function isRareSense(sense: Sense): boolean {
  */
 export function splitRare(senses: readonly Sense[], compact = false): { shown: Sense[]; folded: Sense[] } {
   if (compact) return { shown: [...senses], folded: [] };
-  const rare = senses.filter(isRareSense);
-  const common = senses.filter((sense) => !isRareSense(sense));
-  if (rare.length === 0 || common.length === 0) return { shown: [...senses], folded: [] };
-  return { shown: common, folded: rare };
+  const shown: Sense[] = [];
+  const folded: Sense[] = [];
+  for (const sense of senses) (isRareSense(sense) ? folded : shown).push(sense);
+  return shown.length === 0 || folded.length === 0 ? { shown: [...senses], folded: [] } : { shown, folded };
 }
