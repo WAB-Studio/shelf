@@ -87,7 +87,7 @@ test("`shrieked`'s `-ed` fixes the verb, so `shriek` leads with «chillar», not
   await expect(glossLocator(page, "alarido")).toBeVisible();
   expect(await textLeads(page, "chillar", "alarido")).toBe(true);
   // Same proof as `sternly`'s own: the noun's two glosses join on one line.
-  await expect(page.getByText("alarido, chillido", { exact: true })).toBeVisible();
+  await expect(page.getByText("chillido, alarido", { exact: true })).toBeVisible();
 });
 
 test("`toiled`'s `-ed` fixes the verb, so `toil` leads with «afanar», not «esfuerzo»", async ({ page }) => {
