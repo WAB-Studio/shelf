@@ -503,7 +503,7 @@ test("a content word's block draws the dictionary alone", async ({ page }) => {
   const lines = (await blockLines(page, "weird", "happened")).map((l) => l.text);
   expect(lines.length, "weird draws its senses").toBeGreaterThan(0);
   expect(lines.filter((line) => GLOSSES.has(line))).toEqual([]);
-  expect(lines).toContain("raro, anormal, extraño");
+  expect(lines).toContain("raro, extraño, anormal");
 });
 
 test("offline, the breakdown still leads with the table translation and asks for nothing", async ({ page, context }) => {
@@ -588,7 +588,7 @@ test("in a sentence, a form with no entry of its own still leads, then names its
   const form = lines.indexOf(formLine("formOf", "stopping", "stop"));
   expect(form, "the form is named").toBeGreaterThanOrEqual(0);
   expect(lines.filter((line) => line.includes("también es una forma de"))).toEqual([]);
-  expect(lines.indexOf("dejar de, parar de, parar")).toBeGreaterThan(form);
+  expect(lines.indexOf("parar, detener, dejar de")).toBeGreaterThan(form);
   await expect(mainHeadings(page).filter({ hasText: /^stop$/ })).toHaveCount(1);
 });
 
