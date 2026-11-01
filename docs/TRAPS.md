@@ -3382,3 +3382,12 @@ Slot unresolved, and Slot throws. Bisected by removing one block at a time: only
 
 - In a server component, write `<ButtonLink href>` (`components/ui/button-link.tsx`), never `Button asChild`.
 - Prove a hydration fix with many fresh browser contexts, not one load: 0 of 20 after the fix.
+
+## A probe archived «now» stays in the week on a Sunday
+
+Measured 2026-11-01, a Sunday: `check:day` went red on `integracion` (f58d8d78) and on #751 alike with
+«an archived goal is not in loadWeek's goals». `loadWeek` keeps a goal archived on its week's own Sunday (RP-24,
+`lib/queries/rows.ts:127` compares with `>=`); `scripts/check-day.ts` archived its probe with `new Date()`.
+
+- Seed an archive, an end or a retirement a full week before the day under test, never at now.
+- A date check that passes six days of seven proves nothing: read the rule's boundary and seed past it.
