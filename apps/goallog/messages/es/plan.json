@@ -14,7 +14,7 @@
     "everyNDaysLabel": "cada cuántos días",
     "timesPerMonthLabel": "veces al mes",
     "timesPerMonthHint": "Cualquier día del mes cuenta. Hoy lo muestra «1 de 2 este mes».",
-    "doneByLabel": "qué lo da por hecho",
+    "doneByLabel": "Qué lo da por hecho",
     "satisfaction": {
       "tap": "una vez",
       "quantity": "un número",
@@ -23,7 +23,7 @@
     "quantityLabel": "cantidad",
     "unitLabel": "unidad",
     "noMeasureYet": "Esta meta todavía no tiene cifra: «{unit}» se la pone.",
-    "thresholdLabel": "cuenta desde",
+    "thresholdLabel": "Cuenta desde",
     "submit": "Añadirlo",
     "submitting": "Añadiéndolo…",
     "save": "Guardar",

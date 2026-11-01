@@ -130,9 +130,9 @@ test("RNL-03: at 1440px the box and the answer sit in the left panel, beside the
   expect(searchBox).not.toBeNull();
   expect(answer).not.toBeNull();
 
-  // 1120px centred in what the sidebar leaves.
+  // 1120px from the same left edge as the screens beside it: the sidebar's 240px and the page's 32px padding.
   expect(Math.abs(panels!.width - 1120)).toBeLessThan(2);
-  expect(Math.abs(panels!.x - (240 + (1200 - 1120) / 2))).toBeLessThan(2);
+  expect(Math.abs(panels!.x - (240 + 32))).toBeLessThan(2);
   expect(Math.abs(side!.width - 380)).toBeLessThan(1);
   for (const inner of [searchBox!, answer!]) {
     expect(inner.x).toBeGreaterThanOrEqual(panels!.x - 1);

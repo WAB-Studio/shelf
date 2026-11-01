@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { useFormatter, useTranslations } from "next-intl";
 
@@ -16,9 +17,11 @@ import { nextQuotaReset } from "@/lib/sync/quota-day";
 import { syncNow } from "@/lib/sync/driver";
 import type { SyncFailure } from "@/lib/sync/failure";
 import type { SyncState } from "@/lib/log/types";
-import { Button, Flex, MetaLabel, Separator, Text, TextField } from "@/components/ui";
+import { Button, Card, Flex, MetaLabel, Separator, Text, TextField } from "@/components/ui";
 import { askToKeepStorage, storageKept } from "@/lib/storage/persist";
 import { DevicesPanel } from "./devices-panel";
+import { useWideScreen } from "./use-wide-screen";
+import { DEVICES_SLOT_ID } from "./devices-slot";
 
 // `lastCopy` and `failedOffline` open on "hace", so the span they take carries
 // no direction word of its own; `format.relativeTime` always adds one.
@@ -622,6 +625,10 @@ function SyncedSection({
     );
   }
 
+  const wide = useWideScreen();
+  const devicesSlot = wide && typeof document !== "undefined" ? document.getElementById(DEVICES_SLOT_ID) : null;
+  const devicesPanel = <DevicesPanel refreshSignal={syncVersion} onOwnDeviceRetired={onOwnDeviceRetired} />;
+
   // The confirm title already carries the address; saying it twice is noise.
   const titleShown =
     !syncState.retired && ((!confirmed && !confirmedHere) || (confirmedHere && syncStatus.kind === "syncing"));
@@ -636,9 +643,9 @@ function SyncedSection({
         <KeepLog />
       </Flex>
 
-      <Separator size="4" />
-
-      <DevicesPanel refreshSignal={syncVersion} onOwnDeviceRetired={onOwnDeviceRetired} />
+      {/* From 1280px the list stands in the second panel, mounted from here so it keeps this section's state. */}
+      {devicesSlot === null && <Separator size="4" />}
+      {devicesSlot === null ? devicesPanel : createPortal(<Card>{devicesPanel}</Card>, devicesSlot)}
 
       <Separator size="4" />
 

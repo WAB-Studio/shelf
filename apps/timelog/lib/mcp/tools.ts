@@ -16,6 +16,7 @@ export type Reads = {
   dayTotals(from: string, to: string): Promise<DayTotal[]>;
   claudeBetween(from: string, to: string): Promise<ClaudeDay[]>;
   appsByDay(from: string, to: string): Promise<DayApp[]>;
+  uploadedDays(from: string, to: string): Promise<string[]>;
 };
 
 export type ToolOutcome = { ok: true; value: Record<string, unknown> } | { ok: false; error: keyof typeof mcp.errors };
@@ -85,12 +86,12 @@ export const tools: ToolSpec[] = [
     name: "get_daily",
     description: mcp.tools.get_daily,
     input: z.object({ from: z.string(), to: z.string() }),
-    async run(reads, input) {
+    async run(reads, input, today) {
       const { from, to } = input as { from: string; to: string };
       if (!isCivilDay(from) || !isCivilDay(to)) return { ok: false, error: "day" };
       if (from > to || addDays(from, MAX_RANGE_DAYS - 1) < to) return { ok: false, error: "range" };
-      const [totals, claude, apps] = await Promise.all([reads.dayTotals(from, to), reads.claudeBetween(from, to), reads.appsByDay(from, to)]);
-      return { ok: true, value: { from, to, days: dailyRows(from, to, totals, claude, apps, time.system) } };
+      const [totals, claude, apps, uploaded] = await Promise.all([reads.dayTotals(from, to), reads.claudeBetween(from, to), reads.appsByDay(from, to), reads.uploadedDays(from, to)]);
+      return { ok: true, value: { from, to, days: dailyRows(from, to, totals, claude, apps, time.system, today, new Set(uploaded)) } };
     },
   },
 ];

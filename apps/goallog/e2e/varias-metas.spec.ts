@@ -87,7 +87,7 @@ test("an empty week says what to do and links to opening one (RP-11, RP-16)", as
     // less week, so nothing here says the range itself should hide).
     await expect(page.getByText(/^Del \d/)).toBeVisible();
     await expect(page.getByText("Todavía no tienes una meta abierta.")).toBeVisible();
-    const link = page.getByRole("link", { name: "Crear una meta" });
+    const link = page.getByRole("link", { name: "Abrir una meta" });
     await expect(link).toBeVisible();
     await expect(link).toHaveAttribute("href", "/metas/nueva");
   } finally {

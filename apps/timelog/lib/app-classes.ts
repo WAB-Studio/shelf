@@ -5,6 +5,8 @@ export type AppClass = "code" | "browser" | "comms" | "leisure" | "system" | "ot
 
 export const APP_CLASSES: AppClass[] = ["code", "browser", "comms", "leisure", "system", "other"];
 
+const CLAUDE_APP = "Claude";
+
 const CLASS_OF: Record<string, AppClass> = {
   "VS Code": "code",
   "Visual Studio": "code",
@@ -33,6 +35,11 @@ const CLASS_OF: Record<string, AppClass> = {
 // The class of an app by its readable name; one not listed is «other». Windows' own noise is `systemName`.
 export function appClass(name: string, systemName: string): AppClass {
   return name === systemName ? "system" : (CLASS_OF[name] ?? "other");
+}
+
+// The colour an app's row draws in: its class, except the Claude desktop app, which keeps the orange its Claude card gives it.
+export function appTone(name: string, systemName: string): AppClass | "claudeApp" {
+  return name === CLAUDE_APP ? "claudeApp" : appClass(name, systemName);
 }
 
 // The day's time by class, longest first; a class with nothing is absent.

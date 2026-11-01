@@ -584,7 +584,8 @@ export function SearchScreen({ initialQuery }: { initialQuery?: string }) {
   const storyWord = kind.kind === "word" && wordAnswer !== null && wordFound && tableLine === null
     ? (wordAnswer.exact?.headword ?? wordAnswer.viaInflection[0].lemma)
     : null;
-  // A word keeps its second panel even while it has no answer, so the layout does not jump as the reader types.
+  // The second panel is reserved in every state, so the grid does not move as the reader types, looks a word up or
+  // reads a phrase; it holds something only for an empty box and for an answered word.
   const side =
     kind.kind === "empty" ? <ReviewCard /> : kind.kind === "word" && storyWord !== null ? <WordStoryPanel headword={storyWord} /> : undefined;
 
@@ -602,7 +603,7 @@ export function SearchScreen({ initialQuery }: { initialQuery?: string }) {
           </>
         }
         side={side}
-        reserveSide={kind.kind === "word"}
+        reserveSide
         sideOnPhone={kind.kind === "empty"}
       >
         {kind.kind === "empty" && <Starters onPick={handleTextChange} />}

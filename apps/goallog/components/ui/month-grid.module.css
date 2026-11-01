@@ -30,7 +30,8 @@
   opacity: 0.6;
 }
 
-/* Four steps of the accent over the tile; the busiest day is the full accent with the ground's ink. */
+/* Four steps of the sky over the tile. The number is light on the first step and navy from the second: light ink on the
+   second step measured 3.11:1 (2.99 dark), navy is 4.85:1 (4.76). */
 .level0 {
   background: var(--pulsar-line);
 }
@@ -41,6 +42,7 @@
 
 .level2 {
   background: color-mix(in srgb, var(--pulsar-accent) 55%, var(--pulsar-line));
+  color: var(--pulsar-brand, #0b1f3a);
 }
 
 .level3 {
@@ -56,4 +58,39 @@
 
 .today {
   box-shadow: inset 0 0 0 2px var(--pulsar-ink);
+}
+
+/* A day up to today is a link: the tile keeps its fill, the focus ring is the ink. */
+.link {
+  text-decoration: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.link:focus-visible {
+  outline: 2px solid var(--pulsar-ink);
+  outline-offset: 2px;
+}
+
+.legend {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-block-start: 12px;
+}
+
+.legendEnd {
+  font-size: 14px;
+  color: var(--pulsar-muted);
+}
+
+.swatch {
+  inline-size: 20px;
+  block-size: 20px;
+  border-radius: 6px;
+}
+
+.legendNote {
+  margin: 4px 0 0;
+  font-size: 14px;
+  color: var(--pulsar-muted);
 }

@@ -127,6 +127,11 @@
   .split.even .main > * {
     margin-block-start: 0;
   }
+
+  /* A day with one block takes the whole row. */
+  .split.even .main > :only-child {
+    grid-column: 1 / -1;
+  }
 }
 
 @media (min-width: 768px) {

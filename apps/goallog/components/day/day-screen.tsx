@@ -21,6 +21,9 @@ import { EmptyDay } from "./empty-day";
 import { DoneOneOffRow } from "./done-one-off-row";
 import { EvidenceNote } from "./evidence-note";
 import type { SourceKey } from "@/i18n/translator";
+import { partialPair } from "@/lib/day/row-phrases";
+import { formatTime, isTimeUnit } from "@/lib/units/time";
+import { timeWordsOf } from "@/lib/units/time-words";
 import { screenPlanned } from "@/lib/plan/screen-planned";
 import type { DayMonthLine } from "@/lib/queries/day";
 import { evidenceUnitWords } from "@/lib/evidence/unit-words";
@@ -104,9 +107,12 @@ function dayPhrase(key: DayPhraseKey, day: string, t: Translator, extra: Record<
  */
 export async function DayScreen({ day: requested }: { day?: string } = {}) {
   const t = await getTranslations();
-  // «3 búsquedas»: the number and the source's noun, each through next-intl.
-  const evidenceAmount = (evidence: { labelKey: SourceKey }, count: number) =>
-    t("day.row.evidenceAmount", { count, unit: evidenceUnitWords({ labelKey: evidence.labelKey, unit: "" }, count, t) });
+  const timeWords = timeWordsOf(t as unknown as Parameters<typeof timeWordsOf>[0]);
+  // «3 búsquedas»; a source of minutes reads as every other minute does, «1 h 28 min».
+  const evidenceAmount = (evidence: { labelKey: SourceKey; unit: string }, count: number) =>
+    isTimeUnit(evidence.unit)
+      ? formatTime(count, timeWords)
+      : t("day.row.evidenceAmount", { count, unit: evidenceUnitWords({ labelKey: evidence.labelKey, unit: "" }, count, t) });
   const today = todayInZone();
   const day = requested ?? today;
   const past = day < today;
@@ -353,7 +359,13 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
                       got:
                         slot.satisfiedBy === "evidence"
                           ? evidenceAmount(commitment.evidence, slot.quantity ?? 0)
-                          : null,
+                          : slot.partial
+                            ? t("day.row.partialAmount", partialPair(
+                                evidenceAmount(commitment.evidence, slot.quantity ?? 0),
+                                evidenceAmount(commitment.evidence, commitment.evidence.threshold),
+                                isTimeUnit(commitment.evidence.unit) ? "minutos" : null,
+                              ))
+                            : null,
                       source: evidence === "unreadable" ? null : t(commitment.evidence.labelKey),
                     }
                   : undefined
