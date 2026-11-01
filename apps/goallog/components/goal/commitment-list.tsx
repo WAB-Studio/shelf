@@ -9,7 +9,7 @@ import type { GoalCommitment } from "@/lib/queries/goal";
 import { strip, stripCount } from "@/lib/day/constancy";
 import { todayInZone } from "@/lib/zone";
 import { sentenceCase } from "@/lib/day/day-words";
-import { weekdaysSentence } from "@/lib/day/row-phrases";
+import { stripLabel, weekdaysSentence } from "@/lib/day/row-phrases";
 import { evidenceUnitWords } from "@/lib/evidence/unit-words";
 
 import { Button, Figure, Flex, Row, Section, Strip, Text } from "@/components/ui";
@@ -83,7 +83,7 @@ function satisfactionWords(commitment: GoalCommitment, t: Translator): ReactNode
 function MiniStrip({ commitment, today, t }: { commitment: GoalCommitment; today: string; t: Translator }) {
   const cells = strip(today, commitment, commitment.done);
   const { done, of } = stripCount(cells, commitment.cadence);
-  return <Strip size="mini" cells={cells} label={of === null ? t("goal.commitments.stripAriaDays", { done }) : t("goal.commitments.stripAria", { done, of })} />;
+  return <Strip size="mini" cells={cells} label={stripLabel((key, values) => t(key, values), { done, of })} />;
 }
 
 /**

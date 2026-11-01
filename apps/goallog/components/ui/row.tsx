@@ -69,6 +69,14 @@ type RowProps = Omit<ComponentPropsWithoutRef<"button">, "children" | "name"> & 
   end?: ReactNode;
   // A link row drawn as a white bordered card, not a ruled line.
   card?: boolean;
+  // A big tappable tile of its own, 64px at least, in place of a ruled line (Hoy's commitments). `done` fills it in
+  // the soft accent.
+  tile?: boolean;
+  done?: boolean;
+  // A line of its own under the name and its meta: a commitment's history strip. Drawn, never read in the row's name.
+  strip?: ReactNode;
+  // What the strip says, for a screen reader: the row's description.
+  stripLabel?: string;
   // How deep the row sits in a tree of goals: 0 at the top, 2 at most. The
   // row and its hairline start that many 20px steps in (`JerarquiaArbol`).
   level?: 0 | 1 | 2;
@@ -100,6 +108,10 @@ export const Row = forwardRef<HTMLButtonElement, RowProps>(function Row(
     note,
     end,
     card,
+    tile,
+    done,
+    strip,
+    stripLabel,
     still,
     level = 0,
     foldSlot,
@@ -108,14 +120,17 @@ export const Row = forwardRef<HTMLButtonElement, RowProps>(function Row(
     type = "button",
     disabled,
     onClick,
-    ...props
+    ...rest
   },
   ref,
 ) {
+  const props = stripLabel ? { "aria-description": stripLabel, ...rest } : rest;
   const merged = [
     styles.row,
     rule ? undefined : styles.flush,
     card ? styles.card : undefined,
+    tile ? styles.tile : undefined,
+    tile && done ? styles.done : undefined,
     level === 1 ? styles.level1 : level === 2 ? styles.level2 : undefined,
     !still && (onLeadingClick || end || (href && (fold || foldSlot))) ? styles.split : undefined,
     className,
@@ -149,6 +164,7 @@ export const Row = forwardRef<HTMLButtonElement, RowProps>(function Row(
             {preview}
           </Text>
         ) : null}
+        {strip ? <span className={styles.strip} aria-hidden>{strip}</span> : null}
       </span>
       {wideTrailing ? <span className={`${styles.trailing} ${styles.wideOnly}`}>{wideTrailing}</span> : null}
       {trailing ? <span className={styles.trailing}>{trailing}</span> : null}

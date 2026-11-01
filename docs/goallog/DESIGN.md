@@ -15,8 +15,8 @@ A ship's log: what happened, when, and who wrote it down.
   2026-09-22. A palette with no red is what enforces it — a later screen cannot reach for one.
 - **Light is the primary face.** Dark is the same design inverted, never a second design.
   `apps/wordbook` is dark-first; this app inherits nothing from it.
-- **A figure is set in mono, a sentence in Archivo.** Hours, counts, minutes, dates and quantities
-  are the log's substance: they read as a log or they read as decoration.
+- **A figure that stands alone is set in mono, a sentence in Archivo.** Hours, counts, minutes, dates and quantities
+  are the log's substance. A figure inside a sentence («todos los días · 10 min», «sábado 31 oct») is the sentence's own face, tabular.
 - **Writing a fact costs one tap.** No form stands on the day's path. What needs a number offers it
   already filled.
 - Rule between rows with a hairline. On the phone there is no card and no border box. From 768px the groups sit in `Panel` cards (raised ground, 1px line, radius 14), the brand surfaces the restyle of 2026-10-30 chose; a row inside a card is still ruled by a hairline.
@@ -63,8 +63,8 @@ Decided by the user 2026-10-30 after the critic: **navy stays a brand block in t
 from «la misma página invertida»: the dark rail was `#07142A`, which vanished on the ground `#0F1317`; it is
 lifted to `#0E2347` (1.20:1 against the ground, a block and not a hairline) and the navy never inverts.
 
-- **One hero block per main screen**, navy on both faces, carrying the figure of the day or of the goal in
-  the title face (Hoy: «1 de 6» and its bar; a goal: its total). The rest of the page stays on the ground.
+- **One hero block on a goal's page and on Mes**, navy on both faces, carrying the goal's total or the month's figure in
+  the title face. Hoy has none. The rest of the page stays on the ground.
 - **Button hierarchy.** The pill is the primary action alone. `quiet` is a row with a chevron, for going
   somewhere; `tone="danger"` on a quiet or ghost button is a destructive act drawn in ink with a red mark,
   never a pill. A page holds one pill.
@@ -128,7 +128,7 @@ Dark, the same design inverted:
 ## Type
 
 - Sentences, headings, commitment names and controls: **Archivo**, fallback `system-ui, sans-serif`.
-- Every figure: **Chivo Mono**, fallback `ui-monospace, monospace`, `letter-spacing: 0.02em`.
+- Every figure that stands alone: **Chivo Mono**, fallback `ui-monospace, monospace`, `letter-spacing: 0.02em`. A figure in a sentence is Archivo, tabular.
 - Set a section label at 11 px, mono, uppercase, `letter-spacing: 0.14em`, in **muted**. It names a
   goal or a group, never a state.
 - Set a screen title at 27 px / 600 / `-0.02em` on the phone, 38–44 px / 600–700 / `-0.03em` wide.
@@ -2052,3 +2052,13 @@ The user accepted the critic's recommendations on 2026-10-31.
 - **The past day, the commitment's page and the export of one goal use the desktop width**: one block alone takes the row, and the commitment's page is the days beside its actions in two columns from 1024.
 - **The printed report keeps months only** (RP-125, 2026-10-14): paper does not print the weeks. The critic's request to print them is open with the user.
 - **«Abrir una meta» is the one verb** for creating a goal; the Semana legend says «sin hacer» for a past day left open.
+
+## Hoy, 2026-11-01, by the user
+
+- **The header is the date.** «Domingo 1 de noviembre» is the `h1`, in the title face, with the day's count beside it («2» in the accent, «de 5», «hechos hoy»; «· 1 en parte» while a row is partial). On the phone the count stands at the start of the controls line, «ayer» and the theme toggle at its end. A past day keeps its header.
+- **No navy block on Hoy.** The week is `WeekStrip`: seven slim columns, each a bar filled to the share of the day done, the day's «5/7» under it, today on the soft accent.
+- **A commitment is a tile** (`Row` with `tile`): 64px at least, a raised box with a hairline; done fills it in the soft accent with the accent mark. Under its name it carries its 30-day strip (`Strip size="row"`), the same bars as the goal's page.
+- **A goal is named once**, by `GroupHead`: its name in the title face, «Fase 1 de 3» as a tag, the phase's aim on one line that opens whole on a press, and from 768 the week's hours as one figure at its end. A goal with one phase has no tag.
+- **«Este mes» names its goal only when several cards stand beside the groups.**
+- **«Sueltas» is a plain line** at the end of the list: its label, its tasks and its field, no card.
+- **One accent on the ground.** Tangerine marks done, links and the tag; navy is the rail and the goal's and Mes's hero; sky only on navy.

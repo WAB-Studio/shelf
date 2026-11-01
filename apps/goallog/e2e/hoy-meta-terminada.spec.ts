@@ -1,7 +1,7 @@
 import type { Browser, Locator, Page } from "@playwright/test";
 import type postgres from "postgres";
 
-import { test, expect, type Person } from "./fixtures";
+import { test, expect, todayHeading, type Person } from "./fixtures";
 import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
 import { boxOf } from "./box";
 
@@ -81,7 +81,7 @@ async function open(page: Page, path = "/"): Promise<void> {
   await page.goto(path);
   await expect(page.locator("main :is(h1, p, a, button, input)").first()).toBeVisible();
   await expect(page.locator("main")).toHaveCount(1);
-  await expect(page.getByRole("heading", { level: 1, name: "Hoy" })).toHaveCount(1);
+  await expect(todayHeading(page)).toHaveCount(1);
 }
 
 test("a goal that ended yesterday reads «terminó ayer · ver»", async ({ browser, baseURL, person, db }) => {

@@ -41,6 +41,13 @@ export function weekdaysSentence(translate: Translate, days: number[], names: st
   return translate("day.cadence.daysJoin", { list: said.slice(0, -1).join(", "), last: said[said.length - 1] });
 }
 
+// A strip's one name for a screen reader: «26 de 30 días hechos…», or the count alone for a cadence with no days named.
+export function stripLabel(translate: Translate, count: { done: number; of: number | null }): string {
+  return count.of === null
+    ? translate("goal.commitments.stripAriaDays", { done: count.done })
+    : translate("goal.commitments.stripAria", { done: count.done, of: count.of });
+}
+
 // A goal's phase line: «fase 2 de 3 · desbloquear la boca»; a goal with one
 // phase says its name alone.
 export function phaseLine(

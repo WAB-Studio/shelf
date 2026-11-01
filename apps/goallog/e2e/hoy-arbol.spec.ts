@@ -1,7 +1,7 @@
 import type { Browser } from "@playwright/test";
 import type postgres from "postgres";
 
-import { test, expect, type Person } from "./fixtures";
+import { test, expect, todayCount, type Person } from "./fixtures";
 import {
   MONTH_LONG,
   monthStart,
@@ -88,7 +88,7 @@ for (const width of [360, 1280]) {
       try {
         await open(page);
         // Header tally of the board: six rows ask today.
-        await expect(page.locator("main")).toContainText(/0\s*de\s*6\s*hechos hoy/);
+        await expect(todayCount(page, 0, 6)).toBeVisible();
 
         const general = await topOf(page, names.general);
         const own = await topOfRow(page, names.own);
@@ -113,8 +113,9 @@ for (const width of [360, 1280]) {
           expect(await standalone(page, name), `«${name}» heads a block of its own`).toBe(0);
         }
 
-        // The loose goal keeps its phase line.
-        await expect(page.getByText(/fase 1 de 3 · desbloquear la boca/i)).toBeVisible();
+        // The loose goal keeps its phase: a tag in its header and the aim on one line under it.
+        await expect(page.getByText("Fase 1 de 3", { exact: true })).toBeVisible();
+        await expect(page.getByText(/desbloquear la boca/i)).toBeVisible();
       } finally {
         await context.close();
       }
@@ -338,14 +339,14 @@ test("a tap on the small goal's row from the general's block is one POST and the
     await open(page);
     await expect(row(page, names.row)).toContainText(names.small);
     expect(await topOf(page, names.general)).toBeLessThan(await topOfRow(page, names.row));
-    await expect(page.locator("main")).toContainText(/0\s*de\s*2\s*hechos hoy/);
+    await expect(todayCount(page, 0, 2)).toBeVisible();
 
     const posts: string[] = [];
     page.on("request", (request) => {
       if (request.method() === "POST" && request.headers()["next-action"]) posts.push(request.url());
     });
     await row(page, names.row).click();
-    await expect(page.locator("main")).toContainText(/1\s*de\s*2\s*hechos hoy/);
+    await expect(todayCount(page, 1, 2)).toBeVisible();
     await expect
       .poll(async () => (await db`select 1 from goals.facts where commitment_id = ${commitment}`).length)
       .toBe(1);

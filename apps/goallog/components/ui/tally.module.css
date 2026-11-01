@@ -1,0 +1,44 @@
+.tally {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.line {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+/* The count done: the title face, in the one accent. */
+.done {
+  font-family: var(--font-display), var(--font-sans), sans-serif;
+  font-size: 30px;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  color: var(--pulsar-accent);
+}
+
+.rest {
+  font-family: var(--font-sans);
+  font-size: 18px;
+  font-variant-numeric: tabular-nums;
+  color: var(--pulsar-ink-secondary);
+}
+
+.caption {
+  font-size: var(--pulsar-text-small-size);
+  color: var(--pulsar-muted);
+}
+
+@media (min-width: 768px) {
+  .tally {
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 2px;
+  }
+
+  .done {
+    font-size: 40px;
+  }
+}

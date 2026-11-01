@@ -54,6 +54,12 @@ export { WeekBars, type WeekBar } from "./week-bars";
 
 export { Hero } from "./hero";
 
+export { Tally } from "./tally";
+
+export { WeekStrip, type WeekStripDay } from "./week-strip";
+
+export { GroupHead } from "./group-head";
+
 export { Sheet } from "./sheet";
 
 export { Field } from "./field";

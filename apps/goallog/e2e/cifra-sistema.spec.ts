@@ -56,6 +56,8 @@ for (const [width, height] of [
             {
               gap: unit.getBoundingClientRect().left - numberEnd,
               family: style.fontFamily,
+              // A figure inside a sentence speaks the sentence's face; one that stands alone is mono (DESIGN «Hoy»).
+              inSentence: [...figure.classList].some((name) => /_meta$/.test(name)),
               lines: figure.getBoundingClientRect().height / parseFloat(style.lineHeight),
             },
           ];
@@ -65,7 +67,8 @@ for (const [width, height] of [
       for (const figure of measured) {
         expect(figure.gap).toBeGreaterThanOrEqual(0);
         expect(figure.gap).toBeLessThanOrEqual(6);
-        expect(figure.family).toMatch(/mono/i);
+        if (figure.inSentence) expect(figure.family).not.toMatch(/mono/i);
+        else expect(figure.family).toMatch(/mono/i);
         expect(figure.lines).toBeLessThan(1.5);
       }
     } finally {

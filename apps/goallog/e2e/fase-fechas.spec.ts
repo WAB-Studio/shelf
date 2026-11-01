@@ -25,7 +25,7 @@ async function expectFigures(line: Locator, figures: string[]) {
   }));
   expect(set.family).not.toMatch(/mono/i);
   expect(set.spans.map((span) => span.text)).toEqual(figures);
-  for (const span of set.spans) expect(span.family).toMatch(/mono/i);
+  for (const span of set.spans) expect(span.family).not.toMatch(/mono/i);
 }
 
 // A goal whose last day is the Wednesday of its week 6, so week 5 is whole and
@@ -64,7 +64,7 @@ for (const [width, height] of WIDTHS) {
       const from = page.getByLabel(plan.phaseForm.fromLabel);
       const to = page.getByLabel(plan.phaseForm.toLabel);
 
-      // Week 5: its Monday and its Sunday, in mono.
+      // Week 5: its Monday and its Sunday, in the line's own face.
       await from.fill("5");
       await to.fill("5");
       const mondayFive = addWeeksToCivilDate(monday, 4);

@@ -110,9 +110,8 @@
 
 /* The refusal's own reason is a sentence the person must read: ink, never muted. */
 .reason {
-  font-family: var(--font-mono);
+  font-family: var(--font-sans);
   font-size: var(--pulsar-text-meta-size);
-  letter-spacing: 0.02em;
   color: var(--pulsar-ink);
 }
 
