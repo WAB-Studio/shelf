@@ -3,7 +3,7 @@
 # Self-contained: it runs as root before Claude starts and reads no path of the repo.
 # Cached about 7 days when it ends in under 5 minutes, so it only warms downloads.
 # Exits 0 always: a failed warm-up must not stop the session.
-SUPABASE_VERSION="2.119.0"   # keep equal to scripts/supabase-local.sh
+SUPABASE_VERSION="2.119.0"   # keep equal to scripts/supabase-local.sh; session-start.sh warns when they differ
 
 # The CLI's npx download, so the first `supabase-local.sh start` does not pay for it.
 npx --yes "supabase@${SUPABASE_VERSION}" --version >/dev/null 2>&1 || echo "setup: supabase CLI warm-up failed"

@@ -11,9 +11,6 @@ API_URL="http://127.0.0.1:44321"
 
 cli() { (cd "$ROOT" && npx --yes "supabase@${SUPABASE_VERSION}" "$@"); }
 
-# A cloud session is one lane; lane 1 is the unset default.
-[ "${CLAUDE_CODE_REMOTE:-}" = true ] && export HARNESS_LANE="${HARNESS_LANE:-1}"
-
 # A cloud VM starts with Docker stopped; start it only when the stack is asked for.
 ensure_docker() {
   docker info >/dev/null 2>&1 && return 0
@@ -23,9 +20,10 @@ ensure_docker() {
   local i
   for i in $(seq 1 30); do docker info >/dev/null 2>&1 && return 0; sleep 1; done
   echo "supabase-local: Docker did not come up" >&2
+  return 1
 }
 
-is_up() { docker ps --format '{{.Names}}' | grep -q '^supabase_db_shelf$'; }
+is_up() { ensure_docker || return 1; docker ps --format '{{.Names}}' | grep -q '^supabase_db_shelf$'; }
 
 # Reads one KEY="value" line out of `status -o env` text on stdin.
 status_value() { sed -n "s/^$1=\"\(.*\)\"\$/\1/p" | head -1; }
@@ -73,7 +71,6 @@ cmd_migrate() {
 }
 
 cmd_start() {
-  ensure_docker
   # Already up: apply nothing; `migrate` is the explicit way to catch up.
   if is_up; then
     echo "supabase-local: stack already up" >&2

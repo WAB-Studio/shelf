@@ -15,30 +15,25 @@ the repo's `.claude/settings.json`, hooks, `CLAUDE.md`, agents and skills load, 
   - `*.vercel.com`, `api.vercel.com` (only to deploy or read Vercel from the VM)
 - Setup script: paste `scripts/cloud/setup.sh` whole. It reads no repo path, warms the Supabase CLI download
   and exits 0. Docker images are not pulled there (unmeasured; the first `supabase-local.sh start` pulls them).
-- Variables (.env format). Secrets are marked; put them in network secrets when the UI offers it.
-  - `NEXT_PUBLIC_SUPABASE_URL`
-  - `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
-  - `NEXT_PUBLIC_SITE_URL`
-  - `DATABASE_URL` (secret)
-  - `MIGRATION_DATABASE_URL` (secret)
-  - `SUPABASE_SECRET_KEY` (secret)
-  - `CRON_SECRET` (secret)
-  - `OPENAI_API_KEY` (secret, optional)
-  - `TRANSLATE_MYMEMORY_EMAIL`, `TRANSLATE_MYMEMORY_KEY` (secret, optional)
-  - `APP_MODEL_CALLS_DAILY_CAP`, `PULSAR_MODEL_STUB` (optional)
-  - The same names feed every app: `session-start.sh` writes each app's `.env.local` from them. TimeLog has no `.env.example`.
+- Variables: none required. A cloud session holds no production secret.
+  - Optional `OPENAI_API_KEY`, as a network secret, to call the real model on purpose.
+  - `scripts/supabase-local.sh exec` overlays the local stack's database, keys and empty paid keys on every command.
+- Production migrations and anything that touches production stay on the user's PC.
 - Never set `GH_TOKEN` by hand; the proxy injects it.
 
 ## What runs on start
 
 - `scripts/cloud/session-start.sh` (SessionStart hook; exits at once unless `CLAUDE_CODE_REMOTE=true`):
-  git identity wilson, `npm ci` when the lockfile hash moved, `npx next typegen` per app, `.env.local` per app
-  from the variables. Never overwrites an existing `.env.local`. Never fails the session.
+  git identity wilson, `npm ci` when the lockfile hash moved (stamp written after success), `npx next typegen` per app,
+  `.env.local` per app copied from `.env.example` (placeholders, site URL on the lane-1 port). Never overwrites an existing
+  `.env.local`. Never fails the session. The hook times out at 900 s.
+- `npm ci` stays in the hook: the setup script runs before the repo is guaranteed to be there.
+- Warns when `setup.sh` pins another Supabase CLI version than `supabase-local.sh`: paste it again.
 - `attribution` in `.claude/settings.json` is blank and `sessionUrl` is false: no trailer, no session link.
 
 ## Work
 
-- One cloud session is one lane: `HARNESS_LANE` defaults to 1. `scripts/worktree.sh` refuses.
+- One cloud session is one lane, lane 1 (`HARNESS_LANE` unset). `scripts/worktree.sh` refuses.
 - Fan out with several cloud sessions, one branch each.
 - Run `typecheck` and `lint` as always. A suite needs the local stack: `scripts/supabase-local.sh start`
   (starts Docker first when the daemon is down), then `scripts/supabase-local.sh exec <cmd>`.
@@ -49,7 +44,8 @@ the repo's `.claude/settings.json`, hooks, `CLAUDE.md`, agents and skills load, 
 
 - Use `scripts/gh-rest.sh`. Never `gh pr` or `gh issue`: the proxy refuses GraphQL (403).
   - `scripts/gh-rest.sh pr-create <branch> --title t --body-file f` (base is always integracion)
-  - `scripts/gh-rest.sh pr-view <n>`, `pr-checks <n>`, `pr-list`
+  - `scripts/gh-rest.sh pr-view <n>`, `pr-checks <n>` (check-runs and commit statuses), `pr-list`
+  - A raw `gh api …/pulls/<n>/merge` is refused by the guard.
   - `scripts/gh-rest.sh pr-merge <n> --squash` (refuses a PR that targets main)
 - Push works to any branch; deletes and tags are refused.
 

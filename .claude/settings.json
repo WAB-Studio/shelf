@@ -51,7 +51,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "f=\"$CLAUDE_PROJECT_DIR/scripts/cloud/session-start.sh\"; [ \"$CLAUDE_CODE_REMOTE\" = true ] && [ -f \"$f\" ] && bash \"$f\"; exit 0"
+            "command": "f=\"$CLAUDE_PROJECT_DIR/scripts/cloud/session-start.sh\"; [ \"$CLAUDE_CODE_REMOTE\" = true ] && [ -f \"$f\" ] && bash \"$f\"; exit 0",
+            "timeout": 900
           }
         ]
       }

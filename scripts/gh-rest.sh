@@ -25,6 +25,9 @@ case "$cmd" in
         *) echo "gh-rest: unknown option $1" >&2; exit 1 ;;
       esac
     done
+    if printf '%s\n%s' "$title" "$body" | grep -qiE '^[[:space:]]*(co-authored-by|claude-session)[[:space:]]*:|generated with \[?claude code|claude\.ai/code/session'; then
+      echo "gh-rest: No Claude trailer: no Co-Authored-By, Claude-Session or Generated-with footer." >&2; exit 1
+    fi
     api "repos/$REPO/pulls" -f "title=$title" -f "head=$head" -f "base=$BASE" -f "body=$body" --jq '.html_url'
     ;;
   pr-view)
@@ -35,6 +38,8 @@ case "$cmd" in
     n="${1:?number}"
     sha="$(api "repos/$REPO/pulls/$n" --jq '.head.sha')"
     api "repos/$REPO/commits/$sha/check-runs" --paginate --jq '.check_runs[] | "\(.name) \(.status) \(.conclusion // "-")"'
+    # Vercel and other integrations report commit statuses, not check-runs.
+    api "repos/$REPO/commits/$sha/status" --jq '.statuses[] | "\(.context) \(.state) -"'
     ;;
   pr-list)
     api "repos/$REPO/pulls?state=open&per_page=50" --jq '.[] | "#\(.number) \(.head.ref) -> \(.base.ref) \(.title)"'

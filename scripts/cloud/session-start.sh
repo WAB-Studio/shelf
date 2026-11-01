@@ -14,38 +14,45 @@ warn() { echo "cloud-start: warning: $*" >&2; }
 git config user.name wilson 2>/dev/null && git config user.email cxrkeybwp2004@gmail.com 2>/dev/null \
   && DONE+=("git identity")
 
+# A killed `npm ci` leaves node_modules half built; the stamp is written only after success, so the next start redoes it.
 STAMP="$ROOT/node_modules/.lock-hash"
 HASH="$(sha256sum package-lock.json 2>/dev/null | cut -d' ' -f1)"
 if [ ! -d node_modules ] || [ ! -f "$STAMP" ] || [ "$(cat "$STAMP")" != "$HASH" ]; then
-  if npm ci --no-audit --no-fund >/dev/null 2>&1; then
+  if timeout 600 npm ci --no-audit --no-fund >/dev/null 2>&1; then
     echo "$HASH" > "$STAMP"
     DONE+=("npm ci")
   else
-    warn "npm ci failed; run it by hand."
+    rm -f "$STAMP"
+    warn "npm ci failed or timed out; run it by hand."
   fi
 fi
 
-# Write only keys the environment holds. A file that exists is the user's: wordbook's is never touched.
+# No secret is written: `supabase-local.sh exec` overlays the local stack's values on whatever the file holds.
+# The file exists only so tools that demand it (db:migrate) find one. wordbook's real file is the user's and
+# AGENTS.md forbids touching it; a fresh VM has none, so a missing file is created, an existing one never changed.
+port_of() { case $1 in homefund) echo 3000 ;; wordbook) echo 3100 ;; goallog) echo 3200 ;; timelog) echo 3300 ;; esac; }
 for env_example in apps/*/.env.example; do
   [ -f "$env_example" ] || continue
-  app_dir="$(dirname "$env_example")"
+  app_dir="$(dirname "$env_example")"; app="$(basename "$app_dir")"
   target="$app_dir/.env.local"
   [ -e "$target" ] && continue
-  lines=""
-  while IFS= read -r key; do
-    [ -n "${!key:-}" ] && lines+="${key}=${!key}"$'\n'
-  done < <(sed -n 's/^\([A-Z][A-Z0-9_]*\)=.*/\1/p' "$env_example")
-  if [ -n "$lines" ]; then
-    printf '%s' "$lines" > "$target" && chmod 600 "$target" && DONE+=("$(basename "$app_dir") .env.local")
-  fi
+  cp "$env_example" "$target" || continue
+  port="$(port_of "$app")"
+  [ -n "$port" ] && sed -i -E "s#^NEXT_PUBLIC_SITE_URL=.*#NEXT_PUBLIC_SITE_URL=http://localhost:$port#" "$target"
+  DONE+=("$app .env.local")
 done
+
+# setup.sh is pasted into claude.ai and cannot read the repo; its pinned version must follow the script's.
+want="$(sed -n 's/^SUPABASE_VERSION="\([^"]*\)".*/\1/p' scripts/supabase-local.sh)"
+have="$(sed -n 's/^SUPABASE_VERSION="\([^"]*\)".*/\1/p' scripts/cloud/setup.sh)"
+[ "$want" = "$have" ] || warn "setup.sh pins supabase $have, supabase-local.sh $want: paste setup.sh again."
 
 # Gitignored route types the root typecheck needs. One app at a time, as CI does.
 if [ -d node_modules ]; then
   for app in homefund wordbook goallog timelog; do
     [ -d "apps/$app" ] || continue
     [ -d "apps/$app/.next/types" ] && continue
-    (cd "apps/$app" && npx next typegen >/dev/null 2>&1) && DONE+=("typegen $app") || warn "typegen failed for $app."
+    (cd "apps/$app" && timeout 120 npx next typegen >/dev/null 2>&1) && DONE+=("typegen $app") || warn "typegen failed for $app."
   done
 fi
 

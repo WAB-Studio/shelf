@@ -25,7 +25,7 @@ Read it before you open, work in or drop a lane. The why behind each rule: `docs
 
 ## Cloud lane
 
-- Treat a cloud session as lane 1: `HARNESS_LANE` defaults to 1 there and `worktree.sh` refuses.
+- Treat a cloud session as lane 1: leave `HARNESS_LANE` unset there; `worktree.sh` refuses.
 - Fan out with more cloud sessions. See `docs/agentes/nube.md`.
 
 ## Harness lanes

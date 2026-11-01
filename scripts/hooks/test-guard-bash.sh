@@ -168,6 +168,29 @@ blocks 'gh api repos/WAB-Studio/shelf/pulls -f base=integracion -f head=x -f bod
 passes 'gh api repos/WAB-Studio/shelf/pulls -f title=t -f head=x -f base=integracion'
 passes 'gh api repos/WAB-Studio/shelf/pulls -f head=integracion -f base=main'
 passes 'gh api repos/WAB-Studio/shelf/pulls/5'
+blocks 'gh api -X PUT repos/WAB-Studio/shelf/pulls/5/merge -f merge_method=squash'
+blocks 'gh api repos/WAB-Studio/shelf/pulls/5/merge --method PUT'
+blocks 'gh api -XPATCH repos/WAB-Studio/shelf/pulls/5 -f base=main'
+passes 'gh api -X PATCH repos/WAB-Studio/shelf/pulls/5 -f base=integracion'
+passes 'gh api -X PATCH repos/WAB-Studio/shelf/pulls/5 -f title=t'
+TMPD=$(mktemp -d)
+printf '{"title":"t","head":"x","base":"main"}' > "$TMPD/main.json"
+printf '{"title":"t","head":"x","base":"integracion","body":"Co-Authored-By: C"}' > "$TMPD/trailer.json"
+printf '{"title":"t","head":"x","base":"integracion"}' > "$TMPD/ok.json"
+printf 'ok body' > "$TMPD/ok.md"
+printf 'x\n\nClaude-Session: abc' > "$TMPD/bad.md"
+blocks "gh api repos/WAB-Studio/shelf/pulls --input $TMPD/main.json"
+blocks "gh api repos/WAB-Studio/shelf/pulls --input $TMPD/trailer.json"
+blocks "gh api repos/WAB-Studio/shelf/pulls --input $TMPD/missing.json"
+passes "gh api repos/WAB-Studio/shelf/pulls --input $TMPD/ok.json"
+blocks "gh api repos/WAB-Studio/shelf/pulls -f base=integracion -f head=x -F body=@$TMPD/bad.md"
+passes "gh api repos/WAB-Studio/shelf/pulls -f base=integracion -f head=x -F body=@$TMPD/ok.md"
+blocks "gh api repos/WAB-Studio/shelf/pulls -f base=integracion -f head=x -F body=@$TMPD/missing.md"
+# gh-rest.sh refuses a trailer before any network call
+GHR="$HERE/../gh-rest.sh"
+"$GHR" pr-create x --title t --body-file "$TMPD/bad.md" >/dev/null 2>&1 && { echo "FAIL: gh-rest trailer"; FAILS=$((FAILS+1)); }
+"$GHR" pr-create x --base main >/dev/null 2>&1 && { echo "FAIL: gh-rest base"; FAILS=$((FAILS+1)); }
+rm -rf "$TMPD"
 passes 'scripts/gh-rest.sh pr-create nube --title t'
 
 [ $FAILS -eq 0 ] && echo "guard-bash: all green" || { echo "$FAILS failed"; exit 1; }
