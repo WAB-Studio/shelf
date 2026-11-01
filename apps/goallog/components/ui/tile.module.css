@@ -1,0 +1,10 @@
+/* The box a commitment's row draws as a tile (`row.module.css` `.tile`), for a line that is not a `Row`: a month's
+   task on Hoy, so its mark stands where a commitment's does. */
+.tile {
+  box-sizing: border-box;
+  min-block-size: 64px;
+  padding: 12px 14px;
+  background: var(--pulsar-raised);
+  border: 1px solid var(--pulsar-line);
+  border-radius: 12px;
+}

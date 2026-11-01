@@ -538,8 +538,10 @@ test("an ended goal and an archived one refuse the sheet on this month and a com
   const context = await browser.newContext({ storageState: person.sessionFile, baseURL: baseURL! });
   try {
     const page = await context.newPage();
+    // Ended today, its last day is yesterday: on a month's first day that is last month, so this month is not its own.
+    const endedMonths = todayInZone().endsWith("-01") ? [] : [thisMonth];
     for (const [goalId, months] of [
-      [ended.id, [thisMonth]],
+      [ended.id, endedMonths],
       [archivedId, [thisMonth, followingMonth]],
     ] as const) {
       for (const month of months) {

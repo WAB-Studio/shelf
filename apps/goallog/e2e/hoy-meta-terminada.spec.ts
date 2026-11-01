@@ -143,7 +143,7 @@ test("«ver» opens the goal that ended", async ({ browser, baseURL, person, db 
   });
 });
 
-test("at 1280 the line sits under «Hoy» and above the goals", async ({ browser, baseURL, person, db }) => {
+test("at 1280 the line sits under the date and above the goals", async ({ browser, baseURL, person, db }) => {
   test.skip(!inThisWeek(1), MONDAY_YESTERDAY);
   await withPerson(browser, baseURL, person, db, async (page, personId) => {
     const stamp = Date.now();
@@ -156,7 +156,8 @@ test("at 1280 the line sits under «Hoy» and above the goals", async ({ browser
     const line = page.getByText(`${name} terminó ayer`);
     await expect(line).toHaveCount(1);
     const box = async (locator: Locator) => (await boxOf(locator));
-    const t = await box(page.getByRole("main").getByText("Hoy", { exact: true }));
+    // The header is the date (DESIGN «Hoy, 2026-11-01»): the line sits under it.
+    const t = await box(page.getByRole("main").getByRole("heading", { level: 1 }));
     const g = await box(page.getByText(openName).first());
     expect(g.y).toBeGreaterThanOrEqual(t.y + t.height - 1);
     const l = await box(line);

@@ -23,7 +23,7 @@ function rowOf(page: Page, name: string): Locator {
 
 async function lefts(page: Page, name: string): Promise<{ mark: number; name: number }> {
   const row = rowOf(page, name);
-  const mark = await row.locator("[data-state]").first().boundingBox();
+  const mark = await row.locator("[data-part='mark'][data-state]").first().boundingBox();
   const text = await page.getByText(name, { exact: true }).first().boundingBox();
   return { mark: mark!.x, name: text!.x };
 }

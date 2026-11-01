@@ -41,11 +41,8 @@
   color: var(--pulsar-ink);
 }
 
-/* The figure inside a row's metadata line, where it reads beside a sentence: the sentence's own face,
-   tabular, since mono is for a figure that stands alone. */
+/* The figure inside a row's metadata line, where it reads beside a sentence. */
 .meta {
-  font-family: var(--font-sans);
-  letter-spacing: normal;
   font-size: var(--pulsar-text-meta-size);
   line-height: 1.4;
   color: var(--pulsar-muted);

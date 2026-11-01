@@ -117,14 +117,11 @@ test("the week's figure carries its unit on Hoy, the goal and the review, and is
 
     await page.setViewportSize({ width: 1280, height: 800 });
 
-    // Hoy: the card's label is the goal, its figure the sum in its unit, its caption the week.
+    // Hoy: the goal's head names it, and at its end stand the sum in its unit and the week's caption.
     await page.goto("/");
-    const card = page
-      .getByText("esta semana", { exact: true })
-      .locator("xpath=ancestor::div[.//a][1]")
-      .filter({ hasText: goalName });
+    const card = page.locator("[data-part='group-head']").filter({ hasText: goalName }).filter({ hasText: "esta semana" });
     await expect(card).toHaveCount(1);
-    await expect(card.locator("[data-part='section-label']").first()).toHaveText(goalName);
+    await expect(card.getByRole("heading", { level: 2 })).toHaveText(goalName);
     await expect(card).toContainText(new RegExp(`${total}\\s*${KM}`));
     await expect(card).toContainText("esta semana");
     await expect(card).not.toContainText(first);
