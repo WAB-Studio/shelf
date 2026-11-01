@@ -148,7 +148,8 @@ test.describe("the audit screen", () => {
     await page.goto("/es/settings/audit");
 
     // Newest first, so the row this test wrote is on the first page.
-    await expect(page.getByRole("cell", { name: categoryId })).toBeVisible();
+    // The table at the desktop and the cards on the phone both carry the id.
+    await expect(page.getByText(categoryId).locator("visible=true")).toBeVisible();
   });
 });
 
