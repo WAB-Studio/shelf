@@ -162,6 +162,8 @@ type GoalsQueryRow = {
   commitments: CommitmentRow[];
   phases: PhaseRow[];
   facts: FactRow[];
+  // Today alone: the commitments' facts of the last thirty days, for the strips.
+  strip_facts: { commitment_id: string; day: string; quantity: number | null; note: string | null }[];
   month_budgets: MonthBudgetRow[];
   one_offs: OneOffRow[];
   done_one_offs: DoneOneOffRow[];
@@ -213,7 +215,7 @@ async function queryGoalsRow(
   day: string,
   weekStart: string,
   isToday: boolean,
-  factsFrom: string,
+  stripFrom: string,
 ): Promise<GoalsQueryRow> {
   const [row] = await tx.execute<GoalsQueryRow>(sql`
     select
@@ -249,7 +251,16 @@ async function queryGoalsRow(
                ) order by f.day, f.written_at, f.id), '[]'::json)
          from "goals"."facts" f
          left join "goals"."commitments" c on c.id = f.commitment_id
-         where f.day between least(${factsFrom}::date, date_trunc('month', ${day}::date)::date) and ${day}::date) as facts,
+         where f.day between least(${weekStart}::date, date_trunc('month', ${day}::date)::date) and ${day}::date) as facts,
+      (select coalesce(json_agg(jsonb_build_object(
+                 'commitment_id', f.commitment_id,
+                 'day', f.day,
+                 'quantity', f.quantity,
+                 'note', f.note
+               )), '[]'::json)
+         from "goals"."facts" f
+         where ${isToday}::boolean and f.commitment_id is not null
+           and f.day between ${stripFrom}::date and ${day}::date) as strip_facts,
       (select coalesce(json_agg(to_jsonb(b) order by b.month), '[]'::json)
          from "goals"."month_budgets" b
          join "goals"."goals" g on g.id = b.goal_id
@@ -334,9 +345,19 @@ function stripsOf(
   row: GoalsQueryRow,
   evidenceOutcome: EvidenceOutcome,
   day: string,
+  drawn: ReadonlySet<string>,
 ): Record<string, DayStrip> {
+  const byCommitment = new Map<string, { day: string; quantity: number | null; note: string | null }[]>();
+  for (const fact of row.strip_facts) {
+    const own = byCommitment.get(fact.commitment_id);
+    if (own) own.push(fact);
+    else byCommitment.set(fact.commitment_id, [fact]);
+  }
   const strips: Record<string, DayStrip> = {};
   for (const commitment of row.commitments) {
+    if (!drawn.has(commitment.id)) continue;
+    // A source that cannot be read leaves its commitment no strip: «0 de 30» would be a lie.
+    if (commitment.satisfaction === "evidence" && evidenceOutcome.status !== "read") continue;
     const createdOn = civilDateInZone(new Date(commitment.created_at));
     const cadence = toCadence(commitment);
     const { done } = commitmentDays({
@@ -345,8 +366,8 @@ function stripsOf(
       createdOn,
       today: day,
       declaredDayCount: 0,
-      recent: row.facts.filter((fact) => fact.commitment_id === commitment.id),
-      evidence: evidenceOutcome.status === "read" ? evidenceOutcome.bySourceKey : null,
+      recent: byCommitment.get(commitment.id) ?? [],
+      evidence: evidenceOutcome.bySourceKey,
     });
     const cells = strip(day, { cadence, createdOn }, done);
     strips[commitment.id] = { cells, ...stripCount(cells, cadence) };
@@ -817,11 +838,18 @@ export async function loadDay(day: string): Promise<{
   const stripFrom = stripDays(day)[0];
   const evidenceFrom = isToday && stripFrom < periodFrom ? stripFrom : periodFrom;
 
-  const [row, evidenceOutcome] = await Promise.all([
-    withGoalsDb((tx) => queryGoalsRow(tx, day, weekStart, isToday, evidenceFrom)),
+  const [row, evidenceRead] = await Promise.all([
+    withGoalsDb((tx) => queryGoalsRow(tx, day, weekStart, isToday, stripFrom)),
     readEvidenceOutcome(person.id, evidenceFrom, day),
   ]);
 
+  // Everything but the strips reads the period alone: the wider days are cut away here.
+  const evidenceOutcome: EvidenceOutcome = {
+    status: evidenceRead.status,
+    bySourceKey: Object.fromEntries(
+      Object.entries(evidenceRead.bySourceKey).map(([key, days]) => [key, days.filter((d) => d.day >= periodFrom)]),
+    ),
+  };
   const commitments = row.commitments.map(toCommitmentPlan);
   // The statement returns every phase so a goal's phase can say its place
   // among them; what the day derives from stays the ones in effect on `day`.
@@ -837,7 +865,7 @@ export async function loadDay(day: string): Promise<{
   // Every fact of the period, not the day's alone: `asksOn` counts a quota
   // over the week or the month, and `deriveSlot` reads the day's own by day.
   const facts = row.facts
-    .filter((fact): fact is FactRow & { commitment_id: string } => fact.commitment_id !== null && fact.day >= periodFrom)
+    .filter((fact): fact is FactRow & { commitment_id: string } => fact.commitment_id !== null)
     .map(toDeclaredFact);
   const dayEvidence = Object.fromEntries(
     Object.entries(evidenceOutcome.bySourceKey).map(([key, days]) => [
@@ -881,7 +909,7 @@ export async function loadDay(day: string): Promise<{
   return {
     view,
     periodDone,
-    strips: isToday ? stripsOf(row, evidenceOutcome, day) : {},
+    strips: isToday ? stripsOf(row, evidenceRead, day, new Set([...view.slots.map((slot) => slot.commitmentId), ...Object.keys(periodDone)])) : {},
     evidence: evidenceOutcome.status,
     goals: goals.map((goal) => toGoalSummary(goal, tree)),
     groups,

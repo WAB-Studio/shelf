@@ -298,7 +298,7 @@ for (const width of [360, 1440]) {
 }
 
 // The widest date the app can draw, so the line is measured whatever day the suite runs.
-const LONGEST_DATE = "miércoles 30 de septiembre";
+const LONGEST_DATE = "Miércoles 30 de septiembre";
 
 for (const longest of [false, true]) {
 test(`at 360 the header holds the date, the count, «ayer» and the theme button without overflow (${longest ? "the longest date" : "today's date"})`, async ({
@@ -330,7 +330,10 @@ test(`at 360 the header holds the date, the count, «ayer» and the theme button
     }
     expect(boxes.link.x + boxes.link.width).toBeLessThanOrEqual(boxes.theme.x);
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(360);
-    // The controls stand on the header's first line, the date under them.
+    // The count and the controls share the header's first line: «ayer» and the toggle stand at its end.
+    expect(boxes.link.x).toBeGreaterThanOrEqual(boxes.count.x + boxes.count.width);
+    expect(Math.abs(boxes.link.y + boxes.link.height / 2 - (boxes.count.y + boxes.count.height / 2))).toBeLessThan(12);
+    // The date stands under them.
     expect(boxes.h1.y).toBeGreaterThanOrEqual(boxes.link.y + boxes.link.height - 1);
   } finally {
     await context.close();

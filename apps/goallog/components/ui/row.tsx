@@ -73,7 +73,7 @@ type RowProps = Omit<ComponentPropsWithoutRef<"button">, "children" | "name"> & 
   // the soft accent.
   tile?: boolean;
   done?: boolean;
-  // A line of its own under the name and its meta: a commitment's history strip.
+  // A line of its own under the name and its meta: a commitment's history strip. Drawn, never read in the row's name: the caller names it with `aria-description`.
   strip?: ReactNode;
   // How deep the row sits in a tree of goals: 0 at the top, 2 at most. The
   // row and its hairline start that many 20px steps in (`JerarquiaArbol`).
@@ -160,7 +160,7 @@ export const Row = forwardRef<HTMLButtonElement, RowProps>(function Row(
             {preview}
           </Text>
         ) : null}
-        {strip ? <span className={styles.strip}>{strip}</span> : null}
+        {strip ? <span className={styles.strip} aria-hidden>{strip}</span> : null}
       </span>
       {wideTrailing ? <span className={`${styles.trailing} ${styles.wideOnly}`}>{wideTrailing}</span> : null}
       {trailing ? <span className={styles.trailing}>{trailing}</span> : null}

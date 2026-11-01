@@ -13,17 +13,12 @@ export function GroupHead({
   name,
   tag,
   phase,
-  expandLabel,
-  collapseLabel,
   trailing,
 }: {
   name: string;
   // «Fase 1 de 3».
   tag?: string;
   phase?: string;
-  // What the phase line's press does next, for a screen reader.
-  expandLabel?: string;
-  collapseLabel?: string;
   trailing?: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
@@ -39,7 +34,7 @@ export function GroupHead({
         {trailing ? <div className={styles.trailing}>{trailing}</div> : null}
       </div>
       {phase ? (
-        <button type="button" className={styles.phase} aria-expanded={open} aria-label={open ? collapseLabel : expandLabel} onClick={() => setOpen(!open)}>
+        <button type="button" className={styles.phase} aria-expanded={open} onClick={() => setOpen(!open)}>
           <span className={open ? styles.phaseOpen : styles.phaseText}>{phase}</span>
           <ChevronDown size={16} aria-hidden className={open ? styles.chevronOpen : styles.chevron} />
         </button>

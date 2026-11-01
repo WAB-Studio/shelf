@@ -6,7 +6,7 @@ import { Button, Face, Figure, Flex, GroupHead, Page, Panel, Section, SectionLab
 import type { Translator } from "@/i18n/translator";
 import { dayPhrase as dayPhraseOf, endedPhrase, type DayPhraseKey } from "@/lib/day/day-phrase";
 import { sentenceCase } from "@/lib/day/day-words";
-import { metPhrase, phaseLine } from "@/lib/day/row-phrases";
+import { metPhrase, phaseLine, stripLabel } from "@/lib/day/row-phrases";
 import { tallyDay, tallyDays } from "@/lib/day/tally";
 import { phaseOn } from "@/lib/day/derive";
 import type { DaySlot } from "@/lib/day/types";
@@ -329,7 +329,7 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
     if (!own) return undefined;
     return {
       cells: own.cells,
-      label: own.of === null ? t("goal.commitments.stripAriaDays", { done: own.done }) : t("goal.commitments.stripAria", { done: own.done, of: own.of }),
+      label: stripLabel((key, values) => t(key, values), own),
     };
   }
 
@@ -477,7 +477,7 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
         {line === undefined || planned === null ? (
           // No amount planned: the reached figure when the goal measures,
           // then its tasks done of total (a measureless goal reads only those).
-          <Flex align="baseline" gap="2" wrap="wrap">
+          <Flex align="baseline" gap="1" wrap="wrap">
             {line !== undefined ? (
               <>
                 <Figure value={line.reached} unit={goal.measureUnit ?? undefined} variant="meta" />
@@ -503,7 +503,7 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
             {t("day.monthLine.paceUnder", { threshold: 60 })}
           </Text>
         ) : (
-          <Flex align="baseline" gap="2" wrap="wrap">
+          <Flex align="baseline" gap="1" wrap="wrap">
             <Figure value={line.reached} unit={goal.measureUnit ?? undefined} variant="meta" bare />
             <Text variant="sentence">
               {t("day.monthLine.of")} <Figure value={planned} unit={goal.measureUnit ?? undefined} variant="meta" />
@@ -615,14 +615,13 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
                 name={label}
                 tag={position && position.total > 1 ? t("day.phase.tag", position) : undefined}
                 phase={rootPhase?.name}
-                expandLabel={t("day.phase.expand")}
-                collapseLabel={t("day.phase.collapse")}
                 trailing={
                   root && weekly !== undefined ? (
                     <Face on="desktop">
                       <Flex direction="column" align="end">
                         <Figure value={weekly} unit={root.measureUnit ?? undefined} />
                         <Text variant="sentence">{t("day.weekFigure.caption")}</Text>
+                        <TextLink href={`/metas/${root.id}/revision`}>{t("goal.detail.reviewLink")}</TextLink>
                       </Flex>
                     </Face>
                   ) : undefined
@@ -721,7 +720,7 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
   );
   const goalless = past ? pastTasks : (
     <>
-      {figures.map((goal) => (
+      {figures.filter((goal) => !rootIds.has(goal.id) || monthGoals.includes(goal)).map((goal) => (
         <Panel as="div" key={goal.id}>
           <Face on="desktop">
             <Flex direction="column" gap="3">
@@ -736,7 +735,9 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
               {monthGoals.includes(goal) ? (
                 <Section label={monthTitle(goal)}>{monthLines(goal)}</Section>
               ) : null}
-              <TextLink href={`/metas/${goal.id}/revision`}>{t("goal.detail.reviewLink")}</TextLink>
+              {rootIds.has(goal.id) ? null : (
+                <TextLink href={`/metas/${goal.id}/revision`}>{t("goal.detail.reviewLink")}</TextLink>
+              )}
             </Flex>
           </Face>
         </Panel>
