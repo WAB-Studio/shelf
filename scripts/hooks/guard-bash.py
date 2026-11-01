@@ -355,6 +355,28 @@ def has_trailer(text):
     return bool(TRAILER_LINE.search(text) or TRAILER_ANY.search(text))
 
 
+def check_gh_api(a, p, raw):
+    """A `gh api` call that opens a PR must point it at integracion; one that merges must not name main."""
+    path = next((x for x in a if re.match(r"^/?repos/[^/]+/[^/]+/pulls", x)), "")
+    if not path:
+        return None
+    method = (option(a, "--method", "-X") or "").upper()
+    fields = option_all(a, ["--field", "--raw-field"], ["-f", "-F"])
+    if has_trailer(message_text(a, p.cwd, p.heredocs, [], raw) + "\n".join(f.split("=", 1)[-1] for f in fields)):
+        return TRAILER_MSG
+    if re.search(r"/pulls/?$", path) and (method == "POST" or fields):
+        base = next((f.split("=", 1)[1] for f in fields if f.startswith("base=")), None)
+        head = next((f.split("=", 1)[1] for f in fields if f.startswith("head=")), "")
+        if base == "main" and head == "integracion":
+            return None
+        if base != "integracion":
+            return f"Point every PR at integracion (base is {base or 'unset, so main'}); only integracion -> main may target main."
+    if re.search(r"/pulls/\d+/merge/?$", path) and method == "PUT":
+        if any(f in ("base=main", "base.ref=main") for f in fields):
+            return "Merging into main is the deploy: the user does it."
+    return None
+
+
 def check(cmd, cwd):
     cmds = []
     scan(cmd, 0, False, cmds)
@@ -423,6 +445,11 @@ def check(cmd, cwd):
                 return f"Commit as {AUTHOR}; the committer here is {cn or ''} <{ce or ''}>."
         elif p.head == "gh":
             a = gh_args(p)
+            if a[:1] == ["api"]:
+                r = check_gh_api(a[1:], p, cmd)
+                if r:
+                    return r
+                continue
             if a[:1] != ["pr"] or len(a) < 2 or a[1] not in ("create", "edit", "comment", "merge", "review"):
                 continue
             if has_trailer(message_text(a[2:], p.cwd, p.heredocs, all_bodies, cmd)):

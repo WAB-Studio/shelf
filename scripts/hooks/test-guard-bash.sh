@@ -161,4 +161,13 @@ for c in 'git log --grep commit -n 3' 'git cat-file commit HEAD' "git -C $HERE/.
   outside "$c"; [ $? -eq 0 ] || { echo "FAIL (should pass outside a repo): $c"; FAILS=$((FAILS+1)); }
 done
 
+# --- gh api: PRs by REST ---
+blocks 'gh api repos/WAB-Studio/shelf/pulls -f title=t -f head=x -f base=main'
+blocks 'gh api repos/WAB-Studio/shelf/pulls -X POST -f title=t -f head=x'
+blocks 'gh api repos/WAB-Studio/shelf/pulls -f base=integracion -f head=x -f body="Claude-Session: abc"'
+passes 'gh api repos/WAB-Studio/shelf/pulls -f title=t -f head=x -f base=integracion'
+passes 'gh api repos/WAB-Studio/shelf/pulls -f head=integracion -f base=main'
+passes 'gh api repos/WAB-Studio/shelf/pulls/5'
+passes 'scripts/gh-rest.sh pr-create nube --title t'
+
 [ $FAILS -eq 0 ] && echo "guard-bash: all green" || { echo "$FAILS failed"; exit 1; }

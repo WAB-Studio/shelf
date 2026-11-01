@@ -7,6 +7,12 @@ Working rules live in `AGENTS.md`. Session state lives in `private/handoffs/`. T
 holds only what a person could not guess from the code. Entries whose cause is gone live in `docs/TRAPS-archivo.md`.
 
 
+## `gh pr` fails in a cloud session
+
+Measured 2026-11-01 from the Claude Code docs: the cloud git proxy blocks GraphQL, and every `gh pr` and
+`gh issue` subcommand rides GraphQL, so each answers 403. REST works: `scripts/gh-rest.sh`, or
+`gh api repos/WAB-Studio/shelf/...`. See `docs/agentes/nube.md`.
+
 ## A test seeded with the answer passes whether or not the code works
 
 Measured 2026-09-10, module 8 (the photo credits in `/cuenta`).
