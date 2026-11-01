@@ -262,8 +262,6 @@ export async function GoalsScreen({
                   name={goal.name}
                   tag={goal.weeksLeft === null ? undefined : t("goal.list.weeksLeft", { count: goal.weeksLeft })}
                   phase={goal.phaseAim ?? undefined}
-                  expandLabel={t("day.phase.expand")}
-                  collapseLabel={t("day.phase.collapse")}
                 />
                 {month ? <Text variant="sentence">{monthName(month.month)}</Text> : null}
                 {" "}
