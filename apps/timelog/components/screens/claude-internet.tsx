@@ -12,8 +12,8 @@ type Words = Awaited<ReturnType<typeof calendarWords>>;
 const SITES_SHOWN = 8;
 const PAGES_SHOWN = 8;
 const SESSIONS_SHOWN = 8;
-// ActivityWatch's page on the browser extension that records the tab in front.
-const EXTENSION_URL = "https://docs.activitywatch.net/en/latest/watchers.html#web-watchers";
+// The uploader's install and update steps.
+const UPLOADER_URL = "https://github.com/WAB-Studio/timelog-sync/blob/timelog/TIMELOG.md#on-windows-with-the-installer";
 
 // «Claude» of one day (RT-14): Claude Code, claude.ai and the desktop app, and what they add up to. A row shows once
 // its source has ever sent anything, so a PC with no Claude folder is told so rather than shown a flat zero.
@@ -59,7 +59,7 @@ export async function ClaudeBlock({ isToday, claude, sessions, hasClaudeCode, ha
   );
 }
 
-// «Internet» of one day (RT-13): the longest hostnames, never a page.
+// «Internet» of one day (RT-13): the longest hostnames, each opening onto its pages.
 export async function InternetBlock({ isToday, sites, pages, hasSites, words }: { isToday: boolean; sites: SiteTime[]; pages: PageTime[]; hasSites: boolean; words: Words }) {
   const t = await getTranslations("time.internet");
   const pageRow = (page: PageTime): BarRow => {
@@ -96,7 +96,7 @@ export async function InternetBlock({ isToday, sites, pages, hasSites, words }: 
         <>
           <Text as="p" variant="meta">{t(hasSites ? (isToday ? "emptyToday" : "empty") : "never")}</Text>
           {hasSites ? null : (
-            <TextLink href={EXTENSION_URL} target="_blank" rel="noreferrer">
+            <TextLink href={UPLOADER_URL} target="_blank" rel="noreferrer">
               {t("install")} ›
             </TextLink>
           )}
