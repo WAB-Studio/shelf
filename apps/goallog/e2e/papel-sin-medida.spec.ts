@@ -155,7 +155,8 @@ test.describe("the paper report prints the months of a goal that measures nothin
       const at = flat.indexOf(name.toLowerCase());
       const measure = `no mide nada · hasta el ${lastDay(3)}`;
       const label = `${name} · por mes · 3 meses`.toLowerCase();
-      expect(flat.indexOf(measure, at), "measure line follows the name").toBeGreaterThan(at);
+      // The paper as read, in the message: a runner whose fonts break the line differently shows where.
+      expect(flat.indexOf(measure, at), `measure line follows the name in «${flat.slice(at, at + 240)}»`).toBeGreaterThan(at);
       expect(flat.indexOf(label), "the label counts 3 printed months of 5").toBeGreaterThan(flat.indexOf(measure));
     } finally {
       await context.close();
