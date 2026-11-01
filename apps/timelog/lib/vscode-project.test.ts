@@ -24,6 +24,9 @@ test("Insiders and Cursor read the same", () => {
 test("no folder, another app or an editor screen names no project", () => {
   assert.equal(projectOfWindow("Code.exe", "notes.txt - Visual Studio Code"), null);
   assert.equal(projectOfWindow("Code.exe", "Welcome - Visual Studio Code"), null);
+  for (const lone of ["Makefile", "Dockerfile", "LICENSE", "Untitled-1", "Keyboard Shortcuts", "Untitled (Workspace)", ".gitignore"]) {
+    assert.equal(projectOfWindow("Code.exe", `${lone} - Visual Studio Code`), null, lone);
+  }
   assert.equal(projectOfWindow("chrome.exe", "a - b - Visual Studio Code"), null);
   assert.equal(projectOfWindow("Code.exe", "Visual Studio Code"), null);
 });
@@ -36,4 +39,25 @@ test("projects add up across files, longest first", () => {
     { app: "Slack.exe", title: "general", seconds: 999 },
   ];
   assert.deepEqual(projectsOf(rows), [{ project: "tools", seconds: 200 }, { project: "shelf", seconds: 150 }]);
+});
+
+test("a profile name before the product is not the project", () => {
+  assert.equal(projectOfWindow("Code.exe", "route.ts - shelf - Work - Visual Studio Code"), "shelf");
+  assert.equal(projectOfWindow("Code.exe", "\u25CF Makefile - shelf - Work - Visual Studio Code"), "shelf");
+});
+
+test("a dotted folder alone is the project", () => {
+  assert.equal(projectOfWindow("Code.exe", "next.js - Visual Studio Code"), "next.js");
+  assert.equal(projectOfWindow("Code.exe", "shelf - Work - Visual Studio Code"), "shelf");
+});
+
+test("bracketed text after the product and any remote tag are dropped", () => {
+  assert.equal(projectOfWindow("Code.exe", "a.ts - shelf - Visual Studio Code [Administrator]"), "shelf");
+  assert.equal(projectOfWindow("Code.exe", "a.ts - shelf [Tunnel: box] - Visual Studio Code"), "shelf");
+  assert.equal(projectOfWindow("Code.exe", "a.ts - shelf [Container node] - Visual Studio Code [Unsupported]"), "shelf");
+});
+
+test("VSCodium and Code - OSS read the same", () => {
+  assert.equal(projectOfWindow("VSCodium.exe", "a.ts - shelf - VSCodium"), "shelf");
+  assert.equal(projectOfWindow("code-oss", "a.ts - shelf - Code - OSS"), "shelf");
 });

@@ -81,6 +81,10 @@ Interface language: Spanish or English, the person's choice (RT-12). A person re
   nequi.com.co, daviplata.com) and password managers, and the person edits it in `aw-timelog.toml`
   (`exclude`), by `--exclude`, or from the tray. Excluded hosts and apps leave the PC as nothing, not even as
   seconds. (2026-10-30)
+- [ ] **RT-23** The day shows «Proyectos» under Apps: the seconds in VS Code-family windows (VS Code, Insiders, OSS,
+  VSCodium, Cursor) grouped by the workspace folder their window title names («file — folder — [profile —] product»,
+  remote and tunnel tags removed), read from the window rows RT-18 already stores; no new field is uploaded. Depends on
+  RT-22: merge after it. (2026-11-01)
 - [x] **RT-17** «Hoy» and any day show «Claude» (Claude Code, claude.ai and the Claude app, and
   «Claude en total» as their sum, then Claude Code's sessions) and «Internet» (the longest sites, each opening
   onto its pages); an app's row opens onto its longest window titles. «Semana» shows Claude's week

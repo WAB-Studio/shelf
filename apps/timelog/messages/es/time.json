@@ -39,7 +39,7 @@
     "apps": "Apps",
     "projects": "Proyectos",
     "projectBar": "{project}: {duration}",
-    "projectsMore": "y {n} proyectos más",
+    "projectsMore": "{n, plural, one {y # proyecto más · {duration}} other {y # proyectos más · {duration}}}",
     "claudeCard": "Claude",
     "windowBar": "{title}: {duration}",
     "windowsMore": "y {n} ventanas más",
