@@ -332,7 +332,8 @@ test("list_loose_one_offs lists a goal's dayless tasks in inGoals, and not the d
     const completed = await oneOffs.completeOneOff({ oneOffId: made.done, day: dayFrom(0) });
     if (!completed.ok) throw new Error(`completeOneOff: ${completed.error}`);
   });
-  await admin`update goals.goals set horizon = ${dayFrom(0)} where id = ${endedGoal}`;
+  // Opened weeks before, so an end today still leaves it a month even on the first of one.
+  await admin`update goals.goals set horizon = ${dayFrom(0)}, created_at = now() - interval '40 days' where id = ${endedGoal}`;
 
   const body = (await call("list_loose_one_offs", {})).structuredContent as {
     dayless: { name: string }[];
@@ -408,7 +409,8 @@ test("get_report keeps every month of the goal, down to the horizon's with no am
   };
   const months = body.goals[0].months;
   const last = months[months.length - 1];
-  assert.equal(last.month, dayFrom(120).slice(0, 7));
+  // The horizon is the day after the goal's last day, so the last month is the one holding the day before it.
+  assert.equal(last.month, dayFrom(119).slice(0, 7));
   assert.deepEqual([last.planned, last.past, last.current], [null, false, false]);
 });
 
@@ -420,7 +422,8 @@ test("get_goal reads an ended goal's months as closed and an open goal's as they
     endedGoal = made.goalId;
   });
   // The horizon is the day after the goal's last: today ends it as of yesterday.
-  await admin`update goals.goals set horizon = ${dayFrom(0)} where id = ${endedGoal}`;
+  // Opened weeks before, so an end today still leaves it a month even on the first of one.
+  await admin`update goals.goals set horizon = ${dayFrom(0)}, created_at = now() - interval '40 days' where id = ${endedGoal}`;
   type Months = { month: string; current: boolean; past: boolean }[];
   const ended = (await call("get_goal", { goal_id: endedGoal })).structuredContent as { endedOn: string | null; months: Months };
   assert.notEqual(ended.endedOn, null);
@@ -440,7 +443,8 @@ test("get_report reads an ended goal's months as closed and an open goal's as th
     if (!made.ok) throw new Error(`createGoal ended: ${made.error}`);
     endedGoal = made.goalId;
   });
-  await admin`update goals.goals set horizon = ${dayFrom(0)} where id = ${endedGoal}`;
+  // Opened weeks before, so an end today still leaves it a month even on the first of one.
+  await admin`update goals.goals set horizon = ${dayFrom(0)}, created_at = now() - interval '40 days' where id = ${endedGoal}`;
   const result = await call("get_report", {});
   const goals = (result.structuredContent as { goals: { id: string; endedOn: string | null; months: Months }[] }).goals;
   const ended = goals.find((goal) => goal.id === endedGoal)!;
