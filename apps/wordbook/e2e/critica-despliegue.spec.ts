@@ -4,7 +4,7 @@ import type { Page } from "@playwright/test";
 import messages from "../messages/es.json";
 import manifest from "../public/dictionary/manifest.json";
 
-// The findings of the deploy critic of 2026-10-31 that needed no decision: each one measured on the screen.
+// Each layout and answer rule below is measured on the screen, at the width where it applies.
 
 async function open(page: Page, route: string, width: number): Promise<void> {
   await page.setViewportSize({ width, height: 800 });
@@ -71,15 +71,21 @@ test("at 1280 the box keeps its width from an empty box to a phrase, and the pan
   expect(after!.width).toBe(before!.width);
 });
 
-test("at 1280 /registro, /repaso and /cuenta share one left edge", async ({ page }) => {
-  await open(page, "/registro", 1280);
-  const edges: number[] = [];
-  for (const route of ["/registro", "/repaso", "/cuenta"]) {
-    await page.goto(route);
-    edges.push(Math.round((await page.getByRole("heading", { level: 1 }).boundingBox())!.x));
-  }
-  expect(new Set(edges).size).toBe(1);
-});
+for (const width of [1280, 1600]) {
+  test(`at ${width} /, /registro, /repaso and /cuenta share one left edge`, async ({ page }) => {
+    await open(page, "/registro", width);
+    const edges: number[] = [];
+    for (const route of ["/registro", "/repaso", "/cuenta"]) {
+      await page.goto(route);
+      edges.push(Math.round((await page.getByRole("heading", { level: 1 }).boundingBox())!.x));
+    }
+    await open(page, "/", width);
+    edges.push(Math.round((await box(page).boundingBox())!.x));
+    expect(new Set(edges.slice(0, 3)).size).toBe(1);
+    // The box sits inside the green band, a padding in from the same edge.
+    expect(Math.abs(edges[3] - edges[0])).toBeLessThan(40);
+  });
+}
 
 test("a /registro row is one compact line, and the story and the row count the same searches", async ({ page }) => {
   await open(page, "/", 1280);
@@ -104,4 +110,24 @@ test("«Repasar ahora» in a word's history opens that word alone", async ({ pag
   await expect(page.getByText("1 de 1")).toBeVisible();
   await expect(page.locator("main")).toContainText("time");
   await expect(page.locator("main")).not.toContainText("bleak");
+});
+
+test("a word asked for alone ends with «Repasaste», offers the day's queue and never closes the day", async ({ page }) => {
+  await open(page, "/", 390);
+  await lookUp(page, ["time", "bleak"]);
+  await page.goto("/repaso?palabra=time");
+  await page.getByRole("button", { name: messages.review.show }).click();
+  await page.getByRole("button", { name: new RegExp(`^${messages.review.grade.good}`) }).click();
+  await expect(page.getByText("Repasaste «time».")).toBeVisible();
+  await expect(page.getByText(/Terminaste por hoy/)).toHaveCount(0);
+  await page.getByRole("button", { name: messages.review.reviewToday }).click();
+  await expect(page.getByText("1 de 1")).toBeVisible();
+});
+
+test("a word with nothing to review says so and still offers the day's cards", async ({ page }) => {
+  await open(page, "/", 390);
+  await lookUp(page, ["time"]);
+  await page.goto("/repaso?palabra=nonexistentword");
+  await expect(page.getByText("«nonexistentword» aún no tiene nada que repasar. Esto es lo de hoy.")).toBeVisible();
+  await expect(page.getByRole("button", { name: messages.review.show })).toBeVisible();
 });

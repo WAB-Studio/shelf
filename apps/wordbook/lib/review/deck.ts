@@ -52,12 +52,13 @@ export function buildQueue(rows: StudyRow[], cards: ReviewCard[], now: number): 
 
 /**
  * One entry on demand, from the panel of its history: due or not, it is asked now. Nothing of the day's
- * queue, so answering it introduces no other entry. Empty when the record holds no answer for it.
+ * queue, and it takes no slot of the daily cap (the session rates it with an empty `introducedOn`). Empty
+ * when the record holds no answer for it.
  */
 export function buildQueueFor(rows: StudyRow[], cards: ReviewCard[], key: string, now: number): ReviewQueue {
-  const row = rows.find((candidate) => candidate.key === key && isReviewable(candidate));
+  const row = rows.find((candidate) => (candidate.key === key || candidate.key.toLowerCase() === key.toLowerCase()) && isReviewable(candidate));
   if (row === undefined) return { items: [], later: 0, nextDue: null };
-  const card = cards.find((candidate) => candidate.key === key) ?? null;
+  const card = cards.find((candidate) => candidate.key === row.key) ?? null;
   return {
     items: [{ row, card: card === null ? null : { ...card, due: Math.min(card.due, now) } }],
     later: 0,

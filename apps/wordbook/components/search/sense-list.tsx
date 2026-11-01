@@ -522,14 +522,14 @@ function CorrectionOffer({ words, t }: { words: readonly string[]; t: ReturnType
   );
 }
 
-// The parts of speech in the order the answer draws them: those standing before any fold opens, so the
-// first of the index is the first label-free block, then those only the fold holds.
-function indexParts(senses: readonly Sense[]): Sense["pos"][] {
-  const blocks = pronunciationBlocks(senses);
-  const groups = blocks === null ? [senses] : blocks.map((block) => block.senses);
-  const split = groups.map((group) => splitRare(group));
-  const ordered = [...split.flatMap(({ shown }) => shown), ...split.flatMap(({ folded }) => folded)];
-  return [...new Set(ordered.map((sense) => sense.pos))];
+// The parts of speech in the order the answer draws them, the fold's after the senses it follows in each block,
+// so the first of the index is the first block, which draws no label of its own.
+function indexParts(groups: readonly (readonly Sense[])[]): Sense["pos"][] {
+  const drawn = groups.flatMap((group) => {
+    const { shown, folded } = splitRare(group);
+    return [...shown, ...folded];
+  });
+  return [...new Set(drawn.map((sense) => sense.pos))];
 }
 
 // Under the entry's headword, on one line: its sound, the voice and an index of the parts of speech
@@ -546,8 +546,9 @@ function EntryMeta({
   speaker: boolean;
   t: ReturnType<typeof useTranslations>;
 }) {
-  const ipa = pronunciationBlocks(senses) === null ? senses[0].ipa : null;
-  const parts = indexParts(senses);
+  const blocks = pronunciationBlocks(senses);
+  const ipa = blocks === null ? senses[0].ipa : null;
+  const parts = indexParts(blocks === null ? [senses] : blocks.map((block) => block.senses));
   return (
     <Flex align="center" gap="3" wrap="wrap" data-entry-index="">
       {ipa !== null && (

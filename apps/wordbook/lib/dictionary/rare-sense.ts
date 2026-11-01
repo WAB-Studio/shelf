@@ -58,14 +58,15 @@ export function isRareSense(sense: Sense): boolean {
  */
 export function splitRare(senses: readonly Sense[], compact = false): { shown: Sense[]; folded: Sense[] } {
   if (compact) return { shown: [...senses], folded: [] };
-  const firstCommon = senses.findIndex((sense) => !isRareSense(sense));
+  const rare = senses.map(isRareSense);
+  const firstCommon = rare.indexOf(false);
   if (firstCommon === -1) return { shown: [...senses], folded: [] };
   const commonPos = senses[firstCommon].pos;
   const shown: Sense[] = [];
   const folded: Sense[] = [];
   senses.forEach((sense, index) => {
     const moreFrequent = index < firstCommon && sense.pos !== commonPos;
-    (isRareSense(sense) && !moreFrequent ? folded : shown).push(sense);
+    (rare[index] && !moreFrequent ? folded : shown).push(sense);
   });
   return { shown, folded };
 }

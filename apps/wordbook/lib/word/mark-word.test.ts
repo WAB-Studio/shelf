@@ -44,3 +44,14 @@ test("a three-letter word matches its inflections: «run» finds «running» and
   assert.deepEqual(hits("she runs home", ["run"]), ["runs"]);
   assert.deepEqual(hits("a rung of the ladder", ["run"]), []);
 });
+
+test("a three-letter lemma matches its doubled endings and plain «-s»/«-ing» only", () => {
+  assert.deepEqual(hits("she was hopping, not hoping", ["hop"]), ["hopping"]);
+  assert.deepEqual(hits("hopped and hops", ["hop"]), ["hopped", "hops"]);
+  assert.deepEqual(hits("the cars take care and cared", ["car"]), ["cars"]);
+  assert.deepEqual(hits("hated the hat", ["hat"]), ["hat"]);
+  assert.deepEqual(hits("an early ear", ["ear"]), ["ear"]);
+  assert.deepEqual(hits("noted, not nothing", ["not"]), ["not"]);
+  assert.deepEqual(hits("she eats, eating, ate", ["eat"]), ["eats", "eating"]);
+  assert.deepEqual(hits("running runs", ["run"]), ["running", "runs"]);
+});
