@@ -2,7 +2,7 @@ import { getTranslations } from "next-intl/server";
 
 import { getReader } from "@/lib/session";
 import { AccountPanel } from "@/components/account/account-panel";
-import { AccountTabs, InfoSide, TabBody } from "@/components/account/tab-body";
+import { AccountTabs, TabBody } from "@/components/account/tab-body";
 import { AccountInfo } from "@/components/account/account-info";
 import { PageTitle, Card, Flex, MetaLabel, Page, Panels, Separator, Text, ThemeChoice } from "@/components/ui";
 
@@ -21,7 +21,7 @@ function resolveLinkFailure(raw: string | string[] | undefined): LinkFailure {
 // opens no connection at all — the panel below is the only thing that ever
 // calls `/api/devices` or `/api/log/sync`, and only once a reader exists
 // (RNL-09). No `useDictionary` here: this screen never resolves a word
-// (RNL-08). Two panels from 1280px: the account on the left, the credits on the right.
+// (RNL-08). One column on the same left edge as the screens beside it.
 export default async function CuentaPage({
   searchParams,
 }: {
@@ -45,9 +45,6 @@ export default async function CuentaPage({
             <AccountTabs />
           </>
         }
-        side={<InfoSide info={<AccountInfo />} />}
-        sideOnPhone={false}
-        reserveSide
       >
         {linkFailure && tab === "account" && (
           // No red in this palette (docs/wordbook/DESIGN.md "Failure"): a
