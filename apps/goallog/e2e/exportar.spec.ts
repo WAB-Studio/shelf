@@ -961,6 +961,8 @@ test.describe("the report's figures and its paper (RP-31, RP-32, RP-49, RP-35)",
       const printed = at.map((from, index) =>
         lines
           .slice(from, at[index + 1] ?? lines.length)
+          // The months-out line («diciembre 2026 y enero 2027: sin monto») is the screen's `months-out` row, left out above.
+          .filter((line) => !/: sin monto$/.test(line))
           .flatMap((line) => label.exec(line) ?? []),
       );
       expect(printed).toEqual(onScreen);

@@ -4,7 +4,7 @@ import type postgres from "postgres";
 import { test, expect, type Person } from "./fixtures";
 import { dayBefore } from "@/lib/day/weeks";
 import { monthOf, nextMonth } from "@/lib/plan/months";
-import { civilDateToDate, todayInZone, weekOf } from "@/lib/zone";
+import { civilDateToDate, dateToCivilDate, todayInZone, weekOf } from "@/lib/zone";
 import { boxOf } from "./box";
 
 // Module 813 (RP-71, RP-32, RP-17, RP-35), `MesesFuturoYTareas` 6a and `MesesConAño` option B: no `Table` prints a
@@ -266,7 +266,8 @@ for (const width of [360, 1024]) {
           })
           .filter((box) => /^[a-záéíóú]+ 20\d\d$/.test(box.text)),
       );
-      expect(boxes.length, "month labels drawn").toBe(16);
+      // Last week's Monday falls in the month before on its first days: the goal then lives that month too.
+      expect(boxes.length, "month labels drawn").toBe(monthOf(dateToCivilDate(openedAt)) < thisMonth ? 17 : 16);
       for (const box of boxes) expect(box.height, `«${box.text}» height`).toBeLessThanOrEqual(box.line * 1.5);
       for (const box of boxes) expect(box.width, `«${box.text}» width`).toBeCloseTo(128, 0);
       const scroll = await page.evaluate(() => document.documentElement.scrollWidth);

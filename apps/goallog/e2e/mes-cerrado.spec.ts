@@ -22,16 +22,18 @@ type Seeded = { goalId: string; archivedId: string; bareId: string; endedId: str
 
 async function seed(db: postgres.Sql, person: Person): Promise<Seeded> {
   const stamp = Date.now();
+  const opened = `${key(previousMonth(monthBefore))}-15T17:00:00Z`;
   const [goal] = await db<{ id: string }[]>`
     insert into goals.goals (user_id, name, created_at)
-    values (${person.id}, ${`Casa ${stamp}`}, ${`${key(previousMonth(monthBefore))}-15T17:00:00Z`}) returning id
+    values (${person.id}, ${`Casa ${stamp}`}, ${opened}) returning id
   `;
+  // Written with their goal: a fact may not predate its task, and a closed month's mark is dated in that month.
   await db`
-    insert into goals.one_offs (user_id, goal_id, name, planned_month)
+    insert into goals.one_offs (user_id, goal_id, name, planned_month, created_at)
     values
-      (${person.id}, ${goal.id}, ${`Pintar ${stamp}`}, ${monthBefore}::date),
-      (${person.id}, ${goal.id}, ${`Barrer ${stamp}`}, ${lastMonth}::date),
-      (${person.id}, ${goal.id}, ${`Lavar ${stamp}`}, ${previousMonth(monthBefore)}::date)
+      (${person.id}, ${goal.id}, ${`Pintar ${stamp}`}, ${monthBefore}::date, ${opened}),
+      (${person.id}, ${goal.id}, ${`Barrer ${stamp}`}, ${lastMonth}::date, ${opened}),
+      (${person.id}, ${goal.id}, ${`Lavar ${stamp}`}, ${previousMonth(monthBefore)}::date, ${opened})
   `;
   // A parent of the month before last: one sub-task done in it, one done on the next month's first day.
   const [parent] = await db<{ id: string }[]>`

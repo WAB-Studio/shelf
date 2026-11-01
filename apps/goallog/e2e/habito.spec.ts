@@ -142,7 +142,7 @@ test.describe("the screen of a habit (RP-105, RP-106)", () => {
       expect(rowsOf(section)).toEqual([monthLabel(-2), monthLabel(-1), monthLabel(0)]);
       expect(section).toMatch(new RegExp(`${monthLabel(-2)}\\D*0 de ${daysIn(-2) - 19} días`));
       expect(section).toMatch(new RegExp(`${monthLabel(-1)}\\D*4 de ${daysIn(-1)} días`));
-      expect(section).toMatch(new RegExp(`${monthLabel(0)}[^\\d]*0 de ${dayOfMonth} días`));
+      expect(section).toMatch(new RegExp(`${monthLabel(0)}[^\\d]*0 de ${dayOfMonth} ${dayOfMonth === 1 ? "día" : "días"}`));
       expect(section).toContain("en curso");
       expect(section.indexOf("en curso")).toBeGreaterThan(section.indexOf(monthLabel(-1)));
       expect(section).not.toContain("ver todo");
