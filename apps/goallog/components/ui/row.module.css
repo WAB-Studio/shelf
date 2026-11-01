@@ -291,7 +291,8 @@
   min-block-size: 64px;
   padding: 12px 14px;
   background: var(--pulsar-raised);
-  border: 1px solid var(--pulsar-line);
+  /* Half way to the quiet ink: inside a card of the same raised colour a bare hairline drew no box. */
+  border: 1px solid color-mix(in srgb, var(--pulsar-line) 50%, var(--pulsar-quiet));
   border-radius: 12px;
 }
 
@@ -308,4 +309,28 @@
 .strip {
   display: block;
   margin-block-start: 6px;
+}
+
+/* A tile with a note: the box holds both, so the note reads as its row's and not the next one's. The button inside
+   gives its box to the wrapper; the note lines up with the name inside the tile's padding. */
+.tileNoted {
+  background: var(--pulsar-raised);
+  /* Half way to the quiet ink: inside a card of the same raised colour a bare hairline drew no box. */
+  border: 1px solid color-mix(in srgb, var(--pulsar-line) 50%, var(--pulsar-quiet));
+  border-radius: 12px;
+}
+
+.tileNoted .tile.tile {
+  background: transparent;
+  border: 0;
+  padding-block-end: 4px;
+}
+
+.tileNoted .note {
+  padding-inline: 14px;
+  padding-block-end: 12px;
+}
+
+.tileNoted .noteLead {
+  padding-inline-start: 50px;
 }

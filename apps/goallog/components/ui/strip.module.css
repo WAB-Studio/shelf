@@ -80,7 +80,25 @@
   background: var(--pulsar-line);
 }
 
-/* A commitment's row on Hoy: the row's whole width, a thin barcode under its name. */
+/* A commitment's row on Hoy: the row's whole width, a thin barcode under its name. At 20px a ring reads as a
+   letter («0», «o»), so every bar is solid and height alone tells them apart (DESIGN «Constancy is a 30-day strip»):
+   done full, short of its target half, still open a stub, a day not asked a dot. The quiet ink keeps the stub and
+   the dot visible on a done tile's soft fill, where the hairline colour vanished. */
 .row .bars {
   block-size: 20px;
+}
+
+.row .partial {
+  box-shadow: none;
+  background: var(--pulsar-accent);
+}
+
+.row .open {
+  box-shadow: none;
+  background: var(--pulsar-quiet);
+}
+
+.row .neutral,
+.row .before {
+  background: var(--pulsar-quiet);
 }

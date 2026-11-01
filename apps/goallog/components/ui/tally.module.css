@@ -1,13 +1,18 @@
 .tally {
   display: inline-flex;
+  flex-wrap: wrap;
   align-items: baseline;
-  gap: 8px;
+  column-gap: 8px;
+  row-gap: 2px;
+  min-inline-size: 0;
 }
 
+/* «2 de 5» is one piece: on a phone's controls line the caption drops under it rather than splitting it. */
 .line {
   display: inline-flex;
   align-items: baseline;
   gap: 8px;
+  white-space: nowrap;
 }
 
 /* The count done: the title face, in the one accent. */

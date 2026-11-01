@@ -419,3 +419,10 @@ a.dayLink {
 .foldCell .tile {
   background: transparent;
 }
+
+/* In the table the name wraps inside the name column: at the sheet title's 21px a long one took four lines beside
+   seven empty days, so the table sets it at 18px (between a row's name and a sheet's title), still in the title
+   face. The folded phone face keeps 21px over its full width. */
+.group .groupName {
+  font-size: 18px;
+}
