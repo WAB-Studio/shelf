@@ -2062,6 +2062,7 @@ The user accepted the critic's recommendations on 2026-10-31.
 - **«Este mes» names its goal only when several cards stand beside the groups.**
 - **«Sueltas» is a plain line** at the end of the list: its label, its tasks and its field, no card.
 - **One accent on the ground.** Tangerine marks done, links and the tag; navy is the rail and the goal's and Mes's hero; sky only on navy.
+- **A task on Hoy is a tile too**: a goal-less one (`Row` with `tile`) and the month's next one (`Tile`), so its mark stands on a commitment's edge and holds 48 × 56 (RNP-07). Decided by the user 2026-11-01.
 - **A figure inside a sentence stays mono**, on Hoy as on every screen («5 de 10 min», «20 de 40 km»). Decided by the user 2026-11-01, over the Archivo figure #751 had shipped.
 
 ## Semana and Metas, 2026-11-01, by the user

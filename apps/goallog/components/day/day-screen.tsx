@@ -685,7 +685,7 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
       {looseTasks.length > 0 ? (
         <Panel as="div">
           <Section label={t("day.oneOffs.title")}>
-            <Flex direction="column">{looseTasks.map(oneOffRow)}</Flex>
+            <Flex direction="column" gap="2">{looseTasks.map(oneOffRow)}</Flex>
           </Section>
         </Panel>
       ) : null}
@@ -701,7 +701,7 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
           <TextLink href="/sueltas">{t("day.oneOffs.daylessLink", { count: waiting })}</TextLink>
         ) : null}
       </Flex>
-      <Flex direction="column">
+      <Flex direction="column" gap="2">
         {looseTasks.map(oneOffRow)}
         <Face on="desktop">
           <NewOneOff daylessCount={daylessCount} />
