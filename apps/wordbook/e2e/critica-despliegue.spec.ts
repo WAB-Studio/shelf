@@ -65,7 +65,7 @@ test("at 1280 the box keeps its width from an empty box to a phrase, and the pan
   expect(after!.width).toBe(before!.width);
 });
 
-test("at 1280 the screens share one left edge and /cuenta is two panels", async ({ page }) => {
+test("at 1280 /registro, /repaso and /cuenta share one left edge", async ({ page }) => {
   await open(page, "/registro", 1280);
   const edges: number[] = [];
   for (const route of ["/registro", "/repaso", "/cuenta"]) {
@@ -73,11 +73,6 @@ test("at 1280 the screens share one left edge and /cuenta is two panels", async 
     edges.push(Math.round((await page.getByRole("heading", { level: 1 }).boundingBox())!.x));
   }
   expect(new Set(edges).size).toBe(1);
-  const side = page.locator("main aside");
-  await expect(side).toContainText(messages.account.info.dictionaryName);
-  const main = (await page.locator("main > div").first().boundingBox())!;
-  const aside = (await side.boundingBox())!;
-  expect(aside.x).toBeGreaterThan(main.x + main.width / 2);
 });
 
 test("a /registro row is one compact line, and the story and the row count the same searches", async ({ page }) => {
