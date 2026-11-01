@@ -118,8 +118,10 @@ a.dayLink {
   color: var(--pulsar-muted);
 }
 
-/* A goal's name over its rows: the title face, ink, a tag beside it. */
+/* A goal's name over its rows: the title face, ink, a tag beside it. In the title face a long name would run past
+   the table, so it breaks inside its column, as a row's name does. */
 .groupName {
+  white-space: normal;
   margin-inline-end: 10px;
   font-family: var(--font-display);
   font-size: var(--pulsar-text-sheet-title-size);

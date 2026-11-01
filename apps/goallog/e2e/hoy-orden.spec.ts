@@ -67,7 +67,7 @@ test("a goal that asks nothing is below the one that asks at 1280 and has no sec
     await expect(field(quiet)).toBeHidden();
     await expect(page.getByPlaceholder("Escribe una tarea…")).toBeVisible();
     const sectionOf = (goal: string) =>
-      page.locator("main").locator('[data-part="section-label"]', { hasText: new RegExp(`^${goal}$`) }).locator("visible=true");
+      page.locator("main").locator("[data-part='group-head'] h2", { hasText: new RegExp(`^${goal}$`) }).locator("visible=true");
     await expect(sectionOf(asking)).toHaveCount(1);
     await expect(sectionOf(quiet)).toHaveCount(0);
     // The month line of the goal with no section is still on screen.

@@ -460,7 +460,8 @@ deskTest("at 1280 the side column keeps its drawn widths, 360 on Hoy and 380 on 
   try {
     await page.goto("/");
     await expect(page.locator("main")).toHaveCount(1);
-    expect(await cardWidth(page.getByText("Sueltas", { exact: true }).first())).toBe(360);
+    // «Sueltas» is a plain line in the main column now (DESIGN «Hoy, 2026-11-01»): the side column itself holds 360.
+    expect((await page.locator("[data-part='split-after']").first().boundingBox())!.width).toBe(360);
     await page.goto(`/metas/${desk.layoutGoalId}`);
     await expect(page.locator("main")).toHaveCount(1);
     expect(await cardWidth(page.getByText("El final", { exact: true }))).toBe(380);
