@@ -162,7 +162,7 @@ What changed:
 - Every «y N más» (apps, windows, sites, pages) opens. Every cut text carries a `title`.
 - The CSV stops at today and ends with `uploaded` (1 or 0), so a day unseen is told from a real zero.
 - Decided by the user (the critic's picks): the day line opens on the latest session on Hoy; «Semana»'s heatmap carries a
-  first row, Claude in total, a cell per day (RT-17); every heatmap row writes its class under its name, with a legend
+  first row, Claude in total, a cell per day (RT-22); every heatmap row writes its class under its name, with a legend
   under the grid; the block's Claude bar carries its legend of names; a window or page title in a detail wraps to two lines.
 - «Proyectos» (RT-23): a card after Apps, same bars and the same «y N más · X» opening onto the rest. Each bar is a workspace
   folder named as the editor's window title writes it, with its seconds; the card shows only when a VS Code-family window
