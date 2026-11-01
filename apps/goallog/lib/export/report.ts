@@ -1,5 +1,6 @@
 import type { ReviewWeek } from "@/lib/day/types";
 import type { Cadence } from "@/lib/day/types";
+import type { SourceKey } from "@/i18n/translator";
 import type { Level } from "@/lib/goals/tree";
 import type { MonthRow } from "@/lib/plan/months";
 
@@ -33,6 +34,8 @@ export type ReportCommitment = {
   cadence: Cadence;
   targetQuantity: number | null;
   unit: string | null;
+  // An evidence commitment names its source and the least it counts from, wherever it is drawn (RP-09).
+  evidence?: { labelKey: SourceKey; unit: string; threshold: number } | null;
 };
 
 export type WeekSplit = { index: number; month: string; startsOn: string; endsOn: string; total: number };

@@ -186,14 +186,10 @@ export function DayRow({
         onClick={handleTap}
         // A tap row is a toggle: its mark is drawn, never read, so done is said here instead of in a phrase.
         aria-pressed={kind === "tap" && tappable ? markState === "declared" : undefined}
+        note={note}
         still={!tappable}
         disabled={pending}
       />
-      {note ? (
-        <Text as="p" variant="sentence">
-          {note}
-        </Text>
-      ) : null}
       {error ? (
         <Text as="p" variant="sentence">
           {t(error)}

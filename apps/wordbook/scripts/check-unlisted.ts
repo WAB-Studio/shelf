@@ -25,7 +25,7 @@ import postgres from "postgres";
 
 import { admitWord } from "../lib/word/admit";
 import { clientKeyFromAddress } from "../lib/word/client-key";
-import type { DictionaryPayload } from "../lib/dictionary/format";
+import { PAYLOAD_VERSION, type DictionaryPayload } from "../lib/dictionary/format";
 import { buildIndex } from "../lib/dictionary/index-build";
 import { lookupWord } from "../lib/dictionary/lookup";
 
@@ -170,7 +170,7 @@ async function main() {
     providerReply = modelSays(STUB_ANSWER);
 
     const assetPayload = JSON.parse(
-      readFileSync(path.join(APP_DIR, "public", "dictionary", "eng-spa-2025.11.23-v3.json"), "utf8"),
+      readFileSync(path.join(APP_DIR, "public", "dictionary", `eng-spa-2025.11.23-v${PAYLOAD_VERSION}.json`), "utf8"),
     ) as DictionaryPayload;
     const index = buildIndex(assetPayload);
     const unlistedLookup = lookupWord(index, admitWord(UNLISTED_WORD) ?? UNLISTED_WORD);

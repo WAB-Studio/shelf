@@ -122,7 +122,7 @@ test("this month lists the carried parent first, then its own task; marking the 
     await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
     const title = `${label(thisMonth).charAt(0).toUpperCase() + label(thisMonth).slice(1)} ${thisMonth.slice(0, 4)}`;
     await expect(page.getByText(title, { exact: true })).toBeVisible();
-    await expect(page.getByText("este mes", { exact: true })).toBeVisible();
+    await expect(page.getByText("Este mes", { exact: true })).toBeVisible();
     await expect(page.getByRole("link", { name: "de 12 h", exact: true })).toBeVisible();
 
     // Carried first: its section precedes the month's own, and the parent

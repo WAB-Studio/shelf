@@ -3364,3 +3364,15 @@ Vercel builds the apps; nothing applies `db/migrations`. After #730 shipped, Hom
 - `apps/timelog/.env.local` points to 127.0.0.1. Production TimeLog migrates with
   `node --env-file=../homefund/.env.local ../../node_modules/drizzle-kit/bin.cjs migrate` from `apps/timelog`.
 - Confirm in the database afterwards: count `drizzle.__drizzle_migrations*` rows against each journal.
+
+## `<Button asChild><LocaleLink/></Button>` in a server component crashes some loads
+
+Measured 2026-10-31, HomeFund Inicio with no accounts: 8 of 10 fresh loads at 1280 fell into
+«Algo salió mal», with `Slot failed to slot onto its children` during hydration. One passing load proves nothing.
+
+The link crosses the server boundary as a child of the client `Button`. On some loads it reaches Radix's
+Slot unresolved, and Slot throws. Bisected by removing one block at a time: only the `Button asChild` in
+`app/[locale]/(app)/page.tsx` mattered.
+
+- In a server component, write `<ButtonLink href>` (`components/ui/button-link.tsx`), never `Button asChild`.
+- Prove a hydration fix with many fresh browser contexts, not one load: 0 of 20 after the fix.

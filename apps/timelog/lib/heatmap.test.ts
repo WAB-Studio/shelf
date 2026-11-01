@@ -20,6 +20,7 @@ test("the top apps of the week get a cell per day, levelled against the largest 
   assert.deepEqual(map.rows.map((row) => [row.app, row.kind, row.total]), [["VS Code", "code", 5000], ["Chrome", "browser", 2030]]);
   assert.deepEqual(map.rows[0].cells, [{ seconds: 4000, level: 4 }, { seconds: 1000, level: 1 }, { seconds: 0, level: 0 }]);
   assert.deepEqual(map.rows[1].cells.map((cell) => cell.level), [1, 0, 2]);
+  assert.equal(map.largest, 4000);
   assert.equal(map.restCount, 0);
 });
 

@@ -14,8 +14,8 @@ const here = (p: string) => new URL(p, import.meta.url).href;
 const EXPLICIT = "Quiero que me la chupes hasta que me corra en tu boca.";
 
 const state = {
-  top: EXPLICIT as string,
-  matches: [] as { translation: string; match: number }[],
+  top: EXPLICIT as unknown,
+  matches: [] as unknown,
 };
 
 const stubRoot = mkdtempSync(path.join(tmpdir(), "server-only-"));
@@ -82,4 +82,21 @@ test("translate: a clean answer passes untouched", async () => {
   const { POST } = await import("../app/api/translate/route");
   const response = await POST(post());
   assert.deepEqual(await response.json(), { text: "te quiero", origin: "network" });
+});
+
+test("translate: MyMemory's entity and line break are decoded before the reader sees the sentence", async () => {
+  state.top = "Te quiero mucho.&#10;";
+  const { POST } = await import("../app/api/translate/route");
+  const response = await POST(post());
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), { text: "Te quiero mucho.", origin: "network" });
+});
+
+test("translate: a non-string translation and a non-array matches answer 502, never throw", async () => {
+  state.top = 42;
+  state.matches = "";
+  const { POST } = await import("../app/api/translate/route");
+  const response = await POST(post());
+  assert.equal(response.status, 502);
+  assert.deepEqual(await response.json(), { error: "provider" });
 });

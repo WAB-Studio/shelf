@@ -56,6 +56,7 @@ export {
 } from "@radix-ui/themes";
 
 export { Button, IconButton } from "./button";
+export { ButtonLink } from "./button-link";
 
 export { Switch } from "./switch";
 

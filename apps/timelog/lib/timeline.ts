@@ -1,4 +1,4 @@
-import { addDays, dayStart, TIME_ZONE } from "@/lib/zone";
+import { addDays, dayStart } from "@/lib/zone";
 
 export type TimedSession = { key: string; label: string; first: Date; last: Date };
 
@@ -19,15 +19,6 @@ const MIN_SHARE = 0.012;
 const LINE_PX = 840;
 const GLYPH_PX = 8.5;
 const PADDING_PX = 20;
-
-const CLOCK = new Intl.DateTimeFormat("en-GB", { timeZone: TIME_ZONE, hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
-
-// Minutes since midnight on Bogotá's clock.
-export function minuteOfDay(at: Date): number {
-  const parts = CLOCK.formatToParts(at);
-  const part = (type: string) => Number(parts.find((one) => one.type === type)?.value ?? 0);
-  return part("hour") * 60 + part("minute");
-}
 
 // The line of civil day `day` runs from 6:00 to 24:00; a session that began earlier pulls its start back to the hour it
 // began in. A session that crosses midnight is cut at the day's bounds, one wholly outside it is left out. Sessions

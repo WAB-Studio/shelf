@@ -238,7 +238,6 @@
 
 .composition { display: flex; flex-direction: column; gap: 12px; }
 .stacked { display: flex; gap: 2px; height: 16px; border-radius: 8px; overflow: hidden; background: var(--tl-track-on-block); }
-.stackedThin { height: 8px; border-radius: 4px; }
 .part { min-width: 3px; background: var(--tone-block); }
 .legend { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 4px; }
 .legend li { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 14px; }
