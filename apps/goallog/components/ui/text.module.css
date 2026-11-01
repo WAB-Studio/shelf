@@ -53,6 +53,8 @@
   letter-spacing: normal;
   text-transform: none;
   line-height: 1.5;
+  /* Archivo's «K» runs into the space after it («5K del»); a little more space keeps the words apart. */
+  word-spacing: 0.1em;
   color: var(--pulsar-muted);
 }
 

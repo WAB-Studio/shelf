@@ -73,8 +73,10 @@ type RowProps = Omit<ComponentPropsWithoutRef<"button">, "children" | "name"> & 
   // the soft accent.
   tile?: boolean;
   done?: boolean;
-  // A line of its own under the name and its meta: a commitment's history strip. Drawn, never read in the row's name: the caller names it with `aria-description`.
+  // A line of its own under the name and its meta: a commitment's history strip. Drawn, never read in the row's name.
   strip?: ReactNode;
+  // What the strip says, for a screen reader: the row's description.
+  stripLabel?: string;
   // How deep the row sits in a tree of goals: 0 at the top, 2 at most. The
   // row and its hairline start that many 20px steps in (`JerarquiaArbol`).
   level?: 0 | 1 | 2;
@@ -109,6 +111,7 @@ export const Row = forwardRef<HTMLButtonElement, RowProps>(function Row(
     tile,
     done,
     strip,
+    stripLabel,
     still,
     level = 0,
     foldSlot,
@@ -117,10 +120,11 @@ export const Row = forwardRef<HTMLButtonElement, RowProps>(function Row(
     type = "button",
     disabled,
     onClick,
-    ...props
+    ...rest
   },
   ref,
 ) {
+  const props = stripLabel ? { "aria-description": stripLabel, ...rest } : rest;
   const merged = [
     styles.row,
     rule ? undefined : styles.flush,

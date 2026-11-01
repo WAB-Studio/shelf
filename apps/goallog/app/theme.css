@@ -120,8 +120,6 @@ body {
   color: var(--pulsar-ink);
   font-family: var(--font-sans);
   font-variant-numeric: tabular-nums;
-  /* Archivo's «K» runs into the space after it («5K del»); a little more space keeps the words apart. */
-  word-spacing: 0.1em;
 }
 
 /* Radix Themes pins `--default-font-family` to its own system stack on the

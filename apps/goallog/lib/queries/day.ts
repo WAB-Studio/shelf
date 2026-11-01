@@ -257,7 +257,7 @@ async function queryGoalsRow(
                  'day', f.day,
                  'quantity', f.quantity,
                  'note', f.note
-               )), '[]'::json)
+               ) order by f.day, f.written_at, f.id), '[]'::json)
          from "goals"."facts" f
          where ${isToday}::boolean and f.commitment_id is not null
            and f.day between ${stripFrom}::date and ${day}::date) as strip_facts,

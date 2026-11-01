@@ -96,6 +96,7 @@ test("at 1280 the goals sit left and the figure, sueltas, «N esperan» and «he
     const figure = await box(head.getByText("esta semana", { exact: true }));
     const sueltas = await box(page.getByText("Sueltas", { exact: true }));
     const waiting = await box(page.getByRole("link", { name: "2 esperan" }));
+    const doneLabel = await box(page.getByText("Hechas hoy", { exact: true }));
 
     // The head carries the number the review's current week reads.
     await expect(head).toContainText(`${revisionNumber}`);
@@ -107,6 +108,10 @@ test("at 1280 the goals sit left and the figure, sueltas, «N esperan» and «he
     // The goals' groups in one column, «Sueltas» as a plain line closing it.
     expect(figure.y).toBeLessThan(sueltas.y);
     expect(waiting.y).toBeGreaterThan(figure.y);
+    // «Hechas hoy» stands in the column beside them, never inside the goals' one.
+    const goals = await box(head);
+    expect(doneLabel.x).toBeGreaterThanOrEqual(goals.x + goals.width);
+    expect(doneLabel.x).toBeGreaterThanOrEqual(sueltas.x + sueltas.width);
 
     // A goal with no measure draws no card of its own.
     await expect(page.getByText("esta semana", { exact: true })).toHaveCount(1);
