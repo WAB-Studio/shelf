@@ -6,15 +6,7 @@ import { useTranslations } from "next-intl";
 
 import { completeOneOff } from "@/app/actions/one-offs";
 import { NoteSheet } from "@/components/one-offs/note-sheet";
-import {
-  Button,
-  Figure,
-  Flex,
-  IconButton,
-  Mark,
-  Text,
-  Tile,
-} from "@/components/ui";
+import { Button, Figure, Flex, IconButton, Mark, Text, Tile } from "@/components/ui";
 import { useTimeWords } from "@/components/ui/figure";
 import type { MessageKey } from "@/i18n/translator";
 import { formatQuantity, isTimeUnit } from "@/lib/units/time";
@@ -55,13 +47,7 @@ export function MonthTaskLine({
 
   // A sub-task never shows its parent's share (`item.part` is the parent's).
   const splitPart =
-    parentName === null &&
-    estimate !== null &&
-    part !== null &&
-    part > 0 &&
-    part < estimate
-      ? part
-      : null;
+    parentName === null && estimate !== null && part !== null && part > 0 && part < estimate ? part : null;
 
   function handleComplete() {
     if (pending) return;
@@ -83,11 +69,7 @@ export function MonthTaskLine({
       onClick={() => setNoteOpen(true)}
       disabled={pending}
     >
-      {note ? (
-        <FileText size={18} aria-hidden />
-      ) : (
-        <File size={18} aria-hidden />
-      )}
+      {note ? <FileText size={18} aria-hidden /> : <File size={18} aria-hidden />}
     </IconButton>
   );
 
@@ -115,22 +97,14 @@ export function MonthTaskLine({
             <Text variant="name">{name}</Text>
             {isTimeUnit(unit) ? (
               <Text variant="meta" tone="muted">
-                {estimate !== null
-                  ? formatQuantity(estimate, unit, words)
-                  : t("roadmap.plan.unestimated")}
+                {estimate !== null ? formatQuantity(estimate, unit, words) : t("roadmap.plan.unestimated")}
               </Text>
             ) : null}
             <Text variant="sentence">
               {splitPart !== null
                 ? t.rich("day.monthLine.nextPart", {
                     hours: splitPart,
-                    fig: () => (
-                      <Figure
-                        variant="meta"
-                        value={Number(splitPart)}
-                        unit={unit || undefined}
-                      />
-                    ),
+                    fig: () => <Figure variant="meta" value={Number(splitPart)} unit={unit || undefined} />,
                   })
                 : unit !== "" && !isTimeUnit(unit)
                   ? t("day.monthLine.nextMonth")
