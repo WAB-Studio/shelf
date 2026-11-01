@@ -15,8 +15,8 @@ A ship's log: what happened, when, and who wrote it down.
   2026-09-22. A palette with no red is what enforces it — a later screen cannot reach for one.
 - **Light is the primary face.** Dark is the same design inverted, never a second design.
   `apps/wordbook` is dark-first; this app inherits nothing from it.
-- **A figure that stands alone is set in mono, a sentence in Archivo.** Hours, counts, minutes, dates and quantities
-  are the log's substance. A figure inside a sentence («todos los días · 10 min», «sábado 31 oct») is the sentence's own face, tabular.
+- **A figure is set in mono, a sentence in Archivo.** Hours, counts, minutes, dates and quantities
+  are the log's substance: they read as a log or they read as decoration.
 - **Writing a fact costs one tap.** No form stands on the day's path. What needs a number offers it
   already filled.
 - Rule between rows with a hairline. On the phone there is no card and no border box. From 768px the groups sit in `Panel` cards (raised ground, 1px line, radius 14), the brand surfaces the restyle of 2026-10-30 chose; a row inside a card is still ruled by a hairline.
@@ -128,7 +128,7 @@ Dark, the same design inverted:
 ## Type
 
 - Sentences, headings, commitment names and controls: **Archivo**, fallback `system-ui, sans-serif`.
-- Every figure that stands alone: **Chivo Mono**, fallback `ui-monospace, monospace`, `letter-spacing: 0.02em`. A figure in a sentence is Archivo, tabular.
+- Every figure: **Chivo Mono**, fallback `ui-monospace, monospace`, `letter-spacing: 0.02em`.
 - Set a section label at 11 px, mono, uppercase, `letter-spacing: 0.14em`, in **muted**. It names a
   goal or a group, never a state.
 - Set a screen title at 27 px / 600 / `-0.02em` on the phone, 38–44 px / 600–700 / `-0.03em` wide.
@@ -2062,6 +2062,7 @@ The user accepted the critic's recommendations on 2026-10-31.
 - **«Este mes» names its goal only when several cards stand beside the groups.**
 - **«Sueltas» is a plain line** at the end of the list: its label, its tasks and its field, no card.
 - **One accent on the ground.** Tangerine marks done, links and the tag; navy is the rail and the goal's and Mes's hero; sky only on navy.
+- **A figure inside a sentence stays mono**, on Hoy as on every screen («5 de 10 min», «20 de 40 km»). Decided by the user 2026-11-01, over the Archivo figure #751 had shipped.
 
 ## Semana and Metas, 2026-11-01, by the user
 

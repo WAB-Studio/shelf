@@ -6,8 +6,8 @@ import { todayInZone } from "@/lib/zone";
 import connections from "../messages/es/connections.json";
 import { test, expect } from "./fixtures";
 
-// RP-38, RP-43, RP-53: a line that mixes words and figures is Archivo from end to end, its figures and dates
-// included; mono is for a figure that stands alone (docs/goallog/DESIGN.md «Hoy»). The new key's name is a
+// RP-38, RP-43, RP-53: a line that mixes words and figures is Archivo, and only
+// its figures and dates are DM Mono (`SistemaPiezas`). The new key's name is a
 // name, never a mono-caps label (`ConexionesCreada`).
 
 async function expectMixed(line: Locator, figures: string[]) {
@@ -20,7 +20,7 @@ async function expectMixed(line: Locator, figures: string[]) {
   }));
   expect(set.family).not.toMatch(/mono/i);
   expect(set.spans.map((span) => span.text)).toEqual(figures);
-  for (const span of set.spans) expect(span.family).not.toMatch(/mono/i);
+  for (const span of set.spans) expect(span.family).toMatch(/mono/i);
 }
 
 const today = todayInZone();
@@ -30,7 +30,7 @@ const WIDTHS: [number, number][] = [
   [1440, 900],
 ];
 
-test.describe("mixed lines are Archivo with their figures (RP-38, RP-43, RP-53)", () => {
+test.describe("mixed lines are Archivo with figures in mono (RP-38, RP-43, RP-53)", () => {
   test("«Mes»: «de 10 h» beside the goal's figure", async ({ person, browser, baseURL, db }) => {
     const stamp = Date.now();
     const [goal] = await db<{ id: string }[]>`

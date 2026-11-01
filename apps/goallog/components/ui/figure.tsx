@@ -89,13 +89,11 @@ export function Figure({
   const breaks = Boolean(breakUnit && wordUnit);
   // Money reads in the body face with tabular numerals: a mono point takes a whole cell and opens «500 . 000».
   const money = unit !== undefined && /^[A-Z]{3}$/.test(unit);
-  // A figure inside a sentence is the sentence's own face: its point is a plain one, not the narrow mono cut.
-  const inSentence = variant === "meta";
   return (
     <span data-part="figure" className={`${styles.figure} ${size} ${wordUnit ? styles.worded : ""} ${breaks ? styles.breaks : ""} ${breakValue ? styles.breaksValue : ""} ${money ? styles.money : ""}`}>
       {isTimeFigure(formatted) ? (
         <TimeParts time={formatted} unitClass={styles.unit} unitPart="figure-unit" />
-      ) : typeof formatted === "string" && !money && !inSentence ? (
+      ) : typeof formatted === "string" && !money ? (
         <Grouped text={formatted} />
       ) : (
         formatted

@@ -94,7 +94,7 @@ test("a past day with five daily rows (three done, one partial) and a weekly row
     await expect(page.getByText(`${otherName} · ese día pedía tres`)).toHaveCount(1);
     await expect(page.getByText(/^hechos 3 de 9 · 1 en parte$/)).toBeVisible();
 
-    // The tally is a sentence: its line and its figures are Archivo.
+    // The tally is a sentence: its line is Archivo, its figures DM Mono.
     const line = page.getByText(/^hechos 3 de 9 · 1 en parte$/);
     const fonts = await line.evaluate((el) => ({
       line: getComputedStyle(el).fontFamily,
@@ -103,7 +103,7 @@ test("a past day with five daily rows (three done, one partial) and a weekly row
     expect(fonts.line).not.toMatch(/mono/i);
     expect(fonts.line).toMatch(/archivo/i);
     expect(fonts.figures).toHaveLength(3);
-    for (const family of fonts.figures) expect(family).not.toMatch(/mono/i);
+    for (const family of fonts.figures) expect(family).toMatch(/mono/i);
   } finally {
     await context.close();
     await db`delete from goals.goals where id = any(${[main, other]}) and user_id = ${person.id}`;
