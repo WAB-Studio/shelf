@@ -3,6 +3,7 @@
 import { useState, type ReactNode } from "react";
 import { ChevronDown } from "lucide-react";
 
+import { Tag } from "./tag";
 import { Text } from "./text";
 import styles from "./group-head.module.css";
 
@@ -33,7 +34,7 @@ export function GroupHead({
           <Text asChild variant="heading">
             <h2>{name}</h2>
           </Text>
-          {tag ? <span className={styles.tag}>{tag}</span> : null}
+          {tag ? <Tag>{tag}</Tag> : null}
         </div>
         {trailing ? <div className={styles.trailing}>{trailing}</div> : null}
       </div>

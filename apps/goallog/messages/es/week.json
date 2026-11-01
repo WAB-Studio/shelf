@@ -1,7 +1,7 @@
 {
   "range": "Del {start} al {end}",
   "rangeWithMonth": "Del {start} al {end} de {month}",
-  "sectionLabel": "{name} · semana {week} de {total}",
+  "tag": "Semana {week} de {total}",
   "todayMark": "· hoy",
   "table": {
     "caption": "La semana, un compromiso por fila y un día por columna",

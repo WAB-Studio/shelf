@@ -2062,3 +2062,7 @@ The user accepted the critic's recommendations on 2026-10-31.
 - **«Este mes» names its goal only when several cards stand beside the groups.**
 - **«Sueltas» is a plain line** at the end of the list: its label, its tasks and its field, no card.
 - **One accent on the ground.** Tangerine marks done, links and the tag; navy is the rail and the goal's and Mes's hero; sky only on navy.
+
+## Semana and Metas, 2026-11-01, by the user
+
+- **A goal is headed the way Hoy heads it.** Semana: the goal's name in the title face over its rows and «Semana 6 de 28» as a tag (`Tag`). Metas: each goal's card is headed by `GroupHead`, its name, «Faltan 22 semanas» as the tag and the phase's aim on one line that opens whole on a press.
