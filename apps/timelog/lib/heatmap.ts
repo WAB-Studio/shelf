@@ -16,7 +16,7 @@ export function heatLevel(seconds: number, largest: number): number {
   return seconds <= 0 ? 0 : Math.min(HEAT_LEVELS, Math.max(1, Math.ceil((seconds / Math.max(1, largest)) * HEAT_LEVELS)));
 }
 
-// Claude's total per day as one more row of the week's grid (RT-17), levelled against the grid's largest cell.
+// Claude's total per day as one more row of the week's grid (RT-22), levelled against the grid's largest cell.
 export function claudeHeatRow(claude: ClaudeDay[], days: string[], largest: number): { total: number; cells: HeatCell[] } {
   const cells = days.map((day) => {
     const one = claude.find((row) => row.day === day);
