@@ -2055,7 +2055,7 @@ The user accepted the critic's recommendations on 2026-10-31.
 
 ## Hoy, 2026-11-01, by the user
 
-- **The header is the date.** «Domingo 1 de noviembre» is the `h1`, in the title face, with the day's count beside it («2» in the accent, «de 5», «hechos hoy»; «· 1 en parte» while a row is partial). On the phone the count stands on the controls line. A past day keeps its header.
+- **The header is the date.** «Domingo 1 de noviembre» is the `h1`, in the title face, with the day's count beside it («2» in the accent, «de 5», «hechos hoy»; «· 1 en parte» while a row is partial). On the phone the count stands at the start of the controls line, «ayer» and the theme toggle at its end. A past day keeps its header.
 - **No navy block on Hoy.** The week is `WeekStrip`: seven slim columns, each a bar filled to the share of the day done, the day's «5/7» under it, today on the soft accent.
 - **A commitment is a tile** (`Row` with `tile`): 64px at least, a raised box with a hairline; done fills it in the soft accent with the accent mark. Under its name it carries its 30-day strip (`Strip size="row"`), the same bars as the goal's page.
 - **A goal is named once**, by `GroupHead`: its name in the title face, «Fase 1 de 3» as a tag, the phase's aim on one line that opens whole on a press, and from 768 the week's hours as one figure at its end. A goal with one phase has no tag.

@@ -127,9 +127,7 @@
   },
   "phase": {
     "of": "fase {ordinal} de {total} · {name}",
-    "tag": "Fase {ordinal} de {total}",
-    "expand": "Ver la fase entera",
-    "collapse": "Plegar la fase"
+    "tag": "Fase {ordinal} de {total}"
   },
   "row": {
     "notedBy": "lo anota el {source}",

@@ -4,7 +4,7 @@ import { Figure, Hero, Page, Row, ScreenHeader, Section, Split, Strip, Text } fr
 import { stripCount, strip } from "@/lib/day/constancy";
 import type { GoalCommitment } from "@/lib/queries/goal";
 import { civilDateToDate, civilDayMonthShort, todayInZone } from "@/lib/zone";
-import { partialPair } from "@/lib/day/row-phrases";
+import { partialPair, stripLabel } from "@/lib/day/row-phrases";
 import { evidenceUnitWords } from "@/lib/evidence/unit-words";
 import { formatTime, isTimeUnit } from "@/lib/units/time";
 import { timeWordsOf } from "@/lib/units/time-words";
@@ -73,7 +73,7 @@ export async function CommitmentScreen({
             >
               <Strip
                 cells={cells}
-                label={of === null ? t("goal.commitments.stripAriaDays", { done }) : t("goal.commitments.stripAria", { done, of })}
+                label={stripLabel((key, values) => t(key, values), { done, of })}
                 from={civilDayMonthShort(cells[0].day)}
                 to={t("goal.commitments.stripToday")}
               />

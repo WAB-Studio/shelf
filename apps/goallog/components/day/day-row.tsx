@@ -184,6 +184,7 @@ export function DayRow({
       <Row
         leading={<Mark state={markState} quiet={quiet} />}
         tile
+        aria-description={strip?.label}
         done={done || markState === "evidence"}
         strip={strip ? <Strip size="row" cells={strip.cells} label={strip.label} /> : undefined}
         quiet={quiet}
