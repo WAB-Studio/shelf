@@ -13,6 +13,7 @@ import type { AppTime } from "@/lib/queries";
 import { appsBetween, claudeBetween, claudeSessionsBetween, dayTotals, devicesBetween, pagesBetween, sitesBetween, uploadedDays, uploadSpan, windowsBetween } from "@/lib/queries";
 import { focusShare, hourMarks, layoutSessions } from "@/lib/timeline";
 import { percent, sum } from "@/lib/totals";
+import { projectsOf } from "@/lib/vscode-project";
 import { calendarWords } from "@/lib/words";
 import { dayStrip, mondayOf } from "@/lib/week";
 import { addDays, civilDay } from "@/lib/zone";
@@ -56,6 +57,8 @@ export async function DayView({ day }: { day: string }) {
     const name = readableApp(one.app);
     if (name !== null) titlesOf.set(name, [...(titlesOf.get(name) ?? []), one]);
   }
+  const projects = projectsOf(windows);
+  const projectRow = (one: (typeof projects)[number]): BarRow => ({ key: one.project, name: one.project, figure: words.duration(one.seconds), seconds: one.seconds, label: t("projectBar", { project: one.project, duration: words.duration(one.seconds) }) });
   const claudeParts = claudeSources(claude, { code: tClaude("code"), web: tClaude("web"), desktop: tClaude("desktop") })
     .filter((one) => one.seconds > 0)
     .map((one) => ({ ...one, figure: words.duration(one.seconds) }));
@@ -213,6 +216,15 @@ export async function DayView({ day }: { day: string }) {
                 of={top?.seconds}
                 rows={apps.slice(0, APPS_SHOWN).map(appRow)}
                 overflow={apps.length > APPS_SHOWN ? { summary: t("appsMore", { n: apps.length - APPS_SHOWN, duration: words.duration(sum(apps.slice(APPS_SHOWN))) }), rows: apps.slice(APPS_SHOWN).map(appRow) } : undefined}
+              />
+            </Tile>
+          ) : null}
+          {projects.length > 0 ? (
+            <Tile title={t("projects")} figure={words.duration(sum(projects))}>
+              <BarRows
+                of={projects[0]?.seconds}
+                rows={projects.slice(0, APPS_SHOWN).map(projectRow)}
+                overflow={projects.length > APPS_SHOWN ? { summary: t("projectsMore", { n: projects.length - APPS_SHOWN }), rows: projects.slice(APPS_SHOWN).map(projectRow) } : undefined}
               />
             </Tile>
           ) : null}
