@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
@@ -64,7 +65,14 @@ export const LEADING: Readonly<Record<string, readonly string[]>> = {
   "cup|n": ["vaso", "taza"],
 };
 
-// The lead translations one offline model pass picked (`pick-translations.ts`), keyed `headword|pos`. Committed
+// An entry's identity for the picks: its headword, its part of speech and a hash of its glosses, whatever their
+// order. Several entries share a headword and a part of speech (`row`), and their gloss sets tell them apart.
+export function pickKey(headword: string, pos: string, glosses: readonly string[]): string {
+  const hash = createHash("sha1").update([...glosses].sort().join("\u0000")).digest("hex").slice(0, 10);
+  return `${headword.toLowerCase()}|${pos}|${hash}`;
+}
+
+// The lead translations one offline model pass picked (`pick-translations.ts`), keyed by `pickKey`. Committed
 // output only: the build reads it and never asks a model.
 const PICKS = JSON.parse(readFileSync(path.join(import.meta.dirname, "translation-picks.json"), "utf8")) as Readonly<
   Record<string, readonly string[]>
@@ -80,7 +88,7 @@ export function rankTranslations(headword: string, pos: string, translations: re
   const plain = ranked.filter((gloss) => !isInflectedGloss(gloss, kept, pos));
   const ordered = [...plain, ...ranked.filter((gloss) => isInflectedGloss(gloss, kept, pos))];
   const reviewed = (LEADING[key] ?? []).filter((gloss) => ordered.includes(gloss));
-  const lead = reviewed.length > 0 ? reviewed : (PICKS[key] ?? []).filter((gloss) => ordered.includes(gloss));
+  const lead = reviewed.length > 0 ? reviewed : (PICKS[pickKey(headword, pos, kept)] ?? []).filter((gloss) => ordered.includes(gloss));
   return [...lead, ...ordered.filter((gloss) => !lead.includes(gloss))];
 }
 

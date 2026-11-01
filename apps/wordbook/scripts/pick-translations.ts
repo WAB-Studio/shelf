@@ -16,6 +16,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 import { DICTIONARY_DIR, manifestSchema, type DictionaryPayload } from "../lib/dictionary/format";
+import { pickKey } from "./translation-order";
 
 const APP_DIR = path.resolve(import.meta.dirname, "..");
 const PICKS_PATH = path.join(import.meta.dirname, "translation-picks.json");
@@ -37,6 +38,11 @@ function writePicks(picks: Picks): void {
   writeFileSync(PICKS_PATH, JSON.stringify(sorted, null, 0).replace(/\],"/g, '],\n"') + "\n");
 }
 
+// A cached pick stands while it names only glosses the entry still carries.
+function isCached(pick: readonly string[] | undefined, item: Item): boolean {
+  return pick !== undefined && pick.length > 0 && pick.every((gloss) => item.glosses.includes(gloss));
+}
+
 function loadItems(): Item[] {
   const manifest = manifestSchema.parse(
     JSON.parse(readFileSync(path.join(APP_DIR, "public", DICTIONARY_DIR, "manifest.json"), "utf8")),
@@ -46,7 +52,7 @@ function loadItems(): Item[] {
   ) as DictionaryPayload;
   const items = payload.entries
     .filter(([, , , glosses]) => glosses.length >= 2)
-    .map(([headword, pos, , glosses]) => ({ key: `${headword.toLowerCase()}|${pos}`, headword, pos, glosses: [...glosses] }));
+    .map(([headword, pos, , glosses]) => ({ key: pickKey(headword, pos, glosses), headword, pos, glosses: [...glosses] }));
   const weight = (item: Item) => (/\s/.test(item.headword) ? -1 : item.glosses.length);
   return items.sort((a, b) => weight(b) - weight(a));
 }
@@ -95,7 +101,7 @@ async function main(): Promise<void> {
   const limit = args.includes("--limit") ? Number(args[args.indexOf("--limit") + 1]) : Infinity;
   const picks = readPicks();
   const todo = loadItems()
-    .filter((item) => !(picks[item.key] ?? []).some((gloss) => item.glosses.includes(gloss)))
+    .filter((item) => !isCached(picks[item.key], item))
     .slice(0, limit);
   const batches = Array.from({ length: Math.ceil(todo.length / BATCH) }, (_, i) => todo.slice(i * BATCH, (i + 1) * BATCH));
   console.log(`[pick] ${todo.length} entries in ${batches.length} batches, model ${MODEL}`);
