@@ -34,8 +34,9 @@ import {
 } from "@/components/ui";
 import type { PlannedPaymentRow } from "@/db/queries/planned-payments";
 import type { TransactionFormOptions } from "@/db/queries/transaction-form";
-import { civilDateToDate } from "@/lib/dates";
+import { civilDateToDate, todayInBogota } from "@/lib/dates";
 import { categoryNamesById } from "@/lib/fund/category-names";
+import { isOverdue } from "@/lib/fund/glance";
 import { formatMoney } from "@/lib/money";
 import { useActionErrorToast } from "@/lib/use-action-toast";
 
@@ -77,6 +78,7 @@ export function PaymentsScreen({
 
   // The query hands rows soonest-due first, so the keys land in chronological
   // order and each month's rows keep that order.
+  const today = todayInBogota();
   const groups = useMemo(() => {
     const byMonth = new Map<string, PlannedPaymentRow[]>();
     for (const payment of payments) {
@@ -169,6 +171,7 @@ export function PaymentsScreen({
                 <PaymentCard
                   key={payment.id}
                   payment={payment}
+                  today={today}
                   onSettle={() => setSettleTarget(payment)}
                   onEdit={() => setFormTarget(payment)}
                   onCancel={() => setCancelTarget(payment)}
@@ -267,8 +270,10 @@ function PaymentCard({
   onEdit,
   onCancel,
   onDelete,
+  today,
 }: {
   payment: PlannedPaymentRow;
+  today: string;
   onSettle: () => void;
   onEdit: () => void;
   onCancel: () => void;
@@ -280,9 +285,12 @@ function PaymentCard({
   const locale = useLocale();
 
   const due = civilDateToDate(payment.dueDate);
+  const pending = payment.status === "pending";
+  const overdue = isOverdue(payment, today);
 
   return (
     <Card>
+      <Flex direction="column" gap="2">
       <Flex align="center" gap="2">
         <Flex flexGrow="1" minWidth="0">
           <MovementRow
@@ -293,7 +301,7 @@ function PaymentCard({
               />
             }
             title={payment.description ?? t("noConcept")}
-            subtitle={t("reminder")}
+            subtitle={overdue ? t("overdueReminder") : t("reminder")}
             amount={formatMoney(payment.amountCents, payment.currency, locale)}
             tone="transfer"
             wrap
@@ -328,6 +336,12 @@ function PaymentCard({
             </DropdownMenu.Item>
           </DropdownMenu.Content>
         </DropdownMenu.Root>
+      </Flex>
+      {pending && (
+        <Button type="button" variant="surface" color={overdue ? "amber" : "gray"} onClick={onSettle}>
+          {t("settle")}
+        </Button>
+      )}
       </Flex>
     </Card>
   );

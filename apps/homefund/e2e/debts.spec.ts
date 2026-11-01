@@ -1085,6 +1085,8 @@ test.describe("the detail route", () => {
   test("reads the frozen statement saldos, which a later movement leaves alone while the open period moves", async ({
     page,
   }) => {
+    // The statements table draws from `lg` up; the phone reads cards.
+    await page.setViewportSize({ width: 1280, height: 900 });
     await page.goto(`/es/planning/debts/${detailId}`);
 
     const history = page.getByRole("table", {
@@ -1140,9 +1142,28 @@ test.describe("the detail route", () => {
     expect(after).toEqual(stored);
   });
 
+  test("reads each statement as a card on the phone, with its balance in view", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 360, height: 740 });
+    await page.goto(`/es/planning/debts/${detailId}`);
+
+    await expect(
+      page.getByText(installments.statementBalance, { exact: true }).locator("visible=true").first(),
+    ).toBeVisible();
+    await expect(page.getByRole("table", { name: installments.statementsTitle })).toBeHidden();
+
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    );
+    expect(overflow).toBeLessThanOrEqual(0);
+  });
+
   test("records what a person types into the dialog, and shows the row with the gap the base derives", async ({
     page,
   }) => {
+    // The statements table draws from `lg` up; the phone reads cards.
+    await page.setViewportSize({ width: 1280, height: 900 });
     // After the last seeded cut-off and short of it — a period the earlier
     // closes leave open (RF-129).
     const periodStart = addCivilDays(dayOfMonthBack(1, DETAIL_CUT_OFF_DAY), 1);
@@ -1205,6 +1226,8 @@ test.describe("the detail route", () => {
   test("leaves interest and fees blank, and the recorded row shows empty cells rather than a zero", async ({
     page,
   }) => {
+    // The statements table draws from `lg` up; the phone reads cards.
+    await page.setViewportSize({ width: 1280, height: 900 });
     const periodStart = addCivilDays(dayOfMonthBack(1, DETAIL_CUT_OFF_DAY), 1);
     const cutOffDate = todayInBogota();
     const closingMajor = "1800000";

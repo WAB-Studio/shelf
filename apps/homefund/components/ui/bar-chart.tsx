@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import {
   Bar,
   BarChart as RechartsBarChart,
@@ -9,6 +10,12 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+
+// Under this width two labelled bars no longer fit side by side, so each figure
+// is written upright above its own bar.
+const NARROW_PX = 520;
+// What a character of an 11px label measures, with a little to spare.
+const LABEL_CHAR_PX = 6.5;
 
 export type BarChartSeries = { key: string; valueCents: number };
 
@@ -46,11 +53,28 @@ export function BarChart({
   });
 
   const keys = Object.keys(seriesColors);
+  const [narrow, setNarrow] = useState(false);
+
+  // An upright label grows upward by its own length, so the room above the bars is
+  // the longest label drawn at the font's width, plus the offset from its bar.
+  const longestLabel = formatValue
+    ? Math.max(
+        0,
+        ...data.flatMap((datum) =>
+          datum.series.filter((one) => one.valueCents > 0).map((one) => formatValue(one.valueCents).length),
+        ),
+      )
+    : 0;
+  const topMargin = formatValue ? (narrow ? longestLabel * LABEL_CHAR_PX + 16 : 20) : 5;
 
   return (
     <div role="img" aria-label={ariaLabel} style={{ width: "100%", height }}>
-      <ResponsiveContainer width="100%" height={height}>
-        <RechartsBarChart data={rows} margin={{ top: formatValue ? 20 : 5 }}>
+      <ResponsiveContainer
+        width="100%"
+        height={height}
+        onResize={(width) => setNarrow(width < NARROW_PX)}
+      >
+        <RechartsBarChart data={rows} margin={{ top: topMargin, right: 12 }}>
           <XAxis dataKey="label" tickLine={false} axisLine={false} />
           <YAxis hide />
           {averageCents != null && averageCents > 0 && (
@@ -74,6 +98,7 @@ export function BarChart({
                   position="top"
                   fill="var(--gray-11)"
                   fontSize={11}
+                  {...(narrow ? { angle: -90, textAnchor: "start" as const, offset: 8 } : {})}
                   formatter={(value: unknown) =>
                     typeof value === "number" && value > 0 ? formatValue(value) : ""
                   }

@@ -256,7 +256,7 @@ function HubCard({
   );
 
   const summaryText = (
-    <Text size="2" color="gray" truncate>
+    <Text size="2" color="gray">
       {summary}
     </Text>
   );
