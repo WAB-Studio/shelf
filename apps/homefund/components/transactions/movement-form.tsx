@@ -317,7 +317,7 @@ export function MovementForm({
           counterAmount: null,
           counterIsEstimate: false,
           forHousehold: false,
-          contributedByMemberId: options.callerMemberId,
+          contributedByMemberId: null,
           occurredAt: defaults?.occurredAt ?? todayInBogota(),
           description:
             defaults?.description !== undefined ? defaults.description : null,
@@ -415,6 +415,26 @@ export function MovementForm({
   // «De quién» (RF-166) is asked of an income into a fund account, and nowhere else.
   const offersContributor =
     kind === "income" && scope === "group" && options.fundMembers.length > 0;
+
+  // Only a salary is presumed to be the writer's own contribution; any other income
+  // starts unassigned, since a refund or a gift from someone else is no one's aporte.
+  // A choice the person made is never overwritten.
+  const salaryCategoryIds = useMemo(
+    () =>
+      new Set(
+        options.categories.filter((category) => category.seedKey === "salary").map((category) => category.id),
+      ),
+    [options.categories],
+  );
+  const contributorChosen = useRef(false);
+  const hasSalarySplit = splits.some((split) => salaryCategoryIds.has(split.categoryId));
+  useEffect(() => {
+    if (isEdit || !offersContributor || contributorChosen.current) return;
+    form.setValue(
+      "contributedByMemberId",
+      hasSalarySplit ? options.callerMemberId : null,
+    );
+  }, [isEdit, offersContributor, hasSalarySplit, options.callerMemberId, form]);
 
   // A movement is never its own cause (RF-132), so the movement under edit is
   // dropped from what the picker offers; the rest arrive already ordered.
@@ -1035,9 +1055,10 @@ export function MovementForm({
                   <Select.Root
                     size="3"
                     value={field.value ?? NO_ACCOUNT}
-                    onValueChange={(value) =>
-                      field.onChange(value === NO_ACCOUNT ? null : value)
-                    }
+                    onValueChange={(value) => {
+                      contributorChosen.current = true;
+                      field.onChange(value === NO_ACCOUNT ? null : value);
+                    }}
                     disabled={isPending}
                   >
                     <FieldControl>

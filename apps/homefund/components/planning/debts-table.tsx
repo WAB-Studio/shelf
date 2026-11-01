@@ -10,6 +10,7 @@ import {
   Figure,
   Flex,
   Money,
+  PersonalMark,
   RowMenu,
   TablePagination,
   Text,
@@ -54,6 +55,7 @@ const COLUMN_GAP = "8px";
 export type DebtTableRow = {
   accountId: string;
   name: string;
+  personal: boolean;
   // The currency the debt bills in: every figure on its row is read in it, and
   // what it owes in another one rides in `otherOwed` (RF-121, RF-124).
   currency: CurrencyCode;
@@ -286,6 +288,8 @@ export function DebtsTable({
     );
   }
 
+  const tAccounts = useTranslations("accounts");
+
   const columns: DataColumn<DebtTableRow>[] = [
     {
       key: "debt",
@@ -297,6 +301,7 @@ export function DebtsTable({
             <Text size="2" weight="medium" truncate>
               {row.name}
             </Text>
+            {row.personal && <PersonalMark label={tAccounts("ownerPersonal")} />}
             {row.accountId === nextPaymentAccountId && (
               <Badge color="jade" variant="soft" radius="full">
                 {t("nextPaymentBadge")}

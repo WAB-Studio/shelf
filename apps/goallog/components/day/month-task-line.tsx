@@ -6,7 +6,7 @@ import { useTranslations } from "next-intl";
 
 import { completeOneOff } from "@/app/actions/one-offs";
 import { NoteSheet } from "@/components/one-offs/note-sheet";
-import { Button, Figure, Flex, IconButton, Mark, Text } from "@/components/ui";
+import { Button, Figure, Flex, IconButton, Mark, Text, Tile } from "@/components/ui";
 import { useTimeWords } from "@/components/ui/figure";
 import type { MessageKey } from "@/i18n/translator";
 import { formatQuantity, isTimeUnit } from "@/lib/units/time";
@@ -75,43 +75,45 @@ export function MonthTaskLine({
 
   return (
     <>
-      <Flex align="start" gap="2">
-        <Flex ml="-1" asChild>
-          <Button
-            tap={48}
-            variant="ghost"
-            onClick={handleComplete}
-            disabled={pending}
-            aria-label={t("day.monthLine.markTask", { name })}
-          >
-            <Mark state="empty" />
-          </Button>
-        </Flex>
-        <Flex direction="column" gap="1" flexGrow="1" minWidth="0" pt="2">
-          {parentName ? (
+      <Tile>
+        <Flex align="start" gap="2">
+          <Flex ml="-1" asChild>
+            <Button
+              tap={48}
+              variant="ghost"
+              onClick={handleComplete}
+              disabled={pending}
+              aria-label={t("day.monthLine.markTask", { name })}
+            >
+              <Mark state="empty" />
+            </Button>
+          </Flex>
+          <Flex direction="column" gap="1" flexGrow="1" minWidth="0" pt="2">
+            {parentName ? (
+              <Text variant="sentence">
+                {t("day.monthLine.parent", { name: parentName })}
+              </Text>
+            ) : null}
+            <Text variant="name">{name}</Text>
+            {isTimeUnit(unit) ? (
+              <Text variant="meta" tone="muted">
+                {estimate !== null ? formatQuantity(estimate, unit, words) : t("roadmap.plan.unestimated")}
+              </Text>
+            ) : null}
             <Text variant="sentence">
-              {t("day.monthLine.parent", { name: parentName })}
+              {splitPart !== null
+                ? t.rich("day.monthLine.nextPart", {
+                    hours: splitPart,
+                    fig: () => <Figure variant="meta" value={Number(splitPart)} unit={unit || undefined} />,
+                  })
+                : unit !== "" && !isTimeUnit(unit)
+                  ? t("day.monthLine.nextMonth")
+                  : t("day.monthLine.next")}
             </Text>
-          ) : null}
-          <Text variant="name">{name}</Text>
-          {isTimeUnit(unit) ? (
-            <Text variant="meta" tone="muted">
-              {estimate !== null ? formatQuantity(estimate, unit, words) : t("roadmap.plan.unestimated")}
-            </Text>
-          ) : null}
-          <Text variant="sentence">
-            {splitPart !== null
-              ? t.rich("day.monthLine.nextPart", {
-                  hours: splitPart,
-                  fig: () => <Figure variant="meta" value={Number(splitPart)} unit={unit || undefined} />,
-                })
-              : unit !== "" && !isTimeUnit(unit)
-                ? t("day.monthLine.nextMonth")
-                : t("day.monthLine.next")}
-          </Text>
+          </Flex>
+          <Flex mr="-3">{noteButton}</Flex>
         </Flex>
-        <Flex mr="-3">{noteButton}</Flex>
-      </Flex>
+      </Tile>
       {error ? (
         <Text as="p" variant="sentence">
           {t(error)}

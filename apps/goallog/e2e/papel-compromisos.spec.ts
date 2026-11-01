@@ -197,7 +197,7 @@ test.describe("commitments and «por mes» on the export screen and on paper (RP
         expect(count(text, "tema técnico · martes y jueves · 2 h"), `${where}: once`).toBe(1);
         expect(text, `${where}: no short days`).not.toContain("mar y jue");
         const row = text.slice(text.indexOf("metas dentro"), first);
-        expect(row, `${where}: the unit once`).toMatch(/octubre · 0 de 6\.000 palabras/);
+        expect(row, `${where}: the unit once`).toMatch(new RegExp(`${MONTHS[Number(startOf(0).slice(5, 7)) - 1]} · 0 de 6\\.000 palabras`));
         expect(row, `${where}: the unit not twice`).not.toMatch(/palabras de [\d.]+ palabras/);
       }
     } finally {

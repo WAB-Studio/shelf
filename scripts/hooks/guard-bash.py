@@ -355,6 +355,64 @@ def has_trailer(text):
     return bool(TRAILER_LINE.search(text) or TRAILER_ANY.search(text))
 
 
+def api_fields(a, cwd):
+    """`gh api` fields as {key: value}; -F key=@file reads the file. None when a file cannot be read."""
+    out = {}
+    for i, t in enumerate(a):
+        flag, val = None, None
+        for f in ("--field", "--raw-field", "-F", "-f"):
+            if t == f and i + 1 < len(a):
+                flag, val = f, a[i + 1]
+            elif t.startswith(f + "=") and f.startswith("--"):
+                flag, val = f, t.split("=", 1)[1]
+        if flag is None:
+            continue
+        k, _, v = val.partition("=")
+        if flag in ("--field", "-F") and v.startswith("@"):
+            try:
+                with open(v[1:] if os.path.isabs(v[1:]) else os.path.join(cwd or ".", v[1:]), encoding="utf-8", errors="replace") as fh:
+                    v = fh.read()
+            except OSError:
+                return None
+        out[k] = v
+    return out
+
+
+def check_gh_api(a, p, raw):
+    """`gh api` on pulls: a merge goes through gh-rest.sh; a PR opens or moves only onto integracion."""
+    path = next((x for x in a if re.match(r"^/?repos/[^/]+/[^/]+/pulls", x)), "")
+    if not path:
+        return None
+    if re.search(r"/pulls/\d+/merge/?$", path):
+        return "Merge through scripts/gh-rest.sh pr-merge <n> --squash: it refuses a PR whose base is main."
+    method = (option(a, "--method", "-X") or "").upper()
+    if not method and any(re.match(r"^-X[A-Za-z]+$", x) for x in a):
+        method = next(x[2:] for x in a if re.match(r"^-X[A-Za-z]+$", x)).upper()
+    fields = api_fields(a, p.cwd)
+    if fields is None:
+        return "gh api: a field file cannot be read, so its body cannot be checked."
+    infile = option(a, "--input")
+    if infile is not None:
+        try:
+            with open(infile if os.path.isabs(infile) else os.path.join(p.cwd or ".", infile), encoding="utf-8", errors="replace") as fh:
+                data = json.load(fh)
+            fields.update({k: str(v) for k, v in data.items() if isinstance(data, dict)})
+        except (OSError, ValueError, AttributeError):
+            return "gh api --input: the JSON file cannot be read, so the PR cannot be checked."
+        method = method or "POST"
+    if has_trailer("\n".join(fields.values())):
+        return TRAILER_MSG
+    base, head = fields.get("base"), fields.get("head", "")
+    if re.search(r"/pulls/?$", path) and (method == "POST" or fields):
+        if base == "main" and head == "integracion":
+            return None
+        if base != "integracion":
+            return f"Point every PR at integracion (base is {base or 'unset, so main'}); only integracion -> main may target main."
+    if re.search(r"/pulls/\d+/?$", path) and method == "PATCH" and base is not None and base != "integracion":
+        return f"Point every PR at integracion (base is {base})."
+    return None
+
+
 def check(cmd, cwd):
     cmds = []
     scan(cmd, 0, False, cmds)
@@ -423,6 +481,11 @@ def check(cmd, cwd):
                 return f"Commit as {AUTHOR}; the committer here is {cn or ''} <{ce or ''}>."
         elif p.head == "gh":
             a = gh_args(p)
+            if a[:1] == ["api"]:
+                r = check_gh_api(a[1:], p, cmd)
+                if r:
+                    return r
+                continue
             if a[:1] != ["pr"] or len(a) < 2 or a[1] not in ("create", "edit", "comment", "merge", "review"):
                 continue
             if has_trailer(message_text(a[2:], p.cwd, p.heredocs, all_bodies, cmd)):

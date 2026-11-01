@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import type { Page } from "@playwright/test";
 import type postgres from "postgres";
 
-import { test, expect, todayCount, type Person } from "./fixtures";
+import { test, expect, todayCount, todayHeading, type Person } from "./fixtures";
 import { civilDateToDate, dateToCivilDate, todayInZone, weekOf } from "@/lib/zone";
 import { boxOf } from "./box";
 import { noonFromToday } from "./reloj";
@@ -96,8 +96,9 @@ test("«hechos» moves as a row is tapped and matches the Semana's cell; a met f
     const partialRow = page.getByRole("button", { name: new RegExp(`^${partial}`) });
     await expect(partialRow).toContainText("0 de 3 esta semana");
     await expect(partialRow).not.toContainText("veces por semana");
-    const box = await partialRow.boundingBox();
-    expect(box!.height).toBeLessThanOrEqual(72);
+    // The row is a tile with its 30-day strip under the name (DESIGN «Hoy, 2026-11-01»): its progress line stays one line.
+    const line = await partialRow.getByText("0 de 3 esta semana").boundingBox();
+    expect(line!.height).toBeLessThan(30);
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(360);
 
     // The Semana's cell for today counts the same rows.
@@ -161,7 +162,7 @@ test("an open goal that counts nothing draws no «hechos» line, and one counted
     await page.setViewportSize({ width: 360, height: 800 });
     await page.goto("/");
     await expect(page.locator("main")).toHaveCount(1);
-    await expect(page.getByRole("heading", { name: "Hoy", exact: true })).toBeVisible();
+    await expect(todayHeading(page)).toBeVisible();
     await expect(page.locator('[data-part="hero"]')).toHaveCount(0);
 
     await db`
@@ -298,10 +299,10 @@ for (const width of [360, 1440]) {
 }
 
 // The widest date the app can draw, so the line is measured whatever day the suite runs.
-const LONGEST_DATE = "miércoles 30 de septiembre";
+const LONGEST_DATE = "Miércoles 30 de septiembre";
 
 for (const longest of [false, true]) {
-test(`at 360 the header holds eyebrow, «Hoy», the count, «ayer» and the theme button without overflow (${longest ? "the longest date" : "today's date"})`, async ({
+test(`at 360 the header holds the date, the count, «ayer» and the theme button without overflow (${longest ? "the longest date" : "today's date"})`, async ({
   person,
   browser,
   db,
@@ -312,15 +313,13 @@ test(`at 360 the header holds eyebrow, «Hoy», the count, «ayer» and the them
     await page.goto("/");
     await expect(page.locator("main")).toHaveCount(1);
     await page.evaluate(() => document.fonts.ready);
-    const h1 = page.getByRole("heading", { name: "Hoy", exact: true, level: 1 });
+    const h1 = todayHeading(page);
     const count = todayCount(page, 0, 5);
     const link = page.locator(`main a[href="/dia/${plusDays(-1)}"]`);
     const theme = page.getByRole("button", { name: THEME });
     await expect(link).toHaveText("ayer");
-    const eyebrow = page.locator("main > header:visible").getByText(/^\p{L}+ \d{1,2} de \p{L}+$/u).first();
-    if (longest) await eyebrow.evaluate((node, text) => void (node.textContent = text), LONGEST_DATE);
+    if (longest) await h1.evaluate((node, text) => void (node.textContent = text), LONGEST_DATE);
     const boxes = {
-      eyebrow: (await boxOf(eyebrow)),
       h1: (await boxOf(h1)),
       count: (await boxOf(count)),
       link: (await boxOf(link)),
@@ -330,12 +329,13 @@ test(`at 360 the header holds eyebrow, «Hoy», the count, «ayer» and the them
       expect(box.x, `${name} left`).toBeGreaterThanOrEqual(0);
       expect(box.x + box.width, `${name} right`).toBeLessThanOrEqual(360);
     }
-    expect(boxes.link.x).toBeGreaterThanOrEqual(boxes.h1.x + boxes.h1.width);
     expect(boxes.link.x + boxes.link.width).toBeLessThanOrEqual(boxes.theme.x);
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(360);
-    // Date and controls share the header's first line: «ayer» and the toggle stand at its end.
-    expect(boxes.link.x).toBeGreaterThanOrEqual(boxes.eyebrow.x + boxes.eyebrow.width);
-    expect(Math.abs(boxes.link.y + boxes.link.height / 2 - (boxes.eyebrow.y + boxes.eyebrow.height / 2))).toBeLessThan(12);
+    // The count and the controls share the header's first line: «ayer» and the toggle stand at its end.
+    expect(boxes.link.x).toBeGreaterThanOrEqual(boxes.count.x + boxes.count.width);
+    expect(Math.abs(boxes.link.y + boxes.link.height / 2 - (boxes.count.y + boxes.count.height / 2))).toBeLessThan(12);
+    // The date stands under them.
+    expect(boxes.h1.y).toBeGreaterThanOrEqual(boxes.link.y + boxes.link.height - 1);
   } finally {
     await context.close();
     await cleanOwed(db, person, seeded);
@@ -358,7 +358,7 @@ test("a person whose first goal opened today reads «hechos 0 de 3» and no link
     await page.goto("/");
     await expect(page.locator("main")).toHaveCount(1);
     await expect(todayCount(page, 0, 3)).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Hoy", exact: true, level: 1 })).toBeVisible();
+    await expect(todayHeading(page)).toBeVisible();
     await expect(page.getByRole("button", { name: THEME })).toBeVisible();
     await expect(page.locator('main a[href^="/dia/"]')).toHaveCount(0);
     await expect(page.getByText("ayer", { exact: true })).toHaveCount(0);

@@ -1,6 +1,8 @@
 "use client";
 
 import { useFormatter, useLocale, useTranslations } from "next-intl";
+import { civilDateToDate, todayInBogota } from "@/lib/dates";
+import { usePathname, useRouter } from "@/i18n/navigation";
 
 import {
   BarChart,
@@ -11,6 +13,7 @@ import {
   Heading,
   ScreenHeader,
   Disc,
+  MonthStepper,
   Money,
   ProportionBar,
   ReportCard,
@@ -24,7 +27,6 @@ import type { MonthFlow } from "@/db/queries/reports/monthly-flow";
 import type { ReportsData } from "@/db/queries/reports/reports-screen";
 import type { MemberContributionNamed } from "@/db/queries/reports/reports-screen";
 import type { CurrencyCode } from "@/lib/currency";
-import { civilDateToDate } from "@/lib/dates";
 import { scopedCategoryName } from "@/lib/fund/category-names";
 import { averageOfActive, categoryChartColor, shares } from "@/lib/fund/glance";
 import type { Locale } from "@/lib/locales";
@@ -38,13 +40,23 @@ const SERIES_COLORS = {
 } as const;
 
 // The title and the way into «Revisar el mes» (RF-155), on both faces.
-function ReportsHead({ title }: { title: string }) {
+function ReportsHead({ title, month }: { title: string; month: string }) {
   const t = useTranslations("review");
+  const pathname = usePathname();
+  const router = useRouter();
+
   return (
-    <ScreenHeader
-      title={title}
-      actions={<TextLink href="/reports/review" size="2" weight="medium">{t("entry")}</TextLink>}
-    />
+    <Flex direction="column" gap="4">
+      <ScreenHeader
+        title={title}
+        actions={<TextLink href="/reports/review" size="2" weight="medium">{t("entry")}</TextLink>}
+      />
+      <MonthStepper
+        month={month}
+        onChange={(next) => router.push({ pathname, query: { month: next } }, { scroll: false })}
+        nextDisabled={month >= todayInBogota().slice(0, 7)}
+      />
+    </Flex>
   );
 }
 
@@ -59,7 +71,7 @@ function ReportsHead({ title }: { title: string }) {
  * counts (RF-124): two currencies are two breakdowns, two charts and two
  * contribution lists, and no series ever holds a bar from both.
  */
-export function ReportsScreen({ data }: { data: ReportsData }) {
+export function ReportsScreen({ data, month }: { data: ReportsData; month: string }) {
   const t = useTranslations("reports");
 
   const { expensesByCategory, sixMonthFlow, contributions, hasGroup } = data;
@@ -71,12 +83,12 @@ export function ReportsScreen({ data }: { data: ReportsData }) {
           below takes over (RF-19). */}
       <Box display={{ initial: "block", md: "none" }}>
         <Flex direction="column" gap="6">
-          <ReportsHead title={t("title")} />
+          <ReportsHead title={t("title")} month={month} />
 
           <Flex direction="column" gap="3" asChild>
             <section>
               <Heading as="h2" size="4">{t("byCategoryTitle")}</Heading>
-              <ExpenseBands expenses={expensesByCategory} months={sixMonthFlow} />
+              <ExpenseBands expenses={expensesByCategory} months={sixMonthFlow} monthStart={`${month}-01`} />
             </section>
           </Flex>
 
@@ -129,7 +141,7 @@ export function ReportsScreen({ data }: { data: ReportsData }) {
           RF-67). */}
       <Box display={{ initial: "none", md: "block" }}>
         <Flex direction="column" gap="6">
-          <ReportsHead title={t("title")} />
+          <ReportsHead title={t("title")} month={month} />
 
           <Flex direction="column" gap="4">
             <ReportCard>
@@ -142,7 +154,7 @@ export function ReportsScreen({ data }: { data: ReportsData }) {
             <ReportRow>
               <ReportCard>
                 <Heading as="h2" size="4">{t("byCategoryTitle")}</Heading>
-                <ExpenseBands expenses={expensesByCategory} months={sixMonthFlow} />
+                <ExpenseBands expenses={expensesByCategory} months={sixMonthFlow} monthStart={`${month}-01`} />
               </ReportCard>
 
               <ReportCard>
@@ -203,18 +215,21 @@ function byCurrency<T extends { currency: CurrencyCode }>(
 function ExpenseBands({
   expenses,
   months,
+  monthStart,
 }: {
   expenses: CategoryExpense[];
   months: MonthFlow[];
+  // The chosen month, whose adjustment closes each band.
+  monthStart: string;
 }) {
   const t = useTranslations("reports");
   const tKey = useTranslations();
 
-  // The window's last month per currency; the chart never draws the adjustment.
+  // The chosen month per currency; the chart never draws the adjustment.
   const adjustments = new Map<CurrencyCode, MonthFlow>();
   for (const [currency, rows] of byCurrency(months)) {
-    const last = rows[rows.length - 1];
-    if (last && last.adjustmentCents !== 0) adjustments.set(currency, last);
+    const chosen = rows.find((row) => row.monthStart === monthStart);
+    if (chosen && chosen.adjustmentCents !== 0) adjustments.set(currency, chosen);
   }
 
   const bands = new Map<CurrencyCode, CategoryExpense[]>(byCurrency(expenses));

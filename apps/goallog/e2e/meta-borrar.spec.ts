@@ -8,7 +8,7 @@ import { civilDateInZone } from "@/lib/zone";
 import goalMessages from "../messages/es/goal.json";
 import planMessages from "../messages/es/plan.json";
 import roadmapMessages from "../messages/es/roadmap.json";
-import { test, expect, visit, openMore, type Person } from "./fixtures";
+import { test, expect, visit, openMore, settled, type Person } from "./fixtures";
 import { holdActions, monthsAhead, thisMonth, MINUTES, type Db } from "./meta-arbol-seed";
 import { PAGES, dialog, monthLabel, postCounter, rhythmOfGoal, seedOpenGoal, seedTask } from "./metas-sin-final-seed";
 
@@ -144,7 +144,8 @@ test("a goal nothing has happened in offers «Borrar la meta»; a goal with a fa
       await expect(b.page.getByRole("heading", { level: 1 })).toBeVisible();
       // Refused, not hidden: the act stays, disabled, with the reason and the way out under it.
       await expect(deleteButton(b.page), via).toHaveCount(0);
-      await expect(b.page.getByText(goalMessages.delete.refusedFacts, { exact: true }), via).toBeVisible();
+      // Both faces hold the line; the one the width shows is the one that counts.
+      await expect(b.page.getByText(goalMessages.delete.refusedFacts, { exact: true }).locator("visible=true"), via).toHaveCount(1);
     } finally {
       await b.context.close();
     }
@@ -170,7 +171,7 @@ test("a goal that holds a goal, open or archived, offers no «Borrar la meta» (
     try {
       await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
       await expect(deleteButton(page)).toHaveCount(0);
-      await expect(page.getByText("Tiene metas dentro: muévelas o bórralas primero.", { exact: true })).toBeVisible();
+      await expect(page.getByText("Tiene metas dentro: muévelas o bórralas primero.", { exact: true }).locator("visible=true")).toHaveCount(1);
     } finally {
       await context.close();
     }
@@ -792,5 +793,24 @@ test("an open goal's phase row opens its form; an ended goal's row does not (RP-
     await expect(b.page.getByRole("link", { name: /Cimientos cerrados/ })).toHaveCount(0);
   } finally {
     await b.context.close();
+  }
+});
+
+test("on the phone the refusal to delete sits in «Más sobre la meta» beside «Archivar esta meta», never outside the fold", async ({ person, browser, baseURL, db }) => {
+  // Kills: «se archiva» drawn outside the fold while «Archivar esta meta» hides inside it.
+  const id = await seedOpenGoal(db, person, { name: "Con hecho pliegue", unit: null, created: DAY_BACK(3) });
+  await seedFact(db, person, id, "commitment");
+  const context = await browser.newContext({ storageState: person.sessionFile, baseURL: baseURL!, viewport: { width: 360, height: 900 } });
+  const page = await context.newPage();
+  try {
+    await page.goto(`/metas/${id}`);
+    await settled(page);
+    const reason = page.getByText(goalMessages.delete.refusedFacts, { exact: true }).locator("visible=true");
+    await expect(reason).toHaveCount(0);
+    await openMore(page);
+    await expect(reason).toHaveCount(1);
+    await expect(page.getByRole("button", { name: "Archivar esta meta" })).toBeVisible();
+  } finally {
+    await context.close();
   }
 });

@@ -122,7 +122,7 @@ test("this month lists the carried parent first, then its own task; marking the 
     await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
     const title = `${label(thisMonth).charAt(0).toUpperCase() + label(thisMonth).slice(1)} ${thisMonth.slice(0, 4)}`;
     await expect(page.getByText(title, { exact: true })).toBeVisible();
-    await expect(page.getByText("este mes", { exact: true })).toBeVisible();
+    await expect(page.getByText("Este mes", { exact: true })).toBeVisible();
     await expect(page.getByRole("link", { name: "de 12 h", exact: true })).toBeVisible();
 
     // Carried first: its section precedes the month's own, and the parent
@@ -140,9 +140,9 @@ test("this month lists the carried parent first, then its own task; marking the 
     await expect(parentRow).toContainText(owesLine(label(lastMonth), "3 h"));
     await expect(parentRow).toHaveAttribute("data-done", "false");
     // The parent has no mark of its own: only the leaves do.
-    await expect(parentRow.locator("[data-state]")).toHaveCount(0);
+    await expect(parentRow.locator("[data-part='mark'][data-state]")).toHaveCount(0);
     // Two children and the own task, plus the dashed mark of the add link.
-    await expect(page.locator("[data-state]")).toHaveCount(4);
+    await expect(page.locator("[data-part='mark'][data-state]")).toHaveCount(4);
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(360);
 
     const add = page.getByRole("link", { name: `Otra tarea de ${label(thisMonth)}` });

@@ -7,6 +7,12 @@ Working rules live in `AGENTS.md`. Session state lives in `private/handoffs/`. T
 holds only what a person could not guess from the code. Entries whose cause is gone live in `docs/TRAPS-archivo.md`.
 
 
+## `gh pr` fails in a cloud session
+
+Measured 2026-11-01 from the Claude Code docs: the cloud git proxy blocks GraphQL, and every `gh pr` and
+`gh issue` subcommand rides GraphQL, so each answers 403. REST works: `scripts/gh-rest.sh`, or
+`gh api repos/WAB-Studio/shelf/...`. See `docs/agentes/nube.md`.
+
 ## A test seeded with the answer passes whether or not the code works
 
 Measured 2026-09-10, module 8 (the photo credits in `/cuenta`).
@@ -3314,3 +3320,83 @@ every GoalLog page reloaded itself ~10 times a second (`[HMR] connected` → `[F
 - Count main-frame navigations of one page for 4 s: more than 2 is this.
 - Stop the server, move `apps/<app>/.next/dev` into the lane's `private/`, start again. 31/31 green after.
 - Stop the dev server before checking out another commit in its worktree.
+
+
+## The deploy merge deletes `integracion`
+
+Measured 2026-10-31, PR #730 (integracion → main).
+
+The repo has `delete_branch_on_merge` on, so merging the deploy PR deleted `integracion` on GitHub.
+The next branch could not be cut from it (`couldn't find remote ref integracion`).
+
+- Right after a deploy merge, recreate it from main: `git push origin <main sha>:refs/heads/integracion`.
+- Merge the deploy PR with `--merge`, never `--squash`: a squashed main forgets integracion's history,
+  and the next deploy conflicts on every file.
+
+## A branch cut from a branch conflicts after the parent squash-merges
+
+Measured 2026-10-31, PRs #726 and #727 against #711.
+
+`homefund-ronda3` was cut from `homefund-estilo`. Once #711 squash-merged `homefund-estilo`,
+GitHub marked #726 `CONFLICTING` on 28 files and CI never started. The squash commit is no ancestor
+of the child, so git saw two edits of the same lines. The content was identical:
+`git diff origin/homefund-estilo origin/integracion -- apps/homefund` was empty.
+
+- Check that diff is empty, then `git merge -X ours origin/integracion` on the child.
+- Then `git diff HEAD^1 HEAD -- apps/<app>` must be empty. On 2026-10-31 it was not: two
+  non-conflicting hunks came back from the parent (`reports-screen.tsx`, `filter-bar.tsx`) and had to be
+  restored with `git checkout HEAD^1 -- <file>`.
+
+## GoalLog's browser suite does not run on a pull request
+
+Measured 2026-10-31, runs 41166595127 and 41225242801.
+
+`pulsar-e2e` in `.github/workflows/ci.yml` runs on push to integracion or main and on
+`workflow_dispatch`, never on `pull_request`. #709 and #715 merged green on their PRs and left about
+560 GoalLog specs red on integracion; nobody saw it until #718. #729 repaired them.
+
+- Before merging a GoalLog PR, run `gh workflow run ci.yml -R WAB-Studio/shelf --ref <branch>` and wait
+  for every `pulsar-e2e (n)` shard.
+
+## Production migrations do not run with the deploy
+
+Measured 2026-10-31, deploy 5f8fd352.
+
+Vercel builds the apps; nothing applies `db/migrations`. After #730 shipped, HomeFund's code read
+`transactions.contributed_by_member_id`, which production did not have, and TimeLog lacked 0001 and 0002.
+
+- The person runs `npm run db:migrate` in each app from a checkout of **main**. On 2026-10-31 the first
+  run came from a stale branch without 0079 and reported «migrations applied successfully» with nothing applied.
+- `apps/timelog/.env.local` points to 127.0.0.1. Production TimeLog migrates with
+  `node --env-file=../homefund/.env.local ../../node_modules/drizzle-kit/bin.cjs migrate` from `apps/timelog`.
+- Confirm in the database afterwards: count `drizzle.__drizzle_migrations*` rows against each journal.
+
+## `<Button asChild><LocaleLink/></Button>` in a server component crashes some loads
+
+Measured 2026-10-31, HomeFund Inicio with no accounts: 8 of 10 fresh loads at 1280 fell into
+«Algo salió mal», with `Slot failed to slot onto its children` during hydration. One passing load proves nothing.
+
+The link crosses the server boundary as a child of the client `Button`. On some loads it reaches Radix's
+Slot unresolved, and Slot throws. Bisected by removing one block at a time: only the `Button asChild` in
+`app/[locale]/(app)/page.tsx` mattered.
+
+- In a server component, write `<ButtonLink href>` (`components/ui/button-link.tsx`), never `Button asChild`.
+- Prove a hydration fix with many fresh browser contexts, not one load: 0 of 20 after the fix.
+
+## A probe archived «now» stays in the week on a Sunday
+
+Measured 2026-11-01, a Sunday: `check:day` went red on `integracion` (f58d8d78) and on #751 alike with
+«an archived goal is not in loadWeek's goals». `loadWeek` keeps a goal archived on its week's own Sunday (RP-24,
+`lib/queries/rows.ts:127` compares with `>=`); `scripts/check-day.ts` archived its probe with `new Date()`.
+
+- Seed an archive, an end or a retirement a full week before the day under test, never at now.
+- A date check that passes six days of seven proves nothing: read the rule's boundary and seed past it.
+
+## A spec that names a month as today's month breaks in November and on the 1st
+
+Measured 2026-11-01, a Sunday and a month's first day: 18 GoalLog specs went red on `integracion` at once.
+
+- Chained `replaceAll("2026-10", first).replaceAll("2026-11", second)` rewrites `first` again when it is 2026-11. Move months in one pass.
+- A month in another year is said with it («enero de 2027»): derive a label's year from today, never drop it.
+- Ended today means its last day is yesterday: on the 1st that is last month. Seed a task before the fact it carries.
+- The runner's `pdftotext` splits a kerned pair («f ebrero»): compare paper text without spaces.

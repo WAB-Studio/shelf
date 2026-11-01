@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
 
 import { Button, Field, Form, Stack, Text, TextLink, Title } from "@/components/ui";
+import { typedDay } from "@/lib/export-range";
 import { mondayOf } from "@/lib/week";
 import { addDays, civilDay } from "@/lib/zone";
 
@@ -11,9 +12,9 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 // «Exportar» (RT-15): the daily CSV over a range. The form is a plain GET, so the download needs no script.
-export default async function ExportPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
+export default async function ExportPage({ searchParams }: { searchParams: Promise<{ error?: string; from?: string; to?: string }> }) {
   const today = civilDay();
-  const [{ error }, t] = await Promise.all([searchParams, getTranslations("time.export")]);
+  const [{ error, from, to }, t] = await Promise.all([searchParams, getTranslations("time.export")]);
   const monday = mondayOf(today);
   const shortcuts = [
     { key: "thisWeek" as const, from: monday, to: addDays(monday, 6) },
@@ -26,11 +27,11 @@ export default async function ExportPage({ searchParams }: { searchParams: Promi
       <Title>{t("title")}</Title>
       <Text as="p">{t("intro")}</Text>
       <Form action="/api/export" method="get">
-        <Field label={t("from")} name="from" type="date" defaultValue={addDays(today, -29)} required />
-        <Field label={t("to")} name="to" type="date" defaultValue={today} required />
+        <Field label={t("from")} name="from" type="date" defaultValue={typedDay(from, addDays(today, -29))} required />
+        <Field label={t("to")} name="to" type="date" defaultValue={typedDay(to, today)} required />
+        {error === "range" ? <Text as="p">{t("badRange")}</Text> : null}
         <Button type="submit">{t("download")}</Button>
       </Form>
-      {error === "range" ? <Text as="p">{t("badRange")}</Text> : null}
       <Stack gap={2}>
         <Text variant="meta">{t("quick")}</Text>
         <Stack gap={1}>

@@ -97,3 +97,20 @@ test("the month's counts take a source only through a commitment that names it, 
   assert.deepEqual(dayCounts(commitments, facts, read, "2026-10-01", "2026-10-31"), { "2026-10-06": 3 });
   assert.deepEqual(dayCounts(commitments, facts, null, "2026-10-01", "2026-10-31"), { "2026-10-06": 2 });
 });
+
+test("a day its source read under the threshold is listed in part with its minutes, and counts as no day done", () => {
+  const found = commitmentDays({
+    satisfiedBy: { kind: "evidence", threshold: 30, unit: "minutos" },
+    sourceKey: "timelog_vscode",
+    createdOn: "2026-10-01",
+    today: "2026-10-31",
+    declaredDayCount: 0,
+    recent: [],
+    evidence: { timelog_vscode: [day("2026-10-29", 14), day("2026-10-30", 45), day("2026-10-28", 0)] },
+  });
+  assert.deepEqual(found.done, [
+    { day: "2026-10-30", quantity: 45, by: "evidence" },
+    { day: "2026-10-29", quantity: 14, by: "partial" },
+  ]);
+  assert.equal(found.evidenceDayCount, 1);
+});

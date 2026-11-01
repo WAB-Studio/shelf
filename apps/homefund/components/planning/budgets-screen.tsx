@@ -1,7 +1,7 @@
 "use client";
 
-import { ChevronLeft, ChevronRight, EllipsisVertical, Plus } from "lucide-react";
-import { useFormatter, useLocale, useTranslations } from "next-intl";
+import { EllipsisVertical, Plus } from "lucide-react";
+import { useLocale, useTranslations } from "next-intl";
 import { useAction } from "next-safe-action/hooks";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -27,6 +27,7 @@ import {
   FundChip,
   ScreenHeader,
   IconButton,
+  MonthStepper,
   Progress,
   SegmentedControl,
   Text,
@@ -35,7 +36,6 @@ import {
 import type { BudgetStatus } from "@/db/queries/budgets";
 import type { TransactionFormOptions } from "@/db/queries/transaction-form";
 import { usePathname, useRouter } from "@/i18n/navigation";
-import { addCivilMonths, civilDateToDate } from "@/lib/dates";
 import { categoryNamesById, scopedCategoryParts } from "@/lib/fund/category-names";
 import type { CurrencyCode } from "@/lib/currency";
 import type { Locale } from "@/lib/locales";
@@ -78,7 +78,6 @@ export function BudgetsScreen({
 }) {
   const t = useTranslations("budgets");
   const tKey = useTranslations();
-  const format = useFormatter();
   const locale = useLocale();
   const pathname = usePathname();
   const router = useRouter();
@@ -163,14 +162,6 @@ export function BudgetsScreen({
     return budget;
   }
 
-  const anchor = `${month}-01`;
-  const monthName = format.dateTime(civilDateToDate(anchor), {
-    month: "long",
-    year: "numeric",
-  });
-  // The month opens with a capital in the active language; the rest stays as written.
-  const monthLabel = monthName.charAt(0).toLocaleUpperCase(locale) + monthName.slice(1);
-
   // The two controls write the same query, so stepping the month keeps the tab
   // and switching tab keeps the period.
   function pushQuery(nextMonth: string, nextArchived: boolean) {
@@ -183,10 +174,6 @@ export function BudgetsScreen({
       },
       { scroll: false },
     );
-  }
-
-  function goToMonth(delta: number) {
-    pushQuery(addCivilMonths(anchor, delta).slice(0, 7), archived);
   }
 
   const addButton = (
@@ -237,31 +224,10 @@ export function BudgetsScreen({
           </SegmentedControl.Item>
         </SegmentedControl.Root>
 
-        <Flex align="center" justify="center" gap="4" width="100%">
-          <IconButton
-            type="button"
-            variant="ghost"
-            color="gray"
-            size="3"
-            aria-label={t("previousMonth")}
-            onClick={() => goToMonth(-1)}
-          >
-            <ChevronLeft size={18} />
-          </IconButton>
-          <Text weight="bold">
-            {monthLabel}
-          </Text>
-          <IconButton
-            type="button"
-            variant="ghost"
-            color="gray"
-            size="3"
-            aria-label={t("nextMonth")}
-            onClick={() => goToMonth(1)}
-          >
-            <ChevronRight size={18} />
-          </IconButton>
-        </Flex>
+        <MonthStepper
+          month={month}
+          onChange={(next) => pushQuery(next, archived)}
+        />
       </Flex>
 
       <Box display={{ initial: "block", lg: "none" }}>

@@ -81,21 +81,36 @@ const StudyRowItem = memo(function StudyRowItem({
     lead === undefined || (row.forms.length === 1 && lead.text === row.key)
       ? null
       : row.forms.map((form) => form.text).join(", ");
+  const inline = waiting
+    ? null
+    : row.lastTranslation !== null
+      ? splitTranslations(row.lastTranslation)[0]
+      : row.lastOutcome === "unlisted"
+        ? t("study.noResult")
+        : null;
+  // A row with nothing under its line is the line alone, 44px; one that says more pads itself.
+  const extended = waiting || formsLine !== null || phase !== undefined;
   return (
-    // The row is a card. The word and its count are the link; the ✕ sits in a track of its own
-    // beside it, so a tap on it can never navigate (`RegistroBorrarFila`). The main translation sits
-    // under both, outside the link.
-    <Card padding="3">
-      <Grid columns="minmax(0, 1fr) 44px" gapY="2" align="center">
+    // The row is a card of one line: the word, its main translation and its count are the link; the ✕ sits
+    // in a track of its own beside it, so a tap on it can never navigate (`RegistroBorrarFila`).
+    <Card padding="none">
+      <Grid columns="minmax(0, 1fr) 44px" gapY="1" align="center" px="3" py={extended ? "2" : "0"}>
         <Link asChild underline="none" ink>
           <NextLink href={`/registro/${encodeURIComponent(row.key)}`} prefetch={false}>
-            <TapTarget width="100%" align="center" justify="between" gap="3">
+            <TapTarget width="100%" align="center" gap="3">
               {/* `Text truncate` needs a flex container of its own to clip (docs/wordbook/DESIGN.md
                   "What the data forces"). */}
-              <Flex minWidth="0" overflow="hidden" flexGrow="1">
+              <Flex minWidth="0" maxWidth={inline === null ? undefined : "60%"} overflow="hidden">
                 <Text size="5" weight="bold" serif truncate english>
                   {word}
                 </Text>
+              </Flex>
+              <Flex minWidth="0" flexGrow="1" overflow="hidden">
+                {inline !== null && (
+                  <Text variant="translation" muted truncate>
+                    {inline}
+                  </Text>
+                )}
               </Flex>
               <MetaLabel nowrap aria-label={t("study.rowCountLabel", { count: row.count })}>
                 {t("study.rowCount", { count: row.count })}
@@ -121,31 +136,24 @@ const StudyRowItem = memo(function StudyRowItem({
         </Flex>
       )}
 
-      <Flex gridColumn="1 / -1" direction="column" gap="1" minWidth="0">
-        {waiting ? (
-          <>
-            <Text size="2" muted="quietest">
-              {t("study.pendingWaiting")}
+      {(waiting || formsLine !== null) && (
+        <Flex gridColumn="1 / -1" direction="column" gap="1" minWidth="0">
+          {waiting ? (
+            <>
+              <Text size="2" muted="quietest">
+                {t("study.pendingWaiting")}
+              </Text>
+              <Text size="2" muted="quietest">
+                {t(row.lastOutcome === "untranslated" ? "study.pendingPhrase" : "study.pendingWord")}
+              </Text>
+            </>
+          ) : (
+            <Text size="2" muted truncate>
+              {formsLine}
             </Text>
-            <Text size="2" muted="quietest">
-              {t(row.lastOutcome === "untranslated" ? "study.pendingPhrase" : "study.pendingWord")}
-            </Text>
-          </>
-        ) : row.lastTranslation !== null ? (
-          <Text variant="translation" muted truncate>
-            {splitTranslations(row.lastTranslation)[0]}
-          </Text>
-        ) : row.lastOutcome === "unlisted" ? (
-          <Text variant="translation" muted>
-            {t("study.noResult")}
-          </Text>
-        ) : null}
-        {formsLine !== null && !waiting && (
-          <Text size="2" muted truncate>
-            {formsLine}
-          </Text>
-        )}
-      </Flex>
+          )}
+        </Flex>
+      )}
 
       {(phase === "asking" || phase === "deleting") && (
         // The order and weights of `RegistroVaciarConfirmar`: the accent on

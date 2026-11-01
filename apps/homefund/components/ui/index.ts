@@ -56,6 +56,7 @@ export {
 } from "@radix-ui/themes";
 
 export { Button, IconButton } from "./button";
+export { ButtonLink } from "./button-link";
 
 export { Switch } from "./switch";
 
@@ -86,6 +87,7 @@ export { ChipMultiSelect, type ChipOption } from "./chip-multi-select";
 
 export { CopyField } from "./copy-field";
 
+export { MonthStepper } from "./month-stepper";
 export { StackedSegmentedControl } from "./stacked-segmented-control";
 
 export { TapTarget } from "./tap-target";

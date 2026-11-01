@@ -3,14 +3,14 @@ import "server-only";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
-import type { DictionaryPayload } from "@/lib/dictionary/format";
+import { PAYLOAD_VERSION, type DictionaryPayload } from "@/lib/dictionary/format";
 import { buildIndex, type DictionaryIndex } from "@/lib/dictionary/index-build";
 
 const DICTIONARY_ASSET = path.join(
   process.cwd(),
   "public",
   "dictionary",
-  "eng-spa-2025.11.23-v3.json",
+  `eng-spa-2025.11.23-v${PAYLOAD_VERSION}.json`,
 );
 
 // The 8 MiB asset the client installs, parsed once per server process for

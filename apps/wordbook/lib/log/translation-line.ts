@@ -1,5 +1,5 @@
 import type { Sense } from "@/lib/dictionary/index-build";
-import { isRareSense } from "@/lib/dictionary/rare-sense";
+import { splitRare } from "@/lib/dictionary/rare-sense";
 
 // The module 27 wire schema and the row this fills agree on the same 120.
 const TRANSLATION_MAX_CHARS = 120;
@@ -19,9 +19,8 @@ export function cutTranslation(text: string): string {
 // The first three senses, in order, leaving out a rare one while a common one stands; a translation said
 // twice keeps its first place.
 export function formatSenseTranslations(senses: readonly Sense[]): string {
-  const common = senses.filter((sense) => !isRareSense(sense));
   const unique = new Set(
-    (common.length > 0 ? common : senses).slice(0, TRANSLATION_MAX_SENSES).flatMap((sense) => sense.translations),
+    splitRare(senses).shown.slice(0, TRANSLATION_MAX_SENSES).flatMap((sense) => sense.translations),
   );
   return cutTranslation([...unique].join(SEPARATOR));
 }

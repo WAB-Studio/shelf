@@ -118,6 +118,18 @@ a.dayLink {
   color: var(--pulsar-muted);
 }
 
+/* A goal's name over its rows: the title face, ink, a tag beside it. In the title face a long name would run past
+   the table, so it breaks inside its column, as a row's name does. */
+.groupName {
+  white-space: normal;
+  margin-inline-end: 10px;
+  font-family: var(--font-display);
+  font-size: var(--pulsar-text-sheet-title-size);
+  font-weight: 400;
+  letter-spacing: -0.02em;
+  color: var(--pulsar-ink);
+}
+
 .groupNote {
   display: block;
   margin-block-start: 4px;
@@ -406,4 +418,11 @@ a.dayLink {
    mark stands alone there, as the fold has always drawn it. */
 .foldCell .tile {
   background: transparent;
+}
+
+/* In the table the name wraps inside the name column: at the sheet title's 21px a long one took four lines beside
+   seven empty days, so the table sets it at 18px (between a row's name and a sheet's title), still in the title
+   face. The folded phone face keeps 21px over its full width. */
+.group .groupName {
+  font-size: 18px;
 }

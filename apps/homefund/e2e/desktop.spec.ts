@@ -300,9 +300,6 @@ type RouteCase = {
   table?: {
     title: string;
     rowName: string;
-    // False for the one table drawn at every width with no phone-card
-    // alternative (Auditoría) — see the finding beside it below.
-    additive?: boolean;
   };
 };
 
@@ -386,14 +383,9 @@ function routes(): RouteCase[] {
       // `RowMenu`'s `rowName` is the translated entity (`audit-table.tsx`,
       // `row.entity`) — so it names the one write this file commits last
       // (the probe above), guaranteed newest and so on the table's first page.
-      // `additive: false`: `audit-screen.tsx` draws this table at every width
-      // with no `Box display` guard at all — the D16 fix floors its flexible
-      // column so a narrow viewport scrolls it instead of collapsing it, which
-      // only makes sense if the table still shows there.
       table: {
         title: messages.audit.title,
         rowName: messages.audit.entities.categories,
-        additive: false,
       },
     },
     {
@@ -594,10 +586,7 @@ test.describe("at 360, the desktop subtree steps aside", () => {
       await expect(sidebar(page)).toBeHidden();
       await expect(page.getByRole("link", { name: nav.home, exact: true })).toBeVisible();
 
-      // Auditoría has no phone card to switch to (see the finding in
-      // `routes()`): it draws the same table at every width, on purpose, so
-      // this is the one table this pass does not expect gone.
-      if (route.table && route.table.additive !== false) {
+      if (route.table) {
         await expect(page.getByRole("table", { name: route.table.title })).toBeHidden();
       }
 

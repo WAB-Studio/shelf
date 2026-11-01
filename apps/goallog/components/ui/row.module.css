@@ -264,3 +264,73 @@
   outline: 2px solid var(--pulsar-accent);
   outline-offset: -2px;
 }
+
+/* A row with a note under it: the hairline moves to the pair, the note stands under the name. */
+.noted {
+  display: flex;
+  flex-direction: column;
+}
+
+.ruled {
+  border-block-end: 1px solid var(--pulsar-line);
+}
+
+.note {
+  margin: 0;
+  padding-block-end: 10px;
+}
+
+/* The mark's 24px and the row's 12px gap. */
+.noteLead {
+  padding-inline-start: 36px;
+}
+
+/* A tile: the row as a box of its own, each one set apart from the next by the parent's gap and not by a hairline.
+   Doubled to outrank `.row`. */
+.tile.tile {
+  min-block-size: 64px;
+  padding: 12px 14px;
+  background: var(--pulsar-raised);
+  /* Half way to the quiet ink: inside a card of the same raised colour a bare hairline drew no box. */
+  border: 1px solid color-mix(in srgb, var(--pulsar-line) 50%, var(--pulsar-quiet));
+  border-radius: 12px;
+}
+
+/* Done: the soft accent as the fill, the accent mark inside it. */
+.done.done {
+  background: var(--pulsar-accent-soft);
+  border-color: var(--pulsar-accent-soft);
+}
+
+.tile:focus-visible {
+  border-radius: 12px;
+}
+
+.strip {
+  display: block;
+  margin-block-start: 6px;
+}
+
+/* A tile with a note: the box holds both, so the note reads as its row's and not the next one's. The button inside
+   gives its box to the wrapper; the note lines up with the name inside the tile's padding. */
+.tileNoted {
+  background: var(--pulsar-raised);
+  /* Half way to the quiet ink: inside a card of the same raised colour a bare hairline drew no box. */
+  border: 1px solid color-mix(in srgb, var(--pulsar-line) 50%, var(--pulsar-quiet));
+  border-radius: 12px;
+}
+
+.tileNoted .tile.tile {
+  background: transparent;
+  border: 0;
+  padding-block-end: 4px;
+}
+
+.tileNoted .note {
+  padding-inline: 14px;
+  padding-block-end: 12px;
+}
+
+.tileNoted .noteLead {
+  padding-inline-start: 50px;
+}

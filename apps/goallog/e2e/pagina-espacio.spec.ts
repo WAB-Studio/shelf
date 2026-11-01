@@ -64,7 +64,7 @@ const LONGEST_DATE = "Miércoles 30 de septiembre";
 // widest date the app can draw whatever day the suite runs.
 for (const width of [360, 390]) {
   for (const longest of [false, true]) {
-    test(`Hoy's controls row stands on the eyebrow's line at ${width}, the eyebrow ${longest ? "the longest date" : "today's date"}`, async ({ page }) => {
+    test(`Hoy's controls row stands above the date at ${width}, the toggle at its end, the date ${longest ? "the longest one" : "today's"}`, async ({ page }) => {
       await page.setViewportSize({ width, height: 740 });
       await page.goto("/");
       const dateLocator = page.locator("main > header:visible").getByText(WEEKDAY_DATE).first();
@@ -72,9 +72,11 @@ for (const width of [360, 390]) {
       if (longest) await dateLocator.evaluate((node, text) => void (node.textContent = text), LONGEST_DATE);
       const toggle = (await boxOf(page.getByRole("button", { name: /modo (oscuro|claro)/ })));
       const date = (await boxOf(dateLocator));
-      // The toggle and the date share one line, the toggle at its end.
-      expect(Math.abs(toggle.y + toggle.height / 2 - (date.y + date.height / 2))).toBeLessThan(6);
-      expect(toggle.x).toBeGreaterThan(date.x + date.width);
+      // DESIGN «Hoy, 2026-11-01»: on the phone the controls line comes first, the toggle at its end, and the date under it.
+      expect(date.y).toBeGreaterThanOrEqual(toggle.y + toggle.height - 1);
+      expect(toggle.x + toggle.width).toBeLessThanOrEqual(width);
+      expect(toggle.x).toBeGreaterThan(width / 2);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
     });
   }
 }

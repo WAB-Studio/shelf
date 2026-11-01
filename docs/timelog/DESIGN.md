@@ -141,8 +141,8 @@ What changed:
 - **One scale.** A top-level list is measured against its own longest row; a child (a window, a page, a session, a
   Claude source) against its parent's time. Apps show eight, then «y N apps más · X» opens the rest.
 - **Day line.** Claude Code's sessions as labelled segments from 6:00 to 24:00 (from the hour of the first session if
-  earlier), on lanes where they overlap, an hour ruler every three hours. On the phone it scrolls and opens at the hour
-  now; on a past day at its first session.
+  earlier), on lanes where they overlap, an hour ruler every three hours. On the phone it scrolls and opens on the latest
+  session; on a past day at its first session.
 - **Class colours.** Every class is a token pair (on the ground, on the block) in `theme.css`, with its contrast.
 - **Day strip.** L M M J V S D with the day number, the month named («26 oct – 1 nov»), the day shown filled, days
   with no screen dimmed, ‹ › to the same weekday a week away. It replaces «Día anterior» and «Día siguiente».
@@ -152,3 +152,18 @@ What changed:
 - **Phone.** The bottom bar has a border and a shadow and a 16 gutter; the figures of the seven columns break into
   value over unit so two never read as one; first use shows only the connect button; «Actualizado hace…» re-reads
   today every minute and when the tab comes back.
+
+## Critic's pass on the deploy (2026-10-31)
+
+- Zero is «0 min», never «< 1 min». The day strip dashes and strikes a reached day nothing arrived on. A past day with nothing
+  shows its own sentence and no empty Claude and Internet cards. «Hoy» is current on today alone.
+- Day line: one colour per project (six tokens, `--tl-project-*`), the label beside a segment too short for it, the ruler on
+  the same 12-hour clock as the spans. The Claude desktop app draws in Claude's orange everywhere.
+- Every «y N más» (apps, windows, sites, pages) opens. Every cut text carries a `title`.
+- The CSV stops at today and ends with `uploaded` (1 or 0), so a day unseen is told from a real zero.
+- Decided by the user (the critic's picks): the day line opens on the latest session on Hoy; «Semana»'s heatmap carries a
+  first row, Claude in total, a cell per day (RT-22); every heatmap row writes its class under its name, with a legend
+  under the grid; the block's Claude bar carries its legend of names; a window or page title in a detail wraps to two lines.
+- «Proyectos» (RT-23): a card after Apps, same bars and the same «y N más · X» opening onto the rest. Each bar is a workspace
+  folder named as the editor's window title writes it, with its seconds; the card shows only when a VS Code-family window
+  has a folder open. No sentence stands in for an empty one.
