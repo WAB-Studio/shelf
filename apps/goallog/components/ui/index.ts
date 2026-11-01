@@ -60,6 +60,8 @@ export { WeekStrip, type WeekStripDay } from "./week-strip";
 
 export { GroupHead } from "./group-head";
 
+export { Tag } from "./tag";
+
 export { Sheet } from "./sheet";
 
 export { Field } from "./field";

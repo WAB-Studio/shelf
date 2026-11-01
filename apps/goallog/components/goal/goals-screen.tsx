@@ -7,6 +7,7 @@ import {
   Button,
   Figure,
   Flex,
+  GroupHead,
   Page,
   Panel,
   PanelGrid,
@@ -256,7 +257,12 @@ export async function GoalsScreen({
             month?.kind === "amount" && month.planned ? Math.min(100, Math.floor((month.reached * 100) / month.planned)) : null;
           return (
             <Panel key={goal.id} label={goal.name}>
-              <Section label={goal.name}>
+              <Flex direction="column" gap="3">
+                <GroupHead
+                  name={goal.name}
+                  tag={goal.weeksLeft === null ? undefined : t("goal.list.weeksLeft", { count: goal.weeksLeft })}
+                  phase={goal.phaseAim ?? undefined}
+                />
                 {month ? <Text variant="sentence">{monthName(month.month)}</Text> : null}
                 {" "}
                 {month?.kind === "amount" ? (
@@ -280,18 +286,11 @@ export async function GoalsScreen({
                     {t("month.across.over")} <Figure value={month.reached - month.planned} unit={unit} variant="meta" />
                   </Text>
                 ) : null}
-                {goal.phaseAim ? (
-                  <Text as="p" variant="sentence">
-                    {t("goal.list.phaseNow", { aim: goal.phaseAim })}
-                  </Text>
-                ) : null}
                 <Text as="p" variant="sentence" tone="muted">
-                  {goal.weeksLeft === null
-                    ? t("goal.list.noEnd")
-                    : `${t("goal.list.weeksLeft", { count: goal.weeksLeft })} · ${t("goal.list.untilShort", { date: lastDay(goal) ?? "" })}`}
+                  {goal.weeksLeft === null ? t("goal.list.noEnd") : t("goal.list.untilShort", { date: lastDay(goal) ?? "" })}
                 </Text>
                 <TextLink href={`/metas/${goal.id}`}>{t("goal.list.openGoal", { name: goal.name })}</TextLink>
-              </Section>
+              </Flex>
             </Panel>
           );
         })}

@@ -118,6 +118,16 @@ a.dayLink {
   color: var(--pulsar-muted);
 }
 
+/* A goal's name over its rows: the title face, ink, a tag beside it. */
+.groupName {
+  margin-inline-end: 10px;
+  font-family: var(--font-display);
+  font-size: var(--pulsar-text-sheet-title-size);
+  font-weight: 400;
+  letter-spacing: -0.02em;
+  color: var(--pulsar-ink);
+}
+
 .groupNote {
   display: block;
   margin-block-start: 4px;
