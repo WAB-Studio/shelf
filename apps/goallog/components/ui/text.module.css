@@ -36,11 +36,11 @@
   line-height: 1.35;
 }
 
-/* The metadata line under a name: mono, because it carries dates and counts. */
+/* The metadata line under a name: Archivo, tabular, because its dates and counts sit inside words. */
 .meta.meta {
-  font-family: var(--font-mono);
+  font-family: var(--font-sans);
   font-size: var(--pulsar-text-meta-size);
-  letter-spacing: var(--pulsar-text-measure-tracking);
+  font-variant-numeric: tabular-nums;
   line-height: 1.4;
   color: var(--pulsar-muted);
 }

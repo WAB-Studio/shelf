@@ -2,7 +2,7 @@
 import type { Locator } from "@playwright/test";
 import type postgres from "postgres";
 
-import { test, expect } from "./fixtures";
+import { test, expect, todayHeading } from "./fixtures";
 import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
 
 // Hoy at 1024 and beyond (`HoyEscritorio.dc.html`, RNP-17): the goals left, the
@@ -123,7 +123,7 @@ test("at 1280 the goals sit left and the figure, sueltas, «N esperan» and «he
     await expect(page.getByRole("button", { name: /Cambiar a modo/ })).toHaveCount(1);
     await expect(page.getByRole("button", { name: /Cambiar a modo/ })).toBeVisible();
     await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
-    await expect(page.getByRole("heading", { level: 1, name: "Hoy" })).toBeVisible();
+    await expect(todayHeading(page)).toBeVisible();
   } finally {
     await context.close();
     await db`delete from goals.goals where user_id = ${person.id}`;

@@ -126,7 +126,10 @@
     "timesPerMonth": "{count, plural, one {# vez al mes} other {# veces al mes}}"
   },
   "phase": {
-    "of": "fase {ordinal} de {total} · {name}"
+    "of": "fase {ordinal} de {total} · {name}",
+    "tag": "Fase {ordinal} de {total}",
+    "expand": "Ver la fase entera",
+    "collapse": "Plegar la fase"
   },
   "row": {
     "notedBy": "lo anota el {source}",
@@ -136,6 +139,7 @@
   },
   "monthLine": {
     "title": "Este mes",
+    "titleNamed": "{goal} · este mes",
     "markTask": "Marcar hecha: {name}",
     "of": "de",
     "tasksOf": "{total, plural, one {de # tarea} other {de # tareas}}",
@@ -147,11 +151,13 @@
     "pace": "día {day} ·",
     "paceUnder": ", bajo el {threshold} %"
   },
-  "hero": {
-    "label": "Avance de hoy",
-    "figure": "{done} de {total}",
+  "progress": {
+    "of": "de {total}",
+    "label": "{done} de {total} hechos hoy",
+    "labelPartial": "{done} de {total} hechos hoy · {partial} en parte",
     "caption": "hechos hoy",
-    "captionPartial": "hechos hoy · {partial} en parte"
+    "captionPartial": "hechos hoy · {partial} en parte",
+    "week": "La semana"
   },
   "tally": "hechos <fig>{done}</fig> de <fig>{total}</fig>",
   "tallyPartial": "hechos <fig>{done}</fig> de <fig>{total}</fig> · <fig>{partial}</fig> en parte",

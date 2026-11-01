@@ -79,3 +79,8 @@
   box-shadow: none;
   background: var(--pulsar-line);
 }
+
+/* A commitment's row on Hoy: the row's whole width, a thin barcode under its name. */
+.row .bars {
+  block-size: 20px;
+}

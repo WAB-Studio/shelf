@@ -284,3 +284,28 @@
 .noteLead {
   padding-inline-start: 36px;
 }
+
+/* A tile: the row as a box of its own, each one set apart from the next by the parent's gap and not by a hairline.
+   Doubled to outrank `.row`. */
+.tile.tile {
+  min-block-size: 64px;
+  padding: 12px 14px;
+  background: var(--pulsar-raised);
+  border: 1px solid var(--pulsar-line);
+  border-radius: 12px;
+}
+
+/* Done: the soft accent as the fill, the accent mark inside it. */
+.done.done {
+  background: var(--pulsar-accent-soft);
+  border-color: var(--pulsar-accent-soft);
+}
+
+.tile:focus-visible {
+  border-radius: 12px;
+}
+
+.strip {
+  display: block;
+  margin-block-start: 6px;
+}
