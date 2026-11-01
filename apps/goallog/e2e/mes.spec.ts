@@ -140,9 +140,9 @@ test("this month lists the carried parent first, then its own task; marking the 
     await expect(parentRow).toContainText(owesLine(label(lastMonth), "3 h"));
     await expect(parentRow).toHaveAttribute("data-done", "false");
     // The parent has no mark of its own: only the leaves do.
-    await expect(parentRow.locator("[data-state]")).toHaveCount(0);
+    await expect(parentRow.locator("[data-part='mark'][data-state]")).toHaveCount(0);
     // Two children and the own task, plus the dashed mark of the add link.
-    await expect(page.locator("[data-state]")).toHaveCount(4);
+    await expect(page.locator("[data-part='mark'][data-state]")).toHaveCount(4);
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(360);
 
     const add = page.getByRole("link", { name: `Otra tarea de ${label(thisMonth)}` });

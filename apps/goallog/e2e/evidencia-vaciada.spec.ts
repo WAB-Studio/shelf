@@ -63,7 +63,7 @@ test("emptying the reading record empties the evidence mark on Hoy and on Semana
 
     await page.goto("/");
     await expect(page.locator("main")).toHaveCount(1);
-    await expect(row.locator("[data-state]")).toHaveAttribute("data-state", "evidence");
+    await expect(row.locator("[data-part='mark'][data-state]")).toHaveAttribute("data-state", "evidence");
     expect(metaOf(await row.innerText())).toBe("1 búsqueda · diccionario");
     await page.goto("/semana");
     await expect(page.locator("main")).toHaveCount(1);
@@ -75,7 +75,7 @@ test("emptying the reading record empties the evidence mark on Hoy and on Semana
 
     await page.goto("/");
     await expect(page.locator("main")).toHaveCount(1);
-    await expect(row.locator("[data-state]")).toHaveAttribute("data-state", "empty");
+    await expect(row.locator("[data-part='mark'][data-state]")).toHaveAttribute("data-state", "empty");
     // Emptied, the row reads who notes it again, not a met source.
     expect(metaOf(await row.innerText())).toBe("lo anota el diccionario · 1 búsqueda");
     await page.goto("/semana");

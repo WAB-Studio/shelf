@@ -376,7 +376,7 @@ test("a past day draws the half mark, «ese día pedía» and the count with «e
     await page.goto(`/dia/${pastDay(2)}`);
     const row = page.getByRole("button", { name: new RegExp(`^${name}`) });
     await expect(row).toContainText(/2 de 3 min/);
-    await expect(row.locator("[data-state]")).toHaveAttribute("data-state", "partial");
+    await expect(row.locator("[data-part='mark'][data-state]")).toHaveAttribute("data-state", "partial");
     await expect(page.getByText(/^hechos \d+ de \d+ · 1 en parte$/)).toBeVisible();
     await expect(page.getByText(/Meta día pasado \d+ · ese día pedía uno/)).toBeVisible();
   } finally {

@@ -92,7 +92,7 @@ test("at 1280 the goals sit left and the figure, sueltas, «N esperan» and «he
     await expect(head).toHaveCount(1);
     // A time-unit figure is headed by the goal's name, never the unit word (RP-35).
     await expect(head.getByRole("heading", { level: 2 })).toHaveText(`Meta con cifra ${stamp}`);
-    await expect(head.getByText(/^(min|minutos)$/i)).toHaveCount(0);
+    await expect(head.getByRole("heading").filter({ hasText: /^(min|minutos)$/i })).toHaveCount(0);
     const figure = await box(head.getByText("esta semana", { exact: true }));
     const sueltas = await box(page.getByText("Sueltas", { exact: true }));
     const waiting = await box(page.getByRole("link", { name: "2 esperan" }));
@@ -150,24 +150,22 @@ test("at 360 the sections come in the phone's own order and the figure is not dr
     await expect(page.locator("main")).toHaveCount(1);
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(360);
 
-    const order = await page.locator("main section").evaluateAll((sections) =>
-      sections
-        .map((section) => {
-          const rect = section.getBoundingClientRect();
-          return { text: section.textContent ?? "", x: rect.x, width: rect.width };
-        })
-        .filter((entry) => entry.width > 0),
-    );
-    // The navy block of the day leads (DESIGN «Naranja y marino»), then the goals, the one-offs and the done ones.
-    expect(order.map((entry) => entry.text.slice(0, 7))).toEqual([
-      "Avance ",
-      "Meta co",
-      "Meta si",
-      "Sueltas",
-      "Hechas ",
-    ]);
-    // Every section is the page's own column, the width a phone gives it.
-    for (const entry of order) expect(entry.width).toBeCloseTo(order[0].width, 0);
+    // No navy block on Hoy (DESIGN «Hoy, 2026-11-01»): the goals' groups, «Sueltas» closing the list, then the done ones.
+    const parts = [
+      page.locator("[data-part='group-head']").filter({ hasText: `Meta con cifra ${stamp}` }),
+      page.locator("[data-part='group-head']").filter({ hasText: `Meta sin cifra ${stamp}` }),
+      page.getByText("Sueltas", { exact: true }),
+      page.getByText("Hechas hoy", { exact: true }),
+    ];
+    const boxes = [];
+    for (const part of parts) {
+      const found = await part.boundingBox();
+      expect(found).not.toBeNull();
+      boxes.push(found!);
+    }
+    for (let i = 1; i < boxes.length; i++) expect(boxes[i].y).toBeGreaterThan(boxes[i - 1].y);
+    // Every part stands in the page's one column.
+    for (const found of boxes) expect(found.x + found.width).toBeLessThanOrEqual(360);
 
     await expect(page.getByText("esta semana", { exact: true })).toBeHidden();
     await expect(page.getByRole("button", { name: /Cambiar a modo/ })).toHaveCount(1);
@@ -270,7 +268,7 @@ test("at 1280 a goal in a time unit heads its card with its name and one in kil�
     const heads = page.locator("[data-part='group-head']");
     const timeCard = heads.filter({ hasText: "12 min" });
     await expect(timeCard.getByRole("heading", { level: 2 })).toHaveText(`Meta con cifra ${stamp}`);
-    await expect(timeCard.getByText(/^(min|minutos)$/i)).toHaveCount(0);
+    await expect(timeCard.getByRole("heading").filter({ hasText: /^(min|minutos)$/i })).toHaveCount(0);
     const kmCard = heads.filter({ hasText: "7" }).filter({ hasText: "kilómetros" });
     await expect(kmCard.getByText("kilómetros", { exact: true })).toBeVisible();
   } finally {

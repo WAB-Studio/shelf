@@ -118,7 +118,7 @@ test("past the reach, the goal's month page shows its task with no mark and no s
     await expect(page.getByRole("dialog")).toHaveCount(0);
     // A sub-task done on the next month's first day was not done in this one.
     const markOf = (name: string) =>
-      page.getByText(name, { exact: true }).locator("xpath=ancestor::*[.//*[@data-state]][1]").locator("[data-state]").first();
+      page.getByText(name, { exact: true }).locator("xpath=ancestor::*[.//*[@data-state]][1]").locator("[data-part='mark'][data-state]").first();
     await expect(markOf(`Empacar ${stamp}`)).toHaveAttribute("data-state", "declared");
     await expect(markOf(`Cargar ${stamp}`)).toHaveAttribute("data-state", "empty");
 

@@ -96,8 +96,9 @@ test("«hechos» moves as a row is tapped and matches the Semana's cell; a met f
     const partialRow = page.getByRole("button", { name: new RegExp(`^${partial}`) });
     await expect(partialRow).toContainText("0 de 3 esta semana");
     await expect(partialRow).not.toContainText("veces por semana");
-    const box = await partialRow.boundingBox();
-    expect(box!.height).toBeLessThanOrEqual(72);
+    // The row is a tile with its 30-day strip under the name (DESIGN «Hoy, 2026-11-01»): its progress line stays one line.
+    const line = await partialRow.getByText("0 de 3 esta semana").boundingBox();
+    expect(line!.height).toBeLessThan(30);
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(360);
 
     // The Semana's cell for today counts the same rows.
