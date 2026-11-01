@@ -155,9 +155,12 @@ test.describe("the paper report prints the months of a goal that measures nothin
       const at = flat.indexOf(name.toLowerCase());
       const measure = `no mide nada · hasta el ${lastDay(3)}`;
       const label = `${name} · por mes · 3 meses`.toLowerCase();
-      // The paper as read, in the message: a runner whose fonts break the line differently shows where.
-      expect(flat.indexOf(measure, at), `measure line follows the name in «${flat.slice(at, at + 240)}»`).toBeGreaterThan(at);
-      expect(flat.indexOf(label), "the label counts 3 printed months of 5").toBeGreaterThan(flat.indexOf(measure));
+      // Read without spaces: the runner's pdftotext splits a kerned pair («f ebrero», measured 2026-11-01).
+      const bare = (text: string) => text.replace(/\s/g, "");
+      const tight = bare(flat);
+      const from = bare(flat.slice(0, at)).length;
+      expect(tight.indexOf(bare(measure), from), `measure line follows the name in «${flat.slice(at, at + 240)}»`).toBeGreaterThan(from);
+      expect(tight.indexOf(bare(label)), "the label counts 3 printed months of 5").toBeGreaterThan(tight.indexOf(bare(measure)));
     } finally {
       await context.close();
       await remove(db, person, [id]);

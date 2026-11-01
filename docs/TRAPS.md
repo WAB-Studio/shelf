@@ -3391,3 +3391,12 @@ Measured 2026-11-01, a Sunday: `check:day` went red on `integracion` (f58d8d78) 
 
 - Seed an archive, an end or a retirement a full week before the day under test, never at now.
 - A date check that passes six days of seven proves nothing: read the rule's boundary and seed past it.
+
+## A spec that names a month as today's month breaks in November and on the 1st
+
+Measured 2026-11-01, a Sunday and a month's first day: 18 GoalLog specs went red on `integracion` at once.
+
+- Chained `replaceAll("2026-10", first).replaceAll("2026-11", second)` rewrites `first` again when it is 2026-11. Move months in one pass.
+- A month in another year is said with it («enero de 2027»): derive a label's year from today, never drop it.
+- Ended today means its last day is yesterday: on the 1st that is last month. Seed a task before the fact it carries.
+- The runner's `pdftotext` splits a kerned pair («f ebrero»): compare paper text without spaces.
