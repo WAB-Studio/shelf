@@ -81,15 +81,13 @@ Interface language: Spanish or English, the person's choice (RT-12). A person re
   nequi.com.co, daviplata.com) and password managers, and the person edits it in `aw-timelog.toml`
   (`exclude`), by `--exclude`, or from the tray. Excluded hosts and apps leave the PC as nothing, not even as
   seconds. (2026-10-30)
-- [x] **RT-17** «Hoy» and any day show «Claude» (Claude Code, claude.ai and the Claude app, and
+- [x] **RT-22** «Hoy» and any day show «Claude» (Claude Code, claude.ai and the Claude app, and
   «Claude en total» as their sum, then Claude Code's sessions) and «Internet» (the longest sites, each opening
   onto its pages); an app's row opens onto its longest window titles. «Semana» shows Claude's week
-  total and a bar per day. Where a source never arrived the screen says how to connect it: the browser
-  extension for sites, the Claude folder for Claude Code. (2026-10-30)
-- [ ] **RT-22** (draft, pending the user's approval to retire RT-17) «Hoy» and any day show «Claude» and
-  «Internet» as RT-17 does, but sites and pages come from the uploader reading the focused browser's address bar
-  (Windows) or the browser's own history, never from a browser extension. Where sites never arrived the screen tells
-  the person to update the program on the PC, with a link to its install steps.
+  total and a bar per day. Sites and pages come from the program on the PC, which reads the focused browser's
+  address bar (Windows) or the browser's own history; never from a browser extension. Where a source never
+  arrived the screen says what to do: update the program on the PC for sites, with a link to its install steps;
+  the Claude folder for Claude Code. Successor of RT-17. (2026-11-01, «solo quiero que todo dependa del programa»)
 
 ### Non-functional requirements
 
@@ -103,6 +101,7 @@ Interface language: Spanish or English, the person's choice (RT-12). A person re
 ### Retired
 
 - [x] **RT-01** — An upload carries, per device and day, the seconds each app was active with the person at the computer (ActivityWatch's AFK watcher says not-afk). It never carries a window title, a URL or an event. (P5, 1a) _Retired 2026-10-30, by the user («Me gustaría que rastree todo más detallado»). Successor: RT-16 (window titles, pages and Claude Code sessions join the upload, still never an event or a query; RT-20 drops private windows and an exclusion list on the PC)._
+- [x] **RT-17** — «Hoy» and any day show «Claude» (Claude Code, claude.ai and the Claude app, and «Claude en total» as their sum, then Claude Code's sessions) and «Internet» (the longest sites, each opening onto its pages); an app's row opens onto its longest window titles. «Semana» shows Claude's week total and a bar per day. Where a source never arrived the screen says how to connect it: the browser extension for sites, the Claude folder for Claude Code. (2026-10-30) _Retired 2026-11-01, by the user («solo quiero que todo dependa del programa»). Successor: RT-22 (sites come from the program reading the address bar or the browser's history; the screen asks to update the program instead of installing an extension)._
 
 ---
 
