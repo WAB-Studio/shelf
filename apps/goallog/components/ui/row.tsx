@@ -264,7 +264,15 @@ export const Row = forwardRef<HTMLButtonElement, RowProps>(function Row(
   );
   if (!note) return button;
   return (
-    <div className={rule ? `${styles.noted} ${styles.ruled}` : styles.noted}>
+    <div
+      className={
+        tile
+          ? [styles.noted, styles.tileNoted, done ? styles.done : undefined].filter(Boolean).join(" ")
+          : rule
+            ? `${styles.noted} ${styles.ruled}`
+            : styles.noted
+      }
+    >
       {button}
       <Text as="p" variant="sentence" tone="secondary" className={leading ? `${styles.note} ${styles.noteLead}` : styles.note} data-part="row-note">
         {note}

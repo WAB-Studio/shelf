@@ -2063,6 +2063,7 @@ The user accepted the critic's recommendations on 2026-10-31.
 - **«Sueltas» is a plain line** at the end of the list: its label, its tasks and its field, no card.
 - **One accent on the ground.** Tangerine marks done, links and the tag; navy is the rail and the goal's and Mes's hero; sky only on navy.
 - **A task on Hoy is a tile too**: a goal-less one (`Row` with `tile`) and the month's next one (`Tile`), so its mark stands on a commitment's edge and holds 48 × 56 (RNP-07). Decided by the user 2026-11-01.
+- **After the critic of 2026-11-01 (no decision of the user's needed):** the row's 30-day strip is solid at 20px — done full, short half, still open a stub, not asked a dot, all but done in the quiet ink — since a ring that small read as «0» and «o»; a tile's hairline is half way to the quiet ink, so it reads as a box inside a card of the same colour; a tile with a note holds the note inside it; on the phone «2 de 5» never splits, its «hechos hoy» drops under it; Semana's table sets a goal's name at 18px in the title face.
 - **A figure inside a sentence stays mono**, on Hoy as on every screen («5 de 10 min», «20 de 40 km»). Decided by the user 2026-11-01, over the Archivo figure #751 had shipped.
 
 ## Semana and Metas, 2026-11-01, by the user

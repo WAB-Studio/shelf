@@ -5,6 +5,7 @@
   min-block-size: 64px;
   padding: 12px 14px;
   background: var(--pulsar-raised);
-  border: 1px solid var(--pulsar-line);
+  /* Half way to the quiet ink: inside a card of the same raised colour a bare hairline drew no box. */
+  border: 1px solid color-mix(in srgb, var(--pulsar-line) 50%, var(--pulsar-quiet));
   border-radius: 12px;
 }

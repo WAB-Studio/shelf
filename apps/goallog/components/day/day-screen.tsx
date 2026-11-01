@@ -680,8 +680,9 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
     ) : null;
   // A past day: the goal-less tasks it owed, with no field and no link to the
   // ones that wait, then what was done on it. Month tasks stay on Hoy.
+  // Two cards in one column: the past day's even `Split` sets no gap between them, so the column does (16px).
   const pastTasks = (
-    <>
+    <Flex direction="column" gap="4">
       {looseTasks.length > 0 ? (
         <Panel as="div">
           <Section label={t("day.oneOffs.title")}>
@@ -690,7 +691,7 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
         </Panel>
       ) : null}
       {doneBlock}
-    </>
+    </Flex>
   );
   // The goal-less tasks close the list as a plain line, no card around them.
   const looseBlock = (
