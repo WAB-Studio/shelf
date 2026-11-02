@@ -299,6 +299,7 @@ export async function loadMonthAcross(
       plannedMonth: task.planned_month,
       day: task.day,
       estimate: task.estimate,
+      spentMinutes: task.spent_minutes ?? null,
       doneOn: task.done_on,
       factId: task.fact_id ?? null,
       note: task.note,

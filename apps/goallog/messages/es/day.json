@@ -103,7 +103,10 @@
   },
   "taskTimeSheet": {
     "question": "¿Cuánto te tomó?",
-    "extend": "Anotar y alargar la tarea"
+    "extend": "Anotar y alargar la tarea",
+    "markDone": "Marcar hecha",
+    "open": "Anotar el tiempo de {name}",
+    "spent": "llevas {spent} de {estimate}"
   },
   "quantitySheet": {
     "question": "¿Cuánto hiciste hoy?",

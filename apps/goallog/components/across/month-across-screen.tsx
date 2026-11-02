@@ -113,6 +113,7 @@ export async function MonthAcrossScreen({ month, today }: { month?: string; toda
       goalName: goal.name,
       unit,
       estimate: task.estimate,
+      spentMinutes: task.spentMinutes ?? null,
       planMonth: planMonthOf(goal.plan, task.id)?.slice(0, 7) ?? null,
       months: task.parentId === null ? openMonths : [],
       canDelete: task.doneOn === null && kids.every((kid) => kid.doneOn === null),

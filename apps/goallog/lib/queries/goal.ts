@@ -172,6 +172,7 @@ export type TaskRow = {
   planned_month: string | null;
   day: string | null;
   estimate: number | null;
+  spent_minutes?: number | null;
   done_on: string | null;
   // The id of its own fact, what `undoFact` takes back; null while undone.
   fact_id?: string | null;
@@ -308,6 +309,7 @@ function toPlanTask(task: TaskRow, openedOn: string): PlanTask {
     plannedMonth: task.planned_month,
     day: task.day,
     estimate: task.estimate,
+    spentMinutes: task.spent_minutes ?? null,
     doneOn: task.done_on,
     factId: task.fact_id ?? null,
     note: task.note,

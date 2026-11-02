@@ -8,8 +8,8 @@ import { completeOneOff } from "@/app/actions/one-offs";
 import { NoteSheet } from "@/components/one-offs/note-sheet";
 import { ScheduleSheet } from "@/components/one-offs/schedule-sheet";
 import { TaskSheet } from "@/components/plan/task-sheet";
-import { TaskTimeSheet } from "@/components/day/task-time-sheet";
-import { IconButton, Mark, Row, Text } from "@/components/ui";
+import { TaskTime, useSpentLine } from "@/components/day/task-time-sheet";
+import { Flex, IconButton, Mark, Row, Text } from "@/components/ui";
 
 import { dayPhrase } from "@/lib/day/day-phrase";
 import { todayInZone } from "@/lib/zone";
@@ -31,8 +31,8 @@ export type OneOffRowProps = {
   // The past day it is drawn on (RP-129): the mark writes the fact there, and
   // «Darle otro día» is Hoy's act (RP-61), so neither the sheet entry nor its step is built.
   doneOn?: string;
-  // A task estimated in time asks how long it took before it is done (RP-147).
-  timed?: { estimate: number; unit: string };
+  // A task estimated in time keeps the minutes spent on it apart from its mark (RP-147).
+  timed?: { estimate: number; spent: number | null; unit: string };
 };
 
 /**
@@ -41,8 +41,8 @@ export type OneOffRowProps = {
  * distinguish once it is on the list, since `completeOneOff` is what takes
  * it off (`app/actions/one-offs.ts`), never a second state drawn here.
  *
- * Two tap targets, two acts (RP-57): the mark still finishes it
- * (`onLeadingClick`), the name opens its sheet (`onClick`) —
+ * Two tap targets, two acts (RP-57): the mark still finishes it, a time task
+ * included (RP-147) (`onLeadingClick`), the name opens its sheet (`onClick`) —
  * `Row`'s own split, so neither tap reaches the other's act by mistake.
  */
 export function OneOffRow({ oneOffId, name, day, carriedFrom, note, noteEyebrow, goalName, doneOn, timed }: OneOffRowProps) {
@@ -52,7 +52,6 @@ export function OneOffRow({ oneOffId, name, day, carriedFrom, note, noteEyebrow,
   const [sheetOpen, setSheetOpen] = useState(false);
   const [noteOpen, setNoteOpen] = useState(false);
   const [scheduleOpen, setScheduleOpen] = useState(false);
-  const [timeOpen, setTimeOpen] = useState(false);
   const today = todayInZone();
 
   const dayLabel =
@@ -68,10 +67,6 @@ export function OneOffRow({ oneOffId, name, day, carriedFrom, note, noteEyebrow,
 
   function handleComplete() {
     if (pending) return;
-    if (timed) {
-      setTimeOpen(true);
-      return;
-    }
     setError(null);
 
     startTransition(() => {
@@ -81,6 +76,7 @@ export function OneOffRow({ oneOffId, name, day, carriedFrom, note, noteEyebrow,
     });
   }
 
+  const spentLine = useSpentLine(timed?.spent, timed?.estimate ?? null, timed?.unit ?? null);
   const noteButton = (
     <IconButton
       tap={44}
@@ -93,6 +89,14 @@ export function OneOffRow({ oneOffId, name, day, carriedFrom, note, noteEyebrow,
       {note ? <FileText size={18} aria-hidden /> : <File size={18} aria-hidden />}
     </IconButton>
   );
+  const end = timed ? (
+    <Flex align="center">
+      <TaskTime oneOffId={oneOffId} name={name} estimate={timed.estimate} spent={timed.spent} unit={timed.unit} day={doneOn} />
+      {noteButton}
+    </Flex>
+  ) : (
+    noteButton
+  );
 
   return (
     <>
@@ -101,24 +105,13 @@ export function OneOffRow({ oneOffId, name, day, carriedFrom, note, noteEyebrow,
         leading={<Mark state="empty" />}
         leadingLabel={t("oneOffs.markDone", { name })}
         name={name}
-        meta={carriedFrom}
+        meta={[carriedFrom, spentLine].filter(Boolean).join(" · ") || undefined}
         metaVariant="sentence"
         onLeadingClick={handleComplete}
         onClick={() => setSheetOpen(true)}
-        end={noteButton}
+        end={end}
         disabled={pending}
       />
-      {timed ? (
-        <TaskTimeSheet
-          open={timeOpen}
-          onOpenChange={setTimeOpen}
-          oneOffId={oneOffId}
-          name={name}
-          estimate={timed.estimate}
-          unit={timed.unit}
-          day={doneOn}
-        />
-      ) : null}
       {error ? (
         <Text as="p" variant="sentence">
           {t(error)}
