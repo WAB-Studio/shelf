@@ -139,6 +139,12 @@ export function toEvidenceByCommitment(
 
 // A goal a past day still saw: not archived, or archived that day or later (RP-24) — the last day of a closed
 // month or week included.
+// RP-148 in SQL: a commitment's fact is a day done when the commitment asks no quantity, or when its quantity
+// reaches the day's own target, else the commitment's. One fact a commitment a day, so a row decides its day.
+export function metFact(f: "f", c: "c" | "h"): SQL {
+  return sql`(${sql.raw(c)}.satisfaction <> 'quantity' or ${sql.raw(f)}.quantity >= coalesce(${sql.raw(f)}.day_target, ${sql.raw(c)}.target_quantity))`;
+}
+
 export function livedThrough(alias: "g" | "a", day: string): SQL {
   return sql`(${sql.raw(alias)}.archived_at is null or (${sql.raw(alias)}.archived_at at time zone ${TIME_ZONE})::date >= ${day}::date)`;
 }
