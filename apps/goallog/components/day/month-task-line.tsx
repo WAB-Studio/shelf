@@ -6,7 +6,7 @@ import { useTranslations } from "next-intl";
 
 import { completeOneOff } from "@/app/actions/one-offs";
 import { NoteSheet } from "@/components/one-offs/note-sheet";
-import { TaskTimeSheet } from "@/components/day/task-time-sheet";
+import { TaskTime, useSpentLine } from "@/components/day/task-time-sheet";
 import { Button, Figure, Flex, IconButton, Mark, Text, Tile } from "@/components/ui";
 import { useTimeWords } from "@/components/ui/figure";
 import type { MessageKey } from "@/i18n/translator";
@@ -21,6 +21,7 @@ export function MonthTaskLine({
   oneOffId,
   name,
   estimate,
+  spent,
   parentName,
   part,
   unit,
@@ -30,6 +31,8 @@ export function MonthTaskLine({
   oneOffId: string;
   name: string;
   estimate: number | null;
+  // Minutes recorded on it while it is open (RP-147).
+  spent: number | null;
   // The task is a sub-task: its parent's name rides above its own
   // (`HoyTareaMesSubtarea.dc.html`).
   parentName: string | null;
@@ -45,7 +48,6 @@ export function MonthTaskLine({
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<MessageKey | null>(null);
   const [noteOpen, setNoteOpen] = useState(false);
-  const [timeOpen, setTimeOpen] = useState(false);
 
   // A sub-task never shows its parent's share (`item.part` is the parent's).
   const splitPart =
@@ -53,11 +55,6 @@ export function MonthTaskLine({
 
   function handleComplete() {
     if (pending) return;
-    // RP-147: a task estimated in time asks how long it took.
-    if (estimate !== null && isTimeUnit(unit)) {
-      setTimeOpen(true);
-      return;
-    }
     setError(null);
 
     startTransition(() => {
@@ -67,6 +64,7 @@ export function MonthTaskLine({
     });
   }
 
+  const spentLine = useSpentLine(spent, estimate, unit);
   const noteButton = (
     <IconButton
       tap={44}
@@ -104,7 +102,7 @@ export function MonthTaskLine({
             <Text variant="name">{name}</Text>
             {isTimeUnit(unit) ? (
               <Text variant="meta" tone="muted">
-                {estimate !== null ? formatQuantity(estimate, unit, words) : t("roadmap.plan.unestimated")}
+                {estimate !== null ? [formatQuantity(estimate, unit, words), spentLine].filter(Boolean).join(" · ") : t("roadmap.plan.unestimated")}
               </Text>
             ) : null}
             <Text variant="sentence">
@@ -118,19 +116,14 @@ export function MonthTaskLine({
                   : t("day.monthLine.next")}
             </Text>
           </Flex>
-          <Flex mr="-3">{noteButton}</Flex>
+          <Flex mr="-3" align="center">
+            {estimate !== null && isTimeUnit(unit) ? (
+              <TaskTime oneOffId={oneOffId} name={name} estimate={estimate} spent={spent} unit={unit} />
+            ) : null}
+            {noteButton}
+          </Flex>
         </Flex>
       </Tile>
-      {estimate !== null && isTimeUnit(unit) ? (
-        <TaskTimeSheet
-          open={timeOpen}
-          onOpenChange={setTimeOpen}
-          oneOffId={oneOffId}
-          name={name}
-          estimate={estimate}
-          unit={unit}
-        />
-      ) : null}
       {error ? (
         <Text as="p" variant="sentence">
           {t(error)}

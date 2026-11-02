@@ -48,7 +48,8 @@ export async function declareFact(
   const person = await getPerson();
   if (!person) return { ok: false, error: "day.errors.signedOut" };
 
-  const { commitmentId, oneOffId, quantity, note, replace, lowerTarget, extendEstimate } = parsed.data;
+  const { commitmentId, oneOffId, note, replace, lowerTarget } = parsed.data;
+  let quantity = parsed.data.quantity;
 
   try {
     const written = await withGoalsDb(async (tx): Promise<{ id: string; day: string } | { kept: number; unit: string | null }> => {
@@ -153,6 +154,7 @@ export async function declareFact(
             createdAt: oneOffs.createdAt,
             day: oneOffs.day,
             estimate: oneOffs.estimate,
+            spentMinutes: oneOffs.spentMinutes,
             measureUnit: goals.measureUnit,
             // `${oneOffs}.id`: a bare `id` would bind to the subquery's own row.
             hasChildren: sql<boolean>`exists (select 1 from ${oneOffs} c where c.parent_id = ${oneOffs}.id)`,
@@ -187,17 +189,10 @@ export async function declareFact(
         `);
         if (done) return { id: done.id, day: done.day };
 
-        // RP-147: minutes belong to a task estimated in time, on a goal measured in time.
-        if (quantity != null && (oneOff.estimate === null || !isTimeUnit(oneOff.measureUnit))) {
-          throw new NamedError("day.errors.quantityNotTime");
-        }
-        if (extendEstimate) {
-          if (quantity == null || oneOff.estimate === null || quantity <= oneOff.estimate) {
-            throw new NamedError("day.errors.extendInvalid");
-          }
-          // Before the fact: `one_offs_guard_day` holds an estimate still once a fact exists.
-          await tx.update(oneOffs).set({ estimate: quantity }).where(eq(oneOffs.id, oneOffId));
-        }
+        // RP-147: a task estimated in time, on a goal measured in time, is done in the minutes
+        // recorded on it, or its estimate; the client names none.
+        if (quantity != null) throw new NamedError("day.errors.quantityNotTime");
+        if (oneOff.estimate !== null && isTimeUnit(oneOff.measureUnit)) quantity = oneOff.spentMinutes ?? oneOff.estimate;
 
         goalId = oneOff.goalId;
       }

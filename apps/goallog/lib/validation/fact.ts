@@ -93,8 +93,6 @@ export const declareFactSchema = z
     // RP-148: «Bajar la meta de este día» — the day's own target becomes this quantity. The action allows it
     // only on a quantity commitment and a quantity under its target.
     lowerTarget: z.boolean().optional(),
-    // RP-147: a task done in more time than its estimate takes that time as its estimate.
-    extendEstimate: z.boolean().optional(),
     // The day it happened, when that day is gone (RP-06). Absent means
     // today — the action still decides that from the person's own zone, never
     // from the client (RNP-06); this is only ever a day already past.

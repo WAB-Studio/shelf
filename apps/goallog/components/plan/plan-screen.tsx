@@ -236,6 +236,7 @@ async function HolderPlan({ goal }: { goal: GoalView }) {
     goalName: goal.name,
     unit,
     estimate: task.estimate,
+    spentMinutes: task.spentMinutes ?? null,
     planMonth: null,
     months: openMonths,
     canDelete: task.doneOn === null,

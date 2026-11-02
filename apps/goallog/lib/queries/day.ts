@@ -110,6 +110,7 @@ type OneOffRow = {
   day: string | null;
   note: string | null;
   estimate: number | null;
+  spent_minutes: number | null;
 };
 
 // The one statement's whole shape. `goals` and `one_offs` are fetched here
@@ -136,6 +137,7 @@ type GoalTaskRow = {
   planned_month: string | null;
   day: string | null;
   estimate: number | null;
+  spent_minutes: number | null;
   note: string | null;
   in_plan: boolean;
   position: number;
@@ -147,6 +149,7 @@ export type MonthTask = {
   id: string;
   name: string;
   estimate: number | null;
+  spent: number | null;
   note: string | null;
   parentName: string | null;
   // The hours the plan places in this month for the task: the part of a split one.
@@ -297,6 +300,7 @@ async function queryGoalsRow(
                  'planned_month', o.planned_month,
                  'day', o.day,
                  'estimate', o.estimate,
+                 'spent_minutes', o.spent_minutes,
                  'note', o.note,
                  'in_plan', o.in_plan,
                  'position', o.position,
@@ -517,6 +521,7 @@ export type OneOffSummary = {
   day: string | null;
   note: string | null;
   estimate: number | null;
+  spent: number | null;
 };
 
 // A one-off whose fact lands on the day drawn: RP-19's "done stays", read
@@ -532,7 +537,7 @@ export type DoneOneOffSummary = {
 };
 
 function toOneOffSummary(row: OneOffRow): OneOffSummary {
-  return { id: row.id, goalId: row.goal_id, name: row.name, day: row.day, note: row.note, estimate: row.estimate };
+  return { id: row.id, goalId: row.goal_id, name: row.name, day: row.day, note: row.note, estimate: row.estimate, spent: row.spent_minutes };
 }
 
 // What a `DaySlot` (`lib/day/types.ts`) does not carry: which goal a
@@ -647,6 +652,7 @@ function planInputOf(goal: GoalRow, row: GoalsQueryRow, day: string): PlanInput 
       plannedMonth: task.planned_month,
       day: task.day,
       estimate: task.estimate,
+      spentMinutes: task.spent_minutes,
       doneOn: task.done_on,
       note: task.note,
       inPlan: task.in_plan,
@@ -704,6 +710,7 @@ function monthTaskOf(goals: GoalRow[], lists: Record<string, PlanItem[]>): Recor
         id: leaf.id,
         name: leaf.name,
         estimate: leaf.estimate,
+        spent: leaf.spentMinutes ?? null,
         note: leaf.note ?? null,
         parentName: item.children.length === 0 ? null : item.task.name,
         part: item.part,

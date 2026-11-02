@@ -81,12 +81,19 @@ export const completeOneOffSchema = z.object({
   oneOffId: z.uuid({ error: "day.errors.invalid" }),
   // A day already past, up to PAST_DAY_LIMIT back (RP-129); absent is today.
   day: civilDate("day.errors.dayInvalid").optional(),
-  // RP-147: the minutes a task estimated in time took; `extendEstimate` makes them its new estimate.
-  quantity: quantitySchema.optional(),
-  extendEstimate: z.boolean().optional(),
 });
 
 export type CompleteOneOffInput = z.infer<typeof completeOneOffSchema>;
+
+// RP-147: the minutes spent on a task estimated in time, kept without completing it;
+// `extendEstimate` makes them its new estimate.
+export const recordTaskTimeSchema = z.object({
+  oneOffId: z.uuid({ error: "day.errors.invalid" }),
+  minutes: quantitySchema,
+  extendEstimate: z.boolean().optional(),
+});
+
+export type RecordTaskTimeInput = z.infer<typeof recordTaskTimeSchema>;
 
 export const deleteOneOffSchema = z.object({
   oneOffId: z.uuid({ error: "day.errors.invalid" }),
