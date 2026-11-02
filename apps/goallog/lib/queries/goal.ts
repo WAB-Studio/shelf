@@ -11,6 +11,8 @@ import { measureByWeek, totalInSpan } from "@/lib/day/review";
 import type { Cadence, EvidenceDay, Phase, ReviewWeek, SatisfiedBy } from "@/lib/day/types";
 import {
   toCadence,
+  countsInMeasure,
+  factUnit,
   toDeclaredFact,
   toPhase,
   toSatisfiedBy,
@@ -349,7 +351,7 @@ async function queryGoalRow(tx: Transaction, goalId: string): Promise<GoalQueryR
          left join "goals"."evidence_sources" s on s.id = c.source_id
          where c.goal_id = ${goalId}) as commitments,
       (select coalesce(json_agg(to_jsonb(f) || jsonb_build_object(
-                 'commitment_unit', c.unit
+                 'commitment_unit', ${factUnit}
                ) order by f.day, f.written_at, f.id), '[]'::json)
          from "goals"."facts" f
          left join "goals"."commitments" c on c.id = f.commitment_id
@@ -383,7 +385,7 @@ async function queryGoalRow(tx: Transaction, goalId: string): Promise<GoalQueryR
                                   left join "goals"."evidence_sources" s on s.id = c.source_id
                                   where c.goal_id = d.id),
                 'facts', (select coalesce(json_agg(to_jsonb(f) || jsonb_build_object(
-                                    'commitment_unit', c.unit
+                                    'commitment_unit', ${factUnit}
                                   ) order by f.day, f.written_at, f.id), '[]'::json)
                                   from "goals"."facts" f
                                   left join "goals"."commitments" c on c.id = f.commitment_id
@@ -588,10 +590,9 @@ export function goalFigures(input: {
   totalInSpan: (startsOn: string, endsOn: string) => number;
 } {
   const { goal, phases, commitments, budgets, evidence, today } = input;
-  // A one-off's fact carries no `commitment_id`, and no unit to feed the
-  // measure with; only a commitment's own quantity ever can (RP-14).
+  // A commitment's quantity feeds the measure (RP-14), and so do a task's minutes (RP-147).
   const facts = input.facts
-    .filter((fact): fact is FactRow & { commitment_id: string } => fact.commitment_id !== null)
+    .filter(countsInMeasure)
     .map(toDeclaredFact);
 
   // The same civil-day conversion `goalSpan`'s own SQL runs
@@ -1213,7 +1214,7 @@ export async function listGoalsForMetas(today: string = todayInZone()): Promise<
         select g.id, g.name, g.horizon, g.measure_name, g.measure_unit, g.archived_at,
           g.rhythm, g.created_at, g.parent_id, g.note, g.position,
           (select coalesce(json_agg(to_jsonb(f) || jsonb_build_object(
-                     'commitment_unit', c.unit
+                     'commitment_unit', ${factUnit}
                    ) order by f.day, f.written_at, f.id), '[]'::json)
              from "goals"."facts" f
              left join "goals"."commitments" c on c.id = f.commitment_id
@@ -1277,7 +1278,7 @@ export async function listGoalsForMetas(today: string = todayInZone()): Promise<
     const tasks = row.tasks.map((task) => toPlanTask(task, openedOn));
     const plan = planOfRow(row, tasks, openedOn);
     const declared = row.facts
-      .filter((fact): fact is FactRow & { commitment_id: string } => fact.commitment_id !== null)
+      .filter(countsInMeasure)
       .map(toDeclaredFact);
     const reached = reachedByMonth({
       unit,

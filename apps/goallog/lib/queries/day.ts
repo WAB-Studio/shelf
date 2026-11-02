@@ -26,6 +26,8 @@ import { queryEvidenceBySource } from "@/lib/queries/evidence";
 import type { EvidenceOutcome } from "@/lib/queries/evidence";
 import {
   toCadence,
+  countsInMeasure,
+  factUnit,
   toDeclaredFact,
   toEvidenceByCommitment,
   toPhase,
@@ -107,6 +109,7 @@ type OneOffRow = {
   name: string;
   day: string | null;
   note: string | null;
+  estimate: number | null;
 };
 
 // The one statement's whole shape. `goals` and `one_offs` are fetched here
@@ -249,7 +252,7 @@ async function queryGoalsRow(
       (select coalesce(json_agg(to_jsonb(p) order by p.starts_on, p.created_at, p.id), '[]'::json)
          from "goals"."phases" p) as phases,
       (select coalesce(json_agg(to_jsonb(f) || jsonb_build_object(
-                 'commitment_unit', c.unit
+                 'commitment_unit', ${factUnit}
                ) order by f.day, f.written_at, f.id), '[]'::json)
          from "goals"."facts" f
          left join "goals"."commitments" c on c.id = f.commitment_id
@@ -513,6 +516,7 @@ export type OneOffSummary = {
   name: string;
   day: string | null;
   note: string | null;
+  estimate: number | null;
 };
 
 // A one-off whose fact lands on the day drawn: RP-19's "done stays", read
@@ -528,7 +532,7 @@ export type DoneOneOffSummary = {
 };
 
 function toOneOffSummary(row: OneOffRow): OneOffSummary {
-  return { id: row.id, goalId: row.goal_id, name: row.name, day: row.day, note: row.note };
+  return { id: row.id, goalId: row.goal_id, name: row.name, day: row.day, note: row.note, estimate: row.estimate };
 }
 
 // What a `DaySlot` (`lib/day/types.ts`) does not carry: which goal a
@@ -607,10 +611,7 @@ function monthLineOf(
     const unit = goal.measure_unit;
     if (!unit) continue;
     const facts: DeclaredFact[] = row.facts
-      .filter(
-        (fact): fact is FactRow & { commitment_id: string } =>
-          fact.goal_id === goal.id && fact.commitment_id !== null && fact.day >= month,
-      )
+      .filter((fact) => fact.goal_id === goal.id && countsInMeasure(fact) && fact.day >= month)
       .map(toDeclaredFact);
     const evidence = evidenceDaysFor(
       unit,
@@ -741,10 +742,7 @@ function weekMeasureOf(
     // By the fact's own `goal_id`, as `loadGoal` does: a commitment retired
     // earlier this week still counts what it declared.
     const facts: DeclaredFact[] = row.facts
-      .filter(
-        (fact): fact is FactRow & { commitment_id: string } =>
-          fact.goal_id === goal.id && fact.commitment_id !== null && fact.day >= weekStart,
-      )
+      .filter((fact) => fact.goal_id === goal.id && countsInMeasure(fact) && fact.day >= weekStart)
       .map(toDeclaredFact);
     const evidence = evidenceDaysFor(
       unit,

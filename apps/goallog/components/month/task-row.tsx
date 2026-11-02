@@ -13,7 +13,8 @@ import { Flex, IconButton, Mark, Row, Text } from "@/components/ui";
 import { type MessageKey } from "@/i18n/translator";
 import { monthName } from "@/lib/plan/month-name";
 import { useTimeWords } from "@/components/ui/figure";
-import { formatQuantity } from "@/lib/units/time";
+import { formatQuantity, isTimeUnit } from "@/lib/units/time";
+import { TaskTimeSheet } from "@/components/day/task-time-sheet";
 import { todayInZone } from "@/lib/zone";
 
 export type TaskRowProps = {
@@ -84,6 +85,8 @@ export function TaskRow({
   const [error, setError] = useState<MessageKey | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [noteOpen, setNoteOpen] = useState(false);
+  const [timeOpen, setTimeOpen] = useState(false);
+  const asksTime = sheet.estimate !== null && sheet.unit !== null && isTimeUnit(sheet.unit);
 
   function run(act: () => Promise<{ ok: boolean; error?: MessageKey }>) {
     if (pending) return;
@@ -202,7 +205,7 @@ export function TaskRow({
         metaVariant="sentence"
         trailing={trail}
         {...noteProps}
-        onLeadingClick={() => run(() => completeOneOff({ oneOffId, day: markDay ?? undefined }))}
+        onLeadingClick={() => (asksTime ? setTimeOpen(true) : run(() => completeOneOff({ oneOffId, day: markDay ?? undefined })))}
         onClick={() => setSheetOpen(true)}
         still={locked}
         disabled={pending}
@@ -217,6 +220,18 @@ export function TaskRow({
         <Text as="p" variant="sentence" role="alert">
           {t(error)}
         </Text>
+      ) : null}
+      {asksTime && sheet.estimate !== null && sheet.unit !== null ? (
+        <TaskTimeSheet
+          open={timeOpen}
+          onOpenChange={setTimeOpen}
+          oneOffId={oneOffId}
+          name={name}
+          estimate={sheet.estimate}
+          unit={sheet.unit}
+          day={markDay ?? undefined}
+          onDone={() => router.refresh()}
+        />
       ) : null}
       <TaskSheet
         mode="edit"

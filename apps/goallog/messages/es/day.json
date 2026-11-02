@@ -101,6 +101,10 @@
     "savedOther": "Anotada para el {weekday} {day}.",
     "savedOtherFar": "Anotada para el {weekday} {day} de {month}."
   },
+  "taskTimeSheet": {
+    "question": "¿Cuánto te tomó?",
+    "extend": "Anotar y alargar la tarea"
+  },
   "quantitySheet": {
     "question": "¿Cuánto hiciste hoy?",
     "questionPast": "¿Cuánto hiciste ese día?",
@@ -177,6 +181,8 @@
     "oneOffNoteTooLong": "Es muy larga. Escribe máximo 2000 caracteres.",
     "noteTooLong": "La nota es muy larga. Escribe máximo 280 caracteres.",
     "quantityInvalid": "Escribe un número entero entre 1 y 1 000 000.",
+    "quantityNotTime": "Solo una tarea con tiempo estimado anota cuánto tomó.",
+    "extendInvalid": "Solo se alarga una tarea que tomó más de lo estimado.",
     "lowerTargetInvalid": "Solo se baja la meta de un día que quedó corto.",
     "invalid": "Eso no es válido.",
     "signedOut": "Tu sesión terminó. Entra otra vez.",

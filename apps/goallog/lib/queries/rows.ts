@@ -42,7 +42,7 @@ export type PhaseRow = {
 // `one_off_id` and `goal_id`, and each file's own wider row, narrowed to a
 // commitment's fact by its own filter, still satisfies this one structurally.
 type DeclaredFactRow = {
-  commitment_id: string;
+  commitment_id: string | null;
   day: string;
   written_at: string;
   quantity: number | null;
@@ -93,9 +93,22 @@ export function toPhase(row: PhaseRow): Phase {
   return { id: row.id, name: row.aim, startsOn: row.starts_on, endsOn: row.ends_on };
 }
 
+// The unit a fact's quantity is in: its commitment's, or, for a task done in
+// minutes (RP-147), its goal's measure. Read in a statement that joins
+// `commitments` as `c` and `facts` as `f`.
+export const factUnit: SQL = sql`coalesce(c.unit, (
+  select fg.measure_unit from "goals"."goals" fg where fg.id = f.goal_id and f.one_off_id is not null
+))`;
+
+// What a goal's measure reads (RP-14, RP-147): a commitment's fact, or a task's fact that carries minutes.
+export function countsInMeasure(row: { commitment_id: string | null; quantity: number | null }): boolean {
+  return row.commitment_id !== null || row.quantity !== null;
+}
+
 export function toDeclaredFact(row: DeclaredFactRow): DeclaredFact {
   return {
-    commitmentId: row.commitment_id,
+    // A task's minutes name no commitment: the empty id matches none, and only the measure reads them.
+    commitmentId: row.commitment_id ?? "",
     day: row.day,
     writtenAt: row.written_at,
     quantity: row.quantity,

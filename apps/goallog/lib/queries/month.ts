@@ -31,7 +31,7 @@ import {
   type TaskRow,
 } from "@/lib/queries/goal";
 import { dayCounts } from "@/lib/day/constancy";
-import { livedThrough, toCadence, toDeclaredFact, toSatisfiedBy } from "@/lib/queries/rows";
+import { countsInMeasure, factUnit, livedThrough, toCadence, toDeclaredFact, toSatisfiedBy } from "@/lib/queries/rows";
 import { getPerson, withGoalsDb, withReadingDb, type Transaction } from "@/lib/session";
 import { dayBefore } from "@/lib/day/weeks";
 import { civilDateInZone, TIME_ZONE, todayInZone, weekOf } from "@/lib/zone";
@@ -187,7 +187,7 @@ async function queryRows(tx: Transaction, reading: Reading, today: string): Prom
          left join "goals"."evidence_sources" s on s.id = c.source_id
          where c.goal_id = g.id) as commitments,
       (select coalesce(json_agg(to_jsonb(f) || jsonb_build_object(
-                 'commitment_unit', c.unit
+                 'commitment_unit', ${factUnit}
                ) order by f.day, f.written_at, f.id), '[]'::json)
          from "goals"."facts" f
          left join "goals"."commitments" c on c.id = f.commitment_id
@@ -319,7 +319,7 @@ export async function loadMonthAcross(
     let line: MonthLine | null = null;
     if (unit !== null) {
       const declared = row.facts
-        .filter((fact): fact is FactRow & { commitment_id: string } => fact.commitment_id !== null)
+        .filter(countsInMeasure)
         .map(toDeclaredFact);
       const evidence =
         outcome.status === "read" ? evidenceDaysForMeasure(row.goal, row.commitments, outcome.bySourceKey) : [];

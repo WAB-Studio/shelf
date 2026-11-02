@@ -220,6 +220,11 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
     return goals.find((candidate) => candidate.id === goalId)?.name;
   }
 
+  function timedOf(oneOff: OneOffSummary) {
+    const unit = goals.find((candidate) => candidate.id === oneOff.goalId)?.measureUnit ?? null;
+    return oneOff.estimate !== null && unit !== null && isTimeUnit(unit) ? { estimate: oneOff.estimate, unit } : undefined;
+  }
+
   function oneOffRow(oneOff: OneOffSummary) {
     return (
       <OneOffRow
@@ -230,6 +235,7 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
         note={oneOff.note}
         noteEyebrow={noteEyebrow(oneOff.goalId)}
         goalName={goalNameOf(oneOff.goalId)}
+        timed={timedOf(oneOff)}
         doneOn={past ? day : undefined}
         carriedFrom={
           isCarried(oneOff, day)

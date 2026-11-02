@@ -10,6 +10,7 @@ import type { EvidenceOutcome } from "@/lib/queries/evidence";
 import {
   livedThrough,
   toCadence,
+  factUnit,
   toDeclaredFact,
   toEvidenceByCommitment,
   toPhase,
@@ -155,7 +156,7 @@ async function queryGoalsRow(
          where p.starts_on <= ${weekEnd}::date
            and p.ends_on >= ${weekStart}::date) as phases,
       (select coalesce(json_agg(to_jsonb(f) || jsonb_build_object(
-                 'commitment_unit', c.unit,
+                 'commitment_unit', ${factUnit},
                  'one_off_name', o.name,
                  'one_off_parent_name', p.name
                ) order by f.day, f.written_at, f.id), '[]'::json)

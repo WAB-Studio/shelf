@@ -6,6 +6,7 @@ import { and, eq, gte, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { commitments, facts, goals, oneOffs } from "@/db/schema";
+import { isTimeUnit } from "@/lib/units/time";
 import { pgCode } from "@/lib/db-error";
 import { getPerson, withGoalsDb } from "@/lib/session";
 import {
@@ -47,7 +48,7 @@ export async function declareFact(
   const person = await getPerson();
   if (!person) return { ok: false, error: "day.errors.signedOut" };
 
-  const { commitmentId, oneOffId, quantity, note, replace, lowerTarget } = parsed.data;
+  const { commitmentId, oneOffId, quantity, note, replace, lowerTarget, extendEstimate } = parsed.data;
 
   try {
     const written = await withGoalsDb(async (tx): Promise<{ id: string; day: string } | { kept: number; unit: string | null }> => {
@@ -151,10 +152,13 @@ export async function declareFact(
             goalId: oneOffs.goalId,
             createdAt: oneOffs.createdAt,
             day: oneOffs.day,
+            estimate: oneOffs.estimate,
+            measureUnit: goals.measureUnit,
             // `${oneOffs}.id`: a bare `id` would bind to the subquery's own row.
             hasChildren: sql<boolean>`exists (select 1 from ${oneOffs} c where c.parent_id = ${oneOffs}.id)`,
           })
           .from(oneOffs)
+          .leftJoin(goals, eq(goals.id, oneOffs.goalId))
           .where(eq(oneOffs.id, oneOffId));
 
         if (!oneOff) throw new NamedError("day.errors.notFound");
@@ -182,6 +186,18 @@ export async function declareFact(
           select id, day::text as day from ${facts} where one_off_id = ${oneOffId}
         `);
         if (done) return { id: done.id, day: done.day };
+
+        // RP-147: minutes belong to a task estimated in time, on a goal measured in time.
+        if (quantity != null && (oneOff.estimate === null || !isTimeUnit(oneOff.measureUnit))) {
+          throw new NamedError("day.errors.quantityNotTime");
+        }
+        if (extendEstimate) {
+          if (quantity == null || oneOff.estimate === null || quantity <= oneOff.estimate) {
+            throw new NamedError("day.errors.extendInvalid");
+          }
+          // Before the fact: `one_offs_guard_day` holds an estimate still once a fact exists.
+          await tx.update(oneOffs).set({ estimate: quantity }).where(eq(oneOffs.id, oneOffId));
+        }
 
         goalId = oneOff.goalId;
       }

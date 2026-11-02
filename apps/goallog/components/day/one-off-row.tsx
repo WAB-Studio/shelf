@@ -8,6 +8,7 @@ import { completeOneOff } from "@/app/actions/one-offs";
 import { NoteSheet } from "@/components/one-offs/note-sheet";
 import { ScheduleSheet } from "@/components/one-offs/schedule-sheet";
 import { TaskSheet } from "@/components/plan/task-sheet";
+import { TaskTimeSheet } from "@/components/day/task-time-sheet";
 import { IconButton, Mark, Row, Text } from "@/components/ui";
 
 import { dayPhrase } from "@/lib/day/day-phrase";
@@ -30,6 +31,8 @@ export type OneOffRowProps = {
   // The past day it is drawn on (RP-129): the mark writes the fact there, and
   // «Darle otro día» is Hoy's act (RP-61), so neither the sheet entry nor its step is built.
   doneOn?: string;
+  // A task estimated in time asks how long it took before it is done (RP-147).
+  timed?: { estimate: number; unit: string };
 };
 
 /**
@@ -42,13 +45,14 @@ export type OneOffRowProps = {
  * (`onLeadingClick`), the name opens its sheet (`onClick`) —
  * `Row`'s own split, so neither tap reaches the other's act by mistake.
  */
-export function OneOffRow({ oneOffId, name, day, carriedFrom, note, noteEyebrow, goalName, doneOn }: OneOffRowProps) {
+export function OneOffRow({ oneOffId, name, day, carriedFrom, note, noteEyebrow, goalName, doneOn, timed }: OneOffRowProps) {
   const t = useTranslations();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<MessageKey | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [noteOpen, setNoteOpen] = useState(false);
   const [scheduleOpen, setScheduleOpen] = useState(false);
+  const [timeOpen, setTimeOpen] = useState(false);
   const today = todayInZone();
 
   const dayLabel =
@@ -64,6 +68,10 @@ export function OneOffRow({ oneOffId, name, day, carriedFrom, note, noteEyebrow,
 
   function handleComplete() {
     if (pending) return;
+    if (timed) {
+      setTimeOpen(true);
+      return;
+    }
     setError(null);
 
     startTransition(() => {
@@ -100,6 +108,17 @@ export function OneOffRow({ oneOffId, name, day, carriedFrom, note, noteEyebrow,
         end={noteButton}
         disabled={pending}
       />
+      {timed ? (
+        <TaskTimeSheet
+          open={timeOpen}
+          onOpenChange={setTimeOpen}
+          oneOffId={oneOffId}
+          name={name}
+          estimate={timed.estimate}
+          unit={timed.unit}
+          day={doneOn}
+        />
+      ) : null}
       {error ? (
         <Text as="p" variant="sentence">
           {t(error)}

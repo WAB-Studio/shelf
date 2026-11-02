@@ -302,7 +302,8 @@ export async function completeOneOff(input: CompleteOneOffInput): Promise<Comple
 
   // A parent is done by its sub-tasks (RP-30): `declareFact` refuses one under
   // the task's lock, in the transaction that writes the fact.
-  return declareFact({ oneOffId, day }, { namesParent: true });
+  const { quantity, extendEstimate } = parsed.data;
+  return declareFact({ oneOffId, day, quantity, extendEstimate }, { namesParent: true });
 }
 
 /**
