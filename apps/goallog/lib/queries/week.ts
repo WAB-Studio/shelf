@@ -11,6 +11,7 @@ import {
   livedThrough,
   toCadence,
   factUnit,
+  metFact,
   toDeclaredFact,
   toEvidenceByCommitment,
   toPhase,
@@ -167,7 +168,9 @@ async function queryGoalsRow(
          where f.day between least(${weekStart}::date, date_trunc('month', ${weekStart}::date)::date) and ${weekEnd}::date) as facts,
       (select coalesce(json_agg(json_build_object('commitment_id', f.commitment_id, 'day', f.day)), '[]'::json)
          from "goals"."facts" f
-         where f.commitment_id is not null
+         join "goals"."commitments" c on c.id = f.commitment_id
+         -- RP-148: a short day is not one of the period's times.
+         where ${metFact("f", "c")}
            and f.day >= least(${weekStart}::date, date_trunc('month', ${anyDay}::date)::date)
            and f.day <= greatest(${weekEnd}::date, (date_trunc('month', ${anyDay}::date) + interval '1 month - 1 day')::date)) as period_facts,
       (select coalesce(json_agg(g.horizon::text), '[]'::json)

@@ -49,6 +49,16 @@ test("a short day offers to lower its own target; taken, the row is done and the
     const [fact] = await db<{ quantity: number; day_target: number | null }[]>`
       select quantity, day_target from goals.facts where commitment_id = ${commitment.id} and day = ${todayInZone()}::date`;
     expect([fact.quantity, fact.day_target]).toEqual([4, 4]);
+
+    // «Cambiar» to add a note keeps the day's own target: the day stays done.
+    await row.click();
+    await sheet.getByLabel("Una línea, si quieres").fill("Rodilla cargada");
+    await sheet.getByRole("button", { name: "Cambiar", exact: true }).click();
+    await expect(sheet).toBeHidden();
+    await expect(row.locator("[data-part='mark'][data-state]")).toHaveAttribute("data-state", "declared");
+    const [kept] = await db<{ quantity: number; day_target: number | null; note: string | null }[]>`
+      select quantity, day_target, note from goals.facts where commitment_id = ${commitment.id} and day = ${todayInZone()}::date`;
+    expect([kept.quantity, kept.day_target, kept.note]).toEqual([4, 4, "Rodilla cargada"]);
   } finally {
     await context.close();
     await db`delete from goals.goals where id = ${goal.id}`;

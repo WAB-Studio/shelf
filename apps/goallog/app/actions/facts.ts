@@ -85,6 +85,7 @@ export async function declareFact(
       let unit: string | null = null;
       // RP-148: set only when the person lowers the day's target to what it did.
       let dayTarget: number | null = null;
+      let commitmentTarget: number | null = null;
 
       if (commitmentId != null) {
         const [commitment] = await tx
@@ -147,6 +148,7 @@ export async function declareFact(
 
         goalId = commitment.goalId;
         unit = commitment.unit;
+        commitmentTarget = commitment.target;
       } else if (oneOffId != null) {
         const [oneOff] = await tx
           .select({
@@ -216,7 +218,8 @@ export async function declareFact(
       // identical) never see a row deleted out from under them. A quantity
       // that genuinely differs still deletes and recreates: that is what
       // "Cambiar" is for.
-      if (replace && commitmentId != null) {
+      // «Bajar la meta» rewrites the day's fact too, whether or not the sheet knew of one.
+      if ((replace || lowerTarget) && commitmentId != null) {
         const [existing] = await tx.execute<{
           id: string;
           quantity: number | null;
@@ -228,6 +231,11 @@ export async function declareFact(
         `);
 
         if (existing) {
+          // A day lowered before keeps its own target through «Cambiar» while the quantity is still under the
+          // commitment's; at or over it, the day needs no target of its own.
+          if (!lowerTarget && existing.day_target !== null && quantity != null && commitmentTarget !== null && quantity < commitmentTarget) {
+            dayTarget = existing.day_target;
+          }
           const unchanged =
             existing.quantity === (quantity ?? null) && existing.note === (note ?? null) && existing.day_target === dayTarget;
           if (unchanged) return { id: existing.id, day };

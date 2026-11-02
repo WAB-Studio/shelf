@@ -326,11 +326,17 @@ export async function recordTaskTime(input: RecordTaskTimeInput): Promise<{ ok: 
     await withGoalsDb(async (tx) => {
       await taskLock(tx, oneOffId);
       const [task] = await tx
-        .select({ estimate: oneOffs.estimate, measureUnit: goals.measureUnit })
+        .select({
+          estimate: oneOffs.estimate,
+          measureUnit: goals.measureUnit,
+          // Read under the lock: a task done elsewhere meanwhile is refused by name, not as missing.
+          done: sql<boolean>`exists (select 1 from ${facts} f where f.one_off_id = ${oneOffs}.id)`,
+        })
         .from(oneOffs)
         .leftJoin(goals, eq(goals.id, oneOffs.goalId))
         .where(eq(oneOffs.id, oneOffId));
       if (!task) throw new NamedError("day.errors.notFound");
+      if (task.done) throw new NamedError("day.errors.oneOffHasFact");
       if (task.estimate === null || !isTimeUnit(task.measureUnit)) throw new NamedError("day.errors.quantityNotTime");
       if (extendEstimate && minutes <= task.estimate) throw new NamedError("day.errors.extendInvalid");
 
@@ -349,6 +355,7 @@ export async function recordTaskTime(input: RecordTaskTimeInput): Promise<{ ok: 
 
   revalidatePath("/");
   revalidatePath("/mes");
+  revalidatePath("/dia", "layout");
   return { ok: true };
 }
 

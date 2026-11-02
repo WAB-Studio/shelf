@@ -82,7 +82,8 @@ export function TaskTime({ oneOffId, name, estimate, spent, unit, day, onDone }:
     setError(null);
 
     startTransition(async () => {
-      if (quantity !== stored || extendEstimate) {
+      // Against what is recorded, not the chip it starts on: picking the estimate with nothing recorded records it.
+      if (quantity !== spent || extendEstimate) {
         const recorded = await recordTaskTime({
           oneOffId,
           minutes: quantity,
