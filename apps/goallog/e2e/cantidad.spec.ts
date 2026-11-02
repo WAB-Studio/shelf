@@ -59,7 +59,7 @@ test("the quantity sheet writes the chip picked, not the plan's own target (RP-0
     await expect(sheet).toBeVisible();
 
     await sheet.getByRole("button", { name: `${CHOSEN} min`, exact: true }).click();
-    await sheet.getByRole("button", { name: "Anotar" }).click();
+    await sheet.getByRole("button", { name: "Anotar", exact: true }).click();
 
     await expect(sheet).toBeHidden();
     await expect(row.locator("svg")).toBeVisible();

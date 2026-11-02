@@ -172,7 +172,7 @@ test.describe("at 360", () => {
       await page.getByPlaceholder(FIELD).fill(name);
       await metaGroup(page).getByRole("radio", { name: "Leer" }).click();
       await cuandoGroup(page).getByRole("radio", { name: "sin día" }).click();
-      await page.getByRole("button", { name: "Anotar" }).click();
+      await page.getByRole("button", { name: "Anotar", exact: true }).click();
 
       const status = page.getByRole("status");
       await expect(status).toContainText("Quedó en el plan de Leer.");
@@ -211,7 +211,7 @@ test.describe("at 360", () => {
       await field.fill(name);
       await metaGroup(page).getByRole("radio", { name: "Leer" }).click();
       await cuandoGroup(page).getByRole("radio", { name: "sin día" }).click();
-      await page.getByRole("button", { name: "Anotar" }).click();
+      await page.getByRole("button", { name: "Anotar", exact: true }).click();
 
       await expect(field).toBeDisabled();
       await expect(metaGroup(page).getByRole("radio", { name: "Suelta" })).toBeDisabled();

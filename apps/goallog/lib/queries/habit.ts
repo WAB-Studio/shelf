@@ -5,7 +5,7 @@ import { z } from "zod";
 
 import { habitMonths, type HabitMonth } from "@/lib/day/habit-months";
 import type { Cadence, SatisfiedBy } from "@/lib/day/types";
-import { toCadence, toSatisfiedBy, type CommitmentRow } from "@/lib/queries/rows";
+import { metFact, toCadence, toSatisfiedBy, type CommitmentRow } from "@/lib/queries/rows";
 import { withGoalsDb } from "@/lib/session";
 import { civilDateInZone, todayInZone } from "@/lib/zone";
 
@@ -50,13 +50,13 @@ export async function loadHabit(id: string, today: string = todayInZone()): Prom
            from (select to_char(date_trunc('month', f.day), 'YYYY-MM-DD') as month, count(distinct f.day)::int as days
                    from "goals"."facts" f
                    join "goals"."commitments" c on c.id = f.commitment_id
-                  where f.commitment_id = ${id} and c.goal_id is null
+                  where f.commitment_id = ${id} and c.goal_id is null and ${metFact("f", "c")}
                   group by 1) m) as months,
         (select coalesce(json_agg(jsonb_build_object('week', w.week, 'days', w.days) order by w.week), '[]'::json)
            from (select to_char(date_trunc('week', f.day), 'YYYY-MM-DD') as week, count(distinct f.day)::int as days
                    from "goals"."facts" f
                    join "goals"."commitments" c on c.id = f.commitment_id
-                  where f.commitment_id = ${id} and c.goal_id is null
+                  where f.commitment_id = ${id} and c.goal_id is null and ${metFact("f", "c")}
                   group by 1) w) as weeks
     `),
   );

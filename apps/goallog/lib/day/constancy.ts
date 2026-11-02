@@ -1,4 +1,5 @@
 import { asksOn } from "@/lib/day/cadence";
+import { dayTargetOf } from "@/lib/day/met";
 import type { Cadence, EvidenceDay, SatisfiedBy } from "@/lib/day/types";
 import { addDaysToCivilDate } from "@/lib/zone";
 
@@ -23,7 +24,7 @@ export function stripDays(today: string): string[] {
 // The days of a commitment's own: what a person declared, from the facts that name it. A tap is met by any
 // fact; a quantity only once the day's sum reaches its target, as `tally.ts` counts it.
 export function declaredDays(
-  facts: readonly { day: string; quantity: number | null; note?: string | null }[],
+  facts: readonly { day: string; quantity: number | null; note?: string | null; dayTarget?: number | null }[],
   satisfiedBy: SatisfiedBy,
 ): DoneDay[] {
   const byDay = new Map<string, number | null>();
@@ -31,12 +32,15 @@ export function declaredDays(
     const known = byDay.get(fact.day);
     byDay.set(fact.day, fact.quantity === null ? (known ?? null) : (known ?? 0) + fact.quantity);
   }
+  // RP-148: a day the person lowered is measured against its own target.
+  const targetOn = (day: string) =>
+    satisfiedBy.kind === "quantity" ? dayTargetOf(satisfiedBy.target, facts.filter((fact) => fact.day === day)) : 0;
   const notes = new Map(facts.filter((fact) => fact.note).map((fact) => [fact.day, fact.note as string]));
   return [...byDay].map(([day, quantity]) => ({
     day,
     quantity,
     ...(notes.has(day) ? { note: notes.get(day) } : {}),
-    by: satisfiedBy.kind === "quantity" && (quantity ?? 0) < satisfiedBy.target ? ("partial" as const) : ("declared" as const),
+    by: satisfiedBy.kind === "quantity" && (quantity ?? 0) < targetOn(day) ? ("partial" as const) : ("declared" as const),
   }));
 }
 
@@ -73,7 +77,7 @@ export function commitmentDays(input: {
   // Distinct days with a fact, over all time.
   declaredDayCount: number;
   // The facts inside the strip's window.
-  recent: readonly { day: string; quantity: number | null; note?: string | null }[];
+  recent: readonly { day: string; quantity: number | null; note?: string | null; dayTarget?: number | null }[];
   evidence: Record<string, EvidenceDay[]> | null;
 }): { declaredDayCount: number; evidenceDayCount: number; done: DoneDay[] } {
   const { satisfiedBy, today } = input;
@@ -137,7 +141,7 @@ export function stripCount(cells: readonly StripCell[], cadence: Cadence): { don
 // the day it was written. A source no commitment names counts nothing, and a day under a threshold is not met.
 export function dayCounts(
   commitments: readonly { id: string; satisfiedBy: SatisfiedBy; sourceKey: string | null; createdOn: string }[],
-  facts: readonly { commitment_id: string | null; day: string; quantity: number | null }[],
+  facts: readonly { commitment_id: string | null; day: string; quantity: number | null; day_target?: number | null }[],
   bySourceKey: Record<string, EvidenceDay[]> | null,
   from: string,
   to: string,
@@ -157,7 +161,9 @@ export function dayCounts(
       }
       continue;
     }
-    const own = facts.filter((fact) => fact.commitment_id === commitment.id);
+    const own = facts
+      .filter((fact) => fact.commitment_id === commitment.id)
+      .map((fact) => ({ day: fact.day, quantity: fact.quantity, dayTarget: fact.day_target ?? null }));
     for (const entry of declaredDays(own, commitment.satisfiedBy)) if (entry.by === "declared") add(entry.day);
   }
   return counts;

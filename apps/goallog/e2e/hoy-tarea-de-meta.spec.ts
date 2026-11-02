@@ -86,7 +86,7 @@ for (const width of [390, 1440]) {
         await page.goto("/");
         await fillTask(page, goal, task, width);
         await page.getByRole("radio", { name: "sin día" }).click();
-        await page.getByRole("button", { name: "Anotar" }).click();
+        await page.getByRole("button", { name: "Anotar", exact: true }).click();
 
         const status = page.getByRole("status");
         await expect(status).toContainText(width >= 1024 ? `Anotada en el plan de ${goal}.` : `Quedó en el plan de ${goal}.`);
@@ -163,7 +163,7 @@ test("«Anotar» is disabled while the write is pending, and one row lands", asy
 
     await fillTask(page, goal, task, 390);
     await page.getByRole("radio", { name: "sin día" }).click();
-    const submit = page.getByRole("button", { name: "Anotar" });
+    const submit = page.getByRole("button", { name: "Anotar", exact: true });
     await submit.click();
     await expect(submit).toBeDisabled();
     await expect.poll(() => calls).toBe(1);
@@ -213,7 +213,7 @@ test("the goalless field is unchanged: «sin día» counts the waiting list, emp
     const input = page.getByLabel("Algo suelto", { exact: true }).locator("visible=true").last();
     await input.fill(task);
     await page.getByRole("radio", { name: "sin día" }).click();
-    await page.getByRole("button", { name: "Anotar" }).click();
+    await page.getByRole("button", { name: "Anotar", exact: true }).click();
     await expect(page.getByRole("status")).toContainText(/^Anotada sin día: espera en «\d+ sin día»\.$/);
     await expect(page.getByRole("link", { name: "ver el plan", exact: true })).toHaveCount(0);
 
@@ -238,7 +238,7 @@ test("at 360 a 40-letter goal fits its chip and the plan line", async ({ person,
     await expect(input).toBeVisible();
     await fillTask(page, goal, task, 360);
     await page.getByRole("radio", { name: "sin día" }).click();
-    await page.getByRole("button", { name: "Anotar" }).click();
+    await page.getByRole("button", { name: "Anotar", exact: true }).click();
     await expect(page.getByRole("status")).toContainText(`Quedó en el plan de ${goal}.`);
     const scroll = await page.evaluate(() => document.documentElement.scrollWidth);
     expect(scroll).toBeLessThanOrEqual(360);

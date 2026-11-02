@@ -13,7 +13,8 @@ import { Flex, IconButton, Mark, Row, Text } from "@/components/ui";
 import { type MessageKey } from "@/i18n/translator";
 import { monthName } from "@/lib/plan/month-name";
 import { useTimeWords } from "@/components/ui/figure";
-import { formatQuantity } from "@/lib/units/time";
+import { formatQuantity, isTimeUnit } from "@/lib/units/time";
+import { TaskTime, useSpentLine } from "@/components/day/task-time-sheet";
 import { todayInZone } from "@/lib/zone";
 
 export type TaskRowProps = {
@@ -48,6 +49,8 @@ export type TaskRowProps = {
     goalName: string;
     unit: string | null;
     estimate: number | null;
+    // Minutes recorded on it while it is open (RP-147).
+    spentMinutes?: number | null;
     planMonth: string | null;
     months: string[];
     canDelete: boolean;
@@ -84,6 +87,16 @@ export function TaskRow({
   const [error, setError] = useState<MessageKey | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [noteOpen, setNoteOpen] = useState(false);
+  const timed =
+    !done &&
+    !parent &&
+    markDay !== null &&
+    sheet.estimate !== null &&
+    sheet.unit !== null &&
+    isTimeUnit(sheet.unit)
+      ? { estimate: sheet.estimate, unit: sheet.unit }
+      : null;
+  const spentLine = useSpentLine(timed ? (sheet.spentMinutes ?? null) : null, sheet.estimate, sheet.unit);
 
   function run(act: () => Promise<{ ok: boolean; error?: MessageKey }>) {
     if (pending) return;
@@ -117,7 +130,7 @@ export function TaskRow({
         </Text>
       </Flex>
     ) : null;
-  const lines = [meta, partLine, pinLine].filter(Boolean);
+  const lines = [meta, spentLine, partLine, pinLine].filter(Boolean);
   const stacked =
     lines.length > 1 ? (
       <Flex asChild direction="column">
@@ -151,7 +164,23 @@ export function TaskRow({
     </IconButton>
   );
   const locked = markDay === null;
-  const noteProps = parent ? {} : { preview: note, end: noteButton };
+  const end = timed ? (
+    <Flex align="center">
+      <TaskTime
+        oneOffId={oneOffId}
+        name={name}
+        estimate={timed.estimate}
+        spent={sheet.spentMinutes ?? null}
+        unit={timed.unit}
+        day={markDay ?? undefined}
+        onDone={() => router.refresh()}
+      />
+      {noteButton}
+    </Flex>
+  ) : (
+    noteButton
+  );
+  const noteProps = parent ? {} : { preview: note, end };
 
   let row;
   if (parent) {

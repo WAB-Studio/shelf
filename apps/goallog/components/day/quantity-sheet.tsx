@@ -137,7 +137,13 @@ export function QuantitySheet({
     });
   }
 
-  function handleAccept() {
+  // RP-148: the quantity on screen when it falls short of the target, so the sheet can offer to lower the day's.
+  const shortOf = (() => {
+    const quantity = customMode ? customQuantity() : selected;
+    return quantity != null && quantity < target ? quantity : null;
+  })();
+
+  function handleAccept(lowerTarget = false) {
     if (pending) return;
     const quantity = customMode ? customQuantity() : selected;
     if (quantity == null) {
@@ -158,6 +164,7 @@ export function QuantitySheet({
         // second `declareFact` beside the first (25 and 30 would both land
         // in `goals.facts`).
         replace: factId != null,
+        lowerTarget: lowerTarget || undefined,
         day: day ?? drawnToday,
         onHoy: day === undefined && drawnToday !== undefined ? true : undefined,
       }).catch(() => null);
@@ -235,9 +242,14 @@ export function QuantitySheet({
         </Text>
       ) : null}
 
-      <Button block onClick={handleAccept} disabled={pending}>
+      <Button block onClick={() => handleAccept()} disabled={pending}>
         {factId ? t("day.quantitySheet.change") : t("day.quantitySheet.accept")}
       </Button>
+      {shortOf !== null ? (
+        <Button block variant="outline" onClick={() => handleAccept(true)} disabled={pending}>
+          {t("day.quantitySheet.lowerTarget")}
+        </Button>
+      ) : null}
       {factId ? (
         <Button block variant="outline" onClick={handleUndo} disabled={pending}>
           {t("day.quantitySheet.undo")}

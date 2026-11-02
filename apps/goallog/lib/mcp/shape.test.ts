@@ -354,8 +354,8 @@ test("a day pairs each slot with its commitment, its unit and its amounts", () =
     ],
     groups: [{ rootId: ID(10), goalIds: [ID(10)] }],
     oneOffs: [
-      { id: ID(20), goalId: ID(10), name: "Pedir el libro", note: "Pedir en la biblioteca\nantes del viernes", day: "2026-10-03" },
-      { id: ID(21), goalId: null, name: "Llamar", note: null, day: "2026-10-05" },
+      { id: ID(20), goalId: ID(10), name: "Pedir el libro", note: "Pedir en la biblioteca\nantes del viernes", day: "2026-10-03", estimate: null, spent: null },
+      { id: ID(21), goalId: null, name: "Llamar", note: null, day: "2026-10-05", estimate: null, spent: null },
     ],
     doneOneOffs: [{ id: ID(22), goalId: null, name: "Pagar", note: "Con la tarjeta", factId: ID(23), writtenAt: "2026-10-05T14:00:00Z" }],
     daylessCount: 2,

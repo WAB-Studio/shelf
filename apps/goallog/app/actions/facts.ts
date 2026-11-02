@@ -6,6 +6,7 @@ import { and, eq, gte, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { commitments, facts, goals, oneOffs } from "@/db/schema";
+import { isTimeUnit } from "@/lib/units/time";
 import { pgCode } from "@/lib/db-error";
 import { getPerson, withGoalsDb } from "@/lib/session";
 import {
@@ -47,7 +48,8 @@ export async function declareFact(
   const person = await getPerson();
   if (!person) return { ok: false, error: "day.errors.signedOut" };
 
-  const { commitmentId, oneOffId, quantity, note, replace } = parsed.data;
+  const { commitmentId, oneOffId, note, replace, lowerTarget } = parsed.data;
+  let quantity = parsed.data.quantity;
 
   try {
     const written = await withGoalsDb(async (tx): Promise<{ id: string; day: string } | { kept: number; unit: string | null }> => {
@@ -81,12 +83,16 @@ export async function declareFact(
 
       let goalId: string | null = null;
       let unit: string | null = null;
+      // RP-148: set only when the person lowers the day's target to what it did.
+      let dayTarget: number | null = null;
+      let commitmentTarget: number | null = null;
 
       if (commitmentId != null) {
         const [commitment] = await tx
           .select({
             satisfaction: commitments.satisfaction,
             unit: commitments.unit,
+            target: commitments.targetQuantity,
             goalId: commitments.goalId,
             openedAt: goals.createdAt,
             createdAt: commitments.createdAt,
@@ -132,18 +138,31 @@ export async function declareFact(
           throw new NamedError(quantityCheck.error.issues[0].message);
         }
 
+        // RP-148: a day's target only comes down, only on a quantity commitment, and only to a short day's own.
+        if (lowerTarget) {
+          if (commitment.satisfaction !== "quantity" || commitment.target === null || quantity == null || quantity >= commitment.target) {
+            throw new NamedError("day.errors.lowerTargetInvalid");
+          }
+          dayTarget = quantity;
+        }
+
         goalId = commitment.goalId;
         unit = commitment.unit;
+        commitmentTarget = commitment.target;
       } else if (oneOffId != null) {
         const [oneOff] = await tx
           .select({
             goalId: oneOffs.goalId,
             createdAt: oneOffs.createdAt,
             day: oneOffs.day,
+            estimate: oneOffs.estimate,
+            spentMinutes: oneOffs.spentMinutes,
+            measureUnit: goals.measureUnit,
             // `${oneOffs}.id`: a bare `id` would bind to the subquery's own row.
             hasChildren: sql<boolean>`exists (select 1 from ${oneOffs} c where c.parent_id = ${oneOffs}.id)`,
           })
           .from(oneOffs)
+          .leftJoin(goals, eq(goals.id, oneOffs.goalId))
           .where(eq(oneOffs.id, oneOffId));
 
         if (!oneOff) throw new NamedError("day.errors.notFound");
@@ -172,6 +191,11 @@ export async function declareFact(
         `);
         if (done) return { id: done.id, day: done.day };
 
+        // RP-147: a task estimated in time, on a goal measured in time, is done in the minutes
+        // recorded on it, or its estimate; the client names none.
+        if (quantity != null) throw new NamedError("day.errors.quantityNotTime");
+        if (oneOff.estimate !== null && isTimeUnit(oneOff.measureUnit)) quantity = oneOff.spentMinutes ?? oneOff.estimate;
+
         goalId = oneOff.goalId;
       }
 
@@ -194,19 +218,26 @@ export async function declareFact(
       // identical) never see a row deleted out from under them. A quantity
       // that genuinely differs still deletes and recreates: that is what
       // "Cambiar" is for.
-      if (replace && commitmentId != null) {
+      // «Bajar la meta» rewrites the day's fact too, whether or not the sheet knew of one.
+      if ((replace || lowerTarget) && commitmentId != null) {
         const [existing] = await tx.execute<{
           id: string;
           quantity: number | null;
           note: string | null;
+          day_target: number | null;
         }>(sql`
-          select id, quantity, note from ${facts}
+          select id, quantity, note, day_target from ${facts}
           where commitment_id = ${commitmentId} and day = ${day}
         `);
 
         if (existing) {
+          // A day lowered before keeps its own target through «Cambiar» while the quantity is still under the
+          // commitment's; at or over it, the day needs no target of its own.
+          if (!lowerTarget && existing.day_target !== null && quantity != null && commitmentTarget !== null && quantity < commitmentTarget) {
+            dayTarget = existing.day_target;
+          }
           const unchanged =
-            existing.quantity === (quantity ?? null) && existing.note === (note ?? null);
+            existing.quantity === (quantity ?? null) && existing.note === (note ?? null) && existing.day_target === dayTarget;
           if (unchanged) return { id: existing.id, day };
 
           await tx.execute(sql`delete from ${facts} where id = ${existing.id}`);
@@ -228,10 +259,10 @@ export async function declareFact(
       // index too, and is correct before that index exists.
       const [inserted] = await tx.execute<{ id: string }>(sql`
         insert into ${facts}
-          (user_id, commitment_id, one_off_id, goal_id, day, quantity, note)
+          (user_id, commitment_id, one_off_id, goal_id, day, quantity, note, day_target)
         values
           (${person.id}, ${commitmentId ?? null}, ${oneOffId ?? null}, ${goalId},
-           ${day}, ${quantity ?? null}, ${note ?? null})
+           ${day}, ${quantity ?? null}, ${note ?? null}, ${dayTarget})
         on conflict do nothing
         returning id
       `);

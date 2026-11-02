@@ -1,4 +1,5 @@
 import { civilDateInZone, civilDateToDate, weekOf } from "@/lib/zone";
+import { metDays } from "./met";
 import type { CommitmentPlan, DeclaredFact } from "./types";
 import { daysBetween } from "./weeks";
 
@@ -34,20 +35,14 @@ function weekdayOf(day: string): number {
 // `period` and strictly before `day`. A quota counts what is already done,
 // never the day being asked about — the fact that meets the quota is still
 // allowed to land on the day it is being asked for.
+// The days before `day` in its period on which `plan` was met: a short quantity day is not one (RP-148).
 function completedBefore(
-  commitmentId: string,
+  plan: CommitmentPlan,
   facts: DeclaredFact[],
   day: string,
   inPeriod: (factDay: string) => boolean,
 ): number {
-  const days = new Set<string>();
-  for (const fact of facts) {
-    if (fact.commitmentId !== commitmentId) continue;
-    if (fact.day >= day) continue;
-    if (!inPeriod(fact.day)) continue;
-    days.add(fact.day);
-  }
-  return days.size;
+  return metDays(plan, facts, (factDay) => factDay < day && inPeriod(factDay)).size;
 }
 
 // Whether `plan` asks for anything on `day`, given the facts recorded for it
@@ -76,7 +71,7 @@ export function asksOn(
 
     case "times_per_week": {
       const week = weekOf(day);
-      const done = completedBefore(plan.id, facts, day, (factDay) =>
+      const done = completedBefore(plan, facts, day, (factDay) =>
         week.includes(factDay),
       );
       return done < plan.cadence.count;
@@ -84,7 +79,7 @@ export function asksOn(
 
     case "times_per_month": {
       const month = day.slice(0, 7);
-      const done = completedBefore(plan.id, facts, day, (factDay) =>
+      const done = completedBefore(plan, facts, day, (factDay) =>
         factDay.slice(0, 7) === month,
       );
       return done < plan.cadence.count;

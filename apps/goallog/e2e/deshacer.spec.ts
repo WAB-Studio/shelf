@@ -177,7 +177,7 @@ test("a quantity row shows what was logged, with its note, and undoes from the s
     await sheet.getByRole("button", { name: "Escribir otra cantidad" }).click();
     await sheet.getByLabel("otro número, en minutos").fill(String(chosen));
     await sheet.getByLabel("Una línea, si quieres").fill(note);
-    await sheet.getByRole("button", { name: "Anotar" }).click();
+    await sheet.getByRole("button", { name: "Anotar", exact: true }).click();
     await expect(sheet).toBeHidden();
 
     // What was logged, never the plan's own target (RP-04's own "done row").
@@ -224,7 +224,7 @@ test("changing a done quantity row's amount replaces the fact, never adds beside
     await expect(sheet).toBeVisible();
     await sheet.getByRole("button", { name: "Escribir otra cantidad" }).click();
     await sheet.getByLabel("otro número, en minutos").fill("25");
-    await sheet.getByRole("button", { name: "Anotar" }).click();
+    await sheet.getByRole("button", { name: "Anotar", exact: true }).click();
     await expect(sheet).toBeHidden();
 
     // No wait between the close and the reopen: a closed sheet must already

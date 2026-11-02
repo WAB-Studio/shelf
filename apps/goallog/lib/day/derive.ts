@@ -1,5 +1,6 @@
 import { weekOf } from "@/lib/zone";
 import { asksOn } from "./cadence";
+import { dayTargetOf } from "./met";
 import type {
   CommitmentPlan,
   DaySlot,
@@ -22,6 +23,9 @@ type DeriveDayInput = {
   day: string;
   // The day still under way is never «en parte»: its source may yet read more.
   today?: string;
+  // Keep a commitment on a day its own fact was written, though its cadence no longer asked
+  // (a count already met): Semana draws that day with its mark (RP-150). Hoy leaves it out.
+  keepWritten?: boolean;
 };
 
 // The phase whose span holds `day`, or null when no phase covers it — before
@@ -84,14 +88,16 @@ function deriveSlot(
 
     case "quantity": {
       const quantity = declared.reduce((total, fact) => total + (fact.quantity ?? 0), 0);
-      const satisfied = quantity >= plan.satisfiedBy.target;
+      // RP-148: a day the person lowered asks its own target.
+      const target = dayTargetOf(plan.satisfiedBy.target, declared);
+      const satisfied = quantity >= target;
       return {
         commitmentId: plan.id,
         satisfied,
         satisfiedBy: satisfied ? "declared" : null,
         labelKey: null,
         quantity,
-        partial: quantity > 0 && quantity < plan.satisfiedBy.target,
+        partial: quantity > 0 && quantity < target,
       };
     }
 
@@ -121,9 +127,13 @@ export function deriveDay({
   evidence,
   day,
   today,
+  keepWritten = false,
 }: DeriveDayInput): DayView {
   const slots = commitments
-    .filter((plan) => asksOn(plan, day, facts))
+    .filter(
+      (plan) =>
+        asksOn(plan, day, facts) || (keepWritten && facts.some((fact) => fact.commitmentId === plan.id && fact.day === day)),
+    )
     .map((plan) => deriveSlot(plan, facts, evidence, day, today));
 
   return { day, slots, phase: phaseOn(phases, day) };
@@ -136,6 +146,7 @@ type DeriveWeekInput = {
   evidence: EvidenceByCommitment;
   day: string;
   today?: string;
+  keepWritten?: boolean;
 };
 
 // The seven `DayView`s of the Monday-to-Sunday week `day` sits in. A week
@@ -148,12 +159,13 @@ export function deriveWeek({
   evidence,
   day,
   today,
+  keepWritten,
 }: DeriveWeekInput): WeekView {
   const days = weekOf(day);
   return {
     start: days[0],
     days: days.map((weekDay) =>
-      deriveDay({ commitments, phases, facts, evidence, day: weekDay, today }),
+      deriveDay({ commitments, phases, facts, evidence, day: weekDay, today, keepWritten }),
     ),
   };
 }

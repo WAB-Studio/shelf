@@ -6,6 +6,7 @@ import type { ReactNode } from "react";
 import {
   Button,
   Figure,
+  Figures,
   Flex,
   GroupHead,
   Page,
@@ -277,7 +278,7 @@ export async function GoalsScreen({
                   </Flex>
                 ) : month?.kind === "tasks" ? (
                   <Text as="p" variant="sentence">
-                    {t("goal.list.tasksDone", { done: month.done, total: month.total })}
+                    <Figures text={t("goal.list.tasksDone", { done: month.done, total: month.total })} />
                   </Text>
                 ) : null}
                 {percent !== null ? <Progress brand percent={percent} size="thick" /> : null}
@@ -287,7 +288,7 @@ export async function GoalsScreen({
                   </Text>
                 ) : null}
                 <Text as="p" variant="sentence" tone="muted">
-                  {goal.weeksLeft === null ? t("goal.list.noEnd") : t("goal.list.untilShort", { date: lastDay(goal) ?? "" })}
+                  <Figures text={goal.weeksLeft === null ? t("goal.list.noEnd") : t("goal.list.untilShort", { date: lastDay(goal) ?? "" })} />
                 </Text>
                 <TextLink href={`/metas/${goal.id}`}>{t("goal.list.openGoal", { name: goal.name })}</TextLink>
               </Flex>

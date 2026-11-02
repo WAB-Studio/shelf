@@ -9,6 +9,7 @@ import type { LeftOutSection } from "@/lib/import/model";
 import { readText as readStoredText, saveDraft } from "@/lib/import/draft-store";
 import { formKey } from "@/lib/import/reason-key";
 import { parseTemplate, type FormCode } from "@/lib/import/template";
+import { movedExample } from "@/lib/import/example";
 import type { WorkbookError } from "@/lib/import/workbook";
 import { Button, CodeBlock, FilePick, Flex, Mark, MarkList, Notice, Page, ScreenHeader, Section, Text, TextArea, type MarkState } from "@/components/ui";
 import { messageKey, type MessageKey } from "@/i18n/translator";
@@ -346,14 +347,14 @@ export function ImportScreen() {
 
   function copyTemplate() {
     void navigator.clipboard
-      .writeText(t("import.template.example"))
+      .writeText(movedExample(t("import.template.example")))
       .then(() => setCopied(true))
       .catch(() => setCopied(false));
   }
 
   function copyInstruction() {
     void navigator.clipboard
-      .writeText(t("import.entry.instruction"))
+      .writeText(movedExample(t("import.entry.instruction")))
       .then(() => setInstructionCopied(true))
       .catch(() => setInstructionCopied(false));
   }
@@ -521,7 +522,7 @@ export function ImportScreen() {
               <Text as="p" variant="sentence" tone="muted">
                 {t("import.template.note")}
               </Text>
-              <CodeBlock>{t("import.template.example")}</CodeBlock>
+              <CodeBlock>{movedExample(t("import.template.example"))}</CodeBlock>
               <Flex gap="3" wrap="wrap">
                 <Button variant="ghost" tone="accent" onClick={copyTemplate}>
                   {copied ? t("import.template.copied") : t("import.template.copy")}
@@ -533,7 +534,7 @@ export function ImportScreen() {
               <Text as="p" variant="sentence" tone="muted">
                 {t("import.entry.otherAiNote")}
               </Text>
-              <CodeBlock>{t("import.entry.instruction")}</CodeBlock>
+              <CodeBlock>{movedExample(t("import.entry.instruction"))}</CodeBlock>
               <Flex>
                 <Button variant="ghost" tone="accent" onClick={copyInstruction}>
                   {instructionCopied ? t("import.entry.instructionCopied") : t("import.entry.copyInstruction")}

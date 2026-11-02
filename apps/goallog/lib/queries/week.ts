@@ -10,6 +10,8 @@ import type { EvidenceOutcome } from "@/lib/queries/evidence";
 import {
   livedThrough,
   toCadence,
+  factUnit,
+  metFact,
   toDeclaredFact,
   toEvidenceByCommitment,
   toPhase,
@@ -65,6 +67,8 @@ type FactRow = {
   commitment_unit: string | null;
   one_off_name: string | null;
   one_off_parent_name: string | null;
+  // RP-148: the day's own target; `to_jsonb(f)` carries it.
+  day_target?: number | null;
 };
 
 // A not-done one-off dated inside the week, a parent never among them.
@@ -153,7 +157,7 @@ async function queryGoalsRow(
          where p.starts_on <= ${weekEnd}::date
            and p.ends_on >= ${weekStart}::date) as phases,
       (select coalesce(json_agg(to_jsonb(f) || jsonb_build_object(
-                 'commitment_unit', c.unit,
+                 'commitment_unit', ${factUnit},
                  'one_off_name', o.name,
                  'one_off_parent_name', p.name
                ) order by f.day, f.written_at, f.id), '[]'::json)
@@ -164,7 +168,9 @@ async function queryGoalsRow(
          where f.day between least(${weekStart}::date, date_trunc('month', ${weekStart}::date)::date) and ${weekEnd}::date) as facts,
       (select coalesce(json_agg(json_build_object('commitment_id', f.commitment_id, 'day', f.day)), '[]'::json)
          from "goals"."facts" f
-         where f.commitment_id is not null
+         join "goals"."commitments" c on c.id = f.commitment_id
+         -- RP-148: a short day is not one of the period's times.
+         where ${metFact("f", "c")}
            and f.day >= least(${weekStart}::date, date_trunc('month', ${anyDay}::date)::date)
            and f.day <= greatest(${weekEnd}::date, (date_trunc('month', ${anyDay}::date) + interval '1 month - 1 day')::date)) as period_facts,
       (select coalesce(json_agg(g.horizon::text), '[]'::json)
@@ -329,9 +335,10 @@ export async function loadWeek(anyDayInIt: string, today: string = todayInZone()
 
   // What asks comes from the month's facts; what is drawn comes from the
   // week's own, so a tap made after a month was met stays «hecho» though its
-  // day no longer asks. The week-only derivation asks a superset of the other.
+  // day no longer asks. The week-only derivation asks a superset of the other,
+  // and keeps a day written after the week's own count was met (RP-150).
   const asking = deriveWeek({ commitments, phases, facts: monthFacts, evidence, day: anyDayInIt, today });
-  const drawn = deriveWeek({ commitments, phases, facts: weekFacts, evidence, day: anyDayInIt, today });
+  const drawn = deriveWeek({ commitments, phases, facts: weekFacts, evidence, day: anyDayInIt, today, keepWritten: true });
   const view: WeekView = {
     ...drawn,
     days: drawn.days.map((dayView, i) => {

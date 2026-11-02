@@ -135,6 +135,7 @@ export async function MonthDetail({
     goalName: goal.name,
     unit,
     estimate: task.estimate,
+    spentMinutes: task.spentMinutes ?? null,
     planMonth: goal.roadmap.state === "planned" ? (planMonthOf(goal.plan, task.id)?.slice(0, 7) ?? null) : null,
     months: task.parentId === null ? openMonths : [],
     canDelete: task.doneOn === null && kids.every((kid) => kid.doneOn === null),

@@ -180,7 +180,9 @@ test("a new goal opened with 12 reads «12 semanas» and «semana 1 de 12» on S
     `;
     await page.goto("/semana");
     // Both faces are in the DOM; only the phone's label is drawn at 360.
-    await expect(page.getByText(`Semana ${current} de ${total}`, { exact: true }).locator("visible=true")).toHaveCount(1);
+    // The tag inside this goal's own heading: another goal of the person may be in its week 1 of 12 too.
+    const heading = page.locator("h2, th").filter({ hasText: name }).locator("visible=true");
+    await expect(heading.getByText(`Semana ${current} de ${total}`, { exact: true })).toHaveCount(1);
     await expect(page.getByText(name, { exact: true }).locator("visible=true")).toHaveCount(1);
   } finally {
     if (goalId) await db`delete from goals.goals where id = ${goalId} and user_id = ${personId}`;

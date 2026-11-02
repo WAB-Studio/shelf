@@ -55,9 +55,9 @@ test("«mañana» writes tomorrow's day, does not draw, and says where it went (
     await page.goto("/");
     const field = page.getByPlaceholder("Escribe una tarea…");
     await field.fill(name);
-    await expect(page.getByRole("button", { name: "Anotar" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Anotar", exact: true })).toHaveCount(0);
     await page.getByRole("radio", { name: "mañana" }).click();
-    await page.getByRole("button", { name: "Anotar" }).click();
+    await page.getByRole("button", { name: "Anotar", exact: true }).click();
 
     await expect(page.getByRole("status")).toContainText("Anotada para mañana");
     await expect(page.getByRole("button", { name, exact: true })).toHaveCount(0);
@@ -78,7 +78,7 @@ test("«sin día» writes a null day, does not draw, and the way into the list s
     const field = page.getByPlaceholder("Escribe una tarea…");
     await field.fill(name);
     await page.getByRole("radio", { name: "sin día" }).click();
-    await expect(page.getByRole("button", { name: "Anotar" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Anotar", exact: true })).toBeVisible();
     await field.press("Enter");
 
     await expect(page.getByRole("status")).toContainText("Anotada sin día");
@@ -107,7 +107,7 @@ test("«otro día» takes a date; a past one is refused with its message and no 
     await field.fill(name);
     await page.getByRole("radio", { name: "otro día" }).click();
     const date = page.getByLabel("qué día");
-    await expect(page.getByRole("button", { name: "Anotar" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Anotar", exact: true })).toBeVisible();
 
     await date.fill(plusDays(-1));
     await field.press("Enter");

@@ -185,3 +185,12 @@ test("createOneOffSchema: a uuid requestId is kept, one that is not a uuid is re
   assert.equal(bare.success, true);
   assert.equal((bare.data as { requestId?: string }).requestId, undefined);
 });
+
+test("recordTaskTimeSchema carries the minutes spent and the extend flag (RP-147)", async () => {
+  const { recordTaskTimeSchema } = await import("./one-off");
+  const oneOffId = "11111111-1111-4111-8111-111111111111";
+  assert.equal(recordTaskTimeSchema.safeParse({ oneOffId, minutes: 120, extendEstimate: true }).success, true);
+  assert.equal(recordTaskTimeSchema.safeParse({ oneOffId }).success, false);
+  assert.equal(recordTaskTimeSchema.safeParse({ oneOffId, minutes: 0 }).success, false);
+  assert.equal(recordTaskTimeSchema.safeParse({ oneOffId, minutes: 1.5 }).success, false);
+});

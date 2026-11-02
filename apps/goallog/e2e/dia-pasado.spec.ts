@@ -161,7 +161,7 @@ test("a quantity row on a past day asks for that day and writes its number there
     await page.locator("button", { hasText: name }).click();
     const sheet = page.getByRole("dialog");
     await expect(sheet).toContainText("¿Cuánto hiciste ese día?");
-    await sheet.getByRole("button", { name: "Anotar" }).click();
+    await sheet.getByRole("button", { name: "Anotar", exact: true }).click();
     await expect(sheet).toBeHidden();
 
     expect(await factsFor(db, commitmentId)).toEqual([{ day, quantity: 10 }]);
@@ -378,7 +378,9 @@ test("a past day draws the half mark, «ese día pedía» and the count with «e
     await expect(row).toContainText(/2 de 3 min/);
     await expect(row.locator("[data-part='mark'][data-state]")).toHaveAttribute("data-state", "partial");
     await expect(page.getByText(/^hechos \d+ de \d+ · 1 en parte$/)).toBeVisible();
-    await expect(page.getByText(/Meta día pasado \d+ · ese día pedía uno/)).toBeVisible();
+    await expect(
+      page.locator("[data-part='group-head']").filter({ hasText: /Meta día pasado \d+/ }).getByText("ese día pedía uno", { exact: true }),
+    ).toBeVisible();
   } finally {
     await deleteGoal(db, personId, goalId);
   }
