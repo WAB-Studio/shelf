@@ -65,7 +65,8 @@ test("the workbook's name is the file the app hands out", () => {
 test("the delivered workbook, read back, is the draft of PLANTILLA.md's example", async () => {
   const expected = parseTemplate(DOC_EXAMPLE);
   assert.ok(expected.matched && "draft" in expected);
-  const draft = await draftOf(await templateWorkbook(say));
+  // PLANTILLA.md's example is the book of 2026-10-01 (RP-149).
+  const draft = await draftOf(await templateWorkbook(say, "2026-10-01"));
   assert.deepEqual(strip(draft), strip(expected.draft));
 });
 
@@ -361,7 +362,7 @@ test("915 a rhythm in another unit reads as a whole number of it", async () => {
 
 test("the delivered workbook's example rows carry exactly this text", async () => {
   const wb = new ExcelJS.Workbook();
-  await wb.xlsx.load(Buffer.from(await templateWorkbook(say)) as never);
+  await wb.xlsx.load(Buffer.from(await templateWorkbook(say, "2026-10-01")) as never);
   const rows = (name: string) => {
     const sheet = wb.getWorksheet(name)!;
     const out: unknown[][] = [];
@@ -549,7 +550,7 @@ test("M14 too many entries: 200 stored entries pass, 201 do not", async () => {
 
 test("M14 template reads: the delivered template and a real workbook pass the guard and still import", async () => {
   const { zipInflatesWithin } = await guard();
-  const template = await templateWorkbook(say);
+  const template = await templateWorkbook(say, "2026-10-01");
   assert.equal(zipInflatesWithin(template), true);
   const result = await read(template);
   assert.ok("draft" in result);
@@ -639,5 +640,14 @@ test("M14 the end-of-directory record is found behind a long archive comment", a
     zip.file("a.txt", "hello", { compression: "STORE" });
     const bytes = new Uint8Array(await zip.generateAsync({ type: "uint8array", comment: "c".repeat(length) }));
     assert.equal(zipInflatesWithin(bytes), true, `comment of ${length} bytes`);
+  }
+});
+
+test("RP-149: the delivered book starts on today's month, so read back unchanged it counts 0 rows out", async () => {
+  for (const today of ["2026-11-01", "2027-02-28", "2026-12-15"]) {
+    const result = await read(await templateWorkbook(say, today));
+    assert.ok("draft" in result);
+    const months = result.draft.goals.flatMap((goal) => [...goal.months.map((m) => m.month), ...goal.tasks.map((t) => t.month)]);
+    assert.ok(months.length > 0 && months.every((month) => month >= today.slice(0, 7)), `${today}: ${months}`);
   }
 });

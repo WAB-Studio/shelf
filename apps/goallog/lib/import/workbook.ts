@@ -3,6 +3,7 @@ import ExcelJS from "exceljs";
 import { zipInflatesWithin as guardInflatesWithin, zipTooBig as guardTooBig, zipWithin } from "@repo/zip-guard";
 
 import { isHourUnit, isTimeUnit } from "@/lib/units/time";
+import { todayInZone } from "@/lib/zone";
 
 import type { ImportDraft, Source, Src } from "./draft";
 import { isTemplateHeader, parseTemplate, TEMPLATE_HEADER, type FormCode } from "./template";
@@ -262,30 +263,46 @@ export async function readWorkbook(
 // The parser's keyword for a commitment with no amount: grammar, like the dates, not interface copy.
 const TAP = "toque";
 
+// `AAAA-MM`, `by` months after `month`.
+function monthAfter(month: string, by: number): string {
+  const index = Number(month.slice(0, 4)) * 12 + Number(month.slice(5, 7)) - 1 + by;
+  return `${Math.floor(index / 12)}-${String((index % 12) + 1).padStart(2, "0")}`;
+}
+
+// The last civil day of an `AAAA-MM` month.
+function lastDayOf(month: string): string {
+  const day = new Date(Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0)).getUTCDate();
+  return `${month}-${String(day).padStart(2, "0")}`;
+}
+
 // `say` reads `import.template.workbook.*`: the example's words are the interface's, the grammar is not.
-export async function templateWorkbook(say: (key: string) => string): Promise<Uint8Array> {
+// The example's months start on `today`'s, so the book a person downloads and sends back unchanged has nothing
+// outside its goals' spans (RP-149); PLANTILLA.md's example is the book of 2026-10-01.
+export async function templateWorkbook(say: (key: string) => string, today: string = todayInZone()): Promise<Uint8Array> {
   const wb = new ExcelJS.Workbook();
   const w = (key: string) => say(`template.workbook.${key}`);
   const goal = w("evalsName");
+  const first = today.slice(0, 7);
+  const second = monthAfter(first, 1);
   const rows: Record<SheetName, (string | null)[][]> = {
     Metas: [
-      [w("careerName"), null, "2028-10-01", null, null, null, w("careerNote")],
-      [w("appliedName"), w("careerName"), "2027-10-01", null, null, null, null],
-      [goal, w("appliedName"), "2027-03-01", w("evalsMeasure"), w("evalsUnit"), w("evalsRhythm"), w("evalsNote")],
+      [w("careerName"), null, `${monthAfter(first, 24)}-01`, null, null, null, w("careerNote")],
+      [w("appliedName"), w("careerName"), `${monthAfter(first, 12)}-01`, null, null, null, null],
+      [goal, w("appliedName"), `${monthAfter(first, 5)}-01`, w("evalsMeasure"), w("evalsUnit"), w("evalsRhythm"), w("evalsNote")],
       [w("readName"), null, null, w("readMeasure"), w("readUnit"), w("readRhythm"), null],
     ],
-    Fases: [[goal, "2026-10-01", "2026-12-31", goal]],
-    Meses: [[goal, "2026-10", w("monthAmountOct")], [goal, "2026-11", w("monthAmountNov")]],
+    Fases: [[goal, `${first}-01`, lastDayOf(monthAfter(first, 2)), goal]],
+    Meses: [[goal, first, w("monthAmountOct")], [goal, second, w("monthAmountNov")]],
     Compromisos: [
       [goal, w("technicalName"), w("technicalCadence"), w("technicalAmount")],
       [goal, w("passiveName"), w("everyDay"), TAP],
       [w("readName"), w("readName"), w("everyDay"), w("readAmount")],
     ],
     Tareas: [
-      [goal, "2026-10", w("bookTask"), null, w("bookAmount"), null],
-      [goal, "2026-10", w("tutorTask"), null, null, w("tutorNote")],
-      [goal, "2026-10", null, w("pickChild"), w("pickAmount"), w("pickNote")],
-      [goal, "2026-10", null, w("sessionsChild"), w("sessionsAmount"), null],
+      [goal, first, w("bookTask"), null, w("bookAmount"), null],
+      [goal, first, w("tutorTask"), null, null, w("tutorNote")],
+      [goal, first, null, w("pickChild"), w("pickAmount"), w("pickNote")],
+      [goal, first, null, w("sessionsChild"), w("sessionsAmount"), null],
     ],
   };
   for (const name of SHEETS) {
