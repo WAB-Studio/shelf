@@ -4,6 +4,7 @@ import { zipInflatesWithin as guardInflatesWithin, zipTooBig as guardTooBig, zip
 
 import { isHourUnit, isTimeUnit } from "@/lib/units/time";
 import { todayInZone } from "@/lib/zone";
+import { lastDayOf, monthAfter } from "./example";
 
 import type { ImportDraft, Source, Src } from "./draft";
 import { isTemplateHeader, parseTemplate, TEMPLATE_HEADER, type FormCode } from "./template";
@@ -262,18 +263,6 @@ export async function readWorkbook(
 
 // The parser's keyword for a commitment with no amount: grammar, like the dates, not interface copy.
 const TAP = "toque";
-
-// `AAAA-MM`, `by` months after `month`.
-function monthAfter(month: string, by: number): string {
-  const index = Number(month.slice(0, 4)) * 12 + Number(month.slice(5, 7)) - 1 + by;
-  return `${Math.floor(index / 12)}-${String((index % 12) + 1).padStart(2, "0")}`;
-}
-
-// The last civil day of an `AAAA-MM` month.
-function lastDayOf(month: string): string {
-  const day = new Date(Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0)).getUTCDate();
-  return `${month}-${String(day).padStart(2, "0")}`;
-}
 
 // `say` reads `import.template.workbook.*`: the example's words are the interface's, the grammar is not.
 // The example's months start on `today`'s, so the book a person downloads and sends back unchanged has nothing

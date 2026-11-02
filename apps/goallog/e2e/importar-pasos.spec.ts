@@ -1,4 +1,5 @@
 import messages from "../messages/es/import.json";
+import { movedExample } from "../lib/import/example";
 import { readWorkbook } from "../lib/import/workbook";
 import { appAlerts, test, expect } from "./fixtures";
 import {
@@ -25,15 +26,16 @@ test.describe("the entry hands over the template, the workbook and the text for 
       await page.goto("/metas/importar");
       await page.getByRole("button", { name: messages.template.copy }).click();
       await expect(page.getByRole("button", { name: messages.template.copied })).toBeVisible();
-      expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(messages.template.example);
+      // Copied as shown: its dates start on this month (RP-149).
+      expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(movedExample(messages.template.example));
       expect(messages.template.example.startsWith("goallog · plantilla 2")).toBe(true);
 
       await expect(page.getByRole("button", { name: messages.entry.copyInstruction })).toBeVisible();
       await page.getByRole("button", { name: messages.entry.copyInstruction }).click();
       await expect(page.getByRole("button", { name: messages.entry.instructionCopied })).toBeVisible();
       const copied = await page.evaluate(() => navigator.clipboard.readText());
-      expect(copied).toBe(messages.entry.instruction);
-      expect(copied).toContain(messages.template.example);
+      expect(copied).toBe(movedExample(messages.entry.instruction));
+      expect(copied).toContain(movedExample(messages.template.example));
       expect(copied).toContain("[pega aquí tu plan]");
     });
   });
