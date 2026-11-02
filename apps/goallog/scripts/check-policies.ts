@@ -1050,7 +1050,7 @@ async function checkOneOffScheduleAndHorizonGrants(): Promise<void> {
 
   // Read from the catalogue: `one_offs` takes `day` (0005) and
   // `planned_month` (0007, the shift's one write on this table), `note`
-  // (0011) and nothing else.
+  // (0011), `spent_minutes` (0031, RP-147) and nothing else.
   const oneOffCols = await sql<{ column_name: string }[]>`
     select column_name from information_schema.column_privileges
     where table_schema = 'goals' and table_name = 'one_offs'
@@ -1058,7 +1058,7 @@ async function checkOneOffScheduleAndHorizonGrants(): Promise<void> {
   const oneOffUpdatable = oneOffCols.map((r) => r.column_name).sort();
   assert(
     "P58",
-    oneOffUpdatable.join(",") === "day,estimate,name,note,planned_month",
+    oneOffUpdatable.join(",") === "day,estimate,name,note,planned_month,spent_minutes",
     `columns of goals.one_offs updatable by authenticated = ${oneOffUpdatable.join(", ") || "none"}`,
   );
 
@@ -1252,7 +1252,7 @@ async function assertPlanByMonthCatalogue(q: postgres.Sql | postgres.Transaction
   assert(
     "P111",
     oneOffs ===
-      "DELETE INSERT(day,estimate,goal_id,id,in_plan,name,note,parent_id,planned_month,position,user_id) SELECT UPDATE(day,estimate,name,note,planned_month)",
+      "DELETE INSERT(day,estimate,goal_id,id,in_plan,name,note,parent_id,planned_month,position,user_id) SELECT UPDATE(day,estimate,name,note,planned_month,spent_minutes)",
     `one_offs: authenticated = ${oneOffs || "none"}`,
   );
 

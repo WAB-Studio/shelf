@@ -161,7 +161,7 @@ test("a quantity row on a past day asks for that day and writes its number there
     await page.locator("button", { hasText: name }).click();
     const sheet = page.getByRole("dialog");
     await expect(sheet).toContainText("¿Cuánto hiciste ese día?");
-    await sheet.getByRole("button", { name: "Anotar" }).click();
+    await sheet.getByRole("button", { name: "Anotar", exact: true }).click();
     await expect(sheet).toBeHidden();
 
     expect(await factsFor(db, commitmentId)).toEqual([{ day, quantity: 10 }]);

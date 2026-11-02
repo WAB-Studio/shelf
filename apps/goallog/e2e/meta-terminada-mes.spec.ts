@@ -31,7 +31,8 @@ const monthEnd = dateToCivilDate(
 // the goal then ended on the last day of the previous month, the month it
 // lives in is that one, and the month-page checks follow it.
 const endedOn = plusDays(today, -1);
-const endedMonth = endedOn.slice(0, 7);
+// The month of its last day, the day before the horizon: last month on this month's first two days.
+const endedMonth = plusDays(endedOn, -1).slice(0, 7);
 const endedMonthStart = `${endedMonth}-01`;
 
 async function seedGoal(

@@ -80,7 +80,7 @@ test("a time row reads in hours and minutes, a page row as written; the partial 
     // One tap on a chip lands 45 (RNP-02's measure).
     const tapped = Date.now();
     await sheet.getByRole("button", { name: "45 min", exact: true }).click();
-    await sheet.getByRole("button", { name: "Anotar" }).click();
+    await sheet.getByRole("button", { name: "Anotar", exact: true }).click();
     await expect(sheet).toBeHidden();
     expect(Date.now() - tapped).toBeLessThan(5000);
     await expect(timeRow).toContainText("45 min de 1 h 30 min");
@@ -98,7 +98,7 @@ test("a time row reads in hours and minutes, a page row as written; the partial 
     await pagesRow.click();
     await expect(sheet).toBeVisible();
     const started = Date.now();
-    await sheet.getByRole("button", { name: "Anotar" }).click();
+    await sheet.getByRole("button", { name: "Anotar", exact: true }).click();
     await expect(sheet).toBeHidden();
     expect(Date.now() - started).toBeLessThan(5000);
     await expect(pagesRow).toContainText("12 páginas");
