@@ -329,9 +329,10 @@ export async function loadWeek(anyDayInIt: string, today: string = todayInZone()
 
   // What asks comes from the month's facts; what is drawn comes from the
   // week's own, so a tap made after a month was met stays «hecho» though its
-  // day no longer asks. The week-only derivation asks a superset of the other.
+  // day no longer asks. The week-only derivation asks a superset of the other,
+  // and keeps a day written after the week's own count was met (RP-150).
   const asking = deriveWeek({ commitments, phases, facts: monthFacts, evidence, day: anyDayInIt, today });
-  const drawn = deriveWeek({ commitments, phases, facts: weekFacts, evidence, day: anyDayInIt, today });
+  const drawn = deriveWeek({ commitments, phases, facts: weekFacts, evidence, day: anyDayInIt, today, keepWritten: true });
   const view: WeekView = {
     ...drawn,
     days: drawn.days.map((dayView, i) => {

@@ -274,3 +274,22 @@ test("deriveDay: evidence below its threshold is partial with its quantity; noth
   assert.equal(live.slots[0].partial, false);
   assert.equal(slotFor(tapPlan("t"), 1).partial, false);
 });
+
+// --- RP-150: a day written after the week's count was met keeps its mark ---
+
+test("RP-150: deriveWeek with keepWritten keeps the fifth run of a «2 a la semana» on its day; without it the day is not asked", () => {
+  // 2026-03-02 is a Monday: runs on Monday, Tuesday and Thursday, count 2.
+  const plan = tapPlan("run", { cadence: { kind: "times_per_week", count: 2 } });
+  const facts = [fact("run", "2026-03-02"), fact("run", "2026-03-03"), fact("run", "2026-03-05")];
+  const base = { commitments: [plan], phases: [], facts, evidence: {}, day: "2026-03-04" };
+  const slotOn = (week: ReturnType<typeof deriveWeek>, day: string) =>
+    week.days.find((d) => d.day === day)!.slots.find((s) => s.commitmentId === "run");
+
+  const kept = deriveWeek({ ...base, keepWritten: true });
+  assert.equal(slotOn(kept, "2026-03-05")?.satisfied, true);
+  // A day with no fact after the count was met is still not asked.
+  assert.equal(slotOn(kept, "2026-03-06"), undefined);
+
+  const plain = deriveWeek(base);
+  assert.equal(slotOn(plain, "2026-03-05"), undefined);
+});
