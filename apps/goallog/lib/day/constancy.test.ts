@@ -114,3 +114,15 @@ test("a day its source read under the threshold is listed in part with its minut
   ]);
   assert.equal(found.evidenceDayCount, 1);
 });
+
+test("RP-148: declaredDays measures a lowered day against its own target", () => {
+  const satisfiedBy = { kind: "quantity" as const, target: 5, unit: "km" };
+  const days = declaredDays(
+    [
+      { day: "2026-03-02", quantity: 3, dayTarget: null },
+      { day: "2026-03-03", quantity: 3, dayTarget: 3 },
+    ],
+    satisfiedBy,
+  );
+  assert.deepEqual(days.map((d) => [d.day, d.by]), [["2026-03-02", "partial"], ["2026-03-03", "declared"]]);
+});

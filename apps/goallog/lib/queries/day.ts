@@ -95,6 +95,8 @@ type FactRow = {
   quantity: number | null;
   note: string | null;
   commitment_unit: string | null;
+  // RP-148: the day's own target; `to_jsonb(f)` carries it.
+  day_target?: number | null;
 };
 
 type MonthBudgetRow = { goal_id: string; month: string; amount: number };
@@ -163,7 +165,7 @@ type GoalsQueryRow = {
   phases: PhaseRow[];
   facts: FactRow[];
   // Today alone: the commitments' facts of the last thirty days, for the strips.
-  strip_facts: { commitment_id: string; day: string; quantity: number | null; note: string | null }[];
+  strip_facts: { commitment_id: string; day: string; quantity: number | null; note: string | null; day_target: number | null }[];
   month_budgets: MonthBudgetRow[];
   one_offs: OneOffRow[];
   done_one_offs: DoneOneOffRow[];
@@ -256,7 +258,8 @@ async function queryGoalsRow(
                  'commitment_id', f.commitment_id,
                  'day', f.day,
                  'quantity', f.quantity,
-                 'note', f.note
+                 'note', f.note,
+                 'day_target', f.day_target
                ) order by f.day, f.written_at, f.id), '[]'::json)
          from "goals"."facts" f
          where ${isToday}::boolean and f.commitment_id is not null
@@ -347,11 +350,12 @@ function stripsOf(
   day: string,
   drawn: ReadonlySet<string>,
 ): Record<string, DayStrip> {
-  const byCommitment = new Map<string, { day: string; quantity: number | null; note: string | null }[]>();
+  const byCommitment = new Map<string, { day: string; quantity: number | null; note: string | null; dayTarget: number | null }[]>();
   for (const fact of row.strip_facts) {
+    const entry = { day: fact.day, quantity: fact.quantity, note: fact.note, dayTarget: fact.day_target };
     const own = byCommitment.get(fact.commitment_id);
-    if (own) own.push(fact);
-    else byCommitment.set(fact.commitment_id, [fact]);
+    if (own) own.push(entry);
+    else byCommitment.set(fact.commitment_id, [entry]);
   }
   const strips: Record<string, DayStrip> = {};
   for (const commitment of row.commitments) {
@@ -896,7 +900,7 @@ export async function loadDay(day: string): Promise<{
   const looseIds = new Set(infos.filter((info) => info.goalId === null).map((info) => info.id));
   const periodDone: Record<string, number> = {};
   for (const plan of commitments) {
-    const done = periodDoneOn(plan.cadence, plan.id, facts, day);
+    const done = periodDoneOn(plan, facts, day);
     if (done !== null) periodDone[plan.id] = done;
   }
 

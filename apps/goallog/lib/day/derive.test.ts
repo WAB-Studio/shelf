@@ -293,3 +293,23 @@ test("RP-150: deriveWeek with keepWritten keeps the fifth run of a «2 a la sema
   const plain = deriveWeek(base);
   assert.equal(slotOn(plain, "2026-03-05"), undefined);
 });
+
+// --- RP-148: a day's own target ---
+
+test("RP-148: a quantity day lowered to what it did is satisfied; the same day unlowered is in part", () => {
+  const plan = tapPlan("run", { satisfiedBy: { kind: "quantity", target: 5, unit: "km" } });
+  const day = "2026-03-04";
+  const slot = (facts: DeclaredFact[]) => deriveDay({ commitments: [plan], phases: [], facts, evidence: {}, day }).slots[0];
+  const short = slot([fact("run", day, { quantity: 3 })]);
+  assert.deepEqual([short.satisfied, short.partial], [false, true]);
+  const lowered = slot([fact("run", day, { quantity: 3, dayTarget: 3 })]);
+  assert.deepEqual([lowered.satisfied, lowered.partial], [true, false]);
+});
+
+test("RP-148: a short day is not one of a «2 a la semana»'s times, so the week still asks the next day", () => {
+  const plan = tapPlan("run", { cadence: { kind: "times_per_week", count: 2 }, satisfiedBy: { kind: "quantity", target: 5, unit: "km" } });
+  const facts = [fact("run", "2026-03-02", { quantity: 5 }), fact("run", "2026-03-03", { quantity: 2 })];
+  const asks = (f: DeclaredFact[]) => deriveDay({ commitments: [plan], phases: [], facts: f, evidence: {}, day: "2026-03-04" }).slots.length;
+  assert.equal(asks(facts), 1);
+  assert.equal(asks([facts[0], fact("run", "2026-03-03", { quantity: 2, dayTarget: 2 })]), 0);
+});

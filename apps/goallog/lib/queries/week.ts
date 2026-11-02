@@ -65,6 +65,8 @@ type FactRow = {
   commitment_unit: string | null;
   one_off_name: string | null;
   one_off_parent_name: string | null;
+  // RP-148: the day's own target; `to_jsonb(f)` carries it.
+  day_target?: number | null;
 };
 
 // A not-done one-off dated inside the week, a parent never among them.

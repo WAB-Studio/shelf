@@ -111,6 +111,7 @@
     "notePlaceholder": "¿Qué pasó?",
     "accept": "Anotar",
     "change": "Cambiar",
+    "lowerTarget": "Anotar y bajar la meta de este día",
     "undo": "Deshacer"
   },
   "cadence": {
@@ -176,6 +177,7 @@
     "oneOffNoteTooLong": "Es muy larga. Escribe máximo 2000 caracteres.",
     "noteTooLong": "La nota es muy larga. Escribe máximo 280 caracteres.",
     "quantityInvalid": "Escribe un número entero entre 1 y 1 000 000.",
+    "lowerTargetInvalid": "Solo se baja la meta de un día que quedó corto.",
     "invalid": "Eso no es válido.",
     "signedOut": "Tu sesión terminó. Entra otra vez.",
     "oneOffNameEmpty": "Escribe qué es lo suelto.",

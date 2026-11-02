@@ -38,6 +38,9 @@ export const facts = goalsSchema.table(
     writtenAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
     quantity: integer(),
     note: text(),
+    // RP-148: the day's own target, set when the person lowers it to what a short day did. Null: the
+    // commitment's target holds. Never above it, and never on a tap or a one-off (`declareFact` decides).
+    dayTarget: integer(),
   },
   (t) => [
     // The day's screen reads one person's facts for one day.
@@ -58,6 +61,7 @@ export const facts = goalsSchema.table(
       .where(sql`${t.oneOffId} is not null`),
     // A line, not a journal entry.
     check("facts_note_length", sql`length(${t.note}) <= 280`),
+    check("facts_day_target_positive", sql`${t.dayTarget} is null or ${t.dayTarget} > 0`),
     // Exactly one of the two, never both and never neither: a fact satisfies
     // something. A fact that belongs to nothing has no code asking for it.
     check(

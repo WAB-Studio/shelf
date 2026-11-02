@@ -1,5 +1,6 @@
 import { weekOf } from "@/lib/zone";
 import { asksOn } from "./cadence";
+import { dayTargetOf } from "./met";
 import type {
   CommitmentPlan,
   DaySlot,
@@ -87,14 +88,16 @@ function deriveSlot(
 
     case "quantity": {
       const quantity = declared.reduce((total, fact) => total + (fact.quantity ?? 0), 0);
-      const satisfied = quantity >= plan.satisfiedBy.target;
+      // RP-148: a day the person lowered asks its own target.
+      const target = dayTargetOf(plan.satisfiedBy.target, declared);
+      const satisfied = quantity >= target;
       return {
         commitmentId: plan.id,
         satisfied,
         satisfiedBy: satisfied ? "declared" : null,
         labelKey: null,
         quantity,
-        partial: quantity > 0 && quantity < plan.satisfiedBy.target,
+        partial: quantity > 0 && quantity < target,
       };
     }
 

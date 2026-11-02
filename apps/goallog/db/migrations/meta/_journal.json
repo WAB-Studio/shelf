@@ -204,6 +204,13 @@
       "when": 1792379657966,
       "tag": "0029_recibos_de_escritura",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1793649169500,
+      "tag": "0030_un_dia_baja_su_meta",
+      "breakpoints": true
     }
   ]
 }

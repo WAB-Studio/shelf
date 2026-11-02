@@ -48,6 +48,8 @@ type DeclaredFactRow = {
   quantity: number | null;
   note: string | null;
   commitment_unit: string | null;
+  // Absent where a statement builds its own fact object without it.
+  day_target?: number | null;
 };
 
 export function toCadence(row: CommitmentRow): Cadence {
@@ -99,6 +101,7 @@ export function toDeclaredFact(row: DeclaredFactRow): DeclaredFact {
     quantity: row.quantity,
     unit: row.commitment_unit,
     note: row.note,
+    dayTarget: row.day_target ?? null,
   };
 }
 

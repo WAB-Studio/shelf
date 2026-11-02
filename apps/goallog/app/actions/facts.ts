@@ -47,7 +47,7 @@ export async function declareFact(
   const person = await getPerson();
   if (!person) return { ok: false, error: "day.errors.signedOut" };
 
-  const { commitmentId, oneOffId, quantity, note, replace } = parsed.data;
+  const { commitmentId, oneOffId, quantity, note, replace, lowerTarget } = parsed.data;
 
   try {
     const written = await withGoalsDb(async (tx): Promise<{ id: string; day: string } | { kept: number; unit: string | null }> => {
@@ -81,12 +81,15 @@ export async function declareFact(
 
       let goalId: string | null = null;
       let unit: string | null = null;
+      // RP-148: set only when the person lowers the day's target to what it did.
+      let dayTarget: number | null = null;
 
       if (commitmentId != null) {
         const [commitment] = await tx
           .select({
             satisfaction: commitments.satisfaction,
             unit: commitments.unit,
+            target: commitments.targetQuantity,
             goalId: commitments.goalId,
             openedAt: goals.createdAt,
             createdAt: commitments.createdAt,
@@ -130,6 +133,14 @@ export async function declareFact(
           .safeParse({ quantity });
         if (!quantityCheck.success) {
           throw new NamedError(quantityCheck.error.issues[0].message);
+        }
+
+        // RP-148: a day's target only comes down, only on a quantity commitment, and only to a short day's own.
+        if (lowerTarget) {
+          if (commitment.satisfaction !== "quantity" || commitment.target === null || quantity == null || quantity >= commitment.target) {
+            throw new NamedError("day.errors.lowerTargetInvalid");
+          }
+          dayTarget = quantity;
         }
 
         goalId = commitment.goalId;
@@ -199,14 +210,15 @@ export async function declareFact(
           id: string;
           quantity: number | null;
           note: string | null;
+          day_target: number | null;
         }>(sql`
-          select id, quantity, note from ${facts}
+          select id, quantity, note, day_target from ${facts}
           where commitment_id = ${commitmentId} and day = ${day}
         `);
 
         if (existing) {
           const unchanged =
-            existing.quantity === (quantity ?? null) && existing.note === (note ?? null);
+            existing.quantity === (quantity ?? null) && existing.note === (note ?? null) && existing.day_target === dayTarget;
           if (unchanged) return { id: existing.id, day };
 
           await tx.execute(sql`delete from ${facts} where id = ${existing.id}`);
@@ -228,10 +240,10 @@ export async function declareFact(
       // index too, and is correct before that index exists.
       const [inserted] = await tx.execute<{ id: string }>(sql`
         insert into ${facts}
-          (user_id, commitment_id, one_off_id, goal_id, day, quantity, note)
+          (user_id, commitment_id, one_off_id, goal_id, day, quantity, note, day_target)
         values
           (${person.id}, ${commitmentId ?? null}, ${oneOffId ?? null}, ${goalId},
-           ${day}, ${quantity ?? null}, ${note ?? null})
+           ${day}, ${quantity ?? null}, ${note ?? null}, ${dayTarget})
         on conflict do nothing
         returning id
       `);
