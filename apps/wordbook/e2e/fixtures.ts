@@ -11,13 +11,14 @@ if (process.env.MIGRATION_DATABASE_URL) assertSuiteDatabase();
 
 // `/api/word/text` calls the model and spends the user's own OpenAI money;
 // `/api/word/unlisted` and `/api/phrase/notes` are the same kind of paid,
-// cached route for RL-44/RL-47 and RL-46. Every spec in this suite gets all
-// three routes intercepted and answered deterministically by default —
+// cached route for RL-44/RL-47 and RL-46, and `/api/translate` asks the model
+// first (RL-60) and falls to MyMemory, an external service, after it. Every
+// spec in this suite gets all four routes intercepted and answered deterministically by default —
 // importing `test`/`expect` from here, instead of `@playwright/test`
 // directly, is what turns the interception on. A spec that needs a real
 // route says so through `allowRealWordRoute` below, with a reason, in its
 // own comment.
-type WordRouteName = "text" | "unlisted" | "notes";
+type WordRouteName = "text" | "unlisted" | "notes" | "translate";
 
 type WordTextBody = { definition: string | null; example: { en: string; es: string } };
 
@@ -44,6 +45,7 @@ function wordRouteName(url: URL): WordRouteName | null {
   if (url.pathname === "/api/word/text") return "text";
   if (url.pathname === "/api/word/unlisted") return "unlisted";
   if (url.pathname === "/api/phrase/notes") return "notes";
+  if (url.pathname === "/api/translate") return "translate";
   return null;
 }
 
@@ -69,7 +71,7 @@ type WordRouteState = {
 type WordRouteFixtures = {
   wordRouteState: WordRouteState;
   // Lets the rest of a test's own body reach the real route for one of the
-  // three endpoints. `reason` must say why; an empty one throws, so a caller
+  // four endpoints. `reason` must say why; an empty one throws, so a caller
   // cannot opt out silently.
   allowRealWordRoute(route: WordRouteName, reason: string): Promise<void>;
   // Replaces the default absent (204) text answer with a generated one —
@@ -152,6 +154,24 @@ export const test = base.extend<WordRouteFixtures>({
           });
           return;
         }
+        // No translation fixture to author: the sentence comes back marked, so a
+        // spec that reads it sees which request it answered and none ever
+        // reaches the model or MyMemory.
+        if (name === "translate") {
+          let text = "";
+          try {
+            text = String((route.request().postDataJSON() as { text?: unknown } | null)?.text ?? "");
+          } catch {
+            // An unreadable body is answered like an empty sentence.
+          }
+          void route.fulfill({
+            status: 200,
+            contentType: "application/json",
+            headers: { [STUB_HEADER]: "1" },
+            body: JSON.stringify({ text: `traducción de prueba: ${text}`, origin: "network" }),
+          });
+          return;
+        }
         // RL-35's absent shape: no connection, no provider, no cap left —
         // the same screen every route already draws with nothing to show.
         void route.fulfill({ status: 204, headers: { [STUB_HEADER]: "1" } });
@@ -165,14 +185,26 @@ export const test = base.extend<WordRouteFixtures>({
     // this file's own marker reached the real route some other way, which
     // is exactly the gap `allowRealWordRoute` exists to close on purpose
     // instead of by accident.
+    // A spec's own `page.route` stub answers without this file's marker but
+    // also without a server: Playwright reports no server address for a
+    // fulfilled response, so only an answer that came over a socket is real.
+    const checks: Promise<void>[] = [];
     context.on("response", (response) => {
       const name = wordRouteName(new URL(response.url()));
       if (!name || wordRouteState.opted.has(name)) return;
       if (response.headers()[STUB_HEADER] === "1") return;
-      escapes.push(`${response.request().method()} ${response.url()} -> ${response.status()}`);
+      checks.push(
+        response.serverAddr().then(
+          (address) => {
+            if (address) escapes.push(`${response.request().method()} ${response.url()} -> ${response.status()}`);
+          },
+          () => {},
+        ),
+      );
     });
 
     await provide(context);
+    await Promise.all(checks);
 
     if (escapes.length > 0) {
       throw new Error(
