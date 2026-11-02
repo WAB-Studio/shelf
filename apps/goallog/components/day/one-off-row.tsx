@@ -89,6 +89,7 @@ export function OneOffRow({ oneOffId, name, day, carriedFrom, note, noteEyebrow,
   return (
     <>
       <Row
+        tile
         leading={<Mark state="empty" />}
         leadingLabel={t("oneOffs.markDone", { name })}
         name={name}

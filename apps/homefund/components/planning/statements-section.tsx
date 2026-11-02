@@ -10,7 +10,9 @@ import {
   type StatementAccount,
 } from "@/components/planning/account-statement-dialog";
 import {
+  Box,
   Button,
+  Card,
   DataTable,
   EmptyState,
   Flex,
@@ -188,6 +190,23 @@ export function StatementsSection({
     },
   ];
 
+  // The same columns the table draws after the dates, one line each on the
+  // phone; a column with nothing to show drops its line.
+  function phoneFigures(statement: AccountStatementRow): [string, ReactNode][] {
+    return columns
+      .filter((column) => column.align === "end")
+      .map((column): [string, ReactNode] => [column.header, column.cell(statement)])
+      .filter(([, cell]) => cell !== null);
+  }
+
+  const emptyState = (
+    <EmptyState
+      variant="filtered"
+      title={t("statementsEmpty")}
+      description={t("statementsEmptyRecord")}
+    />
+  );
+
   const recordButton = canWrite && (
     <Button
       type="button"
@@ -214,19 +233,49 @@ export function StatementsSection({
         {recordButton}
       </Flex>
 
-      <DataTable
-        label={t("statementsTitle")}
-        columns={columns}
-        rows={statements}
-        rowKey={(statement) => statement.id}
-        empty={
-          <EmptyState
-            variant="filtered"
-            title={t("statementsEmpty")}
-            description={t("statementsEmptyRecord")}
-          />
-        }
-      />
+      <Box display={{ initial: "none", lg: "block" }}>
+        <DataTable
+          label={t("statementsTitle")}
+          columns={columns}
+          rows={statements}
+          rowKey={(statement) => statement.id}
+          empty={emptyState}
+        />
+      </Box>
+
+      {/* The phone reads each statement as a card: eight tracks do not fit. */}
+      <Box display={{ initial: "block", lg: "none" }}>
+        {statements.length === 0 ? (
+          emptyState
+        ) : (
+          <Flex direction="column" gap="3">
+            {statements.map((statement) => (
+              <Card key={statement.id}>
+                <Flex direction="column" gap="2">
+                  <Flex justify="between" align="baseline" gap="3" wrap="wrap">
+                    <Text size="3" weight="medium">
+                      {shortDate(statement.periodStart)} – {shortDate(statement.cutOffDate)}
+                    </Text>
+                    {statement.paymentDueDate !== null && (
+                      <Text size="2" color="gray">
+                        {t("statementDueDate")} {shortDate(statement.paymentDueDate)}
+                      </Text>
+                    )}
+                  </Flex>
+                  {phoneFigures(statement).map(([label, cell]) => (
+                    <Flex key={label} justify="between" align="baseline" gap="3">
+                      <Text size="2" color="gray">
+                        {label}
+                      </Text>
+                      <Text size="2">{cell}</Text>
+                    </Flex>
+                  ))}
+                </Flex>
+              </Card>
+            ))}
+          </Flex>
+        )}
+      </Box>
 
       {recordOpen && (
         <AccountStatementDialog

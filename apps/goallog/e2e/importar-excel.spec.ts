@@ -5,7 +5,7 @@ import type postgres from "postgres";
 import messages from "../messages/es/import.json";
 import { templateWorkbook } from "../lib/import/workbook";
 import { test, expect } from "./fixtures";
-import { asPerson, countOf } from "./importar-plan";
+import { asPerson, countOf, months } from "./importar-plan";
 
 // A workbook uploaded on /metas/importar (RP-98): read on the server with no key, no claim and no
 // model. The boards are `ImportarExcelFilas` and `ImportarExcelAjeno`.
@@ -18,6 +18,23 @@ const GOAL = "Evals y harness";
 async function load(): Promise<ExcelJS.Workbook> {
   const wb = new ExcelJS.Workbook();
   await wb.xlsx.load((await templateWorkbook(say)) as never);
+  return wb;
+}
+
+// The template book with its October and November moved to this month and the next, as `movedExample` moves the text.
+async function loadMoved(): Promise<ExcelJS.Workbook> {
+  const wb = await load();
+  const { first, second } = months();
+  wb.eachSheet((sheet) =>
+    sheet.eachRow((row) =>
+      row.eachCell((cell) => {
+        if (typeof cell.value !== "string") return;
+        cell.value = cell.value
+          .replace("2026-12-31", `${first}-28`)
+          .replace(/2026-1[01]/g, (month) => (month === "2026-10" ? first : second));
+      }),
+    ),
+  );
   return wb;
 }
 
@@ -105,7 +122,7 @@ test.describe("a workbook is read on the server, never by the model (RP-98)", ()
     // Kills: sending a good book to the model, or counting its rows as lines.
     await asPerson({ person, browser, baseURL }, async (page) => {
       await page.goto("/metas/importar");
-      await page.getByLabel(messages.upload).setInputFiles(upload("plantilla-goallog.xlsx", await bytes(await load())));
+      await page.getByLabel(messages.upload).setInputFiles(upload("plantilla-goallog.xlsx", await bytes(await loadMoved())));
       await page.getByRole("button", { name: messages.read }).click();
       await expect(page).toHaveURL(/\/metas\/importar\/revisar$/);
       await expect(page.getByRole("heading", { name: messages.review.title })).toBeVisible();

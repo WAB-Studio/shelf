@@ -3,6 +3,7 @@ import "server-only";
 import { env } from "@/lib/env";
 import { refuseCrossSiteRequest } from "@/lib/word/same-origin";
 import { providerFetch } from "@/lib/provider/fetch";
+import { cleanProviderText } from "@/lib/translate/clean";
 import { isEcho } from "@/lib/translate/echo";
 import { containsBlockedTerm } from "@/lib/translate/blocklist";
 import { translateRequestSchema, type TranslationResult } from "@/lib/translate/types";
@@ -60,6 +61,11 @@ function isUsableTranslation(source: string, candidate: string | undefined): can
   );
 }
 
+// The provider's JSON is not trusted: anything but a string says nothing, and a string is cleaned of its entities.
+function cleanCandidate(value: unknown): string | undefined {
+  return typeof value === "string" ? cleanProviderText(value) : undefined;
+}
+
 // MyMemory's top pick can come back empty — measured live for "the cat sat
 // on the mat" — while `matches` still holds one that answers the sentence.
 // Ranked by `match`, not by array position: the reply is not contractually
@@ -113,12 +119,18 @@ async function translateWithProvider(text: string): Promise<string> {
     throw new Error("MyMemory reported a non-200 responseStatus");
   }
 
-  const translated = payload.responseData?.translatedText;
+  // Cleaned before the gate, so an echo or a blocked term hiding behind an entity is still caught.
+  const translated = cleanCandidate(payload.responseData?.translatedText);
   if (isUsableTranslation(text, translated)) {
     return translated;
   }
 
-  const alternative = bestAlternativeTranslation(text, payload.matches);
+  const alternative = bestAlternativeTranslation(
+    text,
+    Array.isArray(payload.matches)
+      ? payload.matches.map((match) => ({ ...match, translation: cleanCandidate(match?.translation) }))
+      : undefined,
+  );
   if (alternative) {
     return alternative;
   }
@@ -188,7 +200,7 @@ async function translateWithModel(request: Request, text: string): Promise<strin
   try {
     const payload = (await response.json()) as { choices?: { message?: { content?: unknown } }[] };
     const content = payload.choices?.[0]?.message?.content;
-    const out = typeof content === "string" ? content.trim() : "";
+    const out = typeof content === "string" ? cleanProviderText(content) : "";
     if (out && !isEcho(text, out)) return out;
   } catch {
     // An unreadable body is a failed model call, logged below.

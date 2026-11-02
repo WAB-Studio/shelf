@@ -6,7 +6,8 @@ import styles from "./strip.module.css";
 // is a tall bar (declared: the accent filled; evidence: the soft fill with its ring); a day still open is a
 // short stub; a day before the commitment was written is a dot. Height tells them apart as well as hue.
 // It counts no streak and never says one broke.
-// `full` is the commitment's own page, with its first day and «hoy» under it; `mini` is the goal's row.
+// `full` is the commitment's own page, with its first day and «hoy» under it; `mini` is the goal's row; `row` is a
+// commitment's row on Hoy, the width of the row.
 export function Strip({
   cells,
   label,
@@ -17,12 +18,12 @@ export function Strip({
   cells: readonly StripCell[];
   // The strip's one name for a screen reader: «26 de 30 días».
   label: string;
-  size?: "full" | "mini";
+  size?: "full" | "mini" | "row";
   from?: string;
   to?: string;
 }) {
   return (
-    <span className={size === "mini" ? `${styles.strip} ${styles.mini}` : styles.strip} data-part="strip">
+    <span className={size === "full" ? styles.strip : `${styles.strip} ${styles[size]}`} data-part="strip">
       <span className={styles.bars} role="img" aria-label={label}>
         {cells.map((cell) => (
           <span key={cell.day} className={`${styles.bar} ${styles[cell.state]}`} data-state={cell.state} />

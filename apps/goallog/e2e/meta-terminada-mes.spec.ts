@@ -192,6 +192,8 @@ test("822 · a goal with neither rhythm nor amounts still asks to plan on /meses
 });
 
 test("821 · the month card of an ended goal keeps «llevas N %» and nothing after it", async ({ page, db, personId }) => {
+  // The card is this month's: on its first two days a goal ended yesterday had its last day in the month before.
+  test.skip(plusDays(endedOn, -1).slice(0, 7) !== today.slice(0, 7), "an ended goal has no day in this month yet");
   const goalId = await seedGoal(db, personId, {
     name: `Terminada ${Date.now()}`,
     horizon: endedOn,

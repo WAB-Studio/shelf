@@ -294,8 +294,8 @@ export function movedExample(): string {
   const mm = first.slice(5);
   return messages.template.example
     .replace("2026-10-01 a 2026-12-31", `${first}-01 a ${first}-28`)
-    .replaceAll("2026-10", first)
-    .replaceAll("2026-11", second)
+    // One pass: chained, the month just written as `first` would be rewritten again whenever it is 2026-11.
+    .replace(/2026-1[01]/g, (month) => (month === "2026-10" ? first : second))
     .replace("2028-10-01", `${year + 2}-${mm}-01`)
     .replace("2027-10-01", `${year + 1}-${mm}-01`)
     .replace("2027-03-01", `${year + 1}-${mm}-01`);

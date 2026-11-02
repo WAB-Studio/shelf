@@ -17,6 +17,8 @@ const scope = readScope();
 // The category is named in the text, so the interpreter matches it by name and
 // the amount is what is left; 45.910 pesos is 4.591.000 cents.
 const AMOUNT_PESOS = "45910";
+// The field groups thousands as they are written into it.
+const AMOUNT_SHOWN = "45.910";
 const AMOUNT_CENTS = 4591000;
 
 test.beforeEach(async () => {
@@ -56,7 +58,7 @@ test("reads the amount and the category out of one line and records the movement
   // A split row names itself by its position, so the two answer to two names.
   await expect(
     sheet.getByRole("textbox", { name: transactions.amountLabel, exact: true }),
-  ).toHaveValue(AMOUNT_PESOS);
+  ).toHaveValue(AMOUNT_SHOWN);
   await expect(
     sheet.getByRole("button", { name: scope.categoryName, exact: true, pressed: true }),
   ).toBeVisible();
@@ -117,7 +119,7 @@ test("«25 mil» proposes 25000 pesos and saving writes 2500000 cents", async ({
     .fill(`${scope.categoryName} 25 mil`);
   await expect(
     sheet.getByRole("textbox", { name: transactions.amountLabel, exact: true }),
-  ).toHaveValue("25000");
+  ).toHaveValue("25.000");
 
   await sheet.getByRole("combobox", { name: transactions.accountLabel, exact: true }).click();
   await page.getByRole("option", { name: scope.accountName, exact: true }).click();
@@ -139,7 +141,7 @@ test("«25 mil» with Monto retyped by hand saves the person's figure, not one r
     .getByRole("textbox", { name: transactions.quickTitle, exact: true })
     .fill(`${scope.categoryName} 25 mil`);
   const amount = sheet.getByRole("textbox", { name: transactions.amountLabel, exact: true });
-  await expect(amount).toHaveValue("25000");
+  await expect(amount).toHaveValue("25.000");
   await amount.fill("26000");
 
   await sheet.getByRole("combobox", { name: transactions.accountLabel, exact: true }).click();
@@ -191,7 +193,7 @@ test("typing «1.500 mil» key by key takes back the 1500 the prefix proposed", 
   const amount = sheet.getByRole("textbox", { name: transactions.amountLabel, exact: true });
 
   await quick.pressSequentially(`${scope.categoryName} 1.500`);
-  await expect(amount).toHaveValue("1500");
+  await expect(amount).toHaveValue("1.500");
   await quick.pressSequentially(" mil");
   await expect(amount).toHaveValue("");
 
@@ -217,7 +219,7 @@ test("typing «25 m» then «il» key by key asks at «25 m», then leaves 25000
   await quick.pressSequentially(`${scope.categoryName} 25 m`);
   await expect(amount).toHaveValue("");
   await quick.pressSequentially("il");
-  await expect(amount).toHaveValue("25000");
+  await expect(amount).toHaveValue("25.000");
 
   await sheet.getByRole("combobox", { name: transactions.accountLabel, exact: true }).click();
   await page.getByRole("option", { name: scope.accountName, exact: true }).click();
@@ -242,7 +244,7 @@ test("an amount typed by hand survives further text that proposes none", async (
   // The parser writes 1500, the person replaces it, and the reading that then
   // proposes nothing takes back only what the parser wrote.
   await quick.pressSequentially(`${scope.categoryName} 1.500`);
-  await expect(amount).toHaveValue("1500");
+  await expect(amount).toHaveValue("1.500");
   await amount.fill("9000");
   // Back in the text, the caret starts at the front; the «m» goes at the end.
   await quick.press("End");
@@ -333,7 +335,7 @@ test("picking «$ 3.000.000» fills the amount and saving stores 3.000.000 pesos
 
   await expect(group.getByRole("radio", { name: "$ 3.000.000", exact: true })).toBeChecked();
   await expect(group.getByRole("radio", { name: "$ 3", exact: true })).not.toBeChecked();
-  await expect(amount).toHaveValue("3000000");
+  await expect(amount).toHaveValue("3.000.000");
   await expect(sheet.getByText(transactions.quickInterpreted, { exact: true })).toBeVisible();
   await expect(sheet.getByText(ASK_HINT, { exact: true })).toBeHidden();
   await expect(save).toBeEnabled();
@@ -351,7 +353,7 @@ test("«1,15 m» offers no bare figure, so its first choice «$ 1.150» is still
   await quick.pressSequentially(`${scope.categoryName} 1,15 m`);
   const group = sheet.getByRole("radiogroup");
   await group.getByRole("radio", { name: "$ 1.150", exact: true }).check();
-  await expect(amount).toHaveValue("1150");
+  await expect(amount).toHaveValue("1.150");
 
   await pickAccount(page, sheet);
   await save.click();
@@ -408,18 +410,18 @@ test("the question goes away when the text no longer has an ambiguous «m»", as
   await quick.fill(`${scope.categoryName} 3 mil arriendo`);
   await expect(group).toBeHidden();
   await expect(sheet.getByRole("radio")).toHaveCount(0);
-  await expect(amount).toHaveValue("3000");
+  await expect(amount).toHaveValue("3.000");
   await expect(sheet.getByText(ASK_HINT, { exact: true })).toBeHidden();
 });
 
 test("«5M» and «2 M» at the end never ask, ", async ({ page }) => {
   const { sheet, quick, amount } = await openSheet(page);
   await quick.pressSequentially(`${scope.categoryName} 5M arriendo`);
-  await expect(amount).toHaveValue("5000000");
+  await expect(amount).toHaveValue("5.000.000");
   await expect(sheet.getByRole("radiogroup")).toHaveCount(0);
 
   await quick.fill(`${scope.categoryName} 2 M`);
-  await expect(amount).toHaveValue("2000000");
+  await expect(amount).toHaveValue("2.000.000");
   await expect(sheet.getByRole("radiogroup")).toHaveCount(0);
 
 });
@@ -427,7 +429,7 @@ test("«5M» and «2 M» at the end never ask, ", async ({ page }) => {
 test("«un millón» proposes 1.000.000 and saving stores it", async ({ page }) => {
   const { sheet, quick, amount, save } = await openSheet(page);
   await quick.pressSequentially(`${scope.categoryName} un millón`);
-  await expect(amount).toHaveValue("1000000");
+  await expect(amount).toHaveValue("1.000.000");
   await expect(sheet.getByRole("radiogroup")).toHaveCount(0);
   await expect(save).toBeEnabled();
 
@@ -528,7 +530,7 @@ test("changing the «M» a pick answered drops the pick and clears Monto; a type
   await quick.pressSequentially(`${scope.categoryName} 1,5 M arriendo`);
   const first = sheet.getByRole("radiogroup", { name: "¿Cuánto es «1,5 M»?", exact: true });
   await first.getByRole("radio", { name: "$ 1.500.000", exact: true }).check();
-  await expect(amount).toHaveValue("1500000");
+  await expect(amount).toHaveValue("1.500.000");
   await pickAccount(page, sheet);
 
   await quick.fill(`${scope.categoryName} 2 M arriendo`);
@@ -589,7 +591,7 @@ test("picking «$ 25.000» fills Monto 25.000 and saving books 2.500.000 cents (
 }) => {
   const { sheet, amount, save, group } = await expectLowerMAsk(page, "25 m", "25 m", "25");
   await group.getByRole("radio", { name: "$ 25.000", exact: true }).check();
-  await expect(amount).toHaveValue("25000");
+  await expect(amount).toHaveValue("25.000");
   await expect(save).toBeEnabled();
   await save.click();
   await expect(sheet).toBeHidden();
@@ -606,7 +608,7 @@ test("«3 M arriendo» keeps its two choices (M75)", async ({ page }) => {
 test("«25 mil» interprets 25.000 with no question (M75)", async ({ page }) => {
   const { sheet, quick, amount } = await openSheet(page);
   await quick.pressSequentially(`${scope.categoryName} 25 mil`);
-  await expect(amount).toHaveValue("25000");
+  await expect(amount).toHaveValue("25.000");
   await expect(sheet.getByRole("radiogroup")).toHaveCount(0);
   await expect(sheet.getByText(transactions.quickInterpreted, { exact: true })).toBeVisible();
 });

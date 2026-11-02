@@ -32,6 +32,7 @@ This file is the core every agent loads. Read the file the index names before th
 
 - `docs/agentes/lanes.md`: opening, working in and dropping a lane; `HARNESS_LANE`; the harness.
 - `docs/agentes/verificacion.md`: suites, judges, CI, what a session spends.
+- `docs/agentes/nube.md`: working from a cloud session (claude.ai/code): environment, hosts, variables, PRs.
 - `docs/agentes/canvas.md`: the canvases, when the user asks for a drawing.
 - `docs/agentes/lecciones-agenda-amiga.md`: the user's design critiques, as rules. Read it before a critique or a restyle.
 - `docs/agentes/wordbook.md`: WordBook's `/cuenta`, auth, keys and census.
@@ -92,6 +93,7 @@ This file is the core every agent loads. Read the file the index names before th
 
 - Enforced by hooks in `.claude/settings.json`: no `git stash`, commits as `wilson <cxrkeybwp2004@gmail.com>`, no Claude
   trailer of any kind, PRs to `integracion`, no `pkill -f`, no `gh pr merge` chained with a delete, no push to `main`.
+- In a cloud session use `scripts/gh-rest.sh` for PRs; `gh pr` fails there.
 - Do git work without asking: commit, push, open a PR, merge into `integracion`, delete a branch; report it. Ride a docs
   change along with the work that produced it.
 - Ask before taking `integracion` to `main`. That merge is the deploy: once per slice, at most once a day.

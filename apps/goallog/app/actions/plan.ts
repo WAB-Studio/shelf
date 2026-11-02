@@ -210,11 +210,11 @@ async function fixHolderTasks(tx: Transaction, goalId: string): Promise<void> {
     }[];
   }>(sql`
     select g.created_at, g.horizon::text as horizon, g.rhythm,
-      (select coalesce(json_agg(jsonb_build_object('month', b.month, 'amount', b.amount)), '[]'::json)
+      (select coalesce(json_agg(jsonb_build_object('month', b.month, 'amount', b.amount) order by b.month), '[]'::json)
          from "goals"."month_budgets" b where b.goal_id = g.id) as budgets,
       (select coalesce(json_agg(to_jsonb(o) || jsonb_build_object(
                  'done_on', (select min(f.day) from "goals"."facts" f where f.one_off_id = o.id)
-               )), '[]'::json)
+               ) order by o.position, o.created_at, o.id), '[]'::json)
          from "goals"."one_offs" o where o.goal_id = g.id) as tasks
     from ${goals} g where g.id = ${goalId}
   `);

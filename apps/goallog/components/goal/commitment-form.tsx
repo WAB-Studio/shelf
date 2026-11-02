@@ -96,6 +96,7 @@ export function CommitmentForm({ goalId, goalName, hasMeasure, measureUnit, sour
   const [targetQuantity, setTargetQuantity] = useState("");
   const [unit, setUnit] = useState("");
   const [sourceKey, setSourceKey] = useState(sources[0]?.key ?? "");
+  const pickedSource = sources.find((source) => source.key === sourceKey);
   const [threshold, setThreshold] = useState("1");
 
   const weekdayShort = t.raw("day.cadence.weekdayShort") as string[];
@@ -383,17 +384,24 @@ export function CommitmentForm({ goalId, goalName, hasMeasure, measureUnit, sour
                 </Chip>
               ))}
             </ChipRow>
-            <Field
-              label={t("plan.commitmentForm.thresholdLabel")}
-              type="number"
-              inputMode="numeric"
-              min={1}
-              step={1}
-              value={threshold}
-              onChange={(event) => setThreshold(event.target.value)}
-              invalid={thresholdRefusal !== undefined}
-              hint={thresholdRefusal}
-            />
+            <FieldPair narrow={88}>
+              <Field
+                label={t("plan.commitmentForm.thresholdLabel")}
+                type="number"
+                inputMode="numeric"
+                min={1}
+                step={1}
+                value={threshold}
+                onChange={(event) => setThreshold(event.target.value)}
+                invalid={thresholdRefusal !== undefined}
+                hint={thresholdRefusal}
+              />
+              {pickedSource ? (
+                <Text as="span" variant="sentence" tone="muted" data-testid="threshold-unit">
+                  {evidenceUnitWords({ labelKey: pickedSource.labelKey, unit: pickedSource.unit }, Number(threshold) || 1, t)}
+                </Text>
+              ) : null}
+            </FieldPair>
           </>
         ) : null}
       </Section>

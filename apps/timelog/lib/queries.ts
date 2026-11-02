@@ -68,6 +68,25 @@ export async function sitesBetween(from: string, to: string): Promise<SiteTime[]
   return [...rows];
 }
 
+// The days of the range any upload reached, in whichever table it landed: a day with only Claude Code sessions or sites
+// still arrived. One statement.
+export async function uploadedDays(from: string, to: string): Promise<string[]> {
+  const rows = await withTimeDb((tx) =>
+    tx.execute<{ day: string }>(sql`
+      select distinct to_char(day, 'YYYY-MM-DD') as day
+        from (
+          select day from timelog.app_seconds where day between ${from}::date and ${to}::date
+          union all select day from timelog.site_seconds where day between ${from}::date and ${to}::date
+          union all select day from timelog.window_seconds where day between ${from}::date and ${to}::date
+          union all select day from timelog.page_seconds where day between ${from}::date and ${to}::date
+          union all select day from timelog.claude_code_seconds where day between ${from}::date and ${to}::date
+          union all select day from timelog.claude_sessions where day between ${from}::date and ${to}::date
+        ) reached
+       order by day`),
+  );
+  return rows.map((row) => row.day);
+}
+
 // Claude's time per day (RT-14): Claude Code, claude.ai in the browser and the desktop app (a process named
 // Claude), one statement. A day with none of the three is absent.
 export async function claudeBetween(from: string, to: string): Promise<ClaudeDay[]> {

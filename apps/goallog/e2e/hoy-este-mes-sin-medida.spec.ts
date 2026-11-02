@@ -120,11 +120,9 @@ test("at 1280 the side card of a goal with no month plan is titled by the goal's
   try {
     const page = await context.newPage();
     await page.goto("/");
-    const card = page
-      .getByText("esta semana", { exact: true })
-      .locator("xpath=ancestor::div[.//a][1]")
-      .filter({ hasText: name });
-    await expect(card.locator("[data-part='section-label']").first()).toHaveText(name);
+    // The week's figure stands at the end of the goal's head, which the goal's name titles.
+    const card = page.locator("[data-part='group-head']").filter({ hasText: name }).filter({ hasText: "esta semana" });
+    await expect(card.getByRole("heading", { level: 2 })).toHaveText(name);
     await expect(page.locator("[data-part='section-label']").filter({ hasText: /^kilómetros$/i })).toHaveCount(0);
   } finally {
     await context.close();
@@ -189,10 +187,7 @@ test("one of a counted unit or one task reads in the singular on Hoy: «1 kilóm
 
     await page.setViewportSize({ width: 1280, height: 800 });
     await page.goto("/");
-    const card = page
-      .getByText("esta semana", { exact: true })
-      .locator("xpath=ancestor::div[.//a][1]")
-      .filter({ hasText: running });
+    const card = page.locator("[data-part='group-head']").filter({ hasText: running }).filter({ hasText: "esta semana" });
     await expect(card).toContainText(/1\s*kilómetro(?!s)/);
     await expect(card).not.toContainText("kilómetros");
   } finally {

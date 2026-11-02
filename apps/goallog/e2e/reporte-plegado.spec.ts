@@ -86,7 +86,7 @@ test.describe("the report folds its weeks (RP-49)", () => {
         if (width === 1280) {
           await expect(main.locator("table thead").filter({ hasText: "planeado" }).first().locator("th")).toHaveText(["mes", "hecho", "planeado"]);
         }
-        await expect(main.getByText("por semana", { exact: true })).toBeVisible();
+        await expect(main.getByText("Por semana", { exact: true })).toBeVisible();
         await expect(main.getByText(/^Esta semana: .*\.$/)).toBeVisible();
 
         const status = main.getByText("en curso", { exact: true }).locator("visible=true").first();
@@ -141,7 +141,7 @@ test.describe("the report folds its weeks (RP-49)", () => {
 
       await page.emulateMedia({ media: "print" });
       await expect(page.getByText(/^sem \d+ · /).locator("visible=true")).toHaveCount(0);
-      await expect(page.getByText("por semana", { exact: true }).locator("visible=true")).toHaveCount(0);
+      await expect(page.getByText("Por semana", { exact: true }).locator("visible=true")).toHaveCount(0);
       await expect(page.locator("summary").locator("visible=true")).toHaveCount(0);
       const status = page.getByText("en curso", { exact: true }).locator("visible=true").first();
       const lines = await status.evaluate((node) => {
@@ -719,7 +719,7 @@ test("a goal of one week still reads «Esta semana» and holds its weeks table (
     const main = page.getByRole("main");
     await expect(main.getByRole("heading", { name: seeded.name, exact: true })).toBeVisible();
     await expect(main.getByText(/^Esta semana/).locator("visible=true")).toHaveCount(1);
-    await expect(main.getByText("por semana", { exact: true })).toBeVisible();
+    await expect(main.getByText("Por semana", { exact: true })).toBeVisible();
     await expect(main.getByText("Ver la semana", { exact: true })).toBeVisible();
   } finally {
     await context.close();

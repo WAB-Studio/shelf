@@ -31,9 +31,9 @@ import {
   EmptyState,
   Figure,
   Flex,
-  FundChip,
   Heading,
   Money,
+  PersonalMark,
   ScreenHeader,
   Separator,
   StatTiles,
@@ -84,6 +84,7 @@ type DialogTarget =
 // A row carrying its plan position, which is what the phone's cards read.
 type OverviewCard = DebtOverviewRow & {
   name: string;
+  personal: boolean;
   planPosition: PlanPosition | null;
 };
 
@@ -158,6 +159,7 @@ export function DebtsScreen({
       ...withTerms.map((row) => ({
         accountId: row.accountId,
         name: row.name,
+        personal: row.personal,
         currency: row.currency,
         owedCents: row.owedCents,
         creditCents: row.creditCents,
@@ -422,7 +424,6 @@ export function DebtsScreen({
         <Flex direction="column" gap="4">
           <ScreenHeader
             title={t("title")}
-            meta={hasGroup ? <FundChip label={tKey("fund.label")} /> : undefined}
             actions={addButton}
           />
 
@@ -611,6 +612,7 @@ function CardHead({
   icon: Icon,
   tint,
   name,
+  personal,
   meta,
   currency,
   owedCents,
@@ -620,6 +622,7 @@ function CardHead({
   icon: LucideIcon;
   tint: string;
   name: string;
+  personal: boolean;
   meta: string;
   currency: CurrencyCode;
   owedCents: number;
@@ -627,6 +630,7 @@ function CardHead({
   otherOwed: DebtPocket[];
 }) {
   const beside = owesBesideCredit(creditCents, otherOwed);
+  const tAccounts = useTranslations("accounts");
 
   return (
     <Flex direction="column" gap="2">
@@ -640,7 +644,10 @@ function CardHead({
           <Icon size={20} />
         </Disc>
         <Flex direction="column" flexGrow="1" minWidth="0">
-          <Text weight="bold">{name}</Text>
+          <Flex align="center" gap="2" minWidth="0">
+            <Text weight="bold">{name}</Text>
+            {personal && <PersonalMark label={tAccounts("ownerPersonal")} />}
+          </Flex>
           <Text size="1" color="gray">
             {meta}
           </Text>
@@ -753,6 +760,7 @@ function RevolvingCard({
           icon={CreditCard}
           tint="indigo"
           name={row.name}
+          personal={row.personal}
           meta={t("revolvingMeta", {
             // The effective monthly step the server derived off the annual rate,
             // read as a percentage here and nowhere divided, so the card and the
@@ -848,6 +856,7 @@ function InstallmentCard({
           icon={CalendarDays}
           tint="amber"
           name={row.name}
+          personal={row.personal}
           // A debt whose plan the server counted states its position; one that
           // carries no plan only states its kind (RF-81).
           meta={
@@ -917,6 +926,7 @@ function NoTermsCard({
   debt: {
     accountId: string;
     name: string;
+    personal: boolean;
     currency: CurrencyCode;
     owedCents: number;
     creditCents: number;
@@ -936,6 +946,7 @@ function NoTermsCard({
           icon={CircleAlert}
           tint="amber"
           name={debt.name}
+          personal={debt.personal}
           meta={t("noTermsMeta")}
           currency={debt.currency}
           owedCents={debt.owedCents}

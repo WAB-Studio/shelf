@@ -43,18 +43,19 @@ export function clampWeek(monday: string, firstDay: string | null, today: string
   return monday > last ? last : monday;
 }
 
-export type StripDay = { day: string; reachable: boolean; current: boolean };
+export type StripDay = { day: string; reachable: boolean; current: boolean; uploaded: boolean };
 
 // The strip of a day's week (Monday to Sunday): which days there is a screen for (the first upload to today), the
-// current one, and where ‹ › land: the same weekday a week away, held inside the span; null where there is no such week.
-export function dayStrip(day: string, firstDay: string | null, today: string): { monday: string; days: StripDay[]; prev: string | null; next: string | null } {
+// current one, which of them an upload reached (`uploaded` holds those days), and where ‹ › land: the same weekday a week
+// away, held inside the span; null where there is no such week.
+export function dayStrip(day: string, firstDay: string | null, today: string, uploaded: ReadonlySet<string>): { monday: string; days: StripDay[]; prev: string | null; next: string | null } {
   const monday = mondayOf(day);
   const first = firstDay ?? today;
   const prev = addDays(day, -7);
   const next = addDays(day, 7);
   return {
     monday,
-    days: daysOfWeek(monday).map((one) => ({ day: one, reachable: one >= first && one <= today, current: one === day })),
+    days: daysOfWeek(monday).map((one) => ({ day: one, reachable: one >= first && one <= today, current: one === day, uploaded: uploaded.has(one) })),
     prev: monday > mondayOf(first) ? (prev < first ? first : prev) : null,
     next: monday < mondayOf(today) ? (next > today ? today : next) : null,
   };

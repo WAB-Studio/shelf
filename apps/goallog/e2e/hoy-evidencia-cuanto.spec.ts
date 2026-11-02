@@ -108,7 +108,7 @@ for (const width of [390, 1440]) {
         await visit(page, "/");
         expect(await metaOf(page, seeded.name)).toBe(`${NOTED} · 1 búsqueda`);
         const row = rowOf(page, seeded.name);
-        await expect(row.locator("[data-state]")).toHaveAttribute("data-state", "empty");
+        await expect(row.locator("[data-part='mark'][data-state]")).toHaveAttribute("data-state", "empty");
         await expect(row, "named as the one that notes it, not as a met source").not.toContainText(`· ${SOURCE}`);
       } finally {
         await context.close();
@@ -128,7 +128,7 @@ for (const width of [390, 1440]) {
         await visit(page, "/");
         expect(await metaOf(page, seeded.name)).toBe(`${NOTED} · 3 búsquedas`);
         const row = rowOf(page, seeded.name);
-        await expect(row.locator("[data-state]")).toHaveAttribute("data-state", "empty");
+        await expect(row.locator("[data-part='mark'][data-state]")).toHaveAttribute("data-state", "empty");
         await expect(row, "named as the one that notes it, not as a met source").not.toContainText(`· ${SOURCE}`);
       } finally {
         await context.close();
@@ -148,7 +148,7 @@ for (const width of [390, 1440]) {
         await visit(page, "/");
         expect(await metaOf(page, seeded.name)).toBe(`3 búsquedas · ${SOURCE}`);
         const row = rowOf(page, seeded.name);
-        await expect(row.locator("[data-state]")).toHaveAttribute("data-state", "evidence");
+        await expect(row.locator("[data-part='mark'][data-state]")).toHaveAttribute("data-state", "evidence");
         await expect(page.getByRole("button", { name: new RegExp(seeded.name) }), "no control for the row").toHaveCount(0);
 
         // A real pointer press on the row's box: it opens nothing and writes nothing (RP-05).
@@ -157,7 +157,7 @@ for (const width of [390, 1440]) {
         await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
         await expect(page.getByRole("dialog")).toHaveCount(0);
         expect(page.url()).toBe(url);
-        await expect(row.locator("[data-state]")).toHaveAttribute("data-state", "evidence");
+        await expect(row.locator("[data-part='mark'][data-state]")).toHaveAttribute("data-state", "evidence");
         const [facts] = await db<{ count: number }[]>`
           select count(*)::int as count from goals.facts where commitment_id = ${seeded.commitmentId}
         `;

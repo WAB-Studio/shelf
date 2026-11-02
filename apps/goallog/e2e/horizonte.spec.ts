@@ -180,7 +180,8 @@ test("a new goal opened with 12 reads «12 semanas» and «semana 1 de 12» on S
     `;
     await page.goto("/semana");
     // Both faces are in the DOM; only the phone's label is drawn at 360.
-    await expect(page.getByText(`${name} · semana ${current} de ${total}`).locator("visible=true")).toHaveCount(1);
+    await expect(page.getByText(`Semana ${current} de ${total}`, { exact: true }).locator("visible=true")).toHaveCount(1);
+    await expect(page.getByText(name, { exact: true }).locator("visible=true")).toHaveCount(1);
   } finally {
     if (goalId) await db`delete from goals.goals where id = ${goalId} and user_id = ${personId}`;
   }

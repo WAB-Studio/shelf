@@ -2,11 +2,11 @@ import Link from "next/link";
 import { Fragment, type ReactNode } from "react";
 import { getTranslations } from "next-intl/server";
 
-import { Button, Face, Figure, Flex, Hero, Page, Panel, Progress, Section, SectionLabel, Split, Text, TextLink } from "@/components/ui";
+import { Button, Face, Figure, Flex, GroupHead, Page, Panel, Section, SectionLabel, Split, Tally, Text, TextLink, WeekStrip } from "@/components/ui";
 import type { Translator } from "@/i18n/translator";
 import { dayPhrase as dayPhraseOf, endedPhrase, type DayPhraseKey } from "@/lib/day/day-phrase";
 import { sentenceCase } from "@/lib/day/day-words";
-import { metPhrase, phaseLine } from "@/lib/day/row-phrases";
+import { metPhrase, phaseLine, stripLabel } from "@/lib/day/row-phrases";
 import { tallyDay, tallyDays } from "@/lib/day/tally";
 import { phaseOn } from "@/lib/day/derive";
 import type { DaySlot } from "@/lib/day/types";
@@ -21,6 +21,9 @@ import { EmptyDay } from "./empty-day";
 import { DoneOneOffRow } from "./done-one-off-row";
 import { EvidenceNote } from "./evidence-note";
 import type { SourceKey } from "@/i18n/translator";
+import { partialPair } from "@/lib/day/row-phrases";
+import { formatTime, isTimeUnit } from "@/lib/units/time";
+import { timeWordsOf } from "@/lib/units/time-words";
 import { screenPlanned } from "@/lib/plan/screen-planned";
 import type { DayMonthLine } from "@/lib/queries/day";
 import { evidenceUnitWords } from "@/lib/evidence/unit-words";
@@ -104,9 +107,12 @@ function dayPhrase(key: DayPhraseKey, day: string, t: Translator, extra: Record<
  */
 export async function DayScreen({ day: requested }: { day?: string } = {}) {
   const t = await getTranslations();
-  // «3 búsquedas»: the number and the source's noun, each through next-intl.
-  const evidenceAmount = (evidence: { labelKey: SourceKey }, count: number) =>
-    t("day.row.evidenceAmount", { count, unit: evidenceUnitWords({ labelKey: evidence.labelKey, unit: "" }, count, t) });
+  const timeWords = timeWordsOf(t as unknown as Parameters<typeof timeWordsOf>[0]);
+  // «3 búsquedas»; a source of minutes reads as every other minute does, «1 h 28 min».
+  const evidenceAmount = (evidence: { labelKey: SourceKey; unit: string }, count: number) =>
+    isTimeUnit(evidence.unit)
+      ? formatTime(count, timeWords)
+      : t("day.row.evidenceAmount", { count, unit: evidenceUnitWords({ labelKey: evidence.labelKey, unit: "" }, count, t) });
   const today = todayInZone();
   const day = requested ?? today;
   const past = day < today;
@@ -126,6 +132,7 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
     phasePositions,
     factsByCommitment,
     periodDone,
+    strips,
   } = loaded;
 
   // A goal opened after the day drawn did not exist on it: it is not drawn
@@ -178,32 +185,25 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
         name: `${weekdayOf(tally.day, t)} ${Number(tally.day.slice(8, 10))}`,
         today: tally.day === today,
         figure: tally.total === 0 || tally.day > today ? undefined : `${tally.done}/${tally.total}`,
-        percent: tally.total === 0 ? 0 : Math.floor((tally.done * 100) / tally.total),
-        state:
-          tally.total === 0
-            ? ("none" as const)
-            : tally.day > today
-              ? ("empty" as const)
-              : tally.done >= tally.total
-                ? ("declared" as const)
-                : tally.done > 0
-                  ? ("share" as const)
-                  : ("empty" as const),
+        percent: tally.total === 0 || tally.day > today ? 0 : Math.floor((tally.done * 100) / tally.total),
+        none: tally.total === 0,
       }))
     : undefined;
-  // Today's one navy block: how many of what the day asks are done, and the bar of it.
-  const hero =
-    past || lastEnded || counted.total === 0 ? null : (
-      <Hero
-        label={t("day.hero.label")}
-        figure={t("day.hero.figure", { done: counted.done, total: counted.total })}
-        caption={counted.partial > 0 ? t("day.hero.captionPartial", { partial: counted.partial }) : t("day.hero.caption")}
-        highlight
-        days={weekDays}
-      >
-        <Progress percent={Math.floor((counted.done * 100) / counted.total)} />
-      </Hero>
-    );
+  const showProgress = !past && !lastEnded && counted.total > 0;
+  // The day's count beside its date, and the week as seven bars under it.
+  const progress = showProgress ? (
+    <Tally
+      done={counted.done}
+      rest={t("day.progress.of", { total: counted.total })}
+      caption={counted.partial > 0 ? t("day.progress.captionPartial", { partial: counted.partial }) : t("day.progress.caption")}
+      label={
+        counted.partial > 0
+          ? t("day.progress.labelPartial", { done: counted.done, total: counted.total, partial: counted.partial })
+          : t("day.progress.label", { done: counted.done, total: counted.total })
+      }
+    />
+  ) : undefined;
+  const weekStrip = showProgress && weekDays ? <WeekStrip label={t("day.progress.week")} days={weekDays} /> : null;
   const slotByCommitmentId = new Map(view.slots.map((slot) => [slot.commitmentId, slot]));
 
   // Stable: within each kind, `loadDay`'s own creation order stands.
@@ -293,19 +293,24 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
     looseRows.length > 0 || looseMet.length > 0 ? (
       <Panel as="div">
         <Section label={t("day.habits.title")}>
-          <Flex direction="column">{commitmentRows(looseRows, looseMet, undefined)}</Flex>
+          <Flex direction="column" gap="2">{commitmentRows(looseRows, looseMet, undefined)}</Flex>
         </Section>
       </Panel>
     ) : null;
 
   // `naming` is the goal a row of a large or a small goal names; the
   // general's own rows and a loose goal's name nothing.
-  function itemBody(item: SectionItem, naming: string | undefined) {
-    const { goal, rows, met } = item;
-    const goalPhase = phaseOn(
-      phases.filter((phase) => phase.goalId === goal.id),
+  function phaseOf(goalId: string) {
+    return phaseOn(
+      phases.filter((phase) => phase.goalId === goalId),
       day,
     );
+  }
+
+  // `headed` is the group's root, whose phase its header already says.
+  function itemBody(item: SectionItem, naming: string | undefined, headed: boolean) {
+    const { goal, rows, met } = item;
+    const goalPhase = headed ? undefined : phaseOf(goal.id);
     return (
       <>
         {goalPhase ? (
@@ -316,6 +321,16 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
         {commitmentRows(rows, met, naming)}
       </>
     );
+  }
+
+  // The row's own last thirty days, named as the goal's page names them.
+  function stripOf(commitmentId: string) {
+    const own = strips[commitmentId];
+    if (!own) return undefined;
+    return {
+      cells: own.cells,
+      label: stripLabel((key, values) => t(key, values), own),
+    };
   }
 
   function commitmentRows(
@@ -353,12 +368,19 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
                       got:
                         slot.satisfiedBy === "evidence"
                           ? evidenceAmount(commitment.evidence, slot.quantity ?? 0)
-                          : null,
+                          : slot.partial
+                            ? t("day.row.partialAmount", partialPair(
+                                evidenceAmount(commitment.evidence, slot.quantity ?? 0),
+                                evidenceAmount(commitment.evidence, commitment.evidence.threshold),
+                                isTimeUnit(commitment.evidence.unit) ? "minutos" : null,
+                              ))
+                            : null,
                       source: evidence === "unreadable" ? null : t(commitment.evidence.labelKey),
                     }
                   : undefined
               }
               quiet={evidence === "unreadable" && Boolean(commitment.evidence)}
+              strip={stripOf(commitment.id)}
               target={commitment.target}
               unit={commitment.unit}
               cadence={commitment.cadence}
@@ -387,6 +409,7 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
               kind={commitment.kind}
               markState="declared"
               quiet
+              strip={stripOf(commitment.id)}
               target={commitment.target}
               unit={commitment.unit}
               cadence={commitment.cadence}
@@ -426,6 +449,10 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
   );
 
   // One card per open goal that has a measure; the rest get one only for «este mes».
+  // With several goals the month's card names its goal; with one the header above already does.
+  const monthTitle = (goal: (typeof goals)[number]) =>
+    monthGoals.length > 1 ? t("day.monthLine.titleNamed", { goal: goal.name }) : t("day.monthLine.title");
+  const rootIds = new Set(groupBlocks.map((block) => block.rootId));
   const figures = goals.filter(
     (goal) => goal.measureName !== null && weekMeasure[goal.id] !== undefined && !embedded.has(goal.id),
   );
@@ -450,7 +477,7 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
         {line === undefined || planned === null ? (
           // No amount planned: the reached figure when the goal measures,
           // then its tasks done of total (a measureless goal reads only those).
-          <Flex align="baseline" gap="2" wrap="wrap">
+          <Flex align="baseline" gap="1" wrap="wrap">
             {line !== undefined ? (
               <>
                 <Figure value={line.reached} unit={goal.measureUnit ?? undefined} variant="meta" />
@@ -476,7 +503,7 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
             {t("day.monthLine.paceUnder", { threshold: 60 })}
           </Text>
         ) : (
-          <Flex align="baseline" gap="2" wrap="wrap">
+          <Flex align="baseline" gap="1" wrap="wrap">
             <Figure value={line.reached} unit={goal.measureUnit ?? undefined} variant="meta" bare />
             <Text variant="sentence">
               {t("day.monthLine.of")} <Figure value={planned} unit={goal.measureUnit ?? undefined} variant="meta" />
@@ -578,14 +605,33 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
           past && asked > 0
             ? t("day.past.asked", { goal: root?.name ?? "", count: (t.raw("day.past.askedWords") as string[])[asked] ?? asked })
             : (root?.name ?? "");
+        const rootPhase = items[0].goal.id === rootId ? phaseOf(rootId) : undefined;
+        const position = rootPhase ? phasePositions[rootPhase.id] : undefined;
+        const weekly = root && figures.some((goal) => goal.id === root.id) ? weekMeasure[root.id] : undefined;
         const block = (
           <Panel as="div" key={rootId}>
-            <Section label={label}>
-              <Flex direction="column">
+            <Flex direction="column" gap="3">
+              <GroupHead
+                name={label}
+                tag={position && position.total > 1 ? t("day.phase.tag", position) : undefined}
+                phase={rootPhase?.name}
+                trailing={
+                  root && weekly !== undefined ? (
+                    <Face on="desktop">
+                      <Flex direction="column" align="end">
+                        <Figure value={weekly} unit={root.measureUnit ?? undefined} />
+                        <Text variant="sentence">{t("day.weekFigure.caption")}</Text>
+                        <TextLink href={`/metas/${root.id}/revision`}>{t("goal.detail.reviewLink")}</TextLink>
+                      </Flex>
+                    </Face>
+                  ) : undefined
+                }
+              />
+              <Flex direction="column" gap="2">
                 {tree && root && !past ? embeddedMonth(root, false) : null}
                 {items.map((item) => (
                   <Fragment key={item.goal.id}>
-                    {itemBody(item, tree && item.goal.id !== rootId ? item.goal.name : undefined)}
+                    {itemBody(item, tree && item.goal.id !== rootId ? item.goal.name : undefined, item.goal.id === rootId && rootPhase !== undefined)}
                     {carriedFirst.filter((oneOff) => oneOff.goalId === item.goal.id).map(oneOffRow)}
                     {tree && !past && item.goal.id !== rootId ? embeddedMonth(item.goal, true) : null}
                   </Fragment>
@@ -596,7 +642,7 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
                   </Face>
                 )}
               </Flex>
-            </Section>
+            </Flex>
           </Panel>
         );
         // A group that asks nothing today has no block on the phone; its
@@ -634,34 +680,65 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
     ) : null;
   // A past day: the goal-less tasks it owed, with no field and no link to the
   // ones that wait, then what was done on it. Month tasks stay on Hoy.
+  // Two cards in one column: the past day's even `Split` sets no gap between them, so the column does (16px).
   const pastTasks = (
-    <>
+    <Flex direction="column" gap="4">
       {looseTasks.length > 0 ? (
         <Panel as="div">
           <Section label={t("day.oneOffs.title")}>
-            <Flex direction="column">{looseTasks.map(oneOffRow)}</Flex>
+            <Flex direction="column" gap="2">{looseTasks.map(oneOffRow)}</Flex>
           </Section>
         </Panel>
       ) : null}
       {doneBlock}
-    </>
+    </Flex>
+  );
+  // The goal-less tasks close the list as a plain line, no card around them.
+  const looseBlock = (
+    <Flex direction="column" gap="1">
+      <Flex justify="between" align="center" gap="2">
+        <SectionLabel>{t("day.oneOffs.title")}</SectionLabel>
+        {waiting > 0 ? (
+          <TextLink href="/sueltas">{t("day.oneOffs.daylessLink", { count: waiting })}</TextLink>
+        ) : null}
+      </Flex>
+      <Flex direction="column" gap="2">
+        {looseTasks.map(oneOffRow)}
+        <Face on="desktop">
+          <NewOneOff daylessCount={daylessCount} />
+        </Face>
+        <Face on="phone">
+          <NewOneOff
+            daylessCount={daylessCount}
+            chooseGoal={groupBlocks.flatMap(({ rootId, items }) => {
+              const root = items[0].goal.id === rootId ? items[0].goal : openGoals.find((goal) => goal.id === rootId);
+              return root ? [{ id: root.id, name: root.name }] : [];
+            })}
+          />
+        </Face>
+      </Flex>
+    </Flex>
   );
   const goalless = past ? pastTasks : (
     <>
-      {figures.map((goal) => (
+      {figures.filter((goal) => !rootIds.has(goal.id) || monthGoals.includes(goal)).map((goal) => (
         <Panel as="div" key={goal.id}>
           <Face on="desktop">
-            <Flex direction="column" gap="1">
-              <Section label={goal.name}>
-                <Flex align="baseline" gap="2">
-                  <Figure variant="big" value={weekMeasure[goal.id]} unit={goal.measureUnit ?? undefined} />
-                  <Text variant="sentence">{t("day.weekFigure.caption")}</Text>
-                </Flex>
-              </Section>
+            <Flex direction="column" gap="3">
+              {rootIds.has(goal.id) ? null : (
+                <Section label={goal.name}>
+                  <Flex align="baseline" gap="2">
+                    <Figure variant="big" value={weekMeasure[goal.id]} unit={goal.measureUnit ?? undefined} />
+                    <Text variant="sentence">{t("day.weekFigure.caption")}</Text>
+                  </Flex>
+                </Section>
+              )}
               {monthGoals.includes(goal) ? (
-                <Section label={t("day.monthLine.title")}>{monthLines(goal)}</Section>
+                <Section label={monthTitle(goal)}>{monthLines(goal)}</Section>
               ) : null}
-              <TextLink href={`/metas/${goal.id}/revision`}>{t("goal.detail.reviewLink")}</TextLink>
+              {rootIds.has(goal.id) ? null : (
+                <TextLink href={`/metas/${goal.id}/revision`}>{t("goal.detail.reviewLink")}</TextLink>
+              )}
             </Flex>
           </Face>
         </Panel>
@@ -696,31 +773,6 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
           </Panel>
         </Face>
       ) : null}
-      <Panel as="div">
-        <Section>
-          <Flex justify="between" align="center" gap="2">
-            <SectionLabel>{t("day.oneOffs.title")}</SectionLabel>
-            {waiting > 0 ? (
-              <TextLink href="/sueltas">{t("day.oneOffs.daylessLink", { count: waiting })}</TextLink>
-            ) : null}
-          </Flex>
-          <Flex direction="column">
-            {looseTasks.map(oneOffRow)}
-            <Face on="desktop">
-              <NewOneOff daylessCount={daylessCount} />
-            </Face>
-            <Face on="phone">
-              <NewOneOff
-                daylessCount={daylessCount}
-                chooseGoal={groupBlocks.flatMap(({ rootId, items }) => {
-                  const root = items[0].goal.id === rootId ? items[0].goal : openGoals.find((goal) => goal.id === rootId);
-                  return root ? [{ id: root.id, name: root.name }] : [];
-                })}
-              />
-            </Face>
-          </Flex>
-        </Section>
-      </Panel>
       {doneBlock}
     </>
   );
@@ -768,7 +820,8 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
       ) : (
         <DayHeader
           date={sentenceCase(dateLabel(day, t))}
-          title={t("day.title")}
+          title={sentenceCase(dateLabel(day, t))}
+          progress={progress}
           back={
             loaded.firstGoalDay !== null && shiftCivilDay(day, -1) >= loaded.firstGoalDay
               ? { href: `/dia/${shiftCivilDay(day, -1)}`, label: t("day.nav.yesterday") }
@@ -778,13 +831,13 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
           ended={endedLines}
         />
       )}
-      {hero}
+      {weekStrip}
 
       {evidence === "unreadable" ? (
         <EvidenceNote title={t("day.unreadableTitle")} body={t("day.unreadableBody")} />
       ) : null}
 
-      <Split main={<>{notices}{goalsMain}{habitsGroup}</>} after={goalless} even={past} />
+      <Split main={<>{notices}{goalsMain}{habitsGroup}{past ? null : looseBlock}</>} after={goalless} even={past} />
     </Page>
   );
 }

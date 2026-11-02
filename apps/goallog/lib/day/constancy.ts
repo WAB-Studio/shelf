@@ -10,7 +10,7 @@ export const STRIP_DAYS = 30;
 // A day a commitment was met, with what it counted: a declared quantity, a
 // source's minutes, or nothing for a tap. `partial` is a quantity written
 // short of its target: a day touched, never a day done.
-export type DoneDay = { day: string; quantity: number | null; by: "declared" | "evidence" | "partial" };
+export type DoneDay = { day: string; quantity: number | null; by: "declared" | "evidence" | "partial"; note?: string | null };
 
 // `neutral` is a day the cadence does not ask on: neither done nor open.
 export type StripCell = { day: string; state: "declared" | "evidence" | "partial" | "open" | "neutral" | "before" };
@@ -23,7 +23,7 @@ export function stripDays(today: string): string[] {
 // The days of a commitment's own: what a person declared, from the facts that name it. A tap is met by any
 // fact; a quantity only once the day's sum reaches its target, as `tally.ts` counts it.
 export function declaredDays(
-  facts: readonly { day: string; quantity: number | null }[],
+  facts: readonly { day: string; quantity: number | null; note?: string | null }[],
   satisfiedBy: SatisfiedBy,
 ): DoneDay[] {
   const byDay = new Map<string, number | null>();
@@ -31,25 +31,36 @@ export function declaredDays(
     const known = byDay.get(fact.day);
     byDay.set(fact.day, fact.quantity === null ? (known ?? null) : (known ?? 0) + fact.quantity);
   }
+  const notes = new Map(facts.filter((fact) => fact.note).map((fact) => [fact.day, fact.note as string]));
   return [...byDay].map(([day, quantity]) => ({
     day,
     quantity,
+    ...(notes.has(day) ? { note: notes.get(day) } : {}),
     by: satisfiedBy.kind === "quantity" && (quantity ?? 0) < satisfiedBy.target ? ("partial" as const) : ("declared" as const),
   }));
 }
 
-// The days an evidence source met the commitment's threshold, from the day the commitment was written to
-// `today`. A day below the threshold is a day the source saw something, not a day done; a day before the
-// commitment existed was never asked.
-export function evidenceDoneDays(
+// Every day an evidence source read something for a commitment, from the day it was written to `today`: «evidence»
+// at or above the threshold, «partial» under it. A day before the commitment existed was never asked.
+function evidenceReadDays(
   source: { sourceKey: string | null; threshold: number; createdOn: string },
   bySourceKey: Record<string, EvidenceDay[]> | null,
   today: string,
 ): DoneDay[] {
   if (source.sourceKey === null || bySourceKey === null) return [];
   return (bySourceKey[source.sourceKey] ?? [])
-    .filter((entry) => entry.quantity >= source.threshold && entry.day >= source.createdOn && entry.day <= today)
-    .map((entry) => ({ day: entry.day, quantity: entry.quantity, by: "evidence" as const }));
+    .filter((entry) => entry.quantity > 0 && entry.day >= source.createdOn && entry.day <= today)
+    .map((entry) => ({ day: entry.day, quantity: entry.quantity, by: entry.quantity >= source.threshold ? ("evidence" as const) : ("partial" as const) }));
+}
+
+// The days an evidence source met the commitment's threshold: days done. A day below it is a day the source
+// saw something, not a day done.
+export function evidenceDoneDays(
+  source: { sourceKey: string | null; threshold: number; createdOn: string },
+  bySourceKey: Record<string, EvidenceDay[]> | null,
+  today: string,
+): DoneDay[] {
+  return evidenceReadDays(source, bySourceKey, today).filter((entry) => entry.by === "evidence");
 }
 
 // What one commitment has done: declared days (the server's own rule for what it refuses), evidence days
@@ -62,18 +73,22 @@ export function commitmentDays(input: {
   // Distinct days with a fact, over all time.
   declaredDayCount: number;
   // The facts inside the strip's window.
-  recent: readonly { day: string; quantity: number | null }[];
+  recent: readonly { day: string; quantity: number | null; note?: string | null }[];
   evidence: Record<string, EvidenceDay[]> | null;
 }): { declaredDayCount: number; evidenceDayCount: number; done: DoneDay[] } {
   const { satisfiedBy, today } = input;
   const start = stripDays(today)[0];
-  const evidence = evidenceDoneDays(
+  const read = evidenceReadDays(
     { sourceKey: input.sourceKey, threshold: satisfiedBy.kind === "evidence" ? satisfiedBy.threshold : 1, createdOn: input.createdOn },
     satisfiedBy.kind === "evidence" ? input.evidence : null,
     today,
   );
+  const evidence = read.filter((entry) => entry.by === "evidence");
+  // A past day the source read under the threshold is listed with its minutes, in part; it counts as no day done.
+  // Today is still under way, so it is not listed in part.
+  const inPart = read.filter((entry) => entry.by === "partial" && entry.day >= start && entry.day < today);
   const byDay = new Map<string, DoneDay>();
-  for (const entry of [...evidence.filter((e) => e.day >= start), ...declaredDays(input.recent, satisfiedBy)]) {
+  for (const entry of [...inPart, ...evidence.filter((e) => e.day >= start), ...declaredDays(input.recent, satisfiedBy)]) {
     byDay.set(entry.day, entry);
   }
   return {

@@ -20,6 +20,8 @@ type DeriveDayInput = {
   facts: DeclaredFact[];
   evidence: EvidenceByCommitment;
   day: string;
+  // The day still under way is never «en parte»: its source may yet read more.
+  today?: string;
 };
 
 // The phase whose span holds `day`, or null when no phase covers it — before
@@ -65,6 +67,7 @@ function deriveSlot(
   facts: DeclaredFact[],
   evidence: EvidenceByCommitment,
   day: string,
+  today?: string,
 ): DaySlot {
   const declared = declaredOn(facts, plan.id, day);
 
@@ -102,7 +105,8 @@ function deriveSlot(
         satisfiedBy: satisfied ? "evidence" : null,
         labelKey: satisfied ? (rows[0]?.labelKey ?? null) : null,
         quantity,
-        partial: false,
+        // A past day its source read under the threshold is a day in part, with its minutes.
+        partial: !satisfied && quantity > 0 && (today === undefined || day < today),
       };
     }
   }
@@ -116,10 +120,11 @@ export function deriveDay({
   facts,
   evidence,
   day,
+  today,
 }: DeriveDayInput): DayView {
   const slots = commitments
     .filter((plan) => asksOn(plan, day, facts))
-    .map((plan) => deriveSlot(plan, facts, evidence, day));
+    .map((plan) => deriveSlot(plan, facts, evidence, day, today));
 
   return { day, slots, phase: phaseOn(phases, day) };
 }
@@ -130,6 +135,7 @@ type DeriveWeekInput = {
   facts: DeclaredFact[];
   evidence: EvidenceByCommitment;
   day: string;
+  today?: string;
 };
 
 // The seven `DayView`s of the Monday-to-Sunday week `day` sits in. A week
@@ -141,12 +147,13 @@ export function deriveWeek({
   facts,
   evidence,
   day,
+  today,
 }: DeriveWeekInput): WeekView {
   const days = weekOf(day);
   return {
     start: days[0],
     days: days.map((weekDay) =>
-      deriveDay({ commitments, phases, facts, evidence, day: weekDay }),
+      deriveDay({ commitments, phases, facts, evidence, day: weekDay, today }),
     ),
   };
 }

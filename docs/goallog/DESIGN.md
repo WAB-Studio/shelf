@@ -63,8 +63,8 @@ Decided by the user 2026-10-30 after the critic: **navy stays a brand block in t
 from «la misma página invertida»: the dark rail was `#07142A`, which vanished on the ground `#0F1317`; it is
 lifted to `#0E2347` (1.20:1 against the ground, a block and not a hairline) and the navy never inverts.
 
-- **One hero block per main screen**, navy on both faces, carrying the figure of the day or of the goal in
-  the title face (Hoy: «1 de 6» and its bar; a goal: its total). The rest of the page stays on the ground.
+- **One hero block on a goal's page and on Mes**, navy on both faces, carrying the goal's total or the month's figure in
+  the title face. Hoy has none. The rest of the page stays on the ground.
 - **Button hierarchy.** The pill is the primary action alone. `quiet` is a row with a chevron, for going
   somewhere; `tone="danger"` on a quiet or ghost button is a destructive act drawn in ink with a red mark,
   never a pill. A page holds one pill.
@@ -750,12 +750,12 @@ Say what is missing, so a gap nobody drew reads as a gap nobody needed.
   on the user's delegation. Over its quota the row reads «cumplida esta semana · 2 veces», never «2 de 1».
 - **The goal's measure line reads «mide en {unidad}»** (in time, «mide en horas y minutos»: see below), and the review's measure column is headed
   «total» beside the table's own unit. Decided 2026-09-29 by the coordinator, wording module 89.
-- **A row the person marked says «lo dijiste tú» after its hour; a `quantity` row not yet marked
+- **Replaced 2026-10-31 (see «Decisiones del 2026-10-31, after the critic of the deploy 5f8fd352»): a marked row no longer says its hour or «lo dijiste tú».** Original text: **A row the person marked says «lo dijiste tú» after its hour; a `quantity` row not yet marked
   says «pide el número» after its target.** «Anki · 10 min · 07:40 · lo dijiste tú», «Monólogo
   grabado · 3 min · pide el número». An evidence row keeps its source and never says either; a quiet
   row met in its period says neither. Drawn on `HoyEscritorio.dc.html` and `HoyHechas.dc.html`
   since the first boards; decided 2026-09-30 by the user, module 100.
-- **A quantity row logged under its target reads «1 de 3 min · 09:22 · lo dijiste tú»**, the mark still empty (superseded 2026-10-06: the mark is «done in part», `HoyEnParte`); «pide el número» is only for a row with nothing logged that day. «lo dijiste tú» stays on every row the person marked, whether or not the day has evidence. Decided 2026-09-30 by the user, after the critic of module 100.
+- **A quantity row logged under its target reads «1 de 3 min · 09:22 · lo dijiste tú»**, the mark still empty (superseded 2026-10-06: the mark is «done in part», `HoyEnParte`); «pide el número» is only for a row with nothing logged that day. «lo dijiste tú» stayed on every row the person marked (replaced 2026-10-31, as above). Decided 2026-09-30 by the user, after the critic of module 100.
 - **The plan by month is built as the 21 boards of «El plan» draw it.** Approved by the user 2026-09-30.
 - **A time is written «12 h 30 min»** and stored in whole minutes (RP-35). Decided 2026-09-30 by the user.
 - **A done task adds its estimate to the measure** (RP-36), knowing the same hours may count twice if
@@ -2033,3 +2033,39 @@ The critic of round 3 asked four things of the user («Creo que podemos mejorar 
 - **An evidence commitment with days done cannot change its frequency.** The days its source met the threshold count as days done, exactly like a declared fact (RP-127): the page says what fulfils it and the minutes of each day instead of opening the editor. The server act refuses the same: `editCadence` reads the source from the day the commitment was written and refuses on any day it met the threshold, as on a declared fact; an unreadable source refuses too.
 - **Semana is a grid.** A day asked is a 44px square tile holding one of the four marks (check inside «hecho» and «por evidencia»), day headers are 14px over two lines, the day's total is a figure with a bar. The table never scrolls sideways at 390, 820 or 1440.
 - **A control that cannot be pressed is no pill**: disabled draws the 10px radius.
+
+## Decisiones del 2026-10-31, after the critic of the deploy 5f8fd352
+
+The user accepted the critic's recommendations on 2026-10-31.
+
+- **A marked row says neither its hour nor «lo dijiste tú»**; it replaces the 2026-09-30 rule. A tap row is a toggle: the row carries `aria-pressed` and the mark's fill says done; a declared mark is the accent filled, an evidence mark the soft fill with its ring, a quantity under its target the half mark. An evidence row still names its source, and its minutes are a figure in mono like every other row's («1 h 28 min»).
+- **«Planear <mes>» stands in place of «sin monto este mes».** On Mes a goal with no amount for the month shows the act, one tap opens the amount sheet over /meses, and «Guardar» returns to /mes. From the 25th of the month being lived the card offers the next month too, «Planear noviembre», while the goal's span holds it.
+- **On the phone the goal's rare acts fold into «Más sobre la meta»**: «Renombrar», «Añadir meta grande», «Mover la meta», «Archivar esta meta», «Borrar la meta» and, when facts forbid the delete, its reason as plain text beside «Archivar», never outside the fold.
+- **On the phone a goal's commitments come first**, straight under the hero; the plan, the month and the phases follow.
+- **The Mes calendar stays.** Every day up to today is a tile that opens that day (today opens Hoy); a day still to come is plain. A legend under it says what a shade means («menos» to «más», and a line: each day is painted by what was done in it against the month's busiest day). The number on every tile reaches 4.5:1 in both faces: light ink on the first step, navy from the second.
+- **Sky is for any data on the navy block, wherever every surface passes contrast** (it widens «only the key figure» of 2026-10-31): the figure, the pies, the track, the strip's bars and the calendar. Sky is still never text on white and no surface off the navy carries it.
+- **The horizon is the first day after the goal; the goal's last day is the day before it, and that is the date every screen says.** The timeline's end, «hasta el …» and the export read the last day. A phase may still end on the horizon itself (RP-25); that edge is open with the user.
+- **An evidence commitment names its source and its threshold wherever it is drawn**, the export included: «Programar en VS Code · todos los días · TimeLog · VS Code, desde 30 min».
+- **A day its source read under the threshold is a day in part**, with its minutes («14 de 30 min»), on the past day, in the week and in «Últimos días». It counts as no day done.
+- **A destructive quiet act is ink with a small red mark before it**, never red text. /metas holds one pill, «Abrir otra meta»; «Añadir un hábito» and «Cerrar sesión» are quiet rows. An act that cannot be done (change the frequency, delete) is one line of text with its reason, in the retire sheet and on a habit's screen.
+- **A note written in the quantity sheet shows in its row**, under the name and its line, wherever the day's facts show: Hoy, a past day and the commitment's «Últimos días».
+- **The past day, the commitment's page and the export of one goal use the desktop width**: one block alone takes the row, and the commitment's page is the days beside its actions in two columns from 1024.
+- **The printed report keeps months only** (RP-125, 2026-10-14): paper does not print the weeks. The critic's request to print them is open with the user.
+- **«Abrir una meta» is the one verb** for creating a goal; the Semana legend says «sin hacer» for a past day left open.
+
+## Hoy, 2026-11-01, by the user
+
+- **The header is the date.** «Domingo 1 de noviembre» is the `h1`, in the title face, with the day's count beside it («2» in the accent, «de 5», «hechos hoy»; «· 1 en parte» while a row is partial). On the phone the count stands at the start of the controls line, «ayer» and the theme toggle at its end. A past day keeps its header.
+- **No navy block on Hoy.** The week is `WeekStrip`: seven slim columns, each a bar filled to the share of the day done, the day's «5/7» under it, today on the soft accent.
+- **A commitment is a tile** (`Row` with `tile`): 64px at least, a raised box with a hairline; done fills it in the soft accent with the accent mark. Under its name it carries its 30-day strip (`Strip size="row"`), the same bars as the goal's page.
+- **A goal is named once**, by `GroupHead`: its name in the title face, «Fase 1 de 3» as a tag, the phase's aim on one line that opens whole on a press, and from 768 the week's hours as one figure at its end. A goal with one phase has no tag.
+- **«Este mes» names its goal only when several cards stand beside the groups.**
+- **«Sueltas» is a plain line** at the end of the list: its label, its tasks and its field, no card.
+- **One accent on the ground.** Tangerine marks done, links and the tag; navy is the rail and the goal's and Mes's hero; sky only on navy.
+- **A task on Hoy is a tile too**: a goal-less one (`Row` with `tile`) and the month's next one (`Tile`), so its mark stands on a commitment's edge and holds 48 × 56 (RNP-07). Decided by the user 2026-11-01.
+- **After the critic of 2026-11-01 (no decision of the user's needed):** the row's 30-day strip is solid at 20px — done full, short half, still open a stub, not asked a dot, all but done in the quiet ink — since a ring that small read as «0» and «o»; a tile's hairline is half way to the quiet ink, so it reads as a box inside a card of the same colour; a tile with a note holds the note inside it; on the phone «2 de 5» never splits, its «hechos hoy» drops under it; Semana's table sets a goal's name at 18px in the title face.
+- **A figure inside a sentence stays mono**, on Hoy as on every screen («5 de 10 min», «20 de 40 km»). Decided by the user 2026-11-01, over the Archivo figure #751 had shipped.
+
+## Semana and Metas, 2026-11-01, by the user
+
+- **A goal is headed the way Hoy heads it.** Semana: the goal's name in the title face over its rows and «Semana 6 de 28» as a tag (`Tag`). Metas: each goal's card is headed by `GroupHead`, its name, «Faltan 22 semanas» as the tag and the phase's aim on one line that opens whole on a press.

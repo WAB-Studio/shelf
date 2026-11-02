@@ -11,7 +11,11 @@ import { todayInZone } from "@/lib/zone";
 // one and the goal runs three months past it.
 
 const NAMES = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
-const label = (month: string) => NAMES[Number(month.slice(5, 7)) - 1];
+// As the chips say it: the year only when the month falls in another one («enero de 2027» from November).
+const label = (month: string) => {
+  const name = NAMES[Number(month.slice(5, 7)) - 1];
+  return month.slice(0, 4) === todayInZone().slice(0, 4) ? name : `${name} de ${month.slice(0, 4)}`;
+};
 
 const today = todayInZone();
 const thisMonth = monthOf(today);

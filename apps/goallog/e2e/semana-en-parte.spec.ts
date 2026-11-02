@@ -150,7 +150,7 @@ test("the phone footer names the partial apart from «hechos» and draws the fou
       await expect(page.getByText(/hechos/i).filter({ visible: true })).toHaveCount(1);
       const legend = page.getByTestId("week-legend");
       await expect(legend).toBeVisible();
-      for (const word of ["hecho", "por evidencia", "en parte", "pendiente"]) {
+      for (const word of ["hecho", "por evidencia", "en parte", "sin hacer"]) {
         await expect(legend.getByText(word, { exact: true })).toBeVisible();
       }
       await expect(legend.locator('[data-state="partial"]')).toHaveCount(1);

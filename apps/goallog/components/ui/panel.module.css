@@ -64,6 +64,11 @@
     gap: 24px;
     align-items: start;
   }
+
+  /* One card alone takes the row: half of the content area stays empty otherwise. */
+  .grid > :only-child {
+    grid-column: 1 / -1;
+  }
 }
 
 /* `from="wide"`: from 768 to 1279px the cards stay the parent's own items. */

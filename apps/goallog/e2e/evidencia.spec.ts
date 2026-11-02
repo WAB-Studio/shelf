@@ -166,7 +166,7 @@ test("an evidence commitment names diccionario at creation, stays empty below it
     const row = page.locator("div:has([data-state])", { hasText: commitmentName }).last();
     const control = page.getByRole("button", { name: new RegExp(commitmentName) });
     await expect(row).toBeVisible();
-    await expect(row.locator("[data-state]")).toHaveAttribute("data-state", "empty");
+    await expect(row.locator("[data-part='mark'][data-state]")).toHaveAttribute("data-state", "empty");
     // Unmet, the row says who notes it (DESIGN «An evidence row reads automatic»), not a source that met it.
     expect(await metaOf(row, commitmentName)).toBe(`lo anota el ${sources.readingLookups} · ${threshold} búsquedas`);
     await expect(control).toHaveCount(0);
@@ -175,7 +175,7 @@ test("an evidence commitment names diccionario at creation, stays empty below it
     // One fewer than the threshold, stamped at 23:30 Bogotá: still empty.
     await insertLookup(db, personId, deviceId, 1, eveningInBogota(day));
     await page.reload();
-    await expect(row.locator("[data-state]")).toHaveAttribute("data-state", "empty");
+    await expect(row.locator("[data-part='mark'][data-state]")).toHaveAttribute("data-state", "empty");
     expect(await metaOf(row, commitmentName)).toBe(`lo anota el ${sources.readingLookups} · ${threshold} búsquedas`);
 
     // The threshold itself, stamped the same evening: the evidence mark
@@ -183,7 +183,7 @@ test("an evidence commitment names diccionario at creation, stays empty below it
     // disabled row, never a second one that appears once satisfied.
     await insertLookup(db, personId, deviceId, 2, eveningInBogota(day));
     await page.reload();
-    await expect(row.locator("[data-state]")).toHaveAttribute("data-state", "evidence");
+    await expect(row.locator("[data-part='mark'][data-state]")).toHaveAttribute("data-state", "evidence");
     expect(await metaOf(row, commitmentName)).toBe(`${threshold} búsquedas · ${sources.readingLookups}`);
     await expect(row).not.toContainText("lo dijiste tú");
     await expect(row).not.toContainText("pide el número");

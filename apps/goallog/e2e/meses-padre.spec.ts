@@ -21,6 +21,8 @@ const seg = (month: string) => month.slice(0, 7);
 
 const NAMES = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
 const label = (month: string) => NAMES[Number(month.slice(5, 7)) - 1];
+// As `monthName` says it: the year only when the month falls in another one («enero de 2027» from November).
+const named = (month: string) => (month.slice(0, 4) === today.slice(0, 4) ? label(month) : `${label(month)} de ${month.slice(0, 4)}`);
 
 type Db = postgres.Sql;
 type Unit = { measure: string; unit: string };
@@ -462,7 +464,7 @@ test("`/plan` of a holder lists the rhythm of its large goals, one row each, sma
 
     const two = page.getByRole("link").filter({ hasText: "Caso #2 · Nutria con IA" });
     await expect(two).toHaveCount(1);
-    expect(flat(await two.innerText())).toContain(`empieza en ${label(twoAhead)} · 30 h`);
+    expect(flat(await two.innerText())).toContain(`empieza en ${named(twoAhead)} · 30 h`);
 
     expect(text).not.toContain("búsqueda de referencias");
     expect(text).not.toContain("prototipo navegable");

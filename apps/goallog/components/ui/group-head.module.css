@@ -1,0 +1,74 @@
+.head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-block-end: 4px;
+}
+
+.top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  min-inline-size: 0;
+}
+
+.trailing {
+  flex: none;
+  text-align: end;
+}
+
+/* The phase line is a 44px target: one line, the chevron at its end. */
+.phase {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  inline-size: 100%;
+  min-block-size: 44px;
+  padding: 0;
+  background: none;
+  border: 0;
+  color: var(--pulsar-muted);
+  font: inherit;
+  font-size: var(--pulsar-text-small-size);
+  line-height: 1.5;
+  text-align: start;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.phase:focus-visible {
+  outline: 2px solid var(--pulsar-accent);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+.phaseText {
+  flex: 1 1 auto;
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.phaseOpen {
+  flex: 1 1 auto;
+  min-inline-size: 0;
+  overflow-wrap: break-word;
+}
+
+.chevron,
+.chevronOpen {
+  flex: none;
+}
+
+.chevronOpen {
+  transform: rotate(180deg);
+}

@@ -58,7 +58,7 @@ test("a 29 of 30 min row draws the half mark, its meta line and the count «hech
     const row = page.getByRole("button", { name: new RegExp(`^${speak}`) });
     await expect(row).toContainText(/29 de 30 min/);
 
-    const mark = row.locator("[data-state]");
+    const mark = row.locator("[data-part='mark'][data-state]");
     await expect(mark).toHaveAttribute("data-state", "partial");
     await expect(mark.locator("svg")).toHaveCount(0);
     const paint = await mark.evaluate((el) => {
@@ -73,11 +73,11 @@ test("a 29 of 30 min row draws the half mark, its meta line and the count «hech
     expect(paint.image).toContain("linear-gradient");
     expect(paint.image).toContain(paint.accent);
     expect(paint.ring).toContain(paint.accent);
-    await expect(page.getByRole("button", { name: new RegExp(`^${tapDone}`) }).locator("[data-state]")).toHaveAttribute(
+    await expect(page.getByRole("button", { name: new RegExp(`^${tapDone}`) }).locator("[data-part='mark'][data-state]")).toHaveAttribute(
       "data-state",
       "declared",
     );
-    await expect(page.getByRole("button", { name: new RegExp(`^${tapOpen}`) }).locator("[data-state]")).toHaveAttribute(
+    await expect(page.getByRole("button", { name: new RegExp(`^${tapOpen}`) }).locator("[data-part='mark'][data-state]")).toHaveAttribute(
       "data-state",
       "empty",
     );
@@ -93,7 +93,7 @@ test("a 29 of 30 min row draws the half mark, its meta line and the count «hech
     // Meeting the target is done: the mark fills and the count loses «en parte».
     await db`update goals.facts set quantity = 30 where id = ${fact.id}`;
     await page.reload();
-    await expect(row.locator("[data-state]")).toHaveAttribute("data-state", "declared");
+    await expect(row.locator("[data-part='mark'][data-state]")).toHaveAttribute("data-state", "declared");
     await expect(todayCount(page, "\\d+", "\\d+")).toBeVisible();
     await expect(page.getByText(/· \d+ en parte/)).toHaveCount(0);
   } finally {

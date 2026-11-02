@@ -144,7 +144,7 @@ test.describe("one reading lists every mistake (RP-72)", () => {
 
   test("row 6: a plan with no mistakes reaches the review", async ({ person, browser, baseURL }) => {
     await asPerson({ person, browser, baseURL }, async (page) => {
-      await paste(page, messages.template.example.replace("2027-10-01", HORIZON).replace("2026-10-01 a 2026-12-31", `${M1}-01 a ${M1}-28`).replaceAll("2026-10", M1).replaceAll("2026-11", M2));
+      await paste(page, messages.template.example.replace("2027-10-01", HORIZON).replace("2026-10-01 a 2026-12-31", `${M1}-01 a ${M1}-28`).replace(/2026-1[01]/g, (month) => (month === "2026-10" ? M1 : M2)));
       await expect(page).toHaveURL(/\/metas\/importar\/revisar$/);
     });
   });

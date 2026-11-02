@@ -28,7 +28,7 @@ export function SignOutButton() {
 
   return (
     <>
-      <Button type="button" variant="outline" block disabled={pending} onClick={signOut}>
+      <Button type="button" variant="quiet" block disabled={pending} onClick={signOut}>
         {pending ? t("signingOut") : t("signOut")}
       </Button>
       {failed ? <Notice>{t("signOutFailed")}</Notice> : null}

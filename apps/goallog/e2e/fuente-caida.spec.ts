@@ -91,7 +91,7 @@ test.describe("an evidence source that cannot be read (RNP-04)", () => {
 
       await expectNote(page, "Hoy");
       const row = page.locator("button", { hasText: seeded.tapName });
-      await expect(row.locator("[data-state]")).toHaveAttribute("data-state", "declared");
+      await expect(row.locator("[data-part='mark'][data-state]")).toHaveAttribute("data-state", "declared");
       await expect(page.getByText(FAILURE)).toHaveCount(0);
 
       // The unreadable source still lets the row say what it asks (RP-08), and
@@ -102,7 +102,7 @@ test.describe("an evidence source that cannot be read (RNP-04)", () => {
         const meta = (await evidence.innerText()).replace(seeded.evidenceName, "").replace(/\s+/g, " ").trim();
         expect(meta, `at ${width}`).toBe("sin leer la fuente · pide 3 búsquedas");
         expect(meta).not.toMatch(/diccionario|lectura|Reading/i);
-        await expect(evidence.locator("[data-state]")).not.toHaveAttribute("data-state", "evidence");
+        await expect(evidence.locator("[data-part='mark'][data-state]")).not.toHaveAttribute("data-state", "evidence");
       }
     } finally {
       await context.close();

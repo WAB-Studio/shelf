@@ -110,7 +110,7 @@ export function RetireSheet({ open, onOpenChange, commitmentId, name, factDayCou
   // The server refuses a delete by declared facts alone, and a cadence change by those and the source's days.
   const editable = factDayCount === 0 && goalId !== null;
   const cadenceOpen = editable && evidenceDayCount === 0;
-  // Facts name it: the cadence and the delete stay in view, disabled, with their reason. A loose habit says it on its own screen.
+  // Facts name it: the cadence and the delete are not offered, and one line says why. A loose habit says it on its own screen.
   const locked = factDayCount > 0 && goalId !== null;
   const evidenceLocked = editable && evidenceDayCount > 0;
   const [error, setError] = useState<MessageKey | null>(null);
@@ -166,10 +166,6 @@ export function RetireSheet({ open, onOpenChange, commitmentId, name, factDayCou
               {t("goal.commitments.changeCadence")}
             </Link>
           </Button>
-        ) : locked || evidenceLocked ? (
-          <Button block variant="outline" disabled aria-describedby="cadence-locked-reason">
-            {t("goal.commitments.changeCadence")}
-          </Button>
         ) : null}
         <Button block variant="outline" onClick={() => onOpenChange(false)} disabled={pending}>
           {t("plan.retireSheet.cancel")}
@@ -190,21 +186,14 @@ export function RetireSheet({ open, onOpenChange, commitmentId, name, factDayCou
         </Flex>
       ) : null}
       {evidenceLocked ? (
-        <Text as="p" id="cadence-locked-reason" variant="sentence" tone="muted">
+        <Text as="p" variant="sentence" tone="muted">
           {t("plan.retireSheet.evidenceLocked", { days: evidenceDayCount })}
         </Text>
       ) : null}
       {locked ? (
-        <>
-          <Flex justify="start">
-            <Button variant="ghost" disabled aria-describedby="cadence-locked-reason">
-              {t("goal.commitments.delete")}
-            </Button>
-          </Flex>
-          <Text as="p" id="cadence-locked-reason" variant="sentence" tone="muted">
-            {t("plan.errors.cadenceHasFacts")}
-          </Text>
-        </>
+        <Text as="p" variant="sentence" tone="muted">
+          {t("plan.errors.cadenceHasFacts")}
+        </Text>
       ) : null}
     </Sheet>
     {editable ? (

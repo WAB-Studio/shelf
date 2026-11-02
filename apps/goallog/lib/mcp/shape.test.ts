@@ -374,6 +374,7 @@ test("a day pairs each slot with its commitment, its unit and its amounts", () =
     phasePositions: {},
     factsByCommitment: {},
     periodDone: { [ID(12)]: 3 },
+    strips: {},
     monthTask: {},
     monthTaskCounts: {},
     planNotice: {},

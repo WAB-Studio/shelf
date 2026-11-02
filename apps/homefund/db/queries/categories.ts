@@ -29,7 +29,11 @@ export type CategoryNode = {
 
 // A node carries the scope it was read from, so a caller that asked for both
 // tells a personal category apart from the group's without a second lookup.
-export type ScopedCategoryNode = CategoryNode & { scope: "personal" | "group" };
+export type ScopedCategoryNode = CategoryNode & {
+  scope: "personal" | "group";
+  // Which seeded category this is, whatever it is called now.
+  seedKey: "salary" | null;
+};
 
 export type CreateCategoryArgs = {
   scope: CategoryScope;
@@ -127,6 +131,7 @@ export async function listScopedCategories(
         color: categories.color,
         parentId: categories.parentId,
         ownerUserId: categories.ownerUserId,
+        seedKey: categories.seedKey,
       })
       .from(categories)
       .where(
@@ -150,6 +155,7 @@ export async function listScopedCategories(
           kind: row.kind,
           color: row.color,
           scope: row.ownerUserId === null ? "group" : "personal",
+          seedKey: row.seedKey,
           children: [],
         });
       }

@@ -22,6 +22,11 @@ APPS=(
   "goallog  3200       yes         no                  PULSAR_BASE_URL"
 )
 
+if [[ ${CLAUDE_CODE_REMOTE:-} == true ]]; then
+  echo "worktree.sh: a cloud session is already its own lane (1); open another cloud session instead." >&2
+  exit 1
+fi
+
 APP_NAME=homefund
 ARGS=()
 while (($#)); do

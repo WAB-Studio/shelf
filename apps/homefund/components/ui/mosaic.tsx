@@ -5,8 +5,7 @@ import styles from "./mosaic.module.css";
 
 /**
  * A grid of tiles of different sizes (large, medium, wide, small), read as one
- * board instead of a column of equal rows. Three tracks from `md`; below it the
- * tiles stack. `ink` is the deep-violet tile its figure shows in lime on.
+ * board instead of a column of equal rows. One column on a phone, three tracks from `md`. `ink` is the deep-violet tile its figure shows in lime on.
  */
 export function Mosaic({ children }: { children: ReactNode }) {
   return <div className={styles.mosaic}>{children}</div>;

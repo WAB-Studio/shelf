@@ -22,14 +22,13 @@ import { MonthReviewLine } from "@/components/reports/month-review-line";
 import { QuickEntryPill } from "@/components/transactions/quick-entry-pill";
 import {
   Box,
-  Button,
+  ButtonLink,
   Card,
   CategoryTile,
   Columns,
   EmptyState,
   Flex,
   Heading,
-  Link,
   MovementRow,
   Page,
   PlainLink,
@@ -181,11 +180,9 @@ export default async function HomePage(props: PageProps<"/[locale]">) {
             description={td("emptyDescription")}
             action={
               <Flex direction="column" align="center" gap="3" mt="2">
-                <Button asChild size="3">
-                  <LocaleLink href="/settings/accounts">
-                    {td("createAccount")}
-                  </LocaleLink>
-                </Button>
+                <ButtonLink href="/settings/accounts" size="3">
+                  {td("createAccount")}
+                </ButtonLink>
                 {!group && (
                   <TextLink href="/onboarding" justify="center" px="2">
                     {td("createFund")}
@@ -242,9 +239,9 @@ export default async function HomePage(props: PageProps<"/[locale]">) {
           </Flex>
 
           {!group && (
-            <Link asChild size="2" weight="medium">
-              <LocaleLink href="/onboarding">{td("createFund")}</LocaleLink>
-            </Link>
+            <TextLink href="/onboarding" size="2" weight="medium">
+              {td("createFund")}
+            </TextLink>
           )}
         </Flex>
       </Page>

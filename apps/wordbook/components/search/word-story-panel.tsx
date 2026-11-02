@@ -96,7 +96,9 @@ export function WordStoryPanel({ headword }: { headword: string }) {
                   })}
           </Text>
           <Button asChild size="3" variant="soft">
-            <NextLink href="/repaso" prefetch={false}>{t("reviewNow")}</NextLink>
+            <NextLink href={`/repaso?palabra=${encodeURIComponent(headword)}`} prefetch={false}>
+              {t("reviewNow")}
+            </NextLink>
           </Button>
         </Flex>
       </Flex>

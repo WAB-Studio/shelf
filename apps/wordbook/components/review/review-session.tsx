@@ -10,7 +10,7 @@ import { cardBack, cardFront } from "@/lib/log/anki";
 import { contentUnit, isPhraseRow } from "@/lib/log/outcome";
 import { readWordStudy } from "@/lib/log/summary";
 import { readWordStory, type WordStory } from "@/lib/log/story";
-import { buildQueue, isReviewable, type ReviewQueue } from "@/lib/review/deck";
+import { buildQueue, buildQueueFor, isReviewable, type ReviewQueue } from "@/lib/review/deck";
 import { dueWhen, GRADES, intervals, intervalUnit, rate, staysInSession, type ReviewGrade } from "@/lib/review/schedule";
 import { answerSenses, pickSense } from "@/lib/review/sense";
 import { readCards, saveCard } from "@/lib/review/store";
@@ -38,6 +38,9 @@ import {
 
 type Item = ReviewQueue["items"][number];
 
+// The day's regular queue, kept aside while one entry is reviewed on demand.
+type Regular = { queue: ReviewQueue; unit: "entries" | "words" | "phrases" };
+
 type SessionState =
   | { kind: "loading" }
   | { kind: "failed" }
@@ -60,7 +63,34 @@ type SessionState =
       revealedAt: number | null;
       // The moment the screen last checked whether a requeued entry came due.
       clock: number;
+      // The word asked for alone with `?palabra=`, and the day's queue held back until it is answered.
+      focus: { key: string; word: string; regular: Regular } | null;
+      // A word asked for that has nothing to review yet: the day's queue stands in its place.
+      missing: string | null;
     };
+
+function readyState(
+  { queue, unit }: Regular,
+  now: number,
+  focus: { key: string; word: string; regular: Regular } | null,
+  missing: string | null,
+): SessionState {
+  return {
+    kind: "ready",
+    items: queue.items,
+    later: queue.later,
+    total: queue.items.length,
+    nextDue: queue.nextDue,
+    unit,
+    index: 0,
+    saving: false,
+    answered: [],
+    revealedAt: null,
+    clock: now,
+    focus,
+    missing,
+  };
+}
 
 // RL-68 and RL-78: one entry at a time — the word or phrase, then its answer on demand, then how well it
 // was recalled. An entry answered «Otra vez» is due again in a minute, so it joins the end of this
@@ -84,20 +114,17 @@ export function ReviewSession() {
     Promise.all([readWordStudy(), readCards()])
       .then(([{ rows }, cards]) => {
         if (!live) return;
-        const queue = buildQueue(rows, cards, Date.now());
-        setState({
-          kind: "ready",
-          items: queue.items,
-          later: queue.later,
-          total: queue.items.length,
-          nextDue: queue.nextDue,
-          unit: contentUnit(rows.filter(isReviewable)),
-          index: 0,
-          saving: false,
-          answered: [],
-          revealedAt: null,
-          clock: Date.now(),
-        });
+        // `/repaso?palabra=<key>` asks that entry alone, read here because the page itself stays static.
+        const only = new URLSearchParams(window.location.search).get("palabra");
+        const now = Date.now();
+        const regular: Regular = { queue: buildQueue(rows, cards, now), unit: contentUnit(rows.filter(isReviewable)) };
+        const single = only === null ? null : buildQueueFor(rows, cards, only, now);
+        if (single === null || single.items.length === 0) {
+          setState(readyState(regular, now, null, only));
+          return;
+        }
+        const { key, display: word } = single.items[0].row;
+        setState(readyState({ queue: single, unit: contentUnit([single.items[0].row]) }, now, { key, word, regular }, null));
       })
       .catch(() => {
         if (live) setState({ kind: "failed" });
@@ -183,7 +210,8 @@ export function ReviewSession() {
     setFailedSave(false);
     setState((prev) => (prev.kind === "ready" ? { ...prev, saving: true } : prev));
     try {
-      const next = rate(item.row.key, item.card, grade, now);
+      // A word asked for alone is not one of the day's new entries: it takes no slot of the daily cap.
+      const next = rate(item.row.key, item.card, grade, now, state.focus === null ? undefined : "");
       await saveCard(next);
       setState((prev) =>
         prev.kind === "ready"
@@ -212,12 +240,40 @@ export function ReviewSession() {
   const kind = state.unit;
   const item = items[state.index];
 
+  if (item === undefined && state.focus !== null) {
+    // The word asked for is answered: the day's queue is offered, never closed with «terminaste por hoy».
+    const { focus } = state;
+    // The entry just answered is no longer part of the day's queue.
+    const rest: Regular = {
+      ...focus.regular,
+      queue: { ...focus.regular.queue, items: focus.regular.queue.items.filter((entry) => entry.row.key !== focus.key) },
+    };
+    const due = rest.queue.items.length;
+    return (
+      <Card>
+        <Flex direction="column" gap="3" align="start">
+          <Text size="4">{t("reviewedWord", { word: focus.word })}</Text>
+          {due > 0 && <Text muted>{t("dueAfterWord", { count: due, kind: rest.unit })}</Text>}
+          {due > 0 && (
+            <Button size="3" onClick={() => setState(readyState(rest, Date.now(), null, null))}>
+              {t("reviewToday")}
+            </Button>
+          )}
+          <Link asChild>
+            <NextLink href="/registro">{t("backToRecord")}</NextLink>
+          </Link>
+        </Flex>
+      </Card>
+    );
+  }
+
   if (item === undefined) {
     // Every entry answered here is scheduled again, so it joins the ones already waiting.
     const later = state.later + answered.length;
     return (
       <Card>
         <Flex direction="column" gap="3" align="start">
+          {state.missing !== null && <Text muted>{t("wordMissing", { word: state.missing })}</Text>}
           <Text size="4">
             {answered.length === 0 ? t("nothingDue", { kind }) : t("finished", { count: answered.length, kind })}
           </Text>
@@ -274,6 +330,7 @@ export function ReviewSession() {
 
   return (
     <Flex direction="column" gap="4">
+      {state.missing !== null && <Text muted>{t("wordMissing", { word: state.missing })}</Text>}
       <Flex direction="column" gap="2">
         <MetaLabel>{t("progress", { current: repeat ? Math.min(answered.length, total) : state.index + 1, total })}</MetaLabel>
         <Progress aria-label={t("progressLabel")} value={Math.round((done / total) * 100)} />

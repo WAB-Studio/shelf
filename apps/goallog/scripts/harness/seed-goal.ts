@@ -114,7 +114,7 @@ async function main(): Promise<void> {
 
   const goal = await createGoal({
     name: "Inglés B1/B2 → B2+ laboral",
-    horizon: phase3End,
+    horizon: addDays(phase3End, 1),
   });
   if (!goal.ok) throw new Error(`createGoal: ${goal.error}`);
   console.log(`goal ${goal.goalId}`);

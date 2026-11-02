@@ -4,10 +4,10 @@ import { getTranslations } from "next-intl/server";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
-import { Badge, Box, Button, Disc, Flex, Heading, Text } from "@/components/ui";
+import { Badge, Box, ButtonLink, Disc, Flex, Heading, Text } from "@/components/ui";
 import { getUserGroup } from "@/db/queries/groups";
 import { requireUser } from "@/db/session";
-import { Link as LocaleLink, redirect } from "@/i18n/navigation";
+import { redirect } from "@/i18n/navigation";
 import { routing } from "@/i18n/routing";
 
 export async function generateMetadata(
@@ -77,9 +77,9 @@ export default async function WelcomePage(
           {group.name}
         </Badge>
 
-        <Button asChild size={{ initial: "3", md: "4" }}>
-          <LocaleLink href="/">{t("enter")}</LocaleLink>
-        </Button>
+        <ButtonLink href="/" size={{ initial: "3", md: "4" }}>
+          {t("enter")}
+        </ButtonLink>
       </main>
     </Flex>
   );

@@ -148,7 +148,7 @@ async function queryGoalsRow(
          from "goals"."commitments" c
          left join "goals"."evidence_sources" s on s.id = c.source_id
          where c.retired_at is null or (c.retired_at at time zone ${TIME_ZONE})::date >= ${weekStart}::date) as commitments,
-      (select coalesce(json_agg(to_jsonb(p)), '[]'::json)
+      (select coalesce(json_agg(to_jsonb(p) order by p.starts_on, p.created_at, p.id), '[]'::json)
          from "goals"."phases" p
          where p.starts_on <= ${weekEnd}::date
            and p.ends_on >= ${weekStart}::date) as phases,
@@ -156,7 +156,7 @@ async function queryGoalsRow(
                  'commitment_unit', c.unit,
                  'one_off_name', o.name,
                  'one_off_parent_name', p.name
-               )), '[]'::json)
+               ) order by f.day, f.written_at, f.id), '[]'::json)
          from "goals"."facts" f
          left join "goals"."commitments" c on c.id = f.commitment_id
          left join "goals"."one_offs" o on o.id = f.one_off_id
@@ -330,8 +330,8 @@ export async function loadWeek(anyDayInIt: string, today: string = todayInZone()
   // What asks comes from the month's facts; what is drawn comes from the
   // week's own, so a tap made after a month was met stays «hecho» though its
   // day no longer asks. The week-only derivation asks a superset of the other.
-  const asking = deriveWeek({ commitments, phases, facts: monthFacts, evidence, day: anyDayInIt });
-  const drawn = deriveWeek({ commitments, phases, facts: weekFacts, evidence, day: anyDayInIt });
+  const asking = deriveWeek({ commitments, phases, facts: monthFacts, evidence, day: anyDayInIt, today });
+  const drawn = deriveWeek({ commitments, phases, facts: weekFacts, evidence, day: anyDayInIt, today });
   const view: WeekView = {
     ...drawn,
     days: drawn.days.map((dayView, i) => {

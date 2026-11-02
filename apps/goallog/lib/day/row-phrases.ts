@@ -41,6 +41,13 @@ export function weekdaysSentence(translate: Translate, days: number[], names: st
   return translate("day.cadence.daysJoin", { list: said.slice(0, -1).join(", "), last: said[said.length - 1] });
 }
 
+// A strip's one name for a screen reader: «26 de 30 días hechos…», or the count alone for a cadence with no days named.
+export function stripLabel(translate: Translate, count: { done: number; of: number | null }): string {
+  return count.of === null
+    ? translate("goal.commitments.stripAriaDays", { done: count.done })
+    : translate("goal.commitments.stripAria", { done: count.done, of: count.of });
+}
+
 // A goal's phase line: «fase 2 de 3 · desbloquear la boca»; a goal with one
 // phase says its name alone.
 export function phaseLine(
@@ -171,7 +178,9 @@ export function rowMeta(translate: Translate, pieces: RowMetaPieces): RowMetaPar
   const { kind, done, quiet, status } = pieces;
   if (pieces.evidence) {
     const { asks, got, source, noted } = pieces.evidence;
-    return [{ text: got === null ? (noted ? `${noted} · ${asks}` : asks) : source ? `${got} · ${source}` : got }];
+    // The amounts are figures, in mono like every other row's; the source and its words stay text.
+    if (got === null) return noted ? [{ text: `${noted} · ` }, { figure: asks }] : [{ figure: asks }];
+    return source ? [{ figure: got }, { text: ` · ${source}` }] : [{ figure: got }];
   }
   const loud = !quiet && kind !== "evidence";
   const partial = loud && !done && kind === "quantity" ? (pieces.partial ?? null) : null;

@@ -28,7 +28,7 @@ type Variant = "solid" | "outline" | "ghost" | "quiet";
 // rather than a way out, so its ink is the accent instead of `ghost`'s own
 // muted. The only tone this design names; a screen reaching for another one
 // is asking for a colour the token table does not have.
-// `danger` is a destructive act drawn quietly: the label in the danger ink, never a pill.
+// `danger` is a destructive act drawn quietly: the label in ink with a red mark before it, never a pill.
 type Tone = "accent" | "danger";
 
 type PulsarControlProps = {

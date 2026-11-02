@@ -1,7 +1,7 @@
 /* One tap picks the category: a tile over its name, ringed once chosen. */
 .grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(76px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(88px, 1fr));
   gap: 8px;
   width: 100%;
 }
@@ -36,9 +36,13 @@
   box-shadow: 0 0 0 1px var(--accent-9);
 }
 
+/* A name takes two lines before it is cut: the tile has the height for them. */
 .label {
   max-width: 100%;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow-wrap: anywhere;
 }

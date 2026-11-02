@@ -31,6 +31,9 @@ export const categories = finances.table(
     // The stable per-scope import key (RF-51): a re-import matches on it to update instead of duplicate.
     // Auto-filled to `id::text` by a trigger when omitted; a webhook or upsert value survives untouched.
     externalRef: text(),
+    // Which seeded category this row is, whatever it is renamed to: the stable identity a rule
+    // can key on («salary» presets «De quién», RF-166). Null on every category a person made.
+    seedKey: text({ enum: ["salary"] }),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
   },
@@ -53,6 +56,7 @@ export const categories = finances.table(
       columns: [table.parentId],
       foreignColumns: [table.id],
     }).onDelete("cascade"),
+    check("categories_seed_key_valid", sql`${table.seedKey} in ('salary')`),
     check("categories_external_ref_length", sql`length(${table.externalRef}) <= 200`),
     index("categories_group_id_idx").on(table.groupId),
     index("categories_owner_user_id_idx").on(table.ownerUserId),

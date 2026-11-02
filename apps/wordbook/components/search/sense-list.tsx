@@ -5,7 +5,7 @@ import NextLink from "next/link";
 import { useTranslations } from "next-intl";
 
 import { ipaKey, pronunciationBlocks, type Sense } from "@/lib/dictionary/index-build";
-import { isRareSense } from "@/lib/dictionary/rare-sense";
+import { splitRare } from "@/lib/dictionary/rare-sense";
 import type { WordAnswer } from "@/lib/dictionary/lookup";
 import { speak, speechSupported } from "@/lib/speech/speak";
 import {
@@ -349,10 +349,8 @@ function PosSegments({
   t: ReturnType<typeof useTranslations>;
 }) {
   // A sense the reader meets seldom folds behind one line while a common one stands.
-  const rare = compact ? [] : senses.filter(isRareSense);
-  const common = senses.filter((sense) => compact || !isRareSense(sense));
-  const fold = rare.length > 0 && common.length > 0;
-  const segments = segmentByPos(fold ? common : senses);
+  const { shown, folded } = splitRare(senses, compact);
+  const segments = segmentByPos(shown);
 
   return (
     <Flex direction="column" gap="3">
@@ -372,7 +370,7 @@ function PosSegments({
           {index === 0 && interlude}
         </Flex>
       ))}
-      {fold && <RareFold senses={rare} ipaHeaded={ipaHeaded} shownIpa={shownIpa} t={t} />}
+      {folded.length > 0 && <RareFold senses={folded} ipaHeaded={ipaHeaded} shownIpa={shownIpa} t={t} />}
     </Flex>
   );
 }
@@ -524,6 +522,16 @@ function CorrectionOffer({ words, t }: { words: readonly string[]; t: ReturnType
   );
 }
 
+// The parts of speech in the order the answer draws them, the fold's after the senses it follows in each block,
+// so the first of the index is the first block, which draws no label of its own.
+function indexParts(groups: readonly (readonly Sense[])[]): Sense["pos"][] {
+  const drawn = groups.flatMap((group) => {
+    const { shown, folded } = splitRare(group);
+    return [...shown, ...folded];
+  });
+  return [...new Set(drawn.map((sense) => sense.pos))];
+}
+
 // Under the entry's headword, on one line: its sound, the voice and an index of the parts of speech
 // it comes in. The sound shows here only when one pronunciation heads the whole entry; with several,
 // each block carries its own head.
@@ -538,8 +546,9 @@ function EntryMeta({
   speaker: boolean;
   t: ReturnType<typeof useTranslations>;
 }) {
-  const ipa = pronunciationBlocks(senses) === null ? senses[0].ipa : null;
-  const parts = [...new Set(senses.map((sense) => sense.pos))];
+  const blocks = pronunciationBlocks(senses);
+  const ipa = blocks === null ? senses[0].ipa : null;
+  const parts = indexParts(blocks === null ? [senses] : blocks.map((block) => block.senses));
   return (
     <Flex align="center" gap="3" wrap="wrap" data-entry-index="">
       {ipa !== null && (

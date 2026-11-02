@@ -30,7 +30,8 @@ const lastShare = Math.floor((RHYTHM * 7) / lengthOf(thisMonth));
 function timeText(minutes: number): string {
   const h = Math.floor(minutes / 60);
   const min = minutes % 60;
-  return [h ? `${h} h` : "", min ? `${min} min` : ""].filter(Boolean).join(" ");
+  // After hours the minutes take two digits («5 h 09 min», DESIGN.md «a measure's minutes»).
+  return [h ? `${h} h` : "", min ? `${h ? String(min).padStart(2, "0") : min} min` : ""].filter(Boolean).join(" ");
 }
 
 type Seed = { unit: string; name: string; rhythm: number; budgets?: Array<[string, number]>; endsOn?: string };

@@ -25,11 +25,11 @@ const NO_VALUE = "—";
 
 // The tracks of the Metas artboard, in order.
 const WIDTHS = {
-  goal: "minmax(0, 1fr)",
-  progress: "130px",
-  pace: "224px",
-  saved: "128px",
-  remaining: "128px",
+  goal: "minmax(160px, 1fr)",
+  progress: "110px",
+  pace: "190px",
+  saved: "112px",
+  remaining: "112px",
   targetDate: "84px",
   contribute: "96px",
   menu: "36px",
@@ -144,13 +144,13 @@ export function GoalsTable({
       header: t("tableGoal"),
       width: WIDTHS.goal,
       cell: (goal) => (
-        <Flex align="center" gap="2" minWidth="0">
+        <Flex direction="column" minWidth="0">
           <Text size="2" weight="medium" truncate>
             {goal.name}
           </Text>
           {/* Which aportes the meta counts: the ones set aside in this one
               currency and no other (RF-124). */}
-          <Text size="1" color="gray" wrap="nowrap">
+          <Text size="1" color="gray" truncate>
             {tKey("planning.inCurrency", { currency: goal.currency })}
           </Text>
         </Flex>
@@ -331,6 +331,7 @@ export function GoalsTable({
       rows={rows}
       rowKey={(goal) => goal.id}
       empty={empty}
+      columnGap="8px"
       total={
         rows.length > 0
           ? [

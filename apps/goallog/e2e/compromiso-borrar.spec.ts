@@ -75,7 +75,7 @@ const mainOf = async (page: Page) => {
 };
 
 test.describe("the sheet of a live commitment (RP-127)", () => {
-  test("with a fact the sheet retires and shows «Cambiar la frecuencia» and «Borrar el compromiso» disabled, with the reason once", async ({ person, browser, baseURL, db }) => {
+  test("with a fact the sheet retires and offers neither «Cambiar la frecuencia» nor «Borrar el compromiso»: plain text with the reason, once", async ({ person, browser, baseURL, db }) => {
     // Kills: offering the delete or the cadence on `factDayCount >= 0` instead of `=== 0`; hiding the refused acts with no reason.
     const goal = await seedOpenGoal(db, person, { name: "Cuidado", unit: MINUTES, horizon: null });
     const id = await seedCommitment(db, person, goal, "Estirar");
@@ -88,8 +88,10 @@ test.describe("the sheet of a live commitment (RP-127)", () => {
         "Deja de pedirse desde mañana. Las semanas que ya gobernó siguen leyéndose igual, y los 2 días en que lo hiciste siguen ahí.",
       );
       await expect(sheet.getByRole("button", { name: "Retirarlo", exact: true })).toBeEnabled();
-      await expect(sheet.getByRole("button", { name: "Cambiar la frecuencia", exact: true })).toBeDisabled();
-      await expect(sheet.getByRole("button", { name: "Borrar el compromiso", exact: true })).toBeDisabled();
+      // An act that cannot be done is plain text with its reason, never a disabled button.
+      await expect(sheet.getByRole("button", { name: "Cambiar la frecuencia", exact: true })).toHaveCount(0);
+      await expect(sheet.getByRole("button", { name: "Borrar el compromiso", exact: true })).toHaveCount(0);
+      await expect(sheet.locator("button:disabled")).toHaveCount(0);
       await expect(sheet.getByRole("link", { name: /Cambiar/ })).toHaveCount(0);
       await expect(sheet.getByText(CADENCE_REASON, { exact: true })).toHaveCount(1);
     } finally {
@@ -153,6 +155,29 @@ test.describe("the sheet of a live commitment (RP-127)", () => {
       await context.close();
     }
   });
+
+  for (const width of [768, 1024, 1280, 1440]) {
+    test(`at ${width} every act of the sheet, «Dejarlo como está» included, lies inside the dialog`, async ({ person, browser, baseURL, db }) => {
+      // Kills: a row of three buttons wider than the dialog, pushed out of its left edge.
+      const goal = await seedOpenGoal(db, person, { name: "Cuidado", unit: MINUTES, horizon: null });
+      await seedCommitment(db, person, goal, "Estirar");
+      const { page, context } = await visit(browser, baseURL, person, `/metas/${goal}`, width);
+      try {
+        const sheet = await openSheet(page, "Estirar");
+        const box = (await sheet.boundingBox())!;
+        const acts = sheet.locator("button, a");
+        expect(await acts.count()).toBeGreaterThanOrEqual(3);
+        for (const act of await acts.all()) {
+          const at = (await act.boundingBox())!;
+          const name = (await act.innerText()).trim();
+          expect(at.x, `${name} starts inside the dialog`).toBeGreaterThanOrEqual(box.x);
+          expect(at.x + at.width, `${name} ends inside the dialog`).toBeLessThanOrEqual(box.x + box.width);
+        }
+      } finally {
+        await context.close();
+      }
+    });
+  }
 
   test("«Retirarlo» still retires from the three-act sheet and writes retired_at", async ({ person, browser, baseURL, db }) => {
     // Kills: the new acts replacing or rewiring the retire.
@@ -485,9 +510,9 @@ test.describe("a loose habit's screen (RP-127, RP-135)", () => {
     try {
       await mainLower(page);
       await expect(page.getByRole("button", { name: "Retirarlo", exact: true })).toBeVisible();
-      await expect(page.getByRole("button", { name: "Borrar el hábito" })).toBeDisabled();
+      await expect(page.getByRole("button", { name: "Borrar el hábito" })).toHaveCount(0);
       await expect(page.getByRole("link", { name: "Cambiar la frecuencia" })).toHaveCount(0);
-      await expect(page.getByRole("button", { name: "Cambiar la frecuencia" })).toBeDisabled();
+      await expect(page.getByRole("button", { name: "Cambiar la frecuencia" })).toHaveCount(0);
     } finally {
       await context.close();
     }

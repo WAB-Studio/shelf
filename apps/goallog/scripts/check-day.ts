@@ -1642,11 +1642,12 @@ async function runEndedGoalScheduledCheck(): Promise<void> {
     archived = false,
     createdAt: string | null = null,
   ): Promise<string> {
+    // Archived eight days back: a goal archived on its week's Sunday still governs that week (RP-24).
     const [row] = await db<{ id: string }[]>`
       insert into goals.goals (user_id, name, horizon, measure_name, measure_unit, created_at, archived_at)
       values (${userId}, ${name}, ${horizon}::date, ${measure?.name ?? null}, ${measure?.unit ?? null},
               coalesce(${createdAt}::timestamptz, now() - interval '28 days'),
-              ${archived ? new Date().toISOString() : null}::timestamptz)
+              ${archived ? new Date(Date.now() - 8 * 86_400_000).toISOString() : null}::timestamptz)
       returning id
     `;
     goalIds.push(row.id);
@@ -3206,9 +3207,9 @@ async function runEvidenceInfoAndFirstGoalDayCheck(): Promise<void> {
     const loaded = await loadDay(today);
     const mine = (name: string) => loaded.commitments.find((c) => c.name === name);
     assert(
-      "an evidence commitment carries its threshold and its source's label and unit keys",
+      "an evidence commitment carries its threshold, its source's unit and its label and unit keys",
       JSON.stringify(mine("check-571 evidence")?.evidence) ===
-        JSON.stringify({ threshold: 3, labelKey: "sources.readingLookups", unitKey: "sources.readingLookupsUnit" }),
+        JSON.stringify({ threshold: 3, unit: "searches", labelKey: "sources.readingLookups", unitKey: "sources.readingLookupsUnit" }),
       `evidence = ${JSON.stringify(mine("check-571 evidence")?.evidence)}`,
     );
     assert(

@@ -56,8 +56,8 @@ async function seed(db: postgres.Sql, person: Person): Promise<Seeded> {
     values (${person.id}, ${english.id}, ${`Clase ${stamp}`}, ${comingMonth}::date, 60)
   `;
   const [done] = await db<{ id: string }[]>`
-    insert into goals.one_offs (user_id, goal_id, name, planned_month, estimate)
-    values (${person.id}, ${english.id}, ${`Hecha ${stamp}`}, ${lastMonth}::date, 30) returning id
+    insert into goals.one_offs (user_id, goal_id, name, planned_month, estimate, created_at)
+    values (${person.id}, ${english.id}, ${`Hecha ${stamp}`}, ${lastMonth}::date, 30, ${opened}) returning id
   `;
   await db`
     insert into goals.facts (user_id, goal_id, one_off_id, day)
@@ -152,10 +152,12 @@ test("‹ leads to last month, the first one: its tasks as they stood, marked on
 
     const english = page.locator("section", { has: page.getByRole("heading", { name: `Inglés ${stamp}` }) });
     await expect(english.getByText(`Hecha ${stamp}`, { exact: true })).toBeVisible();
-    await expect(english.getByText("hecha", { exact: true })).toBeVisible();
     const marks = page.getByRole("button", { name: /^(Marcar hecha|Deshacer): / });
-    if (closedMonthMarkDay(lastMonth, today) === null) await expect(marks).toHaveCount(0);
-    else await expect(page.getByRole("button", { name: `Deshacer: Hecha ${stamp}` })).toBeVisible();
+    // Past the reach the task says «hecha» as a word; within it, its mark is the button that undoes it.
+    if (closedMonthMarkDay(lastMonth, today) === null) {
+      await expect(english.getByText("hecha", { exact: true })).toBeVisible();
+      await expect(marks).toHaveCount(0);
+    } else await expect(page.getByRole("button", { name: `Deshacer: Hecha ${stamp}` })).toBeVisible();
   });
 });
 

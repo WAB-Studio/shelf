@@ -18,6 +18,7 @@ import {
 } from "@/components/ui";
 import type { PlannedPaymentRow } from "@/db/queries/planned-payments";
 import { civilDateToDate, todayInBogota } from "@/lib/dates";
+import { isOverdue } from "@/lib/fund/glance";
 
 // The em dash a cell with nothing to name reads as (SPEC-A3), not a word a
 // translator would ever change.
@@ -26,10 +27,10 @@ const NO_VALUE = "—";
 // The tracks of the Pagos planificados artboard, in order.
 const WIDTHS = {
   due: "86px",
-  concept: "minmax(0, 1fr)",
-  remind: "100px",
-  category: "158px",
-  account: "176px",
+  concept: "minmax(160px, 1fr)",
+  remind: "88px",
+  category: "130px",
+  account: "140px",
   amount: "124px",
   settle: "138px",
   menu: "36px",
@@ -112,7 +113,7 @@ export function PaymentsTable({
           <Text size="2" weight="medium" truncate>
             {payment.description ?? t("noConcept")}
           </Text>
-          {payment.status === "pending" && payment.dueDate < today && (
+          {isOverdue(payment, today) && (
             <Badge color="amber" variant="soft" radius="full">
               {t("overdueLabel")}
             </Badge>

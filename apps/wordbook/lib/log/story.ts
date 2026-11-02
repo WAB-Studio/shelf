@@ -1,5 +1,5 @@
 import { splitAroundWord } from "@/lib/word/mark-word";
-import { readAll } from "./record";
+import { openLookups, readAll } from "./record";
 import type { LookupRecord } from "./types";
 
 type Row = Pick<LookupRecord, "kind" | "headword" | "normalised" | "text" | "at">;
@@ -41,5 +41,5 @@ export function buildWordStory(rows: readonly Row[], key: string): WordStory {
 }
 
 export async function readWordStory(key: string): Promise<WordStory> {
-  return buildWordStory(await readAll(), key);
+  return buildWordStory([...(await readAll()), ...openLookups()], key);
 }

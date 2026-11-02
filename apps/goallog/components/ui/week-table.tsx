@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Fragment, type ReactNode } from "react";
 
 import type { MarkState } from "./mark";
+import { Tag } from "./tag";
 import styles from "./week-table.module.css";
 
 export type WeekTableColumn = {
@@ -29,6 +30,8 @@ export type WeekTableTally = { figure: string; rest: string; percent: number };
 type WeekTableGroup = {
   key: string;
   label: string;
+  // Where the goal stands, a pill beside the label.
+  tag?: string;
   // A line under the label, for what the group itself says.
   note?: ReactNode;
   rows: readonly {
@@ -133,7 +136,8 @@ export function WeekTable({
           <Fragment key={group.key}>
             <tr>
               <th scope="rowgroup" className={styles.group}>
-                {group.label}
+                <span className={styles.groupName}>{group.label}</span>
+                {group.tag ? <Tag>{group.tag}</Tag> : null}
                 {group.note ? <span className={styles.groupNote}>{group.note}</span> : null}
               </th>
               {columns.map((column, index) => (
@@ -213,7 +217,7 @@ export function WeekFold({
       </div>
       {groups.map((group) => (
         <section key={group.key} className={styles.foldGroup}>
-          <h2 className={styles.foldGroupLabel}>{group.label}</h2>
+          <h2 className={styles.foldGroupLabel}><span className={styles.groupName}>{group.label}</span>{group.tag ? <Tag>{group.tag}</Tag> : null}</h2>
           {group.note ? <div className={styles.foldGroupNote}>{group.note}</div> : null}
           {group.rows.map((row) => (
             <div key={row.key} className={styles.foldRow}>

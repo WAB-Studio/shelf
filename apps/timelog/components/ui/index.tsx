@@ -54,11 +54,11 @@ type MeterSize = "large" | "default" | "compact";
 
 // A name and its figure over the bar under them, 48 tall at least (DESIGN «Hoy»). A long name
 // truncates; the figure never wraps.
-export function Meter({ name, figure, share, label, size = "default", tone }: { name: ReactNode; figure: ReactNode; share: number; label: string; size?: MeterSize; tone?: Tone }) {
+export function Meter({ name, figure, share, label, size = "default", tone, wrap }: { name: ReactNode; figure: ReactNode; share: number; label: string; size?: MeterSize; tone?: Tone; wrap?: boolean }) {
   return (
     <div className={join(styles.stack, styles.gap1, styles.meter, size === "large" && styles.meterLarge, size === "compact" && styles.meterCompact)}>
       <div className={styles.line}>
-        <Text truncate>{name}</Text>
+        <Text truncate={!wrap} wrap={wrap}>{name}</Text>
         <Text mono>{figure}</Text>
       </div>
       <Bar share={share} label={label} tone={tone} />
@@ -109,9 +109,12 @@ export function Figure({ parts, mark }: { parts: { value: string; unit: string }
 
 type TextVariant = "total" | "row" | "meta";
 
-export function Text({ variant = "row", mono, mark, truncate, as = "span", children }: { variant?: TextVariant; mono?: boolean; mark?: boolean; truncate?: boolean; as?: "span" | "p"; children: ReactNode }) {
+// `wrap` lets a long text take two lines before it is cut. `untitled` leaves the title to a parent that already has one.
+export function Text({ variant = "row", mono, mark, truncate, wrap, untitled, as = "span", children }: { variant?: TextVariant; mono?: boolean; mark?: boolean; truncate?: boolean; wrap?: boolean; untitled?: boolean; as?: "span" | "p"; children: ReactNode }) {
   const Tag = as;
-  return <Tag className={join(styles[variant], mono && styles.mono, mark && styles.mark, !mono && styles.name, truncate && styles.truncate)}>{children}</Tag>;
+  // A cut text carries its whole self as a hover and long-press title.
+  const title = !untitled && (truncate || wrap) && typeof children === "string" ? children : undefined;
+  return <Tag title={title} className={join(styles[variant], mono && styles.mono, mark && styles.mark, !mono && styles.name, truncate && styles.truncate, wrap && styles.clamp)}>{children}</Tag>;
 }
 
 // Inside the brand block: a small label over a value.
@@ -137,33 +140,46 @@ function FigureParts({ text }: { text: string }) {
 export type CompositionPart = { key: string; tone: Tone; seconds: number; name: string; figure: string };
 
 // A whole in parts on the brand block: one stacked bar and, under it, each part's name and figure in words, so no
-// part is told by colour alone. `thin` leaves the legend to the text around it.
-export function Composition({ parts, label, thin }: { parts: CompositionPart[]; label: string; thin?: boolean }) {
+// part is told by colour alone.
+export function Composition({ parts, label }: { parts: CompositionPart[]; label: string }) {
   const total = Math.max(1, parts.reduce((sum, part) => sum + part.seconds, 0));
   return (
     <div className={styles.composition}>
-      <div className={join(styles.stacked, thin && styles.stackedThin)} role="img" aria-label={label}>
+      <div className={styles.stacked} role="img" aria-label={label}>
         {parts.map((part) => (
           <div key={part.key} className={join(styles.part, styles[`tone_${part.tone}`])} style={{ flexGrow: part.seconds / total }} />
         ))}
       </div>
-      {thin ? null : (
-        <ul className={styles.legend}>
-          {parts.map((part) => (
-            <li key={part.key} className={styles[`tone_${part.tone}`]}>
-              <span className={styles.swatch} aria-hidden="true" />
-              <Text truncate>{part.name}</Text>
-              <Text mono>{part.figure}</Text>
-            </li>
-          ))}
-        </ul>
-      )}
+      <ul className={styles.legend}>
+        {parts.map((part) => (
+          <li key={part.key} className={styles[`tone_${part.tone}`]}>
+            <span className={styles.swatch} aria-hidden="true" />
+            <Text truncate>{part.name}</Text>
+            <Text mono>{part.figure}</Text>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
 
+// The tones a grid uses, each with its name: the legend of a colour that is also written in the rows.
+export function ToneLegend({ items }: { items: { key: string; tone: Tone; name: string }[] }) {
+  return (
+    <ul className={styles.toneLegend}>
+      {items.map((item) => (
+        <li key={item.key} className={styles[`tone_${item.tone}`]}>
+          <span className={styles.swatchGround} aria-hidden="true" />
+          <Text>{item.name}</Text>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 export type HeatmapColumn = { key: string; label: string; href?: string; future?: boolean };
-export type HeatmapRow = { key: string; name: string; tone: Tone; total: string; cells: { figure: { wide: string; narrow: string } | null; level: number; label: string }[] };
+// `kind` is the class written under the name, so a colour is never the only word for it.
+export type HeatmapRow = { key: string; name: string; kind: string; tone: Tone; total: string; cells: { figure: { wide: string; narrow: string } | null; level: number; label: string }[] };
 
 // A grid of rows by days, a cell tinted by its level and always carrying its figure (a level only helps the eye find it).
 export function Heatmap({ columns, rows, label }: { columns: HeatmapColumn[]; rows: HeatmapRow[]; label: string }) {
@@ -182,8 +198,9 @@ export function Heatmap({ columns, rows, label }: { columns: HeatmapColumn[]; ro
       <tbody>
         {rows.map((row) => (
           <tr key={row.key} className={styles[`tone_${row.tone}`]}>
-            <th scope="row" className={styles.heatName} title={`${row.name}: ${row.total}`}>
-              <Text truncate>{row.name}</Text>
+            <th scope="row" className={styles.heatName} title={`${row.name} · ${row.kind}: ${row.total}`}>
+              <Text truncate untitled>{row.name}</Text>
+              <Text variant="meta" truncate untitled>{row.kind}</Text>
             </th>
             {row.cells.map((cell, index) => (
               <td key={columns[index].key} className={join(styles.heatCell, styles.mono)} data-level={cell.level} aria-label={cell.label}>
@@ -197,7 +214,8 @@ export function Heatmap({ columns, rows, label }: { columns: HeatmapColumn[]; ro
   );
 }
 
-export type StripEntry = { key: string; initial: string; number: number; description: string; href?: string; current: boolean };
+// `empty` is a day reached with no upload: it reads as a dashed tile and its number is struck by a dash, never colour alone.
+export type StripEntry = { key: string; initial: string; number: number; description: string; href?: string; current: boolean; empty?: boolean };
 
 // The days of one week as touchable tiles, the month named above them, ‹ › one day away and « » one week away.
 type StripStep = { href: string; label: string };
@@ -222,12 +240,13 @@ export function DayStrip({ label, days, weekPrev, dayPrev, dayNext, weekNext }: 
             <>
               <span className={styles.stripInitial}>{one.initial}</span>
               <span className={styles.mono}>{one.number}</span>
+              {one.empty ? <span className={styles.stripNone} aria-hidden="true">—</span> : null}
             </>
           );
           return one.href === undefined ? (
             <span key={one.key} className={join(styles.stripDay, styles.stripOff)} aria-hidden="true">{inside}</span>
           ) : (
-            <Link key={one.key} href={one.href} className={join(styles.stripDay, one.current && styles.stripCurrent)} aria-label={one.description} aria-current={one.current ? "date" : undefined}>{inside}</Link>
+            <Link key={one.key} href={one.href} className={join(styles.stripDay, one.current && styles.stripCurrent, one.empty && styles.stripEmpty)} aria-label={one.description} aria-current={one.current ? "date" : undefined}>{inside}</Link>
           );
         })}
       </div>

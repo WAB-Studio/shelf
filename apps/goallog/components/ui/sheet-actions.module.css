@@ -9,6 +9,8 @@
     display: flex;
     /* The primary is first in the markup and stands last, at the right. */
     flex-direction: row-reverse;
+    /* Three buttons are wider than the dialog's 420px: the last one wraps under the others, never out of the dialog's edge. */
+    flex-wrap: wrap;
     gap: 10px;
     margin-block-start: 8px;
   }

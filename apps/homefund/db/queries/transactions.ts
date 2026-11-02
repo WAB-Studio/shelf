@@ -567,15 +567,28 @@ export function transactionListConditions(filters: TransactionListFilters): SQL[
 export async function getTransactionTotals(
   filters: TransactionListFilters,
   outerTx?: Transaction,
-): Promise<{ count: number; nets: { currency: CurrencyCode; netCents: number }[] }> {
+  // A window the net is also read over, in the same scan: `monthNets` carries the
+  // net of the filtered rows that fall inside it, one entry per currency that has any.
+  window?: { start: string; endExclusive: string },
+): Promise<{
+  count: number;
+  nets: { currency: CurrencyCode; netCents: number }[];
+  monthNets: { currency: CurrencyCode; netCents: number }[];
+}> {
   const conditions = transactionListConditions(filters);
+  const signed = sql`case when ${transactions.reconciliationId} is not null then 0 else case ${transactions.kind} when 'income' then ${transactions.amountCents} when 'expense' then -${transactions.amountCents} else 0 end end`;
+  const inWindow = window
+    ? sql`${transactions.occurredAt} >= ${window.start} and ${transactions.occurredAt} < ${window.endExclusive}`
+    : sql`false`;
 
   return withUserDbOrTx(outerTx, async (tx) => {
     const rows = await tx
       .select({
         currency: transactions.currency,
         count: sql<number>`count(*)::int`,
-        netCents: sql<string>`coalesce(sum(case when ${transactions.reconciliationId} is not null then 0 else case ${transactions.kind} when 'income' then ${transactions.amountCents} when 'expense' then -${transactions.amountCents} else 0 end end), 0)::text`,
+        netCents: sql<string>`coalesce(sum(${signed}), 0)::text`,
+        windowCount: sql<number>`(count(*) filter (where ${inWindow}))::int`,
+        windowNetCents: sql<string>`coalesce(sum(${signed}) filter (where ${inWindow}), 0)::text`,
       })
       .from(transactions)
       .where(conditions.length > 0 ? and(...conditions) : undefined)
@@ -583,8 +596,16 @@ export async function getTransactionTotals(
 
     return {
       count: rows.reduce((sum, row) => sum + row.count, 0),
-      nets: rows
-        .map((row) => ({ currency: row.currency as CurrencyCode, netCents: Number(row.netCents) })),
+      nets: rows.map((row) => ({
+        currency: row.currency as CurrencyCode,
+        netCents: Number(row.netCents),
+      })),
+      monthNets: rows
+        .filter((row) => row.windowCount > 0)
+        .map((row) => ({
+          currency: row.currency as CurrencyCode,
+          netCents: Number(row.windowNetCents),
+        })),
     };
   });
 }

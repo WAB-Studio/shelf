@@ -135,11 +135,10 @@ export function WeekTableFace({
 
   const goalGroups = goals.map((goal) => {
     const progress = goalWeekProgress(goal, view.start);
-    const label = progress
-      ? t("week.sectionLabel", { name: goal.name, week: progress.week, total: progress.total })
-      : goal.name;
+    const label = goal.name;
     return {
       key: goal.id,
+      tag: progress ? t("week.tag", { week: progress.week, total: progress.total }) : undefined,
       // An archive since keeps the weeks the goal governed (RP-24).
       label: goal.archivedAt
         ? t("week.archivedOn", { label, date: archivedDay(goal.archivedAt) })

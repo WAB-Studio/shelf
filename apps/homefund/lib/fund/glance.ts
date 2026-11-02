@@ -1,6 +1,26 @@
 // Pure reads behind the screens' at-a-glance blocks. Every figure stays an
 // integer number of cents; a percentage is derived here and never stored.
 
+// A pending payment past its due date; a settled or cancelled one waits on nothing.
+export function isOverdue(
+  payment: { status: string; dueDate: string },
+  today: string,
+): boolean {
+  return payment.status === "pending" && payment.dueDate < today;
+}
+
+// What a proposed delivery is read in: its account's own currency, or the fund's
+// when it names none yet, never pesos by default (RF-121, RF-124).
+export function deliveryCurrency<C extends string>(
+  delivery: { proposedAccountId: string | null },
+  options: { accounts: { id: string; settlementCurrency: C }[]; scopeCurrency: C },
+): C {
+  return (
+    options.accounts.find((account) => account.id === delivery.proposedAccountId)
+      ?.settlementCurrency ?? options.scopeCurrency
+  );
+}
+
 export type LimitBudget = {
   id: string;
   limitCents: number;

@@ -69,9 +69,16 @@ function fromCard(key: string, card: Card, introducedOn: string): ReviewCard {
 }
 
 // The card after one answer; a word never rated before starts here, on the day it is first answered.
-export function rate(key: string, card: ReviewCard | null, grade: ReviewGrade, now: number): ReviewCard {
+// `introducedOn` names the day a new entry counts against the daily cap; an empty one counts against none.
+export function rate(
+  key: string,
+  card: ReviewCard | null,
+  grade: ReviewGrade,
+  now: number,
+  introducedOn: string = localDay(now),
+): ReviewCard {
   const next = scheduler.next(toCard(card, now), new Date(now), RATING[grade]).card;
-  return fromCard(key, next, card?.introducedOn ?? localDay(now));
+  return fromCard(key, next, card?.introducedOn ?? introducedOn);
 }
 
 // How long each answer would put the word away, in ms: what the four buttons say before one is pressed.

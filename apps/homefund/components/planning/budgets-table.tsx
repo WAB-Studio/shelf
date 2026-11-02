@@ -139,14 +139,16 @@ export function BudgetsTable({
       cell: (row) => (
         <Flex align="center" gap="2" minWidth="0">
           <CategoryTile color={row.color} size={9} />
-          <Text size="2" weight="medium" truncate>
-            {row.title}
-          </Text>
-          {/* Which spend the limit counts: the movements booked in this one
-              currency and no other (RF-124). */}
-          <Text size="1" color="gray" wrap="nowrap">
-            {tKey("planning.inCurrency", { currency: row.currency })}
-          </Text>
+          <Flex direction="column" minWidth="0">
+            <Text size="2" weight="medium" truncate>
+              {row.title}
+            </Text>
+            {/* Which spend the limit counts: the movements booked in this one
+                currency and no other (RF-124). */}
+            <Text size="1" color="gray" truncate>
+              {tKey("planning.inCurrency", { currency: row.currency })}
+            </Text>
+          </Flex>
         </Flex>
       ),
     },
@@ -268,6 +270,7 @@ export function BudgetsTable({
       rows={rows}
       rowKey={(row) => row.id}
       empty={empty}
+      columnGap="16px"
       total={
         rows.length > 0
           ? [

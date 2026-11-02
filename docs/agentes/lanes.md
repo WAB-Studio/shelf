@@ -23,6 +23,11 @@ Read it before you open, work in or drop a lane. The why behind each rule: `docs
 - Never run two agents that write `reading.word_texts` or spend `reading.model_spend` at once. `HARNESS_LANE` does not
   scope those tables. See `docs/TRAPS.md`, "One database behind every harness lane".
 
+## Cloud lane
+
+- Treat a cloud session as lane 1: leave `HARNESS_LANE` unset there; `worktree.sh` refuses.
+- Fan out with more cloud sessions. See `docs/agentes/nube.md`.
+
 ## Harness lanes
 
 - Set `HARNESS_LANE=n` to give a track its own identities, session files, storage states and seeded rows.

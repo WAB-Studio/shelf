@@ -157,7 +157,7 @@ function refusalsV1(draft: ImportDraftV1, today: string): DraftRefusal[] {
     });
 
     // A goal whose end already passed has no span: it is refused whole.
-    const span = past ? null : new Set(monthsOfSpan(today, horizon));
+    const span = past ? null : new Set(monthsOfSpan(today, horizon, today));
     const lastDay = dayBefore(horizon ?? nextMonth(lastMonthOf(today, null, today)));
     // Which side of the span a month falls on: before today's month or after the goal's last.
     const outsideSpan = (path: string, m: string) => {
@@ -912,7 +912,7 @@ function refusalsV2(draft: ImportDraft, today: string): DraftRefusal[] {
       else if (goal.phases.slice(0, p).some((earlier) => phasesOverlap(earlier, phaseValue))) refuse(`.phases.${p}`, "plan.errors.phaseOverlap");
     });
 
-    const span = horizonOk || horizon === null ? new Set(monthsOfSpan(today, horizon)) : null;
+    const span = horizonOk || horizon === null ? new Set(monthsOfSpan(today, horizon, today)) : null;
     const lastDay = horizon === null ? dayBefore(nextMonth(lastMonthOf(today, null, today))) : horizonIssue === null ? dayBefore(horizon) : horizon;
     const outsideSpan = (path: string, m: string) => {
       if (span === null || span.has(`${m}-01`)) return;

@@ -167,7 +167,7 @@ async function queryRows(tx: Transaction, reading: Reading, today: string): Prom
                  'row', to_jsonb(h),
                  'daysDone', (select count(distinct f.day)::int from "goals"."facts" f
                                where f.commitment_id = h.id and f.day between ${month}::date and ${until}::date),
-                 'byWeek', (select coalesce(json_agg(jsonb_build_object('week', to_char(w.week, 'YYYY-MM-DD'), 'days', w.days)), '[]'::json)
+                 'byWeek', (select coalesce(json_agg(jsonb_build_object('week', to_char(w.week, 'YYYY-MM-DD'), 'days', w.days) order by w.week), '[]'::json)
                               from (select date_trunc('week', f.day)::date as week, count(distinct f.day)::int as days
                                       from "goals"."facts" f
                                      where f.commitment_id = h.id
@@ -188,7 +188,7 @@ async function queryRows(tx: Transaction, reading: Reading, today: string): Prom
          where c.goal_id = g.id) as commitments,
       (select coalesce(json_agg(to_jsonb(f) || jsonb_build_object(
                  'commitment_unit', c.unit
-               )), '[]'::json)
+               ) order by f.day, f.written_at, f.id), '[]'::json)
          from "goals"."facts" f
          left join "goals"."commitments" c on c.id = f.commitment_id
          where f.goal_id = g.id

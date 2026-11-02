@@ -79,10 +79,9 @@ export function monthRange(monthStart: string): {
   return { start: monthStart, endExclusive: shiftMonthStart(monthStart, 1) };
 }
 
-// Six `YYYY-MM-01` starts, oldest first, ending in the current Bogotá month.
-export function lastSixMonthStarts(): string[] {
-  const current = currentMonthStart();
-  return [5, 4, 3, 2, 1, 0].map((back) => shiftMonthStart(current, -back));
+// Six `YYYY-MM-01` starts, oldest first, ending in `endMonthStart` (default: the current Bogotá month).
+export function lastSixMonthStarts(endMonthStart: string = currentMonthStart()): string[] {
+  return [5, 4, 3, 2, 1, 0].map((back) => shiftMonthStart(endMonthStart, -back));
 }
 
 // Half-open `[Monday, next Monday)` for the Bogotá week around `reference`. The

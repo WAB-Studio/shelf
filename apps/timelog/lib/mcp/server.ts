@@ -3,14 +3,14 @@ import { createMcpHandler } from "mcp-handler";
 
 import type { ResolvedPerson } from "@/lib/keys";
 import { tools, type ToolOutcome } from "@/lib/mcp/tools";
-import { appsBetween, appsByDay, claudeBetween, dayTotals } from "@/lib/queries";
+import { appsBetween, appsByDay, claudeBetween, dayTotals, uploadedDays } from "@/lib/queries";
 import { actAs } from "@/lib/session";
 import { civilDay } from "@/lib/zone";
 
 import mcp from "../../messages/es/mcp.json";
 import pkg from "../../package.json";
 
-const reads = { appsBetween, dayTotals, claudeBetween, appsByDay };
+const reads = { appsBetween, dayTotals, claudeBetween, appsByDay, uploadedDays };
 
 function answer(outcome: ToolOutcome): CallToolResult {
   if (!outcome.ok) return { content: [{ type: "text", text: JSON.stringify({ error: outcome.error, message: mcp.errors[outcome.error] }) }], isError: true };

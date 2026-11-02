@@ -7,7 +7,7 @@ import { previewTranslations } from "@/lib/log/translation-line";
 import { Flex, Link, TapTarget, Text } from "@/components/ui";
 
 // A word's translations on one comma-separated line, the first three and a «ver N más» for the
-// rest (RL-79). The same line serves the word's answer, its row in the record and its history.
+// rest (RL-82). The same line serves the word's answer and its history.
 export function TranslationList({
   items,
   muted,

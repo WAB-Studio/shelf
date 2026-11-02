@@ -160,10 +160,16 @@
   background-color: var(--pulsar-accent-soft);
 }
 
-/* A destructive act, quiet: danger ink on the raised and ground faces, 6.57 and
-   6.03 light (#b42318), 9.20 and 8.55 dark (#ff9b92). */
-.dangerTone.dangerTone {
-  color: var(--pulsar-danger);
+/* A destructive act, quiet: the label stays in ink and a small red mark leads it (docs/goallog/DESIGN.md «Button
+   hierarchy»). The mark is #b42318 light, #ff9b92 dark: 6.57 and 9.20 on the raised face. */
+.dangerTone.dangerTone::before {
+  content: "";
+  flex: none;
+  inline-size: 8px;
+  block-size: 8px;
+  margin-inline-end: 8px;
+  border-radius: 50%;
+  background-color: var(--pulsar-danger);
 }
 
 /* docs/goallog/DESIGN.md "The controls": solid is the accent filled, with no

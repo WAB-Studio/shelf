@@ -61,7 +61,7 @@ export function phasesOverlap(a: PhaseSpan, b: PhaseSpan): boolean {
 
 // Whether a span's own last day still falls within the goal's horizon
 // (RP-11, RP-15): a goal names one horizon, and a phase is a span *of* it,
-// never past it. Compared as civil dates, never as week numbers — the
+// never past it; a phase may end on the horizon itself (RP-25). Compared as civil dates, never as week numbers — the
 // horizon is stored as a date, and this holds regardless of which week
 // convention drew the span.
 export function phaseWithinHorizon(span: PhaseSpan, horizon: string | null): boolean {

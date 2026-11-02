@@ -6,6 +6,8 @@ import { useState, type ReactNode } from "react";
 import {
   Badge,
   type BadgeProps,
+  Box,
+  Card,
   DataTable,
   Dialog,
   Flex,
@@ -50,17 +52,14 @@ const WIDTHS = {
   recordId: `minmax(${RECORD_ID_FLOOR}, 1fr)`,
 } as const;
 
-// This is the only screen that draws its `DataTable` under `md` (RNF-08's
-// exception, see the module 35 report): the fixed columns alone already
-// outrun a phone's viewport, so the flexible one needs a floor too, or grid's
-// negative-free-space step shrinks it to zero instead of scrolling with the
-// rest (D16).
+// The table draws from `lg` up. Its floor keeps the flexible column from
+// collapsing to zero between `lg` and the width the fixed columns need, so it
+// scrolls with the rest instead (D16).
 const MIN_WIDTH = `calc(${WIDTHS.occurredAt} + ${WIDTHS.entity} + ${WIDTHS.action} + ${WIDTHS.actor} + ${RECORD_ID_FLOOR})`;
 
 /**
- * The read-only audit trail (RF-53) as a dense table, replacing the screen's
- * fixed `Table.Root` rather than sitting beside it — the screen already draws
- * this at every width, so no sibling split applies (RNF-08). Its row menu only
+ * The read-only audit trail (RF-53): a dense table from `lg` up and a list of
+ * cards on the phone, where the five tracks do not fit (RNF-08). Its row menu only
  * ever reads: viewing the row's own already-fetched fields at full length, or
  * copying its record id. Neither calls a server action, because the log
  * answers to its own trigger and to nothing a person clicks here (RF-45).
@@ -102,6 +101,30 @@ export function AuditTable({
     }
   }
 
+  // The same two reads in the table's cells and on the phone's cards.
+  const dateLabel = (row: AuditTableRow, withYear: boolean) =>
+    format.dateTime(row.occurredAt, {
+      day: "numeric",
+      month: "short",
+      ...(withYear ? { year: "numeric" } : {}),
+      hour: "2-digit",
+      minute: "2-digit",
+      timeZone: TIME_ZONE,
+    });
+
+  const menuItems = (row: AuditTableRow) => [
+    {
+      key: "details",
+      label: t("viewDetails"),
+      onSelect: () => setDetailsId(row.id),
+    },
+    {
+      key: "copy",
+      label: copiedId === row.id ? t("recordIdCopied") : t("copyRecordId"),
+      onSelect: () => copyRecordId(row),
+    },
+  ];
+
   const columns: DataColumn<AuditTableRow>[] = [
     {
       key: "occurredAt",
@@ -109,14 +132,7 @@ export function AuditTable({
       width: WIDTHS.occurredAt,
       cell: (row) => (
         <Text size="2" color="gray">
-          {format.dateTime(row.occurredAt, {
-            day: "numeric",
-            month: "short",
-            year: "numeric",
-            hour: "2-digit",
-            minute: "2-digit",
-            timeZone: TIME_ZONE,
-          })}
+          {dateLabel(row, true)}
         </Text>
       ),
     },
@@ -159,48 +175,69 @@ export function AuditTable({
           </Text>
           <RowMenu
             rowName={row.entity}
-            items={[
-              {
-                key: "details",
-                label: t("viewDetails"),
-                onSelect: () => setDetailsId(row.id),
-              },
-              {
-                key: "copy",
-                label:
-                  copiedId === row.id
-                    ? t("recordIdCopied")
-                    : t("copyRecordId"),
-                onSelect: () => copyRecordId(row),
-              },
-            ]}
+            items={menuItems(row)}
           />
         </Flex>
       ),
     },
   ];
 
+  const pagination = pageCount > 1 && (
+    <TablePagination
+      caption={t("pageStatus", { page, pages: pageCount })}
+      onPrev={page > 1 ? onPrev : undefined}
+      onNext={page < pageCount ? onNext : undefined}
+      prevLabel={t("previousPage")}
+      nextLabel={t("nextPage")}
+    />
+  );
+
   return (
     <>
-      <DataTable
-        label={t("title")}
-        columns={columns}
-        rows={rows}
-        rowKey={(row) => String(row.id)}
-        minWidth={MIN_WIDTH}
-        empty={empty}
-        footer={
-          pageCount > 1 && (
-            <TablePagination
-              caption={t("pageStatus", { page, pages: pageCount })}
-              onPrev={page > 1 ? onPrev : undefined}
-              onNext={page < pageCount ? onNext : undefined}
-              prevLabel={t("previousPage")}
-              nextLabel={t("nextPage")}
-            />
-          )
-        }
-      />
+      <Box display={{ initial: "none", lg: "block" }}>
+        <DataTable
+          label={t("title")}
+          columns={columns}
+          rows={rows}
+          rowKey={(row) => String(row.id)}
+          minWidth={MIN_WIDTH}
+          empty={empty}
+          footer={pagination}
+        />
+      </Box>
+
+      {/* The phone reads a change as a card: the five tracks do not fit. */}
+      <Box display={{ initial: "block", lg: "none" }}>
+        <Flex direction="column" gap="3">
+          {rows.length === 0 && empty}
+          {rows.map((row) => (
+            <Card key={row.id}>
+              <Flex direction="column" gap="1">
+                <Flex justify="between" align="center" gap="2">
+                  <Text size="3" weight="medium" truncate>
+                    {row.entity}
+                  </Text>
+                  <Badge color={ACTION_COLOR[row.action]}>{row.actionLabel}</Badge>
+                </Flex>
+                <Text size="2" color="gray">
+                  {row.actor} ·{" "}
+                  {dateLabel(row, false)}
+                </Text>
+                <Flex align="center" justify="between" gap="2" minWidth="0">
+                  <Text size="1" color="gray" truncate>
+                    {row.recordId}
+                  </Text>
+                  <RowMenu
+                    rowName={row.entity}
+                    items={menuItems(row)}
+                  />
+                </Flex>
+              </Flex>
+            </Card>
+          ))}
+          {pagination}
+        </Flex>
+      </Box>
 
       <Dialog.Root
         open={details !== null}

@@ -2,7 +2,7 @@
 import type { Locator } from "@playwright/test";
 import type postgres from "postgres";
 
-import { test, expect } from "./fixtures";
+import { test, expect, todayHeading } from "./fixtures";
 import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
 
 // Hoy at 1024 and beyond (`HoyEscritorio.dc.html`, RNP-17): the goals left, the
@@ -87,43 +87,38 @@ test("at 1280 the goals sit left and the figure, sueltas, «N esperan» and «he
     await expect(page.locator("main")).toHaveCount(1);
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(1280);
 
-    // The goal's name also heads its figure card: the first match is the left column's.
-    const goalLeft = await box(page.getByRole("main").getByText(`Meta con cifra ${stamp}`, { exact: true }).first());
-    const goalPlain = await box(page.getByRole("main").getByText(`Meta sin cifra ${stamp}`, { exact: true }));
-    // A time-unit card is headed by the goal's name, never the unit word (RP-35).
-    const card = page.getByText("esta semana", { exact: true }).locator("xpath=ancestor::div[.//a][1]");
-    const label = card.getByText(`Meta con cifra ${stamp}`, { exact: true });
-    await expect(label).toBeVisible();
-    await expect(card.locator("[data-part='section-label']").first()).toHaveText(`Meta con cifra ${stamp}`);
-    await expect(card.locator("[data-part='section-label']").filter({ hasText: /^(min|minutos)$/i })).toHaveCount(0);
-    const figure = await box(label);
+    // The goal's name heads its group, and the week's figure stands at the head's end.
+    const head = page.locator("[data-part='group-head']").filter({ hasText: "esta semana" });
+    await expect(head).toHaveCount(1);
+    // A time-unit figure is headed by the goal's name, never the unit word (RP-35).
+    await expect(head.getByRole("heading", { level: 2 })).toHaveText(`Meta con cifra ${stamp}`);
+    await expect(head.getByRole("heading").filter({ hasText: /^(min|minutos)$/i })).toHaveCount(0);
+    const figure = await box(head.getByText("esta semana", { exact: true }));
     const sueltas = await box(page.getByText("Sueltas", { exact: true }));
     const waiting = await box(page.getByRole("link", { name: "2 esperan" }));
     const doneLabel = await box(page.getByText("Hechas hoy", { exact: true }));
 
-    // The figure card carries the number the review's current week reads.
-    await expect(card).toContainText(`${revisionNumber}`);
-    await expect(card).toContainText("esta semana");
-    await expect(card.getByRole("link", { name: "Ver por semana" })).toHaveAttribute(
+    // The head carries the number the review's current week reads.
+    await expect(head).toContainText(`${revisionNumber}`);
+    await expect(head.getByRole("link", { name: "Ver por semana" })).toHaveAttribute(
       "href",
       `/metas/${measuredId}/revision`,
     );
 
-    // Goals in one left column, the rest in the right one, top to bottom.
-    expect(goalLeft.x + goalLeft.width).toBeLessThan(figure.x);
-    expect(goalPlain.x + goalPlain.width).toBeLessThan(figure.x);
+    // The goals' groups in one column, «Sueltas» as a plain line closing it.
     expect(figure.y).toBeLessThan(sueltas.y);
-    expect(sueltas.y).toBeLessThan(doneLabel.y);
-    expect(waiting.x).toBeGreaterThan(goalLeft.x + goalLeft.width);
     expect(waiting.y).toBeGreaterThan(figure.y);
-    expect(waiting.y).toBeLessThan(doneLabel.y);
+    // «Hechas hoy» stands in the column beside them, never inside the goals' one.
+    const goals = await box(head);
+    expect(doneLabel.x).toBeGreaterThanOrEqual(goals.x + goals.width);
+    expect(doneLabel.x).toBeGreaterThanOrEqual(sueltas.x + sueltas.width);
 
     // A goal with no measure draws no card of its own.
     await expect(page.getByText("esta semana", { exact: true })).toHaveCount(1);
     await expect(page.getByRole("button", { name: /Cambiar a modo/ })).toHaveCount(1);
     await expect(page.getByRole("button", { name: /Cambiar a modo/ })).toBeVisible();
     await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
-    await expect(page.getByRole("heading", { level: 1, name: "Hoy" })).toBeVisible();
+    await expect(todayHeading(page)).toBeVisible();
   } finally {
     await context.close();
     await db`delete from goals.goals where user_id = ${person.id}`;
@@ -155,24 +150,22 @@ test("at 360 the sections come in the phone's own order and the figure is not dr
     await expect(page.locator("main")).toHaveCount(1);
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(360);
 
-    const order = await page.locator("main section").evaluateAll((sections) =>
-      sections
-        .map((section) => {
-          const rect = section.getBoundingClientRect();
-          return { text: section.textContent ?? "", x: rect.x, width: rect.width };
-        })
-        .filter((entry) => entry.width > 0),
-    );
-    // The navy block of the day leads (DESIGN «Naranja y marino»), then the goals, the one-offs and the done ones.
-    expect(order.map((entry) => entry.text.slice(0, 7))).toEqual([
-      "Avance ",
-      "Meta co",
-      "Meta si",
-      "Sueltas",
-      "Hechas ",
-    ]);
-    // Every section is the page's own column, the width a phone gives it.
-    for (const entry of order) expect(entry.width).toBeCloseTo(order[0].width, 0);
+    // No navy block on Hoy (DESIGN «Hoy, 2026-11-01»): the goals' groups, «Sueltas» closing the list, then the done ones.
+    const parts = [
+      page.locator("[data-part='group-head']").filter({ hasText: `Meta con cifra ${stamp}` }),
+      page.locator("[data-part='group-head']").filter({ hasText: `Meta sin cifra ${stamp}` }),
+      page.getByText("Sueltas", { exact: true }),
+      page.getByText("Hechas hoy", { exact: true }),
+    ];
+    const boxes = [];
+    for (const part of parts) {
+      const found = await part.boundingBox();
+      expect(found).not.toBeNull();
+      boxes.push(found!);
+    }
+    for (let i = 1; i < boxes.length; i++) expect(boxes[i].y).toBeGreaterThan(boxes[i - 1].y);
+    // Every part stands in the page's one column.
+    for (const found of boxes) expect(found.x + found.width).toBeLessThanOrEqual(360);
 
     await expect(page.getByText("esta semana", { exact: true })).toBeHidden();
     await expect(page.getByRole("button", { name: /Cambiar a modo/ })).toHaveCount(1);
@@ -272,18 +265,11 @@ test("at 1280 a goal in a time unit heads its card with its name and one in kil�
     await page.setViewportSize({ width: 1280, height: 800 });
     await page.goto("/");
     await expect(page.getByText("esta semana", { exact: true })).toHaveCount(2);
-    const timeCard = page
-      .getByText("esta semana", { exact: true })
-      .locator("xpath=ancestor::div[.//a][1]")
-      .filter({ hasText: "12 min" });
-    await expect(timeCard.getByText(`Meta con cifra ${stamp}`, { exact: true })).toBeVisible();
-    await expect(timeCard.locator("[data-part='section-label']").first()).toHaveText(`Meta con cifra ${stamp}`);
-    await expect(timeCard.locator("[data-part='section-label']").filter({ hasText: /^(min|minutos)$/i })).toHaveCount(0);
-    const kmCard = page
-      .getByText("esta semana", { exact: true })
-      .locator("xpath=ancestor::div[.//a][1]")
-      .filter({ hasText: "7" })
-      .filter({ hasText: "kilómetros" });
+    const heads = page.locator("[data-part='group-head']");
+    const timeCard = heads.filter({ hasText: "12 min" });
+    await expect(timeCard.getByRole("heading", { level: 2 })).toHaveText(`Meta con cifra ${stamp}`);
+    await expect(timeCard.getByRole("heading").filter({ hasText: /^(min|minutos)$/i })).toHaveCount(0);
+    const kmCard = heads.filter({ hasText: "7" }).filter({ hasText: "kilómetros" });
     await expect(kmCard.getByText("kilómetros", { exact: true })).toBeVisible();
   } finally {
     await context.close();

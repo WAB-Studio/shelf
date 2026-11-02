@@ -17,3 +17,7 @@ test("English carries exactly the keys Spanish does", () => {
   assert.deepEqual(paths(enCommon).sort(), paths(esCommon).sort());
   assert.deepEqual(paths(enTime).sort(), paths(esTime).sort());
 });
+
+test("English quotes with “ ”, never with the Spanish «»", () => {
+  assert.equal(JSON.stringify(enTime).includes("«"), false);
+});

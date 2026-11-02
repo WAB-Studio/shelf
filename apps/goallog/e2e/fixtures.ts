@@ -171,13 +171,16 @@ export async function settled(page: Page): Promise<void> {
   await page.evaluate(() => document.fonts.ready);
 }
 
-// Hoy's count: the navy block's figure «N de M» over its caption «hechos hoy», which adds «· k en parte» while a row is partial
-// (docs/goallog/DESIGN.md «Naranja y marino»). Past days keep the tally line, which is text.
+// Hoy's title: the date as its one h1, «Sábado 31 de octubre» (docs/goallog/DESIGN.md «Hoy»).
+export function todayHeading(page: Page): Locator {
+  return page.getByRole("heading", { level: 1, name: /^\p{Lu}\p{L}+ \d{1,2} de \p{L}+$/u });
+}
+
+// Hoy's count: the header's «N de M» named «N de M hechos hoy», which adds «· k en parte» while a row is partial
+// (docs/goallog/DESIGN.md «Hoy»). Past days keep the tally line, which is text.
 export function todayCount(page: Page, done: number | string, total: number | string, partial?: number): Locator {
-  const hero = page
-    .locator('[data-part="hero"]')
-    .filter({ has: page.locator('[data-part="hero-figure"]', { hasText: new RegExp(`^${done} de ${total}$`) }) });
-  return partial === undefined ? hero.filter({ hasNotText: "en parte" }) : hero.filter({ hasText: `hechos hoy · ${partial} en parte` });
+  const tail = partial === undefined ? "" : ` · ${partial} en parte`;
+  return page.locator('[data-part="tally"]').and(page.getByRole("group", { name: new RegExp(`^${done} de ${total} hechos hoy${tail}$`) })).locator("visible=true");
 }
 
 // On the phone a goal's own acts (rename, move, archive, delete, add inside) fold into one row at the foot, «Más sobre la meta»; from

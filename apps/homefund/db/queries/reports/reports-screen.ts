@@ -9,7 +9,7 @@ import type { CategoryExpense } from "@/db/queries/reports/expenses-by-category"
 import { getSixMonthFlow } from "@/db/queries/reports/monthly-flow";
 import type { MonthFlow } from "@/db/queries/reports/monthly-flow";
 import { getSessionUser } from "@/db/session";
-import { currentMonthRange } from "@/lib/dates";
+import { currentMonthStart, monthRange } from "@/lib/dates";
 
 // A contribution row carrying the member's display name, with the caller's own
 // row flagged so the component can label it (RF-66). One row per member AND
@@ -27,7 +27,7 @@ export type ReportsData = {
 };
 
 /**
- * The reports screen's read-model: this month's expenses by category, the
+ * The reports screen's read-model: the chosen month's expenses by category, the
  * six-month flow trend and each member's contribution to the group pot (RF-34,
  * RF-35, RF-66). Scope is never a parameter — RLS inside each query restricts
  * the rows. The five independent reads fan out in one `Promise.all`; the roster
@@ -37,12 +37,12 @@ export type ReportsData = {
  * Every one of the three carries the currency it counts, and the screen draws a
  * band per currency off it: nothing here adds two (RF-124).
  */
-export async function getReportsData(): Promise<ReportsData> {
+export async function getReportsData(monthStart: string = currentMonthStart()): Promise<ReportsData> {
   const [expensesByCategory, sixMonthFlow, contributionRows, group, sessionUser] =
     await Promise.all([
-      getExpensesByCategory(currentMonthRange()),
-      getSixMonthFlow(),
-      getMemberContributions(currentMonthRange()),
+      getExpensesByCategory(monthRange(monthStart)),
+      getSixMonthFlow(monthStart),
+      getMemberContributions(monthRange(monthStart)),
       getUserGroup(),
       getSessionUser(),
     ]);

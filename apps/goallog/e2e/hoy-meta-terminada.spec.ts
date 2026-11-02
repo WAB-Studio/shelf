@@ -1,7 +1,7 @@
 import type { Browser, Locator, Page } from "@playwright/test";
 import type postgres from "postgres";
 
-import { test, expect, type Person } from "./fixtures";
+import { test, expect, todayHeading, type Person } from "./fixtures";
 import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
 import { boxOf } from "./box";
 
@@ -81,7 +81,7 @@ async function open(page: Page, path = "/"): Promise<void> {
   await page.goto(path);
   await expect(page.locator("main :is(h1, p, a, button, input)").first()).toBeVisible();
   await expect(page.locator("main")).toHaveCount(1);
-  await expect(page.getByRole("heading", { level: 1, name: "Hoy" })).toHaveCount(1);
+  await expect(todayHeading(page)).toHaveCount(1);
 }
 
 test("a goal that ended yesterday reads «terminó ayer · ver»", async ({ browser, baseURL, person, db }) => {
@@ -143,7 +143,7 @@ test("«ver» opens the goal that ended", async ({ browser, baseURL, person, db 
   });
 });
 
-test("at 1280 the line sits under «Hoy» and above the goals", async ({ browser, baseURL, person, db }) => {
+test("at 1280 the line sits under the date and above the goals", async ({ browser, baseURL, person, db }) => {
   test.skip(!inThisWeek(1), MONDAY_YESTERDAY);
   await withPerson(browser, baseURL, person, db, async (page, personId) => {
     const stamp = Date.now();
@@ -156,7 +156,8 @@ test("at 1280 the line sits under «Hoy» and above the goals", async ({ browser
     const line = page.getByText(`${name} terminó ayer`);
     await expect(line).toHaveCount(1);
     const box = async (locator: Locator) => (await boxOf(locator));
-    const t = await box(page.getByRole("main").getByText("Hoy", { exact: true }));
+    // The header is the date (DESIGN «Hoy, 2026-11-01»): the line sits under it.
+    const t = await box(page.getByRole("main").getByRole("heading", { level: 1 }));
     const g = await box(page.getByText(openName).first());
     expect(g.y).toBeGreaterThanOrEqual(t.y + t.height - 1);
     const l = await box(line);

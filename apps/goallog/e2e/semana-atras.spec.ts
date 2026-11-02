@@ -69,7 +69,7 @@ async function seed(db: postgres.Sql, person: Person) {
   `;
   const [archived] = await db<{ id: string }[]>`
     insert into goals.goals (user_id, name, horizon, created_at, archived_at)
-    values (${person.id}, ${ARCHIVED_GOAL}, ${shift(today, 30)}, ${noonOf(shift(today, -35))}, ${noonOf(shift(today, -14))})
+    values (${person.id}, ${ARCHIVED_GOAL}, ${shift(today, 30)}, ${noonOf(shift(today, -35))}, ${noonOf(shift(thisMonday, -9))})
     returning id
   `;
   await db`
@@ -128,7 +128,7 @@ test("‹ four times lands on the week holding the fact, done and read-only; ›
     // The goal archived two weeks ago governed this week: it stays, dated.
     await expect(
       page
-        .getByText(new RegExp(`^${ARCHIVED_GOAL} · semana \\d+ de \\d+ · archivada el \\d+ \\w+ \\d{4}$`, "i"))
+        .getByText(new RegExp(`^${ARCHIVED_GOAL} · archivada el \\d+ \\w+ \\d{4}$`, "i"))
         .locator("visible=true"),
     ).toHaveCount(1);
     await expect(page.getByRole("link", { name: /^Abrir el (?!chat$)/ })).toHaveCount(0);
@@ -162,7 +162,7 @@ test("the oldest week has no ‹, the one after it has; a goal archived since is
     await page.goto(`/semana?semana=${mondayAgo(5)}`);
     await expect(prev(page)).toHaveCount(1);
 
-    // Archived two weeks ago (on or before this week's Sunday): gone from it.
+    // Archived on that week's Saturday, before its Sunday (RP-24): gone from it, whatever weekday the suite runs.
     await page.goto(`/semana?semana=${mondayAgo(2)}`);
     await expect(page.getByRole("heading", { level: 1 })).toHaveText(rangeOf(mondayAgo(2)));
     await expect(page.getByText(new RegExp(`^${ARCHIVED_GOAL}`, "i"))).toHaveCount(0);

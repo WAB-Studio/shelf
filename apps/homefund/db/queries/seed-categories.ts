@@ -44,6 +44,7 @@ export async function seedCategoryTree(
       name: category.name[locale],
       kind: category.kind,
       color: seedColors[index].parent,
+      ...(category.key ? { seedKey: category.key } : {}),
     })),
     { returning: { id: categories.id } },
   );

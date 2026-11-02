@@ -51,7 +51,7 @@
     "owes": "de {month} · falta <fig>{owes}</fig>",
     "closed": "cerrado",
     "rhythmTaken": "el ritmo: {amount} al mes",
-    "thisMonth": "este mes",
+    "thisMonth": "Este mes",
     "closedLineTo": "cerrado · <fig>{share} %</fig> pasó a {next} · <fig>{owed}</fig> de <fig>{planned}</fig>",
     "doneOf": "<fig>{done}</fig> de <fig>{total}</fig> hechas",
     "staysIn": "sigue en {month}",
@@ -116,7 +116,10 @@
     },
     "grid": {
       "label": "Los días de {month}, cada uno con lo hecho en él",
-      "day": "{day}: {count, plural, =0 {nada hecho} one {# hecho} other {# hechos}}"
+      "day": "{day}: {count, plural, =0 {nada hecho} one {# hecho} other {# hechos}}",
+      "legendLess": "menos",
+      "legendMore": "más",
+      "legendNote": "Cada día se pinta según lo hecho en él, frente al día con más hechos del mes. Toca un día para abrirlo."
     },
     "nav": {
       "prev": "mes anterior",
@@ -135,6 +138,7 @@
     "mark": "Marcar hecha: {name}",
     "noAmount": "en {month} · sin monto este mes",
     "nothingPlanned": "en {month} · nada planeado todavía",
+    "nothingPlannedPast": "en {month} · nada se planeó",
     "comingNothingPlanned": "Nada planeado para {month} todavía.",
     "comingPlanned": "Plan de <fig>{planned}</fig> para {month}.",
     "noTasks": "ninguna tarea en {month}",
@@ -152,7 +156,7 @@
     "unreadableBody": "Lo que cuenta de ella queda sin marcar hasta que se pueda leer. Lo demás es tuyo y está completo.",
     "empty": {
       "title": "Todavía no tienes una meta abierta.",
-      "create": "Crear una meta",
+      "create": "Abrir una meta",
       "import": "Importar un plan"
     },
     "weeks": {

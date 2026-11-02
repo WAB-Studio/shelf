@@ -257,7 +257,7 @@
   }
 
   .date {
-    font-family: var(--font-mono);
+    font-family: var(--font-sans);
     font-size: var(--pulsar-text-meta-size);
     color: var(--pulsar-muted);
   }

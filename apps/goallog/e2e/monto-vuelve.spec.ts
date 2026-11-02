@@ -47,7 +47,7 @@ test("saving the amount lands back on the month page, on Mes and on the goal tha
     // From Mes.
     await page.goto("/mes");
     const block = page.locator("section", { has: page.getByRole("heading", { name }) });
-    await block.getByRole("link", { name: /^Planear / }).click();
+    await block.getByRole("link", { name: /^Planear / }).first().click();
     await save("4");
     await expect(page).toHaveURL(/\/mes$/);
     await reset();

@@ -8,7 +8,8 @@ import { cadencePhrase, flexibleWords, metPhrase, partialPair, rowMeta } from "@
 import type { Cadence } from "@/lib/day/types";
 import { formatQuantity } from "@/lib/units/time";
 import { useTimeWords } from "@/components/ui/figure";
-import { Figure, Mark, Row, Text, type MarkState } from "@/components/ui";
+import type { StripCell } from "@/lib/day/constancy";
+import { Figure, Mark, Row, Strip, Text, type MarkState } from "@/components/ui";
 
 import { QuantitySheet } from "./quantity-sheet";
 import { type MessageKey } from "@/i18n/translator";
@@ -60,6 +61,8 @@ export type DayRowProps = {
   // A flexible commitment already met in its period, asking nothing today:
   // drawn muted, tappable all the same. `periodDone` says how far it went.
   quiet?: boolean;
+  // The commitment's last thirty days, drawn under its name; absent on a past day.
+  strip?: { cells: StripCell[]; label: string };
 };
 
 /**
@@ -92,6 +95,7 @@ export function DayRow({
   drawnToday,
   writtenLabel,
   quiet,
+  strip,
 }: DayRowProps) {
   const t = useTranslations();
   const words = useTimeWords();
@@ -179,6 +183,10 @@ export function DayRow({
     <>
       <Row
         leading={<Mark state={markState} quiet={quiet} />}
+        tile
+        stripLabel={strip?.label}
+        done={done || markState === "evidence"}
+        strip={strip ? <Strip size="row" cells={strip.cells} label={strip.label} /> : undefined}
         quiet={quiet}
         name={name}
         meta={metaNodes}
@@ -186,14 +194,10 @@ export function DayRow({
         onClick={handleTap}
         // A tap row is a toggle: its mark is drawn, never read, so done is said here instead of in a phrase.
         aria-pressed={kind === "tap" && tappable ? markState === "declared" : undefined}
+        note={note}
         still={!tappable}
         disabled={pending}
       />
-      {note ? (
-        <Text as="p" variant="sentence">
-          {note}
-        </Text>
-      ) : null}
       {error ? (
         <Text as="p" variant="sentence">
           {t(error)}

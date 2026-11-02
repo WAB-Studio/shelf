@@ -3,7 +3,7 @@ import { getTranslations } from "next-intl/server";
 
 import { EditHabitAction } from "@/components/habit/habit-edit-sheet";
 import { DeleteHabitAction, RetireAction } from "@/components/goal/retire-sheet";
-import { Button, Figure, Flex, Page, ScreenHeader, Section, Table, Text, TextLink, type TableRow } from "@/components/ui";
+import { Button, Figure, Page, ScreenHeader, Section, Table, Text, TextLink, type TableRow } from "@/components/ui";
 import { cadencePhrase } from "@/lib/day/row-phrases";
 import { LIST_TAIL, tailOf } from "@/lib/lists/tail";
 import type { HabitView } from "@/lib/queries/habit";
@@ -112,11 +112,7 @@ export async function HabitScreen({
         {hidden > 0 ? <TextLink href={seeAllHref}>{t("habit.months.seeAll")}</TextLink> : null}
         {seeLess}
       </Section>
-      {retired ? null : habit.factDayCount > 0 ? (
-        <Button block variant="outline" disabled aria-describedby="habit-locked-reason">
-          {t("habit.changeCadence")}
-        </Button>
-      ) : (
+      {retired || habit.factDayCount > 0 ? null : (
         <Button asChild block variant="outline">
           <Link href={`/metas/habitos/${habit.id}/frecuencia`}>{t("habit.changeCadence")}</Link>
         </Button>
@@ -130,16 +126,9 @@ export async function HabitScreen({
         />
       )}
       {retired ? null : habit.factDayCount > 0 ? (
-        <>
-          <Flex justify="start">
-            <Button variant="ghost" disabled aria-describedby="habit-locked-reason">
-              {t("habit.delete")}
-            </Button>
-          </Flex>
-          <Text as="p" id="habit-locked-reason" variant="sentence" tone="muted">
-            {t("plan.errors.cadenceHasFacts")}
-          </Text>
-        </>
+        <Text as="p" variant="sentence" tone="muted">
+          {t("plan.errors.cadenceHasFacts")}
+        </Text>
       ) : (
         <DeleteHabitAction label={t("habit.delete")} commitmentId={habit.id} name={habit.name} />
       )}

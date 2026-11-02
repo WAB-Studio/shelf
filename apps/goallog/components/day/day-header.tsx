@@ -1,14 +1,14 @@
 import type { ReactNode } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
-import { Face, Flex, ScreenHeader, SectionLabel, Text, TextLink, ThemeToggle } from "@/components/ui";
+import { Face, Flex, ScreenHeader, Text, TextLink, ThemeToggle } from "@/components/ui";
 
 type HeaderLink = { href: string; label: string };
 
 // The day's own header (`ArmazonEncabezado.dc.html` case 4,
 // `DiaPasadoEscritorio.dc.html`): the shared `ScreenHeader`, its controls row
-// holding the step back to the day before. Today's title is its `h1`, with the
-// date as its eyebrow and the light/dark control at its end (RNP-08):
+// holding the step back to the day before. Today's `h1` is the date in the title
+// face, the day's progress beside it, and the light/dark control at the end of the controls (RNP-08):
 // docs/goallog/DESIGN.md "Decisions taken here" puts it here and nowhere else —
 // there is no `/cuenta` screen in this app. A past day's date is its `h1`, and
 // «volver a hoy» takes the control's place.
@@ -21,6 +21,7 @@ export function DayHeader({
   toToday,
   theme,
   tally,
+  progress,
   ended,
 }: {
   date: string;
@@ -36,6 +37,8 @@ export function DayHeader({
   // «hechos 3 de 5»: a sentence with its figures in mono, under the title (a
   // past day's, under its date), absent when the day counts nothing.
   tally?: ReactNode;
+  // Today's count beside the date, absent when the day counts nothing.
+  progress?: ReactNode;
   // One quiet line per goal that ended this week, under the title.
   ended?: { id: string; text: string; href: string; see: string; seeLabel: string }[];
 }) {
@@ -94,14 +97,8 @@ export function DayHeader({
         chat
         steps={title === undefined}
         title={title ?? date}
-        eyebrow={
-          title ? (
-            // The rail already says the date from 768.
-            <Face on="phone">
-              <SectionLabel>{date}</SectionLabel>
-            </Face>
-          ) : undefined
-        }
+        eyebrow={progress ? <Face on="phone">{progress}</Face> : undefined}
+        actions={progress ? <Face on="desktop">{progress}</Face> : undefined}
         controls={controls}
         meta={tally}
         metaVariant="sentence"

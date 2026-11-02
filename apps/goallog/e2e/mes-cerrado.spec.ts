@@ -22,16 +22,18 @@ type Seeded = { goalId: string; archivedId: string; bareId: string; endedId: str
 
 async function seed(db: postgres.Sql, person: Person): Promise<Seeded> {
   const stamp = Date.now();
+  const opened = `${key(previousMonth(monthBefore))}-15T17:00:00Z`;
   const [goal] = await db<{ id: string }[]>`
     insert into goals.goals (user_id, name, created_at)
-    values (${person.id}, ${`Casa ${stamp}`}, ${`${key(previousMonth(monthBefore))}-15T17:00:00Z`}) returning id
+    values (${person.id}, ${`Casa ${stamp}`}, ${opened}) returning id
   `;
+  // Written with their goal: a fact may not predate its task, and a closed month's mark is dated in that month.
   await db`
-    insert into goals.one_offs (user_id, goal_id, name, planned_month)
+    insert into goals.one_offs (user_id, goal_id, name, planned_month, created_at)
     values
-      (${person.id}, ${goal.id}, ${`Pintar ${stamp}`}, ${monthBefore}::date),
-      (${person.id}, ${goal.id}, ${`Barrer ${stamp}`}, ${lastMonth}::date),
-      (${person.id}, ${goal.id}, ${`Lavar ${stamp}`}, ${previousMonth(monthBefore)}::date)
+      (${person.id}, ${goal.id}, ${`Pintar ${stamp}`}, ${monthBefore}::date, ${opened}),
+      (${person.id}, ${goal.id}, ${`Barrer ${stamp}`}, ${lastMonth}::date, ${opened}),
+      (${person.id}, ${goal.id}, ${`Lavar ${stamp}`}, ${previousMonth(monthBefore)}::date, ${opened})
   `;
   // A parent of the month before last: one sub-task done in it, one done on the next month's first day.
   const [parent] = await db<{ id: string }[]>`
@@ -116,7 +118,7 @@ test("past the reach, the goal's month page shows its task with no mark and no s
     await expect(page.getByRole("dialog")).toHaveCount(0);
     // A sub-task done on the next month's first day was not done in this one.
     const markOf = (name: string) =>
-      page.getByText(name, { exact: true }).locator("xpath=ancestor::*[.//*[@data-state]][1]").locator("[data-state]").first();
+      page.getByText(name, { exact: true }).locator("xpath=ancestor::*[.//*[@data-state]][1]").locator("[data-part='mark'][data-state]").first();
     await expect(markOf(`Empacar ${stamp}`)).toHaveAttribute("data-state", "declared");
     await expect(markOf(`Cargar ${stamp}`)).toHaveAttribute("data-state", "empty");
 

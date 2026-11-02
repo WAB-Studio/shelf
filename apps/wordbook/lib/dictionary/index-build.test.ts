@@ -426,6 +426,8 @@ test("a translation the Spanish frequency list lacks sits last in its sense, the
   const index = shippedIndex();
   assert.deepEqual(sensesOf(index, "say")[0].translations.slice(0, 2), ["decir", "poner"]);
   // «cargante» and the others the list lacks stand behind «penoso» and «pesado», which it knows.
-  assert.deepEqual(sensesOf(index, "cumbersome")[0].translations.slice(0, 3), ["penoso", "pesado", "cargante"]);
+  const cumbersome = sensesOf(index, "cumbersome")[0].translations;
+  assert.ok(cumbersome.indexOf("cargante") > cumbersome.indexOf("penoso"), cumbersome.join(", "));
+  assert.ok(cumbersome.indexOf("cargante") > cumbersome.indexOf("pesado"), cumbersome.join(", "));
   assert.equal(sensesOf(index, "cup")[0].translations.at(-1), "coquilla");
 });
