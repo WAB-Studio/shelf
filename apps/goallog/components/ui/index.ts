@@ -62,6 +62,8 @@ export { GroupHead } from "./group-head";
 
 export { Tag } from "./tag";
 
+export { Figures } from "./figures";
+
 export { Tile } from "./tile";
 
 export { Sheet } from "./sheet";

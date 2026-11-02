@@ -90,8 +90,10 @@ test("a past day with five daily rows (three done, one partial) and a weekly row
     }
 
     await page.goto(`/dia/${days[0]}`);
-    await expect(page.getByText(`${mainName} · ese día pedía seis`)).toHaveCount(1);
-    await expect(page.getByText(`${otherName} · ese día pedía tres`)).toHaveCount(1);
+    // What the day asked is a sentence under the goal's name, inside its head (DESIGN «Hoy»).
+    const head = (goal: string) => page.locator("[data-part='group-head']").filter({ hasText: goal });
+    await expect(head(mainName).getByText("ese día pedía seis", { exact: true })).toHaveCount(1);
+    await expect(head(otherName).getByText("ese día pedía tres", { exact: true })).toHaveCount(1);
     await expect(page.getByText(/^hechos 3 de 9 · 1 en parte$/)).toBeVisible();
 
     // The tally is a sentence: its line is Archivo, its figures DM Mono.
@@ -120,7 +122,9 @@ test("a goal whose rows that day are all weekly still says what that day asked: 
     await seedRow(db, person.id, goal, { name: `Semanal ${stamp}`, kind: "times_per_week", done: [] });
     const page = await context.newPage();
     await page.goto(`/dia/${plusDays(-1)}`);
-    await expect(page.getByText(`${name} · ese día pedía uno`)).toHaveCount(1);
+    await expect(
+      page.locator("[data-part='group-head']").filter({ hasText: name }).getByText("ese día pedía uno", { exact: true }),
+    ).toHaveCount(1);
     await expect(page.getByText("hechos 0 de 1", { exact: true })).toBeVisible();
   } finally {
     await context.close();

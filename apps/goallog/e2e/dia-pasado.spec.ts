@@ -378,7 +378,9 @@ test("a past day draws the half mark, «ese día pedía» and the count with «e
     await expect(row).toContainText(/2 de 3 min/);
     await expect(row.locator("[data-part='mark'][data-state]")).toHaveAttribute("data-state", "partial");
     await expect(page.getByText(/^hechos \d+ de \d+ · 1 en parte$/)).toBeVisible();
-    await expect(page.getByText(/Meta día pasado \d+ · ese día pedía uno/)).toBeVisible();
+    await expect(
+      page.locator("[data-part='group-head']").filter({ hasText: /Meta día pasado \d+/ }).getByText("ese día pedía uno", { exact: true }),
+    ).toBeVisible();
   } finally {
     await deleteGoal(db, personId, goalId);
   }

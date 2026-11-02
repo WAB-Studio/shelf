@@ -608,10 +608,10 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
       {groupBlocks.map(({ rootId, items, asks, tree }) => {
         const root = items[0].goal.id === rootId ? items[0].goal : openGoals.find((goal) => goal.id === rootId);
         const asked = items.reduce((total, item) => total + item.rows.length, 0);
-        const label =
-          past && asked > 0
-            ? t("day.past.asked", { goal: root?.name ?? "", count: (t.raw("day.past.askedWords") as string[])[asked] ?? asked })
-            : (root?.name ?? "");
+        const label = root?.name ?? "";
+        // A past day says what it asked as a sentence under the name, never in the title face (DESIGN «Hoy»).
+        const askedNote =
+          past && asked > 0 ? t("day.past.asked", { count: (t.raw("day.past.askedWords") as string[])[asked] ?? asked }) : undefined;
         const rootPhase = items[0].goal.id === rootId ? phaseOf(rootId) : undefined;
         const position = rootPhase ? phasePositions[rootPhase.id] : undefined;
         const weekly = root && figures.some((goal) => goal.id === root.id) ? weekMeasure[root.id] : undefined;
@@ -620,6 +620,7 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
             <Flex direction="column" gap="3">
               <GroupHead
                 name={label}
+                note={askedNote}
                 tag={position && position.total > 1 ? t("day.phase.tag", position) : undefined}
                 phase={rootPhase?.name}
                 trailing={

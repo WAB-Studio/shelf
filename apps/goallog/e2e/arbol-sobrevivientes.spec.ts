@@ -178,7 +178,9 @@ test("a past day groups by general and says how many the group asked that day (R
   const { names, context, page, at } = await onDays(browser, person, db);
   try {
     await at(`/dia/${plusDays(-1)}`);
-    expect((await mainText(page)).toLowerCase()).toContain(`${names.g} · ese día pedía dos`.toLowerCase());
+    await expect(
+      page.locator("[data-part='group-head']").filter({ hasText: names.g }).getByText("ese día pedía dos", { exact: true }),
+    ).toHaveCount(1);
   } finally {
     await context.close();
   }

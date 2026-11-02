@@ -20,7 +20,7 @@
     "writtenOnFar": "anotado el {weekday} {day} de {month}",
     "startedOn": "{goal} empezó el {weekday} {day}",
     "startedOnFar": "{goal} empezó el {weekday} {day} de {month}",
-    "asked": "{goal} · ese día pedía {count}",
+    "asked": "ese día pedía {count}",
     "askedWords": ["ninguno", "uno", "dos", "tres", "cuatro", "cinco", "seis", "siete", "ocho", "nueve"],
     "limit": "Siete días atrás es lo más lejos que se anota."
   },

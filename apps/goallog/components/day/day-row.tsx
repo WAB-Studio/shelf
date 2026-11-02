@@ -9,7 +9,7 @@ import type { Cadence } from "@/lib/day/types";
 import { formatQuantity } from "@/lib/units/time";
 import { useTimeWords } from "@/components/ui/figure";
 import type { StripCell } from "@/lib/day/constancy";
-import { Figure, Mark, Row, Strip, Text, type MarkState } from "@/components/ui";
+import { Figure, Figures, Mark, Row, Strip, Text, type MarkState } from "@/components/ui";
 
 import { QuantitySheet } from "./quantity-sheet";
 import { type MessageKey } from "@/i18n/translator";
@@ -150,7 +150,7 @@ export function DayRow({
       ? [
           ...(goalName ? [goalName, ...(meta ? [" · "] : [])] : []),
           ...(meta ?? []).map((part, index) =>
-            "figure" in part ? <Figure key={index} value={part.figure} variant="meta" /> : part.text,
+            "figure" in part ? <Figure key={index} value={part.figure} variant="meta" /> : <Figures key={index} text={part.text} />,
           ),
         ]
       : undefined;

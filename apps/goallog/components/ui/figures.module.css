@@ -1,0 +1,6 @@
+/* A figure inside a sentence: the mono face and tracking `Figure` sets, the sentence around it untouched. */
+.fig {
+  font-family: var(--font-mono);
+  letter-spacing: var(--pulsar-text-measure-tracking);
+  font-variant-numeric: tabular-nums;
+}
