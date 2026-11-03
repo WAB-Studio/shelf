@@ -11,6 +11,7 @@ import { tallyDay, tallyDays } from "@/lib/day/tally";
 import { phaseOn } from "@/lib/day/derive";
 import type { DaySlot } from "@/lib/day/types";
 import { loadWaitingTime } from "@/lib/queries/time-entries";
+import { syncTimelogEntries } from "@/lib/queries/timelog-tray";
 import { loadWeek } from "@/lib/queries/week";
 import { loadDay, type CommitmentInfo, type OneOffSummary } from "@/lib/queries/day";
 import { PAST_DAY_LIMIT } from "@/lib/validation/fact";
@@ -122,7 +123,7 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
   const [loaded, week, waitingTime] = await Promise.all([
     loadDay(day),
     past ? null : loadWeek(day, today),
-    past ? null : loadWaitingTime(),
+    past ? null : syncTimelogEntries().catch(() => undefined).then(loadWaitingTime),
   ]);
   const {
     view,
