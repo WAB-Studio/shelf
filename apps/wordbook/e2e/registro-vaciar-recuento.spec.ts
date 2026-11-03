@@ -119,7 +119,7 @@ async function seed(page: Page, rows: { sync?: SyncState; lookups?: SeedLookup[]
   );
 }
 
-async function openRegistro(page: Page, seedRows: Parameters<typeof seed>[1]): Promise<() => number> {
+async function openRecord(page: Page, seedRows: Parameters<typeof seed>[1]): Promise<() => number> {
   await deleteTranslator(page);
   await seed(page, seedRows);
   await page.goto("/registro");
@@ -227,7 +227,7 @@ async function deleteViaUi(page: Page, word: string): Promise<void> {
 }
 
 test("Idle, a row deleted: the confirmation names the words and searches that are left", async ({ page }) => {
-  const loads = await openRegistro(page, { lookups: leaveRows() });
+  const loads = await openRecord(page, { lookups: leaveRows() });
   await expect(trigger(page)).toBeVisible();
 
   await deleteViaUi(page, "leave");
@@ -240,7 +240,7 @@ test("Idle, a row deleted: the confirmation names the words and searches that ar
 test("Confirming, a row deleted under it: the body takes the new figures and the question stays open", async ({
   page,
 }) => {
-  const loads = await openRegistro(page, { lookups: leaveRows() });
+  const loads = await openRecord(page, { lookups: leaveRows() });
   await trigger(page).click();
   await expect(body(page, 3, 4)).toBeVisible();
 
@@ -251,7 +251,7 @@ test("Confirming, a row deleted under it: the body takes the new figures and the
 });
 
 test("Empty after the last row: the trigger goes and the empty state shows", async ({ page }) => {
-  const loads = await openRegistro(page, { lookups: leaveRows() });
+  const loads = await openRecord(page, { lookups: leaveRows() });
   await expect(trigger(page)).toBeVisible();
 
   await deleteViaUi(page, "leave");
@@ -263,7 +263,7 @@ test("Empty after the last row: the trigger goes and the empty state shows", asy
 });
 
 test("Empty after the last row, confirming: the open question goes with it", async ({ page }) => {
-  const loads = await openRegistro(page, { lookups: leaveRows() });
+  const loads = await openRecord(page, { lookups: leaveRows() });
   await trigger(page).click();
   await expect(keep(page)).toBeVisible();
 
@@ -301,7 +301,7 @@ test("Done, rows landed by a pull: the trigger appears on an open screen", async
 });
 
 test("A flush on an open screen: the confirmation's counts rise by one", async ({ page }) => {
-  const loads = await openRegistro(page, { lookups: leaveRows() });
+  const loads = await openRecord(page, { lookups: leaveRows() });
   await trigger(page).click();
   await expect(body(page, 3, 4)).toBeVisible();
 
@@ -315,7 +315,7 @@ test("A flush on an open screen: the confirmation's counts rise by one", async (
 test("Stale reply: with the first read held and two events fired, the body shows the second's figures", async ({
   page,
 }) => {
-  const loads = await openRegistro(page, { lookups: leaveRows() });
+  const loads = await openRecord(page, { lookups: leaveRows() });
   await trigger(page).click();
   await expect(body(page, 3, 4)).toBeVisible();
 
@@ -386,7 +386,7 @@ test("Stale reply: with the first read held and two events fired, the body shows
 });
 
 test("Cancelled: «Conservarlo» closes the question and a later delete leaves it closed", async ({ page }) => {
-  const loads = await openRegistro(page, { lookups: leaveRows() });
+  const loads = await openRecord(page, { lookups: leaveRows() });
   await trigger(page).click();
   await expect(body(page, 3, 4)).toBeVisible();
 

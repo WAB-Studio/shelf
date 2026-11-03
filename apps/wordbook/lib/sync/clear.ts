@@ -11,7 +11,11 @@ const CLEAR_ENDPOINT = "/api/log/clear";
  */
 export async function clearAccountLookups(): Promise<boolean> {
   try {
-    const response = await fetch(CLEAR_ENDPOINT, { method: "DELETE" });
+    const response = await fetch(CLEAR_ENDPOINT, {
+      method: "DELETE",
+      // The guard on the route wants JSON; it also makes the browser preflight a cross-site call.
+      headers: { "Content-Type": "application/json" },
+    });
     return response.ok;
   } catch {
     return false;

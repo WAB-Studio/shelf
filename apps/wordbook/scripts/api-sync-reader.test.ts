@@ -36,7 +36,7 @@ mock.module(here("../lib/sync/upload.ts"), { namedExports: { downloadRows: async
 
 const post = async (body: unknown) => {
   const { POST } = await import("../app/api/log/sync/route");
-  return POST(new Request("http://localhost/api/log/sync", { method: "POST", body: JSON.stringify(body) }));
+  return POST(new Request("http://localhost/api/log/sync", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }));
 };
 
 test("a round sent for another reader answers 409 and reaches no database", async () => {

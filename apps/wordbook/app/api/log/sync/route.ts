@@ -5,6 +5,7 @@ import { getReader, withReaderDb } from "@/lib/session";
 import { deviceLabel } from "@/lib/sync/device-label";
 import { syncRequestSchema, decodeCursor, encodeCursor, type SyncResponse } from "@/lib/sync/protocol";
 import { downloadRows, writeUpload, type DownloadedRow } from "@/lib/sync/upload";
+import { refuseCrossSiteRequest } from "@/lib/word/same-origin";
 
 function toWireRow(row: DownloadedRow): SyncResponse["rows"][number] {
   return {
@@ -34,6 +35,9 @@ export async function POST(request: Request): Promise<Response> {
   // Postgres, so the 401 never opens a connection.
   const reader = await getReader();
   if (!reader) return json({ error: "unauthorized" }, 401);
+
+  const refused = refuseCrossSiteRequest(request);
+  if (refused) return refused;
 
   let raw: unknown;
   try {

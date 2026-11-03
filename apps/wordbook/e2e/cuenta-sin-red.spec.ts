@@ -134,6 +134,12 @@ for (const viewport of [
       await page.addInitScript(() => {
         Object.defineProperty(navigator, "onLine", { configurable: true, get: () => false });
       });
+      // Newer Chromium fires its own `online` when the context comes back, which would reload the page
+      // before a test dispatches its own. Registered ahead of the app's listener, this one keeps the
+      // browser's event from reaching it; only the dispatched ones do.
+      await page.addInitScript(() => {
+        window.addEventListener("online", (event) => event.isTrusted && event.stopImmediatePropagation());
+      });
       await page.goto("/cuenta");
       await expect(page.getByRole("heading", { name: messages.account.title }).first()).toBeVisible();
       return api;
