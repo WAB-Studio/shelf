@@ -78,20 +78,23 @@ async function readFundRoster(): Promise<{
  * Every read, the fund's live roster included, fans out in one `Promise.all`.
  */
 export async function getDashboardData(): Promise<DashboardData> {
-  // The two aggregates keep a connection each so they run side by side; the four light
-  // reads share one, which keeps the screen under the pool's eight connections.
+  // The two aggregates keep a connection each so they run side by side; the light reads share one,
+  // which keeps the screen under the pool's eight connections.
+  // `getSessionUser` reads the claims alone, no connection: it stays outside the shared transaction, which
+  // would otherwise settle first and make it a second claims wait in a row (Q168).
   const [
     balances,
     monthFlow,
-    [accounts, roster, sessionUser, unreviewedCount, pendingDeliveryCount],
+    sessionUser,
+    [accounts, roster, unreviewedCount, pendingDeliveryCount],
   ] = await Promise.all([
     getAccountBalances(),
     getMonthlyFlow(currentMonthRange()),
+    getSessionUser(),
     withSharedTransaction(() =>
       Promise.all([
         listAccounts({ archived: false }),
         readFundRoster(),
-        getSessionUser(),
         countUnreviewedGenerated(),
         countPendingDeliveries(),
       ]),
