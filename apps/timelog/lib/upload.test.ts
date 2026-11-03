@@ -117,3 +117,18 @@ test("windows and pages add up to a day at most, none twice; a session ends afte
   assert.equal(withDay({ claude_sessions: [s("x", "2026-10-28T14:00:00Z", "2026-10-28T15:00:00Z"), s("x", "2026-10-28T14:00:00Z", "2026-10-28T15:00:00Z")] }).success, false);
   assert.equal(withDay({ claude_sessions: [s("x", "not a time", "2026-10-28T15:00:00Z")] }).success, false);
 });
+
+test("a day before the log could begin is refused, the earliest day passes", () => {
+  assert.equal(parse({ device: "pc", days: [day("1900-01-01")] }).success, false);
+  assert.equal(parse({ device: "pc", days: [day("2019-12-31")] }).success, false);
+  assert.equal(parse({ device: "pc", days: [day("2020-01-01")] }).success, true);
+});
+
+test("a page address with credentials is refused, a bare one passes (RT-18)", () => {
+  const page = (url: string) => ({ ...day(today), pages: [{ host: "github.com", url, title: "t", seconds: 5 }] });
+  assert.equal(parse({ device: "pc", days: [page("https://github.com/x/y")] }).success, true);
+  assert.equal(parse({ device: "pc", days: [page("https://github.com/@user")] }).success, true, "an @ in the path is no credential");
+  for (const url of ["https://user:pass@github.com/x", "https://user@github.com/x", "https://github.com@evil.com/x", "https://user:@github.com/x"]) {
+    assert.equal(parse({ device: "pc", days: [page(url)] }).success, false, url);
+  }
+});

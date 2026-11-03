@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { check, date, integer, pgPolicy, primaryKey, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { check, date, index, integer, pgPolicy, primaryKey, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { authenticatedRole, authUid, authUsers } from "drizzle-orm/supabase";
 
 import { timeSchema } from "./_schema";
@@ -24,6 +24,7 @@ export const claudeSessions = timeSchema.table(
   },
   (t) => [
     primaryKey({ columns: [t.userId, t.device, t.day, t.session] }),
+    index("claude_sessions_user_id_day_idx").on(t.userId, t.day),
     check("claude_sessions_seconds_range", sql`${t.seconds} between 1 and 86400`),
     check("claude_sessions_device_length", sql`char_length(${t.device}) between 1 and 80`),
     check("claude_sessions_session_length", sql`char_length(${t.session}) between 1 and 80`),

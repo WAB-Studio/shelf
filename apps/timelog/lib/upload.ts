@@ -33,6 +33,9 @@ const windowDay = z.object({
 
 const HOST = /^[a-z0-9]([a-z0-9.-]{0,118}[a-z0-9])?$/;
 
+// The first day an upload may name: ActivityWatch postdates it, and a day in 1900 would become the log's first day.
+export const EARLIEST_DAY = "2020-01-01";
+
 // A page: its address without credentials, query and fragment, whose host is the `host` it comes under (RT-18).
 const pageDay = z
   .object({
@@ -44,12 +47,13 @@ const pageDay = z
   .refine(
     (page) => {
       try {
-        return new URL(page.url).hostname.replace(/^www\./, "") === page.host;
+        const url = new URL(page.url);
+        return url.username === "" && url.password === "" && url.hostname.replace(/^www\./, "") === page.host;
       } catch {
         return false;
       }
     },
-    "an address under another host",
+    "an address with credentials or under another host",
   );
 
 // A Claude Code session on that day (RT-19): ids and times, never a message.
@@ -78,7 +82,7 @@ export function uploadSchema(today: string = civilDay()) {
         .array(
           z
             .object({
-              day: z.string().refine(isCivilDay, "not a day").refine((day) => day <= latest, "a day not yet lived"),
+              day: z.string().refine(isCivilDay, "not a day").refine((day) => day >= EARLIEST_DAY, "a day before the log began").refine((day) => day <= latest, "a day not yet lived"),
               apps: z.array(appDay).max(MAX_APPS),
               sites: z.array(siteDay).max(MAX_SITES).optional(),
               claude_code_seconds: z.number().int().min(0).max(DAY_SECONDS).optional(),

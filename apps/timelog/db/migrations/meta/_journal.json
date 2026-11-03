@@ -22,6 +22,13 @@
       "when": 1793420390405,
       "tag": "0002_windows_pages_sessions",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1793670634207,
+      "tag": "0003_day_index_and_bare_urls",
+      "breakpoints": true
     }
   ]
 }
