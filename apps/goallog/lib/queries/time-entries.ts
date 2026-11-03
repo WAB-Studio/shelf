@@ -34,7 +34,7 @@ type WaitingRow = {
   goals: TimeGoal[];
 };
 
-const timeUnit = sql`coalesce(lower(trim(g.measure_unit)) = any(array[${sql.join(TIME_UNITS.map((u) => sql`${u}`), sql`, `)}]::text[]), false)`;
+export const timeUnit = sql`coalesce(lower(trim(g.measure_unit)) = any(array[${sql.join(TIME_UNITS.map((u) => sql`${u}`), sql`, `)}]::text[]), false)`;
 
 /**
  * Hoy's tray (RP-151): the entries still waiting (not «no cuenta», nothing allocated), oldest first, and the open
