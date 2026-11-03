@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { check, date, integer, pgPolicy, primaryKey, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { check, date, index, integer, pgPolicy, primaryKey, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { authenticatedRole, authUid, authUsers } from "drizzle-orm/supabase";
 
 import { timeSchema } from "./_schema";
@@ -22,10 +22,12 @@ export const pageSeconds = timeSchema.table(
   },
   (t) => [
     primaryKey({ columns: [t.userId, t.device, t.day, t.url, t.title] }),
+    index("page_seconds_user_id_day_idx").on(t.userId, t.day),
     check("page_seconds_seconds_range", sql`${t.seconds} between 1 and 86400`),
     check("page_seconds_device_length", sql`char_length(${t.device}) between 1 and 80`),
     check("page_seconds_host_shape", sql`${t.host} ~ '^[a-z0-9]([a-z0-9.-]{0,118}[a-z0-9])?$'`),
     check("page_seconds_url_shape", sql`${t.url} ~ '^https?://' and ${t.url} !~ '[?#]' and char_length(${t.url}) <= 500`),
+    check("page_seconds_url_no_credentials", sql`${t.url} !~ '^https?://[^/]*@'`),
     check("page_seconds_title_length", sql`char_length(${t.title}) <= 300`),
     pgPolicy("page_seconds_select_self", { for: "select", to: authenticatedRole, using: sql`${authUid} = ${t.userId}` }),
   ],

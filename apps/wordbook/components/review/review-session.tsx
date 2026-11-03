@@ -4,6 +4,7 @@ import { useEffect, useEffectEvent, useRef, useState } from "react";
 import NextLink from "next/link";
 import { useFormatter, useTranslations } from "next-intl";
 
+import { deviceZone, yearWhenDifferent } from "@/lib/format/zone";
 import { useDictionary } from "@/lib/dictionary/use-dictionary";
 import type { Sense } from "@/lib/dictionary/index-build";
 import { cardBack, cardFront } from "@/lib/log/anki";
@@ -98,6 +99,7 @@ function readyState(
 export function ReviewSession() {
   const t = useTranslations("review");
   const format = useFormatter();
+  const timeZone = deviceZone();
   const tWord = useTranslations("word");
   const { lookup } = useDictionary();
   const [state, setState] = useState<SessionState>({ kind: "loading" });
@@ -282,8 +284,8 @@ export function ReviewSession() {
             <Text muted>
               {t("nextDue", {
                 when: dueWhen(state.nextDue, clock),
-                time: format.dateTime(state.nextDue, { hour: "numeric", minute: "2-digit" }),
-                date: format.dateTime(state.nextDue, { day: "numeric", month: "long" }),
+                time: format.dateTime(state.nextDue, { hour: "numeric", minute: "2-digit", timeZone }),
+                date: format.dateTime(state.nextDue, { day: "numeric", month: "long", timeZone, ...yearWhenDifferent(state.nextDue, clock, timeZone) }),
               })}
             </Text>
           )}

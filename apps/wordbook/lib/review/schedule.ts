@@ -1,4 +1,5 @@
 import { createEmptyCard, fsrs, Rating, type Card, type Grade } from "ts-fsrs";
+import { civilDay } from "@/lib/format/zone";
 
 // RL-68: a word's place in the review, as the device keeps it. Plain numbers, so a row reads back from
 // IndexedDB exactly as it was written; `ts-fsrs` only ever sees a card rebuilt from it.
@@ -30,10 +31,8 @@ const RATING: Record<ReviewGrade, Grade> = {
 // No fuzz: the same answer on the same day always schedules the same way, which a test can hold.
 const scheduler = fsrs({ enable_fuzz: false });
 
-export function localDay(now: number): string {
-  const date = new Date(now);
-  const pad = (value: number) => String(value).padStart(2, "0");
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+export function localDay(now: number, zone?: string): string {
+  return civilDay(now, zone);
 }
 
 function toCard(card: ReviewCard | null, now: number): Card {

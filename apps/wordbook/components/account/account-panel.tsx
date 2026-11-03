@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useFormatter, useTranslations } from "next-intl";
 
 import { sendSignInLink, signOut, verifySignInCode } from "@/app/actions/account";
+import { deviceZone } from "@/lib/format/zone";
 import type { SendSignInLinkResult, VerifySignInCodeResult } from "@/app/actions/account";
 import { signInCodeSchema } from "@/lib/account/sign-in-code";
 import { clearPending, readPending, savePending } from "@/lib/account/pending-sign-in";
@@ -594,7 +595,7 @@ function SyncedSection({
                       hour: "numeric",
                       minute: "2-digit",
                       hour12: true,
-                      timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+                      timeZone: deviceZone(),
                     })
                     .replace(/\s/g, "\u00a0"),
                 })

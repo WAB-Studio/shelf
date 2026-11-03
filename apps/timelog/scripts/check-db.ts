@@ -238,3 +238,49 @@ test("a person reads their own windows, pages and sessions and none of another's
     denied,
   );
 });
+
+const causeOf = (error: unknown) => String((error as { cause?: Error }).cause?.message);
+
+test("a page address with credentials is refused by the table itself (RT-18)", async () => {
+  const on = "2026-10-30";
+  await assert.rejects(
+    db`insert into timelog.page_seconds (user_id, device, day, host, url, title, seconds) values (${ana.id}, 'pc', ${on}, 'github.com', 'https://user:pass@github.com/x', '', 5)`,
+    /page_seconds_url_no_credentials/,
+  );
+  await db`insert into timelog.page_seconds (user_id, device, day, host, url, title, seconds) values (${ana.id}, 'pc', ${on}, 'medium.com', 'https://medium.com/@user', '', 5)`;
+  await assert.rejects(
+    upload(ana, "pc", [{ day: on, apps: [], pages: [{ host: "github.com", url: "https://user@github.com/x", title: "", seconds: 5 }] }]),
+    /page_seconds_url_no_credentials/,
+  );
+});
+
+test("a person cannot add a key for, or revoke a key of, another (RNT-01)", async () => {
+  const forged = mintKey();
+  await assert.rejects(
+    asPerson(ana, (tx) => tx.execute(sql`insert into timelog.access_keys (user_id, name, key_hash, hint) values (${beto.id}, 'forged', ${forged.hash}, ${forged.hint})`)),
+    (error) => /row-level security/.test(causeOf(error)),
+  );
+  const own = mintKey();
+  await asPerson(ana, (tx) => tx.execute(sql`insert into timelog.access_keys (user_id, name, key_hash, hint) values (${ana.id}, 'second', ${own.hash}, ${own.hint})`));
+
+  const theirs = mintKey();
+  await db`insert into timelog.access_keys (user_id, name, key_hash, hint) values (${beto.id}, 'live', ${theirs.hash}, ${theirs.hint})`;
+  const revoked = await asPerson(ana, (tx) => tx.execute(sql`update timelog.access_keys set revoked_at = now() where user_id = ${beto.id} returning id`).then((rows) => rows.length));
+  assert.equal(revoked, 0, "another person's key is untouched");
+  const [untouched] = await db`select revoked_at from timelog.access_keys where user_id = ${beto.id} and name = 'live'`;
+  assert.equal(untouched.revoked_at, null);
+});
+
+test("a person reads no allowed email, and anon reads no table of the app (RNT-01)", async () => {
+  await assert.rejects(asPerson(ana, (tx) => tx.execute(sql`select email from timelog.allowed_emails`)), denied);
+  for (const table of ["access_keys", "allowed_emails", "app_seconds", "site_seconds", "claude_code_seconds", "window_seconds", "page_seconds", "claude_sessions"]) {
+    await assert.rejects(
+      db.begin(async (tx) => {
+        await tx`set local role anon`;
+        await tx.unsafe(`select 1 from timelog.${table} limit 1`);
+      }),
+      /permission denied/,
+      table,
+    );
+  }
+});

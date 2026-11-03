@@ -5,6 +5,7 @@ import { useFormatter, useTranslations } from "next-intl";
 import { z } from "zod";
 
 import { elapsed } from "@/lib/format/elapsed";
+import { deviceZone, yearWhenDifferent } from "@/lib/format/zone";
 import { markRetired, readSyncState } from "@/lib/log/record";
 import { Button, Flex, Grid, Heading, MetaLabel, Separator, Spinner, Text } from "@/components/ui";
 
@@ -76,7 +77,7 @@ function DeviceRowItem({
   const gone = elapsed(seenAt, now);
   const since = new Date(row.createdAt);
   // The server formats in its own zone (UTC in production); the reader reads their own day.
-  const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const timeZone = deviceZone();
   const { browser, platform } = parseLabel(row.label);
   const name =
     browser && platform
@@ -111,6 +112,8 @@ function DeviceRowItem({
             date: t("sinceDate", {
               day: format.dateTime(since, { day: "numeric", timeZone }),
               month: format.dateTime(since, { month: "short", timeZone }),
+              hasYear: "year" in yearWhenDifferent(since.getTime(), now, timeZone) ? "yes" : "no",
+              year: format.dateTime(since, { year: "numeric", timeZone }),
             }),
           })}
         </Text>

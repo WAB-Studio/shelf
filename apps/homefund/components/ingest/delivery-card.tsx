@@ -39,7 +39,7 @@ import { civilDateToDate, todayInBogota } from "@/lib/dates";
 import { categoryNamesById } from "@/lib/fund/category-names";
 import { deliveryCurrency } from "@/lib/fund/glance";
 import { scopeOfAccounts } from "@/lib/fund/category-scope";
-import { centsToPesos } from "@/lib/money";
+import { centsToDecimal } from "@/lib/money";
 import { useActionErrorToast } from "@/lib/use-action-toast";
 import type { AcceptDeliveryInput } from "@/lib/validation/ingest";
 
@@ -79,7 +79,7 @@ function movementDefaults(
   const amount =
     delivery.proposedAmountCents === null
       ? ""
-      : String(centsToPesos(delivery.proposedAmountCents));
+      : centsToDecimal(delivery.proposedAmountCents);
   const accountId = delivery.proposedAccountId;
   const isIncome = delivery.proposedDirection === "income";
   const categoryId = proposedCategoryId(delivery, options);
