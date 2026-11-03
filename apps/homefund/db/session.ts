@@ -68,13 +68,12 @@ export async function requireUser(): Promise<SessionUser> {
 export async function withUserDb<T>(
   fn: (tx: Transaction) => Promise<T>,
 ): Promise<T> {
-  const session = await getVerifiedClaims();
-
-  // Inside `withSharedTransaction` the read joins the screen's transaction.
+  // Inside `withSharedTransaction` the read joins the screen's transaction, already settled under this
+  // request's verified session: no second claims read, which would queue behind the first (Q168).
   const shared = sharedTransaction.getStore();
-  if (shared && session && shared.claims === JSON.stringify(session.claims)) {
-    return fn(shared.tx);
-  }
+  if (shared) return fn(shared.tx);
+
+  const session = await getVerifiedClaims();
 
   // No fallback to an unrestricted connection: without a session there is no query.
   // `search_path` is what lets raw SQL keep naming a table unqualified now
@@ -89,7 +88,7 @@ export async function withUserDb<T>(
   );
 }
 
-type SharedTransaction = { tx: Transaction; claims: string };
+type SharedTransaction = { tx: Transaction };
 
 const sharedTransaction = new AsyncLocalStorage<SharedTransaction>();
 
@@ -101,10 +100,7 @@ const sharedTransaction = new AsyncLocalStorage<SharedTransaction>();
  * its own. A write belongs outside, in its own `withUserDb`.
  */
 export function withSharedTransaction<T>(fn: () => Promise<T>): Promise<T> {
-  return withUserDb(async (tx) => {
-    const session = await getVerifiedClaims();
-    return sharedTransaction.run({ tx, claims: JSON.stringify(session?.claims) }, fn);
-  });
+  return withUserDb((tx) => sharedTransaction.run({ tx }, fn));
 }
 
 /**
