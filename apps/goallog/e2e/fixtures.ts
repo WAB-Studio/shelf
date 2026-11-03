@@ -116,6 +116,7 @@ async function clearPerson(sql: postgres.Sql, id: string): Promise<void> {
   await sql`delete from goals.access_tokens where user_id = ${id}`;
   await sql`delete from goals.model_calls where user_id = ${id}`;
   await sql`delete from goals.facts where user_id = ${id}`;
+  await sql`delete from goals.time_entries where user_id = ${id}`;
   await sql`delete from goals.one_offs where user_id = ${id}`;
   await sql`delete from goals.commitments where user_id = ${id}`;
   await sql`delete from goals.phases where user_id = ${id}`;

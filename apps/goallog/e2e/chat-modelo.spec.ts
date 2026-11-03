@@ -209,6 +209,43 @@ test.describe("the chat against a stubbed model (RP-91–RP-94)", () => {
     }
   });
 
+  test("«ayer trabajé 8 horas»: the proposal reads the time and the goal, and «Hacer» records and confirms it", async ({
+    person,
+    browser,
+    baseURL,
+    db,
+  }) => {
+    const world = await seed(db, person.id);
+    const { context, page } = await open(browser, baseURL!, person);
+    const rows = () =>
+      db<{ minutes: number; source: string; placed: number }[]>`
+        select e.minutes, e.source,
+               coalesce((select sum(a.minutes)::int from goals.time_allocations a where a.entry_id = e.id), 0) as placed
+          from goals.time_entries e where e.user_id = ${person.id}`;
+    try {
+      await send(page, "ayer trabajé 8 horas en inglés");
+      const yesterday = new Date(Date.now() - 86_400_000).toLocaleDateString("es", {
+        day: "numeric",
+        month: "short",
+        timeZone: "America/Bogota",
+      });
+      const sentence = chat.change.record_time
+        .replace("{time}", "8 h")
+        .replace("{day}", yesterday.replace(".", ""))
+        .replace("{goal}", chat.recordTimeGoal.replace("{goal}", "Inglés B1"))
+        .replace("{note}", "");
+      await expect(page.getByText(sentence, { exact: true })).toBeVisible();
+      expect(await rows()).toEqual([]);
+      await hacer(page).click();
+      await expect(hechos(page)).toHaveCount(1);
+      expect(await rows()).toEqual([{ minutes: 480, source: "chat", placed: 480 }]);
+    } finally {
+      await context.close();
+      await db`delete from goals.time_entries where user_id = ${person.id}`;
+      await drop(db, world);
+    }
+  });
+
   test("a month amount reads «sin monto → 4 h»", async ({ person, browser, baseURL, db }) => {
     const world = await seed(db, person.id);
     const { context, page } = await open(browser, baseURL!, person);

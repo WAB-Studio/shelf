@@ -10,6 +10,7 @@ import { civilDateInZone } from "@/lib/zone";
 import { formatQuantity, isTimeUnit } from "@/lib/units/time";
 import type { loadDay } from "@/lib/queries/day";
 import type { GoalCommitment, GoalView, LooseCommitment, MetasSummary } from "@/lib/queries/goal";
+import type { TimeLedgerLine } from "@/lib/queries/time-entries";
 import type { DaylessOneOff, GoalOneOff, ScheduledOneOff } from "@/lib/queries/one-offs";
 
 import units from "../../messages/es/units.json";
@@ -444,5 +445,26 @@ export function shapeLoose(input: { dayless: DaylessOneOff[]; scheduled: Schedul
     dayless: input.dayless.map(one),
     scheduled: input.scheduled.map((oneOff) => ({ ...one(oneOff), day: oneOff.day })),
     inGoals: input.inGoals.map((oneOff) => ({ ...one(oneOff), plannedMonth: oneOff.plannedMonth })),
+  };
+}
+
+// Confirmed and waiting minutes by day and goal (RP-151). A line with no goal is time nobody has named yet.
+export function shapeTimeLedger(
+  lines: TimeLedgerLine[],
+  goalNames: ReadonlyMap<string, { name: string }>,
+  range: { from: string; to: string },
+) {
+  const sum = (pick: (line: TimeLedgerLine) => number) => lines.reduce((total, line) => total + pick(line), 0);
+  return {
+    from: range.from,
+    to: range.to,
+    days: lines.map((line) => ({
+      day: line.day,
+      goal: line.goalId === null ? null : { id: line.goalId, name: goalNames.get(line.goalId)?.name ?? null },
+      confirmed: amountOf(line.confirmedMinutes, "minutos"),
+      waiting: amountOf(line.waitingMinutes, "minutos"),
+    })),
+    confirmed: amountOf(sum((line) => line.confirmedMinutes), "minutos"),
+    waiting: amountOf(sum((line) => line.waitingMinutes), "minutos"),
   };
 }

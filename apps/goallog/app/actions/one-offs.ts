@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 
 import { and, eq, sql } from "drizzle-orm";
 
-import { facts, goals, oneOffs } from "@/db/schema";
+import { facts, goals, oneOffs, timeAllocations, timeEntries } from "@/db/schema";
 import { readReceipt, writeReceipt } from "@/lib/receipts";
 import { getPerson, withGoalsDb, type Transaction } from "@/lib/session";
 import { monthOutsideSpan, monthStart } from "@/lib/validation/budget";
@@ -308,10 +308,46 @@ export async function completeOneOff(input: CompleteOneOffInput): Promise<Comple
 }
 
 /**
+ * The task's time waits «por confirmar» (RP-151): one pending entry holds what the clock says beyond what the person
+ * already placed or dismissed from earlier entries of the same task. A time under what was placed is refused: the
+ * person undoes that entry first. A time equal to it leaves nothing waiting.
+ */
+async function keepTaskEntry(
+  tx: Transaction,
+  { oneOffId, goalId, userId, minutes }: { oneOffId: string; goalId: string | null; userId: string; minutes: number },
+) {
+  const entries = await tx
+    .select({
+      id: timeEntries.id,
+      minutes: timeEntries.minutes,
+      handled: sql<boolean>`${timeEntries.dismissedAt} is not null or exists (select 1 from ${timeAllocations} a where a.entry_id = ${timeEntries}.id)`,
+    })
+    .from(timeEntries)
+    .where(eq(timeEntries.oneOffId, oneOffId));
+  const handled = entries.filter((entry) => entry.handled).reduce((total, entry) => total + entry.minutes, 0);
+  const pending = entries.find((entry) => !entry.handled);
+  if (minutes < handled) throw new NamedError("day.errors.timeBelowPlaced");
+
+  const waiting = minutes - handled;
+  if (waiting === 0) {
+    if (pending) await tx.delete(timeEntries).where(eq(timeEntries.id, pending.id));
+  } else if (pending) {
+    await tx.update(timeEntries).set({ minutes: waiting, day: todayInZone() }).where(eq(timeEntries.id, pending.id));
+  } else {
+    // Named columns only: `created_at` is withheld from `authenticated`.
+    await tx.execute(sql`
+      insert into ${timeEntries} (user_id, day, minutes, source, one_off_id, suggested_goal_id)
+      values (${userId}, ${todayInZone()}, ${waiting}, 'task', ${oneOffId}, ${goalId})
+    `);
+  }
+}
+
+/**
  * Keeps the minutes spent on a task estimated in time without completing it
  * (RP-147): a fact means «done» (RP-20), so the time sits on the task until
  * the person checks it. `extendEstimate` also makes a time over the estimate
- * the estimate, in the one statement.
+ * the estimate, in the one statement. The time waits as an entry to confirm
+ * (RP-151) in the same transaction.
  */
 export async function recordTaskTime(input: RecordTaskTimeInput): Promise<{ ok: true } | { ok: false; error: MessageKey }> {
   const parsed = recordTaskTimeSchema.safeParse(input);
@@ -328,6 +364,7 @@ export async function recordTaskTime(input: RecordTaskTimeInput): Promise<{ ok: 
       const [task] = await tx
         .select({
           estimate: oneOffs.estimate,
+          goalId: oneOffs.goalId,
           measureUnit: goals.measureUnit,
           // Read under the lock: a task done elsewhere meanwhile is refused by name, not as missing.
           done: sql<boolean>`exists (select 1 from ${facts} f where f.one_off_id = ${oneOffs}.id)`,
@@ -347,6 +384,8 @@ export async function recordTaskTime(input: RecordTaskTimeInput): Promise<{ ok: 
         .where(eq(oneOffs.id, oneOffId))
         .returning({ id: oneOffs.id });
       if (updated.length === 0) throw new NamedError("day.errors.notFound");
+
+      await keepTaskEntry(tx, { oneOffId, goalId: task.goalId, userId: person.id, minutes });
     });
   } catch (error) {
     if (error instanceof NamedError) return { ok: false, error: messageKey(error.message) };

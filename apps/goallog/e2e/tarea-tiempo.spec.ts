@@ -2,7 +2,7 @@ import { test, expect } from "./fixtures";
 import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
 
 // RP-147: a task estimated in time keeps the minutes spent on it without being done; only the check completes it, and
-// its fact then holds those minutes, which count in the goal's measure.
+// its fact then holds those minutes. They count in the goal's measure only once confirmed (RP-151).
 
 function plusDays(days: number): string {
   const date = civilDateToDate(todayInZone());
@@ -55,6 +55,14 @@ test("recording 2 h and lengthening keeps the task open; the check then complete
     await expect(page.getByRole("button", { name: `Marcar como hecho: ${name}` })).toHaveCount(0);
     const [fact] = await db<{ quantity: number }[]>`select quantity from goals.facts where one_off_id = ${taskId}`;
     expect(fact.quantity).toBe(120);
+
+    // Done, the time still waits: the goal's total holds nothing until the person confirms it.
+    const [waiting] = await db<{ minutes: number }[]>`select minutes from goals.time_entries where one_off_id = ${taskId}`;
+    expect(waiting.minutes).toBe(120);
+    await page.goto("/");
+    await page.getByRole("button", { name: "Confirmar las horas que esperan" }).click();
+    await page.getByRole("dialog").getByRole("button", { name: /^Confirmar en Meta tiempo/ }).click();
+    await expect(page.getByRole("dialog")).toBeHidden();
 
     await page.goto(`/metas/${goalId}`);
     await expect(page.getByText(/2\s?h/).first()).toBeVisible();

@@ -26,6 +26,7 @@ import { queryEvidenceBySource } from "@/lib/queries/evidence";
 import type { EvidenceOutcome } from "@/lib/queries/evidence";
 import {
   toCadence,
+  confirmedTimeFacts,
   countsInMeasure,
   factUnit,
   toDeclaredFact,
@@ -99,6 +100,8 @@ type FactRow = {
   commitment_unit: string | null;
   // RP-148: the day's own target; `to_jsonb(f)` carries it.
   day_target?: number | null;
+  // RP-151: a confirmed allocation of time, shaped as a fact by `confirmedTimeFacts`.
+  time_allocation?: boolean;
 };
 
 type MonthBudgetRow = { goal_id: string; month: string; amount: number };
@@ -259,7 +262,8 @@ async function queryGoalsRow(
                ) order by f.day, f.written_at, f.id), '[]'::json)
          from "goals"."facts" f
          left join "goals"."commitments" c on c.id = f.commitment_id
-         where f.day between least(${weekStart}::date, date_trunc('month', ${day}::date)::date) and ${day}::date) as facts,
+         where f.day between least(${weekStart}::date, date_trunc('month', ${day}::date)::date) and ${day}::date)::jsonb
+        || ${confirmedTimeFacts(sql`true`, { from: sql`least(${weekStart}::date, date_trunc('month', ${day}::date)::date)`, to: day })} as facts,
       (select coalesce(json_agg(jsonb_build_object(
                  'commitment_id', f.commitment_id,
                  'day', f.day,
