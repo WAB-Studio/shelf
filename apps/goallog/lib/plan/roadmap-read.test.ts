@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { dayBefore } from "@/lib/day/weeks";
 
 import { fillPlan, type PlanInput, type PlanTask } from "./roadmap";
 import { doneIn, openMonthsOf, planMonthList, planMonthOf, planMoved, planShare, rhythmToMeet } from "./roadmap-read";
+import { addDaysToCivilDate } from "@/lib/zone";
 
 const SEP = "2026-09-01";
 const OCT = "2026-10-01";
@@ -187,7 +187,7 @@ test("planShare: a task created today and fixed to a closed month counts in that
 });
 
 test("planMoved: a goal opened in the closed month still reads its notice", () => {
-  // Opened on the 2nd: September plans 11 of 12 (RP-74), so the plan still moves.
+  // Opened on the 2nd: September plans 11 of 12 (RP-76), so the plan still moves.
   const notice = planMoved({ ...input(septemberHalf(), { openedOn: "2026-09-02" }), seen: null });
   assert.equal(notice?.closedMonth, SEP);
 });
@@ -271,7 +271,7 @@ test("planShare: what was carried never passes what the month planned, task by t
 test("rhythmToMeet: a plan that ends on the goal's last day asks for no faster rhythm (RP-52, RP-53)", () => {
   const tasks = [task("all-october", { estimate: 12 })];
   const fits = input(tasks, { rhythm: 12, horizon: NOV, today: "2026-10-02" });
-  assert.equal(dayBefore(fits.horizon as string), "2026-10-31");
+  assert.equal(addDaysToCivilDate(fits.horizon as string, -1), "2026-10-31");
   assert.equal(fillPlan(fits).end, "2026-10-31");
   assert.equal(rhythmToMeet(fits, 12), null);
 });

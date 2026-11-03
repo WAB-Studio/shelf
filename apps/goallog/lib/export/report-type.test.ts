@@ -3,7 +3,7 @@ import { test } from "node:test";
 
 import type { GoalReport } from "./report";
 
-// A report made by hand names its rhythm, even when it is null (RP-110).
+// A report made by hand names its rhythm, even when it is null (RP-120).
 test("GoalReport.rhythm is required", () => {
   // @ts-expect-error rhythm is missing
   const withoutRhythm: Pick<GoalReport, "rhythm" | "name"> = { name: "x" };

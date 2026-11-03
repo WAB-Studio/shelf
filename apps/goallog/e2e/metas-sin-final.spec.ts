@@ -157,7 +157,7 @@ for (const width of [360, 1280]) {
     // ---- the goal's screen ----------------------------------------------------------------------
 
     test("an endless goal's screen draws «sin final» and «ponerle final», no «semana N de M», no «terminó», no «mover el final» (RP-99)", async ({ person, browser, baseURL, db }) => {
-      // Kills: `horizonWeeks` / `dayBefore(goal.horizon)` computed with no condition.
+      // Kills: `horizonWeeks` / `addDaysToCivilDate(goal.horizon, -1)` computed with no condition.
       const id = await seedOpenGoal(db, person, { name: "Cuidado personal", unit: MINUTES, horizon: null, rhythm: 480 });
       await seedTask(db, person, id, "Pedir cita", true);
       const { page, context } = await visit(browser, baseURL, person, `/metas/${id}`, width);

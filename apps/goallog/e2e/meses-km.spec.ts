@@ -1,7 +1,6 @@
 import { test, expect } from "./fixtures";
-import { dayBefore } from "@/lib/day/weeks";
 import { monthOf, nextMonth } from "@/lib/plan/months";
-import { todayInZone } from "@/lib/zone";
+import { addDaysToCivilDate, todayInZone } from "@/lib/zone";
 
 // RP-69 (RP-65): «Por mes» of a goal measured in km says how many tasks each
 // month's list holds, and that goal's empty month never promises time.
@@ -24,7 +23,7 @@ const label = (month: string) => NAMES[Number(month.slice(5, 7)) - 1];
 const seg = (month: string) => month.slice(0, 7);
 
 const thisMonth = monthOf(todayInZone());
-const lastMonth = monthOf(dayBefore(thisMonth));
+const lastMonth = monthOf(addDaysToCivilDate(thisMonth, -1));
 const followingMonth = nextMonth(thisMonth);
 const horizon = nextMonth(followingMonth);
 

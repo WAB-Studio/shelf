@@ -20,7 +20,7 @@ const refusal = (key: string): ChatChangeResult => ({ ok: false, ...errorOf(key)
  * Makes one change the chat proposed (RP-92), on the person's «Hacer». It opens
  * no write path of its own: the act is the catalogue's, so its refusal is the
  * one `/mcp` answers. A tool outside the write catalogue runs nothing. A
- * `requestId` reaches a creating act as its `request_id` (RP-56), so a «Hacer»
+ * `requestId` reaches a creating act as its `request_id` (RP-139), so a «Hacer»
  * resent after a lost answer creates once.
  */
 export async function makeChatChange(input: unknown): Promise<ChatChangeResult> {

@@ -2,9 +2,8 @@ import type { Browser, Locator, Page } from "@playwright/test";
 import type postgres from "postgres";
 
 import { test, expect, type Person } from "./fixtures";
-import { dayBefore } from "@/lib/day/weeks";
 import { monthOf, nextMonth } from "@/lib/plan/months";
-import { todayInZone } from "@/lib/zone";
+import { addDaysToCivilDate, todayInZone } from "@/lib/zone";
 
 // Module 815 (RP-28, RP-32, RP-35, RP-43, RP-73), board `MesesFuturoYTareas`: no screen of the months says a unit the
 // catalogue translates («searches»); a unit other than time is said once, at the end («0 de 60 búsquedas»); a month
@@ -12,7 +11,7 @@ import { todayInZone } from "@/lib/zone";
 // tasks, the label in two lines with no dangling «·».
 
 const thisMonth = monthOf(todayInZone());
-const lastMonth = monthOf(dayBefore(thisMonth));
+const lastMonth = monthOf(addDaysToCivilDate(thisMonth, -1));
 const nextOne = nextMonth(thisMonth);
 const horizon = nextMonth(nextMonth(nextOne));
 const today = todayInZone();

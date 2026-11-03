@@ -421,7 +421,7 @@ test("a fixed task with no hours in a month of amount 0 ends on the month's last
   assert.equal(partIn(roadmap, NOV, "empty").endsOn, "2026-11-30");
 });
 
-// RP-74: the spec's own goal, 16 September to 7 October at 10 h a month.
+// RP-76: the spec's own goal, 16 September to 7 October at 10 h a month.
 const SHORT = { budgets: [], rhythm: 600, openedOn: "2026-09-16", horizon: "2026-10-08" };
 
 test("amountOf: a goal's first month plans its share, 15 of 30 days of 600 is 300", () => {

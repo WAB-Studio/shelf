@@ -61,7 +61,7 @@ type FormState =
 
 // `EntrarFormulario`, `EntrarCódigo`: the one form that asks for an address and
 // then for the six-digit code the mail carries, on `/entrar` and on the consent
-// signed out (RP-18, RP-136). The screen gives its own title and lead; the
+// signed out (RP-136). The screen gives its own title and lead; the
 // fields, the buttons and the refusals are this file's. `next` is where the
 // code, or the link beside it, brings the person back to.
 export function SignInForm({

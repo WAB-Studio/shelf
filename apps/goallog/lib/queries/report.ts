@@ -6,7 +6,6 @@ import { sourceKey } from "@/i18n/translator";
 import { phaseOn } from "@/lib/day/derive";
 import type { EvidenceDay, Phase, ReviewWeek } from "@/lib/day/types";
 import { measureByWeek } from "@/lib/day/review";
-import { dayBefore } from "@/lib/day/weeks";
 import { branchOf, buildTree, rollUp, spanStart, type GoalMonths, type RolledUp, type Tree, type TreeRow } from "@/lib/goals/tree";
 import { queryEvidenceBySource } from "@/lib/queries/evidence";
 import type { GoalReport, Report, ReportTask } from "@/lib/export/report";
@@ -26,7 +25,7 @@ import { placeOf } from "@/lib/queries/month";
 import { confirmedTimeFacts, factUnit, toCadence, toPhase, type PhaseRow } from "@/lib/queries/rows";
 import { getPerson, withGoalsDb, withReadingDb, type Transaction } from "@/lib/session";
 import { isTimeUnit } from "@/lib/units/time";
-import { civilDateInZone, TIME_ZONE, todayInZone } from "@/lib/zone";
+import { addDaysToCivilDate, civilDateInZone, TIME_ZONE, todayInZone } from "@/lib/zone";
 
 // One row per open goal, each carrying what `queryGoalRow` (`goal.ts`) reads
 // for a single one.
@@ -39,7 +38,7 @@ type ReportRow = {
   tasks: (TaskRow & { in_plan: boolean; created_at: string; position: number })[];
 };
 
-// One statement over every goal not archived (RP-49). RLS narrows it to the
+// One statement over every goal not archived (RP-77). RLS narrows it to the
 // caller's own rows (RNP-05).
 async function queryReportRows(tx: Transaction): Promise<ReportRow[]> {
   const rows = await tx.execute<ReportRow>(sql`
@@ -80,7 +79,7 @@ async function queryReportRows(tx: Transaction): Promise<ReportRow[]> {
 const reportEvidenceFrom = sql`(select min((g.created_at at time zone ${TIME_ZONE})::date)
                       from "goals"."goals" g where g.archived_at is null)`;
 
-// The goal's plan, read the way `planMonthList` and `planShare` ask (RP-49).
+// The goal's plan, read the way `planMonthList` and `planShare` ask (RP-77).
 // A goal that holds goals has no rhythm and no budgets of its own (RP-80).
 function planInputOf(row: ReportRow, today: string, holds: boolean): PlanInput {
   const tasks: PlanTask[] = row.tasks.map((task) => ({
@@ -114,7 +113,7 @@ function hasAmountOf(item: PlanItem): boolean {
     : item.children.some((child) => child.estimate !== null);
 }
 
-// What the plan hands «Mes», done and not (RP-49). A parent is done on its
+// What the plan hands «Mes», done and not (RP-77). A parent is done on its
 // last child's day; `owes` counts what is undone today.
 function toReportTask(item: PlanItem): ReportTask {
   const leaf = item.children.length === 0;
@@ -168,7 +167,7 @@ function withinGoal(
 }
 
 /**
- * The export's data (RP-49): every goal not archived, in two transactions
+ * The export's data (RP-77): every goal not archived, in two transactions
  * fanned with `Promise.all` — one over the goals, one over the evidence — so
  * the goal count never lengthens the chain (RNP-03). An evidence rejection
  * degrades to `"unreadable"` and every goal keeps its declared half (RNP-04).
@@ -210,14 +209,14 @@ export async function loadReport(today: string = todayInZone()): Promise<Report>
     // A time goal with no rhythm has no amount to read a month by, so it reads tasks.
     const unit = row.goal.measure_unit;
     const countsTasks = unit === null || (isTimeUnit(unit) && (row.goal.rhythm ?? null) === null);
-    // A goal with no end hands over every month, closed ones included, marked `endless` so the screen picks what to show (RP-106).
+    // A goal with no end hands over every month, closed ones included, marked `endless` so the screen picks what to show (RP-120).
     const noEnd = row.goal.horizon === null;
 
     const report: GoalReport = {
       id: row.goal.id,
       name: row.goal.name,
       horizon: row.goal.horizon,
-      endedOn: row.goal.horizon !== null && row.goal.horizon <= today ? dayBefore(row.goal.horizon) : null,
+      endedOn: row.goal.horizon !== null && row.goal.horizon <= today ? addDaysToCivilDate(row.goal.horizon, -1) : null,
       unit: row.goal.measure_unit,
       measureName: row.goal.measure_name,
       note: row.goal.note ?? null,
@@ -361,7 +360,7 @@ function weekSplitsOf(
     .flatMap((week) => {
       const secondMonth = monthOf(week.endsOn);
       const parts = [
-        { month: monthOf(week.startsOn), startsOn: week.startsOn, endsOn: dayBefore(secondMonth) },
+        { month: monthOf(week.startsOn), startsOn: week.startsOn, endsOn: addDaysToCivilDate(secondMonth, -1) },
         { month: secondMonth, startsOn: secondMonth, endsOn: week.endsOn },
       ];
       return parts.map((part) => ({ index: week.index, ...part, total: total(part.startsOn, part.endsOn) }));

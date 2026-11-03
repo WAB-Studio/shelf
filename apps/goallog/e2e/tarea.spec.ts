@@ -1,7 +1,6 @@
 import { test, expect } from "./fixtures";
-import { dayBefore } from "@/lib/day/weeks";
 import { monthOf, nextMonth } from "@/lib/plan/months";
-import { todayInZone } from "@/lib/zone";
+import { addDaysToCivilDate, todayInZone } from "@/lib/zone";
 import { boxOf } from "./box";
 
 // `TareaNueva`, `SubtareaNueva`, `TareaSinMedida` (RP-30, RP-31,
@@ -29,7 +28,7 @@ function label(month: string): string {
 }
 
 const thisMonth = monthOf(todayInZone());
-const lastMonth = monthOf(dayBefore(thisMonth));
+const lastMonth = monthOf(addDaysToCivilDate(thisMonth, -1));
 const following = nextMonth(thisMonth);
 const horizon = nextMonth(following);
 const seg = (month: string) => month.slice(0, 7);

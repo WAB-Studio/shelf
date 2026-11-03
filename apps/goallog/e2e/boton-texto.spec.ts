@@ -1,7 +1,6 @@
 import { test, expect } from "./fixtures";
-import { dayBefore } from "@/lib/day/weeks";
 import { monthOf, nextMonth } from "@/lib/plan/months";
-import { todayInZone } from "@/lib/zone";
+import { addDaysToCivilDate, todayInZone } from "@/lib/zone";
 import { boxOf } from "./box";
 
 // From 1024 a button or link-button standing alone in a `Page`
@@ -23,7 +22,7 @@ const NAMES = [
   "diciembre",
 ];
 const thisMonth = monthOf(todayInZone());
-const lastMonth = monthOf(dayBefore(thisMonth));
+const lastMonth = monthOf(addDaysToCivilDate(thisMonth, -1));
 const horizon = nextMonth(nextMonth(thisMonth));
 
 test("a goal's /meses with no amount: «Planear» is its text wide at 1440 and the column wide at 390", async ({

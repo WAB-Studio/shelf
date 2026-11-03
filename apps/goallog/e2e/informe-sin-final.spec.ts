@@ -37,7 +37,7 @@ for (const width of [360, 1280]) {
     baseURL,
     db,
   }) => {
-    // Kills: `dayBefore(goal.horizon)` unconditional (a «terminada el …» or «hasta el …» line), or a month list that
+    // Kills: `addDaysToCivilDate(goal.horizon, -1)` unconditional (a «terminada el …» or «hasta el …» line), or a month list that
     // starts at the opening, or stops at a horizon that is not there.
     const name = `Leer ${Date.now()}`;
     const goalId = await seedOpen(db, person.id, name, null);
@@ -76,7 +76,7 @@ test(`the paper of a goal with no end has no «hasta el» and prints the same tw
   baseURL,
   db,
 }) => {
-  // Kills (also with `?todo=1`, RP-106: the closed months the screen opens leaking into the paper, or the «ver todo» link printed): the paper's own `dayBefore(goal.horizon)` or its month list running to a horizon (the screen is right, the PDF is not).
+  // Kills (also with `?todo=1`, RP-106: the closed months the screen opens leaking into the paper, or the «ver todo» link printed): the paper's own `addDaysToCivilDate(goal.horizon, -1)` or its month list running to a horizon (the screen is right, the PDF is not).
   const name = `Leer ${Date.now()}`;
   const goalId = await seedOpen(db, person.id, name, null);
   const context = await browser.newContext({ storageState: person.sessionFile, baseURL: baseURL!, viewport: A4 });

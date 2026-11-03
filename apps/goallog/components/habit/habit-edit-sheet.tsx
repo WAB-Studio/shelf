@@ -16,7 +16,7 @@ export type EditHabitActionProps = {
 };
 
 /**
- * `HabitoPantalla` (RP-104): «Editar» opens a sheet with the name and the note
+ * `HabitoPantalla` (RP-135): «Editar» opens a sheet with the name and the note
  * and nothing else. Cadence, quantity and the months already read stay as they are.
  */
 export function EditHabitAction({ habitId, name, note }: EditHabitActionProps) {

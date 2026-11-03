@@ -11,7 +11,7 @@ function refusal(input: unknown): string | null {
   return parsed.success ? null : parsed.error.issues[0].message;
 }
 
-// RP-117: the name and the unit are trimmed before they are measured, and the same schema serves the form.
+// RP-134: the name and the unit are trimmed before they are measured, and the same schema serves the form.
 test("setGoalMeasureSchema: name 1 to 120, unit 1 to 40, both trimmed", () => {
   const ok = setGoalMeasureSchema.safeParse({ goalId, name: "  Cajas embaladas ", unit: " cajas " });
   assert.equal(ok.success, true);

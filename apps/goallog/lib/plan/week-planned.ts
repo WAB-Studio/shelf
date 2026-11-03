@@ -1,6 +1,5 @@
-import { dayBefore } from "@/lib/day/weeks";
 import { daysInMonth, type MonthBudget } from "@/lib/plan/months";
-import { civilDateToDate, dateToCivilDate } from "@/lib/zone";
+import { addDaysToCivilDate, civilDateToDate, dateToCivilDate } from "@/lib/zone";
 
 /**
  * RP-58: each month's planned amount spread evenly over the month's days,
@@ -16,7 +15,7 @@ export function weekPlanned(input: {
   rhythm?: number | null;
 }): number | null {
   const amounts = new Map(input.budgets.map((b) => [b.month, b.amount]));
-  const last = input.horizon === null ? null : dayBefore(input.horizon);
+  const last = input.horizon === null ? null : addDaysToCivilDate(input.horizon, -1);
   const from = input.weekStart > input.openedOn ? input.weekStart : input.openedOn;
   const to = last !== null && last < input.weekEnd ? last : input.weekEnd;
   // lcm(28, 29, 30, 31): every month length divides it, so each day's share is an exact integer.

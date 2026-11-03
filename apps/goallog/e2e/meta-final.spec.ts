@@ -1,8 +1,8 @@
 import type { Page } from "@playwright/test";
 import type postgres from "postgres";
 
-import { dayBefore, horizonForWeeks } from "@/lib/day/weeks";
-import { addWeeksToCivilDate, civilDateToDate, civilDayMonthYear, todayInZone, weekOf } from "@/lib/zone";
+import { horizonForWeeks } from "@/lib/day/weeks";
+import { addDaysToCivilDate, addWeeksToCivilDate, civilDateToDate, civilDayMonthYear, todayInZone, weekOf } from "@/lib/zone";
 
 import { test, expect } from "./fixtures";
 import goal from "../messages/es/goal.json";
@@ -96,8 +96,8 @@ for (const [width, height] of WIDTHS) {
           await page.goto(`/metas/${goalId}`);
           await expect(page.getByText(/ · hasta el 30 sep 2027$/)).toBeVisible();
           const sheet = await openSheet(page, goalId);
-          await expect(sheet.getByText(`termina el ${civilDayMonthYear(dayBefore(MID_WEEK_HORIZON))}`)).toBeVisible();
-          expect(longDay(dayBefore(MID_WEEK_HORIZON))).toBe("jueves, 30 de septiembre");
+          await expect(sheet.getByText(`termina el ${civilDayMonthYear(addDaysToCivilDate(MID_WEEK_HORIZON, -1))}`)).toBeVisible();
+          expect(longDay(addDaysToCivilDate(MID_WEEK_HORIZON, -1))).toBe("jueves, 30 de septiembre");
         });
       } finally {
         await db`delete from goals.goals where id = ${goalId} and user_id = ${person.id}`;
@@ -131,11 +131,11 @@ for (const [width, height] of WIDTHS) {
           const sheet = await openSheet(page, goalId);
           const field = sheet.getByLabel(WEEKS_LABEL);
           const opening = Number(await field.inputValue());
-          expect(opening).toBe(weeksFromThisTo(dayBefore(MID_WEEK_HORIZON)));
+          expect(opening).toBe(weeksFromThisTo(addDaysToCivilDate(MID_WEEK_HORIZON, -1)));
           const target = fromThisWeek(opening + 4);
           await field.fill(String(opening + 4));
-          await expect(sheet.getByText(`termina el ${civilDayMonthYear(dayBefore(target))}`)).toBeVisible();
-          expect(longDay(dayBefore(target))).toMatch(/^domingo, /);
+          await expect(sheet.getByText(`termina el ${civilDayMonthYear(addDaysToCivilDate(target, -1))}`)).toBeVisible();
+          expect(longDay(addDaysToCivilDate(target, -1))).toMatch(/^domingo, /);
           await sheet.getByRole("button", { name: MOVE }).click();
           await expect(sheet).toBeHidden();
           await expect.poll(() => horizonOf(db, goalId)).toBe(target);
@@ -152,8 +152,8 @@ for (const [width, height] of WIDTHS) {
         await withPage({ person, browser, baseURL }, async (page) => {
           const sheet = await openSheet(page, goalId);
           await expect(sheet.getByLabel(WEEKS_LABEL)).toHaveValue("12");
-          await expect(sheet.getByText(`termina el ${civilDayMonthYear(dayBefore(horizon))}`)).toBeVisible();
-          expect(longDay(dayBefore(horizon))).toMatch(/^domingo, /);
+          await expect(sheet.getByText(`termina el ${civilDayMonthYear(addDaysToCivilDate(horizon, -1))}`)).toBeVisible();
+          expect(longDay(addDaysToCivilDate(horizon, -1))).toMatch(/^domingo, /);
         });
       } finally {
         await db`delete from goals.goals where id = ${goalId} and user_id = ${person.id}`;
@@ -175,7 +175,7 @@ for (const [width, height] of WIDTHS) {
           await field.fill("12");
           await expect(sheet.getByText(INVALID)).toHaveCount(0);
           await expect(field).not.toHaveAttribute("aria-invalid", "true");
-          await expect(sheet.getByText(`termina el ${civilDayMonthYear(dayBefore(horizon))}`)).toBeVisible();
+          await expect(sheet.getByText(`termina el ${civilDayMonthYear(addDaysToCivilDate(horizon, -1))}`)).toBeVisible();
         });
       } finally {
         await db`delete from goals.goals where id = ${goalId} and user_id = ${person.id}`;
@@ -227,7 +227,7 @@ test("the end line and its sheet hold at 360 (RNP-07)", async ({ person, browser
     await expect(page.getByText(/ · hasta el 30 sep 2027$/)).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(360);
     const sheet = await openSheet(page, goalId);
-    await expect(sheet.getByText(`termina el ${civilDayMonthYear(dayBefore(MID_WEEK_HORIZON))}`)).toBeVisible();
+    await expect(sheet.getByText(`termina el ${civilDayMonthYear(addDaysToCivilDate(MID_WEEK_HORIZON, -1))}`)).toBeVisible();
     await sheet.getByLabel(WEEKS_LABEL).fill("0");
     await expect(sheet.getByText(INVALID)).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(360);

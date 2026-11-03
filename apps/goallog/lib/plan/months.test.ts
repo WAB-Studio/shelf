@@ -26,7 +26,7 @@ function evidenceDay(day: string, quantity: number, unit: string): EvidenceDay {
 
 const OCT = "2026-10-01";
 const budget = { month: OCT, amount: 720 };
-// A goal that fills September to November whole, for the rules that are not RP-74's.
+// A goal that fills September to November whole, for the rules that are not RP-76's.
 const span = { openedOn: "2026-09-01", horizon: "2026-12-01" };
 
 test("previousMonth: steps back within a year and across January", () => {
@@ -159,7 +159,7 @@ test("monthRows: a month with no budget reads the rhythm; a budget wins, 0 inclu
       reached: new Map(),
       rhythm,
     }).map((row) => row.planned);
-  // September opens on the 10th: 21 of its 30 days plan 210 of 300 (RP-74).
+  // September opens on the 10th: 21 of its 30 days plan 210 of 300 (RP-76).
   assert.deepEqual(rows([{ month: OCT, amount: 720 }], 300), [210, 720, 300]);
   assert.deepEqual(rows([{ month: OCT, amount: 0 }], 300), [210, 0, 300]);
   assert.deepEqual(rows([{ month: OCT, amount: 720 }]), [null, 720, null]);

@@ -1,8 +1,7 @@
 import month from "../messages/es/month.json";
 import { test, expect } from "./fixtures";
-import { dayBefore } from "@/lib/day/weeks";
 import { monthOf, nextMonth } from "@/lib/plan/months";
-import { todayInZone } from "@/lib/zone";
+import { addDaysToCivilDate, todayInZone } from "@/lib/zone";
 
 // RP-32, RP-35: a closed month says where its share went, with the next
 // month's name (`PalabrasDelPlan`): «66 % pasó a octubre».
@@ -16,7 +15,7 @@ const fill = (template: string, values: Record<string, string>) =>
   template.replace(/\{(\w+)\}/g, (_, key: string) => values[key]);
 
 const thisMonth = monthOf(todayInZone());
-const lastMonth = monthOf(dayBefore(thisMonth));
+const lastMonth = monthOf(addDaysToCivilDate(thisMonth, -1));
 
 test("a closed month reads «66 % pasó a <next month>» in the list and on its page (RP-32, RP-35)", async ({
   person,

@@ -1,9 +1,8 @@
 import type { Locator } from "@playwright/test";
 
 import { test, expect } from "./fixtures";
-import { dayBefore } from "@/lib/day/weeks";
 import { monthOf, nextMonth } from "@/lib/plan/months";
-import { todayInZone } from "@/lib/zone";
+import { addDaysToCivilDate, todayInZone } from "@/lib/zone";
 import monthMessages from "../messages/es/month.json";
 import { boxOf } from "./box";
 
@@ -48,8 +47,8 @@ function label(month: string): string {
 }
 
 const thisMonth = monthOf(todayInZone());
-const lastMonth = monthOf(dayBefore(thisMonth));
-const twoBack = monthOf(dayBefore(lastMonth));
+const lastMonth = monthOf(addDaysToCivilDate(thisMonth, -1));
+const twoBack = monthOf(addDaysToCivilDate(lastMonth, -1));
 const following = nextMonth(thisMonth);
 const horizon = nextMonth(following);
 const seg = (month: string) => month.slice(0, 7);

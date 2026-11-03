@@ -14,7 +14,7 @@ const oneOffDay = () =>
     error: "day.errors.oneOffDayPast",
   });
 
-// One rule for the act, the template and the AI (RP-45): line breaks kept,
+// One rule for the act, the template and the AI (RP-88): line breaks kept,
 // ends trimmed, empty is no note. The length is judged after normalising.
 export const noteSchema = z
   .string({ error: "day.errors.oneOffNoteTooLong" })
@@ -33,7 +33,7 @@ export const createOneOffSchema = z.object({
   day: oneOffDay().nullable(),
   // Absent, a one-off belongs to nothing (RP-20) and its week is still shown.
   goalId: z.uuid({ error: "plan.errors.goalInvalid" }).nullish(),
-  // In the goal's measure unit (RP-30); the server refuses a goal with none.
+  // In the goal's measure unit (RP-68); the server refuses a goal with none.
   estimate: z
     .number({ error: "month.errors.estimateInvalid" })
     .int({ error: "month.errors.estimateInvalid" })
@@ -47,7 +47,7 @@ export const createOneOffSchema = z.object({
   note: noteSchema.nullish(),
   // A task of the goal's plan with no month of its own: the plan places it (RP-50).
   inPlan: z.boolean({ error: "month.errors.invalid" }).optional(),
-  // A resend of the same create answers the first answer and writes nothing (RP-56).
+  // A resend of the same create answers the first answer and writes nothing (RP-139).
   requestId: z.uuid({ error: "month.errors.invalid" }).optional(),
 })
   .refine((input) => !input.inPlan || (input.goalId != null && input.day == null && input.parentId == null), {
@@ -86,11 +86,14 @@ export const completeOneOffSchema = z.object({
 export type CompleteOneOffInput = z.infer<typeof completeOneOffSchema>;
 
 // RP-147: the minutes spent on a task estimated in time, kept without completing it;
-// `extendEstimate` makes them its new estimate.
+// `extendEstimate` makes them its new estimate; `complete` also checks the task, on `day` (RP-129) or today,
+// in the same act.
 export const recordTaskTimeSchema = z.object({
   oneOffId: z.uuid({ error: "day.errors.invalid" }),
   minutes: quantitySchema,
   extendEstimate: z.boolean().optional(),
+  complete: z.boolean().optional(),
+  day: civilDate("day.errors.dayInvalid").optional(),
 });
 
 export type RecordTaskTimeInput = z.infer<typeof recordTaskTimeSchema>;

@@ -3,14 +3,8 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 import { test, expect, settled, type Person } from "./fixtures";
-import { dayBefore } from "@/lib/day/weeks";
 import { nextMonth } from "@/lib/plan/months";
-import {
-  civilDateToDate,
-  civilDateShort,
-  dateToCivilDate,
-  todayInZone,
-} from "@/lib/zone";
+import { addDaysToCivilDate, civilDateShort, civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
 import type postgres from "postgres";
 import exportMessages from "../messages/es/export.json";
 
@@ -707,7 +701,7 @@ test.describe("the report's figures and its paper (RP-31, RP-32, RP-49, RP-35)",
       const horizon = plusDays(90);
       await expect(
         page.getByText(
-          `mide en horas y minutos · hasta el ${longDate(dayBefore(horizon))}`,
+          `mide en horas y minutos · hasta el ${longDate(addDaysToCivilDate(horizon, -1))}`,
         ),
       ).toBeVisible();
       await expect(

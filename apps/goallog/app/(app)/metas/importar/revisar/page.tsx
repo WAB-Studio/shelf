@@ -14,7 +14,7 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 // The auth gate, today's day and a snapshot of every open goal, for the review to match the draft's goals
-// against (RP-130); the draft itself lives in the tab's storage, so the client reads it (RP-37) and the
+// against (RP-130); the draft itself lives in the tab's storage, so the client reads it (RP-130) and the
 // names to match are not known here.
 export default async function ImportReviewPage() {
   const person = await getPerson();

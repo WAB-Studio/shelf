@@ -137,7 +137,7 @@ test("setGoalNoteSchema: trims, turns blank into null, refuses past 100000", () 
   assert.equal(!long.success && long.error.issues[0].message, "tree.errors.noteTooLong");
 });
 
-// RP-56: a create the network lost is resent with the id it first carried. The id is optional and,
+// RP-139: a create the network lost is resent with the id it first carried. The id is optional and,
 // when sent, a uuid: anything else is refused before a statement runs.
 const REQUEST_ID = "3f2c8a5e-1d4b-4c6a-9e7f-0a1b2c3d4e5f";
 const requestIdCases = [

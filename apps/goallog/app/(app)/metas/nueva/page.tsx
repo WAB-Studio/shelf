@@ -11,7 +11,7 @@ export async function generateMetadata(): Promise<Metadata> {
   return { title: t("newGoal") };
 }
 
-// The least it takes to open a goal (RP-11, `MetaNueva.dc.html`): the whole
+// The least it takes to open a goal (RP-99, `MetaNueva.dc.html`): the whole
 // screen is `NewGoalForm`'s own — this file is the auth gate and nothing else,
 // the same shape `app/page.tsx` already takes for the day.
 export default async function NewGoalPage() {
