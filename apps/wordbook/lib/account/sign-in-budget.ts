@@ -41,6 +41,24 @@ export async function claimSignInLink(
 }
 
 /**
+ * RL-73's ceiling on code attempts, so a six-digit code is not left to Auth's
+ * limit alone: the caller's attempts a day, then the address's, claimed in that
+ * order so a stranger exhausts their own and never the owner's. Right or wrong
+ * counts. No salt or no caller address keeps the action open, as for links.
+ */
+export async function claimSignInAttempt(headers: Headers, address: string): Promise<boolean> {
+  const salt = env.CLIENT_KEY_SALT;
+  const caller = scopedClientKey("signin-verify", headers);
+  if (!salt || !caller) {
+    logDark("signin", "no-caller");
+    return true;
+  }
+  if (!(await claimClientCall(caller, env.SIGN_IN_VERIFY_DAILY_CLIENT_CAP))) return false;
+  const recipient = scopeClientKey("signin-verify-to", clientKeyFromAddress(address.toLowerCase(), salt))!;
+  return claimClientCall(recipient, env.SIGN_IN_VERIFY_DAILY_ADDRESS_CAP);
+}
+
+/**
  * Gives back what `claimSignInLink` spent when Auth refused the send, so a
  * refused send leaves all three ceilings where they were. Floors at zero.
  */

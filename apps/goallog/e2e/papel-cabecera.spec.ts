@@ -3,11 +3,10 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 import { test, expect } from "./fixtures";
-import { dayBefore } from "./meta-arbol-seed";
 import { PAGES, openedOnDay, seedHabit, seedOpenGoal } from "./metas-sin-final-seed";
 import { monthLabel, monthStartOf, shift, TODAY } from "./sin-final-seed";
 import { budget, openedIn, range } from "./mes-siguiente-seed";
-import { civilDateToDate } from "@/lib/zone";
+import { addDaysToCivilDate, civilDateToDate } from "@/lib/zone";
 
 import type { Browser, Page } from "@playwright/test";
 import type { Db } from "./mes-siguiente-seed";
@@ -84,7 +83,7 @@ const LABEL = "leer · por mes · 14 de 27 meses";
 const MONTHS_LEFT = lineWords();
 
 function lineWords() {
-  return `1 mes más, hasta el ${wordsOf(dayBefore(horizonIn(3)))}`;
+  return `1 mes más, hasta el ${wordsOf(addDaysToCivilDate(horizonIn(3), -1))}`;
 }
 
 type At = { page: number; at: number };

@@ -1,5 +1,5 @@
-import { dayBefore } from "@/lib/day/weeks";
 import { monthOf, nextMonth } from "./months";
+import { addDaysToCivilDate } from "@/lib/zone";
 
 export type Task = {
   id: string;
@@ -101,10 +101,10 @@ function carriedIn(tasks: Task[], month: string): MonthItem[] {
   return items.sort((a, b) => compareMonths(a.carriedFrom, b.carriedFrom));
 }
 
-// Carried tasks first, then the month's own (RP-30). `done` reads at the
+// Carried tasks first, then the month's own (RP-68). `done` reads at the
 // earlier of `today` and the month's last day.
 export function monthList(tasks: Task[], month: string, today: string): MonthItem[] {
-  const lastDay = dayBefore(nextMonth(month));
+  const lastDay = addDaysToCivilDate(nextMonth(month), -1);
   const readAt = today < lastDay ? today : lastDay;
   // A month after today's has nothing left undone yet (RP-31).
   const carried = month <= monthOf(today) ? carriedIn(tasks, month) : [];

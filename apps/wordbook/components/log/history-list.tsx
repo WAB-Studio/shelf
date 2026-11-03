@@ -10,6 +10,7 @@ import { readWordStudy, type StudyRow } from "@/lib/log/summary";
 import { countRecords, LOG_CLEARED_EVENT, LOG_FLUSHED_EVENT, readSyncState } from "@/lib/log/record";
 import { deleteStudyGroup, LOG_DELETED_EVENT } from "@/lib/log/delete";
 import { countKind } from "@/lib/log/outcome";
+import { deviceZone, yearWhenDifferent } from "@/lib/format/zone";
 import { groupByDay, newestRows } from "@/lib/log/diary";
 import { filterStudyRows, rememberFilter } from "@/lib/log/study-filter";
 import { splitTranslations } from "@/lib/log/translation-line";
@@ -347,7 +348,8 @@ export function HistoryList() {
   const format = useFormatter();
   // The day «today» means is the one the screen opened on.
   const [openedAt] = useState(() => Date.now());
-  const days = useMemo(() => groupByDay(newestRows(visible, shownRows), openedAt), [visible, shownRows, openedAt]);
+  const timeZone = deviceZone();
+  const days = useMemo(() => groupByDay(newestRows(visible, shownRows), openedAt, timeZone), [visible, shownRows, openedAt, timeZone]);
 
   const remove = useCallback(async (key: string): Promise<void> => {
     if (inFlightRef.current.has(key)) return;
@@ -507,7 +509,7 @@ export function HistoryList() {
                     ? t("study.dayYesterday", { count: day.rows.length })
                     : t("study.dayOther", {
                         count: day.rows.length,
-                        date: format.dateTime(day.at, { weekday: "long", day: "numeric", month: "short" }),
+                        date: format.dateTime(day.at, { weekday: "long", day: "numeric", month: "short", timeZone, ...yearWhenDifferent(day.at, openedAt, timeZone) }),
                       })}
               </MetaLabel>
               <Grid columns={{ initial: "1", lg: "2", xl: "3" }} gap="3" align="start">

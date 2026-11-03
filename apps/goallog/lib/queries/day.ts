@@ -21,11 +21,11 @@ import type { PlanInput, PlanItem, PlanTask } from "@/lib/plan/roadmap";
 import { planMonthList, planMoved, type PlanNotice } from "@/lib/plan/roadmap-read";
 import { monthLine, monthOf, reachedByMonth, type MonthLine } from "@/lib/plan/months";
 import { phasePositions } from "@/lib/day/row-phrases";
-import { dayBefore } from "@/lib/day/weeks";
 import { queryEvidenceBySource } from "@/lib/queries/evidence";
 import type { EvidenceOutcome } from "@/lib/queries/evidence";
 import {
   toCadence,
+  confirmedTimeFacts,
   countsInMeasure,
   factUnit,
   toDeclaredFact,
@@ -37,7 +37,7 @@ import {
 } from "@/lib/queries/rows";
 import { sourceKey, type SourceKey } from "@/i18n/translator";
 import { getPerson, withGoalsDb, withReadingDb, type Transaction } from "@/lib/session";
-import { civilDateInZone, TIME_ZONE, todayInZone, weekOf } from "@/lib/zone";
+import { addDaysToCivilDate, civilDateInZone, TIME_ZONE, todayInZone, weekOf } from "@/lib/zone";
 import { branchOf, buildTree, rollUp, rootOf, type GoalMonths, type Level, type Tree } from "@/lib/goals/tree";
 
 // `withReadingDb`'s query fans out over `knownSourceKeys()`
@@ -99,6 +99,8 @@ type FactRow = {
   commitment_unit: string | null;
   // RP-148: the day's own target; `to_jsonb(f)` carries it.
   day_target?: number | null;
+  // RP-151: a confirmed allocation of time, shaped as a fact by `confirmedTimeFacts`.
+  time_allocation?: boolean;
 };
 
 type MonthBudgetRow = { goal_id: string; month: string; amount: number };
@@ -259,7 +261,8 @@ async function queryGoalsRow(
                ) order by f.day, f.written_at, f.id), '[]'::json)
          from "goals"."facts" f
          left join "goals"."commitments" c on c.id = f.commitment_id
-         where f.day between least(${weekStart}::date, date_trunc('month', ${day}::date)::date) and ${day}::date) as facts,
+         where f.day between least(${weekStart}::date, date_trunc('month', ${day}::date)::date) and ${day}::date)::jsonb
+        || ${confirmedTimeFacts(sql`true`, { from: sql`least(${weekStart}::date, date_trunc('month', ${day}::date)::date)`, to: day })} as facts,
       (select coalesce(json_agg(jsonb_build_object(
                  'commitment_id', f.commitment_id,
                  'day', f.day,
@@ -421,7 +424,7 @@ function toPhaseInfo(row: PhaseRow): PhaseInfo {
   return { ...toPhase(row), goalId: row.goal_id };
 }
 
-// A goal's own name and measure (RP-11, RP-14), read beside `DayView` rather
+// A goal's own name and measure (RP-99, RP-14), read beside `DayView` rather
 // than folded into it: the day engine derives a slot, never a group.
 export type GoalSummary = {
   id: string;
@@ -553,7 +556,7 @@ function toOneOffSummary(row: OneOffRow): OneOffSummary {
 // `toCadence` reads.
 export type CommitmentInfo = {
   id: string;
-  // Null: a habit with no goal (RP-100).
+  // Null: a habit with no goal (RP-113).
   goalId: string | null;
   name: string;
   kind: SatisfiedBy["kind"];
@@ -820,7 +823,7 @@ export async function loadDay(day: string): Promise<{
   // Each open goal's notice that a closed month moved its end; today only, `{}` on any other day.
   planNotice: Record<string, PlanNotice | null>;
   commitments: CommitmentInfo[];
-  // Habits with no goal (RP-100), beside the goals: their commitments and the day's slots for them.
+  // Habits with no goal (RP-113), beside the goals: their commitments and the day's slots for them.
   loose: { commitments: CommitmentInfo[]; slots: DaySlot[] };
   // The civil day of the person's oldest goal or loose habit, archived included; null without either.
   firstGoalDay: string | null;
@@ -937,7 +940,7 @@ export async function loadDay(day: string): Promise<{
     endedThisWeek: row.ended_this_week.map((goal) => ({
       id: goal.id,
       name: goal.name,
-      lastDay: dayBefore(goal.horizon),
+      lastDay: addDaysToCivilDate(goal.horizon, -1),
     })),
     weekMeasure: weekMeasureOf(goals, row, evidenceOutcome, day, weekStart),
     monthLine: monthLines,

@@ -4,7 +4,7 @@ import { civilDate } from "./civil-date";
 
 export const GOAL_NAME_MAX = 120;
 
-// RP-56: the id a client mints once per create and resends when the answer was lost. Never typed
+// RP-139: the id a client mints once per create and resends when the answer was lost. Never typed
 // by a person, so its refusal borrows a generic sentence.
 const requestId = z.uuid({ error: "plan.errors.notFound" }).optional();
 
@@ -60,7 +60,7 @@ export function phasesOverlap(a: PhaseSpan, b: PhaseSpan): boolean {
 }
 
 // Whether a span's own last day still falls within the goal's horizon
-// (RP-11, RP-15): a goal names one horizon, and a phase is a span *of* it,
+// (RP-99, RP-15): a goal names one horizon, and a phase is a span *of* it,
 // never past it; a phase may end on the horizon itself (RP-25). Compared as civil dates, never as week numbers — the
 // horizon is stored as a date, and this holds regardless of which week
 // convention drew the span.
@@ -160,7 +160,7 @@ const satisfactionSchema = z.discriminatedUnion("satisfaction", [
 export const addCommitmentSchema = z.intersection(
   z.intersection(
     z.object({
-      // Absent: a habit with no goal (RP-100).
+      // Absent: a habit with no goal (RP-113).
       goalId: z.uuid({ error: "plan.errors.goalInvalid" }).optional(),
       name: z
         .string({ error: "plan.errors.nameEmpty" })

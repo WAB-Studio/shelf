@@ -10,6 +10,7 @@ import { civilDateInZone } from "@/lib/zone";
 import { formatQuantity, isTimeUnit } from "@/lib/units/time";
 import type { loadDay } from "@/lib/queries/day";
 import type { GoalCommitment, GoalView, LooseCommitment, MetasSummary } from "@/lib/queries/goal";
+import type { TimeLedgerLine } from "@/lib/queries/time-entries";
 import type { DaylessOneOff, GoalOneOff, ScheduledOneOff } from "@/lib/queries/one-offs";
 
 import units from "../../messages/es/units.json";
@@ -199,7 +200,7 @@ export function shapeGoalList(
     open: list.open.map(one),
     ended: list.ended.map(one),
     archived: list.archived.map(one),
-    // Habits with no goal (RP-100), live and retired.
+    // Habits with no goal (RP-113), live and retired.
     looseHabits: loose.map((habit) => ({ ...shapeGoalCommitment(habit), note: habit.note })),
   };
 }
@@ -222,7 +223,7 @@ export function shapeGoal(view: GoalView) {
         : { month: monthKey(view.month.month), ...shapeLine(view.month, unit) },
     phases: view.phases.map(shapePhase),
     commitments: view.commitments.map(shapeGoalCommitment),
-    // The goal's units per month (RP-50); the AI sets it with `set_rhythm` (RP-119). Null for a goal that holds goals.
+    // The goal's units per month (RP-50); the AI sets it with `set_rhythm` (RP-139). Null for a goal that holds goals.
     rhythm: amountOrNull(view.rhythm, unit),
     // The day the plan's last task fills, null while it cannot say.
     end: view.roadmap.end,
@@ -334,7 +335,7 @@ export function shapeDay(loaded: LoadedDay) {
       };
     }),
     slots: view.slots.map(slotOf),
-    // Habits with no goal (RP-100): the commitments and what they ask today.
+    // Habits with no goal (RP-113): the commitments and what they ask today.
     loose: {
       commitments: loaded.loose.commitments.map((commitment) => ({
         id: commitment.id,
@@ -444,5 +445,26 @@ export function shapeLoose(input: { dayless: DaylessOneOff[]; scheduled: Schedul
     dayless: input.dayless.map(one),
     scheduled: input.scheduled.map((oneOff) => ({ ...one(oneOff), day: oneOff.day })),
     inGoals: input.inGoals.map((oneOff) => ({ ...one(oneOff), plannedMonth: oneOff.plannedMonth })),
+  };
+}
+
+// Confirmed and waiting minutes by day and goal (RP-151). A line with no goal is time nobody has named yet.
+export function shapeTimeLedger(
+  lines: TimeLedgerLine[],
+  goalNames: ReadonlyMap<string, { name: string }>,
+  range: { from: string; to: string },
+) {
+  const sum = (pick: (line: TimeLedgerLine) => number) => lines.reduce((total, line) => total + pick(line), 0);
+  return {
+    from: range.from,
+    to: range.to,
+    days: lines.map((line) => ({
+      day: line.day,
+      goal: line.goalId === null ? null : { id: line.goalId, name: goalNames.get(line.goalId)?.name ?? null },
+      confirmed: amountOf(line.confirmedMinutes, "minutos"),
+      waiting: amountOf(line.waitingMinutes, "minutos"),
+    })),
+    confirmed: amountOf(sum((line) => line.confirmedMinutes), "minutos"),
+    waiting: amountOf(sum((line) => line.waitingMinutes), "minutos"),
   };
 }

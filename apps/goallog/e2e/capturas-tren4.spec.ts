@@ -5,9 +5,8 @@ import exportMessages from "../messages/es/export.json";
 import monthMessages from "../messages/es/month.json";
 import roadmap from "../messages/es/roadmap.json";
 import { test as base, expect } from "./fixtures";
-import { dayBefore } from "@/lib/day/weeks";
 import { monthOf, nextMonth } from "@/lib/plan/months";
-import { todayInZone } from "@/lib/zone";
+import { addDaysToCivilDate, todayInZone } from "@/lib/zone";
 
 // Each test states what the
 // board owes the person, at the width the capture was taken.
@@ -28,7 +27,7 @@ const test = base.extend<{ mine: Page }>({
 
 const today = todayInZone();
 const m0 = monthOf(today);
-const lastMonth = monthOf(dayBefore(m0));
+const lastMonth = monthOf(addDaysToCivilDate(m0, -1));
 const horizon = [1, 2, 3, 4, 5, 6].reduce((month) => nextMonth(month), m0);
 const stamp = Date.now();
 const monthDone = "2 de 3 tareas hechas";

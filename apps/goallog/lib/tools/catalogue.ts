@@ -23,12 +23,15 @@ import {
 } from "@/app/actions/plan";
 import { editPhase } from "@/app/actions/plan-edit";
 import { setRhythm } from "@/app/actions/roadmap";
-import { shapeDay, shapeGoal, shapeGoalList, shapeLoose, shapeMonth, shapeReport } from "@/lib/mcp/shape";
+import { confirmTimeEntry, recordTimeEntry } from "@/app/actions/time-entries";
+import { shapeDay, shapeGoal, shapeGoalList, shapeLoose, shapeMonth, shapeReport, shapeTimeLedger } from "@/lib/mcp/shape";
 import { planMonthList } from "@/lib/plan/roadmap-read";
+import { loadChangeNames } from "@/lib/queries/chat";
 import { loadDay } from "@/lib/queries/day";
 import { listGoalsForMetas, listLooseCommitments, loadGoal } from "@/lib/queries/goal";
 import { listDaylessOneOffs, listGoalOneOffs, listScheduledOneOffs } from "@/lib/queries/one-offs";
 import { loadReport } from "@/lib/queries/report";
+import { loadTimeLedger } from "@/lib/queries/time-entries";
 import { todayInZone } from "@/lib/zone";
 
 import mcp from "../../messages/es/mcp.json";
@@ -55,6 +58,8 @@ type ActResult =
 const goalId = z.uuid();
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const month = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, "month is YYYY-MM");
+const civilDay = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "a day is YYYY-MM-DD");
+const RANGE_DAYS_MAX = 366;
 
 // The inputs of the writes are as loose as the wire allows: the act's own schema
 // refuses a value, with its own key, and a stricter shape here would turn that
@@ -77,7 +82,7 @@ function camelKeys(input: Record<string, unknown>): Record<string, unknown> {
 
 const READ_ONLY: ToolAnnotations = { readOnlyHint: true, destructiveHint: false, idempotentHint: true };
 const DESTRUCTIVE: ToolAnnotations = { readOnlyHint: false, destructiveHint: true, idempotentHint: true };
-// A creating tool is idempotent too: a resend with its `request_id` answers the first answer (RP-56).
+// A creating tool is idempotent too: a resend with its `request_id` answers the first answer (RP-139).
 const IDEMPOTENT: ToolAnnotations = { readOnlyHint: false, destructiveHint: false, idempotentHint: true };
 
 // A replaced note, measure, end or rhythm cannot be read back after the write, so a client asks first.
@@ -129,6 +134,20 @@ export const readTools: readonly ToolSpec[] = [
     ]);
     return { ok: true, value: shapeLoose({ dayless, scheduled, inGoals }) };
   }),
+  read(
+    "get_time",
+    z.strictObject({ from: civilDay, to: civilDay }).refine(
+      ({ from, to }) => from <= to && (Date.parse(to) - Date.parse(from)) / 86_400_000 < RANGE_DAYS_MAX,
+      "from is not after to, and the range is at most a year",
+    ),
+    async (input) => {
+      const range = { from: input.from as string, to: input.to as string };
+      const lines = await loadTimeLedger(range.from, range.to);
+      const ids = [...new Set(lines.flatMap((line) => (line.goalId === null ? [] : [line.goalId])))];
+      const names = await loadChangeNames({ goals: ids, tasks: [], commitments: [] });
+      return { ok: true, value: shapeTimeLedger(lines, names.goals, range) };
+    },
+  ),
 ];
 
 function write<S extends z.ZodRawShape>(
@@ -152,6 +171,31 @@ function write<S extends z.ZodRawShape>(
 const noteEmpty = (note: unknown) => typeof note !== "string" || note.trim() === "";
 const refused: Promise<ActResult> = Promise.resolve({ ok: false, error: "mcp.errors.noteEmpty" });
 
+// A goal named by its words resolves only when exactly one open goal answers to them; otherwise the time waits unplaced.
+async function goalNamed(name: string): Promise<string | null> {
+  const wanted = name.trim().toLowerCase();
+  const { open } = await listGoalsForMetas();
+  const hits = open.filter((goal) => goal.name.trim().toLowerCase() === wanted);
+  return hits.length === 1 ? hits[0].id : null;
+}
+
+// Time told to the chat or an AI waits in the tray; a goal that resolves confirms it in the same act (RP-151).
+async function recordTime(input: Record<string, unknown>): Promise<ActResult> {
+  const named = typeof input.goalName === "string" && input.goalId === undefined ? await goalNamed(input.goalName) : null;
+  const goalId = input.goalId ?? named ?? undefined;
+  const recorded = await recordTimeEntry({
+    day: input.day,
+    minutes: input.minutes,
+    note: input.note,
+    goalId,
+    source: "chat",
+  } as Parameters<typeof recordTimeEntry>[0]);
+  if (!recorded.ok || recorded.entryId === undefined || typeof goalId !== "string") return recorded;
+  const confirmed = await confirmTimeEntry({ entryId: recorded.entryId, allocations: [{ goalId, minutes: input.minutes as number }] });
+  // A goal that does not measure time leaves the entry waiting; the reason travels with the answer.
+  return { ok: true, entryId: recorded.entryId, confirmed: confirmed.ok, ...(!confirmed.ok && { waitingBecause: confirmed.error }) };
+}
+
 export const writeTools: readonly ToolSpec[] = [
   write(
     "declare_fact",
@@ -163,6 +207,11 @@ export const writeTools: readonly ToolSpec[] = [
       day: day.optional(),
     },
     (input) => declareFact(input as Parameters<typeof declareFact>[0]),
+  ),
+  write(
+    "record_time",
+    { day, minutes: count, goal_id: id.optional(), goal_name: text.optional(), note: text.optional() },
+    recordTime,
   ),
   write("complete_task", { one_off_id: id, day: day.optional() }, (input) =>
     completeOneOff(input as Parameters<typeof completeOneOff>[0]),
@@ -216,13 +265,13 @@ export const writeTools: readonly ToolSpec[] = [
     },
     (input) => addCommitment(input as Parameters<typeof addCommitment>[0]),
   ),
-  // The AI gives and moves an end, never removes one (RP-56): a null is refused before the act.
+  // The AI gives and moves an end, never removes one (RP-139): a null is refused before the act.
   write("move_horizon", { goal_id: id, horizon: day.nullable() }, (input) =>
     input.horizon === null || input.horizon === undefined
       ? Promise.resolve({ ok: false, error: "mcp.errors.endKept" })
       : moveHorizon(input as Parameters<typeof moveHorizon>[0]),
   ),
-  // Fixing never changes the goal's rhythm (RP-56): the act takes a task and a month alone.
+  // Fixing never changes the goal's rhythm (RP-139): the act takes a task and a month alone.
   write("fix_task", { one_off_id: id, month: looseMonth }, (input) =>
     fixTask({ oneOffId: input.oneOffId, month: input.month } as Parameters<typeof fixTask>[0]),
   ),
@@ -234,7 +283,6 @@ export const writeTools: readonly ToolSpec[] = [
     const target = input.oneOffId;
     // An id that is no uuid goes to the act as it is, which refuses it with its own key.
     if (typeof target !== "string" || !UUID.test(target)) return editTask({ ...input, name: "-" } as Parameters<typeof editTask>[0]);
-    const { loadChangeNames } = await import("@/lib/queries/chat");
     const task = (await loadChangeNames({ goals: [], tasks: [target], commitments: [] })).tasks.get(target);
     if (task === undefined) return { ok: false, error: "plan.errors.notFound" };
     return editTask({ oneOffId: target, name: task.name, estimate: input.estimate } as Parameters<typeof editTask>[0]);
@@ -255,11 +303,11 @@ export const writeTools: readonly ToolSpec[] = [
   write("retire_commitment", { commitment_id: id }, (input) =>
     retireCommitment(input as Parameters<typeof retireCommitment>[0]),
   ),
-  // Gives or changes a rhythm, never takes it away (RP-119): the amount has no null.
+  // Gives or changes a rhythm, never takes it away (RP-139): the amount has no null.
   write("set_rhythm", { goal_id: id, amount: count }, (input) =>
     setRhythm(input as Parameters<typeof setRhythm>[0]),
   ),
-  // Only a goal that does not measure yet; a measure set never changes (RP-119).
+  // Only a goal that does not measure yet; a measure set never changes (RP-139).
   write("set_measure", { goal_id: id, name: text, unit: text }, (input) =>
     setGoalMeasure(input as Parameters<typeof setGoalMeasure>[0]),
   ),

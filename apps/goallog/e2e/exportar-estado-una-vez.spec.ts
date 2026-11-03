@@ -1,6 +1,5 @@
 import { test, expect, type Person } from "./fixtures";
-import { dayBefore } from "@/lib/day/weeks";
-import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
+import { addDaysToCivilDate, civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
 import type { Page } from "@playwright/test";
 import type postgres from "postgres";
 
@@ -151,8 +150,8 @@ test.describe("an ended goal's report does not say this week (RP-17, RP-58)", ()
       // Ended earlier this week: horizon the day before today (its last day two days ago, still this week);
       // on a Monday or Tuesday that day falls last week, so the horizon is today and the last day yesterday.
       const weekday = (civilDateToDate(todayInZone()).getUTCDay() + 6) % 7;
-      const horizon = weekday >= 2 ? dayBefore(todayInZone()) : todayInZone();
-      const lastDay = dayBefore(horizon);
+      const horizon = weekday >= 2 ? addDaysToCivilDate(todayInZone(), -1) : todayInZone();
+      const lastDay = addDaysToCivilDate(horizon, -1);
       const [goal] = await db<{ id: string }[]>`
         insert into goals.goals (user_id, name, horizon, measure_name, measure_unit, created_at)
         values (${person.id}, ${name}, ${horizon}, 'horas de estudio', 'minutos', now() - interval '40 days')

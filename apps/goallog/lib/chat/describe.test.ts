@@ -30,7 +30,7 @@ const names = {
 const change = (tool: string, input: Record<string, unknown>) => ({ id: "c1", tool, input });
 
 test("the catalogue holds one sentence per write tool", () => {
-  assert.equal(WRITES.length, 20);
+  assert.equal(WRITES.length, 21);
   for (const name of WRITES) {
     assert.equal(typeof (chat.change as Record<string, unknown>)[name], "string", name);
   }
@@ -106,6 +106,7 @@ test("every tool describes itself over its own ids", () => {
     set_measure: { goal_id: G, name: "Cajas", unit: "cajas" },
     set_task_estimate: { one_off_id: T, estimate: 180 },
     edit_phase: { phase_id: P, aim: "Medir", starts_on: "2026-11-02", ends_on: "2026-11-30" },
+    record_time: { day: "2026-11-02", minutes: 480, goal_id: G, note: "estudio" },
   };
   assert.deepEqual(Object.keys(inputs).sort(), [...WRITES].sort());
   for (const name of WRITES) {
@@ -261,6 +262,7 @@ const PLACEHOLDERS: Record<string, string[]> = {
   set_measure: ["goal"],
   set_task_estimate: ["estimate", "task"],
   edit_phase: ["aim", "from", "phase", "to"],
+  record_time: ["day", "goal", "note", "time"],
 };
 
 test("every change phrase opens with an infinitive and keeps its placeholders", () => {
@@ -428,4 +430,29 @@ test("RP-139: an estimate of 0 minutes, a fraction of a minute or a negative one
     assert.deepEqual(describeChange(change("set_task_estimate", { one_off_id: T, estimate }), names), refused, String(estimate));
   }
   assert.ok("key" in describeChange(change("set_task_estimate", { one_off_id: T, estimate: 1 }), names));
+});
+
+test("record_time reads the day, the time, the goal and the note it will write, and refuses a goal named by words", () => {
+  const out = describeChange(change("record_time", { day: "2026-11-02", minutes: 480, goal_id: G, note: "estudio" }), names);
+  assert.ok("key" in out);
+  assert.equal(out.key, "chat.change.record_time");
+  assert.deepEqual(out.values, {
+    day: "2 nov",
+    time: "8 h",
+    goalName: "EF SET 36+",
+    noteText: "estudio",
+    goal: " en «EF SET 36+»",
+    note: " (estudio)",
+  });
+  const bare = describeChange(change("record_time", { day: "2026-11-02", minutes: 90 }), names);
+  assert.ok("key" in bare);
+  assert.deepEqual([bare.values.goal, bare.values.note, bare.values.time], ["", "", "1 h 30 min"]);
+  for (const input of [
+    { day: "2026-11-02", minutes: 90, goal_name: "Inglés" },
+    { day: "2026-11-02", minutes: 90, goal_id: OTHER },
+    { day: "2026-11-02", minutes: null },
+    { day: "2026-11-02" },
+  ]) {
+    assert.deepEqual(describeChange(change("record_time", input), names), { refused: "chat.errors.notInPlan" });
+  }
 });

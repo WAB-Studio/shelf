@@ -31,10 +31,9 @@ import {
   type TaskRow,
 } from "@/lib/queries/goal";
 import { dayCounts } from "@/lib/day/constancy";
-import { countsInMeasure, factUnit, livedThrough, metFact, toCadence, toDeclaredFact, toSatisfiedBy } from "@/lib/queries/rows";
+import { confirmedTimeFacts, countsInMeasure, factUnit, livedThrough, metFact, toCadence, toDeclaredFact, toSatisfiedBy } from "@/lib/queries/rows";
 import { getPerson, withGoalsDb, withReadingDb, type Transaction } from "@/lib/session";
-import { dayBefore } from "@/lib/day/weeks";
-import { civilDateInZone, TIME_ZONE, todayInZone, weekOf } from "@/lib/zone";
+import { addDaysToCivilDate, civilDateInZone, TIME_ZONE, todayInZone, weekOf } from "@/lib/zone";
 
 export type MonthAcrossGoal = {
   id: string;
@@ -82,7 +81,7 @@ export type MonthAcross = {
   goals: MonthAcrossGoal[];
   // One entry per general (or lone goal); `goalIds` in preorder, drawn goals only.
   groups: { rootId: string; goalIds: string[] }[];
-  // Habits with no goal (RP-100), live or retired this month, with the days of the month each was done.
+  // Habits with no goal (RP-113), live or retired this month, with the days of the month each was done.
   loose: MonthLooseHabit[];
   // Commitments met per day of the month through today, for the calendar. Habits with no goal are not counted.
   intensity: Record<string, number>;
@@ -193,7 +192,8 @@ async function queryRows(tx: Transaction, reading: Reading, today: string): Prom
          from "goals"."facts" f
          left join "goals"."commitments" c on c.id = f.commitment_id
          where f.goal_id = g.id
-           and f.day between ${month}::date and ${until}::date) as facts,
+           and f.day between ${month}::date and ${until}::date)::jsonb
+        || ${confirmedTimeFacts(sql`tg.id = g.id`, { from: month, to: until })} as facts,
       (select coalesce(json_agg(jsonb_build_object('month', b.month, 'amount', b.amount)
                                 order by b.month), '[]'::json)
          from "goals"."month_budgets" b
@@ -245,7 +245,7 @@ async function queryEvidence(
 }
 
 /**
- * «Mes» across every open goal (RP-43): each goal's month figure and list as
+ * «Mes» across every open goal (RP-142): each goal's month figure and list as
  * its own screen reads them, in two transactions fanned with `Promise.all`
  * whatever the goal count (RNP-03). An evidence rejection degrades to
  * `"unreadable"` and every goal keeps its declared half (RNP-04). Writes nothing.
@@ -267,7 +267,7 @@ export async function loadMonthAcross(
   const month = monthOf(input.month ?? today);
   const thisMonth = monthOf(today);
   const view: MonthAcross["view"] = month === thisMonth ? "this" : month > thisMonth ? "coming" : "past";
-  const lastDay = dayBefore(nextMonth(month));
+  const lastDay = addDaysToCivilDate(nextMonth(month), -1);
   const until = today < lastDay ? today : lastDay;
   const reading: Reading = { month, until, lastDay, openAfter: view === "this" ? today : month, view };
 

@@ -23,7 +23,7 @@ function resolveLinkFailure(raw: string | string[] | undefined): LinkFailure {
 // calls `/api/devices` or `/api/log/sync`, and only once a reader exists
 // (RNL-09). No `useDictionary` here: this screen never resolves a word
 // (RNL-08). Two panels from 1280px: the account and its credits on the left, the devices list on the right.
-export default async function CuentaPage({
+export default async function AccountPage({
   searchParams,
 }: {
   searchParams: Promise<{ tab?: string | string[]; error?: string | string[] }>;

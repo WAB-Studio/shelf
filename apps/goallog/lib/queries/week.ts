@@ -116,7 +116,7 @@ type WeekQueryRow = {
  * inside its period, and «al mes» reaches days the week's own `facts` never
  * read. No extra round trip.
  *
- * `goals` are those that governed the week (RP-24, RP-44): written on or
+ * `goals` are those that governed the week (RP-24, RP-142): written on or
  * before its Sunday, not ended before it began, and not archived before
  * its Sunday — so an archive since keeps the past week it lived through, and
  * a goal opened later never enters it. A goal that ended mid-week stays, it
@@ -233,7 +233,7 @@ function toGoalSummary(row: GoalRow): GoalSummary {
 // goal section it draws under.
 export type CommitmentGoal = {
   id: string;
-  // Null: a habit with no goal (RP-100).
+  // Null: a habit with no goal (RP-113).
   goalId: string | null;
   name: string;
   cadence: Cadence;
@@ -296,7 +296,7 @@ export async function loadWeek(anyDayInIt: string, today: string = todayInZone()
   goals: GoalSummary[];
   firstMonday: string | null;
   commitments: CommitmentGoal[];
-  // Habits with no goal (RP-100): their commitments and the week's tally for them, a day each.
+  // Habits with no goal (RP-113): their commitments and the week's tally for them, a day each.
   loose: { commitments: CommitmentGoal[]; days: DayTally[] };
   oneOffFacts: OneOffFact[];
   // The last Monday «Semana» steps forward to (RP-142).

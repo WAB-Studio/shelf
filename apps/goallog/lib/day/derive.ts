@@ -150,7 +150,7 @@ type DeriveWeekInput = {
 };
 
 // The seven `DayView`s of the Monday-to-Sunday week `day` sits in. A week
-// already lived keeps its shape (RP-13): each day is derived on its own,
+// already lived keeps its shape (RP-127): each day is derived on its own,
 // against the commitments as they stood that day, never against today's.
 export function deriveWeek({
   commitments,

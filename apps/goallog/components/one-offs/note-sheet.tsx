@@ -30,7 +30,7 @@ export type NoteSheetProps = {
 };
 
 /**
- * `TareaNota.dc.html` and its states (RP-45): writes, changes or empties a
+ * `TareaNota.dc.html` and its states (RP-88): writes, changes or empties a
  * task's note. A failed save keeps what was typed, never clears it.
  */
 export function NoteSheet({

@@ -4,7 +4,7 @@ import { ReviewSession } from "@/components/review/review-session";
 import { PageTitle, Page, Panels } from "@/components/ui";
 
 // RL-68: the review reads the record and its cards off the device alone, so the server draws the shell.
-export default async function RepasoPage() {
+export default async function ReviewPage() {
   const t = await getTranslations("review");
   return (
     <Page measure="panels">

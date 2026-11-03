@@ -7,6 +7,24 @@ Working rules live in `AGENTS.md`. Session state lives in `private/handoffs/`. T
 holds only what a person could not guess from the code. Entries whose cause is gone live in `docs/TRAPS-archivo.md`.
 
 
+## WordBook's e2e fails on this machine's Chromium, not on CI's
+
+Measured 2026-11-03, lane 4. `/opt/pw-browsers/chromium_headless_shell-1234` (the build Playwright 1.62.1 asks for,
+Chrome 151, what CI installs) is a symlink to the `1243` build, Chrome 153. Six specs failed here and passed in CI:
+`registro-borrar.spec.ts` (the «Pending» and «Deleting» ones), `registro-borrar-carreras.spec.ts` («A slow read…»),
+`cuenta-sin-red.spec.ts` (the two `702` ones) and `cuenta-copia.spec.ts` («network returns on /cuenta»).
+
+- The three `registro-borrar*` specs hold a `readwrite` transaction on `lookups` and expect the ✕ to open its question
+  anyway. In Chrome 153 a `readwrite` on `sync` queues behind it (probe: `readonly` on `sync` answers in 1 ms,
+  `readwrite` on `sync` is still blocked after 1.5 s), and `readSyncState` was `readwrite`. It now peeks with a
+  `readonly` transaction first (`lib/log/record.ts`), so the question no longer waits on a merge in any Chrome.
+- The three `online` specs call `context.setOffline(false)`, and Chrome 153 fires its own trusted `online` event
+  (probe: 1 event), which reloads `/cuenta` before the spec dispatches its own. An init script registered ahead of the
+  app's listener now keeps the trusted one away; the dispatched event still reaches the app.
+- Not measured: whether Chrome 151 fires that native event or queues those transactions. The fixes hold on both.
+- Run WordBook's suite inside `scripts/supabase-local.sh exec`. Bare, every spec that mints a reader dies on
+  `harness: … is not the local stack`, which looks like 70 reds and is one.
+
 ## `gh pr` fails in a cloud session
 
 Measured 2026-11-01 from the Claude Code docs: the cloud git proxy blocks GraphQL, and every `gh pr` and
@@ -3400,3 +3418,10 @@ Measured 2026-11-01, a Sunday and a month's first day: 18 GoalLog specs went red
 - A month in another year is said with it («enero de 2027»): derive a label's year from today, never drop it.
 - Ended today means its last day is yesterday: on the 1st that is last month. Seed a task before the fact it carries.
 - The runner's `pdftotext` splits a kerned pair («f ebrero»): compare paper text without spaces.
+
+## A row's height on paper moves by a pixel with its place on the page
+
+Measured 2026-11-02: `papel-fila-detalle.spec.ts:313` read a row 30.75pt on 2 November and 31.5pt on 1 November (`PULSAR_CLOCK`), against 32.25 ± 0.8. Chromium snaps each row to a whole CSS pixel (0.75pt), and the day moves the table down the A4 page.
+
+- Measure a printed row with at least two pixels of slack (1.5pt) plus float noise; a real regression is a line of text, 15pt.
+- Reproduce a date-dependent paper failure with `PULSAR_CLOCK=YYYY-MM-DD` on the server and the spec.

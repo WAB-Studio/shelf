@@ -12,7 +12,7 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 /**
- * `HabitosSueltos` (RP-100): the commitment form with no goal. A habit has no
+ * `HabitosSueltos` (RP-113): the commitment form with no goal. A habit has no
  * evidence source, so the catalogue is not read.
  */
 export default async function NewHabitPage() {

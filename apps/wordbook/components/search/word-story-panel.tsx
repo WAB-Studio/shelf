@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import NextLink from "next/link";
 import { useFormatter, useTranslations } from "next-intl";
 
+import { deviceZone, yearWhenDifferent } from "@/lib/format/zone";
 import { LOG_DELETED_EVENT } from "@/lib/log/delete";
 import { LOG_CLEARED_EVENT, LOG_FLUSHED_EVENT } from "@/lib/log/record";
 import { readWordStory, type WordStory } from "@/lib/log/story";
@@ -19,6 +20,8 @@ type Review = { kind: "new" } | { kind: "due" } | { kind: "later"; due: number; 
 export function WordStoryPanel({ headword }: { headword: string }) {
   const t = useTranslations("story");
   const format = useFormatter();
+  const timeZone = deviceZone();
+  const [openedAt] = useState(() => Date.now());
   const [story, setStory] = useState<WordStory | null>(null);
   const [review, setReview] = useState<Review>({ kind: "new" });
 
@@ -64,7 +67,7 @@ export function WordStoryPanel({ headword }: { headword: string }) {
           </Text>
           {story.firstAt !== null && (
             <Text size="2" muted>
-              {t("first", { date: format.dateTime(story.firstAt, { day: "numeric", month: "long", year: "numeric" }) })}
+              {t("first", { date: format.dateTime(story.firstAt, { day: "numeric", month: "long", timeZone, ...yearWhenDifferent(story.firstAt, openedAt, timeZone) }) })}
             </Text>
           )}
         </Flex>
@@ -92,7 +95,7 @@ export function WordStoryPanel({ headword }: { headword: string }) {
                 ? t("reviewDue")
                 : t("reviewLater", {
                     when: review.when,
-                    date: format.dateTime(review.due, { day: "numeric", month: "long" }),
+                    date: format.dateTime(review.due, { day: "numeric", month: "long", timeZone, ...yearWhenDifferent(review.due, openedAt, timeZone) }),
                   })}
           </Text>
           <Button asChild size="3" variant="soft">

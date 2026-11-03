@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import {
+  centsToDecimal,
   convertMinor,
   deriveRate,
   formatAmountTyping,
@@ -212,4 +213,18 @@ test("formatAmountTyping reads a pasted figure with both marks by its last mark"
   assert.equal(typed("1,234.56", "en"), "1,234.56");
   assert.equal(typed("1,234,567.5", "es"), "1.234.567,5");
   assert.equal(typed("1.234.567,5", "en"), "1,234,567.5");
+});
+
+test("centsToDecimal writes the stored integer's digits without dividing", () => {
+  assert.equal(centsToDecimal(0), "0");
+  assert.equal(centsToDecimal(100), "1");
+  assert.equal(centsToDecimal(125050), "1250.5");
+  assert.equal(centsToDecimal(125055), "1250.55");
+  assert.equal(centsToDecimal(5), "0.05");
+  assert.equal(centsToDecimal(10), "0.1");
+  assert.equal(centsToDecimal(-5), "-0.05");
+  assert.equal(centsToDecimal(-123400), "-1234");
+  assert.equal(centsToDecimal(115), "1.15");
+  assert.equal(centsToDecimal(9_999_999_999_999), "99999999999.99");
+  assert.equal(Number(centsToDecimal(435)), 4.35);
 });

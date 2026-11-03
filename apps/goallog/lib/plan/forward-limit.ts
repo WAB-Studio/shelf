@@ -1,5 +1,4 @@
-import { dayBefore } from "@/lib/day/weeks";
-import { weekOf } from "@/lib/zone";
+import { addDaysToCivilDate, weekOf } from "@/lib/zone";
 
 import { lastMonthOf, monthOf, nextMonth } from "./months";
 
@@ -12,7 +11,7 @@ export function forwardLimit({ horizons, today }: { horizons: (string | null)[];
   const endless = lastMonthOf(today, null, today);
   for (const horizon of horizons) {
     if (horizon !== null && horizon <= today) continue;
-    const last = horizon === null ? endless : monthOf(dayBefore(horizon));
+    const last = horizon === null ? endless : monthOf(addDaysToCivilDate(horizon, -1));
     if (last > limit) limit = last;
   }
   return limit.slice(0, 7);
@@ -21,5 +20,5 @@ export function forwardLimit({ horizons, today }: { horizons: (string | null)[];
 // The Monday of the week holding the limit month's last day: the last week
 // «Semana» steps forward to.
 export function lastMondayOf(limit: string): string {
-  return weekOf(dayBefore(nextMonth(`${limit}-01`)))[0];
+  return weekOf(addDaysToCivilDate(nextMonth(`${limit}-01`), -1))[0];
 }

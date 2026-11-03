@@ -677,7 +677,7 @@ async function assertDeleteGrants(q: postgres.Sql | postgres.TransactionSql): Pr
   const tablesWithDelete = grants.map((row) => row.table_name).sort();
   assert(
     "P38",
-    tablesWithDelete.join(",") === "commitments,facts,goals,month_budgets,one_offs,phases",
+    tablesWithDelete.join(",") === "commitments,facts,goals,month_budgets,one_offs,phases,time_allocations,time_entries",
     `tables with DELETE granted to authenticated = ${tablesWithDelete.join(", ") || "none"}`,
   );
 }
@@ -4020,6 +4020,180 @@ async function checkParentOwner0027(): Promise<void> {
   await sql.end();
 }
 
+// Time that waits to be confirmed (RP-151, RNP-05): the person reads, writes and allocates only their own, an
+// allocation never passes its entry, and no role holds more than the grants name. Driven under a settled session,
+// forced rollback.
+async function checkTimeEntries0032(): Promise<void> {
+  const sql = postgres(DATABASE_URL!, { prepare: false, max: 1 });
+  const a = randomUUID();
+  const b = randomUUID();
+  const forcedRollback = Symbol("forced rollback");
+
+  await sql
+    .begin(async (tx) => {
+      await tx`insert into auth.users (id) values (${a}), (${b})`;
+
+      await enterUserContext(tx, a);
+      const mine = await seedFixtures(tx, a);
+      const own = await attemptRows<{ id: string }>(tx, (sp) => sp`
+        insert into goals.time_entries (user_id, day, minutes, source, suggested_goal_id)
+        values (${a}, '2026-11-01', 120, 'chat', ${mine.goalId}) returning id`);
+      assert("H01", own.code === undefined && own.rows.length === 1,
+        `A inserts an entry for A, sqlstate = ${own.code ?? "none"}, rows = ${own.rows.length}`);
+      const entryId = own.rows[0]?.id;
+
+      const forged = await attempt(tx, (sp) => sp`
+        insert into goals.time_entries (user_id, day, minutes, source) values (${b}, '2026-11-01', 5, 'chat')`);
+      assert("H02", forged.code === "42501", `A inserts an entry with user_id = B, sqlstate = ${forged.code ?? "none"}`);
+
+      const clock = await attempt(tx, (sp) => sp`
+        insert into goals.time_entries (user_id, day, minutes, source, created_at)
+        values (${a}, '2026-11-01', 5, 'chat', now() - interval '3 days')`);
+      assert("H03", clock.code === "42501", `A inserts an entry naming created_at, sqlstate = ${clock.code ?? "none"}`);
+
+      const zero = await attempt(tx, (sp) => sp`
+        insert into goals.time_entries (user_id, day, minutes, source) values (${a}, '2026-11-01', 0, 'chat')`);
+      const unknownSource = await attempt(tx, (sp) => sp`
+        insert into goals.time_entries (user_id, day, minutes, source) values (${a}, '2026-11-01', 5, 'invented')`);
+      assert("H04", zero.code === "23514" && unknownSource.code === "23514",
+        `entry of 0 minutes = ${zero.code ?? "none"}, entry of an unknown source = ${unknownSource.code ?? "none"}`);
+
+      const half = await attempt(tx, (sp) => sp`
+        insert into goals.time_allocations (user_id, entry_id, goal_id, minutes) values (${a}, ${entryId}, ${mine.goalId}, 90)`);
+      assert("H05", half.code === undefined, `A allocates 90 of 120 to its own goal, sqlstate = ${half.code ?? "none"}`);
+
+      const over = await attempt(tx, (sp) => sp`
+        insert into goals.time_allocations (user_id, entry_id, goal_id, minutes) values (${a}, ${entryId}, ${mine.goalId}, 31)`);
+      assert("H06", over.code === "23514", `A allocates 31 more than the 30 left, sqlstate = ${over.code ?? "none"}`);
+
+      const locked = await attemptCount(tx, (sp) => sp`update goals.time_entries set minutes = 200 where id = ${entryId}`);
+      const dismissLocked = await attemptCount(tx, (sp) => sp`update goals.time_entries set dismissed_at = now() where id = ${entryId}`);
+      assert("H07", locked.count === 0 && dismissLocked.count === 0,
+        `minutes and «no cuenta» change on an entry with allocations, rows = ${locked.count}/${dismissLocked.count}`);
+
+      const rewrite = await attempt(tx, (sp) => sp`update goals.time_allocations set minutes = 1 where entry_id = ${entryId}`);
+      assert("H08", rewrite.code === "42501", `A updates an allocation, sqlstate = ${rewrite.code ?? "none"}`);
+
+      await enterUserContext(tx, b);
+      const theirs = await seedFixtures(tx, b);
+      const seen = await attemptRows<{ id: string }>(tx, (sp) => sp`
+        select id from goals.time_entries where id = ${entryId}
+        union all select id from goals.time_allocations where entry_id = ${entryId}`);
+      assert("H09", seen.code === undefined && seen.rows.length === 0,
+        `B reads A's entry and allocations, sqlstate = ${seen.code ?? "none"}, rows = ${seen.rows.length}`);
+
+      const onForeignEntry = await attempt(tx, (sp) => sp`
+        insert into goals.time_allocations (user_id, entry_id, goal_id, minutes) values (${b}, ${entryId}, ${theirs.goalId}, 1)`);
+      assert("H10", onForeignEntry.code === "42501", `B allocates A's entry, sqlstate = ${onForeignEntry.code ?? "none"}`);
+
+      const own2 = await attemptRows<{ id: string }>(tx, (sp) => sp`
+        insert into goals.time_entries (user_id, day, minutes, source) values (${b}, '2026-11-01', 60, 'chat') returning id`);
+      const toForeignGoal = await attempt(tx, (sp) => sp`
+        insert into goals.time_allocations (user_id, entry_id, goal_id, minutes) values (${b}, ${own2.rows[0]?.id}, ${mine.goalId}, 60)`);
+      assert("H11", toForeignGoal.code === "42501", `B allocates its entry to A's goal, sqlstate = ${toForeignGoal.code ?? "none"}`);
+
+      const suggest = await attempt(tx, (sp) => sp`
+        insert into goals.time_entries (user_id, day, minutes, source, suggested_goal_id)
+        values (${b}, '2026-11-01', 5, 'chat', ${mine.goalId})`);
+      assert("H12", suggest.code === "42501", `B suggests A's goal on its entry, sqlstate = ${suggest.code ?? "none"}`);
+
+      const foreignWrites = await attemptCount(tx, (sp) => sp`update goals.time_entries set dismissed_at = now() where id = ${entryId}`);
+      const foreignDelete = await attemptCount(tx, (sp) => sp`delete from goals.time_allocations where entry_id = ${entryId}`);
+      assert("H13", foreignWrites.count === 0 && foreignDelete.count === 0,
+        `B dismisses and deletes from A's entry, rows = ${foreignWrites.count}/${foreignDelete.count}`);
+
+      await enterUserContext(tx, a);
+      const dismissedFirst = await attemptRows<{ id: string }>(tx, (sp) => sp`
+        insert into goals.time_entries (user_id, day, minutes, source, note) values (${a}, '2026-11-01', 30, 'chat', 'x') returning id`);
+      await tx`update goals.time_entries set dismissed_at = now() where id = ${dismissedFirst.rows[0]?.id}`;
+      const onDismissed = await attempt(tx, (sp) => sp`
+        insert into goals.time_allocations (user_id, entry_id, goal_id, minutes)
+        values (${a}, ${dismissedFirst.rows[0]?.id}, ${mine.goalId}, 30)`);
+      assert("H14", onDismissed.code === "42501", `A allocates a dismissed entry, sqlstate = ${onDismissed.code ?? "none"}`);
+
+      const undone = await attemptCount(tx, (sp) => sp`delete from goals.time_allocations where entry_id = ${entryId}`);
+      assert("H15", undone.code === undefined && undone.count === 1, `A removes its allocation, sqlstate = ${undone.code ?? "none"}, rows = ${undone.count}`);
+
+      for (const table of ["time_entries", "time_allocations"]) {
+        const anon = await privilegesOf(tx, table, "anon");
+        const service = await privilegesOf(tx, table, "service_role");
+        assert(`H16.${table}`, anon === "" && service === "", `${table}: anon = "${anon}", service_role = "${service}"`);
+      }
+      const entryGrants = await privilegesOf(tx, "time_entries", "authenticated");
+      const allocationGrants = await privilegesOf(tx, "time_allocations", "authenticated");
+      assert("H17",
+        entryGrants === "DELETE INSERT(day,id,minutes,note,one_off_id,source,suggested_goal_id,user_id) SELECT UPDATE(day,dismissed_at,minutes)" &&
+          allocationGrants === "DELETE INSERT(entry_id,goal_id,id,minutes,user_id) SELECT",
+        `time_entries = ${entryGrants}; time_allocations = ${allocationGrants}`);
+
+      throw forcedRollback;
+    })
+    .catch((error: unknown) => {
+      if (error !== forcedRollback) throw error;
+    });
+  await sql.end();
+}
+
+// A day's own target (RP-148) and a task's recorded time (RP-147) are written by the actions; the database refuses
+// the same writes made bare, as `authenticated`, inside one rollback.
+async function checkDayTargetAndSpent0033(): Promise<void> {
+  const sql = postgres(DATABASE_URL!, { prepare: false, max: 1 });
+  const a = randomUUID();
+  const forcedRollback = Symbol("forced rollback");
+
+  await sql
+    .begin(async (tx) => {
+      await tx`insert into auth.users (id) values (${a})`;
+      await enterUserContext(tx, a);
+      const mine = await seedFixtures(tx, a);
+      const [quantity] = await tx<{ id: string }[]>`
+        insert into goals.commitments (user_id, goal_id, name, cadence_kind, satisfaction, target_quantity, unit)
+        values (${a}, ${mine.goalId}, 'cantidad de prueba', 'daily', 'quantity', 10, 'paginas') returning id`;
+
+      const onTap = await attempt(tx, (sp) => sp`
+        insert into goals.facts (user_id, commitment_id, day, day_target) values (${a}, ${mine.commitmentId}, '2026-09-23', 3)`);
+      const onTask = await attempt(tx, (sp) => sp`
+        insert into goals.facts (user_id, one_off_id, day, day_target) values (${a}, ${mine.oneOffId}, '2026-09-23', 3)`);
+      assert("D01", onTap.code === "23514" && onTask.code === "23514",
+        `day_target on a tap fact = ${onTap.code ?? "none"}, on a task's fact = ${onTask.code ?? "none"}`);
+
+      const atTarget = await attempt(tx, (sp) => sp`
+        insert into goals.facts (user_id, commitment_id, day, quantity, day_target) values (${a}, ${quantity.id}, '2026-09-23', 10, 10)`);
+      const aboveTarget = await attempt(tx, (sp) => sp`
+        insert into goals.facts (user_id, commitment_id, day, quantity, day_target) values (${a}, ${quantity.id}, '2026-09-23', 11, 11)`);
+      assert("D02", atTarget.code === "23514" && aboveTarget.code === "23514",
+        `day_target = target = ${atTarget.code ?? "none"}, above it = ${aboveTarget.code ?? "none"}`);
+
+      const lowered = await attempt(tx, (sp) => sp`
+        insert into goals.facts (user_id, commitment_id, day, quantity, day_target) values (${a}, ${quantity.id}, '2026-09-23', 4, 4)`);
+      const plain = await attempt(tx, (sp) => sp`
+        insert into goals.facts (user_id, commitment_id, day) values (${a}, ${mine.commitmentId}, '2026-09-24')`);
+      assert("D03", lowered.code === undefined && plain.code === undefined,
+        `a lowered day = ${lowered.code ?? "none"}, a plain tap = ${plain.code ?? "none"}`);
+
+      const noEstimate = await attempt(tx, (sp) => sp`update goals.one_offs set spent_minutes = 30 where id = ${mine.oneOffId}`);
+      assert("D04", noEstimate.code === "23514", `spent_minutes on a task with no goal nor estimate = ${noEstimate.code ?? "none"}`);
+
+      await tx`update goals.goals set measure_name = 'paginas', measure_unit = 'paginas' where id = ${mine.goalId}`;
+      const [task] = await tx<{ id: string }[]>`
+        insert into goals.one_offs (user_id, goal_id, name, planned_month, estimate)
+        values (${a}, ${mine.goalId}, 'tarea de prueba', '2026-12-01', 60) returning id`;
+      const notTime = await attempt(tx, (sp) => sp`update goals.one_offs set spent_minutes = 30 where id = ${task.id}`);
+      assert("D05", notTime.code === "23514", `spent_minutes on a task of a goal measured in pages = ${notTime.code ?? "none"}`);
+
+      await tx`update goals.goals set measure_name = 'tiempo', measure_unit = 'minutos' where id = ${mine.goalId}`;
+      const inTime = await attemptCount(tx, (sp) => sp`update goals.one_offs set spent_minutes = 30 where id = ${task.id}`);
+      assert("D06", inTime.code === undefined && inTime.count === 1,
+        `spent_minutes on a task estimated in a goal measured in minutes, sqlstate = ${inTime.code ?? "none"}, rows = ${inTime.count}`);
+
+      throw forcedRollback;
+    })
+    .catch((error: unknown) => {
+      if (error !== forcedRollback) throw error;
+    });
+  await sql.end();
+}
+
 // A receipt is what one act answered to one request id (RP-56, RNP-05): the
 // person reads and inserts only their own, and no role rewrites or deletes one.
 // Driven as `authenticated`, `anon` and `service_role` inside one rollback.
@@ -4284,6 +4458,8 @@ async function main(): Promise<void> {
   await checkSignInClaims0026();
   await checkParentOwner0027();
   await checkWriteReceipts0029();
+  await checkTimeEntries0032();
+  await checkDayTargetAndSpent0033();
   await checkPruneExecute0029();
 
   if (failed) process.exit(1);

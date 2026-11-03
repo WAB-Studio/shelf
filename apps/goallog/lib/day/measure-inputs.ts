@@ -26,3 +26,9 @@ export function evidenceDaysFor(
   for (const key of keys) for (const day of bySourceKey[key] ?? []) days.push(day);
   return days;
 }
+
+// What a goal's measure reads (RP-14, RP-151): a commitment's fact, or time the person confirmed for the goal.
+// A task's own fact says «done» and carries no minutes the measure counts.
+export function countsInMeasure(row: { commitment_id: string | null; time_allocation?: boolean }): boolean {
+  return row.commitment_id !== null || row.time_allocation === true;
+}

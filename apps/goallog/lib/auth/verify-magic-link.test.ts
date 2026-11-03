@@ -5,7 +5,7 @@ import { AuthApiError, AuthRetryableFetchError } from "@supabase/supabase-js";
 
 import { landingAfterSignIn, verifyMagicLink } from "./verify-magic-link";
 
-// RP-18: the link is verified once. `verifyOtp` spends the token, so a second
+// RP-136: the link is verified once. `verifyOtp` spends the token, so a second
 // call after a timeout would turn an unknown into a certain failure.
 
 const params = { type: "magiclink", token_hash: "h" };

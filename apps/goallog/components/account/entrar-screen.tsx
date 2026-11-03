@@ -8,7 +8,7 @@ import { Page, Separator, Text } from "@/components/ui";
 
 import { SignInForm } from "./sign-in-form";
 
-// The ways `/auth/confirm` sends a person back here (RP-18): a timeout
+// The ways `/auth/confirm` sends a person back here (RP-136): a timeout
 // answering the link, a link already spent or malformed, and a `code` link opened in another browser. Anything else in
 // `?error=` is not this contract's and is read as no error at all.
 const LINK_ERRORS = ["linkTimeout", "linkInvalid", "linkOtherBrowser"] as const;

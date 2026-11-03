@@ -7,7 +7,7 @@ import type { Transaction } from "@/lib/session";
 
 /**
  * The answer an act gave to `requestId` for this person, or null when the id
- * was never answered (RP-56). Filters on the person as well as the id: two
+ * was never answered (RP-139). Filters on the person as well as the id: two
  * people may carry the same id, and a caller running as the owner role sees
  * every row.
  */

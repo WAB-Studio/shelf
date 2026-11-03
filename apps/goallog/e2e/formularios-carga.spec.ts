@@ -1,9 +1,8 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
-import { dayBefore } from "@/lib/day/weeks";
 import { monthOf, nextMonth } from "@/lib/plan/months";
-import { todayInZone } from "@/lib/zone";
+import { addDaysToCivilDate, todayInZone } from "@/lib/zone";
 
 import { test, expect } from "./fixtures";
 import plan from "../messages/es/plan.json";
@@ -23,7 +22,7 @@ async function seedGoal(db: Db, personId: string, name: string, extra: { archive
   const [goal] = await db<{ id: string }[]>`
     insert into goals.goals (user_id, name, horizon, measure_name, measure_unit, created_at, archived_at)
     values (${personId}, ${name}, ${extra.horizon ?? horizon}::date, 'minutos', 'minutos',
-            (${dayBefore(thisMonth)}::date + 1) + time '12:00' at time zone 'UTC',
+            (${addDaysToCivilDate(thisMonth, -1)}::date + 1) + time '12:00' at time zone 'UTC',
             ${extra.archived ? db`now()` : null})
     returning id`;
   return goal.id;
@@ -93,7 +92,7 @@ test("an archived goal and an ended goal answer not-found on each form", async (
     for (const { label, id } of cases) {
       const [phase] = await db<{ id: string }[]>`
         insert into goals.phases (user_id, goal_id, aim, starts_on, ends_on)
-        values (${person.id}, ${id}, 'Fase', ${dayBefore(thisMonth)}::date - 30, ${dayBefore(thisMonth)}::date - 10) returning id`;
+        values (${person.id}, ${id}, 'Fase', ${addDaysToCivilDate(thisMonth, -1)}::date - 30, ${addDaysToCivilDate(thisMonth, -1)}::date - 10) returning id`;
       const href = routes(id, phase.id, "00000000-0000-0000-0000-000000000000");
       for (const path of [href.task, href.newPhase, href.editPhase]) {
         await page.goto(path);
@@ -126,7 +125,7 @@ test("the commitment page opens a bare one and one a fact names, and refuses a r
   const retired = await make(goalId, "Retirado", true);
   const named = await make(goalId, "Con hecho", false);
   const foreign = await make(otherGoal, "De otra", false);
-  await seedFact(db, person.id, named, goalId, dayBefore(todayInZone()));
+  await seedFact(db, person.id, named, goalId, addDaysToCivilDate(todayInZone(), -1));
 
   const context = await browser.newContext({ storageState: person.sessionFile, baseURL: baseURL! });
   try {

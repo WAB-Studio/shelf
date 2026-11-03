@@ -2,9 +2,8 @@ import type { Browser, Page } from "@playwright/test";
 import type postgres from "postgres";
 
 import { test, expect, settled, type Person } from "./fixtures";
-import { dayBefore } from "@/lib/day/weeks";
 import { monthOf, nextMonth } from "@/lib/plan/months";
-import { todayInZone } from "@/lib/zone";
+import { addDaysToCivilDate, todayInZone } from "@/lib/zone";
 
 // Module 823 (RP-28, RP-32, RP-35), the critic's `exportar-360-vocab.png` and `exportar-1024-vocab.png`: on `/exportar`
 // the «Por mes» list of a goal measured in `searches` says «de 60 búsquedas» for a started month. It stays inside its
@@ -12,7 +11,7 @@ import { todayInZone } from "@/lib/zone";
 
 const today = todayInZone();
 const thisMonth = monthOf(today);
-const lastMonth = monthOf(dayBefore(thisMonth));
+const lastMonth = monthOf(addDaysToCivilDate(thisMonth, -1));
 const horizon = nextMonth(nextMonth(nextMonth(thisMonth)));
 
 type Unit = { measure: string; unit: string };

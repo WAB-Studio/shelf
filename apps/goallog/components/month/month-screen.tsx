@@ -51,7 +51,7 @@ function AddRow({ href, label, child }: { href: string; label: string; child?: b
 }
 
 /**
- * `Mes`, `MesArrastre`, `MesVacio`, `MesCerrado`, `RoadmapTramoMedio` (RP-30,
+ * `Mes`, `MesArrastre`, `MesVacio`, `MesCerrado`, `RoadmapTramoMedio` (RP-68,
  * RP-31, RP-32, RP-54): the month's own content, as the goal's plan places it
  * (`planMonthList`, carried ones first) and the closed month's share from
  * `planShare`.

@@ -1,7 +1,8 @@
-import { dayBefore, daysBetween } from "@/lib/day/weeks";
+import { daysBetween } from "@/lib/day/weeks";
 import { monthOfTask } from "./carry";
-import { lastMonthOf, monthOf, nextMonth } from "./months";
+import { lastDayOf, lastMonthOf, monthOf, nextMonth } from "./months";
 import { amountOf, doneDayOf, fillPlan, type PlanInput, type PlanItem, type PlanTask } from "./roadmap";
+import { addDaysToCivilDate } from "@/lib/zone";
 
 export type PlanNotice = {
   closedMonth: string;
@@ -11,8 +12,7 @@ export type PlanNotice = {
   end: string;
 };
 
-const lastDayOf = (month: string) => dayBefore(nextMonth(month));
-const monthBefore = (month: string) => monthOf(dayBefore(month));
+const monthBefore = (month: string) => monthOf(addDaysToCivilDate(month, -1));
 
 function childrenOf(tasks: PlanTask[], task: PlanTask): PlanTask[] {
   return tasks.filter((other) => other.parentId === task.id);
@@ -34,7 +34,7 @@ export function planMonthList(input: PlanInput, month: string): PlanItem[] {
     const items = fillPlan(input).months.find((m) => m.month === month)?.items ?? [];
     if (month !== current) return items;
     // Left undone from last month: it sat in an earlier month on the day before this one began.
-    const before = fillPlan({ ...input, today: dayBefore(current) });
+    const before = fillPlan({ ...input, today: addDaysToCivilDate(current, -1) });
     const sat = new Map<string, string>();
     for (const m of before.months) {
       if (m.month >= current) continue;
@@ -127,7 +127,7 @@ export function planMoved(input: PlanInput & { seen: string | null }): PlanNotic
 export function rhythmToMeet(input: PlanInput, step: number): number | null {
   // A goal with no end has no day to meet.
   if (input.horizon === null) return null;
-  const lastDay = dayBefore(input.horizon);
+  const lastDay = addDaysToCivilDate(input.horizon, -1);
   const plan = fillPlan(input);
   if (plan.state === "empty") return null;
   if (plan.end !== null && plan.end <= lastDay) return null;

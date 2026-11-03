@@ -115,6 +115,12 @@ const FIELDS: Record<string, Field[]> = {
     { as: "goal", from: "goal_id", to: "goal" },
     { as: "amount", from: "amount", to: "amount", goal: "goal_id" },
   ],
+  record_time: [
+    { as: "day", from: "day", to: "day" },
+    { as: "estimate", from: "minutes", to: "time" },
+    { as: "goal", from: "goal_id", to: "goalName", optional: true },
+    { as: "text", from: "note", to: "noteText", optional: true },
+  ],
   set_measure: [
     { as: "goal", from: "goal_id", to: "goal" },
     { as: "text", from: "name", to: "name" },
@@ -191,12 +197,14 @@ function replaced(change: Change, names: ChangeNames, values: Record<string, str
 export function describeChange(change: Change, names: ChangeNames): Described {
   const fields = FIELDS[change.tool];
   if (fields === undefined) return REFUSED;
+  // A goal named by words is never shown, so it is never proposed: the model proposes the id a read gave it.
+  if (change.tool === "record_time" && change.input.goal_name !== undefined) return REFUSED;
   const values: Record<string, string> = {};
   let cleared = false;
   for (const field of fields) {
     const raw = change.input[field.from];
     // A null estimate is a change of its own: it clears the task's estimate.
-    if (field.as === "estimate" && raw === null) {
+    if (field.as === "estimate" && raw === null && change.tool === "set_task_estimate") {
       cleared = true;
       continue;
     }
@@ -253,6 +261,10 @@ export function describeChange(change: Change, names: ChangeNames): Described {
         break;
       }
     }
+  }
+  if (change.tool === "record_time") {
+    values.goal = values.goalName === undefined ? "" : translate("chat.recordTimeGoal", { goal: values.goalName });
+    values.note = values.noteText === undefined ? "" : translate("chat.recordTimeNote", { note: values.noteText });
   }
   const key = cleared ? "chat.clearEstimate" : `chat.change.${change.tool}`;
   return { key, values: { ...values, ...replaced(change, names, values) } };

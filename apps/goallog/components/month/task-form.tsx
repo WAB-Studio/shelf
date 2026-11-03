@@ -30,7 +30,7 @@ export type TaskFormProps = {
 };
 
 /**
- * `TareaNueva`, `SubtareaNueva`, `TareaSinMedida` (RP-30, RP-31, RP-35): a task
+ * `TareaNueva`, `SubtareaNueva`, `TareaSinMedida` (RP-68, RP-31, RP-35): a task
  * of a month, or a sub-task under a parent. A time unit takes hours and
  * minutes as two whole fields and sends their sum in minutes; «con
  * sub-tareas» sends no amount, the parent's time being its children's. Runs

@@ -2,8 +2,7 @@ import type { Browser, Page } from "@playwright/test";
 
 import messages from "../messages/es/import.json";
 import { test, expect, settled as pageSettled } from "./fixtures";
-import { dayBefore } from "../lib/day/weeks";
-import { civilDateToDate, dateToCivilDate, todayInZone } from "../lib/zone";
+import { addDaysToCivilDate, civilDateToDate, dateToCivilDate, todayInZone } from "../lib/zone";
 import { rawGoal, rawTask, seedOf, stored, unfold } from "./importar-plan";
 import { boxOf } from "./box";
 
@@ -24,7 +23,7 @@ const shift = (by: number) => {
 };
 const [first, second] = [shift(0), shift(1)];
 const horizon = `${Number(yearOf(today)) + 1}-${today.slice(5, 7)}-01`;
-const lastDay = dayBefore(horizon);
+const lastDay = addDaysToCivilDate(horizon, -1);
 const phaseEnd = (() => {
   const date = civilDateToDate(`${shift(2)}-01`);
   date.setUTCDate(0);

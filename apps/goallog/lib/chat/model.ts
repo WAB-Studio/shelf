@@ -9,7 +9,7 @@ import { postCompletion } from "@/lib/model/completions";
 import { readTools, writeTools, type ToolSpec } from "@/lib/tools/catalogue";
 
 import { chatSystemPrompt } from "./prompt";
-import { todayInZone } from "@/lib/zone";
+import { addDaysToCivilDate, todayInZone } from "@/lib/zone";
 import { chatStub, type ChatStub } from "./seam";
 import { CHAT_TURNS_SENT, type Change, type ChatTurn } from "./types";
 
@@ -260,8 +260,15 @@ async function found(): Promise<Found> {
 
 const PLACEHOLDER = /^\{\{(goal|task|commitment):(.+)\}\}$/;
 
+// «{{day:-1}}» is yesterday: a script cannot name a date that moves.
+const DAY_PLACEHOLDER = /^\{\{day:(-?\d+)\}\}$/;
+
 function resolve(value: unknown, known: Found): unknown {
   if (typeof value === "string") {
+    const offset = DAY_PLACEHOLDER.exec(value);
+    if (offset) {
+      return addDaysToCivilDate(todayInZone(), Number(offset[1]));
+    }
     const match = PLACEHOLDER.exec(value);
     if (!match) return value;
     const pool = match[1] === "goal" ? known.goals : match[1] === "task" ? known.tasks : known.commitments;

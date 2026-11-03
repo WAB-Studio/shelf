@@ -36,6 +36,7 @@ tanto necesitamos».
 | «Devuelve Documento al plan» | `unfix_task` |
 | «Estima Maze en 3 horas» | `set_task_estimate` (`estimate` 180; through `editTask`; null clears it) |
 | «La fase 2 termina el 30» | `edit_phase` (through `editPhase`) |
+| «Ayer trabajé 8 horas» | `record_time` (`day`, `minutes`; with `goal_id` it confirms the entry to that goal; through `recordTimeEntry` and `confirmTimeEntry`); `get_time` reads the ledger |
 | «Crea la meta Viaje» | `create_goal` |
 | «Pon Fitness dentro de Salud» | `move_goal` |
 | «Anota en Casa: …» | `set_goal_note` |

@@ -11,6 +11,7 @@ import { measureByWeek, totalInSpan } from "@/lib/day/review";
 import type { Cadence, EvidenceDay, Phase, ReviewWeek, SatisfiedBy } from "@/lib/day/types";
 import {
   toCadence,
+  confirmedTimeFacts,
   countsInMeasure,
   factUnit,
   toDeclaredFact,
@@ -23,8 +24,8 @@ import { readEvidenceOutcome } from "@/lib/queries/day";
 import { queryEvidenceBySource } from "@/lib/queries/evidence";
 import type { EvidenceOutcome } from "@/lib/queries/evidence";
 import { getPerson, withGoalsDb, withReadingDb, type Transaction } from "@/lib/session";
-import { civilDateInZone, TIME_ZONE, todayInZone } from "@/lib/zone";
-import { dayBefore, daysBetween } from "@/lib/day/weeks";
+import { addDaysToCivilDate, civilDateInZone, TIME_ZONE, todayInZone } from "@/lib/zone";
+import { daysBetween } from "@/lib/day/weeks";
 import { fillPlan, type PlanInput, type PlanTask, type Roadmap } from "@/lib/plan/roadmap";
 import { planMonthList } from "@/lib/plan/roadmap-read";
 import {
@@ -101,13 +102,15 @@ export type FactRow = {
   commitment_unit: string | null;
   // RP-148: the day's own target; `to_jsonb(f)` carries it.
   day_target?: number | null;
+  // RP-151: a confirmed allocation of time, shaped as a fact by `confirmedTimeFacts`.
+  time_allocation?: boolean;
 };
 
 // One statement's whole shape: the goal itself (`null` when the id does not
 // resolve under RLS — deleted, or somebody else's), every phase and every
 // commitment it has ever had, and every fact that names it — retired
 // commitments and old facts included, since a goal's screen never hides what
-// it once asked for (RP-13).
+// it once asked for (RP-127).
 type GoalQueryRow = {
   goal: GoalRow | null;
   phases: PhaseRow[];
@@ -185,7 +188,7 @@ export type TaskRow = {
 
 // What a commitment reads as on the goal's own screen: its cadence and what
 // satisfies it, in the engine's own shapes, plus its name and its retirement
-// — drawn, never hidden (RP-13). A view of its own rather than
+// — drawn, never hidden (RP-127). A view of its own rather than
 // `CommitmentPlan`: the goal's screen has no day to ask `asksOn` against.
 export type GoalCommitment = {
   id: string;
@@ -198,7 +201,7 @@ export type GoalCommitment = {
   // name from `sources.json` under this key, never a sentence stored here.
   sourceLabelKey: SourceKey | null;
   // Distinct days this commitment has a declared fact on (the retire sheet: "los N días en que lo hiciste" —
-  // RP-13 says the days already done stay done). The server refuses a change or a delete by this count alone.
+  // RP-127 says the days already done stay done). The server refuses a change or a delete by this count alone.
   factDayCount: number;
   // The days its evidence source met the threshold since it was written: days done all the same (RP-05
   // writes no fact), counted apart because only a declared day locks a deletion.
@@ -215,12 +218,12 @@ export type GoalView = {
   id: string;
   name: string;
   horizon: string | null;
-  // The last day the goal counted: `dayBefore(horizon)` once `horizon` is
+  // The last day the goal counted: `addDaysToCivilDate(horizon, -1)` once `horizon` is
   // today or past, null while it still runs and for a goal with no end. Archived or not — the screen
   // decides which wins.
   endedOn: string | null;
   // When the goal was opened (§0.3, 3), in the person's own zone — the goal
-  // screen's own overline (RP-11), read off `to_jsonb(g)`'s whole row rather
+  // screen's own overline (RP-99), read off `to_jsonb(g)`'s whole row rather
   // than a second round trip.
   createdAt: string;
   measureName: string | null;
@@ -357,7 +360,7 @@ async function queryGoalRow(tx: Transaction, goalId: string): Promise<GoalQueryR
                ) order by f.day, f.written_at, f.id), '[]'::json)
          from "goals"."facts" f
          left join "goals"."commitments" c on c.id = f.commitment_id
-         where f.goal_id = ${goalId}) as facts,
+         where f.goal_id = ${goalId})::jsonb || ${confirmedTimeFacts(sql`tg.id = ${goalId}`)} as facts,
       (select coalesce(json_agg(jsonb_build_object('month', b.month, 'amount', b.amount)
                                 order by b.month), '[]'::json)
          from "goals"."month_budgets" b
@@ -391,7 +394,7 @@ async function queryGoalRow(tx: Transaction, goalId: string): Promise<GoalQueryR
                                   ) order by f.day, f.written_at, f.id), '[]'::json)
                                   from "goals"."facts" f
                                   left join "goals"."commitments" c on c.id = f.commitment_id
-                                  where f.goal_id = d.id),
+                                  where f.goal_id = d.id)::jsonb || ${confirmedTimeFacts(sql`tg.id = d.id`)},
                 'budgets', (select coalesce(json_agg(jsonb_build_object('month', b.month, 'amount', b.amount)
                                                      order by b.month), '[]'::json)
                                   from "goals"."month_budgets" b
@@ -512,7 +515,7 @@ function goalSpan(goalId: string, today: string): { from: SQL; to: SQL } {
                select (coalesce(min(t.created_at) filter (where t.archived_at is null), min(t.created_at))
                          at time zone ${TIME_ZONE})::date
                  from t join b on b.id = t.id)`,
-    // `horizon` is the first day after the goal (RP-11), already a civil date:
+    // `horizon` is the first day after the goal (RP-99), already a civil date:
     // the span ends the day before it, or today for a goal with no end.
     to: sql`(select coalesce(g.horizon - 1, ${today}::date) from "goals"."goals" g where g.id = ${goalId})`,
   };
@@ -756,7 +759,7 @@ export async function loadGoal(
     own.set(row.goal.id, { unit: row.goal.measure_unit, months: monthFigures(figures.months, []) });
     for (const entry of row.branch) {
       const from = spanStart(tree, entry.goal.id);
-      const f = figuresOf(entry, from, within(from, entry.goal.horizon === null ? today : dayBefore(entry.goal.horizon)));
+      const f = figuresOf(entry, from, within(from, entry.goal.horizon === null ? today : addDaysToCivilDate(entry.goal.horizon, -1)));
       figuresById.set(entry.goal.id, f);
       own.set(entry.goal.id, { unit: entry.goal.measure_unit, months: monthFigures(f.months, []) });
     }
@@ -853,7 +856,7 @@ export async function loadGoal(
       inUnit: unit !== null && unit === measureUnit,
       month: unit === null || !f ? null : { planned: f.planned, reached: f.reached },
       firstPlanned,
-      endedOn: n.horizon !== null && n.horizon <= today ? dayBefore(n.horizon) : null,
+      endedOn: n.horizon !== null && n.horizon <= today ? addDaysToCivilDate(n.horizon, -1) : null,
       archivedAt: n.archivedAt,
     };
   });
@@ -862,7 +865,7 @@ export async function loadGoal(
     id: row.goal.id,
     name: row.goal.name,
     horizon: row.goal.horizon,
-    endedOn: row.goal.horizon !== null && row.goal.horizon <= today ? dayBefore(row.goal.horizon) : null,
+    endedOn: row.goal.horizon !== null && row.goal.horizon <= today ? addDaysToCivilDate(row.goal.horizon, -1) : null,
     createdAt: row.goal.created_at,
     measureName: row.goal.measure_name,
     measureUnit,
@@ -883,7 +886,7 @@ export async function loadGoal(
     planSeen: row.goal.plan_seen ?? null,
     plan: figures.plan,
     roadmap: holdsGoals
-      ? { state: "noRhythm", months: [], unplaced: [], end: null, lastDay: row.goal.horizon === null ? null : dayBefore(row.goal.horizon) }
+      ? { state: "noRhythm", months: [], unplaced: [], end: null, lastDay: row.goal.horizon === null ? null : addDaysToCivilDate(row.goal.horizon, -1) }
       : fillPlan(figures.plan),
     note: row.goal.note ?? null,
     marked: row.facts.flatMap((fact) => {
@@ -1063,7 +1066,7 @@ export async function loadGoalForm(
     horizon: goal.horizon,
     createdAt: goal.created_at,
     archivedAt: goal.archived_at,
-    endedOn: goal.horizon !== null && goal.horizon <= today ? dayBefore(goal.horizon) : null,
+    endedOn: goal.horizon !== null && goal.horizon <= today ? addDaysToCivilDate(goal.horizon, -1) : null,
     measureUnit,
     phases: row.phases.map(toPhase),
     commitments: row.commitments.map((commitment) =>
@@ -1074,7 +1077,7 @@ export async function loadGoalForm(
   };
 }
 
-// A habit with no goal (RP-100), as the «Hábitos sin meta» section draws it.
+// A habit with no goal (RP-113), as the «Hábitos sin meta» section draws it.
 export type LooseCommitment = GoalCommitment & { note: string | null };
 
 /**
@@ -1221,7 +1224,8 @@ export async function listGoalsForMetas(today: string = todayInZone()): Promise<
              from "goals"."facts" f
              left join "goals"."commitments" c on c.id = f.commitment_id
              where f.goal_id = g.id
-               and f.day between ${month}::date and ${today}::date) as facts,
+               and f.day between ${month}::date and ${today}::date)::jsonb
+            || ${confirmedTimeFacts(sql`tg.id = g.id`, { from: month, to: today })} as facts,
           (select coalesce(json_agg(jsonb_build_object('month', b.month, 'amount', b.amount) order by b.month), '[]'::json)
              from "goals"."month_budgets" b
              where b.goal_id = g.id) as budgets,

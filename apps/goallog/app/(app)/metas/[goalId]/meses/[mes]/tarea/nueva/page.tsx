@@ -8,7 +8,7 @@ import { monthWord } from "@/lib/plan/month-name";
 import { getPerson } from "@/lib/session";
 
 /**
- * `TareaNueva`, `SubtareaNueva`, `TareaSinMedida` (RP-30, RP-31): the auth gate
+ * `TareaNueva`, `SubtareaNueva`, `TareaSinMedida` (RP-68, RP-31): the auth gate
  * and what the form needs of one goal and its month read by `loadGoalForm`. A closed month, a
  * closed goal and a `?padre=` that is not a sub-taskable parent of this month
  * answer `notFound()` — the screens draw no way in to them, so a direct visit

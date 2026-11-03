@@ -4,14 +4,13 @@ import { getTranslations } from "next-intl/server";
 
 import { BudgetSheet } from "@/components/month/budget-sheet";
 import { MonthDetail } from "@/components/month/month-screen";
-import { dayBefore } from "@/lib/day/weeks";
 import { endlessCut, foldsMonths } from "@/lib/lists/endless-cut";
 import { nextMonth, settledMonths } from "@/lib/plan/months";
 import { planMonthList, planShare } from "@/lib/plan/roadmap-read";
 import { screenPlanned } from "@/lib/plan/screen-planned";
 import { loadGoal, type GoalView } from "@/lib/queries/goal";
 import { formatQuantity, isTimeUnit } from "@/lib/units/time";
-import { civilDayMonthYear } from "@/lib/zone";
+import { addDaysToCivilDate, civilDayMonthYear } from "@/lib/zone";
 import { timeWordsOf } from "@/lib/units/time-words";
 import { Button, ListDetail, Page, ScreenHeader, Table, Text, TextLink, type TableRow } from "@/components/ui";
 
@@ -49,7 +48,7 @@ export async function MonthsList({
   const t = await getTranslations();
   const settled = settledMonths(loaded.months, loaded.endedOn !== null);
   const folds = foldsMonths(loaded.horizon, settled);
-  const ends = loaded.horizon === null ? undefined : { lastDay: dayBefore(loaded.horizon) };
+  const ends = loaded.horizon === null ? undefined : { lastDay: addDaysToCivilDate(loaded.horizon, -1) };
   // A goal with no end, or an end past 12 months, shows its months up to this one (last 12), the next and those ahead set by hand; the rest ahead fold into a line.
   // A month open outside the last 12 shows the whole list.
   const folded = folds ? endlessCut(settled, { all: false, rhythm: loaded.rhythm, ends }) : null;

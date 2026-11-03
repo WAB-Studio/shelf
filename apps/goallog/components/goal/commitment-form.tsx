@@ -16,7 +16,7 @@ import { evidenceUnitWords } from "@/lib/evidence/unit-words";
 import { messageKey, type MessageKey, type SourceKey } from "@/i18n/translator";
 
 export type CommitmentFormProps = {
-  // Null: a habit that belongs to no goal (RP-100), which carries a note and has no source.
+  // Null: a habit that belongs to no goal (RP-113), which carries a note and has no source.
   goalId: string | null;
   goalName: string;
   // Whether the goal already names a measure (§0.3, 3): only matters while
@@ -67,7 +67,7 @@ const THRESHOLD_ERRORS: MessageKey[] = ["plan.errors.thresholdInvalid"];
 
 /**
  * `CompromisoNuevo.dc.html` (RP-12): what it is, how often, what gives it for
- * done — and, for a habit with no goal (RP-100), a note. Drives `addCommitment` over its own Zod schema
+ * done — and, for a habit with no goal (RP-113), a note. Drives `addCommitment` over its own Zod schema
  * (`lib/validation/plan.ts`), parsed here first so a bound the server would
  * refuse never leaves the device — the same shape `NewGoalForm` already
  * takes. No new server code.

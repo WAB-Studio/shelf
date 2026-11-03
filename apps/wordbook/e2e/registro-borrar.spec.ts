@@ -228,7 +228,7 @@ const groupIds = async (page: Page, key: string) =>
 const sentMarks = (bodies: Array<{ tombstones: Mark[] }>) =>
   bodies.flatMap((body) => body.tombstones.map((mark) => mark.localId)).sort();
 
-async function openRegistro(page: Page, seedRows: Parameters<typeof seed>[1]): Promise<void> {
+async function openRecord(page: Page, seedRows: Parameters<typeof seed>[1]): Promise<void> {
   await deleteTranslator(page);
   await seed(page, seedRows);
   await page.goto("/registro");
@@ -259,7 +259,7 @@ for (const viewport of [
     page,
   }) => {
     await page.setViewportSize(viewport);
-    await openRegistro(page, { lookups: leaveRows() });
+    await openRecord(page, { lookups: leaveRows() });
     for (const word of ["leave", "leaf", "left"]) {
       await expect(rowLink(page, word)).toBeVisible();
       const button = deleteX(page, word);
@@ -294,7 +294,7 @@ for (const viewport of [
 test("Asking, copy on: the question promises every device and carries no local note", async ({ page }) => {
   await answerRoundsEmpty(page);
   const opened = page.waitForResponse((response) => response.url().includes("/api/log/sync"));
-  await openRegistro(page, { sync: copyOn(), lookups: leaveRows() });
+  await openRecord(page, { sync: copyOn(), lookups: leaveRows() });
   await opened;
   await expect(rowLink(page, "leave")).toBeVisible();
 
@@ -317,7 +317,7 @@ for (const [variant, makeSync, noted] of [
     page,
   }) => {
     await answerRoundsEmpty(page);
-    await openRegistro(page, { sync: makeSync(), lookups: leaveRows() });
+    await openRecord(page, { sync: makeSync(), lookups: leaveRows() });
     await expect(rowLink(page, "leave")).toBeVisible();
     await page.waitForLoadState("networkidle");
 
@@ -340,7 +340,7 @@ for (const [variant, makeSync, noted] of [
 test("Cancelled: «Conservar» closes the local question and nothing is deleted; another row's question closes the first", async ({
   page,
 }) => {
-  await openRegistro(page, { lookups: leaveRows() });
+  await openRecord(page, { lookups: leaveRows() });
   await expect(rowLink(page, "leave")).toBeVisible();
 
   await deleteX(page, "leave").click();
@@ -367,7 +367,7 @@ test("Cancelled: «Conservar» closes the local question and nothing is deleted;
 // -------------------------------------------------------------- Pending
 
 test("Pending: a double tap on «Borrar» deletes once and shows «Borrando…» meanwhile", async ({ page }) => {
-  await openRegistro(page, { lookups: leaveRows() });
+  await openRecord(page, { lookups: leaveRows() });
   await expect(rowLink(page, "leave")).toBeVisible();
   await countDeletedEvents(page);
 
@@ -414,7 +414,7 @@ test("Pending: a double tap on «Borrar» deletes once and shows «Borrando…»
 test("Done: the row leaves, the header drops its searches and one word, and the last row leaves the empty state", async ({
   page,
 }) => {
-  await openRegistro(page, { lookups: leaveRows() });
+  await openRecord(page, { lookups: leaveRows() });
   await expect(header(page, 4, 3)).toBeVisible();
 
   await deleteViaUi(page, "leave");
@@ -437,7 +437,7 @@ test("Failed: an aborted transaction leaves the row and says so; «Conservar» c
   page,
 }) => {
   await answerRoundsEmpty(page);
-  await openRegistro(page, { sync: copyOn({ enabled: false }), lookups: leaveRows() });
+  await openRecord(page, { sync: copyOn({ enabled: false }), lookups: leaveRows() });
   await expect(rowLink(page, "leave")).toBeVisible();
   await page.waitForLoadState("networkidle");
 
@@ -490,7 +490,7 @@ for (const [deleted, kept, remaining] of [
   ["left", ["leave", "leaf"], ["leave>leaf", "leave>leave", "left>leave"]],
 ] as const) {
   test(`Only its group: deleting «${deleted}» takes that row's searches and no other`, async ({ page }) => {
-    await openRegistro(page, { lookups: leaveRows() });
+    await openRecord(page, { lookups: leaveRows() });
     await expect(rowLink(page, deleted)).toBeVisible();
     await deleteViaUi(page, deleted);
     await expect(rowLink(page, deleted)).toHaveCount(0);
@@ -502,7 +502,7 @@ for (const [deleted, kept, remaining] of [
 // ------------------------------------------------------------- Filtered
 
 test("Filtered: deleting while filtering keeps the filter and updates «N de M»", async ({ page }) => {
-  await openRegistro(page, { lookups: leaveRows() });
+  await openRecord(page, { lookups: leaveRows() });
   const filter = page.getByRole("textbox", { name: study("filterLabel") });
   await filter.fill("lea");
   await expect(page.getByText(study("filterCount", { shown: 2, total: 3, kind: "words" }), { exact: true })).toBeVisible();
@@ -525,7 +525,7 @@ test("RNL-11, copy on: a delete starts exactly one round of its own, with no hid
   const sync = copyOn();
   await answerRoundsEmpty(page);
   const rounds = trackRounds(page);
-  await openRegistro(page, { sync, lookups: leaveRows() });
+  await openRecord(page, { sync, lookups: leaveRows() });
   await expect(rowLink(page, "leave")).toBeVisible();
   await expect.poll(rounds.count).toBe(1);
   await page.waitForLoadState("networkidle");
@@ -558,7 +558,7 @@ test("RNL-11, one round per delete: two deletes add at most three rounds, every 
 }) => {
   await answerRoundsEmpty(page);
   const rounds = trackRounds(page);
-  await openRegistro(page, { sync: copyOn(), lookups: leaveRows() });
+  await openRecord(page, { sync: copyOn(), lookups: leaveRows() });
   await expect(rowLink(page, "leave")).toBeVisible();
   await expect.poll(rounds.count).toBe(1);
   await page.waitForLoadState("networkidle");
@@ -606,7 +606,7 @@ test("RNL-11, a round in flight: a delete made while the open round is held leav
     await answerJson(route, emptyRound);
   });
   const rounds = trackRounds(page);
-  await openRegistro(page, { sync: copyOn(), lookups: leaveRows() });
+  await openRecord(page, { sync: copyOn(), lookups: leaveRows() });
   await expect(rowLink(page, "leave")).toBeVisible();
   await expect.poll(rounds.count, { message: "the open round never left" }).toBe(1);
   expect(rounds.bodies[0].tombstones).toEqual([]);
@@ -630,7 +630,7 @@ for (const [variant, makeSync] of [
   test(`Copy off, ${variant}: the row leaves and no request leaves the device`, async ({ page }) => {
     await answerRoundsEmpty(page);
     const api = apiRequests(page);
-    await openRegistro(page, { sync: makeSync(), lookups: leaveRows() });
+    await openRecord(page, { sync: makeSync(), lookups: leaveRows() });
     await expect(rowLink(page, "leave")).toBeVisible();
     await page.waitForLoadState("networkidle");
     const before = api.length;
@@ -657,7 +657,7 @@ test("Offline: the row leaves with no network and the next round online carries 
     offline ? route.abort("internetdisconnected") : answerJson(route, emptyRound),
   );
   const rounds = trackRounds(page);
-  await openRegistro(page, { sync, lookups: leaveRows() });
+  await openRecord(page, { sync, lookups: leaveRows() });
   await expect(rowLink(page, "leave")).toBeVisible();
   await expect.poll(rounds.count).toBe(1);
   await page.waitForLoadState("networkidle");
@@ -691,7 +691,7 @@ test("Offline: the row leaves with no network and the next round online carries 
 // ------------------------------------------------- The word page afterwards
 
 test("The word page after: /registro/<word> draws the never-searched state", async ({ page }) => {
-  await openRegistro(page, { lookups: [lookup("zebra"), lookup("zebra"), lookup("apple")] });
+  await openRecord(page, { lookups: [lookup("zebra"), lookup("zebra"), lookup("apple")] });
   await expect(rowLink(page, "zebra")).toBeVisible();
   await deleteViaUi(page, "zebra");
   await expect(rowLink(page, "zebra")).toHaveCount(0);
@@ -822,7 +822,7 @@ test("RL-70: a delete on one device leaves every device of the reader, and no la
 // ----------------------------------------------- Deleting holds both controls
 
 test("Deleting: while the delete is held, «Conservar» and «Borrar» are both disabled", async ({ page }) => {
-  await openRegistro(page, { lookups: leaveRows() });
+  await openRecord(page, { lookups: leaveRows() });
   await expect(rowLink(page, "leave")).toBeVisible();
 
   // A readwrite transaction kept alive on `lookups` holds the delete pending.

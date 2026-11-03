@@ -9,10 +9,9 @@ import { RhythmSheet } from "@/components/plan/rhythm-sheet";
 import { TaskSheet } from "@/components/plan/task-sheet";
 import { Button, Flex, Row, Text } from "@/components/ui";
 import { Figure, useTimeWords } from "@/components/ui/figure";
-import { dayBefore } from "@/lib/day/weeks";
 import type { PlanInput } from "@/lib/plan/roadmap";
 import { formatQuantity } from "@/lib/units/time";
-import { civilDateWithYear } from "@/lib/zone";
+import { addDaysToCivilDate, civilDateWithYear } from "@/lib/zone";
 
 /**
  * `RoadmapPasaElFinal`'s two offers (RP-53): raise the rhythm to the one that
@@ -70,7 +69,7 @@ export function PlanEnd({
         onClick={() => setOpen(true)}
       />
       {plan.horizon !== null ? (
-        <MoveEndSheet goalId={goalId} from={dayBefore(plan.horizon)} to={planEnd} moveTo={moveTo} open={open} onOpenChange={setOpen} />
+        <MoveEndSheet goalId={goalId} from={addDaysToCivilDate(plan.horizon, -1)} to={planEnd} moveTo={moveTo} open={open} onOpenChange={setOpen} />
       ) : null}
       <Text as="p" variant="sentence">
         {t("roadmap.pasaElFinal.removeTasks")}

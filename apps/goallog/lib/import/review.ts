@@ -1,7 +1,6 @@
 import { horizonTreeRefusal } from "@/lib/goals/placement";
 import { refusalKey } from "@/lib/goals/refusal-key";
 import { buildTree, type Level } from "@/lib/goals/tree";
-import { dayBefore } from "@/lib/day/weeks";
 import { createGoalSchema } from "@/lib/validation/plan";
 
 import { coverage, outness } from "./coverage";
@@ -19,6 +18,7 @@ import {
 } from "./draft";
 import { changesAnything, differences, fingerprint, matchGoals, phaseCrossing, type Difference, type GoalSnapshot } from "./differences";
 import type { StoredDraft } from "./draft-store";
+import { addDaysToCivilDate } from "@/lib/zone";
 
 export type ReviewNode = {
   path: string;
@@ -156,7 +156,7 @@ export function goalHorizonRefusal(draft: ImportDraft, g: number, horizon: strin
   const refusal = horizonTreeRefusal(buildTree(rows), String(g), horizon);
   if (!refusal) return null;
   const named = "above" in refusal ? refusal.above : "below" in refusal ? refusal.below : null;
-  return { key: refusalKey(refusal.code), values: named ? { name: named.name, date: named.horizon === null ? "" : dayBefore(named.horizon) } : {} };
+  return { key: refusalKey(refusal.code), values: named ? { name: named.name, date: named.horizon === null ? "" : addDaysToCivilDate(named.horizon, -1) } : {} };
 }
 
 const WEEKDAY_WORDS: [RegExp, number][] = [

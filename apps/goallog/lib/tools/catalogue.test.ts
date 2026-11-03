@@ -47,9 +47,35 @@ mock.module("@/app/actions/plan", {
 });
 mock.module("@/app/actions/plan-edit", { namedExports: { editPhase: act("editPhase") } });
 mock.module("@/app/actions/roadmap", { namedExports: { setRhythm: act("setRhythm") } });
+// What the confirming act answers next, and the goals `listGoalsForMetas` holds.
+let confirmAnswer: unknown = { ok: true };
+mock.module("@/app/actions/time-entries", {
+  namedExports: {
+    recordTimeEntry: async (input: unknown) => {
+      calls.push({ act: "recordTimeEntry", input });
+      const goalId = (input as { goalId?: string }).goalId;
+      return goalId === "foreign" ? { ok: false, error: "day.errors.notFound" } : { ok: true, entryId: "entry-1" };
+    },
+    confirmTimeEntry: async (input: unknown) => {
+      calls.push({ act: "confirmTimeEntry", input });
+      return confirmAnswer;
+    },
+  },
+});
+mock.module("@/lib/queries/time-entries", {
+  namedExports: {
+    loadTimeLedger: async () => [
+      { day: "2026-11-02", goalId: "g1", confirmedMinutes: 480, waitingMinutes: 0 },
+      { day: "2026-11-02", goalId: null, confirmedMinutes: 0, waitingMinutes: 90 },
+    ],
+  },
+});
+mock.module("@/lib/queries/chat", {
+  namedExports: { loadChangeNames: async () => ({ goals: new Map([["g1", { name: "Inglés" }]]) }) },
+});
 mock.module("@/lib/queries/day", { namedExports: { loadDay: async () => ({}) } });
 mock.module("@/lib/queries/goal", {
-  namedExports: { listGoalsForMetas: async () => [], loadGoal: async () => null },
+  namedExports: { listGoalsForMetas: async () => ({ open: [{ id: "g1", name: "Inglés" }, { id: "g2", name: "Doble" }, { id: "g3", name: "doble" }] }), loadGoal: async () => null },
 });
 mock.module("@/lib/queries/one-offs", {
   namedExports: {
@@ -67,18 +93,18 @@ beforeEach(() => {
   calls.length = 0;
 });
 
-test("the catalogue holds the 26 names of mcp.json and no more", async () => {
+test("the catalogue holds the 28 names of mcp.json and no more", async () => {
   const { readTools, writeTools } = await catalogue();
   const names = [...readTools, ...writeTools].map((tool) => tool.name).sort();
   assert.deepEqual(names, Object.keys(mcp.tools).sort());
-  assert.equal(names.length, 26);
+  assert.equal(names.length, 28);
   assert.ok(names.includes("set_task_estimate") && names.includes("edit_phase"));
 });
 
-test("the 6 reads are reads and the 20 writes are writes", async () => {
+test("the 7 reads are reads and the 21 writes are writes", async () => {
   const { readTools, writeTools } = await catalogue();
-  assert.equal(readTools.length, 6);
-  assert.equal(writeTools.length, 20);
+  assert.equal(readTools.length, 7);
+  assert.equal(writeTools.length, 21);
   assert.ok(readTools.every((tool) => tool.kind === "read"));
   assert.ok(writeTools.every((tool) => tool.kind === "write"));
   assert.ok(!readTools.some((tool) => tool.name === "declare_fact"));
@@ -189,6 +215,8 @@ const VALID: Record<string, Record<string, unknown>> = {
   get_today: {},
   get_report: {},
   list_loose_one_offs: {},
+  get_time: { from: "2026-11-01", to: "2026-11-02" },
+  record_time: { day: "2026-11-02", minutes: 60 },
   declare_fact: {},
   complete_task: { one_off_id: "t" },
   create_task: { name: "x" },
@@ -213,7 +241,7 @@ const VALID: Record<string, Record<string, unknown>> = {
 
 test("every tool takes its own valid input and refuses the same input with a key it does not declare", async () => {
   const { readTools, writeTools } = await catalogue();
-  assert.equal(Object.keys(VALID).length, 26);
+  assert.equal(Object.keys(VALID).length, 28);
   for (const tool of [...readTools, ...writeTools]) {
     const base = VALID[tool.name];
     assert.equal(tool.input.safeParse(base).success, true, `${tool.name} refuses its own valid input`);
@@ -259,7 +287,7 @@ const IDEMPOTENT = { readOnlyHint: false, destructiveHint: false, idempotentHint
 const CREATING = ["create_task", "create_goal", "add_phase", "add_commitment"];
 
 const ANNOTATIONS: [string[], Record<string, boolean>][] = [
-  [["list_goals", "get_goal", "get_month", "get_today", "get_report", "list_loose_one_offs"], READ_ONLY],
+  [["list_goals", "get_goal", "get_month", "get_today", "get_report", "list_loose_one_offs", "get_time"], READ_ONLY],
   [["set_goal_note", "set_task_note", "set_measure", "retire_commitment", "move_horizon", "set_rhythm"], DESTRUCTIVE],
   [
     [
@@ -270,6 +298,7 @@ const ANNOTATIONS: [string[], Record<string, boolean>][] = [
       "unfix_task",
       "complete_task",
       "declare_fact",
+      "record_time",
       "move_goal",
       ...CREATING,
     ],
@@ -277,10 +306,10 @@ const ANNOTATIONS: [string[], Record<string, boolean>][] = [
   ],
 ];
 
-test("each tool carries the annotations its effect deserves, and the three groups cover all 24", async () => {
+test("each tool carries the annotations its effect deserves, and the three groups cover all 26", async () => {
   const { readTools, writeTools } = await catalogue();
   const byName = new Map([...readTools, ...writeTools].map((tool) => [tool.name as string, tool as { annotations?: unknown }]));
-  assert.equal(ANNOTATIONS.flatMap(([names]) => names).length, 24);
+  assert.equal(ANNOTATIONS.flatMap(([names]) => names).length, 26);
   for (const [names, expected] of ANNOTATIONS) {
     for (const name of names) assert.deepEqual(byName.get(name)?.annotations, expected, name);
   }
@@ -373,7 +402,8 @@ test("RP-139: edit_phase takes the phase, its aim and both days, and refuses any
   assert.equal(spec.input.safeParse(whole).success, true);
   assert.equal(spec.input.safeParse({ ...whole, goal_id: ABOVE }).success, false);
   for (const key of Object.keys(whole)) {
-    const { [key]: _gone, ...rest } = whole as Record<string, string>;
+    const rest: Record<string, string> = { ...whole };
+    delete rest[key];
     assert.equal(spec.input.safeParse(rest).success, false, `${key} is required`);
   }
 });
@@ -388,4 +418,71 @@ test("RP-139: edit_phase runs editPhase with the four values and nothing else", 
   assert.deepEqual(calls, [
     { act: "editPhase", input: { phaseId: PHASE, aim: "Medir", startsOn: "2026-11-02", endsOn: "2026-11-30" } },
   ]);
+});
+
+// RP-151, RP-139: the connected AI and the chat read and place time through the app's own acts.
+test("get_time answers the ledger by day and goal in minutes and words, and refuses a bad or a too long range", async () => {
+  const { readTools } = await catalogue();
+  const spec = readTools.find((tool) => tool.name === "get_time")!;
+  const outcome = await spec.run({ from: "2026-11-01", to: "2026-11-02" });
+  assert.ok(outcome.ok);
+  const value = outcome.value as { days: { goal: unknown; confirmed: unknown }[]; confirmed: unknown; waiting: unknown };
+  assert.deepEqual(value.days[0].goal, { id: "g1", name: "Inglés" });
+  assert.deepEqual(value.days[0].confirmed, { value: 480, unit: "minutos", text: "8 h" });
+  assert.equal(value.days[1].goal, null);
+  assert.deepEqual(value.waiting, { value: 90, unit: "minutos", text: "1 h 30 min" });
+  assert.equal(spec.input.safeParse({ from: "2026-11-02", to: "2026-11-01" }).success, false);
+  assert.equal(spec.input.safeParse({ from: "2024-01-01", to: "2026-11-01" }).success, false);
+  assert.equal(spec.input.safeParse({ from: "ayer", to: "2026-11-01" }).success, false);
+});
+
+test("record_time with a goal records with source chat and confirms the whole entry to that goal", async () => {
+  const outcome = await call("record_time", { day: "2026-11-02", minutes: 480, goal_id: "g1", note: "estudio" });
+  assert.deepEqual(outcome, { ok: true, value: { ok: true, entryId: "entry-1", confirmed: true } });
+  assert.deepEqual(calls, [
+    { act: "recordTimeEntry", input: { day: "2026-11-02", minutes: 480, note: "estudio", goalId: "g1", source: "chat" } },
+    { act: "confirmTimeEntry", input: { entryId: "entry-1", allocations: [{ goalId: "g1", minutes: 480 }] } },
+  ]);
+});
+
+test("record_time with no goal waits in the tray and confirms nothing", async () => {
+  const outcome = await call("record_time", { day: "2026-11-02", minutes: 60 });
+  assert.deepEqual(outcome, { ok: true, value: { ok: true, entryId: "entry-1" } });
+  assert.deepEqual(calls.map((c) => c.act), ["recordTimeEntry"]);
+});
+
+test("record_time resolves a goal name that exactly one open goal answers to, and waits when it is ambiguous or unknown", async () => {
+  await call("record_time", { day: "2026-11-02", minutes: 30, goal_name: " inglés " });
+  assert.equal((calls[0].input as { goalId?: string }).goalId, "g1");
+  assert.equal(calls.length, 2);
+  for (const name of ["doble", "nada"]) {
+    calls.length = 0;
+    await call("record_time", { day: "2026-11-02", minutes: 30, goal_name: name });
+    assert.deepEqual(calls.map((c) => c.act), ["recordTimeEntry"], name);
+    assert.equal((calls[0].input as { goalId?: string }).goalId, undefined, name);
+  }
+});
+
+test("record_time on another person's goal is refused by the act and confirms nothing", async () => {
+  const outcome = await call("record_time", { day: "2026-11-02", minutes: 60, goal_id: "foreign" });
+  assert.deepEqual(outcome, { ok: false, error: "day.errors.notFound" });
+  assert.deepEqual(calls.map((c) => c.act), ["recordTimeEntry"]);
+});
+
+test("record_time on a goal that does not measure time leaves the entry waiting and says why", async () => {
+  confirmAnswer = { ok: false, error: "day.errors.timeNotMeasured" };
+  try {
+    const outcome = await call("record_time", { day: "2026-11-02", minutes: 60, goal_id: "g1" });
+    assert.deepEqual(outcome, {
+      ok: true,
+      value: { ok: true, entryId: "entry-1", confirmed: false, waitingBecause: "day.errors.timeNotMeasured" },
+    });
+  } finally {
+    confirmAnswer = { ok: true };
+  }
+});
+
+test("record_time takes no source: the tool is the chat's, never TimeLog's", async () => {
+  const { writeTool } = await catalogue();
+  assert.equal(writeTool("record_time")!.input.safeParse({ day: "2026-11-02", minutes: 1, source: "timelog" }).success, false);
 });

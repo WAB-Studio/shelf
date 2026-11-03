@@ -1,8 +1,7 @@
 import type { Page } from "@playwright/test";
 import { test as base, expect } from "./fixtures";
-import { dayBefore } from "@/lib/day/weeks";
 import { monthOf, nextMonth } from "@/lib/plan/months";
-import { todayInZone } from "@/lib/zone";
+import { addDaysToCivilDate, todayInZone } from "@/lib/zone";
 
 // Module 806 (RP-32, RP-28), `MesesConAño` option B: no month of «Por mes» and
 // no month title reads without its year; the sentences that name a month beside
@@ -37,7 +36,7 @@ const capital = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
 const seg = (month: string) => month.slice(0, 7);
 
 const thisMonth = monthOf(todayInZone());
-const lastMonth = monthOf(dayBefore(thisMonth));
+const lastMonth = monthOf(addDaysToCivilDate(thisMonth, -1));
 
 // The goal's 16 months, this one first: it crosses a year boundary, and its
 // 13th month carries the first one's name in the next year.

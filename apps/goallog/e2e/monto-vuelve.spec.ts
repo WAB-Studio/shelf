@@ -1,12 +1,11 @@
 import { test, expect } from "./fixtures";
-import { dayBefore } from "@/lib/day/weeks";
 import { monthOf, nextMonth } from "@/lib/plan/months";
-import { todayInZone } from "@/lib/zone";
+import { addDaysToCivilDate, todayInZone } from "@/lib/zone";
 
 // RP-28: the amount sheet returns to the screen that opened it.
 
 const thisMonth = monthOf(todayInZone());
-const lastMonth = monthOf(dayBefore(thisMonth));
+const lastMonth = monthOf(addDaysToCivilDate(thisMonth, -1));
 const horizon = nextMonth(nextMonth(thisMonth));
 const seg = thisMonth.slice(0, 7);
 

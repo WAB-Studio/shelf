@@ -34,11 +34,13 @@ export default async function WelcomePage(
 
 
   // The guard fans out with the read it protects, never ahead of it.
-  const [, group] = await Promise.all([requireUser(), getUserGroup()]);
+  const [, group, t] = await Promise.all([
+    requireUser(),
+    getUserGroup(),
+    getTranslations("bienvenida"),
+  ]);
   // Reached without a claimed membership only by a stray visit; send them home.
   if (!group) return redirect({ href: "/", locale });
-
-  const t = await getTranslations("bienvenida");
 
   return (
     <Flex

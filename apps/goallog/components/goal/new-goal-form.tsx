@@ -26,7 +26,7 @@ const NAME_ERRORS: MessageKey[] = ["plan.errors.nameEmpty", "plan.errors.nameToo
 const HORIZON_ERRORS: MessageKey[] = ["goal.errors.horizonWeeksInvalid", "plan.errors.horizonInvalid"];
 
 /**
- * `/metas/nueva` (RP-11, RP-99, §0.3 3): a name and a horizon, nothing else. The
+ * `/metas/nueva` (RP-99, §0.3 3): a name and a horizon, nothing else. The
  * horizon is «con final» — typed in weeks and turned into the civil date the shared schema
  * and `createGoal` actually store, with `lib/zone.ts`'s own arithmetic — or «sin final», sent with
  * no horizon at all —

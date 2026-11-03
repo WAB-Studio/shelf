@@ -37,8 +37,6 @@ export function dateWords(day: string): RegExp {
   return new RegExp(`\\b${Number(day.slice(8, 10))} (?:de )?${month}`, "i");
 }
 
-export { dayBefore } from "@/lib/day/weeks";
-
 export const flat = (text: string) => text.replace(/\s+/g, " ").trim();
 
 const createdAt = () => new Date(new Date(`${thisMonth}T12:00:00Z`).getTime() - 20 * 86_400_000);

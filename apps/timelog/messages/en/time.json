@@ -50,7 +50,6 @@
     "claudeNoneToday": "No Claude yet today.",
     "devicesSum": "Sum of {n} devices",
     "appsMore": "and {n} more apps · {duration}",
-    "strip": "Week of the day",
     "stripDay": "{weekday}, {month} {day}",
     "stripDayEmpty": "{weekday}, {month} {day}, no upload",
     "stripPrev": "Previous week",

@@ -24,7 +24,7 @@ export const commitments = goalsSchema.table(
     userId: uuid()
       .notNull()
       .references(() => authUsers.id, { onDelete: "cascade" }),
-    // Null: a habit with no goal (RP-100).
+    // Null: a habit with no goal (RP-113).
     goalId: uuid()
       .references(() => goals.id, { onDelete: "cascade" }),
     name: text().notNull(),
