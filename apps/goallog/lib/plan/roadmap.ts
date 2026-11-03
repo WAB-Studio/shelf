@@ -1,6 +1,7 @@
-import { daysBetween, dayBefore } from "@/lib/day/weeks";
+import { daysBetween } from "@/lib/day/weeks";
 import { monthOfTask, type Task } from "./carry";
 import { monthOf, nextMonth, plannedOf, type MonthBudget } from "./months";
+import { addDaysToCivilDate } from "@/lib/zone";
 
 export type PlanTask = Task & {
   inPlan: boolean;
@@ -46,13 +47,13 @@ export type Roadmap = {
 // Filling stops this many months past the current one.
 const WINDOW = 120;
 
-// The month's planned amount (RP-74); past the goal's last month the plan
+// The month's planned amount (RP-76); past the goal's last month the plan
 // still projects, at the whole rhythm.
 export function amountOf(
   month: string,
   input: Pick<PlanInput, "budgets" | "rhythm" | "openedOn" | "horizon">,
 ): number | null {
-  if (input.horizon !== null && month > monthOf(dayBefore(input.horizon))) {
+  if (input.horizon !== null && month > monthOf(addDaysToCivilDate(input.horizon, -1))) {
     return input.budgets.find((budget) => budget.month === month)?.amount ?? input.rhythm ?? null;
   }
   return plannedOf(month, input);
@@ -131,7 +132,7 @@ export function fillPlan(input: PlanInput): Roadmap {
   const { today, horizon } = input;
   const doneBy = input.doneBy ?? today;
   const current = monthOf(today);
-  const lastDay = horizon === null ? null : dayBefore(horizon);
+  const lastDay = horizon === null ? null : addDaysToCivilDate(horizon, -1);
   const amounts = (month: string) => amountOf(month, input);
 
   // What the reading day sees: nothing created later, nothing done later. A task fixed to

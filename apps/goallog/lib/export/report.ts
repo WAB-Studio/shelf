@@ -63,7 +63,7 @@ export type GoalReport = {
   commitments?: ReportCommitment[];
   tasks: ReportTask[];
   carried: CarriedReport[];
-  // `tasks` is read for a goal that measures nothing: the months it prints on paper are its tasks' (RP-71).
+  // `tasks` is read for a goal that measures nothing: the months it prints on paper are its tasks' (RP-77).
   // `taskCount` is how many tasks the month's list holds, for every goal; `tasks` stays the read for one that measures nothing.
   months: (MonthRow & {
     carried: number | null;

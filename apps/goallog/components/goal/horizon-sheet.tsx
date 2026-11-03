@@ -6,13 +6,13 @@ import { useTranslations } from "next-intl";
 import { z } from "zod";
 
 import { moveHorizon } from "@/app/actions/plan";
-import { dayBefore, horizonForWeeks, weekIndexOf } from "@/lib/day/weeks";
+import { horizonForWeeks, weekIndexOf } from "@/lib/day/weeks";
 import { horizonWeeks } from "./phase-weeks";
 import { horizonTreeRefusal, type PlacementRefusal } from "@/lib/goals/placement";
 import { refusalKey } from "@/lib/goals/refusal-key";
 import { buildTree, type TreeRow } from "@/lib/goals/tree";
 import { horizonRefusal, moveHorizonSchema } from "@/lib/validation/horizon";
-import { civilDayMonthYear, todayInZone } from "@/lib/zone";
+import { addDaysToCivilDate, civilDayMonthYear, todayInZone } from "@/lib/zone";
 import { Button, Field, Flex, Notice, Sheet, SheetActions, Text } from "@/components/ui";
 import { messageKey, type MessageKey } from "@/i18n/translator";
 
@@ -55,7 +55,7 @@ const row = (id: string, parentId: string | null, ref: { name: string; horizon: 
 });
 
 /**
- * `mover el final` (RP-11, RP-25): a link at the goal's horizon line opening
+ * `mover el final` (RP-99, RP-25): a link at the goal's horizon line opening
  * a sheet with one weeks field. The count becomes the civil date
  * `horizonForWeeks` names, and the refusal the server would give runs here
  * first, on the phases the page loaded — same function, same message.
@@ -120,7 +120,7 @@ export function MoveHorizonAction({
     );
     const ref = refusal && ("above" in refusal ? refusal.above : "below" in refusal ? refusal.below : null);
     if (!refusal || !ref) return null;
-    return t(refusalKey(refusal.code), { name: ref.name, date: ref.horizon ? civilDayMonthYear(dayBefore(ref.horizon)) : "" });
+    return t(refusalKey(refusal.code), { name: ref.name, date: ref.horizon ? civilDayMonthYear(addDaysToCivilDate(ref.horizon, -1)) : "" });
   }
 
   const liveKey =
@@ -207,7 +207,7 @@ export function MoveHorizonAction({
     if (result.ok) {
       setOpen(false);
       if (moveBranch) onMoved?.(later.length);
-      if (noEnd && horizon !== null) onPut?.(dayBefore(horizon));
+      if (noEnd && horizon !== null) onPut?.(addDaysToCivilDate(horizon, -1));
       router.refresh();
     } else if (result.error.startsWith("goal.errors.")) {
       const served = "values" in result && result.values?.date ? { name: result.values.name, endsOn: result.values.date } : null;
@@ -230,7 +230,7 @@ export function MoveHorizonAction({
   const endsOn =
     shownHorizon === null || total === null
       ? t("goal.errors.horizonWeeksInvalid")
-      : t("goal.horizon.endsOnTotal", { date: civilDayMonthYear(dayBefore(shownHorizon)), total });
+      : t("goal.horizon.endsOnTotal", { date: civilDayMonthYear(addDaysToCivilDate(shownHorizon, -1)), total });
   // A refusal takes the hint; the total moves to the muted line.
   const refused = treeSentence !== null || error !== null || liveRefusal !== null;
 
@@ -266,9 +266,9 @@ export function MoveHorizonAction({
             role="note"
             title={t("goal.horizon.laterTitle", { count: later.length })}
             rows={later.map((g) =>
-              t("goal.horizon.laterRow", { name: g.name, date: civilDayMonthYear(dayBefore(g.horizon)) }),
+              t("goal.horizon.laterRow", { name: g.name, date: civilDayMonthYear(addDaysToCivilDate(g.horizon, -1)) }),
             )}
-            aside={t("goal.horizon.laterAside", { count: later.length, date: civilDayMonthYear(dayBefore(candidate)) })}
+            aside={t("goal.horizon.laterAside", { count: later.length, date: civilDayMonthYear(addDaysToCivilDate(candidate, -1)) })}
           />
         ) : null}
         {putMode ? null : (

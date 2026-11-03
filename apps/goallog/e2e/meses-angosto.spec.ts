@@ -1,7 +1,6 @@
 import { test, expect } from "./fixtures";
-import { dayBefore } from "@/lib/day/weeks";
 import { monthOf } from "@/lib/plan/months";
-import { todayInZone } from "@/lib/zone";
+import { addDaysToCivilDate, todayInZone } from "@/lib/zone";
 
 // `MesesListaDetalle.dc.html` (RP-32, RNP-17): the goal's months
 // beside the open month keep the list at 320px. «sin monto» there reads on
@@ -9,7 +8,7 @@ import { todayInZone } from "@/lib/zone";
 // row, at 360 and from 1280 it keeps one line (826, decision 4).
 
 const thisMonth = monthOf(todayInZone());
-const lastMonth = monthOf(dayBefore(thisMonth));
+const lastMonth = monthOf(addDaysToCivilDate(thisMonth, -1));
 
 for (const width of [360, 1280, 1440]) {
   test(`at ${width}px «sin monto» in the months list is one line and no note is narrower than its longest word (RP-32)`, async ({

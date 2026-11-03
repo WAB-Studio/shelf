@@ -11,7 +11,7 @@ export async function generateMetadata(): Promise<Metadata> {
   return { title: t("import") };
 }
 
-// The auth gate and nothing else: the whole screen is `ImportScreen`'s (RP-37).
+// The auth gate and nothing else: the whole screen is `ImportScreen`'s (RP-130).
 export default async function ImportPage() {
   const person = await getPerson();
   if (!person) redirect("/entrar");

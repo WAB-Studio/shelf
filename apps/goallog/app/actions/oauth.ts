@@ -1,11 +1,10 @@
 "use server";
 
-import { sql } from "drizzle-orm";
 import { headers } from "next/headers";
 
 import { env } from "@/lib/env";
 import { issueCode } from "@/lib/oauth/grants";
-import { clientFromMetadataUrl } from "@/lib/oauth/client-metadata";
+import { findClient, type MetadataClient } from "@/lib/oauth/client-metadata";
 import { redirectAllowed } from "@/lib/oauth/clients";
 import { getPerson, withGoalsDb } from "@/lib/session";
 import { authorizationErrorKey, authorizationRequestSchema, type AuthorizationRequest } from "@/lib/validation/oauth";
@@ -13,25 +12,10 @@ import { type MessageKey } from "@/i18n/translator";
 
 export type ConsentResult = { ok: true; redirectTo: string } | { ok: false; error: MessageKey };
 
-type KnownClient = { id: string; redirectUris: string[] };
-
 const siteUrl = () => env.NEXT_PUBLIC_SITE_URL.replace(/\/+$/, "");
 
-// A client named by its metadata document is fetched and registered here; any
-// other id is looked up. Unknown to both is `null`.
-async function findClient(clientId: string, redirectUri: string): Promise<KnownClient | null> {
-  if (clientId.startsWith("https://")) return clientFromMetadataUrl(clientId, await headers(), {}, { redirectUri });
-
-  const rows = await withGoalsDb((tx) =>
-    tx.execute<{ id: string; redirect_uris: string[] }>(sql`
-      select id, redirect_uris from goals.oauth_clients where id = ${clientId}::uuid`),
-  );
-
-  return rows.length === 0 ? null : { id: rows[0].id, redirectUris: rows[0].redirect_uris };
-}
-
 type Checked =
-  | { ok: true; request: AuthorizationRequest; client: KnownClient; personId: string }
+  | { ok: true; request: AuthorizationRequest; client: MetadataClient; personId: string }
   | { ok: false; error: MessageKey };
 
 // The redirect target is only ever one the client registered: the error
@@ -44,7 +28,7 @@ async function check(input: unknown): Promise<Checked> {
   const person = await getPerson();
   if (!person) return { ok: false, error: "oauth.errors.signedOut" };
 
-  const client = await findClient(request.client_id, request.redirect_uri);
+  const client = await findClient(request.client_id, request.redirect_uri, await headers());
   if (!client) return { ok: false, error: "oauth.errors.clientUnknown" };
   if (!redirectAllowed(client, request.redirect_uri)) return { ok: false, error: "oauth.errors.redirectMismatch" };
 

@@ -1,9 +1,8 @@
 import type postgres from "postgres";
 
 import { test, expect } from "./fixtures";
-import { dayBefore } from "@/lib/day/weeks";
 import { monthOf, nextMonth } from "@/lib/plan/months";
-import { todayInZone } from "@/lib/zone";
+import { addDaysToCivilDate, todayInZone } from "@/lib/zone";
 
 // 826 (RP-74): `/meses` says each row's own plan. A goal that opens on the
 // 16th of last month and ends on the 7th of this one plans its days' share of
@@ -11,7 +10,7 @@ import { todayInZone } from "@/lib/zone";
 // itself is taken whole, and the sheet of a split month opens on the share.
 
 const thisMonth = monthOf(todayInZone());
-const lastMonth = monthOf(dayBefore(thisMonth));
+const lastMonth = monthOf(addDaysToCivilDate(thisMonth, -1));
 // First day after the goal: it ends on the 7th of this month.
 const horizon = `${thisMonth.slice(0, 8)}08`;
 const RHYTHM = 600;

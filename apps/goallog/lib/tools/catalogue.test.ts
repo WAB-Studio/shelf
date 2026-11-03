@@ -402,7 +402,8 @@ test("RP-139: edit_phase takes the phase, its aim and both days, and refuses any
   assert.equal(spec.input.safeParse(whole).success, true);
   assert.equal(spec.input.safeParse({ ...whole, goal_id: ABOVE }).success, false);
   for (const key of Object.keys(whole)) {
-    const { [key]: _gone, ...rest } = whole as Record<string, string>;
+    const rest: Record<string, string> = { ...whole };
+    delete rest[key];
     assert.equal(spec.input.safeParse(rest).success, false, `${key} is required`);
   }
 });

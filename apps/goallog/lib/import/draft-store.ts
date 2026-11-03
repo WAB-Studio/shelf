@@ -30,7 +30,7 @@ export type StoredDraft = {
   declined: string[];
   // Correction ids the person accepted by hand; with `declined` they decide which panel a correction draws.
   accepted?: string[];
-  // The id «Crear plan» sends (RP-56): minted with the draft, so a tap repeated after a lost answer, or after a
+  // The id «Crear plan» sends (RP-139): minted with the draft, so a tap repeated after a lost answer, or after a
   // reload, is the same request. A read always has one.
   requestId?: string;
 };

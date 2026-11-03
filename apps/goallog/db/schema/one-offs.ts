@@ -31,7 +31,7 @@ export const oneOffs = goalsSchema.table(
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
     // The plan's order among this person's own rows. A trigger fills it at insert when none is named; no UPDATE grant (RP-47).
     position: integer().notNull(),
-    // In the goal's measure unit (RP-30). The sheet edits it (RP-55) until the task has a fact or children.
+    // In the goal's measure unit (RP-68). The sheet edits it (RP-55) until the task has a fact or children.
     estimate: integer(),
     // Minutes spent on a task not yet done (RP-147). A fact means «done» (RP-20), so the time lives here; it becomes the fact's quantity. The sheet writes it until a fact exists.
     spentMinutes: integer(),
@@ -39,9 +39,9 @@ export const oneOffs = goalsSchema.table(
     plannedMonth: date(),
     // A task of the plan (RP-50), apart from a goal's suelta. A trigger sets it at insert when a month or a parent is named, or when a goal's row has no day; no UPDATE grant.
     inPlan: boolean().notNull().default(false),
-    // One level deep (RP-30). No UPDATE grant: a sub-task never changes hands.
+    // One level deep (RP-68). No UPDATE grant: a sub-task never changes hands.
     parentId: uuid().references((): AnyPgColumn => oneOffs.id, { onDelete: "cascade" }),
-    // Plain text a person writes and changes at any time (RP-45); null when empty, never "".
+    // Plain text a person writes and changes at any time (RP-88); null when empty, never "".
     note: text(),
   },
   (t) => [

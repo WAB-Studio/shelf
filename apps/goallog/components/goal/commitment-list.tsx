@@ -87,7 +87,7 @@ function MiniStrip({ commitment, today, t }: { commitment: GoalCommitment; today
 }
 
 /**
- * `Meta.dc.html`'s commitment rows (RP-12, RP-13, RP-14): the name on the
+ * `Meta.dc.html`'s commitment rows (RP-12, RP-127, RP-14): the name on the
  * left, the cadence over the satisfaction right-aligned in mono. A retired
  * commitment stays in the list — never hidden — marked in its own second
  * line rather than by hue, since this design has none for it. Below the
@@ -108,7 +108,7 @@ export async function CommitmentList({
   archived?: boolean;
 }) {
   const t = await getTranslations();
-  // A retired commitment stays in the list — never hidden (RP-13) — but it
+  // A retired commitment stays in the list — never hidden (RP-127) — but it
   // no longer asks anything of the goal, so the count above it names what is
   // still active and adds the retired ones apart: it always matches the rows.
   const today = todayInZone();
@@ -135,7 +135,7 @@ export async function CommitmentList({
             {retired ? null : <MiniStrip commitment={commitment} today={today} t={t} />}
           </Flex>
         );
-        // A retired one stays in the list and goes nowhere (RP-13); a live one opens its own screen.
+        // A retired one stays in the list and goes nowhere (RP-127); a live one opens its own screen.
         return retired ? (
           <Row key={commitment.id} name={commitment.name} meta={t("goal.commitments.retired")} trailing={trailing} disabled />
         ) : (

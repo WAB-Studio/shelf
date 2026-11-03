@@ -15,7 +15,7 @@ import { messageKey } from "@/i18n/translator";
 type Refusal = { field: "name" | "unit"; text: string };
 
 /**
- * `Ponerle medida` (RP-117) and `Cambiar la medida` (RP-134): under «esta meta no mide nada», a
+ * `Ponerle medida` (RP-134) and `Cambiar la medida` (RP-134): under «esta meta no mide nada», a
  * sheet that asks what the goal counts and in which unit; on a goal that measures and that no
  * fact feeds (`fed` false), the same sheet opens on the measure, says what a new unit takes away
  * and ends in `Quitar la medida`, its sentence over it. A fed measure draws the act disabled with its reason. The same schemas and acts as the AI door; a refusal reads under

@@ -6,9 +6,9 @@ import { useTranslations } from "next-intl";
 import { z } from "zod";
 
 import { createGoal } from "@/app/actions/plan";
-import { dayBefore, horizonForWeeks, horizonWeeksOf } from "@/lib/day/weeks";
+import { horizonForWeeks, horizonWeeksOf } from "@/lib/day/weeks";
 import { createGoalSchema } from "@/lib/validation/plan";
-import { civilDateLabel, todayInZone } from "@/lib/zone";
+import { addDaysToCivilDate, civilDateLabel, todayInZone } from "@/lib/zone";
 import { Button, Field, Sheet, SheetActions, Text } from "@/components/ui";
 import { messageKey } from "@/i18n/translator";
 
@@ -52,12 +52,12 @@ export function CreateInsideAction({ goalId, name, horizon, kind, variant = "qui
       ? ""
       : `${t("tree.errors.endPastAbove", {
           name,
-          date: civilDateLabel(dayBefore(horizon)),
+          date: civilDateLabel(addDaysToCivilDate(horizon, -1)),
         })} ${t("tree.create.upTo", { weeks: room })}`;
   const weeksHint = pastEnd
     ? pastEndText
     : (error ??
-      (newHorizon ? t("tree.create.ends", { date: civilDateLabel(dayBefore(newHorizon), true) }) : undefined));
+      (newHorizon ? t("tree.create.ends", { date: civilDateLabel(addDaysToCivilDate(newHorizon, -1), true) }) : undefined));
 
   function openSheet() {
     setTitle("");

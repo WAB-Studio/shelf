@@ -1,9 +1,10 @@
 import type { Locator, Page } from "@playwright/test";
 
-import { dayBefore, horizonForWeeks } from "@/lib/day/weeks";
+import { horizonForWeeks } from "@/lib/day/weeks";
 
 import { test, expect, type Person } from "./fixtures";
 import { countActionPosts, openAs, seedGoal, MINUTES, today, type Db, MONTH_LONG } from "./meta-arbol-seed";
+import { addDaysToCivilDate } from "../lib/zone";
 
 // Module 908 (RP-79), board `MoverFinalRama`: shortening a general's end past the ends of its goals
 // offers «Mover también sus finales», the only way to shorten it (a general's end never moves alone
@@ -89,14 +90,14 @@ test("a general's end typed before its goals' ends lists them, each with its end
       [tree.names.ings, 46],
       [tree.names.emp, 52],
     ] as const) {
-      await expect(sheet).toContainText(new RegExp(`${escape(name)} · hasta el ${escape(dmy(dayBefore(at(weeksEnd))))}`));
+      await expect(sheet).toContainText(new RegExp(`${escape(name)} · hasta el ${escape(dmy(addDaysToCivilDate(at(weeksEnd), -1)))}`));
     }
     // Goals that end before the typed end are not on the list.
     await expect(sheet.getByText(tree.names.c1)).toHaveCount(0);
     await expect(sheet.getByText(tree.names.c1s)).toHaveCount(0);
-    await expect(sheet).toContainText(`Con «Mover también sus finales» las 5 terminan el ${dmy(dayBefore(at(40)))}.`);
+    await expect(sheet).toContainText(`Con «Mover también sus finales» las 5 terminan el ${dmy(addDaysToCivilDate(at(40), -1))}.`);
     // The typed end itself carries its year.
-    await expect(sheet).toContainText(`termina el ${dmy(dayBefore(at(40)))}`);
+    await expect(sheet).toContainText(`termina el ${dmy(addDaysToCivilDate(at(40), -1))}`);
 
     await expect(sheet.getByRole("button", { name: "Mover también sus finales", exact: true })).toBeEnabled();
     const only = sheet.getByRole("button", { name: "Moverlo", exact: true });
@@ -128,7 +129,7 @@ test("«Mover también sus finales» moves every goal past the new end to it, le
 
     expect(calls).toHaveLength(1);
     await expect(page.getByText("Se movió el final de la meta y el de 5 metas dentro.", { exact: true })).toBeVisible();
-    await expect(page.locator("main").first()).toContainText(`hasta el ${dmy(dayBefore(at(40)))}`);
+    await expect(page.locator("main").first()).toContainText(`hasta el ${dmy(addDaysToCivilDate(at(40), -1))}`);
 
     const now = await horizonsOf(db, Object.values(tree.ids));
     expect(now[tree.G]).toBe(at(40));
@@ -148,7 +149,7 @@ test("a goal below with a phase past the new end refuses the whole move, naming 
 }) => {
   // Kills: moving the branch around a phase that would then end past its goal, or a refusal that names no goal or no day.
   const tree = await seedBranch(db, person, Date.now());
-  const phaseEnds = dayBefore(at(46));
+  const phaseEnds = addDaysToCivilDate(at(46), -1);
   await db`
     insert into goals.phases (user_id, goal_id, aim, starts_on, ends_on)
     values (${person.id}, ${tree.ids.c2}, 'Fase tardía', ${today}::date, ${phaseEnds}::date)`;
@@ -180,7 +181,7 @@ test("a phase that ends before the new end does not stop the move (RP-79)", asyn
   const tree = await seedBranch(db, person, Date.now());
   await db`
     insert into goals.phases (user_id, goal_id, aim, starts_on, ends_on)
-    values (${person.id}, ${tree.ids.c2}, 'Fase a tiempo', ${today}::date, ${dayBefore(at(30))}::date)`;
+    values (${person.id}, ${tree.ids.c2}, 'Fase a tiempo', ${today}::date, ${addDaysToCivilDate(at(30), -1)}::date)`;
   const { page, context } = await openAs(browser, baseURL, person, `/metas/${tree.G}`);
   try {
     const sheet = await openSheet(page);
@@ -208,7 +209,7 @@ test("an end no goal passes shows no list and no «Mover también…», and «Mo
     const sheet = await openSheet(page);
     // Lengthening the general: no goal can end after it.
     await sheet.getByLabel(WEEKS_LABEL).fill("60");
-    await expect(sheet).toContainText(`termina el ${dmy(dayBefore(at(60)))}`);
+    await expect(sheet).toContainText(`termina el ${dmy(addDaysToCivilDate(at(60), -1))}`);
     await expect(sheet.getByText(/terminan después de esta fecha|termina después de esta fecha/)).toHaveCount(0);
     await expect(sheet.getByRole("button", { name: "Mover también sus finales" })).toHaveCount(0);
     const only = sheet.getByRole("button", { name: "Moverlo", exact: true });

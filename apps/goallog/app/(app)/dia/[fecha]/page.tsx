@@ -31,7 +31,7 @@ export default async function PastDayPage({ params }: { params: Promise<{ fecha:
   const today = todayInZone();
   if (day === today) redirect("/");
   if (day > today) notFound();
-  // Past the window the day cannot be written, but its week can be read (RP-44).
+  // Past the window the day cannot be written, but its week can be read (RP-142).
   if (day < oldestPastDay(today)) redirect(`/semana?semana=${day}`);
 
   return <DayScreen day={day} />;

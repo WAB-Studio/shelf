@@ -5,8 +5,11 @@ import { revalidatePath } from "next/cache";
 import { and, eq, sql } from "drizzle-orm";
 
 import { facts, goals, oneOffs, timeAllocations, timeEntries } from "@/db/schema";
+import { writeFact } from "@/lib/actions/write-fact";
+import { pgCode } from "@/lib/db-error";
 import { readReceipt, writeReceipt } from "@/lib/receipts";
 import { getPerson, withGoalsDb, type Transaction } from "@/lib/session";
+import { declareFactSchema, type DeclareFactInput } from "@/lib/validation/fact";
 import { monthOutsideSpan, monthStart } from "@/lib/validation/budget";
 import { isClosed } from "@/lib/validation/closed";
 import { ENDLESS_MONTHS_AHEAD } from "@/lib/plan/months";
@@ -55,13 +58,13 @@ const requestLock = (tx: Transaction, requestId: string) =>
 
 /**
  * Writes something to do once (RP-19, RP-20), or a task of a goal's month
- * (RP-30, RP-31). `goalId`, when given, is read back before the insert the
+ * (RP-68, RP-31). `goalId`, when given, is read back before the insert the
  * way `addPhase` reads its own goal back: `one_offs_insert_self` only checks
  * that the new row's `user_id` is the caller, never that `goal_id` names one
  * of theirs, so `goals_select_self` — not this function's own `where` — is
  * what actually hides a foreign goal. A sub-task reads its parent back
  * instead and takes the parent's goal; the policy refuses the same parents,
- * so this read only buys the refusal its key. With a `requestId` (RP-56), a
+ * so this read only buys the refusal its key. With a `requestId` (RP-139), a
  * resend answers the first answer and writes nothing.
  */
 export async function createOneOff(input: CreateOneOffInput): Promise<CreateOneOffResult> {
@@ -145,7 +148,7 @@ export async function createOneOff(input: CreateOneOffInput): Promise<CreateOneO
           .where(eq(goals.id, goalId));
         if (!own) throw new NamedError("plan.errors.goalNotFound");
         goal = own;
-        // RP-62: a goal measured in anything but time has no plan to place
+        // RP-101: a goal measured in anything but time has no plan to place
         // the task, so it is fixed to its month, the current one when none is named.
         if (day == null && own.measureUnit !== null && !isTimeUnit(own.measureUnit)) {
           // Before the goal opened, the first month of its span.
@@ -302,7 +305,7 @@ export async function completeOneOff(input: CompleteOneOffInput): Promise<Comple
 
   const { oneOffId, day } = parsed.data;
 
-  // A parent is done by its sub-tasks (RP-30): `declareFact` refuses one under
+  // A parent is done by its sub-tasks (RP-68): `declareFact` refuses one under
   // the task's lock, in the transaction that writes the fact.
   return declareFact({ oneOffId, day }, { namesParent: true });
 }
@@ -345,7 +348,7 @@ async function keepTaskEntry(
 /**
  * Keeps the minutes spent on a task estimated in time without completing it
  * (RP-147): a fact means «done» (RP-20), so the time sits on the task until
- * the person checks it. `extendEstimate` also makes a time over the estimate
+ * the person checks it, or `complete` checks it in this same act. `extendEstimate` also makes a time over the estimate
  * the estimate, in the one statement. The time waits as an entry to confirm
  * (RP-151) in the same transaction.
  */
@@ -356,10 +359,13 @@ export async function recordTaskTime(input: RecordTaskTimeInput): Promise<{ ok: 
   const person = await getPerson();
   if (!person) return { ok: false, error: "day.errors.signedOut" };
 
-  const { oneOffId, minutes, extendEstimate } = parsed.data;
+  const { oneOffId, minutes, extendEstimate, complete, day } = parsed.data;
+  // The check is the fact path's own input, so the same schema reads its day (RP-129).
+  const fact = declareFactSchema.safeParse({ oneOffId, day });
+  if (complete && !fact.success) return { ok: false, error: messageKey(fact.error.issues[0].message) };
 
   try {
-    await withGoalsDb(async (tx) => {
+    const doneOn = await withGoalsDb(async (tx) => {
       await taskLock(tx, oneOffId);
       const [task] = await tx
         .select({
@@ -386,9 +392,18 @@ export async function recordTaskTime(input: RecordTaskTimeInput): Promise<{ ok: 
       if (updated.length === 0) throw new NamedError("day.errors.notFound");
 
       await keepTaskEntry(tx, { oneOffId, goalId: task.goalId, userId: person.id, minutes });
+
+      // «Marcar hecha»: the fact is read back from the time just kept, in this same transaction.
+      if (!complete) return null;
+      const written = await writeFact(tx, person.id, fact.data as DeclareFactInput, true);
+      if ("kept" in written) throw new NamedError("day.errors.alreadyNoted");
+      return written.day;
     });
+    if (doneOn) revalidatePath("/semana");
+    if (doneOn) revalidatePath(`/dia/${doneOn}`);
   } catch (error) {
     if (error instanceof NamedError) return { ok: false, error: messageKey(error.message) };
+    if (pgCode(error) === "22003") return { ok: false, error: "day.errors.quantityInvalid" };
     throw error;
   }
 
@@ -481,12 +496,12 @@ const REFUSALS: Record<string, MessageKey> = {
 };
 
 /**
- * The one write behind `editTask` and `fixTask` (RP-51, RP-55, RP-57), in one
+ * The one write behind `editTask` and `fixTask` (RP-51, RP-55, RP-61), in one
  * statement under the task's lock, so a sub-task added meanwhile waits for it. The CTEs read one snapshot: `chk` names the first refusal and
  * `upd` writes only when there is none, so a refusal writes nothing and needs
  * no rollback. A task is done when it, or a child, has a fact. A fact or a
  * child landing in between makes `one_offs_guard_day` return 0 rows for an
- * estimate or a month, reported as `doneTask`. A one-off of no goal (RP-57)
+ * estimate or a month, reported as `doneTask`. A one-off of no goal (RP-61)
  * takes its name alone, and so does a goal's one-off outside the plan.
  */
 async function writeTask(input: TaskWrite): Promise<EditTaskResult> {
@@ -580,7 +595,7 @@ async function writeTask(input: TaskWrite): Promise<EditTaskResult> {
 }
 
 /**
- * The sheet's one act (RP-55, RP-57): name, estimate and month of a plan
+ * The sheet's one act (RP-55, RP-61): name, estimate and month of a plan
  * task, or the name of a suelta. Absent leaves a field; `month: null`
  * returns the task to the plan.
  */
@@ -598,7 +613,7 @@ export async function fixTask(input: FixTaskInput): Promise<FixTaskResult> {
 }
 
 /**
- * Writes, changes or empties a task's note (RP-45), done or not. One UPDATE
+ * Writes, changes or empties a task's note (RP-88), done or not. One UPDATE
  * of `note` alone: it never touches `day` or `planned_month`, so
  * `one_offs_guard_day` lets it through on a done or past row. Another
  * person's row is hidden by `one_offs_update_self` and reads as 0 rows.

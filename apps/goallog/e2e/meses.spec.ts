@@ -1,8 +1,7 @@
 import { test, expect } from "./fixtures";
 import month from "../messages/es/month.json";
-import { dayBefore } from "@/lib/day/weeks";
 import { monthOf, nextMonth } from "@/lib/plan/months";
-import { civilDateInZone, todayInZone } from "@/lib/zone";
+import { addDaysToCivilDate, civilDateInZone, todayInZone } from "@/lib/zone";
 import { boxOf } from "./box";
 
 // `Meses.dc.html`, `MesesEscritorio`, `MesPlan.dc.html` (RP-28,
@@ -29,7 +28,7 @@ function label(month: string): string {
 }
 
 const thisMonth = monthOf(todayInZone());
-const lastMonth = monthOf(dayBefore(thisMonth));
+const lastMonth = monthOf(addDaysToCivilDate(thisMonth, -1));
 // A closed month says where its share went: the month after it.
 const carried = (percent: number) =>
   month.months.carriedTo.replace("{percent}", String(percent)).replace("{month}", label(thisMonth));
@@ -570,7 +569,7 @@ test("a month before the goal was written, one past its horizon and a malformed 
   db,
 }) => {
   const goalId = await seedGoal(db, person.id, `Meta fuera de rango ${Date.now()}`);
-  const before = monthOf(dayBefore(lastMonth));
+  const before = monthOf(addDaysToCivilDate(lastMonth, -1));
   const after = nextMonth(horizon);
   const context = await browser.newContext({ storageState: person.sessionFile, baseURL: baseURL! });
   try {

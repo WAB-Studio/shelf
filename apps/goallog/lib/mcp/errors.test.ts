@@ -69,7 +69,7 @@ test("a tree refusal carries the goal's name and the day in its sentence", () =>
   assert.equal(errorOf("tree.errors.noteTooLong").message, "La nota pasa de 100 000 caracteres.");
 });
 
-// M19 · a refusal reads a tool-specific sentence when one exists (RP-119).
+// M19 · a refusal reads a tool-specific sentence when one exists (RP-139).
 
 const COMBINATION =
   "Combinación no válida. Usa una de estas: suelta (solo name, y day opcional); del mes (goal_id + planned_month, sin day); en el plan (goal_id + in_plan: true, sin day ni parent_id); sub-tarea (parent_id, sin goal_id ni planned_month ni day).";

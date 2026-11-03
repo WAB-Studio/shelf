@@ -394,7 +394,7 @@ export async function MonthAcrossScreen({ month, today }: { month?: string; toda
     return root && members.length > 1 ? groupBlock(root, members) : block(members[0]);
   });
 
-  // Habits with no goal (RP-100): what the month counted of each, never a mark.
+  // Habits with no goal (RP-113): what the month counted of each, never a mark.
   const habitsGroup =
     across.loose.length > 0 ? (
       <Panel key="habits">

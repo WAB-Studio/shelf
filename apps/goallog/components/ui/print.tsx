@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 
 import styles from "./print.module.css";
 
-// The printed face of a page (RP-49, `ReporteImpreso.dc.html`): the export is
+// The printed face of a page (RP-77, `ReporteImpreso.dc.html`): the export is
 // the page the browser prints, so all of it is CSS under `@media print` and
 // none of it runs. On screen the frame is invisible.
 export function PrintPage({ children }: { children?: ReactNode }) {

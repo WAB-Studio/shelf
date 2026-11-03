@@ -2,9 +2,8 @@ import type { Browser, Page } from "@playwright/test";
 import type postgres from "postgres";
 
 import { test, expect, type Person } from "./fixtures";
-import { dayBefore } from "@/lib/day/weeks";
 import { monthOf, nextMonth } from "@/lib/plan/months";
-import { civilDateToDate, dateToCivilDate, todayInZone, weekOf } from "@/lib/zone";
+import { addDaysToCivilDate, civilDateToDate, dateToCivilDate, todayInZone, weekOf } from "@/lib/zone";
 import { boxOf } from "./box";
 
 // Module 813 (RP-71, RP-32, RP-17, RP-35), `MesesFuturoYTareas` 6a and `MesesConAño` option B: no `Table` prints a
@@ -343,7 +342,7 @@ test("exportar at 360: a closed month with «cerrado · N % pasó a …» under 
   baseURL,
   db,
 }) => {
-  const lastMonth = monthOf(dayBefore(thisMonth));
+  const lastMonth = monthOf(addDaysToCivilDate(thisMonth, -1));
   const horizon = nextMonth(nextMonth(nextMonth(thisMonth)));
   const [goal] = await db<{ id: string }[]>`
     insert into goals.goals (user_id, name, horizon, measure_name, measure_unit, created_at)

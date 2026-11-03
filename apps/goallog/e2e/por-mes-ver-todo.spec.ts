@@ -1,5 +1,4 @@
 import { test, expect } from "./fixtures";
-import { dayBefore } from "./meta-arbol-seed";
 import { PAGES, openedOnDay, seedOpenGoal } from "./metas-sin-final-seed";
 import { monthLabel, monthStartOf, shift } from "./sin-final-seed";
 import {
@@ -24,7 +23,7 @@ import {
   textOf,
   yOf,
 } from "./mes-siguiente-seed";
-import { civilDateToDate } from "@/lib/zone";
+import { addDaysToCivilDate, civilDateToDate } from "@/lib/zone";
 
 import type { Locator, Page } from "@playwright/test";
 import type { Db } from "./mes-siguiente-seed";
@@ -49,7 +48,7 @@ function horizonIn(offset: number): string {
   while (weekday(day) !== 1) day = shift(day, 1);
   return day;
 }
-const lastDayIn = (offset: number) => dayBefore(horizonIn(offset));
+const lastDayIn = (offset: number) => addDaysToCivilDate(horizonIn(offset), -1);
 
 const lineWords = (count: number, offset: number) => `${count} ${count === 1 ? "mes" : "meses"} más, hasta el ${wordsOf(lastDayIn(offset))}`;
 const lineRe = (count: number, offset: number) => new RegExp(lineWords(count, offset), "i");

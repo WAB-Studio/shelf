@@ -4,6 +4,7 @@ import messages from "../messages/es/import.json";
 import { check } from "../lib/import/check";
 import { normalize, type RawDraft, type RawGoal, type RawTask, type Source } from "../lib/import/draft";
 import type { StoredDraft } from "../lib/import/draft-store";
+import { monthAfter } from "../lib/plan/months";
 import { civilDateToDate, dateToCivilDate, todayInZone } from "../lib/zone";
 import { expect, settled } from "./fixtures";
 
@@ -18,11 +19,7 @@ export const plus = (days: number) => {
 };
 
 export function months() {
-  const [year, month] = todayInZone().split("-").map(Number);
-  const shift = (by: number) => {
-    const index = year * 12 + (month - 1) + by;
-    return `${Math.floor(index / 12)}-${String((index % 12) + 1).padStart(2, "0")}`;
-  };
+  const shift = (by: number) => monthAfter(todayInZone(), by);
   return { first: shift(0), second: shift(1), third: shift(2), later: shift(10) };
 }
 

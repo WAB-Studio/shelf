@@ -36,7 +36,7 @@ function own(key: MessageKey): MessageKey {
 
 export type TaskSheetProps = {
   mode: "create" | "edit";
-  // Absent on a suelta (RP-57), which belongs to no goal.
+  // Absent on a suelta (RP-61), which belongs to no goal.
   goalId?: string;
   goalName?: string;
   oneOffId?: string;

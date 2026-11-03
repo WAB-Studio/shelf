@@ -17,7 +17,7 @@ export type RetireSheetProps = {
   name: string;
   // Distinct days already declared for this commitment (`lib/queries/
   // goal.ts`'s `factDayCount`): dropped from the sentence at zero rather
-  // than say "0 días" (RP-13's own "what it leaves intact" is nothing to
+  // than say "0 días" (RP-127's own "what it leaves intact" is nothing to
   // name when nothing has been done yet).
   factDayCount: number;
   // Days its source met the threshold: days done, but never declared, so they never lock a deletion.
@@ -94,7 +94,7 @@ export function DeleteCommitmentSheet({ open, onOpenChange, commitmentId, name, 
 }
 
 /**
- * `CompromisoRetirar.dc.html` (RP-13): says what survives, never what is
+ * `CompromisoRetirar.dc.html` (RP-127): says what survives, never what is
  * lost — the weeks already governed and the days already done. "Desde
  * mañana" is measured, not guessed: `lib/day/cadence.ts`'s `asksOn` compares
  * the day asked about to `retired_at` with a strict `>`, so the day a

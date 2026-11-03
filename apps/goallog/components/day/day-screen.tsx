@@ -14,7 +14,7 @@ import { loadWaitingTime } from "@/lib/queries/time-entries";
 import { loadWeek } from "@/lib/queries/week";
 import { loadDay, type CommitmentInfo, type OneOffSummary } from "@/lib/queries/day";
 import { PAST_DAY_LIMIT } from "@/lib/validation/fact";
-import { civilDateToDate, dateToCivilDate, timeInZone, todayInZone } from "@/lib/zone";
+import { addDaysToCivilDate, civilDateToDate, timeInZone, todayInZone } from "@/lib/zone";
 
 import { DayHeader } from "./day-header";
 import { DayRow } from "./day-row";
@@ -34,19 +34,10 @@ import { OneOffRow } from "./one-off-row";
 import { PlanNotices, type PlanNoticeItem } from "./plan-notice";
 import { TimeTray } from "./time-tray";
 
-
-// Goes through `Date` and back rather than subtracting on the string: a
-// civil date crosses months and years, and a digit subtraction does not.
-export function shiftCivilDay(day: string, days: number): string {
-  const date = civilDateToDate(day);
-  date.setUTCDate(date.getUTCDate() + days);
-  return dateToCivilDate(date);
-}
-
 // The oldest day a fact may still name (RP-06): `/dia/[fecha]` refuses any
 // day before it, and its own screen draws no step back from it.
 export function oldestPastDay(today: string): string {
-  return shiftCivilDay(today, -PAST_DAY_LIMIT);
+  return addDaysToCivilDate(today, -PAST_DAY_LIMIT);
 }
 
 // RP-76: the query keeps the 0; the screen reads it as a month with no amount.
@@ -284,7 +275,7 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
 
   type SectionItem = (typeof sections)[number];
 
-  // Habits with no goal (RP-100): the same rows, in a group of their own after the goals.
+  // Habits with no goal (RP-113): the same rows, in a group of their own after the goals.
   const looseOwn = commitments
     .filter((commitment) => commitment.goalId === null)
     .map((commitment) => ({ commitment, slot: slotByCommitmentId.get(commitment.id) }));
@@ -596,8 +587,8 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
       <Text as="p">
         {t("day.allEnded.body", {
           goal: lastEnded.name,
-          date: dateLabel(shiftCivilDay(lastEnded.horizon, -1), t),
-          year: shiftCivilDay(lastEnded.horizon, -1).slice(0, 4),
+          date: dateLabel(addDaysToCivilDate(lastEnded.horizon, -1), t),
+          year: addDaysToCivilDate(lastEnded.horizon, -1).slice(0, 4),
         })}
       </Text>
       <Button asChild block>
@@ -819,12 +810,12 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
         <DayHeader
           date={sentenceCase(dateLabel(day, t))}
           forward={{
-            href: shiftCivilDay(day, 1) === today ? "/" : `/dia/${shiftCivilDay(day, 1)}`,
+            href: addDaysToCivilDate(day, 1) === today ? "/" : `/dia/${addDaysToCivilDate(day, 1)}`,
             label: t("day.nav.dayAfter"),
           }}
           back={
             day > oldestPastDay(today)
-              ? { href: `/dia/${shiftCivilDay(day, -1)}`, label: t("day.nav.dayBefore") }
+              ? { href: `/dia/${addDaysToCivilDate(day, -1)}`, label: t("day.nav.dayBefore") }
               : undefined
           }
           limitNote={day > oldestPastDay(today) ? undefined : t("day.past.limit")}
@@ -837,8 +828,8 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
           title={sentenceCase(dateLabel(day, t))}
           progress={progress}
           back={
-            loaded.firstGoalDay !== null && shiftCivilDay(day, -1) >= loaded.firstGoalDay
-              ? { href: `/dia/${shiftCivilDay(day, -1)}`, label: t("day.nav.yesterday") }
+            loaded.firstGoalDay !== null && addDaysToCivilDate(day, -1) >= loaded.firstGoalDay
+              ? { href: `/dia/${addDaysToCivilDate(day, -1)}`, label: t("day.nav.yesterday") }
               : undefined
           }
           theme={{ toLightLabel: t("day.theme.toLight"), toDarkLabel: t("day.theme.toDark") }}

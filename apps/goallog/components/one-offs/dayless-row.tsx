@@ -26,7 +26,7 @@ export type DaylessRowProps = {
 
 /**
  * A row of `/sueltas`: the mark finishes it today (`completeOneOff`), the
- * name opens its sheet (RP-57), where its day is given, or moved when it has one.
+ * name opens its sheet (RP-61), where its day is given, or moved when it has one.
  */
 export function DaylessRow({ oneOffId, name, goalName, scheduled, onDone, note }: DaylessRowProps) {
   const t = useTranslations();

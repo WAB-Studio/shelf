@@ -1,4 +1,4 @@
-import { addWeeksToCivilDate, civilDateToDate, dateToCivilDate, weekOf } from "@/lib/zone";
+import { addDaysToCivilDate, addWeeksToCivilDate, civilDateToDate, weekOf } from "@/lib/zone";
 
 // Whole civil days between two `YYYY-MM-DD` strings, at midday UTC so no
 // zone offset can shift the count by one — the one implementation every
@@ -34,13 +34,7 @@ export function horizonWeeksOf(openedOn: string, horizon: string): number;
 export function horizonWeeksOf(openedOn: string, horizon: string | null): number | null;
 export function horizonWeeksOf(openedOn: string, horizon: string | null): number | null {
   if (horizon === null) return null;
-  return horizon <= openedOn ? 0 : weekIndexOf(openedOn, dayBefore(horizon));
-}
-
-export function dayBefore(day: string): string {
-  const date = civilDateToDate(day);
-  date.setUTCDate(date.getUTCDate() - 1);
-  return dateToCivilDate(date);
+  return horizon <= openedOn ? 0 : weekIndexOf(openedOn, addDaysToCivilDate(horizon, -1));
 }
 
 // The inverse of `weekIndexOf`: the civil dates a span of 1-based weeks
@@ -55,9 +49,9 @@ export function weekSpan(
   horizon?: string | null,
 ): { startsOn: string; endsOn: string } {
   const firstMonday = mondayOf(openedOn);
-  const sunday = dayBefore(addWeeksToCivilDate(firstMonday, toWeek));
+  const sunday = addDaysToCivilDate(addWeeksToCivilDate(firstMonday, toWeek), -1);
   const holdsLastDay = horizon != null && addWeeksToCivilDate(firstMonday, toWeek - 1) < horizon;
-  const last = holdsLastDay ? dayBefore(horizon) : sunday;
+  const last = holdsLastDay ? addDaysToCivilDate(horizon, -1) : sunday;
   return {
     startsOn: fromWeek === 1 ? openedOn : addWeeksToCivilDate(firstMonday, fromWeek - 1),
     endsOn: last < sunday ? last : sunday,

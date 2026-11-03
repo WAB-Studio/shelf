@@ -4,7 +4,7 @@ import { zipInflatesWithin as guardInflatesWithin, zipTooBig as guardTooBig, zip
 
 import { isHourUnit, isTimeUnit } from "@/lib/units/time";
 import { todayInZone } from "@/lib/zone";
-import { lastDayOf, monthAfter } from "./example";
+import { lastDayOf, monthAfter } from "@/lib/plan/months";
 
 import type { ImportDraft, Source, Src } from "./draft";
 import { isTemplateHeader, parseTemplate, TEMPLATE_HEADER, type FormCode } from "./template";

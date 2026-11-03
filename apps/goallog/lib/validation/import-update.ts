@@ -23,7 +23,7 @@ export const importUpdateSchema = z.preprocess(
   z.strictObject({
     draft: draftV2Schema,
     updates: z.array(update, invalid).default([]),
-    // A confirm resent after its answer was lost answers the first answer (RP-56).
+    // A confirm resent after its answer was lost answers the first answer (RP-139).
     requestId: z.uuid(invalid).optional(),
   }),
 );

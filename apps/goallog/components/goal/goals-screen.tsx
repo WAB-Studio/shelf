@@ -23,7 +23,6 @@ import {
 import { SignOutButton } from "@/components/account/sign-out-button";
 import { GoalBranch, type BranchGoal } from "@/components/goal/goal-branch";
 import { RetiredHabits } from "@/components/goal/retired-habits";
-import { dayBefore } from "@/lib/day/weeks";
 import { cadencePhrase } from "@/lib/day/row-phrases";
 import type {
   GoalSummary,
@@ -31,11 +30,11 @@ import type {
   MetasMonth,
   MetasOpenGoal,
 } from "@/lib/queries/goal";
-import { civilDateInZone, civilDayMonthShort, civilDayMonthYear } from "@/lib/zone";
+import { addDaysToCivilDate, civilDateInZone, civilDayMonthShort, civilDayMonthYear } from "@/lib/zone";
 
 /**
- * `MetasCentro`, `MetasCentroEscritorio` and `MetasVacio` (RP-11, RP-24, RP-27,
- * RP-37): the goals, and «el plan» inside them. The page fetches; this draws.
+ * `MetasCentro`, `MetasCentroEscritorio` and `MetasVacio` (RP-99, RP-24, RP-27,
+ * RP-130): the goals, and «el plan» inside them. The page fetches; this draws.
  * `connect` is the slot after «Exportar» where «Conectar una IA» goes.
  */
 export async function GoalsScreen({
@@ -49,7 +48,7 @@ export async function GoalsScreen({
   open: MetasOpenGoal[];
   ended: GoalSummary[];
   archived: GoalSummary[];
-  // The commitments that belong to no goal, retired ones included (RP-100).
+  // The commitments that belong to no goal, retired ones included (RP-113).
   habits: LooseCommitment[];
   connect?: ReactNode;
   // Who is signed in, for «Tu cuenta» (RP-141).
@@ -162,7 +161,7 @@ export async function GoalsScreen({
   // Null: a goal with no end, which is never among the ended.
   const lastDay = (goal: GoalSummary) => {
     if (goal.horizon === null) return null;
-    const day = dayBefore(goal.horizon);
+    const day = addDaysToCivilDate(goal.horizon, -1);
     return `${civilDayMonthShort(day)} ${day.slice(0, 4)}`;
   };
   const archivedLine = (goal: GoalSummary) => {

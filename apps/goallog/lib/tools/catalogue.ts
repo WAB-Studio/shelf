@@ -82,7 +82,7 @@ function camelKeys(input: Record<string, unknown>): Record<string, unknown> {
 
 const READ_ONLY: ToolAnnotations = { readOnlyHint: true, destructiveHint: false, idempotentHint: true };
 const DESTRUCTIVE: ToolAnnotations = { readOnlyHint: false, destructiveHint: true, idempotentHint: true };
-// A creating tool is idempotent too: a resend with its `request_id` answers the first answer (RP-56).
+// A creating tool is idempotent too: a resend with its `request_id` answers the first answer (RP-139).
 const IDEMPOTENT: ToolAnnotations = { readOnlyHint: false, destructiveHint: false, idempotentHint: true };
 
 // A replaced note, measure, end or rhythm cannot be read back after the write, so a client asks first.
@@ -265,13 +265,13 @@ export const writeTools: readonly ToolSpec[] = [
     },
     (input) => addCommitment(input as Parameters<typeof addCommitment>[0]),
   ),
-  // The AI gives and moves an end, never removes one (RP-56): a null is refused before the act.
+  // The AI gives and moves an end, never removes one (RP-139): a null is refused before the act.
   write("move_horizon", { goal_id: id, horizon: day.nullable() }, (input) =>
     input.horizon === null || input.horizon === undefined
       ? Promise.resolve({ ok: false, error: "mcp.errors.endKept" })
       : moveHorizon(input as Parameters<typeof moveHorizon>[0]),
   ),
-  // Fixing never changes the goal's rhythm (RP-56): the act takes a task and a month alone.
+  // Fixing never changes the goal's rhythm (RP-139): the act takes a task and a month alone.
   write("fix_task", { one_off_id: id, month: looseMonth }, (input) =>
     fixTask({ oneOffId: input.oneOffId, month: input.month } as Parameters<typeof fixTask>[0]),
   ),
@@ -303,11 +303,11 @@ export const writeTools: readonly ToolSpec[] = [
   write("retire_commitment", { commitment_id: id }, (input) =>
     retireCommitment(input as Parameters<typeof retireCommitment>[0]),
   ),
-  // Gives or changes a rhythm, never takes it away (RP-119): the amount has no null.
+  // Gives or changes a rhythm, never takes it away (RP-139): the amount has no null.
   write("set_rhythm", { goal_id: id, amount: count }, (input) =>
     setRhythm(input as Parameters<typeof setRhythm>[0]),
   ),
-  // Only a goal that does not measure yet; a measure set never changes (RP-119).
+  // Only a goal that does not measure yet; a measure set never changes (RP-139).
   write("set_measure", { goal_id: id, name: text, unit: text }, (input) =>
     setGoalMeasure(input as Parameters<typeof setGoalMeasure>[0]),
   ),

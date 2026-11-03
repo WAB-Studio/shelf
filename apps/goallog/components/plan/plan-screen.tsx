@@ -57,7 +57,7 @@ export async function PlanScreen({ goalId, all = false }: { goalId: string; all?
   const goal = await loadGoal(goalId);
   if (!goal) notFound();
   if (goal.holdsGoals) return <HolderPlan goal={goal} />;
-  // A goal measured in something other than time has no plan (RP-62).
+  // A goal measured in something other than time has no plan (RP-101).
   if (goal.measureUnit !== null && !isTimeUnit(goal.measureUnit)) redirect(`/metas/${goal.id}`);
 
   const t = await getTranslations();

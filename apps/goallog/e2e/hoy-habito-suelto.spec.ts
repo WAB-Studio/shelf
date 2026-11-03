@@ -247,7 +247,7 @@ for (const width of FACES) {
     baseURL,
     db,
   }) => {
-    // Kills: `dayBefore(null)` / `horizon <= today` with null (a «terminó …» or «última semana» line, or a crash).
+    // Kills: `addDaysToCivilDate(null, -1)` / `horizon <= today` with null (a «terminó …» or «última semana» line, or a crash).
     const stamp = Date.now();
     const name = `Leer ${stamp}`;
     const goalId = await seedGoal(db, person.id, name, { unit: "minutos", budget: 480 });
