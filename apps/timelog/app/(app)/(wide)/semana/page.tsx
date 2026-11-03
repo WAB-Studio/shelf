@@ -7,6 +7,7 @@ import { Between, Card, Cards, DayColumns, Disclosure, Figure, Heatmap, Hero, He
 import { claudeWeekHint } from "@/lib/daily";
 import { appTone } from "@/lib/app-classes";
 import { buildHeatmap, claudeHeatRow } from "@/lib/heatmap";
+import { withTimeDb } from "@/lib/session";
 import { appsByDay, claudeBetween, dayTotals, uploadSpan } from "@/lib/queries";
 import { fill, sum } from "@/lib/totals";
 import { askedWeek, clampWeek, weekSteps } from "@/lib/week";
@@ -28,11 +29,8 @@ export default async function WeekPage({ searchParams }: { searchParams: Promise
   const { semana } = await searchParams;
   const asked = askedWeek(semana, today);
   const sunday = addDays(asked, 6);
-  const [span, totals, byDay, claude, words, t, tClaude, tClass] = await Promise.all([
-    uploadSpan(),
-    dayTotals(asked, sunday),
-    appsByDay(asked, sunday),
-    claudeBetween(asked, sunday),
+  const [[span, totals, byDay, claude], words, t, tClaude, tClass] = await Promise.all([
+    withTimeDb((tx) => Promise.all([uploadSpan(tx), dayTotals(asked, sunday, tx), appsByDay(asked, sunday, tx), claudeBetween(asked, sunday, tx)])),
     calendarWords(),
     getTranslations("time.week"),
     getTranslations("time.claude"),
