@@ -1,5 +1,6 @@
 import type { CSSProperties } from "react";
 
+import { Figures } from "./figures";
 import styles from "./week-strip.module.css";
 
 export type WeekStripDay = {
@@ -32,7 +33,7 @@ export function WeekStrip({ label, days }: { label: string; days: readonly WeekS
               <span className={styles.fill} style={{ "--share": `${day.percent}%` } as CSSProperties} />
             </span>
           )}
-          <span className={styles.figure}>{day.figure}</span>
+          <span className={styles.figure}>{day.figure ? <Figures text={day.figure} /> : null}</span>
         </li>
       ))}
     </ol>

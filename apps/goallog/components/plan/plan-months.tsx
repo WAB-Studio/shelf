@@ -82,6 +82,7 @@ export async function PlanMonths({ goal, all }: { goal: GoalView; all: boolean }
       goalName: goal.name,
       unit,
       estimate: own.estimate,
+      spentMinutes: own.spentMinutes ?? null,
       planMonth,
       months: own.parentId === null ? openMonths : [],
       canDelete: own.doneOn === null && kids.every((kid) => kid.doneOn === null),

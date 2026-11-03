@@ -189,7 +189,7 @@ test("a loose quantity habit opens its sheet with its own unit and the number pi
     await expect(sheet.getByText("litros", { exact: true })).toBeVisible();
     for (const chip of ["1", "2", "3", "4"]) await expect(sheet.getByRole("button", { name: chip, exact: true })).toBeVisible();
     await sheet.getByRole("button", { name: "3", exact: true }).click();
-    await sheet.getByRole("button", { name: "Anotar" }).click();
+    await sheet.getByRole("button", { name: "Anotar", exact: true }).click();
     await expect(sheet).toBeHidden();
 
     await expect

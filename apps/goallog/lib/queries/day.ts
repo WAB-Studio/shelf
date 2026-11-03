@@ -26,6 +26,8 @@ import { queryEvidenceBySource } from "@/lib/queries/evidence";
 import type { EvidenceOutcome } from "@/lib/queries/evidence";
 import {
   toCadence,
+  countsInMeasure,
+  factUnit,
   toDeclaredFact,
   toEvidenceByCommitment,
   toPhase,
@@ -95,6 +97,8 @@ type FactRow = {
   quantity: number | null;
   note: string | null;
   commitment_unit: string | null;
+  // RP-148: the day's own target; `to_jsonb(f)` carries it.
+  day_target?: number | null;
 };
 
 type MonthBudgetRow = { goal_id: string; month: string; amount: number };
@@ -105,6 +109,8 @@ type OneOffRow = {
   name: string;
   day: string | null;
   note: string | null;
+  estimate: number | null;
+  spent_minutes: number | null;
 };
 
 // The one statement's whole shape. `goals` and `one_offs` are fetched here
@@ -131,6 +137,7 @@ type GoalTaskRow = {
   planned_month: string | null;
   day: string | null;
   estimate: number | null;
+  spent_minutes: number | null;
   note: string | null;
   in_plan: boolean;
   position: number;
@@ -142,6 +149,7 @@ export type MonthTask = {
   id: string;
   name: string;
   estimate: number | null;
+  spent: number | null;
   note: string | null;
   parentName: string | null;
   // The hours the plan places in this month for the task: the part of a split one.
@@ -163,7 +171,7 @@ type GoalsQueryRow = {
   phases: PhaseRow[];
   facts: FactRow[];
   // Today alone: the commitments' facts of the last thirty days, for the strips.
-  strip_facts: { commitment_id: string; day: string; quantity: number | null; note: string | null }[];
+  strip_facts: { commitment_id: string; day: string; quantity: number | null; note: string | null; day_target: number | null }[];
   month_budgets: MonthBudgetRow[];
   one_offs: OneOffRow[];
   done_one_offs: DoneOneOffRow[];
@@ -247,7 +255,7 @@ async function queryGoalsRow(
       (select coalesce(json_agg(to_jsonb(p) order by p.starts_on, p.created_at, p.id), '[]'::json)
          from "goals"."phases" p) as phases,
       (select coalesce(json_agg(to_jsonb(f) || jsonb_build_object(
-                 'commitment_unit', c.unit
+                 'commitment_unit', ${factUnit}
                ) order by f.day, f.written_at, f.id), '[]'::json)
          from "goals"."facts" f
          left join "goals"."commitments" c on c.id = f.commitment_id
@@ -256,7 +264,8 @@ async function queryGoalsRow(
                  'commitment_id', f.commitment_id,
                  'day', f.day,
                  'quantity', f.quantity,
-                 'note', f.note
+                 'note', f.note,
+                 'day_target', f.day_target
                ) order by f.day, f.written_at, f.id), '[]'::json)
          from "goals"."facts" f
          where ${isToday}::boolean and f.commitment_id is not null
@@ -291,6 +300,7 @@ async function queryGoalsRow(
                  'planned_month', o.planned_month,
                  'day', o.day,
                  'estimate', o.estimate,
+                 'spent_minutes', o.spent_minutes,
                  'note', o.note,
                  'in_plan', o.in_plan,
                  'position', o.position,
@@ -347,11 +357,12 @@ function stripsOf(
   day: string,
   drawn: ReadonlySet<string>,
 ): Record<string, DayStrip> {
-  const byCommitment = new Map<string, { day: string; quantity: number | null; note: string | null }[]>();
+  const byCommitment = new Map<string, { day: string; quantity: number | null; note: string | null; dayTarget: number | null }[]>();
   for (const fact of row.strip_facts) {
+    const entry = { day: fact.day, quantity: fact.quantity, note: fact.note, dayTarget: fact.day_target };
     const own = byCommitment.get(fact.commitment_id);
-    if (own) own.push(fact);
-    else byCommitment.set(fact.commitment_id, [fact]);
+    if (own) own.push(entry);
+    else byCommitment.set(fact.commitment_id, [entry]);
   }
   const strips: Record<string, DayStrip> = {};
   for (const commitment of row.commitments) {
@@ -509,6 +520,8 @@ export type OneOffSummary = {
   name: string;
   day: string | null;
   note: string | null;
+  estimate: number | null;
+  spent: number | null;
 };
 
 // A one-off whose fact lands on the day drawn: RP-19's "done stays", read
@@ -524,7 +537,7 @@ export type DoneOneOffSummary = {
 };
 
 function toOneOffSummary(row: OneOffRow): OneOffSummary {
-  return { id: row.id, goalId: row.goal_id, name: row.name, day: row.day, note: row.note };
+  return { id: row.id, goalId: row.goal_id, name: row.name, day: row.day, note: row.note, estimate: row.estimate, spent: row.spent_minutes };
 }
 
 // What a `DaySlot` (`lib/day/types.ts`) does not carry: which goal a
@@ -603,10 +616,7 @@ function monthLineOf(
     const unit = goal.measure_unit;
     if (!unit) continue;
     const facts: DeclaredFact[] = row.facts
-      .filter(
-        (fact): fact is FactRow & { commitment_id: string } =>
-          fact.goal_id === goal.id && fact.commitment_id !== null && fact.day >= month,
-      )
+      .filter((fact) => fact.goal_id === goal.id && countsInMeasure(fact) && fact.day >= month)
       .map(toDeclaredFact);
     const evidence = evidenceDaysFor(
       unit,
@@ -642,6 +652,7 @@ function planInputOf(goal: GoalRow, row: GoalsQueryRow, day: string): PlanInput 
       plannedMonth: task.planned_month,
       day: task.day,
       estimate: task.estimate,
+      spentMinutes: task.spent_minutes,
       doneOn: task.done_on,
       note: task.note,
       inPlan: task.in_plan,
@@ -699,6 +710,7 @@ function monthTaskOf(goals: GoalRow[], lists: Record<string, PlanItem[]>): Recor
         id: leaf.id,
         name: leaf.name,
         estimate: leaf.estimate,
+        spent: leaf.spentMinutes ?? null,
         note: leaf.note ?? null,
         parentName: item.children.length === 0 ? null : item.task.name,
         part: item.part,
@@ -737,10 +749,7 @@ function weekMeasureOf(
     // By the fact's own `goal_id`, as `loadGoal` does: a commitment retired
     // earlier this week still counts what it declared.
     const facts: DeclaredFact[] = row.facts
-      .filter(
-        (fact): fact is FactRow & { commitment_id: string } =>
-          fact.goal_id === goal.id && fact.commitment_id !== null && fact.day >= weekStart,
-      )
+      .filter((fact) => fact.goal_id === goal.id && countsInMeasure(fact) && fact.day >= weekStart)
       .map(toDeclaredFact);
     const evidence = evidenceDaysFor(
       unit,
@@ -896,7 +905,7 @@ export async function loadDay(day: string): Promise<{
   const looseIds = new Set(infos.filter((info) => info.goalId === null).map((info) => info.id));
   const periodDone: Record<string, number> = {};
   for (const plan of commitments) {
-    const done = periodDoneOn(plan.cadence, plan.id, facts, day);
+    const done = periodDoneOn(plan, facts, day);
     if (done !== null) periodDone[plan.id] = done;
   }
 

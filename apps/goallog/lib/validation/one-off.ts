@@ -4,6 +4,7 @@ import { setMonthBudgetSchema } from "@/lib/validation/budget";
 import { todayInZone } from "@/lib/zone";
 
 import { civilDate } from "./civil-date";
+import { quantitySchema } from "./fact";
 
 // A day the person named for their errand, never one already gone: a past
 // one is refused (RP-19). Today is read at parse time, not at import.
@@ -83,6 +84,16 @@ export const completeOneOffSchema = z.object({
 });
 
 export type CompleteOneOffInput = z.infer<typeof completeOneOffSchema>;
+
+// RP-147: the minutes spent on a task estimated in time, kept without completing it;
+// `extendEstimate` makes them its new estimate.
+export const recordTaskTimeSchema = z.object({
+  oneOffId: z.uuid({ error: "day.errors.invalid" }),
+  minutes: quantitySchema,
+  extendEstimate: z.boolean().optional(),
+});
+
+export type RecordTaskTimeInput = z.infer<typeof recordTaskTimeSchema>;
 
 export const deleteOneOffSchema = z.object({
   oneOffId: z.uuid({ error: "day.errors.invalid" }),

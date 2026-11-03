@@ -274,3 +274,42 @@ test("deriveDay: evidence below its threshold is partial with its quantity; noth
   assert.equal(live.slots[0].partial, false);
   assert.equal(slotFor(tapPlan("t"), 1).partial, false);
 });
+
+// --- RP-150: a day written after the week's count was met keeps its mark ---
+
+test("RP-150: deriveWeek with keepWritten keeps the fifth run of a «2 a la semana» on its day; without it the day is not asked", () => {
+  // 2026-03-02 is a Monday: runs on Monday, Tuesday and Thursday, count 2.
+  const plan = tapPlan("run", { cadence: { kind: "times_per_week", count: 2 } });
+  const facts = [fact("run", "2026-03-02"), fact("run", "2026-03-03"), fact("run", "2026-03-05")];
+  const base = { commitments: [plan], phases: [], facts, evidence: {}, day: "2026-03-04" };
+  const slotOn = (week: ReturnType<typeof deriveWeek>, day: string) =>
+    week.days.find((d) => d.day === day)!.slots.find((s) => s.commitmentId === "run");
+
+  const kept = deriveWeek({ ...base, keepWritten: true });
+  assert.equal(slotOn(kept, "2026-03-05")?.satisfied, true);
+  // A day with no fact after the count was met is still not asked.
+  assert.equal(slotOn(kept, "2026-03-06"), undefined);
+
+  const plain = deriveWeek(base);
+  assert.equal(slotOn(plain, "2026-03-05"), undefined);
+});
+
+// --- RP-148: a day's own target ---
+
+test("RP-148: a quantity day lowered to what it did is satisfied; the same day unlowered is in part", () => {
+  const plan = tapPlan("run", { satisfiedBy: { kind: "quantity", target: 5, unit: "km" } });
+  const day = "2026-03-04";
+  const slot = (facts: DeclaredFact[]) => deriveDay({ commitments: [plan], phases: [], facts, evidence: {}, day }).slots[0];
+  const short = slot([fact("run", day, { quantity: 3 })]);
+  assert.deepEqual([short.satisfied, short.partial], [false, true]);
+  const lowered = slot([fact("run", day, { quantity: 3, dayTarget: 3 })]);
+  assert.deepEqual([lowered.satisfied, lowered.partial], [true, false]);
+});
+
+test("RP-148: a short day is not one of a «2 a la semana»'s times, so the week still asks the next day", () => {
+  const plan = tapPlan("run", { cadence: { kind: "times_per_week", count: 2 }, satisfiedBy: { kind: "quantity", target: 5, unit: "km" } });
+  const facts = [fact("run", "2026-03-02", { quantity: 5 }), fact("run", "2026-03-03", { quantity: 2 })];
+  const asks = (f: DeclaredFact[]) => deriveDay({ commitments: [plan], phases: [], facts: f, evidence: {}, day: "2026-03-04" }).slots.length;
+  assert.equal(asks(facts), 1);
+  assert.equal(asks([facts[0], fact("run", "2026-03-03", { quantity: 2, dayTarget: 2 })]), 0);
+});

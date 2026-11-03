@@ -126,15 +126,15 @@ for (const mode of MODES) {
         await expect(sheet).toBeVisible();
         await sheet.getByRole("button", { name: `${TYPED} min`, exact: true }).click();
         const restore = await cut(mode, context, page);
-        await sheet.getByRole("button", { name: "Anotar" }).click();
-        await expect(sheet.getByRole("button", { name: "Anotar" })).toBeEnabled();
+        await sheet.getByRole("button", { name: "Anotar", exact: true }).click();
+        await expect(sheet.getByRole("button", { name: "Anotar", exact: true })).toBeEnabled();
         await expect(page.getByText("No se pudo abrir")).toHaveCount(0);
         await expect(sheet).toBeVisible();
         await expect(sheet.getByRole("button", { name: `${TYPED} min`, exact: true })).toHaveAttribute("aria-pressed", "true");
         expect(await factsOf(db, qty)).toHaveLength(0);
 
         await restore();
-        await sheet.getByRole("button", { name: "Anotar" }).click();
+        await sheet.getByRole("button", { name: "Anotar", exact: true }).click();
         await expect(sheet).toBeHidden();
         const rows = await factsOf(db, qty);
         expect(rows).toHaveLength(1);
@@ -174,8 +174,8 @@ for (const mode of MODES) {
         const sheet = page.getByRole("dialog");
         await expect(sheet).toBeVisible();
         const restore = await cut(mode, context, page);
-        await sheet.getByRole("button", { name: "Anotar" }).click();
-        await expect(sheet.getByRole("button", { name: "Anotar" })).toBeEnabled();
+        await sheet.getByRole("button", { name: "Anotar", exact: true }).click();
+        await expect(sheet.getByRole("button", { name: "Anotar", exact: true })).toBeEnabled();
         await page.keyboard.press("Escape");
         await expect(sheet).toBeHidden();
         await restore();

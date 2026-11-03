@@ -1,6 +1,7 @@
 import "server-only";
 
 import { env } from "@/lib/env";
+import { json } from "@/lib/http/responses";
 import { refuseCrossSiteRequest } from "@/lib/word/same-origin";
 import { providerFetch } from "@/lib/provider/fetch";
 import { cleanProviderText } from "@/lib/translate/clean";
@@ -217,12 +218,12 @@ export async function POST(request: Request): Promise<Response> {
   try {
     raw = await request.json();
   } catch {
-    return Response.json({ error: "invalid" }, { status: 400 });
+    return json({ error: "invalid" }, 400);
   }
 
   const parsed = translateRequestSchema.safeParse(raw);
   if (!parsed.success) {
-    return Response.json({ error: "invalid" }, { status: 400 });
+    return json({ error: "invalid" }, 400);
   }
 
   // Per caller, its own `translate:` row, so a caller's sentences never eat
@@ -232,13 +233,13 @@ export async function POST(request: Request): Promise<Response> {
   try {
     const client = scopedClientKey("translate", request.headers);
     if (client && !(await claimClientCall(client, env.TRANSLATE_DAILY_CLIENT_CAP))) {
-      return Response.json({ error: "rateLimited" }, { status: 429 });
+      return json({ error: "rateLimited" }, 429);
     }
     const text = (await translateWithModel(request, parsed.data.text)) ?? (await translateWithProvider(parsed.data.text));
     const result: TranslationResult = { text, origin: "network" };
-    return Response.json(result, { status: 200 });
+    return json(result, 200);
   } catch (error) {
     console.error("[api/translate] failed", error);
-    return Response.json({ error: "provider" }, { status: 502 });
+    return json({ error: "provider" }, 502);
   }
 }

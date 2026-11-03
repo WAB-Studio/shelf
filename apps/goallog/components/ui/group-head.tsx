@@ -13,9 +13,12 @@ export function GroupHead({
   name,
   tag,
   phase,
+  note,
   trailing,
 }: {
   name: string;
+  // A sentence of its own under the name, never set in the title face: a past day's «ese día pedía dos».
+  note?: string;
   // «Fase 1 de 3».
   tag?: string;
   phase?: string;
@@ -33,6 +36,11 @@ export function GroupHead({
         </div>
         {trailing ? <div className={styles.trailing}>{trailing}</div> : null}
       </div>
+      {note ? (
+        <Text as="p" variant="sentence">
+          {note}
+        </Text>
+      ) : null}
       {phase ? (
         <button type="button" className={styles.phase} aria-expanded={open} onClick={() => setOpen(!open)}>
           <span className={open ? styles.phaseOpen : styles.phaseText}>{phase}</span>

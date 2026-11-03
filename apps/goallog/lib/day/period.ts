@@ -1,16 +1,18 @@
 import { weekOf } from "@/lib/zone";
-import type { Cadence, DeclaredFact } from "./types";
+import { metDays } from "./met";
+import type { CommitmentPlan, DeclaredFact } from "./types";
 
-// Distinct days, up to and including `day`, on which the commitment has a
-// fact inside the period `day` sits in: its week for `times_per_week`, its
-// month for `times_per_month`. Null for a cadence counted by the day. The
-// day's own fact counts, unlike `asksOn`'s quota, which reads what came before.
+// Distinct days, up to and including `day`, on which the commitment was met
+// inside the period `day` sits in: its week for `times_per_week`, its month
+// for `times_per_month`. Null for a cadence counted by the day. The day's own
+// fact counts, unlike `asksOn`'s quota, which reads what came before. A short
+// quantity day is «en parte» and not one of the period's times (RP-148).
 export function periodDoneOn(
-  cadence: Cadence,
-  commitmentId: string,
+  plan: Pick<CommitmentPlan, "id" | "cadence" | "satisfiedBy">,
   facts: DeclaredFact[],
   day: string,
 ): number | null {
+  const { cadence } = plan;
   let inPeriod: (factDay: string) => boolean;
   if (cadence.kind === "times_per_week") {
     const week = weekOf(day);
@@ -21,10 +23,5 @@ export function periodDoneOn(
   } else {
     return null;
   }
-
-  const days = new Set<string>();
-  for (const fact of facts) {
-    if (fact.commitmentId === commitmentId && fact.day <= day && inPeriod(fact.day)) days.add(fact.day);
-  }
-  return days.size;
+  return metDays(plan, facts, (factDay) => factDay <= day && inPeriod(factDay)).size;
 }

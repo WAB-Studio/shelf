@@ -617,6 +617,7 @@ const GOLDEN_VIEW: unknown = {
       "note": null,
       "inPlan": true,
       "position": 1,
+      "spentMinutes": null,
       "createdOn": "2026-09-21"
     },
     {
@@ -631,6 +632,7 @@ const GOLDEN_VIEW: unknown = {
       "note": null,
       "inPlan": true,
       "position": 2,
+      "spentMinutes": null,
       "createdOn": "2026-09-21"
     }
   ],
@@ -657,6 +659,7 @@ const GOLDEN_VIEW: unknown = {
         "note": null,
         "inPlan": true,
         "position": 1,
+        "spentMinutes": null,
         "createdOn": "2026-09-21"
       },
       {
@@ -671,6 +674,7 @@ const GOLDEN_VIEW: unknown = {
         "note": null,
         "inPlan": true,
         "position": 2,
+        "spentMinutes": null,
         "createdOn": "2026-09-21"
       }
     ],
@@ -699,6 +703,7 @@ const GOLDEN_VIEW: unknown = {
               "note": null,
               "inPlan": true,
               "position": 2,
+              "spentMinutes": null,
               "createdOn": "2026-09-21"
             },
             "children": [],
@@ -732,6 +737,7 @@ const GOLDEN_VIEW: unknown = {
               "note": null,
               "inPlan": true,
               "position": 1,
+              "spentMinutes": null,
               "createdOn": "2026-09-21"
             },
             "children": [],

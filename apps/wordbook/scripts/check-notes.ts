@@ -3,71 +3,23 @@
  * real `reading.phrase_notes`, `reading.model_spend` and `reading.client_spend`
  * — never asserted from the migration (AGENTS.md, "Code").
  *
- * Two passes, never one, and never a spawned second server: this app
- * refuses a second `next dev` in the same directory even on another port
- * ("Another next dev server is already running" — docs/agentes/lanes.md,
- * "Run one dev server per worktree"), so the
- * `check-decoration.ts` T17 shape of spawning a short-lived child does not
- * apply here — the lane's own persistent server already occupies this
- * directory's lock.
- *
- *   1. `npm run check:notes` (default) — against the lane's server exactly
- *      as `.env.local` leaves it, `CLIENT_KEY_SALT`, `PHRASE_NOTES_DAILY_CALL_CAP`
- *      and `PHRASE_NOTES_DAILY_CLIENT_CAP` all unset. Runs the gate's 400s,
- *      the translation shape's own 400s and pass, and the "cap unset always
- *      answers 204" cases. No env to arrange.
- *   2. `CHECK_NOTES_PAID=1 npm run check:notes` — against that same server
- *      restarted once with `CLIENT_KEY_SALT`, `PHRASE_NOTES_DAILY_CALL_CAP`
- *      and `PHRASE_NOTES_DAILY_CLIENT_CAP=1` exported in the shell that
- *      started it, never written to `.env.local` (docs/agentes/wordbook.md, "Leave
- *      apps/wordbook/.env.local alone"). Runs the real model calls, the
- *      cache-repeat check, the no-leak check and the per-caller cap check,
- *      then restores `model_spend` and deletes every row it wrote.
- *      A client cap of exactly 1 is why `BLACK_MINORCA` and `FRISKING` below
- *      answer from two different synthetic addresses rather than one: two
- *      real calls a day from the same caller would trip the cap this pass
- *      exists to prove, on phrases the model-call assertions still need to
- *      succeed.
+ * Never spends on a model: with no `PHRASE_NOTES_DAILY_CALL_CAP` the route
+ * answers 204 for every admitted phrase, which is all this script drives —
+ * the gate's 400s, the translation shape's own 400s and pass, and the "cap
+ * unset always answers 204" cases. The paid pass (real model calls) was
+ * removed: no test or check may spend on a paid model.
  *
  * `notes-cache.ts` starts with `import "server-only"`, which throws under
  * plain Node, so its hash derivation is reimplemented here directly — the
  * same reason `check-admission.ts` reimplements `claimClientCall` rather
- * than importing it. `clientKey`'s own formula carries no such import (it
- * lives in `lib/word/client-key.ts`, the pure half `client-budget.ts`
- * wraps) and is imported for real below, same as `check-admission.ts` does.
+ * than importing it.
  */
 import { createHash } from "node:crypto";
 
 import postgres from "postgres";
 
-import { clientKeyFromAddress } from "../lib/word/client-key";
-
 const BASE_URL = process.env.VOYAGER_BASE_URL ?? "http://localhost:3105";
 const NOTES_PATH = "/api/phrase/notes";
-const PAID_PASS = process.env.CHECK_NOTES_PAID === "1";
-
-// Must match exactly what the operator exports before restarting the
-// server for the paid pass (see the file header) — this script has no way
-// to read the running server's own environment, only to assume it.
-const TEST_SALT = "check-notes-script-local-salt-only";
-// RFC 5737 TEST-NET-3, same choice check-admission.ts makes — one address
-// per caller this file needs to keep apart under a client cap of 1.
-const TEST_CLIENT_ADDRESS_MINORCA = "203.0.113.77";
-const TEST_CLIENT_ADDRESS_FRISKING = "203.0.113.78";
-const TEST_CLIENT_ADDRESS_CAP = "203.0.113.79";
-
-// Real sentences from the book that prompted RL-46 (DESIGN.md, "A translated
-// sentence carries a note"); the second translation is MyMemory's own reply,
-// fetched once by hand against this lane's `/api/translate` and pinned here
-// so a re-run never spends a second free-tier call for it.
-const BLACK_MINORCA = { source: "black minorca pullets", translation: "pollitas negras de menorca" };
-const FRISKING = { source: "frisking from side to side", translation: "frisking de lado a lado" };
-
-// A cold pair for the client-cap check alone: never cached by anything
-// above, so both calls are real requests the route must decide on, not a
-// hit either one could hide behind.
-const CAP_FIRST = { source: "an old owl watched quietly", translation: "una vieja lechuza observaba en silencio" };
-const CAP_SECOND = { source: "one small dog barked loudly", translation: "un perro pequeno ladro con fuerza" };
 
 // Never cached by any other test in this file — the fixture the "cap unset"
 // case needs to prove absence rather than read a hit left over from the
@@ -156,14 +108,7 @@ async function postNotes(
 
 const sql = postgres(process.env.DATABASE_URL!, { prepare: false, max: 1 });
 
-type ModelSpendRow = { calls: number };
 type PhraseNoteRow = { phrase_hash: string; notes: unknown; model: string; resolved_at: string };
-
-async function readTodayCalls(): Promise<number> {
-  const [row] = await sql<ModelSpendRow[]>`
-    select calls from reading.model_spend where day = current_date`;
-  return row?.calls ?? 0;
-}
 
 async function checkGate(): Promise<void> {
   const longSource = "word ".repeat(80); // exactly 400 characters, well over the 200-char cap
@@ -206,8 +151,7 @@ async function checkUnconfigured(): Promise<void> {
 }
 
 // Labelled D15-D20, continuing past D14 rather than restarting at D6:
-// `checkPaid` already owns D6-D14 in the file's one call-order across both
-// passes, even though this function runs earlier, in the other process.
+// D6-D14 were the removed paid pass.
 // Proves `admitTranslation` on its own, the source it pairs with already
 // admitted by D1-D3's checks. No env to arrange — a phrase this gate admits
 // still answers 204 here, which is what "pasa el portero" means with no
@@ -248,136 +192,6 @@ async function checkTranslationShape(): Promise<void> {
   const [{ count: after }] = await sql<{ count: string }[]>`select count(*) from reading.phrase_notes`;
   assert("D20. no row was written", before === after, `before=${before} after=${after}`);
   await sql`delete from reading.phrase_notes where phrase_hash = ${hashCapUnset}`;
-}
-
-async function checkPaid(): Promise<void> {
-  const hashMinorca = computeHash(BLACK_MINORCA.source, BLACK_MINORCA.translation);
-  const hashFrisking = computeHash(FRISKING.source, FRISKING.translation);
-  const clientKeyMinorca = clientKeyFromAddress(TEST_CLIENT_ADDRESS_MINORCA, TEST_SALT);
-  const clientKeyFrisking = clientKeyFromAddress(TEST_CLIENT_ADDRESS_FRISKING, TEST_SALT);
-  const headersMinorca = { "x-forwarded-for": TEST_CLIENT_ADDRESS_MINORCA };
-  const headersFrisking = { "x-forwarded-for": TEST_CLIENT_ADDRESS_FRISKING };
-
-  let rowsCreated = 0;
-  const priorSpendRow = (await sql<ModelSpendRow[]>`
-    select calls from reading.model_spend where day = current_date`)[0];
-  const baselineCalls = priorSpendRow?.calls ?? 0;
-
-  try {
-    // A stale row from a previous run would turn the "one model call"
-    // assertion below into a false pass on a cache hit — start from zero.
-    await sql`delete from reading.phrase_notes where phrase_hash in (${hashMinorca}, ${hashFrisking})`;
-
-    const beforeMinorca = await readTodayCalls();
-    const minorca = await postNotes(BASE_URL, BLACK_MINORCA.source, BLACK_MINORCA.translation, headersMinorca);
-    assert(
-      "D6. black minorca pullets / pollitas negras de menorca answers 200 with 1-3 notes",
-      minorca.status === 200 && (minorca.body?.notes?.length ?? 0) >= 1 && (minorca.body?.notes?.length ?? 0) <= 3,
-      `status=${minorca.status} notes=${JSON.stringify(minorca.body?.notes)}`,
-    );
-    if (minorca.status === 200) rowsCreated += 1;
-    const namesMinorca = minorca.body?.notes?.some((n) => /minorca/i.test(n.term)) ?? false;
-    assert("D7. one of those notes names \"minorca\"", namesMinorca, `notes=${JSON.stringify(minorca.body?.notes)}`);
-    console.log(`black minorca notes (literal): ${JSON.stringify(minorca.body?.notes, null, 2)}`);
-
-    const afterMinorca = await readTodayCalls();
-    assert(
-      "D8. that call spent exactly one model_spend.calls",
-      afterMinorca - beforeMinorca === 1,
-      `before=${beforeMinorca} after=${afterMinorca}`,
-    );
-
-    const frisking = await postNotes(BASE_URL, FRISKING.source, FRISKING.translation, headersFrisking);
-    assert(
-      "D9. frisking from side to side answers 200 with a note about \"frisking\"",
-      frisking.status === 200 && (frisking.body?.notes?.some((n) => /frisking/i.test(n.term)) ?? false),
-      `status=${frisking.status} notes=${JSON.stringify(frisking.body?.notes)}`,
-    );
-    if (frisking.status === 200) rowsCreated += 1;
-    console.log(`frisking notes (literal): ${JSON.stringify(frisking.body?.notes, null, 2)}`);
-
-    const afterFrisking = await readTodayCalls();
-    assert(
-      "D10. that call spent exactly one more model_spend.calls",
-      afterFrisking - afterMinorca === 1,
-      `before=${afterMinorca} after=${afterFrisking}`,
-    );
-
-    const repeat = await postNotes(BASE_URL, BLACK_MINORCA.source, BLACK_MINORCA.translation, headersMinorca);
-    assert(
-      "D11. the identical second request answers the same notes",
-      repeat.status === 200 && JSON.stringify(repeat.body?.notes) === JSON.stringify(minorca.body?.notes),
-      `first=${JSON.stringify(minorca.body?.notes)} second=${JSON.stringify(repeat.body?.notes)}`,
-    );
-    const afterRepeat = await readTodayCalls();
-    assert(
-      "D12. and model_spend.calls does not move — two readings around it",
-      afterRepeat === afterFrisking,
-      `before repeat=${afterFrisking} after repeat=${afterRepeat}`,
-    );
-
-    const rows = await sql<PhraseNoteRow[]>`
-      select * from reading.phrase_notes where phrase_hash in (${hashMinorca}, ${hashFrisking})`;
-    assert("D13. both phrases hold exactly one row each", rows.length === 2, `rows=${rows.length}`);
-    const leaked = rows.some((row) => {
-      const blob = JSON.stringify(row).toLowerCase();
-      return blob.includes(foldPhrase(BLACK_MINORCA.source)) || blob.includes(foldPhrase(FRISKING.source));
-    });
-    assert(
-      "D14. select * from reading.phrase_notes carries no readable source phrase",
-      !leaked,
-      `columns=${Object.keys(rows[0] ?? {}).join(",")}`,
-    );
-  } finally {
-    await sql`delete from reading.phrase_notes where phrase_hash in (${hashMinorca}, ${hashFrisking})`;
-    await sql`
-      delete from reading.client_spend
-      where day = current_date and client in (${clientKeyMinorca}, ${clientKeyFrisking})`;
-    if (priorSpendRow) {
-      await sql`update reading.model_spend set calls = ${baselineCalls} where day = current_date`;
-    } else {
-      await sql`delete from reading.model_spend where day = current_date`;
-    }
-    console.log(`cleanup: deleted ${rowsCreated} phrase_notes row(s) this run created, restored model_spend.calls to ${baselineCalls}`);
-  }
-}
-
-// D21, past D14: a client cap of 1 (exported alongside the other two for
-// this pass — see the file header) means a caller's first cold phrase of
-// the day still reaches the model, and a second, different one does not.
-// `CAP_FIRST` and `CAP_SECOND` never touch `BLACK_MINORCA` or `FRISKING`'s
-// cache entries, or this would answer from the cache before ever reaching
-// the claim this check means to drive.
-async function checkClientCap(): Promise<void> {
-  const hashFirst = computeHash(CAP_FIRST.source, CAP_FIRST.translation);
-  const hashSecond = computeHash(CAP_SECOND.source, CAP_SECOND.translation);
-  const clientKeyCap = clientKeyFromAddress(TEST_CLIENT_ADDRESS_CAP, TEST_SALT);
-  const headers = { "x-forwarded-for": TEST_CLIENT_ADDRESS_CAP };
-
-  const priorSpendRow = (await sql<ModelSpendRow[]>`
-    select calls from reading.model_spend where day = current_date`)[0];
-  const baselineCalls = priorSpendRow?.calls ?? 0;
-
-  try {
-    await sql`delete from reading.phrase_notes where phrase_hash in (${hashFirst}, ${hashSecond})`;
-    await sql`delete from reading.client_spend where day = current_date and client = ${clientKeyCap}`;
-
-    const first = await postNotes(BASE_URL, CAP_FIRST.source, CAP_FIRST.translation, headers);
-    const second = await postNotes(BASE_URL, CAP_SECOND.source, CAP_SECOND.translation, headers);
-    assert(
-      "D21. with PHRASE_NOTES_DAILY_CLIENT_CAP=1, a second cold phrase from the same caller answers 204 the same day",
-      first.status === 200 && second.status === 204,
-      `first=${first.status} second=${second.status}`,
-    );
-  } finally {
-    await sql`delete from reading.phrase_notes where phrase_hash in (${hashFirst}, ${hashSecond})`;
-    await sql`delete from reading.client_spend where day = current_date and client = ${clientKeyCap}`;
-    if (priorSpendRow) {
-      await sql`update reading.model_spend set calls = ${baselineCalls} where day = current_date`;
-    } else {
-      await sql`delete from reading.model_spend where day = current_date`;
-    }
-  }
 }
 
 // D22-D28, appended after D20 rather than inserted between the existing
@@ -429,15 +243,10 @@ async function checkControlAndAccents(): Promise<void> {
 }
 
 async function main(): Promise<void> {
-  if (PAID_PASS) {
-    await checkPaid();
-    await checkClientCap();
-  } else {
-    await checkGate();
-    await checkUnconfigured();
-    await checkTranslationShape();
-    await checkControlAndAccents();
-  }
+  await checkGate();
+  await checkUnconfigured();
+  await checkTranslationShape();
+  await checkControlAndAccents();
 
   await sql.end();
   console.log("");

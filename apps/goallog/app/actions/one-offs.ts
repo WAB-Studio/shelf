@@ -15,6 +15,7 @@ import { civilDateInZone, TIME_ZONE, todayInZone } from "@/lib/zone";
 import {
   createOneOffSchema,
   completeOneOffSchema,
+  recordTaskTimeSchema,
   deleteOneOffSchema,
   editTaskSchema,
   fixTaskSchema,
@@ -24,6 +25,7 @@ import {
   type ScheduleOneOffInput,
   type CreateOneOffInput,
   type CompleteOneOffInput,
+  type RecordTaskTimeInput,
   type DeleteOneOffInput,
   type EditTaskInput,
   type FixTaskInput,
@@ -303,6 +305,58 @@ export async function completeOneOff(input: CompleteOneOffInput): Promise<Comple
   // A parent is done by its sub-tasks (RP-30): `declareFact` refuses one under
   // the task's lock, in the transaction that writes the fact.
   return declareFact({ oneOffId, day }, { namesParent: true });
+}
+
+/**
+ * Keeps the minutes spent on a task estimated in time without completing it
+ * (RP-147): a fact means «done» (RP-20), so the time sits on the task until
+ * the person checks it. `extendEstimate` also makes a time over the estimate
+ * the estimate, in the one statement.
+ */
+export async function recordTaskTime(input: RecordTaskTimeInput): Promise<{ ok: true } | { ok: false; error: MessageKey }> {
+  const parsed = recordTaskTimeSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: messageKey(parsed.error.issues[0].message) };
+
+  const person = await getPerson();
+  if (!person) return { ok: false, error: "day.errors.signedOut" };
+
+  const { oneOffId, minutes, extendEstimate } = parsed.data;
+
+  try {
+    await withGoalsDb(async (tx) => {
+      await taskLock(tx, oneOffId);
+      const [task] = await tx
+        .select({
+          estimate: oneOffs.estimate,
+          measureUnit: goals.measureUnit,
+          // Read under the lock: a task done elsewhere meanwhile is refused by name, not as missing.
+          done: sql<boolean>`exists (select 1 from ${facts} f where f.one_off_id = ${oneOffs}.id)`,
+        })
+        .from(oneOffs)
+        .leftJoin(goals, eq(goals.id, oneOffs.goalId))
+        .where(eq(oneOffs.id, oneOffId));
+      if (!task) throw new NamedError("day.errors.notFound");
+      if (task.done) throw new NamedError("day.errors.oneOffHasFact");
+      if (task.estimate === null || !isTimeUnit(task.measureUnit)) throw new NamedError("day.errors.quantityNotTime");
+      if (extendEstimate && minutes <= task.estimate) throw new NamedError("day.errors.extendInvalid");
+
+      // `one_offs_guard_day` skips the update, as 0 rows, on a task with a fact or sub-tasks.
+      const updated = await tx
+        .update(oneOffs)
+        .set(extendEstimate ? { spentMinutes: minutes, estimate: minutes } : { spentMinutes: minutes })
+        .where(eq(oneOffs.id, oneOffId))
+        .returning({ id: oneOffs.id });
+      if (updated.length === 0) throw new NamedError("day.errors.notFound");
+    });
+  } catch (error) {
+    if (error instanceof NamedError) return { ok: false, error: messageKey(error.message) };
+    throw error;
+  }
+
+  revalidatePath("/");
+  revalidatePath("/mes");
+  revalidatePath("/dia", "layout");
+  return { ok: true };
 }
 
 /**

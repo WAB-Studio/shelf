@@ -52,6 +52,8 @@ export type DeclaredFact = {
   quantity: number | null;
   unit: string | null;
   note: string | null;
+  // RP-148: the day's own target, lowered by the person to what a short day did. Absent or null: the plan's.
+  dayTarget?: number | null;
 };
 
 // A row another app's own reader already turned into this shape (RNP-10).

@@ -8,6 +8,8 @@ export type Task = {
   plannedMonth: string | null;
   day: string | null;
   estimate: number | null;
+  // Minutes recorded while undone (RP-147); absent where a builder never reads it.
+  spentMinutes?: number | null;
   // The day of the one-off's own fact; null while undone.
   doneOn: string | null;
   // The one-off's own fact, for `undoFact`; absent where a caller never reads it.

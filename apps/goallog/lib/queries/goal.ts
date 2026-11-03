@@ -11,6 +11,8 @@ import { measureByWeek, totalInSpan } from "@/lib/day/review";
 import type { Cadence, EvidenceDay, Phase, ReviewWeek, SatisfiedBy } from "@/lib/day/types";
 import {
   toCadence,
+  countsInMeasure,
+  factUnit,
   toDeclaredFact,
   toPhase,
   toSatisfiedBy,
@@ -97,6 +99,8 @@ export type FactRow = {
   quantity: number | null;
   note: string | null;
   commitment_unit: string | null;
+  // RP-148: the day's own target; `to_jsonb(f)` carries it.
+  day_target?: number | null;
 };
 
 // One statement's whole shape: the goal itself (`null` when the id does not
@@ -168,6 +172,7 @@ export type TaskRow = {
   planned_month: string | null;
   day: string | null;
   estimate: number | null;
+  spent_minutes?: number | null;
   done_on: string | null;
   // The id of its own fact, what `undoFact` takes back; null while undone.
   fact_id?: string | null;
@@ -304,6 +309,7 @@ function toPlanTask(task: TaskRow, openedOn: string): PlanTask {
     plannedMonth: task.planned_month,
     day: task.day,
     estimate: task.estimate,
+    spentMinutes: task.spent_minutes ?? null,
     doneOn: task.done_on,
     factId: task.fact_id ?? null,
     note: task.note,
@@ -347,7 +353,7 @@ async function queryGoalRow(tx: Transaction, goalId: string): Promise<GoalQueryR
          left join "goals"."evidence_sources" s on s.id = c.source_id
          where c.goal_id = ${goalId}) as commitments,
       (select coalesce(json_agg(to_jsonb(f) || jsonb_build_object(
-                 'commitment_unit', c.unit
+                 'commitment_unit', ${factUnit}
                ) order by f.day, f.written_at, f.id), '[]'::json)
          from "goals"."facts" f
          left join "goals"."commitments" c on c.id = f.commitment_id
@@ -381,7 +387,7 @@ async function queryGoalRow(tx: Transaction, goalId: string): Promise<GoalQueryR
                                   left join "goals"."evidence_sources" s on s.id = c.source_id
                                   where c.goal_id = d.id),
                 'facts', (select coalesce(json_agg(to_jsonb(f) || jsonb_build_object(
-                                    'commitment_unit', c.unit
+                                    'commitment_unit', ${factUnit}
                                   ) order by f.day, f.written_at, f.id), '[]'::json)
                                   from "goals"."facts" f
                                   left join "goals"."commitments" c on c.id = f.commitment_id
@@ -413,7 +419,7 @@ function toGoalCommitment(
   row: CommitmentRow,
   factDayCount: number,
   today: string,
-  recent: { day: string; quantity: number | null; note?: string | null }[] = [],
+  recent: { day: string; quantity: number | null; note?: string | null; dayTarget?: number | null }[] = [],
   evidence: Record<string, EvidenceDay[]> | null = null,
 ): GoalCommitment {
   const satisfiedBy = toSatisfiedBy(row);
@@ -459,13 +465,15 @@ function factDayCounts(facts: FactRow[]): Map<string, number> {
 }
 
 // Per commitment, the facts inside the strip's window.
-function recentFacts(facts: FactRow[], today: string): Map<string, { day: string; quantity: number | null; note: string | null }[]> {
+type RecentFact = { day: string; quantity: number | null; note: string | null; dayTarget: number | null };
+
+function recentFacts(facts: FactRow[], today: string): Map<string, RecentFact[]> {
   const start = stripDays(today)[0];
-  const byCommitment = new Map<string, { day: string; quantity: number | null; note: string | null }[]>();
+  const byCommitment = new Map<string, RecentFact[]>();
   for (const fact of facts) {
     if (!fact.commitment_id || fact.day < start) continue;
     const list = byCommitment.get(fact.commitment_id) ?? [];
-    list.push({ day: fact.day, quantity: fact.quantity, note: fact.note });
+    list.push({ day: fact.day, quantity: fact.quantity, note: fact.note, dayTarget: fact.day_target ?? null });
     byCommitment.set(fact.commitment_id, list);
   }
   return byCommitment;
@@ -584,10 +592,9 @@ export function goalFigures(input: {
   totalInSpan: (startsOn: string, endsOn: string) => number;
 } {
   const { goal, phases, commitments, budgets, evidence, today } = input;
-  // A one-off's fact carries no `commitment_id`, and no unit to feed the
-  // measure with; only a commitment's own quantity ever can (RP-14).
+  // A commitment's quantity feeds the measure (RP-14), and so do a task's minutes (RP-147).
   const facts = input.facts
-    .filter((fact): fact is FactRow & { commitment_id: string } => fact.commitment_id !== null)
+    .filter(countsInMeasure)
     .map(toDeclaredFact);
 
   // The same civil-day conversion `goalSpan`'s own SQL runs
@@ -999,7 +1006,7 @@ export async function loadGoalForm(
     tx.execute<{
       goal: GoalRow | null;
       phases: PhaseRow[];
-      commitments: (CommitmentRow & { fact_day_count: number; recent: { day: string; quantity: number | null; note?: string | null }[] })[];
+      commitments: (CommitmentRow & { fact_day_count: number; recent: { day: string; quantity: number | null; note?: string | null; dayTarget?: number | null }[] })[];
       tasks: TaskRow[];
       tree: TreeSqlRow[];
     }>(sql`
@@ -1013,9 +1020,10 @@ export async function loadGoalForm(
                    'source_unit', s.unit,
                    'source_label_key', s.label_key,
                    'fact_day_count', (select count(distinct f.day)::int from "goals"."facts" f where f.commitment_id = c.id),
-                   'recent', (select coalesce(json_agg(json_build_object('day', r.day::text, 'quantity', r.quantity, 'note', r.note) order by r.day), '[]'::json)
+                   'recent', (select coalesce(json_agg(json_build_object('day', r.day::text, 'quantity', r.quantity, 'note', r.note, 'dayTarget', r.day_target) order by r.day), '[]'::json)
                                 from (select f.day, sum(f.quantity)::int as quantity,
-                                              (array_agg(f.note order by f.written_at desc) filter (where f.note is not null))[1] as note
+                                              (array_agg(f.note order by f.written_at desc) filter (where f.note is not null))[1] as note,
+                                              min(f.day_target)::int as day_target
                                          from "goals"."facts" f
                                        where f.commitment_id = c.id and f.day >= ${stripStart}::date group by f.day) r)
                  ) order by c.position, c.created_at, c.id), '[]'::json)
@@ -1208,7 +1216,7 @@ export async function listGoalsForMetas(today: string = todayInZone()): Promise<
         select g.id, g.name, g.horizon, g.measure_name, g.measure_unit, g.archived_at,
           g.rhythm, g.created_at, g.parent_id, g.note, g.position,
           (select coalesce(json_agg(to_jsonb(f) || jsonb_build_object(
-                     'commitment_unit', c.unit
+                     'commitment_unit', ${factUnit}
                    ) order by f.day, f.written_at, f.id), '[]'::json)
              from "goals"."facts" f
              left join "goals"."commitments" c on c.id = f.commitment_id
@@ -1272,7 +1280,7 @@ export async function listGoalsForMetas(today: string = todayInZone()): Promise<
     const tasks = row.tasks.map((task) => toPlanTask(task, openedOn));
     const plan = planOfRow(row, tasks, openedOn);
     const declared = row.facts
-      .filter((fact): fact is FactRow & { commitment_id: string } => fact.commitment_id !== null)
+      .filter(countsInMeasure)
       .map(toDeclaredFact);
     const reached = reachedByMonth({
       unit,

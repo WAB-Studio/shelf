@@ -33,6 +33,7 @@ import {
   Button,
   Face,
   Figure,
+  Figures,
   Flex,
   Fold,
   Hero,
@@ -41,7 +42,6 @@ import {
   Page,
   Panel,
   Progress,
-  Timeline,
   Row,
   ScreenHeader,
   Section,
@@ -49,6 +49,7 @@ import {
   Split,
   Text,
   TextLink,
+  Timeline,
 } from "@/components/ui";
 
 import { timeline } from "@/lib/goals/timeline";
@@ -411,11 +412,15 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
               </Text>
             ) : paceLine ? null : (
               <Text as="p" variant="sentence" tone="muted">
-                {holds
-                  ? t("tree.goal.monthSum", { percent })
-                  : ended
-                    ? t("goal.detail.monthProgressEnded", { percent })
-                    : t("goal.detail.monthProgress", { percent, days: daysLeft })}
+                <Figures
+                  text={
+                    holds
+                      ? t("tree.goal.monthSum", { percent })
+                      : ended
+                        ? t("goal.detail.monthProgressEnded", { percent })
+                        : t("goal.detail.monthProgress", { percent, days: daysLeft })
+                  }
+                />
               </Text>
             )}
           </>
