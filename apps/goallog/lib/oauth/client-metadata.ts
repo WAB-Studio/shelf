@@ -196,10 +196,15 @@ export async function clientFromMetadataUrl(
 
 /**
  * The client a request names: a metadata-document URL is fetched and registered (above); any other id is
- * a row of `goals.oauth_clients`. Unknown to both is `null`.
+ * a row of `goals.oauth_clients`. Unknown to both is `null`. `caller` is read only for a metadata URL: a lookup by
+ * id has no request to read (the OAuth checks drive the action from a script).
  */
-export async function findClient(clientId: string, redirectUri: string, caller: CallerHeaders): Promise<MetadataClient | null> {
-  if (clientId.startsWith("https://")) return clientFromMetadataUrl(clientId, caller, {}, { redirectUri });
+export async function findClient(
+  clientId: string,
+  redirectUri: string,
+  caller: () => Promise<CallerHeaders>,
+): Promise<MetadataClient | null> {
+  if (clientId.startsWith("https://")) return clientFromMetadataUrl(clientId, await caller(), {}, { redirectUri });
 
   const [{ sql }, { withGoalsDb }] = await Promise.all([import("drizzle-orm"), import("@/lib/session")]);
   const rows = await withGoalsDb((tx) =>

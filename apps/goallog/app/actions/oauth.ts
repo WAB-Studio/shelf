@@ -28,7 +28,7 @@ async function check(input: unknown): Promise<Checked> {
   const person = await getPerson();
   if (!person) return { ok: false, error: "oauth.errors.signedOut" };
 
-  const client = await findClient(request.client_id, request.redirect_uri, await headers());
+  const client = await findClient(request.client_id, request.redirect_uri, headers);
   if (!client) return { ok: false, error: "oauth.errors.clientUnknown" };
   if (!redirectAllowed(client, request.redirect_uri)) return { ok: false, error: "oauth.errors.redirectMismatch" };
 

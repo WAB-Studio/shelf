@@ -42,7 +42,7 @@ export default async function AuthorizePage({ searchParams }: { searchParams: Pr
     return <SignedOut client={t("anonymousClient")} next={ownUrl(query)} />;
   }
 
-  const client = await findClient(request.client_id, request.redirect_uri, await headers());
+  const client = await findClient(request.client_id, request.redirect_uri, headers);
   if (!client || !redirectAllowed(client, request.redirect_uri)) return <Invalid />;
 
   return <Consent client={client.name} email={person.email} request={request} />;
