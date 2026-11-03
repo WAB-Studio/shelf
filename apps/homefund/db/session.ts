@@ -2,7 +2,8 @@ import "server-only";
 
 import { AsyncLocalStorage } from "node:async_hooks";
 
-import { settleSessionSql, verifiedClaims, type SessionUser } from "@repo/supabase-auth";
+import { verifiedClaims, type SessionUser } from "@repo/supabase-auth";
+import { withSettledTransaction } from "@repo/supabase-auth/settled-transaction";
 import { getLocale } from "next-intl/server";
 
 import { db } from "@/db/client";
@@ -68,19 +69,41 @@ export async function withUserDb<T>(
   fn: (tx: Transaction) => Promise<T>,
 ): Promise<T> {
   const session = await getVerifiedClaims();
+
+  // Inside `withSharedTransaction` the read joins the screen's transaction.
+  const shared = sharedTransaction.getStore();
+  if (shared && session && shared.claims === JSON.stringify(session.claims)) {
+    return fn(shared.tx);
+  }
+
   // No fallback to an unrestricted connection: without a session there is no query.
-  if (!session) throw new Error("withUserDb called without a verified session");
+  // `search_path` is what lets raw SQL keep naming a table unqualified now
+  // that the tables live in `finances` rather than `public`.
+  return withSettledTransaction(
+    session,
+    "withUserDb",
+    "finances, public",
+    db.transaction.bind(db),
+    (tx, statement) => tx.execute(statement),
+    fn,
+  );
+}
 
-  const claims = JSON.stringify(session.claims);
+type SharedTransaction = { tx: Transaction; claims: string };
 
-  return db.transaction(async (tx) => {
-    // `search_path` is what lets raw SQL keep naming a table unqualified now
-    // that the tables live in `finances` rather than `public`.
-    await tx.execute(
-      settleSessionSql({ claims, searchPath: "finances, public" }),
-    );
+const sharedTransaction = new AsyncLocalStorage<SharedTransaction>();
 
-    return fn(tx);
+/**
+ * Runs `fn` inside ONE settled transaction that every `withUserDb` read it starts joins,
+ * so a screen's fan-out pays one BEGIN, settle and COMMIT and takes one pool connection
+ * instead of one per loader. Reads only: a statement that fails aborts the transaction
+ * for every read still running in it, so a block that may fail alone goes in a scope of
+ * its own. A write belongs outside, in its own `withUserDb`.
+ */
+export function withSharedTransaction<T>(fn: () => Promise<T>): Promise<T> {
+  return withUserDb(async (tx) => {
+    const session = await getVerifiedClaims();
+    return sharedTransaction.run({ tx, claims: JSON.stringify(session?.claims) }, fn);
   });
 }
 
