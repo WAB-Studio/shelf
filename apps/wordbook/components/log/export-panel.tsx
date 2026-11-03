@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 
+import { civilDay } from "@/lib/format/zone";
 import { buildAnkiExport, readAnkiCounts } from "@/lib/log/anki";
 import { LOG_DELETED_EVENT } from "@/lib/log/delete";
 import { buildExport } from "@/lib/log/export";
@@ -19,13 +20,9 @@ type AnkiState =
   | { kind: "failed" };
 type AnkiCounts = { kind: "loading" } | { kind: "ready"; cards: number; words: number; pending: number; skipped: number } | { kind: "failed" };
 
-function pad(value: number): string {
-  return value.toString().padStart(2, "0");
-}
-
 // `registro-lecturas-<YYYY-MM-DD>.json`, the file name the contract fixes.
 function exportFileName(now: Date, suffix = ".json"): string {
-  return `registro-lecturas-${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}${suffix}`;
+  return `registro-lecturas-${civilDay(now.getTime())}${suffix}`;
 }
 
 // Downloads a blob without a server round trip: an anchor with a `download`

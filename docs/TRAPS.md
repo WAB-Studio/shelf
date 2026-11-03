@@ -7,6 +7,24 @@ Working rules live in `AGENTS.md`. Session state lives in `private/handoffs/`. T
 holds only what a person could not guess from the code. Entries whose cause is gone live in `docs/TRAPS-archivo.md`.
 
 
+## WordBook's e2e fails on this machine's Chromium, not on CI's
+
+Measured 2026-11-03, lane 4. `/opt/pw-browsers/chromium_headless_shell-1234` (the build Playwright 1.62.1 asks for,
+Chrome 151, what CI installs) is a symlink to the `1243` build, Chrome 153. Six specs failed here and passed in CI:
+`registro-borrar.spec.ts` (the «Pending» and «Deleting» ones), `registro-borrar-carreras.spec.ts` («A slow read…»),
+`cuenta-sin-red.spec.ts` (the two `702` ones) and `cuenta-copia.spec.ts` («network returns on /cuenta»).
+
+- The three `registro-borrar*` specs hold a `readwrite` transaction on `lookups` and expect the ✕ to open its question
+  anyway. In Chrome 153 a `readwrite` on `sync` queues behind it (probe: `readonly` on `sync` answers in 1 ms,
+  `readwrite` on `sync` is still blocked after 1.5 s), and `readSyncState` was `readwrite`. It now peeks with a
+  `readonly` transaction first (`lib/log/record.ts`), so the question no longer waits on a merge in any Chrome.
+- The three `online` specs call `context.setOffline(false)`, and Chrome 153 fires its own trusted `online` event
+  (probe: 1 event), which reloads `/cuenta` before the spec dispatches its own. An init script registered ahead of the
+  app's listener now keeps the trusted one away; the dispatched event still reaches the app.
+- Not measured: whether Chrome 151 fires that native event or queues those transactions. The fixes hold on both.
+- Run WordBook's suite inside `scripts/supabase-local.sh exec`. Bare, every spec that mints a reader dies on
+  `harness: … is not the local stack`, which looks like 70 reds and is one.
+
 ## `gh pr` fails in a cloud session
 
 Measured 2026-11-01 from the Claude Code docs: the cloud git proxy blocks GraphQL, and every `gh pr` and

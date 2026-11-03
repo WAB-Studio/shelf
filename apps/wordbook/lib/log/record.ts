@@ -480,10 +480,21 @@ function updateSyncRow(
   });
 }
 
+// Read-only, so it never queues behind a readwrite transaction on another store: newer Chromium runs
+// readwrite transactions one at a time whatever their scope, and a read of this row must not wait for a merge.
+function peekSyncRow(database: IDBDatabase): Promise<SyncState | null> {
+  return new Promise((resolve, reject) => {
+    const request = database.transaction(SYNC_STORE_NAME, "readonly").objectStore(SYNC_STORE_NAME).get(SYNC_KEY);
+    request.onsuccess = () => resolve(request.result ? normaliseSyncState(request.result as SyncRow) : null);
+    request.onerror = () => reject(request.error);
+  });
+}
+
 /** The device's sync row, minting `deviceId` the first time it is read. */
 export async function readSyncState(): Promise<SyncState> {
   try {
-    return await updateSyncRow(await openDatabase(), null);
+    const database = await openDatabase();
+    return (await peekSyncRow(database)) ?? (await updateSyncRow(database, null));
   } catch {
     return defaultSyncState();
   }

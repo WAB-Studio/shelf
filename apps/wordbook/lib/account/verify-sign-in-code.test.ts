@@ -13,6 +13,7 @@ type Params = { email: string; token: string; type: string };
 
 const calls: string[] = [];
 const verifyCalls: Params[] = [];
+let attemptAnswer = true;
 let verifyAnswer: () => { data: { user: { id: string } | null; session: unknown }; error: unknown };
 
 const USER = { id: "00000000-0000-4000-8000-000000000073" };
@@ -25,6 +26,10 @@ const double = {
   claim: async () => {
     calls.push("claim");
     return "ok";
+  },
+  attempt: async () => {
+    calls.push("attempt");
+    return attemptAnswer;
   },
   allowed: async () => {
     calls.push("list");
@@ -62,7 +67,7 @@ const DOUBLES: Record<string, string> = {
   "next/navigation": `export const redirect = (...a) => ${D}.redirect(...a);`,
   "next/headers": `export const headers = () => ${D}.headers(); export const cookies = () => ${D}.cookies();`,
   "@/lib/auth/allowlist": `export const isEmailAllowed = (...a) => ${D}.allowed(...a);`,
-  "@/lib/account/sign-in-budget": `export const claimSignInLink = (...a) => ${D}.claim(...a);`,
+  "@/lib/account/sign-in-budget": `export const claimSignInLink = (...a) => ${D}.claim(...a); export const claimSignInAttempt = (...a) => ${D}.attempt(...a);`,
   "@/lib/env": `export const env = { NEXT_PUBLIC_SUPABASE_URL: "http://stub.invalid", NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "stub", NEXT_PUBLIC_SITE_URL: "http://site.invalid" };`,
   "@repo/supabase-auth": `export const createSupabaseServerClient = (...a) => ${D}.createClient(...a);`,
 };
@@ -93,6 +98,7 @@ const EMAIL = "lectora@live.test";
 beforeEach(() => {
   calls.length = 0;
   verifyCalls.length = 0;
+  attemptAnswer = true;
   verifyAnswer = () => ({ data: { user: USER, session: { access_token: "t" } }, error: null });
 });
 
@@ -134,6 +140,15 @@ test("a malformed address answers emailInvalid and Auth is never asked", async (
   assert.equal(verifyCalls.length, 0);
 });
 
+// Mutation: ask Auth before the attempt claim, or ignore its refusal.
+test("an address or caller over its attempt ceiling answers rateLimited and Auth is never asked", async () => {
+  const verifySignInCode = await action();
+  attemptAnswer = false;
+  const result = await verifySignInCode(EMAIL, "123456");
+  assert.deepEqual(result, { ok: false, error: "rateLimited" });
+  assert.equal(verifyCalls.length, 0);
+});
+
 // Mutation: a retry, `type: "magiclink"`, or `token_hash` for `token`.
 test("a good code asks Auth exactly once, as an email code for that address, and answers ok", async () => {
   const verifySignInCode = await action();
@@ -150,12 +165,12 @@ test("the code Auth is asked about is the trimmed one", async () => {
 });
 
 // Mutation: run the DNS guard, the cap or the list before verifying, or redirect after it.
-test("verifying sends nothing: no DNS lookup, no cap claim, no list read, no send, no redirect", async () => {
+test("verifying sends nothing: no DNS lookup, no link claim, no list read, no send, no redirect", async () => {
   const verifySignInCode = await action();
   await verifySignInCode(EMAIL, "123456");
   verifyAnswer = () => ({ data: { user: null, session: null }, error: new AuthApiError("expired", 403, "otp_expired") });
   await verifySignInCode(EMAIL, "123456");
-  const stray = calls.filter((call) => call !== "client");
+  const stray = calls.filter((call) => call !== "client" && call !== "attempt");
   assert.deepEqual(stray, [], `verifying reached ${stray.join(", ")}`);
 });
 

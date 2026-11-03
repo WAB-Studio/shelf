@@ -95,7 +95,7 @@ export type Upload =
 //
 // The same statement buries what the round names (RL-66): `buried` deletes the
 // caller's rows of those identities, `marked` records each one with the row's
-// own `received_at` (0007's `sync_rows_today` counts a mark by it, so a delete
+// own `received_at` (0009's `sync_gate` counts a mark by it, so a delete
 // never refunds the day's cap), and `written` skips an identity already marked
 // or named in this round — CTEs share one snapshot, so a mark written here is
 // not yet visible to the insert's own policy, and a row named and sent at once

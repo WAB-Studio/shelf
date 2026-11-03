@@ -296,9 +296,9 @@ export function SearchScreen({ initialQuery }: { initialQuery?: string }) {
       // RL-59: a phrase in range that cannot be translated falls to the same
       // per-word breakdown RL-54 draws for one that was never tried — the
       // trigger is this `failed` state, never a `done` with empty text.
-      // RL-55 still logs the call: `commit` in record.ts is what drops an
-      // "untranslated" outcome, so the chain keeps advancing past it instead
-      // of leaving an earlier, answered prefix stranded in `pending`.
+      // RL-76 still logs the call: `commit` in record.ts keeps an "untranslated"
+      // outcome as pending, so the chain keeps advancing past an earlier,
+      // answered prefix instead of stranding it in `pending`.
       setPhraseState({ kind: "failed" });
       setLogPayload(phraseLogPayload(phraseText, dictionaryReady, "untranslated", null, null));
       resolveWordBreakdown(phraseText, "translationFailed");
@@ -409,12 +409,11 @@ export function SearchScreen({ initialQuery }: { initialQuery?: string }) {
       if (latestTextRef.current !== queryText || !answer) return;
       setWordAnswer(answer);
       setSuggestions(items);
-      // RL-55: a miss leaves no row here, but the call still happens — `commit`
-      // in record.ts is what drops a "miss" outcome, not this call site. A
-      // guard here would leave the last *answered* prefix stuck in
-      // `pending` forever, to be written once the reader had moved on to
-      // something else entirely (measured: "asdkjhqwe" left `asd | exact |
-      // TEA` behind).
+      // RL-76: a miss is reported here like any other outcome — `commit` in
+      // record.ts decides it is kept as pending, not this call site. A guard
+      // here would leave the last *answered* prefix stuck in `pending`
+      // forever, to be written once the reader had moved on to something
+      // else entirely (measured: "asdkjhqwe" left `asd | exact | TEA` behind).
       setLogPayload(wordLogPayload(queryText, answer, dictionaryReady));
       return;
     }
@@ -520,10 +519,10 @@ export function SearchScreen({ initialQuery }: { initialQuery?: string }) {
     wordAnswer !== null && wordAnswer.viaInflection.length === 0,
   );
 
-  // RL-55: a word with no entry is recorded only once the network's answer
+  // RL-76: a word with no entry is recorded answered once the network's answer
   // for that same text is in hand. It replaces the miss payload that call
   // produced, so `networkWord` going null (the box left the text) or a
-  // failed, absent or pending answer leaves the miss, which `commit` drops.
+  // failed, absent or pending answer leaves the miss, which `commit` keeps pending.
   // A form with a lemma never reaches here: its payload is `inflected`.
   const unlistedTranslation =
     networkWord !== null && networkAnswer.kind === "resolved"

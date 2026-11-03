@@ -222,9 +222,9 @@ beforeEach(() => {
 });
 afterEach(() => Object.assign(console, real));
 
-function post(body: unknown, headers: Record<string, string> = {}): Request {
+function post(body: unknown, headers: Record<string, string> = {}, method = "POST"): Request {
   return new Request("http://localhost/api", {
-    method: "POST",
+    method,
     headers: { "content-type": "application/json", ...headers },
     body: typeof body === "string" ? body : JSON.stringify(body),
   });
@@ -530,7 +530,7 @@ test("log/sync and log/clear answer no-store on 401, 400, 409 and 200", async ()
   const valid = (readerId: string) => post({ deviceId: device, readerId, rows: [], since: null });
 
   state.reader = null;
-  const noSession = [await sync.POST(valid("reader-1")), await clear.DELETE()];
+  const noSession = [await sync.POST(valid("reader-1")), await clear.DELETE(post("", {}, "DELETE"))];
   for (const response of noSession) assert.equal(response.status, 401);
 
   state.reader = { id: "reader-1", email: "r@example.invalid" };
@@ -541,7 +541,7 @@ test("log/sync and log/clear answer no-store on 401, 400, 409 and 200", async ()
   const ok = await sync.POST(valid("reader-1"));
   assert.equal(ok.status, 200);
   assert.deepEqual(await ok.json(), { accepted: 0, rows: [], cursor: null, tombstones: [], tombstoneCursor: null });
-  const cleared = await clear.DELETE();
+  const cleared = await clear.DELETE(post("", {}, "DELETE"));
   assert.equal(cleared.status, 200);
   assert.deepEqual(await cleared.json(), {});
 

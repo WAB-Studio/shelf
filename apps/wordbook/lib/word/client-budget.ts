@@ -21,7 +21,7 @@ export function clientKey(request: Request): string | null {
   return clientKeyWithSalt(request, env.CLIENT_KEY_SALT);
 }
 
-export function scopedClientKey(scope: "text" | "translate" | "signin", headers: Headers): string | null {
+export function scopedClientKey(scope: "text" | "translate" | "signin" | "signin-verify", headers: Headers): string | null {
   return scopeClientKey(scope, clientKeyFromHeaders(headers, env.CLIENT_KEY_SALT));
 }
 

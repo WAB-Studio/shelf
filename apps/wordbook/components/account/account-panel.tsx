@@ -8,6 +8,7 @@ import { useFormatter, useTranslations } from "next-intl";
 import { sendSignInLink, signOut, verifySignInCode } from "@/app/actions/account";
 import { deviceZone } from "@/lib/format/zone";
 import type { SendSignInLinkResult, VerifySignInCodeResult } from "@/app/actions/account";
+import { emailSchema } from "@/lib/account/email";
 import { signInCodeSchema } from "@/lib/account/sign-in-code";
 import { clearPending, readPending, savePending } from "@/lib/account/pending-sign-in";
 import { countPendingUpload, readSyncState, signOutSync, startCopyFor, writeSyncState } from "@/lib/log/record";
@@ -286,6 +287,10 @@ function SignedOutForm() {
   }, [isHeld]);
 
   async function handleSend(): Promise<void> {
+    if (!emailSchema.safeParse(email).success) {
+      setState({ kind: "failed", error: "emailInvalid" });
+      return;
+    }
     setState({ kind: "sending" });
 
     let timer: ReturnType<typeof setTimeout> | null = null;
