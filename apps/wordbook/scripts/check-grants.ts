@@ -621,16 +621,17 @@ async function checkMigrationsInOrder(): Promise<void> {
   const increasing = journal.entries.every((e, i) => e.idx === i && (i === 0 || e.when > journal.entries[i - 1].when));
   assert(
     "M1",
-    journal.entries.length === 10 &&
+    journal.entries.length === 11 &&
       tags[7] === "0007_lookup_tombstones" &&
       tags[8] === "0008_allowed_emails" &&
       tags[9]?.startsWith("0009_") &&
+      tags[10] === "0010_drop_sync_rows_today" &&
       journal.entries[7].when > 1791606395820 &&
       increasing,
-    `entries = ${journal.entries.length}, tags 7..9 = [${tags.slice(7, 10)}], idx and when strictly increasing = ${increasing}`,
+    `entries = ${journal.entries.length}, tags 7..10 = [${tags.slice(7, 11)}], idx and when strictly increasing = ${increasing}`,
   );
   const [applied] = await sql<{ n: string }[]>`select count(*)::text as n from drizzle.__drizzle_migrations_reading`;
-  assert("M2", applied.n === "10", `rows in __drizzle_migrations_reading = ${applied.n}`);
+  assert("M2", applied.n === "11", `rows in __drizzle_migrations_reading = ${applied.n}`);
 }
 
 // `reading.sync_gate(user, device)`, written from the plan's M30 contract and never from the migration: it takes the
