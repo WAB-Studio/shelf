@@ -26,7 +26,7 @@ export type DoneOneOffRowProps = {
 /**
  * A one-off done today (RP-19): the mark takes the fact back, so the one-off
  * returns among the undone (RP-05); the name opens its sheet, which renames
- * it and never deletes it (RP-22, RP-57).
+ * it and never deletes it (RP-22, RP-61).
  */
 export function DoneOneOffRow({ factId, name, time, note, oneOffId, noteEyebrow, goalName }: DoneOneOffRowProps) {
   const t = useTranslations();

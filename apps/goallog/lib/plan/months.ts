@@ -1,8 +1,7 @@
 import { measureOf } from "@/lib/day/derive";
-import { dayBefore } from "@/lib/day/weeks";
 import type { DeclaredFact, EvidenceDay } from "@/lib/day/types";
 import { formatCount, isTimeUnit } from "@/lib/units/time";
-import { civilDayMonthShort, todayInZone } from "@/lib/zone";
+import { addDaysToCivilDate, civilDayMonthShort, todayInZone } from "@/lib/zone";
 
 export type MonthBudget = { month: string; amount: number };
 
@@ -49,7 +48,7 @@ export const ENDLESS_MONTHS_AHEAD = 11;
 // of the goal when it falls on the 1st: the last month is the last day's. With
 // no horizon it is the current month plus `ENDLESS_MONTHS_AHEAD`, never before the opening's.
 export function lastMonthOf(openedOn: string, horizon: string | null, today: string = todayInZone()): string {
-  if (horizon !== null) return monthOf(dayBefore(horizon));
+  if (horizon !== null) return monthOf(addDaysToCivilDate(horizon, -1));
   let month = monthOf(today);
   for (let i = 0; i < ENDLESS_MONTHS_AHEAD; i += 1) month = nextMonth(month);
   const opened = monthOf(openedOn);
@@ -96,7 +95,18 @@ export function daysInMonth(month: string): number {
   return new Date(Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0)).getUTCDate();
 }
 
-// RP-74: a month's own amount whole; else the rhythm spread over the month's
+// The last civil day of the month `month` sits in, whether it is spelled `AAAA-MM` or `AAAA-MM-01`.
+export function lastDayOf(month: string): string {
+  return `${month.slice(0, 7)}-${String(daysInMonth(month)).padStart(2, "0")}`;
+}
+
+// `AAAA-MM`, `by` months after the month `month` sits in.
+export function monthAfter(month: string, by: number): string {
+  const index = Number(month.slice(0, 4)) * 12 + Number(month.slice(5, 7)) - 1 + by;
+  return `${Math.floor(index / 12)}-${String((index % 12) + 1).padStart(2, "0")}`;
+}
+
+// RP-76: a month's own amount whole; else the rhythm spread over the month's
 // days and summed over the goal's days in it, rounded down. `horizon` is the
 // first day after the goal; a month with none of its days plans 0.
 export function plannedOf(
@@ -109,7 +119,7 @@ export function plannedOf(
   if (rhythm === null) return null;
   const length = daysInMonth(month);
   const lastOfMonth = `${month.slice(0, 8)}${String(length).padStart(2, "0")}`;
-  const lastOfGoal = input.horizon === null ? null : dayBefore(input.horizon);
+  const lastOfGoal = input.horizon === null ? null : addDaysToCivilDate(input.horizon, -1);
   const from = input.openedOn > month ? input.openedOn : month;
   const to = lastOfGoal !== null && lastOfGoal < lastOfMonth ? lastOfGoal : lastOfMonth;
   if (from > to) return 0;
@@ -127,7 +137,7 @@ export function partOf(
   const rhythm = input.rhythm ?? null;
   if (rhythm === null || input.budgets.some((budget) => budget.month === month)) return null;
   const length = daysInMonth(month);
-  const lastOfGoal = input.horizon === null ? null : dayBefore(input.horizon);
+  const lastOfGoal = input.horizon === null ? null : addDaysToCivilDate(input.horizon, -1);
   const from = monthOf(input.openedOn) === month ? Number(input.openedOn.slice(8, 10)) : 1;
   const to = lastOfGoal !== null && monthOf(lastOfGoal) === month ? Number(lastOfGoal.slice(8, 10)) : length;
   if (from === 1 && to === length) return null;
@@ -176,7 +186,7 @@ export function monthLine(input: {
 }
 
 // Every month of the span, a month with nothing included (RP-16). A month
-// with no budget of its own plans its share of the goal's rhythm (RP-50, RP-74).
+// with no budget of its own plans its share of the goal's rhythm (RP-50, RP-76).
 export function monthRows(input: {
   openedOn: string;
   horizon: string | null;

@@ -33,7 +33,7 @@ export function tallyDay(input: {
 
   const slots = view.slots.filter((slot) => {
     const goalId = goalOf.get(slot.commitmentId);
-    // A habit with no goal (RP-100) counts every day it has a slot.
+    // A habit with no goal (RP-113) counts every day it has a slot.
     if (goalId === null) return true;
     return goalId !== undefined && openOn(goalId);
   });

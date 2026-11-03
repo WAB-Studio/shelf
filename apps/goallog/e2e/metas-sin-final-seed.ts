@@ -1,7 +1,6 @@
 import type { Browser, Locator, Page } from "@playwright/test";
 
-import { dayBefore } from "@/lib/day/weeks";
-import { civilDayMonthYear } from "@/lib/zone";
+import { addDaysToCivilDate, civilDayMonthYear } from "@/lib/zone";
 
 import { expect, type Person } from "./fixtures";
 import { MONTH_LONG, monthsAhead, today, thisMonth, type Db, type Unit } from "./meta-arbol-seed";
@@ -125,7 +124,7 @@ export function between(text: string, from: string, to?: string): string {
 
 export const monthLabel = (month: string) => `${MONTH_LONG[Number(month.slice(5, 7)) - 1]} ${month.slice(0, 4)}`;
 
-export const endLine = (horizon: string) => civilDayMonthYear(dayBefore(horizon));
+export const endLine = (horizon: string) => civilDayMonthYear(addDaysToCivilDate(horizon, -1));
 
 export function postCounter(page: Page): string[] {
   const calls: string[] = [];

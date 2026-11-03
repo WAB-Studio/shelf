@@ -5,11 +5,11 @@ import { useTranslations } from "next-intl";
 
 import { z } from "zod";
 
-import { dayBefore, horizonForWeeks, horizonWeeksOf } from "@/lib/day/weeks";
+import { horizonForWeeks, horizonWeeksOf } from "@/lib/day/weeks";
 import { commitmentFormIssue, type DraftGoal } from "@/lib/import/draft";
 import type { Cadence } from "@/lib/import/review";
 import { isTimeUnit, minutesFromFields, splitMinutes } from "@/lib/units/time";
-import { civilDateLabel, civilDayMonthYear } from "@/lib/zone";
+import { addDaysToCivilDate, civilDateLabel, civilDayMonthYear } from "@/lib/zone";
 import { setMonthBudgetSchema } from "@/lib/validation/budget";
 import { createOneOffSchema } from "@/lib/validation/one-off";
 import { addPhaseSchema, createGoalSchema } from "@/lib/validation/plan";
@@ -288,7 +288,7 @@ export function EditSheet({
             value={weeks}
             onChange={(event) => setWeeks(event.target.value)}
             invalid={horizonSentence !== null || amountError !== null || !typedWeeks.success}
-            hint={horizonSentence ?? amountError ?? (candidate ? t("goal.horizon.endsOn", { date: civilDayMonthYear(dayBefore(candidate)) }) : t("goal.errors.horizonWeeksInvalid"))}
+            hint={horizonSentence ?? amountError ?? (candidate ? t("goal.horizon.endsOn", { date: civilDayMonthYear(addDaysToCivilDate(candidate, -1)) }) : t("goal.errors.horizonWeeksInvalid"))}
             autoFocus={editing.name === null}
           />
         ) : null}

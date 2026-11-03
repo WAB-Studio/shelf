@@ -1,7 +1,6 @@
 import { test, expect } from "./fixtures";
-import { dayBefore } from "@/lib/day/weeks";
 import { monthOf } from "@/lib/plan/months";
-import { todayInZone } from "@/lib/zone";
+import { addDaysToCivilDate, todayInZone } from "@/lib/zone";
 import monthMessages from "../messages/es/month.json";
 import { boxOf } from "./box";
 
@@ -33,7 +32,7 @@ function label(month: string): string {
 
 const today = todayInZone();
 const thisMonth = monthOf(today);
-const lastMonth = monthOf(dayBefore(thisMonth));
+const lastMonth = monthOf(addDaysToCivilDate(thisMonth, -1));
 const horizon = `${Number(today.slice(0, 4)) + 1}-${today.slice(5, 7)}-01`;
 const seg = thisMonth.slice(0, 7);
 

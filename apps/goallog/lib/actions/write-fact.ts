@@ -1,0 +1,257 @@
+import { eq, sql } from "drizzle-orm";
+import { z } from "zod";
+
+import { commitments, facts, goals, oneOffs } from "@/db/schema";
+import { isTimeUnit } from "@/lib/units/time";
+import { type Transaction } from "@/lib/session";
+import { requireDayForSubject, requireQuantityFor, type DeclareFactInput } from "@/lib/validation/fact";
+import { civilDateInZone, todayInZone } from "@/lib/zone";
+import { NamedError } from "@/lib/actions/named-error";
+
+export type WrittenFact = { id: string; day: string } | { kept: number; unit: string | null };
+
+/**
+ * The fact insert itself, inside the caller's transaction: `declareFact` opens one for it, and
+ * `recordTaskTime` writes a task's time and its fact in the same one. `input` is already parsed.
+ */
+export async function writeFact(
+  tx: Transaction,
+  personId: string,
+  input: DeclareFactInput,
+  namesParent: boolean,
+): Promise<WrittenFact> {
+  const { commitmentId, oneOffId, note, replace, lowerTarget } = input;
+  let quantity = input.quantity;
+  // Absent means today, decided here from the person's own zone, never
+  // from the client (RNP-06); present, it is a day already past —
+  // `requireDayInRange` (schema) and `requireDayForSubject` (below,
+  // once the subject is read) are what keep it inside RP-06's reach.
+  const day = input.day ?? todayInZone();
+
+  // Serialises every write for this (commitment, day).
+  // Without it, "Cambiar" racing a plain tap on the same commitment
+  // could return a `factId` from a row the other call's own delete had
+  // already removed by the time this one's fallback `select` ran: two
+  // separate statements, no lock between them, each transaction reading
+  // a row the other was free to delete out from under it. A transaction-
+  // scoped advisory lock is released at commit, so the loser's whole
+  // transaction — delete, insert, fallback select alike — runs only
+  // after the winner's has fully landed. A one-off never conflicts on
+  // `facts_commitment_day_unique` (it carries no `commitmentId`), so it
+  // takes no lock on that index; its own lock, below, serialises the
+  // read-then-insert so two marks leave one fact.
+  if (commitmentId != null) {
+    await tx.execute(
+      sql`select pg_advisory_xact_lock(hashtextextended(${commitmentId}::text || ':' || ${day}, 0))`,
+    );
+  } else if (oneOffId != null) {
+    await tx.execute(
+      sql`select pg_advisory_xact_lock(hashtextextended(${oneOffId}::text || ':once', 0))`,
+    );
+  }
+
+  let goalId: string | null = null;
+  let unit: string | null = null;
+  // RP-148: set only when the person lowers the day's target to what it did.
+  let dayTarget: number | null = null;
+  let commitmentTarget: number | null = null;
+
+  if (commitmentId != null) {
+    const [commitment] = await tx
+      .select({
+        satisfaction: commitments.satisfaction,
+        unit: commitments.unit,
+        target: commitments.targetQuantity,
+        goalId: commitments.goalId,
+        openedAt: goals.createdAt,
+        createdAt: commitments.createdAt,
+        retiredAt: commitments.retiredAt,
+      })
+      .from(commitments)
+      .leftJoin(goals, eq(goals.id, commitments.goalId))
+      .where(eq(commitments.id, commitmentId));
+
+    if (!commitment) throw new NamedError("day.errors.notFound");
+
+    // RP-05: a fact for a commitment satisfied by evidence would have no
+    // day of its own to explain — that day is drawn from the source, not
+    // written here. Refused before the insert, not by a column that would
+    // otherwise happily hold it.
+    if (commitment.satisfaction === "evidence") {
+      throw new NamedError("day.errors.evidenceOnly");
+    }
+
+    // RP-06: a caller-supplied day never names a moment this commitment
+    // could not have had — read back from the row itself, never guessed.
+    const dayCheck = z
+      .custom<{ day?: string | null }>()
+      .superRefine(
+        requireDayForSubject({
+          kind: "commitment",
+          // A habit with no goal opens the day it was made.
+          openedDay: civilDateInZone(commitment.openedAt ?? commitment.createdAt),
+          createdDay: civilDateInZone(commitment.createdAt),
+          retiredDay: commitment.retiredAt ? civilDateInZone(commitment.retiredAt) : null,
+        }),
+      )
+      .safeParse({ day: input.day });
+    if (!dayCheck.success) {
+      throw new NamedError(dayCheck.error.issues[0].message);
+    }
+
+    const quantityCheck = z
+      .custom<{ quantity?: number | null }>()
+      .superRefine(requireQuantityFor(commitment.satisfaction))
+      .safeParse({ quantity });
+    if (!quantityCheck.success) {
+      throw new NamedError(quantityCheck.error.issues[0].message);
+    }
+
+    // RP-148: a day's target only comes down, only on a quantity commitment, and only to a short day's own.
+    if (lowerTarget) {
+      if (commitment.satisfaction !== "quantity" || commitment.target === null || quantity == null || quantity >= commitment.target) {
+        throw new NamedError("day.errors.lowerTargetInvalid");
+      }
+      dayTarget = quantity;
+    }
+
+    goalId = commitment.goalId;
+    unit = commitment.unit;
+    commitmentTarget = commitment.target;
+  } else if (oneOffId != null) {
+    const [oneOff] = await tx
+      .select({
+        goalId: oneOffs.goalId,
+        createdAt: oneOffs.createdAt,
+        day: oneOffs.day,
+        estimate: oneOffs.estimate,
+        spentMinutes: oneOffs.spentMinutes,
+        measureUnit: goals.measureUnit,
+        // `${oneOffs}.id`: a bare `id` would bind to the subquery's own row.
+        hasChildren: sql<boolean>`exists (select 1 from ${oneOffs} c where c.parent_id = ${oneOffs}.id)`,
+      })
+      .from(oneOffs)
+      .leftJoin(goals, eq(goals.id, oneOffs.goalId))
+      .where(eq(oneOffs.id, oneOffId));
+
+    if (!oneOff) throw new NamedError("day.errors.notFound");
+    // A parent is done by its sub-tasks (RP-30); a sub-task added meanwhile is seen.
+    if (namesParent && oneOff.hasChildren) throw new NamedError("month.errors.parentIsDoneByChildren");
+
+    // RP-129: a past day, but never before the task existed or its own day.
+    const dayCheck = z
+      .custom<{ day?: string | null }>()
+      .superRefine(
+        requireDayForSubject({
+          kind: "oneOff",
+          createdDay: civilDateInZone(oneOff.createdAt),
+          ownDay: oneOff.day,
+        }),
+      )
+      .safeParse({ day: input.day });
+    if (!dayCheck.success) {
+      throw new NamedError(dayCheck.error.issues[0].message);
+    }
+
+    // A one-off done twice keeps the fact it already has: adopted, never
+    // written again, whether or not the unique index exists.
+    const [done] = await tx.execute<{ id: string; day: string }>(sql`
+      select id, day::text as day from ${facts} where one_off_id = ${oneOffId}
+    `);
+    if (done) return { id: done.id, day: done.day };
+
+    // RP-147: a task estimated in time, on a goal measured in time, is done in the minutes
+    // recorded on it, or its estimate; the client names none.
+    if (quantity != null) throw new NamedError("day.errors.quantityNotTime");
+    if (oneOff.estimate !== null && isTimeUnit(oneOff.measureUnit)) quantity = oneOff.spentMinutes ?? oneOff.estimate;
+
+    goalId = oneOff.goalId;
+  }
+
+  // "Cambiar" (`quantity-sheet.tsx`), never "Anotar": a row that already
+  // carries a fact today is replaced whole, in the same transaction as
+  // the insert below — delete-then-insert, never an UPDATE (`facts`
+  // grants none), and never two separate calls a client could interleave
+  // with someone else's read.
+  //
+  // Adopts first, deletes only when there is something to actually
+  // change: the lock above serialises the two writes, but does
+  // not by itself say what "replace" should do when it wins the race
+  // *after* a concurrent plain tap already landed the very same
+  // (commitment, day) row — deleting that row unconditionally would
+  // still hand the plain caller a `factId` this transaction had just
+  // removed. Reading the existing row first and comparing its own
+  // quantity and note mirrors the plain insert's own `on conflict … do
+  // nothing`: unchanged data is adopted, not recreated, so two calls
+  // racing on a `tap` commitment (no quantity, no note — always
+  // identical) never see a row deleted out from under them. A quantity
+  // that genuinely differs still deletes and recreates: that is what
+  // "Cambiar" is for.
+  // «Bajar la meta» rewrites the day's fact too, whether or not the sheet knew of one.
+  if ((replace || lowerTarget) && commitmentId != null) {
+    const [existing] = await tx.execute<{
+      id: string;
+      quantity: number | null;
+      note: string | null;
+      day_target: number | null;
+    }>(sql`
+      select id, quantity, note, day_target from ${facts}
+      where commitment_id = ${commitmentId} and day = ${day}
+    `);
+
+    if (existing) {
+      // A day lowered before keeps its own target through «Cambiar» while the quantity is still under the
+      // commitment's; at or over it, the day needs no target of its own.
+      if (!lowerTarget && existing.day_target !== null && quantity != null && commitmentTarget !== null && quantity < commitmentTarget) {
+        dayTarget = existing.day_target;
+      }
+      const unchanged =
+        existing.quantity === (quantity ?? null) && existing.note === (note ?? null) && existing.day_target === dayTarget;
+      if (unchanged) return { id: existing.id, day };
+
+      await tx.execute(sql`delete from ${facts} where id = ${existing.id}`);
+    }
+  }
+
+  // Named columns only, never the builder's `.insert()`: it lists every
+  // column of the table and fills the rest with `default`, and Postgres
+  // checks the grant on a column named that way too — `written_at` is
+  // deliberately withheld from `authenticated`, left to the column's own
+  // `now()` (RP-06).
+  //
+  // `facts_commitment_day_unique` is the arbiter for a
+  // `commitmentId` insert: two taps racing from two devices both reach
+  // this statement, one lands and one conflicts, and `on conflict …
+  // do nothing` turns the second into a no-op rather than a 500 — a
+  // one-off's insert never carries a `commitmentId`, so it never matches
+  // that partial index. Without a target it covers the one-off's own
+  // index too, and is correct before that index exists.
+  const [inserted] = await tx.execute<{ id: string }>(sql`
+    insert into ${facts}
+      (user_id, commitment_id, one_off_id, goal_id, day, quantity, note, day_target)
+    values
+      (${personId}, ${commitmentId ?? null}, ${oneOffId ?? null}, ${goalId},
+       ${day}, ${quantity ?? null}, ${note ?? null}, ${dayTarget})
+    on conflict do nothing
+    returning id
+  `);
+
+  if (inserted) return { id: inserted.id, day };
+
+  // The index refused this insert: another device's tap for the same
+  // subject and day landed first. Read back its id rather than fail —
+  // a second tap from another device is a no-op, never an error. A
+  // stale «Anotar» of another quantity is refused with the one kept:
+  // only «Cambiar» replaces it (RP-03).
+  const [existing] = await tx.execute<{ id: string; quantity: number | null }>(
+    commitmentId != null
+      ? sql`select id, quantity from ${facts} where commitment_id = ${commitmentId} and day = ${day}`
+      : sql`select id, quantity from ${facts} where one_off_id = ${oneOffId}`,
+  );
+  if (!existing) {
+    // Unreachable: the conflict that just fired proves a row is there.
+    throw new NamedError("day.errors.notFound");
+  }
+  if (existing.quantity !== null && existing.quantity !== (quantity ?? null)) return { kept: existing.quantity, unit };
+  return { id: existing.id, day };
+}

@@ -7,7 +7,7 @@ import type { GoalReport } from "./report";
 export type Section = "month" | "toDate" | "commitments" | "phases" | "tasks" | "months";
 
 // A goal with no unit measures nothing, so it prints no figure section
-// rather than a zero (RP-49). `month` stays with a unit even when this month
+// rather than a zero (RP-77). `month` stays with a unit even when this month
 // has no amount: the page then prints the reached figure alone. `tasks` is
 // every task of the month, carried first, so a goal with none prints no head.
 // `commitments` follows the measure and prints only with a live one (RP-124).
@@ -45,8 +45,8 @@ export function keepsHeadWithTable(months: GoalReport["months"], unit: string | 
 }
 
 // A month that has not started prints only with a planned amount (a planned 0
-// counts, RP-70); a goal that measures nothing (`unit` null) prints one with a
-// task too (RP-71). A past or current month always prints, and so does the
+// counts, RP-77); a goal that measures nothing (`unit` null) prints one with a
+// task too (RP-77). A past or current month always prints, and so does the
 // month after the current one when the caller marks it `next`.
 export function printsOnPaper(month: GoalReport["months"][number], unit: string | null, next = false): boolean {
   if (next) return true;

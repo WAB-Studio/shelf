@@ -1,7 +1,6 @@
 import type { Locator } from "@playwright/test";
 
-import { addWeeksToCivilDate, civilDateLabel, todayInZone, weekOf } from "@/lib/zone";
-import { dayBefore } from "@/lib/day/weeks";
+import { addDaysToCivilDate, addWeeksToCivilDate, civilDateLabel, todayInZone, weekOf } from "@/lib/zone";
 
 import { test, expect } from "./fixtures";
 import plan from "../messages/es/plan.json";
@@ -33,16 +32,16 @@ async function expectFigures(line: Locator, figures: string[]) {
 async function seedGoal(db: import("postgres").Sql, personId: string) {
   const monday = weekOf(todayInZone())[0];
   // The horizon is the first day after the goal: the Thursday of week 6.
-  const horizonDay = dayBefore(dayBefore(dayBefore(addWeeksToCivilDate(monday, 6))));
+  const horizonDay = addDaysToCivilDate(addDaysToCivilDate(addDaysToCivilDate(addWeeksToCivilDate(monday, 6), -1), -1), -1);
   const [goal] = await db<{ id: string; name: string }[]>`
     insert into goals.goals (user_id, name, horizon)
     values (${personId}, ${`Meta fechas ${Date.now()}`}, ${horizonDay}::date) returning id, name
   `;
   await db`
     insert into goals.phases (user_id, goal_id, aim, starts_on, ends_on)
-    values (${personId}, ${goal.id}, 'Fundamentos', ${addWeeksToCivilDate(monday, 1)}::date, ${dayBefore(addWeeksToCivilDate(monday, 3))}::date)
+    values (${personId}, ${goal.id}, 'Fundamentos', ${addWeeksToCivilDate(monday, 1)}::date, ${addDaysToCivilDate(addWeeksToCivilDate(monday, 3), -1)}::date)
   `;
-  return { goalId: goal.id, monday, lastDay: dayBefore(horizonDay) };
+  return { goalId: goal.id, monday, lastDay: addDaysToCivilDate(horizonDay, -1) };
 }
 
 for (const [width, height] of WIDTHS) {
@@ -68,7 +67,7 @@ for (const [width, height] of WIDTHS) {
       await from.fill("5");
       await to.fill("5");
       const mondayFive = addWeeksToCivilDate(monday, 4);
-      const sundayFive = dayBefore(addWeeksToCivilDate(monday, 5));
+      const sundayFive = addDaysToCivilDate(addWeeksToCivilDate(monday, 5), -1);
       const live = page.locator("#phase-weeks-hint");
       await expect(live).toContainText(`Del ${civilDateLabel(mondayFive, true)} al ${civilDateLabel(sundayFive, true)}.`);
       await expectFigures(live, [civilDateLabel(mondayFive, true), civilDateLabel(sundayFive, true), "6", civilDateLabel(lastDay)]);
@@ -165,7 +164,7 @@ test("with no week left the form opens empty and offers «Mover el final»", asy
   `;
   await db`
     insert into goals.phases (user_id, goal_id, aim, starts_on, ends_on)
-    values (${person.id}, ${goal.id}, 'Todo', ${todayInZone()}::date, ${dayBefore(horizon)}::date)
+    values (${person.id}, ${goal.id}, 'Todo', ${todayInZone()}::date, ${addDaysToCivilDate(horizon, -1)}::date)
   `;
   const context = await browser.newContext({ storageState: person.sessionFile });
   try {

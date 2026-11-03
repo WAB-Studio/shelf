@@ -128,7 +128,7 @@ function emptyPlan() {
 }
 
 /**
- * Writes a reviewed import draft (RP-37, RP-88, RP-95): a tree of goals up to three levels deep,
+ * Writes a reviewed import draft (RP-130, RP-88, RP-95): a tree of goals up to three levels deep,
  * with the notes of goals and tasks. The draft is judged again here with the schema and the
  * refusals the reading already passed: the client is not trusted, and a refusal left over is a
  * forged or stale draft. A correction nobody touched arrives accepted; this judges what it gets.
@@ -139,7 +139,7 @@ function emptyPlan() {
  * `parent_id` read the table as it stood before the statement, so a parent in the same insert is
  * not yet there (0018). Raw SQL naming the granted columns only (docs/TRAPS.md, "Drizzle's insert
  * builder names every column"); `goals` takes its INSERT grant and its measure columns' UPDATE
- * grant as two statements for the same reason. The same update arms the rhythm (RP-63):
+ * grant as two statements for the same reason. The same update arms the rhythm (RP-102):
  * `plan_seen` as `setRhythm`'s first rhythm. A goal that holds goals has no rhythm (refused above),
  * so its tasks are written fixed to their month, as `fixHolderTasks` leaves them.
  *
@@ -155,7 +155,7 @@ function emptyPlan() {
  * with its name and reason, and the rest is written; only a goal the table refuses fails the call. A matched
  * goal's horizon, measure or rhythm the table or its rules refuse is listed the same way.
  *
- * RP-56: with a `requestId`, a confirm resent after its answer was lost answers the first answer
+ * RP-139: with a `requestId`, a confirm resent after its answer was lost answers the first answer
  * and writes nothing. Two sends of one id wait on each other, so the second reads the first's receipt.
  */
 export async function confirmImport(input: unknown): Promise<ConfirmImportResult> {
@@ -168,7 +168,7 @@ export async function confirmImport(input: unknown): Promise<ConfirmImportResult
     const path = issue.path[0] === "draft" ? issue.path.slice(1) : issue.path;
     return { ok: false, error, at: path.join(".") };
   }
-  // RP-37: a phase that starts before the goal opens begins today, one wholly
+  // RP-130: a phase that starts before the goal opens begins today, one wholly
   // before it is dropped, so the refusals and the rows see the cut draft.
   // A version 2 draft is in minutes already (RP-35).
   const today = todayInZone();
@@ -525,7 +525,7 @@ export async function confirmImport(input: unknown): Promise<ConfirmImportResult
           if (row) failed.push({ path: part.path, name: part.name, reason: row.fed ? "plan.errors.measureFed" : "plan.errors.holderNoMeasure" });
         }
       }
-      // `setRhythm`'s rule (RP-76, RP-63, RP-67): the closed months keep the plan they were lived against, a first
+      // `setRhythm`'s rule (RP-76, RP-102, RP-67): the closed months keep the plan they were lived against, a first
       // rhythm on a time goal arms `plan_seen` and lets the plan place the tasks no fact pins.
       await put(plan.rhythmRows, (values) => sql`
         with v(id, rhythm) as (values ${values}),

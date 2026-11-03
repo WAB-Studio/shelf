@@ -1,9 +1,8 @@
 import type { Browser, Locator, Page } from "@playwright/test";
 
 import { weeksToPhaseSpan } from "@/components/goal/phase-weeks";
-import { dayBefore } from "@/lib/day/weeks";
 import { monthOf } from "@/lib/plan/months";
-import { civilDateInZone } from "@/lib/zone";
+import { addDaysToCivilDate, civilDateInZone } from "@/lib/zone";
 
 import goalMessages from "../messages/es/goal.json";
 import planMessages from "../messages/es/plan.json";
@@ -21,7 +20,7 @@ test.use({ actionTimeout: 6000 });
 
 const DAY_MS = 86_400_000;
 const DAY_BACK = (days: number) => new Date(Date.now() - days * DAY_MS);
-const lastMonth = monthOf(dayBefore(thisMonth));
+const lastMonth = monthOf(addDaysToCivilDate(thisMonth, -1));
 
 const DELETE = goalMessages.delete.action;
 const CONFIRM = goalMessages.delete.confirm;

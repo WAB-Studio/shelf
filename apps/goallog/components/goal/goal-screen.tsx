@@ -20,15 +20,9 @@ import { planMonthList } from "@/lib/plan/roadmap-read";
 import { screenPlanned } from "@/lib/plan/screen-planned";
 import { loadGoal } from "@/lib/queries/goal";
 import { claudeBrief, claudeChatHref } from "@/lib/export/claude-brief";
-import { dayBefore, weekIndexOf } from "@/lib/day/weeks";
+import { weekIndexOf } from "@/lib/day/weeks";
 import { formatQuantity, isTimeUnit, type TimeWords } from "@/lib/units/time";
-import {
-  civilDateInZone,
-  civilDayMonthShort,
-  todayInZone,
-  TIME_ZONE,
-  civilDateLabel,
-} from "@/lib/zone";
+import { addDaysToCivilDate, civilDateInZone, civilDateLabel, civilDayMonthShort, TIME_ZONE, todayInZone } from "@/lib/zone";
 import {
   Button,
   Face,
@@ -109,7 +103,7 @@ function phaseSpanLabel(
 }
 
 /**
- * `Meta.dc.html` (RP-11, RP-14, RP-15): a goal's commitments, their cadence
+ * `Meta.dc.html` (RP-99, RP-14, RP-15): a goal's commitments, their cadence
  * and what satisfies them, and its phases — a retired commitment stays in
  * the list, a phase not in effect today draws outlined rather than filled.
  * The measure is a figure, drawn only once the goal has one (§0.3, 3): a
@@ -123,7 +117,7 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
   const t = await getTranslations();
   const today = todayInZone();
   // A goal with no end has no last day: nothing below reads one.
-  const endDay = goal.horizon === null ? null : dayBefore(goal.horizon);
+  const endDay = goal.horizon === null ? null : addDaysToCivilDate(goal.horizon, -1);
   const endLabel = endDay === null ? null : `${civilDayMonthShort(endDay)} ${endDay.slice(0, 4)}`;
   const openedOn = civilDateInZone(new Date(goal.createdAt));
   const totalWeeks = horizonWeeks(openedOn, goal.horizon);
@@ -602,7 +596,7 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
             {openChildren.map((child) => {
               const node = goal.tree.find((entry) => entry.id === child.id);
               const end = node ? node.horizon : goal.horizon;
-              const last = end === null ? null : dayLabel(dayBefore(end));
+              const last = end === null ? null : dayLabel(addDaysToCivilDate(end, -1));
               const count = openBelow(child.id);
               const until =
                 last === null

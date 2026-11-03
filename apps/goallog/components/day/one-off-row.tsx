@@ -41,7 +41,7 @@ export type OneOffRowProps = {
  * distinguish once it is on the list, since `completeOneOff` is what takes
  * it off (`app/actions/one-offs.ts`), never a second state drawn here.
  *
- * Two tap targets, two acts (RP-57): the mark still finishes it, a time task
+ * Two tap targets, two acts (RP-61): the mark still finishes it, a time task
  * included (RP-147) (`onLeadingClick`), the name opens its sheet (`onClick`) —
  * `Row`'s own split, so neither tap reaches the other's act by mistake.
  */

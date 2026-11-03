@@ -1,14 +1,13 @@
 import { test, expect } from "./fixtures";
-import { dayBefore } from "@/lib/day/weeks";
 import { monthOf } from "@/lib/plan/months";
-import { todayInZone } from "@/lib/zone";
+import { addDaysToCivilDate, todayInZone } from "@/lib/zone";
 
 // `MesesListaDetalle.dc.html`, RNP-17: in the months list beside
 // the open month, each chevron stays inside its row, the reached figures share
 // one left edge, and the page has one `h1` with the month's heading an `h2`.
 const thisMonth = monthOf(todayInZone());
-const lastMonth = monthOf(dayBefore(thisMonth));
-const monthBefore = monthOf(dayBefore(lastMonth));
+const lastMonth = monthOf(addDaysToCivilDate(thisMonth, -1));
+const monthBefore = monthOf(addDaysToCivilDate(lastMonth, -1));
 
 for (const width of [1024, 1440]) {
   test(`at ${width}px the months list keeps its chevrons in their rows, its figures in one column and one h1`, async ({

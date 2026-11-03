@@ -200,7 +200,7 @@ export function shapeGoalList(
     open: list.open.map(one),
     ended: list.ended.map(one),
     archived: list.archived.map(one),
-    // Habits with no goal (RP-100), live and retired.
+    // Habits with no goal (RP-113), live and retired.
     looseHabits: loose.map((habit) => ({ ...shapeGoalCommitment(habit), note: habit.note })),
   };
 }
@@ -223,7 +223,7 @@ export function shapeGoal(view: GoalView) {
         : { month: monthKey(view.month.month), ...shapeLine(view.month, unit) },
     phases: view.phases.map(shapePhase),
     commitments: view.commitments.map(shapeGoalCommitment),
-    // The goal's units per month (RP-50); the AI sets it with `set_rhythm` (RP-119). Null for a goal that holds goals.
+    // The goal's units per month (RP-50); the AI sets it with `set_rhythm` (RP-139). Null for a goal that holds goals.
     rhythm: amountOrNull(view.rhythm, unit),
     // The day the plan's last task fills, null while it cannot say.
     end: view.roadmap.end,
@@ -335,7 +335,7 @@ export function shapeDay(loaded: LoadedDay) {
       };
     }),
     slots: view.slots.map(slotOf),
-    // Habits with no goal (RP-100): the commitments and what they ask today.
+    // Habits with no goal (RP-113): the commitments and what they ask today.
     loose: {
       commitments: loaded.loose.commitments.map((commitment) => ({
         id: commitment.id,

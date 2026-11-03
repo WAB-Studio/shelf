@@ -1,9 +1,8 @@
 import type { Locator, Page } from "@playwright/test";
 import type postgres from "postgres";
 
-import { dayBefore } from "@/lib/day/weeks";
 import { monthOf, nextMonth } from "@/lib/plan/months";
-import { todayInZone } from "@/lib/zone";
+import { addDaysToCivilDate, todayInZone } from "@/lib/zone";
 
 import { test as base, expect } from "./fixtures";
 
@@ -215,7 +214,7 @@ for (const width of [390, 1440]) {
     test("a task carried over from last month counts in the header, undone or done", async ({ mine: page, db, person }) => {
       const goalId = await seedGoal(db, person.id, 720);
       try {
-        const lastMonth = `${monthOf(dayBefore(m0)).slice(0, 7)}-01`;
+        const lastMonth = `${monthOf(addDaysToCivilDate(m0, -1)).slice(0, 7)}-01`;
         await db`insert into goals.one_offs (user_id, goal_id, name, estimate, position, in_plan, planned_month)
           values (${person.id}, ${goalId}, 'Arrastrada pendiente', 60, 1, true, ${lastMonth}::date)`;
         const [done] = await db<{ id: string }[]>`

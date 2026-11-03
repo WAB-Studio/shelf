@@ -1,9 +1,10 @@
 import type { Locator, Page } from "@playwright/test";
 
-import { dayBefore, horizonForWeeks } from "@/lib/day/weeks";
+import { horizonForWeeks } from "@/lib/day/weeks";
 
 import { test, expect, type Person } from "./fixtures";
 import { countActionPosts, dateWords, expectTitle, openAs, seedGoal, MINUTES, today, type Db } from "./meta-arbol-seed";
+import { addDaysToCivilDate } from "../lib/zone";
 
 // Module 872 (RP-79), board `JerarquiaFinRechazado`: the end of a goal cannot pass the end of the
 // goal above (RP-79) nor fall before the end of a goal inside it. The sheet «¿Cuántas semanas?» says
@@ -65,7 +66,7 @@ test("shortening a general's end before a goal inside it lists that goal on the 
     // g1 ends in week 12 and does not pass 15; g2 ends in week 20 and does.
     await expect(sheet.getByText("1 meta termina después de esta fecha", { exact: true })).toBeVisible();
     await expect(sheet).toContainText(tree.names.g2);
-    expect(dateWords(dayBefore(tree.at(20))).test(await sheet.innerText())).toBe(true);
+    expect(dateWords(addDaysToCivilDate(tree.at(20), -1)).test(await sheet.innerText())).toBe(true);
     await expect(sheet.getByText(tree.names.g1)).toHaveCount(0);
     await expect(weeks).toHaveAttribute("aria-invalid", "true");
     const confirm = sheet.getByRole("button", { name: "Moverlo", exact: true });
@@ -149,7 +150,7 @@ test("a goal inside cannot end after the goal above: the sentence names it and i
     await weeks.fill("31");
     const sentence = sheet.getByText(endPastAbove(tree.names.G));
     await expect(sentence).toBeVisible();
-    expect(dateWords(dayBefore(tree.at(30))).test(await sentence.innerText())).toBe(true);
+    expect(dateWords(addDaysToCivilDate(tree.at(30), -1)).test(await sentence.innerText())).toBe(true);
     await expect(weeks).toHaveAttribute("aria-invalid", "true");
     const confirm = sheet.getByRole("button", { name: "Moverlo", exact: true });
     await expect(confirm).toBeDisabled();
@@ -193,7 +194,7 @@ test("a goal that ended up in the way after the page loaded: saving shows the se
 
     const sentence = sheet.getByText(belowEndsLater(tree.names.g2));
     await expect(sentence).toBeVisible();
-    expect(dateWords(dayBefore(tree.at(18))).test(await sentence.innerText())).toBe(true);
+    expect(dateWords(addDaysToCivilDate(tree.at(18), -1)).test(await sentence.innerText())).toBe(true);
     expect(calls).toHaveLength(1);
     expect(await horizonOf(db, tree.G)).toBe(tree.at(30));
     await expect(page.getByRole("dialog").getByText(belowEndsLater(tree.names.g2))).toBeVisible();

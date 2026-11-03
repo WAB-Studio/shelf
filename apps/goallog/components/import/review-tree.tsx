@@ -11,12 +11,11 @@ import { correctionKeys, declinedKeys, noticeKey, outKey, remapped } from "@/lib
 import { changesAnything, type Difference } from "@/lib/import/differences";
 import type { reviewTree, ReviewNode } from "@/lib/import/review";
 import { phaseCuts, phaseDrops } from "@/lib/import/draft";
-import { dayBefore } from "@/lib/day/weeks";
 import { weekdaysSentence } from "@/lib/day/row-phrases";
 import { shortMonth } from "@/lib/dates/short-month";
 import { formatQuantity, isTimeUnit } from "@/lib/units/time";
 import { monthWord } from "@/lib/plan/month-name";
-import { civilDateToDate } from "@/lib/zone";
+import { addDaysToCivilDate, civilDateToDate } from "@/lib/zone";
 import { useTimeWords } from "@/components/ui/figure";
 import { Button, CheckRow, Figure, Flex, Fold, Panel, Section, Text } from "@/components/ui";
 import { messageKey, type MessageKey } from "@/i18n/translator";
@@ -207,7 +206,7 @@ export function ReviewTree({
   const metaOf = (node: ReviewNode): string => {
     const parts: string[] = [classOf(node)];
     const goal = goalOf(node);
-    if (node.kind === "goal" || node.kind === "group") parts.push(goal.horizon === null ? t("import.review.noEnd") : t("import.review.horizonUntil", { date: dayShort(dayBefore(goal.horizon)) }));
+    if (node.kind === "goal" || node.kind === "group") parts.push(goal.horizon === null ? t("import.review.noEnd") : t("import.review.horizonUntil", { date: dayShort(addDaysToCivilDate(goal.horizon, -1)) }));
     else if (node.kind === "phase") {
       const phase = goal.phases[Number(node.path.split(".")[3])];
       parts.push(`${dayShort(phase.startsOn)} – ${dayShort(phase.endsOn)}`);
@@ -425,7 +424,7 @@ export function ReviewTree({
   function differenceLine(d: Difference, unit: string): string {
     switch (d.kind) {
       case "horizon":
-        return t("import.review.diff.horizon", { to: dayShort(dayBefore(d.to)) });
+        return t("import.review.diff.horizon", { to: dayShort(addDaysToCivilDate(d.to, -1)) });
       case "note":
         return t("import.review.diff.note", { shape: d.from === null ? "set" : "change", from: clip(d.from ?? ""), to: clip(d.to) });
       case "measure":

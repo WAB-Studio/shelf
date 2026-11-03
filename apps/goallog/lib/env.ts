@@ -8,7 +8,7 @@ export const env = createEnv({
   server: {
     // Supabase transaction pooler (6543), used by the running app.
     DATABASE_URL: z.url(),
-    // Reads a pasted or uploaded plan (RP-37). Unset, the import is off.
+    // Reads a pasted or uploaded plan (RP-130). Unset, the import is off.
     OPENAI_API_KEY: z.string().optional(),
     // Test servers only: answers the plan reader from a fixture, never the model.
     PULSAR_MODEL_STUB: z.string().optional(),

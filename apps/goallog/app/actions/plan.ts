@@ -16,12 +16,11 @@ import {
   type PlacementRefusal,
 } from "@/lib/goals/placement";
 import { refusalKey, refusalName } from "@/lib/goals/refusal-key";
-import { dayBefore } from "@/lib/day/weeks";
 import { fillPlan, type PlanTask } from "@/lib/plan/roadmap";
 import { getPerson, withGoalsDb, type Transaction } from "@/lib/session";
 import { isClosed } from "@/lib/validation/closed";
 import { horizonRefusal, moveHorizonSchema, type MoveHorizonInput } from "@/lib/validation/horizon";
-import { civilDateInZone, clockOverride, todayInZone } from "@/lib/zone";
+import { addDaysToCivilDate, civilDateInZone, clockOverride, todayInZone } from "@/lib/zone";
 import {
   addCommitmentSchema,
   addPhaseSchema,
@@ -132,10 +131,10 @@ function refused(refusal: PlacementRefusal): TreeRefusal {
   if (name === null) return { ok: false, error };
   // Only a goal with an end can be outlasted, so the end read here is never null.
   if (refusal.code === "endPastAbove" && refusal.above.horizon !== null) {
-    return { ok: false, error, values: { name, date: dayBefore(refusal.above.horizon) } };
+    return { ok: false, error, values: { name, date: addDaysToCivilDate(refusal.above.horizon, -1) } };
   }
   if (refusal.code === "belowEndsLater" && refusal.below.horizon !== null) {
-    return { ok: false, error, values: { name, date: dayBefore(refusal.below.horizon) } };
+    return { ok: false, error, values: { name, date: addDaysToCivilDate(refusal.below.horizon, -1) } };
   }
   return { ok: false, error, values: { name } };
 }
@@ -176,7 +175,7 @@ async function treeConstraintRefusal(error: unknown): Promise<TreeRefusal | null
       )
     : [];
   if (!named) return { ok: false, error: key };
-  const date = constraint === "goals_tree_end" && named.horizon !== null ? { date: dayBefore(named.horizon) } : {};
+  const date = constraint === "goals_tree_end" && named.horizon !== null ? { date: addDaysToCivilDate(named.horizon, -1) } : {};
   return { ok: false, error: key, values: { name: named.name, ...date } };
 }
 
@@ -270,7 +269,7 @@ const personLock = (personId: string) =>
   sql`select pg_advisory_xact_lock(hashtextextended(${personId}::text, 1))`;
 
 /**
- * Opens a goal with a name and a horizon alone (§0.3, 3; RP-11). The measure
+ * Opens a goal with a name and a horizon alone (§0.3, 3; RP-99). The measure
  * columns are never named in this INSERT, so they land null by the shape of
  * the statement — `goals`' INSERT grant does not even list them. Named
  * columns only (docs/TRAPS.md, "Drizzle's insert builder names every
@@ -279,7 +278,7 @@ const personLock = (personId: string) =>
  * the grant refuses just as surely as a real value.
  *
  * With a `requestId` the person's lock comes first and the receipt is read after it, so a resend
- * racing its own first try waits for it and answers what it answered (RP-56). A refusal leaves no
+ * racing its own first try waits for it and answers what it answered (RP-139). A refusal leaves no
  * receipt: the same id may still write.
  */
 export async function createGoal(input: CreateGoalInput): Promise<CreateGoalResult> {
@@ -375,7 +374,7 @@ export async function createGoal(input: CreateGoalInput): Promise<CreateGoalResu
  * and both insert — driven live, two overlapping spans both landed. The
  * second call blocks until the first commits or rolls back, then re-reads the
  * phases the first one just wrote and is refused if it overlaps. A
- * `requestId` is looked up after both locks, as `createGoal` does (RP-56).
+ * `requestId` is looked up after both locks, as `createGoal` does (RP-139).
  */
 export async function addPhase(input: AddPhaseInput): Promise<AddPhaseResult> {
   const parsed = addPhaseSchema.safeParse(input);
@@ -450,7 +449,7 @@ export async function addPhase(input: AddPhaseInput): Promise<AddPhaseResult> {
  * a second habit racing the first waits for its unit and converts to it.
  *
  * With a `requestId` the person's lock and the receipt come before any read,
- * so a habit with no goal replays too (RP-56).
+ * so a habit with no goal replays too (RP-139).
  */
 export async function addCommitment(input: AddCommitmentInput): Promise<AddCommitmentResult> {
   const parsed = addCommitmentSchema.safeParse(input);
@@ -469,7 +468,7 @@ export async function addCommitment(input: AddCommitmentInput): Promise<AddCommi
         if (stored !== null) return stored as AddCommitmentResult;
       }
 
-      // A habit with no goal reads and touches no goal (RP-100).
+      // A habit with no goal reads and touches no goal (RP-113).
       const goalId = data.goalId;
       let goalUnit: string | null = null;
       if (goalId !== undefined) {
@@ -556,7 +555,7 @@ export async function addCommitment(input: AddCommitmentInput): Promise<AddCommi
 }
 
 /**
- * Renames a loose habit and rewrites its note (RP-104). One statement: the UPDATE names `name`
+ * Renames a loose habit and rewrites its note (RP-135). One statement: the UPDATE names `name`
  * and `note` alone, and a sibling CTE reads the same row without the `retired_at` filter, so
  * «retired» and «missing» are told apart without a second round trip. A goal's commitment,
  * another person's and a missing id all read as not found.
@@ -601,7 +600,7 @@ export async function editHabit(input: EditHabitInput): Promise<EditHabitResult>
 }
 
 /**
- * Retires a commitment (RP-13). One UPDATE of `retired_at` alone: what a fact
+ * Retires a commitment (RP-127). One UPDATE of `retired_at` alone: what a fact
  * names is retired, never deleted (`deleteCommitment` in `plan-edit.ts` deletes
  * only one no fact names). Scoped by `(id, userId)` in the query itself, the way
  * `undoFact` scopes its delete: a commitment belonging to someone else
@@ -938,7 +937,7 @@ export async function moveHorizon(input: MoveHorizonInput): Promise<MoveHorizonR
 }
 
 /**
- * Gives a goal that measures nothing yet its name and unit (RP-117): the same act for the screen
+ * Gives a goal that measures nothing yet its name and unit (RP-134): the same act for the screen
  * and the AI. A measure once put never changes, so the update runs `where measure_name is null`
  * and the same statement reads back why it did not write. Only the goal's two columns move: no
  * commitment, rhythm or amount is created. Hours are kept as minutes, as a commitment keeps them (RP-66).

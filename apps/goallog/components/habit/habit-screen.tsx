@@ -10,7 +10,7 @@ import type { HabitView } from "@/lib/queries/habit";
 import { civilDayMonthYear } from "@/lib/zone";
 
 /**
- * `HabitoPantalla` (RP-104, RP-105, RP-106): one loose habit, its months and
+ * `HabitoPantalla` (RP-135, RP-113, RP-120): one loose habit, its months and
  * its acts: edit and retire, and while no fact names it (RP-127) its cadence and its delete. A retired habit keeps its months and offers none.
  * `back` and `seeAllHref` arrive decided: the page owns the query string.
  */

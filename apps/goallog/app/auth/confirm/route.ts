@@ -45,7 +45,7 @@ function failure(request: NextRequest, headers: Headers, reason: FailureReason):
 }
 
 /**
- * Lands the magic link (RP-18), copied from `apps/wordbook/app/auth/confirm`.
+ * Lands the magic link (RP-136), copied from `apps/wordbook/app/auth/confirm`.
  * No row to seed: there is no `app_users` here, `getPerson()` reads the
  * verified JWT alone.
  */

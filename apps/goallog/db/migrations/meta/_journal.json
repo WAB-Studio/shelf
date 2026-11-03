@@ -225,6 +225,13 @@
       "when": 1793670295032,
       "tag": "0032_horas_por_confirmar",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1793718226230,
+      "tag": "0033_guardas_de_dia_y_tiempo",
+      "breakpoints": true
     }
   ]
 }

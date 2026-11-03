@@ -22,8 +22,8 @@ import {
   Text,
   TextLink,
 } from "@/components/ui";
-import { dayBefore, horizonWeeksOf, weekIndexOf } from "@/lib/day/weeks";
-import { civilDateLabel } from "@/lib/zone";
+import { horizonWeeksOf, weekIndexOf } from "@/lib/day/weeks";
+import { addDaysToCivilDate, civilDateLabel } from "@/lib/zone";
 
 import { MAX_GOAL_WEEKS, phaseSpanKeeping } from "./phase-weeks";
 import { messageKey, type MessageKey } from "@/i18n/translator";
@@ -35,7 +35,7 @@ export type PhaseFormProps = {
   // (`civilDateInZone`) by the page: `weeksToPhaseSpan` is a pure function
   // over civil dates alone, never the browser's own zone.
   openedOn: string;
-  // A goal names one horizon (RP-11); a phase past it is refused here first,
+  // A goal names one horizon (RP-99); a phase past it is refused here first,
   // then again, authoritative, inside `addPhase`'s own transaction.
   // Null: the goal never ends, and no week is past it.
   horizon: string | null;
@@ -104,7 +104,7 @@ export function PhaseForm({
 
   const fig = { fig: (chunks: ReactNode) => <Figure variant="meta" value={chunks} /> };
   const lastWeek = horizonWeeksOf(openedOn, horizon) ?? MAX_GOAL_WEEKS;
-  const lastDay = horizon === null ? "" : civilDateLabel(dayBefore(horizon));
+  const lastDay = horizon === null ? "" : civilDateLabel(addDaysToCivilDate(horizon, -1));
   const fromTyped = weekSchema.safeParse(fromWeek);
   const toTyped = weekSchema.safeParse(toWeek);
   const fromData = fromTyped.success ? fromTyped.data : null;

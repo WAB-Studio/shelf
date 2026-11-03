@@ -4,7 +4,6 @@ import { getTranslations } from "next-intl/server";
 
 import { type Translator } from "@/i18n/translator";
 import { cadencePhrase } from "@/lib/day/row-phrases";
-import { dayBefore } from "@/lib/day/weeks";
 import {
   civilSpan,
   goalSections,
@@ -20,7 +19,7 @@ import { monthWord } from "@/lib/plan/month-name";
 import { screenPlanned } from "@/lib/plan/screen-planned";
 import { evidenceUnitWords } from "@/lib/evidence/unit-words";
 import { formatCount, formatQuantity, formatTime, isTimeUnit } from "@/lib/units/time";
-import { civilDateToDate, civilDayMonthYear } from "@/lib/zone";
+import { addDaysToCivilDate, civilDateToDate, civilDayMonthYear } from "@/lib/zone";
 import {
   Figure,
   Flex,
@@ -294,7 +293,7 @@ function InsideRow({
   t: Translator<"export">;
 }) {
   const words = useTimeWords();
-  const until = goal.horizon === null ? null : dateWithYear.format(civilDateToDate(dayBefore(goal.horizon)));
+  const until = goal.horizon === null ? null : dateWithYear.format(civilDateToDate(addDaysToCivilDate(goal.horizon, -1)));
   const planned =
     goal.endedOn === null && goal.unit !== null
       ? screenPlanned(goal.thisMonth.planned, (goal.ownMonths ?? []).includes(`${today.slice(0, 7)}-01`))
@@ -389,10 +388,10 @@ function GoalPart({
   // Paper never opens «ver todo»: a goal with no end prints its last 12 months and those ahead set by hand, folds the
   // rest ahead into the rhythm's line and, when it has none, into the «sin monto» line. `?todo=1` only widens the screen.
   const cut = foldsMonths(goal.horizon, goal.months)
-    ? endlessCut(goal.months, { all: false, rhythm: goal.rhythm, ends: goal.horizon === null ? undefined : { lastDay: dayBefore(goal.horizon) } })
+    ? endlessCut(goal.months, { all: false, rhythm: goal.rhythm, ends: goal.horizon === null ? undefined : { lastDay: addDaysToCivilDate(goal.horizon, -1) } })
     : null;
   const paperMonths = cut ? [...cut.shown, ...cut.empty.filter((month) => printsOnPaper(month, goal.unit))].sort((a, b) => a.month.localeCompare(b.month)) : goal.months;
-  // Next month prints as a row though it is empty (RP-110).
+  // Next month prints as a row though it is empty (RP-120).
   const printed = (month: GoalReport["months"][number]) => printsOnPaper(month, goal.unit, cut?.next?.month === month.month);
   const foldedMonths = cut ? cut.empty.filter((month) => !printsOnPaper(month, goal.unit)) : goal.months.filter((month) => !printsOnPaper(month, goal.unit));
   const paperKeys = new Set(paperMonths.map((month) => month.month));
@@ -493,7 +492,7 @@ function GoalPart({
   const sections: (GoalSection | "inside")[] = goalSections({ ...paperGoal, months: [...paperMonths, ...foldedMonths] });
   if (groupTasks.length > 0 && !sections.includes("tasks")) sections.splice(sections.indexOf("months") === -1 ? sections.length : sections.indexOf("months"), 0, "tasks");
   if (held) sections.splice(sections.includes("toDate") ? sections.indexOf("toDate") + 1 : 0, 0, "inside");
-  const until = goal.horizon === null ? null : dateWithYear.format(civilDateToDate(dayBefore(goal.horizon)));
+  const until = goal.horizon === null ? null : dateWithYear.format(civilDateToDate(addDaysToCivilDate(goal.horizon, -1)));
   const thisMonth = monthWord(today);
 
   const measureLine =
@@ -780,7 +779,7 @@ function GoalPart({
         const weekDayOf = (day: string) => (civilDateToDate(day).getUTCDay() + 6) % 7;
         const weekNames = t.raw("weekDays") as string[];
         // `endsOn` runs to Sunday; the goal's last day cuts it.
-        const lastDay = goal.horizon === null ? null : dayBefore(goal.horizon);
+        const lastDay = goal.horizon === null ? null : addDaysToCivilDate(goal.horizon, -1);
         const weekLast = week ? (lastDay !== null && lastDay < week.endsOn ? lastDay : week.endsOn) : null;
         const weekEdges =
           week && weekLast
@@ -992,7 +991,7 @@ function ReportSummary({ report, t }: { report: Report; t: Translator<"export"> 
   const sunday = new Date(monday);
   sunday.setUTCDate(sunday.getUTCDate() + 6);
   // A week across two months names both, so «28 al 3» never reads without its months, and the
-  // year after them, which every date on paper carries (RP-49).
+  // year after them, which every date on paper carries (RP-77).
   const crosses = monday.getUTCMonth() !== sunday.getUTCMonth();
   const shortMonth = (date: Date) => monthShort.format(date).replace(".", "").slice(0, 3);
   const weekHead = t("summary.weekHead", {
@@ -1062,8 +1061,8 @@ function ReportSummary({ report, t }: { report: Report; t: Translator<"export"> 
 /**
  * `ReporteTareas.dc.html`, `ReporteMesesSemanas.dc.html`,
  * `ReporteImpresoTareas.dc.html`, `ReporteMarcoEscritorio.dc.html` and
- * `ReporteMarcoEscritorio1024.dc.html` (RP-49), on top of `ReporteSinEvidencia.dc.html`
- * and `ReporteVacio.dc.html` (RP-49, RP-35): the whole report as one page the
+ * `ReporteMarcoEscritorio1024.dc.html` (RP-77), on top of `ReporteSinEvidencia.dc.html`
+ * and `ReporteVacio.dc.html` (RP-77, RP-35): the whole report as one page the
  * browser prints. A goal prints the sections `goalSections` names and no
  * others, so one that measures nothing never prints a zero; a goal that has
  * ended prints its name, its last day and what it reached, and goes last.

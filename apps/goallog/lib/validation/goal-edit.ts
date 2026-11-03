@@ -9,7 +9,7 @@ export const deleteGoalSchema = z.object({ goalId }, { error: "plan.errors.goalI
 export const removeGoalMeasureSchema = z.object({ goalId }, { error: "plan.errors.goalInvalid" });
 export const removeRhythmSchema = z.object({ goalId }, { error: "plan.errors.goalInvalid" });
 
-// A new measure is worded as the first one is (RP-117), so the same name and unit rules judge it.
+// A new measure is worded as the first one is (RP-134), so the same name and unit rules judge it.
 export const changeGoalMeasureSchema = setGoalMeasureSchema;
 
 export type DeleteGoalInput = z.infer<typeof deleteGoalSchema>;

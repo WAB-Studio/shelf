@@ -1,7 +1,6 @@
 import type postgres from "postgres";
 
-import { dayBefore } from "@/lib/day/weeks";
-import { addWeeksToCivilDate, civilDateInZone, civilDayMonthYear, todayInZone, weekOf } from "@/lib/zone";
+import { addDaysToCivilDate, addWeeksToCivilDate, civilDateInZone, civilDayMonthYear, todayInZone, weekOf } from "@/lib/zone";
 
 import { test, expect } from "./fixtures";
 
@@ -52,7 +51,7 @@ test("an ended goal reads «terminó el» and yesterday, offers both acts and ne
       month: "long",
       year: "numeric",
       timeZone: "UTC",
-    }).formatToParts(new Date(`${dayBefore(todayInZone())}T12:00:00Z`));
+    }).formatToParts(new Date(`${addDaysToCivilDate(todayInZone(), -1)}T12:00:00Z`));
     const part = (type: string) => yesterday.find((p) => p.type === type)!.value;
     await expect(
       page.getByText(`terminó el ${part("weekday")} ${part("day")} de ${part("month")} de ${part("year")}`, { exact: true }),

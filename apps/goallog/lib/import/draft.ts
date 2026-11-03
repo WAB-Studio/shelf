@@ -1,6 +1,5 @@
 import { z } from "zod";
 
-import { dayBefore } from "@/lib/day/weeks";
 import { lastMonthOf, monthsOfSpan, nextMonth } from "@/lib/plan/months";
 import { isEnglishMinuteUnit, isHourUnit, isTimeUnit } from "@/lib/units/time";
 import { addCommitmentSchema, addPhaseSchema, createGoalSchema, phaseWithinHorizon, phasesOverlap } from "@/lib/validation/plan";
@@ -9,7 +8,7 @@ import { setMonthBudgetSchema } from "@/lib/validation/budget";
 import { createOneOffSchema, noteSchema } from "@/lib/validation/one-off";
 import { GOAL_NOTE_MAX } from "@/lib/validation/plan";
 
-import { todayInZone } from "@/lib/zone";
+import { addDaysToCivilDate, todayInZone } from "@/lib/zone";
 
 import { cleanLine, shortenName as shorten } from "./clean";
 import { reshapeTasks } from "./reshape";
@@ -79,7 +78,7 @@ const commitment = z
 
 const estimate = createOneOffSchema.shape.estimate.nonoptional();
 
-// The note is the template's alone (RP-45): the model is sent the draft
+// The note is the template's alone (RP-88): the model is sent the draft
 // without it, and a draft that carries none reads as it always did.
 function draftSchema(withNote: boolean) {
   // Typed as present either way: the types are the template's, the model's schema just leaves the key out.
@@ -92,7 +91,7 @@ function draftSchema(withNote: boolean) {
     children: z.array(z.strictObject({ name: createOneOffSchema.shape.name, estimate, ...note })),
   });
 
-  // The rhythm is the template's alone (RP-63), as the note is: the model's schema leaves the key out.
+  // The rhythm is the template's alone (RP-102), as the note is: the model's schema leaves the key out.
   const rhythm = (withNote ? { rhythm: setRhythmSchema.shape.amount.nullable().default(null) } : {}) as {
     rhythm: z.ZodDefault<z.ZodNullable<typeof setRhythmSchema.shape.amount>>;
   };
@@ -158,7 +157,7 @@ function refusalsV1(draft: ImportDraftV1, today: string): DraftRefusal[] {
 
     // A goal whose end already passed has no span: it is refused whole.
     const span = past ? null : new Set(monthsOfSpan(today, horizon, today));
-    const lastDay = dayBefore(horizon ?? nextMonth(lastMonthOf(today, null, today)));
+    const lastDay = addDaysToCivilDate(horizon ?? nextMonth(lastMonthOf(today, null, today)), -1);
     // Which side of the span a month falls on: before today's month or after the goal's last.
     const outsideSpan = (path: string, m: string) => {
       if (span === null || span.has(`${m}-01`)) return;
@@ -913,7 +912,7 @@ function refusalsV2(draft: ImportDraft, today: string): DraftRefusal[] {
     });
 
     const span = horizonOk || horizon === null ? new Set(monthsOfSpan(today, horizon, today)) : null;
-    const lastDay = horizon === null ? dayBefore(nextMonth(lastMonthOf(today, null, today))) : horizonIssue === null ? dayBefore(horizon) : horizon;
+    const lastDay = horizon === null ? addDaysToCivilDate(nextMonth(lastMonthOf(today, null, today)), -1) : horizonIssue === null ? addDaysToCivilDate(horizon, -1) : horizon;
     const outsideSpan = (path: string, m: string) => {
       if (span === null || span.has(`${m}-01`)) return;
       if (m < today.slice(0, 7)) refuse(path, "import.errors.monthBeforeStart", { first: today.slice(0, 7) });

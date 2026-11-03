@@ -47,7 +47,7 @@ function overrideOf(tool: string, key: string): string | undefined {
 
 // What an act's error key says, in Spanish. The key survives beside it so a
 // caller can branch on it; an unknown one is `mcp.errors.unknown`, never an
-// echo of its input. `values` fills a refusal's `{name}`, `{date}` (RP-56) and `{quantity}`.
+// echo of its input. `values` fills a refusal's `{name}`, `{date}` (RP-139) and `{quantity}`.
 // With a `tool`, `mcp.errors.byTool["<tool>:<key>"]` then `["*:<key>"]` say what to fix.
 export function errorOf(
   key: string,

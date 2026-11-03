@@ -1,13 +1,12 @@
 import { test, expect } from "./fixtures";
-import { dayBefore } from "@/lib/day/weeks";
 import { monthOf } from "@/lib/plan/months";
-import { todayInZone } from "@/lib/zone";
+import { addDaysToCivilDate, todayInZone } from "@/lib/zone";
 
 // `MesesConAño.dc.html`, option B (approved 2026-10-10): the narrow table's label column holds «septiembre 2027» on one line, at 360
 // and in the 320px list beside an open month at 1024. It was 112px in the 12px mono; at the 14px floor of reading text it is 128px.
 
 const thisMonth = monthOf(todayInZone());
-const lastMonth = monthOf(dayBefore(thisMonth));
+const lastMonth = monthOf(addDaysToCivilDate(thisMonth, -1));
 
 for (const width of [360, 1024]) {
   test(`at ${width}px every month label in the months list is 128px wide`, async ({ person, browser, baseURL, db }) => {

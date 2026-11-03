@@ -1,8 +1,7 @@
-import { dayBefore } from "./meta-arbol-seed";
 import { MINUTES, PAGES, openedOnDay, seedOpenGoal } from "./metas-sin-final-seed";
 import { monthStartOf, shift, TODAY } from "./sin-final-seed";
 import { openedIn } from "./mes-siguiente-seed";
-import { civilDateToDate } from "@/lib/zone";
+import { addDaysToCivilDate, civilDateToDate } from "@/lib/zone";
 
 import type { Db } from "./mes-siguiente-seed";
 import type { Person } from "./fixtures";
@@ -20,7 +19,7 @@ export function horizonIn(offset: number): string {
   while (weekday(day) !== 1) day = shift(day, 1);
   return day;
 }
-export const lastDayIn = (offset: number) => dayBefore(horizonIn(offset));
+export const lastDayIn = (offset: number) => addDaysToCivilDate(horizonIn(offset), -1);
 export const lineWords = (count: number, offset: number) =>
   `${count} ${count === 1 ? "mes" : "meses"} más, hasta el ${wordsOf(lastDayIn(offset))}`;
 
@@ -58,7 +57,7 @@ export async function seedMudanza(db: Db, person: Person) {
 export async function seedTerminada(db: Db, person: Person, months = 20, name = "Pintar") {
   let horizon = TODAY;
   while (weekday(horizon) !== 1) horizon = shift(horizon, -1);
-  const last = dayBefore(horizon).slice(0, 7) === monthStartOf(0).slice(0, 7) ? 0 : -1;
+  const last = addDaysToCivilDate(horizon, -1).slice(0, 7) === monthStartOf(0).slice(0, 7) ? 0 : -1;
   const id = await seedOpenGoal(db, person, { name, unit: PAGES, horizon, rhythm: 40, created: openedIn(last - (months - 1)) });
   return { id, last };
 }
