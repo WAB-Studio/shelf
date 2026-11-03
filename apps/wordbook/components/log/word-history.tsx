@@ -5,6 +5,7 @@ import NextLink from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useFormatter, useTranslations } from "next-intl";
 
+import { deviceZone, yearWhenDifferent } from "@/lib/format/zone";
 import { readLemmaHistory, readLemmaKey, readWordStudy, type WordHistoryRow } from "@/lib/log/summary";
 import { splitTranslations } from "@/lib/log/translation-line";
 import { answerSenses } from "@/lib/review/sense";
@@ -234,16 +235,16 @@ export function WordHistory() {
   const leadSense = answer === null ? null : answerSenses(answer)[0];
   const gloss =
     fullGloss === null ? null : (leadSense?.translations[0] ?? splitTranslations(fullGloss)[0] ?? null);
+  const today = new Date();
   // The provider formats in the server's zone; the reader's is the browser's.
-  const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const timeZone = deviceZone();
   const subtitleValues = {
     count: state.total,
-    date: format.dateTime(new Date(earliest.at), { day: "numeric", month: "long", timeZone }),
+    date: format.dateTime(new Date(earliest.at), { day: "numeric", month: "long", timeZone, ...yearWhenDifferent(earliest.at, today.getTime(), timeZone) }),
   };
   // The lemma heads the page, in the casing a row wrote it when one did.
   const heading = key.toLowerCase() === latest.text.toLowerCase() ? latest.text : key;
 
-  const today = new Date();
   const yesterday = new Date(today);
   yesterday.setDate(yesterday.getDate() - 1);
   const dayOf = (value: Date) => format.dateTime(value, { year: "numeric", month: "numeric", day: "numeric", timeZone });
@@ -253,7 +254,7 @@ export function WordHistory() {
     const day = dayOf(moment);
     if (day === dayOf(today)) return t("word.timeToday", { time });
     if (day === dayOf(yesterday)) return t("word.timeYesterday", { time });
-    return t("word.timeOther", { date: format.dateTime(moment, { day: "numeric", month: "short", timeZone }), time });
+    return t("word.timeOther", { date: format.dateTime(moment, { day: "numeric", month: "short", timeZone, ...yearWhenDifferent(at, today.getTime(), timeZone) }), time });
   };
 
   return (
