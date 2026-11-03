@@ -175,10 +175,10 @@ after(async () => {
   }
 });
 
-test("the six read tools are registered, and nothing else", () => {
+test("the seven read tools are registered, and nothing else", () => {
   assert.deepEqual(
     [...handlers.keys()].sort(),
-    ["get_goal", "get_month", "get_report", "get_today", "list_goals", "list_loose_one_offs"],
+    ["get_goal", "get_month", "get_report", "get_time", "get_today", "list_goals", "list_loose_one_offs"],
   );
 });
 
@@ -370,11 +370,11 @@ async function registry(): Promise<Map<string, Registered>> {
   return seen;
 }
 
-test("the registry holds twenty-six tools: six read and twenty write, each with the annotations its effect deserves", async () => {
+test("the registry holds twenty-eight tools: seven read and twenty-one write, each with the annotations its effect deserves", async () => {
   const seen = await registry();
-  assert.equal(seen.size, 26);
+  assert.equal(seen.size, 28);
   const reads = new Set(handlers.keys());
-  assert.equal(reads.size, 6);
+  assert.equal(reads.size, 7);
   const destructive = new Set(["set_goal_note", "set_task_note", "set_measure", "retire_commitment", "move_horizon", "set_rhythm"]);
   // The four creating tools answer a resent request_id once, so they fall with the rest (RP-56).
   for (const [name, config] of seen) {
@@ -385,7 +385,7 @@ test("the registry holds twenty-six tools: six read and twenty write, each with 
         : { readOnlyHint: false, destructiveHint: false, idempotentHint: true };
     assert.deepEqual(config.annotations, expected, name);
   }
-  assert.equal([...seen.keys()].filter((name) => !reads.has(name)).length, 20);
+  assert.equal([...seen.keys()].filter((name) => !reads.has(name)).length, 21);
 });
 
 test("every registered read refuses a key it does not declare", async () => {

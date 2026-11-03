@@ -44,6 +44,8 @@
   "perMonth": "{amount} al mes",
   "clearEstimate": "Quitar la estimación de «{task}»",
   "span": "{from} – {to}",
+  "recordTimeGoal": " en «{goal}»",
+  "recordTimeNote": " ({note})",
   "change": {
     "declare_fact": "Marcar «{commitment}» como cumplido",
     "complete_task": "Marcar la tarea «{task}» como hecha",
@@ -65,6 +67,7 @@
     "retire_commitment": "Retirar el compromiso «{commitment}»",
     "set_rhythm": "Cambiar el ritmo de «{goal}»",
     "set_measure": "Ponerle medida a «{goal}»",
+    "record_time": "Anotar {time} del {day}{goal}{note}",
     "noteText": "nota nueva: «{text}» ({count} caracteres)",
     "noteReplaces": "reemplaza la nota entera"
   }

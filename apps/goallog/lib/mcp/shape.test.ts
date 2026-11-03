@@ -8,7 +8,7 @@ import type { GoalView } from "@/lib/queries/goal";
 import { fillPlan, type PlanInput, type PlanTask } from "@/lib/plan/roadmap";
 import { planMonthList } from "@/lib/plan/roadmap-read";
 
-import { amountOf, shapeDay, shapeGoal, shapeGoalList, shapeLoose, shapeMonth, shapeReport } from "./shape";
+import { amountOf, shapeDay, shapeGoal, shapeGoalList, shapeLoose, shapeMonth, shapeReport, shapeTimeLedger } from "./shape";
 
 const ID = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
 
@@ -542,4 +542,21 @@ test("a goal with no end reads horizon null; a loose habit reads on its own list
     [["Bañarse", 4, "con agua tibia"]],
   );
   assert.deepEqual(shapeGoalList({ open: [], ended: [], archived: [] }).looseHabits, []);
+});
+
+test("shapeTimeLedger gives minutes and words per day and goal, and totals both columns", () => {
+  const shaped = shapeTimeLedger(
+    [
+      { day: "2026-11-02", goalId: ID(1), confirmedMinutes: 480, waitingMinutes: 0 },
+      { day: "2026-11-02", goalId: null, confirmedMinutes: 0, waitingMinutes: 45 },
+    ],
+    new Map([[ID(1), { name: "Inglés" }]]),
+    { from: "2026-11-01", to: "2026-11-02" },
+  );
+  assert.deepEqual(shaped.days[0].goal, { id: ID(1), name: "Inglés" });
+  assert.deepEqual(shaped.days[0].confirmed, { value: 480, unit: "minutos", text: "8 h" });
+  assert.equal(shaped.days[1].goal, null);
+  assert.deepEqual(shaped.confirmed, { value: 480, unit: "minutos", text: "8 h" });
+  assert.deepEqual(shaped.waiting, { value: 45, unit: "minutos", text: "45 min" });
+  assert.deepEqual(shapeTimeLedger([], new Map(), { from: "a", to: "b" }).confirmed.value, 0);
 });

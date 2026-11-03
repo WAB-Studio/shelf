@@ -170,10 +170,10 @@ after(async () => {
   }
 });
 
-test("tools/list carries set_rhythm and set_measure as writes that ask before they replace, twenty writes in all", () => {
+test("tools/list carries set_rhythm and set_measure as writes that ask before they replace, twenty-one writes in all", () => {
   const writes = [...registered.entries()].filter(([, config]) => config.annotations?.readOnlyHint === false);
-  assert.equal(writes.length, 20);
-  assert.equal(registered.size, 26);
+  assert.equal(writes.length, 21);
+  assert.equal(registered.size, 28);
   for (const name of ["set_rhythm", "set_measure"]) {
     assert.deepEqual(registered.get(name)?.annotations, { readOnlyHint: false, destructiveHint: true, idempotentHint: true }, name);
   }

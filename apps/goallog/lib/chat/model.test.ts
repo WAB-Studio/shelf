@@ -43,6 +43,18 @@ mock.module("@/app/actions/plan", {
   },
 });
 mock.module("@/app/actions/plan-edit", { namedExports: { editPhase: act("editPhase") } });
+mock.module("@/app/actions/time-entries", {
+  namedExports: { recordTimeEntry: act("recordTimeEntry"), confirmTimeEntry: act("confirmTimeEntry") },
+});
+mock.module("@/lib/queries/chat", { namedExports: { loadChangeNames: async () => ({ goals: new Map() }) } });
+mock.module("@/lib/queries/time-entries", {
+  namedExports: {
+    loadTimeLedger: async () => {
+      reads.push("loadTimeLedger");
+      return [];
+    },
+  },
+});
 mock.module("@/app/actions/roadmap", { namedExports: { setRhythm: act("setRhythm") } });
 mock.module("@/lib/queries/day", {
   namedExports: {
@@ -92,6 +104,7 @@ mock.module("@/lib/mcp/shape", {
     }),
     shapeMonth: () => ({}),
     shapeReport: () => ({}),
+    shapeTimeLedger: () => ({ days: [] }),
   },
 });
 
@@ -158,10 +171,26 @@ test("a two-round conversation: a read runs, a write becomes one change and neve
   assert.ok(sent.every((request) => request.url === "https://api.openai.com/v1/chat/completions"));
 });
 
-test("the tools offered are the 26 of the catalogue", async () => {
+test("the tools offered are the 28 of the catalogue", async () => {
   script(() => saying("hola"));
   await answer();
   assert.deepEqual(sent[0].body.tools.map((tool) => tool.function.name).sort(), Object.keys(mcp.tools).sort());
+});
+
+test("«ayer trabajé 8 horas»: get_time reads the ledger, record_time becomes a change and nothing is recorded", async () => {
+  script(
+    () => calling("c1", "get_time", { from: "2026-11-02", to: "2026-11-02" }),
+    () => calling("c2", "record_time", { day: "2026-11-02", minutes: 480, goal_id: "g-1" }),
+    () => saying("Propongo anotar 8 h."),
+  );
+  const result = await answer();
+  assert.equal(result.status, "ok");
+  if (result.status !== "ok") return;
+  assert.deepEqual(result.changes.map((change) => [change.tool, change.input]), [
+    ["record_time", { day: "2026-11-02", minutes: 480, goal_id: "g-1" }],
+  ]);
+  assert.deepEqual(reads, ["loadTimeLedger"]);
+  assert.deepEqual(acts, []);
 });
 
 test("a read's value reaches the model in the next request", async () => {
@@ -297,6 +326,22 @@ test("a stubbed chat asked to schedule a goal's dayless task proposes schedule_t
   assert.equal(result.changes.length, 1);
   assert.equal(result.changes[0].tool, "schedule_task");
   assert.deepEqual(result.changes[0].input, { one_off_id: "task-carta", day: "2026-10-27" });
+});
+
+test("a stub script's {{day:-1}} is yesterday and its record_time becomes a change", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "chat-stub-"));
+  const path = join(dir, "script.json");
+  writeFileSync(
+    path,
+    JSON.stringify({ ayer: { reply: "Propongo anotarlo.", calls: [{ name: "record_time", arguments: { day: "{{day:-1}}", minutes: 480 } }] } }),
+  );
+  fakeEnv.PULSAR_CHAT_STUB = `script:${path}`;
+  const result = await answer(ask("ayer"));
+  assert.equal(result.status, "ok");
+  if (result.status !== "ok") return;
+  const { addDaysToCivilDate, todayInZone } = await import("@/lib/zone");
+  assert.deepEqual(result.changes[0].input, { day: addDaysToCivilDate(todayInZone(), -1), minutes: 480 });
+  assert.deepEqual(acts, []);
 });
 
 test("a stub placeholder the plan cannot resolve fails instead of staying literal", async () => {
