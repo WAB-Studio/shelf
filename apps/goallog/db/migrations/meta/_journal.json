@@ -218,6 +218,13 @@
       "when": 1793653103512,
       "tag": "0031_una_tarea_guarda_su_tiempo",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1793670295032,
+      "tag": "0032_horas_por_confirmar",
+      "breakpoints": true
     }
   ]
 }

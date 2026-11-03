@@ -4,6 +4,7 @@ import { sql, type SQL } from "drizzle-orm";
 
 import type { EvidenceByCommitment } from "@/lib/day/derive";
 import type { Cadence, DeclaredFact, EvidenceDay, Phase, SatisfiedBy } from "@/lib/day/types";
+import { TIME_UNITS } from "@/lib/units/time";
 import { civilDateInZone, TIME_ZONE } from "@/lib/zone";
 
 // The columns `toCadence` and `toSatisfiedBy` read, common to every query's
@@ -100,9 +101,31 @@ export const factUnit: SQL = sql`coalesce(c.unit, (
   select fg.measure_unit from "goals"."goals" fg where fg.id = f.goal_id and f.one_off_id is not null
 ))`;
 
-// What a goal's measure reads (RP-14, RP-147): a commitment's fact, or a task's fact that carries minutes.
-export function countsInMeasure(row: { commitment_id: string | null; quantity: number | null }): boolean {
-  return row.commitment_id !== null || row.quantity !== null;
+export { countsInMeasure } from "@/lib/day/measure-inputs";
+
+// The goal's confirmed time (RP-151) as fact-shaped rows, one per allocation, on the entry's day: the measure
+// reads them like a commitment's quantity in the goal's own unit. Only goals measured in minutes take any.
+// `goalFilter` names the goal in the caller's statement; `bounds` limit the entry's day.
+export function confirmedTimeFacts(goalFilter: SQL, bounds?: { from: SQL | string; to: SQL | string }): SQL {
+  const range = bounds ? sql`and e.day between ${bounds.from}::date and ${bounds.to}::date` : sql``;
+  return sql`(select coalesce(jsonb_agg(jsonb_build_object(
+               'id', a.id,
+               'commitment_id', null,
+               'one_off_id', null,
+               'goal_id', a.goal_id,
+               'day', e.day,
+               'written_at', e.created_at,
+               'quantity', a.minutes,
+               'note', null,
+               'commitment_unit', tg.measure_unit,
+               'time_allocation', true
+             ) order by e.day, e.created_at, a.id), '[]'::jsonb)
+          from "goals"."time_allocations" a
+          join "goals"."time_entries" e on e.id = a.entry_id
+          join "goals"."goals" tg on tg.id = a.goal_id
+          where ${goalFilter} and e.dismissed_at is null
+            and coalesce(lower(trim(tg.measure_unit)) = any(array[${sql.join(TIME_UNITS.map((u) => sql`${u}`), sql`, `)}]::text[]), false)
+            ${range})`;
 }
 
 export function toDeclaredFact(row: DeclaredFactRow): DeclaredFact {

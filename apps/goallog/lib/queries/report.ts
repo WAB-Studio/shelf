@@ -23,7 +23,7 @@ import {
   type TaskRow,
 } from "@/lib/queries/goal";
 import { placeOf } from "@/lib/queries/month";
-import { factUnit, toCadence, toPhase, type PhaseRow } from "@/lib/queries/rows";
+import { confirmedTimeFacts, factUnit, toCadence, toPhase, type PhaseRow } from "@/lib/queries/rows";
 import { getPerson, withGoalsDb, withReadingDb, type Transaction } from "@/lib/session";
 import { isTimeUnit } from "@/lib/units/time";
 import { civilDateInZone, TIME_ZONE, todayInZone } from "@/lib/zone";
@@ -60,7 +60,7 @@ async function queryReportRows(tx: Transaction): Promise<ReportRow[]> {
                ) order by f.day, f.written_at, f.id), '[]'::json)
          from "goals"."facts" f
          left join "goals"."commitments" c on c.id = f.commitment_id
-         where f.goal_id = g.id) as facts,
+         where f.goal_id = g.id)::jsonb || ${confirmedTimeFacts(sql`tg.id = g.id`)} as facts,
       (select coalesce(json_agg(jsonb_build_object('month', b.month, 'amount', b.amount)
                                 order by b.month), '[]'::json)
          from "goals"."month_budgets" b where b.goal_id = g.id) as budgets,

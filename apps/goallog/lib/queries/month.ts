@@ -31,7 +31,7 @@ import {
   type TaskRow,
 } from "@/lib/queries/goal";
 import { dayCounts } from "@/lib/day/constancy";
-import { countsInMeasure, factUnit, livedThrough, metFact, toCadence, toDeclaredFact, toSatisfiedBy } from "@/lib/queries/rows";
+import { confirmedTimeFacts, countsInMeasure, factUnit, livedThrough, metFact, toCadence, toDeclaredFact, toSatisfiedBy } from "@/lib/queries/rows";
 import { getPerson, withGoalsDb, withReadingDb, type Transaction } from "@/lib/session";
 import { dayBefore } from "@/lib/day/weeks";
 import { civilDateInZone, TIME_ZONE, todayInZone, weekOf } from "@/lib/zone";
@@ -193,7 +193,8 @@ async function queryRows(tx: Transaction, reading: Reading, today: string): Prom
          from "goals"."facts" f
          left join "goals"."commitments" c on c.id = f.commitment_id
          where f.goal_id = g.id
-           and f.day between ${month}::date and ${until}::date) as facts,
+           and f.day between ${month}::date and ${until}::date)::jsonb
+        || ${confirmedTimeFacts(sql`tg.id = g.id`, { from: month, to: until })} as facts,
       (select coalesce(json_agg(jsonb_build_object('month', b.month, 'amount', b.amount)
                                 order by b.month), '[]'::json)
          from "goals"."month_budgets" b

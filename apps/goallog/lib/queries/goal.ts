@@ -11,6 +11,7 @@ import { measureByWeek, totalInSpan } from "@/lib/day/review";
 import type { Cadence, EvidenceDay, Phase, ReviewWeek, SatisfiedBy } from "@/lib/day/types";
 import {
   toCadence,
+  confirmedTimeFacts,
   countsInMeasure,
   factUnit,
   toDeclaredFact,
@@ -101,6 +102,8 @@ export type FactRow = {
   commitment_unit: string | null;
   // RP-148: the day's own target; `to_jsonb(f)` carries it.
   day_target?: number | null;
+  // RP-151: a confirmed allocation of time, shaped as a fact by `confirmedTimeFacts`.
+  time_allocation?: boolean;
 };
 
 // One statement's whole shape: the goal itself (`null` when the id does not
@@ -357,7 +360,7 @@ async function queryGoalRow(tx: Transaction, goalId: string): Promise<GoalQueryR
                ) order by f.day, f.written_at, f.id), '[]'::json)
          from "goals"."facts" f
          left join "goals"."commitments" c on c.id = f.commitment_id
-         where f.goal_id = ${goalId}) as facts,
+         where f.goal_id = ${goalId})::jsonb || ${confirmedTimeFacts(sql`tg.id = ${goalId}`)} as facts,
       (select coalesce(json_agg(jsonb_build_object('month', b.month, 'amount', b.amount)
                                 order by b.month), '[]'::json)
          from "goals"."month_budgets" b
@@ -391,7 +394,7 @@ async function queryGoalRow(tx: Transaction, goalId: string): Promise<GoalQueryR
                                   ) order by f.day, f.written_at, f.id), '[]'::json)
                                   from "goals"."facts" f
                                   left join "goals"."commitments" c on c.id = f.commitment_id
-                                  where f.goal_id = d.id),
+                                  where f.goal_id = d.id)::jsonb || ${confirmedTimeFacts(sql`tg.id = d.id`)},
                 'budgets', (select coalesce(json_agg(jsonb_build_object('month', b.month, 'amount', b.amount)
                                                      order by b.month), '[]'::json)
                                   from "goals"."month_budgets" b
@@ -1221,7 +1224,8 @@ export async function listGoalsForMetas(today: string = todayInZone()): Promise<
              from "goals"."facts" f
              left join "goals"."commitments" c on c.id = f.commitment_id
              where f.goal_id = g.id
-               and f.day between ${month}::date and ${today}::date) as facts,
+               and f.day between ${month}::date and ${today}::date)::jsonb
+            || ${confirmedTimeFacts(sql`tg.id = g.id`, { from: month, to: today })} as facts,
           (select coalesce(json_agg(jsonb_build_object('month', b.month, 'amount', b.amount) order by b.month), '[]'::json)
              from "goals"."month_budgets" b
              where b.goal_id = g.id) as budgets,

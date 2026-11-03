@@ -10,6 +10,7 @@ import { metPhrase, phaseLine, stripLabel } from "@/lib/day/row-phrases";
 import { tallyDay, tallyDays } from "@/lib/day/tally";
 import { phaseOn } from "@/lib/day/derive";
 import type { DaySlot } from "@/lib/day/types";
+import { loadWaitingTime } from "@/lib/queries/time-entries";
 import { loadWeek } from "@/lib/queries/week";
 import { loadDay, type CommitmentInfo, type OneOffSummary } from "@/lib/queries/day";
 import { PAST_DAY_LIMIT } from "@/lib/validation/fact";
@@ -31,6 +32,7 @@ import { NewOneOff } from "./new-one-off";
 import { MonthTaskLine } from "./month-task-line";
 import { OneOffRow } from "./one-off-row";
 import { PlanNotices, type PlanNoticeItem } from "./plan-notice";
+import { TimeTray } from "./time-tray";
 
 
 // Goes through `Date` and back rather than subtracting on the string: a
@@ -117,7 +119,11 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
   const day = requested ?? today;
   const past = day < today;
   // The week rides beside the day, for the seven marks in the navy block (never after it, RNP-03).
-  const [loaded, week] = await Promise.all([loadDay(day), past ? null : loadWeek(day, today)]);
+  const [loaded, week, waitingTime] = await Promise.all([
+    loadDay(day),
+    past ? null : loadWeek(day, today),
+    past ? null : loadWaitingTime(),
+  ]);
   const {
     view,
     evidence,
@@ -840,6 +846,8 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
         />
       )}
       {weekStrip}
+
+      {waitingTime ? <TimeTray entries={waitingTime.entries} goals={waitingTime.goals} today={today} /> : null}
 
       {evidence === "unreadable" ? (
         <EvidenceNote title={t("day.unreadableTitle")} body={t("day.unreadableBody")} />
