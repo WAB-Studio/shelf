@@ -29,6 +29,10 @@ const DESKTOP = { width: 1440, height: 900 };
 const TOLERANCE = 2;
 // Row heights of a month without a detail, measured on the build before the fix.
 const PAPER_ROW = 32.25;
+// Chromium snaps each row to a whole CSS pixel, 0.75pt on paper, so the same row measures 30.75, 31.5 or 32.25
+// as the day moves the table down the page (measured 2026-11-01 and 11-02). Two pixels and float noise, not a
+// line: a row that grew by a line of text is 15pt taller and still fails.
+const PAPER_ROW_SLACK = 2 * 0.75 + 0.01;
 const SCREEN_ROW = 66.5;
 
 type Measured = {
@@ -314,8 +318,8 @@ test.describe("paper (PDF): a «por mes» row with a detail keeps its figures on
     await withPdf({ person, browser, baseURL: baseURL!, db }, "ph", (file, stamp) => {
       const row = pdfRow(file, stamp, ahead, after);
       expect(row.detail).toBeNull();
-      expect(row.pitch, `row «${ahead}» to «${after}» pitch (${file})`).toBeGreaterThanOrEqual(PAPER_ROW - 0.8);
-      expect(row.pitch, `row «${ahead}» to «${after}» pitch (${file})`).toBeLessThanOrEqual(PAPER_ROW + 0.8);
+      expect(row.pitch, `row «${ahead}» to «${after}» pitch (${file})`).toBeGreaterThanOrEqual(PAPER_ROW - PAPER_ROW_SLACK);
+      expect(row.pitch, `row «${ahead}» to «${after}» pitch (${file})`).toBeLessThanOrEqual(PAPER_ROW + PAPER_ROW_SLACK);
     });
   });
 });

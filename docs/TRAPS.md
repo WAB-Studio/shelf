@@ -3400,3 +3400,10 @@ Measured 2026-11-01, a Sunday and a month's first day: 18 GoalLog specs went red
 - A month in another year is said with it («enero de 2027»): derive a label's year from today, never drop it.
 - Ended today means its last day is yesterday: on the 1st that is last month. Seed a task before the fact it carries.
 - The runner's `pdftotext` splits a kerned pair («f ebrero»): compare paper text without spaces.
+
+## A row's height on paper moves by a pixel with its place on the page
+
+Measured 2026-11-02: `papel-fila-detalle.spec.ts:313` read a row 30.75pt on 2 November and 31.5pt on 1 November (`PULSAR_CLOCK`), against 32.25 ± 0.8. Chromium snaps each row to a whole CSS pixel (0.75pt), and the day moves the table down the A4 page.
+
+- Measure a printed row with at least two pixels of slack (1.5pt) plus float noise; a real regression is a line of text, 15pt.
+- Reproduce a date-dependent paper failure with `PULSAR_CLOCK=YYYY-MM-DD` on the server and the spec.
