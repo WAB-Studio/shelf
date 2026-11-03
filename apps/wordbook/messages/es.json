@@ -323,7 +323,7 @@
       "labelBrowserOnly": "{browser} en otro sistema",
       "labelPlatformOnly": "Navegador desconocido en {platform}",
       "since": "Desde el {date}",
-      "sinceDate": "{day} de {month}."
+      "sinceDate": "{day} de {month}{hasYear, select, yes { de {year}} other {}}."
     },
     "codeLabel": "Código del correo",
     "enter": "Entrar",
