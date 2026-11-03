@@ -31,24 +31,29 @@ export type ReportsData = {
  * six-month flow trend and each member's contribution to the group pot (RF-34,
  * RF-35, RF-66). Scope is never a parameter — RLS inside each query restricts
  * the rows. The five independent reads fan out in one `Promise.all`; the roster
- * is a conditional second trip, taken only once a group is known. The group's
+ * is chained off the group inside the same fan-out. The group's
  * pot is never a contributor, so no group row appears (RF-67).
  *
  * Every one of the three carries the currency it counts, and the screen draws a
  * band per currency off it: nothing here adds two (RF-124).
  */
 export async function getReportsData(monthStart: string = currentMonthStart()): Promise<ReportsData> {
-  const [expensesByCategory, sixMonthFlow, contributionRows, group, sessionUser] =
+  // Only a grouped caller has both contributions and a roster to name them; the
+  // roster chains off the group inside the fan-out, so it adds no wave of its own.
+  const groupAndMembers = getUserGroup().then(async (found) => ({
+    group: found,
+    members: found ? await listMembers(found.id, { archived: false }) : [],
+  }));
+
+  const [expensesByCategory, sixMonthFlow, contributionRows, { group, members }, sessionUser] =
     await Promise.all([
       getExpensesByCategory(monthRange(monthStart)),
       getSixMonthFlow(monthStart),
       getMemberContributions(monthRange(monthStart)),
-      getUserGroup(),
+      groupAndMembers,
       getSessionUser(),
     ]);
 
-  // Only a grouped caller has both contributions and a roster to name them.
-  const members = group ? await listMembers(group.id, { archived: false }) : [];
   const nameByMemberId = new Map(members.map((member) => [member.id, member.name]));
 
 

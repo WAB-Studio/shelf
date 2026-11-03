@@ -13,7 +13,7 @@ import { savingsGoals } from "@/db/schema/savings-goals";
 import { transactions } from "@/db/schema/transactions";
 import { BASE_CURRENCY } from "@/lib/currency";
 import { isCivilDate } from "@/lib/dates";
-import { centsToPesos, pesosToCents } from "@/lib/money";
+import { centsToDecimal, pesosToCents } from "@/lib/money";
 import { CATEGORY_COLORS } from "@/lib/fund/category-color";
 import { ACCOUNT_PLACEMENTS, accountCurrencySchema, createAccountSchema } from "@/lib/validation/account";
 import { BUDGET_PERIODS } from "@/lib/validation/budget";
@@ -50,7 +50,7 @@ type MoneyBoundary = {
 };
 
 const moneyBoundary: MoneyBoundary = {
-  toSheet: centsToPesos,
+  toSheet: (cents) => Number(centsToDecimal(cents)),
   fromSheet: pesosToCents,
 };
 

@@ -15,7 +15,7 @@ import {
 import { BASE_CURRENCY, type CurrencyCode } from "@/lib/currency";
 import { isCivilDate } from "@/lib/dates";
 import { ActionError } from "@/lib/errors";
-import { centsToPesos, maxAmountMinor, parseAmount } from "@/lib/money";
+import { centsToDecimal, maxAmountMinor, parseAmount } from "@/lib/money";
 import { resolveCategoryInScope, scopeKeyOf, type ScopeKey } from "@/lib/spreadsheet/resolve-category";
 import {
   labelNames,
@@ -401,7 +401,7 @@ function toNameShaped(entity: SheetEntity, raw: RawRow): Record<string, unknown>
     const value = raw[key];
     shaped[key] =
       typeof value === "number"
-        ? String(centsToPesos(value))
+        ? centsToDecimal(value)
         : typeof value === "string"
           ? value
           : "";
@@ -432,7 +432,7 @@ function rawCellValue(entity: SheetEntity, raw: RawRow, column: string): string 
   const value = raw[column];
   if (value === null || value === undefined) return null;
   if (moneyKeysByEntity[entity].has(column) && typeof value === "number") {
-    return String(centsToPesos(value));
+    return centsToDecimal(value);
   }
   return String(value);
 }

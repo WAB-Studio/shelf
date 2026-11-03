@@ -66,10 +66,12 @@ export async function generateMetadata(
   const { locale } = await props.params;
   if (!hasLocale(routing.locales, locale)) notFound();
 
-  const group = await getUserGroup();
+  const [group, t] = await Promise.all([
+    getUserGroup(),
+    getTranslations({ locale, namespace: "common" }),
+  ]);
   if (group) return { title: group.name };
 
-  const t = await getTranslations({ locale, namespace: "common" });
   return { title: t("appName") };
 }
 

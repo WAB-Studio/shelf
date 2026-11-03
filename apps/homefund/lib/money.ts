@@ -350,9 +350,20 @@ export function convertMinor(amountMinor: number, rate: number): number {
   return Number(scaleRound(BigInt(amountMinor) * mantissa, exp));
 }
 
-/** @deprecated Formatting an amount is `Money`'s own business. */
-export function centsToPesos(cents: number): number {
-  return cents / 100;
+/**
+ * A stored amount as a plain decimal string with a point and no grouping, its
+ * trailing zeros dropped: 125050 reads «1250.5», 100 reads «1», -5 reads
+ * «-0.05». Built from the integer's own digits, never by dividing, and what
+ * `parseAmount` and `Number` both read back exactly.
+ */
+export function centsToDecimal(cents: number): string {
+  const abs = Math.abs(cents);
+  const major = Math.trunc(abs / STORAGE_UNIT);
+  const fraction = String(abs % STORAGE_UNIT)
+    .padStart(STORAGE_EXPONENT, "0")
+    .replace(/0+$/, "");
+  const sign = cents < 0 ? "-" : "";
+  return `${sign}${major}${fraction === "" ? "" : `.${fraction}`}`;
 }
 
 /**
