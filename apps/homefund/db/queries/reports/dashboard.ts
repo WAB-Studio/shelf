@@ -11,7 +11,7 @@ import { netWorthByOwner } from "@/db/queries/reports/net-worth";
 import type { OwnerNetWorth } from "@/db/queries/reports/net-worth";
 import { countUnreviewedGenerated } from "@/db/queries/recurring-rules";
 import { groupMembers, groups } from "@/db/schema";
-import { getSessionUser, withUserDb } from "@/db/session";
+import { getSessionUser, withSharedTransaction, withUserDb } from "@/db/session";
 import type { CurrencyCode } from "@/lib/currency";
 import { currentMonthRange } from "@/lib/dates";
 
@@ -78,22 +78,27 @@ async function readFundRoster(): Promise<{
  * Every read, the fund's live roster included, fans out in one `Promise.all`.
  */
 export async function getDashboardData(): Promise<DashboardData> {
+  // The two aggregates keep a connection each so they run side by side; the light reads share one,
+  // which keeps the screen under the pool's eight connections.
+  // `getSessionUser` reads the claims alone, no connection: it stays outside the shared transaction, which
+  // would otherwise settle first and make it a second claims wait in a row (Q168).
   const [
-    accounts,
     balances,
     monthFlow,
-    roster,
     sessionUser,
-    unreviewedCount,
-    pendingDeliveryCount,
+    [accounts, roster, unreviewedCount, pendingDeliveryCount],
   ] = await Promise.all([
-    listAccounts({ archived: false }),
     getAccountBalances(),
     getMonthlyFlow(currentMonthRange()),
-    readFundRoster(),
     getSessionUser(),
-    countUnreviewedGenerated(),
-    countPendingDeliveries(),
+    withSharedTransaction(() =>
+      Promise.all([
+        listAccounts({ archived: false }),
+        readFundRoster(),
+        countUnreviewedGenerated(),
+        countPendingDeliveries(),
+      ]),
+    ),
   ]);
 
   // A personal-only caller has an empty roster and falls back to the `isSelf` label.

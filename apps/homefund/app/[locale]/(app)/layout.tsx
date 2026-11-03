@@ -9,7 +9,7 @@ import { QuickEntryProvider } from "@/components/transactions/quick-entry-provid
 import { AppMark, Box, Flex, Heading } from "@/components/ui";
 import { getShellSummary } from "@/db/queries/app-shell";
 import { getTransactionFormOptions } from "@/db/queries/transaction-form";
-import { requireUser } from "@/db/session";
+import { requireUser, withSharedTransaction } from "@/db/session";
 import { routing } from "@/i18n/routing";
 
 // Written by `proxy.ts` under this name, on every request it matches.
@@ -50,10 +50,10 @@ export default async function AppLayout(props: LayoutProps<"/[locale]">) {
   // The proxy already redirected an anonymous visitor; this is what enforces it.
   // Quick-entry options are fetched here so every route opens the sheet or form
   // without a second round trip (RF-22).
-  const [user, options, summary, t, requestHeaders] = await Promise.all([
+  const [user, [options, summary], t, requestHeaders] = await Promise.all([
     requireUser(),
-    getTransactionFormOptions(),
-    getShellSummary(),
+    // One transaction for both reads: the pool holds eight connections.
+    withSharedTransaction(() => Promise.all([getTransactionFormOptions(), getShellSummary()])),
     getTranslations("common"),
     headers(),
   ]);
