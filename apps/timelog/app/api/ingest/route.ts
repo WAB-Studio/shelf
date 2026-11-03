@@ -4,6 +4,9 @@ import { uploadSchema } from "@/lib/upload";
 
 export const runtime = "nodejs";
 
+// Far above a month of real days, far below what could exhaust the function's memory.
+const MAX_BODY_BYTES = 8 * 1024 * 1024;
+
 const json = (status: number, body: unknown) =>
   Response.json(body, { status, headers: { "Cache-Control": "no-store" } });
 
@@ -12,9 +15,15 @@ export async function POST(request: Request): Promise<Response> {
   const key = bearerOf(request.headers.get("authorization"));
   if (key === null) return json(401, { error: "key" });
 
+  const declared = Number(request.headers.get("content-length") ?? 0);
+  if (declared > MAX_BODY_BYTES) return json(413, { error: "size" });
+
   let body: unknown;
   try {
-    body = await request.json();
+    // A chunked body declares no length; the text is measured once read.
+    const text = await request.text();
+    if (text.length > MAX_BODY_BYTES) return json(413, { error: "size" });
+    body = JSON.parse(text);
   } catch {
     return json(400, { error: "json" });
   }
