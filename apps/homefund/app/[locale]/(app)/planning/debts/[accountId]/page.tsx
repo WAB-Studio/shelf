@@ -19,8 +19,10 @@ export async function generateMetadata(
   const { locale, accountId } = await props.params;
   if (!hasLocale(routing.locales, locale)) notFound();
 
-  const t = await getTranslations({ locale, namespace: "debts" });
-  const data = await readDebtDetail(accountId);
+  const [t, data] = await Promise.all([
+    getTranslations({ locale, namespace: "debts" }),
+    readDebtDetail(accountId),
+  ]);
 
   // A debt the caller may not see names nothing: the area's own title stands in,
   // and the page below answers with `notFound()`.
