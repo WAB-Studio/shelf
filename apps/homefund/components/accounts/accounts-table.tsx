@@ -3,6 +3,7 @@
 import type { ReactNode } from "react";
 import { useTranslations } from "next-intl";
 
+import { useOwnerLabel } from "@/components/fund/owner-mark";
 import {
   Badge,
   DataTable,
@@ -72,12 +73,9 @@ export function AccountsTable({
     );
   }
 
+  const ownerOf = useOwnerLabel();
   const ownerLabel = (row: AccountRow) =>
-    row.foreignOwner
-      ? row.ownerName
-        ? tKey("ownership.of", { name: row.ownerName })
-        : tKey("ownership.ofSomeone")
-      : t("ownerPersonal");
+    row.foreignOwner ? ownerOf(row.ownerName) : t("ownerPersonal");
 
   const columns: DataColumn<AccountRow>[] = [
     {
@@ -90,7 +88,9 @@ export function AccountsTable({
             <Text size="2" weight="medium" truncate>
               {row.name}
             </Text>
-            {row.ownerUserId && <PersonalMark label={ownerLabel(row)} />}
+            {row.ownerUserId && (
+              <PersonalMark label={ownerLabel(row)} />
+            )}
           </Flex>
           {/* One scope, never both: a personal account names its owner, a
               group account the group (RF-60). Another member's is theirs by name. */}

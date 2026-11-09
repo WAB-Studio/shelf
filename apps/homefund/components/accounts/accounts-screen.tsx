@@ -13,6 +13,7 @@ import {
   handAccountToGroupAction,
   restoreAccountAction,
 } from "@/app/actions/accounts";
+import { useOwnerLabel } from "@/components/fund/owner-mark";
 import { AccountFormDialog } from "@/components/accounts/account-form-dialog";
 import {
   BilledAmountDialog,
@@ -540,11 +541,8 @@ function AccountCard({
   // is the first entry and every other currency the account holds follows it.
   const [settlement, ...others] = account.balances;
 
-  const ownerLabel = account.foreignOwner
-    ? account.ownerName
-      ? tKey("ownership.of", { name: account.ownerName })
-      : tKey("ownership.ofSomeone")
-    : t("ownerPersonal");
+  const ownerOf = useOwnerLabel();
+  const ownerLabel = account.foreignOwner ? ownerOf(account.ownerName) : t("ownerPersonal");
 
   return (
     <Card>

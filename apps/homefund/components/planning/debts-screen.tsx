@@ -12,6 +12,7 @@ import { CalendarDays, CircleAlert, CreditCard, Plus } from "lucide-react";
 import { useFormatter, useLocale, useTranslations } from "next-intl";
 import { useMemo, useState } from "react";
 
+import { OwnerMark } from "@/components/fund/owner-mark";
 import { DebtFormDialog } from "@/components/planning/debt-form-dialog";
 import type { DebtAccount } from "@/components/planning/debt-form-dialog";
 import { DebtPaymentDialog } from "@/components/planning/debt-payment-dialog";
@@ -32,7 +33,6 @@ import {
   Flex,
   Heading,
   Money,
-  PersonalMark,
   ScreenHeader,
   Separator,
   StatTiles,
@@ -611,8 +611,6 @@ function CardHead({
   otherOwed: DebtPocket[];
 }) {
   const beside = owesBesideCredit(creditCents, otherOwed);
-  const tAccounts = useTranslations("accounts");
-  const tKey = useTranslations();
 
   return (
     <Flex direction="column" gap="2">
@@ -628,18 +626,7 @@ function CardHead({
         <Flex direction="column" flexGrow="1" minWidth="0">
           <Flex align="center" gap="2" minWidth="0">
             <Text weight="bold">{name}</Text>
-            {personal && (
-              <PersonalMark
-                label={
-                  foreignOwner
-                    ? ownerName
-                      ? tKey("ownership.of", { name: ownerName })
-                      : tKey("ownership.ofSomeone")
-                    : tAccounts("ownerPersonal")
-                }
-                showLabel={foreignOwner}
-              />
-            )}
+            <OwnerMark personal={personal} foreignOwner={foreignOwner} ownerName={ownerName} />
           </Flex>
           <Text size="1" color="gray">
             {meta}

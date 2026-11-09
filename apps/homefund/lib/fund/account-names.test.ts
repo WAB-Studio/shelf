@@ -2,14 +2,15 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { accountNamesById, touchesForeignAccount } from "./account-names";
 
-const ownerOf = (name: string) => `De ${name}`;
+const ownerLabel = (name: string | null) => (name ? `De ${name}` : "De otra persona");
+const accountOf = (account: string, owner: string) => `${account} · ${owner}`;
 
 describe("accountNamesById", () => {
   it("leaves the caller's and the fund's accounts bare", () => {
     const names = accountNamesById(
       [{ id: "a", name: "Nequi", foreignOwner: false, ownerName: null }],
-      ownerOf,
-      "De otra persona",
+      ownerLabel,
+      accountOf,
     );
     assert.equal(names.get("a"), "Nequi");
   });
@@ -17,8 +18,8 @@ describe("accountNamesById", () => {
   it("writes another member's account with its owner", () => {
     const names = accountNamesById(
       [{ id: "b", name: "Nequi", foreignOwner: true, ownerName: "Andrea" }],
-      ownerOf,
-      "De otra persona",
+      ownerLabel,
+      accountOf,
     );
     assert.equal(names.get("b"), "Nequi · De Andrea");
   });
@@ -26,8 +27,8 @@ describe("accountNamesById", () => {
   it("falls back to the plain word when the owner has no name", () => {
     const names = accountNamesById(
       [{ id: "c", name: "Nequi", foreignOwner: true, ownerName: null }],
-      ownerOf,
-      "De otra persona",
+      ownerLabel,
+      accountOf,
     );
     assert.equal(names.get("c"), "Nequi · De otra persona");
   });

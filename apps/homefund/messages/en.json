@@ -190,6 +190,7 @@
   },
   "ownership": {
     "of": "{name}'s",
+    "accountOf": "{account} · {owner}",
     "ofSomeone": "Someone else's"
   },
   "nav": {

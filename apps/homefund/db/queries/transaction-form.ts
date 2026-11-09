@@ -39,6 +39,9 @@ export type OfferedCurrency = typeof currencySchema.def.entries[keyof typeof cur
 
 export type TransactionFormOptions = {
   accounts: AccountRow[];
+  // Every account the caller can read, archived ones included, as a movement or a plan
+  // names it: a row on an archived account still reads its name and its owner (RF-58).
+  accountDirectory: { id: string; name: string; foreignOwner: boolean; ownerName: string | null }[];
   categories: ScopedCategory[];
   labels: ScopedLabel[];
   members: { userId: string; name: string }[];
@@ -80,6 +83,7 @@ export const getTransactionFormOptions = cache(
     // BEGIN, the settle and COMMIT are paid once instead of eight times.
     const [
       accountRows,
+      archivedAccountRows,
       categories,
       labels,
       members,
@@ -90,6 +94,7 @@ export const getTransactionFormOptions = cache(
     ] = await withUserDb((tx) =>
       Promise.all([
         listAccounts({ archived: false }, tx),
+        listAccounts({ archived: true }, tx),
         listScopedCategories(user.id, tx),
         listScopedLabels(user.id, tx),
         listCallerMembers(user.id, { archived: false }, tx),
@@ -102,6 +107,12 @@ export const getTransactionFormOptions = cache(
 
     return {
       accounts: accountRows,
+      accountDirectory: [...accountRows, ...archivedAccountRows].map((account) => ({
+        id: account.id,
+        name: account.name,
+        foreignOwner: account.foreignOwner,
+        ownerName: account.ownerName,
+      })),
       categories,
       labels,
       // Only members who have claimed a login can be a movement's creator (RF-25).

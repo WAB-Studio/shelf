@@ -21,6 +21,7 @@ import { useAction } from "next-safe-action/hooks";
 import { Fragment, useState, type ReactNode } from "react";
 
 import { deleteTransactionAction } from "@/app/actions/transactions";
+import { useOwnerLabel } from "@/components/fund/owner-mark";
 import {
   MovementForm,
   movementFormDialogWidth,
@@ -152,10 +153,11 @@ export function MovementsScreen({
 
   // A name and colour per account and per category id — children included — so a
   // row reads its title, subtitle and tile without a second lookup.
+  const ownerLabel = useOwnerLabel();
   const accountNames = accountNamesById(
-    options.accounts,
-    (name) => tKey("ownership.of", { name }),
-    tKey("ownership.ofSomeone"),
+    options.accountDirectory,
+    ownerLabel,
+    (account, owner) => tKey("ownership.accountOf", { account, owner }),
   );
   const categoryNames = categoryNamesById(options.categories, (name) =>
     tc("scopedName", { name }),
@@ -226,7 +228,7 @@ export function MovementsScreen({
     currency: row.currency,
     tone: rowTone(row),
     adjustment: row.reconciliationId !== null,
-    foreign: touchesForeignAccount(row, options.accounts),
+    foreign: touchesForeignAccount(row, options.accountDirectory),
     auto: row.recurringRuleId !== null,
   }));
 

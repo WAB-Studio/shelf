@@ -3,6 +3,7 @@
 import { Fragment, type ReactNode } from "react";
 import { useFormatter, useLocale, useTranslations } from "next-intl";
 
+import { OwnerMark } from "@/components/fund/owner-mark";
 import {
   Badge,
   Button,
@@ -10,7 +11,6 @@ import {
   Figure,
   Flex,
   Money,
-  PersonalMark,
   RowMenu,
   TablePagination,
   Text,
@@ -288,7 +288,6 @@ export function DebtsTable({
     );
   }
 
-  const tAccounts = useTranslations("accounts");
 
   const columns: DataColumn<DebtTableRow>[] = [
     {
@@ -301,18 +300,11 @@ export function DebtsTable({
             <Text size="2" weight="medium" truncate>
               {row.name}
             </Text>
-            {row.personal && (
-              <PersonalMark
-                label={
-                  row.foreignOwner
-                    ? row.ownerName
-                      ? tKey("ownership.of", { name: row.ownerName })
-                      : tKey("ownership.ofSomeone")
-                    : tAccounts("ownerPersonal")
-                }
-                showLabel={row.foreignOwner}
-              />
-            )}
+            <OwnerMark
+              personal={row.personal}
+              foreignOwner={row.foreignOwner}
+              ownerName={row.ownerName}
+            />
             {row.accountId === nextPaymentAccountId && (
               <Badge color="jade" variant="soft" radius="full">
                 {t("nextPaymentBadge")}

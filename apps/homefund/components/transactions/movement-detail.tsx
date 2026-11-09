@@ -8,6 +8,7 @@ import { toast } from "sonner";
 
 import { markMovementReviewedAction } from "@/app/actions/recurring-rules";
 import { deleteTransactionAction } from "@/app/actions/transactions";
+import { useOwnerLabel } from "@/components/fund/owner-mark";
 import { MovementDetailDesktop } from "@/components/transactions/movement-detail-desktop";
 import {
   MovementForm,
@@ -110,10 +111,11 @@ export function MovementDetail({
 
   // A name and colour per account and per category id — children included — so
   // the detail reads its subtitle, account and tile without a second lookup.
+  const ownerLabel = useOwnerLabel();
   const accountNames = accountNamesById(
-    options.accounts,
-    (name) => tKey("ownership.of", { name }),
-    tKey("ownership.ofSomeone"),
+    options.accountDirectory,
+    ownerLabel,
+    (account, owner) => tKey("ownership.accountOf", { account, owner }),
   );
   const categoryNames = categoryNamesById(options.categories, (name) =>
     tc("scopedName", { name }),
@@ -131,7 +133,7 @@ export function MovementDetail({
 
   // An adjustment books one account: a destination leg adds, a source leg takes.
   const isAdjustment = movement.reconciliationId !== null;
-  const othersOwn = touchesForeignAccount(movement, options.accounts);
+  const othersOwn = touchesForeignAccount(movement, options.accountDirectory);
 
   const tone: MoneyTone = isAdjustment
     ? "transfer"

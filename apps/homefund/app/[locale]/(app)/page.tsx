@@ -282,9 +282,9 @@ export default async function HomePage(props: PageProps<"/[locale]">) {
   // A name and colour per account and per category id — children included — so a
   // row reads its title, subtitle and tile without a second lookup.
   const accountNames = accountNamesById(
-    options.accounts,
-    (name) => tOwnership("of", { name }),
-    tOwnership("ofSomeone"),
+    options.accountDirectory,
+    (name) => (name ? tOwnership("of", { name }) : tOwnership("ofSomeone")),
+    (account, owner) => tOwnership("accountOf", { account, owner }),
   );
   const categoryNames = categoryNamesById(options.categories, (name) =>
     tc("scopedName", { name }),

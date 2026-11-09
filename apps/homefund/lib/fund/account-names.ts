@@ -6,19 +6,19 @@ export type NamedAccount = {
   ownerName: string | null;
 };
 
-// An account's name by id, another member's personal account written with its
-// owner after it («Nequi · De Andrea»), so a movement on it never reads as the
-// caller's own (RF-58).
+// An account's name by id, another member's personal account written with its owner
+// after it («Nequi · De Andrea»), so a movement on it never reads as the caller's own
+// (RF-58). The wording is the caller's: `ownerLabel` says whose, `accountOf` joins it.
 export function accountNamesById(
   accounts: readonly NamedAccount[],
-  ownerOf: (name: string) => string,
-  ownerSomeone: string,
+  ownerLabel: (ownerName: string | null) => string,
+  accountOf: (account: string, owner: string) => string,
 ): Map<string, string> {
   return new Map(
     accounts.map((account) => [
       account.id,
       account.foreignOwner
-        ? `${account.name} · ${account.ownerName ? ownerOf(account.ownerName) : ownerSomeone}`
+        ? accountOf(account.name, ownerLabel(account.ownerName))
         : account.name,
     ]),
   );

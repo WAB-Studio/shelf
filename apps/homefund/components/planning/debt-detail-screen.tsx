@@ -7,6 +7,7 @@ import { Fragment, useState } from "react";
 import { toast } from "sonner";
 
 import { deleteInstallmentPlanAction } from "@/app/actions/installment-plans";
+import { OwnerMark } from "@/components/fund/owner-mark";
 import { DebtPaymentDialog } from "@/components/planning/debt-payment-dialog";
 import {
   CreditAndOwedLine,
@@ -26,7 +27,6 @@ import {
   Link,
   Money,
   Panel,
-  PersonalMark,
   RowMenu,
   ScreenHeader,
   Separator,
@@ -266,16 +266,7 @@ export function DebtDetailScreen({ data }: { data: DebtDetailData }) {
         title={account.name}
         meta={
           <>
-            {account.foreignOwner && (
-              <PersonalMark
-                showLabel
-                label={
-                  account.ownerName
-                    ? tKey("ownership.of", { name: account.ownerName })
-                    : tKey("ownership.ofSomeone")
-                }
-              />
-            )}
+            <OwnerMark foreignOwner={account.foreignOwner} ownerName={account.ownerName} />
             {balanceLine}
           </>
         }
