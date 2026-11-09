@@ -29,21 +29,25 @@ const say = (minutes: number) => {
 const firstShare = shareOf(daysIn(year, monthIndex) - dayOfMonth + 1, daysIn(year, monthIndex));
 const firstLine = `desde el ${dayOfMonth}: ${say(firstShare)} de tus 10 h`;
 
-// Bogotá's midnight of a civil day, the clock the app reads.
+// Bogotá's midnight of a civil day, the clock the app reads; «long ago» counts from the day the server calls today,
+// since `now()` is the real clock, which `PULSAR_CLOCK` leaves behind.
 async function seed(
   db: postgres.Sql,
   person: Person,
   input: { name: string; openedOn: string | null; horizon: string; rhythm?: number },
 ) {
+  const openedAt = input.openedOn
+    ? db`${input.openedOn}::date::timestamp at time zone 'America/Bogota'`
+    : db`(${today}::date - 70)::timestamp at time zone 'America/Bogota'`;
   const [goal] = await db<{ id: string }[]>`
     insert into goals.goals (user_id, name, horizon, measure_name, measure_unit, rhythm, created_at)
-    values (${person.id}, ${input.name}, ${input.horizon}::date, 'minutos', 'minutos', ${input.rhythm ?? RHYTHM},
-      ${input.openedOn ? db`${input.openedOn}::date::timestamp at time zone 'America/Bogota'` : db`now() - interval '70 days'`})
+    values (${person.id}, ${input.name}, ${input.horizon}::date, 'minutos', 'minutos', ${input.rhythm ?? RHYTHM}, ${openedAt})
     returning id
   `;
+  // The task is born on the day the server calls today, as it is in an unpinned run: `now()` would plant it on the real day.
   await db`
-    insert into goals.one_offs (user_id, goal_id, name, estimate, in_plan, position)
-    values (${person.id}, ${goal.id}, ${`Tarea ${input.name}`}, 780, true, 0)
+    insert into goals.one_offs (user_id, goal_id, name, estimate, in_plan, position, created_at)
+    values (${person.id}, ${goal.id}, ${`Tarea ${input.name}`}, 780, true, 0, ${`${today}T12:00:00-05:00`}::timestamptz)
   `;
   return goal.id;
 }

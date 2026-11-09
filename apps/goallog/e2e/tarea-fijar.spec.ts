@@ -13,6 +13,9 @@ import { todayInZone } from "@/lib/zone";
 const NAMES = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
 const label = (month: string) => NAMES[Number(month.slice(5, 7)) - 1];
 
+// The screen names the year of a month off this one, as «enero de 2027».
+const spoken = (month: string) => (month.slice(0, 4) === todayInZone().slice(0, 4) ? label(month) : `${label(month)} de ${month.slice(0, 4)}`);
+
 const today = todayInZone();
 const thisMonth = monthOf(today);
 const later = nextMonth(thisMonth);
@@ -90,7 +93,7 @@ for (const width of [390, 1440]) {
       const { context, page } = await open(browser, baseURL!, person.sessionFile, "/mes");
       try {
         const split = page.getByRole("button", { name: new RegExp(`^${second}`) });
-        await expect(split).toContainText(`Empieza aquí con 30 min y sigue en ${label(later)}.`);
+        await expect(split).toContainText(`Empieza aquí con 30 min y sigue en ${spoken(later)}.`);
         await expect(split).toContainText("30 min de 1 h 30 min");
 
         await nameButton(page, first).click();
