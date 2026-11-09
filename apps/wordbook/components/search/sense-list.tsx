@@ -52,7 +52,7 @@ function LearnableSenses({ word, senses, children }: { word: string; senses: rea
   }, [word]);
 
   const choose = (sense: Sense) => {
-    const next = senseChoiceFor(word, sense);
+    const next = senseChoiceFor(word, senses, sense);
     setChoice(next);
     saveSenseChoice(next).catch(() => {});
   };
@@ -721,8 +721,12 @@ export function SenseList({
   // closing the entry, on both variants.
   const offerInside = answer.exact !== null && answer.viaInflection.length > 0;
   const offerAbove = !offerInside;
+  // Drawn inside the exact entry's `LearnableSenses`, whose tap belongs to the exact headword alone: the
+  // lemma's senses must not inherit it.
   const offer = offerInside ? (
-    <ViaInflectionOffer answer={answer} compact={compact} wordHref={wordHref} t={t} />
+    <LearnableContext.Provider value={null}>
+      <ViaInflectionOffer answer={answer} compact={compact} wordHref={wordHref} t={t} />
+    </LearnableContext.Provider>
   ) : null;
 
   const hasAnswer = answer.exact !== null || answer.viaInflection.length > 0;

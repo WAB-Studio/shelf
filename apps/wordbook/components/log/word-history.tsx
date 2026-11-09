@@ -336,7 +336,7 @@ export function WordHistory() {
           </Text>
         )
       ) : networkOnly ? (
-        unlistedRow!.translation === null ? null : unlistedRow!.definition !== null ? (
+        unlistedRow!.translation === null ? null : unlistedRow!.schema >= 3 ? (
           <NetworkAnswer
             surface={key}
             state={{

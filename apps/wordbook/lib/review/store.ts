@@ -8,9 +8,10 @@ const DATABASE_VERSION = 2;
 const STORE_NAME = "cards";
 const SENSE_STORE_NAME = "senses";
 
-// RL-85: which sense of a word the card draws. A sense is named by its part of speech and its first
-// translation, which the dictionary's order keeps stable; a name no sense answers to falls back to the first.
-export type SenseChoice = { key: string; pos: string; translation: string };
+// RL-85: which sense of a word the card draws. A sense is named by its place in the group and by its
+// signature (part of speech, every translation and the gloss), so two senses sharing a part of speech and a
+// first translation stay apart; a name no sense answers to falls back to the first.
+export type SenseChoice = { key: string; index: number; signature: string };
 
 let databasePromise: Promise<IDBDatabase> | null = null;
 
