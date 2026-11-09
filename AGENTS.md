@@ -38,6 +38,7 @@ This file is the core every agent loads. Read the file the index names before th
 - `docs/agentes/wordbook.md`: WordBook's `/cuenta`, auth, keys and census.
 - `docs/agentes/historia.md`: the measurements and decisions behind these rules.
 - `docs/TRAPS.md`: read it before writing a query, a migration or a spec.
+- `docs/decisiones-2026-11-08.md`: every open question, closed. Read it before asking the user anything.
 - `docs/TRAPS-archivo.md`: traps whose cause is gone. Read it only to learn why a rule exists.
 - `apps/<app>/AGENTS.md`: what holds inside one app. Loaded when you work there.
 - «iniciemos» and «cerremos handoff»: the `handoff` skill. To develop: the `orchestrator` skill (one session, § Modules).
@@ -97,6 +98,7 @@ This file is the core every agent loads. Read the file the index names before th
 - Do git work without asking: commit, push, open a PR, merge into `integracion`, delete a branch; report it. Ride a docs
   change along with the work that produced it.
 - Ask before taking `integracion` to `main`. That merge is the deploy: once per slice, at most once a day.
+- Apply a production migration only with the user's authorization in the chat. Decided by the user 2026-11-02.
 - Fetch before you compare. Ask GitHub whether a branch landed: a squash merge is never an ancestor.
 
 ## Verification
