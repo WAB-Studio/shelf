@@ -233,7 +233,7 @@ test("word/text: a non-thin word caches and returns no translations", async () =
   assert.equal(response.status, 200);
   assert.equal(((await response.json()) as { translations: unknown }).translations, null);
   assert.equal(state.textWrites.length, 1);
-  assert.equal(state.textWrites[0][5], null, "translations were stored for a word the dictionary is not thin on");
+  assert.equal(state.textWrites[0][3], null, "translations were stored for a word the dictionary is not thin on");
 });
 
 test("word/text: a cached answer carries the definition only when the caller asked", async () => {

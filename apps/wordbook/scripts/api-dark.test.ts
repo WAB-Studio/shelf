@@ -461,9 +461,9 @@ for (const [reason, refuse] of REFUSALS) {
     const response = await ROUTES[0].call(post(ROUTES[0].body));
     assert.equal(response.status, 200);
     assert.equal(response.headers.get("cache-control"), "no-store");
-    const body = (await response.json()) as { definition: unknown; example: unknown; translations: unknown };
+    const body = (await response.json()) as { definition: unknown; translations: unknown };
     assert.equal(body.definition, "a pet");
-    assert.deepEqual(body.example, { en: "A cat.", es: "Un gato." });
+    assert.equal("example" in body, false);
     assert.equal(body.translations, null);
     assert.equal(state.modelCalls, 0);
     assertDarkLine("word/text", reason);

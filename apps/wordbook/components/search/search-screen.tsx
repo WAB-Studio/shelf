@@ -10,6 +10,7 @@ import type { SenseGroup } from "@/lib/dictionary/index-build";
 import { useDictionary } from "@/lib/dictionary/use-dictionary";
 import type { WordAnswer } from "@/lib/dictionary/lookup";
 import { QUERY_COMMITTED_EVENT } from "@/lib/nav/query-storage";
+import { isThinAnswer } from "@/lib/word/thin";
 import { announce } from "@/lib/word/announce";
 import { useDecoration } from "@/lib/word/use-decoration";
 import { useNetworkAnswer } from "@/lib/word/use-network-answer";
@@ -42,6 +43,12 @@ type LogPayload = Omit<LookupRecord, "id" | "schema">;
 
 // RL-41: "a word that already has a definition never asks for one" — true
 // only when none of the exact match's own senses carry one.
+// RL-41 and RL-45: the text route is asked only for a definition the entry lacks
+// or for the translations of a thin entry; it writes no example (RL-42 retired).
+function wantsDecoration(group: SenseGroup): boolean {
+  return needsDefinition(group) || isThinAnswer(group);
+}
+
 function needsDefinition(group: SenseGroup): boolean {
   return group.senses.every((sense) => sense.definition === null);
 }
@@ -501,7 +508,7 @@ export function SearchScreen({ initialQuery }: { initialQuery?: string }) {
   // decorate. `useDecoration` itself waits for the settle and de-dupes.
   const exactGroup = kind.kind === "word" && wordAnswer !== null ? wordAnswer.exact : null;
   const decoration = useDecoration(
-    exactGroup ? exactGroup.headword : null,
+    exactGroup && wantsDecoration(exactGroup) ? exactGroup.headword : null,
     exactGroup ? needsDefinition(exactGroup) : false,
   );
 

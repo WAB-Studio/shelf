@@ -161,9 +161,8 @@ export function SpeakButton({
 // The IPA heading the entry's first pronunciation block, or null when the
 // entry draws no block at all (58,773 of 58,944 headwords) or when that
 // first block is the headless one — which only `can` and `pace` carry, and
-// never in first place. The voice control and the generated example are
-// both named from here, so neither can name a sound the screen does not
-// lead with.
+// never in first place. The voice control is named from here, so it
+// cannot name a sound the screen does not lead with.
 export function leadPronunciation(senses: readonly Sense[]): string | null {
   return pronunciationBlocks(senses)?.[0].ipa ?? null;
 }
@@ -661,10 +660,6 @@ export function SenseList({
   const t = useTranslations("word");
   const tSearch = useTranslations("search");
   const compact = variant === "compact";
-  // Null on every compact call: the breakdown groups nothing, so it names
-  // nothing either (docs/wordbook/DESIGN.md "A word block on
-  // `SinEntradaFrase` carries its translations alone").
-  const exactLead = !compact && answer.exact !== null ? leadPronunciation(answer.exact.senses) : null;
 
   // RL-58: the lemma block rises under the form's first group instead of
   // closing the entry, on both variants.
@@ -714,21 +709,11 @@ export function SenseList({
                 compact={false}
                 interlude={offerInside ? offer : undefined}
                 lead
-                example={generated && <GeneratedText state={generated} headword={answer.exact.headword} />}
+                example={generated && <GeneratedText state={generated} />}
                 shownIpa={answer.exact.senses[0].ipa}
                 t={t}
               />
             </>
-          )}
-          {/* RL-51: the example is decoration resolved from the spelling
-              alone (RL-42), so it reads as the entry's own. The foot line
-              says which pronunciation it is about: the entry's leading one,
-              the sense the model writes for and the sound «Escuchar» speaks.
-              An entry that draws no block reads unchanged. */}
-          {!compact && generated?.kind === "resolved" && exactLead !== null && (
-            <Text size="1" color="gray" data-generated-pronunciation={exactLead}>
-              {t("examplePronunciation", { ipa: exactLead })}
-            </Text>
           )}
         </Flex>
       )}

@@ -5,8 +5,7 @@ import messages from "../messages/es.json";
 
 // RL-45: the network's own translations for a thin dictionary answer draw
 // under the dictionary's, never inside it — this is the module 8 done
-// criterion, proved against `bed` rather than `snuff` so the dictionary
-// block under test is the one already read in `palabra-historial.spec.ts`.
+// criterion, proved against `snuff`, the thin entry the text route is asked about.
 
 // Chromium's built-in `Translator` hangs `availability()` forever
 // (docs/TRAPS.md); the word path here must never reach it.
@@ -17,14 +16,14 @@ async function deleteTranslator(page: Page): Promise<void> {
 }
 
 // `manifest.asset.path` is only ever fetched once per browser context; a
-// second `loadBed` in the same test hits the cache and gives no fresh
+// second `loadSnuff` in the same test hits the cache and gives no fresh
 // `response` event for `waitForResponse` to catch, so this waits for the
 // heading itself, generously, instead of for the asset (`palabra-historial
-// .spec.ts`'s own `/?q=bed` navigation follows the same pattern).
-async function loadBed(page: Page): Promise<void> {
+// .spec.ts`'s own `/?q=snuff` navigation follows the same pattern).
+async function loadSnuff(page: Page): Promise<void> {
   const decorated = page.waitForResponse((response) => response.url().includes("/api/word/text"));
-  await page.goto("/?q=bed");
-  await expect(page.getByRole("heading", { name: "bed", exact: true })).toBeVisible({ timeout: 10000 });
+  await page.goto("/?q=snuff");
+  await expect(page.getByRole("heading", { name: "snuff", exact: true })).toBeVisible({ timeout: 10000 });
   await decorated;
   await pageTasks(page);
 }
@@ -45,17 +44,14 @@ async function textBeforeGeneratedBlock(page: Page): Promise<string> {
   });
 }
 
-// `stubWordText`'s own body type (`fixtures.ts`, out of this module's file
-// list) predates RL-45 and does not carry `translations` yet — asserted
-// through, never widened, since fixtures.ts is not a file this module edits.
 async function stubThinWordText(
-  stubWordText: (body: { definition: string | null; example: { en: string; es: string } }) => Promise<void>,
-  body: { definition: string | null; example: { en: string; es: string }; translations: string[] | null },
+  stubWordText: (body: { definition: string | null; translations?: string[] | null }) => Promise<void>,
+  body: { definition: string | null; translations: string[] | null },
 ): Promise<void> {
-  await stubWordText(body as unknown as { definition: string | null; example: { en: string; es: string } });
+  await stubWordText(body);
 }
 
-test("bed's dictionary senses draw unchanged whether the network's translations arrive or not, and the network's own lines sit marked underneath them", async ({
+test("snuff's dictionary senses draw unchanged whether the network's translations arrive or not, and the network's own lines sit marked underneath them", async ({
   page,
   stubWordText,
 }) => {
@@ -63,11 +59,10 @@ test("bed's dictionary senses draw unchanged whether the network's translations 
 
   await stubThinWordText(stubWordText, {
     definition: null,
-    example: { en: "He fell asleep in the flower bed.", es: "Se quedó dormido en el macizo de flores." },
     translations: ["aspirar", "resoplar"],
   });
 
-  await loadBed(page);
+  await loadSnuff(page);
   const dictionaryWithNetwork = await textBeforeGeneratedBlock(page);
 
   // The network's own two lines, marked apart from both the dictionary's
@@ -80,11 +75,10 @@ test("bed's dictionary senses draw unchanged whether the network's translations 
 
   await stubThinWordText(stubWordText, {
     definition: null,
-    example: { en: "He fell asleep in the flower bed.", es: "Se quedó dormido en el macizo de flores." },
     translations: null,
   });
 
-  await loadBed(page);
+  await loadSnuff(page);
   const dictionaryWithoutNetwork = await textBeforeGeneratedBlock(page);
 
   // The claim this module exists to prove: nothing above the generated
@@ -106,11 +100,10 @@ test("a thin word with an empty translations array draws no network block, same 
 
   await stubThinWordText(stubWordText, {
     definition: null,
-    example: { en: "He fell asleep in the flower bed.", es: "Se quedó dormido en el macizo de flores." },
     translations: [],
   });
 
-  await loadBed(page);
+  await loadSnuff(page);
 
   await expect(page.locator("[data-network-translations]")).toHaveCount(0);
   await expect(page.getByText(messages.word.networkTranslations)).toHaveCount(0);

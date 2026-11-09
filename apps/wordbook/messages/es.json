@@ -63,7 +63,6 @@
     "networkFailed": "No se pudo responder por internet",
     "example": "Ejemplo",
     "exampleTranslation": "Traducción",
-    "examplePronunciation": "El ejemplo corresponde a {ipa}",
     "suggestions": "Sugerencias",
     "listen": "Escuchar «{headword}»",
     "listenPronunciation": "Escuchar «{headword}» {ipa}",

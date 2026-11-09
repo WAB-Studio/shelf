@@ -19,8 +19,7 @@ test("typing a word letter by letter asks the paid text route exactly once", asy
       contentType: "application/json",
       headers: { [STUB_HEADER]: "1" },
       body: JSON.stringify({
-        definition: null,
-        example: { en: "The lighthouse guided the ships home.", es: "El faro guió a los barcos a casa." },
+        definition: "A tower with a light to guide ships.",
       }),
     });
   });

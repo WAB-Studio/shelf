@@ -7,10 +7,6 @@ export const textRequestSchema = z.object({
 
 export const textResponseSchema = z.object({
   definition: z.string().min(1).nullable(),
-  example: z.object({
-    en: z.string().min(1),
-    es: z.string().min(1),
-  }),
   // RL-45: null for an answer the dictionary was never thin on. A thin one
   // asked over the network answers an array — empty if none came back — and
   // is never asked again (`word-texts.ts`'s `translationsAsked`).

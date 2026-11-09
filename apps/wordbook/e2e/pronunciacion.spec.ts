@@ -217,43 +217,6 @@ test("RL-51: the voice control names the pronunciation it speaks", async ({ page
   await expect(page.getByRole("button", { name: plain, exact: true })).toBeVisible();
 });
 
-// RL-42's example is decoration resolved from the spelling alone, drawn
-// after the last block, and on a grouped entry it read as that block's own:
-// `row` closed with «Me gusta remar el bote» under /ɹaʊ/, the fight. The
-// foot line names the pronunciation the example is about.
-test("RL-51: the generated example names the block it belongs to, and only on a grouped entry", async ({
-  page,
-  stubWordText,
-}) => {
-  await deleteTranslator(page);
-  await stubWordText({
-    definition: null,
-    example: { en: "I like to row the boat.", es: "Me gusta remar el bote." },
-  });
-  await loadDictionary(page);
-
-  await answer(page, "row");
-  await expect(page.getByText("Me gusta remar el bote.")).toBeVisible();
-  const named = messages.word.examplePronunciation.replace("{ipa}", "/rɑː/");
-  await expect(page.getByText(named, { exact: true })).toBeVisible();
-
-  // The line sits under the example, not over it: it answers the block the
-  // example was drawn beneath.
-  const belowExample = await page.evaluate(() => {
-    const line = document.querySelector("main [data-generated-pronunciation]");
-    const block = document.querySelector("main [data-generated-block]");
-    if (!line || !block) return null;
-    return Boolean(block.compareDocumentPosition(line) & Node.DOCUMENT_POSITION_FOLLOWING);
-  });
-  expect(belowExample).toBe(true);
-
-  // An entry that draws no block gains nothing: there is no second
-  // pronunciation the example could have been read as.
-  await answer(page, "umbrella");
-  await expect(page.getByText("Me gusta remar el bote.")).toBeVisible();
-  await expect(page.locator("main [data-generated-pronunciation]")).toHaveCount(0);
-});
-
 // The breakdown of a phrase the dictionary cannot answer carries
 // translations alone (docs/wordbook/DESIGN.md "A word block on
 // `SinEntradaFrase`"), so it never groups and never draws an IPA. Every

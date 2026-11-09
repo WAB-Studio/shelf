@@ -117,14 +117,14 @@ test("a cold thin word the model answers is closed (asked = true), even with []"
   state.generated = { ...state.generated!, translations: [] };
   await ask(true);
   assert.equal(state.writes.length, 1);
-  assert.deepEqual(state.writes[0].slice(5), [[], true]);
+  assert.deepEqual(state.writes[0].slice(3), [[], true]);
 });
 
 test("a cold thin word the model leaves null stays open (asked = false)", async () => {
   state.generated = { ...state.generated!, translations: null };
   await ask(true);
   assert.equal(state.writes.length, 1);
-  assert.deepEqual(state.writes[0].slice(5), [null, false]);
+  assert.deepEqual(state.writes[0].slice(3), [null, false]);
 });
 
 test("one dictionary definition in the group means the model is not asked for a definition", async () => {

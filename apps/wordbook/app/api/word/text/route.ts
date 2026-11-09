@@ -21,7 +21,7 @@ import {
 } from "@/lib/word/text-cache";
 import { isThinAnswer } from "@/lib/word/thin";
 
-// RL-41 and RL-42's decoration: no reader session reaches this route, the
+// RL-41 and RL-45's decoration: no reader session reaches this route, the
 // cache is keyed on the headword alone (`db/schema/word-texts.ts`).
 
 // Above the provider's own 20 s timeout, so a slow model answers 204 rather
@@ -90,8 +90,8 @@ export async function POST(request: Request): Promise<Response> {
     // A thin word never asked, or asked before this column existed:
     // enrich it in place, at most once per row the model answers. Both caps
     // guard this ask too, but never at the cost of the answer already
-    // cached — over either, or with the model off, the row's definition and
-    // example still return; only the enrichment is skipped, and it stays
+    // cached — over either, or with the model off, the row's definition
+    // still returns; only the enrichment is skipped, and it stays
     // open for a later lookup.
     if (thin && !cached.translationsAsked) {
       const dark = !env.OPENAI_API_KEY
@@ -114,7 +114,6 @@ export async function POST(request: Request): Promise<Response> {
     return json(
       textResponseSchema.parse({
         definition: parsed.data.needDefinition ? cached.definition : null,
-        example: cached.example,
         translations,
       }),
       200,
@@ -161,8 +160,6 @@ export async function POST(request: Request): Promise<Response> {
       headword,
       MODEL_NAME,
       definition,
-      generated.example.en,
-      generated.example.es,
       translations,
       translationsWereAnswered(translations),
     );
@@ -173,7 +170,6 @@ export async function POST(request: Request): Promise<Response> {
   return json(
     textResponseSchema.parse({
       definition: parsed.data.needDefinition ? definition : null,
-      example: generated.example,
       translations,
     }),
     200,
