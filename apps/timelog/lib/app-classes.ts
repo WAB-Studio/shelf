@@ -1,3 +1,4 @@
+import { BROWSER_NAMES } from "@/lib/app-names";
 import type { AppTime } from "@/lib/queries";
 
 // What an app is for. Classes describe where the time went; none of them is better than another.
@@ -15,10 +16,7 @@ const CLASS_OF: Record<string, AppClass> = {
   Java: "code",
   Postman: "code",
   "Docker Desktop": "code",
-  Edge: "browser",
-  Chrome: "browser",
-  Firefox: "browser",
-  Brave: "browser",
+  ...Object.fromEntries([...BROWSER_NAMES].map((name) => [name, "browser" as const])),
   Slack: "comms",
   Discord: "comms",
   Teams: "comms",
