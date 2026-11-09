@@ -714,7 +714,7 @@ export function ReviewTree({
     if (returning.has(n.path)) return true;
     if (!unmarked.has(n.path)) return false;
     // A goal two open goals name, and a phase across another, are already one row with its own control in the tree.
-    if (repeated.has(Number(n.path.split(".")[1])) && (n.kind === "goal" || n.kind === "group")) return false;
+    if ((repeated.has(Number(n.path.split(".")[1])) || review.matched.has(Number(n.path.split(".")[1]))) && (n.kind === "goal" || n.kind === "group")) return false;
     if (review.crosses.has(n.path)) return false;
     const parent = parentOf(index);
     return parent === undefined || parent.marked;

@@ -417,3 +417,31 @@ test("906b: a sub-task marked done shows its day too", () => {
   const { nodes } = review(draft(goal({ tasks: [task({ name: "Semana", children: [child] })] })));
   assert.deepEqual(nodes.filter((n) => n.kind === "subTask").map((n) => [n.label, n.doneOn]), [["EF SET", "2026-10-09"]]);
 });
+
+test("a new goal under an open goal left unmarked is still sent, under the open goal standing empty (RP-152)", () => {
+  const d = draft(goal({ name: "Inglés", tasks: [task({ name: "Pasiva" })] }), goal({ key: "g2", parent: "g1", name: "Nueva" }));
+  const r = review(d, { unmarked: null }, [snapshot("Inglés", "a")]);
+  assert.deepEqual(r.toSend.goals.map((g) => g.name), ["Inglés", "Nueva"]);
+  assert.deepEqual(r.toSend.goals[0].tasks, [], "the open goal writes nothing of its own");
+  assert.equal(r.nodes.find((n) => n.path === "goals.1")?.marked, true);
+  assert.equal(r.creating, 1);
+  assert.deepEqual(r.updates, []);
+  // Neither the host nor its new goal is counted as an update; the host is no creation.
+  assert.equal(r.createCount, 1);
+});
+
+test("an open goal left unmarked with no new goal under it sends nothing", () => {
+  const r = review(draft(goal({ name: "Inglés" })), { unmarked: null }, [snapshot("Inglés", "a")]);
+  assert.deepEqual(r.toSend.goals, []);
+});
+
+test("the differences shown for an unmarked open goal are what marking it would send", () => {
+  const stretch = { aim: "Base", startsOn: "2026-10-15", endsOn: "2026-11-30", src: [] };
+  const d = draft(goal({ name: "Meta", phases: [stretch], tasks: [task({ name: "Nueva tarea" }), task({ name: "Otra" })] }));
+  const open = { ...snapshot("Meta", "m"), phases: [{ id: "p", aim: "Base suave", startsOn: "2026-10-15", endsOn: "2026-11-29" }] };
+  const shown = review(d, { unmarked: null }, [open]).changes.get(0)!;
+  assert.ok(!shown.some((c) => c.kind === "phaseAdded"), "the phase that crosses is not offered");
+  const without = review(d, { unmarked: ["goals.0", "goals.0.tasks.1"] }, [open]).changes.get(0)!;
+  assert.ok(!without.some((c) => c.kind === "taskAdded" && c.name === "Otra"), "a sub-part unmarked is not offered");
+  assert.ok(without.some((c) => c.kind === "taskAdded" && c.name === "Nueva tarea"));
+});
