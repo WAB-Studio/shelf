@@ -246,8 +246,9 @@ const WRITTEN = new Set<ReviewNode["kind"]>(["goal", "group", "phase", "month", 
 
 // The review of a stored draft: the tree to draw, what the person is sent to confirm and what the
 // plan's lines came to. The corrections the person declined are undone, the check's proposals they
-// did not decline are applied, a goal one open goal names is drawn as an update (RP-130), and a goal
-// two open goals name starts unmarked: the import cannot choose between them.
+// did not decline are applied, and a goal an open goal names is drawn as an update that starts
+// unmarked (RP-152): the person marks the ones they mean to change. A goal two open goals name starts
+// unmarked too: the import cannot choose between them.
 export function reviewTree(stored: StoredDraft, today: string, snapshots: GoalSnapshot[]) {
   const decided = decideWithPaths(stored.draft, stored.corrections, new Set(stored.declined));
   const work = withoutStrayEstimates(decided.draft);
@@ -256,7 +257,7 @@ export function reviewTree(stored: StoredDraft, today: string, snapshots: GoalSn
   const refusals = draftRefusals(work, today);
   const refused = new Set(refusals.map((refusal) => refusal.path));
   const matches = matchGoals(work, snapshots);
-  // A phase the plan puts across one the goal has: it starts unmarked, as does a goal two open goals name.
+  // A phase the plan puts across one the goal has starts unmarked.
   const crosses = new Map<string, string>();
   for (const { g, match } of matches) {
     if (match === null || match === "ambiguous") continue;
@@ -266,7 +267,7 @@ export function reviewTree(stored: StoredDraft, today: string, snapshots: GoalSn
     });
   }
   const unmarked: ReadonlySet<string> = new Set(
-    stored.unmarked ?? [...matches.flatMap(({ g, match }) => (match === "ambiguous" ? [`goals.${g}`] : [])), ...crosses.keys()],
+    stored.unmarked ?? [...matches.flatMap(({ g, match }) => (match === null ? [] : [`goals.${g}`])), ...crosses.keys()],
   );
   const out = outness(work, unmarked, refused);
   const blocked = outness(work, new Set(), refused);
@@ -359,6 +360,13 @@ export function reviewTree(stored: StoredDraft, today: string, snapshots: GoalSn
     changes.set(g, list);
     // A goal the plan leaves as it is is neither updated nor counted: the server leaves it alone.
     if (changesAnything(list)) updates.push({ g: sent, goalId: snapshot.id, fingerprint: fingerprint(list) });
+  });
+  // A matched goal left unmarked still shows what marking it would change: its differences are read off the whole draft.
+  const whole = withCutPhases(markedDraft(work, new Set(), refused), today);
+  const wholeKept = work.goals.flatMap((_, g) => (blocked(`goals.${g}`) === null ? [g] : []));
+  wholeKept.forEach((g, at) => {
+    const snapshot = matched.get(g);
+    if (snapshot && !changes.has(g)) changes.set(g, differences(whole.goals[at], snapshot, today));
   });
   const unchanged = unchangedParts(work, matched, changes, crosses);
   // The goal's place in the draft as drawn, for a refusal that names its place in the draft sent.

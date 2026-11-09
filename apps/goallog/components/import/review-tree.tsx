@@ -483,7 +483,7 @@ export function ReviewTree({
         </div>,
       );
     }
-    if ((node.kind === "goal" || node.kind === "group") && node.marked && review.changes.has(g)) {
+    if ((node.kind === "goal" || node.kind === "group") && review.changes.has(g)) {
       const list = review.changes.get(g)!;
       const goalUnit = goal.measure?.unit ?? review.matched.get(g)?.measure?.unit ?? "";
       items.push(
