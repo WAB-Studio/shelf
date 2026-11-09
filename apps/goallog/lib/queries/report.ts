@@ -9,7 +9,7 @@ import { measureByWeek } from "@/lib/day/review";
 import { branchOf, buildTree, rollUp, spanStart, type GoalMonths, type RolledUp, type Tree, type TreeRow } from "@/lib/goals/tree";
 import { queryEvidenceBySource } from "@/lib/queries/evidence";
 import type { GoalReport, Report, ReportTask } from "@/lib/export/report";
-import { monthLine, monthOf, monthsOfSpan, toDate } from "@/lib/plan/months";
+import { holderToDate, monthLine, monthOf, monthsOfSpan, toDate } from "@/lib/plan/months";
 import type { PlanInput, PlanItem, PlanTask } from "@/lib/plan/roadmap";
 import { planMonthList, planShare } from "@/lib/plan/roadmap-read";
 import { weekPlanned } from "@/lib/plan/week-planned";
@@ -461,7 +461,13 @@ function holderOf(args: {
     ownMonths: [],
     unit: sum.unit,
     thisMonth: { planned, reached, underPace },
-    toDate: toDate(everyMonth, today, { openedOn: spanStartOn, horizon: row.goal.horizon }),
+    toDate: holderToDate(toDate(everyMonth, today, { openedOn: spanStartOn, horizon: row.goal.horizon }).reached, [
+      row.goal.measure_unit === sum.unit ? report.toDate.planned : 0,
+      ...node.children.flatMap((cid) => {
+        const child = reports.get(cid);
+        return child !== undefined && child.unit === sum.unit ? [child.toDate.planned] : [];
+      }),
+    ]),
     months: everyMonth,
     weeks,
     weekSplits: weekSplitsOf(weeks, (startsOn, endsOn) => spanTotal(id, startsOn, endsOn)),

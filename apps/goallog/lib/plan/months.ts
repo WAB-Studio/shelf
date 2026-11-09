@@ -249,3 +249,10 @@ export function toDate(
       { planned: 0, reached: 0 },
     );
 }
+
+// A goal that holds goals reads «Hasta hoy» (RP-153) as the sum of what each goal under it and its own plan through
+// today, every one spread over its own days: a goal opened mid-month plans fewer of them than its holder's span
+// would say. What was reached is the holder's whole.
+export function holderToDate(reached: number, planned: readonly number[]): { planned: number; reached: number } {
+  return { planned: planned.reduce((sum, amount) => sum + amount, 0), reached };
+}

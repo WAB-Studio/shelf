@@ -12,6 +12,7 @@ import {
   plannedOf,
   reachedByMonth,
   settledMonths,
+  holderToDate,
   plannedThrough,
   toDate,
 } from "./months";
@@ -303,4 +304,15 @@ test("plannedThrough: a goal opened mid-month or ending mid-month spreads over i
 
 test("plannedThrough: a goal not yet open today plans nothing so far", () => {
   assert.equal(plannedThrough(60, "2026-11-01", "2026-11-05", { openedOn: "2026-11-09", horizon: null }), 0);
+});
+
+test("holderToDate: the holder's planned is the sum of its goals' own prorated shares, not one prorating over its span", () => {
+  const today = "2026-11-10";
+  // Two goals planning 60 in November, one open all month, one opened on the 6th.
+  const early = plannedThrough(60, "2026-11-01", today, { openedOn: "2026-01-01", horizon: null });
+  const late = plannedThrough(60, "2026-11-01", today, { openedOn: "2026-11-06", horizon: null });
+  assert.deepEqual([early, late], [20, 12]);
+  assert.deepEqual(holderToDate(35, [0, early, late]), { planned: 32, reached: 35 });
+  // Prorating the sum over the holder's span (open all month) would read 40.
+  assert.notEqual(plannedThrough(120, "2026-11-01", today, { openedOn: "2026-01-01", horizon: null }), 32);
 });
