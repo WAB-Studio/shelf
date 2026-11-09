@@ -43,7 +43,11 @@ async function open(browser: Browser, person: Person, width: number) {
   const page = await context.newPage();
   await page.goto("/");
   await settled(page);
-  if (width < 1024) await expect(page.getByPlaceholder(FIELD)).toBeVisible();
+  // At 360 the field is in a sheet behind the «+» (RP-154); a past day has none, and its tests go there themselves.
+  if (width < 768) {
+    await page.getByRole("button", { name: "Anotar algo suelto" }).click();
+    await expect(page.getByPlaceholder(FIELD)).toBeVisible();
+  } else if (width < 1024) await expect(page.getByPlaceholder(FIELD)).toBeVisible();
   return { context, page };
 }
 
@@ -56,7 +60,7 @@ const metaGroup = (page: Page) => page.getByRole("radiogroup", { name: /^de qué
 const cuandoGroup = (page: Page) => page.getByRole("radiogroup", { name: /^para cuándo$/i });
 
 test.describe("at 360", () => {
-  test("Hoy has one task field, under «SUELTAS», and no goal draws its own", async ({ person, browser, db }) => {
+  test("Hoy has one task field, in the sheet the «+» opens, and no goal draws its own", async ({ person, browser, db }) => {
     await seedGoals(db, person.id);
     const { context, page } = await open(browser, person, 360);
     try {
@@ -66,10 +70,6 @@ test.describe("at 360", () => {
       // The groups' fields may stay in the markup for 1280; none is on screen.
       await expect(page.getByLabel(/^Una tarea de /).locator("visible=true")).toHaveCount(0);
       await expect(page.getByPlaceholder(/^Una tarea de /).locator("visible=true")).toHaveCount(0);
-      // The one field sits under the last goal's group, in «SUELTAS».
-      const last = await boxOf(page.getByText("Revisar meditar", { exact: true }));
-      expect((await boxOf(field)).y).toBeGreaterThan(last.y);
-      await expect(page.getByText("Sueltas", { exact: true })).toBeVisible();
       // Empty: no choices yet.
       await expect(metaGroup(page)).toHaveCount(0);
       await expect(cuandoGroup(page)).toHaveCount(0);
@@ -120,7 +120,8 @@ test.describe("at 360", () => {
       expect(Date.now() - started).toBeLessThan(5000);
       const rows = await rowsOf(db, person.id, name);
       expect(rows).toEqual([{ goal_id: null, day: todayInZone(), in_plan: false }]);
-      await expect(field).toHaveValue("");
+      // Written on today with nothing left to read: the sheet closes on the day it joined.
+      await expect(field).toBeHidden();
     } finally {
       await context.close();
     }

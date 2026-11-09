@@ -29,6 +29,7 @@ import { screenPlanned } from "@/lib/plan/screen-planned";
 import type { DayMonthLine } from "@/lib/queries/day";
 import { evidenceUnitWords } from "@/lib/evidence/unit-words";
 import { NewOneOff } from "./new-one-off";
+import { NewOneOffSheet } from "./new-one-off-sheet";
 import { MonthTaskLine } from "./month-task-line";
 import { OneOffRow } from "./one-off-row";
 import { PlanNotices, type PlanNoticeItem } from "./plan-notice";
@@ -713,7 +714,7 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
           <NewOneOff daylessCount={daylessCount} />
         </Face>
         <Face on="phone">
-          <NewOneOff
+          <NewOneOffSheet
             daylessCount={daylessCount}
             chooseGoal={groupBlocks.flatMap(({ rootId, items }) => {
               const root = items[0].goal.id === rootId ? items[0].goal : openGoals.find((goal) => goal.id === rootId);

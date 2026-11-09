@@ -31,12 +31,14 @@ test("the field at the foot of the day adds a one-off with no dialog and no navi
     const startingUrl = page.url();
 
     // At 360 Hoy has one task field, the one under "Sueltas" (day-screen.tsx).
+    // At 360 the field is in the sheet the «+» opens (RP-154).
+    await page.getByRole("button", { name: "Anotar algo suelto" }).click();
     const field = page.getByPlaceholder("Escribe una tarea…");
     await field.fill(name);
     await field.press("Enter");
 
     await expect(page.locator("button", { hasText: name })).toBeVisible();
-    await expect(field).toHaveValue("");
+    await expect(field).toBeHidden();
 
     expect(dialogFired).toBe(false);
     expect(page.url()).toBe(startingUrl);

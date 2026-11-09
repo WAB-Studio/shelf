@@ -26,6 +26,9 @@ export type NewOneOffProps = {
   // The phone's one field of the day: the goals it may write to, chosen
   // inside it. Absent, the field keeps its desktop face (one per group).
   chooseGoal?: { id: string; name: string }[];
+  // Called once a write lands, with whether a line saying where it went is left showing; a sheet around the
+  // field closes itself when there is nothing left to read.
+  onSaved?: (saidWhere: boolean) => void;
 };
 
 /**
@@ -40,7 +43,7 @@ export type NewOneOffProps = {
  * because Enter in the date field would otherwise write nothing. A one-off written for another
  * day, or none, does not draw on Hoy, so the field says where it went.
  */
-export function NewOneOff({ goalId: fixedGoalId, daylessCount = 0, goalName: fixedGoalName, chooseGoal }: NewOneOffProps) {
+export function NewOneOff({ goalId: fixedGoalId, daylessCount = 0, goalName: fixedGoalName, chooseGoal, onSaved }: NewOneOffProps) {
   const t = useTranslations();
   const [pending, startTransition] = useTransition();
   const [name, setName] = useState("");
@@ -100,8 +103,10 @@ export function NewOneOff({ goalId: fixedGoalId, daylessCount = 0, goalName: fix
           setName("");
           setChoice(DEFAULT_DAY_CHOICE);
           setTarget(null);
-          setSaved(savedMessage(choice.kind, day));
+          const message = savedMessage(choice.kind, day);
+          setSaved(message);
           setSavedInPlan(choice.kind === "none" && goalId ? goalId : null);
+          onSaved?.(message !== null);
         } else setError(result.error);
       });
     });

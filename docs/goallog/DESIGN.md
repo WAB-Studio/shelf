@@ -1786,6 +1786,7 @@ Approved by the user 2026-10-14 («todo a») on the canvas «Bitácora de metas�
 `ImportarComoEscribiste`, `ImportarErroresClaros`, `PorSemanaContenedora`, `PorSemanaTelefono`, `MesesContenedora`, `MetaSinTareas`,
 `PapelSigueLaPantalla`, `CifraUnFormato`, `HoyUnCampo`, `MesAñadirTarea`, `PalabrasPulido`.
 
+- **Hoy's field at 360 sits in a sheet behind a «+» (RP-154),** a 56 px accent circle fixed 16 px over the bottom nav (`AddButton`), named «Anotar algo suelto». The field, «de qué meta» and «para cuándo» keep their words inside it; 1280 does not change.
 - **`HoyUnCampo`: the day chips carry their own label, «para cuándo»,** like «de qué meta» above them.
 - **`ImportarErroresClaros`: the notice stays under the text box,** where it is today.
 - **A correction from the template is read only on the model's path as accepted;** from the template it starts declined (RP-122).

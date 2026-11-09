@@ -96,6 +96,8 @@ export { Separator } from "./separator";
 
 export { ThemeToggle } from "./theme-toggle";
 
+export { AddButton } from "./add-button";
+
 export { Table, type TableRow } from "./table";
 
 export { Face } from "./face";

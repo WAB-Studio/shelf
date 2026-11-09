@@ -1,0 +1,35 @@
+/* Fixed over the content, clear of the bottom nav (components/ui/bottom-nav): its 56px
+   and the device's own inset. A sheet is a portal after this in the tree and stands over it. */
+.add {
+  position: fixed;
+  inset-inline-end: 16px;
+  inset-block-end: calc(56px + env(safe-area-inset-bottom, 0px) + 16px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: 56px;
+  block-size: 56px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--pulsar-accent);
+  color: var(--pulsar-on-accent);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.add:focus-visible {
+  outline: 2px solid var(--pulsar-ink);
+  outline-offset: 2px;
+}
+
+.icon {
+  inline-size: 24px;
+  block-size: 24px;
+}
+
+@media print {
+  .add {
+    display: none;
+  }
+}
