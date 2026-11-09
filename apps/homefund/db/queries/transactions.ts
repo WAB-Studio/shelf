@@ -736,17 +736,25 @@ export async function getSettlementCurrencies({
   };
 }
 
-// Whether the caller can read this account and it belongs to a fund. An account the
-// caller cannot read answers false: the write that follows is refused on its own.
-export async function isFundAccount(accountId: string): Promise<boolean> {
+// What «De quién» needs to know about a write, in ONE round trip: whether the destination is
+// a fund account the caller can read, and, for an edit, who the movement already credits. An
+// account or a movement the caller cannot read answers false and null: the write that follows
+// is refused on its own.
+export async function readContributorContext({
+  toAccountId,
+  transactionId,
+}: {
+  toAccountId: string;
+  transactionId?: string;
+}): Promise<{ intoFund: boolean; stored: string | null }> {
   const [row] = await withUserDb((tx) =>
-    tx
-      .select({ groupId: accounts.groupId })
-      .from(accounts)
-      .where(eq(accounts.id, accountId)),
+    tx.execute<{ into_fund: boolean | null; stored: string | null }>(sql`select
+      (select group_id is not null from accounts where id = ${toAccountId}::uuid) as into_fund,
+      (select contributed_by_member_id from transactions
+        where id = ${transactionId ?? null}::uuid) as stored`),
   );
 
-  return row?.groupId != null;
+  return { intoFund: row?.into_fund === true, stored: row?.stored ?? null };
 }
 
 // One movement in one round trip, its splits and labels along (RF-24). RLS scopes

@@ -11,7 +11,7 @@ import {
   deleteTransaction,
   ResendChangedError,
   getSettlementCurrencies,
-  isFundAccount,
+  readContributorContext,
   updateTransaction,
 } from "@/db/queries/transactions";
 import type { TransactionSplitInput } from "@/db/queries/transactions";
@@ -98,18 +98,31 @@ async function resolveCounterAmount(movement: {
 }
 
 // «De quién» is required on an income into a fund account (RF-167). The rule is the
-// refinement the form runs, against what the destination really is.
-async function assertContributorGiven(movement: {
-  fromAccountId: string | null;
-  toAccountId: string | null;
-  contributedByMemberId?: string | null;
-}): Promise<void> {
+// refinement the form runs, against what the destination really is. An edit that sends
+// nothing keeps who the movement already credits, so it is asked only when that is nobody.
+async function assertContributorGiven(
+  movement: {
+    fromAccountId: string | null;
+    toAccountId: string | null;
+    contributedByMemberId?: string | null;
+  },
+  transactionId?: string,
+): Promise<void> {
   if (movement.fromAccountId !== null || movement.toAccountId === null) return;
 
+  const { intoFund, stored } = await readContributorContext({
+    toAccountId: movement.toAccountId,
+    transactionId,
+  });
+  const effective = {
+    ...movement,
+    contributedByMemberId:
+      movement.contributedByMemberId === undefined ? stored : movement.contributedByMemberId,
+  };
   const verdict = z
-    .custom<typeof movement>()
-    .superRefine(refineContributor(await isFundAccount(movement.toAccountId)))
-    .safeParse(movement);
+    .custom<typeof effective>()
+    .superRefine(refineContributor(intoFund))
+    .safeParse(effective);
 
   if (!verdict.success) throw new ActionError(verdict.error.issues[0].message);
 }
@@ -174,9 +187,11 @@ async function assertCauseReadable(
 export const createTransactionAction = authActionClient
   .inputSchema(createTransactionSchema)
   .action(async ({ parsedInput }) => {
-    await assertCauseReadable(parsedInput.causedByTransactionId, createTransactionSchema);
-    await assertContributorGiven(parsedInput);
-    const counter = await resolveCounterAmount(parsedInput);
+    const [, , counter] = await Promise.all([
+      assertCauseReadable(parsedInput.causedByTransactionId, createTransactionSchema),
+      assertContributorGiven(parsedInput),
+      resolveCounterAmount(parsedInput),
+    ]);
 
     let transactionId: string;
     try {
@@ -216,9 +231,11 @@ export const updateTransactionAction = authActionClient
   .action(async ({ parsedInput }) => {
     // RF-156: an edit sent without the stamp its form loaded is stale, refused before any write.
     if (!parsedInput.expectedUpdatedAt) throw new ActionError("errors.stale");
-    await assertCauseReadable(parsedInput.causedByTransactionId, updateTransactionSchema);
-    await assertContributorGiven(parsedInput);
-    const counter = await resolveCounterAmount(parsedInput);
+    const [, , counter] = await Promise.all([
+      assertCauseReadable(parsedInput.causedByTransactionId, updateTransactionSchema),
+      assertContributorGiven(parsedInput, parsedInput.transactionId),
+      resolveCounterAmount(parsedInput),
+    ]);
 
     let updated: Awaited<ReturnType<typeof updateTransaction>>;
     try {

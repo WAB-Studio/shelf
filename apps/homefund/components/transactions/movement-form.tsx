@@ -69,6 +69,7 @@ import {
 import {
   createTransactionSchema,
   foreignSettlementCurrency,
+  asksContributor,
   refineContributor,
   refineSettlement,
   updateTransactionSchema,
@@ -242,6 +243,9 @@ export function MovementForm({
   // under validation name the accounts: the resolver reads the pair off them and
   // refines the mode's own schema with it, so the form refuses exactly what the
   // action refuses against the currencies it reads back (RNF-10).
+  const intoFundAccount = (accountId: string | null) =>
+    options.accounts.some((account) => account.id === accountId && account.groupId !== null);
+
   const resolver: Resolver<MovementFormValues> = (values, context, options_) => {
     const schema = (
       isEdit
@@ -261,12 +265,7 @@ export function MovementForm({
       )
       .superRefine(
         // A delivery accepted from the inbox may stay unassigned, as its one tap does.
-        refineContributor(
-          !isAccept &&
-            options.accounts.some(
-              (account) => account.id === values.toAccountId && account.groupId !== null,
-            ),
-        ),
+        refineContributor(!isAccept && intoFundAccount(values.toAccountId)),
       );
 
     return (zodResolver(schema) as unknown as Resolver<MovementFormValues>)(
@@ -425,8 +424,10 @@ export function MovementForm({
 
   // «De quién» (RF-167) is asked of an income into a fund account, and nowhere else. It opens
   // empty: a refund or a gift from someone else is no one's aporte, and a guess would credit it.
-  const offersContributor =
-    kind === "income" && scope === "group" && options.fundMembers.length > 0;
+  const offersContributor = asksContributor(
+    { fromAccountId, toAccountId },
+    intoFundAccount(toAccountId),
+  );
 
   // A movement is never its own cause (RF-132), so the movement under edit is
   // dropped from what the picker offers; the rest arrive already ordered.

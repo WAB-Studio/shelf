@@ -301,6 +301,13 @@ export function requireAnAccount(
  * What arrives without a person (a bank notice, a recurring rule, an import) is not
  * a form and is not asked; Aportes shows it as «Sin asignar».
  */
+export function asksContributor(
+  data: { fromAccountId: string | null; toAccountId: string | null },
+  intoFund: boolean,
+): boolean {
+  return intoFund && data.fromAccountId === null && data.toAccountId !== null;
+}
+
 export function refineContributor(intoFund: boolean) {
   return function refine(
     data: {
@@ -310,7 +317,7 @@ export function refineContributor(intoFund: boolean) {
     },
     ctx: z.RefinementCtx,
   ) {
-    if (!intoFund || data.fromAccountId !== null || data.toAccountId === null) return;
+    if (!asksContributor(data, intoFund)) return;
 
     if (!data.contributedByMemberId) {
       ctx.addIssue({
