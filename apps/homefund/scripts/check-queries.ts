@@ -16223,6 +16223,7 @@ async function otherMembersRowsSuite(): Promise<void> {
     ownerAccount: randomUUID(),
     readerAccount: randomUUID(),
     ownerCategory: randomUUID(),
+    ownerDebt: randomUUID(),
   };
   await fixtureSql.begin(async (tx) => {
     await tx`insert into groups (id, name, cash_mode) values (${ids.group}, 'Harness rf58 fondo', 'per_member')`;
@@ -16320,6 +16321,22 @@ async function otherMembersRowsSuite(): Promise<void> {
     !reminders.rows.some((row) => row.id === payment.plannedPaymentId) &&
       !debts.payFrom.some((row) => row.id === ids.ownerAccount),
     `reminders ${JSON.stringify(reminders.rows.map((row) => row.id))}, payFrom ${JSON.stringify(debts.payFrom.map((row) => row.id))}`,
+  );
+  // A debt of the owner's: the Deudas screen shows it to the reader, named; Inicio and
+  // Planeación leave it out of their totals.
+  await fixtureSql`
+    insert into accounts (id, owner_user_id, name, kind, subtype, initial_balance_cents, initial_balance_on)
+    values (${ids.ownerDebt}, ${owner.id}, 'Harness rf58 deuda de Andrea', 'liability', 'card', -700000, '2026-01-01')`;
+  track("accounts", ids.ownerDebt);
+  const [allDebts, restDebts] = await asUser(reader, () =>
+    Promise.all([getDebtsScreenData(), getDebtsScreenData({ withoutForeign: true })]),
+  );
+  const listed = [...allDebts.withTerms, ...allDebts.withoutTerms].find((row) => "accountId" in row && row.accountId === ids.ownerDebt);
+  const kept = [...restDebts.withTerms, ...restDebts.withoutTerms].some((row) => row.accountId === ids.ownerDebt);
+  assert(
+    next("RF-58: the Deudas screen lists another member's debt with its owner; Inicio and Planeación leave it out"),
+    listed?.foreignOwner === true && listed.ownerName === "Harness rf58 Andrea" && !kept,
+    `listed ${JSON.stringify(listed && [listed.foreignOwner, listed.ownerName])}, kept in the rest = ${kept}`,
   );
   const own = await asUser(owner, () => listDueReminders(50));
   assert(

@@ -45,7 +45,7 @@ export default async function PlanningPage(
       listBudgetsWithStatus().then(mine),
       listGoalsWithProgress().then(mine),
       listPlannedPayments({ status: "pending" }).then(mine),
-      getDebtsScreenData(),
+      getDebtsScreenData({ withoutForeign: true }),
       listRecurringRules().then(mine),
       getTransactionFormOptions(),
       getTranslations({ locale, namespace: "planning" }),

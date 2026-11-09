@@ -132,13 +132,23 @@ function addOwed(
  * and buys in dollars owes in both, and there is no single number for what it
  * owes. Every set is labelled by the screen and no figure crosses two of them.
  */
-export async function getDebtsScreenData(): Promise<DebtsScreenData> {
+export async function getDebtsScreenData(
+  options: { withoutForeign?: boolean } = {},
+): Promise<DebtsScreenData> {
   const [{ rows: overview, toBillByPocket }, accounts, balances, positions] = await Promise.all([
     getDebtOverviewWithPockets(),
     listAccounts({ archived: false }),
     getAccountBalances(),
     listPlanPositions(),
   ]);
+
+  // Another member's personal debts are theirs to plan: Inicio and the Planeación hub
+  // ask for the rest, the Deudas screen for all of them, each named by its owner (RF-58).
+  if (options.withoutForeign) {
+    for (let at = accounts.length - 1; at >= 0; at--) {
+      if (accounts[at].foreignOwner) accounts.splice(at, 1);
+    }
+  }
 
   const nameById = new Map(accounts.map((account) => [account.id, account.name]));
   // The roster's own projection carries the write privilege, so no debt costs a

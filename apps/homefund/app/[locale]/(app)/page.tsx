@@ -312,7 +312,13 @@ export default async function HomePage(props: PageProps<"/[locale]">) {
       accountNames.get(withdrawal.targetCashAccountId)) ||
     PERSONAL_CASH_ACCOUNT_NAME[locale];
 
-  const nextDebt = nextDebtPayment(debts ?? []);
+  // Another member's personal debt is theirs to pay: Inicio names only the caller's and the fund's (RF-58).
+  const foreignAccountIds = new Set(
+    options.accountDirectory.filter((account) => account.foreignOwner).map((account) => account.id),
+  );
+  const nextDebt = nextDebtPayment(
+    (debts ?? []).filter((debt) => !foreignAccountIds.has(debt.accountId)),
+  );
 
   return (
     <Page gutter="flush-md">

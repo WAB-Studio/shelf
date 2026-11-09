@@ -2,6 +2,8 @@
 
 import { useFormatter, useTranslations } from "next-intl";
 
+import { useOwnerLabel } from "@/components/fund/owner-mark";
+import { accountNamesById } from "@/lib/fund/account-names";
 import {
   FilterBar,
   FilterChip,
@@ -64,6 +66,7 @@ export function MovementsFilterBar({
 }) {
   const t = useTranslations("transactions");
   const tc = useTranslations("categories");
+  const tKey = useTranslations();
   const format = useFormatter();
 
   function set(patch: Partial<MovementsFilters>) {
@@ -85,6 +88,13 @@ export function MovementsFilterBar({
       .filter((node) => node.scope === scope)
       .flatMap((node) => [node, ...node.children])
       .map((one) => ({ value: one.id, label: one.name }));
+
+  const ownerLabel = useOwnerLabel();
+  const accountNames = accountNamesById(
+    options.accountDirectory,
+    ownerLabel,
+    (account, owner) => tKey("ownership.accountOf", { account, owner }),
+  );
 
   const types: { value: MovementType; label: string }[] = [
     { value: "all", label: t("filterAll") },
@@ -119,7 +129,7 @@ export function MovementsFilterBar({
   if (filters.account) {
     chips.push({
       key: "account",
-      label: named(options.accounts, filters.account),
+      label: accountNames.get(filters.account) ?? filters.account,
       clear: { account: null },
     });
   }
@@ -198,7 +208,7 @@ export function MovementsFilterBar({
           { value: ANY, label: t("allAccounts") },
           ...options.accounts.map((account) => ({
             value: account.id,
-            label: account.name,
+            label: accountNames.get(account.id) ?? account.name,
           })),
         ]}
         width={200}
