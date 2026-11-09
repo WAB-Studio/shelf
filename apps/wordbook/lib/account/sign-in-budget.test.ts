@@ -61,6 +61,20 @@ test("no salt: noKey, one signin no-caller line, no claim spent", async () => {
   assert.equal(state.claims.length, 0);
 });
 
+test("production with no salt: noSalt, no claim spent; outside production it stays noKey", async () => {
+  env.CLIENT_KEY_SALT = undefined;
+  const environment = process.env as Record<string, string | undefined>;
+  const before = environment.NODE_ENV;
+  environment.NODE_ENV = "production";
+  try {
+    const { claimSignInLink } = await import("./sign-in-budget");
+    assert.deepEqual(await claimSignInLink(new Headers({ "x-forwarded-for": "9.9.9.9" }), ADDRESS), { status: "noSalt" });
+    assert.equal(state.claims.length, 0);
+  } finally {
+    environment.NODE_ENV = before;
+  }
+});
+
 test("a salt but no caller address: noKey, the same one line, no claim spent", async () => {
   state.caller = null;
   const { claimSignInLink } = await import("./sign-in-budget");

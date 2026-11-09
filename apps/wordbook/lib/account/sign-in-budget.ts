@@ -21,9 +21,13 @@ import { clientKeyFromAddress, scopeClientKey } from "@/lib/word/client-key";
 export async function claimSignInLink(
   headers: Headers,
   address: string,
-): Promise<{ status: "ok"; keys: string[] } | { status: "rateLimited" } | { status: "noKey" }> {
+): Promise<{ status: "ok"; keys: string[] } | { status: "rateLimited" } | { status: "noKey" } | { status: "noSalt" }> {
   const salt = env.CLIENT_KEY_SALT;
   const caller = scopedClientKey("signin", headers);
+  if (!salt && process.env.NODE_ENV === "production") {
+    logDark("signin", "no-key");
+    return { status: "noSalt" };
+  }
   if (!salt || !caller) {
     logDark("signin", "no-caller");
     return { status: "noKey" };
