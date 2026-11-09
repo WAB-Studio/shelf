@@ -67,7 +67,6 @@ function modelSays(content: unknown): () => Response {
 const STUB_ANSWER = {
   translations: ["prueba"],
   definition: "A stub definition.",
-  example: { en: "A stub sentence.", es: "Una frase de prueba." },
 };
 
 // Real dictionary/admission shapes. `coccidiosis` has no entry and no
@@ -193,20 +192,16 @@ async function main() {
     const firstParsed = first.body as {
       translations?: string[];
       definition?: string | null;
-      example?: { en?: string; es?: string };
     } | null;
     assert(
-      next(`"${UNLISTED_WORD}" answers 200 with a translation, a definition and a two-sided example`),
+      next(`"${UNLISTED_WORD}" answers 200 with a translation and a definition`),
       first.status === 200 &&
         Array.isArray(firstParsed?.translations) &&
         firstParsed.translations.length >= 1 &&
         firstParsed.translations.every((t) => t.length > 0) &&
         typeof firstParsed?.definition === "string" &&
         firstParsed.definition.length > 0 &&
-        typeof firstParsed?.example?.en === "string" &&
-        firstParsed.example.en.length > 0 &&
-        typeof firstParsed?.example?.es === "string" &&
-        firstParsed.example.es.length > 0 &&
+        !("example" in firstParsed) &&
         providerCalls === 1 &&
         Boolean(await wordAnswerRow(UNLISTED_WORD)),
       `status=${first.status}, providerCalls=${providerCalls}, body=${JSON.stringify(firstParsed)}`,
@@ -229,16 +224,12 @@ async function main() {
       `before=${callsBefore}, after=${callsAfter}`,
     );
 
+    const providerBeforeInflected = providerCalls;
     const inflected = await request(INFLECTED_WORD, MAIN_CALLER_IP);
-    const inflectedBody = inflected.body as { translations?: string[]; lemma?: string | null; rule?: string | null } | null;
     assert(
-      next(`"${INFLECTED_WORD}" answers with lemma "${INFLECTED_LEMMA}", rule "${INFLECTED_RULE}"`),
-      inflected.status === 200 &&
-        inflectedBody?.lemma === INFLECTED_LEMMA &&
-        inflectedBody?.rule === INFLECTED_RULE &&
-        Array.isArray(inflectedBody?.translations) &&
-        inflectedBody.translations.length >= 1,
-      `status=${inflected.status}, body=${JSON.stringify(inflectedBody)}`,
+      next(`"${INFLECTED_WORD}" (a form of "${INFLECTED_LEMMA}") answers 204 and reaches no model`),
+      inflected.status === 204 && providerCalls === providerBeforeInflected,
+      `status=${inflected.status}, providerCalls=${providerCalls - providerBeforeInflected} more`,
     );
 
     const providerBeforeRefused = providerCalls;

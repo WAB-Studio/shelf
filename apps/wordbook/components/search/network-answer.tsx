@@ -1,6 +1,6 @@
 import { useTranslations } from "next-intl";
 
-import { Box, Flex, Separator, Text, VisuallyHidden } from "@/components/ui";
+import { Box, Flex, Separator, Text } from "@/components/ui";
 import type { UnlistedAnswer } from "@/lib/word/unlisted-protocol";
 
 // The four shapes a word's network answer can be in. State in, DOM out:
@@ -96,18 +96,6 @@ export function NetworkAnswer({ state, surface }: { state: NetworkAnswerState; s
               </Text>
             </Flex>
           )}
-          <Flex direction="column" gap="1">
-            <Text variant="definitionLabel" muted>
-              {t("example")}
-            </Text>
-            <Text variant="generatedProse" english>
-              {answer.example.en}
-            </Text>
-            <VisuallyHidden>{t("exampleTranslation")}</VisuallyHidden>
-            <Text variant="exampleTranslation" muted>
-              {answer.example.es}
-            </Text>
-          </Flex>
         </Flex>
       </Box>
       <Separator size="4" />

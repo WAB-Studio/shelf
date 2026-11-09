@@ -86,7 +86,7 @@ async function main() {
         tx,
         "T6",
         (sp) =>
-          sp`insert into reading.word_texts (headword, example_en, example_es, model) values ('permcheck', 'x', 'y', 'z')`,
+          sp`insert into reading.word_texts (headword, example_en, example_es, model) values ('permcheck', '', '', 'z')`,
       );
       await denied(tx, "T7", (sp) => sp`update reading.word_texts set model = 'z' where headword = 'permcheck'`);
       await denied(tx, "T8", (sp) => sp`delete from reading.word_texts where headword = 'permcheck'`);

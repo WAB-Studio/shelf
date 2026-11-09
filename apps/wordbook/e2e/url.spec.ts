@@ -81,20 +81,20 @@ test("three lookups in a row leave three stops for back to walk, in order", asyn
   await expect(page.getByText(BRAND_LINE)).toBeVisible();
 });
 
-test("opening /?q=serendipity cold answers it with no typing", async ({ page }) => {
+test("opening /?q=achievement cold answers it with no typing", async ({ page }) => {
   await deleteTranslator(page);
 
   const assetResponse = page.waitForResponse(
     (response) => response.url().includes(manifest.asset.path) && response.ok(),
   );
-  await page.goto("/?q=serendipity");
+  await page.goto("/?q=achievement");
   await assetResponse;
   // aria-busy turns false once the worker has built its index and the install is done.
   await expect(page.locator('[aria-busy="false"]').first()).toBeAttached();
 
   const searchBox = page.getByRole("textbox", { name: messages.search.label });
-  await expect(searchBox).toHaveValue("serendipity");
-  await expect(page.getByRole("heading", { name: "serendipity" })).toBeVisible({ timeout: 5000 });
+  await expect(searchBox).toHaveValue("achievement");
+  await expect(page.getByRole("heading", { name: "achievement" })).toBeVisible({ timeout: 5000 });
 });
 
 // Retired 2026-09-09 (module 10): this drove `messages.source.open`, the
@@ -135,8 +135,8 @@ test("no request leaves the device while typing, past the dictionary asset itsel
   page.on("request", (request) => requestUrls.push(request.url()));
 
   const searchBox = page.getByRole("textbox", { name: messages.search.label });
-  await searchBox.pressSequentially("serendipity", { delay: 30 });
-  await expect(page.getByRole("heading", { name: "serendipity" })).toBeVisible({ timeout: 5000 });
+  await searchBox.pressSequentially("achievement", { delay: 30 });
+  await expect(page.getByRole("heading", { name: "achievement" })).toBeVisible({ timeout: 5000 });
 
   // The instant the answer is painted, `useDecoration`'s own debounce has
   // not fired yet — this is the stricter bound: zero of anything, decoration

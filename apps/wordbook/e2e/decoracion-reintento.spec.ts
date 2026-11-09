@@ -23,14 +23,12 @@ async function openReady(page: Page): Promise<void> {
 }
 
 const TEXT = {
-  definition: null,
-  example: { en: "She opened her umbrella as it started to rain.", es: "Abrió su paraguas cuando empezó a llover." },
+  definition: "A device used for protection against rain.",
 };
 
 const UNLISTED = {
   translations: ["coccidiosis"],
   definition: "A parasitic disease of the intestine.",
-  example: { en: "The flock was tested for coccidiosis.", es: "Se examinó a la parvada por coccidiosis." },
   lemma: null,
   rule: null,
 };
@@ -85,17 +83,17 @@ test("an aborted text request is asked again the next time the word is looked up
   await aborted;
   await pageTasks(page);
   await expect.poll(() => asked.filter((w) => w === "umbrella").length).toBe(1);
-  await expect(page.getByText(TEXT.example.en)).toHaveCount(0);
+  await expect(page.getByText(TEXT.definition)).toHaveCount(0);
 
-  await lookUp(page, "apple");
-  await expect.poll(() => asked.filter((w) => w === "apple").length).toBe(1);
+  await lookUp(page, "cat");
+  await expect.poll(() => asked.filter((w) => w === "cat").length).toBe(1);
   await lookUp(page, "umbrella");
 
   await expect.poll(() => asked.filter((w) => w === "umbrella").length).toBe(2);
-  await expect(page.getByText(TEXT.example.en)).toBeVisible();
+  await expect(page.getByText(TEXT.definition)).toBeVisible();
 });
 
-test("a 503 is asked again: first 503, then 200, and the example draws", async ({ page, scriptWordRoute }) => {
+test("a 503 is asked again: first 503, then 200, and the definition draws", async ({ page, scriptWordRoute }) => {
   await deleteTranslator(page);
   await scriptWordRoute("text", [{ kind: "status", status: 503 }, { kind: "status", status: 204 }, { kind: "ok", body: TEXT }]);
   const asked = track(page, "/api/word/text", "headword");
@@ -106,25 +104,25 @@ test("a 503 is asked again: first 503, then 200, and the example draws", async (
   await refused;
   await pageTasks(page);
   await expect.poll(() => asked.filter((w) => w === "umbrella").length).toBe(1);
-  await expect(page.getByText(TEXT.example.en)).toHaveCount(0);
+  await expect(page.getByText(TEXT.definition)).toHaveCount(0);
 
-  await lookUp(page, "apple");
-  await expect.poll(() => asked.filter((w) => w === "apple").length).toBe(1);
+  await lookUp(page, "cat");
+  await expect.poll(() => asked.filter((w) => w === "cat").length).toBe(1);
   await lookUp(page, "umbrella");
 
   await expect.poll(() => asked.filter((w) => w === "umbrella").length).toBe(2);
-  await expect(page.getByText(TEXT.example.en)).toBeVisible();
+  await expect(page.getByText(TEXT.definition)).toBeVisible();
 });
 
-test("a 204 is not asked again: umbrella, apple, umbrella costs one request for umbrella", async ({ page }) => {
+test("a 204 is not asked again: umbrella, cat, umbrella costs one request for umbrella", async ({ page }) => {
   await deleteTranslator(page);
   const asked = track(page, "/api/word/text", "headword");
   await openReady(page);
 
   await lookUp(page, "umbrella");
   await expect.poll(() => asked.filter((w) => w === "umbrella").length).toBe(1);
-  await lookUp(page, "apple");
-  await expect.poll(() => asked.filter((w) => w === "apple").length).toBe(1);
+  await lookUp(page, "cat");
+  await expect.poll(() => asked.filter((w) => w === "cat").length).toBe(1);
   await freezeTimers(page);
   await lookUp(page, "umbrella");
   await settle(page);
@@ -132,7 +130,7 @@ test("a 204 is not asked again: umbrella, apple, umbrella costs one request for 
   expect(asked.filter((w) => w === "umbrella")).toHaveLength(1);
 });
 
-test("a 200 is not asked again: umbrella, apple, umbrella costs one request for umbrella", async ({
+test("a 200 is not asked again: umbrella, cat, umbrella costs one request for umbrella", async ({
   page,
   stubWordText,
 }) => {
@@ -142,12 +140,12 @@ test("a 200 is not asked again: umbrella, apple, umbrella costs one request for 
   await openReady(page);
 
   await lookUp(page, "umbrella");
-  await expect(page.getByText(TEXT.example.en)).toBeVisible();
-  await lookUp(page, "apple");
-  await expect.poll(() => asked.filter((w) => w === "apple").length).toBe(1);
+  await expect(page.getByText(TEXT.definition)).toBeVisible();
+  await lookUp(page, "cat");
+  await expect.poll(() => asked.filter((w) => w === "cat").length).toBe(1);
   await freezeTimers(page);
   await lookUp(page, "umbrella");
-  await expect(page.getByText(TEXT.example.en)).toBeVisible();
+  await expect(page.getByText(TEXT.definition)).toBeVisible();
   await settle(page);
 
   expect(asked.filter((w) => w === "umbrella")).toHaveLength(1);
@@ -166,11 +164,11 @@ test("an unlisted word whose request was aborted is asked again after another wo
   await expect.poll(() => asked.filter((w) => w === "coccidiosis").length).toBe(1);
   await expect(page.getByText(messages.word.networkFailed)).toBeVisible();
 
-  await lookUp(page, "apple");
-  await expect(page.getByRole("heading", { name: "apple", exact: true })).toBeVisible();
+  await lookUp(page, "cat");
+  await expect(page.getByRole("heading", { name: "cat", exact: true })).toBeVisible();
   await lookUp(page, "coccidiosis");
 
   await expect.poll(() => asked.filter((w) => w === "coccidiosis").length).toBe(2);
   await expect(page.getByText(messages.word.networkAnswerTitle)).toBeVisible();
-  await expect(page.getByText(UNLISTED.example.en)).toBeVisible();
+  await expect(page.getByText(UNLISTED.definition)).toBeVisible();
 });

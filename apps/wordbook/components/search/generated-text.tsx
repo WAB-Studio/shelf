@@ -1,6 +1,6 @@
 import { useTranslations } from "next-intl";
 
-import { Box, Flex, MarkedWord, Separator, Text, VisuallyHidden } from "@/components/ui";
+import { Box, Flex, Separator, Text } from "@/components/ui";
 import type { WordText } from "@/lib/word/protocol";
 
 // The three shapes module 9's hook resolves a word's decoration to. State
@@ -10,11 +10,11 @@ export type GeneratedTextState =
   | { kind: "resolved"; text: WordText }
   | { kind: "absent" };
 
-// A generated definition and example, marked apart from the dictionary's own
+// A generated definition and translations, marked apart from the dictionary's own
 // (docs/wordbook/DESIGN.md "Generated text is marked «generada»" — a model
 // mis-defined `abies` in a test of twelve, and the reader has no way to
 // doubt a line that looks like every other one).
-export function GeneratedText({ state, headword }: { state: GeneratedTextState; headword?: string }) {
+export function GeneratedText({ state }: { state: GeneratedTextState }) {
   const t = useTranslations("word");
 
   // `PalabraSinDefinicionOscuroMovil`: no connection, no result, or the
@@ -40,52 +40,33 @@ export function GeneratedText({ state, headword }: { state: GeneratedTextState; 
   }
 
   const { text } = state;
-  // `text.definition` is null both for the 19.7% the dictionary has no
-  // entry for (RL-41 never asked the model) and for every word that already
-  // carries one (the route strips it, `app/api/word/text/route.ts`). Either
-  // way «Definición generada» would head nothing: the heading and the
-  // hidden a11y label below it swap to the example alone, no board drawn
-  // this case (docs/wordbook/DESIGN.md, `PalabraSinDefinicionOscuroMovil` is
-  // the no-network/no-result/capped state, not this one).
+  // RL-41 / RL-45: the route answers a definition and network translations
+  // only; it writes no example. Either is null for an entry that needs none,
+  // and an answer with neither draws nothing.
   const hasDefinition = text.definition !== null;
-  // RL-45: only a lemma the dictionary answered thin ever carries these
-  // (`isThinAnswer`, `apps/wordbook/lib/word/thin.ts`); every other lemma's
-  // `translations` is `null` and this block draws nothing, same as today.
   const hasNetworkTranslations = text.translations !== null && text.translations.length > 0;
+  if (!hasDefinition && !hasNetworkTranslations) return null;
 
   return (
     <Flex direction="column" data-generated-block="">
       <Separator size="4" />
       <Box pt="2" pb="1">
         <Flex direction="column" gap="2">
-          <Flex align="center" gap="2">
-            <Text variant="definitionLabel" muted>
-              {hasDefinition ? t("definitionGenerated") : t("example")}
-            </Text>
-            <Text variant="generatedMark" muted="quietest">
-              {t("generatedMark")}
-            </Text>
-          </Flex>
-          <Flex direction="column" gap="2">
-            {hasDefinition && (
+          {hasDefinition && (
+            <Flex direction="column" gap="2">
+              <Flex align="center" gap="2">
+                <Text variant="definitionLabel" muted>
+                  {t("definitionGenerated")}
+                </Text>
+                <Text variant="generatedMark" muted="quietest">
+                  {t("generatedMark")}
+                </Text>
+              </Flex>
               <Text variant="generatedProse" muted english>
                 {text.definition}
               </Text>
-            )}
-            <Flex direction="column" gap="1">
-              {/* `word.example` and `word.exampleTranslation` label the pair
-                  for a screen reader without drawing a fourth caption line —
-                  skipped when the heading above already says "Ejemplo". */}
-              {hasDefinition && <VisuallyHidden>{t("example")}</VisuallyHidden>}
-              <Text variant="generatedProse" english>
-                <MarkedWord text={text.example.en} forms={headword === undefined ? [] : [headword]} />
-              </Text>
-              <VisuallyHidden>{t("exampleTranslation")}</VisuallyHidden>
-              <Text variant="exampleTranslation" muted>
-                {text.example.es}
-              </Text>
             </Flex>
-          </Flex>
+          )}
           {hasNetworkTranslations && (
             // Added under the dictionary's own translations, inside the same
             // sense group (docs/wordbook/DESIGN.md "A dictionary answer that

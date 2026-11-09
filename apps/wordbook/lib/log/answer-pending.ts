@@ -18,7 +18,7 @@ export const ANSWER_PENDING_LOCK = "voyager-answer-pending";
 
 type Answer = Pick<
   LookupRecord,
-  "outcome" | "headword" | "rule" | "senses" | "translation" | "origin" | "definition" | "exampleEn" | "exampleEs"
+  "outcome" | "headword" | "rule" | "senses" | "translation" | "origin" | "definition"
 >;
 
 const settleKey = (row: LookupRecord) => `${row.at}|${row.normalised}`;
@@ -46,8 +46,6 @@ async function ask(row: LookupRecord): Promise<Answer | null> {
         translation: cutTranslation(parsed.data.translations.join(", ")),
         origin: null,
         definition: parsed.data.definition,
-        exampleEn: parsed.data.example.en,
-        exampleEs: parsed.data.example.es,
       };
     }
     const result = await translateOverNetwork(row.text);

@@ -20,6 +20,7 @@
     "notFound": "El diccionario no tiene esa palabra",
     "notFoundHint": "Revisa la ortografía o prueba con otra forma de la palabra",
     "correctionTitle": "¿Quisiste decir…?",
+    "askNetwork": "Buscar «{word}» en internet",
     "noEntry": {
       "showDictionary": "ver el diccionario",
       "hideDictionary": "ocultar el diccionario",
@@ -61,9 +62,10 @@
     "networkAnswerTitle": "Respuesta de internet",
     "networkPending": "Buscando una respuesta…",
     "networkFailed": "No se pudo responder por internet",
+    "learnThisSense": "Aprender este sentido",
+    "learningThisSense": "Es el que aprendes",
     "example": "Ejemplo",
     "exampleTranslation": "Traducción",
-    "examplePronunciation": "El ejemplo corresponde a {ipa}",
     "suggestions": "Sugerencias",
     "listen": "Escuchar «{headword}»",
     "listenPronunciation": "Escuchar «{headword}» {ipa}",
@@ -239,7 +241,7 @@
       "failedTitle": "La copia no salió",
       "failedAction": "Reintentar",
       "noSessionTitle": "Tu registro vive solo en este dispositivo",
-      "noSessionBody": "Con una cuenta lo llevas al teléfono y al portátil. Sin ella, nada sale de aquí.",
+      "noSessionBody": "Con una cuenta guardas una copia de tu registro. Sin ella, nada sale de aquí.",
       "noSessionAction": "Entrar con mi correo",
       "confirmTitle": "Copiar tu registro a {email}",
       "confirmBody": "Hasta que lo confirmes, nada sale de este dispositivo.",
@@ -402,6 +404,7 @@
       "days": "{count, plural, one {# día} other {# días}}"
     },
     "waiting": "{kind, select, words {{count, plural, one {Queda # palabra para repetir en un momento.} other {Quedan # palabras para repetir en un momento.}}} phrases {{count, plural, one {Queda # frase para repetir en un momento.} other {Quedan # frases para repetir en un momento.}}} other {{count, plural, one {Queda # entrada para repetir en un momento.} other {Quedan # entradas para repetir en un momento.}}}}",
+    "newWaiting": "{kind, select, entries {{count, plural, one {Espera # entrada nueva: entra mañana, con el tope de {cap} al día.} other {Esperan # entradas nuevas: entran mañana, con el tope de {cap} al día.}}} phrases {{count, plural, one {Espera # frase nueva: entra mañana, con el tope de {cap} al día.} other {Esperan # frases nuevas: entran mañana, con el tope de {cap} al día.}}} other {{count, plural, one {Espera # palabra nueva: entra mañana, con el tope de {cap} al día.} other {Esperan # palabras nuevas: entran mañana, con el tope de {cap} al día.}}}}",
     "waitingIn": "Vuelve en {minutes} min",
     "reviewNow": "Repasar ya"
   }

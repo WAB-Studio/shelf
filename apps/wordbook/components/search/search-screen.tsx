@@ -10,6 +10,7 @@ import type { SenseGroup } from "@/lib/dictionary/index-build";
 import { useDictionary } from "@/lib/dictionary/use-dictionary";
 import type { WordAnswer } from "@/lib/dictionary/lookup";
 import { QUERY_COMMITTED_EVENT } from "@/lib/nav/query-storage";
+import { isThinAnswer } from "@/lib/word/thin";
 import { announce } from "@/lib/word/announce";
 import { useDecoration } from "@/lib/word/use-decoration";
 import { useNetworkAnswer } from "@/lib/word/use-network-answer";
@@ -42,6 +43,12 @@ type LogPayload = Omit<LookupRecord, "id" | "schema">;
 
 // RL-41: "a word that already has a definition never asks for one" — true
 // only when none of the exact match's own senses carry one.
+// RL-41 and RL-45: the text route is asked only for a definition the entry lacks
+// or for the translations of a thin entry; it writes no example (RL-42 retired).
+function wantsDecoration(group: SenseGroup): boolean {
+  return needsDefinition(group) || isThinAnswer(group);
+}
+
 function needsDefinition(group: SenseGroup): boolean {
   return group.senses.every((sense) => sense.definition === null);
 }
@@ -117,6 +124,8 @@ export function SearchScreen({ initialQuery }: { initialQuery?: string }) {
   const [text, setText] = useState(resolvedQuery);
   const [kind, setKind] = useState<QueryKind>({ kind: "empty" });
   const [wordAnswer, setWordAnswer] = useState<WordAnswer | null>(null);
+  // The word the reader tapped «Buscar en internet» on: asked of the network though a headword is one edit away.
+  const [networkAskedFor, setNetworkAskedFor] = useState<string | null>(null);
   // RL-18: stays on screen until the text itself changes, never on a timer
   // — a paused prefix keeps its list.
   const [suggestions, setSuggestions] = useState<string[]>([]);
@@ -501,23 +510,31 @@ export function SearchScreen({ initialQuery }: { initialQuery?: string }) {
   // decorate. `useDecoration` itself waits for the settle and de-dupes.
   const exactGroup = kind.kind === "word" && wordAnswer !== null ? wordAnswer.exact : null;
   const decoration = useDecoration(
-    exactGroup ? exactGroup.headword : null,
+    exactGroup && wantsDecoration(exactGroup) ? exactGroup.headword : null,
     exactGroup ? needsDefinition(exactGroup) : false,
   );
 
-  // RL-44/RL-58: the network is asked only for the two shapes the dictionary
-  // itself could not close — a miss, or a hit that only came through
-  // inflection. An exact headword has its own network answer already
-  // (`useDecoration` above); `suppressNotFound` holding means a prefix is
-  // still mid-word, and asking there would charge every paused keystroke.
+  // RL-86: the network is asked only for a word the dictionary cannot place
+  // at all: no entry, no lemma through inflection and no headword one edit
+  // away (`lingered`, `went` and `recieve` cost nothing). An exact headword
+  // has its own decoration (`useDecoration` above); `suppressNotFound` holding
+  // means a prefix is still mid-word, and asking there would charge every
+  // paused keystroke.
+  // A word one edit from a headword is a slip until the reader taps «Buscar en internet» (RL-86).
+  const typed = wordAnswer === null ? null : normaliseHeadword(wordAnswer.query);
+  const askedNetwork = typed !== null && networkAskedFor === typed;
+  const corrected =
+    wordAnswer !== null && wordAnswer.exact === null && wordAnswer.correction.length > 0 && !askedNetwork;
   const networkWord =
-    kind.kind === "word" && wordAnswer !== null && wordAnswer.exact === null && !suppressNotFound
+    kind.kind === "word" &&
+    wordAnswer !== null &&
+    wordAnswer.exact === null &&
+    wordAnswer.viaInflection.length === 0 &&
+    !corrected &&
+    !suppressNotFound
       ? normaliseHeadword(wordAnswer.query)
       : null;
-  const networkAnswer = useNetworkAnswer(
-    networkWord,
-    wordAnswer !== null && wordAnswer.viaInflection.length === 0,
-  );
+  const networkAnswer = useNetworkAnswer(networkWord, true, askedNetwork);
 
   // RL-76: a word with no entry is recorded answered once the network's answer
   // for that same text is in hand. It replaces the miss payload that call
@@ -543,19 +560,19 @@ export function SearchScreen({ initialQuery }: { initialQuery?: string }) {
       translation: unlistedTranslation,
       origin: null,
       definition: unlistedAnswer.definition,
-      exampleEn: unlistedAnswer.example.en,
-      exampleEs: unlistedAnswer.example.es,
     };
   }, [logPayload, networkWord, unlistedTranslation, unlistedAnswer]);
-  // RL-76: a prefix with suggestions is mid-word, not a word the network failed
-  // to answer. The call still reaches `commit`, as an outcome it drops.
+  // RL-76: a prefix with suggestions is mid-word, and a word one edit from a
+  // headword is a slip: neither is a word the network failed to answer, so
+  // neither is left pending for the drain to pay for. The call still reaches
+  // `commit`, as an outcome it drops.
   const recordable = useMemo<LogPayload | null>(() => {
     if (unlistedPayload) return unlistedPayload;
-    if (suppressNotFound && logPayload?.kind === "word" && logPayload.outcome === "miss") {
+    if ((suppressNotFound || corrected) && logPayload?.kind === "word" && logPayload.outcome === "miss") {
       return { ...logPayload, outcome: "untranslated" };
     }
     return logPayload;
-  }, [unlistedPayload, suppressNotFound, logPayload]);
+  }, [unlistedPayload, suppressNotFound, corrected, logPayload]);
   // The same payload object re-running the effect must not record the lookup twice.
   const recordedRef = useRef<LogPayload | null>(null);
 
@@ -626,6 +643,7 @@ export function SearchScreen({ initialQuery }: { initialQuery?: string }) {
                 answer={wordAnswer}
                 generated={decoration}
                 networkAnswer={networkAnswer}
+                onAskNetwork={typed === null ? undefined : () => setNetworkAskedFor(typed)}
               />
             )}
           </Flex>

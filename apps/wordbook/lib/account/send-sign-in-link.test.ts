@@ -11,7 +11,7 @@ import { beforeEach, test } from "node:test";
 const calls: string[] = [];
 let mxAnswer: () => Promise<{ exchange: string; priority: number }[]>;
 const CLAIMED_KEYS = ["signin:caller-key", "signin-to:recipient-key"];
-type Claim = { status: "ok"; keys: string[] } | { status: "rateLimited" } | { status: "noKey" };
+type Claim = { status: "ok"; keys: string[] } | { status: "rateLimited" } | { status: "noKey" } | { status: "noSalt" };
 let claimAnswer: Claim;
 let otpError: { status: number } | null;
 const released: string[][] = [];
@@ -125,6 +125,13 @@ test("a caller over their allowance never reaches Supabase", async () => {
   const result = await (await getAction()).sendSignInLink("reader@live.test");
   assert.deepEqual(result, { ok: false, error: "capped" });
   assert.deepEqual(calls, ["mx:live.test", "claim"], "a refused claim reached Supabase");
+});
+
+test("production without a salt answers sendFailed and never reaches the list or Supabase", async () => {
+  claimAnswer = { status: "noSalt" };
+  const result = await (await getAction()).sendSignInLink("reader@live.test");
+  assert.deepEqual(result, { ok: false, error: "sendFailed" });
+  assert.deepEqual(calls, ["mx:live.test", "claim"]);
 });
 
 test("a malformed address is refused before any DNS lookup", async () => {

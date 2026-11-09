@@ -95,3 +95,10 @@ test("a word reviewed on demand takes no slot of the day's new entries", () => {
   const counted = rate("word0", null, "good", NOW);
   assert.equal(buildQueue(rows, [counted], NOW).items.filter((item) => item.card === null).length, NEW_PER_DAY - 1);
 });
+
+test("the queue counts the new entries the day's cap held back, and none when the cap held nothing", () => {
+  const rows = Array.from({ length: NEW_PER_DAY + 7 }, (_, i) => row(`w${i}`));
+  assert.equal(buildQueue(rows, [], NOW).newWaiting, 7);
+  assert.equal(buildQueue(rows.slice(0, 3), [], NOW).newWaiting, 0);
+  assert.equal(buildQueueFor(rows, [], "w0", NOW).newWaiting, 0);
+});

@@ -14,16 +14,21 @@ import { clientKeyFromAddress, scopeClientKey } from "@/lib/word/client-key";
  * caller's address, then the address paired with that caller (case-folded),
  * then the address alone at a higher ceiling. Each is claimed only once the
  * one before passed, so a stranger exhausts their own pair and never the
- * owner's, and a caller refused earlier never spends a later one. `noKey` (no salt, or no caller address) keeps the action open:
- * an unset variable must not lock every reader out. `keys` lists what an
+ * owner's, and a caller refused earlier never spends a later one. `noKey` (no caller address, or no salt outside
+ * production) keeps the action open: an unset variable must not lock every reader out. In production no salt is
+ * `noSalt` instead and the send is refused, as the paid routes go dark: without it no cap counts anyone (RL-89). `keys` lists what an
  * accepted claim spent, for `releaseSignInLink`.
  */
 export async function claimSignInLink(
   headers: Headers,
   address: string,
-): Promise<{ status: "ok"; keys: string[] } | { status: "rateLimited" } | { status: "noKey" }> {
+): Promise<{ status: "ok"; keys: string[] } | { status: "rateLimited" } | { status: "noKey" } | { status: "noSalt" }> {
   const salt = env.CLIENT_KEY_SALT;
   const caller = scopedClientKey("signin", headers);
+  if (!salt && process.env.NODE_ENV === "production") {
+    logDark("signin", "no-salt");
+    return { status: "noSalt" };
+  }
   if (!salt || !caller) {
     logDark("signin", "no-caller");
     return { status: "noKey" };
@@ -44,10 +49,14 @@ export async function claimSignInLink(
  * RL-73's ceiling on code attempts, so a six-digit code is not left to Auth's
  * limit alone: the caller's attempts a day, then the address's, claimed in that
  * order so a stranger exhausts their own and never the owner's. Right or wrong
- * counts. No salt or no caller address keeps the action open, as for links.
+ * counts. No caller address keeps the action open, as for links; in production no salt closes it (RL-89).
  */
 export async function claimSignInAttempt(headers: Headers, address: string): Promise<boolean> {
   const salt = env.CLIENT_KEY_SALT;
+  if (!salt && process.env.NODE_ENV === "production") {
+    logDark("signin", "no-salt");
+    return false;
+  }
   const caller = scopedClientKey("signin-verify", headers);
   if (!salt || !caller) {
     logDark("signin", "no-caller");

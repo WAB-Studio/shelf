@@ -238,7 +238,7 @@ test("RNL-08: /registro mounts no dictionary Worker, and searching issues no req
   await assetResponse;
 
   const searchBox = page.getByRole("textbox", { name: messages.search.label });
-  const tenKeystrokes = "throughout";
+  const tenKeystrokes = "accountant";
 
   // A warm-up run of the exact same keystrokes first, autocomplete included,
   // so every web font any state along the way paints is already cached
