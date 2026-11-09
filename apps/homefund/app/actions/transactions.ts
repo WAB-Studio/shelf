@@ -11,6 +11,7 @@ import {
   deleteTransaction,
   ResendChangedError,
   getSettlementCurrencies,
+  isFundAccount,
   updateTransaction,
 } from "@/db/queries/transactions";
 import type { TransactionSplitInput } from "@/db/queries/transactions";
@@ -26,6 +27,7 @@ import {
   createTransactionSchema,
   deleteTransactionSchema,
   foreignSettlementCurrency,
+  refineContributor,
   refineSettlement,
   updateTransactionSchema,
 } from "@/lib/validation/transaction";
@@ -95,6 +97,23 @@ async function resolveCounterAmount(movement: {
   };
 }
 
+// «De quién» is required on an income into a fund account (RF-167). The rule is the
+// refinement the form runs, against what the destination really is.
+async function assertContributorGiven(movement: {
+  fromAccountId: string | null;
+  toAccountId: string | null;
+  contributedByMemberId?: string | null;
+}): Promise<void> {
+  if (movement.fromAccountId !== null || movement.toAccountId === null) return;
+
+  const verdict = z
+    .custom<typeof movement>()
+    .superRefine(refineContributor(await isFundAccount(movement.toAccountId)))
+    .safeParse(movement);
+
+  if (!verdict.success) throw new ActionError(verdict.error.issues[0].message);
+}
+
 // `transactions_verify_currency` raises this and nothing else does: a movement
 // whose currency does not agree with the accounts it names (migration `0032`).
 const CURRENCY_REFUSAL = "23901";
@@ -156,6 +175,7 @@ export const createTransactionAction = authActionClient
   .inputSchema(createTransactionSchema)
   .action(async ({ parsedInput }) => {
     await assertCauseReadable(parsedInput.causedByTransactionId, createTransactionSchema);
+    await assertContributorGiven(parsedInput);
     const counter = await resolveCounterAmount(parsedInput);
 
     let transactionId: string;
@@ -197,6 +217,7 @@ export const updateTransactionAction = authActionClient
     // RF-156: an edit sent without the stamp its form loaded is stale, refused before any write.
     if (!parsedInput.expectedUpdatedAt) throw new ActionError("errors.stale");
     await assertCauseReadable(parsedInput.causedByTransactionId, updateTransactionSchema);
+    await assertContributorGiven(parsedInput);
     const counter = await resolveCounterAmount(parsedInput);
 
     let updated: Awaited<ReturnType<typeof updateTransaction>>;

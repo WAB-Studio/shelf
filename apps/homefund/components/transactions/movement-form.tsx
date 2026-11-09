@@ -69,6 +69,7 @@ import {
 import {
   createTransactionSchema,
   foreignSettlementCurrency,
+  refineContributor,
   refineSettlement,
   updateTransactionSchema,
   type CreateTransactionInput,
@@ -248,15 +249,25 @@ export function MovementForm({
         : isAccept
           ? acceptDeliverySchema
           : createTransactionSchema
-    ).superRefine(
-      refineSettlement(
-        settlementOf(
-          options.accountCurrencies,
-          values.fromAccountId,
-          values.toAccountId,
+    )
+      .superRefine(
+        refineSettlement(
+          settlementOf(
+            options.accountCurrencies,
+            values.fromAccountId,
+            values.toAccountId,
+          ),
         ),
-      ),
-    );
+      )
+      .superRefine(
+        // A delivery accepted from the inbox may stay unassigned, as its one tap does.
+        refineContributor(
+          !isAccept &&
+            options.accounts.some(
+              (account) => account.id === values.toAccountId && account.groupId !== null,
+            ),
+        ),
+      );
 
     return (zodResolver(schema) as unknown as Resolver<MovementFormValues>)(
       values,
@@ -412,29 +423,10 @@ export function MovementForm({
     scope === "personal" &&
     (movement?.forHousehold === true || options.accounts.some((one) => one.groupId));
 
-  // «De quién» (RF-166) is asked of an income into a fund account, and nowhere else.
+  // «De quién» (RF-167) is asked of an income into a fund account, and nowhere else. It opens
+  // empty: a refund or a gift from someone else is no one's aporte, and a guess would credit it.
   const offersContributor =
     kind === "income" && scope === "group" && options.fundMembers.length > 0;
-
-  // Only a salary is presumed to be the writer's own contribution; any other income
-  // starts unassigned, since a refund or a gift from someone else is no one's aporte.
-  // A choice the person made is never overwritten.
-  const salaryCategoryIds = useMemo(
-    () =>
-      new Set(
-        options.categories.filter((category) => category.seedKey === "salary").map((category) => category.id),
-      ),
-    [options.categories],
-  );
-  const contributorChosen = useRef(false);
-  const hasSalarySplit = splits.some((split) => salaryCategoryIds.has(split.categoryId));
-  useEffect(() => {
-    if (isEdit || !offersContributor || contributorChosen.current) return;
-    form.setValue(
-      "contributedByMemberId",
-      hasSalarySplit ? options.callerMemberId : null,
-    );
-  }, [isEdit, offersContributor, hasSalarySplit, options.callerMemberId, form]);
 
   // A movement is never its own cause (RF-132), so the movement under edit is
   // dropped from what the picker offers; the rest arrive already ordered.
@@ -1054,18 +1046,22 @@ export function MovementForm({
                   <FieldLabel htmlFor="movement-contributor">{t("contributorLabel")}</FieldLabel>
                   <Select.Root
                     size="3"
-                    value={field.value ?? NO_ACCOUNT}
-                    onValueChange={(value) => {
-                      contributorChosen.current = true;
-                      field.onChange(value === NO_ACCOUNT ? null : value);
-                    }}
+                    value={field.value ?? (isAccept ? NO_ACCOUNT : undefined)}
+                    onValueChange={(value) =>
+                      field.onChange(value === NO_ACCOUNT ? null : value)
+                    }
                     disabled={isPending}
                   >
                     <FieldControl>
-                      <Select.Trigger id="movement-contributor" />
+                      <Select.Trigger
+                        id="movement-contributor"
+                        placeholder={t("contributorPlaceholder")}
+                      />
                     </FieldControl>
                     <Select.Content position="popper">
-                      <Select.Item value={NO_ACCOUNT}>{t("contributorNone")}</Select.Item>
+                      {isAccept && (
+                        <Select.Item value={NO_ACCOUNT}>{t("contributorNone")}</Select.Item>
+                      )}
                       {options.fundMembers.map((member) => (
                         <Select.Item key={member.id} value={member.id}>
                           {member.name}

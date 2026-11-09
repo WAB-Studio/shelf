@@ -7,6 +7,7 @@ import {
   movementTypeFilter,
   transactionFields,
   pesoAmountSchema,
+  refineContributor,
 } from "./transaction";
 
 const schema = pesoAmountSchema({
@@ -62,4 +63,37 @@ test("«De quién» takes a member id or nothing, and refuses anything else", ()
   assert.equal(field.safeParse(null).success, true);
   assert.equal(field.safeParse("0b5f6a52-6f3b-4c4b-9f64-8c1f0f1d7a11").success, true);
   assert.equal(field.safeParse("not-an-id").success, false);
+});
+
+test("«De quién» is required on an income into a fund account and nowhere else", () => {
+  const issues = (
+    data: Parameters<ReturnType<typeof refineContributor>>[0],
+    intoFund: boolean,
+  ) => {
+    const found: string[] = [];
+    refineContributor(intoFund)(data, {
+      addIssue: (issue: unknown) => {
+        found.push((issue as { message: string }).message);
+      },
+    } as never);
+    return found;
+  };
+  const member = "0b5f6a52-6f3b-4c4b-9f64-8c1f0f1d7a11";
+  const account = "5d1c1a0e-0d7e-4f3b-8a7e-2f1a0c9b6d33";
+
+  assert.deepEqual(issues({ fromAccountId: null, toAccountId: account }, true), [
+    "transactions.errors.contributorRequired",
+  ]);
+  assert.deepEqual(
+    issues({ fromAccountId: null, toAccountId: account, contributedByMemberId: null }, true),
+    ["transactions.errors.contributorRequired"],
+  );
+  assert.deepEqual(
+    issues({ fromAccountId: null, toAccountId: account, contributedByMemberId: member }, true),
+    [],
+  );
+  // Not into the fund, not an income: nothing is asked.
+  assert.deepEqual(issues({ fromAccountId: null, toAccountId: account }, false), []);
+  assert.deepEqual(issues({ fromAccountId: account, toAccountId: null }, true), []);
+  assert.deepEqual(issues({ fromAccountId: member, toAccountId: account }, true), []);
 });

@@ -293,6 +293,35 @@ export function requireAnAccount(
   }
 }
 
+/**
+ * An income into a fund account says whose it is: «De quién» is required there and
+ * nowhere else (RF-167). Whether the destination is a fund account is read off the
+ * account, never off the payload: the form runs this against the accounts it was
+ * handed and the action against the ones it reads back, so both refuse the same.
+ * What arrives without a person (a bank notice, a recurring rule, an import) is not
+ * a form and is not asked; Aportes shows it as «Sin asignar».
+ */
+export function refineContributor(intoFund: boolean) {
+  return function refine(
+    data: {
+      fromAccountId: string | null;
+      toAccountId: string | null;
+      contributedByMemberId?: string | null;
+    },
+    ctx: z.RefinementCtx,
+  ) {
+    if (!intoFund || data.fromAccountId !== null || data.toAccountId === null) return;
+
+    if (!data.contributedByMemberId) {
+      ctx.addIssue({
+        code: "custom",
+        message: "transactions.errors.contributorRequired",
+        path: ["contributedByMemberId"],
+      });
+    }
+  };
+}
+
 // A transfer is confirmed whole the moment it is recorded, so only a one-sided
 // movement waits for a statement (RF-122, RF-123) — the same refusal the
 // `transactions_verify_currency` trigger raises, in the same words. Nothing is

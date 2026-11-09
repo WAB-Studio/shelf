@@ -736,6 +736,19 @@ export async function getSettlementCurrencies({
   };
 }
 
+// Whether the caller can read this account and it belongs to a fund. An account the
+// caller cannot read answers false: the write that follows is refused on its own.
+export async function isFundAccount(accountId: string): Promise<boolean> {
+  const [row] = await withUserDb((tx) =>
+    tx
+      .select({ groupId: accounts.groupId })
+      .from(accounts)
+      .where(eq(accounts.id, accountId)),
+  );
+
+  return row?.groupId != null;
+}
+
 // One movement in one round trip, its splits and labels along (RF-24). RLS scopes
 // the read, so an id the caller may not see returns null, the same as one that
 // was never there.
