@@ -7,7 +7,6 @@ import { notFound } from "next/navigation";
 import { ThemeScript } from "@/components/theme-script";
 import { AppTheme, Flex, Toaster } from "@/components/ui";
 import { routing } from "@/i18n/routing";
-import "@radix-ui/themes/styles.css";
 import "../theme.css";
 
 // The text and its figures (DESIGN.md «Violeta y lima»).
