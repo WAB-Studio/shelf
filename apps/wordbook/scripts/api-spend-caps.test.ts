@@ -35,6 +35,7 @@ const state = {
   openaiContent: "el gato" as unknown,
   group: THIN as Group,
   viaInflection: [] as { lemma: string; rule: string }[],
+  correction: [] as string[],
   cachedText: null as unknown,
   cachedNotes: null as unknown,
   textWrites: [] as unknown[][],
@@ -98,7 +99,7 @@ mock.module(here("../lib/word/spend.ts"), {
 mock.module(here("../lib/word/dictionary-index.ts"), { namedExports: { loadDictionaryIndex: () => ({}) } });
 mock.module(here("../lib/dictionary/index-build.ts"), { namedExports: { groupFor: () => state.group } });
 mock.module(here("../lib/dictionary/lookup.ts"), {
-  namedExports: { lookupWord: () => ({ exact: null, viaInflection: state.viaInflection, correction: [] }) },
+  namedExports: { lookupWord: () => ({ exact: null, viaInflection: state.viaInflection, correction: state.correction }) },
 });
 mock.module(here("../lib/word/model.ts"), {
   namedExports: {
@@ -175,6 +176,7 @@ beforeEach(() => {
   state.openaiContent = "el gato";
   state.group = THIN;
   state.viaInflection = [];
+  state.correction = [];
   state.cachedText = null;
   state.cachedNotes = null;
   state.textWrites = [];
@@ -226,10 +228,20 @@ test("word/text: a day already spent never reaches the model", async () => {
   assert.deepEqual(state.dailyClaims, [10]);
 });
 
-test("word/text: a non-thin word caches and returns no translations", async () => {
+test("word/text: a non-thin word that needs no definition answers 204, claims nothing and writes no row", async () => {
   state.group = FULL;
   const { POST } = await import("../app/api/word/text/route");
   const response = await POST(post({ headword: "cat", needDefinition: false }));
+  assert.equal(response.status, 204);
+  assert.equal(state.modelCalls, 0);
+  assert.deepEqual(state.dailyClaims, []);
+  assert.equal(state.textWrites.length, 0);
+});
+
+test("word/text: a non-thin word without a definition caches and returns no translations", async () => {
+  state.group = { headword: "cat", senses: [{ ...FULL.senses[0], definition: null }] };
+  const { POST } = await import("../app/api/word/text/route");
+  const response = await POST(post({ headword: "cat", needDefinition: true }));
   assert.equal(response.status, 200);
   assert.equal(((await response.json()) as { translations: unknown }).translations, null);
   assert.equal(state.textWrites.length, 1);
@@ -237,12 +249,11 @@ test("word/text: a non-thin word caches and returns no translations", async () =
 });
 
 test("word/text: a cached answer carries the definition only when the caller asked", async () => {
-  state.group = FULL;
+  state.group = THIN;
   state.cachedText = {
     definition: "a pet",
-    example: { en: "A cat.", es: "Un gato." },
     translations: null,
-    translationsAsked: false,
+    translationsAsked: true,
   };
   const { POST } = await import("../app/api/word/text/route");
   const without = await POST(post({ headword: "cat", needDefinition: false }));
@@ -254,18 +265,26 @@ test("word/text: a cached answer carries the definition only when the caller ask
 
 // word/unlisted
 
-test("word/unlisted: an inflected word stores and returns its lemma and rule", async () => {
+test("word/unlisted: an inflected word answers 204 and claims and asks nothing (RL-86)", async () => {
   state.viaInflection = [{ lemma: "zorb", rule: "plural-s" }];
   const { POST } = await import("../app/api/word/unlisted/route");
-  const response = await POST(post(UNLISTED));
-  assert.equal(response.status, 200);
-  const body = (await response.json()) as { lemma: unknown; rule: unknown };
-  assert.equal(body.lemma, "zorb");
-  assert.equal(body.rule, "plural-s");
-  assert.equal(state.unlistedWrites.length, 1);
-  assert.equal(state.unlistedWrites[0][1], "zorb");
-  assert.equal(state.unlistedWrites[0][2], "plural-s");
-  assert.deepEqual(state.unlistedModelArgs[0][1], { lemma: "zorb", rule: "plural-s" });
+  const response = await POST(post({ ...UNLISTED, confirmed: true }));
+  assert.equal(response.status, 204);
+  assert.equal(state.unlistedModelArgs.length, 0);
+  assert.equal(state.unlistedWrites.length, 0);
+  assert.deepEqual(state.dailyClaims, []);
+});
+
+test("word/unlisted: a word one edit from a headword is asked only once the reader confirms", async () => {
+  state.correction = ["zorb"];
+  const { POST } = await import("../app/api/word/unlisted/route");
+  const refused = await POST(post(UNLISTED));
+  assert.equal(refused.status, 204);
+  assert.equal(state.unlistedModelArgs.length, 0);
+  assert.deepEqual(state.dailyClaims, []);
+  const confirmed = await POST(post({ ...UNLISTED, confirmed: true }));
+  assert.equal(confirmed.status, 200);
+  assert.equal(state.unlistedModelArgs.length, 1);
 });
 
 test("word/unlisted: a word with no trace stores a null lemma and rule", async () => {
@@ -273,7 +292,6 @@ test("word/unlisted: a word with no trace stores a null lemma and rule", async (
   await POST(post(UNLISTED));
   assert.equal(state.unlistedWrites[0][1], null);
   assert.equal(state.unlistedWrites[0][2], null);
-  assert.equal(state.unlistedModelArgs[0][1], null);
 });
 
 // phrase/notes

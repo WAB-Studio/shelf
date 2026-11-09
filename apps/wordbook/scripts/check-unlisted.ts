@@ -224,16 +224,12 @@ async function main() {
       `before=${callsBefore}, after=${callsAfter}`,
     );
 
+    const providerBeforeInflected = providerCalls;
     const inflected = await request(INFLECTED_WORD, MAIN_CALLER_IP);
-    const inflectedBody = inflected.body as { translations?: string[]; lemma?: string | null; rule?: string | null } | null;
     assert(
-      next(`"${INFLECTED_WORD}" answers with lemma "${INFLECTED_LEMMA}", rule "${INFLECTED_RULE}"`),
-      inflected.status === 200 &&
-        inflectedBody?.lemma === INFLECTED_LEMMA &&
-        inflectedBody?.rule === INFLECTED_RULE &&
-        Array.isArray(inflectedBody?.translations) &&
-        inflectedBody.translations.length >= 1,
-      `status=${inflected.status}, body=${JSON.stringify(inflectedBody)}`,
+      next(`"${INFLECTED_WORD}" (a form of "${INFLECTED_LEMMA}") answers 204 and reaches no model`),
+      inflected.status === 204 && providerCalls === providerBeforeInflected,
+      `status=${inflected.status}, providerCalls=${providerCalls - providerBeforeInflected} more`,
     );
 
     const providerBeforeRefused = providerCalls;

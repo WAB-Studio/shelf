@@ -77,6 +77,13 @@ export async function POST(request: Request): Promise<Response> {
 
   const thin = isThinAnswer(group);
 
+  // RL-42 is retired: with no definition to give and no translations to add, the route has nothing to
+  // answer, so it claims no call and reads no cache. No empty row is ever written.
+  // One dictionary definition anywhere in the group is "already has one", whatever the caller's own
+  // `needDefinition` claims.
+  const wantDefinition = wantsDefinition(parsed.data.needDefinition, group.senses);
+  if (!wantDefinition && !thin) return empty(204);
+
   let cached: Awaited<ReturnType<typeof readCachedText>>;
   try {
     cached = await readCachedText(headword);
@@ -138,10 +145,6 @@ export async function POST(request: Request): Promise<Response> {
     logDark("word/text", claim);
     return empty(204);
   }
-
-  // One dictionary definition anywhere in the group is "already has one",
-  // whatever the caller's own `needDefinition` claims.
-  const wantDefinition = wantsDefinition(parsed.data.needDefinition, group.senses);
 
   // A thin entry rides this same call: one daily-cap claim for the lookup.
   const generated = await generateWordText(headword, wantDefinition, thin ? group.senses : null);

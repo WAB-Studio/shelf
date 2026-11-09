@@ -39,20 +39,7 @@ const UNLISTED_JSON_SCHEMA = {
   additionalProperties: false,
 };
 
-export type UnlistedInflection = { lemma: string; rule: string };
-
-function buildSystemPrompt(word: string, inflection: UnlistedInflection | null): string {
-  if (inflection) {
-    // The lemma is context, never the answer: the reader typed the form, and
-    // a translation of "swish" where they typed "swishing" is the wrong word.
-    return (
-      `You extend an English-Spanish learner's dictionary. The word "${word}" is not a headword ` +
-      `itself: it is the headword "${inflection.lemma}" inflected. "translations" holds ` +
-      `one or more Spanish translations of "${word}" exactly as written — in its own tense and ` +
-      `number, never the lemma's dictionary form. Set "definition" to null: a form is not defined ` +
-      `on its own.`
-    );
-  }
+function buildSystemPrompt(word: string): string {
   return (
     `You extend an English-Spanish learner's dictionary. "${word}" has no entry in it at all. ` +
     `"translations" holds one or more Spanish translations of "${word}", most common ` +
@@ -66,10 +53,7 @@ function buildSystemPrompt(word: string, inflection: UnlistedInflection | null):
  * 204 is the only way a bad generation reaches a reader — the same contract
  * `generateWordText` (`lib/word/model.ts`) keeps for the text route.
  */
-export async function generateUnlistedAnswer(
-  word: string,
-  inflection: UnlistedInflection | null,
-): Promise<ModelAnswer | null> {
+export async function generateUnlistedAnswer(word: string): Promise<ModelAnswer | null> {
   const apiKey = env.OPENAI_API_KEY;
   if (!apiKey) return null;
 
@@ -82,7 +66,7 @@ export async function generateUnlistedAnswer(
       json_schema: { name: "unlisted_word", schema: UNLISTED_JSON_SCHEMA, strict: true },
     },
     messages: [
-      { role: "system", content: buildSystemPrompt(word, inflection) },
+      { role: "system", content: buildSystemPrompt(word) },
       { role: "user", content: `Word: ${word}` },
     ],
   };
@@ -120,7 +104,5 @@ export async function generateUnlistedAnswer(
 
   const result = modelAnswerSchema.safeParse(parsedContent);
   if (!result.success) return null;
-  // A form's definition is never the model's to give: forced null here too,
-  // so a prompt the model ignored can never smuggle one into the response.
-  return inflection ? { ...result.data, definition: null } : result.data;
+  return result.data;
 }

@@ -15,7 +15,7 @@ import { generateUnlistedAnswer } from "@/lib/word/unlisted-model";
 import { readCachedAnswer, writeCachedAnswer } from "@/lib/word/unlisted-cache";
 import { unlistedRequestSchema, unlistedResponseSchema } from "@/lib/word/unlisted-protocol";
 
-// RL-44 and RL-58's server half: no reader session reaches this route, the
+// RL-86's server half: no reader session reaches this route, the
 // cache is keyed on the word alone (`db/schema/word-answers.ts`).
 
 // Above the provider's own 20 s timeout.
@@ -53,9 +53,11 @@ export async function POST(request: Request): Promise<Response> {
     return empty(400);
   }
 
-  // The best-ranked inflection `lookupWord` found, if the word is a form of
-  // a lemma the dictionary does carry — `null` when it is unlisted outright.
-  const inflection = answer.viaInflection[0] ?? null;
+  // RL-86: the dictionary places a form through its lemma, and a slip one edit from a headword is the
+  // reader's to confirm. Neither claims a call or reaches the model unasked.
+  if (answer.viaInflection.length > 0 || (answer.correction.length > 0 && !parsed.data.confirmed)) {
+    return empty(204);
+  }
 
   let cached: Awaited<ReturnType<typeof readCachedAnswer>>;
   try {
@@ -117,23 +119,17 @@ export async function POST(request: Request): Promise<Response> {
     return empty(204);
   }
 
-  const generated = await generateUnlistedAnswer(
-    word,
-    inflection ? { lemma: inflection.lemma, rule: inflection.rule } : null,
-  );
+  const generated = await generateUnlistedAnswer(word);
   if (!generated) {
     logDark("word/unlisted", "model-failed");
     return empty(204);
   }
 
-  const lemma = inflection?.lemma ?? null;
-  const rule = inflection?.rule ?? null;
-
   try {
     await writeCachedAnswer(
       word,
-      lemma,
-      rule,
+      null,
+      null,
       generated.translations,
       generated.definition,
       MODEL_NAME,
@@ -146,8 +142,8 @@ export async function POST(request: Request): Promise<Response> {
     unlistedResponseSchema.parse({
       translations: generated.translations,
       definition: generated.definition,
-      lemma,
-      rule,
+      lemma: null,
+      rule: null,
     }),
     200,
   );

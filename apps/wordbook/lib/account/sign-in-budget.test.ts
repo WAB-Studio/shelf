@@ -67,8 +67,13 @@ test("production with no salt: noSalt, no claim spent; outside production it sta
   const before = environment.NODE_ENV;
   environment.NODE_ENV = "production";
   try {
-    const { claimSignInLink } = await import("./sign-in-budget");
+    const { claimSignInLink, claimSignInAttempt } = await import("./sign-in-budget");
     assert.deepEqual(await claimSignInLink(new Headers({ "x-forwarded-for": "9.9.9.9" }), ADDRESS), { status: "noSalt" });
+    assert.equal(await claimSignInAttempt(new Headers({ "x-forwarded-for": "9.9.9.9" }), ADDRESS), false);
+    assert.deepEqual(warns, [
+      ["[paid-dark]", "signin", "no-salt"],
+      ["[paid-dark]", "signin", "no-salt"],
+    ]);
     assert.equal(state.claims.length, 0);
   } finally {
     environment.NODE_ENV = before;

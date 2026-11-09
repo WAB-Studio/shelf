@@ -4,6 +4,7 @@ export type DarkReason =
   | "no-key"
   | "no-cap"
   | "no-caller"
+  | "no-salt"
   | "caller-share"
   | "caller-cap"
   | "day-cap"
