@@ -46,6 +46,9 @@ export async function listDueReminders(
           eq(plannedPayments.status, "pending"),
           isNotNull(plannedPayments.remindOn),
           lte(plannedPayments.remindOn, today),
+          // Another member's personal payment is theirs to be reminded of (RF-58).
+          sql`(planned_payments.owner_user_id is null
+            or planned_payments.owner_user_id = (select auth.uid()))`,
         ),
       )
       .orderBy(asc(plannedPayments.dueDate), asc(plannedPayments.id))

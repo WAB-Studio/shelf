@@ -39,6 +39,7 @@ import { civilDateToDate } from "@/lib/dates";
 import { deriveRate } from "@/lib/money";
 import { foreignSettlementCurrency } from "@/lib/validation/transaction";
 import { useActionErrorToast } from "@/lib/use-action-toast";
+import { accountNamesById, touchesForeignAccount } from "@/lib/fund/account-names";
 import { categoryNamesById } from "@/lib/fund/category-names";
 
 // A rate is read, not counted with: enough figures to recognise it, whichever
@@ -109,7 +110,11 @@ export function MovementDetail({
 
   // A name and colour per account and per category id — children included — so
   // the detail reads its subtitle, account and tile without a second lookup.
-  const accountNames = new Map(options.accounts.map((a) => [a.id, a.name]));
+  const accountNames = accountNamesById(
+    options.accounts,
+    (name) => tKey("ownership.of", { name }),
+    tKey("ownership.ofSomeone"),
+  );
   const categoryNames = categoryNamesById(options.categories, (name) =>
     tc("scopedName", { name }),
   );
@@ -126,6 +131,7 @@ export function MovementDetail({
 
   // An adjustment books one account: a destination leg adds, a source leg takes.
   const isAdjustment = movement.reconciliationId !== null;
+  const othersOwn = touchesForeignAccount(movement, options.accounts);
 
   const tone: MoneyTone = isAdjustment
     ? "transfer"
@@ -459,7 +465,8 @@ export function MovementDetail({
           </Text>
         )}
 
-        {!isAdjustment && (
+        {/* Another member's movement is read here, never changed (RF-58). */}
+        {!isAdjustment && !othersOwn && (
         <Flex gap="3">
           <Button
             type="button"

@@ -64,6 +64,7 @@ import type { TransactionListRow } from "@/db/queries/transactions";
 import { usePathname, useRouter } from "@/i18n/navigation";
 import { BASE_CURRENCY, type CurrencyCode } from "@/lib/currency";
 import { addCivilDays, civilDateToDate, todayInBogota } from "@/lib/dates";
+import { accountNamesById, touchesForeignAccount } from "@/lib/fund/account-names";
 import { categoryNamesById } from "@/lib/fund/category-names";
 import { dayNet } from "@/lib/fund/glance";
 import { useActionErrorToast } from "@/lib/use-action-toast";
@@ -151,7 +152,11 @@ export function MovementsScreen({
 
   // A name and colour per account and per category id — children included — so a
   // row reads its title, subtitle and tile without a second lookup.
-  const accountNames = new Map(options.accounts.map((a) => [a.id, a.name]));
+  const accountNames = accountNamesById(
+    options.accounts,
+    (name) => tKey("ownership.of", { name }),
+    tKey("ownership.ofSomeone"),
+  );
   const categoryNames = categoryNamesById(options.categories, (name) =>
     tc("scopedName", { name }),
   );
@@ -221,6 +226,7 @@ export function MovementsScreen({
     currency: row.currency,
     tone: rowTone(row),
     adjustment: row.reconciliationId !== null,
+    foreign: touchesForeignAccount(row, options.accounts),
     auto: row.recurringRuleId !== null,
   }));
 
