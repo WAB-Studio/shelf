@@ -90,6 +90,8 @@ test("«sin día» writes a null day, does not draw, and the way into the list s
     await expect(page.getByRole("status")).toContainText("Anotada sin día");
     await expect(page.getByRole("button", { name, exact: true })).toHaveCount(0);
     expect(await rowsNamed(db, personId, name)).toMatchObject([{ day: null }]);
+    // The sheet stays open on the line that says where; the way in is on the day behind it.
+    await page.keyboard.press("Escape");
     // The count is the identity's, and `sueltas.spec.ts` moves it in parallel:
     // the row above proves the write, the link proves the way in.
     await expect(page.getByRole("link", { name: /^\d+ (espera|esperan)$/ })).toHaveAttribute(

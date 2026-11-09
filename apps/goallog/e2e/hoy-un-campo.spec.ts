@@ -143,8 +143,8 @@ test.describe("at 360", () => {
       await expect(metaGroup(page).getByRole("radio", { name: "Suelta" })).not.toBeChecked();
       await field.press("Enter");
 
-      await expect(page.getByRole("status")).toHaveText("Anotada en Leer.");
-      await expect(field).toHaveValue("");
+      // Today, a goal's included: the sheet closes on the day the task joined.
+      await expect(field).toBeHidden();
       const rows = await rowsOf(db, person.id, name);
       expect(rows).toEqual([{ goal_id: ids[0], day: todayInZone(), in_plan: false }]);
 
@@ -157,6 +157,7 @@ test.describe("at 360", () => {
       expect(task.y).toBeLessThan(escribir.y);
 
       // The next name starts from «Suelta» again.
+      await page.getByRole("button", { name: "Anotar algo suelto" }).click();
       await field.fill("Otra cosa");
       await expect(metaGroup(page).getByRole("radio", { name: "Suelta" })).toBeChecked();
       await expect(metaGroup(page).getByRole("radio", { name: "Leer" })).not.toBeChecked();

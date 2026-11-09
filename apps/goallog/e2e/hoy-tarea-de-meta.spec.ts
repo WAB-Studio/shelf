@@ -131,8 +131,8 @@ test("«hoy» draws the task in the goal's group and shows no plan line", async 
     const input = await fillTask(page, goal, task, 390);
     await input.press("Enter");
     await expect(page.getByText(task)).toBeVisible();
-    // The status is the board's «Anotada en {goal}.», never a plan line.
-    await expect(page.getByRole("status")).toHaveText(`Anotada en ${goal}.`);
+    // Written on today, the sheet closes on the day: no line of where it went, and never a plan line.
+    await expect(page.getByRole("status")).toHaveCount(0);
     await expect(page.getByText("Anotada en el plan")).toHaveCount(0);
     await expect(page.getByRole("link", { name: "ver el plan", exact: true })).toHaveCount(0);
   } finally {
