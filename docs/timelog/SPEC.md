@@ -67,7 +67,7 @@ Interface language: Spanish or English, the person's choice (RT-12). A person re
   the same rows (`get_daily`), read-only, with the same key. Successor of RT-15. (2026-11-08)
 - [x] **RT-16** An upload is classified on the PC and carries, per device and day, only seconds in buckets: per
   app; per window title inside an app (never a browser's: its titles are its pages, and the server
-  refuses an upload that carries one); per website hostname and
+  drops one that arrives); per website hostname and
   per page (its address without credentials, query and fragment, and its title); and Claude Code's seconds per
   day and per session (id, project folder, first and last message of the day). It never carries an event, a
   URL's query or fragment, or the content of a Claude Code message. The person's own rows are read only by them

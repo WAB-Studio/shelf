@@ -133,11 +133,15 @@ test("a page address with credentials is refused, a bare one passes (RT-18)", ()
   }
 });
 
-test("a browser's window title is refused whatever its spelling, any other app's passes (RT-16)", () => {
-  const window = (app: string) => withDay({ windows: [{ app, title: "Bandeja de entrada", seconds: 5 }] }).success;
+test("a browser's window title is dropped whatever its spelling and the day still lands; any other app's stays (RT-16)", () => {
+  const kept = (app: string) => {
+    const result = withDay({ windows: [{ app, title: "Bandeja de entrada", seconds: 5 }] });
+    assert.ok(result.success, app);
+    return result.data.days[0].windows?.length ?? 0;
+  };
   for (const app of ["chrome.exe", "Chrome.EXE", "msedge.exe", "firefox", "brave.exe", "opera.exe", "vivaldi.exe", " chrome.exe "]) {
-    assert.equal(window(app), false, app);
+    assert.equal(kept(app), 0, app);
   }
-  assert.ok(window("Code.exe"));
-  assert.ok(window("chromeless-notes.exe"), "a name that only starts like a browser's");
+  assert.equal(kept("Code.exe"), 1);
+  assert.equal(kept("chromeless-notes.exe"), 1, "a name that only starts like a browser's");
 });

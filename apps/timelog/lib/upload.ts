@@ -25,9 +25,9 @@ const siteDay = z.object({
   seconds: z.number().int().min(1).max(DAY_SECONDS),
 });
 
-// A window title inside one app (RT-18), never a browser's: its titles are its pages (RT-16).
+// A window title inside one app (RT-18).
 const windowDay = z.object({
-  app: name(120).refine((app) => !isBrowser(app), "a browser's window title"),
+  app: name(120),
   title: name(300),
   seconds: z.number().int().min(1).max(DAY_SECONDS),
 });
@@ -87,7 +87,12 @@ export function uploadSchema(today: string = civilDay()) {
               apps: z.array(appDay).max(MAX_APPS),
               sites: z.array(siteDay).max(MAX_SITES).optional(),
               claude_code_seconds: z.number().int().min(0).max(DAY_SECONDS).optional(),
-              windows: z.array(windowDay).max(MAX_WINDOWS).optional(),
+              // A browser's titles are its pages (RT-16): dropped, so an uploader whose browser list lags still lands its day.
+              windows: z
+                .array(windowDay)
+                .max(MAX_WINDOWS)
+                .optional()
+                .transform((windows) => windows?.filter((one) => !isBrowser(one.app))),
               pages: z.array(pageDay).max(MAX_PAGES).optional(),
               claude_sessions: z.array(claudeSession).max(MAX_SESSIONS).optional(),
             })
