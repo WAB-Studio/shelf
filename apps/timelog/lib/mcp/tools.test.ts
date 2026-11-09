@@ -99,6 +99,7 @@ test("get_daily answers one row per day with Claude's time and the top app, from
     claude_code_seconds: 3600,
     claude_ai_seconds: 600,
     claude_desktop_seconds: 0,
+    claude_seconds: 4200,
     claude_screen_seconds: 600,
     top_app: "VS Code",
     top_app_seconds: 11520,

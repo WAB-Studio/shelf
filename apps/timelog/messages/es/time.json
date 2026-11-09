@@ -176,7 +176,7 @@
   },
   "export": {
     "title": "Exportar",
-    "intro": "Un CSV con una fila por día, hasta hoy: tiempo en la computadora, Claude Code (el trabajo del agente), claude.ai, la app de Claude, Claude en pantalla (claude.ai y la app), la app más usada y si ese día llegó una subida, todo en segundos. Claude lee las mismas filas con la herramienta get_daily.",
+    "intro": "Un CSV con una fila por día, hasta hoy: tiempo en la computadora, Claude Code (el trabajo del agente), claude.ai, la app de Claude, el total de Claude, Claude en pantalla (claude.ai y la app), la app más usada y si ese día llegó una subida, todo en segundos. Claude lee las mismas filas con la herramienta get_daily.",
     "from": "Desde",
     "to": "Hasta",
     "download": "Descargar CSV",

@@ -176,7 +176,7 @@
   },
   "export": {
     "title": "Export",
-    "intro": "A CSV with a row per day, up to today: time on the computer, Claude Code (the agent's work), claude.ai, the Claude app, Claude on screen (claude.ai and the app), the most used app and whether an upload reached that day, all in seconds. Claude reads the same rows with the get_daily tool.",
+    "intro": "A CSV with a row per day, up to today: time on the computer, Claude Code (the agent's work), claude.ai, the Claude app, Claude's total, Claude on screen (claude.ai and the app), the most used app and whether an upload reached that day, all in seconds. Claude reads the same rows with the get_daily tool.",
     "from": "From",
     "to": "To",
     "download": "Download CSV",

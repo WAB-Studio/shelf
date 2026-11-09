@@ -172,7 +172,7 @@ What changed:
 
 Decided by the user (RT-24). «% del día» counts what was in front of the person: claude.ai and the app, «Claude en
 pantalla». Claude Code is the agent working, shown apart: a «Claude Code trabajó N por su cuenta» line in the brand block, its
-own row under «Trabajo del agente» in the Claude card, and its own CSV column; it is never added to the percentage.
+own row under «Trabajo del agente» in the Claude card, and its own CSV column beside the total and the screen column; it is never added to the percentage.
 «Semana» says it under its Claude card the same way. The old note «se suman tal cual» is gone: nothing is added twice.
 
 ## Semana grows (2026-11-08)

@@ -11,6 +11,8 @@ export type DailyRow = {
   claude_code_seconds: number;
   claude_ai_seconds: number;
   claude_desktop_seconds: number;
+  // The three added, as it always was.
+  claude_seconds: number;
   // Claude in front of the person: claude.ai and the app. Claude Code is the agent working, apart in claude_code_seconds.
   claude_screen_seconds: number;
   top_app: string;
@@ -31,6 +33,8 @@ export function claudeSources(claude: Pick<ClaudeDay, "code" | "web" | "desktop"
 }
 
 // What the person spent in front of Claude: claude.ai and the app. Claude Code is the agent's work, never added to it.
+export const claudeTotal = (one: Pick<ClaudeDay, "code" | "web" | "desktop">) => one.code + one.web + one.desktop;
+
 export const claudeScreen = (one: Pick<ClaudeDay, "web" | "desktop">) => one.web + one.desktop;
 
 // Every day from `from` to `to`, cut at `today` (a day that has not happened has no row), a day with nothing at zero and
@@ -51,6 +55,7 @@ export function dailyRows(from: string, to: string, totals: DayTotal[], claude: 
       claude_code_seconds: parts.code,
       claude_ai_seconds: parts.web,
       claude_desktop_seconds: parts.desktop,
+      claude_seconds: claudeTotal(parts),
       claude_screen_seconds: claudeScreen(parts),
       top_app: top?.app ?? "",
       top_app_seconds: top?.seconds ?? 0,
@@ -74,6 +79,7 @@ const COLUMNS: (keyof DailyRow)[] = [
   "claude_code_seconds",
   "claude_ai_seconds",
   "claude_desktop_seconds",
+  "claude_seconds",
   "claude_screen_seconds",
   "top_app",
   "top_app_seconds",
