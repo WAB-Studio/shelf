@@ -3,7 +3,7 @@ import { test } from "node:test";
 
 import { nextQuotaReset } from "./quota-day";
 
-// The cap counts the UTC day (`sync_rows_today`), so the copy resumes at the
+// The cap counts the UTC day (`sync_gate`), so the copy resumes at the
 // next 00:00 UTC. `nextQuotaReset(nowMs)` answers that instant in epoch ms.
 const utc = (iso: string): number => Date.parse(iso);
 

@@ -31,7 +31,7 @@ export type DismissPlanNoticeResult = { ok: true } | { ok: false; error: Message
 /**
  * Sets or changes a goal's rhythm (RP-52) in one statement. The CTEs read one
  * snapshot, so `g.rhythm` is the old value: it fills every closed month of the
- * span that has no amount with its share of it (`plannedOf`, RP-74: the plan
+ * span that has no amount with its share of it (`plannedOf`, RP-76: the plan
  * those months were lived against), the integer division its floor, and
  * only the first rhythm (old null) sends the goal's undone top-level plan
  * tasks back to the plan. A task is done when it has a fact, or when it has
@@ -134,7 +134,7 @@ export async function setRhythm(input: unknown): Promise<SetRhythmResult> {
  * Takes a goal's rhythm away (RP-127) in one statement. The months already over are frozen first,
  * each at the plan it was lived against (RP-76), so the rhythm going rewrites no past figure; the
  * open month and the ones to come keep no amount. The CTEs read one snapshot, so `g.rhythm` is the
- * old value. The AI has no tool for this (RP-119).
+ * old value. The AI has no tool for this (RP-139).
  */
 export async function removeRhythm(input: unknown): Promise<RemoveRhythmResult> {
   const parsed = removeRhythmSchema.safeParse(input);

@@ -3,6 +3,7 @@ import { z } from "zod";
 import { json } from "@/lib/http/responses";
 import { getReader, withReaderDb } from "@/lib/session";
 import { listDevices, retireDevice } from "@/lib/sync/devices";
+import { refuseCrossSiteRequest } from "@/lib/word/same-origin";
 
 const retireDeviceRequestSchema = z.object({
   deviceId: z.uuid(),
@@ -24,6 +25,9 @@ export async function GET(): Promise<Response> {
 export async function DELETE(request: Request): Promise<Response> {
   const reader = await getReader();
   if (!reader) return json({ error: "unauthorized" }, 401);
+
+  const refused = refuseCrossSiteRequest(request);
+  if (refused) return refused;
 
   let raw: unknown;
   try {

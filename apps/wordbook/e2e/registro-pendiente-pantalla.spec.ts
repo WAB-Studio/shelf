@@ -109,7 +109,7 @@ async function seed(page: Page, rows: Seed[]): Promise<void> {
   );
 }
 
-async function openRegistro(page: Page, rows: Seed[]): Promise<void> {
+async function openRecord(page: Page, rows: Seed[]): Promise<void> {
   await deleteTranslator(page);
   await keepNetworkSilent(page);
   await seed(page, rows);
@@ -136,7 +136,7 @@ const ROWS = (): Seed[] => [
 test("RL-76: a pending word reads «Sin respuesta todavía» and «Se responde sola…», with its count and no translation", async ({
   page,
 }) => {
-  await openRegistro(page, ROWS());
+  await openRecord(page, ROWS());
   const row = rowOf(page, "zzorble");
   await expect(row).toHaveCount(1);
   await expect(row.getByText(WAITING, { exact: true })).toBeVisible();
@@ -149,7 +149,7 @@ test("RL-76: a pending word reads «Sin respuesta todavía» and «Se responde s
 });
 
 test("RL-76: a pending sentence says «Se traduce sola…», not «Se responde sola…»", async ({ page }) => {
-  await openRegistro(page, ROWS());
+  await openRecord(page, ROWS());
   const row = rowOf(page, "the cat sits still");
   await expect(row.getByText(WAITING, { exact: true })).toBeVisible();
   await expect(row.getByText(PHRASE_LINE, { exact: true })).toBeVisible();
@@ -157,7 +157,7 @@ test("RL-76: a pending sentence says «Se traduce sola…», not «Se responde s
 });
 
 test("RL-76: an answered row beside them is unchanged, and the order is the usual one", async ({ page }) => {
-  await openRegistro(page, ROWS());
+  await openRecord(page, ROWS());
   const alpha = rowOf(page, "alpha");
   await expect(alpha.getByText("alfa", { exact: true })).toBeVisible();
   await expect(alpha.getByText(WAITING)).toHaveCount(0);
@@ -177,7 +177,7 @@ test("RL-76: an answered row beside them is unchanged, and the order is the usua
 });
 
 test("RL-76: tapping a pending word opens its word page", async ({ page }) => {
-  await openRegistro(page, ROWS());
+  await openRecord(page, ROWS());
   await rowOf(page, "zzorble").getByRole("link").click();
   await expect(page).toHaveURL(/\/registro\/zzorble$/);
 });
@@ -190,7 +190,7 @@ test("RL-76: with no rows the study's empty state shows, unchanged", async ({ pa
 });
 
 test("RL-76: when the drain answers a pending row, the list repaints without a reload", async ({ page }) => {
-  await openRegistro(page, ROWS());
+  await openRecord(page, ROWS());
   const row = rowOf(page, "zzorble");
   await expect(row.getByText(WAITING, { exact: true })).toBeVisible();
 
@@ -249,7 +249,7 @@ test("RL-76: when the drain answers a pending row, the list repaints without a r
 });
 
 test("RL-76: the word page of a pending-only word says it waits and draws no answer", async ({ page }) => {
-  await openRegistro(page, [pending("zzorble", NOW - 10)]);
+  await openRecord(page, [pending("zzorble", NOW - 10)]);
   await page.goto("/registro/zzorble");
 
   await expect(page.getByRole("heading", { name: "zzorble" })).toBeVisible();
@@ -268,7 +268,7 @@ test("RL-76: the word page of a pending-only word says it waits and draws no ans
 });
 
 test("RL-76: the word page of an answered word keeps its answer and does not say it waits", async ({ page }) => {
-  await openRegistro(page, [answered("alpha", "alfa", NOW - 10)]);
+  await openRecord(page, [answered("alpha", "alfa", NOW - 10)]);
   await page.goto("/registro/alpha");
   await expect(page.getByRole("heading", { name: "alpha" })).toBeVisible();
   await expect(page.getByText(/alfa/).first()).toBeVisible();

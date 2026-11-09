@@ -467,36 +467,31 @@ async function checkCapCountsBuried(): Promise<void> {
         (user_id, device_id, local_id, at, text, normalised, kind, outcome, senses, dictionary_ready, record_schema)
         values (${a}, ${dev}, ${localId}, now(), 'x', 'x', 'word', 'exact', 0, true, 1)`;
     }
-    const [before] = await tx<{ n: string }[]>`select reading.sync_rows_today(${a})::text as n`;
+    const [before] = await tx<{ n: string }[]>`select (select today from reading.sync_gate(${a}::uuid, ${dev}::uuid))::text as n`;
     // Row 3 is deleted on this device and its mark is written, carrying the deleted row's own received_at.
     const [{ received_at: receivedAt }] = await tx<{ received_at: Date }[]>`
       select received_at from reading.lookups where user_id = ${a} and device_id = ${dev} and local_id = 3`;
     await tx`delete from reading.lookups where user_id = ${a} and device_id = ${dev} and local_id = 3`;
     await tx`insert into reading.lookup_tombstones (user_id, device_id, local_id, received_at)
       values (${a}, ${dev}, 3, ${receivedAt})`;
-    const [after] = await tx<{ n: string }[]>`select reading.sync_rows_today(${a})::text as n`;
+    const [after] = await tx<{ n: string }[]>`select (select today from reading.sync_gate(${a}::uuid, ${dev}::uuid))::text as n`;
     assert("C1", before.n === "3" && after.n === "3", `rows today before the delete = ${before.n}, after the delete and its mark = ${after.n}`);
 
     // A mark from an earlier day buys the day nothing; another reader's mark is not this reader's.
     await tx`insert into reading.lookup_tombstones (user_id, device_id, local_id, received_at)
       values (${a}, ${dev}, 4, now() - interval '3 days')`;
-    const [old] = await tx<{ n: string }[]>`select reading.sync_rows_today(${a})::text as n`;
+    const [old] = await tx<{ n: string }[]>`select (select today from reading.sync_gate(${a}::uuid, ${dev}::uuid))::text as n`;
     await enterUserContext(tx, b);
     await tx`insert into reading.lookup_tombstones (user_id, device_id, local_id, received_at)
       values (${b}, ${dev}, 1, now())`;
     // Privileged, so the policies cannot hide B's mark from the function: it must tell the readers apart itself.
     await tx`reset role`;
-    const [mineStill] = await tx<{ n: string }[]>`select reading.sync_rows_today(${a})::text as n`;
+    const [mineStill] = await tx<{ n: string }[]>`select (select today from reading.sync_gate(${a}::uuid, ${dev}::uuid))::text as n`;
     assert("C2", old.n === "3" && mineStill.n === "3", `with a three-day-old mark = ${old.n}, with B's mark today = ${mineStill.n}`);
 
-    // Same signature, same grants: only the signed-in reader may call it.
-    const [can] = await tx<{ anon: boolean; authenticated: boolean; service_role: boolean; pub: boolean }[]>`
-      select has_function_privilege('anon', 'reading.sync_rows_today(uuid)', 'execute') as anon,
-             has_function_privilege('authenticated', 'reading.sync_rows_today(uuid)', 'execute') as authenticated,
-             has_function_privilege('service_role', 'reading.sync_rows_today(uuid)', 'execute') as service_role,
-             exists (select 1 from pg_proc p, aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a
-                     where p.oid = 'reading.sync_rows_today(uuid)'::regprocedure and a.grantee = 0) as pub`;
-    assert("C3", !can.anon && can.authenticated && !can.service_role && !can.pub, `EXECUTE: anon = ${can.anon}, authenticated = ${can.authenticated}, service_role = ${can.service_role}, PUBLIC = ${can.pub}`);
+    // The count lives in `sync_gate` alone; the function it replaced is gone.
+    const [gone] = await tx<{ present: boolean }[]>`select to_regprocedure('reading.sync_rows_today(uuid)') is not null as present`;
+    assert("C3", !gone.present, `reading.sync_rows_today still exists = ${gone.present}`);
   });
 }
 
@@ -566,12 +561,12 @@ async function checkMarkBesideItsRow(): Promise<void> {
     await tx`insert into reading.lookups
       (user_id, device_id, local_id, at, text, normalised, kind, outcome, senses, dictionary_ready, record_schema)
       values (${a}, ${dev}, 1, now(), 'x', 'x', 'word', 'exact', 0, true, 1)`;
-    const [before] = await tx<{ n: string }[]>`select reading.sync_rows_today(${a})::text as n`;
+    const [before] = await tx<{ n: string }[]>`select (select today from reading.sync_gate(${a}::uuid, ${dev}::uuid))::text as n`;
     const [{ received_at: receivedAt }] = await tx<{ received_at: Date }[]>`
       select received_at from reading.lookups where user_id = ${a} and device_id = ${dev} and local_id = 1`;
     const markCode = await attemptCode(tx, (sp) => sp`insert into reading.lookup_tombstones (user_id, device_id, local_id, received_at)
       values (${a}, ${dev}, 1, ${receivedAt})`);
-    const [after] = await tx<{ n: string }[]>`select reading.sync_rows_today(${a})::text as n`;
+    const [after] = await tx<{ n: string }[]>`select (select today from reading.sync_gate(${a}::uuid, ${dev}::uuid))::text as n`;
     assert("C4", before.n === "1" && markCode === undefined && after.n === "1", `rows today with the row alone = ${before.n}, mark insert sqlstate = ${markCode ?? "ok"}, with the row and its own mark = ${after.n}`);
   });
 }
@@ -626,16 +621,17 @@ async function checkMigrationsInOrder(): Promise<void> {
   const increasing = journal.entries.every((e, i) => e.idx === i && (i === 0 || e.when > journal.entries[i - 1].when));
   assert(
     "M1",
-    journal.entries.length === 10 &&
+    journal.entries.length === 11 &&
       tags[7] === "0007_lookup_tombstones" &&
       tags[8] === "0008_allowed_emails" &&
       tags[9]?.startsWith("0009_") &&
+      tags[10] === "0010_drop_sync_rows_today" &&
       journal.entries[7].when > 1791606395820 &&
       increasing,
-    `entries = ${journal.entries.length}, tags 7..9 = [${tags.slice(7, 10)}], idx and when strictly increasing = ${increasing}`,
+    `entries = ${journal.entries.length}, tags 7..10 = [${tags.slice(7, 11)}], idx and when strictly increasing = ${increasing}`,
   );
   const [applied] = await sql<{ n: string }[]>`select count(*)::text as n from drizzle.__drizzle_migrations_reading`;
-  assert("M2", applied.n === "10", `rows in __drizzle_migrations_reading = ${applied.n}`);
+  assert("M2", applied.n === "11", `rows in __drizzle_migrations_reading = ${applied.n}`);
 }
 
 // `reading.sync_gate(user, device)`, written from the plan's M30 contract and never from the migration: it takes the
@@ -734,8 +730,7 @@ async function checkGateCountAndReader(): Promise<void> {
 
     const [own] = await tx<{ today: string; retired: boolean }[]>`
       select today::text as today, retired from reading.sync_gate(${a}::uuid, ${devA}::uuid)`;
-    const [quota] = await tx<{ n: string }[]>`select reading.sync_rows_today(${a})::text as n`;
-    assert("SG2", own.today === "3" && own.today === quota.n && own.retired === false, `gate today = ${own.today}, sync_rows_today = ${quota.n} (2 rows and 1 buried mark, an old mark ignored), live device retired = ${own.retired}`);
+    assert("SG2", own.today === "3" && own.retired === false, `gate today = ${own.today} (2 rows and 1 buried mark, an old mark ignored), live device retired = ${own.retired}`);
 
     // B has a retired device and rows today; A's claims must see neither through the gate.
     await tx`reset role`;

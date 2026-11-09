@@ -12,6 +12,7 @@ import { claudeSources, claudeTotal } from "@/lib/daily";
 import type { AppTime } from "@/lib/queries";
 import { appsBetween, claudeBetween, claudeSessionsBetween, dayTotals, devicesBetween, pagesBetween, sitesBetween, uploadedDays, uploadSpan, windowsBetween } from "@/lib/queries";
 import { focusShare, hourMarks, layoutSessions } from "@/lib/timeline";
+import { withTimeDb } from "@/lib/session";
 import { percent, sum } from "@/lib/totals";
 import { type ProjectTime, projectsOf } from "@/lib/vscode-project";
 import { calendarWords } from "@/lib/words";
@@ -28,19 +29,24 @@ export async function DayView({ day }: { day: string }) {
   const isToday = day === today;
   const before = addDays(day, -1);
   const monday = mondayOf(day);
-  const [raw, weekDays, sites, pages, windows, sessions, claudeDays, previous, devices, span, words, t, tClaude, tInternet, tTimeline, tClass] = await Promise.all([
-    appsBetween(day, day),
-    // Which days of the strip's week an upload reached, in any table.
-    uploadedDays(monday, addDays(monday, 6)),
-    sitesBetween(day, day),
-    pagesBetween(day, day),
-    windowsBetween(day, day),
-    claudeSessionsBetween(day, day),
-    claudeBetween(day, day),
-    // Only a whole day compares: uploads carry day totals, so today so far has no like-for-like yesterday.
-    isToday ? Promise.resolve([]) : dayTotals(before, before),
-    devicesBetween(day, day),
-    uploadSpan(),
+  // One settled transaction for every read: they pipeline on its connection, one pool slot and one settle for the screen.
+  const [reads, words, t, tClaude, tInternet, tTimeline, tClass] = await Promise.all([
+    withTimeDb((tx) =>
+      Promise.all([
+        appsBetween(day, day, tx),
+        // Which days of the strip's week an upload reached, in any table.
+        uploadedDays(monday, addDays(monday, 6), tx),
+        sitesBetween(day, day, tx),
+        pagesBetween(day, day, tx),
+        windowsBetween(day, day, tx),
+        claudeSessionsBetween(day, day, tx),
+        claudeBetween(day, day, tx),
+        // Only a whole day compares: uploads carry day totals, so today so far has no like-for-like yesterday.
+        isToday ? Promise.resolve([]) : dayTotals(before, before, tx),
+        devicesBetween(day, day, tx),
+        uploadSpan(tx),
+      ]),
+    ),
     calendarWords(),
     getTranslations("time.today"),
     getTranslations("time.claude"),
@@ -48,6 +54,7 @@ export async function DayView({ day }: { day: string }) {
     getTranslations("time.timeline"),
     getTranslations("time.classes"),
   ]);
+  const [raw, weekDays, sites, pages, windows, sessions, claudeDays, previous, devices, span] = reads;
   const claude = claudeDays[0];
   const claudeSeconds = claude === undefined ? 0 : claudeTotal(claude);
   const apps = words.apps(raw);

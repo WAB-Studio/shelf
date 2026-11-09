@@ -64,7 +64,7 @@ async function arrange(draft: ImportDraft, source: "paste" | "file", startedAt: 
 }
 
 /**
- * Reads a pasted plan or one file (RP-37, RP-86, RP-98, RNP-13) in a fixed order: the template
+ * Reads a pasted plan or one file (RP-130, RP-98, RNP-13) in a fixed order: the template
  * and the workbook first, which need neither key nor claim and never reach the model; then a file
  * type the reader refuses, which must not spend a claim; then the key, named when absent; then
  * the claim; then the model, whose answer streams as one JSON object a line. Every branch before

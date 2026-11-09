@@ -503,7 +503,7 @@ async function seedGoal(name: string, fields: { horizon: string; createdAt?: str
 }
 
 test("loadReport: a goal whose horizon is today has ended the day before; one ending tomorrow has not (RP-49)", async () => {
-  const { dayBefore } = await import("@/lib/day/weeks");
+  const { addDaysToCivilDate } = await import("@/lib/zone");
   const tomorrow = new Date(`${today}T12:00:00Z`);
   tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
   const tomorrowDay = tomorrow.toISOString().slice(0, 10);
@@ -512,7 +512,7 @@ test("loadReport: a goal whose horizon is today has ended the day before; one en
 
   const report = await loadReport(today);
   const byId = (id: string) => report.goals.find((goal) => goal.id === id)!;
-  assert.equal(byId(endsToday).endedOn, dayBefore(today));
+  assert.equal(byId(endsToday).endedOn, addDaysToCivilDate(today, -1));
   assert.equal(byId(endsTomorrow).endedOn, null);
 });
 

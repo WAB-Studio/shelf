@@ -112,7 +112,7 @@ function refusal2(input: unknown): string | undefined {
   return parsed.error?.issues[0]?.message;
 }
 
-// RP-45: the note's one rule, shared by the act, the template and the AI.
+// RP-88: the note's one rule, shared by the act, the template and the AI.
 test("noteSchema: 2000 characters pass, 2001 are refused with the key", () => {
   assert.equal(noteSchema.safeParse("a".repeat(2000)).success, true);
   const long = noteSchema.safeParse("a".repeat(2001));
@@ -174,7 +174,7 @@ test("day.json: the task's two new refusals and the past heading read as the use
   assert.equal("dayOnOneOff" in errors, false);
 });
 
-// M8 (RP-56): a create resent after a lost answer carries the id it was sent with.
+// M8 (RP-139): a create resent after a lost answer carries the id it was sent with.
 test("createOneOffSchema: a uuid requestId is kept, one that is not a uuid is refused, none is as before", () => {
   const requestId = "0b6f3c1e-2a4d-4e8f-9c7b-5d1a2e3f4b6c";
   const kept = createOneOffSchema.safeParse({ name: "x", day: null, requestId });

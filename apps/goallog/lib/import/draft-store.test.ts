@@ -301,7 +301,7 @@ test("992 K7: a template with no corrections declines nothing, and a later revie
   assert.deepEqual(readDraft()?.declined, [B.id]);
 });
 
-// RP-86, RP-92: the id a confirm is sent with lives and dies with the draft.
+// RP-130, RP-92: the id a confirm is sent with lives and dies with the draft.
 const KEY = "pulsar.import-draft";
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 

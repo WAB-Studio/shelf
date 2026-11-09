@@ -29,7 +29,7 @@ export function goalHasFacts(goalId: SQL): SQL {
 /**
  * Whether the goal's measure is fed (RP-14): a fact of the goal with a quantity of a commitment
  * in the measure's unit, or an evidence commitment of the goal whose source counts in that unit.
- * A done task is no arm: its estimate counts toward no measure (RP-128). Time allocated to the goal is one (RP-151).
+ * A done task is no arm: its estimate counts toward no measure (RP-151). Time allocated to the goal is one (RP-151).
  */
 export function measureFed(goalId: SQL): SQL {
   return sql`(

@@ -1,8 +1,8 @@
 import type { Page } from "@playwright/test";
 
 import messages from "../messages/es/import.json";
-import { dayBefore, horizonForWeeks } from "../lib/day/weeks";
-import { civilDayMonthYear, todayInZone } from "../lib/zone";
+import { horizonForWeeks } from "../lib/day/weeks";
+import { addDaysToCivilDate, civilDayMonthYear, todayInZone } from "../lib/zone";
 import type { RawDraft } from "../lib/import/draft";
 import { test, expect } from "./fixtures";
 import { asPerson, createButton, months, plus, toOpenReview, toOpenSeededReview, word, type Seed } from "./importar-plan";
@@ -93,14 +93,14 @@ function modelSeed(): Seed {
 
 test.describe("the review of a goal with no end (RP-99)", () => {
   test("its row says «sin final» where a dated goal says «hasta el …», and never a date", async ({ person, browser, baseURL }) => {
-    // Kills: `dayBefore(null)` / writing `horizonUntil` whatever the horizon.
+    // Kills: `addDaysToCivilDate(null, -1)` / writing `horizonUntil` whatever the horizon.
     await asPerson({ person, browser, baseURL }, async (page) => {
       await toOpenReview(page, boardPlan());
       await expect(page.getByText(NO_END, { exact: true })).toHaveCount(1);
       await expect(rowOf(page, new RegExp(`^${READ} meta`))).not.toContainText("hasta el");
       await expect(rowOf(page, new RegExp(`^${READ} meta`))).not.toContainText(/NaN|Invalid|undefined|null/);
       // The dated goal keeps its words, with the day before its horizon.
-      await expect(page.getByText(`meta · hasta el ${dayWord(dayBefore(plus(400)))}`, { exact: true })).toBeVisible();
+      await expect(page.getByText(`meta · hasta el ${dayWord(addDaysToCivilDate(plus(400), -1))}`, { exact: true })).toBeVisible();
       await expect(createButton(page)).toHaveText("Crear 2 metas");
     });
   });
@@ -216,11 +216,11 @@ test.describe("the sheet of a goal with no end (board `ImportarSinFinal-2-hoja-3
       await pencil(page, READ).click();
       await sheet(page).getByRole("button", { name: PUT_END, exact: true }).click();
       await weeksField(page).fill("52");
-      const last = dayBefore(end);
+      const last = addDaysToCivilDate(end, -1);
       await expect(sheet(page).getByText(`termina el ${civilDayMonthYear(last)}`)).toBeVisible();
       await sheet(page).getByRole("button", { name: messages.review.edit.save }).click();
       await expect(sheet(page)).toHaveCount(0);
-      await expect(page.getByText(`meta · hasta el ${dayWord(dayBefore(end))}`, { exact: true })).toHaveCount(1);
+      await expect(page.getByText(`meta · hasta el ${dayWord(addDaysToCivilDate(end, -1))}`, { exact: true })).toHaveCount(1);
       await expect(page.getByText(NO_END, { exact: true })).toHaveCount(0);
       expect(JSON.parse((await draftOf(page))!).draft.goals[0].horizon).toBe(end);
     });

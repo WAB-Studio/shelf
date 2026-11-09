@@ -40,14 +40,12 @@
     }
   },
   "install": {
-    "preparing": "Instalando el diccionario en el dispositivo. Puedes seguir buscando mientras tanto",
     "progress": "Instalando el diccionario: {percent}%",
     "unknownSize": "Instalando el diccionario",
     "pending": "«{query}» se responderá en cuanto termine la instalación",
     "failed": "No se pudo instalar el diccionario",
     "failedPending": "«{query}» no tendrá respuesta hasta que reintentes",
     "retry": "Reintentar",
-    "preparingReadOnly": "Instalando el diccionario en el dispositivo",
     "progressLabel": "Progreso de la instalación"
   },
   "word": {

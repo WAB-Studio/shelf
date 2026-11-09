@@ -4134,6 +4134,66 @@ async function checkTimeEntries0032(): Promise<void> {
   await sql.end();
 }
 
+// A day's own target (RP-148) and a task's recorded time (RP-147) are written by the actions; the database refuses
+// the same writes made bare, as `authenticated`, inside one rollback.
+async function checkDayTargetAndSpent0033(): Promise<void> {
+  const sql = postgres(DATABASE_URL!, { prepare: false, max: 1 });
+  const a = randomUUID();
+  const forcedRollback = Symbol("forced rollback");
+
+  await sql
+    .begin(async (tx) => {
+      await tx`insert into auth.users (id) values (${a})`;
+      await enterUserContext(tx, a);
+      const mine = await seedFixtures(tx, a);
+      const [quantity] = await tx<{ id: string }[]>`
+        insert into goals.commitments (user_id, goal_id, name, cadence_kind, satisfaction, target_quantity, unit)
+        values (${a}, ${mine.goalId}, 'cantidad de prueba', 'daily', 'quantity', 10, 'paginas') returning id`;
+
+      const onTap = await attempt(tx, (sp) => sp`
+        insert into goals.facts (user_id, commitment_id, day, day_target) values (${a}, ${mine.commitmentId}, '2026-09-23', 3)`);
+      const onTask = await attempt(tx, (sp) => sp`
+        insert into goals.facts (user_id, one_off_id, day, day_target) values (${a}, ${mine.oneOffId}, '2026-09-23', 3)`);
+      assert("D01", onTap.code === "23514" && onTask.code === "23514",
+        `day_target on a tap fact = ${onTap.code ?? "none"}, on a task's fact = ${onTask.code ?? "none"}`);
+
+      const atTarget = await attempt(tx, (sp) => sp`
+        insert into goals.facts (user_id, commitment_id, day, quantity, day_target) values (${a}, ${quantity.id}, '2026-09-23', 10, 10)`);
+      const aboveTarget = await attempt(tx, (sp) => sp`
+        insert into goals.facts (user_id, commitment_id, day, quantity, day_target) values (${a}, ${quantity.id}, '2026-09-23', 11, 11)`);
+      assert("D02", atTarget.code === "23514" && aboveTarget.code === "23514",
+        `day_target = target = ${atTarget.code ?? "none"}, above it = ${aboveTarget.code ?? "none"}`);
+
+      const lowered = await attempt(tx, (sp) => sp`
+        insert into goals.facts (user_id, commitment_id, day, quantity, day_target) values (${a}, ${quantity.id}, '2026-09-23', 4, 4)`);
+      const plain = await attempt(tx, (sp) => sp`
+        insert into goals.facts (user_id, commitment_id, day) values (${a}, ${mine.commitmentId}, '2026-09-24')`);
+      assert("D03", lowered.code === undefined && plain.code === undefined,
+        `a lowered day = ${lowered.code ?? "none"}, a plain tap = ${plain.code ?? "none"}`);
+
+      const noEstimate = await attempt(tx, (sp) => sp`update goals.one_offs set spent_minutes = 30 where id = ${mine.oneOffId}`);
+      assert("D04", noEstimate.code === "23514", `spent_minutes on a task with no goal nor estimate = ${noEstimate.code ?? "none"}`);
+
+      await tx`update goals.goals set measure_name = 'paginas', measure_unit = 'paginas' where id = ${mine.goalId}`;
+      const [task] = await tx<{ id: string }[]>`
+        insert into goals.one_offs (user_id, goal_id, name, planned_month, estimate)
+        values (${a}, ${mine.goalId}, 'tarea de prueba', '2026-12-01', 60) returning id`;
+      const notTime = await attempt(tx, (sp) => sp`update goals.one_offs set spent_minutes = 30 where id = ${task.id}`);
+      assert("D05", notTime.code === "23514", `spent_minutes on a task of a goal measured in pages = ${notTime.code ?? "none"}`);
+
+      await tx`update goals.goals set measure_name = 'tiempo', measure_unit = 'minutos' where id = ${mine.goalId}`;
+      const inTime = await attemptCount(tx, (sp) => sp`update goals.one_offs set spent_minutes = 30 where id = ${task.id}`);
+      assert("D06", inTime.code === undefined && inTime.count === 1,
+        `spent_minutes on a task estimated in a goal measured in minutes, sqlstate = ${inTime.code ?? "none"}, rows = ${inTime.count}`);
+
+      throw forcedRollback;
+    })
+    .catch((error: unknown) => {
+      if (error !== forcedRollback) throw error;
+    });
+  await sql.end();
+}
+
 // A receipt is what one act answered to one request id (RP-56, RNP-05): the
 // person reads and inserts only their own, and no role rewrites or deletes one.
 // Driven as `authenticated`, `anon` and `service_role` inside one rollback.
@@ -4399,6 +4459,7 @@ async function main(): Promise<void> {
   await checkParentOwner0027();
   await checkWriteReceipts0029();
   await checkTimeEntries0032();
+  await checkDayTargetAndSpent0033();
   await checkPruneExecute0029();
 
   if (failed) process.exit(1);

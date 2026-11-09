@@ -7,7 +7,7 @@ import { NextRequest } from "next/server";
 
 import { SIGNED_IN_MARKER } from "@/lib/auth/signed-in-marker";
 
-// RP-131 and RP-18: `/auth/confirm` lands a `code` link only in the browser that holds its verifier, and
+// RP-131 and RP-136: `/auth/confirm` lands a `code` link only in the browser that holds its verifier, and
 // still lands a `token_hash` link. The real `@repo/supabase-auth` and `@supabase/ssr` run; Supabase itself
 // is a fake `fetch`, so every request the route makes to Auth is counted and nothing leaves the process.
 const SITE = "https://pulsar.test";

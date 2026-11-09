@@ -4,7 +4,7 @@ import { authenticatedRole, authUid, authUsers } from "drizzle-orm/supabase";
 
 import { goalsSchema } from "./_schema";
 
-// What one act answered to one request id (RP-56), so a request sent twice is
+// What one act answered to one request id (RP-139), so a request sent twice is
 // answered from here instead of written twice. Read and inserted by its owner
 // alone; no role updates or deletes one. Old rows go through
 // `goals.prune_write_receipts`, which `lib/receipts.ts` calls inside its insert.

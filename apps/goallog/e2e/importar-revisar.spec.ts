@@ -2,8 +2,7 @@ import type { Browser, Page } from "@playwright/test";
 
 import messages from "../messages/es/import.json";
 import { appAlerts, test, expect, settled as pageSettled } from "./fixtures";
-import { dayBefore } from "../lib/day/weeks";
-import { civilDateToDate, todayInZone } from "../lib/zone";
+import { addDaysToCivilDate, civilDateToDate, todayInZone } from "../lib/zone";
 import { movedExample, unfold } from "./importar-plan";
 import { boxOf } from "./box";
 
@@ -202,7 +201,7 @@ test.describe("the review of an imported plan (RP-37, RP-35)", () => {
 
   test("the goal's last day is the day before its horizon, and a month names the right reason", async ({ person, browser, baseURL }) => {
     const { previous, first, horizon } = monthsFromToday();
-    const last = dayBefore(horizon);
+    const last = addDaysToCivilDate(horizon, -1);
     await asPerson({ person, browser, baseURL }, async (page) => {
       await toOpenReview(page, template(horizon.slice(0, 7)).replace("- " + horizon.slice(0, 7) + " · 8 h", `- ${horizon.slice(0, 7)} · 8 h\n- ${previous} · 5 h`));
 

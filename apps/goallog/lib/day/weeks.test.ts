@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { civilDateToDate } from "@/lib/zone";
+import { addDaysToCivilDate, civilDateToDate } from "@/lib/zone";
 
 import { goalWeekProgress } from "@/components/week/week-progress";
 
-import { dayBefore, horizonForWeeks, horizonWeeksOf, weekIndexOf, weekSpan } from "./weeks";
+import { horizonForWeeks, horizonWeeksOf, weekIndexOf, weekSpan } from "./weeks";
 
 // One goal opened on each weekday that matters: its first Sunday and the
 // Monday after it differ in every case.
@@ -90,13 +90,13 @@ test("weekSpan: a horizon falling mid-week closes that week on the goal's last d
 
 // The horizon sheet judges a typed week count by re-reading the stored horizon through these two functions. A horizon that is
 // still ahead must read back at or after itself: the Monday after the week of its last day is never earlier than the horizon.
-test("horizonForWeeks(today, weekIndexOf(today, dayBefore(h))) never lands before h, for every today and every open horizon", () => {
+test("horizonForWeeks(today, weekIndexOf(today, addDaysToCivilDate(h, -1))) never lands before h, for every today and every open horizon", () => {
   let checked = 0;
   for (let t = 0; t <= 91; t++) {
     const today = plusDays("2026-10-12", t);
     for (let ahead = 1; ahead <= 400; ahead++) {
       const horizon = plusDays(today, ahead);
-      const readBack = horizonForWeeks(today, weekIndexOf(today, dayBefore(horizon)));
+      const readBack = horizonForWeeks(today, weekIndexOf(today, addDaysToCivilDate(horizon, -1)));
       assert.ok(readBack >= horizon, `today ${today}, horizon ${horizon}: read back ${readBack}`);
       checked++;
     }

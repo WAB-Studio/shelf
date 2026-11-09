@@ -357,7 +357,7 @@ export function WordHistory() {
           </Flex>
         )
       ) : dictionaryStatus.state !== "ready" ? (
-        <InstallStatus status={dictionaryStatus} onRetry={retryDictionary} query="" hasBox={false} />
+        <InstallStatus status={dictionaryStatus} onRetry={retryDictionary} query="" />
       ) : answer ? (
         <SenseList answer={answer} showExactHeadword={false} />
       ) : (

@@ -23,7 +23,7 @@ export type TaskRowProps = {
   // The fact `undoFact` takes back; set only on a done leaf.
   factId: string | null;
   done: boolean;
-  // A parent carries a chevron and no mark: it is done by its children (RP-30).
+  // A parent carries a chevron and no mark: it is done by its children (RP-68).
   parent?: boolean;
   child?: boolean;
   // A sentence, or a mixed line whose figures are `Figure`s.
@@ -31,7 +31,7 @@ export type TaskRowProps = {
   trailing?: string;
   // Names the open mark; absent, the month page's «Marcar como hecho».
   markLabel?: string;
-  // The task's note, null when it has none (RP-45). A parent carries none.
+  // The task's note, null when it has none (RP-88). A parent carries none.
   note?: string | null;
   // The note sheet's label: «nota · {goal} · {month}».
   noteEyebrow?: string;
@@ -60,7 +60,7 @@ export type TaskRowProps = {
 };
 
 /**
- * One task of a month (RP-30): a leaf marks itself done with its mark and is
+ * One task of a month (RP-68): a leaf marks itself done with its mark and is
  * taken back by tapping it done; its name opens the task's sheet (RP-55). A
  * parent has no mark of its own.
  */

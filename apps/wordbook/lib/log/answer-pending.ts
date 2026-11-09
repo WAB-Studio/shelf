@@ -1,3 +1,4 @@
+import { civilDay } from "@/lib/format/zone";
 import { translateOverNetwork } from "@/lib/translate/network";
 import { UNLISTED_ENDPOINT, unlistedRequestSchema, unlistedResponseSchema } from "@/lib/word/unlisted-protocol";
 import { isPendingLookup } from "./outcome";
@@ -19,12 +20,6 @@ type Answer = Pick<
   LookupRecord,
   "outcome" | "headword" | "rule" | "senses" | "translation" | "origin" | "definition" | "exampleEn" | "exampleEs"
 >;
-
-function localDay(now: number): string {
-  const date = new Date(now);
-  const pad = (value: number) => String(value).padStart(2, "0");
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
-}
 
 const settleKey = (row: LookupRecord) => `${row.at}|${row.normalised}`;
 
@@ -121,7 +116,7 @@ function dropTwin(id: number): Promise<boolean> {
 }
 
 async function drain(now: number): Promise<void> {
-  const today = localDay(now);
+  const today = civilDay(now);
   const rows = await readAll();
   const answered = new Set(rows.filter((row) => row.device == null && !isPendingLookup(row)).map(settleKey));
   const waiting = rows.filter((row) => isPendingLookup(row) && row.askedOn !== today);

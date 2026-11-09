@@ -3,7 +3,6 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 import { test, expect } from "./fixtures";
-import { dayBefore } from "./meta-arbol-seed";
 import { MINUTES, PAGES, openedOnDay, seedOpenGoal } from "./metas-sin-final-seed";
 import { monthLabel, monthStartOf, shift, TODAY } from "./sin-final-seed";
 import {
@@ -28,7 +27,7 @@ import {
   textOf,
   yOf,
 } from "./mes-siguiente-seed";
-import { civilDateToDate } from "@/lib/zone";
+import { addDaysToCivilDate, civilDateToDate } from "@/lib/zone";
 
 import type { Locator, Page } from "@playwright/test";
 import type { Db } from "./mes-siguiente-seed";
@@ -54,7 +53,7 @@ function horizonIn(offset: number): string {
   while (weekday(day) !== 1) day = shift(day, 1);
   return day;
 }
-const lastDayIn = (offset: number) => dayBefore(horizonIn(offset));
+const lastDayIn = (offset: number) => addDaysToCivilDate(horizonIn(offset), -1);
 
 const lineRe = (count: number, offset: number) => new RegExp(`${count} meses más, hasta el ${wordsOf(lastDayIn(offset))}`, "i");
 const lineText = (count: number, offset: number) => `${count} meses más, hasta el ${wordsOf(lastDayIn(offset))}`;
@@ -269,7 +268,7 @@ test("E5: an ended goal of 20 months: 12 MESES, «ver todo», every row to its p
   // Kills: the cut that leaves a goal with an end whole; a sheet link on an ended goal.
   let horizon = TODAY;
   while (weekday(horizon) !== 1) horizon = shift(horizon, -1);
-  const last = dayBefore(horizon).slice(0, 7) === monthKey(0) ? 0 : -1;
+  const last = addDaysToCivilDate(horizon, -1).slice(0, 7) === monthKey(0) ? 0 : -1;
   const id = await seedOpenGoal(db, person, { name: "Pintar", unit: PAGES, horizon, rhythm: 40, created: openedIn(last - 19) });
   const { page, context } = await open(browser, baseURL, person.sessionFile, `/metas/${id}/meses`, 360);
   try {

@@ -8,7 +8,7 @@ import { Row } from "@/components/ui";
 export type RetiredHabit = { id: string; name: string; retiredLine: string };
 
 /**
- * `HabitosRetirados` (RP-109): the group row under «Hábitos» and, unfolded, one
+ * `HabitosRetirados` (RP-113): the group row under «Hábitos» and, unfolded, one
  * row per retired habit. Folding lives in this screen alone — nothing is stored,
  * so a reload folds it again.
  */

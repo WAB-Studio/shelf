@@ -72,7 +72,7 @@ export function TaskTime({ oneOffId, name, estimate, spent, unit, day, onDone }:
 
   const quantity = customMode ? customQuantity() : selected;
 
-  // Records the answer, then, for «Marcar hecha», checks the task.
+  // Records the answer; «Marcar hecha» checks the task in the same act.
   function handleAccept(extendEstimate: boolean, complete: boolean) {
     if (pending) return;
     if (quantity == null) {
@@ -83,25 +83,18 @@ export function TaskTime({ oneOffId, name, estimate, spent, unit, day, onDone }:
 
     startTransition(async () => {
       // Against what is recorded, not the chip it starts on: picking the estimate with nothing recorded records it.
-      if (quantity !== spent || extendEstimate) {
-        const recorded = await recordTaskTime({
-          oneOffId,
-          minutes: quantity,
-          extendEstimate: extendEstimate || undefined,
-        }).catch(() => null);
-        if (!recorded) return;
-        if (!recorded.ok) {
-          setError(recorded.error);
-          return;
-        }
-      }
-      if (complete) {
-        const result = await completeOneOff({ oneOffId, day }).catch(() => null);
-        if (!result) return;
-        if (!result.ok) {
-          setError(result.error);
-          return;
-        }
+      const changed = quantity !== spent || extendEstimate;
+      // One act either way: the time and the check land together, or the check alone.
+      const result = await (changed
+        ? recordTaskTime({ oneOffId, minutes: quantity, extendEstimate: extendEstimate || undefined, complete: complete || undefined, day })
+        : complete
+          ? completeOneOff({ oneOffId, day })
+          : Promise.resolve({ ok: true as const })
+      ).catch(() => null);
+      if (!result) return;
+      if (!result.ok) {
+        setError(result.error);
+        return;
       }
       setOpen(false);
       onDone?.();

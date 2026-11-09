@@ -216,18 +216,18 @@ test("RNL-08: /registro mounts no dictionary Worker, and searching issues no req
   // Reached cold, the way a reader who never opened the box would reach it.
   // The listener is armed before the first request, and the empty state is
   // the proof the screen finished reading the record.
-  const requestsOnRegistro: string[] = [];
-  page.on("request", (request) => requestsOnRegistro.push(request.url()));
+  const requestsOnRecord: string[] = [];
+  page.on("request", (request) => requestsOnRecord.push(request.url()));
   await page.goto("/registro");
   await expect(page.getByRole("heading", { name: messages.log.title })).toBeVisible();
   await expect(page.getByText(messages.log.study.emptyTitle)).toBeVisible();
   await page.waitForLoadState("networkidle");
-  expect(requestsOnRegistro.some((url) => url.includes(manifest.asset.path))).toBe(false);
+  expect(requestsOnRecord.some((url) => url.includes(manifest.asset.path))).toBe(false);
 
-  const workersOnRegistro = await page.evaluate(
+  const workersOnRecord = await page.evaluate(
     () => (window as unknown as { __workersBuilt: number }).__workersBuilt,
   );
-  expect(workersOnRegistro).toBe(0);
+  expect(workersOnRecord).toBe(0);
 
   // Now the search screen: the one Worker construction it owns, and the one
   // request its own asset fetch owns — neither repeats on a keystroke.

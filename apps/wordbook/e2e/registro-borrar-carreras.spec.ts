@@ -105,7 +105,7 @@ async function seed(page: Page, lookups: SeedLookup[]): Promise<void> {
   );
 }
 
-async function openRegistro(page: Page): Promise<void> {
+async function openRecord(page: Page): Promise<void> {
   await page.addInitScript(() => {
     delete (window as unknown as { Translator?: unknown }).Translator;
   });
@@ -226,7 +226,7 @@ async function deleteViaUi(page: Page, word: string): Promise<void> {
 }
 
 test("A delete that finds nothing returns the row to idle: no «Borrando…», its ✕ back and enabled", async ({ page }) => {
-  await openRegistro(page);
+  await openRecord(page);
   await expect(header(page, 4, 3)).toBeVisible();
   // The group is gone behind the page and no event reaches it, so the delete is
   // the only thing that can settle the row.
@@ -246,7 +246,7 @@ test("A delete that finds nothing returns the row to idle: no «Borrando…», i
 test("A slow read never overwrites a newer one: a delete under a held read ends with the post-delete rows and header", async ({
   page,
 }) => {
-  await openRegistro(page);
+  await openRecord(page);
   await expect(header(page, 4, 3)).toBeVisible();
 
   await hold(page);
@@ -264,7 +264,7 @@ test("A slow read never overwrites a newer one: a delete under a held read ends 
 });
 
 test("A deleted word searched again opens idle: its ✕ shows and «Borrando…» does not", async ({ page }) => {
-  await openRegistro(page);
+  await openRecord(page);
   await deleteViaUi(page, "leave");
   await expect(rowLink(page, "leave")).toHaveCount(0);
   await expect(header(page, 2, 2)).toBeVisible();
@@ -280,7 +280,7 @@ test("A deleted word searched again opens idle: its ✕ shows and «Borrando…�
 test("A flush during a read is not lost: the row recorded under the held read appears without a reload", async ({
   page,
 }) => {
-  await openRegistro(page);
+  await openRecord(page);
   await expect(header(page, 4, 3)).toBeVisible();
 
   await hold(page);

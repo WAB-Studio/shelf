@@ -42,6 +42,8 @@ const SENT_TO_READER = "Revisa tu correo y escribe aquí el código que te manda
 const RULE_MESSAGE =
   "sendSignInLink POST left the browser with no simulated answer: account-send-link.spec.ts never runs the real action";
 
+const SENTINEL_ADDRESS = "sentinel@example.invalid";
+
 let unsimulatedPosts: string[] = [];
 
 test.beforeEach(async ({ page }) => {
@@ -82,12 +84,13 @@ function nextActionPostFailure(page: Page): Promise<{ hasResponse: boolean }> {
 }
 
 // The abort itself, observed from the browser and apart from the guard's
-// bookkeeping. The address has no `@`, so even with the abort removed the
-// real action would refuse it before any DNS or Supabase call, no request
-// would fail, and this test would time out red.
+// bookkeeping. The form only posts an address the shared schema takes, so the
+// sentinel is well formed but on `.invalid`: with the abort removed the real
+// action would refuse its dead domain before any Supabase call and no request
+// would fail, so this test would time out red.
 test("the guard aborts an action POST that has no simulated answer", async ({ page }) => {
   const failure = nextActionPostFailure(page);
-  await submit(page, "sentinel-no-at-sign");
+  await submit(page, SENTINEL_ADDRESS);
 
   expect(await failure).toEqual({ hasResponse: false });
   expect(unsimulatedPosts).toHaveLength(1);
@@ -100,7 +103,7 @@ test("the guard aborts an action POST that has no simulated answer", async ({ pa
 test("a test that lets the action POST out unsimulated fails", async ({ page }) => {
   test.fail();
   const failure = nextActionPostFailure(page);
-  await submit(page, "sentinel-no-at-sign");
+  await submit(page, SENTINEL_ADDRESS);
   await failure;
 });
 

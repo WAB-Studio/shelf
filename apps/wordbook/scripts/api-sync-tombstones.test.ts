@@ -72,7 +72,7 @@ beforeEach(() => {
 
 const post = async (body: unknown) => {
   const { POST } = await import("../app/api/log/sync/route");
-  const response = await POST(new Request("http://localhost/api/log/sync", { method: "POST", body: JSON.stringify(body) }));
+  const response = await POST(new Request("http://localhost/api/log/sync", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }));
   return { status: response.status, json: (await response.json()) as Record<string, unknown> };
 };
 

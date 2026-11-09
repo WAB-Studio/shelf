@@ -4,7 +4,6 @@ import { resolve4, resolve6, resolveMx } from "node:dns/promises";
 
 import { isAuthRetryableFetchError } from "@supabase/supabase-js";
 import { redirect } from "next/navigation";
-import { z } from "zod";
 
 // `@repo/supabase-auth`, `@/lib/account/sign-in-budget` and `@/lib/auth/allowlist` (through `@/db/client`) load
 // `import "server-only"`, and `@/lib/env` throws when its required vars are
@@ -22,8 +21,6 @@ async function supabaseClient() {
     publishableKey: env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
   });
 }
-
-const emailSchema = z.email();
 
 export type SendSignInLinkResult =
   // `maybe`: Auth timed out, so the mail may have left; the reader is told before asking for another (RL-67).
@@ -108,6 +105,7 @@ export async function isDomainDeliverable(domain: string, resolvers: DnsResolver
  * JWT — there is no `app_users` row here for state to live in instead.
  */
 export async function sendSignInLink(email: string): Promise<SendSignInLinkResult> {
+  const { emailSchema } = await import("@/lib/account/email");
   const parsed = emailSchema.safeParse(email);
   if (!parsed.success) return { ok: false, error: "emailInvalid" };
 
@@ -183,14 +181,20 @@ export type VerifySignInCodeResult =
 // RL-73: shape before Auth; nothing is sent, so no DNS, cap or list. The session
 // cookie is set by the server client; the caller refreshes.
 export async function verifySignInCode(email: string, code: string): Promise<VerifySignInCodeResult> {
-  const parsedEmail = emailSchema.safeParse(email);
-  if (!parsedEmail.success) return { ok: false, error: "emailInvalid" };
-  const [{ signInCodeSchema }, { verifyCode }] = await Promise.all([
+  const [{ emailSchema }, { signInCodeSchema }, { verifyCode }] = await Promise.all([
+    import("@/lib/account/email"),
     import("@/lib/account/sign-in-code"),
     import("@/lib/auth/verify-code"),
   ]);
+  const parsedEmail = emailSchema.safeParse(email);
+  if (!parsedEmail.success) return { ok: false, error: "emailInvalid" };
   const parsedCode = signInCodeSchema.safeParse(code);
   if (!parsedCode.success) return { ok: false, error: "codeShape" };
+  const [{ headers }, { claimSignInAttempt }] = await Promise.all([
+    import("next/headers"),
+    import("@/lib/account/sign-in-budget"),
+  ]);
+  if (!(await claimSignInAttempt(await headers(), parsedEmail.data))) return { ok: false, error: "rateLimited" };
   const supabase = await supabaseClient();
   const result = await verifyCode((params) => supabase.auth.verifyOtp(params), { email: parsedEmail.data, code: parsedCode.data });
   return result.ok ? { ok: true } : { ok: false, error: result.reason };

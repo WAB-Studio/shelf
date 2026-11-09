@@ -1,8 +1,8 @@
 import type { Page } from "@playwright/test";
 import type postgres from "postgres";
 
-import { dayBefore, horizonForWeeks } from "@/lib/day/weeks";
-import { addWeeksToCivilDate, civilDateInZone, civilDateToDate, dateToCivilDate, todayInZone, weekOf } from "@/lib/zone";
+import { horizonForWeeks } from "@/lib/day/weeks";
+import { addDaysToCivilDate, addWeeksToCivilDate, civilDateInZone, civilDateToDate, dateToCivilDate, todayInZone, weekOf } from "@/lib/zone";
 
 import { test, expect, visit } from "./fixtures";
 
@@ -71,7 +71,7 @@ test("moving to 16 weeks counted from this one writes the Monday after them; the
     await expect(sheet.getByLabel(/^semanas, contando esta$/)).toHaveValue(String(weeksBetweenMondays(thisMonday(), stored)));
     await sheet.getByLabel(/^semanas, contando esta$/).fill("16");
     const target = addWeeksToCivilDate(thisMonday(), 16);
-    const end = dayBefore(target);
+    const end = addDaysToCivilDate(target, -1);
     const sunday = `${Number(end.slice(8, 10))} ${new Intl.DateTimeFormat("es-CO", { month: "long", timeZone: "UTC" })
       .format(new Date(`${end}T12:00:00Z`))
       .slice(0, 3)} ${end.slice(0, 4)}`;
@@ -99,7 +99,7 @@ test("a count ending before a phase is refused with its message and the column s
     await db`
       insert into goals.phases (user_id, goal_id, aim, starts_on, ends_on)
       values (${personId}, ${goalId}, ${phaseName}, ${openedOn},
-              ${dayBefore(horizonForWeeks(openedOn, 12))})
+              ${addDaysToCivilDate(horizonForWeeks(openedOn, 12), -1)})
     `;
     const before = await horizonOf(db, goalId);
 
@@ -157,7 +157,7 @@ test("a new goal opened with 12 reads «12 semanas» and «semana 1 de 12» on S
   // week's edge only differ on a day that is not a Monday.
   const [monday] = weekOf(todayInZone());
   const nextMonday = addWeeksToCivilDate(monday, 1);
-  await page.clock.setFixedTime(new Date(`${dayBefore(nextMonday)}T17:00:00Z`));
+  await page.clock.setFixedTime(new Date(`${addDaysToCivilDate(nextMonday, -1)}T17:00:00Z`));
   try {
     await page.goto("/metas/nueva");
     await page.getByLabel("nombre").fill(name);

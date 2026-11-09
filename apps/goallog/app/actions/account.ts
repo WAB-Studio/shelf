@@ -31,7 +31,7 @@ export type SendSignInLinkResult =
   | { ok: false; error: "emailInvalid" | "notInvited" | "domainUndeliverable" | "sendFailed" | "rateLimited" | "capped" };
 
 /**
- * Asks for the sign-in link (RP-18). No `data` on the call: it would land in
+ * Asks for the sign-in link (RP-136). No `data` on the call: it would land in
  * `raw_user_meta_data`, which the user can rewrite and which surfaces in the
  * JWT — there is no row of this app's own for state to live in instead.
  */

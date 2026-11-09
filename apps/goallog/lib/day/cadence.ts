@@ -48,7 +48,7 @@ function completedBefore(
 // Whether `plan` asks for anything on `day`, given the facts recorded for it
 // so far. A retired commitment still asks on the civil day it was retired —
 // the same day `lib/queries/day.ts`'s and `lib/queries/week.ts`'s own SQL
-// filter still admits — and asks nothing on any day after that (RP-13).
+// filter still admits — and asks nothing on any day after that (RP-127).
 export function asksOn(
   plan: CommitmentPlan,
   day: string,

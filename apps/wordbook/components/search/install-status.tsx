@@ -28,9 +28,6 @@ export function InstallStatus({
   // Nothing here re-sends a query: the worker's own queue is what answers
   // it once the install lands (`use-dictionary.ts`).
   query: string;
-  // Kept for the screen with no box of its own (`word-history.tsx`); the
-  // line that named the box is gone, so nothing here reads it.
-  hasBox?: boolean;
 }) {
   const t = useTranslations("install");
   const tLive = useTranslations("live");

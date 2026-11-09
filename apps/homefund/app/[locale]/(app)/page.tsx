@@ -49,7 +49,7 @@ import { getExpensesByCategory } from "@/db/queries/reports/expenses-by-category
 import { getTransactionFormOptions } from "@/db/queries/transaction-form";
 import { listTransactions } from "@/db/queries/transactions";
 import type { TransactionListRow } from "@/db/queries/transactions";
-import { requireUser } from "@/db/session";
+import { requireUser, withSharedTransaction } from "@/db/session";
 import { currentMonthRange } from "@/lib/dates";
 import { Link as LocaleLink } from "@/i18n/navigation";
 import { routing } from "@/i18n/routing";
@@ -121,33 +121,51 @@ export default async function HomePage(props: PageProps<"/[locale]">) {
   // requireUser stays the auth guard. The form options carry the account and
   // category names a row reads for its title and subtitle, the same pairing the
   // movements list fans out (RF-23); the amount is formatted for display only.
-  const [, group, invitation, dashboardData, rows, options, withdrawal, due, review, monthExpenses, budgets, goals, debts, t, td, ta, tc] =
-    await Promise.all([
-      requireUser(),
-      getUserGroup(),
-      getPendingInvitation(),
-      getDashboardData(),
-      listTransactions({}, { limit: RECENT_LIMIT }),
-      getTransactionFormOptions(),
-      resolveWithdrawalTarget(),
-      listDueReminders(DUE_LIMIT),
-      // The review line is optional: a failed read drops the line, never Inicio.
-      getMonthReviewPending().catch((error: unknown) => {
-        unstable_rethrow(error);
-        console.error("getMonthReviewPending", error);
-        return null;
-      }),
-      // The month glance and the right column ride the same fan-out (RNF-09); each one
-      // is optional, so a failed read drops its block, never Inicio.
-      optional("getExpensesByCategory", getExpensesByCategory(currentMonthRange())),
-      optional("listBudgetsWithStatus", listBudgetsWithStatus()),
-      optional("listGoalsWithProgress", listGoalsWithProgress()),
-      optional("getDebtOverview", getDebtOverview()),
-      getTranslations("transactions"),
-      getTranslations("dashboard"),
-      getTranslations("accounts"),
-      getTranslations("categories"),
-    ]);
+  // Six transactions in all, not one per loader (the pool holds eight connections, and the
+  // layout and metadata take theirs): the light reads share one, each heavy one keeps a
+  // connection so they still run side by side, and the optional reads sit apart from the
+  // required ones so a failed optional read aborts only its own scope and drops its block.
+  const [
+    ,
+    [group, invitation, withdrawal, due],
+    dashboardData,
+    [rows, options],
+    [monthExpenses, debts, review, budgets, goals],
+    t,
+    td,
+    ta,
+    tc,
+  ] = await Promise.all([
+    requireUser(),
+    withSharedTransaction(() =>
+      Promise.all([
+        getUserGroup(),
+        getPendingInvitation(),
+        resolveWithdrawalTarget(),
+        listDueReminders(DUE_LIMIT),
+      ]),
+    ),
+    getDashboardData(),
+    withSharedTransaction(() =>
+      Promise.all([listTransactions({}, { limit: RECENT_LIMIT }), getTransactionFormOptions()]),
+    ),
+    // The month glance and the right column ride the same fan-out (RNF-09); each one
+    // is optional, so a failed read drops its block, never Inicio.
+    withSharedTransaction(() =>
+      Promise.all([
+        optional("getExpensesByCategory", getExpensesByCategory(currentMonthRange())),
+        optional("getDebtOverview", getDebtOverview()),
+        // The review line is optional: a failed read drops the line, never Inicio.
+        optional("getMonthReviewPending", getMonthReviewPending()),
+        optional("listBudgetsWithStatus", listBudgetsWithStatus()),
+        optional("listGoalsWithProgress", listGoalsWithProgress()),
+      ]),
+    ),
+    getTranslations("transactions"),
+    getTranslations("dashboard"),
+    getTranslations("accounts"),
+    getTranslations("categories"),
+  ]);
 
   // RF-154: an invitation waiting for this address is answered before anything else on Inicio.
   if (invitation) {

@@ -182,7 +182,7 @@ async function checkRolledBackRounds(only?: string): Promise<void> {
             return fn(readerTx(tx));
           };
           const response = await POST(
-            new Request("http://localhost/api/log/sync", { method: "POST", body: JSON.stringify({ readerId: reader, ...body }) }),
+            new Request("http://localhost/api/log/sync", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ readerId: reader, ...body }) }),
           );
           return { status: response.status, json: (await response.json()) as RoundAnswer["json"] };
         };
@@ -920,7 +920,7 @@ async function main() {
     sessionStub.run = (work) => asReader(work);
     const { POST } = await import("../app/api/log/sync/route");
     const post = async (body: unknown) => {
-      const response = await POST(new Request("http://localhost/api/log/sync", { method: "POST", body: JSON.stringify({ readerId: late, ...(body as object) }) }));
+      const response = await POST(new Request("http://localhost/api/log/sync", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ readerId: late, ...(body as object) }) }));
       return { status: response.status, json: (await response.json()) as { rows: Record<string, unknown>[] } };
     };
     const [phone, laptop] = [randomUUID(), randomUUID()];
@@ -1026,7 +1026,7 @@ async function main() {
       sessionStub.run = (fn) => as(who, fn);
       // A route that throws is a 500 to the device, and a red here rather than a crash of the whole script.
       const response = await POST(
-        new Request("http://localhost/api/log/sync", { method: "POST", body: JSON.stringify({ readerId: who, ...body }) }),
+        new Request("http://localhost/api/log/sync", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ readerId: who, ...body }) }),
       ).catch(() => Response.json({}, { status: 500 }));
       return { status: response.status, json: (await response.json()) as Wire["json"] };
     };
@@ -1184,6 +1184,8 @@ async function main() {
   // lock, so a batch never lands after them. Each case holds one side inside its open transaction with a
   // promise it releases, then waits on the lock table (not on a clock) to see the other side queue.
   const { DELETE: clearAccount } = await import("../app/api/log/clear/route");
+  const clearRequest = () =>
+    new Request("http://localhost/api/log/clear", { method: "DELETE", headers: { "content-type": "application/json" } });
   const gate = () => {
     let open!: () => void;
     const promise = new Promise<void>((resolve) => {
@@ -1272,7 +1274,7 @@ async function main() {
     sessionStub.readerId = reader;
     sessionStub.run = (fn) => as(reader, fn);
     let done = false;
-    const clearing = clearAccount().finally(() => {
+    const clearing = clearAccount(clearRequest()).finally(() => {
       done = true;
     });
     const queued = await queuedOnQuota(db, reader, () => done);

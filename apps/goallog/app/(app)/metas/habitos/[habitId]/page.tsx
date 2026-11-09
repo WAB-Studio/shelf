@@ -12,7 +12,7 @@ export async function generateMetadata(): Promise<Metadata> {
   return { title: t("title") };
 }
 
-// `HabitoPantalla` (RP-105): the auth gate, the one query and the way back.
+// `HabitoPantalla` (RP-113): the auth gate, the one query and the way back.
 // Only `?volver=/mes` is followed; anything else returns to /metas.
 export default async function HabitPage({
   params,

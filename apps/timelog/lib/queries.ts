@@ -2,7 +2,7 @@ import "server-only";
 
 import { sql } from "drizzle-orm";
 
-import { withTimeDb } from "@/lib/session";
+import { withTimeDb, type Transaction } from "@/lib/session";
 
 export type AppTime = { app: string; seconds: number };
 export type DayTotal = { day: string; seconds: number };
@@ -14,11 +14,16 @@ export type PageTime = { host: string; url: string; title: string; seconds: numb
 // A Claude Code session on the days asked: its project folder as Claude Code named it, the first and last message, the seconds.
 export type ClaudeSessionTime = { session: string; project: string; first: Date; last: Date; seconds: number };
 export type DeviceTime = { device: string; seconds: number };
+// A read runs in the transaction it is handed, or settles one of its own; a screen hands one to all its reads.
+function within<T>(tx: Transaction | undefined, read: (tx: Transaction) => Promise<T>): Promise<T> {
+  return tx ? read(tx) : withTimeDb(read);
+}
+
 export type DayApp = { day: string; app: string; seconds: number };
 
 // Every device added: one app on two PCs is one row. Longest first, then by name.
-export async function appsBetween(from: string, to: string): Promise<AppTime[]> {
-  const rows = await withTimeDb((tx) =>
+export async function appsBetween(from: string, to: string, tx?: Transaction): Promise<AppTime[]> {
+  const rows = await within(tx, (tx) =>
     tx.execute<{ app: string; seconds: number }>(sql`
       select app, sum(seconds)::int as seconds
         from timelog.app_seconds
@@ -30,8 +35,8 @@ export async function appsBetween(from: string, to: string): Promise<AppTime[]> 
 }
 
 // Each device's total in the range, longest first. Two PCs on at once add up in every other total here.
-export async function devicesBetween(from: string, to: string): Promise<DeviceTime[]> {
-  const rows = await withTimeDb((tx) =>
+export async function devicesBetween(from: string, to: string, tx?: Transaction): Promise<DeviceTime[]> {
+  const rows = await within(tx, (tx) =>
     tx.execute<DeviceTime>(sql`
       select device, sum(seconds)::int as seconds
         from timelog.app_seconds
@@ -43,8 +48,8 @@ export async function devicesBetween(from: string, to: string): Promise<DeviceTi
 }
 
 // Each day's total in the range; a day with nothing is absent.
-export async function dayTotals(from: string, to: string): Promise<DayTotal[]> {
-  const rows = await withTimeDb((tx) =>
+export async function dayTotals(from: string, to: string, tx?: Transaction): Promise<DayTotal[]> {
+  const rows = await within(tx, (tx) =>
     tx.execute<{ day: string; seconds: number }>(sql`
       select to_char(day, 'YYYY-MM-DD') as day, sum(seconds)::int as seconds
         from timelog.app_seconds
@@ -56,8 +61,8 @@ export async function dayTotals(from: string, to: string): Promise<DayTotal[]> {
 }
 
 // Every device added, longest first, then by name. Hostnames only (RT-13).
-export async function sitesBetween(from: string, to: string): Promise<SiteTime[]> {
-  const rows = await withTimeDb((tx) =>
+export async function sitesBetween(from: string, to: string, tx?: Transaction): Promise<SiteTime[]> {
+  const rows = await within(tx, (tx) =>
     tx.execute<{ host: string; seconds: number }>(sql`
       select host, sum(seconds)::int as seconds
         from timelog.site_seconds
@@ -70,8 +75,8 @@ export async function sitesBetween(from: string, to: string): Promise<SiteTime[]
 
 // The days of the range any upload reached, in whichever table it landed: a day with only Claude Code sessions or sites
 // still arrived. One statement.
-export async function uploadedDays(from: string, to: string): Promise<string[]> {
-  const rows = await withTimeDb((tx) =>
+export async function uploadedDays(from: string, to: string, tx?: Transaction): Promise<string[]> {
+  const rows = await within(tx, (tx) =>
     tx.execute<{ day: string }>(sql`
       select distinct to_char(day, 'YYYY-MM-DD') as day
         from (
@@ -89,8 +94,8 @@ export async function uploadedDays(from: string, to: string): Promise<string[]> 
 
 // Claude's time per day (RT-14): Claude Code, claude.ai in the browser and the desktop app (a process named
 // Claude), one statement. A day with none of the three is absent.
-export async function claudeBetween(from: string, to: string): Promise<ClaudeDay[]> {
-  const rows = await withTimeDb((tx) =>
+export async function claudeBetween(from: string, to: string, tx?: Transaction): Promise<ClaudeDay[]> {
+  const rows = await within(tx, (tx) =>
     tx.execute<ClaudeDay>(sql`
       select to_char(day, 'YYYY-MM-DD') as day, sum(code)::int as code, sum(web)::int as web, sum(desktop)::int as desktop
         from (
@@ -110,8 +115,8 @@ export async function claudeBetween(from: string, to: string): Promise<ClaudeDay
 }
 
 // Window titles inside apps, every device added (RT-18). Longest first.
-export async function windowsBetween(from: string, to: string): Promise<WindowTime[]> {
-  const rows = await withTimeDb((tx) =>
+export async function windowsBetween(from: string, to: string, tx?: Transaction): Promise<WindowTime[]> {
+  const rows = await within(tx, (tx) =>
     tx.execute<WindowTime>(sql`
       select app, title, sum(seconds)::int as seconds
         from timelog.window_seconds
@@ -123,8 +128,8 @@ export async function windowsBetween(from: string, to: string): Promise<WindowTi
 }
 
 // Pages, every device added (RT-18). Longest first.
-export async function pagesBetween(from: string, to: string): Promise<PageTime[]> {
-  const rows = await withTimeDb((tx) =>
+export async function pagesBetween(from: string, to: string, tx?: Transaction): Promise<PageTime[]> {
+  const rows = await within(tx, (tx) =>
     tx.execute<PageTime>(sql`
       select host, url, title, sum(seconds)::int as seconds
         from timelog.page_seconds
@@ -136,8 +141,8 @@ export async function pagesBetween(from: string, to: string): Promise<PageTime[]
 }
 
 // Claude Code sessions that worked in the range (RT-19): a session over two devices or two days is one row.
-export async function claudeSessionsBetween(from: string, to: string): Promise<ClaudeSessionTime[]> {
-  const rows = await withTimeDb((tx) =>
+export async function claudeSessionsBetween(from: string, to: string, tx?: Transaction): Promise<ClaudeSessionTime[]> {
+  const rows = await within(tx, (tx) =>
     tx.execute<{ session: string; project: string; first: string; last: string; seconds: number }>(sql`
       select session, min(project) as project, min(first_at) as first, max(last_at) as last, sum(seconds)::int as seconds
         from timelog.claude_sessions
@@ -149,8 +154,8 @@ export async function claudeSessionsBetween(from: string, to: string): Promise<C
 }
 
 // Each day's apps over a range, for the export's top app. Rows per day, not a day's whole list at a time.
-export async function appsByDay(from: string, to: string): Promise<DayApp[]> {
-  const rows = await withTimeDb((tx) =>
+export async function appsByDay(from: string, to: string, tx?: Transaction): Promise<DayApp[]> {
+  const rows = await within(tx, (tx) =>
     tx.execute<DayApp>(sql`
       select to_char(day, 'YYYY-MM-DD') as day, app, sum(seconds)::int as seconds
         from timelog.app_seconds
@@ -165,8 +170,8 @@ export type UploadSpan = { firstDay: string | null; lastReceived: Date | null; h
 
 // The first day ever uploaded, the moment of the last upload, and whether sites or Claude Code ever arrived,
 // in one statement.
-export async function uploadSpan(): Promise<UploadSpan> {
-  const rows = await withTimeDb((tx) =>
+export async function uploadSpan(tx?: Transaction): Promise<UploadSpan> {
+  const rows = await within(tx, (tx) =>
     tx.execute<{ first_day: string | null; last_received: string | null; has_sites: boolean; has_claude: boolean }>(sql`
       select to_char(min(day), 'YYYY-MM-DD') as first_day, max(received_at) as last_received,
              exists (select 1 from timelog.site_seconds) as has_sites,

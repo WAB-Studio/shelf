@@ -4,6 +4,7 @@ import { sql } from "drizzle-orm";
 
 import { json } from "@/lib/http/responses";
 import { getReader, withReaderDb } from "@/lib/session";
+import { refuseCrossSiteRequest } from "@/lib/word/same-origin";
 
 /**
  * «Vaciar aquí y en mi cuenta» (`RegistroVaciarConfirmar`): empties this
@@ -27,9 +28,12 @@ import { getReader, withReaderDb } from "@/lib/session";
  * keeps this off another reader's rows (RNL-10), proven driving it with two
  * identities in `e2e/registro.spec.ts`, never asserted from the migration.
  */
-export async function DELETE(): Promise<Response> {
+export async function DELETE(request: Request): Promise<Response> {
   const reader = await getReader();
   if (!reader) return json({ error: "unauthorized" }, 401);
+
+  const refused = refuseCrossSiteRequest(request);
+  if (refused) return refused;
 
   await withReaderDb(async (tx) => {
     await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${reader.id}::text || ':sync-quota', 0))`);

@@ -9,7 +9,7 @@ import { metFact, toCadence, toSatisfiedBy, type CommitmentRow } from "@/lib/que
 import { withGoalsDb } from "@/lib/session";
 import { civilDateInZone, todayInZone } from "@/lib/zone";
 
-// One habit with no goal (RP-100), as its own screen draws it (RP-105).
+// One habit with no goal (RP-113), as its own screen draws it (RP-113).
 export type HabitView = {
   id: string;
   name: string;
