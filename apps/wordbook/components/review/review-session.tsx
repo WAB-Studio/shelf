@@ -11,7 +11,7 @@ import { cardBack, cardFront } from "@/lib/log/anki";
 import { contentUnit, isPhraseRow } from "@/lib/log/outcome";
 import { readWordStudy } from "@/lib/log/summary";
 import { readWordStory, type WordStory } from "@/lib/log/story";
-import { buildQueue, buildQueueFor, isReviewable, type ReviewQueue } from "@/lib/review/deck";
+import { buildQueue, buildQueueFor, isReviewable, NEW_PER_DAY, type ReviewQueue } from "@/lib/review/deck";
 import { dueWhen, GRADES, intervals, intervalUnit, rate, staysInSession, type ReviewGrade } from "@/lib/review/schedule";
 import { answerSenses, pickSense } from "@/lib/review/sense";
 import { readCards, readSenseChoice, saveCard } from "@/lib/review/store";
@@ -50,6 +50,8 @@ type SessionState =
       // The queue as the screen opened, then every «Otra vez» answer appended behind it.
       items: Item[];
       later: number;
+      // New entries held back by the day's cap, still unseen.
+      newWaiting: number;
       // The distinct entries the session opened with: a requeued answer never grows it.
       total: number;
       // When the earliest entry put away comes due, or null with none put away.
@@ -80,6 +82,7 @@ function readyState(
     kind: "ready",
     items: queue.items,
     later: queue.later,
+    newWaiting: queue.newWaiting,
     total: queue.items.length,
     nextDue: queue.nextDue,
     unit,
@@ -288,7 +291,8 @@ export function ReviewSession() {
               })}
             </Text>
           )}
-          {later === 0 && <Text muted>{t("empty")}</Text>}
+          {state.newWaiting > 0 && <Text muted>{t("newWaiting", { count: state.newWaiting, kind, cap: NEW_PER_DAY })}</Text>}
+          {later === 0 && state.newWaiting === 0 && <Text muted>{t("empty")}</Text>}
           <Link asChild>
             <NextLink href="/registro">{t("backToRecord")}</NextLink>
           </Link>
