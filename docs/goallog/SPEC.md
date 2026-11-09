@@ -244,7 +244,7 @@ of this gets built, and no schema, table or column is "prepared for" it.
 - [x] **RNP-03** — The day's screen pays a bounded number of round trips to Postgres, every one of them fanned out together, the evidence query included. Never a chain of awaits.
 - [x] **RNP-04** — The evidence is never a condition of the day. When the reading app's rows cannot be read, the day draws its declared facts and says that one source could not be read. Never a blank day, never an error page.
 - [x] **RNP-05** — A person reads and writes only their own facts. The access policies in the database decide it, not the query, and they are proved by driving them. No service path evades them.
-- [x] **RNP-06** — The day is the person's day, in their own zone, never UTC. A fact at 23:40 belongs to that day; the same fact read from another zone still belongs to it.
+- [x] **RNP-06** — The day is the day in `America/Bogota`, one zone for every person (`lib/zone.ts` names it), never UTC. A fact at 23:40 there belongs to that day; the same fact read from another zone still belongs to it. Accepted by the user 2026-11-08.
 - [x] **RNP-07** — The app holds at a 360 px viewport: no horizontal overflow, no overlapping control, no tap target under 32 px on its shorter side. It is used with one thumb, in the minute the thing was finished.
 - [x] **RNP-08** — The person chooses light or dark and the choice is remembered on the device. The app opens in the system's mode until a choice is made.
 - [x] **RNP-10** — A second evidence source costs a reader and a row of configuration, never a migration and never a screen. The shape a source answers in is fixed — a day, a quantity, a unit, a name for the person — and nothing downstream of it knows which app it came from.
