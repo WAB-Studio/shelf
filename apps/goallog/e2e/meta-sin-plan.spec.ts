@@ -157,7 +157,7 @@ for (const width of [360, 390, 1440]) {
 
 // RP-69, `MetaKmTareas`: the month block of a goal measured in something
 // other than time says how many of the month's tasks are done. The line sits
-// in the block, after «llevas … · faltan …» and before «Ver por mes».
+// in the block, after «faltan … · quedan …» and before «Ver por mes».
 const lastMonth = (() => {
   const date = civilDateToDate(monthStart);
   date.setUTCMonth(date.getUTCMonth() - 1);
@@ -210,7 +210,7 @@ for (const width of [360, 390, 1440]) {
         await expect(line).toBeVisible();
         await expect(line).toHaveCount(1);
         // The progress line is replaced by the pace line from the 20th on.
-        const before = page.getByText(/^llevas \d+ %/).locator("visible=true");
+        const before = page.getByText(/^(faltan .+ ·|lo planeado está hecho)/).locator("visible=true");
         const anchor = (await before.count()) > 0 ? before.first() : page.getByText(/de 40/).locator("visible=true").first();
         const after = page.getByRole("link", { name: "Ver por mes", exact: true }).locator("visible=true");
         const [a, l, z] = await Promise.all([
