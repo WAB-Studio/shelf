@@ -227,7 +227,7 @@ export async function loadReport(today: string = todayInZone()): Promise<Report>
         reached: figures.month?.reached ?? 0,
         underPace: figures.month?.underPace ?? false,
       },
-      toDate: toDate(figures.months),
+      toDate: toDate(figures.months, today, { openedOn, horizon: row.goal.horizon }),
       ownMonths: row.budgets.map((budget) => budget.month),
       phases: phases.map((phase) => ({
         aim: phase.name,
@@ -461,7 +461,7 @@ function holderOf(args: {
     ownMonths: [],
     unit: sum.unit,
     thisMonth: { planned, reached, underPace },
-    toDate: toDate(everyMonth),
+    toDate: toDate(everyMonth, today, { openedOn: spanStartOn, horizon: row.goal.horizon }),
     months: everyMonth,
     weeks,
     weekSplits: weekSplitsOf(weeks, (startsOn, endsOn) => spanTotal(id, startsOn, endsOn)),
