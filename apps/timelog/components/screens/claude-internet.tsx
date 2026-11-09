@@ -1,17 +1,19 @@
+import type { ReactNode } from "react";
 import { getTranslations } from "next-intl/server";
 
-import { BarRows, type BarRow } from "@/components/screens/app-rows";
+import { BarRows, capped, type BarRow } from "@/components/screens/app-rows";
 import { Stack, Text, TextLink } from "@/components/ui";
 import { claudeScreen, claudeSources } from "@/lib/daily";
 import { projectName } from "@/lib/claude-project";
 import { INSTALLER_URL } from "@/lib/installer";
+import { sum } from "@/lib/totals";
 import type { ClaudeDay, ClaudeSessionTime, PageTime, SiteTime } from "@/lib/queries";
+import type { ProjectTime } from "@/lib/vscode-project";
 import type { calendarWords } from "@/lib/words";
 
 type Words = Awaited<ReturnType<typeof calendarWords>>;
 
-const SITES_SHOWN = 8;
-const PAGES_SHOWN = 8;
+const ROWS_SHOWN = 8;
 const SESSIONS_SHOWN = 8;
 
 // «Claude» of one day (RT-24): what the person spent in front of Claude (claude.ai and the app), then Claude Code as the
@@ -27,19 +29,19 @@ export async function ClaudeBlock({ isToday, claude, sessions, hasClaudeCode, ha
 
   return (
     <Stack gap={2}>
-      {screen === 0 ? (
+      {screen === 0 && !hasClaudeCode ? (
+        <Text as="p" variant="meta">{t("never")}</Text>
+      ) : screen === 0 ? (
         <Text as="p" variant="meta">{t(isToday ? "emptyToday" : "empty")}</Text>
       ) : (
         <BarRows of={screen} rows={rows.map((row) => ({ key: row.key, tone: row.tone, name: row.name, figure: words.duration(row.seconds), seconds: row.seconds, label: t("bar", { name: row.name, duration: words.duration(row.seconds) }) }))} />
       )}
-      {parts.code > 0 ? (
+      {hasClaudeCode || parts.code > 0 ? (
         <Stack gap={2}>
           <Text variant="meta">{t("agent")}</Text>
           <BarRows tone="claude" of={Math.max(parts.code, ...sessions.map((one) => one.seconds))} rows={[{ key: "code", name: t("code"), figure: words.duration(parts.code), seconds: parts.code, label: t("bar", { name: t("code"), duration: words.duration(parts.code) }) }]} />
         </Stack>
-      ) : hasClaudeCode ? null : (
-        <Text as="p" variant="meta">{t("never")}</Text>
-      )}
+      ) : null}
       {sessions.length > 0 ? (
         <Stack gap={2}>
           <Text variant="meta">{t("sessions")}</Text>
@@ -64,6 +66,20 @@ export async function ClaudeBlock({ isToday, claude, sessions, hasClaudeCode, ha
   );
 }
 
+// The longest projects as bars (RT-23), «y N más · X» opening onto the rest: a day's card and a week's are this.
+export async function ProjectBars({ projects, words }: { projects: ProjectTime[]; words: Words }) {
+  const t = await getTranslations("time.today");
+  const row = (one: ProjectTime): BarRow => ({ key: one.project, name: one.project, figure: words.duration(one.seconds), seconds: one.seconds, label: t("projectBar", { project: one.project, duration: words.duration(one.seconds) }) });
+  return <BarRows of={projects[0]?.seconds} {...capped(projects, ROWS_SHOWN, row, (rest) => t("projectsMore", { n: rest.length, duration: words.duration(sum(rest)) }))} />;
+}
+
+// The longest hostnames as bars (RT-13), «y N más · X» opening onto the rest; `detail` opens a site onto what it holds.
+export async function SiteBars({ sites, words, detail }: { sites: SiteTime[]; words: Words; detail?: (host: string) => ReactNode }) {
+  const t = await getTranslations("time.internet");
+  const row = (one: SiteTime): BarRow => ({ key: one.host, name: one.host, figure: words.duration(one.seconds), seconds: one.seconds, label: t("bar", { host: one.host, duration: words.duration(one.seconds) }), detail: detail?.(one.host) });
+  return <BarRows tone="browser" of={sites[0]?.seconds} {...capped(sites, ROWS_SHOWN, row, (rest) => t("more", { n: rest.length, duration: words.duration(sum(rest)) }))} />;
+}
+
 // «Internet» of one day (RT-13): the longest hostnames, each opening onto its pages.
 export async function InternetBlock({ isToday, sites, pages, hasSites, words }: { isToday: boolean; sites: SiteTime[]; pages: PageTime[]; hasSites: boolean; words: Words }) {
   const t = await getTranslations("time.internet");
@@ -79,22 +95,17 @@ export async function InternetBlock({ isToday, sites, pages, hasSites, words }: 
       <BarRows
         tone="browser"
         of={of}
-        rows={mine.slice(0, PAGES_SHOWN).map(pageRow)}
-        overflow={mine.length > PAGES_SHOWN ? { summary: t("pagesMore", { n: mine.length - PAGES_SHOWN }), rows: mine.slice(PAGES_SHOWN).map(pageRow) } : undefined}
+        rows={mine.slice(0, ROWS_SHOWN).map(pageRow)}
+        overflow={mine.length > ROWS_SHOWN ? { summary: t("pagesMore", { n: mine.length - ROWS_SHOWN }), rows: mine.slice(ROWS_SHOWN).map(pageRow) } : undefined}
       />
     );
   };
-  const siteRow = (one: SiteTime): BarRow => ({ key: one.host, name: one.host, figure: words.duration(one.seconds), seconds: one.seconds, label: t("bar", { host: one.host, duration: words.duration(one.seconds) }), detail: pages.some((page) => page.host === one.host) ? pagesOf(one.host) : undefined });
+  const detail = (host: string) => (pages.some((page) => page.host === host) ? pagesOf(host) : undefined);
   return (
     <Stack gap={2}>
       {sites.length > 0 ? (
         <>
-          <BarRows
-            tone="browser"
-            of={sites[0].seconds}
-            rows={sites.slice(0, SITES_SHOWN).map(siteRow)}
-            overflow={sites.length > SITES_SHOWN ? { summary: t("more", { n: sites.length - SITES_SHOWN }), rows: sites.slice(SITES_SHOWN).map(siteRow) } : undefined}
-          />
+          <SiteBars sites={sites} words={words} detail={detail} />
           <Text as="p" variant="meta">{t("privacy")}</Text>
         </>
       ) : (

@@ -2,13 +2,14 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 
-import { BarRows, type BarRow } from "@/components/screens/app-rows";
+import { BarRows } from "@/components/screens/app-rows";
+import { ProjectBars, SiteBars } from "@/components/screens/claude-internet";
 import { Between, Card, Cards, DayColumns, Disclosure, Figure, Heatmap, Hero, HeroColumns, Mosaic, Stack, Text, TextLink, Tile, Title, ToneLegend } from "@/components/ui";
 import { claudeWeekHint } from "@/lib/daily";
 import { appTone } from "@/lib/app-classes";
 import { buildHeatmap, claudeHeatRow } from "@/lib/heatmap";
 import { withTimeDb } from "@/lib/session";
-import { appsByDay, claudeBetween, dayTotals, sitesBetween, uploadSpan, windowsBetween } from "@/lib/queries";
+import { appsByDay, claudeBetween, dayTotals, editorWindowsBetween, sitesBetween, uploadSpan } from "@/lib/queries";
 import { fill, sum } from "@/lib/totals";
 import { projectsOf } from "@/lib/vscode-project";
 import { askedWeek, clampWeek, weekSteps } from "@/lib/week";
@@ -31,7 +32,7 @@ export default async function WeekPage({ searchParams }: { searchParams: Promise
   const asked = askedWeek(semana, today);
   const sunday = addDays(asked, 6);
   const [[span, totals, byDay, claude, sites, windows], words, t, tClaude, tClass] = await Promise.all([
-    withTimeDb((tx) => Promise.all([uploadSpan(tx), dayTotals(asked, sunday, tx), appsByDay(asked, sunday, tx), claudeBetween(asked, sunday, tx), sitesBetween(asked, sunday, tx), windowsBetween(asked, sunday, tx)])),
+    withTimeDb((tx) => Promise.all([uploadSpan(tx), dayTotals(asked, sunday, tx), appsByDay(asked, sunday, tx), claudeBetween(asked, sunday, tx), sitesBetween(asked, sunday, tx), editorWindowsBetween(asked, sunday, tx)])),
     calendarWords(),
     getTranslations("time.week"),
     getTranslations("time.claude"),
@@ -45,8 +46,6 @@ export default async function WeekPage({ searchParams }: { searchParams: Promise
   const heat = buildHeatmap(byDay, days.map((one) => one.day), words.system, APPS_SHOWN);
   const hint = claudeWeekHint(span);
   const projects = projectsOf(windows);
-  const projectRow = (one: { project: string; seconds: number }): BarRow => ({ key: one.project, name: one.project, figure: words.duration(one.seconds), seconds: one.seconds, label: t("projectBar", { project: one.project, duration: words.duration(one.seconds) }) });
-  const siteRow = (one: { host: string; seconds: number }): BarRow => ({ key: one.host, name: one.host, figure: words.duration(one.seconds), seconds: one.seconds, label: t("siteBar", { host: one.host, duration: words.duration(one.seconds) }) });
   const agentSeconds = claude.reduce((total, one) => total + one.code, 0);
   // Claude's total is the grid's first row, levelled against its largest app cell; every tone in it is also written, in the row and in the legend.
   const claudeRow = claudeHeatRow(claude, days.map((one) => one.day), heat.largest);
@@ -142,21 +141,12 @@ export default async function WeekPage({ searchParams }: { searchParams: Promise
         <Mosaic>
           {projects.length > 0 ? (
             <Tile title={t("projects")} figure={words.duration(sum(projects))}>
-              <BarRows
-                of={projects[0].seconds}
-                rows={projects.slice(0, APPS_SHOWN).map(projectRow)}
-                overflow={projects.length > APPS_SHOWN ? { summary: t("projectsMore", { n: projects.length - APPS_SHOWN, duration: words.duration(sum(projects.slice(APPS_SHOWN))) }), rows: projects.slice(APPS_SHOWN).map(projectRow) } : undefined}
-              />
+              <ProjectBars projects={projects} words={words} />
             </Tile>
           ) : null}
           {sites.length > 0 ? (
             <Tile title={t("internet")} figure={words.duration(sum(sites))}>
-              <BarRows
-                tone="browser"
-                of={sites[0].seconds}
-                rows={sites.slice(0, APPS_SHOWN).map(siteRow)}
-                overflow={sites.length > APPS_SHOWN ? { summary: t("sitesMore", { n: sites.length - APPS_SHOWN }), rows: sites.slice(APPS_SHOWN).map(siteRow) } : undefined}
-              />
+              <SiteBars sites={sites} words={words} />
             </Tile>
           ) : null}
         </Mosaic>

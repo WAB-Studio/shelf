@@ -83,11 +83,7 @@
     "appsMore": "y {n} apps más · {duration}",
     "exportMore": "Exportar otras fechas",
     "projects": "Proyectos de la semana",
-    "projectBar": "{project}: {duration}",
-    "projectsMore": "{n, plural, one {y # proyecto más · {duration}} other {y # proyectos más · {duration}}}",
-    "internet": "Internet de la semana",
-    "siteBar": "{host}: {duration}",
-    "sitesMore": "y {n} sitios más"
+    "internet": "Internet de la semana"
   },
   "keys": {
     "title": "Llaves",
@@ -169,7 +165,7 @@
     "emptyToday": "Sin sitios hoy todavía.",
     "never": "Todavía no llegan sitios. Actualiza el programa de TimeLog en tu PC y se verán tras la próxima subida.",
     "install": "Cómo actualizar el programa",
-    "more": "y {n} sitios más",
+    "more": "y {n} sitios más · {duration}",
     "privacy": "Solo tú lo ves. Los sitios y apps de tu lista de exclusión (bancos y gestores de contraseñas, por defecto) nunca salen de tu PC.",
     "pageBar": "{title}: {duration}",
     "pagesMore": "y {n} páginas más"

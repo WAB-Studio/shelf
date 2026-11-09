@@ -184,3 +184,5 @@ semana», the same bars and the same «y N más» as the day. On a phone a heatm
 
 Decided by the user (RT-27). In «Llaves», under the key form and before the list: a title, one sentence, two copy blocks
 (the address, the Claude Code command) and a line of what to ask. Same copy blocks as the key's; no new element.
+
+The Claude card's figure is the screen time; when only the agent worked it reads «0 min», never «—». Claude Code's row stays once it has ever sent anything, even at zero. A PC that never sent Claude Code says so once, not twice.

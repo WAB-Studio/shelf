@@ -2,7 +2,7 @@ import { getTranslations } from "next-intl/server";
 
 import { BarRows, type BarRow } from "@/components/screens/app-rows";
 import { AutoRefresh } from "@/components/screens/auto-refresh";
-import { ClaudeBlock, InternetBlock } from "@/components/screens/claude-internet";
+import { ClaudeBlock, InternetBlock, ProjectBars } from "@/components/screens/claude-internet";
 import { Timeline } from "@/components/ui/timeline";
 import { Card, Cards, Composition, DayStrip, Figure, Hero, HeroColumns, Mosaic, Stack, Text, TextLink, Tile, Title } from "@/components/ui";
 import { appTone, timeByClass } from "@/lib/app-classes";
@@ -14,7 +14,7 @@ import { appsBetween, claudeBetween, claudeSessionsBetween, dayTotals, devicesBe
 import { focusShare, hourMarks, layoutSessions } from "@/lib/timeline";
 import { withTimeDb } from "@/lib/session";
 import { percent, sum } from "@/lib/totals";
-import { type ProjectTime, projectsOf } from "@/lib/vscode-project";
+import { projectsOf } from "@/lib/vscode-project";
 import { calendarWords } from "@/lib/words";
 import { dayStrip, mondayOf } from "@/lib/week";
 import { addDays, civilDay } from "@/lib/zone";
@@ -66,7 +66,6 @@ export async function DayView({ day }: { day: string }) {
     if (name !== null) titlesOf.set(name, [...(titlesOf.get(name) ?? []), one]);
   }
   const projects = projectsOf(windows);
-  const projectRow = (one: ProjectTime): BarRow => ({ key: one.project, name: one.project, figure: words.duration(one.seconds), seconds: one.seconds, label: t("projectBar", { project: one.project, duration: words.duration(one.seconds) }) });
   const claudeParts = claudeSources(claude, { code: tClaude("code"), web: tClaude("web"), desktop: tClaude("desktop") })
     .filter((one) => one.key !== "code" && one.seconds > 0)
     .map((one) => ({ ...one, figure: words.duration(one.seconds) }));
@@ -230,14 +229,10 @@ export async function DayView({ day }: { day: string }) {
           ) : null}
           {projects.length > 0 ? (
             <Tile title={t("projects")} figure={words.duration(sum(projects))}>
-              <BarRows
-                of={projects[0]!.seconds}
-                rows={projects.slice(0, APPS_SHOWN).map(projectRow)}
-                overflow={projects.length > APPS_SHOWN ? { summary: t("projectsMore", { n: projects.length - APPS_SHOWN, duration: words.duration(sum(projects.slice(APPS_SHOWN))) }), rows: projects.slice(APPS_SHOWN).map(projectRow) } : undefined}
-              />
+              <ProjectBars projects={projects} words={words} />
             </Tile>
           ) : null}
-          <Tile title={tClaude("title")} figure={claudeSeconds > 0 ? words.duration(claudeSeconds) : "—"}>
+          <Tile title={tClaude("title")} figure={claudeSeconds > 0 || claudeAgent > 0 ? words.duration(claudeSeconds) : "—"}>
             <ClaudeBlock isToday={isToday} claude={claude} sessions={sessions} hasClaudeCode={span.hasClaudeCode} hasSites={span.hasSites} words={words} />
           </Tile>
           <Tile title={tInternet("title")} figure={sites.length > 0 ? words.duration(sum(sites)) : "—"}>
