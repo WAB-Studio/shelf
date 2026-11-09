@@ -1,9 +1,19 @@
 import { test, expect } from "./fixtures";
+import { SOURCE_ROWS } from "@/lib/evidence/source-rows";
 import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
 
 // RP-146 and RP-151: a TimeLog commitment marks the day by evidence, and only the TimeLog time it does not count waits in the tray.
 
 type Db = Parameters<Parameters<typeof test>[2]>[0]["db"];
+
+// The catalogue is landed by `npm run source:add`, never a migration (RNP-10): a fresh stack has no TimeLog rows.
+async function catalogue(db: Db) {
+  for (const row of SOURCE_ROWS) {
+    await db`
+      insert into goals.evidence_sources (key, label_key, unit) values (${row.key}, ${row.labelKey}, ${row.unit})
+      on conflict (key) do nothing`;
+  }
+}
 
 async function seconds(db: Db, personId: string, app: string, amount: number) {
   await db`
@@ -20,6 +30,7 @@ async function waiting(db: Db, personId: string): Promise<{ minutes: number }[]>
 
 test("a VS Code commitment marks the day; only Terminal time waits in the tray, once (RP-146, RP-151)", async ({ person, browser, baseURL, db }) => {
   const stamp = Date.now();
+  await catalogue(db);
   const horizon = civilDateToDate(todayInZone());
   horizon.setUTCDate(horizon.getUTCDate() + 90);
   const [goal] = await db<{ id: string }[]>`
@@ -69,6 +80,7 @@ test("a VS Code commitment marks the day; only Terminal time waits in the tray, 
 
 test("TimeLog's whole total as a commitment covers every minute: nothing waits (RP-146)", async ({ person, browser, baseURL, db }) => {
   const stamp = Date.now();
+  await catalogue(db);
   const [goal] = await db<{ id: string }[]>`
     insert into goals.goals (user_id, name, measure_name, measure_unit, created_at)
     values (${person.id}, ${`Meta total ${stamp}`}, 'Tiempo', 'minutos', now() - interval '10 days') returning id`;
