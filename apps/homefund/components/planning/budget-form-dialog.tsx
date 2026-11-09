@@ -22,6 +22,7 @@ import {
   Figure,
   Flex,
   SegmentedControl,
+  ScopedSelectGroups,
   Select,
   Slider,
   Spinner,
@@ -258,6 +259,14 @@ function BudgetForm({
     allExpenseCategories,
     scopeOfAccounts([accountId ?? null], options.accounts),
   );
+  const categoryItems = (scope: "group" | "personal") =>
+    expenseCategories
+      .filter((category) => category.scope === scope)
+      .map((category) => (
+        <Select.Item key={category.id} value={category.id}>
+          {category.name}
+        </Select.Item>
+      ));
   const pickedCategoryId = useWatch({ control: form.control, name: "categoryId" });
   const pickedLabelId = useWatch({ control: form.control, name: "labelId" });
 
@@ -339,11 +348,12 @@ function BudgetForm({
                     />
                   </FieldControl>
                   <Select.Content position="popper">
-                    {expenseCategories.map((category) => (
-                      <Select.Item key={category.id} value={category.id}>
-                        {category.name}
-                      </Select.Item>
-                    ))}
+                    <ScopedSelectGroups
+                      fundHeading={tKey("categories.selectFundHeading")}
+                      personalHeading={tKey("categories.selectPersonalHeading")}
+                      fund={categoryItems("group")}
+                      personal={categoryItems("personal")}
+                    />
                   </Select.Content>
                 </Select.Root>
                 <FieldMessage error={fieldState.error} />

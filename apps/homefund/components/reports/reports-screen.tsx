@@ -261,7 +261,7 @@ function ExpenseBands({
               <Flex justify="between" gap="3" align="baseline">
                 <Text as="div" size="3" truncate>
                   {scopedCategoryName(row.name, row.scope, (name) =>
-                    tKey("categories.scopedName", { name }),
+                    tKey("categories.fundMark", { name }),
                   )}
                 </Text>
                 <Text size="3" weight="medium">

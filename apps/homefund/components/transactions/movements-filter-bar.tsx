@@ -78,6 +78,21 @@ export function MovementsFilterBar({
     ),
   ].map(([id, name]) => ({ id, name }));
 
+  // Fund first, then the person's own, each under a heading only when both
+  // scopes hold categories, so two that share a name read apart.
+  const itemsOf = (scope: "group" | "personal", group: string | undefined) =>
+    options.categories
+      .filter((node) => node.scope === scope)
+      .flatMap((node) => [node, ...node.children])
+      .map((one) => ({ value: one.id, label: one.name, group }));
+  const fundItems = itemsOf("group", undefined);
+  const personalItems = itemsOf("personal", undefined);
+  const headed = fundItems.length > 0 && personalItems.length > 0;
+  const categoryItems = [
+    ...itemsOf("group", headed ? tc("selectFundHeading") : undefined),
+    ...itemsOf("personal", headed ? tc("selectPersonalHeading") : undefined),
+  ];
+
   const types: { value: MovementType; label: string }[] = [
     { value: "all", label: t("filterAll") },
     { value: "expense", label: t("filterExpenses") },
@@ -204,10 +219,7 @@ export function MovementsFilterBar({
         }
         items={[
           { value: ANY, label: t("allCategories") },
-          ...categories.map((category) => ({
-            value: category.id,
-            label: category.name,
-          })),
+          ...categoryItems,
         ]}
         width={200}
       />

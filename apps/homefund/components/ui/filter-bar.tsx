@@ -18,6 +18,18 @@ export function FilterBar({ children }: { children: ReactNode }) {
   return <div className={styles.bar}>{children}</div>;
 }
 
+function groupRuns<T extends { group?: string }>(
+  items: T[],
+): { group?: string; items: T[] }[] {
+  const runs: { group?: string; items: T[] }[] = [];
+  for (const item of items) {
+    const last = runs[runs.length - 1];
+    if (last && last.group === item.group) last.items.push(item);
+    else runs.push({ group: item.group, items: [item] });
+  }
+  return runs;
+}
+
 /**
  * One filter control. `label` is required and renders as a visible element tied
  * to the trigger by id, because the audit found bare controls named only by a
@@ -33,7 +45,8 @@ export function FilterSelect({
   label: string;
   value: string;
   onValueChange: (v: string) => void;
-  items: { value: string; label: string }[];
+  // Consecutive items sharing a `group` sit under that heading.
+  items: { value: string; label: string; group?: string }[];
   width?: number;
 }) {
   const controlId = useId();
@@ -50,11 +63,21 @@ export function FilterSelect({
           style={width ? { width } : undefined}
         />
         <Select.Content position="popper">
-          {items.map((item) => (
-            <Select.Item key={item.value} value={item.value}>
-              {item.label}
-            </Select.Item>
-          ))}
+          {groupRuns(items).map((run) => {
+            const options = run.items.map((item) => (
+              <Select.Item key={item.value} value={item.value}>
+                {item.label}
+              </Select.Item>
+            ));
+            return run.group ? (
+              <Select.Group key={run.items[0].value}>
+                <Select.Label>{run.group}</Select.Label>
+                {options}
+              </Select.Group>
+            ) : (
+              options
+            );
+          })}
         </Select.Content>
       </Select.Root>
     </div>
