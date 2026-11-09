@@ -195,10 +195,15 @@ async function main() {
 
   // Plain lowercase headwords, so the route's own normalising leaves them as they are.
   const plain = index.sortedHeadwords.filter((headword) =>
-    /^q[a-z]{5,}$/.test(headword),
+    /^[a-z]{6,}$/.test(headword),
   );
+  // No definition of their own: the text route answers only a word it can give a definition (or, if thin,
+  // translations), so a non-thin word needs `needDefinition` and a gap to reach the model.
   const nonThin = plain
-    .filter((headword) => !isThinAnswer(groupFor(index, headword)!))
+    .filter((headword) => {
+      const group = groupFor(index, headword)!;
+      return !isThinAnswer(group) && group.senses.every((sense) => sense.definition === null);
+    })
     .slice(0, 10);
   const thin = plain
     .filter((headword) => isThinAnswer(groupFor(index, headword)!))
@@ -305,7 +310,7 @@ async function main() {
     const statuses: number[] = [];
     for (const headword of nonThin.slice(0, 3)) {
       const response = await text.POST(
-        post("/api/word/text", { headword, needDefinition: false }, capIp),
+        post("/api/word/text", { headword, needDefinition: true }, capIp),
       );
       statuses.push(response.status);
     }
@@ -336,7 +341,7 @@ async function main() {
         .slice(3, 9)
         .map((headword) =>
           text.POST(
-            post("/api/word/text", { headword, needDefinition: false }, raceIp),
+            post("/api/word/text", { headword, needDefinition: true }, raceIp),
           ),
         ),
     );
@@ -354,7 +359,7 @@ async function main() {
     const noKey = await text.POST(
       post(
         "/api/word/text",
-        { headword: nonThin[9], needDefinition: false },
+        { headword: nonThin[9], needDefinition: true },
         null,
       ),
     );
@@ -675,7 +680,7 @@ async function main() {
           .POST(
             post(
               "/api/word/text",
-              { headword: nonThin[9], needDefinition: false },
+              { headword: nonThin[9], needDefinition: true },
               "203.0.113.213",
             ),
           )
