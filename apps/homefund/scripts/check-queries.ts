@@ -111,6 +111,7 @@ import {
 } from "@/db/queries/recurring-rules";
 import {
   getFundCashBalances,
+  getFundSpending,
   getMemberContributions,
   getUnassignedIncome,
 } from "@/db/queries/reports/contributions";
@@ -3476,6 +3477,9 @@ async function reconcileSuite(
     (await trips(() => getExpensesByCategory(range))) +
     (await trips(() => getSixMonthFlow())) +
     (await trips(() => getMemberContributions(range))) +
+    (await trips(() => getFundCashBalances(range))) +
+    (await trips(() => getFundSpending(range))) +
+    (await trips(() => getUnassignedIncome(range))) +
     (await trips(() => getUserGroup())) +
     (await trips(() => getSessionUser())) +
     (group ? await trips(() => listMembers(group.id, { archived: false })) : 0);
@@ -4250,6 +4254,7 @@ async function main(): Promise<void> {
   await incomeContributorFollowUpSuite();
   await incomeContributorEditsSuite();
   await fundPotSuite();
+  await otherMembersRowsSuite();
 }
 
 // A member recorded without a login is someone in the fund: a leader whose fund holds one is not alone, so an
@@ -4314,10 +4319,10 @@ async function roundTripSuite(scope: HarnessScope, userId: string): Promise<void
   await getTransactionFormOptions();
   const form = await trips(() => getTransactionFormOptions());
   // One transaction: the single read's BEGIN, settle and COMMIT once, plus the
-  // other seven reads as statements. Seven transactions cost seven times `single`.
+  // other eight reads as statements. Eight transactions cost eight times `single`.
   assert(
-    next("getTransactionFormOptions opens one transaction, not seven"),
-    form === single + 7,
+    next("getTransactionFormOptions opens one transaction, not eight"),
+    form === single + 8,
     `${form} round trips for the form options, ${single} for one read of them`,
   );
 
@@ -16016,6 +16021,7 @@ async function fundPotSuite(): Promise<void> {
     member: randomUUID(),
     cash: randomUUID(),
     category: randomUUID(),
+    expense: randomUUID(),
   };
   await fixtureSql.begin(async (tx) => {
     await tx`insert into groups (id, name, cash_mode) values (${ids.group}, 'Harness rf167 fondo', 'shared')`;
@@ -16027,12 +16033,14 @@ async function fundPotSuite(): Promise<void> {
       values (${ids.cash}, ${ids.group}, true, 'Harness rf167 caja', 'asset', 'cash', 0, '2026-01-01')`;
     await tx`
       insert into categories (id, group_id, name, kind, color)
-      values (${ids.category}, ${ids.group}, 'Harness rf167 ingreso', 'income', '#4C8C4A')`;
+      values (${ids.category}, ${ids.group}, 'Harness rf167 ingreso', 'income', '#4C8C4A'),
+             (${ids.expense}, ${ids.group}, 'Harness rf167 gasto', 'expense', '#8C4A4A')`;
   });
   track("groups", ids.group);
   track("group_members", ids.member);
   track("accounts", ids.cash);
   track("categories", ids.category);
+  track("categories", ids.expense);
 
   const income = {
     fromAccountId: null,
@@ -16053,7 +16061,7 @@ async function fundPotSuite(): Promise<void> {
   );
   keep("transactions", named.transactionId);
   const after = await asUser(payer, () => getUnassignedIncome(range));
-  const cash = await asUser(payer, () => getFundCashBalances());
+  const cash = await asUser(payer, () => getFundCashBalances(range));
   assert(
     next("RF-167: an income into the fund naming nobody is «Sin asignar»; naming a member takes it out of that figure"),
     before.find((row) => row.currency === "COP")?.incomeCents === PAY &&
@@ -16064,6 +16072,31 @@ async function fundPotSuite(): Promise<void> {
     next("RF-167: the fund's cash balance is the cash account's, derived from its movements"),
     cash.find((row) => row.currency === "COP")?.balanceCents === 2 * PAY,
     `cash ${JSON.stringify(cash)}; expected ${2 * PAY}`,
+  );
+
+  const earlier = await asUser(payer, () => getFundCashBalances({ endExclusive: "2026-01-01" }));
+  assert(
+    next("RF-167: the cash balance reads to the window's end, so a month before the fund's opening holds none"),
+    earlier.length === 0,
+    `cash before the opening = ${JSON.stringify(earlier)}`,
+  );
+
+  const spend = await asUser(payer, () =>
+    createTransaction({
+      ...income,
+      fromAccountId: ids.cash,
+      toAccountId: null,
+      amountCents: 500_000,
+      description: "Harness rf167 gasto",
+      splits: [{ categoryId: ids.expense, amountCents: 500_000 }],
+    }),
+  );
+  keep("transactions", spend.transactionId);
+  const spending = await asUser(payer, () => getFundSpending(range));
+  assert(
+    next("RF-167: the fund's spending counts an expense out of a fund account, in the currency the account settles"),
+    spending.find((row) => row.currency === "COP")?.spentCents === 500_000,
+    `spending ${JSON.stringify(spending)}; expected 500000`,
   );
 
   const actions = (await import("@/app/actions/transactions")) as unknown as {
@@ -16085,6 +16118,86 @@ async function fundPotSuite(): Promise<void> {
     refused?.serverError !== undefined && written.length === 0,
     `serverError ${refused?.serverError ?? "none"}, rows written ${written.length}`,
   );
+  const inbox = (await import("@/app/actions/ingest")) as unknown as {
+    acceptDeliveryAction: (input: unknown) => Promise<{ serverError?: string }>;
+  };
+  const claims = JSON.stringify({ sub: payer.id, role: "authenticated", aud: "authenticated" });
+  const deliveryId = await fixtureSql.begin(async (tx) => {
+    await tx`select set_config('request.jwt.claims', ${claims}, true)`;
+    const [row] = await tx<{ id: string }[]>`
+      insert into ingest_deliveries (external_ref, raw_text, shape_hash)
+      values ('harness-rf167-accept', 'Harness rf167 mensaje', ${createHash("sha256").update("rf167-accept").digest("hex")})
+      returning id`;
+    return row.id;
+  });
+  const takenIn = await asUser(payer, () =>
+    inbox.acceptDeliveryAction({
+      deliveryId,
+      fromAccountId: null,
+      toAccountId: ids.cash,
+      amount: "30000",
+      occurredAt: todayInBogota(),
+      description: "Harness rf167 bandeja",
+      splits: [{ categoryId: ids.category, amount: "30000" }],
+      labelIds: [],
+      contributedByMemberId: ids.member,
+    }),
+  );
+  const accepted_ = await fixtureSql`
+    select id, contributed_by_member_id from transactions where description = 'Harness rf167 bandeja'`;
+  for (const row of accepted_) keep("transactions", row.id as string);
+  assert(
+    next("RF-167: accepting an inbox delivery keeps the «De quién» that was chosen"),
+    takenIn?.serverError === undefined &&
+      accepted_.length === 1 &&
+      accepted_[0].contributed_by_member_id === ids.member,
+    `serverError ${takenIn?.serverError ?? "none"}, rows ${JSON.stringify(accepted_)}`,
+  );
+
+  // An edit that sends no «De quién» keeps who the movement credits; one on an income
+  // credited to nobody is asked for it.
+  const updates = (await import("@/app/actions/transactions")) as unknown as {
+    updateTransactionAction: (input: unknown) => Promise<{ serverError?: string }>;
+  };
+  const [stampRow] = await fixtureSql`
+    select updated_at::text as stamp from transactions where id = ${accepted_[0].id as string}`;
+  const edit = {
+    transactionId: accepted_[0].id,
+    fromAccountId: null,
+    toAccountId: ids.cash,
+    amount: "30000",
+    occurredAt: todayInBogota(),
+    description: "Harness rf167 bandeja editada",
+    splits: [{ categoryId: ids.category, amount: "30000" }],
+    labelIds: [],
+    expectedUpdatedAt: stampRow.stamp,
+  };
+  const kept = await asUser(payer, () => updates.updateTransactionAction(edit));
+  const [after_] = await fixtureSql`
+    select contributed_by_member_id from transactions where id = ${accepted_[0].id as string}`;
+  assert(
+    next("RF-167: an edit sending no «De quién» on an income that has one keeps it"),
+    kept?.serverError === undefined && after_.contributed_by_member_id === ids.member,
+    `serverError ${kept?.serverError ?? "none"}, contributor ${after_.contributed_by_member_id}`,
+  );
+  const [unassignedRow] = await fixtureSql`
+    select id, updated_at::text as stamp from transactions where id = ${unnamed.transactionId}`;
+  const refusedEdit = await asUser(payer, () =>
+    updates.updateTransactionAction({
+      ...edit,
+      transactionId: unassignedRow.id,
+      description: "Harness rf167 sin asignar editada",
+      amount: "20000",
+      splits: [{ categoryId: ids.category, amount: "20000" }],
+      expectedUpdatedAt: unassignedRow.stamp,
+    }),
+  );
+  assert(
+    next("RF-167: an edit sending no «De quién» on an income that credits nobody is refused"),
+    refusedEdit?.serverError !== undefined,
+    `serverError ${refusedEdit?.serverError ?? "none"}`,
+  );
+
   const accepted = await asUser(payer, () =>
     actions.createTransactionAction({ ...form, contributedByMemberId: ids.member }),
   );
@@ -16094,5 +16207,124 @@ async function fundPotSuite(): Promise<void> {
     next("RF-167: the same income naming a member is accepted"),
     accepted?.serverError === undefined && saved.length === 1,
     `serverError ${accepted?.serverError ?? "none"}, rows written ${saved.length}`,
+  );
+}
+
+// RF-58, RF-167: another member's personal rows are read with their owner's name and offered
+// no action, and what is theirs to plan stays off the caller's reminders and payment sources.
+async function otherMembersRowsSuite(): Promise<void> {
+  console.log("");
+  const owner = await createMembershipFreeUser();
+  const reader = await createMembershipFreeUser();
+  const ids = {
+    group: randomUUID(),
+    ownerMember: randomUUID(),
+    readerMember: randomUUID(),
+    ownerAccount: randomUUID(),
+    readerAccount: randomUUID(),
+    ownerCategory: randomUUID(),
+  };
+  await fixtureSql.begin(async (tx) => {
+    await tx`insert into groups (id, name, cash_mode) values (${ids.group}, 'Harness rf58 fondo', 'per_member')`;
+    await tx`
+      insert into group_members (id, group_id, user_id, name, role)
+      values (${ids.ownerMember}, ${ids.group}, ${owner.id}, 'Harness rf58 Andrea', 'leader'),
+             (${ids.readerMember}, ${ids.group}, ${reader.id}, 'Harness rf58 Wilson', 'member')`;
+    await tx`
+      insert into accounts (id, owner_user_id, name, kind, subtype, initial_balance_cents, initial_balance_on)
+      values (${ids.ownerAccount}, ${owner.id}, 'Harness rf58 de Andrea', 'asset', 'bank', 0, '2026-01-01'),
+             (${ids.readerAccount}, ${reader.id}, 'Harness rf58 de Wilson', 'asset', 'bank', 0, '2026-01-01')`;
+    await tx`
+      insert into categories (id, owner_user_id, name, kind, color)
+      values (${ids.ownerCategory}, ${owner.id}, 'Harness rf58 gasto', 'expense', '#8C4A4A')`;
+  });
+  track("groups", ids.group);
+  track("group_members", ids.ownerMember);
+  track("group_members", ids.readerMember);
+  track("accounts", ids.ownerAccount);
+  track("accounts", ids.readerAccount);
+  track("categories", ids.ownerCategory);
+
+  const budget = await asUser(owner, () =>
+    createBudget({
+      ownerUserId: owner.id,
+      groupId: null,
+      categoryId: ids.ownerCategory,
+      accountId: null,
+      labelId: null,
+      period: "monthly",
+      limitCents: 1_000_000,
+      thresholdPct: 80,
+      name: "Harness rf58 presupuesto",
+    }),
+  );
+  track("budgets", budget.budgetId);
+  const goal = await asUser(owner, () =>
+    createGoal({
+      ownerUserId: owner.id,
+      groupId: null,
+      name: "Harness rf58 meta",
+      targetAmountCents: 5_000_000,
+      targetDate: null,
+      accountId: null,
+    }),
+  );
+  track("savings_goals", goal.goalId);
+  const payment = await asUser(owner, () =>
+    createPlannedPayment({
+      fromAccountId: ids.ownerAccount,
+      toAccountId: null,
+      amountCents: 100_000,
+      categoryId: null,
+      dueDate: todayInBogota(),
+      remindOn: todayInBogota(),
+      description: "Harness rf58 pago",
+    }),
+  );
+  track("planned_payments", payment.plannedPaymentId);
+
+  const accountsSeen = await asUser(reader, () => listAccounts({ archived: false }));
+  const theirs = accountsSeen.find((row) => row.id === ids.ownerAccount);
+  const mine = accountsSeen.find((row) => row.id === ids.readerAccount);
+  assert(
+    next("RF-58: another member's personal account reads as theirs, by name, and the caller cannot write it"),
+    theirs?.foreignOwner === true &&
+      theirs.ownerName === "Harness rf58 Andrea" &&
+      theirs.canWrite === false &&
+      mine?.foreignOwner === false &&
+      mine.ownerName === null,
+    `theirs ${JSON.stringify(theirs && [theirs.foreignOwner, theirs.ownerName, theirs.canWrite])}, mine ${JSON.stringify(mine && [mine.foreignOwner, mine.ownerName])}`,
+  );
+
+  const [budgetsSeen, goalsSeen, paymentsSeen, reminders, debts] = await asUser(reader, () =>
+    Promise.all([
+      listBudgetsWithStatus(),
+      listGoalsWithProgress(),
+      listPlannedPayments({ status: "pending" }),
+      listDueReminders(50),
+      getDebtsScreenData(),
+    ]),
+  );
+  const readerBudget = budgetsSeen.find((row) => row.id === budget.budgetId);
+  const readerGoal = goalsSeen.find((row) => row.id === goal.goalId);
+  const readerPayment = paymentsSeen.find((row) => row.id === payment.plannedPaymentId);
+  assert(
+    next("RF-58: another member's budget, goal and payment come marked with their owner, so no action is offered on them"),
+    [readerBudget, readerGoal, readerPayment].every(
+      (row) => row?.foreignOwner === true && row.ownerName === "Harness rf58 Andrea",
+    ),
+    JSON.stringify([readerBudget, readerGoal, readerPayment].map((row) => row && [row.foreignOwner, row.ownerName])),
+  );
+  assert(
+    next("RF-58: another member's reminders are not the caller's, and their accounts are no source for a debt payment"),
+    !reminders.rows.some((row) => row.id === payment.plannedPaymentId) &&
+      !debts.payFrom.some((row) => row.id === ids.ownerAccount),
+    `reminders ${JSON.stringify(reminders.rows.map((row) => row.id))}, payFrom ${JSON.stringify(debts.payFrom.map((row) => row.id))}`,
+  );
+  const own = await asUser(owner, () => listDueReminders(50));
+  assert(
+    next("RF-58: the owner still gets their own reminder"),
+    own.rows.some((row) => row.id === payment.plannedPaymentId),
+    `reminders ${JSON.stringify(own.rows.map((row) => row.id))}`,
   );
 }
