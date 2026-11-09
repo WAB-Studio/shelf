@@ -512,19 +512,23 @@ export function SearchScreen({ initialQuery }: { initialQuery?: string }) {
     exactGroup ? needsDefinition(exactGroup) : false,
   );
 
-  // RL-44/RL-58: the network is asked only for the two shapes the dictionary
-  // itself could not close — a miss, or a hit that only came through
-  // inflection. An exact headword has its own network answer already
-  // (`useDecoration` above); `suppressNotFound` holding means a prefix is
-  // still mid-word, and asking there would charge every paused keystroke.
+  // RL-44: the network is asked only for a word the dictionary cannot place
+  // at all: no entry, no lemma through inflection and no headword one edit
+  // away (`lingered`, `went` and `recieve` cost nothing). An exact headword
+  // has its own decoration (`useDecoration` above); `suppressNotFound` holding
+  // means a prefix is still mid-word, and asking there would charge every
+  // paused keystroke.
+  const corrected = wordAnswer !== null && wordAnswer.exact === null && wordAnswer.correction.length > 0;
   const networkWord =
-    kind.kind === "word" && wordAnswer !== null && wordAnswer.exact === null && !suppressNotFound
+    kind.kind === "word" &&
+    wordAnswer !== null &&
+    wordAnswer.exact === null &&
+    wordAnswer.viaInflection.length === 0 &&
+    !corrected &&
+    !suppressNotFound
       ? normaliseHeadword(wordAnswer.query)
       : null;
-  const networkAnswer = useNetworkAnswer(
-    networkWord,
-    wordAnswer !== null && wordAnswer.viaInflection.length === 0,
-  );
+  const networkAnswer = useNetworkAnswer(networkWord, true);
 
   // RL-76: a word with no entry is recorded answered once the network's answer
   // for that same text is in hand. It replaces the miss payload that call
@@ -554,15 +558,17 @@ export function SearchScreen({ initialQuery }: { initialQuery?: string }) {
       exampleEs: unlistedAnswer.example.es,
     };
   }, [logPayload, networkWord, unlistedTranslation, unlistedAnswer]);
-  // RL-76: a prefix with suggestions is mid-word, not a word the network failed
-  // to answer. The call still reaches `commit`, as an outcome it drops.
+  // RL-76: a prefix with suggestions is mid-word, and a word one edit from a
+  // headword is a slip: neither is a word the network failed to answer, so
+  // neither is left pending for the drain to pay for. The call still reaches
+  // `commit`, as an outcome it drops.
   const recordable = useMemo<LogPayload | null>(() => {
     if (unlistedPayload) return unlistedPayload;
-    if (suppressNotFound && logPayload?.kind === "word" && logPayload.outcome === "miss") {
+    if ((suppressNotFound || corrected) && logPayload?.kind === "word" && logPayload.outcome === "miss") {
       return { ...logPayload, outcome: "untranslated" };
     }
     return logPayload;
-  }, [unlistedPayload, suppressNotFound, logPayload]);
+  }, [unlistedPayload, suppressNotFound, corrected, logPayload]);
   // The same payload object re-running the effect must not record the lookup twice.
   const recordedRef = useRef<LogPayload | null>(null);
 

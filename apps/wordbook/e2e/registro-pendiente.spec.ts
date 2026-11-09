@@ -106,16 +106,16 @@ test("offline, a word the dictionary lacks is kept as one pending schema-4 miss"
   network.goOffline();
   await context.setOffline(true);
 
-  await box.fill("whereat");
+  await box.fill("doomscrolling");
   await expect(page.getByText(messages.search.notFound).first()).toBeVisible();
   await box.fill("");
 
-  const rows = await rowsFor(page, "whereat", 1);
+  const rows = await rowsFor(page, "doomscrolling", 1);
   expect(rows[0]).toMatchObject({
     schema: 4,
     kind: "word",
     outcome: "miss",
-    text: "whereat",
+    text: "doomscrolling",
     translation: null,
   });
   expect(rows[0].askedOn ?? null).toBeNull();
@@ -190,19 +190,19 @@ test("back online, the app answers the pending word it holds: the row becomes un
   network.goOffline();
   await context.setOffline(true);
 
-  await box.fill("whereat");
+  await box.fill("doomscrolling");
   await expect(page.getByText(messages.search.notFound).first()).toBeVisible();
   await box.fill("");
-  const [waiting] = await rowsFor(page, "whereat", 1);
+  const [waiting] = await rowsFor(page, "doomscrolling", 1);
   expect(waiting.outcome).toBe("miss");
 
   network.goOnline();
   await context.setOffline(false);
 
   await expect
-    .poll(async () => (await readLogRows(page)).filter((row) => row.normalised === "whereat").map((row) => row.outcome))
+    .poll(async () => (await readLogRows(page)).filter((row) => row.normalised === "doomscrolling").map((row) => row.outcome))
     .toEqual(["unlisted"]);
-  const [answered] = await rowsFor(page, "whereat", 1);
+  const [answered] = await rowsFor(page, "doomscrolling", 1);
   expect(answered).toMatchObject({ kind: "word", at: waiting.at, translation: "¿en dónde?, adónde" });
   expect(answered.id).toBeGreaterThan(waiting.id);
 });
@@ -219,10 +219,10 @@ test("opening the app online answers the pending word it holds, once", async ({
   const box = await openReady(page);
 
   const answered = page.waitForResponse((r) => new URL(r.url()).pathname === UNLISTED);
-  await box.fill("whereat");
+  await box.fill("doomscrolling");
   expect((await answered).status()).toBe(204);
   await box.fill("");
-  const [waiting] = await rowsFor(page, "whereat", 1);
+  const [waiting] = await rowsFor(page, "doomscrolling", 1);
   expect(waiting).toMatchObject({ schema: 4, outcome: "miss" });
 
   let asks = 0;
@@ -232,9 +232,9 @@ test("opening the app online answers the pending word it holds, once", async ({
   await page.reload();
 
   await expect
-    .poll(async () => (await readLogRows(page)).filter((row) => row.normalised === "whereat").map((row) => row.outcome))
+    .poll(async () => (await readLogRows(page)).filter((row) => row.normalised === "doomscrolling").map((row) => row.outcome))
     .toEqual(["unlisted"]);
-  const [replaced] = await rowsFor(page, "whereat", 1);
+  const [replaced] = await rowsFor(page, "doomscrolling", 1);
   expect(replaced).toMatchObject({ at: waiting.at, translation: "¿en dónde?, adónde" });
   expect(asks).toBe(1);
 });

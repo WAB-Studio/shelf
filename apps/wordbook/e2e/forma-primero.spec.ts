@@ -201,9 +201,8 @@ test('variant="compact" draws neither branch\'s network block', async ({ page, c
 
 // `fixtures.ts`'s escape watchdog is what proves no request reached the real
 // server; this spec adds which routes may be asked at all. A form that only
-// resolved through inflection is one of the two cases RL-44 asks the network
-// about, so `/api/word/unlisted` is expected here and every other word route
-// is not.
+// resolved through inflection has its lemma from the dictionary, so no word
+// route is asked (RL-44).
 test("no real request to /api/word/* is left behind", async ({ page }) => {
   await deleteTranslator(page);
   await gotoReady(page);
@@ -221,6 +220,5 @@ test("no real request to /api/word/* is left behind", async ({ page }) => {
   await runClock(page, PHRASE_DEBOUNCE_MS);
 
   const wordRoute = requestUrls.filter((url) => url.includes("/api/word/"));
-  const unexpected = wordRoute.filter((url) => !new URL(url).pathname.startsWith("/api/word/unlisted"));
-  expect(unexpected, `unexpected /api/word/* requests: ${JSON.stringify(unexpected)}`).toEqual([]);
+  expect(wordRoute, `unexpected /api/word/* requests: ${JSON.stringify(wordRoute)}`).toEqual([]);
 });

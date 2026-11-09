@@ -66,24 +66,26 @@ test("coccidiosis: the network block draws under the miss line, 200", async ({ p
   await expect(page.getByText(UNLISTED_ANSWER.example.en)).toBeVisible();
 });
 
-// RL-28's correction offer and RL-44's network answer are two different
-// answers to the same miss, and neither replaces the other: `whereat` has a
-// real candidate (`whereas`) one edit away, and this module still asks the
-// network on its behalf. Ver `## Preguntas`, 1 in the slice plan — this is
-// the line that changes if the user decides otherwise, and no other.
-test("whereat: the correction offer and the network block draw together", async ({ page, stubUnlisted }) => {
+// RL-28's correction offer is the whole answer to a slip: `whereat` has a real
+// candidate (`whereas`) one edit away, so the paid route is not asked (RL-44).
+test("whereat: the correction offer draws and nothing is asked of /api/word/unlisted", async ({ page, stubUnlisted }) => {
   await deleteTranslator(page);
   await stubUnlisted({ ...UNLISTED_ANSWER, translations: ["¿en dónde?"] });
   await openReady(page);
+  const asked: string[] = [];
+  page.on("request", (request) => {
+    if (request.url().includes("/api/word/unlisted")) asked.push(request.url());
+  });
 
   const searchBox = page.getByRole("textbox", { name: messages.search.label });
-  const answered = unlistedAnswered(page);
   await searchBox.fill("whereat");
 
   await expect(page.getByText(messages.search.correctionTitle)).toBeVisible();
   await expect(page.getByRole("link", { name: "whereas", exact: false })).toBeVisible();
-  await answered;
-  await expect(page.getByText(messages.word.networkAnswerTitle)).toBeVisible();
+  await freezeTimers(page);
+  await runClock(page, PHRASE_DEBOUNCE_MS);
+  expect(asked).toEqual([]);
+  await expect(page.getByText(messages.word.networkAnswerTitle)).toHaveCount(0);
 });
 
 // A prefix mid-word has no exact hit, no inflected hit and no answer on
