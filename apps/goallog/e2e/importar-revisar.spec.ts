@@ -280,7 +280,7 @@ test.describe("the review of an imported plan (RP-37, RP-35)", () => {
     });
   });
 
-  // RP-130: one open goal of the name is updated; two are not guessed between, so the goal starts unmarked with the
+  // RP-152: one open goal of the name is updated; two are not guessed between, so the goal starts unmarked with the
   // note, and marking it creates a third beside them, leaving both as they were.
   test("a goal two open goals name starts unmarked with a warning, and marking it creates another and leaves both open ones unchanged", async ({ person, browser, baseURL, db }) => {
     const { horizon } = monthsFromToday();

@@ -65,7 +65,7 @@ test("a goal that asks nothing is below the one that asks at 1280 and has no sec
     // The one task field of the day lives in «Sueltas»; no group draws its own.
     await expect(field(asking)).toBeHidden();
     await expect(field(quiet)).toBeHidden();
-    await expect(page.getByPlaceholder("Escribe una tarea…")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Anotar algo suelto" })).toBeVisible();
     const sectionOf = (goal: string) =>
       page.locator("main").locator("[data-part='group-head'] h2", { hasText: new RegExp(`^${goal}$`) }).locator("visible=true");
     await expect(sectionOf(asking)).toHaveCount(1);

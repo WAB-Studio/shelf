@@ -8,7 +8,7 @@ export type FailedKind = "goal" | "phase" | "month" | "commitment" | "task" | "s
 // the moment the plan is created, so the result cannot look anything up afterwards.
 export type CreatedPart = { name: string; goal: string; kind: FailedKind; month: string | null; reason: string };
 
-// What «Plan creado» draws: how many goals were created, how many open goals were updated (RP-130), and each part that was not written.
+// What «Plan creado» draws: how many goals were created, how many open goals were updated (RP-152), and each part that was not written.
 export type CreatedResult = { goals: number; updated: number; parts: CreatedPart[] };
 
 // The sentence for each reason `FailedPart.reason` can carry; any other key reads as `partFailed`.

@@ -30,7 +30,7 @@ async function seed(db: import("postgres").Sql, personId: string, name: string, 
   return goal.id;
 }
 
-test("846 · a goal ended under 60 % draws no «día N» pace line and reads «llevas 0 %»", async ({ page, db, personId }) => {
+test("846 · a goal ended under 60 % draws no «día N» pace line and reads «faltaron 10 h»", async ({ page, db, personId }) => {
   test.skip(day < 20, PACE_FROM);
   const goalId = await seed(db, personId, `Sprint ${Date.now()}`, plusDays(today, -1));
   try {
@@ -41,7 +41,7 @@ test("846 · a goal ended under 60 % draws no «día N» pace line and reads «l
     expect(text).not.toMatch(new RegExp(`día ${day}\\b`, "i"));
     expect(text).not.toMatch(/bajo el 60 %/i);
     // The ended month line takes the plain progress sentence in the pace line's place.
-    expect(text).toMatch(/llevas 0 %/);
+    expect(text).toMatch(/faltaron 10 h/);
   } finally {
     await db`delete from goals.goals where id = ${goalId} and user_id = ${personId}`;
   }

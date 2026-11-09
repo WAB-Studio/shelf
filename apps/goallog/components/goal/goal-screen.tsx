@@ -27,7 +27,6 @@ import {
   Button,
   Face,
   Figure,
-  Figures,
   Flex,
   Fold,
   Hero,
@@ -209,6 +208,8 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
   const daysLeft = Math.round((Date.parse(`${lastDay}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`)) / 86_400_000);
   const planned = screenPlanned(month?.planned ?? null, goal.plan.budgets.some((budget) => budget.month === `${today.slice(0, 7)}-01`));
   const percent = month && planned ? Math.floor((month.reached * 100) / planned) : 0;
+  // What the month still asks, in the goal's own unit (RP-155); never a score.
+  const left = month && planned ? Math.max(planned - month.reached, 0) : 0;
   // A goal with no measure has no amount to read, but its months and their
   // tasks stay reachable (`MetaSinMedida.dc.html`).
   const bareMonth = !holds && !goal.measureUnit && goal.months.some((row) => row.current);
@@ -406,15 +407,20 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
               </Text>
             ) : paceLine ? null : (
               <Text as="p" variant="sentence" tone="muted">
-                <Figures
-                  text={
-                    holds
-                      ? t("tree.goal.monthSum", { percent })
+                {t.rich(
+                  holds
+                    ? left === 0
+                      ? "tree.goal.monthSumMet"
+                      : "tree.goal.monthSumLeft"
+                    : left === 0
+                      ? ended
+                        ? "goal.detail.monthMetEnded"
+                        : "goal.detail.monthMet"
                       : ended
-                        ? t("goal.detail.monthProgressEnded", { percent })
-                        : t("goal.detail.monthProgress", { percent, days: daysLeft })
-                  }
-                />
+                        ? "goal.detail.monthLeftEnded"
+                        : "goal.detail.monthLeft",
+                  { left: formatQuantity(left, goal.measureUnit ?? "", words), days: daysLeft, ...fig },
+                )}
               </Text>
             )}
           </>

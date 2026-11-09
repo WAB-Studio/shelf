@@ -25,7 +25,7 @@ import { messageKey, type MessageKey } from "@/i18n/translator";
 // A part the table refused after everything the review checks: its path in the draft, its name, and why.
 export type FailedPart = { path: string; name: string; reason: MessageKey };
 
-// `goalIds` are the goals created; `updatedIds` the open goals the review matched and this updated (RP-130).
+// `goalIds` are the goals created; `updatedIds` the open goals the review matched and this updated (RP-152).
 export type ConfirmImportResult =
   | { ok: true; goalIds: string[]; updatedIds: string[]; failed: FailedPart[] }
   | { ok: false; error: MessageKey; at?: string };
@@ -107,7 +107,7 @@ function emptyPlan() {
     childRows: [] as (Part & { taskId: string; childId: string })[],
     doneRows: [] as (Part & { taskId: string })[],
     goalIds: [] as string[],
-    // The updates of matched goals (RP-130), one list per statement.
+    // The updates of matched goals (RP-152), one list per statement.
     horizonRows: [] as (Part & { g: number })[],
     noteRows: [] as Part[],
     measureUpdates: [] as (Part & { goalId: string })[],
@@ -128,7 +128,7 @@ function emptyPlan() {
 }
 
 /**
- * Writes a reviewed import draft (RP-130, RP-88, RP-95): a tree of goals up to three levels deep,
+ * Writes a reviewed import draft (RP-152, RP-88, RP-95): a tree of goals up to three levels deep,
  * with the notes of goals and tasks. The draft is judged again here with the schema and the
  * refusals the reading already passed: the client is not trusted, and a refusal left over is a
  * forged or stale draft. A correction nobody touched arrives accepted; this judges what it gets.
@@ -143,7 +143,7 @@ function emptyPlan() {
  * `plan_seen` as `setRhythm`'s first rhythm. A goal that holds goals has no rhythm (refused above),
  * so its tasks are written fixed to their month, as `fixHolderTasks` leaves them.
  *
- * RP-130: a draft goal the review sent in `updates` updates the one open goal of its name instead,
+ * RP-152: a draft goal the review sent in `updates` updates the one open goal of its name instead,
  * by the differences the review showed: the snapshot is read again in this transaction and a goal
  * whose differences no longer give the review's fingerprint, or whose name now matches none or two,
  * refuses the whole call before anything is written. Nothing is removed; each kind of update is one
@@ -168,7 +168,7 @@ export async function confirmImport(input: unknown): Promise<ConfirmImportResult
     const path = issue.path[0] === "draft" ? issue.path.slice(1) : issue.path;
     return { ok: false, error, at: path.join(".") };
   }
-  // RP-130: a phase that starts before the goal opens begins today, one wholly
+  // RP-152: a phase that starts before the goal opens begins today, one wholly
   // before it is dropped, so the refusals and the rows see the cut draft.
   // A version 2 draft is in minutes already (RP-35).
   const today = todayInZone();
@@ -447,7 +447,7 @@ export async function confirmImport(input: unknown): Promise<ConfirmImportResult
         const stored = await readReceipt(tx, person.id, requestId);
         if (stored !== null) return { replay: stored as ConfirmImportResult };
       }
-      // RP-130: the review's matches are judged against the goals as they stand in this transaction.
+      // RP-152: the review's matches are judged against the goals as they stand in this transaction.
       const matched = new Map<number, GoalSnapshot>();
       const matches = matchGoals(draft, await loadImportSnapshots(draft.goals.map((goal) => goal.name), tx));
       for (const update of updates) {

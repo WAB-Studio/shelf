@@ -28,12 +28,15 @@ const field = (page: Page, goal: string) => page.getByLabel(`Una tarea de ${goal
 // (HoyUnCampo); from 1024 each goal's group keeps its own. Either way the
 // returned locator is the input the name goes into, the goal already chosen.
 const PHONE_FIELD = "Escribe una tarea…";
+// Below 768 the field is in the sheet the «+» opens (RP-154).
+const openPhoneField = (page: Page) => page.getByRole("button", { name: "Anotar algo suelto" }).click();
 async function fillTask(page: Page, goal: string, task: string, width: number) {
   if (width >= 1024) {
     const input = field(page, goal);
     await input.fill(task);
     return input;
   }
+  await openPhoneField(page);
   const input = page.getByPlaceholder(PHONE_FIELD);
   await input.fill(task);
   await page.getByRole("radiogroup", { name: "de qué meta" }).getByRole("radio", { name: goal, exact: true }).click();
@@ -50,6 +53,7 @@ for (const width of [390, 1440]) {
         const page = await context.newPage();
         await page.goto("/");
         const wide = width >= 1024;
+        if (!wide) await openPhoneField(page);
         const input = wide ? field(page, goal) : page.getByPlaceholder(PHONE_FIELD);
         await expect(input).toBeVisible();
         await expect(input).toHaveAttribute("placeholder", wide ? `Una tarea de ${goal}…` : PHONE_FIELD);
@@ -127,8 +131,8 @@ test("«hoy» draws the task in the goal's group and shows no plan line", async 
     const input = await fillTask(page, goal, task, 390);
     await input.press("Enter");
     await expect(page.getByText(task)).toBeVisible();
-    // The status is the board's «Anotada en {goal}.», never a plan line.
-    await expect(page.getByRole("status")).toHaveText(`Anotada en ${goal}.`);
+    // Written on today, the sheet closes on the day: no line of where it went, and never a plan line.
+    await expect(page.getByRole("status")).toHaveCount(0);
     await expect(page.getByText("Anotada en el plan")).toHaveCount(0);
     await expect(page.getByRole("link", { name: "ver el plan", exact: true })).toHaveCount(0);
   } finally {
@@ -191,6 +195,7 @@ test("an empty name in the goal's field is refused with the task's words, not «
   try {
     const page = await context.newPage();
     await page.goto("/");
+    await openPhoneField(page);
     const input = page.getByPlaceholder(PHONE_FIELD);
     await input.fill("   ");
     await input.press("Enter");
@@ -234,8 +239,6 @@ test("at 360 a 40-letter goal fits its chip and the plan line", async ({ person,
   try {
     const page = await context.newPage();
     await page.goto("/");
-    const input = page.getByPlaceholder(PHONE_FIELD);
-    await expect(input).toBeVisible();
     await fillTask(page, goal, task, 360);
     await page.getByRole("radio", { name: "sin día" }).click();
     await page.getByRole("button", { name: "Anotar", exact: true }).click();

@@ -85,12 +85,12 @@ test("the first rhythm's preview names the year even when it is this one", async
     const end = monthOf(today);
     const spoken = `${monthFormat.format(new Date(`${end}T12:00:00Z`))} de ${end.slice(0, 4)}`;
     expect(end.slice(0, 4)).toBe(String(year));
-    await expect(page.getByText(`tus 20 h de tareas terminan en ${spoken}.`, { exact: false })).toBeVisible();
+    await expect(page.getByText(`tus 20 h de tareas caben hasta ${spoken}.`, { exact: false })).toBeVisible();
     // 12 h a month ends next month: the year of that month, always written.
     await page.getByRole("radio", { name: "12 h" }).click();
     const next = nextMonth(monthOf(today));
     const spokenNext = `${monthFormat.format(new Date(`${next}T12:00:00Z`))} de ${next.slice(0, 4)}`;
-    await expect(page.getByText(`tus 20 h de tareas terminan en ${spokenNext}.`, { exact: false })).toBeVisible();
+    await expect(page.getByText(`tus 20 h de tareas caben hasta ${spokenNext}.`, { exact: false })).toBeVisible();
   } finally {
     await drop(db, [goal.id]);
   }

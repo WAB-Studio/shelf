@@ -7,8 +7,15 @@ export type OutReason = "notPlaced" | "unmarked" | "refused" | "noteFull";
 type Why = "unmarked" | "refused";
 
 // Why a part is not written, by its path: unmarked or refused itself, under a part that is, or
-// inside a goal that is out whole (its own refusal, unmarked, or under one that is).
-export function outness(draft: ImportDraft, unmarked: ReadonlySet<string>, refused: ReadonlySet<string>): (path: string) => Why | null {
+// inside a goal that is out whole (its own refusal, unmarked, or under one that is). `open` holds the goals an
+// open goal of the person's already names: leaving one of those out leaves its update out, not the goals the plan
+// creates under it (RP-152).
+export function outness(
+  draft: ImportDraft,
+  unmarked: ReadonlySet<string>,
+  refused: ReadonlySet<string>,
+  open: ReadonlySet<number> = new Set(),
+): (path: string) => Why | null {
   const first = new Map<string, number>();
   draft.goals.forEach((goal, g) => {
     if (!first.has(goal.key)) first.set(goal.key, g);
@@ -18,7 +25,7 @@ export function outness(draft: ImportDraft, unmarked: ReadonlySet<string>, refus
     const at = `goals.${g}`;
     const wholeRefused = [...refused].some((path) => path.startsWith(`${at}.`) && WHOLE_GOAL.test(path));
     const p = goal.parent === null ? undefined : first.get(goal.parent);
-    goalWhy[g] = wholeRefused || refused.has(at) ? "refused" : unmarked.has(at) ? "unmarked" : p !== undefined && p < g ? goalWhy[p] : null;
+    goalWhy[g] = wholeRefused || refused.has(at) ? "refused" : unmarked.has(at) ? "unmarked" : p !== undefined && p < g && !(open.has(p) && goalWhy[p] === "unmarked") ? goalWhy[p] : null;
   });
   return (path) => {
     const parts = path.split(".");
@@ -65,8 +72,9 @@ export function coverage(
   source: Source,
   unmarked: ReadonlySet<string>,
   refused: ReadonlySet<string>,
+  open: ReadonlySet<number> = new Set(),
 ): { kind: Source["kind"]; total: number; plan: number; notes: number; out: number; outLines: { line: number; text: string; reason: OutReason }[] } {
-  const out = outness(draft, unmarked, refused);
+  const out = outness(draft, unmarked, refused, open);
   const lines = source.lines;
   const marks = new Map<number, Mark>();
   const mark = (n: number): Mark => {
@@ -157,7 +165,7 @@ export function placeLeftovers(draft: ImportDraft, source: Source): ImportDraft 
   return { ...draft, goals };
 }
 
-// RP-130: the goal whose note holds every line with text of a section the model could not read, or
+// RP-152: the goal whose note holds every line with text of a section the model could not read, or
 // null when any of them is out (cut by the ceiling, refused, or no general goal took it). `out` is
 // the review's own out lines, so the line and the count never read different drafts.
 export function sectionHolder(

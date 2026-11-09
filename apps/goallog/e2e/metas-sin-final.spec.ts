@@ -171,7 +171,7 @@ for (const width of [360, 1280]) {
         expect(text).not.toContain("terminó");
         expect(text).not.toMatch(/hasta el \d/);
         // RP-101: «El plan» stays for time, and says no date for an end that is not there.
-        expect(text).not.toMatch(/a este ritmo terminas/);
+        expect(text).not.toMatch(/tus tareas caben hasta/);
         expect(text).not.toMatch(/termina el \d/);
         expect(text).toContain("ritmo 8 h al mes");
       } finally {

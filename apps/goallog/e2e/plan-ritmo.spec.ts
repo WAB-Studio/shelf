@@ -54,7 +54,7 @@ async function drop(db: postgres.Sql, personId: string, goalId: string) {
   await db`delete from goals.goals where id = ${goalId} and user_id = ${personId}`;
 }
 
-const LEAD = /^A este ritmo terminas el \d{1,2} de \p{L}+ de \d{4}, \d+ días? antes de tu final\.$/u;
+const LEAD = /^Tus tareas caben hasta el \d{1,2} de \p{L}+ de \d{4}, \d+ días? antes de tu final\.$/u;
 
 function planned(page: Page) {
   return page.getByText(LEAD);
@@ -99,11 +99,11 @@ for (const width of [390, 1440]) {
       try {
         await page.goto(`/metas/${goalId}/plan`);
         await expect(
-          page.getByText(`Con 12 h al mes, tus 20 h de tareas terminan en ${NEXT_MONTH}. Puedes cambiar un mes puntual después.`),
+          page.getByText(`Con 12 h al mes, tus 20 h de tareas caben hasta ${NEXT_MONTH}. Puedes cambiar un mes puntual después.`),
         ).toBeVisible();
         await page.getByRole("radio", { name: "20 h" }).click();
         await expect(page.getByRole("radio", { name: "20 h" })).toHaveAttribute("aria-checked", "true");
-        await expect(page.getByText(new RegExp(`^Con 20 h al mes, tus 20 h de tareas terminan en ${THIS_MONTH}\\.`))).toBeVisible();
+        await expect(page.getByText(new RegExp(`^Con 20 h al mes, tus 20 h de tareas caben hasta ${THIS_MONTH}\\.`))).toBeVisible();
         await expect(page.getByText(/^Con 12 h al mes/)).toHaveCount(0);
       } finally {
         await drop(db, personId, goalId);
@@ -120,7 +120,7 @@ for (const width of [390, 1440]) {
         let end = monthOf(today);
         for (let i = 0; i < 13; i++) end = nextMonth(end);
         const spoken = spokenMonth(end);
-        await expect(page.getByText(`Con 1 h al mes, tus 13 h 30 min de tareas terminan en ${spoken}.`, { exact: false })).toBeVisible();
+        await expect(page.getByText(`Con 1 h al mes, tus 13 h 30 min de tareas caben hasta ${spoken}.`, { exact: false })).toBeVisible();
       } finally {
         await drop(db, personId, goalId);
       }
@@ -222,7 +222,7 @@ for (const width of [390, 1440]) {
         const month = monthOf(today);
         const name = monthFormat.format(new Date(`${month}T12:00:00Z`));
         await expect(
-          sheet.getByText(new RegExp(`^Con 20 h al mes terminas el \\d{1,2} de ${name} de ${month.slice(0, 4)}, a tiempo\\.`)),
+          sheet.getByText(new RegExp(`^Con 20 h al mes tus tareas caben hasta el \\d{1,2} de ${name} de ${month.slice(0, 4)}, a tiempo\\.`)),
         ).toBeVisible();
       } finally {
         await drop(db, personId, goalId);
@@ -242,7 +242,7 @@ for (const width of [390, 1440]) {
         const name = monthFormat.format(new Date(`${end}T12:00:00Z`));
         await expect(
           sheet.getByText(
-            new RegExp(`^Con 1 h al mes terminas el \\d{1,2} de ${name} de ${end.slice(0, 4)}, \\d+ semanas después de tu final\\.`),
+            new RegExp(`^Con 1 h al mes tus tareas caben hasta el \\d{1,2} de ${name} de ${end.slice(0, 4)}, \\d+ semanas después de tu final\\.`),
           ),
         ).toBeVisible();
       } finally {

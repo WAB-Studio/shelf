@@ -119,10 +119,10 @@ test("the goal says the month's amount, never moves with a done task, and links 
       values (${person.id}, ${goalId}, ${`Tarea ${stamp}`}, ${monthStart}::date, 15) returning id
     `;
 
-    const line = (percent: number, reached: string) =>
+    const line = (left: string, reached: string) =>
       late
         ? `día ${day} · ${reached} de 12 h, bajo el 60 %`
-        : `llevas ${percent} % · ${daysLeft === 0 ? "último día" : daysLeft === 1 ? "faltan 1 día" : `faltan ${daysLeft} días`}`;
+        : `faltan ${left} · ${daysLeft === 0 ? "último día" : daysLeft === 1 ? "queda 1 día" : `quedan ${daysLeft} días`}`;
 
     for (const width of [360, 1280]) {
       await page.setViewportSize({ width, height: 800 });
@@ -133,7 +133,7 @@ test("the goal says the month's amount, never moves with a done task, and links 
       // The month line is one sentence; from the 20th the pace line replaces it.
       await expect(seen(page, "6 h 30 min")).toHaveCount(3);
       await expect(seen(page, "6 h 30 min de 12 h")).toHaveCount(late ? 0 : 1);
-      await expect(seen(page, line(54, "6 h 30 min"))).toHaveCount(1);
+      await expect(seen(page, line("5 h 30 min", "6 h 30 min"))).toHaveCount(1);
 
       await db`
         insert into goals.facts (user_id, goal_id, one_off_id, day)
@@ -142,10 +142,10 @@ test("the goal says the month's amount, never moves with a done task, and links 
       await page.goto(`/metas/${goalId}`);
       await expect(seen(page, "6 h 30 min")).toHaveCount(3);
       await expect(seen(page, "6 h 45 min")).toHaveCount(0);
-      await expect(seen(page, line(54, "6 h 30 min"))).toHaveCount(1);
+      await expect(seen(page, line("5 h 30 min", "6 h 30 min"))).toHaveCount(1);
       // Pace speaks from the 20th alone, in ink words, never before.
       await expect(visible(page, /bajo el 60 %/)).toHaveCount(late ? 1 : 0);
-      await expect(visible(page, /llevas \d+ %/)).toHaveCount(late ? 0 : 1);
+      await expect(visible(page, /^faltan .+ · (último día|quedan? \d+ días?)$/)).toHaveCount(late ? 0 : 1);
       if (late) await expect(visible(page, /\d+ %/).filter({ hasNotText: /60 %/ })).toHaveCount(0);
       await expect(visible(page, /sin monto planeado/)).toHaveCount(0);
       await expect(page.getByRole("link", { name: `Planear ${monthName}` })).toHaveCount(0);
@@ -185,7 +185,7 @@ test("a measure with no amount says so and offers to plan the month; no measure 
       await expect(seen(page, "1 h 40 min")).toHaveCount(2);
       await expect(visible(page, /sin monto planeado/)).toHaveCount(1);
       // No amount, so no percentage and no pace, whatever the day.
-      await expect(visible(page, /llevas \d+ %|bajo el 60 %/)).toHaveCount(0);
+      await expect(visible(page, /^faltan |bajo el 60 %/)).toHaveCount(0);
       await expect(page.getByRole("link", { name: `Planear ${monthName}`, exact: true })).toHaveAttribute(
         "href",
         `/metas/${bare}/meses?planear=${today.slice(0, 7)}&volver=${encodeURIComponent(`/metas/${bare}`)}`,
@@ -235,7 +235,7 @@ test("a month budgeted at zero shows its figure and months link, but no bar and 
       await expect(seen(page, monthName)).toHaveCount(1);
       await expect(seen(page, "1 h 30 min de 0 min")).toHaveCount(1);
       await expect(page.locator("span[aria-hidden][class] > span[style*=\"inline-size\"]")).toHaveCount(0);
-      await expect(visible(page, /llevas \d+ %|bajo el 60 %/)).toHaveCount(0);
+      await expect(visible(page, /^faltan |bajo el 60 %/)).toHaveCount(0);
       await expect(visible(page, /sin monto planeado/)).toHaveCount(0);
       await expect(page.getByRole("link", { name: "Ver por mes", exact: true })).toHaveAttribute(
         "href",
@@ -394,7 +394,7 @@ test("a goal with a rhythm leads to its plan: «el plan», the end, the rhythm a
       await expect(seen(page, "El plan")).toHaveCount(1);
       const row = page.locator(`a[href="/metas/${id}/plan"]`);
       await expect(row).toHaveCount(1);
-      await expect(row).toContainText(/^A este ritmo terminas el \d+ de \p{L}+/u);
+      await expect(row).toContainText(/^Tus tareas caben hasta el \d+ de \p{L}+/u);
       await expect(row).toContainText(line(1, 2));
       await expect(page.getByText(/arrastró \d+ %/)).toHaveCount(0);
       await expect(page.getByRole("button", { name: "ver qué se corre" })).toHaveCount(0);

@@ -301,6 +301,7 @@ test("loadReport: two open goals report; the archived and the other person's do 
 test("loadReport: a goal's month and to-date figures are what loadGoal reads", async () => {
   evidenceRejects = false;
   const { toDate } = await import("@/lib/plan/months");
+  const { civilDateInZone } = await import("@/lib/zone");
   const report = await loadReport(today);
   for (const id of [minutesGoalId, searchesGoalId]) {
     const entry = report.goals.find((goal) => goal.id === id);
@@ -308,7 +309,10 @@ test("loadReport: a goal's month and to-date figures are what loadGoal reads", a
     assert.ok(entry && loaded);
     assert.equal(entry.name, loaded.name);
     assert.equal(entry.unit, loaded.measureUnit);
-    assert.deepEqual(entry.toDate, toDate(loaded.months));
+    assert.deepEqual(
+      entry.toDate,
+      toDate(loaded.months, today, { openedOn: civilDateInZone(new Date(loaded.createdAt)), horizon: loaded.horizon }),
+    );
     assert.deepEqual(
       entry.months.map((row) => ({ ...row, tasks: undefined, taskCount: undefined, carried: null })),
       loaded.months.map((row) => ({ ...row, tasks: undefined, taskCount: undefined, carried: null })),

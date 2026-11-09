@@ -101,7 +101,7 @@ test.describe("a section the model could not read is said above the goals (RP-90
   });
 });
 
-// RP-130: the template's general goal holds its two «nota:» lines (5 and 6) in its note.
+// RP-152: the template's general goal holds its two «nota:» lines (5 and 6) in its note.
 const HELD: Out = { heading: "Notas", from: 5, to: 6 };
 const heldLine = (out: Out) =>
   `No se pudo leer la sección «${out.heading}» (líneas ${out.from} a ${out.to}): quedó en la nota de «${GENERAL}»; pégala sola si la quieres como meta.`;
@@ -111,7 +111,7 @@ const count = (page: Page) => page.getByText(/ en notas, /);
 
 for (const width of [360, 1280]) {
   const viewport = { width, height: width === 360 ? 740 : 900 };
-  test.describe(`a section held in a note names the goal that holds it, at ${width} (RP-130)`, () => {
+  test.describe(`a section held in a note names the goal that holds it, at ${width} (RP-152)`, () => {
     test("held: the line names the goal and the count reads «en notas», not «fuera»", async ({ person, browser, baseURL }) => {
       // Kills: the old words for a held section, or counting held lines as «fuera».
       await asPerson({ person, browser, baseURL }, async (page) => {

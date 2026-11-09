@@ -7,7 +7,7 @@ import { boxOf } from "./box";
 import { asPerson, months, plus, toOpenReview, word } from "./importar-plan";
 import { todayInZone } from "../lib/zone";
 
-// RP-130, module 1022: a draft goal one open goal already names is drawn as «Actualiza tu meta», with the
+// RP-152, module 1022: a draft goal one open goal already names is drawn as «Actualiza tu meta», with the
 // differences the import would apply listed under it, and is updated only when the person confirms. Written
 // from the contract and the person's decision of 2026-10-15 (merge, never remove; open goals only, by name;
 // two open goals of one name are not updated), not from the screen. Nothing here calls a model: every plan is
@@ -102,6 +102,8 @@ const openParts = (page: Page) =>
     if ((await parts.getAttribute("aria-expanded")) !== "true") await parts.click();
     await expect(parts).toHaveAttribute("aria-expanded", "true", { timeout: 500 });
   }).toPass();
+// A goal an open goal names arrives unmarked (RP-152): the person marks the ones they mean to update.
+const mark = (page: Page, goal = LEER) => updateRow(page, goal).check();
 const confirm = (page: Page, count = 1) => page.getByRole("button", { name: count === 1 ? "Crear 1 meta" : `Crear ${count} metas` });
 
 // The goal's whole row as the database holds it, to prove a goal was left as it was.
@@ -125,7 +127,7 @@ const DIFFS = (second: string) => [
   `Se queda el compromiso «${RELEER}», que el plan no nombra`,
 ];
 
-test.describe("an import that updates the goals the person already has (RP-130)", () => {
+test.describe("an import that updates the goals the person already has (RP-152)", () => {
   test("a goal an open goal names reads «Actualiza tu meta», and each difference is one line under it, in order, with nothing else", async ({ person, browser, baseURL, db }) => {
     // Kills: keeping the created-goal wording for a matched goal; rendering no difference lines; rendering lines for what
     // already agrees (measure, month one, note, rhythm); a stays line that is not counted; the create button counting the update.
@@ -135,7 +137,7 @@ test.describe("an import that updates the goals the person already has (RP-130)"
       await toOpenReview(page, planOf(leerBlock(), newBlock()));
 
       await expect(updateRow(page)).toBeVisible();
-      await expect(updateRow(page)).toBeChecked();
+      await expect(updateRow(page)).not.toBeChecked();
       // A goal row reads its name then «meta · …»; the task «Leer capítulo» inside the goal is not a created «Leer».
       await expect(rowOf(page, new RegExp(`^${LEER}meta`))).toHaveCount(0);
 
@@ -177,6 +179,7 @@ test.describe("an import that updates the goals the person already has (RP-130)"
     const { first, second } = months();
     await asPerson({ person, browser, baseURL }, async (page) => {
       await toOpenReview(page, planOf(leerBlock(), newBlock()));
+      await mark(page);
       await confirm(page).click();
       await expect(page).toHaveURL(/\/metas$/);
 
@@ -209,6 +212,7 @@ test.describe("an import that updates the goals the person already has (RP-130)"
       }, "Hacer");
       await page.reload();
       await expect(confirm(page)).toBeVisible();
+      await mark(page);
       await confirm(page).click();
 
       await expect(page.getByRole("heading", { name: "Plan creado", exact: true })).toBeVisible();
@@ -217,13 +221,14 @@ test.describe("an import that updates the goals the person already has (RP-130)"
     });
   });
 
-  test("a matched goal the person unmarks is neither created nor updated", async ({ person, browser, baseURL, db }) => {
+  test("a matched goal left unmarked, or unmarked again, is neither created nor updated", async ({ person, browser, baseURL, db }) => {
     // Kills: sending the update for an unmarked goal; creating a goal the person unmarked.
     const id = await openLeer(db, person.id);
     const before = { goal: await goalJson(db, id), parts: await partsOf(db, id) };
     await asPerson({ person, browser, baseURL }, async (page) => {
       await toOpenReview(page, planOf(leerBlock(), newBlock()));
-      await expect(updateRow(page)).toBeChecked();
+      await expect(updateRow(page)).not.toBeChecked();
+      await mark(page);
       await updateRow(page).uncheck();
       await expect(confirm(page)).toBeEnabled();
       await confirm(page).click();
@@ -242,6 +247,7 @@ test.describe("an import that updates the goals the person already has (RP-130)"
     const { second } = months();
     await asPerson({ person, browser, baseURL }, async (page) => {
       await toOpenReview(page, planOf(leerBlock(), newBlock()));
+      await mark(page);
       const before = { goal: await goalJson(db, id), parts: await partsOf(db, id) };
       // The second month now says what the plan says: the differences the review showed no longer hold.
       await db`update goals.month_budgets set amount = 120 where goal_id = ${id} and month = ${`${second}-01`}::date`;
@@ -270,6 +276,7 @@ test.describe("an import that updates the goals the person already has (RP-130)"
     const aim = "Diagnóstico";
     await asPerson({ person, browser, baseURL }, async (page) => {
       await toOpenReview(page, planOf(leerBlock({ phases: [`${plus(-10)} a ${plus(20)} · ${aim}`] }), newBlock()));
+      await mark(page);
       await expect(line(page, new RegExp(`^Agrega la fase «${aim}»`))).toBeVisible();
       await confirm(page).click();
       await expect(page).toHaveURL(/\/metas$/);
@@ -288,6 +295,7 @@ test.describe("an import that updates the goals the person already has (RP-130)"
     await db`insert into goals.facts (user_id, goal_id, commitment_id, day) values (${person.id}, ${id}, ${old}, ${todayInZone()}::date)`;
     await asPerson({ person, browser, baseURL }, async (page) => {
       await toOpenReview(page, planOf({ name: LEER, horizon: plus(300), commitments: [`${REPASAR} · martes y jueves · toque`] }, newBlock()));
+      await mark(page);
       await expect(line(page, `«${REPASAR}» ya tiene días anotados: se retira y se abre otro con el nuevo ritmo`)).toBeVisible();
       await confirm(page).click();
       await expect(page).toHaveURL(/\/metas$/);
@@ -318,7 +326,8 @@ test.describe("an import that updates the goals the person already has (RP-130)"
       await expect(page.getByRole("note").filter({ hasText: messages.review.repeated })).toHaveCount(1);
       await expect(rowOf(page, new RegExp(`^${LEER}`))).not.toBeChecked();
       await expect(updateRow(page)).toHaveCount(0);
-      await expect(updateRow(page, NEW)).toBeChecked();
+      await expect(updateRow(page, NEW)).not.toBeChecked();
+      await mark(page, NEW);
       await expect(line(page, `Agrega la tarea «Hacer»`)).toBeVisible();
       await expect(confirm(page)).toBeEnabled();
 
@@ -342,7 +351,8 @@ test.describe("an import that updates the goals the person already has (RP-130)"
       const goal = (name: string): Block => ({ name, horizon: plus(400) });
       await toOpenReview(page, planOf(goal("Leer más"), goal("Escribir más"), goal("Correr")));
 
-      await expect(rowOf(page, /^Actualiza tu meta «\s*leer\s+más\s*»/i)).toBeChecked();
+      await expect(rowOf(page, /^Actualiza tu meta «\s*leer\s+más\s*»/i)).not.toBeChecked();
+      await rowOf(page, /^Actualiza tu meta «\s*leer\s+más\s*»/i).check();
       await expect(rowOf(page, /^Actualiza tu meta «Escribir/i)).toHaveCount(0);
       await expect(rowOf(page, /^Actualiza tu meta «Correr/i)).toHaveCount(0);
       await expect(rowOf(page, /^Escribir más/)).toBeChecked();
@@ -365,6 +375,7 @@ test.describe("an import that updates the goals the person already has (RP-130)"
     const id = await openLeer(db, person.id);
     await asPerson({ person, browser, baseURL }, async (page) => {
       await toOpenReview(page, planOf(leerBlock(), newBlock()));
+      await mark(page);
       let release: () => void = () => undefined;
       const gate = new Promise<void>((resolve) => (release = resolve));
       let posts = 0;
@@ -392,10 +403,12 @@ test.describe("an import that updates the goals the person already has (RP-130)"
     const id = await openLeer(db, person.id);
     await asPerson({ person, browser, baseURL }, async (page) => {
       await toOpenReview(page, planOf(leerBlock(), newBlock()));
+      await mark(page);
       await expect(page.getByRole("button", { name: "Crear 1 meta y actualizar 1", exact: true })).toBeEnabled();
     });
     await asPerson({ person, browser, baseURL }, async (page) => {
       await toOpenReview(page, planOf(leerBlock()));
+      await mark(page);
       const only = page.getByRole("button", { name: "Actualizar 1 meta", exact: true });
       await expect(only).toBeEnabled();
       await only.click();
@@ -427,10 +440,14 @@ test.describe("an import that updates the goals the person already has (RP-130)"
     await asPerson({ person, browser, baseURL }, async (page) => {
       await toOpenReview(page, planOf({ name: LEER, horizon: plus(400) }, { name: "Correr", horizon: plus(400) }));
       await expect(line(page, messages.review.noChange)).toHaveCount(2);
+      await mark(page);
+      await mark(page, "Correr");
       await expect(page.getByRole("button", { name: /^(Crear|Actualizar)/ })).toHaveCount(0);
     });
     await asPerson({ person, browser, baseURL }, async (page) => {
       await toOpenReview(page, planOf({ name: LEER, horizon: plus(401) }, { name: "Correr", horizon: plus(400) }));
+      await mark(page);
+      await mark(page, "Correr");
       await expect(page.getByRole("button", { name: "Actualizar 1 meta", exact: true })).toBeEnabled();
     });
   });
@@ -440,6 +457,7 @@ test.describe("an import that updates the goals the person already has (RP-130)"
     await openLeer(db, person.id);
     await asPerson({ person, browser, baseURL }, async (page) => {
       await toOpenReview(page, planOf(leerBlock({ commitments: [`${RELEER} · cada día · toque`, `${REPASAR} · cada día · toque`] }), newBlock()));
+      await mark(page);
       await openParts(page);
       await expect(rowOf(page, new RegExp(`^${RELEER}`))).toHaveCount(0);
       await expect(page.getByText(RELEER, { exact: true }).first()).toBeVisible();
@@ -456,6 +474,7 @@ test.describe("an import that updates the goals the person already has (RP-130)"
     await db`insert into goals.phases (user_id, goal_id, aim, starts_on, ends_on) values (${person.id}, ${id}, 'Base aeróbica suave', ${from}::date, ${to}::date)`;
     await asPerson({ person, browser, baseURL }, async (page) => {
       await toOpenReview(page, planOf(leerBlock({ phases: [`${from} a ${to} · Base aeróbica`] }), newBlock()));
+      await mark(page);
       await openParts(page);
       // The server refuses it whatever the review sends, so the row has nothing to mark and offers no retry.
       await expect(rowOf(page, /^Base aeróbica/)).toHaveCount(0);

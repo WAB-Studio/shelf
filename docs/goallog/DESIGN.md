@@ -970,7 +970,7 @@ The user's words: «textos todos pegados, no se entiende la mayoría, la estruct
     hours — and Hoy says so («tu plan se movió 2 semanas»). Nothing asks to be accepted.
   - **A task that does not fit whole starts where it fits and goes on in the next month** («sigue en noviembre»); its
     hours are split between the two.
-  - The end date is the plan's: «a este ritmo terminas en …», set against the goal's end.
+  - The end date is the plan's: «tus tareas caben hasta el …», set against the goal's end.
   - Built before wave 3 of the UX slice: the edit sheet and the plan's words wait for these boards.
 - **Boards III of the roadmap, approved by the user 2026-10-06** on the page «El plan por mes», second row:
   `RoadmapTramoMedio`, `RoadmapTareaNueva`, `RoadmapRitmoHoja`, `RoadmapSinMedida`, `MetaVerPlan`,
@@ -1060,7 +1060,7 @@ The user's words: «textos todos pegados, no se entiende la mayoría, la estruct
   - A month past the goal's last month with no rows is dropped.
   - A goal with no measure draws no figure and no bar on the plan's months.
   - «Añadir una tarea» opens the sheet with no «va a» hint.
-  - A plan that ends on the goal's last day reads «A este ritmo terminas el {date}, el día de tu final.», never «0 días antes».
+  - A plan that ends on the goal's last day reads «Tus tareas caben hasta el {date}, el día de tu final.», never «0 días antes».
 
 - **Eighteen boards of wave 3 and the roadmap's second round, approved by the user 2026-10-06: «si a todo».**
   `RoadmapMoverFinalHoja`, `RoadmapMoverFinalFallo`, `RoadmapHoyMovidoVarios`, `RoadmapMesCifras`, `MetaPlanHechas`,
@@ -1273,7 +1273,7 @@ Taken by the user the same day, on the critic's three questions and two from the
   «octubre · 30 de 60 búsquedas»; no amount keeps its unit («octubre · 18 búsquedas»); no measure, no figure. Board
   `MetasConCifra` approved the same day.
 - **The shared month (first and last) reaches every reader** — Hoy, `/mes`, a connected AI — **and the plan fills it with its
-  share** («A este ritmo terminas el…» moves later for a goal opened mid-month). RP-74; RP-71 retired for RP-75.
+  share** («Tus tareas caben hasta el…» moves later for a goal opened mid-month). RP-74; RP-71 retired for RP-75.
 - **Taken by the user later the same day:** the line «Ritmo X al mes» always says the whole rhythm the person set
   («Ritmo 10 h al mes»), never the first or last month's share; only the month's figures carry the share. On `/metas` on the
   phone, a goal that counts tasks keeps «octubre · 1 de 3 tareas» under its name, though `MetasConCifra` does not draw it.
@@ -1786,6 +1786,7 @@ Approved by the user 2026-10-14 («todo a») on the canvas «Bitácora de metas�
 `ImportarComoEscribiste`, `ImportarErroresClaros`, `PorSemanaContenedora`, `PorSemanaTelefono`, `MesesContenedora`, `MetaSinTareas`,
 `PapelSigueLaPantalla`, `CifraUnFormato`, `HoyUnCampo`, `MesAñadirTarea`, `PalabrasPulido`.
 
+- **Hoy's field at 360 sits in a sheet behind a «+» (RP-154),** a 56 px accent circle fixed 16 px over the bottom nav (`AddButton`), named «Anotar algo suelto». The field, «de qué meta» and «para cuándo» keep their words inside it; 1280 does not change.
 - **`HoyUnCampo`: the day chips carry their own label, «para cuándo»,** like «de qué meta» above them.
 - **`ImportarErroresClaros`: the notice stays under the text box,** where it is today.
 - **A correction from the template is read only on the model's path as accepted;** from the template it starts declined (RP-122).
@@ -1814,7 +1815,7 @@ Approved by the user 2026-10-14 («todo a») on the canvas «Bitácora de metas�
 - **«Nada se borra» covers facts only.** Phases, cadences, a measure, a rhythm and goals with no facts can be edited and deleted; a goal or commitment that explains facts stays archived or retired (RP-13, RP-24). Built (RP-127, RP-134, RP-135).
 - **A goal's hours come from blocks alone,** a block's quantity. A task's estimate does not count toward hours. Built in RP-128.
 - **A task can be marked done on a past day, up to 7 days back,** the same reach as a fact (RP-06). Built (RP-129).
-- **A later import can update goals created before, matched by name,** and shows the differences before applying them. Overturns RP-86 as written («An import creates new goals and never changes an existing one»). Built (RP-130).
+- **A later import can update goals created before, matched by name,** and shows the differences before applying them. Overturns RP-86 as written («An import creates new goals and never changes an existing one»). Built (RP-152).
 - **Three goal levels stay,** as today (RP-78).
 - **The last day of a month reads «último día»,** never «faltan 0 días». Built (RP-132).
 - **The report writes cadence days in full** («martes y jueves»); Hoy keeps the short form. Built (RP-133).

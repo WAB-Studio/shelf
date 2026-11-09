@@ -47,12 +47,12 @@ test("the month line reads «último día» on the last day and «faltan N días
   `;
 
     await page.goto(`/metas/${goal.id}`);
-    const line = page.getByText(/^llevas \d+ %/).locator("visible=true");
+    const line = page.getByText(/^lo planeado está hecho/).locator("visible=true");
     if (daysLeft === 0) {
-      await expect(line).toHaveText("llevas 100 % · último día");
+      await expect(line).toHaveText("lo planeado está hecho · último día");
       await expect(page.getByText(/faltan 0/)).toHaveCount(0);
     } else {
-      await expect(line).toHaveText(`llevas 100 % · faltan ${daysLeft === 1 ? "1 día" : `${daysLeft} días`}`);
+      await expect(line).toHaveText(`lo planeado está hecho · ${daysLeft === 1 ? "queda 1 día" : `quedan ${daysLeft} días`}`);
     }
   } finally {
     await context.close();
