@@ -1,5 +1,5 @@
 /* Fixed over the content, clear of the bottom nav (components/ui/bottom-nav): its 56px
-   and the device's own inset. A sheet is a portal after this in the tree and stands over it. */
+   and the device's own inset; `app/theme.css` reserves that room and its own under the page. A sheet is a portal after this in the tree and stands over it. */
 .add {
   position: fixed;
   inset-inline-end: 16px;

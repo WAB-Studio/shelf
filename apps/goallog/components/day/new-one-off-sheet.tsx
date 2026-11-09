@@ -20,7 +20,7 @@ export function NewOneOffSheet(props: Omit<NewOneOffProps, "onSaved">) {
     <>
       <AddButton label={t("day.newOneOff.open")} onClick={() => setOpen(true)} />
       <Sheet open={open} onOpenChange={setOpen} title={t("day.newOneOff.sheetTitle")}>
-        <NewOneOff {...props} onSaved={(saidWhere) => setOpen(saidWhere)} />
+        <NewOneOff {...props} onSaved={(onToday) => setOpen(!onToday)} />
       </Sheet>
     </>
   );

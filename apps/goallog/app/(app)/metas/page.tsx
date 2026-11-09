@@ -16,7 +16,7 @@ export async function generateMetadata(): Promise<Metadata> {
 
 // A person with goals sees them listed one with the other — never a redirect
 // past a single one (RP-99). With no goal ever, open, ended or archived, the
-// screen draws `MetasVacio` (RP-130); an all-archived person still gets the list.
+// screen draws `MetasVacio` (RP-152); an all-archived person still gets the list.
 export default async function GoalsIndexPage() {
   const person = await getPerson();
   if (!person) redirect("/entrar");

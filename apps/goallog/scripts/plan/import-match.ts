@@ -1,4 +1,4 @@
-// Proves RP-130's read (module 1020): `loadImportSnapshots` returns a snapshot of every open goal of the
+// Proves RP-152's read (module 1020): `loadImportSnapshots` returns a snapshot of every open goal of the
 // person whose name is among a draft's, in one statement, with every field of the type. Statements are
 // counted off the wire, `begin`/`commit` netted out, as `page-statements.ts` counts them.
 import assert from "node:assert/strict";

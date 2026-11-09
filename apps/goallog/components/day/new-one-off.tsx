@@ -26,9 +26,9 @@ export type NewOneOffProps = {
   // The phone's one field of the day: the goals it may write to, chosen
   // inside it. Absent, the field keeps its desktop face (one per group).
   chooseGoal?: { id: string; name: string }[];
-  // Called once a write lands, with whether a line saying where it went is left showing; a sheet around the
-  // field closes itself when there is nothing left to read.
-  onSaved?: (saidWhere: boolean) => void;
+  // Called once a write lands, with whether it landed on today, where Hoy shows it; a sheet around the field
+  // closes itself then, whether or not the write names a goal.
+  onSaved?: (onToday: boolean) => void;
 };
 
 /**
@@ -106,7 +106,7 @@ export function NewOneOff({ goalId: fixedGoalId, daylessCount = 0, goalName: fix
           const message = savedMessage(choice.kind, day);
           setSaved(message);
           setSavedInPlan(choice.kind === "none" && goalId ? goalId : null);
-          onSaved?.(message !== null);
+          onSaved?.(choice.kind === "today");
         } else setError(result.error);
       });
     });

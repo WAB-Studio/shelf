@@ -165,7 +165,7 @@ export function placeLeftovers(draft: ImportDraft, source: Source): ImportDraft 
   return { ...draft, goals };
 }
 
-// RP-130: the goal whose note holds every line with text of a section the model could not read, or
+// RP-152: the goal whose note holds every line with text of a section the model could not read, or
 // null when any of them is out (cut by the ceiling, refused, or no general goal took it). `out` is
 // the review's own out lines, so the line and the count never read different drafts.
 export function sectionHolder(

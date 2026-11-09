@@ -41,7 +41,7 @@ type SnapshotRow = {
 
 /**
  * One statement: a snapshot of every open goal of the person whose name is among `names`, for the import to
- * diff a draft against (RP-130). Open is `listGoals`'s rule, not archived. A name is matched as `nameKey`
+ * diff a draft against (RP-152). Open is `listGoals`'s rule, not archived. A name is matched as `nameKey`
  * reads it, applied here and bound as one jsonb parameter: a JS array would expand into a parenthesised list.
  * `null` reads every open goal, for a page that does not yet know the draft's names (bounded by the person's open goals).
  * Two open goals of one name both come back; the match, not this read, refuses to guess between them.

@@ -7,7 +7,7 @@ import { boxOf } from "./box";
 import { asPerson, months, plus, toOpenReview, word } from "./importar-plan";
 import { todayInZone } from "../lib/zone";
 
-// RP-130, module 1022: a draft goal one open goal already names is drawn as «Actualiza tu meta», with the
+// RP-152, module 1022: a draft goal one open goal already names is drawn as «Actualiza tu meta», with the
 // differences the import would apply listed under it, and is updated only when the person confirms. Written
 // from the contract and the person's decision of 2026-10-15 (merge, never remove; open goals only, by name;
 // two open goals of one name are not updated), not from the screen. Nothing here calls a model: every plan is
@@ -127,7 +127,7 @@ const DIFFS = (second: string) => [
   `Se queda el compromiso «${RELEER}», que el plan no nombra`,
 ];
 
-test.describe("an import that updates the goals the person already has (RP-130)", () => {
+test.describe("an import that updates the goals the person already has (RP-152)", () => {
   test("a goal an open goal names reads «Actualiza tu meta», and each difference is one line under it, in order, with nothing else", async ({ person, browser, baseURL, db }) => {
     // Kills: keeping the created-goal wording for a matched goal; rendering no difference lines; rendering lines for what
     // already agrees (measure, month one, note, rhythm); a stays line that is not counted; the create button counting the update.
