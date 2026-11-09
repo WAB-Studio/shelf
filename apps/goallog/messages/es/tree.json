@@ -32,7 +32,8 @@
   },
   "goal": {
     "inside": "Metas dentro",
-    "monthSum": "{percent} % del mes · suma de sus metas",
+    "monthSumLeft": "faltan <fig>{left}</fig> · suma de sus metas",
+    "monthSumMet": "lo planeado está hecho · suma de sus metas",
     "noAmount": "Sin monto este mes.",
     "otherUnit": "«{name}» mide en {unit} y no suma aquí.",
     "back": "Metas",

@@ -27,7 +27,6 @@ import {
   Button,
   Face,
   Figure,
-  Figures,
   Flex,
   Fold,
   Hero,
@@ -408,14 +407,19 @@ export async function GoalScreen({ goalId }: { goalId: string }) {
               </Text>
             ) : paceLine ? null : (
               <Text as="p" variant="sentence" tone="muted">
-                {holds ? (
-                  <Figures text={t("tree.goal.monthSum", { percent })} />
-                ) : (
-                  t.rich(left === 0 ? (ended ? "goal.detail.monthMetEnded" : "goal.detail.monthMet") : ended ? "goal.detail.monthLeftEnded" : "goal.detail.monthLeft", {
-                    left: formatQuantity(left, goal.measureUnit ?? "", words),
-                    days: daysLeft,
-                    ...fig,
-                  })
+                {t.rich(
+                  holds
+                    ? left === 0
+                      ? "tree.goal.monthSumMet"
+                      : "tree.goal.monthSumLeft"
+                    : left === 0
+                      ? ended
+                        ? "goal.detail.monthMetEnded"
+                        : "goal.detail.monthMet"
+                      : ended
+                        ? "goal.detail.monthLeftEnded"
+                        : "goal.detail.monthLeft",
+                  { left: formatQuantity(left, goal.measureUnit ?? "", words), days: daysLeft, ...fig },
                 )}
               </Text>
             )}

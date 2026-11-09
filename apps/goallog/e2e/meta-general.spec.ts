@@ -107,7 +107,7 @@ test("the general reads its month as the sum of its goals, never its own stored 
     // 120 + 60 planned, 60 + 30 reached.
     expect(text).toContain("1 h 30 min");
     expect(text).toMatch(/de 3 h(?!\s*\d+\s*min)/);
-    expect(text).toContain("50 % del mes · suma de sus metas");
+    expect(text).toContain("suma de sus metas");
     expect(text).not.toContain("16 h 39 min");
     expect(text).not.toContain("12 h 57 min");
     expect(text).not.toContain("13 h");
