@@ -28,6 +28,7 @@ import {
   Link,
   Money,
   Panel,
+  PersonalMark,
   RowMenu,
   ScreenHeader,
   Separator,
@@ -274,7 +275,21 @@ export function DebtDetailScreen({ data }: { data: DebtDetailData }) {
     <Flex direction="column" gap="4">
       <ScreenHeader
         title={account.name}
-        meta={balanceLine}
+        meta={
+          <>
+            {account.foreignOwner && (
+              <PersonalMark
+                showLabel
+                label={
+                  account.ownerName
+                    ? tKey("ownership.of", { name: account.ownerName })
+                    : tKey("ownership.ofSomeone")
+                }
+              />
+            )}
+            {balanceLine}
+          </>
+        }
         metaWraps
         back={{ href: "/planning/debts", label: tDebts("title") }}
         actions={

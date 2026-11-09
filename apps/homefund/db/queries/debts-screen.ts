@@ -52,6 +52,9 @@ export type DebtsScreenData = {
     name: string;
     // A debt of the caller's own, not the fund's: its row wears the personal mark.
     personal: boolean;
+    // Another member's personal debt (RF-58): read-only, named by its owner.
+    foreignOwner: boolean;
+    ownerName: string | null;
     planPosition: PlanPosition | null;
     canWrite: boolean;
   })[];
@@ -59,6 +62,8 @@ export type DebtsScreenData = {
     accountId: string;
     name: string;
     personal: boolean;
+    foreignOwner: boolean;
+    ownerName: string | null;
     // The same pair the overview carries: the pocket the debt settles in, and
     // the ones it does not (RF-121).
     currency: CurrencyCode;
@@ -141,6 +146,12 @@ export async function getDebtsScreenData(): Promise<DebtsScreenData> {
   const writableById = new Map(
     accounts.map((account) => [account.id, account.canWrite]),
   );
+  const ownerById = new Map(
+    accounts.map((account) => [
+      account.id,
+      { foreignOwner: account.foreignOwner, ownerName: account.ownerName },
+    ]),
+  );
   const personalById = new Map(
     accounts.map((account) => [account.id, account.ownerUserId !== null]),
   );
@@ -169,6 +180,8 @@ export async function getDebtsScreenData(): Promise<DebtsScreenData> {
         ...row,
         name,
         personal: personalById.get(row.accountId) ?? false,
+        foreignOwner: ownerById.get(row.accountId)?.foreignOwner ?? false,
+        ownerName: ownerById.get(row.accountId)?.ownerName ?? null,
         planPosition: positionById.get(row.accountId) ?? null,
         // Absent from the roster is a debt the caller may not write.
         canWrite: writableById.get(row.accountId) ?? false,
@@ -191,6 +204,8 @@ export async function getDebtsScreenData(): Promise<DebtsScreenData> {
         accountId: account.id,
         name: account.name,
         personal: account.ownerUserId !== null,
+        foreignOwner: account.foreignOwner,
+        ownerName: account.ownerName,
         currency: account.settlementCurrency,
         owedCents: owedOf(settlementCents),
         creditCents: creditOf(settlementCents),
@@ -283,8 +298,9 @@ export async function getDebtsScreenData(): Promise<DebtsScreenData> {
 
   // A debt is paid from an asset (RF-16), so the source picker is filtered out of
   // the roster already read — never a fifth round trip, and never a liability.
+  // Only an asset the caller may write: a payment out of another member's is refused.
   const payFrom = accounts
-    .filter((account) => account.kind === "asset")
+    .filter((account) => account.kind === "asset" && account.canWrite)
     .map((account) => ({
       id: account.id,
       name: account.name,

@@ -85,6 +85,8 @@ type DialogTarget =
 type OverviewCard = DebtOverviewRow & {
   name: string;
   personal: boolean;
+  foreignOwner: boolean;
+  ownerName: string | null;
   planPosition: PlanPosition | null;
 };
 
@@ -160,6 +162,8 @@ export function DebtsScreen({
         accountId: row.accountId,
         name: row.name,
         personal: row.personal,
+        foreignOwner: row.foreignOwner,
+        ownerName: row.ownerName,
         currency: row.currency,
         owedCents: row.owedCents,
         creditCents: row.creditCents,
@@ -613,6 +617,8 @@ function CardHead({
   tint,
   name,
   personal,
+  foreignOwner,
+  ownerName,
   meta,
   currency,
   owedCents,
@@ -623,6 +629,8 @@ function CardHead({
   tint: string;
   name: string;
   personal: boolean;
+  foreignOwner: boolean;
+  ownerName: string | null;
   meta: string;
   currency: CurrencyCode;
   owedCents: number;
@@ -631,6 +639,7 @@ function CardHead({
 }) {
   const beside = owesBesideCredit(creditCents, otherOwed);
   const tAccounts = useTranslations("accounts");
+  const tKey = useTranslations();
 
   return (
     <Flex direction="column" gap="2">
@@ -646,7 +655,18 @@ function CardHead({
         <Flex direction="column" flexGrow="1" minWidth="0">
           <Flex align="center" gap="2" minWidth="0">
             <Text weight="bold">{name}</Text>
-            {personal && <PersonalMark label={tAccounts("ownerPersonal")} />}
+            {personal && (
+              <PersonalMark
+                label={
+                  foreignOwner
+                    ? ownerName
+                      ? tKey("ownership.of", { name: ownerName })
+                      : tKey("ownership.ofSomeone")
+                    : tAccounts("ownerPersonal")
+                }
+                showLabel={foreignOwner}
+              />
+            )}
           </Flex>
           <Text size="1" color="gray">
             {meta}
@@ -761,6 +781,8 @@ function RevolvingCard({
           tint="indigo"
           name={row.name}
           personal={row.personal}
+          foreignOwner={row.foreignOwner}
+          ownerName={row.ownerName}
           meta={t("revolvingMeta", {
             // The effective monthly step the server derived off the annual rate,
             // read as a percentage here and nowhere divided, so the card and the
@@ -857,6 +879,8 @@ function InstallmentCard({
           tint="amber"
           name={row.name}
           personal={row.personal}
+          foreignOwner={row.foreignOwner}
+          ownerName={row.ownerName}
           // A debt whose plan the server counted states its position; one that
           // carries no plan only states its kind (RF-81).
           meta={
@@ -927,6 +951,8 @@ function NoTermsCard({
     accountId: string;
     name: string;
     personal: boolean;
+    foreignOwner: boolean;
+    ownerName: string | null;
     currency: CurrencyCode;
     owedCents: number;
     creditCents: number;
@@ -947,6 +973,8 @@ function NoTermsCard({
           tint="amber"
           name={debt.name}
           personal={debt.personal}
+          foreignOwner={debt.foreignOwner}
+          ownerName={debt.ownerName}
           meta={t("noTermsMeta")}
           currency={debt.currency}
           owedCents={debt.owedCents}
