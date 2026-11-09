@@ -239,7 +239,7 @@
       "failedTitle": "La copia no salió",
       "failedAction": "Reintentar",
       "noSessionTitle": "Tu registro vive solo en este dispositivo",
-      "noSessionBody": "Con una cuenta lo llevas al teléfono y al portátil. Sin ella, nada sale de aquí.",
+      "noSessionBody": "Con una cuenta guardas una copia de tu registro. Sin ella, nada sale de aquí.",
       "noSessionAction": "Entrar con mi correo",
       "confirmTitle": "Copiar tu registro a {email}",
       "confirmBody": "Hasta que lo confirmes, nada sale de este dispositivo.",
