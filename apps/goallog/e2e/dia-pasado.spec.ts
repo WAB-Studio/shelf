@@ -1,7 +1,7 @@
 import type postgres from "postgres";
 
 import { test, expect, visit } from "./fixtures";
-import { civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
+import { civilDateInZone, civilDateToDate, dateToCivilDate, todayInZone } from "@/lib/zone";
 import { boxOf } from "./box";
 
 // RP-06's own screen (`DiaPasado.dc.html`): a day already past, reached by a
@@ -23,6 +23,10 @@ function pastDay(daysAgo: number): string {
   date.setUTCDate(date.getUTCDate() - daysAgo);
   return dateToCivilDate(date);
 }
+
+// The database stamps `written_at` on the real clock, which `PULSAR_CLOCK` does not move: the day a fact was written
+// is the real day, whatever day the server calls today (`docs/TRAPS.md`, «A mutation that only bites on some days»).
+const writtenToday = () => civilDateInZone(new Date());
 
 // ICU's Spanish weekday, never the catalogue's list the screen reads.
 function writtenLabel(day: string): string {
@@ -122,7 +126,8 @@ test("on yesterday a tap writes one fact for yesterday, read as written today; H
 
     await row.click();
     await expect(row.locator("svg")).toBeVisible();
-    await expect(row).toContainText(writtenLabel(todayInZone()));
+    if (yesterday === writtenToday()) await expect(row).not.toContainText("anotado");
+    else await expect(row).toContainText(writtenLabel(writtenToday()));
     expect(await factsFor(db, commitmentId)).toEqual([{ day: yesterday, quantity: null }]);
 
     await page.goto("/");
@@ -165,9 +170,9 @@ test("a quantity row on a past day asks for that day and writes its number there
     await expect(sheet).toBeHidden();
 
     expect(await factsFor(db, commitmentId)).toEqual([{ day, quantity: 10 }]);
-    await expect(page.locator("button", { hasText: name })).toContainText(
-      new RegExp(`10 min · ${writtenLabel(todayInZone())}`),
-    );
+    const written = page.locator("button", { hasText: name });
+    if (day === writtenToday()) await expect(written).toContainText(/10 min$/);
+    else await expect(written).toContainText(new RegExp(`10 min · ${writtenLabel(writtenToday())}`));
   } finally {
     await deleteGoal(db, personId, goalId);
   }
@@ -209,15 +214,17 @@ test("a commitment created today and a goal opened today are absent from yesterd
   const stamp = Date.now();
   const goalName = `Meta recién abierta ${stamp}`;
   const commitmentName = `Compromiso recién nacido ${stamp}`;
+  // Opened on the day the server calls today: `created_at` defaults to the real clock, which a pin leaves behind.
+  const openedToday = `${todayInZone()}T12:00:00-05:00`;
   const [goal] = await db<{ id: string }[]>`
-    insert into goals.goals (user_id, name, horizon)
-    values (${personId}, ${goalName}, ${pastDay(-60)}) returning id
+    insert into goals.goals (user_id, name, horizon, created_at)
+    values (${personId}, ${goalName}, ${pastDay(-60)}, ${openedToday}::timestamptz) returning id
   `;
 
   try {
     await db`
-      insert into goals.commitments (user_id, goal_id, name, cadence_kind, satisfaction)
-      values (${personId}, ${goal.id}, ${commitmentName}, 'daily', 'tap')
+      insert into goals.commitments (user_id, goal_id, name, cadence_kind, satisfaction, created_at)
+      values (${personId}, ${goal.id}, ${commitmentName}, 'daily', 'tap', ${openedToday}::timestamptz)
     `;
 
     await page.goto("/");

@@ -437,8 +437,8 @@ test("a goal opened mid-month ends later than one opened on the 1st: this month 
   const onFirst = await seedGoal(db, personId, 600, horizon);
   await seedTasks(db, personId, onFirst, [["Diez horas", 600]]);
   const [opened] = await db<{ id: string }[]>`
-    insert into goals.goals (user_id, name, horizon, measure_name, measure_unit, rhythm)
-    values (${personId}, ${`Meta plan hoy ${Date.now()}`}, ${horizon}::date, 'minutos', 'minutos', 600)
+    insert into goals.goals (user_id, name, horizon, measure_name, measure_unit, rhythm, created_at)
+    values (${personId}, ${`Meta plan hoy ${Date.now()}`}, ${horizon}::date, 'minutos', 'minutos', 600, ${`${today}T12:00:00-05:00`}::timestamptz)
     returning id
   `;
   await seedTasks(db, personId, opened.id, [["Diez horas", 600]]);
