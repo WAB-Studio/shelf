@@ -18,9 +18,12 @@ import { usePathname } from "@/i18n/navigation";
  */
 export function SettingsPanel({
   hasGroup,
+  inboxCount = 0,
   trigger,
 }: {
   hasGroup: boolean;
+  // Bandeja's waiting count, spoken in its row when the phone's bar hides it.
+  inboxCount?: number;
   trigger: ReactNode;
 }) {
   const t = useTranslations("nav");
@@ -39,19 +42,11 @@ export function SettingsPanel({
       key,
       href,
       icon: <Icon size={18} />,
-      label: t(key),
+      label:
+        key === "inbox" && inboxCount > 0
+          ? `${t(key)}, ${t("pending", { count: inboxCount })}`
+          : t(key),
       current: pathname === href,
-    }),
-  );
-
-  // Planeación left the phone's bar for Bandeja, so the panel leads with it.
-  const planningItems = destinations(["planning"], hasGroup).map(
-    ({ key, href, icon: Icon }) => ({
-      key,
-      href,
-      icon: <Icon size={18} />,
-      label: t(key),
-      current: pathname.startsWith(href),
     }),
   );
 
@@ -81,9 +76,6 @@ export function SettingsPanel({
           <NavList items={fundItems} onNavigate={() => setOpen(false)} />
         </Box>
       )}
-      <Box display={{ initial: "block", sm: "none" }}>
-        <NavList items={planningItems} onNavigate={() => setOpen(false)} />
-      </Box>
       <NavList items={items} onNavigate={() => setOpen(false)} />
       <Flex direction="column" gap="2">
         <LanguageSwitcher width="100%" showText />

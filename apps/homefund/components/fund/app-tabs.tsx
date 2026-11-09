@@ -32,10 +32,6 @@ export function AppTabs({
       active: isCurrent(pathname, href),
       icon: <Icon size={22} />,
       label: t(key),
-      badge:
-        key === "inbox" && inboxCount > 0
-          ? { count: inboxCount, label: `${t(key)}, ${t("pending", { count: inboxCount })}` }
-          : undefined,
     }),
   );
 
@@ -56,8 +52,20 @@ export function AppTabs({
   const moreTrigger = (
     <SettingsPanel
       hasGroup={hasGroup}
+      inboxCount={inboxCount}
       trigger={
-        <BottomNavTrigger icon={<SlidersHorizontal size={22} />} label={t("settings")} />
+        <BottomNavTrigger
+          icon={<SlidersHorizontal size={22} />}
+          label={t("settings")}
+          badge={
+            inboxCount > 0
+              ? {
+                  count: inboxCount,
+                  label: `${t("settings")}, ${t("pending", { count: inboxCount })}`,
+                }
+              : undefined
+          }
+        />
       }
     />
   );

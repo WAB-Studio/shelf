@@ -91,13 +91,29 @@ test.describe("the phone's navigation", () => {
     await expect(sheet).toBeHidden();
   });
 
+  test("carries the inbox count on Ajustes and in the sheet's Bandeja row", async ({
+    page,
+  }) => {
+    await seedQueue([pending]);
+    await page.goto("/es");
+
+    const trigger = page.getByRole("button", {
+      name: new RegExp(`^${nav.settings},`),
+    });
+    await expect(trigger).toBeVisible();
+    await trigger.click();
+    await expect(
+      page.getByRole("dialog").getByRole("link", { name: new RegExp(`^${nav.inbox},`) }),
+    ).toBeVisible();
+  });
+
   test("keeps its three tabs, each at least 32 px on its shorter side", async ({
     page,
   }) => {
     await page.goto("/es");
 
-    // Bandeja's name carries its count once something waits, so it matches by prefix.
-    for (const label of [nav.home, nav.movements, nav.inbox]) {
+    // Planeación is the third tab; Bandeja moved to the settings sheet.
+    for (const label of [nav.home, nav.movements, nav.planning]) {
       const tab = page.getByRole("link", { name: new RegExp(`^${label}(,|$)`) });
       await expect(tab).toBeVisible();
 
