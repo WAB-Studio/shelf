@@ -179,3 +179,8 @@ own row under «Trabajo del agente» in the Claude card, and its own CSV column;
 
 Decided by the user (RT-26). Under the apps heatmap, «Semana» adds a mosaic of «Proyectos de la semana» and «Internet de la
 semana», the same bars and the same «y N más» as the day. On a phone a heatmap cell stacks hours over minutes («4h»/«43»).
+
+## Conectar Claude (2026-11-08)
+
+Decided by the user (RT-27). In «Llaves», under the key form and before the list: a title, one sentence, two copy blocks
+(the address, the Claude Code command) and a line of what to ask. Same copy blocks as the key's; no new element.

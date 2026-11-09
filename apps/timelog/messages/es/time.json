@@ -117,7 +117,16 @@
     "copyCommand": "Copiar comando",
     "confirmRevoke": "¿Revocar «{name}»? Deja de subir y de leer.",
     "confirmYes": "Sí, revocar",
-    "confirmNo": "Cancelar"
+    "confirmNo": "Cancelar",
+    "claudeTitle": "Conectar Claude",
+    "claudeIntro": "Claude puede leer tus días con una llave: tus apps, tu semana y el CSV de «Exportar». Solo lee, no cambia nada. Agrega el servidor en Claude Code con el bloque de abajo; en otro cliente de Claude usa la dirección y manda la llave en el encabezado Authorization: Bearer.",
+    "claudeAddress": "Dirección del servidor",
+    "copyAddress": "Copiar dirección",
+    "claudeCommand": "Agregarlo a Claude Code:",
+    "copyClaudeCommand": "Copiar comando de Claude",
+    "keyPlaceholder": "TU_LLAVE",
+    "claudeKeyHint": "Cambia TU_LLAVE por una llave tuya. Al crear una llave nueva, el bloque la trae puesta.",
+    "claudeAsk": "Pregúntale, por ejemplo: «¿cuánto usé el computador la semana pasada?»."
   },
   "signIn": {
     "title": "Entrar",

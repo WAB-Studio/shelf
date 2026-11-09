@@ -99,6 +99,9 @@ Interface language: Spanish or English, the person's choice (RT-12). A person re
   the seven days) and «Internet de la semana» (the longest sites of the week), each with the eight longest and a «y N más»
   that opens the rest. A card with nothing is absent. On a phone a heatmap cell shows hours over minutes («4h» then
   «43»), so the minutes are not lost. (2026-11-08)
+- [x] **RT-27** «Llaves» has a «Conectar Claude» section: the MCP server's address (`/mcp` on the app's own address), a
+  block to copy that adds it to Claude Code with the key in the `Authorization: Bearer` header (the key just created, else
+  a placeholder), and a line on what to ask. A key revoked on the screen leaves it at once, with its commands. (2026-11-08)
 
 ### Non-functional requirements
 

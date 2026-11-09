@@ -117,7 +117,16 @@
     "copyCommand": "Copy command",
     "confirmRevoke": "Revoke “{name}”? It stops uploading and reading.",
     "confirmYes": "Yes, revoke",
-    "confirmNo": "Cancel"
+    "confirmNo": "Cancel",
+    "claudeTitle": "Connect Claude",
+    "claudeIntro": "Claude can read your days with a key: your apps, your week and the “Export” CSV. It only reads, it changes nothing. Add the server to Claude Code with the block below; in another Claude client use the address and send the key in the Authorization: Bearer header.",
+    "claudeAddress": "Server address",
+    "copyAddress": "Copy address",
+    "claudeCommand": "Add it to Claude Code:",
+    "copyClaudeCommand": "Copy Claude command",
+    "keyPlaceholder": "YOUR_KEY",
+    "claudeKeyHint": "Replace YOUR_KEY with one of your keys. When you create a new key, the block comes with it filled in.",
+    "claudeAsk": "Ask it, for example: “how much did I use the computer last week?”."
   },
   "signIn": {
     "title": "Sign in",
