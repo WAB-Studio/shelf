@@ -24,7 +24,7 @@ This file is the core every agent loads. Read the file the index names before th
 - `apps/` holds the apps, `packages/` the code two of them share: npm workspaces, one lockfile, `node_modules` hoisted
   to the root (a script reaches a binary as `../../node_modules/...`). Promote nothing until a second app asks for it.
 - `docs/`, `private/`, `.claude/` and `scripts/worktree.sh` govern every app and stay at the root.
-- `apps/portal` is one static page with no build, live at https://universo-apps.vercel.app until its Shelf address ships with the deploy. Deploy it by hand from
+- `apps/portal` is one static page with no build, live at https://shelfhome.vercel.app (Vercel project `universo-apps`). Deploy it by hand from
   `apps/portal` with `npx vercel deploy --prod --yes`; update its links when an app's URL changes.
 - Add `https://<the app's URL>/auth/confirm` to Supabase's Redirect URLs before an app that signs in by email first deploys.
 

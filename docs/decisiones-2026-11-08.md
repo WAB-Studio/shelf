@@ -73,8 +73,8 @@ de los handoffs del 2026-11-01 y 2026-11-02 y las de `docs/auditoria-2026-11-02/
 - RT-11: «has not arrived» significa solo futuro; se corrige el texto. Construir (docs).
 - RT-15 se retira → código nuevo (el CSV corta en hoy y lleva la columna `uploaded`). Construir (docs).
 - La enumeración de invitados («notInvited») se queda, por paridad con GoalLog.
-- Dirección de Shelf: `shelfhome.vercel.app` en el proyecto `universo-apps`; si no está libre, se queda
-  `universo-apps.vercel.app`.
+- Dirección de Shelf: `shelfhome.vercel.app` en el proyecto `universo-apps`, agregada el 2026-11-08;
+  `universo-apps.vercel.app` sigue respondiendo.
 
 ## Lo único que queda en manos del usuario
 

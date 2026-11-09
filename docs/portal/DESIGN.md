@@ -20,7 +20,7 @@
 
 ## Despliegue
 
-- Proyecto de Vercel `universo-apps`, https://universo-apps.vercel.app
+- Proyecto de Vercel `universo-apps`, https://shelfhome.vercel.app (`universo-apps.vercel.app` sigue respondiendo)
 - `vercel.json` apaga los despliegues por git: la página no gasta la cuota de `main`.
 - Se despliega a mano desde `apps/portal`: `npx vercel deploy --prod --yes`. Solo cuando cambia una dirección o la página.
 
