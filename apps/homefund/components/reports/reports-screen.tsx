@@ -356,7 +356,7 @@ function LegendItem({ color, label }: { color: string; label: string }) {
 // (`docs/FLOWS.md` §4). Each figure is one currency's and never added to another's.
 function ContributionsBody({ data }: { data: ReportsData }) {
   const t = useTranslations("reports");
-  const { contributions, expensesByCategory, fundCash, unassigned, hasGroup } = data;
+  const { contributions, fundCash, fundSpending, unassigned, hasGroup } = data;
 
   if (!hasGroup) {
     return (
@@ -367,10 +367,9 @@ function ContributionsBody({ data }: { data: ReportsData }) {
   }
 
   const pot = new Map<CurrencyCode, { spentCents: number; cashCents: number | null }>();
-  for (const row of expensesByCategory) {
-    if (row.scope !== "group") continue;
+  for (const row of fundSpending) {
     const figure = pot.get(row.currency) ?? { spentCents: 0, cashCents: null };
-    figure.spentCents += row.totalCents;
+    figure.spentCents += row.spentCents;
     pot.set(row.currency, figure);
   }
   for (const cash of fundCash) {

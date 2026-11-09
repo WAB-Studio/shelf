@@ -155,21 +155,49 @@ export type FundCashBalance = {
 };
 
 /**
- * What the fund's cash accounts hold now, one figure per currency, in ONE round
- * trip. The balance is the view's, derived from movements, never a stored
- * column; a currency is never added to another (RF-124). Archived accounts are
- * off the pot. RLS shows a caller with no fund no group account, so the answer
- * is empty.
+ * What the fund's cash accounts held when the window closed, one figure per
+ * currency, in ONE round trip: the current month reads to today, an earlier one
+ * to its last day. It is `account_balances`' own three-branch rule over the
+ * movements dated before the window's end, derived and never stored; a currency
+ * is never added to another (RF-124). Archived accounts are off the pot, and so
+ * is one opened after the window closed. RLS shows a caller with no fund no group
+ * account, so the answer is empty.
  */
-export async function getFundCashBalances(): Promise<FundCashBalance[]> {
+export async function getFundCashBalances(range: {
+  endExclusive: string;
+}): Promise<FundCashBalance[]> {
   return withUserDb(async (tx) => {
     const rows = await tx.execute<{ currency: string; balance_cents: string }>(sql`
-      select b.currency, sum(b.balance_cents)::text as balance_cents
-      from account_balances b
-      join accounts a on a.id = b.id
-      where a.group_id is not null and a.subtype = 'cash' and a.archived_at is null
-      group by b.currency
-      order by b.currency
+      select s.currency, sum(s.amount_cents)::text as balance_cents
+      from (
+        select a.id, a.settlement_currency as currency, a.initial_balance_cents as amount_cents, true as is_settlement
+        from accounts a
+        where a.group_id is not null and a.subtype = 'cash' and a.archived_at is null
+          and a.initial_balance_on < ${range.endExclusive}
+        union all
+        select a.id, v.currency, v.amount_cents, v.currency = a.settlement_currency
+        from transactions t
+        join accounts a on a.id = t.to_account_id
+        cross join lateral (values
+          (t.currency, case when t.currency <> a.settlement_currency and t.counter_amount_cents is not null and not t.counter_is_estimate then 0::bigint else t.amount_cents end),
+          (a.settlement_currency, case when t.currency <> a.settlement_currency and t.counter_amount_cents is not null and not t.counter_is_estimate then t.counter_amount_cents else 0::bigint end)
+        ) as v(currency, amount_cents)
+        where a.group_id is not null and a.subtype = 'cash' and a.archived_at is null
+          and t.occurred_at < ${range.endExclusive}
+        union all
+        select a.id, v.currency, -v.amount_cents, v.currency = a.settlement_currency
+        from transactions t
+        join accounts a on a.id = t.from_account_id
+        cross join lateral (values
+          (t.currency, case when t.currency <> a.settlement_currency and t.counter_amount_cents is not null and not t.counter_is_estimate then 0::bigint else t.amount_cents end),
+          (a.settlement_currency, case when t.currency <> a.settlement_currency and t.counter_amount_cents is not null and not t.counter_is_estimate then t.counter_amount_cents else 0::bigint end)
+        ) as v(currency, amount_cents)
+        where a.group_id is not null and a.subtype = 'cash' and a.archived_at is null
+          and t.occurred_at < ${range.endExclusive}
+      ) s
+      group by s.currency
+      having sum(s.amount_cents) <> 0 or bool_or(s.is_settlement)
+      order by s.currency
     `);
 
     return rows.map((row) => ({
@@ -218,6 +246,46 @@ export async function getUnassignedIncome(range: {
     return rows.map((row) => ({
       currency: row.currency,
       incomeCents: Number(row.income_cents),
+    }));
+  });
+}
+
+export type FundSpending = {
+  currency: CurrencyCode;
+  spentCents: number;
+};
+
+/**
+ * What the fund's accounts spent in one window, per currency, in ONE round trip:
+ * every expense out of a fund account, categorised or not, booked as the account
+ * settled it (the confirmed second amount when the movement was in another
+ * currency), the same rule Aportes and the cash balance read by. A
+ * reconciliation's adjustment is a count and not a spend.
+ */
+export async function getFundSpending(range: {
+  start: string;
+  endExclusive: string;
+}): Promise<FundSpending[]> {
+  return withUserDb(async (tx) => {
+    const rows = await tx.execute<{ currency: string; spent_cents: string }>(sql`
+      select
+        fa.settlement_currency as currency,
+        sum(case when t.currency <> fa.settlement_currency
+          and t.counter_amount_cents is not null and not t.counter_is_estimate
+        then t.counter_amount_cents else t.amount_cents end)::text as spent_cents
+      from transactions t
+      join accounts fa on fa.id = t.from_account_id
+      where t.kind = 'expense'
+        and fa.group_id is not null
+        and t.reconciliation_id is null
+        and t.occurred_at >= ${range.start} and t.occurred_at < ${range.endExclusive}
+      group by fa.settlement_currency
+      order by fa.settlement_currency
+    `);
+
+    return rows.map((row) => ({
+      currency: row.currency,
+      spentCents: Number(row.spent_cents),
     }));
   });
 }
