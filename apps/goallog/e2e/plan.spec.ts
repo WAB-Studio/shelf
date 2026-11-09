@@ -209,7 +209,7 @@ for (const width of [390, 1440]) {
       await seedTasks(db, personId, goalId, late.tasks);
       try {
         await page.goto(`/metas/${goalId}/plan`);
-        await expect(page.getByText(/^A este ritmo terminas el \d{1,2} de \p{L}+ de \d{4}, \d+ semanas? después de tu final, el \d{1,2} de \p{L}+ de \d{4}\.$/u)).toBeVisible();
+        await expect(page.getByText(/^Tus tareas caben hasta el \d{1,2} de \p{L}+ de \d{4}, \d+ semanas? después de tu final, el \d{1,2} de \p{L}+ de \d{4}\.$/u)).toBeVisible();
         await expect(page.getByRole("button", { name: "Subir el ritmo" })).toBeVisible();
         await expect(page.getByText("Con 11 h al mes llegas a tiempo.")).toBeVisible();
         await expect(page.getByRole("button", { name: "Mover el final" })).toBeVisible();
@@ -289,7 +289,7 @@ for (const width of [390, 1440]) {
         await page.getByRole("button", { name: "Subir el ritmo" }).click();
         const sheet = page.getByRole("dialog");
         await expect(sheet.getByRole("heading", { name: "¿Cuántas horas al mes?" })).toBeVisible();
-        await expect(sheet.getByText(/^Con 11 h al mes terminas el \d{1,2} de \p{L}+ de \d{4}, a tiempo\./u)).toBeVisible();
+        await expect(sheet.getByText(/^Con 11 h al mes tus tareas caben hasta el \d{1,2} de \p{L}+ de \d{4}, a tiempo\./u)).toBeVisible();
       } finally {
         await drop(db, personId, goalId);
       }
@@ -326,7 +326,7 @@ for (const width of [390, 1440]) {
         await expect(page.getByRole("button", { name: "Subir el ritmo" })).toHaveCount(0);
         await expect(page.getByText("después de tu final", { exact: true })).toHaveCount(0);
         // The end falls on the new last day: no day of slack, none late.
-        await expect(page.getByText(/^A este ritmo terminas el \d{1,2} de \p{L}+ de \d{4}, el día de tu final\.$/u)).toBeVisible();
+        await expect(page.getByText(/^Tus tareas caben hasta el \d{1,2} de \p{L}+ de \d{4}, el día de tu final\.$/u)).toBeVisible();
         await expect(page.getByText(/0 días/)).toHaveCount(0);
         expect((await horizonOf()) > late.horizon).toBe(true);
       } finally {
@@ -444,12 +444,12 @@ test("a goal opened mid-month ends later than one opened on the 1st: this month 
   await seedTasks(db, personId, opened.id, [["Diez horas", 600]]);
   try {
     await page.goto(`/metas/${onFirst}/plan`);
-    await expect(page.getByText(new RegExp(`^A este ritmo terminas el ${spoken(whole)}, `, "u"))).toBeVisible();
+    await expect(page.getByText(new RegExp(`^Tus tareas caben hasta el ${spoken(whole)}, `, "u"))).toBeVisible();
     await page.goto(`/metas/${opened.id}/plan`);
-    await expect(page.getByText(new RegExp(`^A este ritmo terminas el ${spoken(late)}, `, "u"))).toBeVisible();
+    await expect(page.getByText(new RegExp(`^Tus tareas caben hasta el ${spoken(late)}, `, "u"))).toBeVisible();
     // The goal's plan row says the whole rhythm the person set, never this month's share.
     await page.goto(`/metas/${opened.id}`);
-    await expect(page.getByRole("link", { name: /^A este ritmo terminas el .* Ritmo 10 h al mes/u })).toBeVisible();
+    await expect(page.getByRole("link", { name: /^Tus tareas caben hasta el .* Ritmo 10 h al mes/u })).toBeVisible();
   } finally {
     await drop(db, personId, onFirst);
     await drop(db, personId, opened.id);

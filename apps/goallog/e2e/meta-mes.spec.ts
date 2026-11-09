@@ -394,7 +394,7 @@ test("a goal with a rhythm leads to its plan: «el plan», the end, the rhythm a
       await expect(seen(page, "El plan")).toHaveCount(1);
       const row = page.locator(`a[href="/metas/${id}/plan"]`);
       await expect(row).toHaveCount(1);
-      await expect(row).toContainText(/^A este ritmo terminas el \d+ de \p{L}+/u);
+      await expect(row).toContainText(/^Tus tareas caben hasta el \d+ de \p{L}+/u);
       await expect(row).toContainText(line(1, 2));
       await expect(page.getByText(/arrastró \d+ %/)).toHaveCount(0);
       await expect(page.getByRole("button", { name: "ver qué se corre" })).toHaveCount(0);

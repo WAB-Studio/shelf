@@ -172,7 +172,7 @@ for (const [width, kind] of [[390, "days"], [390, "weeks"], [1440, "days"], [144
       const hours = (minutes: number) => `${minutes / 60} h`;
       return (
         `${closedName[0].toUpperCase()}${closedName.slice(1)} cerró con ${hours(done)} de ${hours(rhythm)}. ` +
-        `Lo que faltó pasó a ${nextName}${tail} Ahora terminas el ${end.getUTCDate()} de ${MONTHS[end.getUTCMonth()]} de ${end.getUTCFullYear()}.`
+        `Lo que faltó pasó a ${nextName}${tail} Ahora tus tareas caben hasta el ${end.getUTCDate()} de ${MONTHS[end.getUTCMonth()]} de ${end.getUTCFullYear()}.`
       );
     };
     const dayCount = moved!.movedDays;
@@ -318,13 +318,13 @@ for (const width of [360, 390, 1440]) {
         .toHaveCount(1);
       await expect
         .soft(
-          seen(`Se movió ${dayCount} ${dayCount === 1 ? "día" : "días"}. Ahora terminas el ${endOf(days!)}.`),
+          seen(`Se movió ${dayCount} ${dayCount === 1 ? "día" : "días"}. Ahora tus tareas caben hasta el ${endOf(days!)}.`),
           "the short goal reads its days",
         )
         .toHaveCount(1);
       await expect
         .soft(
-          seen(`Se movió ${weekCount} ${weekCount === 1 ? "semana" : "semanas"}. Ahora terminas el ${endOf(weeks!)}.`),
+          seen(`Se movió ${weekCount} ${weekCount === 1 ? "semana" : "semanas"}. Ahora tus tareas caben hasta el ${endOf(weeks!)}.`),
           "the long goal reads its weeks",
         )
         .toHaveCount(1);
