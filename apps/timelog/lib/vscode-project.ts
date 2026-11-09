@@ -5,6 +5,7 @@ export type ProjectTime = { project: string; seconds: number };
 // Editors whose title reads «file — folder — [profile —] product»: VS Code, its Insiders and OSS builds, VSCodium, Cursor.
 // Lower-cased process names without «.exe».
 const EDITORS = new Set(["code", "code - insiders", "code-insiders", "code - oss", "code-oss", "codium", "vscodium", "cursor"]);
+export const EDITOR_PROCESSES: string[] = [...EDITORS];
 const SEPARATOR = /\s+[-–—]\s+/;
 const PRODUCT = /\s+[-–—]\s+(?:Visual Studio Code(?:\s+[-–—]\s+Insiders)?|Code - OSS|VSCodium|Cursor)$/i;
 // Any bracketed tag — «[WSL: Ubuntu]», «[SSH: host]», «[Tunnel: x]», «[Container …]», «[Administrator]» — and «(Workspace)»

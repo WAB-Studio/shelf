@@ -1,14 +1,39 @@
 import type { AppTime } from "@/lib/queries";
 
+// Browsers by their lower-cased process name without «.exe», under the name people say. Their window titles are their
+// pages, which travel as pages (RT-16); the class of «browser» is these names.
+const BROWSERS: Record<string, string> = {
+  chrome: "Chrome",
+  msedge: "Edge",
+  firefox: "Firefox",
+  brave: "Brave",
+  opera: "Opera",
+  opera_gx: "Opera GX",
+  vivaldi: "Vivaldi",
+  iexplore: "Internet Explorer",
+  chromium: "Chromium",
+  librewolf: "LibreWolf",
+  waterfox: "Waterfox",
+  arc: "Arc",
+  safari: "Safari",
+  duckduckgo: "DuckDuckGo",
+  yandex: "Yandex",
+  thorium: "Thorium",
+  floorp: "Floorp",
+};
+
+export const BROWSER_NAMES: ReadonlySet<string> = new Set(Object.values(BROWSERS));
+
+export const BROWSER_PROCESSES: string[] = Object.keys(BROWSERS);
+
+export const isBrowser = (raw: string) => Object.hasOwn(BROWSERS, raw.trim().replace(/\.exe$/i, "").toLowerCase());
+
 // Well-known processes by their lower-cased name without «.exe».
 const KNOWN: Record<string, string> = {
+  ...BROWSERS,
   claude: "Claude",
   code: "VS Code",
   devenv: "Visual Studio",
-  msedge: "Edge",
-  chrome: "Chrome",
-  firefox: "Firefox",
-  brave: "Brave",
   windowsterminal: "Terminal",
   explorer: "Explorer",
   notepad: "Notepad",
@@ -78,11 +103,6 @@ function isBackground(bare: string): boolean {
     .split(/[^a-z0-9]+/)
     .some((word) => BACKGROUND.has(word));
 }
-
-// Browsers by their lower-cased process name without «.exe». Their window titles are their pages, which travel as pages (RT-16).
-const BROWSERS = new Set(["chrome", "msedge", "firefox", "brave", "opera", "opera_gx", "vivaldi", "iexplore", "chromium", "librewolf", "waterfox", "zen", "arc", "safari", "tor", "duckduckgo", "yandex", "thorium", "floorp"]);
-
-export const isBrowser = (raw: string) => BROWSERS.has(raw.trim().replace(/\.exe$/i, "").toLowerCase());
 
 const TEAMS = /^(ms-?teams|teams|microsoft\.teams.*)$/;
 

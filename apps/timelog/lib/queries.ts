@@ -2,6 +2,8 @@ import "server-only";
 
 import { sql } from "drizzle-orm";
 
+import { BROWSER_PROCESSES } from "@/lib/app-names";
+import { EDITOR_PROCESSES } from "@/lib/vscode-project";
 import { withTimeDb, type Transaction } from "@/lib/session";
 
 export type AppTime = { app: string; seconds: number };
@@ -114,13 +116,30 @@ export async function claudeBetween(from: string, to: string, tx?: Transaction):
   return [...rows];
 }
 
-// Window titles inside apps, every device added (RT-18). Longest first.
+const processName = sql`lower(regexp_replace(trim(app), '[.]exe$', '', 'i'))`;
+const listOf = (names: string[]) => sql.join(names.map((name) => sql`${name}`), sql`, `);
+
+// Window titles inside apps, every device added (RT-18). Longest first. A browser's are left out whatever the row says:
+// the server stopped keeping them (RT-16) but older uploads may still hold some.
 export async function windowsBetween(from: string, to: string, tx?: Transaction): Promise<WindowTime[]> {
   const rows = await within(tx, (tx) =>
     tx.execute<WindowTime>(sql`
       select app, title, sum(seconds)::int as seconds
         from timelog.window_seconds
-       where day between ${from}::date and ${to}::date
+       where day between ${from}::date and ${to}::date and ${processName} not in (${listOf(BROWSER_PROCESSES)})
+       group by app, title
+       order by seconds desc, app, title`),
+  );
+  return [...rows];
+}
+
+// Only the windows of VS Code-family editors (RT-23), for a range too long to read every window of.
+export async function editorWindowsBetween(from: string, to: string, tx?: Transaction): Promise<WindowTime[]> {
+  const rows = await within(tx, (tx) =>
+    tx.execute<WindowTime>(sql`
+      select app, title, sum(seconds)::int as seconds
+        from timelog.window_seconds
+       where day between ${from}::date and ${to}::date and ${processName} in (${listOf(EDITOR_PROCESSES)})
        group by app, title
        order by seconds desc, app, title`),
   );

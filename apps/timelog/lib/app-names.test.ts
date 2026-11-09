@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { readableApp, readableApps } from "./app-names";
+import { appClass } from "./app-classes";
+import { isBrowser, readableApp, readableApps } from "./app-names";
 
 test("an app drops its extension and well-known ones read as people say them", () => {
   assert.equal(readableApp("Code.exe"), "VS Code");
@@ -58,4 +59,10 @@ test("apps group under their readable names, system noise as one row", () => {
     { app: "Chrome", seconds: 150 },
     { app: "Sistema", seconds: 50 },
   ]);
+});
+
+test("one list of browsers names them, classes them and spots them whatever the spelling (RT-16)", () => {
+  for (const raw of ["chrome.exe", "Vivaldi.EXE", "opera", "arc.exe", " msedge.exe "]) assert.equal(isBrowser(raw), true, raw);
+  for (const raw of ["Code.exe", "tor.exe", "zen.exe", "chromeless.exe"]) assert.equal(isBrowser(raw), false, raw);
+  for (const raw of ["vivaldi.exe", "opera.exe", "arc.exe", "edge"]) assert.equal(appClass(readableApp(raw) ?? "", "Sistema"), raw === "edge" ? "other" : "browser", raw);
 });
