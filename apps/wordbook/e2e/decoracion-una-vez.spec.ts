@@ -34,8 +34,8 @@ test("typing a word letter by letter asks the paid text route exactly once", asy
 
   const box = page.getByRole("textbox", { name: messages.search.label });
   await box.click();
-  await box.pressSequentially("lighthouse", { delay: KEYSTROKE_MS });
+  await box.pressSequentially("accountant", { delay: KEYSTROKE_MS });
   await runClock(page, PHRASE_DEBOUNCE_MS);
 
-  await expect.poll(() => asked).toEqual(["lighthouse"]);
+  await expect.poll(() => asked).toEqual(["accountant"]);
 });

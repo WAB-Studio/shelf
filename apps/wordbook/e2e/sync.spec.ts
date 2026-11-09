@@ -240,7 +240,7 @@ test("RL-14: the word-path guard holds with the sync driver mounted in the layou
   await expect(page.locator('[aria-busy="false"]').first()).toBeAttached();
 
   const searchBox = page.getByRole("textbox", { name: messages.search.label });
-  const tenKeystrokes = "throughout";
+  const tenKeystrokes = "accountant";
 
   // A warm-up run first, autocomplete included, so every font any state
   // along the way paints is already cached before the measured run — a font

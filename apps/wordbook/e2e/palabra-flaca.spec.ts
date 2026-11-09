@@ -28,19 +28,14 @@ async function loadSnuff(page: Page): Promise<void> {
   await pageTasks(page);
 }
 
-// Everything the page drew before `GeneratedText`'s own block — the
-// headword row and `SenseGroup`'s senses, translations and IPA — read as one
-// string with a DOM `Range` rather than a component boundary, since no file
-// this module may touch owns a selector for "the dictionary's block" on its
-// own.
+// Everything the page drew apart from `GeneratedText`'s own block — the headword row and
+// `SenseGroup`'s senses, translations and IPA — read as one string. The block draws nothing when the
+// text route has no translations to add, so the dictionary's text is the page's with the block cut out.
 async function textBeforeGeneratedBlock(page: Page): Promise<string> {
   return page.evaluate(() => {
-    const marker = document.querySelector("[data-generated-block]");
-    if (!marker) return document.body.textContent ?? "";
-    const range = document.createRange();
-    range.setStart(document.body, 0);
-    range.setEndBefore(marker);
-    return range.toString();
+    const copy = document.body.cloneNode(true) as HTMLElement;
+    copy.querySelectorAll("[data-generated-block]").forEach((block) => block.remove());
+    return copy.textContent ?? "";
   });
 }
 

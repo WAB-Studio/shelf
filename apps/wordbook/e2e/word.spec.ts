@@ -435,11 +435,8 @@ test("`left` (one of the 34 entries whose definition is a bare '.') never draws 
   page,
 }) => {
   await deleteTranslator(page);
-  // `left` has its own dictionary definitions; stubbing the text route to
-  // 204 leaves the count below the dictionary's own, unmoved by decoration.
-  // Module 7 keeps the generated label ("Definición generada") apart from
-  // the dictionary's own ("Definición en inglés"); if this ever moves off
-  // 2, the two strings collided.
+  // `left` has its own dictionary definitions, so the text route is never asked
+  // for it and the count below is the dictionary's own.
 
   const assetResponse = page.waitForResponse(
     (response) => response.url().includes(manifest.asset.path) && response.ok(),
@@ -450,14 +447,12 @@ test("`left` (one of the 34 entries whose definition is a bare '.') never draws 
   await expect(page.locator('[aria-busy="false"]').first()).toBeAttached();
 
   const searchBox = page.getByRole("textbox", { name: messages.search.label });
-  const answered = textResponse(page);
   await searchBox.fill("left");
   await expect(page.getByRole("heading", { name: "left", exact: true })).toBeVisible({ timeout: 5000 });
   // RL-40 offers `leave` within `left`'s entry — its own senses carry no
   // definition at all, but the count below leaves its block out anyway, so
   // the period-only filter does not depend on that.
   await expect(page.getByRole("heading", { name: "leave", exact: true })).toBeVisible();
-  await decorated(page, answered);
 
   // Four senses of "left" carry a definition in the source: adj (null,
   // never had one), adv ("On the left side."), n ("The left side or
