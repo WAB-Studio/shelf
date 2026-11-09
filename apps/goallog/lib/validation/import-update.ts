@@ -4,7 +4,7 @@ import { draftV2Schema } from "@/lib/import/draft";
 
 const invalid = { error: "import.errors.draftInvalid" };
 
-// A draft goal the review matched to one open goal, with the fingerprint of the differences it showed (RP-130).
+// A draft goal the review matched to one open goal, with the fingerprint of the differences it showed (RP-152).
 const update = z.strictObject(
   {
     g: z.number(invalid).int(invalid).nonnegative(invalid),

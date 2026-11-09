@@ -43,8 +43,8 @@ test("past the top, the rest is counted and its time added; system noise is one 
   assert.equal(buildHeatmap([], days, "Sistema", 8).rows.length, 0);
 });
 
-test("Claude's week is one more row, a cell per day levelled against the grid", () => {
-  const row = claudeHeatRow([{ day: "2026-10-26", code: 1000, web: 500, desktop: 500 }, { day: "2026-10-28", code: 4000, web: 0, desktop: 0 }], days, 4000);
+test("Claude's week is one more row of what was on screen, Claude Code left out, a cell per day levelled against the grid", () => {
+  const row = claudeHeatRow([{ day: "2026-10-26", code: 9000, web: 1000, desktop: 1000 }, { day: "2026-10-27", code: 4000, web: 0, desktop: 0 }, { day: "2026-10-28", code: 0, web: 4000, desktop: 0 }], days, 4000);
   assert.deepEqual(row.cells, [{ seconds: 2000, level: 2 }, { seconds: 0, level: 0 }, { seconds: 4000, level: 4 }]);
   assert.equal(row.total, 6000);
   assert.equal(heatLevel(0, 0), 0);

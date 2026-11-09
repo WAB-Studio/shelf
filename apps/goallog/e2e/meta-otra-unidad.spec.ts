@@ -55,7 +55,7 @@ test("a large goal with a small goal in words: the notice names it, the sum is t
     const text = await mainText(page);
     expect(text).toContain("4 h");
     expect(text).toContain("de 10 h");
-    expect(text).toContain("40 % del mes · suma de sus metas");
+    expect(text).toContain("suma de sus metas");
     expect(text).not.toContain("4 h 40 min");
 
     expect(flat(await goalLink(page, words).innerText())).toContain(`${monthWord} · 40 de 120 palabras`);

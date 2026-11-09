@@ -283,7 +283,8 @@ for (const width of [390, 1440]) {
         await page.goto(`/metas/${goalId}`);
         const row = planRow(page, goalId);
         await expect(row.getByText("Ritmo 12 h al mes", { exact: true })).toBeVisible();
-        await expect(row).not.toContainText("tareas");
+        // No count of tasks; the lead «Tus tareas caben hasta…» names none.
+        await expect(row).not.toContainText(/\d tareas?/);
         await expect(row).not.toContainText(" · en ");
       } finally {
         await drop(db, person.id, goalId);

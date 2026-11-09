@@ -2,7 +2,8 @@ import type { StudyRow } from "@/lib/log/summary";
 
 import { localDay, type ReviewCard } from "./schedule";
 
-// New entries a day can bring in, so a long record never buries the reader on the first visit.
+// New entries a day can bring in, so a long record never buries the reader on the first visit. Fixed
+// at 20 (RL-68): no setting moves it.
 export const NEW_PER_DAY = 20;
 
 // An entry with an answer to recall: a word or a translated phrase (RL-78). A row still waiting for its
@@ -20,6 +21,8 @@ export type ReviewQueue = {
   later: number;
   // When the earliest of those comes due, or null with none waiting.
   nextDue: number | null;
+  // New entries the daily cap held back: the finished screen says how many wait for tomorrow.
+  newWaiting: number;
 };
 
 /**
@@ -37,16 +40,16 @@ export function buildQueue(rows: StudyRow[], cards: ReviewCard[], now: number): 
   const today = localDay(now);
   const live = new Set(reviewable.map((row) => row.key));
   const introducedToday = cards.filter((card) => card.introducedOn === today && live.has(card.key)).length;
-  const fresh = reviewable
+  const unseen = reviewable
     .filter((row) => !byKey.has(row.key))
-    .sort((a, b) => b.count - a.count || b.lastAt - a.lastAt)
-    .slice(0, Math.max(0, NEW_PER_DAY - introducedToday))
-    .map((row) => ({ row, card: null }));
+    .sort((a, b) => b.count - a.count || b.lastAt - a.lastAt);
+  const fresh = unseen.slice(0, Math.max(0, NEW_PER_DAY - introducedToday)).map((row) => ({ row, card: null }));
   const waiting = known.map((row) => byKey.get(row.key)!.due).filter((moment) => moment > now);
   return {
     items: [...due, ...fresh],
     later: known.length - due.length,
     nextDue: waiting.length === 0 ? null : Math.min(...waiting),
+    newWaiting: unseen.length - fresh.length,
   };
 }
 
@@ -57,11 +60,12 @@ export function buildQueue(rows: StudyRow[], cards: ReviewCard[], now: number): 
  */
 export function buildQueueFor(rows: StudyRow[], cards: ReviewCard[], key: string, now: number): ReviewQueue {
   const row = rows.find((candidate) => (candidate.key === key || candidate.key.toLowerCase() === key.toLowerCase()) && isReviewable(candidate));
-  if (row === undefined) return { items: [], later: 0, nextDue: null };
+  if (row === undefined) return { items: [], later: 0, nextDue: null, newWaiting: 0 };
   const card = cards.find((candidate) => candidate.key === row.key) ?? null;
   return {
     items: [{ row, card: card === null ? null : { ...card, due: Math.min(card.due, now) } }],
     later: 0,
     nextDue: null,
+    newWaiting: 0,
   };
 }

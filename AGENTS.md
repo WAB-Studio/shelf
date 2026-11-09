@@ -24,7 +24,7 @@ This file is the core every agent loads. Read the file the index names before th
 - `apps/` holds the apps, `packages/` the code two of them share: npm workspaces, one lockfile, `node_modules` hoisted
   to the root (a script reaches a binary as `../../node_modules/...`). Promote nothing until a second app asks for it.
 - `docs/`, `private/`, `.claude/` and `scripts/worktree.sh` govern every app and stay at the root.
-- `apps/portal` is one static page with no build, live at https://universo-apps.vercel.app until its Shelf address ships with the deploy. Deploy it by hand from
+- `apps/portal` is one static page with no build, live at https://shelfhome.vercel.app (Vercel project `universo-apps`). Deploy it by hand from
   `apps/portal` with `npx vercel deploy --prod --yes`; update its links when an app's URL changes.
 - Add `https://<the app's URL>/auth/confirm` to Supabase's Redirect URLs before an app that signs in by email first deploys.
 
@@ -38,6 +38,7 @@ This file is the core every agent loads. Read the file the index names before th
 - `docs/agentes/wordbook.md`: WordBook's `/cuenta`, auth, keys and census.
 - `docs/agentes/historia.md`: the measurements and decisions behind these rules.
 - `docs/TRAPS.md`: read it before writing a query, a migration or a spec.
+- `docs/decisiones-2026-11-08.md`: every open question, closed. Read it before asking the user anything.
 - `docs/TRAPS-archivo.md`: traps whose cause is gone. Read it only to learn why a rule exists.
 - `apps/<app>/AGENTS.md`: what holds inside one app. Loaded when you work there.
 - «iniciemos» and «cerremos handoff»: the `handoff` skill. To develop: the `orchestrator` skill (one session, § Modules).
@@ -97,6 +98,7 @@ This file is the core every agent loads. Read the file the index names before th
 - Do git work without asking: commit, push, open a PR, merge into `integracion`, delete a branch; report it. Ride a docs
   change along with the work that produced it.
 - Ask before taking `integracion` to `main`. That merge is the deploy: once per slice, at most once a day.
+- Apply a production migration only with the user's authorization in the chat. Decided by the user 2026-11-02.
 - Fetch before you compare. Ask GitHub whether a branch landed: a squash merge is never an ancestor.
 
 ## Verification

@@ -127,7 +127,7 @@ function placement(failure: Failure) {
 }
 
 /**
- * `/metas/importar` (RP-130, RNP-13): a pasted text or one file goes to
+ * `/metas/importar` (RP-152, RNP-13): a pasted text or one file goes to
  * `/importar/leer`, and its draft is carried to the review. Every failure keeps
  * the text. The privacy line sits above «Leer el plan» in every state.
  */

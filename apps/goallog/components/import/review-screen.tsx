@@ -30,7 +30,7 @@ function subscribeWide(notify: () => void) {
 }
 
 /**
- * `/metas/importar/revisar` (RP-130, RP-89): the plan the reader left, as a tree, every part marked
+ * `/metas/importar/revisar` (RP-152, RP-89): the plan the reader left, as a tree, every part marked
  * in. What the person unmarks, declines or changes is what `confirmImport` is sent, kept in the
  * tab's storage so a reload loses none of it; nothing reaches the database before «Crear».
  */

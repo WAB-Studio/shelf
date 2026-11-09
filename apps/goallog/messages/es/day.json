@@ -80,6 +80,8 @@
     "dateLabel": "Qué día"
   },
   "newOneOff": {
+    "open": "Anotar algo suelto",
+    "sheetTitle": "Algo suelto",
     "label": "Algo suelto",
     "placeholder": "Escribe algo suelto...",
     "labelForGoal": "Una tarea de {goal}",

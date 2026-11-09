@@ -10,14 +10,12 @@ type CachedRow = {
   rule: string | null;
   translations: string[];
   definition: string | null;
-  example_en: string;
-  example_es: string;
 };
 
 /** The one round trip the hot path pays. A miss returns `null`, never throws. */
 export async function readCachedAnswer(word: string): Promise<UnlistedAnswer | null> {
   const [row] = await db.execute<CachedRow>(sql`
-    select lemma, rule, translations, definition, example_en, example_es
+    select lemma, rule, translations, definition
     from reading.word_answers
     where word = ${word}
   `);
@@ -25,13 +23,14 @@ export async function readCachedAnswer(word: string): Promise<UnlistedAnswer | n
   return {
     translations: row.translations,
     definition: row.definition,
-    example: { en: row.example_en, es: row.example_es },
     lemma: row.lemma,
     rule: row.rule,
   };
 }
 
 /**
+ * `example_en` and `example_es` stay NOT NULL on rows written before examples were retired; new rows leave them empty.
+ *
  * Written once, on an accepted model answer alone (`writeCachedText`'s same
  * rule): a failure leaves no row, so the daily cap is what bounds a word
  * that keeps failing, never a bad row on disk. `on conflict do nothing`: two
@@ -49,8 +48,6 @@ export async function writeCachedAnswer(
   rule: string | null,
   translations: readonly string[],
   definition: string | null,
-  exampleEn: string,
-  exampleEs: string,
   model: string,
 ): Promise<void> {
   const translationsArray = sql`ARRAY[${sql.join(
@@ -61,7 +58,7 @@ export async function writeCachedAnswer(
     insert into reading.word_answers
       (word, lemma, rule, translations, definition, example_en, example_es, model)
     values
-      (${word}, ${lemma}, ${rule}, ${translationsArray}, ${definition}, ${exampleEn}, ${exampleEs}, ${model})
+      (${word}, ${lemma}, ${rule}, ${translationsArray}, ${definition}, '', '', ${model})
     on conflict (word) do nothing
   `);
 }

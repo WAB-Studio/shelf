@@ -1,12 +1,14 @@
 "use client";
 
-import { useState, useSyncExternalStore, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
 import NextLink from "next/link";
 import { useTranslations } from "next-intl";
 
 import { ipaKey, pronunciationBlocks, type Sense } from "@/lib/dictionary/index-build";
 import { splitRare } from "@/lib/dictionary/rare-sense";
 import type { WordAnswer } from "@/lib/dictionary/lookup";
+import { pickSense, senseChoiceFor } from "@/lib/review/sense";
+import { readSenseChoice, saveSenseChoice, type SenseChoice } from "@/lib/review/store";
 import { speak, speechSupported } from "@/lib/speech/speak";
 import {
   Box,
@@ -23,6 +25,44 @@ import {
 import { TranslationList } from "@/components/translations/translation-list";
 import { GeneratedText, type GeneratedTextState } from "./generated-text";
 import { NetworkAnswer, type NetworkAnswerState } from "./network-answer";
+
+// RL-85: the senses of one word the reader can pick the card's sense from. Set by `LearnableSenses`
+// around the group the review will draw from; absent everywhere else, where no sense offers the tap.
+const LearnableContext = createContext<{
+  senses: readonly Sense[];
+  chosen: Sense | null;
+  choose: (sense: Sense) => void;
+} | null>(null);
+
+// The sense the reader taps to learn, kept on the device beside the review's cards. Until a tap the
+// first sense stands, which is what the review draws with no choice.
+function LearnableSenses({ word, senses, children }: { word: string; senses: readonly Sense[]; children: ReactNode }) {
+  const [choice, setChoice] = useState<SenseChoice | null>(null);
+
+  useEffect(() => {
+    let live = true;
+    readSenseChoice(word)
+      .then((kept) => {
+        if (live) setChoice(kept);
+      })
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [word]);
+
+  const choose = (sense: Sense) => {
+    const next = senseChoiceFor(word, senses, sense);
+    setChoice(next);
+    saveSenseChoice(next).catch(() => {});
+  };
+
+  return (
+    <LearnableContext.Provider value={{ senses, chosen: pickSense(senses, choice), choose }}>
+      {children}
+    </LearnableContext.Provider>
+  );
+}
 
 // `search-screen.tsx`'s own query name: every door this file opens onto a
 // correction is `/?q=<word>`, the same param `no-entry-answer.tsx` reads —
@@ -161,9 +201,8 @@ export function SpeakButton({
 // The IPA heading the entry's first pronunciation block, or null when the
 // entry draws no block at all (58,773 of 58,944 headwords) or when that
 // first block is the headless one — which only `can` and `pace` carry, and
-// never in first place. The voice control and the generated example are
-// both named from here, so neither can name a sound the screen does not
-// lead with.
+// never in first place. The voice control is named from here, so it
+// cannot name a sound the screen does not lead with.
 export function leadPronunciation(senses: readonly Sense[]): string | null {
   return pronunciationBlocks(senses)?.[0].ipa ?? null;
 }
@@ -202,6 +241,7 @@ function SenseDetail({
   example?: ReactNode;
   t: ReturnType<typeof useTranslations>;
 }) {
+  const learnable = useContext(LearnableContext);
   const ownSound = sense.ipa !== null && (segmentIpa === null || ipaKey(sense.ipa) !== ipaKey(segmentIpa));
   const ownIpa = !compact && ownSound ? sense.ipa : null;
 
@@ -219,6 +259,21 @@ function SenseDetail({
           </Text>
         )}
         <TranslationList items={sense.translations} lead={lead} />
+        {!compact && learnable !== null && learnable.senses.length > 1 && (
+          learnable.chosen === sense ? (
+            <Text size="2" muted>
+              {t("learningThisSense")}
+            </Text>
+          ) : (
+            <Link asChild underline="always" muted>
+              <button type="button" onClick={() => learnable.choose(sense)}>
+                <TapTarget align="center" px="1">
+                  <Text size="2">{t("learnThisSense")}</Text>
+                </TapTarget>
+              </button>
+            </Link>
+          )
+        )}
       </Flex>
       {!compact && sense.definition !== null && (
         <Flex direction="column" data-definition-block="">
@@ -496,9 +551,20 @@ function SenseGroup({
 // real one-edit typos. `wrap="wrap"` below carries nine short words in a
 // few rows at 360px with nothing pushed off screen (checked against `boz`).
 // Silent when `words` is empty — `zzqqxv` is the only case left that reaches
-// no headword at all; a real word the dictionary lacks (`fettle`) draws its
-// wrong-looking candidates here until the network answer (RL-44) offers the better door.
-function CorrectionOffer({ words, t }: { words: readonly string[]; t: ReturnType<typeof useTranslations> }) {
+// no headword at all. A real word the dictionary lacks (`fettle`) draws its
+// wrong-looking candidates here, and `onAsk` adds the reader's own door to the
+// network (RL-86): the network is never asked for such a word unprompted.
+function CorrectionOffer({
+  words,
+  surface,
+  onAsk,
+  t,
+}: {
+  words: readonly string[];
+  surface: string;
+  onAsk?: () => void;
+  t: ReturnType<typeof useTranslations>;
+}) {
   return (
     <Flex direction="column" gap="2">
       <Text size="2" color="gray">
@@ -518,6 +584,15 @@ function CorrectionOffer({ words, t }: { words: readonly string[]; t: ReturnType
           </Link>
         ))}
       </Flex>
+      {onAsk !== undefined && (
+        <Link asChild underline="always" muted>
+          <button type="button" onClick={onAsk}>
+            <TapTarget align="center" px="1">
+              <Text size="2">{t("askNetwork", { word: surface })}</Text>
+            </TapTarget>
+          </button>
+        </Link>
+      )}
     </Flex>
   );
 }
@@ -630,6 +705,7 @@ export function SenseList({
   showSpeaker = true,
   generated,
   networkAnswer,
+  onAskNetwork,
 }: {
   answer: WordAnswer;
   variant?: SenseListVariant;
@@ -657,21 +733,23 @@ export function SenseList({
   // every `compact` call, so neither opens a connection of its own
   // (RL-58's own screen, never the breakdown's eight words at once).
   networkAnswer?: NetworkAnswerState;
+  // Set by `search-screen.tsx` alone: the reader's tap on «Buscar en internet» (RL-86).
+  onAskNetwork?: () => void;
 }) {
   const t = useTranslations("word");
   const tSearch = useTranslations("search");
   const compact = variant === "compact";
-  // Null on every compact call: the breakdown groups nothing, so it names
-  // nothing either (docs/wordbook/DESIGN.md "A word block on
-  // `SinEntradaFrase` carries its translations alone").
-  const exactLead = !compact && answer.exact !== null ? leadPronunciation(answer.exact.senses) : null;
 
   // RL-58: the lemma block rises under the form's first group instead of
   // closing the entry, on both variants.
   const offerInside = answer.exact !== null && answer.viaInflection.length > 0;
   const offerAbove = !offerInside;
+  // Drawn inside the exact entry's `LearnableSenses`, whose tap belongs to the exact headword alone: the
+  // lemma's senses must not inherit it.
   const offer = offerInside ? (
-    <ViaInflectionOffer answer={answer} compact={compact} wordHref={wordHref} t={t} />
+    <LearnableContext.Provider value={null}>
+      <ViaInflectionOffer answer={answer} compact={compact} wordHref={wordHref} t={t} />
+    </LearnableContext.Provider>
   ) : null;
 
   const hasAnswer = answer.exact !== null || answer.viaInflection.length > 0;
@@ -691,7 +769,14 @@ export function SenseList({
             </Text>
           )}
         </Flex>
-        {answer.correction.length > 0 && <CorrectionOffer words={answer.correction} t={tSearch} />}
+        {answer.correction.length > 0 && (
+          <CorrectionOffer
+            words={answer.correction}
+            surface={answer.query}
+            onAsk={compact || networkAnswer === undefined || networkAnswer.kind !== "absent" ? undefined : onAskNetwork}
+            t={tSearch}
+          />
+        )}
         {!compact && networkAnswer && <NetworkAnswer state={networkAnswer} surface={answer.query} />}
       </Flex>
     );
@@ -709,26 +794,18 @@ export function SenseList({
           ) : (
             <>
               <EntryMeta senses={answer.exact.senses} headword={answer.exact.headword} speaker={showSpeaker} t={t} />
-              <SenseGroup
-                senses={answer.exact.senses}
-                compact={false}
-                interlude={offerInside ? offer : undefined}
-                lead
-                example={generated && <GeneratedText state={generated} headword={answer.exact.headword} />}
-                shownIpa={answer.exact.senses[0].ipa}
-                t={t}
-              />
+              <LearnableSenses word={answer.exact.headword} senses={answer.exact.senses}>
+                <SenseGroup
+                  senses={answer.exact.senses}
+                  compact={false}
+                  interlude={offerInside ? offer : undefined}
+                  lead
+                  example={generated && <GeneratedText state={generated} />}
+                  shownIpa={answer.exact.senses[0].ipa}
+                  t={t}
+                />
+              </LearnableSenses>
             </>
-          )}
-          {/* RL-51: the example is decoration resolved from the spelling
-              alone (RL-42), so it reads as the entry's own. The foot line
-              says which pronunciation it is about: the entry's leading one,
-              the sense the model writes for and the sound «Escuchar» speaks.
-              An entry that draws no block reads unchanged. */}
-          {!compact && generated?.kind === "resolved" && exactLead !== null && (
-            <Text size="1" color="gray" data-generated-pronunciation={exactLead}>
-              {t("examplePronunciation", { ipa: exactLead })}
-            </Text>
           )}
         </Flex>
       )}
@@ -772,7 +849,13 @@ export function SenseList({
                         {!compact && <SpeakButton headword={hit.lemma} ipa={leadPronunciation(hit.group.senses)} t={t} />}
                       </Flex>
                     </Flex>
-                    <SenseGroup senses={hit.group.senses} compact={compact} t={t} />
+                    {index === 0 && !compact ? (
+                      <LearnableSenses word={hit.lemma} senses={hit.group.senses}>
+                        <SenseGroup senses={hit.group.senses} compact={compact} t={t} />
+                      </LearnableSenses>
+                    ) : (
+                      <SenseGroup senses={hit.group.senses} compact={compact} t={t} />
+                    )}
                   </Flex>
                 </Box>
               </Flex>

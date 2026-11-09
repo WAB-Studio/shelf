@@ -158,6 +158,12 @@ body {
     flex: 1 0 auto;
     padding-block-end: calc(57px + env(safe-area-inset-bottom, 0px));
   }
+
+  /* A screen with the fixed «+» (components/ui/add-button) keeps its height and the gap above the tabs clear too,
+     so the last control scrolls out from under it (RNP-07). */
+  body:has([data-part="add-button"]) > .radix-themes {
+    padding-block-end: calc(57px + 56px + 32px + env(safe-area-inset-bottom, 0px));
+  }
 }
 
 /* RNP-17, `HoyEscritorio.dc.html`: from 768px the shell is a row. The rail

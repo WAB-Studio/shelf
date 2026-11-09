@@ -36,7 +36,7 @@ test("a brief duration keeps the largest unit, floored", () => {
 
 test("a heatmap cell keeps its figure on one line, hours with their minutes where there is room", () => {
   const tiny = { hours: "h", minutes: "m" };
-  assert.deepEqual(heatFigure(4 * 3600 + 43 * 60, words, tiny), { wide: "4 h 43", narrow: "4h" });
+  assert.deepEqual(heatFigure(4 * 3600 + 43 * 60, words, tiny), { wide: "4 h 43", narrow: "4h\n43" });
   assert.deepEqual(heatFigure(4 * 3600, words, tiny), { wide: "4 h", narrow: "4h" });
   assert.deepEqual(heatFigure(57 * 60, words, tiny), { wide: "57 min", narrow: "57m" });
   assert.deepEqual(heatFigure(20, words, tiny), { wide: "< 1 min", narrow: "<1m" });
@@ -45,4 +45,5 @@ test("a heatmap cell keeps its figure on one line, hours with their minutes wher
 
 test("the minutes beside hours in a heatmap cell keep two digits", () => {
   assert.equal(heatFigure(4 * 3600 + 9 * 60, words, { hours: "h", minutes: "m" }).wide, "4 h 09");
+  assert.equal(heatFigure(4 * 3600 + 9 * 60, words, { hours: "h", minutes: "m" }).narrow, "4h\n09");
 });

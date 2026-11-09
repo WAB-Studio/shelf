@@ -461,9 +461,9 @@ for (const [reason, refuse] of REFUSALS) {
     const response = await ROUTES[0].call(post(ROUTES[0].body));
     assert.equal(response.status, 200);
     assert.equal(response.headers.get("cache-control"), "no-store");
-    const body = (await response.json()) as { definition: unknown; example: unknown; translations: unknown };
+    const body = (await response.json()) as { definition: unknown; translations: unknown };
     assert.equal(body.definition, "a pet");
-    assert.deepEqual(body.example, { en: "A cat.", es: "Un gato." });
+    assert.equal("example" in body, false);
     assert.equal(body.translations, null);
     assert.equal(state.modelCalls, 0);
     assertDarkLine("word/text", reason);
@@ -484,24 +484,22 @@ test("word/text: a cached row that needs no enrichment logs nothing even with no
   assert.equal((await ROUTES[0].call(post(ROUTES[0].body))).status, 200);
   state.groups = { cat: SWISH };
   state.cachedText = CACHED_THIN;
-  assert.equal((await ROUTES[0].call(post(ROUTES[0].body))).status, 200);
+  assert.equal((await ROUTES[0].call(post(ROUTES[0].body))).status, 204, "a word with nothing to give answers 204");
   assert.deepEqual(warns, []);
 });
 
 // RL-45's dead claim path
 
-test("word/text: a body with surface and rule is answered as one without, for a word that is not thin", async () => {
+test("word/text: a word that is not thin and has a definition answers 204 with no claim, surface and rule or not", async () => {
   state.groups = { swish: SWISH };
   const plain = await ROUTES[0].call(post({ headword: "swish", needDefinition: false }));
   const claimed = await ROUTES[0].call(
     post({ headword: "swish", needDefinition: false, surface: "swishing", rule: "ing" }),
   );
-  assert.equal(plain.status, 200);
-  assert.equal(claimed.status, 200);
-  assert.equal(state.textModelArgs.length, 2);
-  assert.equal(state.textModelArgs[0][2], null, "a plain lookup of a full word was sent as thin");
-  assert.equal(state.textModelArgs[1][2], null, "a surface/rule claim made a full word thin");
-  assert.equal(((await claimed.json()) as { translations: unknown }).translations, null);
+  assert.equal(plain.status, 204);
+  assert.equal(claimed.status, 204);
+  assert.equal(state.textModelArgs.length, 0);
+  assert.deepEqual(warns, []);
 });
 
 test("word/text: an unknown rule in the old claim no longer fails the body", async () => {
@@ -509,7 +507,7 @@ test("word/text: an unknown rule in the old claim no longer fails the body", asy
   const response = await ROUTES[0].call(
     post({ headword: "swish", needDefinition: false, surface: "swishing", rule: "no-such-rule" }),
   );
-  assert.equal(response.status, 200);
+  assert.equal(response.status, 204);
 });
 
 test("word/text: a thin word is still sent to the model with its senses, claim or no claim", async () => {

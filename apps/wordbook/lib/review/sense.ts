@@ -1,26 +1,30 @@
 import type { Sense } from "@/lib/dictionary/index-build";
 import type { WordAnswer } from "@/lib/dictionary/lookup";
 
-import { splitTranslations } from "@/lib/log/translation-line";
+import type { SenseChoice } from "./store";
 
 // The senses a card can draw from: the headword's own, else the first lemma an inflection reached.
 export function answerSenses(answer: WordAnswer): readonly Sense[] {
   return answer.exact?.senses ?? answer.viaInflection[0]?.group.senses ?? [];
 }
 
-// RL-78: a card shows one sense. It is the sense the reader saw, the one sharing the most
-// translations with the line the record kept; with none in common, the headword's first.
-export function pickSense(senses: readonly Sense[], stored: string | null): Sense | null {
+function signatureOf(sense: Sense): string {
+  return JSON.stringify([sense.pos, sense.translations, sense.definition]);
+}
+
+export function senseChoiceFor(key: string, senses: readonly Sense[], sense: Sense): SenseChoice {
+  return { key, index: senses.indexOf(sense), signature: signatureOf(sense) };
+}
+
+// RL-78 and RL-85: a card shows one sense. It is the one the reader tapped in the answer; with no tap,
+// or when no sense answers to the one tapped, the headword's first.
+export function pickSense(senses: readonly Sense[], choice: SenseChoice | null): Sense | null {
   if (senses.length === 0) return null;
-  const kept = new Set(stored === null ? [] : splitTranslations(stored));
-  let best = senses[0];
-  let bestScore = best.translations.filter((translation) => kept.has(translation)).length;
-  for (const sense of senses.slice(1)) {
-    const score = sense.translations.filter((translation) => kept.has(translation)).length;
-    if (score > bestScore) {
-      best = sense;
-      bestScore = score;
-    }
+  if (choice !== null) {
+    const atIndex = senses[choice.index];
+    if (atIndex !== undefined && signatureOf(atIndex) === choice.signature) return atIndex;
+    const tapped = senses.find((sense) => signatureOf(sense) === choice.signature);
+    if (tapped !== undefined) return tapped;
   }
-  return best;
+  return senses[0];
 }

@@ -19,8 +19,7 @@ test("typing a word letter by letter asks the paid text route exactly once", asy
       contentType: "application/json",
       headers: { [STUB_HEADER]: "1" },
       body: JSON.stringify({
-        definition: null,
-        example: { en: "The lighthouse guided the ships home.", es: "El faro guió a los barcos a casa." },
+        definition: "A tower with a light to guide ships.",
       }),
     });
   });
@@ -35,8 +34,8 @@ test("typing a word letter by letter asks the paid text route exactly once", asy
 
   const box = page.getByRole("textbox", { name: messages.search.label });
   await box.click();
-  await box.pressSequentially("lighthouse", { delay: KEYSTROKE_MS });
+  await box.pressSequentially("accountant", { delay: KEYSTROKE_MS });
   await runClock(page, PHRASE_DEBOUNCE_MS);
 
-  await expect.poll(() => asked).toEqual(["lighthouse"]);
+  await expect.poll(() => asked).toEqual(["accountant"]);
 });

@@ -95,7 +95,7 @@ test("821 · an open goal ending before the month's end counts «faltan» to its
     horizon: midNextWeek,
     budgetMonth: thisMonth,
   });
-  // Reached in full: under 60 % from the 20th the pace line replaces «llevas… · faltan…».
+  // Reached in full: under 60 % from the 20th the pace line replaces «lo planeado está hecho · quedan…».
   const [commitment] = await db<{ id: string }[]>`
     insert into goals.commitments
       (user_id, goal_id, name, cadence_kind, satisfaction, target_quantity, unit, created_at)
@@ -108,8 +108,8 @@ test("821 · an open goal ending before the month's end counts «faltan» to its
   `;
   try {
     await page.goto(`/metas/${goalId}`);
-    const line = days === 0 ? "último día" : days === 1 ? "faltan 1 día" : `faltan ${days} días`;
-    await expect(page.getByText(new RegExp(`llevas \\d+ % · ${line}$`))).toBeVisible();
+    const line = days === 0 ? "último día" : days === 1 ? "queda 1 día" : `quedan ${days} días`;
+    await expect(page.getByText(new RegExp(`^lo planeado está hecho · ${line}$`))).toBeVisible();
   } finally {
     await drop(db, personId, goalId);
   }
@@ -192,7 +192,7 @@ test("822 · a goal with neither rhythm nor amounts still asks to plan on /meses
   }
 });
 
-test("821 · the month card of an ended goal keeps «llevas N %» and nothing after it", async ({ page, db, personId }) => {
+test("821 · the month card of an ended goal keeps «faltaron …» and nothing after it", async ({ page, db, personId }) => {
   // The card is this month's: on its first two days a goal ended yesterday had its last day in the month before.
   test.skip(plusDays(endedOn, -1).slice(0, 7) !== today.slice(0, 7), "an ended goal has no day in this month yet");
   const goalId = await seedGoal(db, personId, {
@@ -203,7 +203,7 @@ test("821 · the month card of an ended goal keeps «llevas N %» and nothing af
   try {
     await page.goto(`/metas/${goalId}`);
     await expect(page.getByText(/^terminó el /)).toBeVisible();
-    await expect(page.getByText(/^llevas \d+ %$/)).toBeVisible();
+    await expect(page.getByText(/^(faltaron .+|lo planeado quedó hecho)$/)).toBeVisible();
   } finally {
     await drop(db, personId, goalId);
   }

@@ -10,7 +10,7 @@
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <meta name="description" content="Cuatro apps para el día a día: la plata de la casa, las palabras, las metas y el tiempo.">
 <style>
-/* Layout: one card per app. Phone: stacked, phone frame. Tablet (640-1099): a row per app, browser frame beside the text. Desktop (1100+): 2 by 2, browser frame with the phone overlapping its corner. Each card wears its app's own colours; the page itself stays warm paper and ink. */
+/* Layout: a header with the shelf itself (four spines, each opening its app) and one card per app below. Phone: stacked, phone frame. Tablet (640-1099): a row per app, browser frame beside the text. Desktop (1100+): 2 by 2, browser frame with the phone overlapping its corner. The page is warm paper and ink; the apps bring the colour. */
 :root {
   --paper: #f5f3ee;
   --card: #fffefb;
@@ -18,6 +18,7 @@
   --ink: #23211d;
   --muted: #5f5a50;
   --sans: -apple-system, "Segoe UI", Roboto, "Helvetica Neue", system-ui, sans-serif;
+  --serif: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
   color-scheme: light;
 }
 * { box-sizing: border-box; }
@@ -26,12 +27,31 @@ body {
   margin: 0; min-height: 100vh; min-height: 100dvh;
   background: var(--paper); color: var(--ink);
   font-family: var(--sans); font-size: 16px; line-height: 1.5;
-  padding: 40px 20px 56px;
+  padding: 32px 16px 40px;
 }
 main { width: 100%; max-width: 1240px; margin: 0 auto; }
-header { max-width: 640px; margin-bottom: 32px; }
-h1 { margin: 0 0 8px; font-size: 44px; line-height: 1.05; font-weight: 700; letter-spacing: -.03em; }
-header p { margin: 0; color: var(--muted); font-size: 18px; }
+
+.top { display: grid; gap: 28px; margin-bottom: 32px; }
+.brand { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; color: var(--muted); font-size: 15px; letter-spacing: .02em; }
+.brand svg { width: 28px; height: 28px; display: block; }
+h1 { margin: 0 0 12px; font-family: var(--serif); font-size: 48px; line-height: 1; font-weight: 700; letter-spacing: -.01em; }
+.top p { margin: 0; color: var(--muted); font-size: 18px; max-width: 34ch; }
+
+/* the shelf: each spine is a book, its height its own, its name read bottom to top */
+.spines { display: flex; align-items: flex-end; gap: 8px; height: 168px; padding: 0 12px; border-bottom: 8px solid var(--ink); border-radius: 0 0 3px 3px; }
+.spine {
+  --btn: #222; --btn-ink: #fff;
+  flex: 0 0 52px; display: flex; align-items: center; justify-content: center;
+  background: var(--btn); color: var(--btn-ink); border-radius: 5px 5px 0 0;
+  text-decoration: none; font-weight: 700; font-size: 16px; letter-spacing: .04em;
+  writing-mode: vertical-rl; transform: rotate(180deg); transform-origin: center;
+  box-shadow: inset 0 14px 0 -10px rgba(255,255,255,.35), inset 0 -14px 0 -10px rgba(255,255,255,.35);
+}
+.spine:focus-visible { outline: 3px solid var(--ink); outline-offset: 3px; }
+.spine[data-app="homefund"] { --btn: #5b2ee5; --btn-ink: #c8f560; height: 138px; }
+.spine[data-app="wordbook"] { --btn: #0c5a43; --btn-ink: #f6b83a; height: 160px; }
+.spine[data-app="goallog"] { --btn: #c2410c; --btn-ink: #ffffff; height: 124px; }
+.spine[data-app="timelog"] { --btn: #232c37; --btn-ink: #22d3ee; height: 148px; }
 
 .shelf { list-style: none; margin: 0; padding: 0; display: grid; gap: 20px; }
 
@@ -40,29 +60,30 @@ header p { margin: 0; color: var(--muted); font-size: 18px; }
   position: relative;
   display: flex; flex-direction: column; gap: 20px;
   height: 100%;
-  background: var(--card); border: 1px solid var(--line); border-radius: 22px;
-  padding: 24px; overflow: hidden;
+  background: var(--card); border: 1px solid var(--line); border-radius: 20px;
+  padding: 20px; overflow: hidden;
 }
 .app[data-app="homefund"] { --tint: #ece6fc; --btn: #5b2ee5; --btn-ink: #c8f560; }
 .app[data-app="wordbook"] { --tint: #e1efe8; --btn: #0c5a43; --btn-ink: #f6b83a; }
 .app[data-app="goallog"] { --tint: #fbe6da; --btn: #c2410c; --btn-ink: #ffffff; }
 .app[data-app="timelog"] { --tint: #e3e8ee; --btn: #232c37; --btn-ink: #22d3ee; }
 
-.who { display: flex; flex-direction: column; gap: 12px; align-items: flex-start; }
-.mark { width: 52px; height: 52px; display: block; }
-.app h2 { margin: 0; font-size: 26px; line-height: 1.15; font-weight: 700; letter-spacing: -.02em; }
-.app p { margin: 0; color: var(--muted); font-size: 17px; max-width: 30ch; }
+.who { display: grid; grid-template-columns: auto 1fr auto; grid-template-areas: "mark name open" "line line line"; align-items: center; column-gap: 14px; row-gap: 12px; }
+.mark { grid-area: mark; width: 44px; height: 44px; display: block; }
+.app h2 { grid-area: name; margin: 0; font-family: var(--serif); font-size: 26px; line-height: 1.1; font-weight: 700; }
+.app p { grid-area: line; margin: 0; color: var(--muted); font-size: 17px; }
 .open {
-  display: inline-flex; align-items: center; min-height: 48px; padding: 0 22px; margin-top: 4px;
+  grid-area: open;
+  display: inline-flex; align-items: center; min-height: 48px; padding: 0 20px;
   border-radius: 999px; background: var(--btn); color: var(--btn-ink);
-  font-size: 16px; font-weight: 600; text-decoration: none;
+  font-size: 16px; font-weight: 600; text-decoration: none; white-space: nowrap;
 }
 /* the whole card is the target; the button is its name */
 .open::after { content: ""; position: absolute; inset: 0; border-radius: inherit; }
 .open:focus-visible { outline: 3px solid var(--btn); outline-offset: 3px; }
 .app:hover { border-color: var(--btn); }
 
-.view { margin: 0 -24px -24px; padding: 28px 24px 0; background: var(--tint); display: flex; justify-content: center; align-items: flex-end; overflow: hidden; }
+.view { margin: 0 -20px -20px; padding: 24px 20px 0; background: var(--tint); display: flex; justify-content: center; align-items: flex-end; overflow: hidden; }
 .phone { width: 250px; flex: none; margin: 0; background: #17161a; padding: 7px 7px 0; border-radius: 30px 30px 0 0; }
 .phone img { display: block; width: 100%; height: auto; border-radius: 24px 24px 0 0; background: #fff; }
 .browser { display: none; margin: 0; background: #d9d6cd; border-radius: 12px 12px 0 0; overflow: hidden; flex: none; }
@@ -72,25 +93,44 @@ header p { margin: 0; color: var(--muted); font-size: 18px; }
   radial-gradient(circle at 46px 13px, #b9b5aa 4px, transparent 5px); }
 .browser img { display: block; width: 100%; height: auto; background: #fff; }
 
+footer { margin-top: 40px; padding-top: 16px; border-top: 8px solid var(--ink); border-radius: 3px 3px 0 0; color: var(--muted); font-size: 15px; display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+
+@media (max-width: 639px) {
+  .spines { height: 128px; gap: 6px; }
+  .spine { flex-basis: 44px; font-size: 15px; }
+  .spine[data-app="homefund"] { height: 104px; }
+  .spine[data-app="wordbook"] { height: 122px; }
+  .spine[data-app="goallog"] { height: 94px; }
+  .spine[data-app="timelog"] { height: 112px; }
+}
+
 @media (min-width: 640px) {
-  body { padding: 56px 32px 72px; }
-  h1 { font-size: 56px; }
-  header { margin-bottom: 40px; }
+  body { padding: 48px 32px 56px; }
+  .top { grid-template-columns: 1fr auto; align-items: end; gap: 40px; margin-bottom: 40px; }
+  h1 { font-size: 64px; }
   .app { flex-direction: row; align-items: stretch; gap: 0; padding: 0; min-height: 280px; }
-  .who { flex: 0 0 300px; justify-content: center; padding: 32px; }
+  .who { flex: 0 0 300px; align-content: center; padding: 28px; grid-template-columns: auto 1fr; grid-template-areas: "mark name" "line line" "open open"; }
+  .open { justify-self: start; }
   .view { flex: 1; margin: 0; padding: 32px 0 0 32px; justify-content: flex-start; min-width: 0; }
   .phone { display: none; }
   .browser { display: block; width: 100%; border-radius: 12px 0 0 0; }
 }
 
 @media (min-width: 1100px) {
-  body { padding: 72px 40px 88px; }
-  h1 { font-size: 64px; }
+  body { padding: 64px 40px 64px; }
+  h1 { font-size: 80px; }
+  .spines { height: 200px; gap: 10px; padding: 0 20px; }
+  .spine { flex-basis: 60px; font-size: 18px; }
+  .spine[data-app="homefund"] { height: 164px; }
+  .spine[data-app="wordbook"] { height: 192px; }
+  .spine[data-app="goallog"] { height: 148px; }
+  .spine[data-app="timelog"] { height: 176px; }
   .shelf { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; }
   .app { flex-direction: column; gap: 0; min-height: 0; }
-  .who { flex: none; padding: 32px 32px 28px; }
-  .view { position: relative; padding: 0 0 0 32px; flex: 1; align-items: flex-end; }
-  .browser { width: 84%; flex: none; margin-top: 28px; border-radius: 12px 0 0 0; }
+  .who { flex: none; padding: 24px 28px; grid-template-columns: auto 1fr auto; grid-template-areas: "mark name open" "line line line"; }
+  .open { justify-self: end; }
+  .view { position: relative; padding: 0 0 0 28px; flex: 1; align-items: flex-end; }
+  .browser { width: 84%; flex: none; margin-top: 24px; border-radius: 12px 0 0 0; }
   .phone { display: block; position: absolute; right: 28px; bottom: 0; width: 150px; padding: 5px 5px 0; border-radius: 22px 22px 0 0; }
   .phone img { border-radius: 17px 17px 0 0; }
 }
@@ -105,9 +145,18 @@ header p { margin: 0; color: var(--muted); font-size: 18px; }
 </head>
 <body>
 <main>
-<header>
-  <h1>Shelf</h1>
-  <p>Cuatro apps que hice para mi día a día: la plata de la casa, las palabras, las metas y el tiempo.</p>
+<header class="top">
+  <div>
+    <div class="brand"><svg viewBox="0 0 64 64" aria-hidden="true"><rect x="11" y="17" width="9" height="32" rx="1.5" fill="#5b2ee5"/><rect x="22" y="12" width="9" height="37" rx="1.5" fill="#0c5a43"/><rect x="33" y="20" width="9" height="29" rx="1.5" fill="#c2410c"/><rect x="44" y="15" width="9" height="34" rx="1.5" fill="#232c37"/><rect x="8" y="49" width="48" height="4" rx="1" fill="#23211d"/></svg>Hecho por Wilson</div>
+    <h1>Shelf</h1>
+    <p>Cuatro apps que hice para mi día a día: la plata de la casa, las palabras, las metas y el tiempo.</p>
+  </div>
+  <nav class="spines" aria-label="Abrir una app">
+    <a class="spine" data-app="homefund" href="https://homefundapp.vercel.app">HomeFund</a>
+    <a class="spine" data-app="wordbook" href="https://wordbookapp.vercel.app">WordBook</a>
+    <a class="spine" data-app="goallog" href="https://goallogapp.vercel.app">GoalLog</a>
+    <a class="spine" data-app="timelog" href="https://timelog-delta.vercel.app">TimeLog</a>
+  </nav>
 </header>
 
 <ul class="shelf">
@@ -168,6 +217,7 @@ header p { margin: 0; color: var(--muted); font-size: 18px; }
     </article>
   </li>
 </ul>
+<footer><span>Shelf · cuatro libros en el mismo estante</span><span>2026</span></footer>
 </main>
 </body>
 </html>

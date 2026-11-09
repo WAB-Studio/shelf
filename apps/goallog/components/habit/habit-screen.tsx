@@ -3,7 +3,7 @@ import { getTranslations } from "next-intl/server";
 
 import { EditHabitAction } from "@/components/habit/habit-edit-sheet";
 import { DeleteHabitAction, RetireAction } from "@/components/goal/retire-sheet";
-import { Button, Figure, Page, ScreenHeader, Section, Table, Text, TextLink, type TableRow } from "@/components/ui";
+import { Button, Figure, Figures, Page, ScreenHeader, Section, Table, Text, TextLink, type TableRow } from "@/components/ui";
 import { cadencePhrase } from "@/lib/day/row-phrases";
 import { LIST_TAIL, tailOf } from "@/lib/lists/tail";
 import type { HabitView } from "@/lib/queries/habit";
@@ -57,7 +57,7 @@ export async function HabitScreen({
         <>
           {line}
           <br />
-          {t("week.flexible.weekProgress", { done: month.thisWeek.done, total: month.thisWeek.count })}
+          <Figures text={t("week.flexible.weekProgress", { done: month.thisWeek.done, total: month.thisWeek.count })} />
         </>
       ) : line,
     };

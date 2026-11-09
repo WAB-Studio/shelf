@@ -60,8 +60,8 @@ test.describe("the rhythm's notices without an estimate", () => {
           { exact: true },
         ),
       ).toBeVisible();
-      await expect(page.getByText(/terminan en/)).toHaveCount(0);
-      await expect(page.getByText(/terminas el/)).toHaveCount(0);
+      await expect(page.getByText(/caben hasta/)).toHaveCount(0);
+      await expect(page.getByText(/caben hasta el/)).toHaveCount(0);
     } finally {
       await drop(db, personId, goalId);
     }
@@ -79,37 +79,37 @@ test.describe("the rhythm's notices without an estimate", () => {
           { exact: true },
         ),
       ).toBeVisible();
-      await expect(sheet.getByText(/terminas el/)).toHaveCount(0);
+      await expect(sheet.getByText(/caben hasta el/)).toHaveCount(0);
     } finally {
       await drop(db, personId, goalId);
     }
   });
 
-  test("the lead of the plan, no pending task estimated: no «terminas el»", async ({ page, db, personId }) => {
+  test("the lead of the plan, no pending task estimated: no «tus tareas caben hasta el»", async ({ page, db, personId }) => {
     const goalId = await seedGoal(db, personId, 720, [null, null]);
     try {
       await page.goto(`/metas/${goalId}/plan`);
       await expect(
         page.getByText(`Ninguna tarea pendiente tiene estimación: van a ${THIS_MONTH} hasta que les pongas una.`, { exact: true }),
       ).toBeVisible();
-      await expect(page.getByText(/terminas el/)).toHaveCount(0);
+      await expect(page.getByText(/caben hasta el/)).toHaveCount(0);
     } finally {
       await drop(db, personId, goalId);
     }
   });
 
-  test("the lead keeps «terminas el» when one pending task has an estimate", async ({ page, db, personId }) => {
+  test("the lead keeps «tus tareas caben hasta el» when one pending task has an estimate", async ({ page, db, personId }) => {
     const goalId = await seedGoal(db, personId, 720, [180, null, null]);
     try {
       await page.goto(`/metas/${goalId}/plan`);
-      await expect(page.getByText(/^A este ritmo terminas el \d{1,2} de \p{L}+ de \d{4}/u)).toBeVisible();
+      await expect(page.getByText(/^Tus tareas caben hasta el \d{1,2} de \p{L}+ de \d{4}/u)).toBeVisible();
       await expect(page.getByText(/Ninguna tarea pendiente tiene estimación/)).toHaveCount(0);
     } finally {
       await drop(db, personId, goalId);
     }
   });
 
-  test("one task of 3 h and two without: the first rhythm keeps «tus 3 h de tareas terminan en»", async ({
+  test("one task of 3 h and two without: the first rhythm keeps «tus 3 h de tareas caben hasta»", async ({
     page,
     db,
     personId,
@@ -117,7 +117,7 @@ test.describe("the rhythm's notices without an estimate", () => {
     const goalId = await seedGoal(db, personId, null, [180, null, null]);
     try {
       await page.goto(`/metas/${goalId}/plan`);
-      await expect(page.getByText(/^Con 12 h al mes, tus 3 h de tareas terminan en \p{L}+ de \d{4}\./u)).toBeVisible();
+      await expect(page.getByText(/^Con 12 h al mes, tus 3 h de tareas caben hasta \p{L}+ de \d{4}\./u)).toBeVisible();
       await expect(page.getByText(/Ninguna tarea tiene estimación todavía/)).toHaveCount(0);
     } finally {
       await drop(db, personId, goalId);
@@ -131,7 +131,7 @@ test.describe("the rhythm's notices without an estimate", () => {
       await page.getByRole("button", { name: "Ritmo 12 h al mes" }).click();
       const sheet = page.getByRole("dialog");
       await sheet.getByRole("radio", { name: "20 h" }).click();
-      await expect(sheet.getByText(/^Con 20 h al mes terminas el \d{1,2} de \p{L}+ de \d{4}, a tiempo\./u)).toBeVisible();
+      await expect(sheet.getByText(/^Con 20 h al mes tus tareas caben hasta el \d{1,2} de \p{L}+ de \d{4}, a tiempo\./u)).toBeVisible();
     } finally {
       await drop(db, personId, goalId);
     }

@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { isBrowser } from "@/lib/app-names";
 import { addDays, civilDay, isCivilDay } from "@/lib/zone";
 
 // Postgres refuses a NUL in text and jsonb; a control character is no app's name.
@@ -86,7 +87,12 @@ export function uploadSchema(today: string = civilDay()) {
               apps: z.array(appDay).max(MAX_APPS),
               sites: z.array(siteDay).max(MAX_SITES).optional(),
               claude_code_seconds: z.number().int().min(0).max(DAY_SECONDS).optional(),
-              windows: z.array(windowDay).max(MAX_WINDOWS).optional(),
+              // A browser's titles are its pages (RT-16): dropped, so an uploader whose browser list lags still lands its day.
+              windows: z
+                .array(windowDay)
+                .max(MAX_WINDOWS)
+                .optional()
+                .transform((windows) => windows?.filter((one) => !isBrowser(one.app))),
               pages: z.array(pageDay).max(MAX_PAGES).optional(),
               claude_sessions: z.array(claudeSession).max(MAX_SESSIONS).optional(),
             })

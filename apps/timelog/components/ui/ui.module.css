@@ -259,7 +259,7 @@
 .heatCell[data-level="3"] { background: color-mix(in srgb, var(--tone) var(--tl-heat-3), var(--tl-track)); }
 .heatCell[data-level="4"] { background: color-mix(in srgb, var(--tone) var(--tl-heat-4), var(--tl-track)); }
 .heatCell { color: var(--tl-text); white-space: nowrap; font-size: 12px; }
-.heatNarrow { display: inline; }
+.heatNarrow { display: inline-block; white-space: pre; line-height: 1.15; }
 .heatWide { display: none; }
 @media (min-width: 720px) { .heatCell { font-size: 14px; } .heatNarrow { display: none; } .heatWide { display: inline; } }
 .heatNone { color: var(--tl-muted); }

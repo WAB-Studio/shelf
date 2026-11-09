@@ -187,6 +187,8 @@ test("a one-off belonging to nothing, done today, fills a mark in the Sueltas gr
 
   // Written from the day's one field with «Suelta» chosen, never a goal's.
   await page.goto("/");
+  // At 360 the field is in the sheet the «+» opens (RP-154).
+  await page.getByRole("button", { name: "Anotar algo suelto" }).click();
   const field = page.getByPlaceholder("Escribe una tarea…");
   await field.fill(name);
   await field.press("Enter");

@@ -129,7 +129,7 @@ this gets built, and no schema, table or column is "prepared for" it.
     offering one unnamed. It names it in the control's own label and draws nothing: the block head
     under it already carries that IPA. A second control was refused: both would take the same
     spelling and sound alike.
-  - **The generated example (RL-42) names the pronunciation it belongs to**, in a line at its foot,
+  - _(Retired with RL-42, 2026-11-08: the example is gone, and its foot line with it.)_ **The generated example (RL-42) names the pronunciation it belongs to**, in a line at its foot,
     on a grouped entry alone. It is resolved from the spelling, so it lands under whichever block the
     entry draws last and reads as that block's own: `row` closed with «Me gusta remar el bote»
     beneath `/ɹaʊ/`, `tear` with «no rasgar el vestido» beneath `/tiə/`, 5 of 5 measured 2026-09-20.
@@ -180,26 +180,6 @@ this gets built, and no schema, table or column is "prepared for" it.
   for every reader ever, and with no connection the answer is exactly the one the device already
   draws. A word that already has a definition never asks for one.
 
-- [x] **RL-42** — A word can carry **one example sentence using it**, with its Spanish translation,
-  resolved and cached the same way and under the same decoration clause. This is not RL-08's path:
-  RL-08 translates a sentence the reader typed, this shows the word in use.
-
-  **The daily cap is the on-switch, not just a limit.** `WORD_TEXT_DAILY_CALL_CAP` is optional, and
-  left unset the route answers `204` to every cold word: generated text is off until a number is set.
-  **That number is 500, raised from 50 by the user 2026-09-11.** Measured against a real reading
-  session: ~76 calls in 43 minutes, so 50 emptied mid-chapter. It bounds distinct new words per day, not
-  words lacking a definition — the example generates for every word looked up, so a word that already
-  has a definition still costs one call. A cap that bites costs nothing: the reader gets the screen
-  RL-35 already draws.
-
-  **The four numbers in production, kept by the user 2026-09-19.** `WORD_TEXT_DAILY_CALL_CAP` 500 is
-  the whole day's budget: the three model routes — this one, RL-44's unlisted word and RL-46's phrase
-  notes — all spend from the same `reading.model_spend` row, whichever claims it first.
-  `PHRASE_NOTES_DAILY_CALL_CAP` 200 is a second, lower ceiling the notes route alone stops at.
-  Per device and per day, `WORD_UNLISTED_DAILY_CLIENT_CAP` is 100 and `PHRASE_NOTES_DAILY_CLIENT_CAP`
-  is 50, **both read against one shared `reading.client_spend` row**: a reader who spends 50 calls on
-  unlisted words gets no phrase notes that day, having asked for none. That is the accepted price of
-  one counter per caller.
 
 #### The sentence
 
@@ -232,11 +212,10 @@ this gets built, and no schema, table or column is "prepared for" it.
   row of `/registro` on its word's page, including a word the reader never opened online. The page shows
   what the device saved for that word. A word that is not in the record says so, in the same page; no
   address inside the app ever lands on the browser's offline page.
-- [x] **RL-62** — A word the network answered (RL-44) is recorded with the whole answer that arrived: its translations, its
-  definition when it carried one, and its example sentence with the example's Spanish translation, each cut to what the
-  copy admits. Its page on `/registro` draws that answer from the device, with or without a connection, as the box drew
-  it. The answer travels in the copy and comes down to the reader's other devices with the row. A row recorded before
-  keeps its translation alone. Decided by the user 2026-10-09.
+- [x] **RL-90** *(successor of RL-62)* — A word the network answered (RL-86) is recorded with the whole answer that arrived: its translations
+  and its definition when it carried one, each cut to what the copy admits; no example is recorded. Its page on `/registro` draws that
+  answer from the device, with or without a connection, as the box drew it. The answer travels in the copy and comes down to the
+  reader's other devices with the row. A row recorded before keeps what it has and its example is no longer drawn. Decided by the user 2026-11-08.
 - [x] **RL-63** — `/registro` can be narrowed by typing. A field above the list keeps only the rows whose word, a form
   searched under it, or its translation contains what was typed, case and accents aside; a line says how many of the
   record's words are shown, and a typing that matches nothing says so. Emptying the field gives the whole list back, and
@@ -311,9 +290,14 @@ this gets built, and no schema, table or column is "prepared for" it.
   - Driven 2026-10-30 by `scripts/mcp/server.test.ts`, over the server's own stdio: the protocol and its errors, the three tools, and the file left byte for byte as it was.
 - [x] **RL-72** *(successor of RL-65)* — The log can be exported from the app as a file the reader saves onto their device: every recorded search, with its date and the headword it reached, in a documented and versioned JSON shape, which is the complete copy. The export also offers a CSV for Anki beside it: one card per row of `/registro`, its word on the front and on the back its latest translation or, when it has none and the network answered, that answer's definition. A row with neither gives no card; after a download the export says how many words stayed out and why, and with no card to give it offers no CSV and says so. The export is deliberate: it is reached from outside the search screen and nothing triggers it on its own. Decided by the user 2026-10-16.
   - Proved 2026-10-17, CI run 38992454179 on 3cec823e: `apps/wordbook/e2e/export.spec.ts:666,673,679,687,697,704,739` (no card: no CSV and why; the definition on the back; the words left out named; the link follows a delete and a sync) and `apps/wordbook/lib/log/anki.test.ts:106,116,123,131`, green.
-- [x] **RL-68** — The reader reviews the words in their record inside the app, scheduled by spaced repetition (FSRS). Decided by the user 2026-10-15; built straight from these words, no boards, decided by the user 2026-10-30.
-  - `/repaso`, reached from `/registro`: the words already learning whose time came, then up to 20 new ones a day, the most looked up first; a sentence, a miss and a pending row stay out. The word, «Mostrar respuesta», then «Otra vez» · «Difícil» · «Bien» · «Fácil», each naming its interval. The cards live on the device (`reading-review`); the copy (RL-22) does not carry them yet.
-- [x] **RL-78** *(supersedes the sentence clause of RL-68; RL-68 stays standing until the user retires it)* — The review also asks a phrase the reader translated, scheduled by the same FSRS logic as a word; a phrase still waiting for its answer or never translated stays out. A card shows one sense of a word, the one the reader saw, with its part of speech and its definition when it has one; a phrase shows its translation. An entry answered «Otra vez» comes back in the same session once it is due: the session is not finished while one waits, and says so. Where the review mixes words and phrases it counts «entradas», not «palabras». Decided by the user 2026-10-30.
+- [x] **RL-85** — A card of the review draws one sense of the word, the one the reader tapped in the answer («Aprender este sentido»);
+  with no tap, the first sense of the first group. The tap is kept on the device beside the cards and leaves with the word. A word with
+  a single sense offers no tap. Decided by the user 2026-11-08 (audit 2026-11-02, question 1).
+- [x] **RL-88** *(refines RL-78)* — The review brings in at most 20 new entries a day, fixed: no setting moves it. When the cap held
+  entries back, the finished screen says how many wait for tomorrow. Decided by the user 2026-11-08.
+- [x] **RL-89** *(refines RL-75)* — In production, with no `CLIENT_KEY_SALT`, the sign-in mail is refused (`sendFailed`) as the paid
+  routes answer 204: without the salt no cap counts a caller. Outside production the action stays open. Decided by the user 2026-11-08.
+- [x] **RL-78** *(successor of RL-68)* — The review also asks a phrase the reader translated, scheduled by the same FSRS logic as a word; a phrase still waiting for its answer or never translated stays out. A card shows one sense of a word, the one the reader saw, with its part of speech and its definition when it has one; a phrase shows its translation. An entry answered «Otra vez» comes back in the same session once it is due: the session is not finished while one waits, and says so. Where the review mixes words and phrases it counts «entradas», not «palabras». Decided by the user 2026-10-30.
   - Seen working 2026-10-31 by the deploy critic on 5f8fd352 (a phrase enters the review; an answered «Otra vez» comes back).
 - [x] **RL-80** *(refines RL-76)* — Opening, reloading or returning to an address that already carries the query (`/?q=book`) answers it again but records no lookup; only what the reader types or follows a link to is a lookup. Decided 2026-10-30 after the critic: a reload inflated the count.
   - Seen working 2026-10-31 by the deploy critic on 5f8fd352: reloading `/?q=time` left «5 búsquedas».
@@ -325,12 +309,14 @@ this gets built, and no schema, table or column is "prepared for" it.
 - [x] **RL-28** — When a search finds nothing and the word looks like a typo of one the dictionary
   has, the answer offers the words it might have been, and reaching one of them is a tap. The
   suggestion is computed on the device and touches the network on no keystroke.
-- [x] **RL-44** *(successor of RL-29)* — When a search finds nothing, the word is answered over the
-  network on its own, and the reader asks for nothing. A suggestion RL-28 finds is offered above it
-  and never instead of it: `whereat` offers `whereas` and still answers `whereat`. The answer carries the
-  word's translation, its definition and one example sentence with its Spanish translation. It says
-  it did not come from the dictionary, and says plainly when it could not be produced. A hyphenated
-  string the dictionary has no entry for reaches this answer like any other word.
+- [x] **RL-86** *(successor of RL-44)* — When a search finds nothing the dictionary can place, the word is answered over the
+  network on its own, and the reader asks for nothing. The dictionary places a word when it has an entry, resolves a lemma
+  through inflection (`lingered`, `went`, `children`, `swishing`) or finds a headword one edit away (`recieve`, `whereat`):
+  those words ask the network for nothing, so a reading page spends no paid call on a form or a slip. A suggestion RL-28
+  finds is offered as before. The answer carries the word's translation and its definition; it carries no example (RL-42's principle:
+  examples are the reader's own phrases alone). It says it did not come from the dictionary, and says plainly when it could not be produced.
+  A hyphenated string the dictionary has no entry for reaches this answer like any other word. A word left to a
+  correction is not recorded as waiting for an answer. Decided by the user 2026-11-08 (audit 2026-11-02, question 2).
 - [x] **RL-45** — A dictionary answer that is thin — at most four translations, and either more than
   one sense or no definition at all — is completed over the network. What arrives is
   added underneath what the dictionary said and marked as coming from the network; it never replaces
@@ -348,14 +334,14 @@ this gets built, and no schema, table or column is "prepared for" it.
   control the reader taps open; a table word the dictionary has no entry for shows its table line alone, with no
   control and no suggestions. Case and surrounding spaces do not matter. It answers from the device, so it holds
   with no network at all. A word the table lacks answers as before. Decided by the user 2026-10-09.
-- [x] **RL-58** *(successor of RL-47)* — The form the reader typed leads the answer with its own translation and one
-  example sentence, resolved over the network when the dictionary has no row for the form itself. The headword it
+- [x] **RL-87** *(successor of RL-58)* — The form the reader typed leads the answer under its own heading, and the headword it
   inflects from sits named as such, with its own sense groups, **right under the form's first group**, not at the end:
-  `left` answers its own first group and the `leave` block follows it. An exact entry the reader typed on purpose still
+  `left` answers its own first group and the `leave` block follows it. The form has no translation of its own: the network
+  is not asked for it (RL-86). An exact entry the reader typed on purpose still
   wins the top of the screen: `bed` answers as `bed` and offers nothing. When the form's suffix pins a part of speech —
   only a verb takes `-ing` or `-ed`, only an adjective takes `-ly` — that group leads the headword's own, ahead of any
   frequency order. It is answered from the device and touches the network on no keystroke. Decided by the user
-  2026-10-08.
+  2026-11-08.
 - [x] **RL-54** *(successor of RL-31)* — A string of two or more words that the dictionary has no entry for is
   answered as a sentence: it goes to translation (RL-09) and, when that fails, to RL-59's answer. Only a string of more than 60 words is not sent anywhere: the app names how many words it holds and asks
   for one word, or a sentence of up to sixty. That answer comes from the device and touches the network on
@@ -391,6 +377,54 @@ this gets built, and no schema, table or column is "prepared for" it.
 ### Retired
 
 Dead codes. The number stays burned and the tick stays as it was.
+
+- [x] **RL-62** — A word the network answered (RL-44) is recorded with the whole answer that arrived: its translations, its
+  definition when it carried one, and its example sentence with the example's Spanish translation, each cut to what the
+  copy admits. Its page on `/registro` draws that answer from the device, with or without a connection, as the box drew
+  it. The answer travels in the copy and comes down to the reader's other devices with the row. A row recorded before
+  keeps its translation alone. Decided by the user 2026-10-09.
+  _Retired 2026-11-08, by the user. Successor: RL-90. Examples are the reader's own phrases alone; the answer records and draws none._
+
+- [x] **RL-68** — The reader reviews the words in their record inside the app, scheduled by spaced repetition (FSRS). Decided by the user 2026-10-15; built straight from these words, no boards, decided by the user 2026-10-30.
+  - `/repaso`, reached from `/registro`: the words already learning whose time came, then up to 20 new ones a day, the most looked up first; a sentence, a miss and a pending row stay out. The word, «Mostrar respuesta», then «Otra vez» · «Difícil» · «Bien» · «Fácil», each naming its interval. The cards live on the device (`reading-review`); the copy (RL-22) does not carry them yet.
+  _Retired 2026-11-08, by the user. Successor: RL-78 (the review of words and phrases). The daily cap of 20 is RL-88's; the tap on a sense is RL-85's._
+- [x] **RL-58** *(successor of RL-47)* — The form the reader typed leads the answer with its own translation and one
+  example sentence, resolved over the network when the dictionary has no row for the form itself. The headword it
+  inflects from sits named as such, with its own sense groups, **right under the form's first group**, not at the end:
+  `left` answers its own first group and the `leave` block follows it. An exact entry the reader typed on purpose still
+  wins the top of the screen: `bed` answers as `bed` and offers nothing. When the form's suffix pins a part of speech —
+  only a verb takes `-ing` or `-ed`, only an adjective takes `-ly` — that group leads the headword's own, ahead of any
+  frequency order. It is answered from the device and touches the network on no keystroke. Decided by the user
+  2026-10-08.
+  _Retired 2026-11-08, by the user. Successor: RL-87. The form's own translation came from the network call RL-86 no longer makes._
+- [x] **RL-44** *(successor of RL-29)* — When a search finds nothing, the word is answered over the
+  network on its own, and the reader asks for nothing. A suggestion RL-28 finds is offered above it
+  and never instead of it: `whereat` offers `whereas` and still answers `whereat`. The answer carries the
+  word's translation, its definition and one example sentence with its Spanish translation. It says
+  it did not come from the dictionary, and says plainly when it could not be produced. A hyphenated
+  string the dictionary has no entry for reaches this answer like any other word.
+  _Retired 2026-11-08, by the user. Successor: RL-86. A form, an inflection and a slip one edit from a headword no longer spend a paid call._
+- [x] **RL-42** — A word can carry **one example sentence using it**, with its Spanish translation,
+  resolved and cached the same way and under the same decoration clause. This is not RL-08's path:
+  RL-08 translates a sentence the reader typed, this shows the word in use.
+
+  **The daily cap is the on-switch, not just a limit.** `WORD_TEXT_DAILY_CALL_CAP` is optional, and
+  left unset the route answers `204` to every cold word: generated text is off until a number is set.
+  **That number is 500, raised from 50 by the user 2026-09-11.** Measured against a real reading
+  session: ~76 calls in 43 minutes, so 50 emptied mid-chapter. It bounds distinct new words per day, not
+  words lacking a definition — the example generates for every word looked up, so a word that already
+  has a definition still costs one call. A cap that bites costs nothing: the reader gets the screen
+  RL-35 already draws.
+
+  **The four numbers in production, kept by the user 2026-09-19.** `WORD_TEXT_DAILY_CALL_CAP` 500 is
+  the whole day's budget: the three model routes — this one, RL-44's unlisted word and RL-46's phrase
+  notes — all spend from the same `reading.model_spend` row, whichever claims it first.
+  `PHRASE_NOTES_DAILY_CALL_CAP` 200 is a second, lower ceiling the notes route alone stops at.
+  Per device and per day, `WORD_UNLISTED_DAILY_CLIENT_CAP` is 100 and `PHRASE_NOTES_DAILY_CLIENT_CAP`
+  is 50, **both read against one shared `reading.client_spend` row**: a reader who spends 50 calls on
+  unlisted words gets no phrase notes that day, having asked for none. That is the accepted price of
+  one counter per caller.
+  _Retired 2026-11-08, by the user. No successor. Examples are the reader's own phrases alone; the text route writes no example and the screen draws none. The caps above still bind the route for RL-41 and RL-45._
 
 - [x] **RL-81** *(refines RL-43 and RL-79)* — Inside a sense, a translation that a Spanish word-frequency list does not vouch for (none of its content words among the 20,000 commonest) moves behind the rest; the dictionary's order stands for every other and nothing is promoted over a sibling. The order is written into the dictionary asset when it is built, so the answer, the three shown with «ver N más» and the line saved for a new lookup all follow it and the device receives no list. The list is hermitdave/FrequencyWords, OpenSubtitles 2018 Spanish, CC BY-SA 4.0; its credit is on `/cuenta`. Decided by the user 2026-10-30.
   - Seen working 2026-10-31 by the deploy critic on 5f8fd352. The order of the first three translations is RL-83.
@@ -686,7 +720,7 @@ Rules the model must always guarantee, regardless of how they are implemented:
 - The dictionary is data, never state. Nothing the reader does mutates it.
 - A headword is a group of senses, never a row. Its senses, its parts of speech,
   its pronunciations and its translations answer together or not at all.
-- A word's answer never touches the network (RL-35). Its definition and its example (RL-41, RL-42)
+- A word's answer never touches the network (RL-35). Its definition and its network translations (RL-41, RL-45)
   do, and only with a connection: decoration, never a condition of the answer. That request goes to
   a route handler of this app's own, never straight to a party of its own.
 - The payload is installed whole or not at all. There is no partial dictionary
@@ -710,17 +744,17 @@ Principles, not recipes:
   surfaces and none of them is on that path: the sentence translation (RL-09); the copy of the
   reader's record — its sync, its wipe and the devices that hold it (RL-22, RL-25) — which runs on the
   same Supabase as `apps/homefund`, in a schema of its own, and only once the reader opened an account on
-  purpose; and the word's decoration (RL-41, RL-42), which reaches the network only after the text is
+  purpose; and the word's decoration (RL-41, RL-45), which reaches the network only after the text is
   already drawn and never changes or delays it. With no account, nothing of the reader's record leaves
   the device (RNL-11); the decoration reaches the network with or without one, because it is not the
   reader's record.
-- **A word's definition and its example are the things on that path that do reach the network**
-  (RL-41, RL-42), and each goes through a route handler of the app's own, not straight to a party of
+- **A word's definition and its network translations are the things on that path that do reach the network**
+  (RL-41, RL-45), and each goes through a route handler of the app's own, not straight to a party of
   its own. Decided by the user 2026-09-10: hiding the request behind a route of the app's own is
   exactly what RL-09 already does for the sentence path, and it is what keeps a third party from
   learning which word a reader is looking up. The request reaches the network only as the answer
   draws and only with a connection, and never blocks or delays the text.
-- **The server surface is eight route handlers and five pages, and nothing else** (`/repaso` added 2026-10-30, RL-68). Counted
+- **The server surface is eight route handlers, five pages and one file of server actions, and nothing else** (`/repaso` added 2026-10-30, RL-68). Counted
   2026-09-14 against the files `apps/wordbook/app` serves, correcting a figure stale since before this
   slice: the text here read «five route handlers and one page … becoming seven» and had fallen three
   handlers and three pages behind what had already shipped.
@@ -732,20 +766,22 @@ Principles, not recipes:
     **only** a request that carries a session the reader opened on purpose; with no account they
     answer 401 without opening a connection.
   - `app/auth/confirm/route.ts` — landing the sign-in link (RL-22).
-  - `app/api/word/text/route.ts` — the word's decoration (RL-41, RL-42): a definition for the entries
-    that carry none, and an example sentence. Answers with no session, caches what it resolves, and
+  - `app/actions/account.ts` — the server actions of `/cuenta`: the sign-in link request (RL-22, RL-69, RL-75, RL-89), the
+    code check (RL-73) and sign out. Added to this list 2026-11-08; it was already serving.
+  - `app/api/word/text/route.ts` — the word's decoration (RL-41, RL-45): a definition for the entries
+    that carry none, and the network translations of a thin one. Answers with no session, caches what it resolves, and
     answers with nothing rather than a provider's own error on any failure.
   - `app/api/word/unlisted/route.ts` — a word the dictionary has no entry for, answered over the
-    network on its own (RL-44, RL-58).
+    network on its own (RL-86).
   - `app/api/phrase/notes/route.ts` — the terms a translated sentence names as not obvious (RL-46).
   - `app/cuenta/page.tsx` — a server component that reads the session and queries nothing.
   - `app/page.tsx`, `app/registro/page.tsx` and `app/registro/[palabra]/page.tsx` — the box and the
     reader's own record.
-  - `app/repaso/page.tsx` — the review (RL-68): a shell; the record and its cards are read on the device.
+  - `app/repaso/page.tsx` — the review (RL-78): a shell; the record and its cards are read on the device.
 - **The word's text never passes through any of them.** That is the claim "no backend" actually
   protects, and it is the one to check before adding a ninth: not how many handlers exist, but whether
   the answer's text still touches none of them (RL-35, RNL-11). The word's decoration — its
-  definition and its example (RL-41, RL-42) — does touch one of them, but only once the text already
+  definition and its network translations (RL-41, RL-45) — does touch one of them, but only once the text already
   stands on its own: it arrives late, arrives only sometimes, and its absence never changes or delays
   the text it decorates.
 - **A local MCP server (RL-27) is not part of the deployed app.** It is a

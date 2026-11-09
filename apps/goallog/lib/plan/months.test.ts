@@ -12,6 +12,8 @@ import {
   plannedOf,
   reachedByMonth,
   settledMonths,
+  holderToDate,
+  plannedThrough,
   toDate,
 } from "./months";
 import { weekPlanned } from "./week-planned";
@@ -134,7 +136,7 @@ test("monthRows: one row per month of the span, a month with nothing included, f
   ]);
 });
 
-test("toDate: sums through the current month, a month without amount adds 0 planned", () => {
+test("toDate: closed months whole, the current month by days, a month without amount adds 0 planned", () => {
   const rows = monthRows({
     openedOn: "2026-09-10",
     horizon: "2026-12-01",
@@ -146,7 +148,7 @@ test("toDate: sums through the current month, a month without amount adds 0 plan
       ["2026-11-01", 999],
     ]),
   });
-  assert.deepEqual(toDate(rows), { planned: 720, reached: 150 });
+  assert.deepEqual(toDate(rows, "2026-10-22", { openedOn: "2026-09-10", horizon: "2026-12-01" }), { planned: Math.floor((720 * 22) / 31), reached: 150 });
 });
 
 test("monthRows: a month with no budget reads the rhythm; a budget wins, 0 included; no rhythm reads as before", () => {
@@ -234,7 +236,7 @@ test("plannedOf: no rhythm and no amount reads null", () => {
 test("monthRows and monthLine plan Reto's shares; to date sums them", () => {
   const rows = monthRows({ ...reto, today: "2026-10-07", reached: new Map() });
   assert.deepEqual(rows.map((row) => row.planned), [300, 135]);
-  assert.equal(toDate(rows).planned, 435);
+  assert.equal(toDate(rows, "2026-10-07", reto).planned, 435);
   assert.equal(
     monthLine({ month: OCT, today: "2026-10-07", budget: null, reached: 0, rhythm: 600, openedOn: reto.openedOn, horizon: reto.horizon }).planned,
     135,
@@ -285,4 +287,32 @@ test("partOf: names the days a first, a last and a one-month goal fill; a whole 
   assert.equal(partOf("2026-10-01", { ...base, openedOn: "2026-10-01", horizon: "2026-12-01" }), null);
   assert.equal(partOf("2026-10-01", { ...first, budgets: [{ month: "2026-10-01", amount: 60 }] }), null);
   assert.equal(partOf("2026-10-01", { ...first, rhythm: null }), null);
+});
+
+test("plannedThrough: the month's amount spread by days up to today, rounded down", () => {
+  const open = { openedOn: "2026-01-01", horizon: null };
+  assert.equal(plannedThrough(112, "2026-11-01", "2026-11-02", open), 7);
+  assert.equal(plannedThrough(112, "2026-11-01", "2026-11-30", open), 112);
+  assert.equal(plannedThrough(100, "2026-11-01", "2026-11-01", open), 3);
+});
+
+test("plannedThrough: a goal opened mid-month or ending mid-month spreads over its own days", () => {
+  assert.equal(plannedThrough(60, "2026-11-01", "2026-11-05", { openedOn: "2026-11-02", horizon: null }), 8);
+  assert.equal(plannedThrough(60, "2026-11-01", "2026-11-05", { openedOn: "2026-11-02", horizon: "2026-11-12" }), 24);
+  assert.equal(plannedThrough(60, "2026-11-01", "2026-11-20", { openedOn: "2026-01-01", horizon: "2026-11-11" }), 60);
+});
+
+test("plannedThrough: a goal not yet open today plans nothing so far", () => {
+  assert.equal(plannedThrough(60, "2026-11-01", "2026-11-05", { openedOn: "2026-11-09", horizon: null }), 0);
+});
+
+test("holderToDate: the holder's planned is the sum of its goals' own prorated shares, not one prorating over its span", () => {
+  const today = "2026-11-10";
+  // Two goals planning 60 in November, one open all month, one opened on the 6th.
+  const early = plannedThrough(60, "2026-11-01", today, { openedOn: "2026-01-01", horizon: null });
+  const late = plannedThrough(60, "2026-11-01", today, { openedOn: "2026-11-06", horizon: null });
+  assert.deepEqual([early, late], [20, 12]);
+  assert.deepEqual(holderToDate(35, [0, early, late]), { planned: 32, reached: 35 });
+  // Prorating the sum over the holder's span (open all month) would read 40.
+  assert.notEqual(plannedThrough(120, "2026-11-01", today, { openedOn: "2026-01-01", horizon: null }), 32);
 });

@@ -7,7 +7,7 @@ import { textResponseSchema, type WordText } from "@/lib/word/protocol";
 
 // Mini over nano: nano left snuff's missing senses empty on 4 of 4 real
 // calls and repeated a sense already listed; mini filled all 4. The gain is
-// in `translations` alone — both write the definition and example well.
+// in `translations` alone — both write the definition well.
 export const MODEL_NAME = "gpt-5-mini";
 
 const CHAT_COMPLETIONS_ENDPOINT = "https://api.openai.com/v1/chat/completions";
@@ -33,15 +33,9 @@ const WORD_TEXT_JSON_SCHEMA = {
   type: "object",
   properties: {
     definition: { type: ["string", "null"] },
-    example: {
-      type: "object",
-      properties: { en: { type: "string" }, es: { type: "string" } },
-      required: ["en", "es"],
-      additionalProperties: false,
-    },
     translations: { type: ["array", "null"], items: { type: "string" } },
   },
-  required: ["definition", "example", "translations"],
+  required: ["definition", "translations"],
   additionalProperties: false,
 };
 
@@ -90,18 +84,14 @@ function buildSystemPrompt(headword: string, wantDefinition: boolean, existingSe
       `own register, starting with the definition itself — never with "${headword}" or its part of speech.`
     : `Set "definition" to null: this headword already has one.`;
   return (
-    `You extend an English-Spanish learner's dictionary. "example.en" is one natural English sentence that uses ` +
-    `"${headword}". "example.es" is its Spanish translation. ${definitionInstruction} ` +
+    `You extend an English-Spanish learner's dictionary entry for "${headword}". ${definitionInstruction} ` +
     `${buildTranslationsInstruction(headword, existingSenses)}`
   );
 }
 
 /**
- * One call, definition, example and (RL-45) translations together — the
- * shape measured against twelve entries with no definition. The route also
- * calls this with `wantDefinition` false and a cached example already on
- * hand, purely for `translations`; the example it returns then is spent
- * tokens, never written back over the cached one. Never throws: any
+ * One call, definition and (RL-45) translations together. The route also
+ * calls this with `wantDefinition` false, purely for `translations`. Never throws: any
  * failure, at any step, answers `null`, so the route's own 204 is the only
  * way a bad generation reaches a reader. Endpoint and parameter names
  * verified with a real call this session: `/v1/chat/completions` takes

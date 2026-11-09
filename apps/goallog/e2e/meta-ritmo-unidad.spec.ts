@@ -62,7 +62,7 @@ for (const width of [360, 1280]) {
         await expect(sheet.getByText("Los meses que ya cerraron no cambian.", { exact: true })).toBeVisible();
         await expect(sheet.getByRole("button", { name: SAVE, exact: true })).toBeVisible();
         await expect(sheet.getByRole("button", { name: "Cancelar", exact: true })).toBeVisible();
-        expect(await sheet.innerText()).not.toMatch(/terminas el/i);
+        expect(await sheet.innerText()).not.toMatch(/caben hasta el/i);
       } finally {
         await context.close();
       }
@@ -157,14 +157,14 @@ for (const width of [360, 1280]) {
     });
 
     test("a goal in pages is not planned: `/plan` sends it back to its screen, and its screen names no end it would reach (RP-101)", async ({ person, browser, baseURL, db }) => {
-      // Kills: dropping the redirect; drawing «A este ritmo terminas el …» for a unit other than time.
+      // Kills: dropping the redirect; drawing «Tus tareas caben hasta el …» for a unit other than time.
       const id = await seedOpenGoal(db, person, { name: "Leer", unit: PAGES, horizon: null, rhythm: 40, created: openedOnDay(5).at });
       await seedTask(db, person, id, "Terminar un libro", false);
       const { page, context } = await visit(browser, baseURL, person, `/metas/${id}/plan`, width, new RegExp(`/metas/${id}$`));
       try {
         await expect(page).toHaveURL(new RegExp(`/metas/${id}$`));
         const text = await mainLower(page);
-        expect(text).not.toMatch(/terminas el/);
+        expect(text).not.toMatch(/caben hasta el/);
         expect(text).not.toMatch(/termina el \d/);
         expect(text).toContain("40 páginas al mes");
       } finally {

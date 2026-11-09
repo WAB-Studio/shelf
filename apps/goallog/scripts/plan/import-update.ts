@@ -1,4 +1,4 @@
-// Proves RP-130's act (module 1021): `confirmImport` given `{ draft, updates }` writes, in one transaction, every
+// Proves RP-152's act (module 1021): `confirmImport` given `{ draft, updates }` writes, in one transaction, every
 // difference the review listed for a goal that matches one open goal, refuses a review the goal changed under,
 // and still creates the goals that match none. Written from the contract, not from the implementation.
 // The person is an isolated one made by `scripts/mcp/lib/people.ts` and acted as with `actAs`; the review's

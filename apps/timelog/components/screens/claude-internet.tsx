@@ -1,40 +1,47 @@
+import type { ReactNode } from "react";
 import { getTranslations } from "next-intl/server";
 
-import { BarRows, type BarRow } from "@/components/screens/app-rows";
+import { BarRows, capped, type BarRow } from "@/components/screens/app-rows";
 import { Stack, Text, TextLink } from "@/components/ui";
-import { claudeSources, claudeTotal, sourcesOverlap } from "@/lib/daily";
+import { claudeScreen, claudeSources } from "@/lib/daily";
 import { projectName } from "@/lib/claude-project";
+import { INSTALLER_URL } from "@/lib/installer";
+import { sum } from "@/lib/totals";
 import type { ClaudeDay, ClaudeSessionTime, PageTime, SiteTime } from "@/lib/queries";
+import type { ProjectTime } from "@/lib/vscode-project";
 import type { calendarWords } from "@/lib/words";
 
 type Words = Awaited<ReturnType<typeof calendarWords>>;
 
-const SITES_SHOWN = 8;
-const PAGES_SHOWN = 8;
+const ROWS_SHOWN = 8;
 const SESSIONS_SHOWN = 8;
-// The uploader's install and update steps.
-const UPLOADER_URL = "https://github.com/WAB-Studio/timelog-sync/blob/timelog/TIMELOG.md#on-windows-with-the-installer";
 
-// «Claude» of one day (RT-14): Claude Code, claude.ai and the desktop app, and what they add up to. A row shows once
-// its source has ever sent anything, so a PC with no Claude folder is told so rather than shown a flat zero.
+// «Claude» of one day (RT-24): what the person spent in front of Claude (claude.ai and the app), then Claude Code as the
+// agent's own work with its sessions. Claude Code's row shows once it has ever sent anything, so a PC with no Claude
+// folder is told so rather than shown a flat zero.
 export async function ClaudeBlock({ isToday, claude, sessions, hasClaudeCode, hasSites, words }: { isToday: boolean; claude: ClaudeDay | undefined; sessions: ClaudeSessionTime[]; hasClaudeCode: boolean; hasSites: boolean; words: Words }) {
   const t = await getTranslations("time.claude");
   const parts = claude ?? { day: "", code: 0, web: 0, desktop: 0 };
-  const total = claudeTotal(parts);
+  const screen = claudeScreen(parts);
   const sources = claudeSources(parts, { code: t("code"), web: t("web"), desktop: t("desktop") });
-  const shown = { code: hasClaudeCode, web: hasSites, desktop: false };
-  const rows = sources.filter((row) => shown[row.key] || row.seconds > 0);
+  const shown = { web: hasSites, desktop: false };
+  const rows = sources.filter((row) => row.key !== "code" && (shown[row.key] || row.seconds > 0));
 
   return (
     <Stack gap={2}>
-      {total === 0 ? (
-        <Text as="p" variant="meta">{t(hasClaudeCode ? (isToday ? "emptyToday" : "empty") : "never")}</Text>
+      {screen === 0 && !hasClaudeCode ? (
+        <Text as="p" variant="meta">{t("never")}</Text>
+      ) : screen === 0 ? (
+        <Text as="p" variant="meta">{t(isToday ? "emptyToday" : "empty")}</Text>
       ) : (
-        <>
-          <BarRows of={total} rows={rows.map((row) => ({ key: row.key, tone: row.tone, name: row.name, figure: words.duration(row.seconds), seconds: row.seconds, label: t("bar", { name: row.name, duration: words.duration(row.seconds) }) }))} />
-          {sourcesOverlap(rows) ? <Text as="p" variant="meta">{t("overlap")}</Text> : null}
-        </>
+        <BarRows of={screen} rows={rows.map((row) => ({ key: row.key, tone: row.tone, name: row.name, figure: words.duration(row.seconds), seconds: row.seconds, label: t("bar", { name: row.name, duration: words.duration(row.seconds) }) }))} />
       )}
+      {hasClaudeCode || parts.code > 0 ? (
+        <Stack gap={2}>
+          <Text variant="meta">{t("agent")}</Text>
+          <BarRows tone="claude" of={Math.max(parts.code, ...sessions.map((one) => one.seconds))} rows={[{ key: "code", name: t("code"), figure: words.duration(parts.code), seconds: parts.code, label: t("bar", { name: t("code"), duration: words.duration(parts.code) }) }]} />
+        </Stack>
+      ) : null}
       {sessions.length > 0 ? (
         <Stack gap={2}>
           <Text variant="meta">{t("sessions")}</Text>
@@ -59,6 +66,20 @@ export async function ClaudeBlock({ isToday, claude, sessions, hasClaudeCode, ha
   );
 }
 
+// The longest projects as bars (RT-23), «y N más · X» opening onto the rest: a day's card and a week's are this.
+export async function ProjectBars({ projects, words }: { projects: ProjectTime[]; words: Words }) {
+  const t = await getTranslations("time.today");
+  const row = (one: ProjectTime): BarRow => ({ key: one.project, name: one.project, figure: words.duration(one.seconds), seconds: one.seconds, label: t("projectBar", { project: one.project, duration: words.duration(one.seconds) }) });
+  return <BarRows of={projects[0]?.seconds} {...capped(projects, ROWS_SHOWN, row, (rest) => t("projectsMore", { n: rest.length, duration: words.duration(sum(rest)) }))} />;
+}
+
+// The longest hostnames as bars (RT-13), «y N más · X» opening onto the rest; `detail` opens a site onto what it holds.
+export async function SiteBars({ sites, words, detail }: { sites: SiteTime[]; words: Words; detail?: (host: string) => ReactNode }) {
+  const t = await getTranslations("time.internet");
+  const row = (one: SiteTime): BarRow => ({ key: one.host, name: one.host, figure: words.duration(one.seconds), seconds: one.seconds, label: t("bar", { host: one.host, duration: words.duration(one.seconds) }), detail: detail?.(one.host) });
+  return <BarRows tone="browser" of={sites[0]?.seconds} {...capped(sites, ROWS_SHOWN, row, (rest) => t("more", { n: rest.length, duration: words.duration(sum(rest)) }))} />;
+}
+
 // «Internet» of one day (RT-13): the longest hostnames, each opening onto its pages.
 export async function InternetBlock({ isToday, sites, pages, hasSites, words }: { isToday: boolean; sites: SiteTime[]; pages: PageTime[]; hasSites: boolean; words: Words }) {
   const t = await getTranslations("time.internet");
@@ -74,29 +95,24 @@ export async function InternetBlock({ isToday, sites, pages, hasSites, words }: 
       <BarRows
         tone="browser"
         of={of}
-        rows={mine.slice(0, PAGES_SHOWN).map(pageRow)}
-        overflow={mine.length > PAGES_SHOWN ? { summary: t("pagesMore", { n: mine.length - PAGES_SHOWN }), rows: mine.slice(PAGES_SHOWN).map(pageRow) } : undefined}
+        rows={mine.slice(0, ROWS_SHOWN).map(pageRow)}
+        overflow={mine.length > ROWS_SHOWN ? { summary: t("pagesMore", { n: mine.length - ROWS_SHOWN }), rows: mine.slice(ROWS_SHOWN).map(pageRow) } : undefined}
       />
     );
   };
-  const siteRow = (one: SiteTime): BarRow => ({ key: one.host, name: one.host, figure: words.duration(one.seconds), seconds: one.seconds, label: t("bar", { host: one.host, duration: words.duration(one.seconds) }), detail: pages.some((page) => page.host === one.host) ? pagesOf(one.host) : undefined });
+  const detail = (host: string) => (pages.some((page) => page.host === host) ? pagesOf(host) : undefined);
   return (
     <Stack gap={2}>
       {sites.length > 0 ? (
         <>
-          <BarRows
-            tone="browser"
-            of={sites[0].seconds}
-            rows={sites.slice(0, SITES_SHOWN).map(siteRow)}
-            overflow={sites.length > SITES_SHOWN ? { summary: t("more", { n: sites.length - SITES_SHOWN }), rows: sites.slice(SITES_SHOWN).map(siteRow) } : undefined}
-          />
+          <SiteBars sites={sites} words={words} detail={detail} />
           <Text as="p" variant="meta">{t("privacy")}</Text>
         </>
       ) : (
         <>
           <Text as="p" variant="meta">{t(hasSites ? (isToday ? "emptyToday" : "empty") : "never")}</Text>
           {hasSites ? null : (
-            <TextLink href={UPLOADER_URL} target="_blank" rel="noreferrer">
+            <TextLink href={INSTALLER_URL} target="_blank" rel="noreferrer">
               {t("install")} ›
             </TextLink>
           )}

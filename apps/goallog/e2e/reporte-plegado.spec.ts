@@ -17,6 +17,10 @@ function plusDays(days: number): string {
   return dateToCivilDate(date);
 }
 
+// The goal's opening, counted from the day the server calls today: `now()` is the real clock, which `PULSAR_CLOCK` leaves
+// behind (`docs/TRAPS.md`, «A mutation that only bites on some days»).
+const pinnedNoon = () => `${todayInZone()}T12:00:00-05:00`;
+
 // Long enough that the month's tasks cannot fit page 1 after the head and the first sections.
 const LONG_NOTE = Array.from({ length: 400 }, (_, i) => `n${String(i).padStart(3, "0")}`)
   .join(" ")
@@ -404,7 +408,7 @@ async function seedWeek(
   const horizon = plusDays(span.horizonInDays);
   const [goal] = await db<{ id: string }[]>`
     insert into goals.goals (user_id, name, horizon, measure_name, measure_unit, created_at)
-    values (${person.id}, ${name}, ${horizon}, 'minutos', 'minutos', now() - make_interval(days => ${span.openedDaysAgo}))
+    values (${person.id}, ${name}, ${horizon}, 'minutos', 'minutos', ${pinnedNoon()}::timestamptz - make_interval(days => ${span.openedDaysAgo}))
     returning id
   `;
   const months = [-1, 0, 1].map((offset) => firstOfMonth(today, offset));
@@ -518,7 +522,7 @@ async function seedPartial(
   const [goal] = await db<{ id: string }[]>`
     insert into goals.goals (user_id, name, horizon, measure_name, measure_unit, created_at)
     values (${person.id}, ${name}, ${plusDays(edges.ends ? 1 : 90)}, ${measure.unit}, ${measure.unit},
-      now() - make_interval(days => ${edges.opens ? weekday - 1 : 70}))
+      ${pinnedNoon()}::timestamptz - make_interval(days => ${edges.opens ? weekday - 1 : 70}))
     returning id
   `;
   if (measure.amount !== null) {
