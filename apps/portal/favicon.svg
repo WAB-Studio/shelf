@@ -1,14 +1,14 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <defs>
-    <radialGradient id="a" cx="10%" cy="0%" r="110%"><stop offset="0" stop-color="#F7B98B"/><stop offset=".55" stop-color="#F7B98B" stop-opacity="0"/></radialGradient>
-    <radialGradient id="b" cx="100%" cy="100%" r="110%"><stop offset="0" stop-color="#7E9BF0"/><stop offset=".55" stop-color="#7E9BF0" stop-opacity="0"/></radialGradient>
-    <radialGradient id="c" cx="85%" cy="10%" r="80%"><stop offset="0" stop-color="#74D8BD"/><stop offset=".5" stop-color="#74D8BD" stop-opacity="0"/></radialGradient>
-  </defs>
-  <rect width="64" height="64" rx="15" fill="#C9A8D8"/>
-  <rect width="64" height="64" rx="15" fill="url(#a)"/>
-  <rect width="64" height="64" rx="15" fill="url(#b)"/>
-  <rect width="64" height="64" rx="15" fill="url(#c)"/>
-  <circle cx="18" cy="32" r="7.5" fill="#2F5BEA" stroke="#fff" stroke-width="2.5"/>
-  <circle cx="32" cy="32" r="7.5" fill="#1C1B16" stroke="#fff" stroke-width="2.5"/>
-  <circle cx="46" cy="32" r="7.5" fill="#1C6E5A" stroke="#fff" stroke-width="2.5"/>
+  <rect width="64" height="64" rx="14" fill="#f5f3ee"/>
+  <rect x="11" y="17" width="9" height="32" rx="1.5" fill="#5b2ee5"/>
+  <rect x="22" y="12" width="9" height="37" rx="1.5" fill="#0c5a43"/>
+  <rect x="33" y="20" width="9" height="29" rx="1.5" fill="#c2410c"/>
+  <rect x="44" y="15" width="9" height="34" rx="1.5" fill="#232c37"/>
+  <g fill="#f5f3ee">
+    <rect x="11" y="22" width="9" height="2.5"/><rect x="11" y="41" width="9" height="2.5"/>
+    <rect x="22" y="17" width="9" height="2.5"/><rect x="22" y="41" width="9" height="2.5"/>
+    <rect x="33" y="25" width="9" height="2.5"/><rect x="33" y="41" width="9" height="2.5"/>
+    <rect x="44" y="20" width="9" height="2.5"/><rect x="44" y="41" width="9" height="2.5"/>
+  </g>
+  <rect x="8" y="49" width="48" height="4" rx="1" fill="#23211d"/>
 </svg>
