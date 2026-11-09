@@ -61,6 +61,8 @@
     "networkAnswerTitle": "Respuesta de internet",
     "networkPending": "Buscando una respuesta…",
     "networkFailed": "No se pudo responder por internet",
+    "learnThisSense": "Aprender este sentido",
+    "learningThisSense": "Es el que aprendes",
     "example": "Ejemplo",
     "exampleTranslation": "Traducción",
     "suggestions": "Sugerencias",

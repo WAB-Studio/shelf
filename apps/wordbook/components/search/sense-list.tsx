@@ -1,12 +1,14 @@
 "use client";
 
-import { useState, useSyncExternalStore, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
 import NextLink from "next/link";
 import { useTranslations } from "next-intl";
 
 import { ipaKey, pronunciationBlocks, type Sense } from "@/lib/dictionary/index-build";
 import { splitRare } from "@/lib/dictionary/rare-sense";
 import type { WordAnswer } from "@/lib/dictionary/lookup";
+import { pickSense, senseChoiceFor } from "@/lib/review/sense";
+import { readSenseChoice, saveSenseChoice, type SenseChoice } from "@/lib/review/store";
 import { speak, speechSupported } from "@/lib/speech/speak";
 import {
   Box,
@@ -23,6 +25,44 @@ import {
 import { TranslationList } from "@/components/translations/translation-list";
 import { GeneratedText, type GeneratedTextState } from "./generated-text";
 import { NetworkAnswer, type NetworkAnswerState } from "./network-answer";
+
+// RL-85: the senses of one word the reader can pick the card's sense from. Set by `LearnableSenses`
+// around the group the review will draw from; absent everywhere else, where no sense offers the tap.
+const LearnableContext = createContext<{
+  senses: readonly Sense[];
+  chosen: Sense | null;
+  choose: (sense: Sense) => void;
+} | null>(null);
+
+// The sense the reader taps to learn, kept on the device beside the review's cards. Until a tap the
+// first sense stands, which is what the review draws with no choice.
+function LearnableSenses({ word, senses, children }: { word: string; senses: readonly Sense[]; children: ReactNode }) {
+  const [choice, setChoice] = useState<SenseChoice | null>(null);
+
+  useEffect(() => {
+    let live = true;
+    readSenseChoice(word)
+      .then((kept) => {
+        if (live) setChoice(kept);
+      })
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [word]);
+
+  const choose = (sense: Sense) => {
+    const next = senseChoiceFor(word, sense);
+    setChoice(next);
+    saveSenseChoice(next).catch(() => {});
+  };
+
+  return (
+    <LearnableContext.Provider value={{ senses, chosen: pickSense(senses, choice), choose }}>
+      {children}
+    </LearnableContext.Provider>
+  );
+}
 
 // `search-screen.tsx`'s own query name: every door this file opens onto a
 // correction is `/?q=<word>`, the same param `no-entry-answer.tsx` reads —
@@ -201,6 +241,7 @@ function SenseDetail({
   example?: ReactNode;
   t: ReturnType<typeof useTranslations>;
 }) {
+  const learnable = useContext(LearnableContext);
   const ownSound = sense.ipa !== null && (segmentIpa === null || ipaKey(sense.ipa) !== ipaKey(segmentIpa));
   const ownIpa = !compact && ownSound ? sense.ipa : null;
 
@@ -218,6 +259,21 @@ function SenseDetail({
           </Text>
         )}
         <TranslationList items={sense.translations} lead={lead} />
+        {!compact && learnable !== null && learnable.senses.length > 1 && (
+          learnable.chosen === sense ? (
+            <Text size="2" muted>
+              {t("learningThisSense")}
+            </Text>
+          ) : (
+            <Link asChild underline="always" muted>
+              <button type="button" onClick={() => learnable.choose(sense)}>
+                <TapTarget align="center" px="1">
+                  <Text size="2">{t("learnThisSense")}</Text>
+                </TapTarget>
+              </button>
+            </Link>
+          )
+        )}
       </Flex>
       {!compact && sense.definition !== null && (
         <Flex direction="column" data-definition-block="">
@@ -704,15 +760,17 @@ export function SenseList({
           ) : (
             <>
               <EntryMeta senses={answer.exact.senses} headword={answer.exact.headword} speaker={showSpeaker} t={t} />
-              <SenseGroup
-                senses={answer.exact.senses}
-                compact={false}
-                interlude={offerInside ? offer : undefined}
-                lead
-                example={generated && <GeneratedText state={generated} />}
-                shownIpa={answer.exact.senses[0].ipa}
-                t={t}
-              />
+              <LearnableSenses word={answer.exact.headword} senses={answer.exact.senses}>
+                <SenseGroup
+                  senses={answer.exact.senses}
+                  compact={false}
+                  interlude={offerInside ? offer : undefined}
+                  lead
+                  example={generated && <GeneratedText state={generated} />}
+                  shownIpa={answer.exact.senses[0].ipa}
+                  t={t}
+                />
+              </LearnableSenses>
             </>
           )}
         </Flex>
@@ -757,7 +815,13 @@ export function SenseList({
                         {!compact && <SpeakButton headword={hit.lemma} ipa={leadPronunciation(hit.group.senses)} t={t} />}
                       </Flex>
                     </Flex>
-                    <SenseGroup senses={hit.group.senses} compact={compact} t={t} />
+                    {index === 0 && !compact ? (
+                      <LearnableSenses word={hit.lemma} senses={hit.group.senses}>
+                        <SenseGroup senses={hit.group.senses} compact={compact} t={t} />
+                      </LearnableSenses>
+                    ) : (
+                      <SenseGroup senses={hit.group.senses} compact={compact} t={t} />
+                    )}
                   </Flex>
                 </Box>
               </Flex>

@@ -14,7 +14,7 @@ import { readWordStory, type WordStory } from "@/lib/log/story";
 import { buildQueue, buildQueueFor, isReviewable, type ReviewQueue } from "@/lib/review/deck";
 import { dueWhen, GRADES, intervals, intervalUnit, rate, staysInSession, type ReviewGrade } from "@/lib/review/schedule";
 import { answerSenses, pickSense } from "@/lib/review/sense";
-import { readCards, saveCard } from "@/lib/review/store";
+import { readCards, readSenseChoice, saveCard } from "@/lib/review/store";
 import { gapOutWord } from "@/lib/word/mark-word";
 import { TranslationList } from "@/components/translations/translation-list";
 import {
@@ -139,23 +139,22 @@ export function ReviewSession() {
   const current = state.kind === "ready" ? state.items[state.index] : undefined;
   const currentKey = current?.row.key;
   const currentIsPhrase = current !== undefined && isPhraseRow(current.row);
-  const currentTranslation = current?.row.lastTranslation ?? null;
 
   // A word asks the dictionary on the device for its senses; a phrase has none, and a dictionary that
   // never answers leaves the card on the line the record kept.
   useEffect(() => {
     if (currentKey === undefined || currentIsPhrase) return;
     let live = true;
-    lookup(currentKey)
-      .then((answer) => {
-        const picked = pickSense(answerSenses(answer), currentTranslation);
+    Promise.all([lookup(currentKey), readSenseChoice(currentKey).catch(() => null)])
+      .then(([answer, choice]) => {
+        const picked = pickSense(answerSenses(answer), choice);
         if (live && picked !== null) setSense({ key: currentKey, sense: picked });
       })
       .catch(() => {});
     return () => {
       live = false;
     };
-  }, [currentKey, currentIsPhrase, currentTranslation, lookup]);
+  }, [currentKey, currentIsPhrase, lookup]);
 
   useEffect(() => {
     if (currentKey === undefined || currentIsPhrase) return;
