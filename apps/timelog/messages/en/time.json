@@ -81,6 +81,12 @@
     "cell": "{app}, {day}: {duration}",
     "restBar": "{app}: {duration}",
     "appsMore": "and {n} more apps · {duration}",
+    "projects": "Projects this week",
+    "projectBar": "{project}: {duration}",
+    "projectsMore": "{n, plural, one {and # more project · {duration}} other {and # more projects · {duration}}}",
+    "internet": "Internet this week",
+    "siteBar": "{host}: {duration}",
+    "sitesMore": "and {n} more sites",
     "exportMore": "Export other dates"
   },
   "keys": {

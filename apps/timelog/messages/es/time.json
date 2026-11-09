@@ -81,7 +81,13 @@
     "cell": "{app}, {day}: {duration}",
     "restBar": "{app}: {duration}",
     "appsMore": "y {n} apps más · {duration}",
-    "exportMore": "Exportar otras fechas"
+    "exportMore": "Exportar otras fechas",
+    "projects": "Proyectos de la semana",
+    "projectBar": "{project}: {duration}",
+    "projectsMore": "{n, plural, one {y # proyecto más · {duration}} other {y # proyectos más · {duration}}}",
+    "internet": "Internet de la semana",
+    "siteBar": "{host}: {duration}",
+    "sitesMore": "y {n} sitios más"
   },
   "keys": {
     "title": "Llaves",

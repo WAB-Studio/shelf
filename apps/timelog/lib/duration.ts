@@ -33,12 +33,13 @@ export function briefDuration(seconds: number, words: DurationWords): string {
   return minutes < 60 ? `${minutes} ${words.minutes}` : `${Math.floor(minutes / 60)} ${words.hours}`;
 }
 
-// A heatmap cell on one line, wide and narrow: «4 h 43» or «57 min» where there is room, «4h» or «57m» where there is not.
+// A heatmap cell, wide and narrow: «4 h 43» or «57 min» on one line where there is room; where there is not, «57m», or hours over
+// minutes on two lines («4h» then «43») so a phone loses none of them.
 export function heatFigure(seconds: number, words: DurationWords, tiny: { hours: string; minutes: string }): { wide: string; narrow: string } {
   const minutes = Math.floor(seconds / 60);
   if (minutes === 0) return seconds <= 0 ? { wide: `0 ${words.minutes}`, narrow: `0${tiny.minutes}` } : { wide: words.underMinute, narrow: `<1${tiny.minutes}` };
   const hours = Math.floor(minutes / 60);
   const rest = minutes % 60;
   if (hours === 0) return { wide: `${rest} ${words.minutes}`, narrow: `${rest}${tiny.minutes}` };
-  return { wide: rest === 0 ? `${hours} ${words.hours}` : `${hours} ${words.hours} ${String(rest).padStart(2, "0")}`, narrow: `${hours}${tiny.hours}` };
+  return { wide: rest === 0 ? `${hours} ${words.hours}` : `${hours} ${words.hours} ${String(rest).padStart(2, "0")}`, narrow: rest === 0 ? `${hours}${tiny.hours}` : `${hours}${tiny.hours}\n${String(rest).padStart(2, "0")}` };
 }

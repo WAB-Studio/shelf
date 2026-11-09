@@ -95,6 +95,10 @@ Interface language: Spanish or English, the person's choice (RT-12). A person re
   the focused browser's address bar (Windows) or the browser's own history; never from a browser extension. Where a
   source never arrived the screen says what to do: update the program on the PC for sites, with a link to the latest
   installer, the same one «Llaves» downloads; the Claude folder for Claude Code. Successor of RT-22. (2026-11-08)
+- [x] **RT-26** «Semana» also shows «Proyectos de la semana» (the VS Code-family workspace folders of RT-23, added over
+  the seven days) and «Internet de la semana» (the longest sites of the week), each with the eight longest and a «y N más»
+  that opens the rest. A card with nothing is absent. On a phone a heatmap cell shows hours over minutes («4h» then
+  «43»), so the minutes are not lost. (2026-11-08)
 
 ### Non-functional requirements
 
