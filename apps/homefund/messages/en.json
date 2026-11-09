@@ -182,7 +182,11 @@
     "shareLabel": "{pct}% of the month's spending",
     "averageLabel": "Average {amount}",
     "emptyMonths": "No movements in {months}: the average leaves them out.",
-    "contributionsNote": "Incomes into the fund with no «From whom» are not counted."
+    "potIn": "Fund in {currency}",
+    "potSpent": "Fund spending this month",
+    "potCash": "Cash balance",
+    "unassigned": "Unassigned",
+    "contributionsNote": "Unassigned are incomes into the fund that arrived without «From whom»; open them to choose who put them in."
   },
   "ownership": {
     "of": "{name}'s",
@@ -649,6 +653,7 @@
       "causeNotFound": "You can't use that movement as a cause.",
       "causeSelf": "A movement can't be its own cause.",
       "counterpartyComplete": "This movement already has both accounts; there's nothing to complete.",
+      "contributorRequired": "Choose whose income this is",
       "contributorInvalid": "Pick a fund member"
     },
     "labelsLabel": "Labels",
@@ -675,7 +680,8 @@
     "headlineNetFrom": "Net since {from}",
     "headlineNetTo": "Net until {to}",
     "contributorLabel": "From whom",
-    "contributorNone": "Unassigned"
+    "contributorNone": "Unassigned",
+    "contributorPlaceholder": "Choose who"
   },
   "cash": {
     "withdrawAction": "Withdraw cash",

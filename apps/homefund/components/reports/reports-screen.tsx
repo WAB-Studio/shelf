@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { useFormatter, useLocale, useTranslations } from "next-intl";
 import { civilDateToDate, todayInBogota } from "@/lib/dates";
 import { usePathname, useRouter } from "@/i18n/navigation";
@@ -74,7 +75,7 @@ function ReportsHead({ title, month }: { title: string; month: string }) {
 export function ReportsScreen({ data, month }: { data: ReportsData; month: string }) {
   const t = useTranslations("reports");
 
-  const { expensesByCategory, sixMonthFlow, contributions, hasGroup } = data;
+  const { expensesByCategory, sixMonthFlow } = data;
 
   return (
     <>
@@ -104,31 +105,7 @@ export function ReportsScreen({ data, month }: { data: ReportsData; month: strin
           <Flex direction="column" gap="3" asChild>
             <section>
               <Heading as="h2" size="4">{t("contributionsTitle")}</Heading>
-              {!hasGroup ? (
-                <Text size="2" color="gray">
-                  {t("noGroup")}
-                </Text>
-              ) : contributions.length === 0 ? (
-                <Text size="2" color="gray">
-                  {t("contributionsEmpty")}
-                </Text>
-              ) : (
-                byCurrency(contributions).map(([currency, rows]) => (
-                  <Flex key={currency} direction="column" gap="3">
-                    <Text size="2" color="gray">
-                      {t("inCurrency", { currency })}
-                    </Text>
-                    {rows.map((row) => (
-                      <ContributionRow key={`${row.memberId}|${row.currency}`} row={row} />
-                    ))}
-                  </Flex>
-                ))
-              )}
-              {hasGroup && (
-                <Text size="1" color="gray">
-                  {t("contributionsNote")}
-                </Text>
-              )}
+              <ContributionsBody data={data} />
             </section>
           </Flex>
         </Flex>
@@ -159,31 +136,7 @@ export function ReportsScreen({ data, month }: { data: ReportsData; month: strin
 
               <ReportCard>
                 <Heading as="h2" size="4">{t("contributionsTitle")}</Heading>
-                {!hasGroup ? (
-                  <Text size="2" color="gray">
-                    {t("noGroup")}
-                  </Text>
-                ) : contributions.length === 0 ? (
-                  <Text size="2" color="gray">
-                    {t("contributionsEmpty")}
-                  </Text>
-                ) : (
-                  byCurrency(contributions).map(([currency, rows]) => (
-                    <Flex key={currency} direction="column" gap="3">
-                      <Text size="2" color="gray">
-                        {t("inCurrency", { currency })}
-                      </Text>
-                      {rows.map((row) => (
-                        <ContributionRow key={`${row.memberId}|${row.currency}`} row={row} />
-                      ))}
-                    </Flex>
-                  ))
-                )}
-                {hasGroup && (
-                  <Text size="1" color="gray">
-                    {t("contributionsNote")}
-                  </Text>
-                )}
+                <ContributionsBody data={data} />
               </ReportCard>
             </ReportRow>
           </Flex>
@@ -393,6 +346,102 @@ function LegendItem({ color, label }: { color: string; label: string }) {
       <Disc size={12} surface={color} />
       <Text size="2" color="gray">
         {label}
+      </Text>
+    </Flex>
+  );
+}
+
+// Who put in what, then what the fund spent and what its cash holds, so the
+// month reads as a whole: contributions and spending have no reason to match
+// (`docs/FLOWS.md` §4). Each figure is one currency's and never added to another's.
+function ContributionsBody({ data }: { data: ReportsData }) {
+  const t = useTranslations("reports");
+  const { contributions, expensesByCategory, fundCash, unassigned, hasGroup } = data;
+
+  if (!hasGroup) {
+    return (
+      <Text size="2" color="gray">
+        {t("noGroup")}
+      </Text>
+    );
+  }
+
+  const pot = new Map<CurrencyCode, { spentCents: number; cashCents: number | null }>();
+  for (const row of expensesByCategory) {
+    if (row.scope !== "group") continue;
+    const figure = pot.get(row.currency) ?? { spentCents: 0, cashCents: null };
+    figure.spentCents += row.totalCents;
+    pot.set(row.currency, figure);
+  }
+  for (const cash of fundCash) {
+    const figure = pot.get(cash.currency) ?? { spentCents: 0, cashCents: null };
+    figure.cashCents = cash.balanceCents;
+    pot.set(cash.currency, figure);
+  }
+
+  return (
+    <>
+      {contributions.length === 0 && unassigned.length === 0 ? (
+        <Text size="2" color="gray">
+          {t("contributionsEmpty")}
+        </Text>
+      ) : (
+        [...new Set([...contributions, ...unassigned].map((row) => row.currency))].map(
+          (currency) => (
+            <Flex key={currency} direction="column" gap="3">
+              <Text size="2" color="gray">
+                {t("inCurrency", { currency })}
+              </Text>
+              {contributions
+                .filter((row) => row.currency === currency)
+                .map((row) => (
+                  <ContributionRow key={`${row.memberId}|${row.currency}`} row={row} />
+                ))}
+              {unassigned
+                .filter((row) => row.currency === currency)
+                .map((row) => (
+                  <PotRow key="unassigned" label={t("unassigned")}>
+                    <Money minor={row.incomeCents} currency={currency} size="inherit" />
+                  </PotRow>
+                ))}
+            </Flex>
+          ),
+        )
+      )}
+      {[...pot].map(([currency, figure]) => (
+        <Flex key={currency} direction="column" gap="2">
+          <Text size="2" color="gray">
+            {t("potIn", { currency })}
+          </Text>
+          <PotRow label={t("potSpent")}>
+            <Money minor={figure.spentCents} currency={currency} signed={false} size="inherit" />
+          </PotRow>
+          {figure.cashCents !== null && (
+            <PotRow label={t("potCash")}>
+              <Money minor={figure.cashCents} currency={currency} size="inherit" />
+            </PotRow>
+          )}
+        </Flex>
+      ))}
+      {unassigned.length > 0 && (
+        <Text size="1" color="gray">
+          {t("contributionsNote")}
+        </Text>
+      )}
+    </>
+  );
+}
+
+function PotRow({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <Flex align="center" gap="3">
+      <Box asChild flexGrow="1" minWidth="0">
+        <Text as="div" size="3" truncate>
+          {label}
+        </Text>
+      </Box>
+      <Text size="3" weight="medium">
+        {children}
       </Text>
     </Flex>
   );

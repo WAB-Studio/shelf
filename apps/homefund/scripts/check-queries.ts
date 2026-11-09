@@ -110,7 +110,11 @@ import {
   createRecurringRule,
   listRecurringRules,
 } from "@/db/queries/recurring-rules";
-import { getMemberContributions } from "@/db/queries/reports/contributions";
+import {
+  getFundCashBalances,
+  getMemberContributions,
+  getUnassignedIncome,
+} from "@/db/queries/reports/contributions";
 import { getDashboardData } from "@/db/queries/reports/dashboard";
 import { getExpensesByCategory } from "@/db/queries/reports/expenses-by-category";
 import { getMonthlyFlow, getSixMonthFlow } from "@/db/queries/reports/monthly-flow";
@@ -4275,6 +4279,7 @@ async function main(): Promise<void> {
   await incomeContributorSuite();
   await incomeContributorFollowUpSuite();
   await incomeContributorEditsSuite();
+  await fundPotSuite();
 }
 
 // A member recorded without a login is someone in the fund: a leader whose fund holds one is not alone, so an
@@ -16026,5 +16031,98 @@ async function incomeContributorEditsSuite(): Promise<void> {
     next("RF-166: completing the counterparty of an income gives it a source and clears «De quién»"),
     before === ids.guest && after === null && completed?.serverError === undefined,
     `before ${before}, after ${after}, ${completed?.serverError ?? "no error"}`,
+  );
+}
+
+// RF-167: what arrives without a person is «Sin asignar», the fund's cash is read beside what was put in,
+// and the form's action refuses an income into the fund that names nobody.
+async function fundPotSuite(): Promise<void> {
+  console.log("");
+  const PAY = 2_000_000;
+  const range = currentMonthRange();
+  const payer = await createMembershipFreeUser();
+  const ids = {
+    group: randomUUID(),
+    member: randomUUID(),
+    cash: randomUUID(),
+    category: randomUUID(),
+  };
+  await fixtureSql.begin(async (tx) => {
+    await tx`insert into groups (id, name, cash_mode) values (${ids.group}, 'Harness rf167 fondo', 'shared')`;
+    await tx`
+      insert into group_members (id, group_id, user_id, name, role)
+      values (${ids.member}, ${ids.group}, ${payer.id}, 'Harness rf167', 'leader')`;
+    await tx`
+      insert into accounts (id, group_id, is_shared, name, kind, subtype, initial_balance_cents, initial_balance_on)
+      values (${ids.cash}, ${ids.group}, true, 'Harness rf167 caja', 'asset', 'cash', 0, '2026-01-01')`;
+    await tx`
+      insert into categories (id, group_id, name, kind, color)
+      values (${ids.category}, ${ids.group}, 'Harness rf167 ingreso', 'income', '#4C8C4A')`;
+  });
+  track("groups", ids.group);
+  track("group_members", ids.member);
+  track("accounts", ids.cash);
+  track("categories", ids.category);
+
+  const income = {
+    fromAccountId: null,
+    toAccountId: ids.cash,
+    amountCents: PAY,
+    occurredAt: todayInBogota(),
+    description: "Harness rf167 ingreso",
+    splits: [{ categoryId: ids.category, amountCents: PAY }],
+    labelIds: [],
+    externalRef: null,
+  };
+  const unnamed = await asUser(payer, () => createTransaction(income));
+  keep("transactions", unnamed.transactionId);
+
+  const before = await asUser(payer, () => getUnassignedIncome(range));
+  const named = await asUser(payer, () =>
+    createTransaction({ ...income, contributedByMemberId: ids.member }),
+  );
+  keep("transactions", named.transactionId);
+  const after = await asUser(payer, () => getUnassignedIncome(range));
+  const cash = await asUser(payer, () => getFundCashBalances());
+  assert(
+    next("RF-167: an income into the fund naming nobody is «Sin asignar»; naming a member takes it out of that figure"),
+    before.find((row) => row.currency === "COP")?.incomeCents === PAY &&
+      after.find((row) => row.currency === "COP")?.incomeCents === PAY,
+    `unassigned ${JSON.stringify(before)} then ${JSON.stringify(after)}; expected ${PAY} both times`,
+  );
+  assert(
+    next("RF-167: the fund's cash balance is the cash account's, derived from its movements"),
+    cash.find((row) => row.currency === "COP")?.balanceCents === 2 * PAY,
+    `cash ${JSON.stringify(cash)}; expected ${2 * PAY}`,
+  );
+
+  const actions = (await import("@/app/actions/transactions")) as unknown as {
+    createTransactionAction: (input: unknown) => Promise<{ serverError?: string; data?: unknown }>;
+  };
+  const form = {
+    fromAccountId: null,
+    toAccountId: ids.cash,
+    amount: "20000",
+    occurredAt: todayInBogota(),
+    description: "Harness rf167 formulario",
+    splits: [{ categoryId: ids.category, amount: "20000" }],
+    labelIds: [],
+  };
+  const refused = await asUser(payer, () => actions.createTransactionAction(form));
+  const written = await fixtureSql`select id from transactions where description = 'Harness rf167 formulario'`;
+  assert(
+    next("RF-167: the form's action refuses an income into the fund that names no «De quién», and writes nothing"),
+    refused?.serverError !== undefined && written.length === 0,
+    `serverError ${refused?.serverError ?? "none"}, rows written ${written.length}`,
+  );
+  const accepted = await asUser(payer, () =>
+    actions.createTransactionAction({ ...form, contributedByMemberId: ids.member }),
+  );
+  const saved = await fixtureSql`select id from transactions where description = 'Harness rf167 formulario'`;
+  for (const row of saved) keep("transactions", row.id as string);
+  assert(
+    next("RF-167: the same income naming a member is accepted"),
+    accepted?.serverError === undefined && saved.length === 1,
+    `serverError ${accepted?.serverError ?? "none"}, rows written ${saved.length}`,
   );
 }

@@ -182,7 +182,11 @@
     "shareLabel": "{pct}% del gasto del mes",
     "averageLabel": "Promedio {amount}",
     "emptyMonths": "Sin movimientos en {months}: el promedio no los cuenta.",
-    "contributionsNote": "Los ingresos al fondo sin «De quién» no cuentan como aporte."
+    "potIn": "Del fondo en {currency}",
+    "potSpent": "Gasto del fondo este mes",
+    "potCash": "Saldo de la caja",
+    "unassigned": "Sin asignar",
+    "contributionsNote": "Sin asignar son los ingresos al fondo que llegaron sin «De quién»; ábrelos para elegir quién los puso."
   },
   "ownership": {
     "of": "De {name}",
@@ -649,6 +653,7 @@
       "causeNotFound": "No puedes usar ese movimiento como causa.",
       "causeSelf": "Un movimiento no puede ser su propia causa.",
       "counterpartyComplete": "Este movimiento ya tiene las dos cuentas; no hay nada que completar.",
+      "contributorRequired": "Elige de quién es este ingreso",
       "contributorInvalid": "Elige un miembro del fondo"
     },
     "labelsLabel": "Etiquetas",
@@ -675,7 +680,8 @@
     "headlineNetFrom": "Neto desde el {from}",
     "headlineNetTo": "Neto hasta el {to}",
     "contributorLabel": "De quién",
-    "contributorNone": "Sin asignar"
+    "contributorNone": "Sin asignar",
+    "contributorPlaceholder": "Elige quién"
   },
   "cash": {
     "withdrawAction": "Retirar efectivo",

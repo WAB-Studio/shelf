@@ -148,3 +148,76 @@ export async function getMemberContributions(range: {
     }));
   });
 }
+
+export type FundCashBalance = {
+  currency: CurrencyCode;
+  balanceCents: number;
+};
+
+/**
+ * What the fund's cash accounts hold now, one figure per currency, in ONE round
+ * trip. The balance is the view's, derived from movements, never a stored
+ * column; a currency is never added to another (RF-124). Archived accounts are
+ * off the pot. RLS shows a caller with no fund no group account, so the answer
+ * is empty.
+ */
+export async function getFundCashBalances(): Promise<FundCashBalance[]> {
+  return withUserDb(async (tx) => {
+    const rows = await tx.execute<{ currency: string; balance_cents: string }>(sql`
+      select b.currency, sum(b.balance_cents)::text as balance_cents
+      from account_balances b
+      join accounts a on a.id = b.id
+      where a.group_id is not null and a.subtype = 'cash' and a.archived_at is null
+      group by b.currency
+      order by b.currency
+    `);
+
+    return rows.map((row) => ({
+      currency: row.currency,
+      balanceCents: Number(row.balance_cents),
+    }));
+  });
+}
+
+export type UnassignedIncome = {
+  currency: CurrencyCode;
+  incomeCents: number;
+};
+
+/**
+ * The incomes into a fund account for one window that name no member, per
+ * currency, in ONE round trip (RF-167): what arrived through a quick entry, a bank
+ * notice, a recurring rule or an import carries nobody, and Aportes lists it as
+ * «Sin asignar» instead of dropping it. Booked as `getMemberContributions` books
+ * an income, in the currency the fund account settles.
+ */
+export async function getUnassignedIncome(range: {
+  start: string;
+  endExclusive: string;
+}): Promise<UnassignedIncome[]> {
+  return withUserDb(async (tx) => {
+    const rows = await tx.execute<{ currency: string; income_cents: string }>(sql`
+      select
+        case when t.currency <> ta.settlement_currency
+          and t.counter_amount_cents is not null and not t.counter_is_estimate
+        then ta.settlement_currency else t.currency end as currency,
+        sum(case when t.currency <> ta.settlement_currency
+          and t.counter_amount_cents is not null and not t.counter_is_estimate
+        then t.counter_amount_cents else t.amount_cents end) as income_cents
+      from transactions t
+      join accounts ta on ta.id = t.to_account_id
+      where t.from_account_id is null
+        and ta.group_id is not null
+        and t.reconciliation_id is null
+        and t.contributed_by_member_id is null
+        and t.occurred_at >= ${range.start} and t.occurred_at < ${range.endExclusive}
+      group by 1
+      order by 1
+    `);
+
+    return rows.map((row) => ({
+      currency: row.currency,
+      incomeCents: Number(row.income_cents),
+    }));
+  });
+}
