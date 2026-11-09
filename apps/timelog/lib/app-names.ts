@@ -79,6 +79,11 @@ function isBackground(bare: string): boolean {
     .some((word) => BACKGROUND.has(word));
 }
 
+// Browsers by their lower-cased process name without «.exe». Their window titles are their pages, which travel as pages (RT-16).
+const BROWSERS = new Set(["chrome", "msedge", "firefox", "brave", "opera", "opera_gx", "vivaldi", "iexplore", "chromium", "librewolf", "waterfox", "zen", "arc", "safari", "tor", "duckduckgo", "yandex", "thorium", "floorp"]);
+
+export const isBrowser = (raw: string) => BROWSERS.has(raw.trim().replace(/\.exe$/i, "").toLowerCase());
+
 const TEAMS = /^(ms-?teams|teams|microsoft\.teams.*)$/;
 
 // «Code.exe» to «VS Code»; a process not known keeps its name without the extension. `null` is system noise.

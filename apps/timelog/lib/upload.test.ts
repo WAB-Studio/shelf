@@ -132,3 +132,12 @@ test("a page address with credentials is refused, a bare one passes (RT-18)", ()
     assert.equal(parse({ device: "pc", days: [page(url)] }).success, false, url);
   }
 });
+
+test("a browser's window title is refused whatever its spelling, any other app's passes (RT-16)", () => {
+  const window = (app: string) => withDay({ windows: [{ app, title: "Bandeja de entrada", seconds: 5 }] }).success;
+  for (const app of ["chrome.exe", "Chrome.EXE", "msedge.exe", "firefox", "brave.exe", "opera.exe", "vivaldi.exe", " chrome.exe "]) {
+    assert.equal(window(app), false, app);
+  }
+  assert.ok(window("Code.exe"));
+  assert.ok(window("chromeless-notes.exe"), "a name that only starts like a browser's");
+});

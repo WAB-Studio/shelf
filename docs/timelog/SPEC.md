@@ -48,7 +48,8 @@ Interface language: Spanish or English, the person's choice (RT-12). A person re
   «TimeLog: pegar llave…». «Llaves» links its latest release.
 - [x] **RT-11** Any past day opens on its own screen, with the same block and the same list as «Hoy»;
   from «Semana» the day is reached by touching it, and the day's screen carries ‹ › to the day before
-  and the day after. A day that is not a real date, or has not arrived, is a 404. (2026-10-30)
+  and the day after. A day that is not a real date, or is still to come ("has not arrived" means the future only), is a 404;
+  a past day nothing arrived on opens the empty day. (2026-10-30)
 - [x] **RT-12** The interface is served in Spanish and in English. The language is the person's choice,
   kept in a cookie, else the browser's, else Spanish; no address changes with it. (2026-10-30)
 - [x] **RT-13** An upload may carry, per device and day, the seconds each website was in front with the
@@ -65,7 +66,8 @@ Interface language: Spanish or English, the person's choice (RT-12). A person re
   (1 when any upload reached the day, 0 when none did, so a day unseen is told from a real zero). The MCP server answers
   the same rows (`get_daily`), read-only, with the same key. Successor of RT-15. (2026-11-08)
 - [x] **RT-16** An upload is classified on the PC and carries, per device and day, only seconds in buckets: per
-  app; per window title inside an app (never a browser's: its titles are its pages); per website hostname and
+  app; per window title inside an app (never a browser's: its titles are its pages, and the server
+  refuses an upload that carries one); per website hostname and
   per page (its address without credentials, query and fragment, and its title); and Claude Code's seconds per
   day and per session (id, project folder, first and last message of the day). It never carries an event, a
   URL's query or fragment, or the content of a Claude Code message. The person's own rows are read only by them

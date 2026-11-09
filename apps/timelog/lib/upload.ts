@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { isBrowser } from "@/lib/app-names";
 import { addDays, civilDay, isCivilDay } from "@/lib/zone";
 
 // Postgres refuses a NUL in text and jsonb; a control character is no app's name.
@@ -24,9 +25,9 @@ const siteDay = z.object({
   seconds: z.number().int().min(1).max(DAY_SECONDS),
 });
 
-// A window title inside one app (RT-18).
+// A window title inside one app (RT-18), never a browser's: its titles are its pages (RT-16).
 const windowDay = z.object({
-  app: name(120),
+  app: name(120).refine((app) => !isBrowser(app), "a browser's window title"),
   title: name(300),
   seconds: z.number().int().min(1).max(DAY_SECONDS),
 });
