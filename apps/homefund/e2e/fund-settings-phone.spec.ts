@@ -114,7 +114,7 @@ test.describe("at 360, a member of a fund", () => {
     page,
   }) => {
     const sheet = await openSheet(page);
-    await expectFirstRow(sheet, nav.planning);
+    await expectFirstRow(sheet, nav.inbox);
 
     await sheet.getByRole("link", { name: nav.fundSettings, exact: true }).click();
     await expect(page).toHaveURL(GROUP_HREF);
@@ -132,7 +132,7 @@ test.describe("at 360, the leader of a fund", () => {
     page,
   }) => {
     await expectFirstRow(await openScreen(page), nav.inbox);
-    await expectFirstRow(await openSheet(page), nav.planning);
+    await expectFirstRow(await openSheet(page), nav.inbox);
 
     await page.getByRole("dialog").getByRole("link", { name: nav.fundSettings, exact: true }).click();
     await expect(page).toHaveURL(GROUP_HREF);
@@ -149,7 +149,7 @@ test.describe("at 360, a person with no fund", () => {
     page,
   }) => {
     // The screen's list leads on Bandeja, the sheet's on Planeación.
-    for (const [open, first] of [[openScreen, nav.inbox], [openSheet, nav.planning]] as const) {
+    for (const [open, first] of [[openScreen, nav.inbox], [openSheet, nav.inbox]] as const) {
       const surface = await open(page);
       await expectNoRow(surface);
       await expect(surface.getByRole("link", { name: nav.members, exact: true })).toHaveCount(0);

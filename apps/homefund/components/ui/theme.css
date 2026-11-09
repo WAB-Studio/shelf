@@ -1,0 +1,39 @@
+/* What the theme writes over Radix's own classes. It loads after Radix's sheet
+   (`theme.tsx` imports both, in that order), so a rule of equal weight wins by
+   position and the doubled ones by weight. Tokens on `.radix-themes` stay in
+   `app/theme.css`. */
+
+/* The soft variants draw their ring from step 8 directly, not --focus-8. */
+.light .rt-BaseButton.rt-variant-soft:focus-visible,
+.light .rt-SelectTrigger.rt-variant-soft:focus-visible {
+  outline-color: var(--accent-11);
+}
+
+.dark .rt-BaseButton.rt-variant-soft:focus-visible,
+.dark .rt-SelectTrigger.rt-variant-soft:focus-visible {
+  outline-color: var(--accent-11);
+}
+
+/* Titles carry the brand: the grotesque, bold. Zero-specificity scope, so a
+   primitive that sets its own heading metrics still wins. */
+:where(.radix-themes) .rt-Heading {
+  font-weight: 700;
+}
+
+/* The 44px floor (SPEC-A3) for every field: a text input, a select's trigger and a
+   segmented control reach it by default, whatever size a screen asks for. The text
+   input's root is raised by both borders and a rounding pixel so the input itself,
+   which a person measures, is 44. Doubled to outrank Radix's own size class. */
+.rt-TextFieldRoot.rt-TextFieldRoot {
+  box-sizing: border-box;
+  min-height: 47px;
+}
+
+.rt-SelectTrigger.rt-SelectTrigger:not(.rt-variant-ghost) {
+  box-sizing: border-box;
+  min-height: 44px;
+}
+
+.rt-SegmentedControlRoot.rt-SegmentedControlRoot {
+  min-height: 44px;
+}

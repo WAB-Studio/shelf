@@ -3,6 +3,7 @@ import "server-only";
 import { and, desc, eq, sql } from "drizzle-orm";
 
 import { insertRow } from "@/db/insert-row";
+import { ownerColumns } from "@/db/queries/owner-columns";
 import { goalContributions, savingsGoals, transactions } from "@/db/schema";
 import { withUserDb } from "@/db/session";
 import { staleOrGone, stampIs } from "@/db/queries/stamp";
@@ -30,6 +31,9 @@ export type GoalProgress = {
   requiredMonthlyCents: number | null;
   // Behind the straight line from the day the goal opened to its target date.
   behindPace: boolean;
+  // Another member's personal goal (RF-58): read-only, named by its owner.
+  foreignOwner: boolean;
+  ownerName: string | null;
   // `updated_at::text` as Postgres prints it; an edit sends it back (RF-156).
   updatedAt: string;
 };
@@ -71,6 +75,8 @@ export async function listGoalsWithProgress(options?: {
   // The goal's own opening day, read in the zone every civil date here is in.
   const openedOn = sql`(g.created_at at time zone ${TIME_ZONE})::date`;
 
+  const owner = ownerColumns("g.owner_user_id");
+
   return withUserDb(async (tx) => {
     const rows = await tx.execute<{
       id: string;
@@ -83,11 +89,15 @@ export async function listGoalsWithProgress(options?: {
       progress_pct: number;
       required_monthly_cents: string | null;
       behind_pace: boolean;
+      foreign_owner: boolean;
+      owner_name: string | null;
       updated_at: string;
     }>(sql`
       with goals as (
         select
           g.id,
+          ${owner.foreignOwner} as foreign_owner,
+          ${owner.ownerName} as owner_name,
           g.updated_at::text as updated_at,
           g.name,
           g.target_amount_cents,
@@ -171,6 +181,8 @@ export async function listGoalsWithProgress(options?: {
             ? null
             : Number(row.required_monthly_cents),
         behindPace: row.behind_pace,
+        foreignOwner: row.foreign_owner,
+        ownerName: row.owner_name,
         updatedAt: row.updated_at,
       };
     });

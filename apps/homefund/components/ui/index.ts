@@ -37,6 +37,7 @@ export {
 export type { Responsive } from "@radix-ui/themes/props";
 
 export { ToolbarSelect } from "./toolbar-select";
+export { ScopedSelectGroups } from "./scoped-select-groups";
 
 export { FilterField } from "./filter-field";
 

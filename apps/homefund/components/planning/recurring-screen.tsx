@@ -11,6 +11,7 @@ import {
   pauseRecurringRuleAction,
   resumeRecurringRuleAction,
 } from "@/app/actions/recurring-rules";
+import { OwnerMark } from "@/components/fund/owner-mark";
 import { RecurringFormDialog } from "@/components/planning/recurring-form-dialog";
 import { RecurringTable } from "@/components/planning/recurring-table";
 import type { RecurringTableRow } from "@/components/planning/recurring-table";
@@ -116,6 +117,8 @@ export function RecurringScreen({
       amountCents: rule.amountCents,
       currency: rule.currency,
       isIncome: rule.toAccountId !== null,
+      foreignOwner: rule.foreignOwner,
+      ownerName: rule.ownerName,
     };
   });
 
@@ -292,6 +295,7 @@ function RuleCard({
             <Badge color="jade" variant="soft" radius="full">
               {t("autoBadge")}
             </Badge>
+            <OwnerMark foreignOwner={rule.foreignOwner} ownerName={rule.ownerName} />
           </Flex>
           <Text size="2" color="gray" truncate>
             {subtitle}
@@ -308,12 +312,14 @@ function RuleCard({
       </ToneSurface>
       <Flex align="center" justify="end" gap="3" mt="3">
         <Flex align="center" gap="2">
-          <Switch
-            checked={rule.isActive}
-            onCheckedChange={onToggle}
-            disabled={isPending}
-            aria-label={t("activeToggle")}
-          />
+          {!rule.foreignOwner && (
+            <Switch
+              checked={rule.isActive}
+              onCheckedChange={onToggle}
+              disabled={isPending}
+              aria-label={t("activeToggle")}
+            />
+          )}
           <Text size="2" color="gray">
             {rule.isActive
               ? t("stateActive")
@@ -322,16 +328,19 @@ function RuleCard({
                 : t("statePaused")}
           </Text>
         </Flex>
-        <IconButton
-          type="button"
-          tap
-          variant="ghost"
-          color="gray"
-          onClick={onEdit}
-          aria-label={tKey("common.edit")}
-        >
-          <Pencil size={16} />
-        </IconButton>
+        {/* Another member's rule can be read, never changed. */}
+        {!rule.foreignOwner && (
+          <IconButton
+            type="button"
+            tap
+            variant="ghost"
+            color="gray"
+            onClick={onEdit}
+            aria-label={tKey("common.edit")}
+          >
+            <Pencil size={16} />
+          </IconButton>
+        )}
         <RowMenu
           rowName={rule.description ?? t("noConcept")}
           items={[

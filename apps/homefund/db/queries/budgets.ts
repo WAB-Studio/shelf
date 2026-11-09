@@ -3,6 +3,7 @@ import "server-only";
 import { and, eq, sql } from "drizzle-orm";
 
 import { insertRow } from "@/db/insert-row";
+import { ownerColumns } from "@/db/queries/owner-columns";
 import { budgets } from "@/db/schema";
 import type { Budget } from "@/db/schema";
 import { withUserDb } from "@/db/session";
@@ -29,6 +30,9 @@ export type BudgetStatus = {
   remainingCents: number;
   overThreshold: boolean;
   overspent: boolean;
+  // Another member's personal budget (RF-58): read-only, named by its owner.
+  foreignOwner: boolean;
+  ownerName: string | null;
   // `updated_at::text` as Postgres prints it; an edit sends it back (RF-156).
   updatedAt: string;
 };
@@ -70,6 +74,8 @@ export async function listBudgetsWithStatus(
   const weekly = periodRange("weekly", anchor);
   const yearly = periodRange("yearly", anchor);
 
+  const owner = ownerColumns("b.owner_user_id");
+
   return withUserDb(async (tx) => {
     const rows = await tx.execute<{
       id: string;
@@ -82,10 +88,14 @@ export async function listBudgetsWithStatus(
       currency: string;
       limit_cents: string;
       spent_cents: string;
+      foreign_owner: boolean;
+      owner_name: string | null;
       updated_at: string;
     }>(sql`
       select
         b.id,
+        ${owner.foreignOwner} as foreign_owner,
+        ${owner.ownerName} as owner_name,
         b.updated_at::text as updated_at,
         b.name,
         b.category_id,
@@ -147,6 +157,8 @@ export async function listBudgetsWithStatus(
         thresholdPct: row.threshold_pct,
         currency: row.currency,
         updatedAt: row.updated_at,
+        foreignOwner: row.foreign_owner,
+        ownerName: row.owner_name,
         limitCents,
         spentCents,
         remainingCents: limitCents - spentCents,

@@ -3,6 +3,7 @@
 import type { ReactNode } from "react";
 import { useFormatter, useLocale, useTranslations } from "next-intl";
 
+import { OwnerMark } from "@/components/fund/owner-mark";
 import {
   Badge,
   Button,
@@ -153,6 +154,7 @@ export function GoalsTable({
           <Text size="1" color="gray" truncate>
             {tKey("planning.inCurrency", { currency: goal.currency })}
           </Text>
+          <OwnerMark foreignOwner={goal.foreignOwner} ownerName={goal.ownerName} />
         </Flex>
       ),
     },
@@ -255,8 +257,9 @@ export function GoalsTable({
       header: "",
       width: WIDTHS.contribute,
       align: "end",
+      // Nothing here acts on another member's personal goal.
       cell: (goal) =>
-        !archived && (
+        !archived && !goal.foreignOwner && (
           <Button
             type="button"
             variant="surface"
@@ -272,7 +275,7 @@ export function GoalsTable({
       header: "",
       width: WIDTHS.menu,
       align: "end",
-      cell: (goal) => (
+      cell: (goal) => goal.foreignOwner ? null : (
         <RowMenu
           rowName={goal.name}
           items={

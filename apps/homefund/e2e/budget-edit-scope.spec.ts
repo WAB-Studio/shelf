@@ -367,11 +367,14 @@ test.describe("a plain member edits", () => {
     );
   });
 
-  test("the leader's budget on the leader's account keeps that account in the trigger", async ({ page }) => {
-    // Kills: the held account dropped when the caller cannot write it.
-    const dialog = await openEdit(page, HELD_BUDGET);
+  test("the leader's personal budget is read with its owner and offers no action", async ({ page }) => {
+    // Kills: an edit, archive or delete offered on another member's personal budget (RF-58, 2026-11-08).
+    await page.goto("/es/planning/budgets");
 
-    await expect(dialog.locator("#budget-account")).toHaveText(LEADER_ACCOUNT);
+    await expect(
+      page.getByRole("button", { name: common.actionsFor.replace("{name}", HELD_BUDGET), exact: true }),
+    ).toHaveCount(0);
+    await expect(page.getByText(HELD_BUDGET).locator("visible=true").first()).toBeVisible();
   });
 });
 

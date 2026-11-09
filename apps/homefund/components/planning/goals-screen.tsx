@@ -18,6 +18,7 @@ import {
   deleteGoalAction,
   restoreGoalAction,
 } from "@/app/actions/savings-goals";
+import { OwnerMark } from "@/components/fund/owner-mark";
 import { GoalContributeDialog } from "@/components/planning/goal-contribute-dialog";
 import { GoalContributionsDialog } from "@/components/planning/goal-contributions-dialog";
 import { GoalFormDialog } from "@/components/planning/goal-form-dialog";
@@ -452,6 +453,7 @@ function GoalCard({
                 currency: goal.currency,
               })}
             </Text>
+            <OwnerMark foreignOwner={goal.foreignOwner} ownerName={goal.ownerName} />
           </Flex>
           <Badge
             color={goal.reachedTarget ? "jade" : "gray"}
@@ -460,6 +462,8 @@ function GoalCard({
           >
             {t("percent", { pct: goal.progressPct })}
           </Badge>
+          {/* Nothing here acts on another member's personal goal. */}
+          {!goal.foreignOwner && (
           <DropdownMenu.Root>
             <DropdownMenu.Trigger>
               <IconButton
@@ -500,6 +504,7 @@ function GoalCard({
               </DropdownMenu.Item>
             </DropdownMenu.Content>
           </DropdownMenu.Root>
+          )}
         </Flex>
 
         {/* The bar reads the apartado the server derived against the meta,
@@ -525,7 +530,7 @@ function GoalCard({
             </Figure>
           </Text>
           {/* Archiving is what stops money reaching the goal, so it stops here too. */}
-          {!archived && (
+          {!archived && !goal.foreignOwner && (
             <Button
               type="button"
               tap

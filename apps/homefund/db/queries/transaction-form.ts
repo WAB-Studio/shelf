@@ -39,13 +39,15 @@ export type OfferedCurrency = typeof currencySchema.def.entries[keyof typeof cur
 
 export type TransactionFormOptions = {
   accounts: AccountRow[];
+  // Every account the caller can read, archived ones included, as a movement or a plan
+  // names it: a row on an archived account still reads its name and its owner (RF-58).
+  accountDirectory: { id: string; name: string; foreignOwner: boolean; ownerName: string | null }[];
   categories: ScopedCategory[];
   labels: ScopedLabel[];
   members: { userId: string; name: string }[];
   // Every active member of the fund, login or not, for «De quién» on an income into a fund
-  // account (RF-166); `callerMemberId` is the one the form opens on.
+  // account (RF-167); the form opens it empty and requires one.
   fundMembers: { id: string; name: string }[];
-  callerMemberId: string | null;
   lastUsedAccountId: string | null;
   // What each selectable account settles in (RF-121), so the form knows when to
   // ask for the second amount without going back to the server for it.
@@ -81,6 +83,7 @@ export const getTransactionFormOptions = cache(
     // BEGIN, the settle and COMMIT are paid once instead of eight times.
     const [
       accountRows,
+      archivedAccountRows,
       categories,
       labels,
       members,
@@ -91,6 +94,7 @@ export const getTransactionFormOptions = cache(
     ] = await withUserDb((tx) =>
       Promise.all([
         listAccounts({ archived: false }, tx),
+        listAccounts({ archived: true }, tx),
         listScopedCategories(user.id, tx),
         listScopedLabels(user.id, tx),
         listCallerMembers(user.id, { archived: false }, tx),
@@ -103,6 +107,12 @@ export const getTransactionFormOptions = cache(
 
     return {
       accounts: accountRows,
+      accountDirectory: [...accountRows, ...archivedAccountRows].map((account) => ({
+        id: account.id,
+        name: account.name,
+        foreignOwner: account.foreignOwner,
+        ownerName: account.ownerName,
+      })),
       categories,
       labels,
       // Only members who have claimed a login can be a movement's creator (RF-25).
@@ -110,7 +120,6 @@ export const getTransactionFormOptions = cache(
         member.userId ? [{ userId: member.userId, name: member.name }] : [],
       ),
       fundMembers: members.map((member) => ({ id: member.id, name: member.name })),
-      callerMemberId: members.find((member) => member.userId === user.id)?.id ?? null,
       lastUsedAccountId,
       accountCurrencies: currencies.accountCurrencies,
       scopeCurrency: currencies.scopeCurrency,

@@ -52,6 +52,9 @@ export type DebtsScreenData = {
     name: string;
     // A debt of the caller's own, not the fund's: its row wears the personal mark.
     personal: boolean;
+    // Another member's personal debt (RF-58): read-only, named by its owner.
+    foreignOwner: boolean;
+    ownerName: string | null;
     planPosition: PlanPosition | null;
     canWrite: boolean;
   })[];
@@ -59,6 +62,8 @@ export type DebtsScreenData = {
     accountId: string;
     name: string;
     personal: boolean;
+    foreignOwner: boolean;
+    ownerName: string | null;
     // The same pair the overview carries: the pocket the debt settles in, and
     // the ones it does not (RF-121).
     currency: CurrencyCode;
@@ -127,7 +132,9 @@ function addOwed(
  * and buys in dollars owes in both, and there is no single number for what it
  * owes. Every set is labelled by the screen and no figure crosses two of them.
  */
-export async function getDebtsScreenData(): Promise<DebtsScreenData> {
+export async function getDebtsScreenData(
+  options: { withoutForeign?: boolean } = {},
+): Promise<DebtsScreenData> {
   const [{ rows: overview, toBillByPocket }, accounts, balances, positions] = await Promise.all([
     getDebtOverviewWithPockets(),
     listAccounts({ archived: false }),
@@ -135,11 +142,25 @@ export async function getDebtsScreenData(): Promise<DebtsScreenData> {
     listPlanPositions(),
   ]);
 
+  // Another member's personal debts are theirs to plan: Inicio and the Planeación hub
+  // ask for the rest, the Deudas screen for all of them, each named by its owner (RF-58).
+  if (options.withoutForeign) {
+    for (let at = accounts.length - 1; at >= 0; at--) {
+      if (accounts[at].foreignOwner) accounts.splice(at, 1);
+    }
+  }
+
   const nameById = new Map(accounts.map((account) => [account.id, account.name]));
   // The roster's own projection carries the write privilege, so no debt costs a
   // second statement to learn what its caller may do to it.
   const writableById = new Map(
     accounts.map((account) => [account.id, account.canWrite]),
+  );
+  const ownerById = new Map(
+    accounts.map((account) => [
+      account.id,
+      { foreignOwner: account.foreignOwner, ownerName: account.ownerName },
+    ]),
   );
   const personalById = new Map(
     accounts.map((account) => [account.id, account.ownerUserId !== null]),
@@ -169,6 +190,8 @@ export async function getDebtsScreenData(): Promise<DebtsScreenData> {
         ...row,
         name,
         personal: personalById.get(row.accountId) ?? false,
+        foreignOwner: ownerById.get(row.accountId)?.foreignOwner ?? false,
+        ownerName: ownerById.get(row.accountId)?.ownerName ?? null,
         planPosition: positionById.get(row.accountId) ?? null,
         // Absent from the roster is a debt the caller may not write.
         canWrite: writableById.get(row.accountId) ?? false,
@@ -191,6 +214,8 @@ export async function getDebtsScreenData(): Promise<DebtsScreenData> {
         accountId: account.id,
         name: account.name,
         personal: account.ownerUserId !== null,
+        foreignOwner: account.foreignOwner,
+        ownerName: account.ownerName,
         currency: account.settlementCurrency,
         owedCents: owedOf(settlementCents),
         creditCents: creditOf(settlementCents),
@@ -283,8 +308,9 @@ export async function getDebtsScreenData(): Promise<DebtsScreenData> {
 
   // A debt is paid from an asset (RF-16), so the source picker is filtered out of
   // the roster already read — never a fifth round trip, and never a liability.
+  // Only an asset the caller may write: a payment out of another member's is refused.
   const payFrom = accounts
-    .filter((account) => account.kind === "asset")
+    .filter((account) => account.kind === "asset" && account.canWrite)
     .map((account) => ({
       id: account.id,
       name: account.name,

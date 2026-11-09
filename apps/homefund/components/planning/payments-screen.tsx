@@ -10,6 +10,7 @@ import {
   cancelPlannedPaymentAction,
   deletePlannedPaymentAction,
 } from "@/app/actions/planned-payments";
+import { OwnerMark } from "@/components/fund/owner-mark";
 import { PaymentFormDialog } from "@/components/planning/payment-form-dialog";
 import { PaymentsTable } from "@/components/planning/payments-table";
 import { PaymentSettleDialog } from "@/components/planning/payment-settle-dialog";
@@ -307,6 +308,8 @@ function PaymentCard({
             wrap
           />
         </Flex>
+        {/* Nothing here acts on another member's personal payment. */}
+        {!payment.foreignOwner && (
         <DropdownMenu.Root>
           <DropdownMenu.Trigger>
             <IconButton
@@ -336,8 +339,10 @@ function PaymentCard({
             </DropdownMenu.Item>
           </DropdownMenu.Content>
         </DropdownMenu.Root>
+        )}
       </Flex>
-      {pending && (
+      <OwnerMark foreignOwner={payment.foreignOwner} ownerName={payment.ownerName} />
+      {pending && !payment.foreignOwner && (
         <Button type="button" variant="surface" color={overdue ? "amber" : "gray"} onClick={onSettle}>
           {t("settle")}
         </Button>

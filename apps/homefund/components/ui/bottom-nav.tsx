@@ -68,13 +68,31 @@ function Tab({ tab }: { tab: BottomNavTab }) {
 // props a trigger clones onto it (asChild), so a NavPanel can drive it directly.
 export const BottomNavTrigger = forwardRef<
   HTMLButtonElement,
-  { icon: ReactNode; label: ReactNode } & ComponentPropsWithoutRef<"button">
->(function BottomNavTrigger({ icon, label, ...props }, ref) {
+  {
+    icon: ReactNode;
+    label: ReactNode;
+    // A count over the icon, as a tab carries it; `label` is the spoken name.
+    badge?: { count: number; label: string };
+  } & ComponentPropsWithoutRef<"button">
+>(function BottomNavTrigger({ icon, label, badge, ...props }, ref) {
   return (
-    <button ref={ref} type="button" className={styles.trigger} {...props}>
+    <button
+      ref={ref}
+      type="button"
+      className={styles.trigger}
+      aria-label={badge?.label}
+      {...props}
+    >
       <TapTarget align="center" justify="center">
         <Flex direction="column" align="center" gap="1">
-          {icon}
+          <span className={styles.iconSlot}>
+            {icon}
+            {badge && (
+              <span aria-hidden className={styles.badge}>
+                {badge.count > 99 ? "99+" : badge.count}
+              </span>
+            )}
+          </span>
           <Text size="1" weight="medium" color="gray">
             {label}
           </Text>

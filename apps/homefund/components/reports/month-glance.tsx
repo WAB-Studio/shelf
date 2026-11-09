@@ -54,7 +54,7 @@ export function MonthGlance({
             ...top.map((row) => ({
               key: row.categoryId,
               label: scopedCategoryName(row.name, row.scope, (name) =>
-                tKey("categories.scopedName", { name }),
+                tKey("categories.fundMark", { name }),
               ),
               cents: row.totalCents,
               color: categoryChartColor(row.color, row.categoryId),

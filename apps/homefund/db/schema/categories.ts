@@ -32,7 +32,7 @@ export const categories = finances.table(
     // Auto-filled to `id::text` by a trigger when omitted; a webhook or upsert value survives untouched.
     externalRef: text(),
     // Which seeded category this row is, whatever it is renamed to: the stable identity a rule
-    // can key on («salary» presets «De quién», RF-166). Null on every category a person made.
+    // can key on («salary», the seeded income category). Null on every category a person made.
     seedKey: text({ enum: ["salary"] }),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),

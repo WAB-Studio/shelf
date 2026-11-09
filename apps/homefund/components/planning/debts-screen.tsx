@@ -12,6 +12,7 @@ import { CalendarDays, CircleAlert, CreditCard, Plus } from "lucide-react";
 import { useFormatter, useLocale, useTranslations } from "next-intl";
 import { useMemo, useState } from "react";
 
+import { OwnerMark } from "@/components/fund/owner-mark";
 import { DebtFormDialog } from "@/components/planning/debt-form-dialog";
 import type { DebtAccount } from "@/components/planning/debt-form-dialog";
 import { DebtPaymentDialog } from "@/components/planning/debt-payment-dialog";
@@ -22,7 +23,6 @@ import {
   PocketFigure,
 } from "@/components/planning/debts-table";
 import type { DebtTableRow } from "@/components/planning/debts-table";
-import { InstallmentPlanDialog } from "@/components/planning/installment-plan-dialog";
 import {
   Box,
   Button,
@@ -33,7 +33,6 @@ import {
   Flex,
   Heading,
   Money,
-  PersonalMark,
   ScreenHeader,
   Separator,
   StatTiles,
@@ -78,13 +77,14 @@ type DialogTarget =
       mode: "pay";
       account: DebtAccount & { creditCents: number; otherOwed: DebtPocket[] };
       currency: CurrencyCode;
-    }
-  | { mode: "plan"; account: DebtAccount; currency: CurrencyCode };
+    };
 
 // A row carrying its plan position, which is what the phone's cards read.
 type OverviewCard = DebtOverviewRow & {
   name: string;
   personal: boolean;
+  foreignOwner: boolean;
+  ownerName: string | null;
   planPosition: PlanPosition | null;
 };
 
@@ -160,6 +160,8 @@ export function DebtsScreen({
         accountId: row.accountId,
         name: row.name,
         personal: row.personal,
+        foreignOwner: row.foreignOwner,
+        ownerName: row.ownerName,
         currency: row.currency,
         owedCents: row.owedCents,
         creditCents: row.creditCents,
@@ -394,17 +396,6 @@ export function DebtsScreen({
               row.currency,
             )
           }
-          onNewPlan={(row) =>
-            setTarget({
-              mode: "plan",
-              account: {
-                accountId: row.accountId,
-                name: row.name,
-                owedCents: row.owedCents,
-              },
-              currency: row.currency,
-            })
-          }
           onDetail={(row) => router.push(`/planning/debts/${row.accountId}`)}
           onEditTerms={(row) =>
             setTarget({
@@ -587,20 +578,6 @@ export function DebtsScreen({
           payFrom={payFrom}
         />
       )}
-
-      {target?.mode === "plan" && (
-        <InstallmentPlanDialog
-          open
-          onOpenChange={(open) => {
-            if (!open) setTarget(null);
-          }}
-          account={{
-            id: target.account.accountId,
-            name: target.account.name,
-          }}
-          currency={target.currency}
-        />
-      )}
     </Flex>
   );
 }
@@ -613,6 +590,8 @@ function CardHead({
   tint,
   name,
   personal,
+  foreignOwner,
+  ownerName,
   meta,
   currency,
   owedCents,
@@ -623,6 +602,8 @@ function CardHead({
   tint: string;
   name: string;
   personal: boolean;
+  foreignOwner: boolean;
+  ownerName: string | null;
   meta: string;
   currency: CurrencyCode;
   owedCents: number;
@@ -630,7 +611,6 @@ function CardHead({
   otherOwed: DebtPocket[];
 }) {
   const beside = owesBesideCredit(creditCents, otherOwed);
-  const tAccounts = useTranslations("accounts");
 
   return (
     <Flex direction="column" gap="2">
@@ -646,7 +626,7 @@ function CardHead({
         <Flex direction="column" flexGrow="1" minWidth="0">
           <Flex align="center" gap="2" minWidth="0">
             <Text weight="bold">{name}</Text>
-            {personal && <PersonalMark label={tAccounts("ownerPersonal")} />}
+            <OwnerMark personal={personal} foreignOwner={foreignOwner} ownerName={ownerName} />
           </Flex>
           <Text size="1" color="gray">
             {meta}
@@ -761,6 +741,8 @@ function RevolvingCard({
           tint="indigo"
           name={row.name}
           personal={row.personal}
+          foreignOwner={row.foreignOwner}
+          ownerName={row.ownerName}
           meta={t("revolvingMeta", {
             // The effective monthly step the server derived off the annual rate,
             // read as a percentage here and nowhere divided, so the card and the
@@ -857,6 +839,8 @@ function InstallmentCard({
           tint="amber"
           name={row.name}
           personal={row.personal}
+          foreignOwner={row.foreignOwner}
+          ownerName={row.ownerName}
           // A debt whose plan the server counted states its position; one that
           // carries no plan only states its kind (RF-81).
           meta={
@@ -927,6 +911,8 @@ function NoTermsCard({
     accountId: string;
     name: string;
     personal: boolean;
+    foreignOwner: boolean;
+    ownerName: string | null;
     currency: CurrencyCode;
     owedCents: number;
     creditCents: number;
@@ -947,6 +933,8 @@ function NoTermsCard({
           tint="amber"
           name={debt.name}
           personal={debt.personal}
+          foreignOwner={debt.foreignOwner}
+          ownerName={debt.ownerName}
           meta={t("noTermsMeta")}
           currency={debt.currency}
           owedCents={debt.owedCents}

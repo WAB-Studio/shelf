@@ -173,14 +173,16 @@ test.describe("reports", () => {
     await page.goto("/es/reports");
 
     const shown = reportBand(page);
-    const fundRow = shown.getByText(MARKED, { exact: true }).locator("..");
+    // Reportes marks the fund's scope with «· fondo» (the user, 2026-11-08).
+    const FUND_ROW = `${MARKED} · fondo`;
+    const fundRow = shown.getByText(FUND_ROW, { exact: true }).locator("..");
     const personalRow = shown.getByText(NAME, { exact: true }).locator("..");
 
     await expect(fundRow).toHaveCount(1);
     await expect(personalRow).toHaveCount(1);
     expect(await digitsOf(fundRow)).toContain(String(FUND_CENTS / 100));
     expect(await digitsOf(personalRow)).toContain(String(PERSONAL_CENTS / 100));
-    await expect(shown.getByText(new RegExp(NAME)).first()).toHaveText(MARKED);
+    await expect(shown.getByText(new RegExp(NAME)).first()).toHaveText(FUND_ROW);
   });
 });
 
@@ -252,6 +254,9 @@ test.describe("a credential's default category follows its default account", () 
 
     await expect(optionCount(page, PERSONAL_OPTION)).toHaveCount(1);
     await expect(optionCount(page, FUND_OPTION)).toHaveCount(1);
+    // Both scopes in one list sit under a heading each (the user, 2026-11-08).
+    await expect(page.getByText(messages.categories.selectFundHeading, { exact: true })).toBeVisible();
+    await expect(page.getByText(messages.categories.selectPersonalHeading, { exact: true })).toBeVisible();
   });
 
   test("a personal account offers no fund category", async ({ page }) => {

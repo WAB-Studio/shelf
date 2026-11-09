@@ -21,6 +21,7 @@ import { useAction } from "next-safe-action/hooks";
 import { Fragment, useState, type ReactNode } from "react";
 
 import { deleteTransactionAction } from "@/app/actions/transactions";
+import { useOwnerLabel } from "@/components/fund/owner-mark";
 import {
   MovementForm,
   movementFormDialogWidth,
@@ -64,6 +65,7 @@ import type { TransactionListRow } from "@/db/queries/transactions";
 import { usePathname, useRouter } from "@/i18n/navigation";
 import { BASE_CURRENCY, type CurrencyCode } from "@/lib/currency";
 import { addCivilDays, civilDateToDate, todayInBogota } from "@/lib/dates";
+import { accountNamesById, touchesForeignAccount } from "@/lib/fund/account-names";
 import { categoryNamesById } from "@/lib/fund/category-names";
 import { dayNet } from "@/lib/fund/glance";
 import { useActionErrorToast } from "@/lib/use-action-toast";
@@ -151,7 +153,12 @@ export function MovementsScreen({
 
   // A name and colour per account and per category id — children included — so a
   // row reads its title, subtitle and tile without a second lookup.
-  const accountNames = new Map(options.accounts.map((a) => [a.id, a.name]));
+  const ownerLabel = useOwnerLabel();
+  const accountNames = accountNamesById(
+    options.accountDirectory,
+    ownerLabel,
+    (account, owner) => tKey("ownership.accountOf", { account, owner }),
+  );
   const categoryNames = categoryNamesById(options.categories, (name) =>
     tc("scopedName", { name }),
   );
@@ -221,6 +228,7 @@ export function MovementsScreen({
     currency: row.currency,
     tone: rowTone(row),
     adjustment: row.reconciliationId !== null,
+    foreign: touchesForeignAccount(row, options.accountDirectory),
     auto: row.recurringRuleId !== null,
   }));
 

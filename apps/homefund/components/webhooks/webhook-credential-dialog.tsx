@@ -22,13 +22,13 @@ import {
   FieldLabel,
   FieldMessage,
   Flex,
+  ScopedSelectGroups,
   Select,
   Spinner,
   Text,
   TextField,
 } from "@/components/ui";
 import type { WebhookCredentialOptions } from "@/db/queries/webhook-credentials";
-import { scopedCategoryName } from "@/lib/fund/category-names";
 import { categoriesInScope } from "@/lib/fund/category-scope";
 import { useActionErrorToast } from "@/lib/use-action-toast";
 import { issueWebhookCredentialSchema } from "@/lib/validation/webhook";
@@ -134,6 +134,32 @@ function WebhookCredentialBody({
   const scopeOf = (accountId: string | null) =>
     options.accounts.find((one) => one.id === accountId)?.scope ?? null;
   const offeredCategories = categoriesInScope(options.categories, scopeOf(defaultAccountId));
+
+  const categoryItems = (scope: "group" | "personal") =>
+    offeredCategories
+      .filter((category) => category.scope === scope)
+      .map((category) => (
+        <Select.Item key={category.id} value={category.id}>
+          {/* Two categories may share a name across kinds; the kind
+              is what tells them apart. */}
+          <Flex as="span" align="center" gap="2">
+            {/* The cap leaves room for the kind beside it inside a
+                360 px screen; the full name stays the option's own. */}
+            <Box maxWidth="calc(100vw - 10rem)" asChild>
+              <Text as="div" truncate>
+                {category.name}
+              </Text>
+            </Box>
+            <Text size="1" color="gray">
+              {tKey(
+                category.kind === "income"
+                  ? "categories.kindIncome"
+                  : "categories.kindExpense",
+              )}
+            </Text>
+          </Flex>
+        </Select.Item>
+      ));
 
   // A category of the other scope picked before the account is dropped, never
   // carried silently into the issue.
@@ -274,32 +300,12 @@ function WebhookCredentialBody({
                   </FieldControl>
                   <Select.Content position="popper">
                     <Select.Item value={ANY}>{t("defaultNone")}</Select.Item>
-                    {offeredCategories.map((category) => (
-                      <Select.Item key={category.id} value={category.id}>
-                        {/* Two categories may share a name across kinds; the kind
-                            is what tells them apart. */}
-                        <Flex as="span" align="center" gap="2">
-                          {/* The cap leaves room for the kind beside it inside a
-                              360 px screen; the full name stays the option's own. */}
-                          <Box maxWidth="calc(100vw - 10rem)" asChild>
-                            <Text as="div" truncate>
-                              {scopedCategoryName(
-                                category.name,
-                                category.scope,
-                                (name) => tKey("categories.scopedName", { name }),
-                              )}
-                            </Text>
-                          </Box>
-                          <Text size="1" color="gray">
-                            {tKey(
-                              category.kind === "income"
-                                ? "categories.kindIncome"
-                                : "categories.kindExpense",
-                            )}
-                          </Text>
-                        </Flex>
-                      </Select.Item>
-                    ))}
+                    <ScopedSelectGroups
+                      fundHeading={tKey("categories.selectFundHeading")}
+                      personalHeading={tKey("categories.selectPersonalHeading")}
+                      fund={categoryItems("group")}
+                      personal={categoryItems("personal")}
+                    />
                   </Select.Content>
                 </Select.Root>
                 <FieldMessage error={fieldState.error} />
