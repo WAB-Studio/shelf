@@ -51,7 +51,7 @@ export const transactions = finances.table(
     // A household bill paid from a personal account, marked «del hogar»: it counts as its payer's
     // contribution to the fund (RF-139). Only an expense carries it; set and cleared by the person.
     forHousehold: boolean().notNull().default(false),
-    // Which member of the fund put this income in (RF-166): only an income into a fund account carries it,
+    // Which member of the fund put this income in (RF-167): only an income into a fund account carries it,
     // and the policy keeps the member inside that account's fund.
     contributedByMemberId: uuid().references(() => groupMembers.id, { onDelete: "set null" }),
     // The type is derived, never chosen (RF-18): a stored generated column no INSERT can target.

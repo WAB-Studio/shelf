@@ -528,12 +528,15 @@ Board C1h corrected the same day: a card in credit reads «Según HomeFund −$ 
   selects, «Más» shows all); splitting across several categories sits behind «Dividir» and opens the split editor. No
   validation message shows before a submit attempt. Frequency is the count of the person's movements per category, read
   in the form options' one fan-out (the user, 2026-10-30).
-- A fund category no longer reads «· fondo»: its name is bare everywhere. A personal account (and a personal category
-  where a component, not a string, draws it) wears a small `User` glyph with an aria-label (the user, 2026-10-30).
-- The phone's bottom bar reads Inicio · Movimientos · [+] · Bandeja · Ajustes: Bandeja (the `Inbox` icon) replaces
-  Planeación and carries a count of pending deliveries plus «Por completar», hidden at zero, its aria-label naming the
-  number. Planeación stays one tap away from a row beside «Ver reportes» on Inicio and the first row of the Ajustes
-  panel. The desktop sidebar is unchanged (the usability critic, delegated by the user, 2026-10-30).
+- A fund category's name is bare, except where two can share it: a selector that lists both scopes puts them under
+  «Categorías del fondo» and «Mis categorías», and Reportes and Inicio's month glance write «· fondo» after the fund's
+  (the user, 2026-11-08, over 2026-10-30). A personal account (and a personal category where a component, not a string,
+  draws it) wears a small `User` glyph with an aria-label. Another member's personal row wears the owner's name beside
+  the glyph («De Andrea») and offers no action (the user, 2026-11-08).
+- The phone's bottom bar reads Inicio · Movimientos · [+] · Planeación · Ajustes: Planeación is back on the bar and
+  Bandeja is the first row of the Ajustes panel, with the count of pending deliveries plus «Por completar» on the
+  Ajustes tab and on its row, hidden at zero (the user, 2026-11-08, over the usability critic's 2026-10-30).
+  The desktop sidebar is unchanged.
 
 
 ## Decisión del 2026-10-31: ronda 3 de la crítica

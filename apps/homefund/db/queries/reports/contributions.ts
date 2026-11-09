@@ -6,7 +6,7 @@ import { withUserDb } from "@/db/session";
 import type { CurrencyCode } from "@/lib/currency";
 
 export type MemberContribution = {
-  // The member the figure belongs to, login or not (RF-166); `userId` is their login, null without one.
+  // The member the figure belongs to, login or not (RF-167); `userId` is their login, null without one.
   memberId: string;
   userId: string | null;
   // The currency the pot received, and the only one this figure counts
@@ -26,7 +26,7 @@ export type MemberContribution = {
  * a contributor, so no group row appears (RF-67). A caller with no group has no
  * group account on either side of any transfer; the household branch, which
  * touches no group account, asks for the payer's membership itself. An income into a group
- * account counts for the member it names in «De quién» (RF-166); an income that names nobody
+ * account counts for the member it names in «De quién» (RF-167); an income that names nobody
  * counts for no one.
  *
  * `booked` is the three-branch rule `account_balances` applies to a leg
@@ -107,7 +107,7 @@ export async function getMemberContributions(range: {
           and t.occurred_at >= ${range.start} and t.occurred_at < ${range.endExclusive}
           and exists (select 1 from group_members m where m.user_id = fa.owner_user_id)
         union all
-        -- RF-166: an income into a fund account credited to the member who put it in, booked as the
+        -- RF-167: an income into a fund account credited to the member who put it in, booked as the
         -- account settled it. An income naming nobody (every one before the field) stays out.
         select
           null::uuid,

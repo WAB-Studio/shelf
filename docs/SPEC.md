@@ -112,7 +112,7 @@ accounting exports, native apps. None of this gets built or left
 - [x] **RF-163** — An item marked «Está bien» in «Revisar el mes» can be taken back: under «Revisados» it offers «Deshacer», which drops its mark, so it waits again and counts again on Inicio's line. Only a person who may write the movement takes the mark back. Decided by the user 2026-10-28.
 - [x] **RF-164** — An edit that changes a movement's amount makes the amount the person's own: «Revisar el mes» no longer lists it as an amount quick entry read from words. Decided by the user 2026-10-28.
 - [x] **RF-165** — An edit that changes a movement's amount also undoes «Está bien» on it for «Muy por encima de lo usual» and «Dos iguales»: the item waits again in «Revisar el mes». A twin pair waits again when either of its movements changes amount. Decided by the user 2026-10-28.
-- [ ] **RF-166** — An income into a fund account carries «De quién»: the fund member it is credited to, defaulting to the person writing it and asked nowhere else. «Aportes del mes» counts personal-to-fund transfers (RF-139) plus the incomes into fund accounts by their «De quién»; an income with none stays out, and the report says so in one line. The backup (RF-142) exports and restores the field by the member's name. Decided by the user 2026-10-31 («Elige lo que recomiendas»).
+- [x] **RF-167** *(successor of RF-166)* — An income into a fund account carries «De quién»: the fund member it is credited to. The movement form opens it empty and requires it on every income into a fund account, one Zod schema in the form and on the server; an income that arrives without a person (a quick entry, a bank notice, a recurring rule, an import) is stored without one. «Aportes del mes» counts personal-to-fund transfers (RF-139) plus the incomes into fund accounts by their «De quién», lists the incomes with none as «Sin asignar», and shows beside them the fund's spending for the month and the balance of the fund's cash account. The backup (RF-142) exports and restores the field by the member's name. Decided by the user 2026-11-08.
 
 #### Categories
 
@@ -270,6 +270,7 @@ Dead codes. The number stays burned and the tick stays as it was.
 - [x] **RF-95** — Quick entry accepts bank amounts written with comma or dot thousands separators and an optional zero-decimal suffix in either locale, without accepting fractional pesos. _Retired 2026-09-06. Successor: RF-128 (the same reading as the importer, up to the two decimals the column stores)._
 
 ---
+- [ ] **RF-166** — An income into a fund account carries «De quién»: the fund member it is credited to, defaulting to the person writing it and asked nowhere else. «Aportes del mes» counts personal-to-fund transfers (RF-139) plus the incomes into fund accounts by their «De quién»; an income with none stays out, and the report says so in one line. The backup (RF-142) exports and restores the field by the member's name. Decided by the user 2026-10-31 («Elige lo que recomiendas»). _Retired 2026-11-08, by the user. Successor: RF-167 (no value is presumed: «De quién» opens empty and is required on every income into a fund account made in the form; what arrives without a person is «Sin asignar»; Aportes also shows the fund's spending and the cash balance)._
 
 ## 2. Data model
 
@@ -343,6 +344,10 @@ erDiagram
     labels ||--o{ transaction_labels : "tags"
 
     recurring_rules ||--o{ transactions : "generates"
+    group_members ||--o{ transactions : "puts in (De quién)"
+    transactions ||--o{ transaction_reviews : "reviewed once per rule"
+    app_users ||--o{ transaction_reviews : "marks"
+    planned_payments ||--o{ reminder_mails : "mailed once per date"
 
     savings_goals ||--o{ goal_contributions : "collects"
 
@@ -465,6 +470,7 @@ erDiagram
         text name
         text kind "expense | income"
         text color
+        text seed_key "salary; which seeded category this is, null on one a person made"
         timestamptz created_at
         timestamptz updated_at
     }
@@ -485,6 +491,8 @@ erDiagram
         uuid recurring_rule_id FK "null if manual"
         timestamptz reviewed_at "null until a generated movement is reviewed"
         boolean awaiting_counterparty "true until the ingest-unknown side is named"
+        boolean amount_from_words "quick entry read the amount from words and the person did not retype it"
+        uuid contributed_by_member_id FK "null unless an income into a fund account names who put it in"
         text external_ref "import reference"
         uuid caused_by_transaction_id FK "null unless another movement caused this one"
         uuid reconciliation_id FK "null unless it is a reconciliation's adjustment"
@@ -617,6 +625,7 @@ erDiagram
         text token_hash "sha-256 hex, stored never shown"
         uuid default_account_id FK "null = payload must name it"
         uuid default_category_id FK "null = payload must name it"
+        text purpose "ingest | mcp; what the key opens, fixed when minted"
         integer rate_limit_per_min "default 60"
         timestamptz rate_window_started_at "resolver-managed"
         integer rate_count "resolver-managed"
@@ -685,6 +694,32 @@ erDiagram
         uuid trusted_account_id FK "only while trusted"
         timestamptz created_at
         timestamptz updated_at
+    }
+
+    transaction_reviews {
+        uuid id PK
+        uuid transaction_id FK
+        text rule "the «Revisar el mes» rule it answers; one per movement and rule"
+        uuid marked_by FK "set from the session, never sent"
+        timestamptz marked_at
+    }
+
+    allowed_emails {
+        text email PK "lowercased and trimmed; who may ask for a sign-in link"
+        timestamptz added_at
+    }
+
+    sign_in_claims {
+        text client_key PK
+        date day PK "Bogotá day"
+        integer count "sign-in links sent, 1..1000"
+    }
+
+    reminder_mails {
+        uuid id PK
+        uuid planned_payment_id FK
+        date remind_on "the reminder date it was mailed for; unique with the payment"
+        timestamptz mailed_at
     }
 ```
 
@@ -838,7 +873,6 @@ Principles, not recipes:
 | Forms | **React Hook Form** (`^7.86.0`), with **@hookform/resolvers** (`^5.9.1`) | State, errors and submission wired to the validation schema; the resolver binds Zod to React Hook Form. |
 | Table | **TanStack Table** (`@tanstack/react-table ^9.2.4`) | Sorting, filtering, pagination and selection for the transaction list. |
 | Charts | **Recharts** (`~3.10.0`) | Declarative React charts with full React 19 and App Router SSR support. |
-| Dates | **date-fns** | Date arithmetic and time zones, tree-shakeable. |
 | Toasts | **sonner** (`^2.0.8`) | Notifications; Radix Themes ships no toast. |
 | Icons | **lucide-react** (`^1.34.0`) | An icon set, chosen independently of the component library. |
 | Environment | **@t3-oss/env-nextjs** (`^0.13.11`) | Fails at build time on a missing variable, not in production. |
@@ -870,7 +904,7 @@ StrykerJS (`@stryker-mutator/core`, `@stryker-mutator/tap-runner`) is a developm
 |---|---|
 | Prisma | Drizzle: no binary engine, better cold starts. |
 | NextAuth / Auth.js | Supabase Auth: it is where the identity the policies evaluate comes from. |
-| rrule | date-fns arithmetic covers monthly, weekly and yearly. |
+| rrule | `lib/dates.ts` arithmetic covers monthly, weekly and yearly. |
 | Dinero.js | Native browser formatting and integer arithmetic. |
 | tRPC | Server actions are already type-safe. |
 | Zustand / Redux | State lives on the server. |

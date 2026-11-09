@@ -303,7 +303,7 @@ export const transactionRowSchema = z.object({
     .boolean()
     .nullish()
     .transform((cell) => cell ?? false),
-  // The fund member an income into a fund account is credited to (RF-166), by name; blank names nobody.
+  // The fund member an income into a fund account is credited to (RF-167), by name; blank names nobody.
   contributedBy: z.string().trim().max(80).nullish(),
   // Every label's name, joined by `LABEL_SEPARATOR`; each resolves like a category.
   labels: z

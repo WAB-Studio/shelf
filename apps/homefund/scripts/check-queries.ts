@@ -15699,7 +15699,7 @@ async function statementImportSuite(): Promise<void> {
 }
 
 
-// RF-166: an income into a fund account names who put it in; «Aportes del mes» counts it for them.
+// RF-167: an income into a fund account names who put it in; «Aportes del mes» counts it for them.
 async function incomeContributorSuite(): Promise<void> {
   console.log("");
   const PAY = 3_000_000;
@@ -15760,7 +15760,7 @@ async function incomeContributorSuite(): Promise<void> {
   keep("transactions", named.transactionId);
   const withName = await mine();
   assert(
-    next("RF-166: an income into a fund account counts as an aporte for the member it names; one naming nobody counts for no one"),
+    next("RF-167: an income into a fund account counts as an aporte for the member it names; one naming nobody counts for no one"),
     withoutName === 0 && withName === PAY,
     `contribution ${withoutName} with only the unnamed income, ${withName} after the named one; expected 0 and ${PAY}`,
   );
@@ -15775,13 +15775,13 @@ async function incomeContributorSuite(): Promise<void> {
     refused = true;
   }
   assert(
-    next("RF-166: the policy refuses a contributor who belongs to another fund"),
+    next("RF-167: the policy refuses a contributor who belongs to another fund"),
     refused,
     `an income crediting another fund's member was ${refused ? "refused" : "accepted"}`,
   );
 }
 
-// RF-166, the edges: a member with no login is counted, an edit that moves the income to
+// RF-167, the edges: a member with no login is counted, an edit that moves the income to
 // another fund drops the contributor instead of failing, and the backup names who put it in.
 async function incomeContributorFollowUpSuite(): Promise<void> {
   console.log("");
@@ -15835,7 +15835,7 @@ async function incomeContributorFollowUpSuite(): Promise<void> {
     (row) => row.memberId === ids.guest && row.currency === "COP",
   );
   assert(
-    next("RF-166: an income credited to a member with no login is counted for that member"),
+    next("RF-167: an income credited to a member with no login is counted for that member"),
     counted?.contributionCents === PAY && counted.userId === null,
     `guest contribution ${JSON.stringify(counted)}; expected ${PAY} and no user`,
   );
@@ -15843,13 +15843,13 @@ async function incomeContributorFollowUpSuite(): Promise<void> {
   const sheet = await asUser(payer, () => readExport({ entityKeys: ["transactions"] }));
   const exportedRow = (sheet.transactions ?? []).find((row) => row.description === "Harness rf166b ingreso");
   assert(
-    next("RF-166: the backup writes «De quién» by the member's name"),
+    next("RF-167: the backup writes «De quién» by the member's name"),
     exportedRow?.contributedBy === "Harness rf166b invitado",
     `contributedBy cell ${JSON.stringify(exportedRow?.contributedBy)}`,
   );
 }
 
-// RF-166, the writes around it: an import names the member or is refused, a blank cell keeps
+// RF-167, the writes around it: an import names the member or is refused, a blank cell keeps
 // the stored one, an income leaving its fund drops it, and completing the counterparty clears it.
 async function incomeContributorEditsSuite(): Promise<void> {
   console.log("");
@@ -15950,7 +15950,7 @@ async function incomeContributorEditsSuite(): Promise<void> {
   const blank = await commit([importRow("update", undefined, ref, 2)]);
   const kept = await contributorOf(transactionId);
   assert(
-    next("RF-166: re-importing a movement whose «De quién» cell is blank keeps the stored contributor"),
+    next("RF-167: re-importing a movement whose «De quién» cell is blank keeps the stored contributor"),
     blank === null && kept === ids.guest,
     `commit ${JSON.stringify(blank)}; contributor after = ${kept}, expected ${ids.guest}`,
   );
@@ -15960,7 +15960,7 @@ async function incomeContributorEditsSuite(): Promise<void> {
   const unknown = await commit([importRow("new", "Nadie Existe", `${ref}-x`, 7)]);
   const stranger = await fixtureSql<{ id: string }[]>`select id from transactions where external_ref = ${`${ref}-x`}`;
   assert(
-    next("RF-166: an import names the member by name; a name that is no member of the fund is a row error and writes nothing"),
+    next("RF-167: an import names the member by name; a name that is no member of the fund is a row error and writes nothing"),
     named === null &&
       renamed === ids.member &&
       unknown?.reasonKey === "data.import.errors.contributorUnknown" &&
@@ -15980,7 +15980,7 @@ async function incomeContributorEditsSuite(): Promise<void> {
   );
   const left = await contributorOf(transactionId);
   assert(
-    next("RF-166: editing an income into an account outside its fund, sending no contributor, saves and drops it"),
+    next("RF-167: editing an income into an account outside its fund, sending no contributor, saves and drops it"),
     left === null,
     `contributor after the move = ${left}`,
   );
@@ -15998,7 +15998,7 @@ async function incomeContributorEditsSuite(): Promise<void> {
   );
   const after = await contributorOf(waiting);
   assert(
-    next("RF-166: completing the counterparty of an income gives it a source and clears «De quién»"),
+    next("RF-167: completing the counterparty of an income gives it a source and clears «De quién»"),
     before === ids.guest && after === null && completed?.serverError === undefined,
     `before ${before}, after ${after}, ${completed?.serverError ?? "no error"}`,
   );
