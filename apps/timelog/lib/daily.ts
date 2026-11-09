@@ -4,14 +4,15 @@ import { addDays } from "@/lib/zone";
 
 export const MAX_EXPORT_DAYS = 366;
 
-// A day of the export (RT-15): the same row in the CSV and in the MCP tool.
+// A day of the export (RT-25): the same row in the CSV and in the MCP tool.
 export type DailyRow = {
   day: string;
   total_seconds: number;
   claude_code_seconds: number;
   claude_ai_seconds: number;
   claude_desktop_seconds: number;
-  claude_seconds: number;
+  // Claude in front of the person: claude.ai and the app. Claude Code is the agent working, apart in claude_code_seconds.
+  claude_screen_seconds: number;
   top_app: string;
   top_app_seconds: number;
   // 1 when an upload reached that day in any table, 0 when nothing arrived: a day of zeros is then a day unseen, not a real zero.
@@ -29,10 +30,8 @@ export function claudeSources(claude: Pick<ClaudeDay, "code" | "web" | "desktop"
   ];
 }
 
-// Two sources with time at once are both counted, which is what the note under them says.
-export const sourcesOverlap = (sources: ClaudeSource[]) => sources.filter((one) => one.seconds > 0).length >= 2;
-
-export const claudeTotal = (one: Pick<ClaudeDay, "code" | "web" | "desktop">) => one.code + one.web + one.desktop;
+// What the person spent in front of Claude: claude.ai and the app. Claude Code is the agent's work, never added to it.
+export const claudeScreen = (one: Pick<ClaudeDay, "web" | "desktop">) => one.web + one.desktop;
 
 // Every day from `from` to `to`, cut at `today` (a day that has not happened has no row), a day with nothing at zero and
 // no top app; `uploaded` holds the days any upload reached. The top app is the longest one a person opened: Windows' own background hosts (`systemName`) never take it.
@@ -52,7 +51,7 @@ export function dailyRows(from: string, to: string, totals: DayTotal[], claude: 
       claude_code_seconds: parts.code,
       claude_ai_seconds: parts.web,
       claude_desktop_seconds: parts.desktop,
-      claude_seconds: claudeTotal(parts),
+      claude_screen_seconds: claudeScreen(parts),
       top_app: top?.app ?? "",
       top_app_seconds: top?.seconds ?? 0,
       uploaded: uploaded.has(day) ? 1 : 0,
@@ -75,7 +74,7 @@ const COLUMNS: (keyof DailyRow)[] = [
   "claude_code_seconds",
   "claude_ai_seconds",
   "claude_desktop_seconds",
-  "claude_seconds",
+  "claude_screen_seconds",
   "top_app",
   "top_app_seconds",
   "uploaded",

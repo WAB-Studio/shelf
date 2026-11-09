@@ -5,10 +5,8 @@ import { useTranslations } from "next-intl";
 
 import { createKey, revokeKey } from "@/app/actions/keys";
 import { keyNameSchema } from "@/lib/forms";
+import { INSTALLER_URL } from "@/lib/installer";
 import { Between, Button, Code, CodeBlock, Confirm, Field, Form, Stack, Text, TextLink } from "@/components/ui";
-
-// ActivityWatch with aw-timelog bundled (RT-10): the latest release of our fork.
-const INSTALLER_URL = "https://github.com/WAB-Studio/activitywatch/releases/latest";
 
 export type KeyLine = { id: string; name: string; when: string | null; revoked: boolean };
 

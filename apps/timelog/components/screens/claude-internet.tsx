@@ -2,8 +2,9 @@ import { getTranslations } from "next-intl/server";
 
 import { BarRows, type BarRow } from "@/components/screens/app-rows";
 import { Stack, Text, TextLink } from "@/components/ui";
-import { claudeSources, claudeTotal, sourcesOverlap } from "@/lib/daily";
+import { claudeScreen, claudeSources } from "@/lib/daily";
 import { projectName } from "@/lib/claude-project";
+import { INSTALLER_URL } from "@/lib/installer";
 import type { ClaudeDay, ClaudeSessionTime, PageTime, SiteTime } from "@/lib/queries";
 import type { calendarWords } from "@/lib/words";
 
@@ -12,28 +13,32 @@ type Words = Awaited<ReturnType<typeof calendarWords>>;
 const SITES_SHOWN = 8;
 const PAGES_SHOWN = 8;
 const SESSIONS_SHOWN = 8;
-// The uploader's install and update steps.
-const UPLOADER_URL = "https://github.com/WAB-Studio/timelog-sync/blob/timelog/TIMELOG.md#on-windows-with-the-installer";
 
-// «Claude» of one day (RT-14): Claude Code, claude.ai and the desktop app, and what they add up to. A row shows once
-// its source has ever sent anything, so a PC with no Claude folder is told so rather than shown a flat zero.
+// «Claude» of one day (RT-24): what the person spent in front of Claude (claude.ai and the app), then Claude Code as the
+// agent's own work with its sessions. Claude Code's row shows once it has ever sent anything, so a PC with no Claude
+// folder is told so rather than shown a flat zero.
 export async function ClaudeBlock({ isToday, claude, sessions, hasClaudeCode, hasSites, words }: { isToday: boolean; claude: ClaudeDay | undefined; sessions: ClaudeSessionTime[]; hasClaudeCode: boolean; hasSites: boolean; words: Words }) {
   const t = await getTranslations("time.claude");
   const parts = claude ?? { day: "", code: 0, web: 0, desktop: 0 };
-  const total = claudeTotal(parts);
+  const screen = claudeScreen(parts);
   const sources = claudeSources(parts, { code: t("code"), web: t("web"), desktop: t("desktop") });
-  const shown = { code: hasClaudeCode, web: hasSites, desktop: false };
-  const rows = sources.filter((row) => shown[row.key] || row.seconds > 0);
+  const shown = { web: hasSites, desktop: false };
+  const rows = sources.filter((row) => row.key !== "code" && (shown[row.key] || row.seconds > 0));
 
   return (
     <Stack gap={2}>
-      {total === 0 ? (
-        <Text as="p" variant="meta">{t(hasClaudeCode ? (isToday ? "emptyToday" : "empty") : "never")}</Text>
+      {screen === 0 ? (
+        <Text as="p" variant="meta">{t(isToday ? "emptyToday" : "empty")}</Text>
       ) : (
-        <>
-          <BarRows of={total} rows={rows.map((row) => ({ key: row.key, tone: row.tone, name: row.name, figure: words.duration(row.seconds), seconds: row.seconds, label: t("bar", { name: row.name, duration: words.duration(row.seconds) }) }))} />
-          {sourcesOverlap(rows) ? <Text as="p" variant="meta">{t("overlap")}</Text> : null}
-        </>
+        <BarRows of={screen} rows={rows.map((row) => ({ key: row.key, tone: row.tone, name: row.name, figure: words.duration(row.seconds), seconds: row.seconds, label: t("bar", { name: row.name, duration: words.duration(row.seconds) }) }))} />
+      )}
+      {parts.code > 0 ? (
+        <Stack gap={2}>
+          <Text variant="meta">{t("agent")}</Text>
+          <BarRows tone="claude" of={Math.max(parts.code, ...sessions.map((one) => one.seconds))} rows={[{ key: "code", name: t("code"), figure: words.duration(parts.code), seconds: parts.code, label: t("bar", { name: t("code"), duration: words.duration(parts.code) }) }]} />
+        </Stack>
+      ) : hasClaudeCode ? null : (
+        <Text as="p" variant="meta">{t("never")}</Text>
       )}
       {sessions.length > 0 ? (
         <Stack gap={2}>
@@ -96,7 +101,7 @@ export async function InternetBlock({ isToday, sites, pages, hasSites, words }: 
         <>
           <Text as="p" variant="meta">{t(hasSites ? (isToday ? "emptyToday" : "empty") : "never")}</Text>
           {hasSites ? null : (
-            <TextLink href={UPLOADER_URL} target="_blank" rel="noreferrer">
+            <TextLink href={INSTALLER_URL} target="_blank" rel="noreferrer">
               {t("install")} ›
             </TextLink>
           )}

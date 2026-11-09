@@ -43,6 +43,7 @@ export default async function WeekPage({ searchParams }: { searchParams: Promise
   const longestDay = Math.max(1, ...days.map((one) => one.seconds));
   const heat = buildHeatmap(byDay, days.map((one) => one.day), words.system, APPS_SHOWN);
   const hint = claudeWeekHint(span);
+  const agentSeconds = claude.reduce((total, one) => total + one.code, 0);
   // Claude's total is the grid's first row, levelled against its largest app cell; every tone in it is also written, in the row and in the legend.
   const claudeRow = claudeHeatRow(claude, days.map((one) => one.day), heat.largest);
   const toneName = (tone: ReturnType<typeof appTone> | "claude") => (tone === "claude" ? tClaude("title") : tone === "claudeApp" ? tClaude("desktop") : tClass(tone));
@@ -52,7 +53,7 @@ export default async function WeekPage({ searchParams }: { searchParams: Promise
     label: t("cell", { app, day: `${words.weekdayShort(day)} ${words.dayOfMonth(day)}`, duration: cell.seconds === 0 ? t("none") : words.duration(cell.seconds) }),
   });
   const heatRows = [
-    ...(claudeRow.total === 0 ? [] : [{ key: "claude-total", name: tClaude("total"), kind: toneName("claude"), tone: "claude" as const, total: words.duration(claudeRow.total), cells: claudeRow.cells.map((cell, index) => cellOf(tClaude("total"), days[index].day, cell)) }]),
+    ...(claudeRow.total === 0 ? [] : [{ key: "claude-total", name: tClaude("screen"), kind: toneName("claude"), tone: "claude" as const, total: words.duration(claudeRow.total), cells: claudeRow.cells.map((cell, index) => cellOf(tClaude("screen"), days[index].day, cell)) }]),
     ...heat.rows.map((row) => {
       const tone = appTone(row.app, words.system);
       return { key: row.app, name: row.app, kind: toneName(tone), tone, total: words.duration(row.total), cells: row.cells.map((cell, index) => cellOf(row.app, days[index].day, cell)) };
@@ -87,6 +88,7 @@ export default async function WeekPage({ searchParams }: { searchParams: Promise
           <Card label={t("claudeWeekTotal")}>
             <Text mono>{claudeRow.total > 0 ? words.duration(claudeRow.total) : t("none")}</Text>
             {claudeRow.total === 0 ? <Text variant="meta">{t(`claudeHint.${hint}`)}</Text> : null}
+            {agentSeconds > 0 ? <Text variant="meta">{t("claudeAgentWeek", { duration: words.duration(agentSeconds) })}</Text> : null}
             {claudeRow.total === 0 && hint === "connect" ? <TextLink href="/llaves">{t("connect")} ›</TextLink> : null}
           </Card>
         </Cards>

@@ -92,7 +92,7 @@ export async function uploadedDays(from: string, to: string, tx?: Transaction): 
   return rows.map((row) => row.day);
 }
 
-// Claude's time per day (RT-14): Claude Code, claude.ai in the browser and the desktop app (a process named
+// Claude's time per day (RT-14, RT-24): Claude Code, claude.ai in the browser and the desktop app (a process named
 // Claude), one statement. A day with none of the three is absent.
 export async function claudeBetween(from: string, to: string, tx?: Transaction): Promise<ClaudeDay[]> {
   const rows = await within(tx, (tx) =>

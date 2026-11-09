@@ -1,6 +1,6 @@
 import { appClass, type AppClass } from "@/lib/app-classes";
 import { appName } from "@/lib/app-names";
-import { claudeTotal } from "@/lib/daily";
+import { claudeScreen } from "@/lib/daily";
 import type { ClaudeDay, DayApp } from "@/lib/queries";
 
 export const HEAT_LEVELS = 4;
@@ -16,11 +16,11 @@ export function heatLevel(seconds: number, largest: number): number {
   return seconds <= 0 ? 0 : Math.min(HEAT_LEVELS, Math.max(1, Math.ceil((seconds / Math.max(1, largest)) * HEAT_LEVELS)));
 }
 
-// Claude's total per day as one more row of the week's grid (RT-22), levelled against the grid's largest cell.
+// Claude on screen per day as one more row of the week's grid (RT-24), levelled against the grid's largest cell.
 export function claudeHeatRow(claude: ClaudeDay[], days: string[], largest: number): { total: number; cells: HeatCell[] } {
   const cells = days.map((day) => {
     const one = claude.find((row) => row.day === day);
-    const seconds = one === undefined ? 0 : claudeTotal(one);
+    const seconds = one === undefined ? 0 : claudeScreen(one);
     return { seconds, level: heatLevel(seconds, largest) };
   });
   return { total: cells.reduce((sum, cell) => sum + cell.seconds, 0), cells };
