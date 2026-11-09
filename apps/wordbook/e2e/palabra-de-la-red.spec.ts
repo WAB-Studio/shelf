@@ -85,6 +85,14 @@ test("whereat: the correction offer draws and nothing is asked of /api/word/unli
   await runClock(page, PHRASE_DEBOUNCE_MS);
   expect(asked).toEqual([]);
   await expect(page.getByText(messages.word.networkAnswerTitle)).toHaveCount(0);
+
+  // The reader's own tap is the one door to the network for a slip.
+  const answered = unlistedAnswered(page);
+  await page.getByRole("button", { name: messages.search.askNetwork.replace("{word}", "whereat") }).click();
+  await runClock(page, PHRASE_DEBOUNCE_MS);
+  await answered;
+  expect(asked).toHaveLength(1);
+  await expect(page.getByText(messages.word.networkAnswerTitle)).toBeVisible();
 });
 
 // A prefix mid-word has no exact hit, no inflected hit and no answer on

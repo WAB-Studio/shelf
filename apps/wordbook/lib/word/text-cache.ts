@@ -77,7 +77,7 @@ export async function writeCachedText(
 /**
  * RL-45's backfill: a row `writeCachedText` wrote before this column asked
  * anything, or one whose first ask never fired (no key, over the cap). The
- * definition it already carries are left untouched — only
+ * definition it already carries is left untouched — only
  * `translations` moves here, and only alongside the flag.
  */
 export async function markTranslationsAsked(

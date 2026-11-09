@@ -124,6 +124,8 @@ export function SearchScreen({ initialQuery }: { initialQuery?: string }) {
   const [text, setText] = useState(resolvedQuery);
   const [kind, setKind] = useState<QueryKind>({ kind: "empty" });
   const [wordAnswer, setWordAnswer] = useState<WordAnswer | null>(null);
+  // The word the reader tapped «Buscar en internet» on: asked of the network though a headword is one edit away.
+  const [networkAskedFor, setNetworkAskedFor] = useState<string | null>(null);
   // RL-18: stays on screen until the text itself changes, never on a timer
   // — a paused prefix keeps its list.
   const [suggestions, setSuggestions] = useState<string[]>([]);
@@ -512,13 +514,17 @@ export function SearchScreen({ initialQuery }: { initialQuery?: string }) {
     exactGroup ? needsDefinition(exactGroup) : false,
   );
 
-  // RL-44: the network is asked only for a word the dictionary cannot place
+  // RL-86: the network is asked only for a word the dictionary cannot place
   // at all: no entry, no lemma through inflection and no headword one edit
   // away (`lingered`, `went` and `recieve` cost nothing). An exact headword
   // has its own decoration (`useDecoration` above); `suppressNotFound` holding
   // means a prefix is still mid-word, and asking there would charge every
   // paused keystroke.
-  const corrected = wordAnswer !== null && wordAnswer.exact === null && wordAnswer.correction.length > 0;
+  // A word one edit from a headword is a slip until the reader taps «Buscar en internet» (RL-86).
+  const typed = wordAnswer === null ? null : normaliseHeadword(wordAnswer.query);
+  const askedNetwork = typed !== null && networkAskedFor === typed;
+  const corrected =
+    wordAnswer !== null && wordAnswer.exact === null && wordAnswer.correction.length > 0 && !askedNetwork;
   const networkWord =
     kind.kind === "word" &&
     wordAnswer !== null &&
@@ -528,7 +534,7 @@ export function SearchScreen({ initialQuery }: { initialQuery?: string }) {
     !suppressNotFound
       ? normaliseHeadword(wordAnswer.query)
       : null;
-  const networkAnswer = useNetworkAnswer(networkWord, true);
+  const networkAnswer = useNetworkAnswer(networkWord, true, askedNetwork);
 
   // RL-76: a word with no entry is recorded answered once the network's answer
   // for that same text is in hand. It replaces the miss payload that call
@@ -637,6 +643,7 @@ export function SearchScreen({ initialQuery }: { initialQuery?: string }) {
                 answer={wordAnswer}
                 generated={decoration}
                 networkAnswer={networkAnswer}
+                onAskNetwork={typed === null ? undefined : () => setNetworkAskedFor(typed)}
               />
             )}
           </Flex>

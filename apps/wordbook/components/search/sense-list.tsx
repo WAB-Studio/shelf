@@ -551,9 +551,20 @@ function SenseGroup({
 // real one-edit typos. `wrap="wrap"` below carries nine short words in a
 // few rows at 360px with nothing pushed off screen (checked against `boz`).
 // Silent when `words` is empty — `zzqqxv` is the only case left that reaches
-// no headword at all; a real word the dictionary lacks (`fettle`) draws its
-// wrong-looking candidates here until the network answer (RL-44) offers the better door.
-function CorrectionOffer({ words, t }: { words: readonly string[]; t: ReturnType<typeof useTranslations> }) {
+// no headword at all. A real word the dictionary lacks (`fettle`) draws its
+// wrong-looking candidates here, and `onAsk` adds the reader's own door to the
+// network (RL-86): the network is never asked for such a word unprompted.
+function CorrectionOffer({
+  words,
+  surface,
+  onAsk,
+  t,
+}: {
+  words: readonly string[];
+  surface: string;
+  onAsk?: () => void;
+  t: ReturnType<typeof useTranslations>;
+}) {
   return (
     <Flex direction="column" gap="2">
       <Text size="2" color="gray">
@@ -573,6 +584,15 @@ function CorrectionOffer({ words, t }: { words: readonly string[]; t: ReturnType
           </Link>
         ))}
       </Flex>
+      {onAsk !== undefined && (
+        <Link asChild underline="always" muted>
+          <button type="button" onClick={onAsk}>
+            <TapTarget align="center" px="1">
+              <Text size="2">{t("askNetwork", { word: surface })}</Text>
+            </TapTarget>
+          </button>
+        </Link>
+      )}
     </Flex>
   );
 }
@@ -685,6 +705,7 @@ export function SenseList({
   showSpeaker = true,
   generated,
   networkAnswer,
+  onAskNetwork,
 }: {
   answer: WordAnswer;
   variant?: SenseListVariant;
@@ -712,6 +733,8 @@ export function SenseList({
   // every `compact` call, so neither opens a connection of its own
   // (RL-58's own screen, never the breakdown's eight words at once).
   networkAnswer?: NetworkAnswerState;
+  // Set by `search-screen.tsx` alone: the reader's tap on «Buscar en internet» (RL-86).
+  onAskNetwork?: () => void;
 }) {
   const t = useTranslations("word");
   const tSearch = useTranslations("search");
@@ -746,7 +769,14 @@ export function SenseList({
             </Text>
           )}
         </Flex>
-        {answer.correction.length > 0 && <CorrectionOffer words={answer.correction} t={tSearch} />}
+        {answer.correction.length > 0 && (
+          <CorrectionOffer
+            words={answer.correction}
+            surface={answer.query}
+            onAsk={compact || networkAnswer === undefined || networkAnswer.kind !== "absent" ? undefined : onAskNetwork}
+            t={tSearch}
+          />
+        )}
         {!compact && networkAnswer && <NetworkAnswer state={networkAnswer} surface={answer.query} />}
       </Flex>
     );

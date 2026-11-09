@@ -20,6 +20,7 @@
     "notFound": "El diccionario no tiene esa palabra",
     "notFoundHint": "Revisa la ortografía o prueba con otra forma de la palabra",
     "correctionTitle": "¿Quisiste decir…?",
+    "askNetwork": "Buscar «{word}» en internet",
     "noEntry": {
       "showDictionary": "ver el diccionario",
       "hideDictionary": "ocultar el diccionario",
