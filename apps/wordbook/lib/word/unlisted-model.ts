@@ -21,10 +21,6 @@ const MAX_OUTPUT_TOKENS = 2000;
 const modelAnswerSchema = z.object({
   translations: z.array(z.string().min(1)).min(1),
   definition: z.string().min(1).nullable(),
-  example: z.object({
-    en: z.string().min(1),
-    es: z.string().min(1),
-  }),
 });
 type ModelAnswer = z.infer<typeof modelAnswerSchema>;
 
@@ -38,14 +34,8 @@ const UNLISTED_JSON_SCHEMA = {
   properties: {
     translations: { type: "array", minItems: 1, items: { type: "string" } },
     definition: { type: ["string", "null"] },
-    example: {
-      type: "object",
-      properties: { en: { type: "string" }, es: { type: "string" } },
-      required: ["en", "es"],
-      additionalProperties: false,
-    },
   },
-  required: ["translations", "definition", "example"],
+  required: ["translations", "definition"],
   additionalProperties: false,
 };
 
@@ -60,16 +50,14 @@ function buildSystemPrompt(word: string, inflection: UnlistedInflection | null):
       `itself: it is the headword "${inflection.lemma}" inflected. "translations" holds ` +
       `one or more Spanish translations of "${word}" exactly as written — in its own tense and ` +
       `number, never the lemma's dictionary form. Set "definition" to null: a form is not defined ` +
-      `on its own. "example.en" is one natural English sentence that uses "${word}" exactly as ` +
-      `written. "example.es" is its Spanish translation.`
+      `on its own.`
     );
   }
   return (
     `You extend an English-Spanish learner's dictionary. "${word}" has no entry in it at all. ` +
     `"translations" holds one or more Spanish translations of "${word}", most common ` +
     `first. "definition" is one concise English sentence defining "${word}", in a dictionary's ` +
-    `own register. "example.en" is one natural English sentence that uses "${word}". "example.es" ` +
-    `is its Spanish translation.`
+    `own register.`
   );
 }
 

@@ -212,11 +212,10 @@ this gets built, and no schema, table or column is "prepared for" it.
   row of `/registro` on its word's page, including a word the reader never opened online. The page shows
   what the device saved for that word. A word that is not in the record says so, in the same page; no
   address inside the app ever lands on the browser's offline page.
-- [x] **RL-62** — A word the network answered (RL-44) is recorded with the whole answer that arrived: its translations, its
-  definition when it carried one, and its example sentence with the example's Spanish translation, each cut to what the
-  copy admits. Its page on `/registro` draws that answer from the device, with or without a connection, as the box drew
-  it. The answer travels in the copy and comes down to the reader's other devices with the row. A row recorded before
-  keeps its translation alone. Decided by the user 2026-10-09.
+- [x] **RL-90** *(successor of RL-62)* — A word the network answered (RL-86) is recorded with the whole answer that arrived: its translations
+  and its definition when it carried one, each cut to what the copy admits; no example is recorded. Its page on `/registro` draws that
+  answer from the device, with or without a connection, as the box drew it. The answer travels in the copy and comes down to the
+  reader's other devices with the row. A row recorded before keeps what it has and its example is no longer drawn. Decided by the user 2026-11-08.
 - [x] **RL-63** — `/registro` can be narrowed by typing. A field above the list keeps only the rows whose word, a form
   searched under it, or its translation contains what was typed, case and accents aside; a line says how many of the
   record's words are shown, and a typing that matches nothing says so. Emptying the field gives the whole list back, and
@@ -314,8 +313,8 @@ this gets built, and no schema, table or column is "prepared for" it.
   network on its own, and the reader asks for nothing. The dictionary places a word when it has an entry, resolves a lemma
   through inflection (`lingered`, `went`, `children`, `swishing`) or finds a headword one edit away (`recieve`, `whereat`):
   those words ask the network for nothing, so a reading page spends no paid call on a form or a slip. A suggestion RL-28
-  finds is offered as before. The answer carries the word's translation, its definition and one example sentence with
-  its Spanish translation. It says it did not come from the dictionary, and says plainly when it could not be produced.
+  finds is offered as before. The answer carries the word's translation and its definition; it carries no example (RL-42's principle:
+  examples are the reader's own phrases alone). It says it did not come from the dictionary, and says plainly when it could not be produced.
   A hyphenated string the dictionary has no entry for reaches this answer like any other word. A word left to a
   correction is not recorded as waiting for an answer. Decided by the user 2026-11-08 (audit 2026-11-02, question 2).
 - [x] **RL-45** — A dictionary answer that is thin — at most four translations, and either more than
@@ -378,6 +377,13 @@ this gets built, and no schema, table or column is "prepared for" it.
 ### Retired
 
 Dead codes. The number stays burned and the tick stays as it was.
+
+- [x] **RL-62** — A word the network answered (RL-44) is recorded with the whole answer that arrived: its translations, its
+  definition when it carried one, and its example sentence with the example's Spanish translation, each cut to what the
+  copy admits. Its page on `/registro` draws that answer from the device, with or without a connection, as the box drew
+  it. The answer travels in the copy and comes down to the reader's other devices with the row. A row recorded before
+  keeps its translation alone. Decided by the user 2026-10-09.
+  _Retired 2026-11-08, by the user. Successor: RL-90. Examples are the reader's own phrases alone; the answer records and draws none._
 
 - [x] **RL-68** — The reader reviews the words in their record inside the app, scheduled by spaced repetition (FSRS). Decided by the user 2026-10-15; built straight from these words, no boards, decided by the user 2026-10-30.
   - `/repaso`, reached from `/registro`: the words already learning whose time came, then up to 20 new ones a day, the most looked up first; a sentence, a miss and a pending row stay out. The word, «Mostrar respuesta», then «Otra vez» · «Difícil» · «Bien» · «Fácil», each naming its interval. The cards live on the device (`reading-review`); the copy (RL-22) does not carry them yet.

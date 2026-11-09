@@ -659,14 +659,14 @@ Measured over the built asset, 64,258 entries. Design for these, not for the rar
   where the dark face is not derivable from the light one.
   _All five retired 2026-09-14 along with RL-36 — see "The canvas, and which of its boards are
   stale" above for what each draws now._
-- **The generated definition and example are drawn on the dark face too, in three boards** — canvas
+- **The generated definition and example are drawn on the dark face too, in three boards** _(the example is gone since 2026-11-08, RL-42 retired; see «Decisions of 2026-11-08»)_ — canvas
   version 30, 2026-09-10: `PalabraGeneradaOscuroMovil` (resolved, the definition and example marked
   «generada»), `PalabraGenerandoOscuroMovil` (asked for, not yet back — the translation above is
   already whole, so this block reserves no height for it) and `PalabraSinDefinicionOscuroMovil` (no
   connection, no result, or the daily ceiling reached — exactly today's screen, with no gap left for
   what did not arrive). Same reason as the photo: a generated block on `#14130F` is a real design
   difference, not the token table applied.
-- **The heading over a generated block names what is under it, and no board draws the case where
+- _(Superseded 2026-11-08: the generated block holds a definition or network translations, never an example, and draws nothing when it has neither.)_ **The heading over a generated block names what is under it, and no board draws the case where
   that is only an example. Decided and built 2026-09-11.** «Definición generada» was drawn
   unconditionally while the definition itself was gated on `definition !== null`, so a word without
   one was told it had a definition. Measured against `reading.word_texts` that day: **22 of 41 rows
@@ -1141,7 +1141,7 @@ Measured over the built asset, 64,258 entries. Design for these, not for the rar
     and got a word about taste. `sternly` answered **`stern` · SUSTANTIVO · «popa»** — a ship's
     stern, for an adverb of the adjective. `shrieked` and `fidgeted` answered the bare infinitive:
     correct and still not what was asked.
-  - **The form's own translation is what leads, resolved over the network when the dictionary has
+  - _(Superseded 2026-11-08, RL-87: the form has no translation of its own; the network is not asked.)_ **The form's own translation is what leads, resolved over the network when the dictionary has
     no row for it**, with one example sentence. «es una forma de X» keeps `PalabraConFlexion`'s rule
     and left border, now carrying the headword's groups underneath rather than above.
   - **The cost, taken knowingly:** a network call on every inflected form the dictionary cannot
@@ -1536,7 +1536,7 @@ the entry's **leading block** — the IPA drawn directly under the headword — 
 second control was refused: both would take the same spelling and sound the same. An entry that
 draws no block names nothing extra; there is no second sound to be confused with.
 
-**The generated example names the block it belongs to.** RL-42's example is decoration resolved
+_(Retired 2026-11-08 with RL-42: there is no generated example, so no foot line.)_ **The generated example names the block it belongs to.** RL-42's example is decoration resolved
 from the spelling alone and is drawn after the last block, so it read as that block's own: `row`
 closed with «Me gusta remar el bote» under `/ɹaʊ/`, the fight; `tear` with «no rasgar el vestido»
 under `/tiə/`, the teardrop — 5 of 5 measured. A line at its foot now names the pronunciation the
@@ -1969,3 +1969,18 @@ and width). RL-76 decided by the user 2026-10-18.
   still outranks it.
 - **The row of `/registro`** keeps one translation, the lead (RL-82).
 - **The fold of seldom-used senses** folds a labelled sense only when its part of speech is also the less frequent one (RL-84).
+
+### Decisions of 2026-11-08
+
+Taken by the user, delegated to the build.
+
+- **Examples are the reader's own phrases alone.** No generated example is drawn or stored: not under a word (RL-42, retired),
+  not in the network answer of a word with no entry (`SinResultadoIA` loses its example and its «Ejemplo» label), not in the
+  `/registro` row. The text route answers a definition, or the network translations of a thin entry, and the screen asks it
+  only for those; an answer with neither draws nothing.
+- **The network answers a word the dictionary cannot place, and only that** (RL-86). A form with a lemma (`went`, `lingered`)
+  draws the form's heading with its lemma underneath and no network block; a slip one edit from a headword (`recieve`) draws
+  the correction offer alone and leaves no pending row.
+- **A card draws the sense the reader tapped** (RL-85). Each sense of a word with several carries «Aprender este sentido»;
+  the one in force reads «Es el que aprendes», and with no tap it is the first.
+- **The finished review says how many new entries wait** behind the cap of 20 a day (RL-88).

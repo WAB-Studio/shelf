@@ -25,7 +25,6 @@ type WordTextBody = { definition: string | null; translations?: string[] | null 
 type UnlistedBody = {
   translations: string[];
   definition: string | null;
-  example: { en: string; es: string };
   lemma: string | null;
   rule: string | null;
 };

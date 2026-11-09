@@ -96,7 +96,6 @@ async function readLogRows(page: Page): Promise<Row[]> {
 const BODY = {
   translations: ["¿en dónde?", "adónde"],
   definition: "At what place.",
-  example: { en: "Whereat did he look?", es: "¿Hacia dónde miró?" },
   lemma: null,
   rule: null,
 };
@@ -400,7 +399,7 @@ test("bajo su búsqueda: returning to a word whose answer the tab holds records 
 
 
 // ---- Module 700 · RL-62, RL-61: the whole answer is kept and read back ----
-// A word the network answered keeps its translation, definition and example on
+// A word the network answered keeps its translation and definition on
 // the row; its /registro page paints them as the resolved network block, with
 // or without a connection, and asks the network for nothing.
 
@@ -502,13 +501,11 @@ async function expectWholeAnswer(page: Page): Promise<void> {
   await expect(page.getByText(DOOM.translation, { exact: true })).toBeVisible();
   await expect(page.getByText(messages.word.definitionEnglish, { exact: true })).toBeVisible();
   await expect(page.getByText(DOOM.definition, { exact: true })).toBeVisible();
-  await expect(page.getByText(messages.word.example, { exact: true })).toBeVisible();
-  await expect(page.getByText(DOOM.exampleEn, { exact: true })).toBeVisible();
-  await expect(page.getByText(DOOM.exampleEs, { exact: true })).toBeVisible();
+  await expect(page.getByText(messages.word.example, { exact: true })).toHaveCount(0);
   await expect(page.getByText(messages.search.notFound)).toHaveCount(0);
 }
 
-test("700 hecho, con red: searching doomscrolling leaves a row carrying translation, definition and both examples", async ({
+test("700 hecho, con red: searching doomscrolling leaves a row carrying translation and definition, and no example", async ({
   page,
   stubUnlisted,
 }) => {
@@ -516,7 +513,6 @@ test("700 hecho, con red: searching doomscrolling leaves a row carrying translat
   await stubUnlisted({
     translations: [DOOM.translation],
     definition: DOOM.definition,
-    example: { en: DOOM.exampleEn, es: DOOM.exampleEs },
     lemma: null,
     rule: null,
   });
@@ -532,12 +528,10 @@ test("700 hecho, con red: searching doomscrolling leaves a row carrying translat
     outcome: "unlisted",
     translation: DOOM.translation,
     definition: DOOM.definition,
-    exampleEn: DOOM.exampleEn,
-    exampleEs: DOOM.exampleEs,
   });
 });
 
-test("700 hecho, sin red: offline, /registro/doomscrolling paints translation, definition, example and its translation", async ({
+test("700 hecho, sin red: offline, /registro/doomscrolling paints translation and definition, and no example", async ({
   page,
 }) => {
   await deleteTranslator(page);
@@ -566,7 +560,6 @@ test("700 sin conexión pedida: opening the page paints the answer and sends no 
   await stubUnlisted({
     translations: ["otra cosa"],
     definition: "Another.",
-    example: { en: "Other.", es: "Otra." },
     lemma: null,
     rule: null,
   });
@@ -602,7 +595,7 @@ test("700 fila vieja: a schema 2 row paints its translation alone, with no defin
   await expect(page.getByText(messages.search.notFound)).toHaveCount(0);
 });
 
-test("700 sin definición: an answer with definition null paints the example and no definition label", async ({
+test("700 sin definición: an answer with definition null paints the translation, no example and no definition label", async ({
   page,
 }) => {
   await deleteTranslator(page);
@@ -610,8 +603,7 @@ test("700 sin definición: an answer with definition null paints the example and
 
   await page.goto("/registro/doomscrolling");
   await expect(page.getByText(DOOM.translation, { exact: true })).toBeVisible();
-  await expect(page.getByText(DOOM.exampleEn, { exact: true })).toBeVisible();
-  await expect(page.getByText(DOOM.exampleEs, { exact: true })).toBeVisible();
+  await expect(page.getByText(messages.word.example, { exact: true })).toHaveCount(0);
   await expect(page.getByText(messages.word.definitionEnglish, { exact: true })).toHaveCount(0);
 });
 

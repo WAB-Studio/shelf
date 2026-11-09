@@ -36,7 +36,6 @@ const UNLISTED = "/api/word/unlisted";
 const FORM_ANSWER = {
   translations: ["fue"],
   definition: "Past tense of go.",
-  example: { en: "She went home.", es: "Ella se fue a casa." },
   lemma: null,
   rule: null,
 };

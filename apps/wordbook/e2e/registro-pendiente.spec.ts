@@ -15,7 +15,6 @@ const TRANSLATE = "/api/translate";
 const BODY = {
   translations: ["¿en dónde?", "adónde"],
   definition: "At what place.",
-  example: { en: "Whereat did he look?", es: "¿Hacia dónde miró?" },
   lemma: null,
   rule: null,
 };

@@ -29,7 +29,6 @@ const TEXT = {
 const UNLISTED = {
   translations: ["coccidiosis"],
   definition: "A parasitic disease of the intestine.",
-  example: { en: "The flock was tested for coccidiosis.", es: "Se examinó a la parvada por coccidiosis." },
   lemma: null,
   rule: null,
 };
@@ -171,5 +170,5 @@ test("an unlisted word whose request was aborted is asked again after another wo
 
   await expect.poll(() => asked.filter((w) => w === "coccidiosis").length).toBe(2);
   await expect(page.getByText(messages.word.networkAnswerTitle)).toBeVisible();
-  await expect(page.getByText(UNLISTED.example.en)).toBeVisible();
+  await expect(page.getByText(UNLISTED.definition)).toBeVisible();
 });

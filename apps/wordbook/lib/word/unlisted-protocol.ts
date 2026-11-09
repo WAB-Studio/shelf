@@ -17,10 +17,6 @@ export const unlistedRequestSchema = z.object({
 export const unlistedResponseSchema = z.object({
   translations: z.array(z.string().min(1)).min(1),
   definition: z.string().min(1).nullable(),
-  example: z.object({
-    en: z.string().min(1),
-    es: z.string().min(1),
-  }),
   // Both null for a word the dictionary carries no trace of at all, both set
   // when the word is a form `lookupWord` traced back to a lemma it does have.
   lemma: z.string().min(1).nullable(),

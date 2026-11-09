@@ -554,8 +554,6 @@ export function SearchScreen({ initialQuery }: { initialQuery?: string }) {
       translation: unlistedTranslation,
       origin: null,
       definition: unlistedAnswer.definition,
-      exampleEn: unlistedAnswer.example.en,
-      exampleEs: unlistedAnswer.example.es,
     };
   }, [logPayload, networkWord, unlistedTranslation, unlistedAnswer]);
   // RL-76: a prefix with suggestions is mid-word, and a word one edit from a

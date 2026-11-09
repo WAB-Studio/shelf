@@ -40,7 +40,6 @@ function unlistedAnswered(page: Page): Promise<unknown> {
 const UNLISTED_ANSWER = {
   translations: ["coccidiosis"],
   definition: "A parasitic disease of the intestine.",
-  example: { en: "The flock was tested for coccidiosis.", es: "Se examinó a la parvada por coccidiosis." },
   lemma: null,
   rule: null,
 };
@@ -63,7 +62,7 @@ test("coccidiosis: the network block draws under the miss line, 200", async ({ p
   await expect(page.getByText(messages.search.notFoundHint)).toHaveCount(0);
   await expect(page.getByText(UNLISTED_ANSWER.translations[0], { exact: true })).toBeVisible();
   await expect(page.getByText(UNLISTED_ANSWER.definition!)).toBeVisible();
-  await expect(page.getByText(UNLISTED_ANSWER.example.en)).toBeVisible();
+  await expect(page.getByText(UNLISTED_ANSWER.definition!)).toBeVisible();
 });
 
 // RL-28's correction offer is the whole answer to a slip: `whereat` has a real

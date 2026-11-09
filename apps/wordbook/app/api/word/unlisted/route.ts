@@ -136,8 +136,6 @@ export async function POST(request: Request): Promise<Response> {
       rule,
       generated.translations,
       generated.definition,
-      generated.example.en,
-      generated.example.es,
       MODEL_NAME,
     );
   } catch (error) {
@@ -148,7 +146,6 @@ export async function POST(request: Request): Promise<Response> {
     unlistedResponseSchema.parse({
       translations: generated.translations,
       definition: generated.definition,
-      example: generated.example,
       lemma,
       rule,
     }),
