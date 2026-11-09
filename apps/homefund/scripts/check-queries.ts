@@ -20,7 +20,6 @@ import type { z } from "zod";
 import { roundTrips } from "./harness/instrument";
 
 import {
-  createInstallmentPlanAction,
   recordDebtPaymentAction,
 } from "@/app/actions/installment-plans";
 import { getAccountBalances } from "@/db/queries/account-balances";
@@ -1530,35 +1529,6 @@ async function writeSuite(
       ok: result?.serverError === "installments.errors.notLiability",
       detail: `serverError = ${result?.serverError ?? "none"}`,
     }),
-  );
-
-  await checkReadValue(
-    "createInstallmentPlanAction answers an asset account with that same key",
-    () =>
-      createInstallmentPlanAction({
-        accountId: scope.assetAccountId,
-        description: null,
-        principal: "1000",
-        nInstallments: 3,
-        frequency: "monthly",
-        interestRate: null,
-        downPayment: null,
-        aval: null,
-        startDate: today,
-        merchant: null,
-      }),
-    async (result) => {
-      const [row] = await fixtureSql<{ total: string }[]>`
-        select count(*)::text as total from installment_plans
-        where account_id = ${scope.assetAccountId}`;
-
-      return {
-        ok:
-          result?.serverError === "installments.errors.notLiability" &&
-          row.total === "0",
-        detail: `serverError = ${result?.serverError ?? "none"}, plans on the asset = ${row.total}`,
-      };
-    },
   );
 
   // The leftover key, and it is reachable: the shared peso schema bounds only the

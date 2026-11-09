@@ -1,7 +1,6 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { Plus } from "lucide-react";
 import { useFormatter, useLocale, useTranslations } from "next-intl";
 import { useAction } from "next-safe-action/hooks";
 import { Fragment, useState } from "react";
@@ -14,7 +13,6 @@ import {
   owesBesideCredit,
   PocketFigure,
 } from "@/components/planning/debts-table";
-import { InstallmentPlanDialog } from "@/components/planning/installment-plan-dialog";
 import { SettlementRow } from "@/components/planning/settlement-row";
 import { StatementsSection } from "@/components/planning/statements-section";
 import {
@@ -94,7 +92,7 @@ export function DebtDetailScreen({ data }: { data: DebtDetailData }) {
   // all read in it, and it is the one a statement is cut in (RF-121).
   const currency = account.settlementCurrency;
 
-  const [dialog, setDialog] = useState<"pay" | "plan" | null>(null);
+  const [dialog, setDialog] = useState<"pay" | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<InstallmentPlanRow | null>(
     null,
   );
@@ -201,21 +199,24 @@ export function DebtDetailScreen({ data }: { data: DebtDetailData }) {
       label: tDebts("tableBalance"),
       value: balanceLine,
     },
-    {
-      key: "pending",
-      label: t("tilePending"),
-      value:
-        plans.length === 0 ? (
-          NO_VALUE
-        ) : (
-          <Money
-            minor={pendingCents}
-            currency={currency}
-            signed={false}
-            size="inherit"
-          />
-        ),
-    },
+    // Plans already stored stay readable; none can be opened any more, so a debt
+    // with none states nothing about them.
+    ...(plans.length === 0
+      ? []
+      : [
+          {
+            key: "pending",
+            label: t("tilePending"),
+            value: (
+              <Money
+                minor={pendingCents}
+                currency={currency}
+                signed={false}
+                size="inherit"
+              />
+            ),
+          },
+        ]),
     {
       key: "nextPayment",
       label: tDebts("tileNextPayment"),
@@ -259,18 +260,6 @@ export function DebtDetailScreen({ data }: { data: DebtDetailData }) {
     },
   ];
 
-  const newPlanButton = (
-    <Button
-      type="button"
-      variant="surface"
-      color="gray"
-      onClick={() => setDialog("plan")}
-    >
-      <Plus size={15} />
-      {tDebts("rowNewPlan")}
-    </Button>
-  );
-
   return (
     <Flex direction="column" gap="4">
       <ScreenHeader
@@ -293,48 +282,41 @@ export function DebtDetailScreen({ data }: { data: DebtDetailData }) {
         metaWraps
         back={{ href: "/planning/debts", label: tDebts("title") }}
         actions={
-          // Exactly what the policies would admit: a reader is offered neither
-          // the abono nor the plan, and no row menu below offers the delete.
+          // Exactly what the policies would admit: a reader is offered no abono,
+          // and no row menu below offers the delete.
           canWrite && (
-            <>
-              <Button
-                type="button"
-                variant="surface"
-                color="gray"
-                onClick={() => setDialog("pay")}
-              >
-                {tDebts("rowPay")}
-              </Button>
-              {newPlanButton}
-            </>
+            <Button
+              type="button"
+              variant="surface"
+              color="gray"
+              onClick={() => setDialog("pay")}
+            >
+              {tDebts("rowPay")}
+            </Button>
           )
         }
       />
 
       <StatTiles tiles={tiles} />
 
-      <Flex direction="column" px={{ initial: "0", md: "6" }}>
-        <Heading as="h2" size="3">
-          {t("plansTitle")}
-        </Heading>
-      </Flex>
+      {plans.length > 0 && (
+        <>
+          <Flex direction="column" px={{ initial: "0", md: "6" }}>
+            <Heading as="h2" size="3">
+              {t("plansTitle")}
+            </Heading>
+          </Flex>
 
-      {plans.length === 0 ? (
-        <EmptyState
-          variant="filtered"
-          title={t("plansEmpty")}
-          action={canWrite ? newPlanButton : undefined}
-        />
-      ) : (
-        plans.map((plan) => (
-          <PlanTable
-            key={plan.id}
-            plan={plan}
-            currency={currency}
-            canWrite={canWrite}
-            onDelete={() => setDeleteTarget(plan)}
-          />
-        ))
+          {plans.map((plan) => (
+            <PlanTable
+              key={plan.id}
+              plan={plan}
+              currency={currency}
+              canWrite={canWrite}
+              onDelete={() => setDeleteTarget(plan)}
+            />
+          ))}
+        </>
       )}
 
       <SettlementSection
@@ -432,17 +414,6 @@ export function DebtDetailScreen({ data }: { data: DebtDetailData }) {
           }}
           currency={currency}
           payFrom={payFrom}
-        />
-      )}
-
-      {dialog === "plan" && (
-        <InstallmentPlanDialog
-          open
-          onOpenChange={(open) => {
-            if (!open) setDialog(null);
-          }}
-          account={{ id: account.id, name: account.name }}
-          currency={currency}
         />
       )}
 

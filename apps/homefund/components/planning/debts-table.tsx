@@ -246,7 +246,6 @@ export function DebtsTable({
   onPrev,
   onNext,
   onPay,
-  onNewPlan,
   onDetail,
   onEditTerms,
 }: {
@@ -263,7 +262,6 @@ export function DebtsTable({
   onPrev: () => void;
   onNext: () => void;
   onPay: (row: DebtTableRow) => void;
-  onNewPlan: (row: DebtTableRow) => void;
   onDetail: (row: DebtTableRow) => void;
   onEditTerms: (row: DebtTableRow) => void;
 }) {
@@ -490,11 +488,6 @@ export function DebtsTable({
                     key: "pay",
                     label: t("rowPay"),
                     onSelect: () => onPay(row),
-                  },
-                  {
-                    key: "plan",
-                    label: t("rowNewPlan"),
-                    onSelect: () => onNewPlan(row),
                   },
                 ]
               : []),

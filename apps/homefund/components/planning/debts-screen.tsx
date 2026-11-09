@@ -22,7 +22,6 @@ import {
   PocketFigure,
 } from "@/components/planning/debts-table";
 import type { DebtTableRow } from "@/components/planning/debts-table";
-import { InstallmentPlanDialog } from "@/components/planning/installment-plan-dialog";
 import {
   Box,
   Button,
@@ -78,8 +77,7 @@ type DialogTarget =
       mode: "pay";
       account: DebtAccount & { creditCents: number; otherOwed: DebtPocket[] };
       currency: CurrencyCode;
-    }
-  | { mode: "plan"; account: DebtAccount; currency: CurrencyCode };
+    };
 
 // A row carrying its plan position, which is what the phone's cards read.
 type OverviewCard = DebtOverviewRow & {
@@ -398,17 +396,6 @@ export function DebtsScreen({
               row.currency,
             )
           }
-          onNewPlan={(row) =>
-            setTarget({
-              mode: "plan",
-              account: {
-                accountId: row.accountId,
-                name: row.name,
-                owedCents: row.owedCents,
-              },
-              currency: row.currency,
-            })
-          }
           onDetail={(row) => router.push(`/planning/debts/${row.accountId}`)}
           onEditTerms={(row) =>
             setTarget({
@@ -589,20 +576,6 @@ export function DebtsScreen({
           debt={target.account}
           currency={target.currency}
           payFrom={payFrom}
-        />
-      )}
-
-      {target?.mode === "plan" && (
-        <InstallmentPlanDialog
-          open
-          onOpenChange={(open) => {
-            if (!open) setTarget(null);
-          }}
-          account={{
-            id: target.account.accountId,
-            name: target.account.name,
-          }}
-          currency={target.currency}
         />
       )}
     </Flex>
