@@ -4,6 +4,7 @@ import { Check } from "lucide-react";
 import type { ReactNode } from "react";
 import { useFormatter, useTranslations } from "next-intl";
 
+import { OwnerMark } from "@/components/fund/owner-mark";
 import {
   Badge,
   Button,
@@ -118,6 +119,7 @@ export function PaymentsTable({
               {t("overdueLabel")}
             </Badge>
           )}
+          <OwnerMark foreignOwner={payment.foreignOwner} ownerName={payment.ownerName} />
         </Flex>
       ),
     },
@@ -190,6 +192,8 @@ export function PaymentsTable({
       // settle action — only its mark, if it has one.
       cell: (payment) => {
         if (payment.status === "pending") {
+          // Nothing here acts on another member's personal payment.
+          if (payment.foreignOwner) return null;
           return (
             <Button
               type="button"
@@ -223,7 +227,7 @@ export function PaymentsTable({
       header: "",
       width: WIDTHS.menu,
       align: "end",
-      cell: (payment) => (
+      cell: (payment) => payment.foreignOwner ? null : (
         <RowMenu
           rowName={payment.description ?? t("noConcept")}
           items={[

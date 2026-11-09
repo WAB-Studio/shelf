@@ -3,6 +3,7 @@
 import { Fragment, type ReactNode } from "react";
 import { useLocale, useTranslations } from "next-intl";
 
+import { OwnerMark } from "@/components/fund/owner-mark";
 import {
   Badge,
   CategoryTile,
@@ -49,6 +50,9 @@ export type BudgetTableRow = {
   thresholdPct: number;
   overThreshold: boolean;
   overspent: boolean;
+  // Another member's personal budget: named by its owner, with no menu.
+  foreignOwner: boolean;
+  ownerName: string | null;
 };
 
 /**
@@ -148,6 +152,7 @@ export function BudgetsTable({
             <Text size="1" color="gray" truncate>
               {tKey("planning.inCurrency", { currency: row.currency })}
             </Text>
+            <OwnerMark foreignOwner={row.foreignOwner} ownerName={row.ownerName} />
           </Flex>
         </Flex>
       ),
@@ -221,7 +226,7 @@ export function BudgetsTable({
       header: "",
       width: WIDTHS.menu,
       align: "end",
-      cell: (row) => (
+      cell: (row) => row.foreignOwner ? null : (
         <RowMenu
           rowName={row.title}
           items={

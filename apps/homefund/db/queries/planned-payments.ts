@@ -3,6 +3,7 @@ import "server-only";
 import { and, asc, eq, sql } from "drizzle-orm";
 
 import { insertRow } from "@/db/insert-row";
+import { ownerColumns } from "@/db/queries/owner-columns";
 import {
   accounts,
   plannedPayments,
@@ -38,6 +39,9 @@ export type PlannedPaymentRow = {
   description: string | null;
   status: PlannedPaymentStatus;
   settledTransactionId: string | null;
+  // Another member's personal payment (RF-58): read-only, named by its owner.
+  foreignOwner: boolean;
+  ownerName: string | null;
   // `updated_at::text` as Postgres prints it; an edit sends it back so a save after someone
   // else's is refused stale.
   updatedAt: string;
@@ -65,6 +69,7 @@ export async function listPlannedPayments({
         description: plannedPayments.description,
         status: plannedPayments.status,
         settledTransactionId: plannedPayments.settledTransactionId,
+        ...ownerColumns("planned_payments.owner_user_id"),
         // Qualified: the joined accounts carry an `updated_at` of their own.
         updatedAt: sql<string>`planned_payments.updated_at::text`,
       })

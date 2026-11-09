@@ -2,6 +2,7 @@ import "server-only";
 
 import { and, asc, desc, eq, isNotNull, isNull, sql } from "drizzle-orm";
 
+import { ownerColumns } from "@/db/queries/owner-columns";
 import { insertRow } from "@/db/insert-row";
 import { accounts } from "@/db/schema";
 import type { Account } from "@/db/schema";
@@ -48,19 +49,8 @@ export type AccountRow = {
 // personal accounts ahead of the group's, then by name. The balance and the write
 // privilege ride this same statement (RNF-07, RNF-09) — the roster costs one
 // round trip, as before.
-// Written with the column's own name for the same reason `canWrite` is: a
-// reference inside a projection renders bare and binds inward.
-export const foreignOwnerSql = sql<boolean>`(
-  accounts.owner_user_id is not null
-  and accounts.owner_user_id is distinct from (select auth.uid())
-)`;
-export const ownerNameSql = sql<string | null>`(
-  select gm.name from group_members gm
-  where gm.user_id = accounts.owner_user_id
-    and accounts.owner_user_id is distinct from (select auth.uid())
-    and gm.archived_at is null
-  limit 1
-)`;
+export const { foreignOwner: foreignOwnerSql, ownerName: ownerNameSql } =
+  ownerColumns("accounts.owner_user_id");
 
 export async function listAccounts(
   options: { archived: boolean },
