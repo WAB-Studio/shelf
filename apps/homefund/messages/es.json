@@ -184,6 +184,10 @@
     "emptyMonths": "Sin movimientos en {months}: el promedio no los cuenta.",
     "contributionsNote": "Los ingresos al fondo sin «De quién» no cuentan como aporte."
   },
+  "ownership": {
+    "of": "De {name}",
+    "ofSomeone": "De otra persona"
+  },
   "nav": {
     "title": "Navegación",
     "close": "Cerrar",

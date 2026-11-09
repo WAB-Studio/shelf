@@ -184,6 +184,10 @@
     "emptyMonths": "No movements in {months}: the average leaves them out.",
     "contributionsNote": "Incomes into the fund with no «From whom» are not counted."
   },
+  "ownership": {
+    "of": "{name}'s",
+    "ofSomeone": "Someone else's"
+  },
   "nav": {
     "title": "Navigation",
     "close": "Close",

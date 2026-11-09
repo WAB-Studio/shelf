@@ -72,6 +72,13 @@ export function AccountsTable({
     );
   }
 
+  const ownerLabel = (row: AccountRow) =>
+    row.foreignOwner
+      ? row.ownerName
+        ? tKey("ownership.of", { name: row.ownerName })
+        : tKey("ownership.ofSomeone")
+      : t("ownerPersonal");
+
   const columns: DataColumn<AccountRow>[] = [
     {
       key: "name",
@@ -83,12 +90,12 @@ export function AccountsTable({
             <Text size="2" weight="medium" truncate>
               {row.name}
             </Text>
-            {row.ownerUserId && <PersonalMark label={t("ownerPersonal")} />}
+            {row.ownerUserId && <PersonalMark label={ownerLabel(row)} />}
           </Flex>
           {/* One scope, never both: a personal account names its owner, a
-              group account the group (RF-60). */}
+              group account the group (RF-60). Another member's is theirs by name. */}
           <Text size="2" color="gray">
-            {row.ownerUserId ? t("ownerPersonal") : t("ownerFund")}
+            {row.ownerUserId ? ownerLabel(row) : t("ownerFund")}
           </Text>
         </Flex>
       ),
@@ -178,7 +185,8 @@ export function AccountsTable({
       header: "",
       width: WIDTHS.menu,
       align: "end",
-      cell: (row) => (
+      // Nothing here acts on another member's personal account.
+      cell: (row) => row.foreignOwner ? null : (
         <RowMenu
           rowName={row.name}
           items={[
