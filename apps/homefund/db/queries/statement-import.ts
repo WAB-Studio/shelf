@@ -38,7 +38,10 @@ export type Removal = {
   transactionId: string;
   date: string;
   description: string | null;
-  amountCents: number;
+  // The movement on this statement's account: negative when it left, in the account's currency; null
+  // while a movement in another currency has no confirmed amount there.
+  amountCents: number | null;
+  currency: string;
   effect: "deletes" | "unlinks";
 };
 
@@ -111,6 +114,8 @@ type Context = {
     sourceRef: string | null;
     // RF-136: the movement is a purchase on this liability, the only kind a deferral can name.
     purchase: boolean;
+    // The leg is on this statement already, so a re-import may match it by shape whatever its state.
+    held: boolean;
   }[];
   categories: { id: string; kind: "income" | "expense"; ownerUserId: string | null; groupId: string | null }[];
   accounts: { id: string; currency: string }[];
@@ -122,7 +127,7 @@ type Context = {
     transactionId: string;
     occurredAt: string;
     description: string | null;
-    amountCents: string;
+    legCents: string | null;
     reconciled: boolean;
     shared: boolean;
     // The import wrote the movement with this very source row: both carry one transaction's timestamp.
@@ -130,34 +135,29 @@ type Context = {
   }[];
 };
 
-// The statement's own period: what the person named, else the span of its lines.
-function periodOf(input: StatementInput): { periodStart: string; cutOffDate: string } {
-  const dates = input.rows.map((row) => row.date).sort();
-  return {
-    periodStart: input.statement?.periodStart ?? dates[0]!,
-    cutOffDate: input.statement?.cutOffDate ?? dates[dates.length - 1]!,
-  };
-}
-
 const idsParam = (values: (string | undefined)[]) => jsonbParam(values.filter((value): value is string => !!value));
 
 // Everything the classification reads, in one round trip under the caller's policies.
 async function readContext(tx: Transaction, input: StatementInput): Promise<Context> {
   const dates = input.rows.map((row) => row.date).sort();
-  const { cutOffDate } = periodOf(input);
+  const { cutOffDate } = input.statement;
   const [row] = await tx.execute<Context>(sql`
+    with stmt as (
+      select s.id from account_statements s
+      where s.account_id = ${input.accountId} and s.cut_off_date = ${cutOffDate}::date)
     select
-      (select s.id from account_statements s
-        where s.account_id = ${input.accountId} and s.cut_off_date = ${cutOffDate}::date) as "statementId",
+      (select id from stmt) as "statementId",
       coalesce((select json_agg(json_build_object('sourceId', ts.id, 'transactionId', t.id,
-          'occurredAt', t.occurred_at, 'description', t.description, 'amountCents', t.amount_cents::text,
+          'occurredAt', t.occurred_at, 'description', t.description,
+          'legCents', (case when t.from_account_id = a.id then -1 else 1 end
+            * case when t.currency = a.settlement_currency then t.amount_cents else t.counter_amount_cents end)::text,
           'reconciled', t.reconciliation_id is not null, 'createdHere', t.created_at = ts.created_at,
           'shared', exists (select 1 from transaction_sources o where o.transaction_id = t.id and o.id <> ts.id))
           order by t.occurred_at, ts.created_at)
         from transaction_sources ts
         join transactions t on t.id = ts.transaction_id
-        join account_statements st on st.id = ts.statement_id
-        where st.account_id = ${input.accountId} and st.cut_off_date = ${cutOffDate}::date), '[]') as held,
+        join accounts a on a.id = ts.account_id
+        where ts.statement_id = (select id from stmt)), '[]') as held,
       (select json_build_object('id', a.id, 'name', a.name, 'currency', a.settlement_currency,
           'canWrite', coalesce(private.can_write_account(a.id), false), 'openedOn', a.initial_balance_on,
           'ownerUserId', a.owner_user_id, 'groupId', a.group_id, 'kind', a.kind)
@@ -172,13 +172,14 @@ async function readContext(tx: Transaction, input: StatementInput): Promise<Cont
             else t.counter_amount_cents end)::text,
           'outOfAccount', t.from_account_id is not distinct from a.id,
           'sourced', s.id is not null, 'sourceRef', s.source_ref,
-          'purchase', ${deferrablePurchaseSql})
+          'purchase', ${deferrablePurchaseSql},
+          'held', s.statement_id is not null and s.statement_id = (select id from stmt))
           order by t.created_at)
         from transactions t
         join accounts a on a.id = ${input.accountId}
         left join transaction_sources s on s.transaction_id = t.id and s.account_id = a.id
         where (t.from_account_id = a.id or t.to_account_id = a.id)
-          and t.reconciliation_id is null
+          and (t.reconciliation_id is null or (s.statement_id is not null and s.statement_id = (select id from stmt)))
           and t.occurred_at between ${dates[0]}::date and ${dates[dates.length - 1]}::date), '[]') as candidates,
       coalesce((select json_agg(json_build_object('id', c.id, 'kind', c.kind,
           'ownerUserId', c.owner_user_id, 'groupId', c.group_id))
@@ -238,13 +239,15 @@ function classify(rows: StatementRow[], context: Context): PreviewLine[] {
     const importedAs = row.reference === undefined ? undefined : imported.get(row.reference);
     if (importedAs) return { ...base, status: "already_imported", matchedTransactionId: importedAs };
     // The same day, the same amount, the same direction on this account. A leg sourced before is
-    // this line only when neither carries a reference: a referenced line was looked up above.
+    // this line only when neither carries a reference (a referenced line was looked up above), or when
+    // this statement holds it without one: the line now names the reference it lacked.
     const match = byShape
       .get(`${row.date}|${Math.abs(row.amountCents)}|${out}`)
       ?.find(
         (candidate) =>
           !taken.has(candidate.id) &&
-          (!candidate.sourced || (row.reference === undefined && candidate.sourceRef === null)),
+          (!candidate.sourced ||
+            (candidate.sourceRef === null && (row.reference === undefined || candidate.held))),
       );
     if (match) {
       taken.add(match.id);
@@ -344,11 +347,13 @@ function summarise(input: StatementInput, context: Context): StatementPreview {
         transactionId: one.transactionId,
         date: one.occurredAt,
         description: one.description,
-        amountCents: Number(one.amountCents),
+        amountCents: one.legCents === null ? null : Number(one.legCents),
+        currency: account.currency,
         effect: one.createdHere && !one.shared && !one.reconciled ? "deletes" : "unlinks",
       }),
     );
-  const period = { ...periodOf(input), existing: context.statementId !== null };
+  const { periodStart, cutOffDate } = input.statement;
+  const period = { periodStart, cutOffDate, existing: context.statementId !== null };
   const counts = { new: 0, matches: 0, already_imported: 0, invalid: 0 };
   for (const line of lines) counts[line.status] += 1;
   return {
@@ -373,7 +378,7 @@ async function cutStatement(
   input: StatementInput,
   period: StatementPreview["statement"],
 ): Promise<string> {
-  const printed = input.statement?.closingBalanceCents;
+  const printed = input.statement.closingBalanceCents;
   const [row] = await tx.execute<{ id: string }>(sql`
     insert into account_statements (account_id, period_start, cut_off_date, closing_balance_cents, source)
     select a.id, ${period.periodStart}::date, ${period.cutOffDate}::date,
@@ -441,21 +446,33 @@ export async function importStatement(
       current = undefined;
       // The statement's row is found, or cut when this is its first import.
       const statementId = context.statementId ?? (await cutStatement(tx, input, preview.statement));
-      // Drop what the statement no longer names: the movement itself when this was its only source,
-      // else just this leg's source row. The sources go first, so a dropped line's reference is free.
+      // What the statement held and still names is written again under its new line number or
+      // reference, so a renumbered line never meets its own old row in the unique index.
+      const heldSource = new Map(context.held.map((one) => [one.transactionId, one.sourceId]));
+      const kept = preview.lines
+        .filter((line) => line.status === "already_imported" && heldSource.has(line.matchedTransactionId!))
+        .map((line) => ({ transactionId: line.matchedTransactionId!, row: rows.get(line.line)! }));
       const unlinked = preview.removals.filter((one) => one.effect === "unlinks");
       const deleted = preview.removals.filter((one) => one.effect === "deletes");
-      const held = new Map(context.held.map((one) => [one.transactionId, one.sourceId]));
-      if (unlinked.length > 0) {
-        await tx.execute(sql`
-          delete from transaction_sources
-          where id in (select jsonb_array_elements_text(${idsParam(unlinked.map((one) => held.get(one.transactionId)))})::uuid)`);
+      const dropped = [...unlinked, ...kept].map((one) => heldSource.get(one.transactionId)!);
+      // One round trip for what leaves: the movements this import created and the source rows. Each
+      // count must be the one the preview said, else a policy skipped a row and nothing is written.
+      if (dropped.length > 0 || deleted.length > 0) {
+        const [done] = await tx.execute<{ sources: number; movements: number }>(sql`
+          with gone as (
+            delete from transactions
+            where id in (select jsonb_array_elements_text(${idsParam(deleted.map((one) => one.transactionId))})::uuid)
+            returning id),
+          freed as (
+            delete from transaction_sources
+            where id in (select jsonb_array_elements_text(${idsParam(dropped)})::uuid)
+            returning id)
+          select (select count(*)::int from freed) as sources, (select count(*)::int from gone) as movements`);
+        if (done?.movements !== deleted.length || done.sources !== dropped.length) {
+          throw new StatementError("lineRefused");
+        }
       }
-      if (deleted.length > 0) {
-        await tx.execute(sql`
-          delete from transactions
-          where id in (select jsonb_array_elements_text(${idsParam(deleted.map((one) => one.transactionId))})::uuid)`);
-      }
+      legs.push(...kept);
       if (legs.length > 0) {
         await tx.execute(sql`
           insert into transaction_sources (transaction_id, account_id, statement_id, source_ref, source_seq)
@@ -468,16 +485,17 @@ export async function importStatement(
           )}`);
       }
       await writeDeferrals(tx, input.accountId, legs);
+      return {
+        created: preview.counts.new,
+        linked: preview.counts.matches,
+        skipped: preview.counts.already_imported,
+        removed: deleted.length,
+        unlinked: unlinked.length,
+      };
     } catch (error) {
       console.error("statement line refused:", pgErrorCode(error) ?? "", pgConstraintName(error) ?? "");
+      if (error instanceof StatementError) throw error;
       throw new StatementError("lineRefused", current);
     }
-    return {
-      created: preview.counts.new,
-      linked: preview.counts.matches,
-      skipped: preview.counts.already_imported,
-      removed: preview.removals.filter((one) => one.effect === "deletes").length,
-      unlinked: preview.removals.filter((one) => one.effect === "unlinks").length,
-    };
   });
 }

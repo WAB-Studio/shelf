@@ -15349,7 +15349,12 @@ async function statementImportSuite(): Promise<void> {
     insert into ingest_counterparties (owner_user_id, pattern_key, pattern_label, side, state, trusted_account_id)
     values (${owner.id}, ${counterpartyPatternKey("TRANSF A BOLSILLO 7781")}, 'TRANSF A BOLSILLO', 'to', 'trusted', ${ids.card})`;
 
-  const { tool } = mcpClient(POST, token);
+  const { tool: callTool } = mcpClient(POST, token);
+  // A statement is named by its cut-off date; unless a call names one, it is the span of its lines.
+  const tool = (name: string, args: Record<string, unknown>) => {
+    const days = ((args.rows ?? []) as { date: string }[]).map((row) => row.date).sort();
+    return callTool(name, args.statement ? args : { ...args, statement: { periodStart: days[0], cutOffDate: days[days.length - 1] } });
+  };
   const count = async () => {
     const [row] = await fixtureSql<{ movements: number; sources: number }[]>`
       select (select count(*)::int from transactions where from_account_id = ${ids.bank} or to_account_id = ${ids.bank}) as movements,
@@ -15579,6 +15584,80 @@ async function statementImportSuite(): Promise<void> {
       afterStatements[0]?.n === 1 && transfer?.n === 1 && transfer.amount === "2000000" &&
       (await sourcesOf(ids.bank)).some((one) => one.transaction_id === bankSide.transaction_id),
     `removals ${JSON.stringify(removals)}, replaced ${JSON.stringify(replaced.value)}, card sources ${JSON.stringify(afterCard)}, gone ${JSON.stringify(goneRows)}, transfer ${JSON.stringify(transfer)}`,
+  );
+
+  // A statement without its period is refused: the cut-off date is what a re-import is found by.
+  const unnamed = await callTool("preview_statement", { accountId: ids.card, rows: cardRows });
+  // A line outside the period it names is refused too.
+  const outside = await callTool("preview_statement", {
+    accountId: ids.card, rows: cardRows, statement: { periodStart: "2026-10-05", cutOffDate: "2026-10-31" },
+  });
+  assert(
+    next("RF-134: a statement names its period, and no line may fall outside it"),
+    unnamed.isError && outside.isError,
+    `unnamed ${JSON.stringify(unnamed.value)}, outside ${JSON.stringify(outside.value)}`,
+  );
+
+  // Re-import with lines added before, a reference given to a line that had none and a reconciled line:
+  // kept legs are renumbered, none is recreated, and the statement stays one.
+  const november = { periodStart: "2026-11-01", cutOffDate: "2026-11-08" };
+  const novRows = [
+    { line: 1, date: "2026-11-02", description: "UNO", amountCents: -100_000, categoryId: ids.food },
+    { line: 2, date: "2026-11-03", description: "DOS", amountCents: -200_000, categoryId: ids.food },
+    { line: 3, date: "2026-11-04", description: "TRES", amountCents: -300_000, categoryId: ids.food },
+  ];
+  const novFirst = await tool("preview_statement", { accountId: ids.card, rows: novRows, statement: november });
+  await tool("import_statement", { accountId: ids.card, rows: novRows, statement: november, previewKey: novFirst.value?.previewKey });
+  const novMovement = async (description: string) =>
+    (await fixtureSql<{ id: string }[]>`
+      select id from transactions where from_account_id = ${ids.card} and description = ${description}`)[0]?.id;
+  const [dosId, tresId, unoId] = [await novMovement("DOS"), await novMovement("TRES"), await novMovement("UNO")];
+  await fixtureSql.begin(async (tx) => {
+    const claims = JSON.stringify({ sub: owner.id, role: "authenticated", aud: "authenticated" });
+    await tx`select set_config('request.jwt.claims', ${claims}, true)`;
+    const [reconciliation] = await tx<{ id: string }[]>`
+      insert into account_reconciliations (account_id, reconciled_on, counted_balance_cents)
+      values (${ids.card}, '2026-11-05', 0) returning id`;
+    await tx`update transactions set reconciliation_id = ${reconciliation!.id} where id = ${dosId ?? null}`;
+  });
+  const novNext = [
+    { line: 1, date: "2026-11-01", description: "CERO", amountCents: -50_000, categoryId: ids.food },
+    { ...novRows[0]!, line: 2 },
+    { ...novRows[1]!, line: 3 },
+    { ...novRows[2]!, line: 4, reference: `T-${tag}` },
+  ];
+  const novPreview = await tool("preview_statement", { accountId: ids.card, rows: novNext, statement: november });
+  const novImport = await tool("import_statement", {
+    accountId: ids.card, rows: novNext, statement: november, previewKey: novPreview.value?.previewKey,
+  });
+  const novSources = await fixtureSql<{ id: string; source_seq: number | null; source_ref: string | null }[]>`
+    select t.id, s.source_seq, s.source_ref from transaction_sources s join transactions t on t.id = s.transaction_id
+    where s.account_id = ${ids.card} and t.occurred_at >= '2026-11-01'`;
+  const seqOf = (id: string | undefined) => novSources.find((one) => one.id === id);
+  const novCount = await fixtureSql<{ n: number }[]>`
+    select count(*)::int as n from transactions
+    where from_account_id = ${ids.card} and description in ('CERO', 'UNO', 'DOS', 'TRES')`;
+  assert(
+    next("RF-134: a re-import renumbers the legs it keeps, matches a reconciled leg it holds, and gives a held leg the reference it lacked"),
+    !novImport.isError && novImport.value?.created === 1 && novImport.value?.skipped === 3 && novImport.value?.removed === 0 &&
+      novCount[0]?.n === 4 &&
+      seqOf(unoId)?.source_seq === 2 && seqOf(dosId)?.source_seq === 3 &&
+      seqOf(tresId)?.source_ref === `T-${tag}` && seqOf(tresId)?.source_seq === null,
+    `preview ${JSON.stringify(novPreview.value?.counts)}, import ${JSON.stringify(novImport.value)}, sources ${JSON.stringify(novSources)}, movements ${novCount[0]?.n}`,
+  );
+
+  // Dropping the statement's last line names the same statement, so exactly that line goes.
+  const novLast = novNext.slice(0, 3);
+  const lastPreview = await tool("preview_statement", { accountId: ids.card, rows: novLast, statement: november });
+  const lastImport = await tool("import_statement", {
+    accountId: ids.card, rows: novLast, statement: november, previewKey: lastPreview.value?.previewKey,
+  });
+  const novStatements = await fixtureSql<{ n: number }[]>`
+    select count(*)::int as n from account_statements where account_id = ${ids.card} and cut_off_date = '2026-11-08'`;
+  assert(
+    next("RF-134: dropping a statement's last line replaces within the same statement: that movement goes, no second statement is cut"),
+    !lastImport.isError && lastImport.value?.removed === 1 && novStatements[0]?.n === 1 && (await novMovement("TRES")) === undefined,
+    `import ${JSON.stringify(lastImport.value)}, statements ${novStatements[0]?.n}`,
   );
 }
 

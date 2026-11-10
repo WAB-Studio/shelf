@@ -29,8 +29,8 @@ export const statementRowSchema = z.object({
 });
 
 // The statement the lines were read from. A statement is told apart by its account and its cut-off
-// date, so a re-import names the same one and replaces its rows (RF-134). Absent, the period runs from
-// the first line's day to the last's and the closing balance is the one the movements derive.
+// date, so a re-import names the same one and replaces its rows (RF-134): Claude reads both off the
+// statement. Without a printed closing balance the one the movements derive is recorded.
 const statementPeriodSchema = z.object({
   periodStart: occurredAtSchema,
   cutOffDate: occurredAtSchema,
@@ -42,15 +42,18 @@ export const statementSchema = z
   .object({
     accountId: z.uuid(),
     rows: z.array(statementRowSchema).min(1).max(500),
-    statement: statementPeriodSchema.optional(),
+    statement: statementPeriodSchema,
   })
   .superRefine(({ accountId, rows, statement }, ctx) => {
-    if (statement && statement.periodStart > statement.cutOffDate) {
+    if (statement.periodStart > statement.cutOffDate) {
       ctx.addIssue({ code: "custom", path: ["statement", "periodStart"], message: "period after cut-off" });
     }
     const lines = new Set<number>();
     const refs = new Set<string>();
     rows.forEach((row, index) => {
+      if (row.date < statement.periodStart || row.date > statement.cutOffDate) {
+        ctx.addIssue({ code: "custom", path: ["rows", index, "date"], message: "outside the statement's period" });
+      }
       if (lines.has(row.line)) ctx.addIssue({ code: "custom", path: ["rows", index, "line"], message: "repeated line" });
       lines.add(row.line);
       if (row.reference !== undefined) {
