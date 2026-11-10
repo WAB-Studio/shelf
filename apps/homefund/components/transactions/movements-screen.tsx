@@ -290,13 +290,12 @@ export function MovementsScreen({
   exportQuery.set("entities", "transactions");
   const exportHref = `/${locale}/settings/data/export?${exportQuery.toString()}`;
 
-  // `framed` is the table's slot: the stack keeps its own height there, and only
-  // the pane's own copy grows to fill it.
+  // `framed` is the table's slot: its frame spaces it, so only the phone's copy carries its own.
   function emptyState(framed: boolean) {
     if (filtersActive) {
       return (
         <EmptyState
-          variant="filtered"
+          variant={framed ? undefined : "filtered"}
           icon={<Search size={40} strokeWidth={1.6} />}
           title={t("filteredEmptyTitle")}
           description={t("filteredEmptyDescription")}
@@ -313,7 +312,6 @@ export function MovementsScreen({
     // because no movement has been recorded yet (FLOWS §9).
     return (
       <EmptyState
-        variant={framed ? "filtered" : "first"}
         icon={<ArrowRightLeft size={40} strokeWidth={1.6} />}
         title={t("emptyTitle")}
         action={
