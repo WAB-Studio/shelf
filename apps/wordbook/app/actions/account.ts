@@ -123,6 +123,8 @@ export async function sendSignInLink(email: string): Promise<SendSignInLinkResul
   ]);
   const claim = await claimSignInLink(await headers(), parsed.data);
   if (claim.status === "rateLimited") return { ok: false, error: "capped" };
+  // Production without CLIENT_KEY_SALT sends nothing: no cap would count the caller.
+  if (claim.status === "noSalt") return { ok: false, error: "sendFailed" };
   const spent = claim.status === "ok" ? claim.keys : [];
 
   // RL-69: after the claim, so probing the list spends the caller's allowance like a send does;

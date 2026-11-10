@@ -20,12 +20,11 @@ if (process.env.MIGRATION_DATABASE_URL) assertSuiteDatabase();
 // own comment.
 type WordRouteName = "text" | "unlisted" | "notes" | "translate";
 
-type WordTextBody = { definition: string | null; example: { en: string; es: string } };
+type WordTextBody = { definition: string | null; translations?: string[] | null };
 
 type UnlistedBody = {
   translations: string[];
   definition: string | null;
-  example: { en: string; es: string };
   lemma: string | null;
   rule: string | null;
 };

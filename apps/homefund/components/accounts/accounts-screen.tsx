@@ -13,6 +13,7 @@ import {
   handAccountToGroupAction,
   restoreAccountAction,
 } from "@/app/actions/accounts";
+import { useOwnerLabel } from "@/components/fund/owner-mark";
 import { AccountFormDialog } from "@/components/accounts/account-form-dialog";
 import {
   BilledAmountDialog,
@@ -540,6 +541,9 @@ function AccountCard({
   // is the first entry and every other currency the account holds follows it.
   const [settlement, ...others] = account.balances;
 
+  const ownerOf = useOwnerLabel();
+  const ownerLabel = account.foreignOwner ? ownerOf(account.ownerName) : t("ownerPersonal");
+
   return (
     <Card>
       <Flex direction="column" gap="3">
@@ -547,11 +551,16 @@ function AccountCard({
         <Flex direction="column" gap="1" flexGrow="1" minWidth="0">
           <Flex align="center" gap="2" wrap="wrap">
             <Text weight="medium">{account.name}</Text>
-            {account.ownerUserId && <PersonalMark label={t("ownerPersonal")} />}
+            {account.ownerUserId && <PersonalMark label={ownerLabel} />}
             <Badge color={account.kind === "liability" ? "red" : "green"}>
               {t(account.kind === "liability" ? "kindLiability" : "kindAsset")}
             </Badge>
           </Flex>
+          {account.foreignOwner && (
+            <Text size="2" color="gray">
+              {ownerLabel}
+            </Text>
+          )}
           {account.institution && (
             <Text size="2" color="gray">
               {account.institution}
@@ -613,50 +622,53 @@ function AccountCard({
             </Text>
           </Flex>
         </Flex>
-        <DropdownMenu.Root>
-          <DropdownMenu.Trigger>
-            <IconButton
-              type="button"
-              variant="ghost"
-              color="gray"
-              size="3"
-              aria-label={tKey("common.actionsFor", { name: account.name })}
-            >
-              <EllipsisVertical size={16} />
-            </IconButton>
-          </DropdownMenu.Trigger>
-          <DropdownMenu.Content>
-            {/* An archived account is read-only: the way back is all it offers,
-                and a mistake is corrected by restoring it first. */}
-            {archived ? (
-              <DropdownMenu.Item onSelect={onRestore}>
-                {tKey("common.restore")}
+        {/* Nothing here acts on another member's personal account. */}
+        {!account.foreignOwner && (
+          <DropdownMenu.Root>
+            <DropdownMenu.Trigger>
+              <IconButton
+                type="button"
+                variant="ghost"
+                color="gray"
+                size="3"
+                aria-label={tKey("common.actionsFor", { name: account.name })}
+              >
+                <EllipsisVertical size={16} />
+              </IconButton>
+            </DropdownMenu.Trigger>
+            <DropdownMenu.Content>
+              {/* An archived account is read-only: the way back is all it offers,
+                  and a mistake is corrected by restoring it first. */}
+              {archived ? (
+                <DropdownMenu.Item onSelect={onRestore}>
+                  {tKey("common.restore")}
+                </DropdownMenu.Item>
+              ) : (
+                <>
+                  <DropdownMenu.Item onSelect={onEdit}>
+                    {tKey("common.edit")}
+                  </DropdownMenu.Item>
+                  {account.canWrite && (
+                    <DropdownMenu.Item onSelect={onReconcile}>
+                      {t("reconcile")}
+                    </DropdownMenu.Item>
+                  )}
+                  <DropdownMenu.Item onSelect={onArchive}>
+                    {tKey("common.archive")}
+                  </DropdownMenu.Item>
+                  {onHandOver && (
+                    <DropdownMenu.Item onSelect={onHandOver}>
+                      {t("handOver")}
+                    </DropdownMenu.Item>
+                  )}
+                </>
+              )}
+              <DropdownMenu.Item color="red" onSelect={onDelete}>
+                {tKey("common.delete")}
               </DropdownMenu.Item>
-            ) : (
-              <>
-                <DropdownMenu.Item onSelect={onEdit}>
-                  {tKey("common.edit")}
-                </DropdownMenu.Item>
-                {account.canWrite && (
-                  <DropdownMenu.Item onSelect={onReconcile}>
-                    {t("reconcile")}
-                  </DropdownMenu.Item>
-                )}
-                <DropdownMenu.Item onSelect={onArchive}>
-                  {tKey("common.archive")}
-                </DropdownMenu.Item>
-                {onHandOver && (
-                  <DropdownMenu.Item onSelect={onHandOver}>
-                    {t("handOver")}
-                  </DropdownMenu.Item>
-                )}
-              </>
-            )}
-            <DropdownMenu.Item color="red" onSelect={onDelete}>
-              {tKey("common.delete")}
-            </DropdownMenu.Item>
-          </DropdownMenu.Content>
-        </DropdownMenu.Root>
+            </DropdownMenu.Content>
+          </DropdownMenu.Root>
+        )}
       </Flex>
       {pending.length > 0 && (
         <>

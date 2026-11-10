@@ -336,7 +336,7 @@ export function WordHistory() {
           </Text>
         )
       ) : networkOnly ? (
-        unlistedRow!.translation === null ? null : unlistedRow!.exampleEn !== null && unlistedRow!.exampleEs !== null ? (
+        unlistedRow!.translation === null ? null : unlistedRow!.schema >= 3 ? (
           <NetworkAnswer
             surface={key}
             state={{
@@ -344,7 +344,6 @@ export function WordHistory() {
               answer: {
                 translations: [unlistedRow!.translation],
                 definition: unlistedRow!.definition,
-                example: { en: unlistedRow!.exampleEn, es: unlistedRow!.exampleEs },
                 lemma: null,
                 rule: null,
               },

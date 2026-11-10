@@ -712,7 +712,6 @@ function answeredWord(text: string, at = NOON - 4 * 60 * 60 * 1000): LookupRecor
 const UNLISTED = {
   translations: ["zorpo", "zorpa"],
   definition: "a word no dictionary carries",
-  example: { en: "A zorp sat there.", es: "Un zorpo estaba ahí." },
   lemma: null,
   rule: null,
 };

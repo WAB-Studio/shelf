@@ -11,6 +11,7 @@ import { tallyDay, tallyDays } from "@/lib/day/tally";
 import { phaseOn } from "@/lib/day/derive";
 import type { DaySlot } from "@/lib/day/types";
 import { loadWaitingTime } from "@/lib/queries/time-entries";
+import { syncTimelogEntries } from "@/lib/queries/timelog-tray";
 import { loadWeek } from "@/lib/queries/week";
 import { loadDay, type CommitmentInfo, type OneOffSummary } from "@/lib/queries/day";
 import { PAST_DAY_LIMIT } from "@/lib/validation/fact";
@@ -29,6 +30,7 @@ import { screenPlanned } from "@/lib/plan/screen-planned";
 import type { DayMonthLine } from "@/lib/queries/day";
 import { evidenceUnitWords } from "@/lib/evidence/unit-words";
 import { NewOneOff } from "./new-one-off";
+import { NewOneOffSheet } from "./new-one-off-sheet";
 import { MonthTaskLine } from "./month-task-line";
 import { OneOffRow } from "./one-off-row";
 import { PlanNotices, type PlanNoticeItem } from "./plan-notice";
@@ -113,7 +115,7 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
   const [loaded, week, waitingTime] = await Promise.all([
     loadDay(day),
     past ? null : loadWeek(day, today),
-    past ? null : loadWaitingTime(),
+    past ? null : syncTimelogEntries().catch(() => undefined).then(loadWaitingTime),
   ]);
   const {
     view,
@@ -713,7 +715,7 @@ export async function DayScreen({ day: requested }: { day?: string } = {}) {
           <NewOneOff daylessCount={daylessCount} />
         </Face>
         <Face on="phone">
-          <NewOneOff
+          <NewOneOffSheet
             daylessCount={daylessCount}
             chooseGoal={groupBlocks.flatMap(({ rootId, items }) => {
               const root = items[0].goal.id === rootId ? items[0].goal : openGoals.find((goal) => goal.id === rootId);

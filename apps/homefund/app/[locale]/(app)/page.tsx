@@ -57,6 +57,7 @@ import { PERSONAL_CASH_ACCOUNT_NAME } from "@/lib/fund/seed";
 import type { Locale } from "@/lib/locales";
 import type { ACCOUNT_SUBTYPES } from "@/lib/validation/account";
 import { formatMoney } from "@/lib/money";
+import { accountNamesById } from "@/lib/fund/account-names";
 import { categoryNamesById } from "@/lib/fund/category-names";
 import { nearestLimit, nextDebtPayment } from "@/lib/fund/glance";
 
@@ -135,6 +136,7 @@ export default async function HomePage(props: PageProps<"/[locale]">) {
     td,
     ta,
     tc,
+    tOwnership,
   ] = await Promise.all([
     requireUser(),
     withSharedTransaction(() =>
@@ -157,14 +159,23 @@ export default async function HomePage(props: PageProps<"/[locale]">) {
         optional("getDebtOverview", getDebtOverview()),
         // The review line is optional: a failed read drops the line, never Inicio.
         optional("getMonthReviewPending", getMonthReviewPending()),
-        optional("listBudgetsWithStatus", listBudgetsWithStatus()),
-        optional("listGoalsWithProgress", listGoalsWithProgress()),
+        // Another member's personal budgets and goals are not the caller's to watch:
+        // Inicio keeps their own and the fund's (RF-58).
+        optional(
+          "listBudgetsWithStatus",
+          listBudgetsWithStatus().then((all) => all.filter((one) => !one.foreignOwner)),
+        ),
+        optional(
+          "listGoalsWithProgress",
+          listGoalsWithProgress().then((all) => all.filter((one) => !one.foreignOwner)),
+        ),
       ]),
     ),
     getTranslations("transactions"),
     getTranslations("dashboard"),
     getTranslations("accounts"),
     getTranslations("categories"),
+    getTranslations("ownership"),
   ]);
 
   // RF-154: an invitation waiting for this address is answered before anything else on Inicio.
@@ -270,7 +281,11 @@ export default async function HomePage(props: PageProps<"/[locale]">) {
 
   // A name and colour per account and per category id — children included — so a
   // row reads its title, subtitle and tile without a second lookup.
-  const accountNames = new Map(options.accounts.map((a) => [a.id, a.name]));
+  const accountNames = accountNamesById(
+    options.accountDirectory,
+    (name) => (name ? tOwnership("of", { name }) : tOwnership("ofSomeone")),
+    (account, owner) => tOwnership("accountOf", { account, owner }),
+  );
   const categoryNames = categoryNamesById(options.categories, (name) =>
     tc("scopedName", { name }),
   );
@@ -297,7 +312,13 @@ export default async function HomePage(props: PageProps<"/[locale]">) {
       accountNames.get(withdrawal.targetCashAccountId)) ||
     PERSONAL_CASH_ACCOUNT_NAME[locale];
 
-  const nextDebt = nextDebtPayment(debts ?? []);
+  // Another member's personal debt is theirs to pay: Inicio names only the caller's and the fund's (RF-58).
+  const foreignAccountIds = new Set(
+    options.accountDirectory.filter((account) => account.foreignOwner).map((account) => account.id),
+  );
+  const nextDebt = nextDebtPayment(
+    (debts ?? []).filter((debt) => !foreignAccountIds.has(debt.accountId)),
+  );
 
   return (
     <Page gutter="flush-md">

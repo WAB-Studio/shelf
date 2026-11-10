@@ -10,7 +10,7 @@ export const runtime = "nodejs";
 
 const to = (request: Request, path: string) => Response.redirect(new URL(path, request.url), 303);
 
-// The daily CSV (RT-15): one row per day of the range, the same rows `get_daily` answers. The person's session
+// The daily CSV (RT-25): one row per day of the range, the same rows `get_daily` answers. The person's session
 // reads it; a bad range goes back to the form with its reason.
 export async function GET(request: Request): Promise<Response> {
   if ((await getPerson()) === null) return to(request, "/entrar");

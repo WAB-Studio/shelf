@@ -153,7 +153,7 @@ function transactionReasonKey(error: unknown): string {
 }
 
 // A movement as the import hands it on: the form's own shape, plus the member named in
-// «De quién» (RF-166), which the commit resolves inside the destination account's fund.
+// «De quién» (RF-167), which the commit resolves inside the destination account's fund.
 export type ImportedTransactionInput = CreateTransactionInput & {
   contributedByName?: string | null;
 };
@@ -791,7 +791,7 @@ type ResolvedTransaction = {
   counterAmountCents: number | null;
   counterIsEstimate: boolean;
   forHousehold: boolean;
-  // The member named in «De quién» (RF-166) and, once `resolveContributors` has read the
+  // The member named in «De quién» (RF-167) and, once `resolveContributors` has read the
   // destination's fund, the member row it points at.
   contributedByName: string | null;
   contributedByMemberId: string | null;
@@ -855,7 +855,7 @@ function resolveRows(
 
 // Reads, in one statement, the members of each destination account's fund and points every
 // named «De quién» at its member row. A name that points at none (a stranger, or an account
-// outside a fund) is a row failure like an unresolved category (RF-166). Only an income
+// outside a fund) is a row failure like an unresolved category (RF-167). Only an income
 // carries one; on any other movement the name is ignored, as the mark is on a bill.
 async function resolveContributors(
   tx: Transaction,

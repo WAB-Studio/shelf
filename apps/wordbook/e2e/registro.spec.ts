@@ -597,8 +597,7 @@ test("the «generated» mark reads at 4.5:1 and the search field's edge at 3:1, 
 }) => {
   await deleteTranslator(page);
   await stubWordText({
-    definition: "A round fruit.",
-    example: { en: "She ate an apple.", es: "Ella comió una manzana." },
+    definition: "A small domestic animal.",
   });
   const palette = {
     // The search box sits on the brand block, whose field edge is the same soft green in both modes.
@@ -615,7 +614,7 @@ test("the «generated» mark reads at 4.5:1 and the search field's edge at 3:1, 
 
   for (const scheme of ["light", "dark"] as const) {
     await page.emulateMedia({ colorScheme: scheme });
-    const searchBox = await searchFor(page, "apple");
+    const searchBox = await searchFor(page, "cat");
     const mark = page.getByText(messages.word.generatedMark, { exact: true }).first();
     await expect(mark).toBeVisible();
     expect(await computedColor(mark)).toBe(hexToRgb(palette[scheme].quiet));

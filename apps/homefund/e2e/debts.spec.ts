@@ -693,51 +693,6 @@ test.describe("the row menus", () => {
     await dropAccounts([debtId, sourceId, switchingId]);
   });
 
-  test("the plan dialog schedules the lines the row's meta then counts", async ({
-    page,
-  }) => {
-    await page.goto("/es/planning/debts");
-
-    const row = page.getByRole("row").filter({ hasText: debtName });
-    await expect(row.getByText(positionText(0, 6), { exact: true })).toHaveCount(0);
-
-    await rowMenu(page, debtName).click();
-    await page
-      .getByRole("menuitem", { name: debts.rowNewPlan, exact: true })
-      .click();
-
-    const dialog = page.getByRole("dialog");
-    await expect(dialog).toBeVisible();
-    // The plan lands on the debt whose menu opened it, which the dialog states
-    // rather than offering as a choice (RF-81).
-    await expect(dialog.getByText(debtName, { exact: true })).toBeVisible();
-
-    await dialog
-      .getByRole("textbox", { name: installments.principalLabel })
-      .fill("600000");
-    await dialog
-      .getByRole("textbox", { name: installments.installmentsLabel })
-      .fill("6");
-    await dialog
-      .getByRole("button", { name: installments.planSave, exact: true })
-      .click();
-
-    await expect(
-      page.getByText(installments.planSaved, { exact: true }),
-    ).toBeVisible();
-    await expect(row.getByText(positionText(0, 6), { exact: true })).toBeVisible();
-
-    // The dated schedule is derived server-side and the lines total the
-    // principal exactly — no cent is lost to the split (RF-81).
-    const [scheduled] = await fixtureSql<{ lines: string; total: string }[]>`
-      select count(*)::text as lines, coalesce(sum(l.amount_cents), 0)::text as total
-      from installment_lines l
-      join installment_plans p on p.id = l.plan_id
-      where p.account_id = ${debtId}`;
-    expect(scheduled.lines).toBe("6");
-    expect(scheduled.total).toBe(String(60_000_000));
-  });
-
   test("the payment dialog closes the oldest cuotas, names what it did not reach and drops the saldo", async ({
     page,
   }) => {
@@ -1304,9 +1259,9 @@ test.describe("the detail route", () => {
     await expect(
       page.getByText(installments.planDeleted, { exact: true }),
     ).toBeVisible();
-    await expect(
-      page.getByText(installments.plansEmpty, { exact: true }),
-    ).toBeVisible();
+    // A debt with no plan states nothing about plans: no table and no empty line.
+    await expect(page.getByRole("table", { name: planTitle })).toHaveCount(0);
+    await expect(page.getByText(installments.plansTitle, { exact: true })).toHaveCount(0);
 
     // The lines go with the plan; the movement that paid nine of them stays,
     // unlinked, which is what the confirmation said it would do.
@@ -1534,9 +1489,6 @@ test.describe("under a plain member", () => {
     // And no action the database would refuse is on offer.
     await expect(
       page.getByRole("button", { name: debts.rowPay, exact: true }),
-    ).toHaveCount(0);
-    await expect(
-      page.getByRole("button", { name: debts.rowNewPlan, exact: true }),
     ).toHaveCount(0);
     await expect(rowMenu(page, readerPlanTitle)).toHaveCount(0);
   });

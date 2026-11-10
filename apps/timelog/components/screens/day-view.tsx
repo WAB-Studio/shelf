@@ -2,19 +2,19 @@ import { getTranslations } from "next-intl/server";
 
 import { BarRows, type BarRow } from "@/components/screens/app-rows";
 import { AutoRefresh } from "@/components/screens/auto-refresh";
-import { ClaudeBlock, InternetBlock } from "@/components/screens/claude-internet";
+import { ClaudeBlock, InternetBlock, ProjectBars } from "@/components/screens/claude-internet";
 import { Timeline } from "@/components/ui/timeline";
 import { Card, Cards, Composition, DayStrip, Figure, Hero, HeroColumns, Mosaic, Stack, Text, TextLink, Tile, Title } from "@/components/ui";
 import { appTone, timeByClass } from "@/lib/app-classes";
 import { readableApp } from "@/lib/app-names";
 import { projectName } from "@/lib/claude-project";
-import { claudeSources, claudeTotal } from "@/lib/daily";
+import { claudeScreen, claudeSources } from "@/lib/daily";
 import type { AppTime } from "@/lib/queries";
 import { appsBetween, claudeBetween, claudeSessionsBetween, dayTotals, devicesBetween, pagesBetween, sitesBetween, uploadedDays, uploadSpan, windowsBetween } from "@/lib/queries";
 import { focusShare, hourMarks, layoutSessions } from "@/lib/timeline";
 import { withTimeDb } from "@/lib/session";
 import { percent, sum } from "@/lib/totals";
-import { type ProjectTime, projectsOf } from "@/lib/vscode-project";
+import { projectsOf } from "@/lib/vscode-project";
 import { calendarWords } from "@/lib/words";
 import { dayStrip, mondayOf } from "@/lib/week";
 import { addDays, civilDay } from "@/lib/zone";
@@ -56,7 +56,8 @@ export async function DayView({ day }: { day: string }) {
   ]);
   const [raw, weekDays, sites, pages, windows, sessions, claudeDays, previous, devices, span] = reads;
   const claude = claudeDays[0];
-  const claudeSeconds = claude === undefined ? 0 : claudeTotal(claude);
+  const claudeSeconds = claude === undefined ? 0 : claudeScreen(claude);
+  const claudeAgent = claude?.code ?? 0;
   const apps = words.apps(raw);
   // Windows come under the readable name of their app, two processes with one name together.
   const titlesOf = new Map<string, typeof windows>();
@@ -65,9 +66,8 @@ export async function DayView({ day }: { day: string }) {
     if (name !== null) titlesOf.set(name, [...(titlesOf.get(name) ?? []), one]);
   }
   const projects = projectsOf(windows);
-  const projectRow = (one: ProjectTime): BarRow => ({ key: one.project, name: one.project, figure: words.duration(one.seconds), seconds: one.seconds, label: t("projectBar", { project: one.project, duration: words.duration(one.seconds) }) });
   const claudeParts = claudeSources(claude, { code: tClaude("code"), web: tClaude("web"), desktop: tClaude("desktop") })
-    .filter((one) => one.seconds > 0)
+    .filter((one) => one.key !== "code" && one.seconds > 0)
     .map((one) => ({ ...one, figure: words.duration(one.seconds) }));
   const claudeLabel = claudeParts.map((one) => `${one.name}: ${one.figure}`).join(", ");
   const total = sum(apps);
@@ -83,7 +83,7 @@ export async function DayView({ day }: { day: string }) {
   // Before the first upload there is nothing to read: no empty sections stand in for it.
   const firstUse = top === undefined && span.lastReceived === null;
   // A past day nothing arrived on has nothing to open: no empty Claude and Internet cards stand in for it.
-  const emptyPast = !isToday && apps.length === 0 && claudeSeconds === 0 && sites.length === 0;
+  const emptyPast = !isToday && apps.length === 0 && claudeSeconds === 0 && claudeAgent === 0 && sites.length === 0;
 
   const windowRow = (title: (typeof windows)[number]): BarRow => ({
     key: title.app + title.title,
@@ -163,6 +163,7 @@ export async function DayView({ day }: { day: string }) {
               <Stack gap={2}>
                 <Text variant="meta">{t("claudeCard")}</Text>
                 <Text as="p">{claudeSeconds > 0 ? t("claudeGlance", { duration: words.duration(claudeSeconds), percent: percent(claudeSeconds, total) }) : t(isToday ? "claudeNoneToday" : "claudeNoneDay")}</Text>
+                {claudeAgent > 0 ? <Text variant="meta">{t("claudeAgent", { duration: words.duration(claudeAgent) })}</Text> : null}
                 {claudeSeconds > 0 ? (
                   <Composition
                     label={claudeLabel}
@@ -228,14 +229,10 @@ export async function DayView({ day }: { day: string }) {
           ) : null}
           {projects.length > 0 ? (
             <Tile title={t("projects")} figure={words.duration(sum(projects))}>
-              <BarRows
-                of={projects[0]!.seconds}
-                rows={projects.slice(0, APPS_SHOWN).map(projectRow)}
-                overflow={projects.length > APPS_SHOWN ? { summary: t("projectsMore", { n: projects.length - APPS_SHOWN, duration: words.duration(sum(projects.slice(APPS_SHOWN))) }), rows: projects.slice(APPS_SHOWN).map(projectRow) } : undefined}
-              />
+              <ProjectBars projects={projects} words={words} />
             </Tile>
           ) : null}
-          <Tile title={tClaude("title")} figure={claudeSeconds > 0 ? words.duration(claudeSeconds) : "—"}>
+          <Tile title={tClaude("title")} figure={claudeSeconds > 0 || claudeAgent > 0 ? words.duration(claudeSeconds) : "—"}>
             <ClaudeBlock isToday={isToday} claude={claude} sessions={sessions} hasClaudeCode={span.hasClaudeCode} hasSites={span.hasSites} words={words} />
           </Tile>
           <Tile title={tInternet("title")} figure={sites.length > 0 ? words.duration(sum(sites)) : "—"}>

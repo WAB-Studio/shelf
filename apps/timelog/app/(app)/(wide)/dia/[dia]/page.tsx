@@ -7,7 +7,7 @@ import { civilDay, isCivilDay } from "@/lib/zone";
 
 export async function generateMetadata({ params }: { params: Promise<{ dia: string }> }): Promise<Metadata> {
   const { dia } = await params;
-  if (!isCivilDay(dia)) return {};
+  if (!isCivilDay(dia) || dia > civilDay()) return {};
   const words = await calendarWords();
   return { title: `${words.weekday(dia)} ${words.dayShort(dia)}` };
 }

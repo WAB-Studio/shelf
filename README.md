@@ -7,7 +7,7 @@ Tres apps personales en un solo repositorio, y la página que las reúne.
 | **HomeFund** | `apps/homefund` | Un fondo compartido: cuentas, movimientos, deudas, presupuestos y recurrentes de un hogar, con los saldos derivados de los movimientos. | `docs/SPEC.md`, `docs/FLOWS.md`, `docs/DESIGN.md` |
 | **WordBook** | `apps/wordbook` | Un diccionario inglés–español que se instala en el teléfono, funciona sin conexión y recuerda lo que buscaste para exportarlo a Anki. | `docs/wordbook/SPEC.md`, `docs/wordbook/DESIGN.md` |
 | **GoalLog** | `apps/goallog` | Metas que se ganan en semanas: el plan dice qué cuenta, los hechos del día dicen qué pasó. Se conecta a otros asistentes por MCP. | `docs/goallog/SPEC.md`, `docs/goallog/DESIGN.md` |
-| **Shelf** | `apps/portal` | Una página estática, sin build, con el enlace a cada app. En línea en https://universo-apps.vercel.app. | `docs/portal/DESIGN.md` |
+| **Shelf** | `apps/portal` | Una página estática, sin build, con el enlace a cada app. En línea en https://shelfhome.vercel.app. | `docs/portal/DESIGN.md` |
 
 Cada `SPEC.md` es el contrato: lo que no está en su §1 no se construye. Cada requisito tiene un código (`RF-…`, `RNF-…`)
 que nunca se renumera.

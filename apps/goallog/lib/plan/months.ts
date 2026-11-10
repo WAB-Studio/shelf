@@ -211,15 +211,48 @@ export function settledMonths<T extends { current: boolean; past: boolean }>(row
   return ended ? rows.map((row) => ({ ...row, current: false, past: true })) : rows;
 }
 
-// The sum through the current month; a month with no amount plans 0.
-export function toDate(rows: MonthRow[]): { planned: number; reached: number } {
+// The current month's planned amount through `today`: spread evenly over the goal's days in the month, the days up to
+// and including today taken, rounded down. A month already closed, or one still to come, is whole.
+export function plannedThrough(
+  planned: number,
+  month: string,
+  today: string,
+  span: { openedOn: string; horizon: string | null },
+): number {
+  const first = span.openedOn > month ? span.openedOn : `${month.slice(0, 7)}-01`;
+  const lastOfMonth = lastDayOf(month);
+  const lastOfGoal = span.horizon === null ? null : addDaysToCivilDate(span.horizon, -1);
+  const last = lastOfGoal !== null && lastOfGoal < lastOfMonth ? lastOfGoal : lastOfMonth;
+  if (first > last) return 0;
+  const through = today < last ? today : last;
+  if (through < first) return 0;
+  const days = (from: string, to: string) => Number(to.slice(8, 10)) - Number(from.slice(8, 10)) + 1;
+  return Math.floor((planned * days(first, through)) / days(first, last));
+}
+
+// The sum through today (RP-153): closed months whole, the current month spread by days, a month with no amount plans 0.
+export function toDate(
+  rows: MonthRow[],
+  today: string,
+  span: { openedOn: string; horizon: string | null },
+): { planned: number; reached: number } {
   return rows
     .filter((row) => row.current || row.past)
     .reduce(
-      (sum, row) => ({
-        planned: sum.planned + (row.planned ?? 0),
-        reached: sum.reached + row.reached,
-      }),
+      (sum, row) => {
+        const planned = row.planned ?? 0;
+        return {
+          planned: sum.planned + (row.current ? plannedThrough(planned, row.month, today, span) : planned),
+          reached: sum.reached + row.reached,
+        };
+      },
       { planned: 0, reached: 0 },
     );
+}
+
+// A goal that holds goals reads «Hasta hoy» (RP-153) as the sum of what each goal under it and its own plan through
+// today, every one spread over its own days: a goal opened mid-month plans fewer of them than its holder's span
+// would say. What was reached is the holder's whole.
+export function holderToDate(reached: number, planned: readonly number[]): { planned: number; reached: number } {
+  return { planned: planned.reduce((sum, amount) => sum + amount, 0), reached };
 }

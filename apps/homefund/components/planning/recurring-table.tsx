@@ -9,6 +9,7 @@ import {
   pauseRecurringRuleAction,
   resumeRecurringRuleAction,
 } from "@/app/actions/recurring-rules";
+import { OwnerMark } from "@/components/fund/owner-mark";
 import {
   Badge,
   CategoryTile,
@@ -69,6 +70,9 @@ export type RecurringTableRow = {
   currency: string;
   // A destination-only rule is income, a source-only rule an expense (RF-29).
   isIncome: boolean;
+  // Another member's personal rule: named by its owner, read-only.
+  foreignOwner: boolean;
+  ownerName: string | null;
 };
 
 /**
@@ -121,6 +125,7 @@ export function RecurringTable({
           <Badge color="amber" variant="soft" radius="full">
             {t("autoBadge")}
           </Badge>
+          <OwnerMark foreignOwner={row.foreignOwner} ownerName={row.ownerName} />
         </Flex>
       ),
     },
@@ -203,18 +208,25 @@ export function RecurringTable({
         <RowMenu
           rowName={row.concept}
           items={[
-            { key: "edit", label: tKey("common.edit"), onSelect: () => onEdit(row) },
+            // Another member's rule can be read, never changed.
+            ...(row.foreignOwner
+              ? []
+              : [{ key: "edit", label: tKey("common.edit"), onSelect: () => onEdit(row) }]),
             {
               key: "viewGenerated",
               label: t("rowViewGenerated"),
               onSelect: () => onViewGenerated(row),
             },
-            {
-              key: "delete",
-              label: tKey("common.delete"),
-              tone: "danger",
-              onSelect: () => onDelete(row),
-            },
+            ...(row.foreignOwner
+              ? []
+              : [
+                  {
+                    key: "delete",
+                    label: tKey("common.delete"),
+                    tone: "danger" as const,
+                    onSelect: () => onDelete(row),
+                  },
+                ]),
           ]}
         />
       ),
@@ -260,16 +272,18 @@ function StatusCell({ row }: { row: RecurringTableRow }) {
 
   return (
     <Flex align="center" gap="2">
-      <Switch
-        checked={row.isActive}
-        onCheckedChange={onToggle}
-        disabled={isPending}
-        aria-label={
-          row.isActive
-            ? t("pauseSwitchLabel", { name: row.concept })
-            : t("resumeSwitchLabel", { name: row.concept })
-        }
-      />
+      {!row.foreignOwner && (
+        <Switch
+          checked={row.isActive}
+          onCheckedChange={onToggle}
+          disabled={isPending}
+          aria-label={
+            row.isActive
+              ? t("pauseSwitchLabel", { name: row.concept })
+              : t("resumeSwitchLabel", { name: row.concept })
+          }
+        />
+      )}
       <Text size="2" color="gray">
         {row.isActive
           ? t("stateActive")

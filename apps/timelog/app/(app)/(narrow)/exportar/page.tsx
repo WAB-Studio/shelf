@@ -11,7 +11,7 @@ export async function generateMetadata(): Promise<Metadata> {
   return { title: t("title") };
 }
 
-// «Exportar» (RT-15): the daily CSV over a range. The form is a plain GET, so the download needs no script.
+// «Exportar» (RT-25): the daily CSV over a range. The form is a plain GET, so the download needs no script.
 export default async function ExportPage({ searchParams }: { searchParams: Promise<{ error?: string; from?: string; to?: string }> }) {
   const today = civilDay();
   const [{ error, from, to }, t] = await Promise.all([searchParams, getTranslations("time.export")]);

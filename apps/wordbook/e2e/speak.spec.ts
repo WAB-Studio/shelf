@@ -80,17 +80,17 @@ test("RL-26: a headword with no IPA is heard exactly like one that has it", asyn
   await gotoReady(page);
 
   const searchBox = page.getByRole("textbox", { name: messages.search.label });
-  // FreeDict carries no IPA for "abandonable" (36,320 of 64,258 entries do;
+  // FreeDict carries no IPA for "umbrella" (36,320 of 64,258 entries do;
   // this one is among the 27,938 that do not).
-  await searchBox.fill("abandonable");
-  await expect(page.getByRole("heading", { name: "abandonable" })).toBeVisible({ timeout: 5000 });
+  await searchBox.fill("umbrella");
+  await expect(page.getByRole("heading", { name: "umbrella" })).toBeVisible({ timeout: 5000 });
 
-  const speakButton = page.getByRole("button", { name: "Escuchar «abandonable»" });
+  const speakButton = page.getByRole("button", { name: "Escuchar «umbrella»" });
   await expect(speakButton).toBeVisible();
 
   await speakButton.click();
   const calls = await page.evaluate(() => (window as unknown as { __speakCalls: { text: string; lang: string }[] }).__speakCalls);
-  expect(calls).toEqual([{ text: "abandonable", lang: "en-US" }]);
+  expect(calls).toEqual([{ text: "umbrella", lang: "en-US" }]);
 });
 
 test("RL-26: a second press restarts the word rather than queueing behind it", async ({ page }) => {
@@ -145,8 +145,8 @@ test("RL-26: pressing the speak control fires no network request of its own", as
   page.on("request", (request) => requests.push(request.url()));
 
   await searchBox.fill("");
-  await searchBox.fill("abandonable");
-  await expect(page.getByRole("heading", { name: "abandonable" })).toBeVisible({ timeout: 5000 });
+  await searchBox.fill("umbrella");
+  await expect(page.getByRole("heading", { name: "umbrella" })).toBeVisible({ timeout: 5000 });
 
   // The stricter bound: at the instant of paint, decoration's own debounce
   // has not fired yet, so the click below still finds nothing pending.
@@ -155,7 +155,7 @@ test("RL-26: pressing the speak control fires no network request of its own", as
 
   // The assertion this test exists for, kept intact: the click itself emits
   // nothing of its own.
-  const speakButton = page.getByRole("button", { name: "Escuchar «abandonable»" });
+  const speakButton = page.getByRole("button", { name: "Escuchar «umbrella»" });
   await speakButton.click();
   await runClock(page, PHRASE_DEBOUNCE_MS);
 

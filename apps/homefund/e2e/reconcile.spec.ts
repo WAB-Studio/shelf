@@ -309,7 +309,7 @@ test.describe("the row menu (B8)", () => {
       await clearGroup();
     });
 
-    test("offers no Cuadrar, where its owner is offered it", async ({ page, browser, baseURL }) => {
+    test("offers no menu, where its owner is offered Cuadrar", async ({ page, browser, baseURL }) => {
       // The owner's menu on the same row is the control: without it, an account the
       // member cannot see at all would pass for the wrong reason.
       const ownerContext = await browser.newContext({ baseURL, storageState: STORAGE_STATE });
@@ -322,14 +322,14 @@ test.describe("the row menu (B8)", () => {
       await ownerContext.close();
 
       await page.goto("/es/settings/accounts");
-      await rowMenu(page, account.name).click();
-      await expect(page.getByRole("menuitem", { name: common.edit, exact: true })).toBeVisible();
-      await expect(page.getByRole("menuitem", { name: accounts.reconcile })).toHaveCount(0);
+      // Another member's personal account offers no menu at all (RF-58, 2026-11-08).
+      await expect(page.getByText(account.name).locator("visible=true").first()).toBeVisible();
+      await expect(rowMenu(page, account.name)).toHaveCount(0);
     });
 
     // The phone draws accounts as cards, a sibling of the laptop's table that decides
     // «Cuadrar» on its own; the laptop project reaches it by narrowing the window.
-    test("offers no Cuadrar on the phone's card, where its owner is offered it", async ({
+    test("offers no menu on the phone's card, where its owner is offered Cuadrar", async ({
       page,
       browser,
       baseURL,
@@ -352,9 +352,9 @@ test.describe("the row menu (B8)", () => {
 
       await page.setViewportSize(phone);
       await page.goto("/es/settings/accounts");
-      await rowMenu(page, account.name).click();
-      await expect(page.getByRole("menuitem", { name: common.edit, exact: true })).toBeVisible();
-      await expect(page.getByRole("menuitem", { name: accounts.reconcile })).toHaveCount(0);
+      // Another member's personal account offers no menu at all (RF-58, 2026-11-08).
+      await expect(page.getByText(account.name).locator("visible=true").first()).toBeVisible();
+      await expect(rowMenu(page, account.name)).toHaveCount(0);
     });
   });
 });

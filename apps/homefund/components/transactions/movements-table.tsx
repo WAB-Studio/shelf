@@ -39,6 +39,8 @@ export type MovementTableRow = {
   auto: boolean;
   // A reconciliation's adjustment: signed in plain ink and never editable.
   adjustment: boolean;
+  // On another member's personal account: read, never changed (RF-58).
+  foreign: boolean;
 };
 
 // The em dash a cell with nothing to name reads as (SPEC-A3), not a word a
@@ -180,7 +182,7 @@ export function MovementsTable({
             tone={row.tone}
             signed={row.adjustment ? "always" : true}
           />
-          {!row.adjustment && (
+          {!row.adjustment && !row.foreign && (
           <RowMenu
             rowName={row.title}
             items={[

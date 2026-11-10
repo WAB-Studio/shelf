@@ -180,6 +180,7 @@ export async function acceptDelivery({
   description,
   splits,
   labelIds,
+  contributedByMemberId,
 }: AcceptDeliveryArgs): Promise<{ transactionId: string }> {
   return withUserDb(async (tx) => {
     const [delivery] = await tx
@@ -210,6 +211,7 @@ export async function acceptDelivery({
       externalRef: delivery.externalRef,
       splits,
       labelIds,
+      contributedByMemberId,
     });
 
     const updated = await tx

@@ -81,14 +81,31 @@ test.describe("the phone's navigation", () => {
     page,
   }) => {
     await page.goto("/es");
-    await page.getByRole("button", { name: nav.settings, exact: true }).click();
+    // Ajustes carries the Bandeja count in its name once something waits.
+    await page.getByRole("button", { name: new RegExp(`^${nav.settings}(,|$)`) }).click();
 
     const sheet = page.getByRole("dialog");
     await expect(sheet).toBeVisible();
 
-    await sheet.getByRole("link", { name: nav.inbox, exact: true }).click();
+    await sheet.getByRole("link", { name: new RegExp(`^${nav.inbox}(,|$)`) }).click();
     await expect(page).toHaveURL("/es/inbox");
     await expect(sheet).toBeHidden();
+  });
+
+  test("carries the inbox count on Ajustes and in the sheet's Bandeja row", async ({
+    page,
+  }) => {
+    await seedQueue([pending]);
+    await page.goto("/es");
+
+    const trigger = page.getByRole("button", {
+      name: new RegExp(`^${nav.settings},`),
+    });
+    await expect(trigger).toBeVisible();
+    await trigger.click();
+    await expect(
+      page.getByRole("dialog").getByRole("link", { name: new RegExp(`^${nav.inbox},`) }),
+    ).toBeVisible();
   });
 
   test("keeps its three tabs, each at least 32 px on its shorter side", async ({
@@ -96,9 +113,11 @@ test.describe("the phone's navigation", () => {
   }) => {
     await page.goto("/es");
 
-    // Bandeja's name carries its count once something waits, so it matches by prefix.
-    for (const label of [nav.home, nav.movements, nav.inbox]) {
-      const tab = page.getByRole("link", { name: new RegExp(`^${label}(,|$)`) });
+    // Planeación is the third tab; Bandeja moved to the settings sheet.
+    for (const label of [nav.home, nav.movements, nav.planning]) {
+      const tab = page
+        .getByRole("navigation")
+        .getByRole("link", { name: new RegExp(`^${label}(,|$)`) });
       await expect(tab).toBeVisible();
 
       const box = await tab.boundingBox();

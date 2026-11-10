@@ -1,8 +1,8 @@
 import type postgres from "postgres";
 
 import { test, expect, type Person } from "./fixtures";
-import { monthOf, nextMonth } from "@/lib/plan/months";
-import { todayInZone } from "@/lib/zone";
+import { monthOf, nextMonth, plannedThrough } from "@/lib/plan/months";
+import { addDaysToCivilDate, todayInZone } from "@/lib/zone";
 
 // Module 833 (`UnidadUnaVez`): on `/exportar`, on screen and on paper, a figure followed by «de» says its unit once, at
 // the end («30 de 60 búsquedas»); a figure with no «de» keeps its unit («18 búsquedas»).
@@ -10,6 +10,8 @@ import { todayInZone } from "@/lib/zone";
 const today = todayInZone();
 const thisMonth = monthOf(today);
 const horizon = nextMonth(nextMonth(thisMonth));
+// «Hasta hoy» spreads the month's 60 over the goal's days up to today (RP-153); the goal opened ten days ago.
+const throughToday = plannedThrough(60, thisMonth, today, { openedOn: addDaysToCivilDate(today, -10), horizon });
 const flat = (text: string) => text.replace(/\s+/g, " ").trim();
 
 async function seedGoal(db: postgres.Sql, person: Person, name: string, budget: number | null, done: number): Promise<string> {
@@ -50,7 +52,7 @@ for (const media of ["screen", "print"] as const) {
       await expect(page.getByRole("main").first()).toContainText("HASTA HOY", { ignoreCase: true });
       const text = flat(await page.getByRole("main").first().innerText());
       expect(text).toMatch(/ESTE MES · \S+ 30 de 60 búsquedas/i);
-      expect(text).toMatch(/HASTA HOY 30 de 60 búsquedas/i);
+      expect(text).toMatch(new RegExp(`HASTA HOY 30 de ${throughToday} búsquedas`, "i"));
       // The week line is screen-only: the paper never prints it.
       if (media === "screen") {
         expect(text).toMatch(/Esta semana: 30 de \d+ búsquedas ?\./);

@@ -232,7 +232,7 @@ test("903: a line a refused part and an unmarked part both cover is out as refus
   assert.deepEqual(c.outLines.map((o) => o.reason), ["refused"]);
 });
 
-// ---- RP-130: the goal whose note holds a section the model could not read.
+// ---- RP-152: the goal whose note holds a section the model could not read.
 
 test("130: the first root goal that holds the section is named, not the last root", () => {
   const lines = ["uno", "dos", "tres"];

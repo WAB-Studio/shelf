@@ -15,6 +15,7 @@ import type {
 import { getUserGroup } from "@/db/queries/groups";
 import { listPlansForAccount } from "@/db/queries/installment-plans";
 import type { InstallmentPlanRow } from "@/db/queries/installment-plans";
+import { foreignOwnerSql, ownerNameSql } from "@/db/queries/accounts";
 import { accounts, debtTerms } from "@/db/schema";
 import type { Account, DebtTerms } from "@/db/schema";
 import { withUserDb } from "@/db/session";
@@ -42,6 +43,9 @@ export type DebtDetailAccount = {
   balanceCents: number;
   // Every pocket the account holds, the settlement one first.
   balances: AccountBalance[];
+  // Another member's personal debt (RF-58), named by its owner.
+  foreignOwner: boolean;
+  ownerName: string | null;
   archivedAt: Date | null;
 };
 
@@ -88,6 +92,8 @@ async function readAccount(accountId: string): Promise<AccountRead> {
         // Written with the column's own name, never a Drizzle column reference: a
         // reference inside a projection fragment renders bare and binds inward.
         canWrite: sql<boolean>`private.can_write_account(accounts.id)`,
+        foreignOwner: foreignOwnerSql,
+        ownerName: ownerNameSql,
         // Every pocket, the settlement one first: a card that buys in dollars and
         // bills in pesos holds two, and the screen names each one (RF-124).
         balances: sql<AccountBalance[]>`coalesce((
@@ -120,6 +126,7 @@ async function readAccount(accountId: string): Promise<AccountRead> {
           join account_balances xb
             on xb.id = x.id and xb.currency = x.settlement_currency
           where x.kind = 'asset' and x.archived_at is null
+            and private.can_write_account(x.id)
         ), '[]'::jsonb)`,
         terms: debtTerms,
       })
@@ -153,6 +160,8 @@ async function readAccount(accountId: string): Promise<AccountRead> {
           toBillCents:
             balance.toBillCents === null ? null : Number(balance.toBillCents),
         })),
+        foreignOwner: row.foreignOwner,
+        ownerName: row.ownerName,
         archivedAt: row.archivedAt,
       },
       terms: row.terms,

@@ -379,7 +379,6 @@ test("umbrella draws no dictionary definition, and the generated one arrives mar
   // mocked.
   await stubWordText({
     definition: "A device used for protection against rain, consisting of a folding frame.",
-    example: { en: "She opened her umbrella as it started to rain.", es: "Abrió su paraguas cuando empezó a llover." },
   });
 
   const assetResponse = page.waitForResponse(
@@ -403,22 +402,15 @@ test("umbrella draws no dictionary definition, and the generated one arrives mar
   await expect(page.getByText(messages.word.generatedMark)).toBeVisible();
 });
 
-test("a generated example with no definition heads itself as an example, never as a definition", async ({
+test("a text answer with neither a definition nor translations draws no generated block", async ({
   page,
   stubWordText,
 }) => {
   await deleteTranslator(page);
-  // The route answers `definition: null` whenever the dictionary already
-  // carries one, not only for the 19.7% missing outright
-  // (`app/api/word/text/route.ts`) — «Definición generada» must not stand
-  // over an example alone either way.
-  await stubWordText({
-    definition: null,
-    example: {
-      en: "She opened her umbrella as it started to rain.",
-      es: "Abrió su paraguas cuando empezó a llover.",
-    },
-  });
+  // The route answers `definition: null` and no translations whenever the
+  // entry needs neither; nothing generated stands in for the example RL-42
+  // used to add.
+  await stubWordText({ definition: null });
 
   const assetResponse = page.waitForResponse(
     (response) => response.url().includes(manifest.asset.path) && response.ok(),
@@ -434,24 +426,17 @@ test("a generated example with no definition heads itself as an example, never a
   await expect(page.getByRole("heading", { name: "umbrella", exact: true })).toBeVisible({ timeout: 5000 });
   await decorated(page, answered);
 
-  // No definition heading of either kind, the example headed by its own
-  // label instead, and the «generada» mark still on it.
-  await expect(page.getByText(messages.word.definitionEnglish)).toHaveCount(0);
   await expect(page.getByText(messages.word.definitionGenerated)).toHaveCount(0);
-  await expect(page.getByText(messages.word.example, { exact: true })).toBeVisible();
-  await expect(page.getByText(messages.word.generatedMark)).toBeVisible();
-  await expect(page.getByText("She opened her umbrella as it started to rain.")).toBeVisible();
+  await expect(page.getByText(messages.word.generatedMark)).toHaveCount(0);
+  await expect(page.locator("[data-generated-block]")).toHaveCount(0);
 });
 
 test("`left` (one of the 34 entries whose definition is a bare '.') never draws that period as one", async ({
   page,
 }) => {
   await deleteTranslator(page);
-  // `left` has its own dictionary definitions; stubbing the text route to
-  // 204 leaves the count below the dictionary's own, unmoved by decoration.
-  // Module 7 keeps the generated label ("Definición generada") apart from
-  // the dictionary's own ("Definición en inglés"); if this ever moves off
-  // 2, the two strings collided.
+  // `left` has its own dictionary definitions, so the text route is never asked
+  // for it and the count below is the dictionary's own.
 
   const assetResponse = page.waitForResponse(
     (response) => response.url().includes(manifest.asset.path) && response.ok(),
@@ -462,14 +447,12 @@ test("`left` (one of the 34 entries whose definition is a bare '.') never draws 
   await expect(page.locator('[aria-busy="false"]').first()).toBeAttached();
 
   const searchBox = page.getByRole("textbox", { name: messages.search.label });
-  const answered = textResponse(page);
   await searchBox.fill("left");
   await expect(page.getByRole("heading", { name: "left", exact: true })).toBeVisible({ timeout: 5000 });
   // RL-40 offers `leave` within `left`'s entry — its own senses carry no
   // definition at all, but the count below leaves its block out anyway, so
   // the period-only filter does not depend on that.
   await expect(page.getByRole("heading", { name: "leave", exact: true })).toBeVisible();
-  await decorated(page, answered);
 
   // Four senses of "left" carry a definition in the source: adj (null,
   // never had one), adv ("On the left side."), n ("The left side or
@@ -650,15 +633,14 @@ test("RL-40: a word's own entry answers first, and a plausible inflection is off
   await expect(page.getByRole("heading", { name: "be", exact: true })).toHaveCount(0);
 });
 
+// `umbrella` and `cat` are the two words with no definition of their own: the only ones the route is asked about.
 // Long enough that "cat"'s answer, sent second, still lands well inside it
 // — long enough to still be in flight when "cat" replaces "dog" below.
 const DOG_TEXT = {
   definition: "Definición de dog: nunca debe aparecer bajo cat.",
-  example: { en: "The dog barks loudly.", es: "El perro ladra fuerte." },
 };
 const CAT_TEXT = {
   definition: "Definición de cat.",
-  example: { en: "The cat sleeps all day.", es: "El gato duerme todo el día." },
 };
 
 test("a headword replaced mid-flight never lands its text on the word that replaced it", async ({
@@ -676,7 +658,7 @@ test("a headword replaced mid-flight never lands its text on the word that repla
   const dogAnswered = Promise.withResolvers<void>();
   await page.route(`${baseURL}/api/word/text`, async (route) => {
     const body = route.request().postDataJSON() as { headword: string };
-    const isDog = body.headword === "dog";
+    const isDog = body.headword === "umbrella";
     if (isDog) {
       // Held until the test lets it go, so it is still in flight when "cat" replaces it below.
       dogAsked.resolve();
@@ -689,7 +671,7 @@ test("a headword replaced mid-flight never lands its text on the word that repla
         body: JSON.stringify(isDog ? DOG_TEXT : CAT_TEXT),
       });
     } catch {
-      // `dog`'s own AbortController already cancelled the fetch client-side
+      // `umbrella`'s own AbortController already cancelled the fetch client-side
       // by the time this fires; there is nothing left to answer.
     }
     if (isDog) dogAnswered.resolve();
@@ -704,24 +686,24 @@ test("a headword replaced mid-flight never lands its text on the word that repla
   await expect(page.locator('[aria-busy="false"]').first()).toBeAttached();
 
   const searchBox = page.getByRole("textbox", { name: messages.search.label });
-  await searchBox.fill("dog");
-  await expect(page.getByRole("heading", { name: "dog", exact: true })).toBeVisible({ timeout: 5000 });
+  await searchBox.fill("umbrella");
+  await expect(page.getByRole("heading", { name: "umbrella", exact: true })).toBeVisible({ timeout: 5000 });
 
-  // `dog`'s own fetch has actually been sent — the abort this proves is one
+  // `umbrella`'s own fetch has actually been sent — the abort this proves is one
   // of an in-flight request, not one still only queued behind the timer.
   await dogAsked.promise;
 
   await searchBox.fill("cat");
   await expect(page.getByRole("heading", { name: "cat", exact: true })).toBeVisible({ timeout: 5000 });
-  await expect(page.getByText(CAT_TEXT.example.en)).toBeVisible({ timeout: PHRASE_DEBOUNCE_MS + 2000 });
+  await expect(page.getByText(CAT_TEXT.definition)).toBeVisible({ timeout: PHRASE_DEBOUNCE_MS + 2000 });
 
-  // `dog`'s answer is let go now: had its request not been abandoned, it
+  // `umbrella`'s answer is let go now: had its request not been abandoned, it
   // would land on `cat`.
   dogHeld.resolve();
   await dogAnswered.promise;
   await pageTasks(page);
-  await expect(page.getByText(CAT_TEXT.example.en)).toBeVisible();
-  await expect(page.getByText(DOG_TEXT.example.en)).toHaveCount(0);
+  await expect(page.getByText(CAT_TEXT.definition)).toBeVisible();
+  await expect(page.getByText(DOG_TEXT.definition)).toHaveCount(0);
 });
 
 // RL-51 groups only the 190 headwords carrying more than one pronunciation.

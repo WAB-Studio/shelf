@@ -10,6 +10,7 @@ import postgres from "postgres";
 
 import type { EvidenceDay } from "../lib/day/types";
 import { readerFor } from "../lib/evidence/registry";
+import { sharedRows } from "../lib/evidence/shared-read";
 import { withSettledTransaction } from "../lib/settled-transaction";
 import { TIMELOG_SOURCES } from "../lib/evidence/timelog-apps";
 
@@ -47,6 +48,17 @@ async function main() {
     assert.deepEqual(total.map((d) => [d.day, d.quantity]), [["2026-10-01", 100], ["2026-10-02", 20]]);
     const terminal = await read("timelog_app_terminal");
     assert.deepEqual(terminal.map((d) => [d.day, d.quantity]), [["2026-10-02", 20]]);
+
+    // The tray's carrier reads the raw rows by the same door: another person's identity sees only its own seconds.
+    const strangerRows = await withSettledTransaction<unknown, { app: string; seconds: number }[]>(
+      { claims: { sub: other, role: "authenticated" } },
+      "check-timelog",
+      "reading, public",
+      (cb) => db.transaction(cb),
+      (tx, statement) => (tx as typeof db).execute(statement),
+      async (tx) => (await sharedRows(tx as never, "2026-10-01", "2026-10-31", "America/Bogota")).timelog,
+    );
+    assert.deepEqual(strangerRows.map((r) => [r.app, r.seconds]), [["Code.exe", 7200]], "a stranger reads none of my seconds");
 
     const statements: string[] = [];
     const counting = postgres(process.env.DATABASE_URL!, { prepare: false, max: 1, debug: (_c, query) => statements.push(query) });

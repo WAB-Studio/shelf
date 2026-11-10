@@ -12,7 +12,7 @@ async function deleteOneOffsByName(db: postgres.Sql, personId: string, name: str
   }
 }
 
-test("the field at the foot of the day adds a one-off with no dialog and no navigation (RP-19)", async ({
+test("the field behind the «+» adds a one-off with no browser dialog and no navigation, and its sheet closes (RP-19, RP-154)", async ({
   page,
   db,
   personId,
@@ -20,6 +20,7 @@ test("the field at the foot of the day adds a one-off with no dialog and no navi
   const name = `Suelta de prueba ${Date.now()}`;
   await deleteOneOffsByName(db, personId, name);
 
+  // `dialog` is the browser's alert or prompt; the sheet is not one.
   let dialogFired = false;
   page.on("dialog", (dialog) => {
     dialogFired = true;
@@ -30,13 +31,14 @@ test("the field at the foot of the day adds a one-off with no dialog and no navi
     await page.goto("/");
     const startingUrl = page.url();
 
-    // At 360 Hoy has one task field, the one under "Sueltas" (day-screen.tsx).
+    // At 360 the field is in the sheet the «+» opens (RP-154).
+    await page.getByRole("button", { name: "Anotar algo suelto" }).click();
     const field = page.getByPlaceholder("Escribe una tarea…");
     await field.fill(name);
     await field.press("Enter");
 
     await expect(page.locator("button", { hasText: name })).toBeVisible();
-    await expect(field).toHaveValue("");
+    await expect(field).toBeHidden();
 
     expect(dialogFired).toBe(false);
     expect(page.url()).toBe(startingUrl);

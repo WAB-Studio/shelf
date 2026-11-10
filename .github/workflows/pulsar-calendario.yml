@@ -15,7 +15,7 @@ on:
     - cron: "0 8 * * *"
   workflow_dispatch:
 
-# `issues: write` is for the failure notice below: a red scheduled run mails
+# `issues: write` is for the notice job below: a red scheduled run mails
 # only whoever last touched the cron, and nobody reads it on a quiet day.
 permissions:
   contents: read
@@ -175,13 +175,31 @@ jobs:
           name: pulsar-calendario-playwright-results-${{ matrix.name }}
           path: apps/goallog/private/playwright-results
 
-      - name: Open an issue for the failed run
-        if: failure() && github.event_name == 'schedule'
+  # One issue for the whole schedule, never one per cell and night: a red night comments on the open one,
+  # a green night closes it.
+  notice:
+    needs: [pins, dates]
+    if: always() && github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Open, comment on or close the calendar issue
         env:
           GH_TOKEN: ${{ github.token }}
+          RESULT: ${{ needs.dates.result }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          TITLE: pulsar-calendario en rojo
         run: |
-          gh issue create \
-            --repo "$GITHUB_REPOSITORY" \
-            --title "pulsar-calendario (${{ matrix.name }}) failed $(date -u +%F)" \
-            --body "The daily calendar-bound specs failed: $RUN_URL"
+          open="$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --limit 100 --json number,title \
+            | jq -r --arg t "$TITLE" 'map(select(.title == $t)) | .[0].number // empty')"
+          if [ "$RESULT" = success ]; then
+            if [ -n "$open" ]; then gh issue close "$open" --repo "$GITHUB_REPOSITORY" -c "Verde otra vez: $RUN_URL"; fi
+            exit 0
+          fi
+          failed="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/jobs?per_page=100" \
+            --jq '[.jobs[] | select(.conclusion == "failure") | .name] | join(", ")')"
+          body="$(date -u +%F): ${failed:-$RESULT} — $RUN_URL"
+          if [ -n "$open" ]; then
+            gh issue comment "$open" --repo "$GITHUB_REPOSITORY" --body "$body"
+          else
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "$TITLE" --body "$body"
+          fi

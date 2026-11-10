@@ -318,7 +318,9 @@ test("every block and the trailing line lead back to /?q=<word>, and that screen
   // still a door, even with nothing behind it.
   await page.locator('main a[href="/?q=fettle"]').click();
   await expect(page).toHaveURL(/\/\?q=fettle$/);
-  await expect(page.getByText(messages.search.notFound)).toBeVisible();
+  // The screen's line and the live region that announces it say the same words: no network is pending
+  // for a word one edit from a headword (RL-86), so the announcement is the miss itself.
+  await expect(page.getByText(messages.search.notFound).first()).toBeVisible();
 
   await page.goBack();
   await expect(page.getByText(expectedTitle)).toBeVisible();

@@ -10,6 +10,7 @@ import postgres from "postgres";
 
 import { withSettledTransaction } from "@repo/supabase-auth/settled-transaction";
 
+import { BROWSER_PROCESSES } from "../lib/app-names";
 import { fingerprint, mintKey } from "../lib/key-format";
 
 const db = postgres(process.env.DATABASE_URL!, { prepare: false, max: 2, onnotice: () => {} });
@@ -237,6 +238,22 @@ test("a person reads their own windows, pages and sessions and none of another's
     asPerson(ana, (tx) => tx.execute(sql`insert into timelog.window_seconds (user_id, device, day, app, title, seconds) values (${ana.id}, 'pc', ${on}, 'forged', 't', 1)`)),
     denied,
   );
+});
+
+test("the read predicate leaves out a browser\'s stored window rows, however the process was spelt (RT-16)", async () => {
+  const on = "2026-10-31";
+  const apps = ["Code.exe", "chrome.exe", "Chrome.EXE", " msedge.exe", "firefox", "chromeless.exe"];
+  for (const [index, app] of apps.entries()) {
+    await db`insert into timelog.window_seconds (user_id, device, day, app, title, seconds) values (${ana.id}, 'pc', ${on}, ${app}, ${`t${index}`}, 9)`;
+  }
+  const names = sql.join(BROWSER_PROCESSES.map((name) => sql`${name}`), sql`, `);
+  const kept = await asPerson(ana, (tx) =>
+    tx.execute<{ app: string }>(sql`
+      select app from timelog.window_seconds
+       where day = ${on}::date and lower(regexp_replace(trim(app), '[.]exe$', '', 'i')) not in (${names})
+       order by app`).then((rows) => rows.map((row) => row.app)),
+  );
+  assert.deepEqual(kept, ["chromeless.exe", "Code.exe"]);
 });
 
 const causeOf = (error: unknown) => String((error as { cause?: Error }).cause?.message);

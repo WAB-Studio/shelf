@@ -13,6 +13,7 @@ import {
 } from "@/app/actions/budgets";
 import { BudgetFormDialog } from "@/components/planning/budget-form-dialog";
 import { BudgetsTable } from "@/components/planning/budgets-table";
+import { OwnerMark } from "@/components/fund/owner-mark";
 import type { BudgetTableRow } from "@/components/planning/budgets-table";
 import {
   Box,
@@ -154,6 +155,8 @@ export function BudgetsScreen({
     thresholdPct: budget.thresholdPct,
     overThreshold: budget.overThreshold,
     overspent: budget.overspent,
+    foreignOwner: budget.foreignOwner,
+    ownerName: budget.ownerName,
   }));
 
   function fromRow(row: BudgetTableRow): BudgetStatus {
@@ -416,6 +419,9 @@ function BudgetCard({
             </Text>
           )}
         </Flex>
+        <OwnerMark foreignOwner={budget.foreignOwner} ownerName={budget.ownerName} />
+        {/* Nothing here acts on another member's personal budget. */}
+        {!budget.foreignOwner && (
         <DropdownMenu.Root>
           <DropdownMenu.Trigger>
             <IconButton
@@ -450,6 +456,7 @@ function BudgetCard({
             </DropdownMenu.Item>
           </DropdownMenu.Content>
         </DropdownMenu.Root>
+        )}
       </Flex>
       {/* The figure has the whole line: name above, amounts below, nothing cut. */}
       <Figure

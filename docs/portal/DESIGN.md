@@ -20,7 +20,7 @@
 
 ## Despliegue
 
-- Proyecto de Vercel `universo-apps`, https://universo-apps.vercel.app
+- Proyecto de Vercel `universo-apps`, https://shelfhome.vercel.app (`universo-apps.vercel.app` sigue respondiendo)
 - `vercel.json` apaga los despliegues por git: la página no gasta la cuota de `main`.
 - Se despliega a mano desde `apps/portal`: `npx vercel deploy --prod --yes`. Solo cuando cambia una dirección o la página.
 
@@ -69,3 +69,16 @@ desktop 1440 x 820, WebP quality 80, each under 50 KB). Re-shoot them after the 
 | `timelog-desktop.webp` | `apps/timelog/private/estilo/ronda2/hoy-d-light.png` (lane 4) |
 
 The data is the seeded Casa Parada Ruiz, the English-study plan and a day at the computer: no «Demo», no harness emails.
+
+## Decision of 2026-11-08: the header is the shelf itself
+
+The user found the page «regular». Replaces the bare title and the header's empty half; the cards and their screenshots stay.
+
+- **The shelf.** The header's right half (under it on the phone) holds four book spines on an ink ledge, each in its app's fill
+  and ink, its name read bottom to top, each a link that opens its app. Heights differ; nothing moves on hover.
+- **Serif for names.** «Shelf» and each card's name take the system serif stack (`Iowan Old Style`, Palatino, Georgia); text
+  stays in the system sans. Nothing is downloaded.
+- **Compact card head.** Mark, name and «Abrir ›» on one line, the sentence below it, so the screenshots get the room; on
+  tablet the head stacks beside the browser frame.
+- **Ledge at the foot.** A footer under the same ink ledge closes the page. The brand line above the title carries the shelf
+  icon and «Hecho por Wilson».

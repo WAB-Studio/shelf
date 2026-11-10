@@ -148,6 +148,8 @@ export type WordHistoryRow = {
   // A sentence's own row: its answer is `translation` above, never a
   // dictionary headword — RL-34's own distinction, the caller's to read.
   kind: LookupRecord["kind"];
+  // The row's own schema: an `unlisted` row from before 3 kept a translation alone.
+  schema: number;
 };
 
 type FoundRow = WordHistoryRow & { id: number };
@@ -223,6 +225,7 @@ async function readHistory(
               exampleEn: record.exampleEn!,
               exampleEs: record.exampleEs!,
               kind: record.kind,
+              schema: record.schema,
             });
             cursor.continue();
           };
@@ -247,6 +250,7 @@ async function readHistory(
       exampleEn: row.exampleEn,
       exampleEs: row.exampleEs,
       kind: row.kind,
+      schema: row.schema,
     })),
     total: found.length,
   };

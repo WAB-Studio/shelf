@@ -3,6 +3,7 @@ import "server-only";
 import { and, asc, eq, isNotNull, isNull, sql } from "drizzle-orm";
 
 import { insertRow } from "@/db/insert-row";
+import { ownerColumns } from "@/db/queries/owner-columns";
 import { accounts, categories, recurringRules, transactions } from "@/db/schema";
 import type { RecurringRule } from "@/db/schema";
 import { settledIn } from "@/db/queries/planned-payments";
@@ -31,6 +32,9 @@ export type RecurringRuleRow = {
   isActive: boolean;
   // Why a paused rule is paused: the run set it when it could not generate (RF-157); null when a person paused it.
   pausedReason: RecurringRule["pausedReason"];
+  // Another member's personal rule (RF-58): read-only, named by its owner.
+  foreignOwner: boolean;
+  ownerName: string | null;
   // `updated_at::text` as Postgres prints it; an edit sends it back so a save after someone
   // else's is refused stale.
   updatedAt: string;
@@ -57,6 +61,7 @@ export async function listRecurringRules(): Promise<RecurringRuleRow[]> {
         endsOn: recurringRules.endsOn,
         isActive: recurringRules.isActive,
         pausedReason: recurringRules.pausedReason,
+        ...ownerColumns("recurring_rules.owner_user_id"),
         // Qualified: the joined accounts carry an `updated_at` of their own.
         updatedAt: sql<string>`recurring_rules.updated_at::text`,
       })

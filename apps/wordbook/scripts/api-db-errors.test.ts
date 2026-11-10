@@ -276,7 +276,7 @@ test("word/text: a failing cache write still answers the paid text", async () =>
   const { POST } = await import("../app/api/word/text/route");
   const response = await POST(post(TEXT));
   assert.equal(response.status, 200);
-  assert.equal(((await response.json()) as { example: { en: string } }).example.en, "A cat.");
+  assert.equal(((await response.json()) as { definition: string }).definition, "a pet");
   assertLoggedOnce("api/word/text");
 });
 

@@ -72,6 +72,7 @@ export const acceptDeliveryAction = authActionClient
         description: parsedInput.description,
         splits,
         labelIds: parsedInput.labelIds,
+        contributedByMemberId: parsedInput.contributedByMemberId ?? null,
       }));
     } catch (error) {
       mapReviewError(error);

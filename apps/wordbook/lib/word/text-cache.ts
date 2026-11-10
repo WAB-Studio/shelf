@@ -7,8 +7,6 @@ import type { WordText } from "@/lib/word/protocol";
 
 type CachedRow = {
   definition: string | null;
-  example_en: string;
-  example_es: string;
   translations: string[] | null;
   translations_asked: boolean;
 };
@@ -20,14 +18,13 @@ export type CachedText = WordText & { translationsAsked: boolean };
 /** The one round trip the hot path pays. A miss returns `null`, never throws. */
 export async function readCachedText(headword: string): Promise<CachedText | null> {
   const [row] = await db.execute<CachedRow>(sql`
-    select definition, example_en, example_es, translations, translations_asked
+    select definition, translations, translations_asked
     from reading.word_texts
     where headword = ${headword}
   `);
   if (!row) return null;
   return {
     definition: row.definition,
-    example: { en: row.example_en, es: row.example_es },
     translations: row.translations,
     translationsAsked: row.translations_asked,
   };
@@ -45,6 +42,9 @@ export function translationsWereAnswered(translations: readonly string[] | null)
 }
 
 /**
+ * `example_en` and `example_es` stay NOT NULL columns of rows written before
+ * RL-42 was retired; new rows leave them empty.
+ *
  * Written once, on an accepted model answer alone — a failure leaves no row,
  * so the daily cap is what bounds a word that keeps failing, never a bad
  * row on disk. `on conflict do nothing`: two cold readers racing the same
@@ -61,8 +61,6 @@ export async function writeCachedText(
   headword: string,
   model: string,
   definition: string | null,
-  exampleEn: string,
-  exampleEs: string,
   translations: readonly string[] | null,
   translationsAsked: boolean,
 ): Promise<void> {
@@ -70,7 +68,7 @@ export async function writeCachedText(
     insert into reading.word_texts
       (headword, definition, example_en, example_es, model, translations, translations_asked)
     values
-      (${headword}, ${definition}, ${exampleEn}, ${exampleEs}, ${model},
+      (${headword}, ${definition}, '', '', ${model},
        ${sql.param(translations)}, ${translationsAsked})
     on conflict (headword) do nothing
   `);
@@ -79,7 +77,7 @@ export async function writeCachedText(
 /**
  * RL-45's backfill: a row `writeCachedText` wrote before this column asked
  * anything, or one whose first ask never fired (no key, over the cap). The
- * definition and example it already carries are left untouched — only
+ * definition it already carries is left untouched — only
  * `translations` moves here, and only alongside the flag.
  */
 export async function markTranslationsAsked(

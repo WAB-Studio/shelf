@@ -6,7 +6,7 @@ import { withUserDb } from "@/db/session";
 import type { CurrencyCode } from "@/lib/currency";
 
 export type MemberContribution = {
-  // The member the figure belongs to, login or not (RF-166); `userId` is their login, null without one.
+  // The member the figure belongs to, login or not (RF-167); `userId` is their login, null without one.
   memberId: string;
   userId: string | null;
   // The currency the pot received, and the only one this figure counts
@@ -26,7 +26,7 @@ export type MemberContribution = {
  * a contributor, so no group row appears (RF-67). A caller with no group has no
  * group account on either side of any transfer; the household branch, which
  * touches no group account, asks for the payer's membership itself. An income into a group
- * account counts for the member it names in «De quién» (RF-166); an income that names nobody
+ * account counts for the member it names in «De quién» (RF-167); an income that names nobody
  * counts for no one.
  *
  * `booked` is the three-branch rule `account_balances` applies to a leg
@@ -107,7 +107,7 @@ export async function getMemberContributions(range: {
           and t.occurred_at >= ${range.start} and t.occurred_at < ${range.endExclusive}
           and exists (select 1 from group_members m where m.user_id = fa.owner_user_id)
         union all
-        -- RF-166: an income into a fund account credited to the member who put it in, booked as the
+        -- RF-167: an income into a fund account credited to the member who put it in, booked as the
         -- account settled it. An income naming nobody (every one before the field) stays out.
         select
           null::uuid,
@@ -145,6 +145,147 @@ export async function getMemberContributions(range: {
       userId: row.user_id,
       currency: row.currency,
       contributionCents: Number(row.contribution_cents),
+    }));
+  });
+}
+
+export type FundCashBalance = {
+  currency: CurrencyCode;
+  balanceCents: number;
+};
+
+/**
+ * What the fund's cash accounts held when the window closed, one figure per
+ * currency, in ONE round trip: the current month reads to today, an earlier one
+ * to its last day. It is `account_balances`' own three-branch rule over the
+ * movements dated before the window's end, derived and never stored; a currency
+ * is never added to another (RF-124). Archived accounts are off the pot, and so
+ * is one opened after the window closed. RLS shows a caller with no fund no group
+ * account, so the answer is empty.
+ */
+export async function getFundCashBalances(range: {
+  endExclusive: string;
+}): Promise<FundCashBalance[]> {
+  return withUserDb(async (tx) => {
+    const rows = await tx.execute<{ currency: string; balance_cents: string }>(sql`
+      select s.currency, sum(s.amount_cents)::text as balance_cents
+      from (
+        select a.id, a.settlement_currency as currency, a.initial_balance_cents as amount_cents, true as is_settlement
+        from accounts a
+        where a.group_id is not null and a.subtype = 'cash' and a.archived_at is null
+          and a.initial_balance_on < ${range.endExclusive}
+        union all
+        select a.id, v.currency, v.amount_cents, v.currency = a.settlement_currency
+        from transactions t
+        join accounts a on a.id = t.to_account_id
+        cross join lateral (values
+          (t.currency, case when t.currency <> a.settlement_currency and t.counter_amount_cents is not null and not t.counter_is_estimate then 0::bigint else t.amount_cents end),
+          (a.settlement_currency, case when t.currency <> a.settlement_currency and t.counter_amount_cents is not null and not t.counter_is_estimate then t.counter_amount_cents else 0::bigint end)
+        ) as v(currency, amount_cents)
+        where a.group_id is not null and a.subtype = 'cash' and a.archived_at is null
+          and t.occurred_at < ${range.endExclusive}
+        union all
+        select a.id, v.currency, -v.amount_cents, v.currency = a.settlement_currency
+        from transactions t
+        join accounts a on a.id = t.from_account_id
+        cross join lateral (values
+          (t.currency, case when t.currency <> a.settlement_currency and t.counter_amount_cents is not null and not t.counter_is_estimate then 0::bigint else t.amount_cents end),
+          (a.settlement_currency, case when t.currency <> a.settlement_currency and t.counter_amount_cents is not null and not t.counter_is_estimate then t.counter_amount_cents else 0::bigint end)
+        ) as v(currency, amount_cents)
+        where a.group_id is not null and a.subtype = 'cash' and a.archived_at is null
+          and t.occurred_at < ${range.endExclusive}
+      ) s
+      group by s.currency
+      having sum(s.amount_cents) <> 0 or bool_or(s.is_settlement)
+      order by s.currency
+    `);
+
+    return rows.map((row) => ({
+      currency: row.currency,
+      balanceCents: Number(row.balance_cents),
+    }));
+  });
+}
+
+export type UnassignedIncome = {
+  currency: CurrencyCode;
+  incomeCents: number;
+};
+
+/**
+ * The incomes into a fund account for one window that name no member, per
+ * currency, in ONE round trip (RF-167): what arrived through a quick entry, a bank
+ * notice, a recurring rule or an import carries nobody, and Aportes lists it as
+ * «Sin asignar» instead of dropping it. Booked as `getMemberContributions` books
+ * an income, in the currency the fund account settles.
+ */
+export async function getUnassignedIncome(range: {
+  start: string;
+  endExclusive: string;
+}): Promise<UnassignedIncome[]> {
+  return withUserDb(async (tx) => {
+    const rows = await tx.execute<{ currency: string; income_cents: string }>(sql`
+      select
+        case when t.currency <> ta.settlement_currency
+          and t.counter_amount_cents is not null and not t.counter_is_estimate
+        then ta.settlement_currency else t.currency end as currency,
+        sum(case when t.currency <> ta.settlement_currency
+          and t.counter_amount_cents is not null and not t.counter_is_estimate
+        then t.counter_amount_cents else t.amount_cents end) as income_cents
+      from transactions t
+      join accounts ta on ta.id = t.to_account_id
+      where t.from_account_id is null
+        and ta.group_id is not null
+        and t.reconciliation_id is null
+        and t.contributed_by_member_id is null
+        and t.occurred_at >= ${range.start} and t.occurred_at < ${range.endExclusive}
+      group by 1
+      order by 1
+    `);
+
+    return rows.map((row) => ({
+      currency: row.currency,
+      incomeCents: Number(row.income_cents),
+    }));
+  });
+}
+
+export type FundSpending = {
+  currency: CurrencyCode;
+  spentCents: number;
+};
+
+/**
+ * What the fund's accounts spent in one window, per currency, in ONE round trip:
+ * every expense out of a fund account, categorised or not, booked as the account
+ * settled it (the confirmed second amount when the movement was in another
+ * currency), the same rule Aportes and the cash balance read by. A
+ * reconciliation's adjustment is a count and not a spend.
+ */
+export async function getFundSpending(range: {
+  start: string;
+  endExclusive: string;
+}): Promise<FundSpending[]> {
+  return withUserDb(async (tx) => {
+    const rows = await tx.execute<{ currency: string; spent_cents: string }>(sql`
+      select
+        fa.settlement_currency as currency,
+        sum(case when t.currency <> fa.settlement_currency
+          and t.counter_amount_cents is not null and not t.counter_is_estimate
+        then t.counter_amount_cents else t.amount_cents end)::text as spent_cents
+      from transactions t
+      join accounts fa on fa.id = t.from_account_id
+      where t.kind = 'expense'
+        and fa.group_id is not null
+        and t.reconciliation_id is null
+        and t.occurred_at >= ${range.start} and t.occurred_at < ${range.endExclusive}
+      group by fa.settlement_currency
+      order by fa.settlement_currency
+    `);
+
+    return rows.map((row) => ({
+      currency: row.currency,
+      spentCents: Number(row.spent_cents),
     }));
   });
 }

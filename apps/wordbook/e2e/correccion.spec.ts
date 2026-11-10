@@ -44,7 +44,8 @@ test("a one-edit typo offers the headword it was one edit from, with no request"
   const searchBox = page.getByRole("textbox", { name: messages.search.label });
   await searchBox.fill("recieve");
 
-  await expect(page.getByText(messages.search.notFound)).toBeVisible();
+  // The screen's line and the live region say the same words: a one-edit typo asks no network (RL-86).
+  await expect(page.getByText(messages.search.notFound).first()).toBeVisible();
   await expect(page.getByText(messages.search.correctionTitle)).toBeVisible();
   await expect(page.getByRole("link", { name: "receive", exact: false })).toBeVisible();
   // notFoundHint is what today's app shows instead — it accuses the reader
@@ -86,7 +87,8 @@ test("a word one edit from several headwords at once offers all of them", async 
   const searchBox = page.getByRole("textbox", { name: messages.search.label });
   await searchBox.fill("fettle");
 
-  await expect(page.getByText(messages.search.notFound)).toBeVisible();
+  // The screen's line and the live region say the same words: a one-edit typo asks no network (RL-86).
+  await expect(page.getByText(messages.search.notFound).first()).toBeVisible();
   await expect(page.getByText(messages.search.correctionTitle)).toBeVisible();
   await expect(page.getByText(messages.search.notFoundHint)).toHaveCount(0);
   for (const word of ["kettle", "mettle", "nettle", "settle"]) {

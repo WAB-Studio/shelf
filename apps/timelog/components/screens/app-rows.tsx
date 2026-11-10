@@ -5,6 +5,12 @@ import { Disclosure, Meter, Rows, Text, type Tone } from "@/components/ui";
 // `detail` opens under the row; `note` is a small line under it; `wrap` gives a long name two lines (a detail is opened to be read).
 export type BarRow = { key: string; name: string; figure: string; seconds: number; label: string; detail?: ReactNode; note?: string; tone?: Tone; wrap?: boolean };
 
+// The first `shown` of `items` as rows, the rest behind «y N más» (`summary` says it): BarRows' `rows` and `overflow` together.
+export function capped<T>(items: T[], shown: number, row: (one: T) => BarRow, summary: (rest: T[]) => string): { rows: BarRow[]; overflow?: { summary: string; rows: BarRow[] } } {
+  const rest = items.slice(shown);
+  return { rows: items.slice(0, shown).map(row), overflow: rest.length === 0 ? undefined : { summary: summary(rest), rows: rest.map(row) } };
+}
+
 // One meter per item, each bar a share of the longest. `featured` makes the first rows large and the rest compact.
 // `tone` colours every row that names none of its own. `of` is the whole a bar is a share of: a child row names its
 // parent's time, so a window never draws as long as the app it sits in; without it, the longest row. `overflow` is what

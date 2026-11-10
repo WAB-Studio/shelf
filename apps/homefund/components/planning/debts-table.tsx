@@ -3,6 +3,7 @@
 import { Fragment, type ReactNode } from "react";
 import { useFormatter, useLocale, useTranslations } from "next-intl";
 
+import { OwnerMark } from "@/components/fund/owner-mark";
 import {
   Badge,
   Button,
@@ -10,7 +11,6 @@ import {
   Figure,
   Flex,
   Money,
-  PersonalMark,
   RowMenu,
   TablePagination,
   Text,
@@ -56,6 +56,8 @@ export type DebtTableRow = {
   accountId: string;
   name: string;
   personal: boolean;
+  foreignOwner: boolean;
+  ownerName: string | null;
   // The currency the debt bills in: every figure on its row is read in it, and
   // what it owes in another one rides in `otherOwed` (RF-121, RF-124).
   currency: CurrencyCode;
@@ -244,7 +246,6 @@ export function DebtsTable({
   onPrev,
   onNext,
   onPay,
-  onNewPlan,
   onDetail,
   onEditTerms,
 }: {
@@ -261,7 +262,6 @@ export function DebtsTable({
   onPrev: () => void;
   onNext: () => void;
   onPay: (row: DebtTableRow) => void;
-  onNewPlan: (row: DebtTableRow) => void;
   onDetail: (row: DebtTableRow) => void;
   onEditTerms: (row: DebtTableRow) => void;
 }) {
@@ -288,7 +288,6 @@ export function DebtsTable({
     );
   }
 
-  const tAccounts = useTranslations("accounts");
 
   const columns: DataColumn<DebtTableRow>[] = [
     {
@@ -301,7 +300,11 @@ export function DebtsTable({
             <Text size="2" weight="medium" truncate>
               {row.name}
             </Text>
-            {row.personal && <PersonalMark label={tAccounts("ownerPersonal")} />}
+            <OwnerMark
+              personal={row.personal}
+              foreignOwner={row.foreignOwner}
+              ownerName={row.ownerName}
+            />
             {row.accountId === nextPaymentAccountId && (
               <Badge color="jade" variant="soft" radius="full">
                 {t("nextPaymentBadge")}
@@ -477,11 +480,6 @@ export function DebtsTable({
                     key: "pay",
                     label: t("rowPay"),
                     onSelect: () => onPay(row),
-                  },
-                  {
-                    key: "plan",
-                    label: t("rowNewPlan"),
-                    onSelect: () => onNewPlan(row),
                   },
                 ]
               : []),

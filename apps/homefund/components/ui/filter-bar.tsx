@@ -6,6 +6,7 @@ import { useTranslations } from "next-intl";
 import { Select } from "@radix-ui/themes";
 
 import { DateInput } from "./date-input";
+import { ScopedSelectGroups } from "./scoped-select-groups";
 
 import styles from "./filter-bar.module.css";
 
@@ -28,12 +29,20 @@ export function FilterSelect({
   value,
   onValueChange,
   items,
+  scoped,
   width,
 }: {
   label: string;
   value: string;
   onValueChange: (v: string) => void;
   items: { value: string; label: string }[];
+  // Options after `items` that sit under a heading per scope when both hold some.
+  scoped?: {
+    fund: { value: string; label: string }[];
+    personal: { value: string; label: string }[];
+    fundHeading: string;
+    personalHeading: string;
+  };
   width?: number;
 }) {
   const controlId = useId();
@@ -55,6 +64,22 @@ export function FilterSelect({
               {item.label}
             </Select.Item>
           ))}
+          {scoped && (
+            <ScopedSelectGroups
+              fundHeading={scoped.fundHeading}
+              personalHeading={scoped.personalHeading}
+              fund={scoped.fund.map((item) => (
+                <Select.Item key={item.value} value={item.value}>
+                  {item.label}
+                </Select.Item>
+              ))}
+              personal={scoped.personal.map((item) => (
+                <Select.Item key={item.value} value={item.value}>
+                  {item.label}
+                </Select.Item>
+              ))}
+            />
+          )}
         </Select.Content>
       </Select.Root>
     </div>

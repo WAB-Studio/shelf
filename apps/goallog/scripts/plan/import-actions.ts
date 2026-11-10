@@ -155,7 +155,7 @@ function draftOf(text: string): Draft {
 }
 
 // Four goals, each with every section: more of everything than the example.
-// `label` keeps each caller's goals apart: a name an open goal already holds is skipped, not created (RP-130).
+// `label` keeps each caller's goals apart: a name an open goal already holds is skipped, not created (RP-152).
 function fourGoals(rhythmLine = "", label = "meta"): string {
   const goals = [1, 2, 3, 4].map(
     (n) => `
@@ -317,7 +317,7 @@ test("confirmImport: a four-goal draft pays the same number of statements as the
   assert.equal(ids.length, 4);
   console.log(`# statements for 1 goal = ${measured.one}, for 4 goals = ${measured.four}`);
   assert.equal(measured.four, measured.one);
-  // Settle, the snapshot of the open goals the draft names (RP-130: a matched goal is skipped), goals,
+  // Settle, the snapshot of the open goals the draft names (RP-152: a matched goal is skipped), goals,
   // measure, phases, budgets, commitments, parents, children.
   assert.equal(measured.one, 9);
 
@@ -795,7 +795,7 @@ test("confirmImport: a task the table refuses is named and left out; the rest of
 
 test("confirmImport: a clean plan still pays the same statements and lists nothing failed", async () => {
   const { statements } = await confirmed(draftOf(EXAMPLE.replace("# IA aplicada", `# 898 limpia ${RUN}`)));
-  // The 9 of the example: the snapshot read of RP-130 included.
+  // The 9 of the example: the snapshot read of RP-152 included.
   assert.equal(statements, 9);
 });
 

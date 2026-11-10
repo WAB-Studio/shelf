@@ -35,13 +35,18 @@ export default async function PlanningPage(
   if (!hasLocale(routing.locales, locale)) notFound();
 
 
+  // Another member's personal plan is not the caller's to summarise: the hub, like
+  // Inicio, keeps their own and the fund's (RF-58). The areas below still list it, named.
+  const mine = <T extends { foreignOwner: boolean }>(rows: T[]) =>
+    rows.filter((row) => !row.foreignOwner);
+
   const [budgets, goals, payments, debts, rules, options, t, format, tc] =
     await Promise.all([
-      listBudgetsWithStatus(),
-      listGoalsWithProgress(),
-      listPlannedPayments({ status: "pending" }),
-      getDebtsScreenData(),
-      listRecurringRules(),
+      listBudgetsWithStatus().then(mine),
+      listGoalsWithProgress().then(mine),
+      listPlannedPayments({ status: "pending" }).then(mine),
+      getDebtsScreenData({ withoutForeign: true }),
+      listRecurringRules().then(mine),
       getTransactionFormOptions(),
       getTranslations({ locale, namespace: "planning" }),
       getFormatter({ locale }),

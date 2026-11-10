@@ -2,8 +2,18 @@ import "server-only";
 
 import { listMembers } from "@/db/queries/group-members";
 import { getUserGroup } from "@/db/queries/groups";
-import { getMemberContributions } from "@/db/queries/reports/contributions";
-import type { MemberContribution } from "@/db/queries/reports/contributions";
+import {
+  getFundCashBalances,
+  getFundSpending,
+  getMemberContributions,
+  getUnassignedIncome,
+} from "@/db/queries/reports/contributions";
+import type {
+  FundCashBalance,
+  FundSpending,
+  MemberContribution,
+  UnassignedIncome,
+} from "@/db/queries/reports/contributions";
 import { getExpensesByCategory } from "@/db/queries/reports/expenses-by-category";
 import type { CategoryExpense } from "@/db/queries/reports/expenses-by-category";
 import { getSixMonthFlow } from "@/db/queries/reports/monthly-flow";
@@ -23,6 +33,13 @@ export type ReportsData = {
   expensesByCategory: CategoryExpense[];
   sixMonthFlow: MonthFlow[];
   contributions: MemberContributionNamed[];
+  // What the fund's cash accounts hold now, to read beside what was put in and
+  // what the fund spent in the month.
+  fundCash: FundCashBalance[];
+  // What the fund's accounts spent in the month, categorised or not.
+  fundSpending: FundSpending[];
+  // Incomes into the fund that name no member: «Sin asignar» in Aportes (RF-167).
+  unassigned: UnassignedIncome[];
   hasGroup: boolean;
 };
 
@@ -45,11 +62,14 @@ export async function getReportsData(monthStart: string = currentMonthStart()): 
     members: found ? await listMembers(found.id, { archived: false }) : [],
   }));
 
-  const [expensesByCategory, sixMonthFlow, contributionRows, { group, members }, sessionUser] =
+  const [expensesByCategory, sixMonthFlow, contributionRows, fundCash, fundSpending, unassigned, { group, members }, sessionUser] =
     await Promise.all([
       getExpensesByCategory(monthRange(monthStart)),
       getSixMonthFlow(monthStart),
       getMemberContributions(monthRange(monthStart)),
+      getFundCashBalances(monthRange(monthStart)),
+      getFundSpending(monthRange(monthStart)),
+      getUnassignedIncome(monthRange(monthStart)),
       groupAndMembers,
       getSessionUser(),
     ]);
@@ -67,6 +87,9 @@ export async function getReportsData(monthStart: string = currentMonthStart()): 
     expensesByCategory,
     sixMonthFlow,
     contributions,
+    fundCash,
+    fundSpending,
+    unassigned,
     hasGroup: group !== null,
   };
 }

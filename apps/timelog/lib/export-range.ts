@@ -3,7 +3,7 @@ import { z } from "zod";
 import { MAX_EXPORT_DAYS } from "@/lib/daily";
 import { addDays, isCivilDay } from "@/lib/zone";
 
-// The export's range (RT-15), one schema for the page's form and the download behind it.
+// The export's range (RT-25), one schema for the page's form and the download behind it.
 export const exportRange = z
   .object({
     from: z.string().refine(isCivilDay),

@@ -31,13 +31,15 @@ test("Enter alone writes a one-off for today that draws on Hoy, and the chips de
   const name = `Suelta solo Enter ${Date.now()}`;
   try {
     await page.goto("/");
+    // At 360 the field is in the sheet the «+» opens (RP-154).
+    await page.getByRole("button", { name: "Anotar algo suelto" }).click();
     const field = page.getByPlaceholder("Escribe una tarea…");
     await field.fill(name);
     await expect(page.getByRole("radio", { name: "hoy" })).toHaveAttribute("aria-checked", "true");
     await field.press("Enter");
 
     await expect(page.getByRole("button", { name, exact: true })).toBeVisible();
-    await expect(field).toHaveValue("");
+    await expect(field).toBeHidden();
     await expect(page.getByRole("radiogroup")).toHaveCount(0);
     expect(await rowsNamed(db, personId, name)).toMatchObject([{ day: todayInZone() }]);
   } finally {
@@ -53,6 +55,8 @@ test("«mañana» writes tomorrow's day, does not draw, and says where it went (
   const name = `Suelta mañana ${Date.now()}`;
   try {
     await page.goto("/");
+    // At 360 the field is in the sheet the «+» opens (RP-154).
+    await page.getByRole("button", { name: "Anotar algo suelto" }).click();
     const field = page.getByPlaceholder("Escribe una tarea…");
     await field.fill(name);
     await expect(page.getByRole("button", { name: "Anotar", exact: true })).toHaveCount(0);
@@ -75,6 +79,8 @@ test("«sin día» writes a null day, does not draw, and the way into the list s
   const name = `Suelta sin día ${Date.now()}`;
   try {
     await page.goto("/");
+    // At 360 the field is in the sheet the «+» opens (RP-154).
+    await page.getByRole("button", { name: "Anotar algo suelto" }).click();
     const field = page.getByPlaceholder("Escribe una tarea…");
     await field.fill(name);
     await page.getByRole("radio", { name: "sin día" }).click();
@@ -84,6 +90,8 @@ test("«sin día» writes a null day, does not draw, and the way into the list s
     await expect(page.getByRole("status")).toContainText("Anotada sin día");
     await expect(page.getByRole("button", { name, exact: true })).toHaveCount(0);
     expect(await rowsNamed(db, personId, name)).toMatchObject([{ day: null }]);
+    // The sheet stays open on the line that says where; the way in is on the day behind it.
+    await page.keyboard.press("Escape");
     // The count is the identity's, and `sueltas.spec.ts` moves it in parallel:
     // the row above proves the write, the link proves the way in.
     await expect(page.getByRole("link", { name: /^\d+ (espera|esperan)$/ })).toHaveAttribute(
@@ -103,6 +111,8 @@ test("«otro día» takes a date; a past one is refused with its message and no 
   const name = `Suelta otro día ${Date.now()}`;
   try {
     await page.goto("/");
+    // At 360 the field is in the sheet the «+» opens (RP-154).
+    await page.getByRole("button", { name: "Anotar algo suelto" }).click();
     const field = page.getByPlaceholder("Escribe una tarea…");
     await field.fill(name);
     await page.getByRole("radio", { name: "otro día" }).click();

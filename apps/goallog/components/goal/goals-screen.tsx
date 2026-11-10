@@ -34,7 +34,7 @@ import { addDaysToCivilDate, civilDateInZone, civilDayMonthShort, civilDayMonthY
 
 /**
  * `MetasCentro`, `MetasCentroEscritorio` and `MetasVacio` (RP-99, RP-24, RP-27,
- * RP-130): the goals, and «el plan» inside them. The page fetches; this draws.
+ * RP-152): the goals, and «el plan» inside them. The page fetches; this draws.
  * `connect` is the slot after «Exportar» where «Conectar una IA» goes.
  */
 export async function GoalsScreen({

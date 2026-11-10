@@ -3,13 +3,15 @@ import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 
 import { BarRows } from "@/components/screens/app-rows";
-import { Between, Card, Cards, DayColumns, Disclosure, Figure, Heatmap, Hero, HeroColumns, Stack, Text, TextLink, Tile, Title, ToneLegend } from "@/components/ui";
+import { ProjectBars, SiteBars } from "@/components/screens/claude-internet";
+import { Between, Card, Cards, DayColumns, Disclosure, Figure, Heatmap, Hero, HeroColumns, Mosaic, Stack, Text, TextLink, Tile, Title, ToneLegend } from "@/components/ui";
 import { claudeWeekHint } from "@/lib/daily";
 import { appTone } from "@/lib/app-classes";
 import { buildHeatmap, claudeHeatRow } from "@/lib/heatmap";
 import { withTimeDb } from "@/lib/session";
-import { appsByDay, claudeBetween, dayTotals, uploadSpan } from "@/lib/queries";
+import { appsByDay, claudeBetween, dayTotals, editorWindowsBetween, sitesBetween, uploadSpan } from "@/lib/queries";
 import { fill, sum } from "@/lib/totals";
+import { projectsOf } from "@/lib/vscode-project";
 import { askedWeek, clampWeek, weekSteps } from "@/lib/week";
 import { calendarWords } from "@/lib/words";
 import { addDays, civilDay } from "@/lib/zone";
@@ -29,8 +31,8 @@ export default async function WeekPage({ searchParams }: { searchParams: Promise
   const { semana } = await searchParams;
   const asked = askedWeek(semana, today);
   const sunday = addDays(asked, 6);
-  const [[span, totals, byDay, claude], words, t, tClaude, tClass] = await Promise.all([
-    withTimeDb((tx) => Promise.all([uploadSpan(tx), dayTotals(asked, sunday, tx), appsByDay(asked, sunday, tx), claudeBetween(asked, sunday, tx)])),
+  const [[span, totals, byDay, claude, sites, windows], words, t, tClaude, tClass] = await Promise.all([
+    withTimeDb((tx) => Promise.all([uploadSpan(tx), dayTotals(asked, sunday, tx), appsByDay(asked, sunday, tx), claudeBetween(asked, sunday, tx), sitesBetween(asked, sunday, tx), editorWindowsBetween(asked, sunday, tx)])),
     calendarWords(),
     getTranslations("time.week"),
     getTranslations("time.claude"),
@@ -43,6 +45,8 @@ export default async function WeekPage({ searchParams }: { searchParams: Promise
   const longestDay = Math.max(1, ...days.map((one) => one.seconds));
   const heat = buildHeatmap(byDay, days.map((one) => one.day), words.system, APPS_SHOWN);
   const hint = claudeWeekHint(span);
+  const projects = projectsOf(windows);
+  const agentSeconds = claude.reduce((total, one) => total + one.code, 0);
   // Claude's total is the grid's first row, levelled against its largest app cell; every tone in it is also written, in the row and in the legend.
   const claudeRow = claudeHeatRow(claude, days.map((one) => one.day), heat.largest);
   const toneName = (tone: ReturnType<typeof appTone> | "claude") => (tone === "claude" ? tClaude("title") : tone === "claudeApp" ? tClaude("desktop") : tClass(tone));
@@ -52,7 +56,7 @@ export default async function WeekPage({ searchParams }: { searchParams: Promise
     label: t("cell", { app, day: `${words.weekdayShort(day)} ${words.dayOfMonth(day)}`, duration: cell.seconds === 0 ? t("none") : words.duration(cell.seconds) }),
   });
   const heatRows = [
-    ...(claudeRow.total === 0 ? [] : [{ key: "claude-total", name: tClaude("total"), kind: toneName("claude"), tone: "claude" as const, total: words.duration(claudeRow.total), cells: claudeRow.cells.map((cell, index) => cellOf(tClaude("total"), days[index].day, cell)) }]),
+    ...(claudeRow.total === 0 ? [] : [{ key: "claude-total", name: tClaude("screen"), kind: toneName("claude"), tone: "claude" as const, total: words.duration(claudeRow.total), cells: claudeRow.cells.map((cell, index) => cellOf(tClaude("screen"), days[index].day, cell)) }]),
     ...heat.rows.map((row) => {
       const tone = appTone(row.app, words.system);
       return { key: row.app, name: row.app, kind: toneName(tone), tone, total: words.duration(row.total), cells: row.cells.map((cell, index) => cellOf(row.app, days[index].day, cell)) };
@@ -87,6 +91,7 @@ export default async function WeekPage({ searchParams }: { searchParams: Promise
           <Card label={t("claudeWeekTotal")}>
             <Text mono>{claudeRow.total > 0 ? words.duration(claudeRow.total) : t("none")}</Text>
             {claudeRow.total === 0 ? <Text variant="meta">{t(`claudeHint.${hint}`)}</Text> : null}
+            {agentSeconds > 0 ? <Text variant="meta">{t("claudeAgentWeek", { duration: words.duration(agentSeconds) })}</Text> : null}
             {claudeRow.total === 0 && hint === "connect" ? <TextLink href="/llaves">{t("connect")} ›</TextLink> : null}
           </Card>
         </Cards>
@@ -132,6 +137,20 @@ export default async function WeekPage({ searchParams }: { searchParams: Promise
           <TextLink href="/exportar">{t("exportMore")} ›</TextLink>
         </Between>
       </Tile>
+      {projects.length > 0 || sites.length > 0 ? (
+        <Mosaic>
+          {projects.length > 0 ? (
+            <Tile title={t("projects")} figure={words.duration(sum(projects))}>
+              <ProjectBars projects={projects} words={words} />
+            </Tile>
+          ) : null}
+          {sites.length > 0 ? (
+            <Tile title={t("internet")} figure={words.duration(sum(sites))}>
+              <SiteBars sites={sites} words={words} />
+            </Tile>
+          ) : null}
+        </Mosaic>
+      ) : null}
     </Stack>
   );
 }

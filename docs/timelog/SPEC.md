@@ -48,7 +48,8 @@ Interface language: Spanish or English, the person's choice (RT-12). A person re
   «TimeLog: pegar llave…». «Llaves» links its latest release.
 - [x] **RT-11** Any past day opens on its own screen, with the same block and the same list as «Hoy»;
   from «Semana» the day is reached by touching it, and the day's screen carries ‹ › to the day before
-  and the day after. A day that is not a real date, or has not arrived, is a 404. (2026-10-30)
+  and the day after. A day that is not a real date, or is still to come ("has not arrived" means the future only), is a 404;
+  a past day nothing arrived on opens the empty day. (2026-10-30)
 - [x] **RT-12** The interface is served in Spanish and in English. The language is the person's choice,
   kept in a cookie, else the browser's, else Spanish; no address changes with it. (2026-10-30)
 - [x] **RT-13** An upload may carry, per device and day, the seconds each website was in front with the
@@ -59,12 +60,14 @@ Interface language: Spanish or English, the person's choice (RT-12). A person re
   stretches between consecutive messages of its session logs at most five minutes apart (a lone message
   one minute), merged across sessions and cut at the Bogotá day. A day naming it replaces it whole; a
   zero stores no row. (2026-10-30)
-- [x] **RT-15** «Exportar» downloads a CSV with a row per day of a range of up to 366 days: seconds at
-  the computer, in Claude Code, on claude.ai, in the Claude app, Claude's total (the three added) and the
-  top app. The MCP server answers the same rows (`get_daily`), read-only, with the same key.
-  (2026-10-30, «si todos los días se exporta cuánto estuve trabajando en general sería bueno para mis métricas»)
+- [x] **RT-25** «Exportar» downloads a CSV with a row per day of a range of up to 366 days, cut at today (a day that has
+  not happened has no row): `day`, seconds at the computer, in Claude Code (the agent's work), on claude.ai, in the Claude
+  app, `claude_seconds` (the three added, as before), `claude_screen_seconds` (claude.ai and the app, never Claude Code), the top app and its seconds, and `uploaded`
+  (1 when any upload reached the day, 0 when none did, so a day unseen is told from a real zero). The MCP server answers
+  the same rows (`get_daily`), read-only, with the same key. Successor of RT-15. (2026-11-08)
 - [x] **RT-16** An upload is classified on the PC and carries, per device and day, only seconds in buckets: per
-  app; per window title inside an app (never a browser's: its titles are its pages); per website hostname and
+  app; per window title inside an app (never a browser's: its titles are its pages, and the server
+  drops one that arrives); per website hostname and
   per page (its address without credentials, query and fragment, and its title); and Claude Code's seconds per
   day and per session (id, project folder, first and last message of the day). It never carries an event, a
   URL's query or fragment, or the content of a Claude Code message. The person's own rows are read only by them
@@ -84,13 +87,21 @@ Interface language: Spanish or English, the person's choice (RT-12). A person re
 - [x] **RT-23** The day shows «Proyectos» under Apps: the seconds in VS Code-family windows (VS Code, Insiders, OSS,
   VSCodium, Cursor) grouped by the workspace folder their window title names («file — folder — [profile —] product»,
   remote and tunnel tags removed), read from the window rows RT-18 already stores; no new field is uploaded. (2026-11-01)
-- [x] **RT-22** «Hoy» and any day show «Claude» (Claude Code, claude.ai and the Claude app, and
-  «Claude en total» as their sum, then Claude Code's sessions) and «Internet» (the longest sites, each opening
-  onto its pages); an app's row opens onto its longest window titles. «Semana» shows Claude's week
-  total and a bar per day. Sites and pages come from the program on the PC, which reads the focused browser's
-  address bar (Windows) or the browser's own history; never from a browser extension. Where a source never
-  arrived the screen says what to do: update the program on the PC for sites, with a link to its install steps;
-  the Claude folder for Claude Code. Successor of RT-17. (2026-11-01, «solo quiero que todo dependa del programa»)
+- [x] **RT-24** «Hoy» and any day show «Claude» as what the person spent in front of it (claude.ai and the Claude app,
+  «Claude en pantalla»; «% del día» counts only that), with Claude Code apart as the agent's own work («Trabajo del
+  agente», its seconds and its sessions, never added to the screen time), and «Internet» (the longest sites, each
+  opening onto its pages); an app's row opens onto its longest window titles. «Semana» shows Claude on screen for the
+  week and a bar per day, and Claude Code's week apart. Sites and pages come from the program on the PC, which reads
+  the focused browser's address bar (Windows) or the browser's own history; never from a browser extension. Where a
+  source never arrived the screen says what to do: update the program on the PC for sites, with a link to the latest
+  installer, the same one «Llaves» downloads; the Claude folder for Claude Code. Successor of RT-22. (2026-11-08)
+- [x] **RT-26** «Semana» also shows «Proyectos de la semana» (the VS Code-family workspace folders of RT-23, added over
+  the seven days) and «Internet de la semana» (the longest sites of the week), each with the eight longest and a «y N más»
+  that opens the rest. A card with nothing is absent. On a phone a heatmap cell shows hours over minutes («4h» then
+  «43»), so the minutes are not lost. (2026-11-08)
+- [x] **RT-27** «Llaves» has a «Conectar Claude» section: the MCP server's address (`/mcp` on the app's own address), a
+  block to copy that adds it to Claude Code with the key in the `Authorization: Bearer` header (the key just created, else
+  a placeholder), and a line on what to ask. A key revoked on the screen leaves it at once, with its commands. (2026-11-08)
 
 ### Non-functional requirements
 
@@ -105,6 +116,8 @@ Interface language: Spanish or English, the person's choice (RT-12). A person re
 
 - [x] **RT-01** — An upload carries, per device and day, the seconds each app was active with the person at the computer (ActivityWatch's AFK watcher says not-afk). It never carries a window title, a URL or an event. (P5, 1a) _Retired 2026-10-30, by the user («Me gustaría que rastree todo más detallado»). Successor: RT-16 (window titles, pages and Claude Code sessions join the upload, still never an event or a query; RT-20 drops private windows and an exclusion list on the PC)._
 - [x] **RT-17** — «Hoy» and any day show «Claude» (Claude Code, claude.ai and the Claude app, and «Claude en total» as their sum, then Claude Code's sessions) and «Internet» (the longest sites, each opening onto its pages); an app's row opens onto its longest window titles. «Semana» shows Claude's week total and a bar per day. Where a source never arrived the screen says how to connect it: the browser extension for sites, the Claude folder for Claude Code. (2026-10-30) _Retired 2026-11-01, by the user («solo quiero que todo dependa del programa»). Successor: RT-22 (sites come from the program reading the address bar or the browser's history; the screen asks to update the program instead of installing an extension)._
+- [x] **RT-15** — «Exportar» downloads a CSV with a row per day of a range of up to 366 days: seconds at the computer, in Claude Code, on claude.ai, in the Claude app, Claude's total (the three added) and the top app. The MCP server answers the same rows (`get_daily`), read-only, with the same key. (2026-10-30, «si todos los días se exporta cuánto estuve trabajando en general sería bueno para mis métricas») _Retired 2026-11-08, by the user's delegation. Successor: RT-25 (the CSV stops at today, ends with `uploaded`, and a column for Claude on screen joins Claude's total)._
+- [x] **RT-22** — «Hoy» and any day show «Claude» (Claude Code, claude.ai and the Claude app, and «Claude en total» as their sum, then Claude Code's sessions) and «Internet» (the longest sites, each opening onto its pages); an app's row opens onto its longest window titles. «Semana» shows Claude's week total and a bar per day. Sites and pages come from the program on the PC, which reads the focused browser's address bar (Windows) or the browser's own history; never from a browser extension. Where a source never arrived the screen says what to do: update the program on the PC for sites, with a link to its install steps; the Claude folder for Claude Code. Successor of RT-17. (2026-11-01, «solo quiero que todo dependa del programa») _Retired 2026-11-08, by the user's delegation. Successor: RT-24 (Claude on screen apart from Claude Code's work; «actualiza el programa» goes to the latest installer)._
 
 ---
 

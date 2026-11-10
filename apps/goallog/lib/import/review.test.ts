@@ -150,22 +150,23 @@ test("a goal unmarked takes the goals inside it; a declined proposal is not appl
   assert.equal(r.nodes.find((n) => n.path === "goals.3")?.marked, true);
 });
 
-test("a goal one open goal names is an update, marked; a goal two open goals name starts unmarked (RP-130)", () => {
+test("a goal an open goal names starts unmarked, one or two of them; the rest is sent (RP-152)", () => {
   const d = draft(goal({ name: "Inglés" }), goal({ key: "g2", name: "Otra" }), goal({ key: "g3", name: "Doble" }));
   const r = review(d, { unmarked: null }, [snapshot("ingles".replace("i", "I").replace("ngles", "nglés"), "a"), snapshot("Doble", "b"), snapshot("doble", "c")]);
-  assert.deepEqual(r.toSend.goals.map((g) => g.name), ["Inglés", "Otra"]);
+  assert.deepEqual(r.toSend.goals.map((g) => g.name), ["Otra"]);
+  assert.equal(r.nodes.find((n) => n.path === "goals.0")?.marked, false);
   assert.deepEqual([...r.ambiguous], [2]);
   assert.deepEqual(r.changes.get(0), []);
   assert.deepEqual(r.updates, [], "a goal the plan leaves as it is is no update");
   assert.equal(r.creating, 1);
 });
 
-test("a goal that changes is counted as an update, one that does not is not counted at all (RP-130)", () => {
+test("a goal marked back that changes is counted as an update, one that does not is not counted at all (RP-152)", () => {
   const d = draft(goal({ name: "Inglés", horizon: "2028-01-01" }), goal({ key: "g2", name: "Igual" }), goal({ key: "g3", name: "Nueva" }));
-  const r = review(d, { unmarked: null }, [snapshot("Inglés", "a"), snapshot("Igual", "b")]);
+  const r = review(d, { unmarked: [] }, [snapshot("Inglés", "a"), snapshot("Igual", "b")]);
   assert.deepEqual(r.updates.map((u) => [u.g, u.goalId]), [[0, "a"]]);
   assert.equal(r.creating, 1);
-  const alone = review(draft(goal({ name: "Igual" })), { unmarked: null }, [snapshot("Igual", "b")]);
+  const alone = review(draft(goal({ name: "Igual" })), { unmarked: [] }, [snapshot("Igual", "b")]);
   assert.equal(alone.updates.length + alone.creating, 0, "nothing to create or update: no button");
 });
 
@@ -173,7 +174,7 @@ test("a phase across an existing one of another name starts unmarked with the ph
   const crossing = { aim: "Base aeróbica", startsOn: "2026-10-15", endsOn: "2026-11-30", src: [] };
   const clear = { aim: "Velocidad", startsOn: "2027-01-01", endsOn: "2027-02-28", src: [] };
   const open = { ...snapshot("Meta", "m"), phases: [{ id: "p", aim: "Base aeróbica suave", startsOn: "2026-10-15", endsOn: "2026-11-29" }] };
-  const r = review(draft(goal({ phases: [crossing, clear] })), { unmarked: null }, [open]);
+  const r = review(draft(goal({ phases: [crossing, clear] })), { unmarked: ["goals.0.phases.0"] }, [open]);
   assert.deepEqual([...r.crosses], [["goals.0.phases.0", "Base aeróbica suave"]]);
   assert.equal(r.nodes.find((n) => n.path === "goals.0.phases.0")?.marked, false);
   assert.equal(r.nodes.find((n) => n.path === "goals.0.phases.1")?.marked, true);
@@ -200,7 +201,7 @@ test("a part the plan leaves as it is carries no box; a part that changes does",
   ] });
   const r = review(
     draft(goal({ rhythm: 600, months: [{ month: "2026-11", amount: 90, src: [] }, { month: "2026-12", amount: 30, src: [] }], commitments: [stretch], tasks: [moved] })),
-    { unmarked: null },
+    { unmarked: [] },
     [open],
   );
   assert.deepEqual([...r.unchanged].sort(), ["goals.0.commitments.0", "goals.0.months.0", "goals.0.rhythm", "goals.0.tasks.0.children.0"]);
@@ -415,4 +416,32 @@ test("906b: a sub-task marked done shows its day too", () => {
   const child = { name: "EF SET", estimate: 60, note: null, noteSrc: [], src: [], rule: null, doneOn: "2026-10-09" };
   const { nodes } = review(draft(goal({ tasks: [task({ name: "Semana", children: [child] })] })));
   assert.deepEqual(nodes.filter((n) => n.kind === "subTask").map((n) => [n.label, n.doneOn]), [["EF SET", "2026-10-09"]]);
+});
+
+test("a new goal under an open goal left unmarked is still sent, under the open goal standing empty (RP-152)", () => {
+  const d = draft(goal({ name: "Inglés", tasks: [task({ name: "Pasiva" })] }), goal({ key: "g2", parent: "g1", name: "Nueva" }));
+  const r = review(d, { unmarked: null }, [snapshot("Inglés", "a")]);
+  assert.deepEqual(r.toSend.goals.map((g) => g.name), ["Inglés", "Nueva"]);
+  assert.deepEqual(r.toSend.goals[0].tasks, [], "the open goal writes nothing of its own");
+  assert.equal(r.nodes.find((n) => n.path === "goals.1")?.marked, true);
+  assert.equal(r.creating, 1);
+  assert.deepEqual(r.updates, []);
+  // Neither the host nor its new goal is counted as an update; the host is no creation.
+  assert.equal(r.createCount, 1);
+});
+
+test("an open goal left unmarked with no new goal under it sends nothing", () => {
+  const r = review(draft(goal({ name: "Inglés" })), { unmarked: null }, [snapshot("Inglés", "a")]);
+  assert.deepEqual(r.toSend.goals, []);
+});
+
+test("the differences shown for an unmarked open goal are what marking it would send", () => {
+  const stretch = { aim: "Base", startsOn: "2026-10-15", endsOn: "2026-11-30", src: [] };
+  const d = draft(goal({ name: "Meta", phases: [stretch], tasks: [task({ name: "Nueva tarea" }), task({ name: "Otra" })] }));
+  const open = { ...snapshot("Meta", "m"), phases: [{ id: "p", aim: "Base suave", startsOn: "2026-10-15", endsOn: "2026-11-29" }] };
+  const shown = review(d, { unmarked: null }, [open]).changes.get(0)!;
+  assert.ok(!shown.some((c) => c.kind === "phaseAdded"), "the phase that crosses is not offered");
+  const without = review(d, { unmarked: ["goals.0", "goals.0.tasks.1"] }, [open]).changes.get(0)!;
+  assert.ok(!without.some((c) => c.kind === "taskAdded" && c.name === "Otra"), "a sub-part unmarked is not offered");
+  assert.ok(without.some((c) => c.kind === "taskAdded" && c.name === "Nueva tarea"));
 });

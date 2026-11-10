@@ -4,7 +4,7 @@ import { and, asc, desc, eq, isNull, ne, or, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
 import { insertRow } from "@/db/insert-row";
-import type { AccountRow } from "@/db/queries/accounts";
+import { foreignOwnerSql, ownerNameSql, type AccountRow } from "@/db/queries/accounts";
 import { callerCashMode, callerGroupId } from "@/db/queries/groups";
 import { insertTransaction, ResendChangedError } from "@/db/queries/transactions";
 import { accounts } from "@/db/schema";
@@ -59,6 +59,8 @@ const accountRowColumns = {
   // reference inside a projection fragment renders bare and binds inward. The
   // WHERE below already keeps this list to own-or-shared, so it reads true here.
   canWrite: sql<boolean>`private.can_write_account(accounts.id)`,
+  foreignOwner: foreignOwnerSql,
+  ownerName: ownerNameSql,
   archivedAt: accounts.archivedAt,
 } as const;
 

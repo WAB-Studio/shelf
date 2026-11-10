@@ -5,10 +5,8 @@ import { useTranslations } from "next-intl";
 
 import { createKey, revokeKey } from "@/app/actions/keys";
 import { keyNameSchema } from "@/lib/forms";
+import { INSTALLER_URL } from "@/lib/installer";
 import { Between, Button, Code, CodeBlock, Confirm, Field, Form, Stack, Text, TextLink } from "@/components/ui";
-
-// ActivityWatch with aw-timelog bundled (RT-10): the latest release of our fork.
-const INSTALLER_URL = "https://github.com/WAB-Studio/activitywatch/releases/latest";
 
 export type KeyLine = { id: string; name: string; when: string | null; revoked: boolean };
 
@@ -16,7 +14,7 @@ export type KeyLine = { id: string; name: string; when: string | null; revoked: 
 export function KeysPanel({ keys, siteUrl }: { keys: KeyLine[]; siteUrl: string }) {
   const t = useTranslations("time.keys");
   const [name, setName] = useState("");
-  const [fresh, setFresh] = useState<string | null>(null);
+  const [fresh, setFresh] = useState<{ id: string; key: string } | null>(null);
   const [error, setError] = useState<"nameInvalid" | "signedOut" | "revokeFailed" | null>(null);
   const [confirming, setConfirming] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -31,7 +29,7 @@ export function KeysPanel({ keys, siteUrl }: { keys: KeyLine[]; siteUrl: string 
       const result = await createKey(name);
       setError(result.ok ? null : result.error);
       if (result.ok) {
-        setFresh(result.key);
+        setFresh({ id: result.id, key: result.key });
         setName("");
       }
     });
@@ -42,8 +40,14 @@ export function KeysPanel({ keys, siteUrl }: { keys: KeyLine[]; siteUrl: string 
     startTransition(async () => {
       const result = await revokeKey(id);
       setError(result.ok ? null : "revokeFailed");
+      // A key just revoked is a key that no longer works: its copy and commands go with it.
+      if (result.ok) setFresh((shown) => (shown?.id === id ? null : shown));
     });
   }
+
+  const mcpUrl = `${siteUrl.replace(/\/$/, "")}/mcp`;
+  // The key is shown once and never read back: after that the block carries a placeholder to fill in.
+  const claudeKey = fresh === null ? t("keyPlaceholder") : fresh.key;
 
   return (
     <Stack gap={4}>
@@ -68,10 +72,17 @@ export function KeysPanel({ keys, siteUrl }: { keys: KeyLine[]; siteUrl: string 
       {fresh !== null ? (
         <Stack gap={2}>
           <Text as="p">{t("shown")}</Text>
-          <CopyBlock key={fresh} label={t("keyBlock")} action={t("copyKey")} value={fresh} />
-          <CopyBlock key={`command-${fresh}`} label={t("command")} action={t("copyCommand")} value={`py -m aw_client timelog --url ${siteUrl} --key ${fresh}`} />
+          <CopyBlock key={fresh.key} label={t("keyBlock")} action={t("copyKey")} value={fresh.key} />
+          <CopyBlock key={`command-${fresh.key}`} label={t("command")} action={t("copyCommand")} value={`py -m aw_client timelog --url ${siteUrl} --key ${fresh.key}`} />
         </Stack>
       ) : null}
+      <Stack gap={2}>
+        <Text>{t("claudeTitle")}</Text>
+        <Text as="p" variant="meta">{t("claudeIntro")}</Text>
+        <CopyBlock key={`address-${mcpUrl}`} label={t("claudeAddress")} action={t("copyAddress")} value={mcpUrl} />
+        <CopyBlock key={`claude-${claudeKey}`} label={t("claudeCommand")} action={t("copyClaudeCommand")} value={`claude mcp add --transport http timelog ${mcpUrl} --header "Authorization: Bearer ${claudeKey}"`} />
+        <Text as="p" variant="meta">{fresh === null ? t("claudeKeyHint") : t("claudeAsk")}</Text>
+      </Stack>
       {keys.length === 0 ? (
         <Text as="p" variant="meta">{t("none")}</Text>
       ) : (

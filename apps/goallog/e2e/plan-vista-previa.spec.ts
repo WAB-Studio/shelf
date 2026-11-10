@@ -95,20 +95,20 @@ async function plannedMonths(db: postgres.Sql, goalId: string) {
 
 // What the hint before the click says the plan ends in.
 async function previewMonth(page: Page): Promise<string> {
-  const hint = page.getByText(/^Con .+ al mes, tus .+ de tareas terminan en /);
+  const hint = page.getByText(/^Con .+ al mes, tus .+ de tareas caben hasta /);
   await expect(hint).toBeVisible();
   const text = (await hint.textContent()) ?? "";
-  const match = /terminan en (.+?)\. Puedes/.exec(text);
+  const match = /caben hasta (.+?)\. Puedes/.exec(text);
   expect(match, text).not.toBeNull();
   return match![1];
 }
 
-// What the lead says after the click: «terminas el 31 de octubre de 2026».
+// What the lead says after the click: «tus tareas caben hasta el 31 de octubre de 2026».
 async function leadMonth(page: Page): Promise<string> {
-  const lead = page.getByText(/^A este ritmo terminas el \d{1,2} de \p{L}+ de \d{4}/u);
+  const lead = page.getByText(/^Tus tareas caben hasta el \d{1,2} de \p{L}+ de \d{4}/u);
   await expect(lead).toBeVisible();
   const text = (await lead.textContent()) ?? "";
-  const match = /terminas el \d{1,2} de (\p{L}+) de (\d{4})/u.exec(text);
+  const match = /caben hasta el \d{1,2} de (\p{L}+) de (\d{4})/u.exec(text);
   expect(match, text).not.toBeNull();
   return `${match![1]} de ${match![2]}`;
 }
@@ -262,7 +262,7 @@ test("the rhythm sheet of a goal with a rhythm keeps its fixed tasks: its end is
     await page.getByRole("button", { name: "Ritmo 12 h al mes" }).click();
     const sheet = page.getByRole("dialog");
     await sheet.getByRole("radio", { name: "20 h" }).click();
-    const hint = sheet.getByText(/^Con 20 h al mes terminas el /);
+    const hint = sheet.getByText(/^Con 20 h al mes tus tareas caben hasta el /);
     await expect(hint).toBeVisible();
     const name = monthFormat.format(new Date(`${monthAfter(6).slice(0, 7)}-01T12:00:00Z`));
     await expect(hint).toContainText(`de ${name}`);
@@ -278,7 +278,7 @@ test("«abc» draws no hint and the button says how to write a rhythm", async ({
   try {
     await visit(page, `/metas/${goalId}/plan`);
     await page.getByPlaceholder("otra").fill("abc");
-    await expect(page.getByText(/terminan en /)).toHaveCount(0);
+    await expect(page.getByText(/caben hasta /)).toHaveCount(0);
     await page.getByRole("button", { name: "Armar el plan" }).click();
     await expect(page.getByText("Escríbelo como 8 h, 1 h 30 min o 90 min.")).toBeVisible();
     const [row] = await db<{ rhythm: number | null }[]>`select rhythm from goals.goals where id = ${goalId}`;

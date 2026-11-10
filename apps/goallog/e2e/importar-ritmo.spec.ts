@@ -132,7 +132,7 @@ test.describe("the review says the rhythm before creating (RP-63, RP-35)", () =>
         await expect(page).toHaveURL(/\/metas$/);
         await page.getByRole("link", { name: /Evals y harness/ }).first().click();
         await expect(page.getByText("El plan", { exact: true })).toBeVisible();
-        const plan = page.getByRole("link", { name: /^A este ritmo terminas el .* Ritmo 12 h al mes/ });
+        const plan = page.getByRole("link", { name: /^Tus tareas caben hasta el .* Ritmo 12 h al mes/ });
         await expect(plan).toBeVisible();
         await expect(plan).toHaveAttribute("href", /\/metas\/[^/]+\/plan$/);
         const [goal] = await db`select rhythm from goals.goals where user_id = ${person.id} and name = ${GOAL}`;
@@ -154,7 +154,7 @@ test.describe("the review says the rhythm before creating (RP-63, RP-35)", () =>
         await expect(page).toHaveURL(/\/metas$/);
         await page.getByRole("link", { name: /Evals y harness/ }).first().click();
         await expect(page.getByRole("link", { name: "Armar el plan" })).toBeVisible();
-        await expect(page.getByRole("link", { name: /A este ritmo terminas/ })).toHaveCount(0);
+        await expect(page.getByRole("link", { name: /Tus tareas caben hasta/ })).toHaveCount(0);
         const [goal] = await db`select rhythm from goals.goals where user_id = ${person.id} and name = ${GOAL}`;
         expect(goal.rhythm).toBeNull();
       } finally {
@@ -262,7 +262,7 @@ test.describe("the rhythm row is touched like an amount (RP-67)", () => {
           }
           await page.getByRole("link", { name: /Evals y harness/ }).first().click();
           // Imported today: the line still says the whole rhythm, never the share of this month.
-          await expect(page.getByRole("link", { name: new RegExp(`^A este ritmo terminas el .* Ritmo 10 h al mes`) })).toBeVisible();
+          await expect(page.getByRole("link", { name: new RegExp(`^Tus tareas caben hasta el .* Ritmo 10 h al mes`) })).toBeVisible();
         } finally {
           await wipe(db, person.id);
         }

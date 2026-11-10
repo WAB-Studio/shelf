@@ -8,7 +8,7 @@ import { keyNameSchema } from "@/lib/forms";
 import { issueKey } from "@/lib/keys";
 import { getPerson, withTimeDb } from "@/lib/session";
 
-export type CreateKeyResult = { ok: true; key: string } | { ok: false; error: "nameInvalid" | "signedOut" };
+export type CreateKeyResult = { ok: true; id: string; key: string } | { ok: false; error: "nameInvalid" | "signedOut" };
 
 // Shown once (RT-03, RT-06): the key leaves here and is never read back.
 export async function createKey(name: string): Promise<CreateKeyResult> {
@@ -17,9 +17,9 @@ export async function createKey(name: string): Promise<CreateKeyResult> {
   const person = await getPerson();
   if (person === null) return { ok: false, error: "signedOut" };
 
-  const key = await withTimeDb((tx) => issueKey(tx, person.id, parsed.data));
+  const issued = await withTimeDb((tx) => issueKey(tx, person.id, parsed.data));
   revalidatePath("/llaves");
-  return { ok: true, key };
+  return { ok: true, ...issued };
 }
 
 // The update policy admits only the person's own live key.

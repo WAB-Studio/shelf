@@ -29,21 +29,25 @@ const say = (minutes: number) => {
 const firstShare = shareOf(daysIn(year, monthIndex) - dayOfMonth + 1, daysIn(year, monthIndex));
 const firstLine = `desde el ${dayOfMonth}: ${say(firstShare)} de tus 10 h`;
 
-// Bogotá's midnight of a civil day, the clock the app reads.
+// Bogotá's midnight of a civil day, the clock the app reads; «long ago» counts from the day the server calls today,
+// since `now()` is the real clock, which `PULSAR_CLOCK` leaves behind.
 async function seed(
   db: postgres.Sql,
   person: Person,
   input: { name: string; openedOn: string | null; horizon: string; rhythm?: number },
 ) {
+  const openedAt = input.openedOn
+    ? db`${input.openedOn}::date::timestamp at time zone 'America/Bogota'`
+    : db`(${today}::date - 70)::timestamp at time zone 'America/Bogota'`;
   const [goal] = await db<{ id: string }[]>`
     insert into goals.goals (user_id, name, horizon, measure_name, measure_unit, rhythm, created_at)
-    values (${person.id}, ${input.name}, ${input.horizon}::date, 'minutos', 'minutos', ${input.rhythm ?? RHYTHM},
-      ${input.openedOn ? db`${input.openedOn}::date::timestamp at time zone 'America/Bogota'` : db`now() - interval '70 days'`})
+    values (${person.id}, ${input.name}, ${input.horizon}::date, 'minutos', 'minutos', ${input.rhythm ?? RHYTHM}, ${openedAt})
     returning id
   `;
+  // The task is born on the day the server calls today, as it is in an unpinned run: `now()` would plant it on the real day.
   await db`
-    insert into goals.one_offs (user_id, goal_id, name, estimate, in_plan, position)
-    values (${person.id}, ${goal.id}, ${`Tarea ${input.name}`}, 780, true, 0)
+    insert into goals.one_offs (user_id, goal_id, name, estimate, in_plan, position, created_at)
+    values (${person.id}, ${goal.id}, ${`Tarea ${input.name}`}, 780, true, 0, ${`${today}T12:00:00-05:00`}::timestamptz)
   `;
   return goal.id;
 }
@@ -78,18 +82,18 @@ for (const width of [360, 1280]) {
       const line = visible(page, firstLine, true);
       await expect(line).toHaveCount(1);
 
-      // Figure, then the line, then the bar, then «llevas».
+      // Figure, then the line, then the bar, then «faltan».
       // From the 20th the pace line holds the figure and ends «, bajo el 60 %».
       // The navy block above repeats the month in its own line and bar: the month block is the section that is no hero.
       const block = page.locator("section:not([data-part='hero'])").filter({ has: page.locator("[data-part='progress-track']") }).last();
       const figure = block.getByText(new RegExp(`de ${say(firstShare)}( ?, bajo el 60 %)?$`)).locator("visible=true").first();
       const bar = block.locator("[data-part='progress-track']").locator("visible=true");
-      const lleva = visible(page, /^(llevas \d+ %|día \d+ ·)/);
+      const lleva = visible(page, /^(faltan .+ ·|lo planeado está hecho|día \d+ ·)/);
       await expect(bar).toHaveCount(1);
       const [y0, y1, y2, y3] = [await top(figure), await top(line), await top(bar), await top(lleva)];
       expect(y1).toBeGreaterThan(y0);
       expect(y2).toBeGreaterThan(y1);
-      // From the 20th «día N ·» is the figure's own line, above the share, not «llevas» under the bar.
+      // From the 20th «día N ·» is the figure's own line, above the share, not «faltan» under the bar.
       if (dayOfMonth < 20) expect(y3).toBeGreaterThan(y2);
       else expect(y3).toBeLessThanOrEqual(y0);
 
@@ -97,7 +101,7 @@ for (const width of [360, 1280]) {
       const figures = await line.locator("[data-part='figure']").allTextContents();
       expect(figures).toEqual([say(firstShare), "10 h"]);
 
-      // Muted like «llevas…» (or, from the 20th, like the pace line that replaces it).
+      // Muted like «faltan…» (or, from the 20th, like the pace line that replaces it).
       const reference = lleva;
       expect(await color(line)).toBe(await color(reference));
       const ink = page.getByRole("heading", { level: 1 }).locator("visible=true").first();
@@ -155,7 +159,7 @@ test("360 · a month the goal fills whole has no line, on the goal and on its mo
       const goal = await open(browser, baseURL!, person, 360, `/metas/${id}`);
       try {
         // Anchor on the month's own figure so an absent line is read on a drawn page.
-        await expect(visible(goal.page, /llevas \d+ %|día \d+ ·/)).toHaveCount(1);
+        await expect(visible(goal.page, /^(faltan .+ ·|lo planeado está hecho)|día \d+ ·/)).toHaveCount(1);
         await expect(goal.page.getByText(/^desde el \d+:|^hasta el \d+:/)).toHaveCount(0);
         await goal.page.goto(`/metas/${id}/meses/${monthOf(today).slice(0, 7)}`);
         await settled(goal.page);
@@ -288,8 +292,8 @@ test("360 · the part line on the goal's month block reads muted: unlike the ink
     const ink = page.getByRole("heading", { level: 1 }).locator("visible=true").first();
     expect(lineColor).not.toBe(await color(ink));
     expect(lineColor).not.toBe(await tokenColor(page, "--pulsar-ink"));
-    // «en total…» sits in the navy block now, in its own muted: the reference is the block's own line («llevas …» or the pace).
-    const reference = visible(page, /^(llevas \d+ %|día \d+ ·)/);
+    // «en total…» sits in the navy block now, in its own muted: the reference is the block's own line («faltan …» or the pace).
+    const reference = visible(page, /^(faltan .+ ·|lo planeado está hecho|día \d+ ·)/);
     expect(lineColor).toBe(await color(reference));
     expect(lineColor).toBe(await tokenColor(page, "--pulsar-muted"));
   } finally {

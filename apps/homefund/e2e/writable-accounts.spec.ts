@@ -333,13 +333,14 @@ test.describe("as a plain member", () => {
     // Kills: the cut made in the query instead of the pickers.
     await page.goto(`/es/movements?account=${ids.leader}`);
     // The chip sits in both bands, so presence is asserted, not paint.
-    await expect(page.getByText(LEADER_ACCOUNT, { exact: true })).not.toHaveCount(0);
+    // Another member's account is named with its owner (RF-58, 2026-11-08).
+    await expect(page.getByText(new RegExp(`^${LEADER_ACCOUNT} · `))).not.toHaveCount(0);
 
     // The phone keeps its filters behind a sheet; the laptop draws the select.
     if (!isDesktop(testInfo)) return;
     await page.goto("/es/movements");
     await page.getByRole("combobox", { name: transactions.accountLabel, exact: true }).first().click();
-    await expect(page.getByRole("option", { name: LEADER_ACCOUNT, exact: true })).toHaveCount(1);
+    await expect(page.getByRole("option", { name: new RegExp(`^${LEADER_ACCOUNT} · `) })).toHaveCount(1);
   });
 });
 

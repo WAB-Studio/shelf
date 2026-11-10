@@ -66,7 +66,7 @@ function rhythmChecks(draft: ImportDraft, goal: DraftGoal, at: string, notices: 
   notices.push({ at, code: "rhythmWithoutTasks", values: { name: goal.name, above: above.name } });
 }
 
-// RP-130's third step: the plan against itself. A correction is a proposal the person accepts or
+// RP-152's third step: the plan against itself. A correction is a proposal the person accepts or
 // declines; a notice only says what does not add up.
 export function check(draft: ImportDraft): { corrections: Correction[]; notices: Notice[] } {
   const corrections: Correction[] = [];
