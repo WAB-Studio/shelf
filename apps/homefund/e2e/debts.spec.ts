@@ -196,20 +196,6 @@ function rowMenu(page: Page, name: string): Locator {
   });
 }
 
-// The `other` branch of an ICU plural with `#` filled, which is what a count
-// renders as on screen once it leaves the catalogue.
-function atCount(message: string, count: number): string {
-  const branch = /other \{([^}]*)\}/.exec(message)?.[1] ?? message;
-  return branch.replace("#", String(count));
-}
-
-// A plan's position as the list states it, paid over total (RF-81).
-function positionText(paid: number, total: number): string {
-  return debts.installmentPosition
-    .replace("{paid}", String(paid))
-    .replace("{total}", String(total));
-}
-
 /**
  * The figure a tile states under its label. Several labels are also column
  * headers of the table below them and one is also the badge on a row, so the
@@ -663,7 +649,6 @@ test.describe("the laptop band", () => {
 });
 
 const MENU_DEBT_OWED_CENTS = 100_000_000;
-const MENU_LINE_CENTS = 10_000_000;
 const MENU_PAID_CENTS = 25_000_000;
 
 test.describe("the row menus", () => {
@@ -693,17 +678,9 @@ test.describe("the row menus", () => {
     await dropAccounts([debtId, sourceId, switchingId]);
   });
 
-  test("the payment dialog closes the oldest cuotas, names what it did not reach and drops the saldo", async ({
+  test("the payment dialog says it was saved and drops the saldo", async ({
     page,
   }) => {
-    await seedPlan({
-      accountId: debtId,
-      merchant: `Compra del menú ${stamp}`,
-      lines: 3,
-      amountCents: MENU_LINE_CENTS,
-      startDate: todayInBogota(),
-    });
-
     await page.goto("/es/planning/debts");
 
     const row = page.getByRole("row").filter({ hasText: debtName });
@@ -727,20 +704,10 @@ test.describe("the row menus", () => {
       .getByRole("button", { name: installments.paymentSave, exact: true })
       .click();
 
-    // Two lines of $100.000 are covered in full and the third is not: both the
-    // count and the leftover come off the allocation itself (RF-82).
     await expect(
-      page.getByText(atCount(installments.paymentPaidLines, 2), { exact: true }),
+      page.getByText(installments.paymentSaved, { exact: true }),
     ).toBeVisible();
-    const remainder = page.getByText(
-      installments.paymentRemainder.split("{")[0].trim(),
-    );
-    await expect(remainder).toBeVisible();
-    expect(await digitsOf(remainder)).toBe(
-      pesos(MENU_PAID_CENTS - 2 * MENU_LINE_CENTS),
-    );
 
-    await expect(row.getByText(positionText(2, 3), { exact: true })).toBeVisible();
     // The saldo is derived from the movements, so the payment moves it by
     // exactly what it paid.
     expect(await digitsOf(row.getByRole("cell").nth(6))).toBe(
@@ -748,7 +715,7 @@ test.describe("the row menus", () => {
     );
   });
 
-  test("a payment on a card with no installment plan says it was saved and names no cuota", async ({
+  test("a payment on a card with no installment plan says it was saved and says nothing about cuotas", async ({
     page,
   }) => {
     // Kills: «El pago no completó ninguna cuota» on a card that has none.
@@ -771,10 +738,6 @@ test.describe("the row menus", () => {
     await expect(
       page.getByText(installments.paymentSaved, { exact: true }),
     ).toBeVisible();
-    await expect(page.getByText(atCount(installments.paymentPaidLines, 0), { exact: true })).toHaveCount(0);
-    await expect(
-      page.getByText(installments.paymentRemainder.split("{")[0].trim()),
-    ).toHaveCount(0);
   });
 
   test("the source picker offers no liability, and a source that stopped being one is refused", async ({
@@ -936,7 +899,6 @@ test.describe("the detail route", () => {
   const payerName = `Cuenta del extracto ${stamp}`;
   const planTitle = `Compra a cuotas ${stamp}`;
 
-  let paymentId = "";
 
   // Opened four months back so past cut-offs exist to close, and settled by one
   // movement dated between two of them, so the frozen balances differ from
@@ -965,20 +927,11 @@ test.describe("the detail route", () => {
       openedOn,
       balances: DETAIL_STATEMENT_CENTS,
     });
-    paymentId = await seedPayment({
+    await seedPayment({
       fromId: payerId,
       toId: detailId,
       amountCents: DETAIL_PAID_CENTS,
       occurredAt: addCivilDays(todayInBogota(), -70),
-    });
-    await seedPlan({
-      accountId: detailId,
-      merchant: planTitle,
-      lines: PLAN_LINES,
-      amountCents: DETAIL_LINE_CENTS,
-      startDate: openedOn,
-      paidLines: PLAN_PAID_LINES,
-      paidTransactionId: paymentId,
     });
   });
 
@@ -986,55 +939,20 @@ test.describe("the detail route", () => {
     await dropAccounts([detailId, payerId]);
   });
 
-  test("marks the nine lines a movement settled and totals the pending of the other fifteen", async ({
+  test("reads no plan, whatever lines the tables still hold: no plan table", async ({
     page,
   }) => {
+    await seedPlan({
+      accountId: detailId,
+      merchant: planTitle,
+      lines: PLAN_LINES,
+      amountCents: DETAIL_LINE_CENTS,
+      startDate: addCivilMonths(todayInBogota(), -4),
+    });
     await page.goto(`/es/planning/debts/${detailId}`);
 
-    const plan = page.getByRole("table", { name: planTitle });
-    // The column headers and the totals ride rows of their own; the read below
-    // is a snapshot and does not wait for the render behind it.
-    await expect(plan.getByRole("row")).toHaveCount(PLAN_LINES + 2);
-    await expect(
-      plan.getByText(
-        installments.planPosition
-          .replace("{paid}", String(PLAN_PAID_LINES))
-          .replace("{total}", String(PLAN_LINES)),
-        { exact: true },
-      ),
-    ).toBeVisible();
-
-    // A line reads paid exactly when a movement is linked to it, and that
-    // movement is reachable from the row (RF-82).
-    const status = await readColumn(plan, 3, 5);
-    expect(status).toHaveLength(PLAN_LINES);
-    expect(status.filter((cell) => cell === installments.statusPaid)).toHaveLength(
-      PLAN_PAID_LINES,
-    );
-    expect(
-      status.filter((cell) => cell === installments.statusPending),
-    ).toHaveLength(PLAN_LINES - PLAN_PAID_LINES);
-    await expect(
-      plan.getByRole("link", { name: installments.viewMovement, exact: true }),
-    ).toHaveCount(PLAN_PAID_LINES);
-
-    // The pending is the sum of the lines still unpaid, and of no others.
-    const amounts = await readColumn(plan, 2, 5);
-    const pending = amounts
-      .filter((_, at) => status[at] === installments.statusPending)
-      .reduce((sum, cell) => sum + digitsIn(cell), 0);
-    expect(pending).toBe(
-      pesos((PLAN_LINES - PLAN_PAID_LINES) * DETAIL_LINE_CENTS),
-    );
-
-    // The totals row of the plan and the screen's own tile both state it.
-    const totals = await readColumn(plan, 2, 3);
-    expect(digitsIn(totals[0])).toBe(pending);
-    expect(
-      await digitsOf(
-        tileValue(page.getByRole("main"), installments.tilePending),
-      ),
-    ).toBe(pending);
+    await expect(page.getByRole("heading", { name: installments.currentPeriod, exact: true }).first()).toBeVisible();
+    await expect(page.getByRole("table", { name: planTitle })).toHaveCount(0);
   });
 
   test("reads the frozen statement saldos, which a later movement leaves alone while the open period moves", async ({
@@ -1235,43 +1153,6 @@ test.describe("the detail route", () => {
     expect(stored.interest).toBeNull();
     expect(stored.fees).toBeNull();
   });
-
-  test("names every line the delete drops, and keeps the movement it unlinks", async ({
-    page,
-  }) => {
-    await page.goto(`/es/planning/debts/${detailId}`);
-
-    await rowMenu(page, planTitle).click();
-    await page.getByRole("menuitem", { name: common.delete, exact: true }).click();
-
-    const confirm = page.getByRole("alertdialog");
-    await expect(confirm).toBeVisible();
-    await expect(
-      confirm.getByText(
-        installments.deleteDescription.replace("{count}", String(PLAN_LINES)),
-        { exact: true },
-      ),
-    ).toBeVisible();
-
-    await confirm
-      .getByRole("button", { name: common.delete, exact: true })
-      .click();
-    await expect(
-      page.getByText(installments.planDeleted, { exact: true }),
-    ).toBeVisible();
-    // A debt with no plan states nothing about plans: no table and no empty line.
-    await expect(page.getByRole("table", { name: planTitle })).toHaveCount(0);
-    await expect(page.getByText(installments.plansTitle, { exact: true })).toHaveCount(0);
-
-    // The lines go with the plan; the movement that paid nine of them stays,
-    // unlinked, which is what the confirmation said it would do.
-    expect(
-      await fixtureSql`select id from installment_plans where account_id = ${detailId}`,
-    ).toHaveLength(0);
-    expect(
-      await fixtureSql`select id from transactions where id = ${paymentId}`,
-    ).toHaveLength(1);
-  });
 });
 
 const PHONE_LINES = 4;
@@ -1300,24 +1181,14 @@ test.describe("the phone list", () => {
       id: phoneId,
       name: phoneName,
       owedCents: PHONE_OPENING_CENTS,
-      // A debt read by its kind: the card the phone draws for it is the one that
-      // states a plan position (RF-81).
+      // A debt read by its kind: the card the phone draws for it is the installment one.
       terms: { debtKind: "installment", annualRate: 0.2 },
     });
-    const paid = await seedPayment({
+    await seedPayment({
       fromId: phonePayerId,
       toId: phoneId,
       amountCents: PHONE_PAID_LINES * PHONE_LINE_CENTS,
       occurredAt: todayInBogota(),
-    });
-    await seedPlan({
-      accountId: phoneId,
-      merchant: `Compra del teléfono ${stamp}`,
-      lines: PHONE_LINES,
-      amountCents: PHONE_LINE_CENTS,
-      startDate: todayInBogota(),
-      paidLines: PHONE_PAID_LINES,
-      paidTransactionId: paid,
     });
   });
 
@@ -1325,7 +1196,7 @@ test.describe("the phone list", () => {
     await dropAccounts([phoneId, phonePayerId]);
   });
 
-  test("shows the card list without the laptop table, and the installment card states its plan position", async ({
+  test("shows the card list without the laptop table, and the installment card names its kind", async ({
     page,
   }) => {
     await page.goto("/es/planning/debts");
@@ -1336,13 +1207,9 @@ test.describe("the phone list", () => {
     await expect(band(page)).toHaveCount(1);
 
     await expect(band(page).getByText(phoneName, { exact: true })).toBeVisible();
-    // Read inside this debt's own card: the other project seeds a twin plan with
-    // the same position under this user.
+    // No plan position: the next payment is the minimum alone (RF-136).
     await expect(
-      phoneCard(page, phoneName, phoneId).getByText(
-        positionText(PHONE_PAID_LINES, PHONE_LINES),
-        { exact: true },
-      ),
+      phoneCard(page, phoneName, phoneId).getByText(debts.installmentMeta, { exact: true }),
     ).toBeVisible();
     expect(await digitsOf(cardOwed(page, phoneName))).toBe(
       pesos(PHONE_OWED_CENTS),
@@ -1376,7 +1243,6 @@ test.describe("under a plain member", () => {
 
   const readerId = randomUUID();
   const readerName = `Deuda compartida ${stamp}`;
-  const readerPlanTitle = `Compra compartida ${stamp}`;
 
   // `seedGroup` clears every fund the two identities belong to before it builds
   // its own, so the other project seeding here at the same time would tear this
@@ -1401,13 +1267,6 @@ test.describe("under a plain member", () => {
         minimumPaymentCents: 2_000_000,
         creditLimitCents: READER_LIMIT_CENTS,
       },
-    });
-    await seedPlan({
-      accountId: readerId,
-      merchant: readerPlanTitle,
-      lines: 3,
-      amountCents: 5_000_000,
-      startDate: todayInBogota(),
     });
   });
 
@@ -1466,7 +1325,7 @@ test.describe("under a plain member", () => {
     }
   });
 
-  test("reads the detail and is offered neither the abono, the plan nor the delete", async ({
+  test("reads the detail and is offered neither the abono nor the delete", async ({
     page,
   }) => {
     await page.goto(`/es/planning/debts/${readerId}`);
@@ -1484,13 +1343,11 @@ test.describe("under a plain member", () => {
     expect(await digitsOf(tileValue(main, debts.tileAvailableCredit))).toBe(
       pesos(READER_LIMIT_CENTS - READER_OWED_CENTS),
     );
-    await expect(page.getByRole("table", { name: readerPlanTitle })).toBeVisible();
 
     // And no action the database would refuse is on offer.
     await expect(
       page.getByRole("button", { name: debts.rowPay, exact: true }),
     ).toHaveCount(0);
-    await expect(rowMenu(page, readerPlanTitle)).toHaveCount(0);
   });
 });
 

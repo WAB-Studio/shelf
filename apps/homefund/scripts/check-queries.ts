@@ -83,12 +83,8 @@ import {
   listSilencedShapes,
   restoreShape,
 } from "@/db/queries/ingest-review";
-import {
-  createInstallmentPlan,
-  listPlanPositions,
-  listPlansForAccount,
-  recordDebtPayment,
-} from "@/db/queries/installment-plans";
+import { createDeferral } from "@/db/queries/deferrals";
+import { recordDebtPayment } from "@/db/queries/installment-plans";
 import {
   createLabel,
   listLabels,
@@ -488,7 +484,6 @@ const CARD_LINE_CENTS = 40000000;
 // Three equal lines, so a payment of two of them plus a few cents leaves a
 // remainder no line can take.
 const PLAN_LINE_CENTS = 100000;
-const PLAN_REMAINDER_CENTS = 5000;
 
 // The day of the month the fixture debt cuts its statements on.
 const CUT_OFF_DAY = 15;
@@ -598,17 +593,6 @@ async function seedDebtFixture(
   track("installment_plans", fixture.planId);
 
   return fixture;
-}
-
-// Which of a plan's lines a movement closed, read as the owner and in due order:
-// the allocation is oldest-first, so WHICH lines were taken is the assertion, not
-// how many.
-async function readPaidLines(planId: string): Promise<string> {
-  const rows = await fixtureSql<{ seq: number; paid: boolean }[]>`
-    select seq, paid_transaction_id is not null as paid
-    from installment_lines where plan_id = ${planId} order by due_date, seq`;
-
-  return rows.map((row) => `${row.seq}:${row.paid}`).join(", ");
 }
 
 type WriteResults = {
@@ -1392,36 +1376,6 @@ async function writeSuite(
   );
 
   await checkWrite(
-    "createInstallmentPlan",
-    () =>
-      createInstallmentPlan({
-        accountId,
-        description: "Harness nevera",
-        principalCents: CARD_LINE_CENTS * 3,
-        nInstallments: 3,
-        frequency: "monthly",
-        interestRate: "0.0200",
-        downPaymentCents: null,
-        avalCents: null,
-        startDate: today,
-        merchant: "Harness store",
-        lines: [
-          { seq: 1, dueDate: today, amountCents: CARD_LINE_CENTS },
-          { seq: 2, dueDate: today, amountCents: CARD_LINE_CENTS },
-          { seq: 3, dueDate: today, amountCents: CARD_LINE_CENTS },
-        ],
-      }),
-    async ({ planId }) => {
-      keep("installment_plans", planId);
-      const stored = await readColumn<string | number>("installment_plans", "id", planId, "n_installments");
-      return {
-        ok: Number(stored) === 3,
-        detail: `plan ${planId}, n_installments = ${stored}`,
-      };
-    },
-  );
-
-  await checkWrite(
     "recordDebtPayment",
     () =>
       recordDebtPayment({
@@ -1430,39 +1384,13 @@ async function writeSuite(
         amountCents: CARD_LINE_CENTS,
         occurredAt: today,
       }),
-    async ({ transactionId, paidLineIds }) => {
+    async ({ transactionId }) => {
       keep("transactions", transactionId);
       const kind = await readColumn<string>("transactions", "id", transactionId, "kind");
       const stored = await readColumn<string | number>("transactions", "id", transactionId, "amount_cents");
       return {
-        ok: kind === "transfer" && Number(stored) === CARD_LINE_CENTS && paidLineIds.length === 1,
-        detail: `movement ${transactionId}, lines paid = ${paidLineIds.length}, kind = ${kind}, amount_cents = ${stored}`,
-      };
-    },
-  );
-
-  // RF-82 end to end through the app's own allocator: two lines closed oldest
-  // first, the third left standing because the payment does not cover it whole,
-  // and the cents over the two returned unallocated.
-  await checkWrite(
-    "recordDebtPayment closes the oldest lines and hands back the remainder",
-    () =>
-      recordDebtPayment({
-        fromAccountId: scope.assetAccountId,
-        toAccountId: scope.liabilityAccountId,
-        amountCents: PLAN_LINE_CENTS * 2 + PLAN_REMAINDER_CENTS,
-        occurredAt: today,
-      }),
-    async ({ transactionId, paidLineIds, remainderCents }) => {
-      keep("transactions", transactionId);
-      const paid = await readPaidLines(debt.planId);
-
-      return {
-        ok:
-          paidLineIds.length === 2 &&
-          remainderCents === PLAN_REMAINDER_CENTS &&
-          paid === "1:true, 2:true, 3:false",
-        detail: `${paidLineIds.length} lines closed, remainder ${remainderCents} cents of the ${PLAN_LINE_CENTS * 2 + PLAN_REMAINDER_CENTS} paid, lines by seq = ${paid}`,
+        ok: kind === "transfer" && Number(stored) === CARD_LINE_CENTS,
+        detail: `movement ${transactionId}, kind = ${kind}, amount_cents = ${stored}`,
       };
     },
   );
@@ -2221,24 +2149,17 @@ async function readSuite(
 
       let refused: string | null = null;
       try {
-        const { planId } = await asUser(fellow, () =>
-          createInstallmentPlan({
-            accountId: debtAccountId,
-            description: "Harness plan a member may not write",
-            principalCents: 300000,
-            nInstallments: 3,
-            frequency: "monthly",
-            interestRate: null,
-            downPaymentCents: null,
-            avalCents: null,
-            startDate: todayInBogota(),
-            merchant: null,
-            lines: [],
+        const { transactionId } = await asUser(fellow, () =>
+          recordDebtPayment({
+            fromAccountId: scope.assetAccountId,
+            toAccountId: debtAccountId,
+            amountCents: 300000,
+            occurredAt: todayInBogota(),
           }),
         );
         // It landed, which is the failure this assertion is here to catch; the
         // row is tracked so the run still drops what it wrote.
-        track("installment_plans", planId);
+        track("transactions", transactionId);
       } catch (error) {
         refused = pgErrorCode(error) ?? "none";
       }
@@ -2264,57 +2185,7 @@ async function readSuite(
           seenByBoth.length === owned.length &&
           read.every((row) => !row.canWrite) &&
           refused === "42501",
-        detail: `the owner writes ${owned.filter((row) => row.canWrite).length} of ${owned.length} debts; the member reads ${seenByBoth.length} of them and writes ${read.filter((row) => row.canWrite).length}, and her plan was refused with ${refused ?? "nothing"}`,
-      };
-    },
-  );
-
-  // RF-82: the position a debt's lines add up to, read across its plans. The
-  // write suite closed one of the card's three lines with a movement.
-  await checkReadValue(
-    "listPlanPositions states the paid-down card's position",
-    () => listPlanPositions(),
-    (positions) => {
-      const card = positions.find((position) => position.accountId === debtAccountId);
-
-      return {
-        ok:
-          card?.linesTotal === 3 &&
-          card.linesPaid === 1 &&
-          card.pendingCents === CARD_LINE_CENTS * 2 &&
-          card.nextDueDate === todayInBogota() &&
-          card.nextAmountCents === CARD_LINE_CENTS,
-        detail: `${card?.linesPaid ?? "no"} of ${card?.linesTotal ?? "no"} lines paid, ${card?.pendingCents ?? "no"} cents pending, next ${card?.nextAmountCents ?? "no"} cents on ${card?.nextDueDate ?? "no date"}`,
-      };
-    },
-  );
-
-  // A plan sits on any liability: one whose account carries no `debt_terms` row
-  // still has a position to state (RF-81).
-  await checkReadValue(
-    "listPlanPositions states the position of a debt with no terms",
-    async () => {
-      const [positions, terms] = await Promise.all([
-        listPlanPositions(),
-        getDebtTerms(scope.liabilityAccountId),
-      ]);
-
-      return { positions, terms };
-    },
-    ({ positions, terms }) => {
-      const plan = positions.find(
-        (position) => position.accountId === scope.liabilityAccountId,
-      );
-
-      return {
-        ok:
-          terms === null &&
-          plan?.linesTotal === 3 &&
-          plan.linesPaid === 2 &&
-          plan.pendingCents === PLAN_LINE_CENTS &&
-          plan.nextDueDate === debt.dueDates[2] &&
-          plan.nextAmountCents === PLAN_LINE_CENTS,
-        detail: `terms = ${terms === null ? "none" : "some"}, ${plan?.linesPaid ?? "no"} of ${plan?.linesTotal ?? "no"} lines paid, ${plan?.pendingCents ?? "no"} cents pending, next ${plan?.nextAmountCents ?? "no"} cents on ${plan?.nextDueDate ?? "no date"}`,
+        detail: `the owner writes ${owned.filter((row) => row.canWrite).length} of ${owned.length} debts; the member reads ${seenByBoth.length} of them and writes ${read.filter((row) => row.canWrite).length}, and her payment was refused with ${refused ?? "nothing"}`,
       };
     },
   );
@@ -2389,7 +2260,6 @@ async function readSuite(
   );
 
   await checkRead("getDebtTerms", () => getDebtTerms(debtAccountId));
-  await checkRead("listPlansForAccount", () => listPlansForAccount(debtAccountId));
   await checkRead("listAuditLog", () => listAuditLog({ limit: 20, offset: 0 }));
   await checkRead("getAuditFilterOptions", () => getAuditFilterOptions());
   await checkRead("listWebhookCredentials", () => listWebhookCredentials());
@@ -8021,12 +7891,11 @@ async function recurringVersionSuite(): Promise<void> {
   );
 }
 
-// M44: two payments of one card never share an installment line, and a resent payment books once.
+// M44: two payments of one card each book their own movement, and a resent payment books once.
 async function debtPaymentSuite(): Promise<void> {
   console.log("");
   const tag = randomUUID().slice(0, 8);
   const today = todayInBogota();
-  const LINE = 100_000;
   const user = await createMembershipFreeUser();
   const open = async (kind: "asset" | "liability", name: string) => {
     const { accountId } = await asUser(user, () =>
@@ -8049,36 +7918,7 @@ async function debtPaymentSuite(): Promise<void> {
   };
   const bank = await open("asset", "bank");
 
-  // A card owing two lines of one payment each, the older line due first.
-  const newCard = async (name: string): Promise<{ cardId: string; l1: string; l2: string; planId: string }> => {
-    const cardId = await open("liability", name);
-    const { planId } = await asUser(user, () =>
-      createInstallmentPlan({
-        accountId: cardId,
-        description: `m44 ${name} ${tag}`,
-        principalCents: LINE * 2,
-        nInstallments: 2,
-        frequency: "monthly",
-        interestRate: null,
-        downPaymentCents: null,
-        avalCents: null,
-        startDate: shiftDate(today, -30),
-        merchant: null,
-        lines: [
-          { seq: 1, dueDate: shiftDate(today, -30), amountCents: LINE },
-          { seq: 2, dueDate: shiftDate(today, -1), amountCents: LINE },
-        ],
-      }),
-    );
-    keep("installment_plans", planId);
-    const lines = await fixtureSql<{ id: string }[]>`
-      select id from installment_lines where plan_id = ${planId} order by seq`;
-    return { cardId, planId, l1: lines[0].id, l2: lines[1].id };
-  };
-  type Answer = {
-    serverError?: string;
-    data?: { transactionId: string; paidLineIds: string[]; remainderCents: number };
-  };
+  type Answer = { serverError?: string; data?: { transactionId: string } };
   const pay = (cardId: string, over: Record<string, unknown> = {}) =>
     asUser(user, () =>
       recordDebtPaymentAction({
@@ -8089,9 +7929,6 @@ async function debtPaymentSuite(): Promise<void> {
         ...over,
       } as Parameters<typeof recordDebtPaymentAction>[0]),
     ) as Promise<Answer | undefined>;
-  const links = (planId: string) =>
-    fixtureSql<{ id: string; paid: string | null }[]>`
-      select id, paid_transaction_id as paid from installment_lines where plan_id = ${planId} order by seq`;
   const movements = async (cardId: string) => {
     const rows = await fixtureSql<{ id: string; external_ref: string | null; amount_cents: string }[]>`
       select id, external_ref, amount_cents::text from transactions where to_account_id = ${cardId}`;
@@ -8102,116 +7939,47 @@ async function debtPaymentSuite(): Promise<void> {
   // Q: two payments at once, repeated so a lucky ordering cannot hide the overlap
   let worst = "";
   let allRight = true;
-  let answersTrue = true;
-  let answerDetail = "";
   for (let round = 0; round < 5; round++) {
-    const card = await newCard(`race${round}`);
-    const [a, b] = await Promise.all([pay(card.cardId), pay(card.cardId)]);
-    const rows = await movements(card.cardId);
-    const stored = await links(card.planId);
-    const linked = stored.map((l) => l.paid);
-    const ids = rows.map((r) => r.id);
-    const right =
-      rows.length === 2 &&
-      linked.every((p) => p !== null && ids.includes(p)) &&
-      new Set(linked).size === 2;
-    if (!right) {
+    const card = await open("liability", `race${round}`);
+    const [a, b] = await Promise.all([pay(card), pay(card)]);
+    const rows = await movements(card);
+    const ids = rows.map((r) => r.id).sort().join();
+    const said = [a?.data?.transactionId, b?.data?.transactionId].sort().join();
+    if (rows.length !== 2 || ids !== said) {
       allRight = false;
-      worst ||= `round ${round}: ${rows.length} movement(s), links ${JSON.stringify(linked)}, ids ${JSON.stringify(ids)}`;
-    }
-    for (const answer of [a, b]) {
-      const mine = stored.filter((l) => l.paid === answer?.data?.transactionId).map((l) => l.id).sort();
-      const said = [...(answer?.data?.paidLineIds ?? [])].sort();
-      if (answer?.data === undefined || JSON.stringify(mine) !== JSON.stringify(said)) {
-        answersTrue = false;
-        answerDetail ||= `round ${round}: said ${JSON.stringify(said)}, stored ${JSON.stringify(mine)}, answer ${JSON.stringify(answer)}`;
-      }
+      worst ||= `round ${round}: ${rows.length} movement(s), ids ${ids}, answers ${said}`;
     }
   }
   assert(
-    next("Two payments of one card at once book two movements, and lines L1 and L2 each link to a different one"),
+    next("Two payments of one card at once book two movements, and each answer names its own"),
     allRight,
     worst || "5 rounds clean",
   );
 
-  // Q: the answer matches the stored links
-  assert(
-    next("Each concurrent payment's paidLineIds names exactly the lines stored against its own movement"),
-    answersTrue,
-    answerDetail || "5 rounds clean",
-  );
-
-  // Q: the lock is taken on the card, as the first thing the payment does
-  const held = await newCard("lock");
-  const lockKey = held.cardId;
-  let settled = false;
-  let settledWhileHeld = false;
-  let blocked: Promise<Answer | undefined> | undefined;
-  await fixtureSql.begin(async (tx) => {
-    await tx`select pg_advisory_xact_lock(hashtextextended(${lockKey}::text, 0))`;
-    blocked = pay(held.cardId);
-    blocked.then(() => {
-      settled = true;
-    });
-    await new Promise((r) => setTimeout(r, 1500));
-    // Read before the commit releases the lock; after it the payment settles by design.
-    settledWhileHeld = settled;
-  });
-  const afterRelease = await blocked;
-  const heldLinks = await links(held.planId);
-  await movements(held.cardId);
-  assert(
-    next("A payment of a card waits on the advisory lock keyed by the card id, then books once it is released"),
-    !settledWhileHeld &&
-      afterRelease?.data?.paidLineIds.length === 1 &&
-      heldLinks[0].paid === afterRelease.data.transactionId,
-    `settled while held = ${settledWhileHeld}, answer = ${JSON.stringify(afterRelease)}`,
-  );
-
   // Q: one request sent twice
-  const resend = await newCard("resend");
+  const resend = await open("liability", "resend");
   const ref = randomUUID();
-  const first = await pay(resend.cardId, { requestRef: ref });
-  const second = await pay(resend.cardId, { requestRef: ref });
-  const sent = await movements(resend.cardId);
-  const sentLinks = await links(resend.planId);
+  const first = await pay(resend, { requestRef: ref });
+  const second = await pay(resend, { requestRef: ref });
+  const sent = await movements(resend);
   assert(
     next("A payment sent twice with the same requestRef books one movement under form:<ref>, and both answers name it"),
     sent.length === 1 &&
       sent[0].external_ref === `form:${ref}` &&
       first?.data?.transactionId === sent[0].id &&
-      second?.data?.transactionId === sent[0].id &&
-      sentLinks[0].paid === sent[0].id &&
-      sentLinks[1].paid === null,
-    `${sent.length} movement(s), refs ${JSON.stringify(sent.map((r) => r.external_ref))}, links ${JSON.stringify(sentLinks.map((l) => l.paid))}, first = ${JSON.stringify(first)}, second = ${JSON.stringify(second)}`,
+      second?.data?.transactionId === sent[0].id,
+    `${sent.length} movement(s), refs ${JSON.stringify(sent.map((r) => r.external_ref))}, first = ${JSON.stringify(first)}, second = ${JSON.stringify(second)}`,
   );
 
   // Q: two requests, two payments
-  const apart = await newCard("apart");
-  const x = await pay(apart.cardId, { requestRef: randomUUID() });
-  const y = await pay(apart.cardId, { requestRef: randomUUID() });
-  const both = await movements(apart.cardId);
-  const apartLinks = await links(apart.planId);
+  const apart = await open("liability", "apart");
+  const x = await pay(apart, { requestRef: randomUUID() });
+  const y = await pay(apart, { requestRef: randomUUID() });
+  const both = await movements(apart);
   assert(
-    next("Two payments with different requestRefs book two movements, each closing its own line"),
-    both.length === 2 &&
-      x?.data?.transactionId !== y?.data?.transactionId &&
-      apartLinks[0].paid === x?.data?.transactionId &&
-      apartLinks[1].paid === y?.data?.transactionId,
-    `${both.length} movement(s), links ${JSON.stringify(apartLinks.map((l) => l.paid))}, x = ${JSON.stringify(x)}, y = ${JSON.stringify(y)}`,
-  );
-
-  // Q: the sequential allocation stays oldest first and its answer is true
-  const seq = await newCard("seq");
-  const both2 = await pay(seq.cardId, { amount: "2000" });
-  const seqLinks = await links(seq.planId);
-  await movements(seq.cardId);
-  assert(
-    next("One payment covering two lines links both to its movement and reports both"),
-    both2?.data !== undefined &&
-      seqLinks.every((l) => l.paid === both2.data?.transactionId) &&
-      [...both2.data.paidLineIds].sort().join() === [seq.l1, seq.l2].sort().join(),
-    `answer = ${JSON.stringify(both2)}, links ${JSON.stringify(seqLinks.map((l) => l.paid))}`,
+    next("Two payments with different requestRefs book two movements"),
+    both.length === 2 && x?.data?.transactionId !== y?.data?.transactionId,
+    `${both.length} movement(s), x = ${JSON.stringify(x)}, y = ${JSON.stringify(y)}`,
   );
 
   // M53: a card in credit owes nothing; it never adds to what the screen says is owed.
@@ -12283,7 +12051,6 @@ async function debtCreditSideSuite(): Promise<void> {
       [`${row.accountId} owed`, row.owedCents],
       [`${row.accountId} credit`, row.creditCents],
       [`${row.accountId} interest`, row.monthlyInterestCents],
-      [`${row.accountId} due installments`, row.dueInstallmentsCents],
     );
     if (row.availableCreditCents !== null) figures.push([`${row.accountId} available`, row.availableCreditCents]);
     if (row.minimumPaymentCents !== null) figures.push([`${row.accountId} minimum`, row.minimumPaymentCents]);
@@ -12914,7 +12681,7 @@ async function o6m2DebtsAndSettledSuite(): Promise<void> {
     };
     for (const row of [...overview, ...screen.withTerms]) {
       integerFigures.push([`${where} owed`, row.owedCents], [`${where} credit`, row.creditCents]);
-      integerFigures.push([`${where} interest`, row.monthlyInterestCents], [`${where} installments`, row.dueInstallmentsCents]);
+      integerFigures.push([`${where} interest`, row.monthlyInterestCents]);
       if (row.availableCreditCents !== null) integerFigures.push([`${where} available`, row.availableCreditCents]);
       if (row.minimumPaymentCents !== null) integerFigures.push([`${where} minimum`, row.minimumPaymentCents]);
       pockets(row.accountId, row.otherOwed);
@@ -15148,8 +14915,8 @@ async function moneyFormsStaleSuite(): Promise<void> {
   );
 }
 
-// RF-83, RF-136: the next payment is the debt's minimum alone. An instalment falling due is already inside that
-// minimum, so a card carrying one never adds it a second time.
+// RF-83, RF-136: the next payment is the debt's minimum alone. A deferred purchase only fractions its share of that
+// minimum, so a card carrying one never adds anything to it.
 async function nextPaymentMinimumSuite(): Promise<void> {
   console.log("");
   const tag = randomUUID().slice(0, 8);
@@ -15176,35 +14943,39 @@ async function nextPaymentMinimumSuite(): Promise<void> {
   await fixtureSql`
     insert into debt_terms (account_id, debt_kind, annual_rate, minimum_payment_cents, statement_cut_off_day, payment_due_day)
     values (${cardId}, 'revolving', 0.30, ${MINIMUM}, 1, 28)`;
-  const { planId } = await asUser(holder, () =>
-    createInstallmentPlan({
-      accountId: cardId,
-      description: `Harness rf136 cuotas ${tag}`,
-      principalCents: 30_000_000,
-      nInstallments: 3,
-      frequency: "monthly",
-      interestRate: null,
-      downPaymentCents: null,
-      avalCents: null,
-      startDate: shiftDate(today, -40),
-      merchant: null,
-      // The first line already due, so it falls before the card's next due day.
-      lines: [
-        { seq: 1, dueDate: shiftDate(today, -10), amountCents: 10_000_000 },
-        { seq: 2, dueDate: shiftDate(today, 20), amountCents: 10_000_000 },
-        { seq: 3, dueDate: shiftDate(today, 50), amountCents: 10_000_000 },
-      ],
+  // A purchase a person deferred into three instalments: the whole of it stays in the balance.
+  const { categoryId } = await asUser(holder, () =>
+    createCategory({
+      scope: { ownerUserId: holder.id },
+      name: `Harness rf136 compra ${tag}`,
+      kind: "expense",
+      parentId: null,
+      color: "#B4542F",
     }),
   );
-  track("installment_plans", planId);
+  keep("categories", categoryId);
+  const { transactionId } = await asUser(holder, () =>
+    createTransaction({
+      fromAccountId: cardId,
+      toAccountId: null,
+      amountCents: 30_000_000,
+      occurredAt: shiftDate(today, -10),
+      description: `Harness rf136 cuotas ${tag}`,
+      externalRef: null,
+      splits: [{ categoryId, amountCents: 30_000_000 }],
+      labelIds: [],
+    }),
+  );
+  track("transactions", transactionId);
+  const deferred = await asUser(holder, () => createDeferral({ transactionId, instalments: 3 }));
 
   const screen = await asUser(holder, () => getDebtsScreenData());
   const card = screen.withTerms.find((row) => row.accountId === cardId);
   const tile = screen.totals.nextPayment;
   assert(
-    next("RF-136: a card with an instalment falling due names its minimum alone as the next payment"),
-    card !== undefined && card.dueInstallmentsCents > 0 && tile?.accountId === cardId && tile.amountCents === MINIMUM,
-    `next payment ${tile?.amountCents ?? "none"} on ${tile?.accountId === cardId ? "the card" : "another debt"}; minimum ${MINIMUM}, instalments due ${card?.dueInstallmentsCents ?? "no row"}`,
+    next("RF-136: a card with a deferred purchase names its minimum alone as the next payment"),
+    deferred && card?.minimumPaymentCents === MINIMUM && tile?.accountId === cardId && tile.amountCents === MINIMUM,
+    `next payment ${tile?.amountCents ?? "none"} on ${tile?.accountId === cardId ? "the card" : "another debt"}; minimum ${MINIMUM}, deferred ${deferred}`,
   );
 }
 

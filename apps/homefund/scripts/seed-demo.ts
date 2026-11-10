@@ -30,11 +30,6 @@ import {
 import { createCategory, listScopedCategories } from "@/db/queries/categories";
 import { recordBilledAmount } from "@/db/queries/debt-statements";
 import { upsertDebtTerms } from "@/db/queries/debt-terms";
-import {
-  createInstallmentPlan,
-  listPlansForAccount,
-  recordDebtPayment,
-} from "@/db/queries/installment-plans";
 import { createLabel, listLabels } from "@/db/queries/labels";
 import {
   cancelPlannedPayment,
@@ -770,10 +765,6 @@ const DEMO_RULES: RulePlan[] = [
 // to count (RF-31). The newest are the ones left standing.
 const UNREVIEWED_KEPT = 3;
 
-const PLAN_DESCRIPTION = "Nevera y lavadora";
-const PLAN_INSTALLMENTS = 12;
-const PLAN_PAID_LINES = 3;
-
 /**
  * The tables the seed can write, and how a row of each is attributed to the
  * seeded user. The census is per user, not global: this database is shared with
@@ -1343,14 +1334,9 @@ async function seedForeignCurrency(userId: string, scaffold: Scaffold): Promise<
 
 /**
  * The two debts: the Visa carries the terms (RF-78) and no statement history —
- * a close is recorded off a real statement, never generated (RF-129) — and the
- * Falabella carries a twelve-line plan whose first lines are already paid
- * (RF-81, RF-82). The payment is written only while no line is paid, so a second
- * run never walks the FIFO on further.
+ * a close is recorded off a real statement, never generated (RF-129).
  */
 async function seedDebts(scaffold: Scaffold): Promise<void> {
-  const today = todayInBogota();
-
   await upsertDebtTerms({
     accountId: scaffold.accountIds.visa,
     debtKind: "revolving",
@@ -1362,53 +1348,6 @@ async function seedDebts(scaffold: Scaffold): Promise<void> {
     paymentDueDay: 5,
     avalCents: null,
   });
-
-  const falabella = scaffold.accountIds.falabella;
-  const plans = await listPlansForAccount(falabella);
-  if (plans.length === 0) {
-    const startDate = dayOfMonth(monthStart(-3), 10);
-    const principalCents = pesosToCents(3_600_000);
-    const perLine = Math.floor(principalCents / PLAN_INSTALLMENTS);
-
-    await createInstallmentPlan({
-      accountId: falabella,
-      description: PLAN_DESCRIPTION,
-      principalCents,
-      nInstallments: PLAN_INSTALLMENTS,
-      frequency: "monthly",
-      interestRate: "0.0195",
-      downPaymentCents: null,
-      avalCents: null,
-      startDate,
-      merchant: "Falabella",
-      lines: Array.from({ length: PLAN_INSTALLMENTS }, (_, index) => ({
-        seq: index + 1,
-        dueDate: addCivilMonths(startDate, index),
-        // The rounding remainder rides the last line, so the lines sum to the principal.
-        amountCents:
-          index === PLAN_INSTALLMENTS - 1
-            ? principalCents - perLine * (PLAN_INSTALLMENTS - 1)
-            : perLine,
-      })),
-    });
-  }
-
-  const [plan] = await listPlansForAccount(falabella);
-  const paidAlready = plan.lines.some((line) => line.paidTransactionId !== null);
-  if (!paidAlready) {
-    const covered = plan.lines
-      .slice(0, PLAN_PAID_LINES)
-      .reduce((sum, line) => sum + line.amountCents, 0);
-
-    const { paidLineIds } = await recordDebtPayment({
-      fromAccountId: scaffold.accountIds.savings,
-      toAccountId: falabella,
-      amountCents: covered,
-      occurredAt: addCivilDays(today, -35),
-    });
-
-    console.log(`SEED    ${paidLineIds.length} installment line(s) marked paid.`);
-  }
 }
 
 // The four goals and their aportes. Each goal's aportes are written with it, so a

@@ -10,8 +10,6 @@ import {
   toBillKey,
 } from "@/db/queries/debt-overview";
 import type { DebtOverviewRow, DebtPocket } from "@/db/queries/debt-overview";
-import { listPlanPositions } from "@/db/queries/installment-plans";
-import type { PlanPosition } from "@/db/queries/installment-plans";
 import { BASE_CURRENCY, type CurrencyCode } from "@/lib/currency";
 
 // One consolidated set, in one currency. Every figure in it is denominated in
@@ -55,7 +53,6 @@ export type DebtsScreenData = {
     // Another member's personal debt (RF-58): read-only, named by its owner.
     foreignOwner: boolean;
     ownerName: string | null;
-    planPosition: PlanPosition | null;
     canWrite: boolean;
   })[];
   withoutTerms: {
@@ -70,7 +67,6 @@ export type DebtsScreenData = {
     owedCents: number;
     creditCents: number;
     otherOwed: DebtPocket[];
-    planPosition: PlanPosition | null;
     canWrite: boolean;
   }[];
   payFrom: { id: string; name: string; balanceCents: number }[];
@@ -121,11 +117,11 @@ function addOwed(
 }
 
 /**
- * Everything the debts screen renders, in ONE fan-out of four existing reads
+ * Everything the debts screen renders, in ONE fan-out of three existing reads
  * (RF-83, RF-117, RNF-09): the terms-carrying overview, the account roster for
  * names, the kind partition and what the caller may write, the derived balances
- * for the no-terms owed magnitudes, and each account's installment position. The
- * awaits never chain — four round trips, no more. Every figure arrives already
+ * for the no-terms owed magnitudes. The
+ * awaits never chain — three round trips, no more. Every figure arrives already
  * derived from the backend and stays integer cents.
  *
  * The totals come out one set per currency (RF-124): a card that bills in pesos
@@ -135,11 +131,10 @@ function addOwed(
 export async function getDebtsScreenData(
   options: { withoutForeign?: boolean } = {},
 ): Promise<DebtsScreenData> {
-  const [{ rows: overview, toBillByPocket }, accounts, balances, positions] = await Promise.all([
+  const [{ rows: overview, toBillByPocket }, accounts, balances] = await Promise.all([
     getDebtOverviewWithPockets(),
     listAccounts({ archived: false }),
     getAccountBalances(),
-    listPlanPositions(),
   ]);
 
   // Another member's personal debts are theirs to plan: Inicio and the Planeación hub
@@ -174,9 +169,6 @@ export async function getDebtsScreenData(
       balance.balanceCents,
     ]),
   );
-  const positionById = new Map(
-    positions.map((position) => [position.accountId, position]),
-  );
 
   // The overview holds the liabilities that carry terms (RF-78), archived ones
   // included — its join filters only by kind. An archived account is off the
@@ -192,7 +184,6 @@ export async function getDebtsScreenData(
         personal: personalById.get(row.accountId) ?? false,
         foreignOwner: ownerById.get(row.accountId)?.foreignOwner ?? false,
         ownerName: ownerById.get(row.accountId)?.ownerName ?? null,
-        planPosition: positionById.get(row.accountId) ?? null,
         // Absent from the roster is a debt the caller may not write.
         canWrite: writableById.get(row.accountId) ?? false,
       },
@@ -202,7 +193,7 @@ export async function getDebtsScreenData(
   // A liability absent from the overview owes without a rate (RF-78, RF-79); its
   // owed and its credit are the two sides of the derived balance, never a stored
   // figure, read in the pocket it settles in and with its other pockets beside
-  // it. It may still carry a plan, so its position is looked up the same way.
+  // it.
   const withTermsIds = new Set(withTerms.map((row) => row.accountId));
   const withoutTerms = accounts
     .filter((account) => account.kind === "liability" && !withTermsIds.has(account.id))
@@ -228,7 +219,6 @@ export async function getDebtsScreenData(
             // Read off the overview's statement; only shown, never summed (RF-124).
             toBillCents: toBillByPocket.get(toBillKey(account.id, balance.currency)) ?? null,
           })),
-        planPosition: positionById.get(account.id) ?? null,
         canWrite: account.canWrite,
       };
     });

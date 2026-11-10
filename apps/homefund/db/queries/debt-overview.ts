@@ -44,7 +44,6 @@ export type DebtOverviewRow = {
   minimumPaymentCents: number | null;
   nextCutOffDate: string | null;
   nextDueDate: string | null;
-  dueInstallmentsCents: number;
   // The card's other pockets, in currency order. The screen shows them; no
   // figure above counts them.
   otherOwed: DebtPocket[];
@@ -92,13 +91,10 @@ export function toBillKey(accountId: string, currency: CurrencyCode): string {
  * step of the annual rate, NOT the linear `rate/12`, and that step rides along as
  * a rate of its own so the screen states the percentage without dividing
  * anything; the minimum is 0 for a card that owes nothing, else the fixed
- * amount, or a percentage of the owed, or null; and due installments sum the unpaid lines falling on or
- * before the next due date. The cut-off and due dates come from the latest
+ * amount, or a percentage of the owed, or null. The cut-off and due dates come from the latest
  * statement's own printed dates when one exists, and from the terms' fixed days
  * otherwise (RF-131) — the same reading `getCurrentStatement` takes, so the list
- * and the detail screen never name different dates for the same debt; due
- * installments still bound themselves to the terms-derived date, since a
- * statement's due date can be missing. No figure is re-summed from a stored
+ * and the detail screen never name different dates for the same debt. No figure is re-summed from a stored
  * balance, and the CALLER folds these rows into the totals — this adds no round
  * trip for them.
  *
@@ -141,7 +137,6 @@ export async function getDebtOverviewWithPockets(): Promise<{
       minimum_payment_cents: string | null;
       next_cut_off_date: string | null;
       next_due_date: string | null;
-      due_installments_cents: string;
       currency: string;
       other_owed: {
         currency: string;
@@ -216,15 +211,6 @@ export async function getDebtOverviewWithPockets(): Promise<{
         })} as minimum_payment_cents,
         coalesce(s.cut_off_date, nc.next_cut_off) as next_cut_off_date,
         coalesce(s.payment_due_date, nd.next_due) as next_due_date,
-        coalesce((
-          select sum(l.amount_cents)
-          from installment_lines l
-          join installment_plans p on p.id = l.plan_id
-          where p.account_id = dt.account_id
-            and l.paid_transaction_id is null
-            and nd.next_due is not null
-            and l.due_date <= nd.next_due
-        ), 0) as due_installments_cents,
         b.other_owed
       -- Every liability, terms or not: a row with no terms carries only its
       -- pockets out, for the debts screen's no-terms rows, and lists nowhere.
@@ -279,7 +265,6 @@ export async function getDebtOverviewWithPockets(): Promise<{
             row.minimum_payment_cents === null ? null : Number(row.minimum_payment_cents),
           nextCutOffDate: row.next_cut_off_date,
           nextDueDate: row.next_due_date,
-          dueInstallmentsCents: Number(row.due_installments_cents),
           otherOwed: row.other_owed.map((pocket) => ({
             currency: pocket.currency,
             owedCents: Number(pocket.owedCents),

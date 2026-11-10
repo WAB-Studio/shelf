@@ -15,8 +15,6 @@ import type {
 import { listDeferralsForAccount } from "@/db/queries/deferrals";
 import type { DeferralRow } from "@/db/queries/deferrals";
 import { getUserGroup } from "@/db/queries/groups";
-import { listPlansForAccount } from "@/db/queries/installment-plans";
-import type { InstallmentPlanRow } from "@/db/queries/installment-plans";
 import { foreignOwnerSql, ownerNameSql } from "@/db/queries/accounts";
 import { accounts, debtTerms } from "@/db/schema";
 import type { Account, DebtTerms } from "@/db/schema";
@@ -54,7 +52,6 @@ export type DebtDetailAccount = {
 export type DebtDetailData = {
   account: DebtDetailAccount;
   terms: DebtTerms | null;
-  plans: InstallmentPlanRow[];
   // The purchases a person deferred into instalments (RF-136); derived on read, none moves the balance.
   deferrals: DeferralRow[];
   statements: AccountStatementRow[];
@@ -193,10 +190,9 @@ async function readAccount(accountId: string): Promise<AccountRead> {
 export async function getDebtDetail(
   accountId: string,
 ): Promise<DebtDetailData | null> {
-  const [read, plans, deferrals, statements, currentStatement, pendingSettlements, group] =
+  const [read, deferrals, statements, currentStatement, pendingSettlements, group] =
     await Promise.all([
       readAccount(accountId),
-      listPlansForAccount(accountId),
       listDeferralsForAccount(accountId),
       listAccountStatements(accountId),
       getCurrentStatement(accountId),
@@ -209,7 +205,6 @@ export async function getDebtDetail(
   return {
     account: read.account,
     terms: read.terms,
-    plans,
     deferrals,
     statements,
     currentStatement,
