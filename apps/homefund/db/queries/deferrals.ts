@@ -18,6 +18,12 @@ export type DeferralRow = {
   status: DeferralStatus;
 };
 
+// The one predicate of what may be deferred: a purchase, an expense with no destination and no
+// reconciliation, on a liability. `t` is the movement and `a` its source account.
+export const deferrablePurchaseSql = sql.raw(
+  "(t.from_account_id is not null and t.to_account_id is null and t.reconciliation_id is null and a.kind = 'liability')",
+);
+
 type RawDeferral = {
   id: string;
   transactionId: string;
@@ -29,21 +35,38 @@ type RawDeferral = {
   clearedOn: string | null;
 };
 
-// The first day on or after the purchase when the account's derived balance stood at zero or in
-// credit: a payment covering the balance. The balance only moves on a movement's day, so those are
-// the only days worth asking about.
+// The first day after the purchase when the account's derived balance reached zero or credit having been
+// owed since the purchase: a payment covering the balance. A card already in credit when it bought, and
+// never owing afterwards, has no such day. One running balance over the account's movements, in its
+// settlement currency, the way `account_settlement_balance_on` lands each leg (RF-121, RF-124); the
+// balance only moves on a movement's day, so those are the only days there are. The account is the
+// purchase's own source, read through the movement, never the stored column.
 async function readDeferrals(tx: Transaction, where: ReturnType<typeof sql>): Promise<DeferralRow[]> {
   const rows = await tx.execute<RawDeferral>(sql`
     select d.id, d.transaction_id as "transactionId", t.description, t.amount_cents::text as "amountCents",
       t.currency, t.occurred_at::text as "purchasedOn", d.instalments,
       (select min(x.day) from (
-          select distinct t2.occurred_at as day from transactions t2
-          where (t2.from_account_id = d.account_id or t2.to_account_id = d.account_id)
-            and t2.occurred_at >= t.occurred_at
+          select r.day, r.balance,
+            coalesce(bool_or(r.balance < 0) over (order by r.day rows between unbounded preceding and 1 preceding), false) as was_owed
+          from (
+            select g.day, a.initial_balance_cents + sum(g.delta) over (order by g.day) as balance
+            from (
+              select t2.occurred_at as day,
+                sum(case when t2.to_account_id = t.from_account_id then 1 else -1 end * case
+                  when t2.currency = a.settlement_currency then t2.amount_cents
+                  when t2.counter_amount_cents is not null and not t2.counter_is_estimate then t2.counter_amount_cents
+                  else 0 end) as delta
+              from transactions t2
+              where t2.from_account_id = t.from_account_id or t2.to_account_id = t.from_account_id
+              group by t2.occurred_at
+            ) g
+          ) r
+          where r.day >= t.occurred_at
         ) x
-        where private.account_settlement_balance_on(d.account_id, x.day) >= 0)::text as "clearedOn"
+        where x.day > t.occurred_at and x.balance >= 0 and x.was_owed)::text as "clearedOn"
     from deferrals d
-    join transactions t on t.id = d.transaction_id
+    join transactions t on t.id = d.transaction_id and t.from_account_id = d.account_id
+    join accounts a on a.id = t.from_account_id
     where ${where}
     order by t.occurred_at desc, d.created_at desc`);
   const today = todayInBogota();
@@ -67,7 +90,7 @@ async function readDeferrals(tx: Transaction, where: ReturnType<typeof sql>): Pr
 
 /** The purchases of one liability that a person deferred, newest first (RF-136). */
 export async function listDeferralsForAccount(accountId: string): Promise<DeferralRow[]> {
-  return withUserDb((tx) => readDeferrals(tx, sql`d.account_id = ${accountId}`));
+  return withUserDb((tx) => readDeferrals(tx, sql`t.from_account_id = ${accountId}`));
 }
 
 export type MovementDeferral = {
@@ -83,15 +106,15 @@ export async function getMovementDeferral(transactionId: string): Promise<Moveme
       readDeferrals(tx, sql`d.transaction_id = ${transactionId}`),
       tx.execute<{ ok: boolean }>(sql`
         select true as ok from transactions t
-        join accounts a on a.id = t.from_account_id and a.kind = 'liability'
-        where t.id = ${transactionId} and private.can_write_account(a.id)`),
+        join accounts a on a.id = t.from_account_id
+        where t.id = ${transactionId} and ${deferrablePurchaseSql} and private.can_write_account(a.id)`),
     ]);
     return { deferral: rows[0] ?? null, canDefer: can.length > 0 };
   });
 }
 
 /**
- * Writes the deferral of a purchase: a movement whose source is a liability account. Returns false
+ * Writes the deferral of a purchase: an expense whose source is a liability account. Returns false
  * when there is no such movement for the caller (absent, hidden, or not a purchase on a liability).
  * A second deferral of the same movement raises the unique violation.
  */
@@ -107,8 +130,8 @@ export async function createDeferral({
       insert into deferrals (transaction_id, account_id, instalments)
       select t.id, t.from_account_id, ${instalments}::smallint
       from transactions t
-      join accounts a on a.id = t.from_account_id and a.kind = 'liability'
-      where t.id = ${transactionId}
+      join accounts a on a.id = t.from_account_id
+      where t.id = ${transactionId} and ${deferrablePurchaseSql}
       returning id`);
     return rows.length > 0;
   });

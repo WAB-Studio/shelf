@@ -5,6 +5,7 @@ import { createHash } from "node:crypto";
 import { sql } from "drizzle-orm";
 
 import { jsonbParam } from "@/db/jsonb-param";
+import { deferrablePurchaseSql } from "@/db/queries/deferrals";
 import { insertTransaction, trustedPatternsSql } from "@/db/queries/transactions";
 import { withUserDb, type Transaction } from "@/db/session";
 import { pgConstraintName, pgErrorCode } from "@/lib/db-error";
@@ -86,6 +87,8 @@ type Context = {
     outOfAccount: boolean;
     sourced: boolean;
     sourceRef: string | null;
+    // RF-136: the movement is a purchase on this liability, the only kind a deferral can name.
+    purchase: boolean;
   }[];
   categories: { id: string; kind: "income" | "expense"; ownerUserId: string | null; groupId: string | null }[];
   accounts: { id: string; currency: string }[];
@@ -112,7 +115,8 @@ async function readContext(tx: Transaction, input: StatementInput): Promise<Cont
           'legCents', (case when t.currency = a.settlement_currency then t.amount_cents
             else t.counter_amount_cents end)::text,
           'outOfAccount', t.from_account_id is not distinct from a.id,
-          'sourced', s.id is not null, 'sourceRef', s.source_ref)
+          'sourced', s.id is not null, 'sourceRef', s.source_ref,
+          'purchase', ${deferrablePurchaseSql})
           order by t.created_at)
         from transactions t
         join accounts a on a.id = ${input.accountId}
@@ -212,12 +216,22 @@ function classify(rows: StatementRow[], context: Context): PreviewLine[] {
 
 // RF-136: a line that carries instalments is proposed as deferred. Only a purchase on a liability can
 // be; any other line with instalments is invalid, so nothing is deferred the person did not see.
-function withDeferrals(lines: PreviewLine[], rows: StatementRow[], account: NonNullable<Context["account"]>): PreviewLine[] {
+function withDeferrals(
+  lines: PreviewLine[],
+  rows: StatementRow[],
+  account: NonNullable<Context["account"]>,
+  candidates: Context["candidates"],
+): PreviewLine[] {
   const instalments = new Map(rows.map((row) => [row.line, row.instalments]));
   return lines.map((line) => {
     const count = instalments.get(line.line);
     if (count === undefined || line.status === "already_imported" || line.status === "invalid") return line;
-    if (account.kind !== "liability" || line.kind !== "expense") {
+    // A matched movement is judged by what it is, not by what the line says it is.
+    const purchase =
+      line.status === "matches"
+        ? candidates.find((one) => one.id === line.matchedTransactionId)?.purchase === true
+        : account.kind === "liability" && line.kind === "expense";
+    if (!purchase) {
       return { ...line, status: "invalid", reason: "cannot_defer" };
     }
     return { ...line, deferral: { instalments: count } };
@@ -257,7 +271,7 @@ function summarise(input: StatementInput, context: Context): StatementPreview {
   if (!account) throw new StatementError("notFound");
   if (!account.canWrite) throw new StatementError("readOnly");
   const rows = [...input.rows].sort((a, b) => a.line - b.line);
-  const lines = withDeferrals(classify(rows, context), rows, account);
+  const lines = withDeferrals(classify(rows, context), rows, account, context.candidates);
   const counts = { new: 0, matches: 0, already_imported: 0, invalid: 0 };
   for (const line of lines) counts[line.status] += 1;
   return {

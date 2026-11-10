@@ -173,9 +173,8 @@ async function readAccount(accountId: string): Promise<AccountRead> {
 }
 
 /**
- * One debt's whole detail (RF-16, RF-81, RF-82, RNF-09): the account with
- * its derived balance and terms, its installment plans with their lines and
- * pending, its closed statements, the open period's live figures, the purchases
+ * One debt's whole detail (RF-16, RF-136, RNF-09): the account with
+ * its derived balance and terms, the purchases a person deferred, its closed statements, the open period's live figures, the purchases
  * still waiting for a statement (RF-123), and the roster a payment is made from.
  * Seven independent reads in ONE `Promise.all` — nothing chains.
  *

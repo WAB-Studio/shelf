@@ -1135,7 +1135,7 @@
     "action": "Defer in instalments",
     "remove": "Remove deferral",
     "dialogTitle": "Defer in instalments",
-    "dialogBody": "The purchase stays whole in your balance; the instalments only fraction its part of the minimum payment. Confirm how many instalments the bank gave.",
+    "dialogBody": "The purchase stays whole in your balance; the bank only fractions its part of the minimum payment into instalments, and your minimum payment does not change here. Confirm how many instalments the bank gave.",
     "instalmentsLabel": "Number of instalments",
     "save": "Confirm deferral",
     "saved": "Purchase deferred.",

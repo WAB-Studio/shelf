@@ -1135,7 +1135,7 @@
     "action": "Diferir en cuotas",
     "remove": "Quitar diferido",
     "dialogTitle": "Diferir en cuotas",
-    "dialogBody": "La compra sigue completa en tu saldo; las cuotas solo fraccionan su parte del pago mínimo. Confirma cuántas cuotas dio el banco.",
+    "dialogBody": "La compra sigue completa en tu saldo; el banco solo fracciona en cuotas su parte del pago mínimo y tu pago mínimo no cambia aquí. Confirma cuántas cuotas dio el banco.",
     "instalmentsLabel": "Número de cuotas",
     "save": "Confirmar diferido",
     "saved": "Compra diferida.",

@@ -83,7 +83,7 @@ import {
   listSilencedShapes,
   restoreShape,
 } from "@/db/queries/ingest-review";
-import { createDeferral } from "@/db/queries/deferrals";
+import { createDeferral, getMovementDeferral, listDeferralsForAccount } from "@/db/queries/deferrals";
 import { recordDebtPayment } from "@/db/queries/installment-plans";
 import {
   createLabel,
@@ -15537,6 +15537,98 @@ async function deferralImportSuite(): Promise<void> {
       stored[0]?.instalments === 36 && stored[0].description === "NEVERA 1/36" && stored[0].created_by === owner.id &&
       again.isError && (await balance()) === "-361000000",
     `imported ${JSON.stringify(imported.value)}, stored ${JSON.stringify(stored)}, balance ${await balance()}`,
+  );
+
+  // A transfer out of the card is not a purchase: a line that matches it and carries instalments is refused.
+  const { transactionId: transferId } = await asUser(owner, () =>
+    createTransaction({
+      fromAccountId: ids.card,
+      toAccountId: ids.bank,
+      amountCents: 700_000,
+      occurredAt: "2026-03-20",
+      description: "Harness rf136 traslado",
+      externalRef: null,
+      splits: [],
+      labelIds: [],
+    }),
+  );
+  track("transactions", transferId);
+  const transferLine = {
+    line: 1, date: "2026-03-20", description: "TRASLADO 1/6", amountCents: -700_000, categoryId: ids.food, instalments: 6,
+  };
+  const matched = await tool("preview_statement", { accountId: ids.card, rows: [transferLine] });
+  const matchedLine = (matched.value?.lines as Line[] | undefined)?.[0];
+  const transferState = await asUser(owner, () => getMovementDeferral(transferId));
+  const [purchaseId] = await fixtureSql<{ id: string }[]>`
+    select t.id from transactions t where t.from_account_id = ${ids.card} and t.description = 'NEVERA 1/36'`;
+  const purchaseState = await asUser(owner, () => getMovementDeferral(purchaseId!.id));
+  assert(
+    next("RF-136: a line matching a transfer out of the card is invalid (cannot_defer), and only the purchase offers a deferral"),
+    matchedLine?.status === "invalid" && matchedLine.reason === "cannot_defer" &&
+      !transferState.canDefer && transferState.deferral === null &&
+      purchaseState.canDefer && purchaseState.deferral?.instalments === 36,
+    `line ${JSON.stringify(matchedLine)}, transfer ${JSON.stringify(transferState)}, purchase ${JSON.stringify(purchaseState)}`,
+  );
+
+  // RF-136: the plan ends when a payment covers a balance that was owed, and never for a card in credit.
+  const open = async (name: string, initialCents: number) => {
+    const id = randomUUID();
+    await fixtureSql.begin(async (tx) => {
+      const claims = JSON.stringify({ sub: owner.id, role: "authenticated", aud: "authenticated" });
+      await tx`select set_config('request.jwt.claims', ${claims}, true)`;
+      await tx`
+        insert into accounts (id, owner_user_id, name, kind, subtype, initial_balance_cents, initial_balance_on)
+        values (${id}, ${owner.id}, ${`Harness rf136 ${name} ${tag}`}, 'liability', 'card', ${initialCents}, '2026-01-01')`;
+    });
+    track("accounts", id);
+    return id;
+  };
+  const move = async (from: string | null, to: string | null, cents: number, day: string) => {
+    const { transactionId } = await asUser(owner, () =>
+      createTransaction({
+        fromAccountId: from,
+        toAccountId: to,
+        amountCents: cents,
+        occurredAt: day,
+        description: `Harness rf136 ${day}`,
+        externalRef: null,
+        splits: from !== null && to === null ? [{ categoryId: ids.food, amountCents: cents }] : [],
+        labelIds: [],
+      }),
+    );
+    track("transactions", transactionId);
+    return transactionId;
+  };
+  const stateOf = async (accountId: string) =>
+    (await asUser(owner, () => listDeferralsForAccount(accountId)))[0]?.status.state;
+
+  const owing = await open("deuda", 0);
+  const owingPurchase = await move(owing, null, 3_600_000, "2026-03-15");
+  await asUser(owner, () => createDeferral({ transactionId: owingPurchase, instalments: 36 }));
+  const beforePayment = await stateOf(owing);
+  await move(ids.bank, owing, 1_000_000, "2026-04-01");
+  const afterPartial = await stateOf(owing);
+  await move(ids.bank, owing, 2_600_000, "2026-05-02");
+  const afterCovering = await stateOf(owing);
+
+  const inCredit = await open("saldo a favor", 10_000_000);
+  const creditPurchase = await move(inCredit, null, 3_600_000, "2026-03-15");
+  await asUser(owner, () => createDeferral({ transactionId: creditPurchase, instalments: 36 }));
+  const creditAtPurchase = await stateOf(inCredit);
+  await move(ids.bank, inCredit, 500_000, "2026-04-01");
+  const creditAfterPayment = await stateOf(inCredit);
+
+  const sameDay = await open("mismo dia", 0);
+  const sameDayPurchase = await move(sameDay, null, 1_000_000, "2026-03-15");
+  await asUser(owner, () => createDeferral({ transactionId: sameDayPurchase, instalments: 12 }));
+  await move(ids.bank, sameDay, 1_000_000, "2026-03-15");
+  const coveredTheSameDay = await stateOf(sameDay);
+  assert(
+    next("RF-136: a deferral stays running until a payment covers a balance that was owed; a card in credit never reads extinguished"),
+    beforePayment === "running" && afterPartial === "running" && afterCovering === "extinguished" &&
+      creditAtPurchase === "running" && creditAfterPayment === "running" &&
+      coveredTheSameDay === "running",
+    `owing: ${beforePayment}, ${afterPartial}, ${afterCovering}; in credit: ${creditAtPurchase}, ${creditAfterPayment}; paid the same day: ${coveredTheSameDay}`,
   );
 }
 

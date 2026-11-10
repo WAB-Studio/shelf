@@ -358,6 +358,8 @@ async function checkDeferrals() {
     writer: "rf136-1. the owner of the card defers a purchase, the count is 2 to 72, a second deferral of it is 23505, and created_by is auth.uid()",
     scope: "rf136-2. a fund member who only reads the card reads the deferral and cannot defer or remove; a user of another fund reads and writes nothing: 42501",
     final: "rf136-3. no deferral can be updated; the owner removes it and defers again; deleting the purchase takes its deferral",
+    pairing: "rf136-5. a deferral must name an expense whose source is the named liability: another card, a refund into the card, a transfer out of it and an asset's purchase are each 23514",
+    edited: "rf136-6. editing the purchase's source, or giving it a destination, takes its deferral; an edit that keeps both leaves it",
     grants: "rf136-4. anon and service_role hold no privilege on deferrals; authenticated holds select, insert (transaction_id, account_id, instalments) and delete alone",
   };
 
@@ -419,6 +421,57 @@ async function checkDeferrals() {
     return [{
       ok: update === "42501" && removed === 1 && again === null && left === 0,
       detail: `update ${update ?? "accepted"}, delete took ${removed}, defer again ${again ?? "accepted"}, ${left} left after the purchase went`,
+    }];
+  });
+
+  await rf136Rows([labels.pairing], async (tx) => {
+    const f = await rf136Fixture(tx);
+    await enterUserContext(tx, f.member);
+    const [{ id: other }] = await tx<{ id: string }[]>`
+      insert into accounts (owner_user_id, name, kind, subtype, initial_balance_on)
+      values (${f.member}, 'rls rf136 other card', 'liability', 'card', ${todayInBogota()}) returning id`;
+    const [{ id: refund }] = await tx<{ id: string }[]>`
+      insert into transactions (to_account_id, amount_cents, occurred_at) values (${f.card}, 1000, ${todayInBogota()}) returning id`;
+    const [{ id: transfer }] = await tx<{ id: string }[]>`
+      insert into transactions (from_account_id, to_account_id, amount_cents, occurred_at)
+      values (${f.card}, ${f.personal}, 1000, ${todayInBogota()}) returning id`;
+    const assetPurchase = await o6m1Movement(tx, f.personal, f.personalCategory, 1000, "rls rf136 asset purchase");
+    const attempt = (transactionId: string, accountId: string) =>
+      m1Refusal(tx, (sp) => sp`
+        insert into deferrals (transaction_id, account_id, instalments) values (${transactionId}, ${accountId}, 6)`);
+    const codes = {
+      otherCard: await attempt(f.purchase, other),
+      refund: await attempt(refund, f.card),
+      transfer: await attempt(transfer, f.card),
+      asset: await attempt(assetPurchase, f.personal),
+    };
+    const own = await attempt(f.purchase, f.card);
+    return [{
+      ok: Object.values(codes).every((code) => code === "23514") && own === null,
+      detail: `other card ${codes.otherCard}, refund ${codes.refund}, transfer ${codes.transfer}, asset ${codes.asset}; the purchase on its own card ${own ?? "accepted"}`,
+    }];
+  });
+
+  await rf136Rows([labels.edited], async (tx) => {
+    const f = await rf136Fixture(tx);
+    await enterUserContext(tx, f.member);
+    const [{ id: other }] = await tx<{ id: string }[]>`
+      insert into accounts (owner_user_id, name, kind, subtype, initial_balance_on)
+      values (${f.member}, 'rls rf136 other card', 'liability', 'card', ${todayInBogota()}) returning id`;
+    const count = async () =>
+      (await tx`select id from deferrals where transaction_id = ${f.purchase}`).length;
+    await tx`insert into deferrals (transaction_id, account_id, instalments) values (${f.purchase}, ${f.card}, 12)`;
+    await tx`update transactions set amount_cents = 9100000, description = 'rls rf136 edited' where id = ${f.purchase}`;
+    await tx`update transactions set from_account_id = ${f.card} where id = ${f.purchase}`;
+    const kept = await count();
+    await tx`update transactions set from_account_id = ${other} where id = ${f.purchase}`;
+    const moved = await count();
+    await tx`insert into deferrals (transaction_id, account_id, instalments) values (${f.purchase}, ${other}, 12)`;
+    await tx`update transactions set to_account_id = ${f.personal} where id = ${f.purchase}`;
+    const transferred = await count();
+    return [{
+      ok: kept === 1 && moved === 0 && transferred === 0,
+      detail: `after an edit that keeps the source ${kept} deferral, after moving the source ${moved}, after giving it a destination ${transferred}`,
     }];
   });
 

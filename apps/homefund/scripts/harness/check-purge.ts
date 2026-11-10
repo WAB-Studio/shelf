@@ -37,6 +37,7 @@ type Fund = {
 const GROUP_TABLES = [
   "debt_terms",
   "installment_plans",
+  "deferrals",
   "account_statements",
   "budgets",
   "planned_payments",
@@ -55,7 +56,7 @@ async function spend(
   categoryId: string,
   amountCents: number,
   description: string,
-): Promise<void> {
+): Promise<string> {
   const [row] = await tx<{ id: string }[]>`
     insert into transactions (from_account_id, amount_cents, occurred_at, description)
     values (${accountId}, ${amountCents}, current_date, ${description})
@@ -63,6 +64,7 @@ async function spend(
   await tx`
     insert into transaction_splits (transaction_id, category_id, amount_cents)
     values (${row.id}, ${categoryId}, ${amountCents})`;
+  return row.id;
 }
 
 async function asActor<T>(userId: string, fn: (tx: Tx) => Promise<T>): Promise<T> {
@@ -121,6 +123,10 @@ async function seedFund(leader: HarnessUser, member?: HarnessUser): Promise<Fund
       insert into recurring_rules (group_id, from_account_id, amount_cents, category_id, frequency, interval_n, day_of_month, next_run_on, created_by)
       values (${fund.groupId}, ${fund.cashId}, 5000, ${fund.categoryId}, 'monthly', 1, 5, current_date + 5, ${leader.id})`;
     await spend(tx, fund.cashId, fund.categoryId, 7000, "purge leader spends");
+    // A purchase on the fund's card, deferred (RF-136).
+    const purchase = await spend(tx, fund.cardId, fund.categoryId, 9000, "purge leader buys on the card");
+    await tx`
+      insert into deferrals (transaction_id, account_id, instalments) values (${purchase}, ${fund.cardId}, 6)`;
   });
 
   if (member) {
@@ -138,6 +144,7 @@ async function countFund(fund: Fund): Promise<Counts> {
     select
       (select count(*) from debt_terms where account_id in (${fund.cashId}, ${fund.cardId}))::text as debt_terms,
       (select count(*) from installment_plans where account_id in (${fund.cashId}, ${fund.cardId}))::text as installment_plans,
+      (select count(*) from deferrals where account_id in (${fund.cashId}, ${fund.cardId}))::text as deferrals,
       (select count(*) from account_statements where account_id in (${fund.cashId}, ${fund.cardId}))::text as account_statements,
       (select count(*) from budgets where group_id = ${fund.groupId})::text as budgets,
       (select count(*) from planned_payments where group_id = ${fund.groupId})::text as planned_payments,
@@ -217,7 +224,7 @@ async function main(): Promise<void> {
     const seededB = await countFund(fundB);
     assert(
       "P0 seed",
-      GROUP_TABLES.every((t) => seededA[t] >= 1 && seededB[t] >= 1) && seededA.transactions === 2,
+      GROUP_TABLES.every((t) => seededA[t] >= 1 && seededB[t] >= 1) && seededA.transactions === 3,
       `fund A ${JSON.stringify(seededA)}, fund B ${JSON.stringify(seededB)}`,
     );
 
