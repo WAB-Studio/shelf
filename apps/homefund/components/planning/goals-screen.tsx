@@ -169,21 +169,15 @@ export function GoalsScreen({
     bandTotals.set(goal.currency, running);
   }
 
-  // `framed` is the table's slot: the stack keeps its own height there, and only
-  // the pane's own copy grows to fill it.
-  function emptyState(framed: boolean) {
+  function emptyState() {
     if (archived) {
       return (
-        <EmptyState
-          variant={framed ? "filtered" : "first"}
-          title={t("archivedEmpty")}
-        />
+        <EmptyState title={t("archivedEmpty")} />
       );
     }
 
     return (
       <EmptyState
-        variant={framed ? "filtered" : "first"}
         title={t("emptyTitle")}
         description={t("emptyDescription")}
         action={addButton}
@@ -310,7 +304,7 @@ export function GoalsScreen({
           page={table.state.pagination.pageIndex + 1}
           pageSize={PAGE_SIZE}
           total={goals.length}
-          empty={emptyState(true)}
+          empty={emptyState()}
           onPrev={() => table.previousPage()}
           onNext={() => table.nextPage()}
           onContribute={(goal) => setContributeTarget(goal)}
@@ -324,7 +318,7 @@ export function GoalsScreen({
 
       <Box display={{ initial: "block", lg: "none" }}>
         {goals.length === 0 ? (
-          emptyState(false)
+          emptyState()
         ) : (
           <Flex direction="column" gap="3">
             {goals.map((goal) => (

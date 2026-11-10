@@ -208,7 +208,6 @@ export function DebtsScreen({
   // the column headers stay on screen.
   const tableEmpty = (
     <EmptyState
-      variant="filtered"
       title={t("emptyTitle")}
       description={t("emptyDescription")}
       action={addButton}
