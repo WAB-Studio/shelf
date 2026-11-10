@@ -3,11 +3,10 @@ import "server-only";
 import type { CallToolResult, McpServer, ServerContext } from "@modelcontextprotocol/server";
 import { z } from "zod";
 
-import { listScopedCategories } from "@/db/queries/categories";
+import { freeCategoryColor, listScopedCategories } from "@/db/queries/categories";
 import { bookMovement, dropMovement, openAccount, openCategory, reviseMovement } from "@/db/queries/ledger-write";
-import { getTransactionById, listTransactions } from "@/db/queries/transactions";
+import { getTransactionById, listTransactions, type TransactionListRow } from "@/db/queries/transactions";
 import { ActionError } from "@/lib/errors";
-import { CATEGORY_COLORS, nextCategoryColor } from "@/lib/fund/category-color";
 import { centsToDecimal } from "@/lib/money";
 import { createAccountSchema } from "@/lib/validation/account";
 import { createCategoryInputSchema } from "@/lib/validation/category";
@@ -24,24 +23,27 @@ function parseForm<S extends z.ZodType>(schema: S, data: unknown): z.output<S> {
   return verdict.data;
 }
 
-const cents = z.number().int();
-const date = z.string().describe("AAAA-MM-DD");
+function movementShape(t: Say) {
+  const d = (key: string) => t(`params.${key}`);
+  const cents = z.number().int();
+  return {
+    fromAccountId: z.string().nullable().describe(d("fromAccountId")),
+    toAccountId: z.string().nullable().describe(d("toAccountId")),
+    amountCents: cents.describe(d("amountCents")),
+    currency: z.string().optional().describe(d("currency")),
+    counterAmountCents: cents.nullish().describe(d("counterAmountCents")),
+    counterIsEstimate: z.boolean().optional().describe(d("counterIsEstimate")),
+    occurredAt: z.string().describe(d("occurredAt")),
+    description: z.string().nullable().describe(d("description")),
+    categoryId: z.string().optional().describe(d("categoryId")),
+    splits: z.array(z.object({ categoryId: z.string(), amountCents: cents })).optional().describe(d("splits")),
+    contributedByMemberId: z.string().nullish().describe(d("contributedByMemberId")),
+    forHousehold: z.boolean().optional().describe(d("forHousehold")),
+  };
+}
 
-const movementShape = {
-  fromAccountId: z.string().nullable().describe("Cuenta de origen: null en un ingreso."),
-  toAccountId: z.string().nullable().describe("Cuenta de destino: null en un gasto."),
-  amountCents: cents.describe("Monto en centavos enteros."),
-  currency: z.string().optional().describe("COP o USD; si falta, la de las cuentas."),
-  counterAmountCents: cents.nullish().describe("Lo que salió o llegó en la cuenta de otra moneda."),
-  occurredAt: date,
-  description: z.string().nullable(),
-  categoryId: z.string().optional().describe("Atajo: una sola categoría por todo el monto."),
-  splits: z.array(z.object({ categoryId: z.string(), amountCents: cents })).optional(),
-  contributedByMemberId: z.string().nullish().describe("«De quién»: obligatorio en un ingreso a una cuenta del fondo."),
-  forHousehold: z.boolean().optional(),
-};
-
-type MovementInput = z.infer<z.ZodObject<typeof movementShape>>;
+type MovementInput = z.infer<z.ZodObject<ReturnType<typeof movementShape>>>;
+type Split = { categoryId: string; amountCents: number };
 
 function movementForm(input: MovementInput) {
   const splits = input.splits ?? (input.categoryId ? [{ categoryId: input.categoryId, amountCents: input.amountCents }] : []);
@@ -51,17 +53,53 @@ function movementForm(input: MovementInput) {
     amount: centsToDecimal(input.amountCents),
     currency: input.currency,
     counterAmount: input.counterAmountCents == null ? null : centsToDecimal(input.counterAmountCents),
+    counterIsEstimate: input.counterIsEstimate,
     occurredAt: input.occurredAt,
     description: input.description,
     contributedByMemberId: input.contributedByMemberId,
     forHousehold: input.forHousehold,
-    splits: splits.map((split) => ({ categoryId: split.categoryId, amount: centsToDecimal(split.amountCents) })),
+    splits: splits.map((split: Split) => ({ categoryId: split.categoryId, amount: centsToDecimal(split.amountCents) })),
     labelIds: [],
   };
 }
 
+// An edit sends what changes; what it omits is the stored row's, read back as the form would have loaded it.
+function patched(current: TransactionListRow, patch: Partial<MovementInput>): MovementInput {
+  const pick = <K extends keyof MovementInput>(key: K, stored: MovementInput[K]): MovementInput[K] =>
+    patch[key] === undefined ? stored : (patch[key] as MovementInput[K]);
+  const fromAccountId = pick("fromAccountId", current.fromAccountId);
+  const toAccountId = pick("toAccountId", current.toAccountId);
+  const amountCents = pick("amountCents", current.amountCents);
+  const only = current.splits.length === 1 ? current.splits[0] : undefined;
+  // A transfer carries no split; a lone split follows an amount that changed.
+  const splits =
+    patch.splits ??
+    (patch.categoryId || (fromAccountId !== null && toAccountId !== null)
+      ? undefined
+      : only
+        ? [{ categoryId: only.categoryId, amountCents }]
+        : current.splits);
+  return {
+    fromAccountId,
+    toAccountId,
+    amountCents,
+    currency: pick("currency", current.currency),
+    counterAmountCents: pick("counterAmountCents", current.counterAmountCents),
+    counterIsEstimate: pick("counterIsEstimate", current.counterIsEstimate),
+    occurredAt: pick("occurredAt", current.occurredAt),
+    description: pick("description", current.description),
+    categoryId: patch.categoryId,
+    splits,
+    contributedByMemberId: pick("contributedByMemberId", current.contributedByMemberId),
+    forHousehold: pick("forHousehold", current.forHousehold),
+  };
+}
+
 export function registerLedgerTools(server: McpServer, run: Run, t: Say): void {
+  const d = (key: string) => t(`params.${key}`);
   const write = { readOnlyHint: false, destructiveHint: false, idempotentHint: false };
+  const shape = movementShape(t);
+  const idOf = (key: string, value: string) => parseForm(z.uuid({ error: key }), value);
 
   server.registerTool(
     "list_categories",
@@ -86,60 +124,79 @@ export function registerLedgerTools(server: McpServer, run: Run, t: Say): void {
     {
       description: t("tools.listMovements"),
       inputSchema: z.object({
-        accountId: z.string().uuid().optional(),
-        from: date.regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
-        to: date.regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
-        limit: z.number().int().min(1).max(200).optional(),
+        accountId: z.string().optional().describe(d("accountId")),
+        from: z.string().optional().describe(d("from")),
+        to: z.string().optional().describe(d("to")),
+        limit: z.number().int().min(1).max(200).optional().describe(d("limit")),
       }),
       annotations: { readOnlyHint: true },
     },
     (input: { accountId?: string; from?: string; to?: string; limit?: number }, ctx) =>
-      run(ctx, async () =>
-        (await listTransactions({ accountId: input.accountId, from: input.from, to: input.to }, { limit: input.limit ?? 50 })).map(
-          (row) => ({
-            id: row.id,
-            kind: row.kind,
-            date: row.occurredAt,
-            description: row.description,
-            amountCents: row.amountCents,
-            currency: row.currency,
-            fromAccountId: row.fromAccountId,
-            toAccountId: row.toAccountId,
-            splits: row.splits,
-          }),
-        ),
-      ),
+      run(ctx, async () => {
+        const accountId = input.accountId === undefined ? undefined : idOf("transactions.errors.accountInvalid", input.accountId);
+        const rows = await listTransactions({ accountId, from: input.from, to: input.to }, { limit: input.limit ?? 50 });
+        // Everything update_movement can resend or patch, and the stamp it must quote back.
+        return rows.map((row) => ({
+          id: row.id,
+          kind: row.kind,
+          date: row.occurredAt,
+          description: row.description,
+          amountCents: row.amountCents,
+          currency: row.currency,
+          counterAmountCents: row.counterAmountCents,
+          counterIsEstimate: row.counterIsEstimate,
+          fromAccountId: row.fromAccountId,
+          toAccountId: row.toAccountId,
+          contributedByMemberId: row.contributedByMemberId,
+          forHousehold: row.forHousehold,
+          labelIds: row.labels.map((label) => label.id),
+          splits: row.splits,
+          updatedAt: row.updatedAt,
+        }));
+      }),
   );
 
   server.registerTool(
     "record_movement",
-    { description: t("tools.recordMovement"), inputSchema: z.object(movementShape), annotations: write },
-    (input: MovementInput, ctx) =>
-      run(ctx, async () => bookMovement(parseForm(createTransactionSchema, movementForm(input)))),
+    {
+      description: t("tools.recordMovement"),
+      inputSchema: z.object({ ...shape, requestRef: z.string().optional().describe(d("requestRef")) }),
+      annotations: { ...write, idempotentHint: true },
+    },
+    (input: MovementInput & { requestRef?: string }, ctx) =>
+      run(ctx, async () =>
+        bookMovement(parseForm(createTransactionSchema, { ...movementForm(input), requestRef: input.requestRef })),
+      ),
   );
 
-  // The edit takes the stamp from the row it rewrites: Claude has no form open to carry one.
+  // The stamp is the one Claude read in list_movements: an edit after someone else's save is refused stale (RF-156).
   server.registerTool(
     "update_movement",
     {
       description: t("tools.updateMovement"),
-      inputSchema: z.object({ transactionId: z.string(), ...movementShape }),
+      inputSchema: z.object({
+        transactionId: z.string().describe(d("transactionId")),
+        expectedUpdatedAt: z.string().describe(d("expectedUpdatedAt")),
+        ...z.object(shape).partial().shape,
+      }),
       annotations: { ...write, idempotentHint: true },
     },
-    (input: MovementInput & { transactionId: string }, ctx) =>
+    (input: Partial<MovementInput> & { transactionId: string; expectedUpdatedAt: string }, ctx) =>
       run(ctx, async () => {
-        const current = await getTransactionById(input.transactionId);
+        const { transactionId, expectedUpdatedAt, ...patch } = input;
+        const id = idOf("errors.notFound", transactionId);
+        const current = await getTransactionById(id);
         if (!current) throw new ActionError("errors.notFound");
         await reviseMovement(
           parseForm(updateTransactionSchema, {
-            ...movementForm(input),
-            transactionId: input.transactionId,
+            ...movementForm(patched(current, patch)),
+            transactionId: id,
             labelIds: current.labels.map((label) => label.id),
             causedByTransactionId: current.causedByTransactionId,
-            expectedUpdatedAt: current.updatedAt,
+            expectedUpdatedAt,
           }),
         );
-        return { transactionId: input.transactionId };
+        return { transactionId: id };
       }),
   );
 
@@ -147,13 +204,14 @@ export function registerLedgerTools(server: McpServer, run: Run, t: Say): void {
     "delete_movement",
     {
       description: t("tools.deleteMovement"),
-      inputSchema: z.object({ transactionId: z.string() }),
+      inputSchema: z.object({ transactionId: z.string().describe(d("transactionId")) }),
       annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
     },
     (input: { transactionId: string }, ctx) =>
       run(ctx, async () => {
-        await dropMovement(parseForm(z.uuid({ error: "errors.notFound" }), input.transactionId));
-        return { transactionId: input.transactionId };
+        const id = idOf("errors.notFound", input.transactionId);
+        await dropMovement(id);
+        return { transactionId: id };
       }),
   );
 
@@ -162,15 +220,15 @@ export function registerLedgerTools(server: McpServer, run: Run, t: Say): void {
     {
       description: t("tools.createAccount"),
       inputSchema: z.object({
-        name: z.string(),
-        kind: z.string(),
-        subtype: z.string(),
-        placement: z.string().default("personal"),
-        settlementCurrency: z.string().default("COP"),
-        openingBalanceCents: cents,
-        balanceOn: date,
-        institution: z.string().nullable().default(null),
-        lastFour: z.string().optional(),
+        name: z.string().describe(d("accountName")),
+        kind: z.string().describe(d("accountKind")),
+        subtype: z.string().describe(d("accountSubtype")),
+        placement: z.string().default("personal").describe(d("accountPlacement")),
+        settlementCurrency: z.string().default("COP").describe(d("settlementCurrency")),
+        openingBalanceCents: z.number().int().describe(d("openingBalanceCents")),
+        balanceOn: z.string().describe(d("balanceOn")),
+        institution: z.string().nullable().default(null).describe(d("institution")),
+        lastFour: z.string().optional().describe(d("lastFour")),
       }),
       annotations: write,
     },
@@ -186,18 +244,18 @@ export function registerLedgerTools(server: McpServer, run: Run, t: Say): void {
     {
       description: t("tools.createCategory"),
       inputSchema: z.object({
-        name: z.string(),
-        kind: z.string(),
-        parentId: z.string().nullable().default(null),
-        placement: z.string().default("personal"),
-        color: z.string().optional().describe(`Uno de ${CATEGORY_COLORS.join(", ")}; si falta, el primero libre.`),
+        name: z.string().describe(d("categoryName")),
+        kind: z.string().describe(d("categoryKind")),
+        parentId: z.string().nullable().default(null).describe(d("parentId")),
+        placement: z.string().optional().describe(d("categoryPlacement")),
+        color: z.string().optional().describe(d("color")),
       }),
       annotations: write,
     },
-    (input: { color?: string }, ctx) =>
+    (input: { color?: string; placement?: string }, ctx) =>
       run(ctx, async (owner) => {
-        const color =
-          input.color ?? nextCategoryColor((await listScopedCategories(owner)).flatMap((node) => (node.color ? [node.color] : [])));
+        const placement = input.placement === "personal" || input.placement === "group" ? input.placement : undefined;
+        const color = input.color ?? (await freeCategoryColor(owner, placement));
         return openCategory(parseForm(createCategoryInputSchema, { ...input, color }), owner);
       }),
   );

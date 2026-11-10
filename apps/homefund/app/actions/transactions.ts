@@ -54,8 +54,9 @@ async function assertCauseReadable(
 export const createTransactionAction = authActionClient
   .inputSchema(createTransactionSchema)
   .action(async ({ parsedInput }) => {
-    await assertCauseReadable(parsedInput.causedByTransactionId, createTransactionSchema);
-    const { transactionId } = await bookMovement(parsedInput);
+    const { transactionId } = await bookMovement(parsedInput, () =>
+      assertCauseReadable(parsedInput.causedByTransactionId, createTransactionSchema),
+    );
 
     refresh();
     return { ok: true as const, transactionId };
@@ -70,8 +71,9 @@ export const createTransactionAction = authActionClient
 export const updateTransactionAction = authActionClient
   .inputSchema(updateTransactionSchema)
   .action(async ({ parsedInput }) => {
-    await assertCauseReadable(parsedInput.causedByTransactionId, updateTransactionSchema);
-    await reviseMovement(parsedInput);
+    await reviseMovement(parsedInput, () =>
+      assertCauseReadable(parsedInput.causedByTransactionId, updateTransactionSchema),
+    );
 
     refresh();
   });

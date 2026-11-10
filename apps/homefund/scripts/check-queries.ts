@@ -15366,13 +15366,67 @@ async function mcpDoorSuite(): Promise<void> {
     `listed ${JSON.stringify(movements.value)?.slice(0, 160)}, alien ${JSON.stringify(alienListed.value)}`,
   );
 
-  const edited = await writer.tool("update_movement", { ...purchase, transactionId: recordedId, amountCents: 300_000_00 });
-  const [after] = await fixtureSql<{ amount_cents: string }[]>`select amount_cents::text from transactions where id = ${recordedId}`;
-  const editedAlien = await writer.tool("update_movement", { ...purchase, transactionId: alienMovement, fromAccountId: ownAccount });
+  const [{ updatedAt }] = (movements.value as { id: string; updatedAt: string }[]).filter((one) => one.id === recordedId);
+  const edited = await writer.tool("update_movement", { transactionId: recordedId, expectedUpdatedAt: updatedAt, amountCents: 300_000_00 });
+  const [after] = await fixtureSql<{ amount_cents: string; category_id: string }[]>`
+    select t.amount_cents::text, s.category_id from transactions t join transaction_splits s on s.transaction_id = t.id where t.id = ${recordedId}`;
+  const editedAlien = await writer.tool("update_movement", { transactionId: alienMovement, expectedUpdatedAt: updatedAt, fromAccountId: ownAccount });
   assert(
-    next("RF-169: update_movement rewrites a movement the owner can write, and refuses another person's as not found"),
-    !edited.isError && after?.amount_cents === "30000000" && editedAlien.isError,
-    `edited ${JSON.stringify(edited.value)}, amount ${after?.amount_cents}, alien ${JSON.stringify(editedAlien.value)}`,
+    next("RF-169: update_movement patches a movement the owner can write (what it omits stays, a lone split follows the amount), and refuses another person's as not found"),
+    !edited.isError && after?.amount_cents === "30000000" && after.category_id === food && editedAlien.isError,
+    `edited ${JSON.stringify(edited.value)}, row ${JSON.stringify(after)}, alien ${JSON.stringify(editedAlien.value)}`,
+  );
+
+  const stale = await writer.tool("update_movement", { transactionId: recordedId, expectedUpdatedAt: updatedAt, amountCents: 310_000_00 });
+  const badId = await writer.tool("delete_movement", { transactionId: "no-es-un-uuid" });
+  const [unchanged] = await fixtureSql<{ amount_cents: string }[]>`select amount_cents::text from transactions where id = ${recordedId}`;
+  assert(
+    next("RF-156: update_movement with a stamp an earlier save moved answers stale and writes nothing; a malformed id answers a catalogue sentence"),
+    stale.isError && /desactualizad|cambi|otra persona/i.test(JSON.stringify(stale.value)) && unchanged?.amount_cents === "30000000" &&
+      badId.isError && !/uuid|Invalid/i.test(JSON.stringify(badId.value)),
+    `stale ${JSON.stringify(stale.value)}, amount ${unchanged?.amount_cents}, bad id ${JSON.stringify(badId.value)}`,
+  );
+
+  const dollars = randomUUID();
+  await fixtureSql.begin(async (tx) => {
+    const claims = JSON.stringify({ sub: owner.id, role: "authenticated", aud: "authenticated" });
+    await tx`select set_config('request.jwt.claims', ${claims}, true)`;
+    await tx`
+      insert into accounts (id, owner_user_id, name, kind, subtype, settlement_currency, initial_balance_cents, initial_balance_on)
+      values (${dollars}, ${owner.id}, ${`Harness rf169 dolares ${tag}`}, 'asset', 'bank', 'USD', 0, '2026-01-01')`;
+  });
+  track("accounts", dollars);
+  const ref = randomUUID();
+  const card = { fromAccountId: dollars, toAccountId: null, amountCents: 1_000_00, occurredAt: "2026-09-21", description: `Compra USD ${tag}`, categoryId: food, requestRef: ref };
+  const [first, second] = [await writer.tool("record_movement", card), await writer.tool("record_movement", card)];
+  const [booked] = await fixtureSql<{ n: number }[]>`select count(*)::int as n from transactions where from_account_id = ${dollars}`;
+  assert(
+    next("RF-169: record_movement sent twice with the same requestRef books once and answers the same id"),
+    !first.isError && !second.isError &&
+      (first.value as { transactionId: string }).transactionId === (second.value as { transactionId: string }).transactionId && booked?.n === 1,
+    `first ${JSON.stringify(first.value)}, second ${JSON.stringify(second.value)}, rows ${booked?.n}`,
+  );
+
+  const billed = {
+    fromAccountId: dollars, toAccountId: null, currency: "COP", amountCents: 400_000_00, counterAmountCents: 100_00, counterIsEstimate: true,
+    occurredAt: "2026-09-22", description: `Compra en COP ${tag}`, categoryId: food,
+  };
+  const estimated = await writer.tool("record_movement", billed);
+  const estimatedId = (estimated.value as { transactionId?: string } | null)?.transactionId ?? "";
+  const estimatedList = await writer.tool("list_movements", { accountId: dollars, from: "2026-09-22", to: "2026-09-22" });
+  const listedEstimate = (estimatedList.value as { id: string; updatedAt: string; counterAmountCents: number | null; counterIsEstimate: boolean }[]).find(
+    (one) => one.id === estimatedId,
+  );
+  const renamed = await writer.tool("update_movement", {
+    transactionId: estimatedId, expectedUpdatedAt: listedEstimate?.updatedAt, description: `Cambio ${tag}`,
+  });
+  const [kept] = await fixtureSql<{ counter_amount_cents: string; counter_is_estimate: boolean; description: string }[]>`
+    select counter_amount_cents::text, counter_is_estimate, description from transactions where id = ${estimatedId || randomUUID()}`;
+  assert(
+    next("RF-169: list_movements returns what a patch keeps (the second amount and its estimate mark); update_movement leaves what it omits"),
+    !estimated.isError && listedEstimate?.counterAmountCents === 10_000 && listedEstimate.counterIsEstimate === true &&
+      !renamed.isError && kept?.counter_amount_cents === "10000" && kept.counter_is_estimate === true && kept.description === `Cambio ${tag}`,
+    `estimated ${JSON.stringify(estimated.value)}, listed ${JSON.stringify(listedEstimate)}, renamed ${JSON.stringify(renamed.value)}, row ${JSON.stringify(kept)}`,
   );
 
   const deletedAlien = await writer.tool("delete_movement", { transactionId: alienMovement });

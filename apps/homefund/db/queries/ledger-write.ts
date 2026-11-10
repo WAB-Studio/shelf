@@ -156,8 +156,11 @@ export function mapTransactionError(error: unknown): never {
  * to its amount, a transfer none. A resent `requestRef` answers with the movement
  * the first copy booked, and books nothing.
  */
-export async function bookMovement(input: CreateTransactionInput): Promise<{ transactionId: string }> {
-  const [, counter] = await Promise.all([assertContributorGiven(input), resolveCounterAmount(input)]);
+export async function bookMovement(
+  input: CreateTransactionInput,
+  alsoCheck: () => Promise<void> = async () => {},
+): Promise<{ transactionId: string }> {
+  const [, , counter] = await Promise.all([alsoCheck(), assertContributorGiven(input), resolveCounterAmount(input)]);
 
   try {
     return await createTransaction({
@@ -187,10 +190,14 @@ export async function bookMovement(input: CreateTransactionInput): Promise<{ tra
  * (RF-24). A denied edit reports as no row, the same as a movement that was
  * never there, and one whose stamp someone else's save moved reports `errors.stale`.
  */
-export async function reviseMovement(input: UpdateTransactionInput): Promise<void> {
+export async function reviseMovement(
+  input: UpdateTransactionInput,
+  alsoCheck: () => Promise<void> = async () => {},
+): Promise<void> {
   // RF-156: an edit sent without the stamp its form loaded is stale, refused before any write.
   if (!input.expectedUpdatedAt) throw new ActionError("errors.stale");
-  const [, counter] = await Promise.all([
+  const [, , counter] = await Promise.all([
+    alsoCheck(),
     assertContributorGiven(input, input.transactionId),
     resolveCounterAmount(input),
   ]);
