@@ -15613,11 +15613,14 @@ async function statementImportSuite(): Promise<void> {
       select id from transactions where from_account_id = ${ids.card} and description = ${description}`)[0]?.id;
   const [dosId, tresId, unoId] = [await novMovement("DOS"), await novMovement("TRES"), await novMovement("UNO")];
   await fixtureSql.begin(async (tx) => {
+    // A count that agrees with the movements books no adjustment, so the reconciliation's one
+    // movement slot (unique on transactions) is free for the held leg.
     const claims = JSON.stringify({ sub: owner.id, role: "authenticated", aud: "authenticated" });
     await tx`select set_config('request.jwt.claims', ${claims}, true)`;
     const [reconciliation] = await tx<{ id: string }[]>`
       insert into account_reconciliations (account_id, reconciled_on, counted_balance_cents)
-      values (${ids.card}, '2026-11-05', 0) returning id`;
+      values (${ids.card}, '2026-11-05', private.account_settlement_balance_on(${ids.card}, '2026-11-05'))
+      returning id`;
     await tx`update transactions set reconciliation_id = ${reconciliation!.id} where id = ${dosId ?? null}`;
   });
   const novNext = [
