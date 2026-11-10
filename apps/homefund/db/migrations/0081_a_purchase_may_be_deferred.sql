@@ -29,7 +29,7 @@ GRANT DELETE ON TABLE "finances"."deferrals" TO authenticated;--> statement-brea
 CREATE TRIGGER capture_audit AFTER INSERT OR UPDATE OR DELETE ON "finances"."deferrals"
   FOR EACH ROW EXECUTE FUNCTION private.capture_audit();--> statement-breakpoint
 -- A deferral pairs a purchase with the liability it was billed on: the movement is an expense, its source
--- is the named account, that account is a liability, and the caller may write it. The insert policy only
+-- is the named account, that account is a liability (23514), and the caller may write it (42501). The insert policy only
 -- knows the account, so without this a writable card could be paired with any movement.
 CREATE OR REPLACE FUNCTION private.assert_deferral()
  RETURNS trigger
@@ -37,20 +37,26 @@ CREATE OR REPLACE FUNCTION private.assert_deferral()
  SECURITY DEFINER
  SET search_path TO ''
 AS $function$
+declare
+  v_source uuid;
+  v_destination uuid;
 begin
-  if not exists (
-    select 1
-    from finances.transactions t
-    join finances.accounts a on a.id = t.from_account_id
-    where t.id = new.transaction_id
-      and t.from_account_id = new.account_id
-      and t.kind = 'expense'
-      and t.reconciliation_id is null
-      and a.kind = 'liability'
-      and (select private.can_write_transaction(t.from_account_id, t.to_account_id))
-  ) then
-    raise exception 'a deferral names a purchase on a liability account the caller may write'
+  select t.from_account_id, t.to_account_id into v_source, v_destination
+  from finances.transactions t
+  join finances.accounts a on a.id = t.from_account_id
+  where t.id = new.transaction_id
+    and t.from_account_id = new.account_id
+    and t.kind = 'expense'
+    and t.reconciliation_id is null
+    and a.kind = 'liability';
+  if not found then
+    raise exception 'a deferral names a purchase on a liability account'
       using errcode = 'check_violation';
+  end if;
+  -- A pairing that is right but not the caller's to write is a refusal of privilege, as the policy's own.
+  if not (select private.can_write_transaction(v_source, v_destination)) then
+    raise exception 'a deferral names a purchase the caller may write'
+      using errcode = 'insufficient_privilege';
   end if;
   return new;
 end;

@@ -1890,7 +1890,7 @@ async function readSuite(
   await checkRead("countUnreviewedGenerated", () => countUnreviewedGenerated());
   await checkRead("getDebtsScreenData", () => getDebtsScreenData());
   await checkRead("getDebtOverview", () => getDebtOverview());
-  // The screen fans four reads out (RNF-09); the count is what says they never
+  // The screen fans three reads out (RNF-09: the plan positions are retired with RF-81); the count is what says they never
   // chained and never went one read per debt — the writability of every debt
   // rides the roster's own projection, not a statement of its own. The first call
   // is unmeasured on
@@ -1910,7 +1910,7 @@ async function readSuite(
       return { unit, trips: roundTrips() - before };
     },
     ({ unit, trips }) => ({
-      ok: trips === unit * 4,
+      ok: trips === unit * 3,
       detail: `${trips} round trips for the screen, ${unit} for a single read`,
     }),
   );

@@ -635,23 +635,21 @@ test.describe("at 360, the desktop subtree steps aside", () => {
   }
 
   // D16's own pending note (module 39, "un pendiente que te dejó D16"): the debt
-  // detail screen draws both its tables with no `lg` guard at all — not the
-  // additive pattern the rest of the slice keeps, the same shape Auditoría had
-  // before its fix. Measured here, named by its own result, not repaired: that
-  // is a different module's contract.
+  // detail screen draws its tables with no `lg` guard at all. The plan table is
+  // gone (RF-136), so what is measured is whatever table the screen still draws;
+  // none at all is a result too. Measured here, named by its own result, not
+  // repaired: that is a different module's contract.
   test("the debt detail screen's fixed columns at 360px (measured, not fixed)", async ({
     page,
   }) => {
     await page.goto(`/es/planning/debts/${debtDetailAccountId}`);
 
-    // `count()` reads the DOM once and does not retry; the page still has a
-    // server round trip ahead of it right after `goto`, so this waits for the
-    // first table the way every other check in this file already does.
-    await expect(page.getByRole("table").first()).toBeVisible();
+    // `count()` reads the DOM once and does not retry: wait for the screen's own
+    // balance tile before counting.
+    await expect(page.getByText(messages.debts.tableBalance, { exact: true }).first()).toBeVisible();
 
     const tables = page.getByRole("table");
     const count = await tables.count();
-    expect(count).toBeGreaterThan(0);
 
     const collapsed: string[] = [];
     for (let i = 0; i < count; i += 1) {
