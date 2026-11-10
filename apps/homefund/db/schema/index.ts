@@ -15,6 +15,7 @@ export * from "./recurring-rules";
 export * from "./savings-goals";
 export * from "./goal-contributions";
 export * from "./debt-terms";
+export * from "./deferrals";
 export * from "./installment-plans";
 export * from "./installment-lines";
 export * from "./account-statements";

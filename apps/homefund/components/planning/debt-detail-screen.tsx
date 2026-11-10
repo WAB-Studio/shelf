@@ -7,6 +7,7 @@ import { Fragment, useState } from "react";
 import { toast } from "sonner";
 
 import { deleteInstallmentPlanAction } from "@/app/actions/installment-plans";
+import { DeferredPurchases } from "@/components/planning/deferral-control";
 import { OwnerMark } from "@/components/fund/owner-mark";
 import { DebtPaymentDialog } from "@/components/planning/debt-payment-dialog";
 import {
@@ -81,6 +82,7 @@ export function DebtDetailScreen({ data }: { data: DebtDetailData }) {
     account,
     terms,
     plans,
+    deferrals,
     statements,
     currentStatement,
     pendingSettlements,
@@ -308,6 +310,13 @@ export function DebtDetailScreen({ data }: { data: DebtDetailData }) {
             />
           ))}
         </>
+      )}
+
+      {/* Purchases a person confirmed as deferred: the balance holds them whole (RF-136). */}
+      {deferrals.length > 0 && (
+        <Flex direction="column" px={{ initial: "0", md: "6" }}>
+          <DeferredPurchases rows={deferrals} />
+        </Flex>
       )}
 
       <SettlementSection

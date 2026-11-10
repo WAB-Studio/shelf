@@ -9,6 +9,7 @@ import {
   getTransactionFormOptions,
   resolveCreatorNames,
 } from "@/db/queries/transaction-form";
+import { getMovementDeferral } from "@/db/queries/deferrals";
 import { getTransactionById, listTransactions } from "@/db/queries/transactions";
 import { routing } from "@/i18n/routing";
 import { MONTH_PATTERN } from "@/lib/dates";
@@ -35,11 +36,12 @@ export default async function MovementPage(
   // the form options ride the same fan-out for the edit dialog and the
   // account/category names the detail reads. The charges this movement caused
   // need no cause id to look up, so they ride this same round trip too (RF-132).
-  const [movement, options, causedCharges, tr] = await Promise.all([
+  const [movement, options, causedCharges, tr, deferral] = await Promise.all([
     getTransactionById(id),
     getTransactionFormOptions(),
     listTransactions({ causedByTransactionId: id }),
     getTranslations({ locale }),
+    getMovementDeferral(id),
   ]);
   // «Corregir» in «Revisar el mes» opens the movement with `?review=YYYY-MM`: back leads there (RF-155).
   const back =
@@ -69,6 +71,7 @@ export default async function MovementPage(
         creatorName={creatorNames.get(movement.createdBy) ?? null}
         cause={cause}
         causedCharges={causedCharges}
+        deferral={deferral}
         back={back}
       />
     </Page>

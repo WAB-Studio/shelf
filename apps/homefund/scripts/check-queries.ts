@@ -4255,6 +4255,7 @@ async function main(): Promise<void> {
   await incomeContributorEditsSuite();
   await fundPotSuite();
   await otherMembersRowsSuite();
+  await deferralImportSuite();
 }
 
 // A member recorded without a login is someone in the fund: a leader whose fund holds one is not alone, so an
@@ -15700,6 +15701,71 @@ async function statementImportSuite(): Promise<void> {
     inboundImport.value?.created === 1 && received?.currency === "COP" && received.counter_amount_cents === "1000" &&
       dollarSide.value?.lines?.[0]?.status === "matches",
     `imported ${JSON.stringify(inboundImport.value)}, received ${JSON.stringify(received)}, dollar side ${JSON.stringify(dollarSide.value?.lines)}`,
+  );
+}
+
+
+// RF-136: a statement line that prints «1/36» is proposed as deferred by the preview and written as a
+// deferral by the import; only a purchase on a liability can be, and the balance never moves with it.
+async function deferralImportSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const { POST } = await import("@/app/mcp/route");
+  const owner = await createMembershipFreeUser();
+  const ids = { card: randomUUID(), bank: randomUUID(), food: randomUUID() };
+  await fixtureSql.begin(async (tx) => {
+    const claims = JSON.stringify({ sub: owner.id, role: "authenticated", aud: "authenticated" });
+    await tx`select set_config('request.jwt.claims', ${claims}, true)`;
+    await tx`
+      insert into accounts (id, owner_user_id, name, kind, subtype, initial_balance_cents, initial_balance_on)
+      values (${ids.card}, ${owner.id}, ${`Harness rf136 tarjeta ${tag}`}, 'liability', 'card', 0, '2026-01-01'),
+        (${ids.bank}, ${owner.id}, ${`Harness rf136 banco ${tag}`}, 'asset', 'bank', 0, '2026-01-01')`;
+    await tx`
+      insert into categories (id, owner_user_id, name, kind, color)
+      values (${ids.food}, ${owner.id}, ${`Harness rf136 hogar ${tag}`}, 'expense', '#4C8C4A')`;
+  });
+  track("accounts", ids.card);
+  track("accounts", ids.bank);
+  track("categories", ids.food);
+  const { id: credentialId, token } = await asUser(owner, () =>
+    issueWebhookCredential({ name: `Harness rf136 ${tag}`, purpose: "mcp", defaultAccountId: null, defaultCategoryId: null }),
+  );
+  keep("webhook_credentials", credentialId);
+  const { tool } = mcpClient(POST, token);
+  const balance = async () => {
+    const [row] = await fixtureSql<{ cents: string }[]>`
+      select balance_cents::text as cents from account_balances where id = ${ids.card}`;
+    return row?.cents;
+  };
+
+  const rows = [
+    { line: 1, date: "2026-03-15", description: "NEVERA 1/36", amountCents: -360_000_000, categoryId: ids.food, instalments: 36 },
+    { line: 2, date: "2026-03-16", description: "CAFE", amountCents: -1_000_000, categoryId: ids.food },
+  ];
+  type Line = { line: number; status: string; reason?: string; deferral?: { instalments: number; proposal: string } };
+  const preview = await tool("preview_statement", { accountId: ids.card, rows });
+  const lines = (preview.value?.lines ?? []) as Line[];
+  const [none] = await fixtureSql<{ n: number }[]>`select count(*)::int as n from deferrals where account_id = ${ids.card}`;
+  const wrongSide = await tool("preview_statement", { accountId: ids.bank, rows: [rows[0]] });
+  assert(
+    next("RF-136: the preview proposes the deferral and writes nothing; on an asset account the line is invalid"),
+    !preview.isError && lines[0]?.status === "new" && lines[0].deferral?.instalments === 36 &&
+      lines[0].deferral.proposal === "Diferir en 36 cuotas" && lines[1]?.deferral === undefined &&
+      none?.n === 0 && (wrongSide.value?.lines as Line[])?.[0]?.reason === "cannot_defer",
+    `preview ${JSON.stringify(lines)}, deferrals ${none?.n}, asset ${JSON.stringify(wrongSide.value?.lines)}`,
+  );
+
+  const imported = await tool("import_statement", { accountId: ids.card, rows, previewKey: preview.value?.previewKey });
+  const again = await tool("import_statement", { accountId: ids.card, rows, previewKey: preview.value?.previewKey });
+  const stored = await fixtureSql<{ instalments: number; description: string; created_by: string }[]>`
+    select d.instalments, t.description, d.created_by from deferrals d join transactions t on t.id = d.transaction_id
+    where d.account_id = ${ids.card}`;
+  assert(
+    next("RF-136: the import writes the deferral of the proposed line, stamped by its owner, and the whole purchase stays in the balance"),
+    !imported.isError && imported.value?.created === 2 && stored.length === 1 &&
+      stored[0]?.instalments === 36 && stored[0].description === "NEVERA 1/36" && stored[0].created_by === owner.id &&
+      again.isError && (await balance()) === "-361000000",
+    `imported ${JSON.stringify(imported.value)}, stored ${JSON.stringify(stored)}, balance ${await balance()}`,
   );
 }
 

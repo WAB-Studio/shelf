@@ -25,7 +25,8 @@ export type InvalidReason =
   | "category_mismatch"
   | "unknown_account"
   | "needs_counter_amount"
-  | "before_opening";
+  | "before_opening"
+  | "cannot_defer";
 
 export type PreviewLine = {
   line: number;
@@ -41,6 +42,8 @@ export type PreviewLine = {
   counter?: { currency: string; amountCents: number | null };
   // Only on a new line the person marked unsure: it is written waiting for its other side (RF-133).
   awaitsCounterparty?: true;
+  // RF-136: the line carries instalments, so it is proposed as deferred; the import writes it.
+  deferral?: { instalments: number };
 };
 
 export type StatementPreview = {
@@ -70,6 +73,7 @@ type Context = {
     openedOn: string;
     ownerUserId: string | null;
     groupId: string | null;
+    kind: "asset" | "liability";
   } | null;
   // The movement each already-imported reference of this account belongs to.
   refs: { ref: string; transactionId: string }[];
@@ -97,7 +101,7 @@ async function readContext(tx: Transaction, input: StatementInput): Promise<Cont
     select
       (select json_build_object('id', a.id, 'name', a.name, 'currency', a.settlement_currency,
           'canWrite', coalesce(private.can_write_account(a.id), false), 'openedOn', a.initial_balance_on,
-          'ownerUserId', a.owner_user_id, 'groupId', a.group_id)
+          'ownerUserId', a.owner_user_id, 'groupId', a.group_id, 'kind', a.kind)
         from accounts a where a.id = ${input.accountId} and a.archived_at is null) as account,
       coalesce((select json_agg(json_build_object('ref', s.source_ref, 'transactionId', s.transaction_id))
         from transaction_sources s
@@ -206,6 +210,38 @@ function classify(rows: StatementRow[], context: Context): PreviewLine[] {
   });
 }
 
+// RF-136: a line that carries instalments is proposed as deferred. Only a purchase on a liability can
+// be; any other line with instalments is invalid, so nothing is deferred the person did not see.
+function withDeferrals(lines: PreviewLine[], rows: StatementRow[], account: NonNullable<Context["account"]>): PreviewLine[] {
+  const instalments = new Map(rows.map((row) => [row.line, row.instalments]));
+  return lines.map((line) => {
+    const count = instalments.get(line.line);
+    if (count === undefined || line.status === "already_imported" || line.status === "invalid") return line;
+    if (account.kind !== "liability" || line.kind !== "expense") {
+      return { ...line, status: "invalid", reason: "cannot_defer" };
+    }
+    return { ...line, deferral: { instalments: count } };
+  });
+}
+
+// The deferral of each written or matched purchase whose line proposed one. A movement already
+// deferred keeps its first deferral.
+async function writeDeferrals(
+  tx: Transaction,
+  accountId: string,
+  legs: { transactionId: string; row: StatementRow }[],
+): Promise<void> {
+  const deferred = legs.filter((leg) => leg.row.instalments !== undefined);
+  if (deferred.length === 0) return;
+  await tx.execute(sql`
+    insert into deferrals (transaction_id, account_id, instalments)
+    values ${sql.join(
+      deferred.map((leg) => sql`(${leg.transactionId}::uuid, ${accountId}::uuid, ${leg.row.instalments}::smallint)`),
+      sql`, `,
+    )}
+    on conflict (transaction_id) do nothing`);
+}
+
 // The key binds an import to the lines a preview showed AND to what it said about each: a line that
 // would now be written differently changes it, so the import refuses rather than act unseen.
 function previewKeyOf(accountId: string, rows: StatementRow[], lines: PreviewLine[]): string {
@@ -221,7 +257,7 @@ function summarise(input: StatementInput, context: Context): StatementPreview {
   if (!account) throw new StatementError("notFound");
   if (!account.canWrite) throw new StatementError("readOnly");
   const rows = [...input.rows].sort((a, b) => a.line - b.line);
-  const lines = classify(rows, context);
+  const lines = withDeferrals(classify(rows, context), rows, account);
   const counts = { new: 0, matches: 0, already_imported: 0, invalid: 0 };
   for (const line of lines) counts[line.status] += 1;
   return {
@@ -294,6 +330,7 @@ export async function importStatement(
             sql`, `,
           )}`);
       }
+      await writeDeferrals(tx, input.accountId, legs);
     } catch (error) {
       console.error("statement line refused:", pgErrorCode(error) ?? "", pgConstraintName(error) ?? "");
       throw new StatementError("lineRefused", current);

@@ -568,6 +568,13 @@
       "when": 1793489688749,
       "tag": "0080_a_salary_is_known_by_its_seed",
       "breakpoints": true
+    },
+    {
+      "idx": 81,
+      "version": "7",
+      "when": 1794351000765,
+      "tag": "0081_a_purchase_may_be_deferred",
+      "breakpoints": true
     }
   ]
 }

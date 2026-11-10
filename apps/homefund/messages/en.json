@@ -283,7 +283,8 @@
       "reminder_mails": "Reminder emails",
       "allowed_emails": "Allowed emails",
       "sign_in_claims": "Sign-ins",
-      "other": "Other record"
+      "other": "Other record",
+      "deferrals": "Deferred purchases"
     }
   },
   "members": {
@@ -1129,6 +1130,26 @@
       "notLiability": "The account is not a liability."
     }
   },
+  "deferrals": {
+    "title": "Deferred purchases",
+    "step": "Instalment {current} of {total} · {amount} a month",
+    "extinguished": "Extinguished",
+    "action": "Defer in instalments",
+    "remove": "Remove deferral",
+    "dialogTitle": "Defer in instalments",
+    "dialogBody": "The purchase stays whole in your balance; the instalments only fraction its part of the minimum payment. Confirm how many instalments the bank gave.",
+    "instalmentsLabel": "Number of instalments",
+    "save": "Confirm deferral",
+    "saved": "Purchase deferred.",
+    "removed": "Deferral removed.",
+    "removeTitle": "Remove the deferral?",
+    "removeBody": "The purchase stays in your balance; it only stops counting as deferred.",
+    "errors": {
+      "instalmentsInvalid": "Enter a number of instalments between 2 and 72.",
+      "notPurchase": "Only a purchase on a card or debt can be deferred.",
+      "alreadyDeferred": "This purchase is already deferred."
+    }
+  },
   "installments": {
     "planDeleted": "Plan deleted.",
     "paymentTitle": "Pay down the debt",
@@ -1587,6 +1608,7 @@
       "previewStatement": "Step 1 of importing a bank statement: says what each line would do, writing nothing. Each line: «new» (will be created), «matches» (already recorded by hand or as a transfer's other side; only linked), «already_imported» (skipped) or «invalid» (with its reason). «proposal» is the account the person used before for that description: ask them before passing it as counterAccountId. A transfer with an account in another currency carries «counter»: ask the person how much arrived (or left) in that account, pass it as counterAmountCents and confirm the resulting rate with them. Show the summary to the person before step 2.",
       "importStatement": "Step 2: imports exactly what preview_statement showed, with its previewKey. All or nothing: if a line changed, or what the preview said about it, or one is invalid, nothing is written and it asks for a new preview. Repeating it never duplicates movements: what was imported shows as «already_imported»."
     },
+    "deferralProposal": "Defer in {count} instalments",
     "errors": {
       "unauthorized": "The key is not valid or was revoked.",
       "unknown": "It could not be done. Try again.",

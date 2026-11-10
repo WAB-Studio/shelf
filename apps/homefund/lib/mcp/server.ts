@@ -95,7 +95,17 @@ function registerStatementTools(server: McpServer): void {
   server.registerTool(
     "preview_statement",
     { description: t("tools.previewStatement"), inputSchema: statementSchema, annotations: { readOnlyHint: true } },
-    (input, ctx) => run(ctx, () => previewStatement(input)),
+    (input, ctx) =>
+      run(ctx, async () => {
+        const preview = await previewStatement(input);
+        // RF-136: a line with instalments reads as the proposal a person confirms, never as done.
+        const lines = preview.lines.map((line) =>
+          line.deferral
+            ? { ...line, deferral: { ...line.deferral, proposal: t("deferralProposal", { count: line.deferral.instalments }) } }
+            : line,
+        );
+        return { ...preview, lines };
+      }),
   );
   server.registerTool(
     "import_statement",

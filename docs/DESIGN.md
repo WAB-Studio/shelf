@@ -74,7 +74,13 @@ highlight, a white ground, pill buttons), with HomeFund's own palette and faces.
   stays; «Cupo disponible · …» adds the credit to the limit. At zero the figure is «$ 0» in the normal ink. «Deuda total» and
   «Interés mensual» never count a credit. A pocket in another currency reads by its own sign under the settlement figure
   («A favor US$ 20» under «$ 80.000»). The laptop's table uses the same figure and tone in its balance column; not drawn apart.
-- `Deudas · cuotas` has no board yet.
+- `Deudas · cuotas` is built under RF-136 (2026-11-10), words only, no board: the debt's detail lists «Compras diferidas»
+  in a `Panel`, one `PanelRow` per purchase linking to its movement, «Cuota 3 de 36 · $ 12.345 al mes» at the end or
+  «Extinguida»; the section is absent while nothing is deferred. A purchase on a card offers «Diferir en cuotas» in a
+  `Panel` on the movement's detail (phone and laptop); it opens a dialog with one field, «Número de cuotas» (2 to 72), and
+  «Confirmar diferido». «Quitar diferido» replaces the button once deferred. The balance, «Deuda total» and «Pago mínimo»
+  never change with it. A statement line printing «1/36» reaches the person through the MCP preview as «Diferir en 36
+  cuotas»; accepting the preview confirms it.
 
 ## Decision of 2026-10-14: the app is called «HomeFund»
 
