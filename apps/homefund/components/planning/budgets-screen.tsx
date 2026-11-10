@@ -272,10 +272,9 @@ export function BudgetsScreen({
           archived={archived}
           empty={
             archived ? (
-              <EmptyState variant="filtered" title={t("archivedEmpty")} />
+              <EmptyState title={t("archivedEmpty")} />
             ) : (
               <EmptyState
-                variant="filtered"
                 title={t("emptyTitle")}
                 description={t("emptyDescription")}
                 action={addButton}

@@ -144,7 +144,8 @@ export function DataTable<Row>({
         {empty && isEmpty && (
           <div role="rowgroup">
             <div role="row">
-              <div role="cell" aria-colspan={columns.length}>
+              {/* The frame spaces its own empty state, so every table's reads the same. */}
+              <div role="cell" aria-colspan={columns.length} className={styles.empty}>
                 {empty}
               </div>
             </div>

@@ -318,7 +318,6 @@ export function AccountsScreen({
                 emptyState
               ) : filteredAccounts.length === 0 ? (
                 <EmptyState
-                  variant="filtered"
                   title={t("filteredEmptyTitle")}
                   description={t("filteredEmptyDescription")}
                   action={
