@@ -10,8 +10,10 @@ import { getMonthReview } from "@/db/queries/month-review";
 import { importStatement, previewStatement, StatementError } from "@/db/queries/statement-import";
 import { actAsCredentialOwner } from "@/db/session";
 import { lastClosedMonth } from "@/lib/dates";
+import { ActionError } from "@/lib/errors";
 import { env } from "@/lib/env";
 import { pgErrorCode } from "@/lib/db-error";
+import { registerLedgerTools } from "@/lib/mcp/write-tools";
 import { statementImportSchema, statementSchema } from "@/lib/validation/statement-import";
 
 import es from "../../messages/es.json";
@@ -27,6 +29,13 @@ export const RESOURCE_METADATA_PATH = "/.well-known/oauth-protected-resource/mcp
 // A tool answers outside a request, where next-intl's request config does not run.
 const t = createTranslator({ locale: "es", messages: { mcp: es.mcp }, namespace: "mcp" });
 
+// A write refuses in the key a form would show; the whole catalogue is read, since those keys live in
+// every namespace. A key the catalogue lacks answers the generic sentence, never the key itself.
+const tForm = createTranslator({ locale: "es", messages: es });
+function refusal(key: string): string {
+  return tForm.has(key as never) ? tForm(key as never) : t("errors.unknown");
+}
+
 // The owner `withMcpAuth` carries, put there by the route's `verify` alone.
 function ownerOf(ctx: ServerContext): string | null {
   const owner = ctx.http?.authInfo?.extra?.ownerUserId;
@@ -39,15 +48,16 @@ function text(value: unknown, isError = false): CallToolResult {
 
 // Every tool runs as the credential's owner, so the policies scope it exactly as they scope that
 // person's own screens; a failure answers a sentence, never the driver's message (it carries the query).
-async function run(ctx: ServerContext, load: () => Promise<unknown>): Promise<CallToolResult> {
+async function run(ctx: ServerContext, load: (owner: string) => Promise<unknown>): Promise<CallToolResult> {
   const owner = ownerOf(ctx);
   if (owner === null) return text({ error: t("errors.unauthorized") }, true);
   try {
-    return text(await actAsCredentialOwner(owner, load));
+    return text(await actAsCredentialOwner(owner, () => load(owner)));
   } catch (error) {
     if (error instanceof StatementError) {
       return text({ error: t(`errors.statement.${error.key}`), line: error.line }, true);
     }
+    if (error instanceof ActionError) return text({ error: refusal(error.messageKey) }, true);
     console.error("mcp tool failed:", error instanceof Error ? error.name : "unknown", pgErrorCode(error) ?? "");
     return text({ error: t("errors.unknown") }, true);
   }
@@ -125,6 +135,7 @@ export function buildHandler(): (request: Request) => Promise<Response> {
   return createMcpHandler((server) => {
     registerReadTools(server);
     registerStatementTools(server);
+    registerLedgerTools(server, run, (key) => t(key as never));
   }, {
     serverInfo: { name: "homefund", version: pkg.version },
     instructions: t("instructions"),

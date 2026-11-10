@@ -4,13 +4,12 @@ import { refresh } from "next/cache";
 
 import {
   archiveAccount,
-  createAccount,
   deleteAccount,
   handAccountToGroup,
   restoreAccount,
   updateAccount,
 } from "@/db/queries/accounts";
-import { getUserGroup } from "@/db/queries/groups";
+import { openAccount } from "@/db/queries/ledger-write";
 import { pgErrorCode } from "@/lib/db-error";
 import { ActionError } from "@/lib/errors";
 import { parseAmount } from "@/lib/money";
@@ -25,47 +24,15 @@ import {
 } from "@/lib/validation/account";
 
 /**
- * Creates an account (RF-60, RF-09, RF-10, RF-121). A personal account is owned
- * by the caller; a group account is held by their group and shared so any member
- * may write it. The amount arrives as a string the schema already read in the
- * account's own currency; parsing it again here can only fail if the schema let
- * something through it should not have.
+ * Creates an account (RF-60, RF-09, RF-10, RF-121); the write is `openAccount`'s, shared with `/mcp`.
  */
 export const createAccountAction = authActionClient
   .inputSchema(createAccountSchema)
-  .action(async ({ parsedInput: { amount, placement, ...account }, ctx }) => {
-    const amountMinor = parseAmount(amount);
-    if (amountMinor === null) throw new ActionError("errors.unexpected");
-
-    // The owner/group XOR is resolved from the session, never trusted from the
-    // form; a group placement without a group has nowhere to land.
-    let placementFields: { ownerUserId: string | null; groupId: string | null; isShared: boolean };
-    if (placement === "group") {
-      const group = await getUserGroup();
-      if (!group) throw new ActionError("errors.notFound");
-      placementFields = { ownerUserId: null, groupId: group.id, isShared: true };
-    } else {
-      placementFields = { ownerUserId: ctx.user.id, groupId: null, isShared: false };
-    }
-
-    let accountId: string;
-    try {
-      ({ accountId } = await createAccount({
-        ...account,
-        ...placementFields,
-        amountMinor,
-      }));
-    } catch (error) {
-      // `accounts_settlement_currency_iso`: a code the picker does not offer and
-      // the shape check refuses. Every other 23514 on this table is a placement
-      // the form cannot express.
-      if (pgErrorCode(error) === "23514")
-        throw new ActionError("accounts.errors.currencyInvalid");
-      throw error;
-    }
+  .action(async ({ parsedInput, ctx }) => {
+    const created = await openAccount(parsedInput, ctx.user.id);
 
     refresh();
-    return { accountId };
+    return created;
   });
 
 /**

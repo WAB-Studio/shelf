@@ -15231,7 +15231,7 @@ async function mcpDoorSuite(): Promise<void> {
   assert(
     next("RF-144: /mcp answers 401 with no key, an unknown one or a webhook's, and lists its tools to a key for Claude"),
     anonymous.status === 401 && forged.status === 401 && webhookKey.status === 401 &&
-      JSON.stringify(names) === JSON.stringify(["import_statement", "list_accounts", "preview_statement", "review_month"]),
+      JSON.stringify(names) === JSON.stringify(["create_account", "create_category", "delete_movement", "import_statement", "list_accounts", "list_categories", "list_movements", "preview_statement", "record_movement", "review_month", "update_movement"]),
     `no key ${anonymous.status}, unknown key ${forged.status}, webhook key ${webhookKey.status}, tools ${JSON.stringify(names)}`,
   );
 
@@ -15287,6 +15287,140 @@ async function mcpDoorSuite(): Promise<void> {
     next("RF-144: a key for Claude opens /mcp in X-API-Key too; a webhook key there still answers 401"),
     apiKey.status === 200 && apiWebhookKey.status === 401,
     `X-API-Key ${apiKey.status}, webhook key in X-API-Key ${apiWebhookKey.status}`,
+  );
+
+  // RF-169, RF-170, RF-171: Claude writes through the forms' own schemas and writes, as the key's owner.
+  const food = randomUUID();
+  const alienFood = randomUUID();
+  for (const [user, id, name] of [
+    [owner, food, `Harness rf169 comida ${tag}`],
+    [stranger, alienFood, `Harness rf169 ajena ${tag}`],
+  ] as const) {
+    await fixtureSql.begin(async (tx) => {
+      const claims = JSON.stringify({ sub: user.id, role: "authenticated", aud: "authenticated" });
+      await tx`select set_config('request.jwt.claims', ${claims}, true)`;
+      await tx`insert into categories (id, owner_user_id, name, kind, color) values (${id}, ${user.id}, ${name}, 'expense', '#4C8C4A')`;
+    });
+    track("categories", id);
+  }
+  const { id: writeKeyId, token: writeToken } = await asUser(owner, () =>
+    issueWebhookCredential({ name: `Harness rf169 ${tag}`, purpose: "mcp", defaultAccountId: null, defaultCategoryId: null }),
+  );
+  keep("webhook_credentials", writeKeyId);
+  const writer = mcpClient(POST, writeToken);
+  const owed = async (account: string) => {
+    const [row] = await fixtureSql<{ n: number }[]>`
+      select count(*)::int as n from transactions where from_account_id = ${account} or to_account_id = ${account}`;
+    return row!.n;
+  };
+  const { transactionId: alienMovement } = await asUser(stranger, () =>
+    createTransaction({
+      fromAccountId: strangerAccount, toAccountId: null, amountCents: 1_000_00, occurredAt: "2026-09-01",
+      description: `Harness rf169 ajeno ${tag}`, externalRef: null, splits: [{ categoryId: alienFood, amountCents: 1_000_00 }], labelIds: [],
+    }),
+  );
+
+  const categories = await writer.tool("list_categories");
+  const categoryIds = (categories.value as { id: string }[] | null)?.map((one) => one.id) ?? [];
+  assert(
+    next("RF-171: list_categories answers the owner's categories with kind and scope, never another person's"),
+    !categories.isError && categoryIds.includes(food) && !categoryIds.includes(alienFood),
+    `isError ${categories.isError}, own ${categoryIds.includes(food)}, stranger's ${categoryIds.includes(alienFood)}`,
+  );
+
+  const purchase = {
+    fromAccountId: ownAccount, toAccountId: null, amountCents: 250_000_00, occurredAt: "2026-09-20",
+    description: `Mercado ${tag}`, categoryId: food,
+  };
+  const recorded = await writer.tool("record_movement", purchase);
+  const recordedId = (recorded.value as { transactionId?: string } | null)?.transactionId ?? "";
+  const [stored] = await fixtureSql<{ kind: string; amount_cents: string; category_id: string }[]>`
+    select t.kind, t.amount_cents::text, s.category_id from transactions t
+    join transaction_splits s on s.transaction_id = t.id where t.id = ${recordedId}`;
+  assert(
+    next("RF-169: record_movement books an expense with its kind derived from the accounts and its category, and answers the movement's id"),
+    !recorded.isError && stored?.kind === "expense" && stored.amount_cents === "25000000" && stored.category_id === food,
+    `recorded ${JSON.stringify(recorded.value)}, stored ${JSON.stringify(stored)}`,
+  );
+
+  const before = await owed(strangerAccount);
+  const toAlien = await writer.tool("record_movement", { ...purchase, fromAccountId: strangerAccount });
+  const alienCategory = await writer.tool("record_movement", { ...purchase, categoryId: alienFood });
+  const future = await writer.tool("record_movement", { ...purchase, occurredAt: "2999-01-01" });
+  const ownAfter = await owed(ownAccount);
+  assert(
+    next("RF-169: record_movement refuses another person's account, a category of another scope and a future date, in the form's words, writing nothing"),
+    toAlien.isError && alienCategory.isError && future.isError &&
+      (await owed(strangerAccount)) === before && ownAfter === 1 &&
+      typeof (future.value as { error?: string } | null)?.error === "string" && !/at |Error:/.test(JSON.stringify(future.value)),
+    `alien ${JSON.stringify(toAlien.value)}, category ${JSON.stringify(alienCategory.value)}, future ${JSON.stringify(future.value)}, own rows ${ownAfter}`,
+  );
+
+  const movements = await writer.tool("list_movements", { accountId: ownAccount, from: "2026-09-01", to: "2026-09-30" });
+  const alienListed = await writer.tool("list_movements", { accountId: strangerAccount });
+  const movementIds = (movements.value as { id: string }[] | null)?.map((one) => one.id) ?? [];
+  assert(
+    next("RF-171: list_movements answers the account's movements in a date range, and none of another person's account"),
+    !movements.isError && movementIds.includes(recordedId) && !alienListed.isError &&
+      !((alienListed.value as { id: string }[] | null) ?? []).some((one) => one.id === alienMovement),
+    `listed ${JSON.stringify(movements.value)?.slice(0, 160)}, alien ${JSON.stringify(alienListed.value)}`,
+  );
+
+  const edited = await writer.tool("update_movement", { ...purchase, transactionId: recordedId, amountCents: 300_000_00 });
+  const [after] = await fixtureSql<{ amount_cents: string }[]>`select amount_cents::text from transactions where id = ${recordedId}`;
+  const editedAlien = await writer.tool("update_movement", { ...purchase, transactionId: alienMovement, fromAccountId: ownAccount });
+  assert(
+    next("RF-169: update_movement rewrites a movement the owner can write, and refuses another person's as not found"),
+    !edited.isError && after?.amount_cents === "30000000" && editedAlien.isError,
+    `edited ${JSON.stringify(edited.value)}, amount ${after?.amount_cents}, alien ${JSON.stringify(editedAlien.value)}`,
+  );
+
+  const deletedAlien = await writer.tool("delete_movement", { transactionId: alienMovement });
+  const deleted = await writer.tool("delete_movement", { transactionId: recordedId });
+  const [alienKept] = await fixtureSql<{ n: number }[]>`select count(*)::int as n from transactions where id = ${alienMovement}`;
+  assert(
+    next("RF-169: delete_movement removes a movement the owner can write and refuses another person's"),
+    !deleted.isError && deletedAlien.isError && (await owed(ownAccount)) === 0 && alienKept?.n === 1,
+    `deleted ${JSON.stringify(deleted.value)}, alien ${JSON.stringify(deletedAlien.value)}, kept ${alienKept?.n}`,
+  );
+
+  const account = await writer.tool("create_account", {
+    name: `Harness rf170 ahorros ${tag}`, kind: "asset", subtype: "bank", openingBalanceCents: 500_000_00, balanceOn: "2026-01-01",
+  });
+  const accountId = (account.value as { accountId?: string } | null)?.accountId ?? "";
+  if (accountId) track("accounts", accountId);
+  const [openedAccount] = await fixtureSql<{ owner_user_id: string; initial_balance_cents: string }[]>`
+    select owner_user_id, initial_balance_cents::text from accounts where id = ${accountId || randomUUID()}`;
+  const noFund = await writer.tool("create_account", {
+    name: `Harness rf170 fondo ${tag}`, kind: "asset", subtype: "bank", placement: "group", openingBalanceCents: 0, balanceOn: "2026-01-01",
+  });
+  assert(
+    next("RF-170: create_account opens a personal account for the key's owner with its opening balance; a fund account with no fund is refused"),
+    !account.isError && openedAccount?.owner_user_id === owner.id && openedAccount.initial_balance_cents === "50000000" && noFund.isError,
+    `account ${JSON.stringify(account.value)}, row ${JSON.stringify(openedAccount)}, no fund ${JSON.stringify(noFund.value)}`,
+  );
+
+  const category = await writer.tool("create_category", { name: `Harness rf170 hijo ${tag}`, kind: "expense", parentId: food });
+  const categoryId = (category.value as { categoryId?: string } | null)?.categoryId ?? "";
+  if (categoryId) track("categories", categoryId);
+  const wrongKind = await writer.tool("create_category", { name: `Harness rf170 ingreso ${tag}`, kind: "income", parentId: food });
+  const alienParent = await writer.tool("create_category", { name: `Harness rf170 ajeno ${tag}`, kind: "expense", parentId: alienFood });
+  const [child] = await fixtureSql<{ parent_id: string }[]>`select parent_id from categories where id = ${categoryId || randomUUID()}`;
+  assert(
+    next("RF-170: create_category writes a subcategory under the owner's parent; a parent of the wrong kind or of another person is refused"),
+    !category.isError && child?.parent_id === food && wrongKind.isError && alienParent.isError,
+    `category ${JSON.stringify(category.value)}, child ${JSON.stringify(child)}, wrong kind ${JSON.stringify(wrongKind.value)}, alien parent ${JSON.stringify(alienParent.value)}`,
+  );
+
+  const viaWebhook = await Promise.all(
+    ["record_movement", "update_movement", "delete_movement", "create_account", "create_category", "list_categories", "list_movements"].map((name) =>
+      mcpClient(POST, ingestToken).rpc(ingestToken, "tools/call", { name, arguments: {} }),
+    ),
+  );
+  assert(
+    next("RF-169: no write or read tool of the ledger opens to a webhook key"),
+    viaWebhook.every((one) => one.status === 401),
+    `statuses ${JSON.stringify(viaWebhook.map((one) => one.status))}`,
   );
 }
 

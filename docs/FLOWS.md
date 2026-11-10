@@ -214,6 +214,13 @@ Without that, someone types a name with a trailing space and half the rows fail.
 Import order is dictated by dependencies: members and categories first, then
 accounts, then recurring rules and transactions.
 
+### Claude writes from the chat (RF-169, RF-170, RF-171)
+
+The person hands Claude a photo or a message. Claude reads it, then `list_categories`, `list_accounts`
+and `list_movements` (a duplicate?), tells the person what it is about to write and, once they agree,
+calls `record_movement`, `create_account` or `create_category`. A mistake is fixed from the same chat
+with `update_movement` or `delete_movement`. Every refusal comes back as the form's sentence.
+
 ---
 
 ## 8. Language
