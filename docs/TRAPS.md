@@ -7,6 +7,18 @@ Working rules live in `AGENTS.md`. Session state lives in `private/handoffs/`. T
 holds only what a person could not guess from the code. Entries whose cause is gone live in `docs/TRAPS-archivo.md`.
 
 
+## Production Auth sent 8-digit codes; every app reads 6
+
+Found 2026-11-10 by the user: HomeFund's sign-in mail carried `15441772`, the field (`maxLength={6}`,
+`apps/homefund/components/auth/login-form.tsx:241`) cut it to `154417`, and the server answered «wrong or expired».
+Production's «Email OTP Length» was 8; `supabase/config.toml:51` says 6, so no local suite could see it. HomeFund, GoalLog
+(`lib/validation/sign-in.ts:9`) and WordBook (`components/account/account-panel.tsx:369`) all take exactly six digits.
+
+- The user set production back to 6 in the dashboard (Authentication → Providers → Email) the same day.
+- Read a production Auth setting from the dashboard before blaming the code for a sign-in failure; the local stack
+  only mirrors `config.toml`.
+
+
 ## WordBook's e2e fails on this machine's Chromium, not on CI's
 
 Measured 2026-11-03, lane 4. `/opt/pw-browsers/chromium_headless_shell-1234` (the build Playwright 1.62.1 asks for,
