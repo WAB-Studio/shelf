@@ -15499,6 +15499,23 @@ async function mcpDoorSuite(): Promise<void> {
     openMonth.isError && throttled.status === 429 && ingestWindow?.rate_count === 0,
     `open month isError ${openMonth.isError}, throttled /mcp ${throttled.status}, webhook key's count ${ingestWindow?.rate_count}`,
   );
+
+  // claude.ai drops a custom Authorization header, so its connector sends the key as X-API-Key.
+  await fixtureSql`update webhook_credentials set rate_limit_per_min = 60, rate_count = 0 where id = ${credentialId}`;
+  const viaHeader = (key: string) =>
+    POST(
+      new Request("http://localhost/mcp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json, text/event-stream", "X-API-Key": key },
+        body: JSON.stringify({ jsonrpc: "2.0", id: 99, method: "tools/list" }),
+      }),
+    );
+  const [apiKey, apiWebhookKey] = await Promise.all([viaHeader(token), viaHeader(ingestToken)]);
+  assert(
+    next("RF-144: a key for Claude opens /mcp in X-API-Key too; a webhook key there still answers 401"),
+    apiKey.status === 200 && apiWebhookKey.status === 401,
+    `X-API-Key ${apiKey.status}, webhook key in X-API-Key ${apiWebhookKey.status}`,
+  );
 }
 
 // RF-144, RF-134, RF-135: a statement Claude read enters through a preview first, writes each line
