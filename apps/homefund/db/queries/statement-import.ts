@@ -6,6 +6,7 @@ import { sql } from "drizzle-orm";
 
 import { jsonbParam } from "@/db/jsonb-param";
 import { deferrablePurchaseSql } from "@/db/queries/deferrals";
+import { derivedBalanceAt } from "@/db/queries/account-statements";
 import { insertTransaction, trustedPatternsSql } from "@/db/queries/transactions";
 import { withUserDb, type Transaction } from "@/db/session";
 import { pgConstraintName, pgErrorCode } from "@/lib/db-error";
@@ -382,13 +383,7 @@ async function cutStatement(
   const [row] = await tx.execute<{ id: string }>(sql`
     insert into account_statements (account_id, period_start, cut_off_date, closing_balance_cents, source)
     select a.id, ${period.periodStart}::date, ${period.cutOffDate}::date,
-      ${printed === undefined ? sql`a.initial_balance_cents + coalesce((select sum(
-          (case when t.to_account_id = a.id then 1 else -1 end) * (case
-            when t.currency = a.settlement_currency then t.amount_cents
-            when t.counter_amount_cents is not null and not t.counter_is_estimate then t.counter_amount_cents
-            else 0 end))
-        from transactions t
-        where (t.to_account_id = a.id or t.from_account_id = a.id) and t.occurred_at <= ${period.cutOffDate}::date), 0)`
+      ${printed === undefined ? derivedBalanceAt(sql`a`, sql`${period.cutOffDate}::date`)
         : sql`${printed}::bigint`},
       'imported'
     from accounts a where a.id = ${input.accountId}
