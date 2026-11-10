@@ -28,9 +28,26 @@ export const statementRowSchema = z.object({
   instalments: z.number().int().min(MIN_INSTALMENTS).max(MAX_INSTALMENTS).optional(),
 });
 
+// The statement the lines were read from. A statement is told apart by its account and its cut-off
+// date, so a re-import names the same one and replaces its rows (RF-134). Absent, the period runs from
+// the first line's day to the last's and the closing balance is the one the movements derive.
+const statementPeriodSchema = z.object({
+  periodStart: occurredAtSchema,
+  cutOffDate: occurredAtSchema,
+  // As the statement printed it, signed like the account (a card's debt is negative).
+  closingBalanceCents: z.number().int().min(-Number.MAX_SAFE_INTEGER).max(Number.MAX_SAFE_INTEGER).optional(),
+});
+
 export const statementSchema = z
-  .object({ accountId: z.uuid(), rows: z.array(statementRowSchema).min(1).max(500) })
-  .superRefine(({ accountId, rows }, ctx) => {
+  .object({
+    accountId: z.uuid(),
+    rows: z.array(statementRowSchema).min(1).max(500),
+    statement: statementPeriodSchema.optional(),
+  })
+  .superRefine(({ accountId, rows, statement }, ctx) => {
+    if (statement && statement.periodStart > statement.cutOffDate) {
+      ctx.addIssue({ code: "custom", path: ["statement", "periodStart"], message: "period after cut-off" });
+    }
     const lines = new Set<number>();
     const refs = new Set<string>();
     rows.forEach((row, index) => {

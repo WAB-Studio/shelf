@@ -18,6 +18,8 @@ import type { StatementInput, StatementRow } from "@/lib/validation/statement-im
 //   off another statement); the import links this leg to it and writes nothing new.
 // - `already_imported`: this leg already carries this line's source; the import skips it.
 // - `invalid`: the import cannot write it; `reason` says why.
+// A re-import also replaces the statement's rows (RF-134): a leg this statement named before and the
+// lines no longer name is a `Removal`, shown beside the lines before the person confirms.
 export type LineStatus = "new" | "matches" | "already_imported" | "invalid";
 
 export type InvalidReason =
@@ -28,6 +30,17 @@ export type InvalidReason =
   | "needs_counter_amount"
   | "before_opening"
   | "cannot_defer";
+
+// A movement a re-import drops: `deletes` when the import created it and this statement was its only
+// source, `unlinks` when a person or another channel wrote it, the other side's statement still names
+// it, or a reconciliation holds it: only this leg's source row goes.
+export type Removal = {
+  transactionId: string;
+  date: string;
+  description: string | null;
+  amountCents: number;
+  effect: "deletes" | "unlinks";
+};
 
 export type PreviewLine = {
   line: number;
@@ -50,11 +63,20 @@ export type PreviewLine = {
 export type StatementPreview = {
   previewKey: string;
   account: { id: string; name: string; currency: string };
+  // The statement these lines belong to; `existing` once an earlier import or close recorded it.
+  statement: { periodStart: string; cutOffDate: string; existing: boolean };
   lines: PreviewLine[];
   counts: Record<LineStatus, number>;
+  removals: Removal[];
 };
 
-export type StatementImportResult = { created: number; linked: number; skipped: number };
+export type StatementImportResult = {
+  created: number;
+  linked: number;
+  skipped: number;
+  removed: number;
+  unlinked: number;
+};
 
 export class StatementError extends Error {
   constructor(
@@ -93,15 +115,49 @@ type Context = {
   categories: { id: string; kind: "income" | "expense"; ownerUserId: string | null; groupId: string | null }[];
   accounts: { id: string; currency: string }[];
   trusted: TrustedPattern[];
+  statementId: string | null;
+  // The legs the statement row already holds, with what the movement is, for a re-import to drop.
+  held: {
+    sourceId: string;
+    transactionId: string;
+    occurredAt: string;
+    description: string | null;
+    amountCents: string;
+    reconciled: boolean;
+    shared: boolean;
+    // The import wrote the movement with this very source row: both carry one transaction's timestamp.
+    createdHere: boolean;
+  }[];
 };
+
+// The statement's own period: what the person named, else the span of its lines.
+function periodOf(input: StatementInput): { periodStart: string; cutOffDate: string } {
+  const dates = input.rows.map((row) => row.date).sort();
+  return {
+    periodStart: input.statement?.periodStart ?? dates[0]!,
+    cutOffDate: input.statement?.cutOffDate ?? dates[dates.length - 1]!,
+  };
+}
 
 const idsParam = (values: (string | undefined)[]) => jsonbParam(values.filter((value): value is string => !!value));
 
 // Everything the classification reads, in one round trip under the caller's policies.
 async function readContext(tx: Transaction, input: StatementInput): Promise<Context> {
   const dates = input.rows.map((row) => row.date).sort();
+  const { cutOffDate } = periodOf(input);
   const [row] = await tx.execute<Context>(sql`
     select
+      (select s.id from account_statements s
+        where s.account_id = ${input.accountId} and s.cut_off_date = ${cutOffDate}::date) as "statementId",
+      coalesce((select json_agg(json_build_object('sourceId', ts.id, 'transactionId', t.id,
+          'occurredAt', t.occurred_at, 'description', t.description, 'amountCents', t.amount_cents::text,
+          'reconciled', t.reconciliation_id is not null, 'createdHere', t.created_at = ts.created_at,
+          'shared', exists (select 1 from transaction_sources o where o.transaction_id = t.id and o.id <> ts.id))
+          order by t.occurred_at, ts.created_at)
+        from transaction_sources ts
+        join transactions t on t.id = ts.transaction_id
+        join account_statements st on st.id = ts.statement_id
+        where st.account_id = ${input.accountId} and st.cut_off_date = ${cutOffDate}::date), '[]') as held,
       (select json_build_object('id', a.id, 'name', a.name, 'currency', a.settlement_currency,
           'canWrite', coalesce(private.can_write_account(a.id), false), 'openedOn', a.initial_balance_on,
           'ownerUserId', a.owner_user_id, 'groupId', a.group_id, 'kind', a.kind)
@@ -258,10 +314,17 @@ async function writeDeferrals(
 
 // The key binds an import to the lines a preview showed AND to what it said about each: a line that
 // would now be written differently changes it, so the import refuses rather than act unseen.
-function previewKeyOf(accountId: string, rows: StatementRow[], lines: PreviewLine[]): string {
+function previewKeyOf(
+  accountId: string,
+  rows: StatementRow[],
+  lines: PreviewLine[],
+  period: unknown,
+  removals: Removal[],
+): string {
   const said = lines.map((line) => [line.line, line.status, line.matchedTransactionId ?? null]);
+  const dropped = removals.map((one) => [one.transactionId, one.effect]);
   return createHash("sha256")
-    .update(JSON.stringify({ accountId, rows, said }))
+    .update(JSON.stringify({ accountId, rows, said, period, dropped }))
     .digest("hex")
     .slice(0, 32);
 }
@@ -272,13 +335,29 @@ function summarise(input: StatementInput, context: Context): StatementPreview {
   if (!account.canWrite) throw new StatementError("readOnly");
   const rows = [...input.rows].sort((a, b) => a.line - b.line);
   const lines = withDeferrals(classify(rows, context), rows, account, context.candidates);
+  // What this statement held that no line names any more. A reconciled movement is never deleted.
+  const named = new Set(lines.map((line) => line.matchedTransactionId));
+  const removals = context.held
+    .filter((one) => !named.has(one.transactionId))
+    .map(
+      (one): Removal => ({
+        transactionId: one.transactionId,
+        date: one.occurredAt,
+        description: one.description,
+        amountCents: Number(one.amountCents),
+        effect: one.createdHere && !one.shared && !one.reconciled ? "deletes" : "unlinks",
+      }),
+    );
+  const period = { ...periodOf(input), existing: context.statementId !== null };
   const counts = { new: 0, matches: 0, already_imported: 0, invalid: 0 };
   for (const line of lines) counts[line.status] += 1;
   return {
-    previewKey: previewKeyOf(input.accountId, rows, lines),
+    previewKey: previewKeyOf(input.accountId, rows, lines, period, removals),
     account: { id: account.id, name: account.name, currency: account.currency },
+    statement: period,
     lines,
     counts,
+    removals,
   };
 }
 
@@ -287,12 +366,38 @@ export async function previewStatement(input: StatementInput): Promise<Statement
   return withUserDb(async (tx) => summarise(input, await readContext(tx, input)));
 }
 
+// The statement's row, read off an imported statement. Without a printed closing balance it takes the
+// one the account's movements derive at the cut-off, the way a close cut by the app does (RF-129).
+async function cutStatement(
+  tx: Transaction,
+  input: StatementInput,
+  period: StatementPreview["statement"],
+): Promise<string> {
+  const printed = input.statement?.closingBalanceCents;
+  const [row] = await tx.execute<{ id: string }>(sql`
+    insert into account_statements (account_id, period_start, cut_off_date, closing_balance_cents, source)
+    select a.id, ${period.periodStart}::date, ${period.cutOffDate}::date,
+      ${printed === undefined ? sql`a.initial_balance_cents + coalesce((select sum(
+          (case when t.to_account_id = a.id then 1 else -1 end) * (case
+            when t.currency = a.settlement_currency then t.amount_cents
+            when t.counter_amount_cents is not null and not t.counter_is_estimate then t.counter_amount_cents
+            else 0 end))
+        from transactions t
+        where (t.to_account_id = a.id or t.from_account_id = a.id) and t.occurred_at <= ${period.cutOffDate}::date), 0)`
+        : sql`${printed}::bigint`},
+      'imported'
+    from accounts a where a.id = ${input.accountId}
+    returning id`);
+  return row!.id;
+}
+
 const sourceOf = (row: StatementRow) => ({ ref: row.reference ?? null, seq: row.reference ? null : row.line });
 
 /**
  * Writes what the preview with this key showed, in one transaction: a new line becomes a movement
- * with its source (RF-134), a matched one gains its source, an imported one is skipped. A changed
- * classification, or an invalid line, writes nothing.
+ * with its source (RF-134), a matched one gains its source, an imported one is skipped, and what the
+ * statement held before that no line names any more is dropped. A changed classification, or an
+ * invalid line, writes nothing.
  */
 export async function importStatement(
   input: StatementInput & { previewKey: string },
@@ -301,7 +406,8 @@ export async function importStatement(
     // Two imports of one account (a retry while the first still runs) take turns: the second reads
     // after the first committed, so a line without a reference is not written twice.
     await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`statement:${input.accountId}`}, 0))`);
-    const preview = summarise(input, await readContext(tx, input));
+    const context = await readContext(tx, input);
+    const preview = summarise(input, context);
     if (preview.previewKey !== input.previewKey) throw new StatementError("previewChanged");
     if (preview.counts.invalid > 0) throw new StatementError("invalidLines");
     const rows = new Map(input.rows.map((row) => [row.line, row]));
@@ -333,13 +439,30 @@ export async function importStatement(
         legs.push({ transactionId, row });
       }
       current = undefined;
+      // The statement's row is found, or cut when this is its first import.
+      const statementId = context.statementId ?? (await cutStatement(tx, input, preview.statement));
+      // Drop what the statement no longer names: the movement itself when this was its only source,
+      // else just this leg's source row. The sources go first, so a dropped line's reference is free.
+      const unlinked = preview.removals.filter((one) => one.effect === "unlinks");
+      const deleted = preview.removals.filter((one) => one.effect === "deletes");
+      const held = new Map(context.held.map((one) => [one.transactionId, one.sourceId]));
+      if (unlinked.length > 0) {
+        await tx.execute(sql`
+          delete from transaction_sources
+          where id in (select jsonb_array_elements_text(${idsParam(unlinked.map((one) => held.get(one.transactionId)))})::uuid)`);
+      }
+      if (deleted.length > 0) {
+        await tx.execute(sql`
+          delete from transactions
+          where id in (select jsonb_array_elements_text(${idsParam(deleted.map((one) => one.transactionId))})::uuid)`);
+      }
       if (legs.length > 0) {
         await tx.execute(sql`
-          insert into transaction_sources (transaction_id, account_id, source_ref, source_seq)
+          insert into transaction_sources (transaction_id, account_id, statement_id, source_ref, source_seq)
           values ${sql.join(
             legs.map((leg) => {
               const { ref, seq } = sourceOf(leg.row);
-              return sql`(${leg.transactionId}::uuid, ${input.accountId}::uuid, ${ref}, ${seq}::int)`;
+              return sql`(${leg.transactionId}::uuid, ${input.accountId}::uuid, ${statementId}::uuid, ${ref}, ${seq}::int)`;
             }),
             sql`, `,
           )}`);
@@ -349,6 +472,12 @@ export async function importStatement(
       console.error("statement line refused:", pgErrorCode(error) ?? "", pgConstraintName(error) ?? "");
       throw new StatementError("lineRefused", current);
     }
-    return { created: preview.counts.new, linked: preview.counts.matches, skipped: preview.counts.already_imported };
+    return {
+      created: preview.counts.new,
+      linked: preview.counts.matches,
+      skipped: preview.counts.already_imported,
+      removed: preview.removals.filter((one) => one.effect === "deletes").length,
+      unlinked: preview.removals.filter((one) => one.effect === "unlinks").length,
+    };
   });
 }

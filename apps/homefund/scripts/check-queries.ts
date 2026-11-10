@@ -15490,6 +15490,96 @@ async function statementImportSuite(): Promise<void> {
       dollarSide.value?.lines?.[0]?.status === "matches",
     `imported ${JSON.stringify(inboundImport.value)}, received ${JSON.stringify(received)}, dollar side ${JSON.stringify(dollarSide.value?.lines)}`,
   );
+
+  // RF-134: each leg names its statement; a re-import replaces exactly that statement's rows.
+  // A movement the person wrote by hand, which the card statement's line 5 names again.
+  const { transactionId: handCardId } = await asUser(owner, () =>
+    createTransaction({
+      fromAccountId: ids.card,
+      toAccountId: null,
+      amountCents: 120_000,
+      occurredAt: "2026-10-11",
+      description: "PROPINA A MANO",
+      externalRef: null,
+      splits: [{ categoryId: ids.food, amountCents: 120_000 }],
+      labelIds: [],
+    }),
+  );
+  const october = { periodStart: "2026-10-01", cutOffDate: "2026-10-31" };
+  const cardRows = [
+    { line: 1, date: "2026-10-03", description: "CAFE", amountCents: -500_000, categoryId: ids.food },
+    { line: 2, date: "2026-10-05", description: "LIBRERIA", amountCents: -700_000, categoryId: ids.food },
+    { line: 3, date: "2026-10-07", description: "ENVIO A BANCO", amountCents: -2_000_000, counterAccountId: ids.bank },
+    { line: 4, date: "2026-10-09", description: "TAXI", amountCents: -300_000, categoryId: ids.food },
+    { line: 5, date: "2026-10-11", description: "PROPINA", amountCents: -120_000, categoryId: ids.food },
+  ];
+  const cardFirst = await tool("preview_statement", { accountId: ids.card, rows: cardRows, statement: october });
+  const cardImport = await tool("import_statement", {
+    accountId: ids.card, rows: cardRows, statement: october, previewKey: cardFirst.value?.previewKey,
+  });
+  const sourcesOf = (accountId: string) => fixtureSql<{ statement_id: string | null; description: string; transaction_id: string }[]>`
+    select s.statement_id, t.description, t.id as transaction_id from transaction_sources s
+    join transactions t on t.id = s.transaction_id where s.account_id = ${accountId} order by t.occurred_at`;
+  const cardSources = await sourcesOf(ids.card);
+  const cardStatements = await fixtureSql<{ id: string; source: string; cut_off_date: string }[]>`
+    select id, source, cut_off_date::text from account_statements where account_id = ${ids.card}`;
+  assert(
+    next("RF-134: an import finds or cuts its statement's row and stamps every leg it writes with it"),
+    !cardImport.isError && cardImport.value?.created === 4 && cardImport.value?.linked === 1 &&
+      cardStatements.length === 1 && cardStatements[0]?.source === "imported" && cardStatements[0].cut_off_date === "2026-10-31" &&
+      cardSources.length === 5 && cardSources.every((one) => one.statement_id === cardStatements[0]?.id),
+    `import ${JSON.stringify(cardImport.value)}, statements ${JSON.stringify(cardStatements)}, sources ${JSON.stringify(cardSources)}`,
+  );
+
+  // The bank's own statement names the same transfer from the other side.
+  const bankRows = [{ line: 1, date: "2026-10-07", description: "RECIBO DE TARJETA", amountCents: 2_000_000 }];
+  const bankPreview = await tool("preview_statement", { accountId: ids.bank, rows: bankRows, statement: october });
+  const bankImport = await tool("import_statement", {
+    accountId: ids.bank, rows: bankRows, statement: october, previewKey: bankPreview.value?.previewKey,
+  });
+  const bankSources = await sourcesOf(ids.bank);
+  const bankSide = bankSources.find((one) => one.description === "ENVIO A BANCO");
+  const keptCafe = cardSources.find((one) => one.description === "CAFE");
+  await fixtureSql`update transactions set description = 'CAFE CON LECHE' where id = ${keptCafe?.transaction_id ?? null}`;
+
+  const edited = [
+    cardRows[0]!,
+    { ...cardRows[3]!, amountCents: -350_000 },
+  ];
+  const replacePreview = await tool("preview_statement", { accountId: ids.card, rows: edited, statement: october });
+  const removals = (replacePreview.value?.removals ?? []) as { description: string; effect: string }[];
+  const effectOf = (description: string) => removals.find((one) => one.description === description)?.effect;
+  const replaced = await tool("import_statement", {
+    accountId: ids.card, rows: edited, statement: october, previewKey: replacePreview.value?.previewKey,
+  });
+  const afterCard = await sourcesOf(ids.card);
+  const afterStatements = await fixtureSql<{ n: number }[]>`
+    select count(*)::int as n from account_statements where account_id = ${ids.card}`;
+  const [transfer] = await fixtureSql<{ n: number; amount: string }[]>`
+    select count(*)::int as n, coalesce(max(amount_cents), 0)::text as amount from transactions where id = ${bankSide?.transaction_id ?? null}`;
+  const goneRows = await fixtureSql<{ description: string; amount_cents: string }[]>`
+    select description, amount_cents::text from transactions
+    where from_account_id = ${ids.card} and description in ('LIBRERIA', 'TAXI')`;
+  const [handKept] = await fixtureSql<{ n: number; sources: number }[]>`
+    select count(*)::int as n,
+      (select count(*)::int from transaction_sources where transaction_id = ${handCardId}) as sources
+    from transactions where id = ${handCardId}`;
+  const [survivor] = await fixtureSql<{ id: string; description: string }[]>`
+    select id, description from transactions where id = ${keptCafe?.transaction_id ?? null}`;
+  assert(
+    next("RF-134: a re-import drops what its statement no longer names, keeps and updates the rest, and a transfer the other side's statement names stays"),
+    !bankImport.isError && bankImport.value?.linked === 1 && bankSide !== undefined &&
+      bankSide.statement_id !== null && bankSide.statement_id !== cardStatements[0]?.id &&
+      effectOf("LIBRERIA") === "deletes" && effectOf("TAXI") === "deletes" && effectOf("ENVIO A BANCO") === "unlinks" && effectOf("PROPINA A MANO") === "unlinks" &&
+      replacePreview.value?.counts?.already_imported === 1 && replacePreview.value?.counts?.new === 1 &&
+      !replaced.isError && replaced.value?.removed === 2 && replaced.value?.unlinked === 2 && handKept?.n === 1 && handKept.sources === 0 && replaced.value?.created === 1 &&
+      goneRows.length === 1 && goneRows[0]?.description === "TAXI" && goneRows[0].amount_cents === "350000" &&
+      survivor?.description === "CAFE CON LECHE" &&
+      afterCard.length === 2 && afterCard.every((one) => one.statement_id === cardStatements[0]?.id) &&
+      afterStatements[0]?.n === 1 && transfer?.n === 1 && transfer.amount === "2000000" &&
+      (await sourcesOf(ids.bank)).some((one) => one.transaction_id === bankSide.transaction_id),
+    `removals ${JSON.stringify(removals)}, replaced ${JSON.stringify(replaced.value)}, card sources ${JSON.stringify(afterCard)}, gone ${JSON.stringify(goneRows)}, transfer ${JSON.stringify(transfer)}`,
+  );
 }
 
 
