@@ -15611,7 +15611,9 @@ async function deferralImportSuite(): Promise<void> {
   await move(ids.bank, owing, 2_600_000, "2026-05-02");
   const afterCovering = await stateOf(owing);
 
-  const inCredit = await open("saldo a favor", 10_000_000);
+  // The opening of a liability is never positive: the credit comes from an overpayment before the purchase.
+  const inCredit = await open("saldo a favor", 0);
+  await move(ids.bank, inCredit, 10_000_000, "2026-02-01");
   const creditPurchase = await move(inCredit, null, 3_600_000, "2026-03-15");
   await asUser(owner, () => createDeferral({ transactionId: creditPurchase, instalments: 36 }));
   const creditAtPurchase = await stateOf(inCredit);

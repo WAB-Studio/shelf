@@ -710,9 +710,10 @@ test.describe("the row menus", () => {
 
     // The saldo is derived from the movements, so the payment moves it by
     // exactly what it paid.
-    expect(await digitsOf(row.getByRole("cell").nth(6))).toBe(
-      pesos(MENU_DEBT_OWED_CENTS - MENU_PAID_CENTS),
-    );
+    // The row re-reads after the action's refresh, which lands after the toast.
+    await expect
+      .poll(async () => digitsOf(row.getByRole("cell").nth(6)))
+      .toBe(pesos(MENU_DEBT_OWED_CENTS - MENU_PAID_CENTS));
   });
 
   test("a payment on a card with no installment plan says it was saved and says nothing about cuotas", async ({
