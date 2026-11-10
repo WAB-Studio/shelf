@@ -15612,22 +15612,29 @@ async function statementImportSuite(): Promise<void> {
     (await fixtureSql<{ id: string }[]>`
       select id from transactions where from_account_id = ${ids.card} and description = ${description}`)[0]?.id;
   const [dosId, tresId, unoId] = [await novMovement("DOS"), await novMovement("TRES"), await novMovement("UNO")];
-  await fixtureSql.begin(async (tx) => {
-    // A count that agrees with the movements books no adjustment, so the reconciliation's one
-    // movement slot (unique on transactions) is free for the held leg.
+  // A reconciliation's adjustment is the one reconciled movement: a single leg with no split. A line
+  // of this statement names it, so the statement holds it as a leg (as a leg matched earlier would).
+  const adjustmentId = await fixtureSql.begin(async (tx) => {
     const claims = JSON.stringify({ sub: owner.id, role: "authenticated", aud: "authenticated" });
     await tx`select set_config('request.jwt.claims', ${claims}, true)`;
     const [reconciliation] = await tx<{ id: string }[]>`
       insert into account_reconciliations (account_id, reconciled_on, counted_balance_cents)
-      values (${ids.card}, '2026-11-05', private.account_settlement_balance_on(${ids.card}, '2026-11-05'))
+      values (${ids.card}, '2026-11-05', private.account_settlement_balance_on(${ids.card}, '2026-11-05') + 70000)
       returning id`;
-    await tx`update transactions set reconciliation_id = ${reconciliation!.id} where id = ${dosId ?? null}`;
+    const [adjustment] = await tx<{ id: string }[]>`
+      select id from transactions where reconciliation_id = ${reconciliation!.id}`;
+    await tx`
+      insert into transaction_sources (transaction_id, account_id, statement_id, source_seq)
+      select ${adjustment!.id}, ${ids.card}, s.id, 9 from account_statements s
+      where s.account_id = ${ids.card} and s.cut_off_date = '2026-11-08'`;
+    return adjustment!.id;
   });
   const novNext = [
     { line: 1, date: "2026-11-01", description: "CERO", amountCents: -50_000, categoryId: ids.food },
     { ...novRows[0]!, line: 2 },
     { ...novRows[1]!, line: 3 },
-    { ...novRows[2]!, line: 4, reference: `T-${tag}` },
+    { line: 4, date: "2026-11-05", description: "AJUSTE", amountCents: 70_000, categoryId: ids.pay },
+    { ...novRows[2]!, line: 5, reference: `T-${tag}` },
   ];
   const novPreview = await tool("preview_statement", { accountId: ids.card, rows: novNext, statement: november });
   const novImport = await tool("import_statement", {
@@ -15642,15 +15649,15 @@ async function statementImportSuite(): Promise<void> {
     where from_account_id = ${ids.card} and description in ('CERO', 'UNO', 'DOS', 'TRES')`;
   assert(
     next("RF-134: a re-import renumbers the legs it keeps, matches a reconciled leg it holds, and gives a held leg the reference it lacked"),
-    !novImport.isError && novImport.value?.created === 1 && novImport.value?.skipped === 3 && novImport.value?.removed === 0 &&
+    !novImport.isError && novImport.value?.created === 1 && novImport.value?.skipped === 4 && novImport.value?.removed === 0 &&
       novCount[0]?.n === 4 &&
-      seqOf(unoId)?.source_seq === 2 && seqOf(dosId)?.source_seq === 3 &&
+      seqOf(unoId)?.source_seq === 2 && seqOf(dosId)?.source_seq === 3 && seqOf(adjustmentId)?.source_seq === 4 &&
       seqOf(tresId)?.source_ref === `T-${tag}` && seqOf(tresId)?.source_seq === null,
     `preview ${JSON.stringify(novPreview.value?.counts)}, import ${JSON.stringify(novImport.value)}, sources ${JSON.stringify(novSources)}, movements ${novCount[0]?.n}`,
   );
 
   // Dropping the statement's last line names the same statement, so exactly that line goes.
-  const novLast = novNext.slice(0, 3);
+  const novLast = novNext.slice(0, 4);
   const lastPreview = await tool("preview_statement", { accountId: ids.card, rows: novLast, statement: november });
   const lastImport = await tool("import_statement", {
     accountId: ids.card, rows: novLast, statement: november, previewKey: lastPreview.value?.previewKey,
