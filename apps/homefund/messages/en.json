@@ -1457,7 +1457,7 @@
       "scopeViolation": "That category belongs to another scope than the account. Pick a fund category for a fund account, or one of yours for your own account."
     },
     "mcpHeading": "Connect Claude",
-    "mcpDescription": "Add HomeFund as an HTTP MCP connector with this URL and a key for Claude in the «Authorization: Bearer» header. A webhook key does not open this door. Claude sees your accounts and «Review the month» with your own permissions; revoking the key disconnects it.",
+    "mcpDescription": "Add HomeFund as an HTTP MCP connector with this URL and a key for Claude. On claude.ai pick «No sign-in» and add the «X-API-Key» header with the key; in Claude Code it goes in «Authorization: Bearer». A webhook key does not open this door. Claude sees your accounts and «Review the month» with your own permissions; revoking the key disconnects it.",
     "mcpIssue": "Create a key for Claude"
   },
   "ingest": {

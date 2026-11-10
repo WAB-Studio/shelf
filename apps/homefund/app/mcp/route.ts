@@ -26,7 +26,11 @@ const door = withMcpAuth(buildHandler(), verify, {
 });
 
 async function handle(request: Request): Promise<Response> {
-  const bearer = request.headers.get("authorization")?.match(BEARER)?.[1]?.trim();
+  // claude.ai keeps `Authorization` for its own OAuth and drops a custom one, so a connector there
+  // carries the key in `X-API-Key`.
+  const bearer =
+    request.headers.get("authorization")?.match(BEARER)?.[1]?.trim() ||
+    request.headers.get("x-api-key")?.trim();
   const credential = bearer ? await resolveWebhookCredential(bearer, "mcp") : null;
   // A live key over its window is not a bad key: 429 tells the client to wait, not to sign in again.
   if (credential?.throttled) {
