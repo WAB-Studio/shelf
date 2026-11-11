@@ -1699,6 +1699,27 @@ async function emailIngestSuite(): Promise<void> {
     `it answered ${landed.status} ${JSON.stringify(landed.body)}, landed ${JSON.stringify(row)}`,
   );
 
+  const promo = await post(
+    { authorization: `Bearer ${token}` },
+    {
+      from: "yo@example.com",
+      to: [`${token}@in.example.com`],
+      subject: `Gánate $150 mil pidiendo tu tarjeta ${tag}`,
+      text: "Aprovecha esta oferta de tu banco.",
+    },
+  );
+  const [promoRow] = await fixtureSql<{ status: string; amount: string | null }[]>`
+    select status, proposed_amount_cents as amount from ingest_deliveries where id = ${String(promo.body.deliveryId)}`;
+  assert(
+    next("a promotional bank email lands rejected with its reason, no figure, never pending"),
+    promo.status === 200 &&
+      promo.body.status === "rejected" &&
+      promo.body.reason === "promotion" &&
+      promoRow?.status === "rejected" &&
+      promoRow.amount === null,
+    `it answered ${promo.status} ${JSON.stringify(promo.body)}, stored ${JSON.stringify(promoRow)}`,
+  );
+
   const anonymous = await post({}, email);
   const forged = await post(
     { "svix-id": "msg_1", "svix-timestamp": String(Math.floor(Date.now() / 1000)), "svix-signature": "v1,AAAA" },

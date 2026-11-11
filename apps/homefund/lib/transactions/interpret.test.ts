@@ -473,3 +473,17 @@ test("an account word leaves the description only when it named the account chos
   assert.equal(result.accountId, "a2");
   assert.match(result.description, /nequi/i);
 });
+
+test("a year beside a month or «de» is no amount in a bank message, and typed text is unchanged", () => {
+  const bank = { ...ctx, skipYearLike: true };
+  const read = (text: string, c: typeof ctx & { skipYearLike?: boolean }) => {
+    const { amountPesos } = interpretQuickEntry(text, c);
+    return amountPesos === null ? null : parseAmount(amountPesos);
+  };
+  assert.equal(read("Vigente hasta Octubre 2026", bank), null);
+  assert.equal(read("Extracto de 2026 de tu tarjeta", bank), null);
+  assert.equal(read("Pagaste $52.300 el 3 de Octubre 2026", bank), 5_230_000);
+  assert.equal(read("Compra 2000 en tienda", bank), 200_000);
+  assert.equal(read("Pagué 2000 de bus", ctx), 200_000);
+  assert.equal(read("Vigente hasta Octubre 2026", ctx), 202_600);
+});

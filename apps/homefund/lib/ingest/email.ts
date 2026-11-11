@@ -95,14 +95,24 @@ function withoutForwardHeaders(lines: string[]): string[] {
   return kept;
 }
 
+/** The subject without its forward prefixes, and the body as plain text. */
+export function emailWords(email: Pick<InboundEmail, "subject" | "text" | "html">): {
+  subject: string;
+  body: string;
+} {
+  return {
+    subject: email.subject.replace(/^\s*((fwd?|rv|re)\s*:\s*)+/i, "").trim(),
+    body: email.text.trim() ? email.text : htmlToText(email.html),
+  };
+}
+
 /**
  * The bank's words, one line, at most what the ingest schema takes: the subject,
  * then the body without forward headers, quote marks or markup. A longer message
  * is cut around its first amount.
  */
 export function emailToMessage(email: Pick<InboundEmail, "subject" | "text" | "html">): string {
-  const body = email.text.trim() ? email.text : htmlToText(email.html);
-  const subject = email.subject.replace(/^\s*((fwd?|rv|re)\s*:\s*)+/i, "").trim();
+  const { subject, body } = emailWords(email);
   const lines = withoutForwardHeaders(
     body.split(/\r?\n/).map((line) => line.replace(/^(\s*>)+/, "").trim()),
   );
