@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Archivo, Archivo_Black, DM_Mono } from "next/font/google";
+import localFont from "next/font/local";
 import { Theme } from "@radix-ui/themes";
 
 import { ThemeScript } from "@/components/theme-script";
@@ -10,25 +10,28 @@ import common from "@/messages/es/common.json";
 import "@radix-ui/themes/styles.css";
 import "./theme.css";
 
-const sans = Archivo({
+const sans = localFont({
+  src: "./fonts/archivo.woff2",
+  weight: "100 900",
   variable: "--font-sans",
-  subsets: ["latin"],
   fallback: ["system-ui", "sans-serif"],
   display: "swap",
 });
 
-const display = Archivo_Black({
-  variable: "--font-display",
-  subsets: ["latin"],
+const display = localFont({
+  src: "./fonts/archivo-black.woff2",
   weight: "400",
+  variable: "--font-display",
   fallback: ["Archivo", "system-ui", "sans-serif"],
   display: "swap",
 });
 
-const mono = DM_Mono({
+const mono = localFont({
+  src: [
+    { path: "./fonts/dm-mono-400.woff2", weight: "400" },
+    { path: "./fonts/dm-mono-500.woff2", weight: "500" },
+  ],
   variable: "--font-mono",
-  subsets: ["latin"],
-  weight: ["400", "500"],
   fallback: ["ui-monospace", "monospace"],
   display: "swap",
 });
