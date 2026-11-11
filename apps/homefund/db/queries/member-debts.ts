@@ -48,14 +48,16 @@ export async function getMemberDebts(): Promise<MemberDebtsData | null> {
   });
 }
 
-// What `debtor` still owes `creditor` in `currency` within fund `g.id`: debts from debtor to creditor and
-// payments back count for it, the reverse ones against it, as `memberDebtBalances` nets them.
-function pendingSql(debtor: string, creditor: string, currency: string) {
+// What `debtor` still owes `creditor` in `currency` within fund `group`: debts from debtor to creditor and
+// payments back count for it, the reverse ones against it, as `memberDebtBalances` nets them. The recording
+// guard and the delete guard both read it, so the netting is written here once for the database;
+// `excluding` leaves one entry out, for the figure a delete would leave.
+function pendingSql(group: SQL, debtor: SQL, creditor: SQL, currency: SQL, excluding?: SQL) {
   return sql`(select coalesce(sum(case
       when d.debtor_member_id = ${debtor} and d.creditor_member_id = ${creditor} then 1
       when d.debtor_member_id = ${creditor} and d.creditor_member_id = ${debtor} then -1
       else 0 end * case d.kind when 'debt' then d.amount_cents else -d.amount_cents end), 0)
-    from member_debts d where d.group_id = g.id and d.currency = ${currency})`;
+    from member_debts d where d.group_id = ${group} and d.currency = ${currency}${excluding ? sql` and d.id <> ${excluding}` : sql``})`;
 }
 
 // Serialises the writes that read a pair's pending figure, per fund.
@@ -84,7 +86,7 @@ export async function recordMemberDebt(input: RecordMemberDebtInput): Promise<{ 
             ${input.occurredOn}, ${input.description}
           from g
           where g.id is not null
-            and (${input.kind} = 'debt' or ${input.amountCents} <= ${pendingSql(input.debtorMemberId, input.creditorMemberId, input.currency)})
+            and (${input.kind} = 'debt' or ${input.amountCents} <= ${pendingSql(sql`g.id`, sql`${input.debtorMemberId}`, sql`${input.creditorMemberId}`, sql`${input.currency}`)})
           returning id)
         select (select id from g) as "groupId", (select id from written) as id`);
       if (!row?.groupId) throw new ActionError("memberDebts.errors.noFund");
@@ -100,9 +102,9 @@ export async function recordMemberDebt(input: RecordMemberDebtInput): Promise<{ 
 }
 
 /**
- * Removes one entry of the caller's fund. A payment always goes; a debt goes only while the debtor's other debts
- * to that creditor in that currency still cover the payments the debtor made them, so no payment is left
- * standing on a debt that is gone.
+ * Removes one entry of the caller's fund. A payment always goes; a debt goes only while the pair's other entries
+ * net, as `pendingSql` nets them in both directions, to what the debtor owes (not below zero), so no payment is left
+ * standing on a debt that is gone; a debt no payment was made against has none to protect.
  */
 export async function deleteMemberDebt(id: string): Promise<"deleted" | "notFound" | "paid"> {
   const user = await requireUser();
@@ -113,11 +115,12 @@ export async function deleteMemberDebt(id: string): Promise<"deleted" | "notFoun
       gone as (
         delete from member_debts d using t
         where d.id = t.id
-          and (t.kind = 'payment' or (
-            select coalesce(sum(case p.kind when 'debt' then p.amount_cents else -p.amount_cents end), 0)
-            from member_debts p
-            where p.group_id = t.group_id and p.currency = t.currency and p.id <> t.id
-              and p.debtor_member_id = t.debtor_member_id and p.creditor_member_id = t.creditor_member_id) >= 0)
+          and (t.kind = 'payment'
+            or ${pendingSql(sql`t.group_id`, sql`t.debtor_member_id`, sql`t.creditor_member_id`, sql`t.currency`, sql`t.id`)} >= 0
+            or not exists (
+              select 1 from member_debts p
+              where p.group_id = t.group_id and p.currency = t.currency and p.kind = 'payment' and p.id <> t.id
+                and p.debtor_member_id = t.debtor_member_id and p.creditor_member_id = t.creditor_member_id))
         returning d.id)
       select (select id from t) as found, (select id from gone) as deleted`);
     if (row?.deleted) return "deleted";

@@ -17,7 +17,7 @@ import { installmentPlans } from "./installment-plans";
 import { transactions } from "./transactions";
 
 // The dated lines a plan generates (RF-81): each a due date and an amount (aval folded in). A payment
-// is allocated oldest-first (RF-82); a line is marked paid only when covered in full, and the paying
+// is allocated oldest-first (retired with RF-81, no successor); a line is marked paid only when covered in full, and the paying
 // movement is linked. Pending derives from the unpaid lines and is never stored. No scope of its own —
 // the plan's account gates it (RLS below).
 export const installmentLines = finances.table(
@@ -31,7 +31,7 @@ export const installmentLines = finances.table(
     // Date-only, interpreted in America/Bogota (RNF-06): a YYYY-MM-DD string end to end, never a JS Date.
     dueDate: date({ mode: "string" }).notNull(),
     amountCents: bigint({ mode: "number" }).notNull(),
-    // The movement that settled this line in full, once allocated (RF-82); cleared if that movement is deleted.
+    // The movement that settled this line in full, once allocated (retired with RF-81, no successor); cleared if that movement is deleted.
     paidTransactionId: uuid().references(() => transactions.id, { onDelete: "set null" }),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
   },

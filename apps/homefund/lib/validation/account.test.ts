@@ -26,6 +26,7 @@ const updateBase = {
   name: "Cuenta",
   kind: "asset",
   subtype: "bank",
+  placement: "personal",
   isShared: false,
   institution: null,
   settlementCurrency: "COP",
@@ -92,4 +93,20 @@ test("create accepts each valid pair and returns the same word", () => {
     assert.equal(result.success, true);
     assert.equal(result.data?.subtype, subtype);
   }
+});
+
+test("update refuses a holder on a personal account with one holderInvalid issue", () => {
+  assert.deepEqual(
+    issues(updateAccountSchema, { ...updateBase, holderMemberId: "22222222-2222-4222-8222-222222222222" }),
+    [{ message: "accounts.errors.holderInvalid", path: ["holderMemberId"] }],
+  );
+});
+
+test("update accepts a holder on a group account", () => {
+  const result = updateAccountSchema.safeParse({
+    ...updateBase,
+    placement: "group",
+    holderMemberId: "22222222-2222-4222-8222-222222222222",
+  });
+  assert.equal(result.success, true);
 });

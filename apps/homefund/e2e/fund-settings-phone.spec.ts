@@ -1,6 +1,6 @@
 /**
- * «Ajustes del fondo» on the phone (module M13, RF-55, RF-154; board `AjustesFondoMiembroMovil` and
- * `AjustesSinFondoMovil`, DESIGN.md « Decisions of 2026-10-22», Q1 a). Below `md`, every member of a
+ * «Ajustes del fondo» on the phone (RF-55, RF-154; board `AjustesFondoMiembroMovil` and
+ * `AjustesSinFondoMovil`). Below `md`, every member of a
  * fund, leader or not, finds «Ajustes del fondo» as the FIRST row of the «Ajustes» list, on the
  * `/settings` screen and in the bottom bar's sheet, and it leads to `/es/settings/group`. A person with
  * no fund sees no such row. From `md` up no list offers it: the chevron beside the fund name owns it.

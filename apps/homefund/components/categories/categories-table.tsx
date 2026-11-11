@@ -13,7 +13,7 @@ import {
   type DataSection,
 } from "@/components/ui";
 
-// The em dash a cell with nothing to name reads as (SPEC-A3), not a word a
+// The em dash a cell with nothing to name reads as in the desktop design, not a word a
 // translator would ever change.
 const NO_VALUE = "—";
 
@@ -45,7 +45,7 @@ export type CategoryTableRow = {
 };
 
 /**
- * The dense Categorías of `private/design-desktop/SPEC-A3.md` (RF-63):
+ * The dense Categorías of the desktop design (RF-63):
  * one section per scope, personal and the group's, a subcategory drawn right
  * under its parent inside that same section and never the other. The count in
  * `subcategorías` is the query's own `childCount` (RF-63) — this table never

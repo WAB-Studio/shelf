@@ -244,7 +244,7 @@ const notPending = Symbol("planned payment no longer pending");
 
 /**
  * Records the real movement and flips the payment to 'done' inside ONE
- * `withUserDb` transaction (RF-75). The payment's accounts, amount and category
+ * `withUserDb` transaction (RF-161). The payment's accounts, amount and category
  * become the transaction — an expense with a single split, a transfer with none,
  * mirroring the ledger's own insert path. The guarded UPDATE claims the row only
  * while it is still pending; if it claims nothing the payment was already settled

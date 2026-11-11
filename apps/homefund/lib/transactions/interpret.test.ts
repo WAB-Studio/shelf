@@ -100,7 +100,7 @@ test("a bank message keeps reading its own amount", () => {
   assert.equal(stored("Compraste $25.000 en KFC"), 2_500_000);
 });
 
-// The widened multiplier (Q12, 2026-10-18; critic C2, same day): an uppercase
+// The widened multiplier (RF-22): an uppercase
 // «M», «millón» and «millones» are a million; a lowercase «m» never is. 2 000 000 pesos is 200 000 000 cents.
 
 test("«M», «millón» and «millones» multiply by a million", () => {
@@ -165,7 +165,7 @@ test("«M» spaced as the last word is a million", () => {
   assert.equal(stored("gasté 2 M  "), 200_000_000);
 });
 
-// M75 (Q27 b, RF-22): a lowercase «m» right after a number is not read as a
+// (RF-22): a lowercase «m» right after a number is not read as a
 // figure. The parser proposes no amount and asks with three choices in cents.
 
 test("a lowercase «m» after a number asks with three choices and proposes no amount", () => {
@@ -239,7 +239,7 @@ test("«mil» alone never reads as a million, nor inside a word", () => {
   assert.equal(interpretQuickEntry("almuerzo", ctx).amountPesos, null);
 });
 
-// M71 (Q12-e, Q12-f): a spaced «m» with words after it is not guessed. The
+// A spaced «m» with words after it is not guessed. The
 // parser proposes no amount and asks, offering the bare number and the number
 // times a million, both in integer cents.
 

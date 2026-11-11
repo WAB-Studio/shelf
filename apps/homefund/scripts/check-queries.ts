@@ -539,7 +539,7 @@ type DebtFixture = {
 /**
  * The two debts the installment, credit and statement checks read, beside the card
  * the write suite creates: a liability that carries terms without a limit (RF-117)
- * and a plan on a liability that carries no terms at all (RF-81, RF-82). Written as
+ * and a plan on a liability that carries no terms at all (retired RF-81, RF-82). Written as
  * the owner under the caller's claims, the way `seedHarnessScope` writes: the
  * stamping triggers see `auth.uid()` while the owner's privileges do the insert.
  */
@@ -3374,7 +3374,7 @@ async function reconcileSuite(
 }
 
 // Export -> import into a fresh scope reproduces every balance and keeps adjustments out of income
-// and expense (RF-50, RF-138). The import is `commitImport` itself, fed the rows `readExport` wrote.
+// and expense (RF-142, RF-138). The import is `commitImport` itself, fed the rows `readExport` wrote.
 async function reimportSuite(userId: string, scope: HarnessScope): Promise<void> {
   const today = todayInBogota();
   const importer = await createMembershipFreeUser();
@@ -4422,7 +4422,7 @@ async function roundTripSuite(scope: HarnessScope, userId: string): Promise<void
 }
 
 // A weekly budget on /planning/budgets spans the same Monday-to-Sunday week /planning
-// shows (RF-72): today's in the current month, the month's last day's in a past one.
+// shows (RF-160): today's in the current month, the month's last day's in a past one.
 // Dates are fixed and the clock is passed in, so the proof holds on any run day.
 async function weeklyBudgetSuite(scope: HarnessScope, userId: string): Promise<void> {
   const book = async (day: string, amountCents: number): Promise<void> => {
@@ -4595,6 +4595,7 @@ async function ledgerGuardSuite(userId: string, scope: HarnessScope): Promise<vo
     name: `${prefix} usada`,
     kind: "asset",
     subtype: "bank",
+    placement: "personal",
     isShared: false,
     institution: "",
     lastFour: "",
@@ -8455,6 +8456,7 @@ async function accountPlannedVersionSuite(): Promise<void> {
         name: `Harness m46 ${tag}`,
         kind: "asset",
         subtype: "bank",
+        placement: "personal",
         isShared: false,
         institution: "",
         lastFour: "",
@@ -12104,7 +12106,7 @@ async function debtCreditSideSuite(): Promise<void> {
 }
 
 // What a count that takes money out of an account, the first and last day of a range, and an English seed owe
-// the person (RF-137, RF-138, RF-118, RF-50, RF-46). Each block is a survivor of an earlier mutation round.
+// the person (RF-137, RF-138, RF-118, RF-142, RF-46). Each block is a survivor of an earlier mutation round.
 async function o5m2SurvivorsSuite(): Promise<void> {
   console.log("");
   const tag = randomUUID().slice(0, 8);
@@ -13911,6 +13913,7 @@ async function o6m7OpeningRefusalsSuite(): Promise<void> {
         name: `Harness o6m7 con movimiento ${tag}`,
         kind: "asset",
         subtype: "bank",
+        placement: "personal",
         isShared: false,
         institution: "",
         lastFour: "",
@@ -18476,6 +18479,22 @@ async function memberDebtDeleteSuite(): Promise<void> {
     next("RF-183: another fund's member cannot remove an entry, a paid-against debt is refused and stays, a payment goes, then the debt goes"),
     foreign === "notFound" && paid === "paid" && pendingAfterRefusal === 150_000_00 && paymentGone === "deleted" && debtGone === "deleted" && left === 0,
     `stranger ${foreign}, paid debt ${paid}, pending ${pendingAfterRefusal}, payment ${paymentGone}, debt ${debtGone}, left ${left}`,
+  );
+
+  // The opposite direction nets too: a debt the creditor owes back counts against the payment standing on the first.
+  const mine = (kind: "debt" | "payment", amountCents: number) =>
+    asUser(leader, () => recordMemberDebt({ kind, debtorMemberId: ids.papa, creditorMemberId: ids.leader, amountCents, currency: "COP", occurredOn: "2026-11-01", description: null }));
+  const first = await mine("debt", 100_000_00);
+  await mine("debt", 50_000_00);
+  await mine("payment", 30_000_00);
+  const back = await asUser(leader, () => recordMemberDebt({ kind: "debt", debtorMemberId: ids.leader, creditorMemberId: ids.papa, amountCents: 40_000_00, currency: "COP", occurredOn: "2026-11-01", description: null }));
+  const refusedByBack = await asUser(leader, () => deleteMemberDebt(first.id));
+  const backGone = await asUser(leader, () => deleteMemberDebt(back.id));
+  const firstGone = await asUser(leader, () => deleteMemberDebt(first.id));
+  assert(
+    next("RF-183: a debt is refused its delete when the creditor's own debt back leaves the payment on nothing, while that debt back itself goes, then the first goes"),
+    refusedByBack === "paid" && backGone === "deleted" && firstGone === "deleted",
+    `with debt back ${refusedByBack}, back ${backGone}, first ${firstGone}`,
   );
 }
 

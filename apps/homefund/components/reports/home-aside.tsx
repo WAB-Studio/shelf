@@ -19,7 +19,7 @@ import type { CurrencyCode } from "@/lib/currency";
 import { civilDateToDate } from "@/lib/dates";
 import type { Locale } from "@/lib/locales";
 import { useMoneyText } from "@/lib/use-privacy";
-import type { NextDebtPayment } from "@/lib/fund/glance";
+import { budgetPercent, type NextDebtPayment } from "@/lib/fund/glance";
 
 /**
  * The desktop Inicio's right column under «Por pagar»: the budgets nearest their
@@ -69,12 +69,12 @@ export function HomeAside({
                     <Badge color="red" variant="soft" radius="full">{t("budgetOver")}</Badge>
                   ) : (
                     <Text size="2" color="gray">
-                      {Math.round((budget.spentCents / budget.limitCents) * 100)}%
+                      {budgetPercent(budget.spentCents, budget.limitCents)}%
                     </Text>
                   )}
                 </Flex>
                 <Progress
-                  value={Math.min(100, (budget.spentCents / budget.limitCents) * 100)}
+                  value={Math.min(100, budgetPercent(budget.spentCents, budget.limitCents))}
                   color={budget.overspent ? "red" : budget.overThreshold ? "amber" : undefined}
                   aria-label={budget.name ?? budgetNames.get(budget.categoryId) ?? ""}
                 />

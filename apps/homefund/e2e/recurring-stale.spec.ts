@@ -1,10 +1,10 @@
 /**
- * The recurring rule's edit dialog against a version that moved (Q24, RNF-10): the
+ * The recurring rule's edit dialog against a version that moved (RNF-10): the
  * daily run advances a rule's `next_run_on` while a person has it open, and the
  * save that follows is told to reopen it, with what was typed still on screen and
  * the rule's stored figures unchanged.
  *
- * Written from the contract in `docs/SPEC.md` §1 (Q24) and the plan's M47/M48, not
+ * Written from the contract in `docs/SPEC.md` §1, not
  * from the dialog: the refusal line is the catalogue's `errors.stale`, shown in the
  * dialog, never a toast that vanishes with the form still open.
  */

@@ -133,7 +133,7 @@ test("«25 mil» proposes 25000 pesos and saving writes 2500000 cents", async ({
   expect(rows).toEqual([{ amount_cents: "2500000", amount_from_words: true }]);
 });
 
-// M71 (Q12-e, Q12-f). An «m» with words after it is not guessed: the sheet asks
+// An «m» with words after it is not guessed: the sheet asks
 // which amount the person meant (boards C3m, C3n). The wording is the board's.
 const ASK_HINT = "Elige cuánto es, o escribe el monto.";
 const ASK_TEXT = "3 M arriendo";

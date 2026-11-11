@@ -37,7 +37,7 @@ export default async function BudgetsPage(
   // The archived tab lists exactly the budgets the active one leaves out (RF-120).
   const archived = searchParams.tab === "archived";
   // The query slides each period's range around this anchor, never a stored
-  // spent column (RF-72); the current month anchors on today, as /planning does.
+  // spent column (RF-160); the current month anchors on today, as /planning does.
   const anchor = budgetAnchor(month);
 
   const [budgets, options, group] = await Promise.all([

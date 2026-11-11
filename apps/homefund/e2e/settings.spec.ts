@@ -62,7 +62,7 @@ test("the categories screen renders the categories it read", async ({ page }) =>
   await expect(shown.getByText(scope.categoryName, { exact: true })).toBeVisible();
 
   // The phone states the count as a phrase inside the category's own card; the
-  // laptop states it as a bare figure in the row's own column (SPEC-A3). Either
+  // laptop states it as a bare figure in the row's own column. Either
   // way this is the one node naming this category's own count, not whichever
   // other childless category the run left standing.
   const subcategoryCount = shown

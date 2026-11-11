@@ -77,7 +77,7 @@ function SettleForm({
   const onActionError = useActionErrorToast();
 
   // The reused action records the real movement and flips the payment to done;
-  // a payment no longer pending surfaces as `alreadySettled` (RF-75).
+  // a payment no longer pending surfaces as `alreadySettled` (RF-161).
   const settle = useAction(settlePlannedPaymentAction, {
     onSuccess() {
       toast.success(t("settled"));

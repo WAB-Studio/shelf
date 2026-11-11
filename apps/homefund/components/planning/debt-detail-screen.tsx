@@ -33,7 +33,7 @@ import type { CurrencyCode } from "@/lib/currency";
 import { civilDateToDate, todayInBogota } from "@/lib/dates";
 import { useMoneyText } from "@/lib/use-privacy";
 
-// The em dash a cell or a tile with nothing to name reads as (SPEC-A3), not a
+// The em dash a cell or a tile with nothing to name reads as in the desktop design, not a
 // word a translator would ever change.
 const NO_VALUE = "—";
 

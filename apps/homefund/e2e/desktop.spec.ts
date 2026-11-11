@@ -157,13 +157,13 @@ test.describe("at 1280, the sidebar and its smoke routes", () => {
       await expect(dataTable).toBeVisible();
 
       // The header's own `role=row` is excluded: this counts the data rows
-      // SPEC-A3's "at least 8" is about, not the columns above them.
+      // the desktop design's "at least 8" is about, not the columns above them.
       const rows = dataTable
         .getByRole("row")
         .filter({ hasNot: page.getByRole("columnheader") });
       expect(await rows.count()).toBeGreaterThanOrEqual(ROW_COUNT);
 
-      // The generic form of D16: `.container` never sets a height, so it can
+      // The generic form of the container rule: `.container` never sets a height, so it can
       // only clip when a caller floors a column past the viewport — the exact
       // shape the audit table once shipped. Proven at the table's own DOM node,
       // not by the artboard's promise that it never happens.
@@ -181,7 +181,7 @@ test.describe("at 1280, the sidebar and its smoke routes", () => {
 
       // Every `role=combobox` a `FilterField` wires (`components/ui/filter-field.tsx`)
       // forwards its id onto the control; a visible `<label for>` naming that id
-      // is what SPEC-A3's fourth audit demand asks for, proved generically
+      // is what the desktop design's fourth audit demand asks for, proved generically
       // rather than one message key per screen.
       const selects = page.getByRole("combobox");
       const selectCount = await selects.count();

@@ -7,7 +7,7 @@ import type { CurrencyCode } from "@/lib/currency";
 import { formatMoneyMasked } from "@/lib/privacy";
 import { usePrivacy } from "@/lib/use-privacy";
 
-// The ledger's minus is U+2212, never the hyphen a keyboard types (SPEC-A3).
+// The ledger's minus is U+2212, never the hyphen a keyboard types.
 const MINUS = "−";
 
 // U+2248, the mark a figure the issuer has not billed yet carries (RF-123).
@@ -33,7 +33,7 @@ const TONE_COLOR: Record<MoneyTone, string | undefined> = {
 const SIZE_STYLE = {
   row: { fontSize: "13.5px", fontWeight: 600 },
   figure: { fontSize: "23px", fontWeight: 700, letterSpacing: "-0.025em" },
-  // The one figure a detail screen is built around (SPEC-A3).
+  // The one figure a detail screen is built around.
   hero: { fontSize: "40px", fontWeight: 700, letterSpacing: "-0.03em" },
   // Takes the surrounding type, for a heading or a chip that already sets it and
   // re-sizes itself across breakpoints.

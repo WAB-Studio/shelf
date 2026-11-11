@@ -16,7 +16,7 @@ import {
 } from "@/components/ui";
 import type { AccountRow } from "@/db/queries/accounts";
 
-// The em dash a cell with nothing to name reads as (SPEC-A3), not a word a
+// The em dash a cell with nothing to name reads as in the desktop design, not a word a
 // translator would ever change.
 const NO_VALUE = "—";
 
@@ -34,7 +34,7 @@ const WIDTHS = {
 type Line = { row: AccountRow; free: boolean };
 
 /**
- * The dense Cuentas of `private/design-desktop/SPEC-A3.md` (RF-114): every
+ * The dense Cuentas of the desktop design (RF-114): every
  * account's balance arrives already derived from `account_balances` and only
  * reads through `Money` here — no figure is computed on the client, and a
  * liability's own negative cents carries the minus through. `archived` decides

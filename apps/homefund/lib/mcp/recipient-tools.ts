@@ -6,7 +6,7 @@ import { z } from "zod";
 import { deleteRecipient, listRecipients, saveRecipient } from "@/db/queries/recipients";
 import { ActionError } from "@/lib/errors";
 import { parseForm } from "@/lib/mcp/parse-form";
-import { RECIPIENT_KINDS, saveRecipientSchema } from "@/lib/validation/recipient";
+import { RECIPIENT_KINDS, deleteRecipientSchema, saveRecipientSchema } from "@/lib/validation/recipient";
 
 type Run = (ctx: ServerContext, load: (owner: string) => Promise<unknown>) => Promise<CallToolResult>;
 type Say = (key: string) => string;
@@ -48,7 +48,7 @@ export function registerRecipientTools(server: McpServer, run: Run, t: Say): voi
     },
     (input, ctx) =>
       run(ctx, async () => {
-        const id = parseForm(z.uuid({ error: "errors.notFound" }), input.id);
+        const { id } = parseForm(deleteRecipientSchema, input);
         if (!(await deleteRecipient(id))) throw new ActionError("errors.notFound");
         return { deleted: id };
       }),

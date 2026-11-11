@@ -11,8 +11,6 @@ export const keepSignedInSchema = z.object({
   days: z.enum(KEEP_SIGNED_IN_CHOICES, { error: "errors.unexpected" }),
 });
 
-export type KeepSignedInInput = z.infer<typeof keepSignedInSchema>;
-
 /** The stored value for a choice: whole days, or `null` for «Siempre». */
 export function keepDaysOf(choice: KeepSignedInChoice): number | null {
   return choice === "always" ? null : Number(choice);

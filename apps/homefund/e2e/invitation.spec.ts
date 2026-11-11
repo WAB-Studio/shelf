@@ -1,5 +1,5 @@
 /**
- * RF-154, the invited person's screen (board «Invitación», M69): «X te invitó · Aceptar / Rechazar».
+ * RF-154, the invited person's screen (board «Invitación»): «X te invitó · Aceptar / Rechazar».
  *
  * Written from the board, not from the component: every sentence is spelled out, so a changed word
  * reddens a test. The invitee is the harness's second identity, signed in by its stored session; a

@@ -1,10 +1,10 @@
 /**
- * The planned payment's edit dialog against a version that moved (Q24, RNF-10):
+ * The planned payment's edit dialog against a version that moved (RNF-10):
  * two tabs open the same payment, the second to save wins, and the first is told
  * to reopen it, with what it typed still on screen and the other tab's figure
  * standing in the database.
  *
- * Written from the contract (plan M46/M48), not from the dialog: the refusal line
+ * Written from the contract, not from the dialog: the refusal line
  * is the catalogue's `errors.stale`, shown inside the dialog.
  */
 import { randomUUID } from "node:crypto";

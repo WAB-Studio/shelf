@@ -20,7 +20,7 @@ import type { GoalProgress } from "@/db/queries/savings-goals";
 import { civilDateToDate } from "@/lib/dates";
 import { useMoneyText } from "@/lib/use-privacy";
 
-// The em dash a cell with nothing to name reads as (SPEC-A3), not a word a
+// The em dash a cell with nothing to name reads as in the desktop design, not a word a
 // translator would ever change.
 const NO_VALUE = "—";
 
@@ -61,7 +61,7 @@ const PACE_COLOR = {
 } as const;
 
 /**
- * The dense Metas of `private/design-desktop/SPEC-A3.md` (RF-76, RF-87): a goal
+ * The dense Metas of the desktop design (RF-76, RF-87): a goal
  * per row with its bar, its ritmo, what it has apartado and what it still needs,
  * and a total that sums the rows on screen. Every figure arrives derived from the
  * server and is only formatted here; nothing is stored (RNF-07). The caller owns

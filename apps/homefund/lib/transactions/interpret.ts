@@ -1,12 +1,12 @@
 import { isCivilDate } from "@/lib/dates";
-import { normalizeAmountInput, parseAmount } from "@/lib/money";
+import { normalizeGroupMarks, parseAmount } from "@/lib/money";
 
 // Quick entry reads one text field and proposes an editable movement (RF-22).
 // Everything it returns is a proposal the form may overwrite; a field is null
 // when nothing matched. It is pure: no DB, no async, no side effect.
 
 // The first run of digits, optionally carrying the thousands separators a
-// person types by hand; `normalizeAmountInput` strips those to a peso string.
+// person types by hand; `normalizeGroupMarks` strips those to a peso string.
 const AMOUNT_PATTERN = /\d[\d.,]*\d|\d/g;
 // A spoken multiplier right after the amount (RF-22): «mil» and «k» are a
 // thousand, «M», «millón» and «millones» a million. A letter or digit after the
@@ -100,9 +100,9 @@ function multiplyPesos(mantissa: string, zeros: number): string | null {
 function lowerMChoices(amount: string): AmountAsk["choices"] {
   const mantissa = MANTISSA_PATTERN.test(amount)
     ? amount
-    : normalizeAmountInput(amount);
+    : normalizeGroupMarks(amount);
   const pesos = [
-    normalizeAmountInput(amount),
+    normalizeGroupMarks(amount),
     multiplyPesos(mantissa, THOUSAND_ZEROS) ?? `${mantissa}000`,
     multiplyPesos(mantissa, MILLION_ZEROS) ?? `${mantissa}000000`,
   ];
@@ -264,7 +264,7 @@ export function interpretQuickEntry(
             amountMatch[0],
             MULTIPLIER_ZEROS[multiplierMatch[1].toLowerCase()] ?? MILLION_ZEROS,
           )
-        : normalizeAmountInput(amountMatch[0]);
+        : normalizeGroupMarks(amountMatch[0]);
   const mentionedTails = new Set(
     ACCOUNT_TAIL_PATTERNS.flatMap((pattern) =>
       [...text.matchAll(pattern)].map((match) => match[1]),

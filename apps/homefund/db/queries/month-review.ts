@@ -2,11 +2,12 @@ import "server-only";
 
 import { sql, type SQL } from "drizzle-orm";
 
+import { hasUsualHistorySql, isAboveUsualSql, usualMedianSql } from "@/db/queries/above-usual";
 import { transactionReviews } from "@/db/schema";
 import { withUserDb } from "@/db/session";
 import { addCivilMonths, lastClosedMonth, monthRange } from "@/lib/dates";
 
-import { ABOVE_USUAL_FACTOR, USUAL_MIN_LINES, USUAL_WINDOW_MONTHS, type ReviewRule } from "@/lib/month-review-rules";
+import { USUAL_WINDOW_MONTHS, type ReviewRule } from "@/lib/month-review-rules";
 
 // One of a twin's equal movements, so the person sees what to compare.
 export type ReviewEntry = { id: string; description: string | null; createdBy: string; createdAt: string };
@@ -31,7 +32,7 @@ export type ReviewItem = {
 // `noted`: the month holds a movement the caller can read, so an empty review is a checked one.
 export type MonthReview = { month: string; firstMonth: string | null; noted: boolean; items: ReviewItem[] };
 
-// The month's items by RF-155's four fixed rules (O7-Q2 a for «above usual»), as one CTE chain
+// The month's items by RF-155's four fixed rules , as one CTE chain
 // the item read and the pending count share. RLS scopes every table it touches.
 function reviewItemsSql(month: string): SQL {
   const { start, endExclusive } = monthRange(`${month}-01`);
@@ -55,18 +56,18 @@ function reviewItemsSql(month: string): SQL {
     -- month, once it has at least three.
     usual as (
       select category_id, currency,
-        percentile_disc(0.5) within group (order by amount_cents) as median_cents
+        ${usualMedianSql(sql`amount_cents`)} as median_cents
       from expense_splits
       where occurred_at < ${start}::date
       group by category_id, currency
-      having count(*) >= ${USUAL_MIN_LINES}
+      having ${hasUsualHistorySql}
     ),
     -- One item per movement: its largest split over three times its category's usual.
     above_usual as (
       select distinct on (e.transaction_id) e.transaction_id, e.category_id, e.amount_cents, u.median_cents
       from expense_splits e
       join usual u using (category_id, currency)
-      where e.occurred_at >= ${start}::date and e.amount_cents > ${ABOVE_USUAL_FACTOR} * u.median_cents
+      where e.occurred_at >= ${start}::date and ${isAboveUsualSql(sql`e.amount_cents`, sql`u.median_cents`)}
       order by e.transaction_id, e.amount_cents desc
     ),
     flagged as (
@@ -141,7 +142,7 @@ export async function getMonthReview(month: string): Promise<MonthReview> {
 }
 
 /**
- * Inicio's line (RF-155, O7-Q1 a): the movements in last month's unmarked items the caller can
+ * Inicio's line (RF-155): the movements in last month's unmarked items the caller can
  * mark, each once though a twin holds two and one movement may stand under two rules; null when
  * none stand out. The screen's rows and account join, so the count never names a row it hides.
  */

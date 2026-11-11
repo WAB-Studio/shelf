@@ -3,7 +3,7 @@
  * what HomeFund derives for a day, types what they counted, reads the gap,
  * confirms, and reads the account's reconciliations in the same dialog.
  *
- * Written from the plan's M3 Done table and boards B1-B8, before the dialog
+ * Written from boards B1-B8, before the dialog
  * exists. Every figure a test expects is stated here from the rows it seeds
  * (opening + legs), never read back from the screen it judges; what the
  * database holds afterwards is read with the fixture connection.

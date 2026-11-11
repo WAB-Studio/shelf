@@ -39,7 +39,7 @@ export type BudgetStatus = {
 
 /**
  * Every non-archived budget with its spent and remaining derived in ONE grouped
- * read — never one round trip per budget (RF-72, RNF-09). Spent sums the budget
+ * read — never one round trip per budget (RF-160, RNF-09). Spent sums the budget
  * category's expense splits over the budget's own period window, optionally
  * narrowed to the movements touching its account and/or carrying its label, and
  * only the movements booked in the budget's own currency, so no limit is ever
@@ -47,7 +47,7 @@ export type BudgetStatus = {
  * correlated subselect picks each row's window by its period. The window bounds
  * come from `periodRange` around `anchorDate` (today by default), so a stored
  * spent column never exists; the anchor only slides the window the split sum
- * derives over, never a budget's period or threshold (RF-72).
+ * derives over, never a budget's period or threshold (RF-160).
  * `archived` swaps the listing onto the archived side (RF-120): the two sides
  * partition the readable budgets, and an archived one derives its figures the
  * same way, since nothing about the spend is special-cased or stored.

@@ -124,7 +124,7 @@ export const updatePlannedPaymentSchema = z
 export type UpdatePlannedPaymentInput = z.infer<typeof updatePlannedPaymentSchema>;
 
 // Settling records the real movement, so its date obeys the ledger's own
-// not-future rule (RF-75).
+// not-future rule (RF-161).
 export const settlePlannedPaymentSchema = z.object({
   plannedPaymentId: z.uuid({ error: "plannedPayments.errors.plannedPaymentInvalid" }),
   occurredAt: occurredAtSchema,

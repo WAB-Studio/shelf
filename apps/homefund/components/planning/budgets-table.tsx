@@ -15,6 +15,7 @@ import {
   Text,
   type DataColumn,
 } from "@/components/ui";
+import { budgetPercent } from "@/lib/fund/glance";
 import { useMoneyText } from "@/lib/use-privacy";
 
 // The minus U+2212 money.tsx reserves for a signed figure — this column signs
@@ -56,7 +57,7 @@ export type BudgetTableRow = {
 };
 
 /**
- * The dense Presupuestos of `private/design-desktop/SPEC-A3.md` (RF-72, RF-73):
+ * The dense Presupuestos of the desktop design (RF-160, RF-73):
  * a budget per row with its bar and a total that sums every row on screen. The
  * spend a bar and a badge read is the server's own derivation, never a sum this
  * table takes over a list of movements (RNF-07); the badge only names a
@@ -90,12 +91,9 @@ export function BudgetsTable({
   }
 
   // The percentage a bar and its aria-label read, clamped so an overspend never
-  // runs the track past its end (SPEC-A3).
+  // runs the track past its end.
   function pctOf(row: { spentCents: number; limitCents: number }): number {
-    if (row.limitCents > 0) {
-      return Math.min(100, Math.round((row.spentCents / row.limitCents) * 100));
-    }
-    return row.spentCents > 0 ? 100 : 0;
+    return Math.min(100, budgetPercent(row.spentCents, row.limitCents));
   }
 
   function toneOf(row: { overspent: boolean; overThreshold: boolean }) {

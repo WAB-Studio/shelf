@@ -74,7 +74,7 @@ const CATEGORY_KIND_MISMATCH = "data.import.errors.categoryKindMismatch";
 const FOREIGN_CURRENCY_UNSUPPORTED = "errors.foreignCurrencyUnsupported";
 const ADJUSTMENT_ONE_ACCOUNT = "data.import.errors.adjustmentOneAccount";
 // The row names a currency its account does not settle in and brings no amount in the account's own,
-// so it refuses instead of re-denominating (RF-50, RF-121, RF-122).
+// so it refuses instead of re-denominating (RF-142, RF-121, RF-122).
 const ROW_CURRENCY_MISMATCH = "transactions.errors.currencyMismatch";
 // A row in its account's own currency names a second amount the movement does not have (RF-122).
 const COUNTER_AMOUNT_FORBIDDEN = "transactions.errors.counterAmountForbidden";
@@ -572,7 +572,7 @@ function checkBaseCurrency(
   }
 }
 
-// A transaction row's `currency` cell read against both accounts it names (RF-50, RF-121), by the
+// A transaction row's `currency` cell read against both accounts it names (RF-142, RF-121), by the
 // rule `transactions_verify_currency` holds at write time. A blank cell is a sheet from before the
 // column and passes only on base-currency accounts, as every such sheet was. A named one may differ
 // from one side's settlement currency when `counterAmount` carries that side's amount (RF-122) —

@@ -81,7 +81,7 @@ export async function getDashboardData(): Promise<DashboardData> {
   // The two aggregates keep a connection each so they run side by side; the light reads share one,
   // which keeps the screen under the pool's eight connections.
   // `getSessionUser` reads the claims alone, no connection: it stays outside the shared transaction, which
-  // would otherwise settle first and make it a second claims wait in a row (Q168).
+  // would otherwise settle first and make it a second claims wait in a row.
   const [
     balances,
     monthFlow,
