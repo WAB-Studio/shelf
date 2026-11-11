@@ -1,0 +1,48 @@
+name: backup
+
+# The weekly encrypted copy of the Shelf database (RF-191): scripts/backup/backup-encrypted.sh into the `copias`
+# branch of WAB-Studio/shelf-copias. Only the owner's age private key opens it; it is never in GitHub.
+on:
+  schedule:
+    - cron: '0 11 * * 0' # Sunday 06:00 in Bogotá
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backup
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7
+        with:
+          repository: WAB-Studio/shelf-copias
+          ssh-key: ${{ secrets.BACKUP_DEPLOY_KEY }}
+          path: copias
+          fetch-depth: 1
+      - name: Install age and the PostgreSQL 17 client
+        run: |
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsSL -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq age postgresql-client-17
+      - name: Back up
+        env:
+          MIGRATION_DATABASE_URL: ${{ secrets.MIGRATION_DATABASE_URL }}
+          BACKUP_ROWS_FILE: ${{ runner.temp }}/rows.txt
+          PG_BIN: /usr/lib/postgresql/17/bin
+          GIT_AUTHOR_NAME: shelf-backup
+          GIT_AUTHOR_EMAIL: shelf-backup@users.noreply.github.com
+          GIT_COMMITTER_NAME: shelf-backup
+          GIT_COMMITTER_EMAIL: shelf-backup@users.noreply.github.com
+        run: |
+          scripts/backup/backup-encrypted.sh copias | tee out.txt
+          archive="$(tail -1 out.txt)"
+          echo "$(basename "$archive"): $(du -h "$archive" | cut -f1)" >> "$GITHUB_STEP_SUMMARY"
+          { echo; echo "| table | rows |"; echo "|---|---|"; awk '{print "| " $1 " | " $2 " |"}' "$BACKUP_ROWS_FILE"; } >> "$GITHUB_STEP_SUMMARY"
