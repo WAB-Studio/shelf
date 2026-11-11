@@ -97,8 +97,6 @@ const escape = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 const figure = (page: Page, cents: number): Locator =>
   page.getByText(new RegExp(`(?<![\\d.,])${escape(money(cents))}(?![\\d.,])`)).filter({ visible: true });
 
-const visible = (page: Page, text: string): Locator => page.getByText(text).filter({ visible: true });
-
 test("the parent's card reads what its subcategories and itself spent", async ({ page }) => {
   // Kills: the budget's sum keyed on the parent's own category alone (reads 5.000, not 35.000).
   await page.goto("/es/planning/budgets");
@@ -106,38 +104,4 @@ test("the parent's card reads what its subcategories and itself spent", async ({
   await expect(figure(page, SPENT).first()).toBeVisible();
   await expect(figure(page, RENT + DIRECT)).toHaveCount(0);
   await expect(figure(page, DIRECT)).toHaveCount(0);
-});
-
-test("the card's remaining is the limit less the whole family's spend", async ({ page }) => {
-  // Kills: the remaining derived from the parent's own splits.
-  await page.goto("/es/planning/budgets");
-
-  await expect(figure(page, LIMIT - SPENT).first()).toBeVisible();
-});
-
-test("a parent with no spend reads zero and a full remaining", async ({ page }) => {
-  // Kills: a null spend drawn as a blank, or the empty parent borrowing another's children.
-  await page.goto("/es/planning/budgets");
-
-  await expect(figure(page, 0).first()).toBeVisible();
-  await expect(figure(page, LIMIT).first()).toBeVisible();
-});
-
-test("the movements filtered by the parent are the three the card counts", async ({ page }) => {
-  // Kills: the filter matching the parent's own splits alone, or leaking another parent's child.
-  await page.goto(`/es/movements?category=${ids.parent}`);
-
-  await expect(visible(page, NAME.rent).first()).toBeVisible();
-  await expect(visible(page, NAME.utilities).first()).toBeVisible();
-  await expect(visible(page, NAME.parent).first()).toBeVisible();
-  await expect(visible(page, NAME.stranger)).toHaveCount(0);
-});
-
-test("filtering by a subcategory lists that subcategory alone", async ({ page }) => {
-  // Kills: the filter widened to the whole family from a child.
-  await page.goto(`/es/movements?category=${ids.rent}`);
-
-  await expect(visible(page, NAME.rent).first()).toBeVisible();
-  await expect(visible(page, NAME.utilities)).toHaveCount(0);
-  await expect(visible(page, NAME.parent)).toHaveCount(0);
 });

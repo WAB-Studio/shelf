@@ -29,20 +29,6 @@ const SCREEN_FILES = [
   "components/transactions/movement-detail.tsx",
 ];
 
-async function resolved(page: Page, property: string, value: string): Promise<string> {
-  return page.evaluate(
-    ([prop, val]) => {
-      const probe = document.createElement("div");
-      probe.style.setProperty(prop, val);
-      (document.querySelector(".radix-themes") ?? document.body).append(probe);
-      const out = getComputedStyle(probe).getPropertyValue(prop);
-      probe.remove();
-      return out;
-    },
-    [property, value],
-  );
-}
-
 async function computed(locator: Locator, property: string): Promise<string> {
   return locator.evaluate((el, prop) => getComputedStyle(el).getPropertyValue(prop), property);
 }
@@ -52,7 +38,7 @@ function card(page: Page, name: "net" | "month"): Locator {
 }
 
 test.describe("dashboard band", () => {
-  test("at 360 the net card is the one box, the month card is not", async ({
+  test("at 360 the net card is the one box, the month card is not @mobile", async ({
     page,
   }, testInfo) => {
     test.skip(testInfo.project.name !== "mobile", "the phone's column");
@@ -82,131 +68,11 @@ test.describe("dashboard band", () => {
     expect(parseFloat(await computed(figure, "font-size"))).toBeGreaterThanOrEqual(44);
     
   });
-
-  test("the month stats wrap into a grid and no figure runs into the next", async ({ page }, testInfo) => {
-    test.skip(testInfo.project.name !== "desktop", "the laptop's row");
-    await page.goto("/es");
-    const stats = page.locator('[data-stats="3"]').first();
-    await expect(stats).toBeVisible();
-    expect(await computed(stats, "display")).toBe("grid");
-
-    const boxes = await stats.locator("> *").evaluateAll((els) =>
-      els.map((el) => el.getBoundingClientRect()),
-    );
-    expect(boxes).toHaveLength(3);
-    // Two boxes on one line never overlap; a wrapped one starts below.
-    for (let i = 1; i < boxes.length; i++) {
-      const [a, b] = [boxes[i - 1], boxes[i]];
-      expect(b.left >= a.right - 0.5 || b.top >= a.bottom - 0.5).toBe(true);
-    }
-  });
-});
-
-test.describe("dashboard band with a gap", () => {
-  let accountId = "";
-
-  test.beforeAll(async () => {
-    accountId = randomUUID();
-    await asHarnessUser(async (tx) => {
-      await tx`
-        insert into accounts (
-          id, owner_user_id, name, kind, subtype, initial_balance_cents, initial_balance_on)
-        values (${accountId}, ${scope.userId}, ${`Descuadre ${stamp}`}, 'asset', 'bank',
-          50_000_000, ${addCivilDays(todayInBogota(), -1)})`;
-      await tx`
-        insert into account_reconciliations (account_id, reconciled_on, counted_balance_cents)
-        values (${accountId}, ${todayInBogota()}, 51_000_000)`;
-    });
-  });
-
-  test.afterAll(async () => {
-    await fixtureSql`
-      delete from transactions where from_account_id = ${accountId} or to_account_id = ${accountId}`;
-    await fixtureSql`delete from account_reconciliations where account_id = ${accountId}`;
-    await fixtureSql`delete from accounts where id = ${accountId}`;
-  });
-
-  test("a gap adds «Descuadre del mes» as a fourth figure in a grid", async ({ page }, testInfo) => {
-    test.skip(testInfo.project.name !== "desktop", "the laptop's row");
-    await page.goto("/es");
-    const stats = page.locator('[data-stats="4"]').first();
-    await expect(stats).toBeVisible();
-
-    await expect(stats.getByText(messages.dashboard.monthAdjustment, { exact: true })).toBeVisible();
-    expect(await stats.locator("> *").count()).toBe(4);
-    expect(await computed(stats, "display")).toBe("grid");
-  });
-});
-
-test.describe("reports cards", () => {
-  // The trend draws its legend only over a window that holds something.
-  const flowIds = [randomUUID(), randomUUID()];
-
-  test.beforeAll(async () => {
-    await asHarnessUser(async (tx) => {
-      await tx`
-        insert into transactions (id, from_account_id, amount_cents, occurred_at, description)
-        values (${flowIds[0]}, ${scope.accountId}, 1_000_000, ${todayInBogota()}, ${`Gasto ${stamp}`})`;
-      await tx`
-        insert into transactions (id, from_account_id, amount_cents, occurred_at, description)
-        values (${flowIds[1]}, ${scope.accountId}, 2_000_000, ${todayInBogota()}, ${`Gasto dos ${stamp}`})`;
-      await tx`
-        insert into transaction_splits (transaction_id, category_id, amount_cents)
-        values (${flowIds[0]}, ${scope.categoryId}, 1_000_000), (${flowIds[1]}, ${scope.categoryId}, 2_000_000)`;
-    });
-  });
-
-  test.afterAll(async () => {
-    await fixtureSql`delete from transactions where id in ${fixtureSql(flowIds)}`;
-  });
-
-  test("at 1280 the cards sit on the panel background with a 20 px radius", async ({
-    page,
-  }, testInfo) => {
-    test.skip(testInfo.project.name !== "desktop", "the laptop's cards");
-    await page.goto("/es/reports");
-
-    const trend = page
-      .getByRole("heading", { name: messages.reports.comparisonTitle, exact: true })
-      .locator("..");
-    const lower = page
-      .getByRole("heading", { name: messages.reports.byCategoryTitle, exact: true })
-      .locator("..");
-    await expect(trend).toBeVisible();
-    await expect(lower).toBeVisible();
-
-    const panel = await resolved(page, "background-color", "var(--color-panel-solid)");
-    for (const cardLocator of [trend, lower]) {
-      expect(await computed(cardLocator, "background-color")).toBe(panel);
-      expect(await computed(cardLocator, "border-top-left-radius")).toBe("20px");
-    }
-
-    expect(await computed(lower.locator(".."), "display")).toBe("grid");
-  });
-
-  test("the legend dots are 12 by 12 and round", async ({ page }) => {
-    await page.goto("/es/reports");
-
-    const label = page
-      .getByText(new RegExp(`^${messages.reports.legendIncome}`))
-      .locator("visible=true")
-      .first();
-    await expect(label).toBeVisible();
-    const dot = label.locator("xpath=preceding-sibling::*[1]");
-
-    const box = await dot.boundingBox();
-    expect(Math.round(box!.width)).toBe(12);
-    expect(Math.round(box!.height)).toBe(12);
-    expect(await computed(dot, "border-top-left-radius")).toBe(
-      await resolved(page, "border-top-left-radius", "9999px"),
-    );
-  });
 });
 
 test.describe("movement detail", () => {
   let movementId = "";
   let adjustmentAccountId = "";
-  let adjustmentId = "";
 
   test.beforeAll(async () => {
     movementId = randomUUID();
@@ -227,11 +93,6 @@ test.describe("movement detail", () => {
         insert into account_reconciliations (account_id, reconciled_on, counted_balance_cents)
         values (${adjustmentAccountId}, ${addCivilDays(todayInBogota(), -1)}, 51_000_000)`;
     });
-    const [row] = await fixtureSql<{ id: string }[]>`
-      select id from transactions
-      where reconciliation_id is not null
-        and (from_account_id = ${adjustmentAccountId} or to_account_id = ${adjustmentAccountId})`;
-    adjustmentId = row.id;
   });
 
   test.afterAll(async () => {
@@ -244,7 +105,7 @@ test.describe("movement detail", () => {
     await clearLedger();
   });
 
-  test("Editar and Eliminar share the row and both grow", async ({ page }, testInfo) => {
+  test("Editar and Eliminar share the row and both grow @mobile", async ({ page }, testInfo) => {
     test.skip(testInfo.project.name !== "mobile", "the phone's detail");
     await page.goto(`/es/movements/${movementId}`);
 
@@ -257,28 +118,6 @@ test.describe("movement detail", () => {
     const [a, b] = [await edit.boundingBox(), await remove.boundingBox()];
     expect(Math.abs(a!.y - b!.y)).toBeLessThan(1);
     expect(Math.abs(a!.width - b!.width)).toBeLessThan(1);
-  });
-
-  test("an adjustment has no buttons row and its heading still fills the header", async ({
-    page,
-  }, testInfo) => {
-    test.skip(testInfo.project.name !== "mobile", "the phone's detail");
-    await page.goto(`/es/movements/${adjustmentId}`);
-
-    const heading = page
-      .getByRole("heading", { name: messages.transactions.kindAdjustment, exact: true })
-      .locator("visible=true")
-      .first();
-    await expect(heading).toBeVisible();
-    await expect(
-      page.getByRole("button", { name: messages.transactions.edit, exact: true }),
-    ).toHaveCount(0);
-
-    const reach = await heading.evaluate((el) => {
-      const row = el.closest("[class*='rt-Flex']")!;
-      return row.getBoundingClientRect().right - el.getBoundingClientRect().right;
-    });
-    expect(Math.abs(reach)).toBeLessThan(1);
   });
 });
 

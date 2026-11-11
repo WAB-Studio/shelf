@@ -118,6 +118,24 @@
   text-align: right;
 }
 
+.bandCell {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.bandAside {
+  display: flex;
+  gap: 12px;
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--gray-12);
+}
+
 /* The caps band a run of rows sits under, as in PagosPlanificados. */
 .band {
   display: flex;

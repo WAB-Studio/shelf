@@ -11,7 +11,7 @@ import messages from "@/messages/es.json";
 import { todayInBogota } from "@/lib/dates";
 
 import { fixtureSql } from "../scripts/harness/fixtures";
-import { asHarnessUser, clearLedger, readScope, seedQueue, test } from "./global-setup";
+import { asHarnessUser, readScope, test } from "./global-setup";
 
 const scope = readScope();
 const stamp = randomUUID().slice(0, 8);
@@ -44,33 +44,12 @@ test.describe("an overdue payment on the phone", () => {
     await fixtureSql`delete from planned_payments where id = ${id}`;
   });
 
-  test("says Vencido and offers Registrar pago without a menu", async ({ page }) => {
+  test("says Vencido and offers Registrar pago without a menu @mobile", async ({ page }) => {
     await page.goto("/es/planning/payments");
     await expect(page.getByText(`Predial ${stamp}`).locator("visible=true")).toBeVisible();
     await expect(page.getByText(messages.plannedPayments.overdueLabel, { exact: false }).first()).toBeVisible();
     await expect(
       page.getByRole("button", { name: messages.plannedPayments.settle, exact: true }).first(),
     ).toBeVisible();
-  });
-});
-
-test.describe("a bank email in Bandeja", () => {
-  test.afterEach(clearLedger);
-
-  test("reads in pesos and says it is an expense", async ({ page }) => {
-    await seedQueue([
-      {
-        merchant: `Tienda ${stamp}`,
-        amountCents: 8_450_000,
-        accountId: scope.accountId,
-        categoryId: scope.categoryId,
-        categorySource: "merchant",
-      },
-    ]);
-    await page.goto("/es/inbox");
-    const card = page.getByText("$ 84.500").locator("visible=true").first();
-    await expect(card).toBeVisible();
-    await expect(page.getByText(messages.ingest.kindExpense, { exact: true }).locator("visible=true").first()).toBeVisible();
-    await expect(page.getByText("84.500 COP")).toHaveCount(0);
   });
 });

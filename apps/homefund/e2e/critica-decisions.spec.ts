@@ -16,7 +16,7 @@ test("Reportes steps back a month and names it", async ({ page }) => {
   await expect(page.getByRole("button", { name: messages.common.nextMonth }).locator("visible=true").first()).toBeEnabled();
 });
 
-test("Planeación draws its tiles in one column on the phone", async ({ page }) => {
+test("Planeación draws its tiles in one column on the phone @mobile", async ({ page }) => {
   await page.setViewportSize({ width: 360, height: 740 });
   await page.goto("/es/planning");
   const tiles = page.locator("main a[href*='/planning/']").locator("visible=true");

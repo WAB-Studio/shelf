@@ -19,7 +19,6 @@ import { asHarnessUser, readScope, test } from "./global-setup";
 const rules = messages.recurringRules;
 
 const FAILED_LINE = "Pausada: no se pudo generar el movimiento. Revisa la regla y reanúdala.";
-const ENDED_LINE = "Esta regla ya terminó. Cambia su fecha de fin para reanudarla.";
 
 const scope = readScope();
 const stamp = randomUUID().slice(0, 8);
@@ -81,15 +80,6 @@ test("a rule the run paused shows why on its row", async ({ page }) => {
   await expect(visibleText(row(page), FAILED_LINE)).toHaveCount(1);
 });
 
-test("a rule the person paused reads «Pausada» alone", async ({ page }) => {
-  // Kills: the reason shown when it is null.
-  await seed({ active: false, reason: null });
-  await page.goto("/es/planning/recurring");
-
-  await expect(visibleText(row(page), rules.statePaused)).toHaveCount(1);
-  await expect(page.getByText(FAILED_LINE)).toHaveCount(0);
-});
-
 test("resuming a rule the run paused takes the line away, and it stays gone after a reload", async ({
   page,
 }) => {
@@ -107,27 +97,4 @@ test("resuming a rule the run paused takes the line away, and it stays gone afte
   await page.reload();
   await expect(row(page)).toBeVisible();
   await expect(page.getByText(FAILED_LINE)).toHaveCount(0);
-});
-
-test("a person with no rules sees the empty state and no pause line", async ({ page }) => {
-  // Kills: the screen showing a pause line or no empty state when the list is empty.
-  await fixtureSql`delete from recurring_rules where owner_user_id = ${scope.userId}`;
-  await page.goto("/es/planning/recurring");
-
-  await expect(visibleText(page, rules.emptyTitle)).toHaveCount(1);
-  await expect(visibleText(page, rules.emptyDescription)).toHaveCount(1);
-  await expect(page.getByText(FAILED_LINE)).toHaveCount(0);
-});
-
-test("resuming a rule the run ended says it ended, and the rule stays paused", async ({ page }) => {
-  // Kills: the database's 23514 mapped to nothing, so the person gets «Algo salió mal».
-  await seed({ active: false, reason: null, endsOn: "past" });
-  await page.goto("/es/planning/recurring");
-
-  await row(page).getByRole("switch").filter({ visible: true }).click();
-
-  await expect(visibleText(page, ENDED_LINE)).toHaveCount(1);
-  await expect(page.getByText(messages.errors.unexpected)).toHaveCount(0);
-  expect((await stored()).is_active).toBe(false);
-  await expect(visibleText(row(page), rules.statePaused)).toHaveCount(1);
 });

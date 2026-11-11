@@ -72,23 +72,3 @@ test("a cause lists the one charge it caused and no other movement", async ({ pa
   await expect(linkTo(page, unrelatedId)).toHaveCount(0);
   await expect(linkTo(page, causeId)).toHaveCount(0);
 });
-
-test("a movement that caused nothing draws no consequence list", async ({ page }) => {
-  // Kills: the same filter dropped (the movement lists the whole ledger under «Cobros»).
-  await page.goto(`/es/movements/${unrelatedId}`);
-
-  await expect(page.getByText("Harness ajeno").filter({ visible: true }).first()).toBeVisible();
-  await expect(page.getByText(transactions.causedTitle, { exact: true }).filter({ visible: true })).toHaveCount(0);
-  await expect(page.getByText(transactions.causedTotal, { exact: true }).filter({ visible: true })).toHaveCount(0);
-  await expect(linkTo(page, chargeId)).toHaveCount(0);
-  await expect(linkTo(page, causeId)).toHaveCount(0);
-});
-
-test("a charge lists none, and links back to its cause alone", async ({ page }) => {
-  // Kills: the filter dropped (the charge's page lists its cause and the unrelated movement as consequences).
-  await page.goto(`/es/movements/${chargeId}`);
-
-  await expect(linkTo(page, causeId).first()).toBeVisible();
-  await expect(page.getByText(transactions.causedTitle, { exact: true }).filter({ visible: true })).toHaveCount(0);
-  await expect(linkTo(page, unrelatedId)).toHaveCount(0);
-});

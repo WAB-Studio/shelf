@@ -4132,6 +4132,7 @@ async function main(): Promise<void> {
   await mcpCleanupSuite();
   await mcpInboxSuite();
   await mcpInboxReviewSuite();
+  await accountLoanSuite();
   await monthReviewClearSuite();
 }
 
@@ -17434,4 +17435,40 @@ async function mcpInboxReviewSuite(): Promise<void> {
   );
 
   await fixtureSql`delete from ingest_deliveries where owner_user_id = ${owner.id}`;
+}
+
+// RF-178: a liability may be a loan; an asset may not, and the list carries the subtype the screen groups by.
+async function accountLoanSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const owner = await createMembershipFreeUser();
+  const base = {
+    groupId: null, isShared: false, institution: null, settlementCurrency: BASE_CURRENCY, balanceOn: "2026-01-01",
+    ownerUserId: owner.id,
+  };
+  const loan = await asUser(owner, () =>
+    createAccount({ ...base, name: `Harness rf178 loan ${tag}`, kind: "liability", subtype: "loan", amountMinor: 5_000_00 }),
+  );
+  track("accounts", loan.accountId);
+  const card = await asUser(owner, () =>
+    createAccount({ ...base, name: `Harness rf178 card ${tag}`, kind: "liability", subtype: "card", amountMinor: 1_000_00 }),
+  );
+  track("accounts", card.accountId);
+  const listed = await asUser(owner, () => listAccounts({ archived: false }));
+  assert(
+    next("RF-178: a loan is created under a liability, kept as a loan, and sits apart from a card in the list the screen groups by kind and subtype"),
+    listed.find((row) => row.id === loan.accountId)?.subtype === "loan" &&
+      listed.find((row) => row.id === loan.accountId)?.kind === "liability" &&
+      listed.find((row) => row.id === card.accountId)?.subtype === "card",
+    `rows ${JSON.stringify(listed.map((row) => [row.name, row.kind, row.subtype]))}`,
+  );
+  let code = "none";
+  try {
+    await asUser(owner, () =>
+      createAccount({ ...base, name: `Harness rf178 asset ${tag}`, kind: "asset", subtype: "loan", amountMinor: 0 }),
+    );
+  } catch (error) {
+    code = pgErrorCode(error) ?? "unknown";
+  }
+  assert(next("RF-178: the database refuses a loan on an asset"), code === "23514", `code ${code}`);
 }
