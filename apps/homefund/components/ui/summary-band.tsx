@@ -1,5 +1,5 @@
 import type { ComponentProps, ReactNode } from "react";
-import { Flex, Heading, Theme } from "@radix-ui/themes";
+import { Flex, Theme } from "@radix-ui/themes";
 
 import styles from "./summary-band.module.css";
 
@@ -66,15 +66,6 @@ export function BandCard({
         children
       )}
     </div>
-  );
-}
-
-// A headline figure that grows to 40px from `md`.
-export function BandFigure({ children }: { children: ReactNode }) {
-  return (
-    <Heading size="8" className={styles.figure}>
-      {children}
-    </Heading>
   );
 }
 

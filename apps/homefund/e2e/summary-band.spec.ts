@@ -17,6 +17,7 @@ import { addCivilDays, todayInBogota } from "@/lib/dates";
 import messages from "@/messages/es.json";
 
 import { fixtureSql } from "../scripts/harness/fixtures";
+import { pageOverflow } from "./fit";
 import { asHarnessUser, clearLedger, readScope, test } from "./global-setup";
 
 const scope = readScope();
@@ -159,5 +160,55 @@ test.describe("lint", () => {
     const { default: config } = await import("../eslint.config.mjs");
     const files = debtEntries(config as ConfigEntry[]).flatMap((entry) => entry.files ?? []);
     expect(files).toEqual(["app/[[]locale]/layout.tsx"]);
+  });
+});
+
+// A regression row for the phone sweep, outside the header's before/after contract:
+// it is red on every commit before the figure was capped to its card.
+test.describe("dashboard band on a narrow phone", () => {
+  const accountId = randomUUID();
+
+  // Owed in dollars, so the dollar net worth is the longest figure the card draws:
+  // «−US$ 1.222.222.221,23».
+  test.beforeAll(async () => {
+    await asHarnessUser(async (tx) => {
+      await tx`
+        insert into accounts (
+          id, owner_user_id, name, kind, subtype, initial_balance_cents,
+          initial_balance_on, settlement_currency)
+        values (
+          ${accountId}, ${scope.userId}, ${`Dólares ${stamp}`}, 'liability', 'loan',
+          -122222222123, ${todayInBogota()}, 'USD')`;
+    });
+  });
+
+  test.afterAll(async () => {
+    await asHarnessUser(async (tx) => {
+      await tx`delete from accounts where id = ${accountId}`;
+    });
+  });
+
+  test("a billion-dollar net worth stays inside the net card @mobile", async ({
+    page,
+  }, testInfo) => {
+    test.skip(testInfo.project.name !== "mobile", "the phone's column");
+    await page.goto("/es");
+
+    const net = card(page, "net");
+    const figure = net.locator(".rt-Heading").filter({ hasText: "1.222.222.221,23" });
+    await expect(figure).toBeVisible();
+
+    // The text's own boxes, not the heading's: a block heading ends at the card's
+    // edge whatever its text does.
+    const overflow = await figure.evaluate((heading) => {
+      const card = heading.closest("[data-card]")!;
+      const style = getComputedStyle(card);
+      const inner = card.getBoundingClientRect().right - parseFloat(style.paddingRight);
+      const range = document.createRange();
+      range.selectNodeContents(heading);
+      return Math.max(...[...range.getClientRects()].map((rect) => rect.right)) - inner;
+    });
+    expect(overflow).toBeLessThanOrEqual(0);
+    expect(await pageOverflow(page)).toBeLessThanOrEqual(0);
   });
 });

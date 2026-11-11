@@ -1,0 +1,14 @@
+.row {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.body {
+  flex: 1 1 7rem;
+  min-width: 0;
+}
+
+.figure {
+  flex-shrink: 0;
+  margin-left: auto;
+}

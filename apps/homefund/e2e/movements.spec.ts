@@ -16,6 +16,7 @@ import messages from "@/messages/es.json";
 import { TIME_ZONE } from "@/lib/locales";
 
 import { fixtureSql } from "../scripts/harness/fixtures";
+import { MIN_TITLE_PX, pageOverflow, rightOverhang } from "./fit";
 import { asHarnessUser, clearLedger, readScope, test } from "./global-setup";
 
 const transactions = messages.transactions;
@@ -539,5 +540,38 @@ test.describe("the «Descuadre» filter (RF-138, boards C2a-C2e)", () => {
       const box = await radio.boundingBox();
       expect(Math.min(box!.width, box!.height)).toBeGreaterThanOrEqual(44);
     }
+  });
+});
+
+test.describe("a wide amount on a narrow phone", () => {
+  const LONG_DESCRIPTION = "Compra en Amazon de electrodomésticos importados";
+
+  // After the outer `beforeEach`, which resets the ledger and seeds its two rows.
+  test.beforeEach(async () => {
+    await asHarnessUser(async (tx) => {
+      await tx`
+        with movement as (
+          insert into transactions (from_account_id, amount_cents, occurred_at, description)
+          values (${scope.accountId}, 123456789012, ${todayInBogota()}, ${LONG_DESCRIPTION})
+          returning id)
+        insert into transaction_splits (transaction_id, category_id, amount_cents)
+        select id, ${scope.categoryId}, 123456789012 from movement`;
+    });
+  });
+
+  test("keeps the title at least 7rem wide and the amount inside the row @mobile", async ({
+    page,
+  }) => {
+    await page.goto("/es/movements");
+
+    const title = page.getByText(LONG_DESCRIPTION, { exact: true }).filter({ visible: true });
+    const amount = page.getByText(/1\.234\.567\.890/).filter({ visible: true });
+    await expect(title).toBeVisible();
+    await expect(amount).toBeVisible();
+
+    expect((await title.boundingBox())!.width).toBeGreaterThanOrEqual(MIN_TITLE_PX);
+    const card = page.locator(".rt-Card").filter({ visible: true }).filter({ has: title }).last();
+    expect(await rightOverhang(amount, card)).toBeLessThanOrEqual(0);
+    expect(await pageOverflow(page)).toBeLessThanOrEqual(0);
   });
 });

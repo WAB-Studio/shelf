@@ -110,7 +110,7 @@ export function DebtDetailScreen({ data }: { data: DebtDetailData }) {
     });
   }
 
-  // Credit with a pocket owed reads the row's whole Q9 line (Q18 a); a card
+  // Credit with a pocket owed reads the row's whole line; a card
   // whose pesos are at zero while another pocket owes names it «Debes».
   const beside = owesBesideCredit(creditCents, otherOwed);
   const onlyForeign =

@@ -955,6 +955,7 @@ void (async () => {
     await unreviewedExportSuite();
     await credentialDefaultCategorySuite();
     await failureNoStoreSuite();
+    await emailIngestSuite();
   } catch (error) {
     assert(
       next("the run completed"),
@@ -1650,5 +1651,50 @@ async function failureNoStoreSuite(): Promise<void> {
     next("a rejected token_hash link that clears a session says no-store once, never doubled"),
     rejected.location.endsWith("/es/login?error=linkInvalid") && mentions === 1,
     `it answered ${rejected.status} to ${rejected.location}, cache-control «${rejected.cacheControl}»`,
+  );
+}
+
+// RF-187: a forwarded bank email lands as a delivery; an unsigned, unkeyed or forged call does not.
+async function emailIngestSuite(): Promise<void> {
+  const userId = httpUserId;
+  if (!userId) throw new Error("emailIngestSuite ran before the session was read");
+  const tag = randomUUID().slice(0, 8).toUpperCase();
+  const token = await edgeCredential(userId);
+  const post = async (headers: Record<string, string>, payload: unknown) => {
+    const response = await fetch(`${HARNESS_BASE_URL}/api/webhooks/email`, {
+      method: "POST",
+      headers: { "content-type": "application/json", ...headers },
+      body: JSON.stringify(payload),
+    });
+    const body = (await response.json()) as Record<string, unknown>;
+    if (typeof body.deliveryId === "string") landedDeliveries.push(body.deliveryId);
+    return { status: response.status, body };
+  };
+  const email = {
+    from: "yo@example.com",
+    to: [`${token}@in.example.com`],
+    subject: "RV: Alertas y Notificaciones",
+    text: `---------- Forwarded message ---------\nDe: Bancolombia\n\nBancolombia: Compraste COP9.100,00 en ZXQ MAIL ${tag} con tu T.Cred *4872.`,
+  };
+
+  const landed = await post({ authorization: `Bearer ${token}` }, email);
+  const [row] = await fixtureSql<{ text: string }[]>`
+    select raw_text as text from ingest_deliveries where id = ${String(landed.body.deliveryId)}`;
+  assert(
+    next("a forwarded bank email with a bearer key lands as a delivery of the bank's words alone"),
+    landed.status === 200 &&
+      row?.text === `Alertas y Notificaciones Bancolombia: Compraste COP9.100,00 en ZXQ MAIL ${tag} con tu T.Cred *4872.`,
+    `it answered ${landed.status} ${JSON.stringify(landed.body)}, landed ${JSON.stringify(row)}`,
+  );
+
+  const anonymous = await post({}, email);
+  const forged = await post(
+    { "svix-id": "msg_1", "svix-timestamp": String(Math.floor(Date.now() / 1000)), "svix-signature": "v1,AAAA" },
+    email,
+  );
+  assert(
+    next("an email with no key, or with a signature the secret did not make, is refused with 401"),
+    anonymous.status === 401 && forged.status === 401,
+    `they answered ${anonymous.status} and ${forged.status}`,
   );
 }
