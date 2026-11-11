@@ -33,9 +33,9 @@ export function MovementRow({
   wrap?: boolean;
 }) {
   return (
-    <Flex align="center" gap="3">
+    <Flex align="center" gap="3" wrap="wrap" className={styles.row}>
       {tile}
-      <Box flexGrow="1" minWidth="0">
+      <Box className={styles.body}>
         <Flex align="center" gap="2">
           <Text
             as="div"

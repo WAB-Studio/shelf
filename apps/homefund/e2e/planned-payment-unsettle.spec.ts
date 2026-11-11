@@ -138,3 +138,32 @@ test.describe("confirming the delete of a settling movement", () => {
     }
   });
 });
+
+test.describe("an overdue payment on a narrow phone", () => {
+  test("shows its whole amount and its menu inside the card @mobile", async ({ page }, testInfo) => {
+    // Kills: the row's longest word and the amount refusing to wrap, which pushed «$ 12.345.6» and the menu out of the card.
+    test.skip(testInfo.project.name !== "mobile", "the phone's cards");
+    const label = "Administración del edificio";
+    await asHarnessUser(async (tx) => {
+      await tx`
+        insert into planned_payments (
+          owner_user_id, from_account_id, amount_cents, category_id, due_date, description, created_by)
+        values (${scope.userId}, ${scope.accountId}, 1234567890, ${scope.categoryId},
+          ${todayInBogota()}::date - 3, ${label}, ${scope.userId})`;
+    });
+    await page.goto("/es/planning/payments");
+
+    const menu = page
+      .getByRole("button", { name: common.actionsFor.replace("{name}", label), exact: true })
+      .filter({ visible: true });
+    const card = page.locator(".rt-Card").filter({ visible: true }).filter({ has: menu });
+    const amount = card.getByText(/12\.345\.678/);
+    await expect(amount).toBeVisible();
+
+    const cardBox = (await card.boundingBox())!;
+    for (const inside of [amount, menu]) {
+      const box = (await inside.boundingBox())!;
+      expect(box.x + box.width).toBeLessThanOrEqual(cardBox.x + cardBox.width);
+    }
+  });
+});
