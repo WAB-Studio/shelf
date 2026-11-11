@@ -6,7 +6,7 @@ import { z } from "zod";
 import { listAccounts, updateAccount } from "@/db/queries/accounts";
 import { freeCategoryColor, listScopedCategories } from "@/db/queries/categories";
 import { bookMovement, dropMovement, openAccount, openCategory, reviseMovement } from "@/db/queries/ledger-write";
-import { getTransactionById, listTransactions, type TransactionListRow } from "@/db/queries/transactions";
+import { getTransactionById, listTransactions, type TransactionListRow, type TransactionSplitInput } from "@/db/queries/transactions";
 import { pgErrorCode } from "@/lib/db-error";
 import { ActionError } from "@/lib/errors";
 import { centsToDecimal, parseAmount } from "@/lib/money";
@@ -38,14 +38,14 @@ function movementShape(t: Say) {
     occurredAt: z.string().describe(d("occurredAt")),
     description: z.string().nullable().describe(d("description")),
     categoryId: z.string().optional().describe(d("categoryId")),
-    splits: z.array(z.object({ categoryId: z.string(), amountCents: cents })).optional().describe(d("splits")),
+    splits: z.array(z.object({ categoryId: z.string(), amountCents: cents, description: z.string().nullish() })).optional().describe(d("splits")),
     contributedByMemberId: z.string().nullish().describe(d("contributedByMemberId")),
     forHousehold: z.boolean().optional().describe(d("forHousehold")),
   };
 }
 
 type MovementInput = z.infer<z.ZodObject<ReturnType<typeof movementShape>>>;
-type Split = { categoryId: string; amountCents: number };
+type Split = TransactionSplitInput;
 
 function movementForm(input: MovementInput) {
   const splits = input.splits ?? (input.categoryId ? [{ categoryId: input.categoryId, amountCents: input.amountCents }] : []);
@@ -60,9 +60,25 @@ function movementForm(input: MovementInput) {
     description: input.description,
     contributedByMemberId: input.contributedByMemberId,
     forHousehold: input.forHousehold,
-    splits: splits.map((split: Split) => ({ categoryId: split.categoryId, amount: centsToDecimal(split.amountCents) })),
+    splits: splits.map((split: Split) => ({
+      categoryId: split.categoryId,
+      amount: centsToDecimal(split.amountCents),
+      description: split.description,
+    })),
     labelIds: [],
   };
+}
+
+// The lines an edit leaves the movement with, or undefined when the form should build them from `categoryId` alone.
+// A transfer carries none; a lone line follows an amount that changed and keeps its name when its category does.
+function splitsFor(current: TransactionListRow, patch: Partial<MovementInput>, amountCents: number, isTransfer: boolean): Split[] | undefined {
+  if (patch.splits) return patch.splits;
+  if (isTransfer) return undefined;
+  const [only] = current.splits;
+  if (current.splits.length === 1) {
+    return [{ categoryId: patch.categoryId ?? only.categoryId, amountCents, description: only.description }];
+  }
+  return patch.categoryId ? undefined : current.splits;
 }
 
 // An edit sends what changes; what it omits is the stored row's, read back as the form would have loaded it.
@@ -72,15 +88,7 @@ function patched(current: TransactionListRow, patch: Partial<MovementInput>): Mo
   const fromAccountId = pick("fromAccountId", current.fromAccountId);
   const toAccountId = pick("toAccountId", current.toAccountId);
   const amountCents = pick("amountCents", current.amountCents);
-  const only = current.splits.length === 1 ? current.splits[0] : undefined;
-  // A transfer carries no split; a lone split follows an amount that changed.
-  const splits =
-    patch.splits ??
-    (patch.categoryId || (fromAccountId !== null && toAccountId !== null)
-      ? undefined
-      : only
-        ? [{ categoryId: only.categoryId, amountCents }]
-        : current.splits);
+  const splits = splitsFor(current, patch, amountCents, fromAccountId !== null && toAccountId !== null);
   return {
     fromAccountId,
     toAccountId,

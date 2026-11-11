@@ -31,7 +31,7 @@ import { pgConstraintName, pgErrorCode } from "@/lib/db-error";
 import { learnedPattern, proposalFor, type TrustedPattern } from "@/lib/ingest/counterparty-pattern";
 import type { SettlementCurrencies } from "@/lib/validation/transaction";
 
-export type TransactionSplitInput = { categoryId: string; amountCents: number };
+export type TransactionSplitInput = { categoryId: string; amountCents: number; description?: string | null };
 
 // The scope, `kind` and `created_by` are set by triggers/generation, so no write
 // here names them (RF-18, RF-25). A transfer names both accounts and carries no
@@ -134,7 +134,7 @@ export type TransactionListRow = {
   // currency off the row it already has (RF-121).
   fromSettlementCurrency: CurrencyCode | null;
   toSettlementCurrency: CurrencyCode | null;
-  splits: { categoryId: string; amountCents: number }[];
+  splits: { categoryId: string; amountCents: number; description: string | null }[];
   labels: { id: string; name: string; color: string | null }[];
   // The movement that produced this one, one hop only (RF-132); null for most rows.
   causedByTransactionId: string | null;
@@ -280,18 +280,10 @@ export async function insertTransaction(
 
   const transactionId = row.id;
 
-  if (splits.length > 0) {
-    await tx.execute(sql`
-      insert into transaction_splits (transaction_id, category_id, amount_cents)
-      values ${sql.join(
-        splits.map(
-          (split) =>
-            sql`(${transactionId}, ${split.categoryId}, ${split.amountCents})`,
-        ),
-        sql`, `,
-      )}
-    `);
-  }
+  await insertSplitRows(
+    tx,
+    splits.map((split) => ({ transactionId, ...split })),
+  );
 
   if (labelIds.length > 0) {
     await insertRow(
@@ -442,6 +434,7 @@ export async function updateTransaction({
           transactionId,
           categoryId: split.categoryId,
           amountCents: split.amountCents,
+          description: split.description ?? null,
         })),
       );
     }
@@ -610,6 +603,22 @@ export async function getTransactionTotals(
   });
 }
 
+// The one multi-row insert of a movement's lines: the column list lives here and nowhere else. The deferred
+// sum trigger checks the set at commit, so it need not balance the instant it lands.
+export async function insertSplitRows(
+  tx: Transaction,
+  rows: (TransactionSplitInput & { transactionId: string })[],
+): Promise<void> {
+  if (rows.length === 0) return;
+  await tx.execute(sql`
+    insert into transaction_splits (transaction_id, category_id, amount_cents, description)
+    values ${sql.join(
+      rows.map((row) => sql`(${row.transactionId}, ${row.categoryId}, ${row.amountCents}, ${row.description ?? null})`),
+      sql`, `,
+    )}
+  `);
+}
+
 /**
  * Every matching movement with its splits and labels in ONE round trip: the two
  * child sets ride along as correlated jsonb subselects, never an N+1 follow-up
@@ -628,8 +637,8 @@ export async function listTransactions(
   // which turns the correlation into a constant and empties both sets.
   const outerId = sql`"transactions"."id"`;
 
-  const splitsJson = sql<{ categoryId: string; amountCents: number }[]>`coalesce((
-    select jsonb_agg(jsonb_build_object('categoryId', s.category_id, 'amountCents', s.amount_cents))
+  const splitsJson = sql<{ categoryId: string; amountCents: number; description: string | null }[]>`coalesce((
+    select jsonb_agg(jsonb_build_object('categoryId', s.category_id, 'amountCents', s.amount_cents, 'description', s.description))
     from ${transactionSplits} s where s.transaction_id = ${outerId}
   ), '[]'::jsonb)`;
 

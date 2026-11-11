@@ -4128,6 +4128,7 @@ async function main(): Promise<void> {
   await otherMembersRowsSuite();
   await deferralImportSuite();
   await accountPocketSuite();
+  await receiptLinesSuite();
 }
 
 // A member recorded without a login is someone in the fund: a leader whose fund holds one is not alone, so an
@@ -16833,5 +16834,170 @@ async function accountPocketSuite(): Promise<void> {
     next("RF-173: update_account takes a pocket out of its parent with null and puts it back with the parent's id"),
     !detached.isError && afterDetach?.parent_account_id === null && !reattached.isError && afterAttach?.parent_account_id === madeId,
     `detach ${JSON.stringify(detached.value)} -> ${afterDetach?.parent_account_id}, attach ${JSON.stringify(reattached.value)} -> ${afterAttach?.parent_account_id}`,
+  );
+}
+
+// RF-175: a receipt is one movement whose splits are its lines, each with a product name and a category,
+// several of them sharing one; budgets still derive from the splits by category and a subcategory counts in its parent.
+async function receiptLinesSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const { POST } = await import("@/app/mcp/route");
+  const owner = await createMembershipFreeUser();
+  const account = await asUser(owner, () =>
+    createAccount({
+      kind: "asset", subtype: "bank", groupId: null, isShared: false, institution: null, settlementCurrency: BASE_CURRENCY,
+      balanceOn: "2026-01-01", ownerUserId: owner.id, name: `Harness rf175 cuenta ${tag}`, amountMinor: 1_000_000_00,
+    }),
+  );
+  track("accounts", account.accountId);
+  const [market, dairy, cleaning, home] = [randomUUID(), randomUUID(), randomUUID(), randomUUID()];
+  await fixtureSql.begin(async (tx) => {
+    const claims = JSON.stringify({ sub: owner.id, role: "authenticated", aud: "authenticated" });
+    await tx`select set_config('request.jwt.claims', ${claims}, true)`;
+    for (const [id, name, parent] of [
+      [market, "Mercado", null], [dairy, "Lácteos", market], [cleaning, "Aseo", market], [home, "Hogar y arreglos", null],
+    ] as const) {
+      await tx`insert into categories (id, owner_user_id, name, kind, color, parent_id)
+        values (${id}, ${owner.id}, ${`Harness rf175 ${name} ${tag}`}, 'expense', '#4C8C4A', ${parent})`;
+      track("categories", id);
+    }
+  });
+  const budget = async (categoryId: string) => {
+    const { budgetId } = await asUser(owner, () =>
+      createBudget({
+        ownerUserId: owner.id, groupId: null, categoryId, accountId: null, labelId: null, period: "monthly",
+        limitCents: 900_000_00, thresholdPct: 80, name: `Harness rf175 presupuesto ${tag} ${categoryId.slice(0, 4)}`,
+      }),
+    );
+    keep("budgets", budgetId);
+    return budgetId;
+  };
+  const [marketBudget, homeBudget] = [await budget(market), await budget(home)];
+  const today = todayInBogota();
+  const refusedWith = async (attempt: () => Promise<unknown>) => {
+    try {
+      await attempt();
+      return "none";
+    } catch (error) {
+      return pgErrorCode(error) ?? "unknown";
+    }
+  };
+  const lines = [
+    { categoryId: dairy, amountCents: 4_000_00, description: "Leche entera" },
+    { categoryId: dairy, amountCents: 3_000_00, description: "Yogurt" },
+    { categoryId: cleaning, amountCents: 2_000_00, description: "Jabón de loza" },
+    { categoryId: home, amountCents: 5_000_00, description: "Bombillo" },
+  ];
+  const receipt = (splits: typeof lines, amountCents: number) =>
+    createTransaction({
+      fromAccountId: account.accountId, toAccountId: null, amountCents, occurredAt: today,
+      description: `Harness rf175 factura ${tag}`, externalRef: null, splits, labelIds: [],
+    });
+
+  const { transactionId } = await asUser(owner, () => receipt(lines, 14_000_00));
+  track("transactions", transactionId);
+  const [read] = await asUser(owner, () => listTransactions({ id: transactionId }));
+  const byName = new Map((read?.splits ?? []).map((split) => [split.description, split]));
+  assert(
+    next("RF-175: one movement carries four lines summing to its total, two in the same category, each with its product name"),
+    read !== undefined && read.splits.length === 4 && read.amountCents === 14_000_00 &&
+      byName.get("Leche entera")?.categoryId === dairy && byName.get("Yogurt")?.categoryId === dairy &&
+      byName.get("Bombillo")?.amountCents === 5_000_00,
+    `splits ${JSON.stringify(read?.splits)}`,
+  );
+
+  const mismatch = await refusedWith(() => asUser(owner, () => receipt(lines, 14_000_01)));
+  const tooLong = await refusedWith(() =>
+    asUser(owner, () => receipt([{ categoryId: home, amountCents: 1_000_00, description: "x".repeat(201) }], 1_000_00)),
+  );
+  assert(
+    next("RF-175: lines that do not sum to the movement are refused, and so is a product name over 200 characters"),
+    mismatch === "23514" && tooLong === "23514",
+    `mismatch ${mismatch}, too long ${tooLong}`,
+  );
+
+  // A discount is not a line of its own: a negative one is refused, so it rides inside the lines it lowers.
+  const negative = await refusedWith(() =>
+    asUser(owner, () =>
+      receipt([{ categoryId: home, amountCents: 10_500_00, description: "Bombillo" }, { categoryId: home, amountCents: -500_00, description: "Descuento" }], 10_000_00),
+    ),
+  );
+  const { transactionId: discounted } = await asUser(owner, () =>
+    receipt([{ categoryId: home, amountCents: 9_500_00, description: "Bombillo (con descuento)" }], 9_500_00),
+  );
+  track("transactions", discounted);
+  assert(
+    next("RF-175: a discount is a negative line refused by the amount check, so it is subtracted from the lines it applies to"),
+    negative === "23514",
+    `negative line ${negative}`,
+  );
+
+  const budgets = await asUser(owner, () => listBudgetsWithStatus());
+  const spent = (id: string) => budgets.find((row) => row.id === id)?.spentCents;
+  assert(
+    next("RF-175: a budget's spent counts each line by its category, the two lines of one subcategory and the other subcategory all in the parent's"),
+    spent(marketBudget) === 9_000_00 && spent(homeBudget) === 14_500_00,
+    `Mercado ${spent(marketBudget)} (want 900000), Hogar ${spent(homeBudget)} (want 1450000)`,
+  );
+
+  const { id: keyId, token } = await asUser(owner, () =>
+    issueWebhookCredential({ name: `Harness rf175 ${tag}`, purpose: "mcp", defaultAccountId: null, defaultCategoryId: null }),
+  );
+  keep("webhook_credentials", keyId);
+  const writer = mcpClient(POST, token);
+  const booked = await writer.tool("record_movement", {
+    fromAccountId: account.accountId, toAccountId: null, amountCents: 7_000_00, occurredAt: today, description: `Harness rf175 mcp ${tag}`,
+    splits: [{ categoryId: dairy, amountCents: 4_000_00, description: "Leche" }, { categoryId: cleaning, amountCents: 3_000_00, description: "Cloro" }],
+    requestRef: randomUUID(),
+  });
+  const bookedId = (booked.value as { transactionId?: string } | null)?.transactionId ?? "";
+  if (bookedId) track("transactions", bookedId);
+  const listed = (await writer.tool("list_movements", { accountId: account.accountId, from: today, to: today })).value as
+    | { id: string; splits: { categoryId: string; amountCents: number; description: string | null }[] }[]
+    | null;
+  const listedLines = listed?.find((row) => row.id === bookedId)?.splits ?? [];
+  assert(
+    next("RF-175: record_movement takes described splits and list_movements returns them"),
+    !booked.isError && listedLines.length === 2 && listedLines.some((l) => l.description === "Leche" && l.categoryId === dairy) &&
+      listedLines.some((l) => l.description === "Cloro" && l.amountCents === 3_000_00),
+    `booked ${JSON.stringify(booked.value)}, lines ${JSON.stringify(listedLines)}`,
+  );
+
+  // A statement re-import rewrites a movement's lines; the names a person gave them survive it.
+  const ref = `harness-rf175-${tag}`;
+  const { transactionId: named } = await asUser(owner, () =>
+    createTransaction({
+      fromAccountId: account.accountId, toAccountId: null, amountCents: 2_000_00, occurredAt: today, description: `Harness rf175 reimport ${tag}`,
+      externalRef: ref, splits: [{ categoryId: home, amountCents: 2_000_00, description: "Bombillo LED" }], labelIds: [],
+    }),
+  );
+  track("transactions", named);
+  await asUser(owner, () =>
+    withUserDb((tx) =>
+      commitImport(
+        tx,
+        {
+          members: [], categories: [], accounts: [], recurringRules: [], adjustments: [],
+          transactions: [
+            {
+              status: "update", index: 0, sheetRow: 2, externalRef: ref, placeholderId: null,
+              object: {
+                fromAccountId: account.accountId, toAccountId: null, amount: "2000", occurredAt: today,
+                description: `Harness rf175 reimport ${tag}`, externalRef: ref, splits: [{ categoryId: home, amount: "2000" }], labelIds: [],
+              },
+            },
+          ],
+        } as never,
+        { userId: owner.id, groupId: null },
+      ),
+    ),
+  );
+  const [afterImport] = await fixtureSql<{ description: string | null }[]>`
+    select description from transaction_splits where transaction_id = ${named}`;
+  assert(
+    next("RF-175: a re-import that rewrites a movement's lines keeps the product names of the lines that did not change"),
+    afterImport?.description === "Bombillo LED",
+    `description after re-import ${JSON.stringify(afterImport)}`,
   );
 }

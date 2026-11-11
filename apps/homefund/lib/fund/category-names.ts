@@ -47,3 +47,16 @@ export function categoryNamesById(
   }
   return names;
 }
+
+// «Mercado › Lácteos»: a subcategory is read with its parent, a line's category at its most specific.
+// Built on the names `categoryNamesById` already gave, so a screen computes them once.
+export function categoryPathsById(
+  nodes: readonly NamedCategoryNode[],
+  names: ReadonlyMap<string, string>,
+): Map<string, string> {
+  const paths = new Map(names);
+  for (const node of nodes) {
+    for (const child of node.children) paths.set(child.id, `${names.get(node.id)} › ${child.name}`);
+  }
+  return paths;
+}

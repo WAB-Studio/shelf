@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { bigint, check, index, uuid } from "drizzle-orm/pg-core";
+import { bigint, check, index, text, uuid } from "drizzle-orm/pg-core";
 
 import { finances } from "./_schema";
 import { categories } from "./categories";
@@ -18,9 +18,12 @@ export const transactionSplits = finances.table(
       .notNull()
       .references(() => categories.id, { onDelete: "restrict" }),
     amountCents: bigint({ mode: "number" }).notNull(),
+    // The product a line of a receipt names (RF-175); null on a split that is only a category.
+    description: text(),
   },
   (table) => [
     check("transaction_splits_amount_positive", sql`${table.amountCents} > 0`),
+    check("transaction_splits_description_length", sql`char_length(${table.description}) <= 200`),
     index("transaction_splits_transaction_id_idx").on(table.transactionId),
     index("transaction_splits_category_id_idx").on(table.categoryId),
   ],

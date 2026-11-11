@@ -26,13 +26,12 @@ import {
   foreignSettlementCurrency,
   refineContributor,
   refineSettlement,
+  type SplitFields,
   type UpdateTransactionInput,
 } from "@/lib/validation/transaction";
 
 // The writes behind the forms' actions and behind `/mcp`: each takes input a Zod schema already
 // parsed and throws an `ActionError` carrying a catalogue key, so both doors refuse in the same words.
-
-type SplitInput = { categoryId: string; amount: string };
 
 // The amount and each split arrive as Zod-validated strings, already bound to
 // the stored scale by the schema; turning them into integers here can only
@@ -44,10 +43,11 @@ function toMinor(amount: string): number {
   return minor;
 }
 
-function toSplitMinor(splits: SplitInput[]): TransactionSplitInput[] {
+function toSplitMinor(splits: SplitFields[]): TransactionSplitInput[] {
   return splits.map((split) => ({
     categoryId: split.categoryId,
     amountCents: toMinor(split.amount),
+    description: split.description,
   }));
 }
 
