@@ -14,9 +14,6 @@ import {
   refineAccountStatementAmounts,
 } from "@/lib/validation/account-statement";
 
-// An amount arrives as a Zod-validated string; turning it into the integer the
-// column keeps can only fail if the refinement above let something through it
-// should not have.
 // A blank field stays absent: `recordAccountStatement` writes it `null`, which
 // says "the statement never printed this figure" — never the zero a parsed
 // empty string would otherwise read as (RF-130).

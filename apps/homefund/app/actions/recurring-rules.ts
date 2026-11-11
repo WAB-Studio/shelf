@@ -2,7 +2,6 @@
 
 import { refresh } from "next/cache";
 
-
 import {
   categoryFitsRuleAccount,
   createRecurringRule,

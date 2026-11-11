@@ -10,8 +10,6 @@ import { routing } from "@/i18n/routing";
 import { todayInBogota } from "@/lib/dates";
 import { monthParamSchema } from "@/lib/validation/month";
 
-// A malformed `?month` falls back to the current Bogotá month, as Presupuestos does.
-
 export async function generateMetadata(
   props: PageProps<"/[locale]/reports">,
 ): Promise<Metadata> {

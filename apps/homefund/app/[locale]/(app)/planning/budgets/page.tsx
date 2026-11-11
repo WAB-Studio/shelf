@@ -13,11 +13,6 @@ import { budgetAnchor } from "@/lib/dates";
 import { monthParamSchema } from "@/lib/validation/month";
 import { routing } from "@/i18n/routing";
 
-// A malformed `?month` never reaches `periodRange`: anything but a real `YYYY-MM`
-// month falls back to the current Bogotá month, so the window always resolves.
-// The shape alone is not enough: `1999-13-01` is no day, and `monthRange` throws
-// on it before any bound reaches Postgres.
-
 const searchParamsSchema = z.object({ month: monthParamSchema });
 
 export async function generateMetadata(

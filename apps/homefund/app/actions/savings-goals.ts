@@ -1,8 +1,7 @@
 "use server";
 
 import { refresh } from "next/cache";
-
-import { z } from "zod";
+import type { z } from "zod";
 
 import { getUserGroup } from "@/db/queries/groups";
 import {
@@ -18,7 +17,7 @@ import {
   type GoalContributionRow,
 } from "@/db/queries/savings-goals";
 import type { CurrencyCode } from "@/lib/currency";
-import { requireMinor } from "@/lib/action-amounts";
+import { assertRefined, requireMinor } from "@/lib/action-amounts";
 import { pgErrorCode } from "@/lib/db-error";
 import { ActionError } from "@/lib/errors";
 import { authActionClient } from "@/lib/safe-action";
@@ -45,12 +44,7 @@ function toGoalMinor(
   amounts: { targetAmount: string; initialContribution?: string | null },
   currency: CurrencyCode,
 ): { targetAmountCents: number; initialContributionCents: number | null } {
-  const verdict = z
-    .custom<typeof amounts>()
-    .superRefine(refineGoalAmounts(currency))
-    .safeParse(amounts);
-
-  if (!verdict.success) throw new ActionError(verdict.error.issues[0].message);
+  assertRefined(amounts, refineGoalAmounts(currency));
 
   return {
     targetAmountCents: requireMinor(amounts.targetAmount),

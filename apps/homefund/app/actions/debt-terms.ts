@@ -16,9 +16,6 @@ import {
   refineDebtTermsAmounts,
 } from "@/lib/validation/debt-terms";
 
-// An amount arrives as a Zod-validated string; turning it into the integer the
-// column keeps can only fail if the refinement above let something through it
-// should not have, so a null parse is `errors.unexpected`, not a field message.
 // The `assert_debt_terms_liability` trigger raises 23514 when the account is not
 // a liability; a denied write reads the same as terms that were never there, and
 // so does an account deleted under the open dialog — the policy is the account's.
