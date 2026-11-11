@@ -35,7 +35,7 @@ export type InboxTableRow = {
   amountMinor: number | null;
   currency: CurrencyCode;
   // What the proposal would record: money out unless the message says money in.
-  direction: "income" | "expense";
+  direction: "income" | "expense" | "transfer";
   isComplete: boolean;
   // The proposal's own day, set only when it is before the account opened.
   beforeOpeningOn: string | null;
@@ -168,7 +168,13 @@ export function InboxTable({
         ) : (
           <Flex direction="column" align="end">
             <Text size="1" color={row.direction === "income" ? "jade" : "gray"}>
-              {t(row.direction === "income" ? "kindIncome" : "kindExpense")}
+              {t(
+                row.direction === "income"
+                  ? "kindIncome"
+                  : row.direction === "transfer"
+                    ? "kindTransfer"
+                    : "kindExpense",
+              )}
             </Text>
             <Money minor={row.amountMinor} currency={row.currency} tone="plain" />
           </Flex>

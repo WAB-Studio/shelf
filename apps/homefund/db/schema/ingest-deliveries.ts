@@ -17,6 +17,7 @@ import { finances } from "./_schema";
 import { accounts } from "./accounts";
 import { appUsers } from "./app-users";
 import { categories } from "./categories";
+import { recipients } from "./recipients";
 import { transactions } from "./transactions";
 import { webhookCredentials } from "./webhook-credentials";
 
@@ -56,8 +57,14 @@ export const ingestDeliveries = finances.table(
     proposedAccountId: uuid().references(() => accounts.id, { onDelete: "set null" }),
     proposedCategoryId: uuid().references(() => categories.id, { onDelete: "set null" }),
     // Where the proposed category came from, so the review can say why it is offered (RF-93).
-    categorySource: text({ enum: ["merchant", "interpreter", "credential_default"] }),
-    proposedDirection: text({ enum: ["income", "expense"] }),
+    categorySource: text({ enum: ["merchant", "interpreter", "credential_default", "recipient"] }),
+    // `transfer` only when a saved recipient says both sides are the person's accounts (RF-189).
+    proposedDirection: text({ enum: ["income", "expense", "transfer"] }),
+    // The account a transfer lands in; `proposed_account_id` is then the one it leaves.
+    proposedToAccountId: uuid().references(() => accounts.id, { onDelete: "set null" }),
+    // The number the message names (digits, whole or a tail) and the saved recipient it matched uniquely.
+    extractedIdentifier: text(),
+    recipientId: uuid().references(() => recipients.id, { onDelete: "set null" }),
     // Date-only, interpreted in America/Bogota (RNF-06): a YYYY-MM-DD string end to end, never a JS Date.
     proposedOccurredAt: date({ mode: "string" }),
     proposedDescription: text(),
@@ -106,11 +113,11 @@ export const ingestDeliveries = finances.table(
     ),
     check(
       "ingest_deliveries_proposed_direction_valid",
-      sql`${table.proposedDirection} is null or ${table.proposedDirection} in ('income', 'expense')`,
+      sql`${table.proposedDirection} is null or ${table.proposedDirection} in ('income', 'expense', 'transfer')`,
     ),
     check(
       "ingest_deliveries_category_source_valid",
-      sql`${table.categorySource} is null or ${table.categorySource} in ('merchant', 'interpreter', 'credential_default')`,
+      sql`${table.categorySource} is null or ${table.categorySource} in ('merchant', 'interpreter', 'credential_default', 'recipient')`,
     ),
     // A proposed category always says where it came from, so none is ever offered unexplained.
     check(
@@ -137,6 +144,16 @@ export const ingestDeliveries = finances.table(
     index("ingest_deliveries_proposed_account_id_idx")
       .on(table.proposedAccountId)
       .where(sql`${table.proposedAccountId} is not null`),
+    check(
+      "ingest_deliveries_extracted_identifier_digits",
+      sql`${table.extractedIdentifier} is null or ${table.extractedIdentifier} ~ '^[0-9]{4,20}$'`,
+    ),
+    index("ingest_deliveries_proposed_to_account_id_idx")
+      .on(table.proposedToAccountId)
+      .where(sql`${table.proposedToAccountId} is not null`),
+    index("ingest_deliveries_recipient_id_idx")
+      .on(table.recipientId)
+      .where(sql`${table.recipientId} is not null`),
     index("ingest_deliveries_proposed_category_id_idx")
       .on(table.proposedCategoryId)
       .where(sql`${table.proposedCategoryId} is not null`),

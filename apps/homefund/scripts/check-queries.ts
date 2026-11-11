@@ -4149,6 +4149,7 @@ async function main(): Promise<void> {
   await madeBySuite();
   await memberDebtsSuite();
   await memberDebtDeleteSuite();
+  await recipientsSuite();
 }
 
 // A member recorded without a login is someone in the fund: a leader whose fund holds one is not alone, so an
@@ -15268,7 +15269,7 @@ async function mcpDoorSuite(): Promise<void> {
   assert(
     next("RF-144: /mcp answers 401 with no key, an unknown one or a webhook's, and lists its tools to a key for Claude"),
     anonymous.status === 401 && forged.status === 401 && webhookKey.status === 401 &&
-      JSON.stringify(names) === JSON.stringify(["accept_deliveries", "create_account", "create_category", "delete_movement", "import_statement", "list_accounts", "list_categories", "list_inbox", "list_member_debts", "list_members", "list_movements", "merge_movements", "move_account_to_fund", "move_category_movements", "preview_statement", "record_member_debt", "record_movement", "reject_deliveries", "review_month", "spending_patterns", "update_account", "update_category", "update_movement"]),
+      JSON.stringify(names) === JSON.stringify(["accept_deliveries", "create_account", "create_category", "delete_movement", "delete_recipient", "import_statement", "list_accounts", "list_categories", "list_inbox", "list_member_debts", "list_members", "list_movements", "list_recipients", "merge_movements", "move_account_to_fund", "move_category_movements", "preview_statement", "record_member_debt", "record_movement", "reject_deliveries", "review_month", "save_recipient", "spending_patterns", "update_account", "update_category", "update_movement"]),
     `no key ${anonymous.status}, unknown key ${forged.status}, webhook key ${webhookKey.status}, tools ${JSON.stringify(names)}`,
   );
 
@@ -18474,5 +18475,128 @@ async function memberDebtDeleteSuite(): Promise<void> {
     next("RF-183: another fund's member cannot remove an entry, a paid-against debt is refused and stays, a payment goes, then the debt goes"),
     foreign === "notFound" && paid === "paid" && pendingAfterRefusal === 150_000_00 && paymentGone === "deleted" && debtGone === "deleted" && left === 0,
     `stranger ${foreign}, paid debt ${paid}, pending ${pendingAfterRefusal}, payment ${paymentGone}, debt ${debtGone}, left ${left}`,
+  );
+}
+
+// RF-189: a saved number tells the inbox what a transfer was. The notice's number is read, matched on its last
+// digits against the person's recipients (two matches are none), and the proposal takes the recipient's shape:
+// an own account makes a transfer, a payee an expense in its category, a person only the name. The delivery
+// still waits; Claude saves a number through the MCP and the inbox lists it.
+async function recipientsSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const today = todayInBogota();
+  const { POST } = await import("@/app/mcp/route");
+  const { recordIngestDelivery } = await import("@/db/queries/webhook-ingest");
+  const user = await createMembershipFreeUser();
+  const stranger = await createMembershipFreeUser();
+  const mkAccount = async (name: string, lastFour: string | null): Promise<string> => {
+    const { accountId } = await asUser(user, () =>
+      createAccount({
+        name: `Harness rf189 ${name} ${tag}`, kind: "asset", subtype: "bank", ownerUserId: user.id, groupId: null, isShared: false,
+        institution: null, lastFour, settlementCurrency: "COP", amountMinor: 500_000_00, balanceOn: shiftDate(today, -10),
+      }),
+    );
+    track("accounts", accountId);
+    return accountId;
+  };
+  const bank = await mkAccount("bancolombia", "3397");
+  const nequi = await mkAccount("nequi", null);
+  const { categoryId: rent } = await asUser(user, () =>
+    createCategory({ scope: { ownerUserId: user.id }, name: `Harness rf189 arriendo ${tag}`, kind: "expense", parentId: null, color: "#0E7490" }),
+  );
+  track("categories", rent);
+  const { id: credentialId, token } = await asUser(user, () => issueWebhookCredential({ name: `Harness rf189 ${tag}`, purpose: "mcp", defaultAccountId: null, defaultCategoryId: null }));
+  keep("webhook_credentials", credentialId);
+  const { tool } = mcpClient(POST, token);
+  const save = (fields: Record<string, unknown>) => tool("save_recipient", fields);
+  const sent = (to: string) => `Bancolombia: Transferiste $60.000 desde tu cuenta *3397 a la cuenta ${to} el 11/11/2026 05:48. ${randomUUID().slice(0, 6)}`;
+  type Delivered = { direction: string | null; account: string | null; to: string | null; category: string | null; source: string | null; description: string | null; number: string | null; recipient: string | null; status: string };
+  const deliver = async (text: string): Promise<Delivered> => {
+    const result = await recordIngestDelivery({
+      ownerUserId: user.id, credentialId, defaultAccountId: null, defaultCategoryId: null,
+      payload: { text } as Parameters<typeof recordIngestDelivery>[0]["payload"],
+    });
+    return (await fixtureSql<Delivered[]>`
+      select proposed_direction as direction, proposed_account_id as account, proposed_to_account_id as "to", proposed_category_id as category,
+             category_source as source, proposed_description as description, extracted_identifier as number, recipient_id as recipient, status
+      from ingest_deliveries where id = ${result.deliveryId}`)[0];
+  };
+
+  const mine = await save({ identifier: "*3203359119", name: "Nequi de mamá", kind: "own_account", accountId: nequi });
+  const again = await save({ identifier: "320 335 9119", name: "Otro", kind: "person" });
+  const noAccount = await save({ identifier: "3105550001", name: "Sin cuenta", kind: "own_account" });
+  const listed = (await tool("list_recipients")).value as { identifier: string; name: string; kind: string; accountName: string | null }[];
+  assert(
+    next("RF-189: save_recipient keeps the digits of a number, list_recipients reads it with its account, and the same number twice or an own account with no account is refused in Spanish"),
+    !mine.isError && listed.length === 1 && listed[0].identifier === "3203359119" && listed[0].accountName === `Harness rf189 nequi ${tag}` &&
+      again.isError && String((again.value as { error?: string }).error).includes("Ya guardaste") && noAccount.isError,
+    `saved ${JSON.stringify(mine.value)}, again ${JSON.stringify(again.value)}, no account ${JSON.stringify(noAccount.value)}, listed ${JSON.stringify(listed)}`,
+  );
+
+  const transfer = await deliver(sent("*3203359119"));
+  assert(
+    next("RF-189: a notice naming a saved own account proposes a transfer into it, described by the recipient's name, and waits pending"),
+    transfer.direction === "transfer" && transfer.account === bank && transfer.to === nequi && transfer.category === null &&
+      transfer.description === "Nequi de mamá" && transfer.number === "3203359119" && transfer.recipient !== null && transfer.status === "pending",
+    JSON.stringify(transfer),
+  );
+
+  const tail = await deliver(sent("*9119"));
+  const unknown = await deliver(sent("*5550"));
+  const unknownIds = await fixtureSql<{ id: string }[]>`select id from ingest_deliveries where owner_user_id = ${user.id} and extracted_identifier = '5550'`;
+  assert(
+    next("RF-189: a tail matches the one number that ends with it, and a number nobody saved keeps its digits with no recipient"),
+    tail.recipient === transfer.recipient && tail.direction === "transfer" && unknown.recipient === null && unknown.number === "5550" &&
+      unknown.direction === "expense" && unknownIds.length === 1,
+    `tail ${JSON.stringify(tail)}, unknown ${JSON.stringify(unknown)}`,
+  );
+
+  await save({ identifier: "3105556870", name: "Doña Rosa", kind: "person" });
+  await save({ identifier: "3004446870", name: "Don Luis", kind: "person" });
+  const ambiguous = await deliver(sent("*6870"));
+  const full = await deliver(sent("3105556870"));
+  assert(
+    next("RF-189: a tail two saved numbers end with matches none, while the whole number of one matches it and a person with no account only names the description"),
+    ambiguous.recipient === null && ambiguous.number === "6870" && ambiguous.description !== "Doña Rosa" &&
+      full.recipient !== null && full.description === "Doña Rosa" && full.direction === "expense" && full.to === null && full.account === bank,
+    `ambiguous ${JSON.stringify(ambiguous)}, full ${JSON.stringify(full)}`,
+  );
+
+  await save({ identifier: "9988776655", name: "Arriendo Don José", kind: "payee", categoryId: rent });
+  const payee = await deliver(sent("*9988776655"));
+  assert(
+    next("RF-189: a payee proposes an expense in its category, said to come from the recipient"),
+    payee.direction === "expense" && payee.category === rent && payee.source === "recipient" && payee.description === "Arriendo Don José",
+    JSON.stringify(payee),
+  );
+
+  const inbox = (await tool("list_inbox")).value as { extractedNumber: string | null; recipientName: string | null; proposal: { kind: string | null; toAccountId: string | null }; notDetected: string[] }[];
+  const asTransfer = inbox.find((one) => one.recipientName === "Nequi de mamá" && one.extractedNumber === "3203359119");
+  const asUnknown = inbox.find((one) => one.extractedNumber === "5550");
+  assert(
+    next("RF-189: list_inbox returns each delivery's number and the matched recipient's name, a transfer with its destination and no category missing"),
+    asTransfer?.proposal.kind === "transfer" && asTransfer.proposal.toAccountId === nequi && !asTransfer.notDetected.includes("category") &&
+      asUnknown !== undefined && asUnknown.recipientName === null,
+    JSON.stringify({ asTransfer, asUnknown }),
+  );
+
+  const accepted = await tool("accept_deliveries", { deliveries: [{ id: (await fixtureSql<{ id: string }[]>`select id from ingest_deliveries where recipient_id = ${transfer.recipient} and status = 'pending' order by created_at limit 1`)[0].id }] });
+  const [{ n: movements }] = await fixtureSql<{ n: number }[]>`
+    select count(*)::int as n from transactions where from_account_id = ${bank} and to_account_id = ${nequi} and amount_cents = 60000_00`;
+  assert(
+    next("RF-189: accepting the transfer proposal records a transfer from the bank account into the saved one"),
+    !accepted.isError && movements === 1,
+    `accepted ${JSON.stringify(accepted.value)}, transfers ${movements}`,
+  );
+
+  const theirs = await asUser(stranger, async () => (await import("@/db/queries/recipients")).listRecipients());
+  const del = await tool("delete_recipient", { id: (listed[0] as unknown as { id: string }).id });
+  const after = (await tool("list_recipients")).value as unknown[];
+  const orphan = await fixtureSql<{ recipient: string | null }[]>`select recipient_id as recipient from ingest_deliveries where id in (select id from ingest_deliveries where owner_user_id = ${user.id} and extracted_identifier = '3203359119')`;
+  assert(
+    next("RF-189: another person sees none of the recipients, a delete removes one and its deliveries keep their number with no recipient"),
+    theirs.length === 0 && !del.isError && after.length === 3 && orphan.length > 0 && orphan.every((row) => row.recipient === null),
+    `stranger ${theirs.length}, delete ${JSON.stringify(del.value)}, left ${after.length}, orphans ${JSON.stringify(orphan)}`,
   );
 }
