@@ -6,9 +6,9 @@ import { z } from "zod";
 import { upsertDebtTerms } from "@/db/queries/debt-terms";
 import { getSettlementCurrencies } from "@/db/queries/transactions";
 import { BASE_CURRENCY } from "@/lib/currency";
+import { requireMinor } from "@/lib/action-amounts";
 import { pgErrorCode } from "@/lib/db-error";
 import { ActionError } from "@/lib/errors";
-import { parseAmount } from "@/lib/money";
 import { authActionClient } from "@/lib/safe-action";
 import {
   debtTermsSchema,
@@ -19,12 +19,6 @@ import {
 // An amount arrives as a Zod-validated string; turning it into the integer the
 // column keeps can only fail if the refinement above let something through it
 // should not have, so a null parse is `errors.unexpected`, not a field message.
-function toMinor(amount: string): number {
-  const minor = parseAmount(amount);
-  if (minor === null) throw new ActionError("errors.unexpected");
-  return minor;
-}
-
 // The `assert_debt_terms_liability` trigger raises 23514 when the account is not
 // a liability; a denied write reads the same as terms that were never there, and
 // so does an account deleted under the open dialog — the policy is the account's.
@@ -85,12 +79,12 @@ export const saveDebtTermsAction = authActionClient
           debtKind,
           annualRate: percentToFraction(annualRate),
           minimumPaymentCents:
-            minimumPayment != null ? toMinor(minimumPayment) : null,
+            minimumPayment != null ? requireMinor(minimumPayment) : null,
           minimumPaymentPct: minimumPaymentPct != null ? percentToFraction(minimumPaymentPct) : null,
-          creditLimitCents: creditLimit != null ? toMinor(creditLimit) : null,
+          creditLimitCents: creditLimit != null ? requireMinor(creditLimit) : null,
           statementCutOffDay: statementCutOffDay ?? null,
           paymentDueDay: paymentDueDay ?? null,
-          avalCents: aval != null ? toMinor(aval) : null,
+          avalCents: aval != null ? requireMinor(aval) : null,
           // The form writes terms onto a debt that had none (RF-156): any found are someone else's.
           keepOthers: true,
         });

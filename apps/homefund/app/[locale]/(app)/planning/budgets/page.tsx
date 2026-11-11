@@ -9,19 +9,16 @@ import { Page } from "@/components/ui";
 import { listBudgetsWithStatus } from "@/db/queries/budgets";
 import { getUserGroup } from "@/db/queries/groups";
 import { getTransactionFormOptions } from "@/db/queries/transaction-form";
-import { MONTH_PATTERN, budgetAnchor, todayInBogota } from "@/lib/dates";
+import { budgetAnchor } from "@/lib/dates";
+import { monthParamSchema } from "@/lib/validation/month";
 import { routing } from "@/i18n/routing";
 
 // A malformed `?month` never reaches `periodRange`: anything but a real `YYYY-MM`
 // month falls back to the current Bogotá month, so the window always resolves.
 // The shape alone is not enough: `1999-13-01` is no day, and `monthRange` throws
 // on it before any bound reaches Postgres.
-const monthSchema = z
-  .string()
-  .regex(MONTH_PATTERN)
-  .catch(() => todayInBogota().slice(0, 7));
 
-const searchParamsSchema = z.object({ month: monthSchema });
+const searchParamsSchema = z.object({ month: monthParamSchema });
 
 export async function generateMetadata(
   props: PageProps<"/[locale]/planning/budgets">,
@@ -39,7 +36,6 @@ export default async function BudgetsPage(
 ) {
   const { locale } = await props.params;
   if (!hasLocale(routing.locales, locale)) notFound();
-
 
   const searchParams = await props.searchParams;
   const { month } = searchParamsSchema.parse(searchParams);
