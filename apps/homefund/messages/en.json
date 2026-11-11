@@ -1593,6 +1593,7 @@
       "updateMovement": "Fixes a movement the person can write. It is a patch: send only what changes and the rest stays as it is. Pass the updatedAt you read in list_movements as expectedUpdatedAt: if someone edited it meanwhile, it is refused. CONFIRM the change with the person before calling it.",
       "deleteMovement": "Deletes a movement the person can write. It cannot be undone: CONFIRM with the person which one before calling it.",
       "createAccount": "Creates an account with an opening balance in cents on a date: asset (bank or cash) or liability (card, what is owed goes positive). placement «personal» or «group» (the fund's). CONFIRM name, kind, currency and balance with the person before calling it, and check with list_accounts that it does not exist yet.",
+      "updateAccount": "Fixes an account the person can write: name, subtype, currency, institution, last four digits, opening balance in cents and its date. It is a patch: send only what changes. Pass the updatedAt you read in list_accounts as expectedUpdatedAt: if someone edited it meanwhile, it is refused. CONFIRM the change with the person before calling it, above all the opening balance.",
       "createCategory": "Creates a category (expense or income), optionally under a parent of the same kind and scope. placement «personal» or «group». CONFIRM with the person before calling it and check with list_categories that it does not exist yet."
     },
     "deferralProposal": "Defer in {count} instalments",

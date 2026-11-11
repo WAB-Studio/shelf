@@ -3,12 +3,14 @@ import "server-only";
 import type { CallToolResult, McpServer, ServerContext } from "@modelcontextprotocol/server";
 import { z } from "zod";
 
+import { listAccounts, updateAccount } from "@/db/queries/accounts";
 import { freeCategoryColor, listScopedCategories } from "@/db/queries/categories";
 import { bookMovement, dropMovement, openAccount, openCategory, reviseMovement } from "@/db/queries/ledger-write";
 import { getTransactionById, listTransactions, type TransactionListRow } from "@/db/queries/transactions";
+import { pgErrorCode } from "@/lib/db-error";
 import { ActionError } from "@/lib/errors";
-import { centsToDecimal } from "@/lib/money";
-import { createAccountSchema } from "@/lib/validation/account";
+import { centsToDecimal, parseAmount } from "@/lib/money";
+import { createAccountSchema, updateAccountSchema } from "@/lib/validation/account";
 import { createCategoryInputSchema } from "@/lib/validation/category";
 import { createTransactionSchema, updateTransactionSchema } from "@/lib/validation/transaction";
 
@@ -236,6 +238,62 @@ export function registerLedgerTools(server: McpServer, run: Run, t: Say): void {
       run(ctx, async (owner) => {
         const { openingBalanceCents, ...rest } = input as { openingBalanceCents: number };
         return openAccount(parseForm(createAccountSchema, { ...rest, amount: centsToDecimal(openingBalanceCents) }), owner);
+      }),
+  );
+
+  // The stamp is the one list_accounts returned; the edit goes through the dialog's schema and `updateAccount` (RF-172).
+  server.registerTool(
+    "update_account",
+    {
+      description: t("tools.updateAccount"),
+      inputSchema: z.object({
+        accountId: z.string().describe(d("accountId")),
+        expectedUpdatedAt: z.string().describe(d("expectedUpdatedAt")),
+        name: z.string().optional().describe(d("accountName")),
+        subtype: z.string().optional().describe(d("accountSubtype")),
+        settlementCurrency: z.string().optional().describe(d("settlementCurrency")),
+        openingBalanceCents: z.number().int().optional().describe(d("openingBalanceCents")),
+        balanceOn: z.string().optional().describe(d("balanceOn")),
+        institution: z.string().nullable().optional().describe(d("institution")),
+        lastFour: z.string().nullable().optional().describe(d("lastFour")),
+      }),
+      annotations: { ...write, idempotentHint: true },
+    },
+    (input: Record<string, string | number | null | undefined> & { accountId: string; expectedUpdatedAt: string }, ctx) =>
+      run(ctx, async () => {
+        const id = idOf("errors.notFound", input.accountId);
+        const current = (await listAccounts({ archived: false })).find((account) => account.id === id);
+        if (!current || !current.canWrite) throw new ActionError("errors.notFound");
+        const pick = (key: string, stored: unknown) => (input[key] === undefined ? stored : input[key]);
+        // The stored opening of a liability is negative; the form, and so Claude, speak what is owed, positive.
+        const storedCents = current.kind === "liability" ? -current.initialBalanceCents : current.initialBalanceCents;
+        const { amount, ...form } = parseForm(updateAccountSchema, {
+          accountId: id,
+          name: pick("name", current.name),
+          kind: current.kind,
+          subtype: pick("subtype", current.subtype),
+          isShared: current.isShared,
+          institution: pick("institution", current.institution) ?? "",
+          lastFour: pick("lastFour", current.lastFour) ?? undefined,
+          settlementCurrency: pick("settlementCurrency", current.settlementCurrency),
+          amount: centsToDecimal(input.openingBalanceCents === undefined ? storedCents : (input.openingBalanceCents as number)),
+          balanceOn: pick("balanceOn", current.initialBalanceOn),
+          expectedUpdatedAt: input.expectedUpdatedAt,
+        });
+        const amountMinor = parseAmount(amount);
+        if (amountMinor === null) throw new ActionError("errors.unexpected");
+        let updated: Awaited<ReturnType<typeof updateAccount>>;
+        try {
+          updated = await updateAccount({ ...form, expectedUpdatedAt: form.expectedUpdatedAt ?? input.expectedUpdatedAt, amountMinor });
+        } catch (error) {
+          if (pgErrorCode(error) === "42501") throw new ActionError("errors.notLeader");
+          if (pgErrorCode(error) === "23514") throw new ActionError("accounts.errors.currencyInvalid");
+          if (pgErrorCode(error) === "AC001") throw new ActionError("accounts.errors.currencyLocked");
+          throw error;
+        }
+        if (updated === "stale") throw new ActionError("errors.stale");
+        if (!updated) throw new ActionError("errors.notFound");
+        return { accountId: id };
       }),
   );
 
