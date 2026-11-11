@@ -17,7 +17,9 @@ import {
 } from "@/db/schema";
 import { getUserGroup } from "@/db/queries/groups";
 import { requireUser, withUserDb } from "@/db/session";
+import { readExport } from "@/db/queries/export";
 import { statementKey, type SheetEntity } from "@/lib/spreadsheet/schema";
+import { CATEGORY_PATH_SEPARATOR, HELD_KEY_PREFIX, identityKeys } from "@/lib/spreadsheet/sheet-layout";
 
 // The tables whose `external_ref` set is read on its own: the rest come with their rows or with
 // `readRestoredKeys`. A row's `external_ref` is its stable per-scope import key (RF-52): present
@@ -47,7 +49,8 @@ export type ScopedAccount = ScopedEntity & { settlementCurrency: string; initial
 
 // A category additionally carries its kind (RF-27): a transaction row resolving one
 // checks it against the movement's own direction before the row ever reaches a write.
-export type ScopedCategory = ScopedEntity & { kind: string };
+// Its path, «Parent › Child», is what a cell may name it by.
+export type ScopedCategory = ScopedEntity & { kind: string; path?: string };
 
 // The caller's existing scope, read once so the pipeline resolves references and
 // classifies rows without touching Postgres again. The account and category rows
@@ -61,7 +64,48 @@ export type ImportScope = {
   labels: ScopedEntity[];
   goals: ScopedEntity[];
   existingRefs: Record<SheetEntity, Set<string>>;
+  // The stable keys of the rows the fund holds, by the row's identity (RF-179): a file row
+  // with no key column adopts the key of the row it repeats, so it updates it, never adds.
+  // Several equal rows list their keys in the fund's own order.
+  knownKeys: Partial<Record<SheetEntity, Map<string, string[]>>>;
 };
+
+// What the file says about the movements it carries, to read only the fund's rows that could
+// repeat them: the days they span and the accounts they touch.
+export type FileWindow = { from?: string; to?: string; accountNames?: string[] };
+
+// The fund's rows of the entities a file carries, keyed by identity. They come through the
+// export, so a cell reads the same on both sides of the comparison. Movements are read in the
+// file's own window, in a read of their own beside the rest.
+async function readKnownKeys(
+  entities: readonly SheetEntity[],
+  window: FileWindow,
+): Promise<ImportScope["knownKeys"]> {
+  const withMovements = entities.includes("transactions");
+  const [movements, rest] = await Promise.all([
+    withMovements
+      ? readExport({ entityKeys: ["transactions"], withKeys: true, ...window })
+      : Promise.resolve({}),
+    readExport({ entityKeys: entities.filter((entity) => entity !== "transactions"), withKeys: true }),
+  ]);
+  const data = { ...rest, ...movements } as Record<string, unknown[] | undefined>;
+  const known: ImportScope["knownKeys"] = {};
+  for (const entity of entities) {
+    const keys = new Map<string, string[]>();
+    for (const row of (data[entity] ?? []) as Record<string, unknown>[]) {
+      const ref = row["externalRef"];
+      if (typeof ref !== "string") continue;
+      for (const identity of identityKeys(entity, row)) keys.set(identity, [...(keys.get(identity) ?? []), ref]);
+    }
+    known[entity] = keys;
+  }
+  return known;
+}
+
+// A row the fund holds with no key is still the row a file repeats: it answers to a key made
+// of its id, which the commit knows to leave alone.
+const keyed = <Row extends { id: string; externalRef: string | null }>(rows: Row[]): Row[] =>
+  rows.map((row) => ({ ...row, externalRef: row.externalRef ?? `${HELD_KEY_PREFIX}${row.id}` }));
 
 // The set of `external_ref` values already in the caller's scope for one entity,
 // the null-guarded index the classification matches on (RF-52).
@@ -108,6 +152,22 @@ function refsOf(rows: ScopedEntity[]): Set<string> {
   return new Set(rows.filter((row) => row.externalRef != null).map((row) => row.externalRef as string));
 }
 
+// A category's path through its parents; a level that is missing ends the walk.
+function pathOf(
+  row: { id: string; name: string; parentId: string | null },
+  all: readonly { id: string; name: string; parentId: string | null }[],
+): string {
+  const byId = new Map(all.map((category) => [category.id, category]));
+  const names = [row.name];
+  for (let at = row.parentId, hops = 0; at !== null && hops < 8; hops += 1) {
+    const parent = byId.get(at);
+    if (!parent) break;
+    names.unshift(parent.name);
+    at = parent.parentId;
+  }
+  return names.join(CATEGORY_PATH_SEPARATOR);
+}
+
 /**
  * The read side of the import pipeline (RF-51/52), all in the caller's RLS scope like
  * `readExport`: the account, category, label and goal rows a reference resolves through, and every
@@ -116,18 +176,22 @@ function refsOf(rows: ScopedEntity[]): Set<string> {
  * The caller's id and fund ride the same fan-out as the entity reads.
  * Each read is its own round trip, fanned out with `Promise.all`, never chained.
  */
-export async function readImportScope(): Promise<ImportScope> {
+export async function readImportScope(
+  entities: readonly SheetEntity[] = [],
+  window: FileWindow = {},
+): Promise<ImportScope> {
   const [
     user,
     group,
     accountRows,
-    categoryRows,
+    categoryRowsRaw,
     labelRows,
     goalRows,
     memberRefs,
     recurringRefs,
     transactionRefs,
     restoredKeys,
+    knownKeys,
   ] =
     await Promise.all([
       requireUser(),
@@ -154,6 +218,7 @@ export async function readImportScope(): Promise<ImportScope> {
             ownerUserId: categories.ownerUserId,
             groupId: categories.groupId,
             kind: categories.kind,
+            parentId: categories.parentId,
           })
           .from(categories),
       ),
@@ -183,24 +248,34 @@ export async function readImportScope(): Promise<ImportScope> {
       readExistingRefs("recurringRules"),
       readExistingRefs("transactions"),
       readRestoredKeys(),
+      readKnownKeys(entities, window),
     ]);
+
+  const categoryRows = keyed(categoryRowsRaw).map((row) => ({ ...row, path: pathOf(row, categoryRowsRaw) }));
+  const held = { accounts: keyed(accountRows), labels: keyed(labelRows), goals: keyed(goalRows) };
+  // The rows matched by identity are the rows the fund holds, whether or not they carry a key.
+  const refsFound = (entity: SheetEntity, refs: Set<string>): Set<string> => {
+    for (const list of knownKeys[entity]?.values() ?? []) for (const ref of list) refs.add(ref);
+    return refs;
+  };
 
   return {
     caller: { userId: user.id, groupId: group?.id ?? null },
-    accounts: accountRows,
+    accounts: held.accounts,
     categories: categoryRows,
-    labels: labelRows,
-    goals: goalRows,
+    labels: held.labels,
+    goals: held.goals,
+    knownKeys,
     existingRefs: {
-      accounts: refsOf(accountRows),
-      categories: refsOf(categoryRows),
-      labels: refsOf(labelRows),
-      members: memberRefs,
-      recurringRules: recurringRefs,
-      transactions: transactionRefs,
-      budgets: restoredKeys.budgets,
-      goals: refsOf(goalRows),
-      goalContributions: restoredKeys.goalContributions,
+      accounts: refsFound("accounts", refsOf(held.accounts)),
+      categories: refsFound("categories", refsOf(categoryRows)),
+      labels: refsFound("labels", refsOf(held.labels)),
+      members: refsFound("members", memberRefs),
+      recurringRules: refsFound("recurringRules", recurringRefs),
+      transactions: refsFound("transactions", transactionRefs),
+      budgets: refsFound("budgets", restoredKeys.budgets),
+      goals: refsFound("goals", refsOf(held.goals)),
+      goalContributions: refsFound("goalContributions", restoredKeys.goalContributions),
       debts: restoredKeys.debts,
       statements: restoredKeys.statements,
     },

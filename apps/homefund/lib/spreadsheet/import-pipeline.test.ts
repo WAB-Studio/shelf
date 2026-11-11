@@ -13,7 +13,7 @@ import { maxAmountMinor, parseAmount } from "@/lib/money";
 // locale are doubled at module resolution, and the scope is whatever each test seeds.
 
 const messages = JSON.parse(readFileSync(new URL("../../messages/en.json", import.meta.url), "utf8")) as {
-  data: { sheets: Record<string, string>; columns: Record<string, string> };
+  data: { sheets: Record<string, string>; columns: Record<string, string>; choices: Record<string, Record<string, string>> };
 };
 
 const UUID = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
@@ -29,6 +29,7 @@ type Scope = {
   labels: unknown[];
   goals: unknown[];
   existingRefs: Record<string, Set<string>>;
+  knownKeys: Record<string, Map<string, string[]>>;
 };
 let scope: Scope;
 const freshScope = (): Scope => ({
@@ -37,6 +38,7 @@ const freshScope = (): Scope => ({
   categories: [FOOD],
   labels: [TRIP],
   goals: [],
+  knownKeys: {},
   existingRefs: {
     budgets: new Set(),
     goals: new Set(),
@@ -55,9 +57,12 @@ const freshScope = (): Scope => ({
 const double = {
   readImportScope: async () => scope,
   getLocale: async () => "en",
-  getTranslations: async () => (key: string) => {
-    const [group, name] = key.split(".");
-    return (messages.data as unknown as Record<string, Record<string, string>>)[group][name];
+  getTranslations: async () => {
+    const find = (key: string): string | undefined =>
+      key.split(".").reduce<unknown>((node, part) => (node as Record<string, unknown> | undefined)?.[part], messages.data) as
+        | string
+        | undefined;
+    return Object.assign((key: string) => find(key), { has: (key: string) => find(key) !== undefined });
   },
 };
 (globalThis as unknown as { __importDouble: typeof double }).__importDouble = double;
@@ -79,7 +84,7 @@ registerHooks({
 });
 
 const MIB = 1024 * 1024;
-const COLUMNS = ["externalRef", "fromAccount", "toAccount", "amount", "currency", "category", "occurredAt", "description", "adjustment"];
+const COLUMNS = ["occurredAt", "fromAccount", "toAccount", "amount", "currency", "description", "category", "adjustment"];
 
 type Cells = Partial<Record<(typeof COLUMNS)[number], string | number | null>>;
 
@@ -164,9 +169,16 @@ test("a row's key does not depend on where it sits in the sheet", async () => {
   assert.equal(later, alone);
 });
 
-test("a row that carries its own reference keeps it untouched", async () => {
-  const rows = await run(await book([{ ...spend(1000, "a"), externalRef: "mine-1" }]));
+test("a row that repeats one the fund holds takes its key and updates it; the twin beyond the fund's rows is new (RF-179)", async () => {
+  const { identityKeys } = await import("./sheet-layout");
+  const [held] = identityKeys("transactions", { ...spend(100000, "a") });
+  scope.knownKeys = { transactions: new Map([[held, ["mine-1"]]]) };
+  scope.existingRefs.transactions = new Set(["mine-1"]);
+  const rows = await run(await book([spend(1000, "a"), spend(1000, "a")]));
   assert.equal(rows[0].externalRef, "mine-1");
+  assert.equal(rows[0].status, "update");
+  assert.match(rows[1].externalRef ?? "", /^imp:/);
+  assert.equal(rows[1].status, "new");
 });
 
 test("second import: the rows whose keys were committed are updates, never new, even when the sheet shifts", async () => {
@@ -306,11 +318,11 @@ test("RF-52: a sheet written before the two columns existed parses as it did, a 
 });
 
 test("RF-52: a foreign row keeps its reference, so importing the file twice updates it instead of duplicating", async () => {
-  const file = await bookForeign([dollarPurchase({ externalRef: "usd-1" })]);
+  const file = await bookForeign([dollarPurchase()]);
   const first = (await run(file))[0];
   assert.deepEqual(first.errors, []);
   assert.equal(first.status, "new");
-  scope.existingRefs.transactions = new Set(["usd-1"]);
+  scope.existingRefs.transactions = new Set([first.externalRef as string]);
   const again = (await run(file))[0];
   assert.deepEqual(again.errors, []);
   assert.equal(again.status, "update");
@@ -318,7 +330,7 @@ test("RF-52: a foreign row keeps its reference, so importing the file twice upda
 
 // ---- M3: an account's opening off a backup, and the cap on a second amount (RF-142, RF-51, RF-126) --
 
-const ACCOUNT_COLUMNS = ["externalRef", "name", "kind", "subtype", "placement", "institution", "amount", "balanceOn", "settlementCurrency"] as const;
+const ACCOUNT_COLUMNS = ["name", "kind", "subtype", "placement", "institution", "amount", "balanceOn", "settlementCurrency"] as const;
 
 async function bookAccounts(rows: Record<string, string | number | null>[]) {
   const wb = new ExcelJS.Workbook();
@@ -493,9 +505,9 @@ test("the downloadable template, deflated by ExcelJS as it ships, reads through 
     labels: {
       sheetName: (entity) => messages.data.sheets[entity],
       columnHeader: (key) => messages.data.columns[key],
+      choiceLabel: (_set: string, value: string) => value,
     },
-    accountNames: ["Checking", "Savings"],
-    categoryNames: ["Food"],
+    options: { accountNames: ["Checking", "Savings"], categoryPaths: ["Food"] },
   });
   const bytes = new Uint8Array(await wb.xlsx.writeBuffer());
   const { runImportPipeline } = await import("./import-pipeline");
@@ -653,7 +665,7 @@ const LABEL_COLUMNS = [...COLUMNS, "labels"] as const;
 async function bookLabels(labelRows: Record<string, string | null>[], movements: Record<string, string | number | null | undefined>[]) {
   const wb = new ExcelJS.Workbook();
   const labels = wb.addWorksheet(messages.data.sheets.labels);
-  const labelKeys = ["externalRef", "name", "color"];
+  const labelKeys = ["name", "color"];
   labels.addRow(labelKeys.map((key) => messages.data.columns[key]));
   for (const row of labelRows) labels.addRow(labelKeys.map((key) => row[key] ?? null));
   const sheet = wb.addWorksheet(messages.data.sheets.transactions);
@@ -689,9 +701,10 @@ test("a label name nobody holds refuses its movement on the labels cell", async 
   assert.deepEqual(movement.errors, [{ key: "data.import.errors.unknownReference", column: "labels", value: "Trip; Nowhere" }]);
 });
 
-test("a blank labels cell is no labels, and an existing label's key updates it", async () => {
+test("a blank labels cell is no labels, and an existing label's name updates it", async () => {
+  scope.knownKeys = { labels: new Map([[JSON.stringify(["Trip"]), ["lab-1"]]]) };
   const rows = await sheetsOf(
-    await bookLabels([{ externalRef: "lab-1", name: "Trip renamed", color: "#DC2626" }], [{ ...spend(1000, "a"), labels: "Trip renamed" }, spend(2000, "b")]),
+    await bookLabels([{ name: "Trip", color: "#DC2626" }], [{ ...spend(1000, "a"), labels: "Trip" }, spend(2000, "b")]),
   );
   assert.equal(rows("labels")[0].status, "update");
   const [labelled, bare] = rows("transactions");
@@ -747,25 +760,22 @@ test("a row placed in the fund, from someone with no fund, is refused on its pla
   assert.deepEqual(rows("goals")[0].errors, [{ key: "data.import.errors.noFund", column: "placement", value: "group" }]);
 });
 
-test("a contribution names a file-new goal by name and a movement by its key; an unknown key is refused", async () => {
-  scope.existingRefs.transactions = new Set(["mov-1"]);
+test("a contribution names a file-new goal by name and earmarks no movement", async () => {
   const rows = await sheetsOf(
     await bookSheets({
       goals: [{ name: "Viaje", placement: "personal", targetAmount: 1000000, targetDate: "2027-06-01" }],
       goalContributions: [
-        { goal: "Viaje", amount: 50000, contributedOn: "2026-10-01", movement: "mov-1" },
+        { goal: "Viaje", amount: 50000, contributedOn: "2026-10-01" },
         { goal: "Viaje", amount: 20000, contributedOn: "2026-10-02" },
-        { goal: "Viaje", amount: 20000, contributedOn: "2026-10-03", movement: "nowhere" },
       ],
     }),
   );
   const [goal] = rows("goals");
   assert.deepEqual(goal.errors, []);
-  const [linked, bare, lost] = rows("goalContributions");
-  assert.deepEqual(linked.errors, []);
-  assert.deepEqual(linked.object, { goalId: goal.placeholderId, amount: "50000", contributedOn: "2026-10-01", movement: "mov-1" });
-  assert.equal((bare.object as { movement: string | null }).movement, null);
-  assert.deepEqual(lost.errors, [{ key: "data.import.errors.unknownReference", column: "movement", value: "nowhere" }]);
+  const [first, bare] = rows("goalContributions");
+  assert.deepEqual(first.errors, []);
+  assert.deepEqual(first.object, { goalId: goal.placeholderId, amount: "50000", contributedOn: "2026-10-01" });
+  assert.deepEqual(bare.errors, []);
 });
 
 // ---- debts and statements (RF-142, RF-78, RF-129) ---------------------------------------------
@@ -875,6 +885,7 @@ test("a second row for one account's terms, or one account's cut-off, is refused
 const sheetLabels = {
   sheetName: (entity: string) => messages.data.sheets[entity],
   columnHeader: (key: string) => messages.data.columns[key],
+  choiceLabel: (_set: string, value: string) => value,
 };
 
 async function exportedWorkbook() {
@@ -927,10 +938,15 @@ test("the Transactions sheet has a frozen bold header, a filter, a date cell and
 
 test("an exported workbook, background sheets hidden and dates as cells, round-trips through the import", async () => {
   const { bytes } = await exportedWorkbook();
+  const { identityKeys } = await import("./sheet-layout");
+  const [held] = identityKeys("transactions", { occurredAt: "2026-01-10", fromAccount: "Checking", toAccount: null, amount: 123456789, currency: null, description: "Groceries" });
+  scope.knownKeys = { transactions: new Map([[held, ["tx-1"]]]), accounts: new Map([[JSON.stringify(["Checking"]), ["acc-1"]]]) };
+  scope.existingRefs.transactions = new Set(["tx-1"]);
   const rows = await run(bytes);
   assert.equal(rows.length, 1);
   assert.deepEqual(rows[0].errors, []);
   assert.equal(rows[0].externalRef, "tx-1");
+  assert.equal(rows[0].status, "update");
 });
 
 test("a sheet picked by name stays visible, and a hidden sheet still formats its dates", async () => {
@@ -943,4 +959,117 @@ test("a sheet picked by name stays visible, and a hidden sheet still formats its
   assert.equal(rules.state, "hidden");
   const nextRunOn = sheetDescriptors.recurringRules.columns.findIndex((c) => c.key === "nextRunOn") + 1;
   assert.equal(rules.getRow(2).getCell(nextRunOn).numFmt, "dd/mm/yyyy");
+});
+
+// ---- one format for export, import and template (RF-179) --------------------------------------
+
+const readableLabels = {
+  ...sheetLabels,
+  choiceLabel: (set: string, value: string) =>
+    (messages.data as unknown as { choices: Record<string, Record<string, string>> }).choices[set]?.[value] ?? value,
+};
+
+test("no sheet carries a key column, and a movement leads with its date, then from, to, amount, currency, description, category", () => {
+  for (const descriptor of Object.values(sheetDescriptors)) {
+    assert.ok(!(descriptor.columns as readonly { key: string }[]).some((c) => c.key === "externalRef" || c.key === "movement"));
+  }
+  assert.deepEqual(
+    sheetDescriptors.transactions.columns.slice(0, 7).map((c) => c.key),
+    ["occurredAt", "fromAccount", "toAccount", "amount", "currency", "description", "category"],
+  );
+});
+
+test("the template offers dropdowns for accounts, categories and closed sets, and tints movements by type", async () => {
+  const { buildTemplate } = await import("./workbook");
+  const wb = buildTemplate({
+    labels: readableLabels,
+    options: { accountNames: ["Checking"], categoryPaths: ["Food", "Food › Lunch"] },
+  });
+  const sheet = wb.getWorksheet(messages.data.sheets.transactions)!;
+  const column = (key: string) => sheetDescriptors.transactions.columns.findIndex((c) => c.key === key) + 1;
+  const rules = (target: typeof sheet) =>
+    (target as unknown as { dataValidations: { model: Record<string, { type: string } | undefined> } }).dataValidations.model;
+  const letterOf = (key: string) => String.fromCharCode(64 + column(key));
+  const moves = rules(sheet);
+  for (const key of ["fromAccount", "category", "currency", "forHousehold"]) {
+    assert.equal(moves[`${letterOf(key)}2:${letterOf(key)}500`]?.type, "list", key);
+  }
+  assert.equal(moves[`${letterOf("description")}2:${letterOf("description")}500`], undefined);
+  assert.equal(Object.keys(moves).length, 7, "one rule per dropdown column, not per cell");
+  const kind = wb.getWorksheet(messages.data.sheets.categories)!;
+  assert.equal(rules(kind)["B2:B500"]?.type, "list");
+  assert.equal(wb.getWorksheet("options")!.state, "hidden");
+  assert.equal(wb.getWorksheet("options")!.getCell(2, 2).value, "Food › Lunch");
+  assert.equal((sheet as unknown as { conditionalFormattings: { rules: unknown[] }[] }).conditionalFormattings[0].rules.length, 3);
+});
+
+test("a category kind written in the person's wording, and a category picked by path, read back", async () => {
+  const { buildWorkbook } = await import("./workbook");
+  const wb = buildWorkbook({
+    data: {
+      categories: [{ name: "Lunch", kind: "expense", parent: "Food", color: null }],
+      transactions: [
+        { occurredAt: "2026-01-10", fromAccount: "Checking", toAccount: null, amount: 1000, currency: "COP", description: "x", category: "Food", labels: null, contributedBy: null, forHousehold: true, adjustment: null, counterAmount: null, counterIsEstimate: null },
+      ],
+    } as never,
+    labels: readableLabels,
+  });
+  const sheet = wb.getWorksheet(messages.data.sheets.categories)!;
+  assert.equal(sheet.getRow(2).getCell(2).value, messages.data.choices.categoryKind.expense);
+  const moves = wb.getWorksheet(messages.data.sheets.transactions)!;
+  const household = sheetDescriptors.transactions.columns.findIndex((c) => c.key === "forHousehold") + 1;
+  assert.equal(moves.getRow(2).getCell(household).value, messages.data.choices.flag.yes);
+
+  const { buildChoiceReader, parseWorkbook } = await import("./workbook");
+  const parsed = await parseWorkbook({
+    buffer: buffer(new Uint8Array(await wb.xlsx.writeBuffer())),
+    labels: {
+      entityBySheetName: new Map(Object.entries(messages.data.sheets).map(([entity, name]) => [name, entity as never])),
+      columnKeyByHeader: new Map(
+        Object.keys(sheetDescriptors).map((entity) => [
+          entity as never,
+          new Map((sheetDescriptors[entity as keyof typeof sheetDescriptors].columns as readonly { key: string }[]).map((c) => [messages.data.columns[c.key], c.key])),
+        ]),
+      ),
+      choiceByLabel: buildChoiceReader(readableLabels.choiceLabel as never),
+    },
+  });
+  assert.equal(parsed.categories![0].record.kind, "expense");
+  assert.equal(parsed.transactions![0].record.forHousehold, true);
+});
+
+test("two identical rows with one left in the app: it is restored, and no key repeats (RF-179)", async () => {
+  const { identityKeys } = await import("./sheet-layout");
+  const { createHash } = await import("node:crypto");
+  // The surviving row holds the key the SECOND twin would have derived.
+  const body = JSON.stringify([
+    "transactions",
+    [["amount", 100000], ["category", "Food"], ["description", "twin"], ["fromAccount", "Checking"], ["occurredAt", "2026-01-10"]],
+  ]);
+  const second = `imp:${createHash("sha256").update(`${body}\u00001`).digest("hex").slice(0, 32)}`;
+  const [held] = identityKeys("transactions", { ...spend(100000, "twin") });
+  scope.knownKeys = { transactions: new Map([[held, [second]]]) };
+  scope.existingRefs.transactions = new Set([second]);
+  const rows = await run(await book([spend(1000, "twin"), spend(1000, "twin")]));
+  assert.equal(rows[0].externalRef, second);
+  assert.equal(rows[0].status, "update");
+  assert.equal(rows[1].status, "new");
+  assert.equal(new Set(rows.map((r) => r.externalRef)).size, 2);
+});
+
+test("a category is named by its full path, and a bare name still works when it is unique", async () => {
+  const LUNCH_A = { id: UUID(31), name: "Lunch", externalRef: "c-a", ownerUserId: UUID(99), groupId: null, kind: "expense", path: "Work › Lunch" };
+  const LUNCH_B = { id: UUID(32), name: "Lunch", externalRef: "c-b", ownerUserId: UUID(99), groupId: null, kind: "expense", path: "Home › Lunch" };
+  scope.categories = [FOOD, LUNCH_A, LUNCH_B];
+  const rows = await run(await book([{ ...spend(1000, "p"), category: "Home › Lunch" }, { ...spend(1000, "b"), category: "Lunch" }, spend(1000, "u")]));
+  assert.equal((rows[0].object as { splits: { categoryId: string }[] }).splits[0].categoryId, LUNCH_B.id);
+  assert.equal(rows[1].errors[0]?.key, "data.import.errors.ambiguousReference");
+  assert.deepEqual(rows[2].errors, []);
+});
+
+test("an older file's external reference column is still read as the row's key (RF-179)", async () => {
+  scope.existingRefs.transactions = new Set(["old-1"]);
+  const rows = await run(await bookWith([...COLUMNS, "externalRef"] as never, [{ ...spend(1000, "old"), externalRef: "old-1" }] as never));
+  assert.equal(rows[0].externalRef, "old-1");
+  assert.equal(rows[0].status, "update");
 });

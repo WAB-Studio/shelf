@@ -150,15 +150,18 @@ import {
 import { updateRecurringRule } from "@/db/queries/recurring-rules";
 import {
   buildEffectiveRefs,
+  entitiesIn,
+  keyParsedRows,
   processRow,
   refuseRepeated,
+  runImportPipeline,
   type RawRow,
 } from "@/lib/spreadsheet/import-pipeline";
 import { commitImport } from "@/db/queries/import-commit";
 import * as importCommitModule from "@/db/queries/import-commit";
 import { commitImportAction } from "@/app/actions/import";
 import { ActionError } from "@/lib/errors";
-import { buildWorkbook, parseWorkbook } from "@/lib/spreadsheet/workbook";
+import { buildChoiceReader, buildWorkbook, parseWorkbook } from "@/lib/spreadsheet/workbook";
 import type { ReverseSheetLabels } from "@/lib/spreadsheet/workbook";
 import type { CommitInput } from "@/db/queries/import-commit";
 import { getUserLocale, upsertUserLocale } from "@/db/queries/user-locale";
@@ -3427,7 +3430,7 @@ async function reimportSuite(userId: string, scope: HarnessScope): Promise<void>
   });
 
   // What a person would export: the fixture's own accounts and the movements that touch them.
-  const exported = await readExport({ entityKeys: ["accounts", "transactions"] });
+  const exported = await readExport({ entityKeys: ["accounts", "transactions"], withKeys: true });
   const sheetAccounts = (exported.accounts ?? []).filter((row) => String(row.name).startsWith(prefix));
   const sheetMovements = (exported.transactions ?? []).filter(
     (row) =>
@@ -4133,6 +4136,7 @@ async function main(): Promise<void> {
   await mcpInboxSuite();
   await mcpInboxReviewSuite();
   await accountLoanSuite();
+  await sheetRoundTripSuite();
 }
 
 // A member recorded without a login is someone in the fund: a leader whose fund holds one is not alone, so an
@@ -4775,7 +4779,7 @@ async function ledgerGuardSuite(userId: string, scope: HarnessScope): Promise<vo
   });
   keep("transactions", foreignOnPeso.transactionId);
 
-  const exported = await readExport({ entityKeys: ["accounts", "transactions"] });
+  const exported = await readExport({ entityKeys: ["accounts", "transactions"], withKeys: true });
   const sheetAccounts = (exported.accounts ?? []).filter((r) => String(r.name).startsWith(prefix));
   const sheetMovements = (exported.transactions ?? []).filter(
     (r) => String(r.fromAccount ?? "").startsWith(prefix) || String(r.toAccount ?? "").startsWith(prefix),
@@ -7110,6 +7114,7 @@ async function importCategoryScopeSuite(): Promise<void> {
     labels: [],
     goals: [],
     existingRefs: emptyRefs(),
+    knownKeys: {},
   });
 
   type Files = Partial<Record<"accounts" | "categories", RawRow[]>>;
@@ -11052,20 +11057,22 @@ async function importCommitSetSuite(): Promise<void> {
     const exported = await readExport({ entityKeys: ["accounts", "transactions"] });
     return { accountId, transactionId, exported };
   });
-  const tabsRef = `m3-${tag}-pestanas-cuenta`;
+  const tabsName = `Harness m3 pestanas nueva ${tag}`;
   const exportedAccount = (tabsFixture.exported.accounts ?? []).find((r) => String(r.name).includes(`pestanas banco ${tag}`));
-  const exportedMovement = (tabsFixture.exported.transactions ?? []).find((r) => r.externalRef === `m3-${tag}-pestanas`);
+  const exportedMovement = (tabsFixture.exported.transactions ?? []).find((r) => r.description === `m3 ${tag} pestanas antes`);
   // The harness's next-intl answers each key with itself, so the pipeline reads a tab named by its key.
   const sheetLabels = {
     sheetName: (entity: string) => `sheets.${entity}`,
     columnHeader: (key: string) => `columns.${key}`,
+    choiceLabel: (_set: string, value: string) => value,
   };
   const workbook = buildWorkbook({
     data: {
       accounts: exportedAccount
-        ? [{ ...exportedAccount, name: `Harness m3 pestanas nueva ${tag}`, externalRef: tabsRef }]
+        ? [{ ...exportedAccount, name: `Harness m3 pestanas nueva ${tag}` }]
         : [],
-      transactions: exportedMovement ? [{ ...exportedMovement, description: `m3 ${tag} pestanas despues` }] : [],
+      // Unchanged: the file repeats the movement the fund holds, so it updates it and contends for its row.
+      transactions: exportedMovement ? [exportedMovement] : [],
     },
     labels: sheetLabels,
   });
@@ -11102,7 +11109,7 @@ async function importCommitSetSuite(): Promise<void> {
     return r;
   });
   const tabsCopies = await fixtureSql<{ id: string }[]>`
-    select id from accounts where owner_user_id = ${tabs.id} and external_ref = ${tabsRef}`;
+    select id from accounts where owner_user_id = ${tabs.id} and name = ${tabsName}`;
   for (const r of tabsCopies) track("accounts", r.id);
   const okTabs = answers.filter((a) => a.startsWith("data ")).length;
   const toldWhy = answers.filter((a) => a === "serverError data.import.errors.alreadyCommitting").length;
@@ -12320,6 +12327,7 @@ async function dollarBackupSuite(): Promise<void> {
 
   const labels: ReverseSheetLabels = {
     entityBySheetName: new Map(SHEET_ENTITIES.map((entity) => [`sheets.${entity}`, entity] as const)),
+    choiceByLabel: buildChoiceReader((_set, value) => value),
     columnKeyByHeader: new Map(
       SHEET_ENTITIES.map(
         (entity) =>
@@ -12330,6 +12338,7 @@ async function dollarBackupSuite(): Promise<void> {
   const sheetLabels = {
     sheetName: (entity: string) => `sheets.${entity}`,
     columnHeader: (key: string) => `columns.${key}`,
+    choiceLabel: (_set: string, value: string) => value,
   };
 
   // The fund's own backup. Accounts and categories carry the stable key a re-import matches on.
@@ -12338,7 +12347,8 @@ async function dollarBackupSuite(): Promise<void> {
     (rows ?? []).filter((row) => String(row.name) in names).map((row) => ({ ...row, externalRef: names[String(row.name)] }));
   const accountRows = keyed(exported.accounts, { [cardName]: refOf("card"), [bankName]: refOf("bank") });
   const categoryRows = keyed(exported.categories, { [categoryName]: refOf("category") });
-  const movementRows = (exported.transactions ?? []).filter((row) => String(row.externalRef).startsWith(`o5m15-${tag}-`));
+  const descOf = (suffix: string) => `Harness o5m15 ${suffix} ${tag}`;
+  const movementRows = (exported.transactions ?? []).filter((row) => String(row.description).startsWith("Harness o5m15 ") && String(row.description).endsWith(` ${tag}`));
   const fileOf = async (movements: typeof movementRows) => {
     const workbook = buildWorkbook({
       data: { accounts: accountRows as never, categories: categoryRows as never, transactions: movements as never },
@@ -12354,7 +12364,7 @@ async function dollarBackupSuite(): Promise<void> {
     const header = (sheet.getRow(1).values as unknown[]).slice(1);
     const at = (key: string) => header.indexOf(`columns.${key}`) + 1;
     for (let r = 2; r <= sheet.rowCount; r += 1) {
-      if (sheet.getRow(r).getCell(at("externalRef")).value === refOf(ref)) {
+      if (sheet.getRow(r).getCell(at("description")).value === descOf(ref)) {
         const value = sheet.getRow(r).getCell(at(column)).value;
         return value === undefined ? null : value;
       }
@@ -12366,7 +12376,7 @@ async function dollarBackupSuite(): Promise<void> {
     cell("usd", "currency") === "USD" &&
       cell("usd", "amount") === 25 &&
       cell("usd", "counterAmount") === 105_000 &&
-      cell("usd", "counterIsEstimate") === true,
+      cell("usd", "counterIsEstimate") === "yes",
     `currency ${cell("usd", "currency")}, amount ${cell("usd", "amount")}, counterAmount ${cell("usd", "counterAmount")}, counterIsEstimate ${cell("usd", "counterIsEstimate")}`,
   );
   assert(
@@ -12381,7 +12391,8 @@ async function dollarBackupSuite(): Promise<void> {
   // ---- The reader: a file in, the commit input out.
   const prepare = async (user: HarnessUser, bytes: Uint8Array) => {
     const parsed = await parseWorkbook({ buffer: bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer, labels });
-    const importScope = await asUser(user, () => readImportScope());
+    const importScope = await asUser(user, () => readImportScope(entitiesIn(parsed)));
+    keyParsedRows(parsed, importScope);
     const recordsOf = (entity: (typeof SHEET_ENTITIES)[number]) => (parsed[entity] ?? []).map((row) => row.record as RawRow);
     const refs = buildEffectiveRefs(importScope, recordsOf);
     const rows = (entity: (typeof SHEET_ENTITIES)[number]) =>
@@ -12419,12 +12430,12 @@ async function dollarBackupSuite(): Promise<void> {
   const said = (result: Committed) => (result.error === undefined ? "ok" : `threw ${refusal(result.error)}`);
   const stored = (user: HarnessUser) =>
     fixtureSql<{ ref: string; currency: string; amount: string; counter: string | null; estimate: boolean }[]>`
-      select t.external_ref as ref, t.currency, t.amount_cents::text as amount,
+      select t.description as ref, t.currency, t.amount_cents::text as amount,
         t.counter_amount_cents::text as counter, t.counter_is_estimate as estimate
       from transactions t
       join accounts a on a.id = coalesce(t.from_account_id, t.to_account_id)
       where a.owner_user_id = ${user.id}
-      order by t.external_ref`;
+      order by t.description`;
   const balances = (user: HarnessUser) =>
     fixtureSql<{ name: string; currency: string; balance: string }[]>`
       select a.name, b.currency, b.balance_cents::text as balance
@@ -12451,21 +12462,21 @@ async function dollarBackupSuite(): Promise<void> {
   const firstCommit = await commitAs(clean, first.input);
   await trackOwned(clean);
   const restored = await stored(clean);
-  const byRef = (rows: typeof restored, suffix: string) => rows.find((r) => r.ref === refOf(suffix));
+  const byRef = (rows: typeof restored, suffix: string) => rows.find((r) => r.ref === descOf(suffix));
   assert(
     next("Importing the backup into a clean fund gives the dollar purchase back as USD 25.00 charged 105000.00 on the card, still an estimate"),
     first.errors.length === 0 &&
       said(firstCommit) === "ok" &&
       JSON.stringify(byRef(restored, "usd")) ===
-        JSON.stringify({ ref: refOf("usd"), currency: "USD", amount: String(USD_CENTS), counter: String(ESTIMATE_CENTS), estimate: true }),
+        JSON.stringify({ ref: descOf("usd"), currency: "USD", amount: String(USD_CENTS), counter: String(ESTIMATE_CENTS), estimate: true }),
     `file errors [${first.errors.join(",")}]; commit ${said(firstCommit)}; restored ${JSON.stringify(byRef(restored, "usd"))}`,
   );
   assert(
     next("The billed dollar purchase comes back billed and the peso movement comes back in pesos with no second amount"),
     JSON.stringify(byRef(restored, "billed")) ===
-      JSON.stringify({ ref: refOf("billed"), currency: "USD", amount: String(BILLED_USD_CENTS), counter: String(BILLED_CENTS), estimate: false }) &&
+      JSON.stringify({ ref: descOf("billed"), currency: "USD", amount: String(BILLED_USD_CENTS), counter: String(BILLED_CENTS), estimate: false }) &&
       JSON.stringify(byRef(restored, "cop")) ===
-        JSON.stringify({ ref: refOf("cop"), currency: "COP", amount: String(COP_CENTS), counter: null, estimate: false }),
+        JSON.stringify({ ref: descOf("cop"), currency: "COP", amount: String(COP_CENTS), counter: null, estimate: false }),
     `billed ${JSON.stringify(byRef(restored, "billed"))}; peso ${JSON.stringify(byRef(restored, "cop"))}`,
   );
 
@@ -12505,7 +12516,7 @@ async function dollarBackupSuite(): Promise<void> {
       JSON.stringify(await balances(clean)) === JSON.stringify(before),
     `commit ${said(secondCommit)} ${JSON.stringify(secondCommit.outcome)}; rows ${JSON.stringify(restoredAgain)}`,
   );
-  const copOnly = await commitAs(clean, { ...again.input, transactions: again.input.transactions.filter((row) => row.externalRef === refOf("cop")) });
+  const copOnly = await commitAs(clean, { ...again.input, transactions: again.input.transactions.filter((row) => (row.object as { description?: string }).description === descOf("cop")) });
   assert(
     next("Updating the dollar rows costs the commit no more round trips than updating one peso row: the updates stay one statement per kind"),
     secondCommit.error === undefined &&
@@ -12517,7 +12528,7 @@ async function dollarBackupSuite(): Promise<void> {
 
   // ---- RF-52: the file says the bank has now billed 106000.
   const corrected = movementRows.map((row) =>
-    row.externalRef === refOf("usd") ? { ...row, counterAmount: 10_600_000, counterIsEstimate: false } : row,
+    row.description === descOf("usd") ? { ...row, counterAmount: 10_600_000, counterIsEstimate: false } : row,
   );
   const correctedFile = await fileOf(corrected);
   const third = await prepare(clean, correctedFile.bytes);
@@ -12528,14 +12539,14 @@ async function dollarBackupSuite(): Promise<void> {
     third.errors.length === 0 &&
       thirdCommit.outcome?.inserted === 0 &&
       JSON.stringify(byRef(restoredCorrected, "usd")) ===
-        JSON.stringify({ ref: refOf("usd"), currency: "USD", amount: String(USD_CENTS), counter: "10600000", estimate: false }),
+        JSON.stringify({ ref: descOf("usd"), currency: "USD", amount: String(USD_CENTS), counter: "10600000", estimate: false }),
     `commit ${said(thirdCommit)}; row ${JSON.stringify(byRef(restoredCorrected, "usd"))}`,
   );
 
   // ---- All or nothing: a movement the database refuses takes the whole file with it.
   const doomed = await createMembershipFreeUser();
   const whole = await prepare(doomed, original.bytes);
-  const peso = whole.input.transactions.find((row) => row.externalRef === refOf("cop"))!;
+  const peso = whole.input.transactions.find((row) => (row.object as { description?: string }).description === descOf("cop"))!;
   const bad = {
     ...peso,
     sheetRow: 99,
@@ -13174,6 +13185,7 @@ async function o6m3BackupRestoreSuite(): Promise<void> {
 
   const labels: ReverseSheetLabels = {
     entityBySheetName: new Map(SHEET_ENTITIES.map((entity) => [`sheets.${entity}`, entity] as const)),
+    choiceByLabel: buildChoiceReader((_set, value) => value),
     columnKeyByHeader: new Map(
       SHEET_ENTITIES.map(
         (entity) =>
@@ -13184,6 +13196,7 @@ async function o6m3BackupRestoreSuite(): Promise<void> {
   const sheetLabels = {
     sheetName: (entity: string) => `sheets.${entity}`,
     columnHeader: (key: string) => `columns.${key}`,
+    choiceLabel: (_set: string, value: string) => value,
   };
   type Rows = Record<string, unknown>[];
   const fileOf = async (data: { accounts?: Rows; categories?: Rows; transactions?: Rows }) =>
@@ -13192,7 +13205,8 @@ async function o6m3BackupRestoreSuite(): Promise<void> {
   // A file in, the commit input out, each row as the pipeline left it: its errors ride along.
   const prepare = async (user: HarnessUser, bytes: Uint8Array) => {
     const parsed = await parseWorkbook({ buffer: bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer, labels });
-    const importScope = await asUser(user, () => readImportScope());
+    const importScope = await asUser(user, () => readImportScope(entitiesIn(parsed)));
+    keyParsedRows(parsed, importScope);
     const recordsOf = (entity: (typeof SHEET_ENTITIES)[number]) => (parsed[entity] ?? []).map((row) => row.record as RawRow);
     const refs = buildEffectiveRefs(importScope, recordsOf);
     const rows = (entity: (typeof SHEET_ENTITIES)[number]) =>
@@ -13249,18 +13263,19 @@ async function o6m3BackupRestoreSuite(): Promise<void> {
   };
   const storedMovements = (user: HarnessUser) =>
     fixtureSql<{ ref: string; currency: string; amount: string; counter: string | null; estimate: boolean }[]>`
-      select t.external_ref as ref, t.currency, t.amount_cents::text as amount,
+      select t.description as ref, t.currency, t.amount_cents::text as amount,
         t.counter_amount_cents::text as counter, t.counter_is_estimate as estimate
       from transactions t
       join accounts a on a.id = coalesce(t.from_account_id, t.to_account_id)
       where a.owner_user_id = ${user.id}
-      order by t.external_ref`;
+      order by t.description`;
 
   // ---- The fund's own backup, as the export writes it.
   const exported = await asUser(source, () => readExport({ entityKeys: ["accounts", "categories", "transactions"] }));
   const accountRows = (exported.accounts ?? []).filter((row) => [cardName, bankName].includes(String(row.name))) as Rows;
   const categoryRows = (exported.categories ?? []).filter((row) => String(row.name) === categoryName) as Rows;
-  const movementRows = (exported.transactions ?? []).filter((row) => String(row.externalRef).startsWith(`o6m3-${tag}-`)) as Rows;
+  const descOf = (suffix: string) => `Harness o6m3 ${suffix} ${tag}`;
+  const movementRows = (exported.transactions ?? []).filter((row) => String(row.description).startsWith("Harness o6m3 ") && String(row.description).endsWith(` ${tag}`)) as Rows;
   const exportedCard = accountRows.find((row) => row.name === cardName);
   assert(
     next("RF-142: the export writes a card opened at 150000 owed as -15000000 cents, the shape an older backup already carries"),
@@ -13302,7 +13317,7 @@ async function o6m3BackupRestoreSuite(): Promise<void> {
   assert(
     next("No double sign, update: re-importing the backup over the restored card, signed or not, updates it and leaves its opening at -15000000"),
     again.errors.length === 0 &&
-      again.accounts.find((row) => row.externalRef === exportedCard?.externalRef)?.status === "update" &&
+      again.accounts.find((row) => (row.object as { name?: string } | null)?.name === cardName)?.status === "update" &&
       said(againCommit) === "ok" &&
       againCommit.outcome?.inserted === 0 &&
       afterSigned === String(-OPENING) &&
@@ -13355,7 +13370,7 @@ async function o6m3BackupRestoreSuite(): Promise<void> {
     await fileOf({ accounts: [bankAt(`Harness o6m3 limpia ${tag}`, "clean", 10_000), bankAt(`Harness o6m3 negativa ${tag}`, "negative-2", -10_000)] }),
   );
   const besideCommit = await commitAs(doomed, beside.input);
-  const strayMovement = { ...movementRows.find((row) => row.externalRef === refOf("bank"))!, externalRef: refOf("stray"), fromAccount: `Harness o6m3 nadie ${tag}` };
+  const strayMovement = { ...movementRows.find((row) => row.description === descOf("bank"))!, externalRef: refOf("stray"), fromAccount: `Harness o6m3 nadie ${tag}` };
   const cleanAccountErroredMovement = await prepare(
     doomed,
     await fileOf({ accounts: [bankAt(`Harness o6m3 limpia dos ${tag}`, "clean-2", 10_000)], categories: categoryRows, transactions: [strayMovement] }),
@@ -13380,12 +13395,12 @@ async function o6m3BackupRestoreSuite(): Promise<void> {
 
   // ---- C6, C7: an old sheet's blank currency over a stored dollar purchase.
   const blankCurrency = movementRows
-    .filter((row) => row.externalRef === refOf("usd"))
+    .filter((row) => row.description === descOf("usd"))
     .map((row) => ({ ...row, currency: null, counterAmount: null, counterIsEstimate: null }));
-  const storedBefore = (await storedMovements(source)).find((row) => row.ref === refOf("usd"));
+  const storedBefore = (await storedMovements(source)).find((row) => row.ref === descOf("usd"));
   const blank = await prepare(source, await fileOf({ transactions: blankCurrency }));
   const blankCommit = await commitAs(source, blank.input);
-  const storedAfter = (await storedMovements(source)).find((row) => row.ref === refOf("usd"));
+  const storedAfter = (await storedMovements(source)).find((row) => row.ref === descOf("usd"));
   assert(
     next("C6 / C7: a blank-currency re-import over a dollar purchase keeps its 105000 on the card and its estimate mark as stored"),
     storedBefore?.counter === String(ESTIMATE_CENTS) &&
@@ -13423,6 +13438,7 @@ async function o6m3BackupRestoreSuite(): Promise<void> {
   const largeCommit = await commitAs(batcher, large.input);
   await trackOwned(batcher);
   const batched = await storedMovements(batcher);
+  const lote = (suffix: string) => `Harness o6m3 lote ${suffix} ${tag}`;
   const counterOf = (ref: string) => batched.find((row) => row.ref === ref)?.counter ?? null;
   assert(
     next("C8: importing 3 or 12 new movements runs the batch: the same round trips either way, every movement written, the dollar ones with their 105000"),
@@ -13434,9 +13450,9 @@ async function o6m3BackupRestoreSuite(): Promise<void> {
       largeCommit.outcome?.inserted === 12 &&
       batched.length === 15 &&
       smallCommit.trips === largeCommit.trips &&
-      counterOf(refOf("small-0")) === String(ESTIMATE_CENTS) &&
-      counterOf(refOf("large-0")) === String(ESTIMATE_CENTS),
-    `3 rows: ${said(smallCommit)} in ${smallCommit.trips} trips; 12 rows: ${said(largeCommit)} in ${largeCommit.trips} trips; stored ${batched.length}; dollar counters ${counterOf(refOf("small-0"))}, ${counterOf(refOf("large-0"))}; errors [${[...small.errors, ...large.errors].join(",")}]`,
+      counterOf(lote("small-0")) === String(ESTIMATE_CENTS) &&
+      counterOf(lote("large-0")) === String(ESTIMATE_CENTS),
+    `3 rows: ${said(smallCommit)} in ${smallCommit.trips} trips; 12 rows: ${said(largeCommit)} in ${largeCommit.trips} trips; stored ${batched.length}; dollar counters ${counterOf(lote("small-0"))}, ${counterOf(lote("large-0"))}; errors [${[...small.errors, ...large.errors].join(",")}]`,
   );
 }
 
@@ -14645,6 +14661,7 @@ async function everyEntityBackupSuite(): Promise<void> {
   // The real file: written by the workbook, read back by the workbook, as the import reads an upload.
   const reverse: ReverseSheetLabels = {
     entityBySheetName: new Map(SHEET_ENTITIES.map((entity) => [`sheets.${entity}`, entity] as const)),
+    choiceByLabel: buildChoiceReader((_set, value) => value),
     columnKeyByHeader: new Map(
       SHEET_ENTITIES.map(
         (entity) =>
@@ -14655,13 +14672,14 @@ async function everyEntityBackupSuite(): Promise<void> {
   const exported = await asUser(source, () => readExport({ entityKeys: [...SHEET_ENTITIES] }));
   const workbook = buildWorkbook({
     data: exported,
-    labels: { sheetName: (entity) => `sheets.${entity}`, columnHeader: (key) => `columns.${key}` },
+    labels: { sheetName: (entity) => `sheets.${entity}`, columnHeader: (key) => `columns.${key}`, choiceLabel: (_set: string, value: string) => value },
   });
   const bytes = new Uint8Array(await workbook.xlsx.writeBuffer());
 
   const restore = async (user: HarnessUser, alter?: (input: CommitInput) => void) => {
     const parsed = await parseWorkbook({ buffer: bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer, labels: reverse });
-    const importScope = await asUser(user, () => readImportScope());
+    const importScope = await asUser(user, () => readImportScope(entitiesIn(parsed)));
+    keyParsedRows(parsed, importScope);
     const recordsOf = (entity: (typeof SHEET_ENTITIES)[number]) => (parsed[entity] ?? []).map((row) => row.record as RawRow);
     const refs = buildEffectiveRefs(importScope, recordsOf);
     const rows = (entity: (typeof SHEET_ENTITIES)[number]) => {
@@ -14712,8 +14730,8 @@ async function everyEntityBackupSuite(): Promise<void> {
         (select string_agg(name || ':' || (archived_at is not null)::text || ':' || coalesce(target_date::text, ''), ',' order by name)
           from savings_goals where owner_user_id = ${user.id}) as goal_states,
         (select count(*)::int from goal_contributions gc join savings_goals g on g.id = gc.goal_id where g.owner_user_id = ${user.id}) as contributions,
-        (select string_agg(gc.amount_cents::text || '@' || (gc.created_at at time zone 'America/Bogota')::date::text || ':' || (t.description is not null)::text, ',' order by gc.amount_cents, gc.created_at)
-          from goal_contributions gc join savings_goals g on g.id = gc.goal_id left join transactions t on t.id = gc.transaction_id
+        (select string_agg(gc.amount_cents::text || '@' || (gc.created_at at time zone 'America/Bogota')::date::text, ',' order by gc.amount_cents, gc.created_at)
+          from goal_contributions gc join savings_goals g on g.id = gc.goal_id
           where g.owner_user_id = ${user.id}) as contribution_rows,
         (select concat_ws('|', d.debt_kind, d.annual_rate::float8, d.minimum_payment_pct::float8, d.credit_limit_cents, d.statement_cut_off_day, d.payment_due_day)
           from debt_terms d join accounts a on a.id = d.account_id where a.owner_user_id = ${user.id}) as debt,
@@ -14743,7 +14761,7 @@ async function everyEntityBackupSuite(): Promise<void> {
     ["the label, and the label on its movement", "movement_labels"],
     ["the budget with its period, limit, warning, category and label", "budget"],
     ["both savings goals, the archived one archived and the live one with its target day", "goal_states"],
-    ["the three contributions with their amounts and days, the earmarked one still on its movement", "contribution_rows"],
+    ["the three contributions with their amounts and days (the sheet no longer names an earmarked movement)", "contribution_rows"],
     ["the card's debt terms, its rate and minimum as the fractions it had", "debt"],
     ["the closed statement with its days and its signed figures", "statement"],
   ] as const) {
@@ -17416,4 +17434,102 @@ async function accountLoanSuite(): Promise<void> {
     code = pgErrorCode(error) ?? "unknown";
   }
   assert(next("RF-178: the database refuses a loan on an asset"), code === "23514", `code ${code}`);
+}
+
+// RF-179: a fund built in the app (no movement carries a key) exports and imports back unchanged
+// without adding a row; a twin deleted in the app is restored, and a path names the right child.
+async function sheetRoundTripSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const today = todayInBogota();
+  const user = await createMembershipFreeUser();
+  const open = async (name: string) => {
+    const { accountId } = await asUser(user, () =>
+      createAccount({
+        name: `Harness rf179 ${name} ${tag}`,
+        kind: "asset",
+        subtype: "bank",
+        ownerUserId: user.id,
+        groupId: null,
+        isShared: false,
+        institution: null,
+        lastFour: null,
+        settlementCurrency: "COP",
+        amountMinor: 100_000_00,
+        balanceOn: shiftDate(today, -30),
+      }),
+    );
+    track("accounts", accountId);
+    return accountId;
+  };
+  const bank = await open("banco");
+  const { categoryId: parent } = await asUser(user, () =>
+    createCategory({ scope: { ownerUserId: user.id }, name: `Harness rf179 padre ${tag}`, kind: "expense", parentId: null, color: CATEGORY_COLORS[0] }),
+  );
+  track("categories", parent);
+  const { categoryId: child } = await asUser(user, () =>
+    createCategory({ scope: { ownerUserId: user.id }, name: `Hijo ${tag}`, kind: "expense", parentId: parent, color: CATEGORY_COLORS[1] }),
+  );
+  track("categories", child);
+  const book = async (description: string, amountCents: number) => {
+    const { transactionId } = await asUser(user, () =>
+      createTransaction({
+        fromAccountId: bank,
+        toAccountId: null,
+        amountCents,
+        occurredAt: shiftDate(today, -3),
+        description,
+        externalRef: null,
+        splits: [{ categoryId: child, amountCents }],
+        labelIds: [],
+      } as never),
+    );
+    track("transactions", transactionId);
+    return transactionId;
+  };
+  await book(`rf179 gemelo ${tag}`, 12_000_00);
+  const twin = await book(`rf179 gemelo ${tag}`, 12_000_00);
+  await book(`rf179 solo ${tag}`, 5_000_00);
+
+  const counts = async () => {
+    const [row] = await fixtureSql<{ accounts: number; categories: number; movements: number }[]>`
+      select (select count(*)::int from accounts where owner_user_id = ${user.id}) as accounts,
+        (select count(*)::int from categories where owner_user_id = ${user.id}) as categories,
+        (select count(*)::int from transactions where owner_user_id = ${user.id}) as movements`;
+    return row;
+  };
+  const labels = {
+    sheetName: (entity: string) => `sheets.${entity}`,
+    columnHeader: (key: string) => `columns.${key}`,
+    choiceLabel: (_set: string, value: string) => value,
+  };
+  const importAgain = async (data: Parameters<typeof buildWorkbook>[0]["data"]) => {
+    const bytes = new Uint8Array(await buildWorkbook({ data, labels }).xlsx.writeBuffer());
+    const form = new FormData();
+    form.append("file", new File([bytes], `rf179-${tag}.xlsx`));
+    const answer = await asUser(user, () => commitImportAction(form));
+    const preview = await asUser(user, () => runImportPipeline({ buffer: bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer }));
+    const problems = preview.perEntity.flatMap((e) => e.rows.flatMap((r) => r.errors.map((x) => `${e.entity}#${r.sheetRow}:${x.key}@${x.column ?? ""}=${x.value ?? ""} obj=${JSON.stringify(r.status)}`)));
+    return { serverError: answer?.serverError, problems };
+  };
+  const exported = await asUser(user, () => readExport({ entityKeys: ["accounts", "categories", "transactions"] }));
+
+  const before = await counts();
+  const first = await importAgain(exported);
+  const after = await counts();
+  assert(
+    next("RF-179: an unchanged export of a fund built in the app imports back without adding an account, a category or a movement"),
+    first?.serverError === undefined && before.movements === 3 && JSON.stringify(after) === JSON.stringify(before),
+    `serverError ${first?.serverError} ${first?.problems.join(",")}; before ${JSON.stringify(before)}; after ${JSON.stringify(after)}`,
+  );
+
+  await fixtureSql`delete from transactions where id = ${twin}`;
+  const second = await importAgain(exported);
+  const restored = await counts();
+  assert(
+    next("RF-179: a twin movement deleted in the app comes back on a re-import, once, beside the one that stayed"),
+    second?.serverError === undefined && restored.movements === 3 && restored.accounts === before.accounts,
+    `serverError ${second?.serverError} ${second?.problems.join(",")}; movements ${restored.movements}`,
+  );
+  for (const r of await fixtureSql<{ id: string }[]>`select id from transactions where owner_user_id = ${user.id}`) track("transactions", r.id);
 }
