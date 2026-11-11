@@ -272,7 +272,6 @@ export function buildWorkbook(input: {
   const workbook = new ExcelJS.Workbook();
 
   const lists = input.options ? optionLists(input.options, input.labels) : null;
-  lists?.sheet(workbook);
 
   const present = orderedEntities().filter((entity) => input.data[entity] !== undefined);
   // Hiding every sheet leaves nothing to open, so a selection of only background
@@ -304,6 +303,8 @@ export function buildWorkbook(input: {
     if (lists && entity === "transactions") addMovementTints(sheet, columns, lastRow);
   }
 
+  // Last, so the first sheet a reader (a person or a script) opens is always the data.
+  lists?.sheet(workbook);
   openOnFirstVisible(workbook);
   return workbook;
 }
