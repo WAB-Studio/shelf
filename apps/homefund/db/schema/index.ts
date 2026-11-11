@@ -34,3 +34,4 @@ export * from "./oauth-clients";
 export * from "./oauth-codes";
 export * from "./oauth-calls";
 export * from "./member-debts";
+export * from "./recipients";

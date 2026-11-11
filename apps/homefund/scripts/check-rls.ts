@@ -322,6 +322,7 @@ async function main() {
   await checkDeferrals();
   await checkOauthExchange();
   await checkMemberDebts();
+  await checkRecipients();
 }
 
 // RF-136: a deferral is read and written exactly when its purchase's liability account is, carries 2 to 72
@@ -5315,6 +5316,8 @@ const INSERT_GRANT_GAPS: Record<string, string[]> = {
     "paused_reason",
     "updated_at",
   ],
+  // A recipient is named by its owner alone (RF-189); the stamps are the database's.
+  recipients: ["created_at", "id", "updated_at"],
   savings_goals: ["archived_at", "created_at", "id", "updated_at"],
   reminder_mails: ["id", "mailed_at", "planned_payment_id", "remind_on"],
   sign_in_claims: ["client_key", "count", "day"],
@@ -5428,6 +5431,7 @@ const UPDATE_GRANT_GAPS: Record<string, string[]> = {
     "category_source",
     "created_at",
     "credential_id",
+    "extracted_identifier",
     "external_ref",
     "id",
     "merchant_key",
@@ -5439,7 +5443,9 @@ const UPDATE_GRANT_GAPS: Record<string, string[]> = {
     "proposed_description",
     "proposed_direction",
     "proposed_occurred_at",
+    "proposed_to_account_id",
     "raw_text",
+    "recipient_id",
     "shape_hash",
     "updated_at",
   ],
@@ -5489,6 +5495,7 @@ const UPDATE_GRANT_GAPS: Record<string, string[]> = {
     "used_at",
   ],
   planned_payments: ["created_at", "created_by", "group_id", "id", "owner_user_id", "updated_at"],
+  recipients: ["created_at", "id", "owner_user_id", "updated_at"],
   recurring_rules: ["created_at", "created_by", "group_id", "id", "owner_user_id", "paused_reason", "updated_at"],
   savings_goals: ["created_at", "external_ref", "group_id", "id", "owner_user_id", "updated_at"],
   reminder_mails: ["id", "mailed_at", "planned_payment_id", "remind_on"],
@@ -5553,6 +5560,7 @@ const DELETE_GRANTS: string[] = [
   "labels",
   "member_debts",
   "planned_payments",
+  "recipients",
   "recurring_rules",
   "savings_goals",
   "transaction_labels",
@@ -14182,6 +14190,102 @@ async function checkMemberDebts() {
     const [{ update }] = await tx<{ update: boolean }[]>`
       select has_any_column_privilege('authenticated', 'finances.member_debts'::regclass, 'UPDATE') as update`;
     return [{ ok: held === 0 && !update, detail: `anon/service_role with a privilege ${held}, authenticated UPDATE ${update}` }];
+  });
+}
+
+// RF-189: a saved number is its owner's alone to read, write and remove; the unique number, the digits and the
+// kind's references are the table's; anon and service_role hold nothing on it.
+async function checkRecipients() {
+  console.log("");
+  const labels = {
+    owner: "rf189-1. a person saves, reads, renames and removes their own recipient; a stranger reads none, updates none and removes none",
+    forged: "rf189-2. naming another person as the owner is 42501, for an insert and for an update",
+    shape: "rf189-3. a number twice is 23505 per owner and free for another; fewer than four digits, letters, a blank name and a reference the kind does not use are 23514",
+    deliveries: "rf189-4. a delivery names its number and recipient on insert, and removing the recipient leaves the number with no recipient",
+    grants: "rf189-5. anon and service_role hold no privilege on recipients",
+  };
+  const fixture = async (tx: M1Tx) => {
+    const [owner, stranger] = [randomUUID(), randomUUID()];
+    await tx`insert into auth.users (id) values (${owner}), (${stranger})`;
+    await tx`insert into app_users (id) values (${owner}), (${stranger})`;
+    return { owner, stranger };
+  };
+  const insert = (owner: string, identifier: string, name = "rls rf189", kind = "person") => (sp: M1Tx) =>
+    sp`insert into recipients (owner_user_id, identifier, name, kind) values (${owner}, ${identifier}, ${name}, ${kind})`;
+
+  await rf136Rows([labels.owner, labels.forged], async (tx) => {
+    const f = await fixture(tx);
+    await enterUserContext(tx, f.owner);
+    await insert(f.owner, "3203359119")(tx);
+    const mine = (await tx`select id from recipients`).length;
+    const renamed = (await tx`update recipients set name = 'Nequi de mamá' where identifier = '3203359119' returning id`).length;
+    await enterUserContext(tx, f.stranger);
+    const strangerSees = (await tx`select id from recipients`).length;
+    const strangerUpdates = (await tx`update recipients set name = 'robado' returning id`).length;
+    const strangerRemoves = (await tx`delete from recipients returning id`).length;
+    const forgedInsert = await m1Refusal(tx, insert(f.owner, "3105550001"));
+    await enterUserContext(tx, f.owner);
+    const forgedUpdate = await m1Refusal(tx, (sp) => sp`update recipients set owner_user_id = ${f.stranger} where identifier = '3203359119'`);
+    const removed = (await tx`delete from recipients returning id`).length;
+    await tx`reset role`;
+    return [
+      {
+        ok: mine === 1 && renamed === 1 && strangerSees === 0 && strangerUpdates === 0 && strangerRemoves === 0 && removed === 1,
+        detail: `owner sees ${mine}, renames ${renamed}, removes ${removed}; stranger sees ${strangerSees}, updates ${strangerUpdates}, removes ${strangerRemoves}`,
+      },
+      { ok: forgedInsert === "42501" && forgedUpdate === "42501", detail: `insert for another ${forgedInsert}, owner column update ${forgedUpdate}` },
+    ];
+  });
+
+  await rf136Rows([labels.shape], async (tx) => {
+    const f = await fixture(tx);
+    await enterUserContext(tx, f.owner);
+    await insert(f.owner, "3203359119")(tx);
+    const twice = await m1Refusal(tx, insert(f.owner, "3203359119"));
+    const short = await m1Refusal(tx, insert(f.owner, "123"));
+    const letters = await m1Refusal(tx, insert(f.owner, "32o3359119"));
+    const blank = await m1Refusal(tx, insert(f.owner, "3105550001", "  "));
+    const wrongKind = await m1Refusal(tx, insert(f.owner, "3105550002", "x", "friend"));
+    const accountOnPayee = await m1Refusal(tx, (sp) => sp`
+      insert into recipients (owner_user_id, identifier, name, kind, account_id)
+      values (${f.owner}, '3105550003', 'x', 'payee', gen_random_uuid())`);
+    await enterUserContext(tx, f.stranger);
+    const other = await m1Refusal(tx, insert(f.stranger, "3203359119"));
+    await tx`reset role`;
+    return [{
+      ok: twice === "23505" && short === "23514" && letters === "23514" && blank === "23514" && wrongKind === "23514" &&
+        accountOnPayee === "23514" && other === null,
+      detail: `twice ${twice}, short ${short}, letters ${letters}, blank ${blank}, kind ${wrongKind}, account on a payee ${accountOnPayee}, another owner ${other ?? "accepted"}`,
+    }];
+  });
+
+  await rf136Rows([labels.deliveries], async (tx) => {
+    const f = await fixture(tx);
+    await enterUserContext(tx, f.owner);
+    const [{ id }] = await tx<{ id: string }[]>`
+      insert into recipients (owner_user_id, identifier, name, kind) values (${f.owner}, '3203359119', 'rls rf189', 'person') returning id`;
+    const deliver = await m1Refusal(tx, (sp) => sp`
+      insert into ingest_deliveries (external_ref, raw_text, shape_hash, extracted_identifier, recipient_id, proposed_direction)
+      values ('rls-rf189', 'Transferiste a la cuenta *3203359119', ${"a".repeat(64)}, '3203359119', ${id}, 'transfer')`);
+    const badNumber = await m1Refusal(tx, (sp) => sp`
+      insert into ingest_deliveries (external_ref, raw_text, shape_hash, extracted_identifier)
+      values ('rls-rf189-b', 'x', ${"b".repeat(64)}, '12')`);
+    await tx`delete from recipients where id = ${id}`;
+    const [row] = await tx<{ recipient_id: string | null; extracted_identifier: string }[]>`
+      select recipient_id, extracted_identifier from ingest_deliveries where external_ref = 'rls-rf189'`;
+    await tx`reset role`;
+    return [{
+      ok: deliver === null && badNumber === "23514" && row?.recipient_id === null && row?.extracted_identifier === "3203359119",
+      detail: `insert ${deliver ?? "accepted"}, a short number ${badNumber}, after removal recipient ${row?.recipient_id ?? "null"} number ${row?.extracted_identifier}`,
+    }];
+  });
+
+  await rf136Rows([labels.grants], async (tx) => {
+    const [{ held }] = await tx<{ held: number }[]>`
+      select count(*)::int as held from unnest(array['anon', 'service_role']) r
+      where has_any_column_privilege(r, 'finances.recipients'::regclass, 'SELECT, INSERT, UPDATE, REFERENCES')
+         or has_table_privilege(r, 'finances.recipients'::regclass, 'DELETE, TRUNCATE')`;
+    return [{ ok: held === 0, detail: `anon/service_role with a privilege ${held}` }];
   });
 }
 

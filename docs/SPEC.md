@@ -222,6 +222,7 @@ accounting exports, native apps. None of this gets built or left
 - [x] **RF-188** — HomeFund installed on an iPhone opens like an app: a launch image per current iPhone (CSS size, pixel ratio, portrait) and theme, the mark on the page's own background, drawn at build time; an opaque 180 px home-screen icon; the status bar `default`, legible in both themes; the page, the sidebar and the bottom bar clear the notch and the home indicator. Safari in a tab on an iPhone or iPad shows a discreet note «Agrégala a tu inicio» with the steps (Compartir → Agregar a pantalla de inicio) until the person dismisses it on that device; the installed app, other browsers and other systems never show it. Decided by the user 2026-11-11.
 - [x] **RF-183** — Inside a fund, one member owes another, with or without a login of their own: «Papá le debe a Adrian $200.000 — préstamo para la moto». Each entry is a debt or a payment of it (partial or whole), with the fund, the debtor, the creditor, the amount in integer cents, the currency, the date, a description and `created_by`. What each pair still owes per currency is derived from the entries, a payment netting against the debt and debts both ways netting into one figure, never stored; a payment larger than what is still owed is refused. The database refuses a debtor who is the creditor and a member of another fund. Any member of the fund with a login reads, writes and removes its entries; nobody outside it sees them, and nobody edits one. Planeación → Deudas shows an «Entre miembros» section: each pair with what it still owes, its entries, and «Registrar deuda» and «Registrar pago». Claude reads them with `list_member_debts` and writes one with `record_member_debt`, which asks to confirm with the person first. Decided by the user 2026-11-11.
 - [x] **RF-185** — Planeación has «Suscripciones»: the charges HomeFund finds repeating by RF-184's fixed rules over the last twelve closed months plus the current one, each with its name, typical amount, how often (every month or every week), next expected charge and account. The running ones come first, soonest next charge first, and the title carries what they cost a month per currency (a weekly charge counts 52 over 12 months, in whole cents); the ones whose next charge is overdue by more than the rule's grace sit apart under «Sin cobro reciente» with their last date. The hub has its tile. The screen only reads: nothing is stored, and Claude reviews the list with the person through `spending_patterns`. Decided by the user 2026-11-11.
+- [ ] **RF-189** — A person saves the numbers their bank messages name as recipients: «Destinatarios» in Ajustes, next to «Correos del banco», lists, adds, edits and removes them, each with the digits of an account or a phone, a name («Nequi de mamá», «Arriendo Don José») and what it is: one of their own accounts (with that account), a person (with their «Me debe» account, if any) or a payee (with a default category). A number is saved once per person. Ingest reads the destination or source number out of the message («a la cuenta *3203359119», «a la llave 3203359119», «de 3203359119») and keeps it on the delivery; a notice shows the whole number or a tail like `*6870`, so a saved number matches when it ends with the digits shown, and two matches are no match. A match makes the proposal: an own account, or a person with an account, a transfer between that account and the bank account the message names (into it for an expense, out of it for an income); a payee an expense in its category; a person with no account only the description. The description is the recipient's name, not the whole message, and the delivery still waits in the Bandeja for a person (RF-90). A delivery whose number is unknown offers «Guardar este número», prefilled. Claude reads each delivery's number and matched name in `list_inbox`, lists with `list_recipients`, saves with `save_recipient` (create or update) and removes with `delete_recipient`, and asks the person once what an unknown number is before saving it. Decided by the user 2026-11-11.
 - [x] **RF-190** — A person stays signed in on a device that keeps being used, however long: the proxy is the only place a session is refreshed (no screen or action ever spends a refresh token it cannot hand back to the browser), and requests that arrive together with one expired access token share one refresh instead of each spending the same refresh token. Ajustes has «Mantener la sesión abierta», per person: «Siempre» (the default, never signs a device out) or 7, 30, 90 or 180 days without opening HomeFund, after which that device alone is signed out and sent to the login; the count restarts at every visit, and the choice takes effect on every device, this one included, at its next token refresh, within the hour. It is kept in the person's auth metadata and enforced by HomeFund, never as a project-wide Supabase setting. Decided by the user 2026-11-11.
 - [x] **RF-135** — A counterparty is remembered per user: a description pattern earns an account and a side after two consecutive agreeing completions, and a completion naming a different account marks the pattern ambiguous, which no later agreement undoes. A remembered pattern prefills the missing side and never fills it on its own.
 
@@ -374,6 +375,8 @@ erDiagram
     accounts ||--o{ deferrals : "its liability leg"
     groups ||--o{ member_debts : "holds"
     group_members ||--o{ member_debts : "owes or is owed"
+    app_users ||--o{ recipients : "saves"
+    recipients ||--o{ ingest_deliveries : "names the number of"
     transactions ||--o{ transaction_reviews : "reviewed once per rule"
     app_users ||--o{ transaction_reviews : "marks"
     planned_payments ||--o{ reminder_mails : "mailed once per date"
@@ -558,6 +561,18 @@ erDiagram
         timestamptz created_at
     }
 
+    recipients {
+        uuid id PK
+        uuid owner_user_id FK
+        text identifier "digits only, 4 to 20, unique per owner; matched by its last digits"
+        text name "1 to 80"
+        text kind "own_account | person | payee"
+        uuid account_id FK "own_account or person; set null on delete"
+        uuid category_id FK "payee only; set null on delete"
+        timestamptz created_at
+        timestamptz updated_at
+    }
+
     transaction_sources {
         uuid id PK
         uuid transaction_id FK
@@ -730,8 +745,11 @@ erDiagram
         bigint proposed_amount_cents
         uuid proposed_account_id FK
         uuid proposed_category_id FK
-        text category_source "merchant | interpreter | credential_default"
-        text proposed_direction "income | expense"
+        text category_source "merchant | interpreter | credential_default | recipient"
+        text proposed_direction "income | expense | transfer"
+        uuid proposed_to_account_id FK "a transfer's destination; proposed_account_id is then its source"
+        text extracted_identifier "the number the message names, digits"
+        uuid recipient_id FK "the saved recipient it matched uniquely; set null on delete"
         date proposed_occurred_at
         text proposed_description
         timestamptz resolved_at "null while pending"
