@@ -100,9 +100,12 @@ function completeInput(
 export function DeliveryCard({
   delivery,
   options,
+  onSaveNumber,
 }: {
   delivery: PendingDeliveryRow;
   options: TransactionFormOptions;
+  // Offered when the message names a number nobody saved yet (RF-189).
+  onSaveNumber: () => void;
 }) {
   const t = useTranslations("ingest");
   const tKey = useTranslations();
@@ -309,6 +312,19 @@ export function DeliveryCard({
             </Text>
           )}
         </Flex>
+
+        {delivery.recipientName && (
+          <Text size="2" color="gray">
+            {t("recipientIs", { name: delivery.recipientName })}
+          </Text>
+        )}
+        {delivery.extractedIdentifier && !delivery.recipientId && (
+          <Flex align="start">
+            <Button type="button" size="3" variant="soft" onClick={onSaveNumber}>
+              {t("saveNumber")}
+            </Button>
+          </Flex>
+        )}
 
         <Flex direction="column" align="start" gap="2">
           <Button

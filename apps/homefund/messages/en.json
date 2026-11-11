@@ -220,6 +220,7 @@
     "data": "Data",
     "audit": "Audit log",
     "webhooks": "Bank emails",
+    "recipients": "Recipients",
     "roleLeader": "Owner",
     "roleMember": "Member"
   },
@@ -1666,7 +1667,9 @@
       "proposed": "Suggested: you used it before with this description.",
       "complete": "Complete",
       "completed": "Movement completed"
-    }
+    },
+    "saveNumber": "Save this number",
+    "recipientIs": "Recipient: {name}"
   },
   "review": {
     "entry": "Review the month",
@@ -1912,6 +1915,30 @@
     }
   },
   "recipients": {
+    "title": "Recipients",
+    "add": "Add recipient",
+    "addTitle": "Add recipient",
+    "editTitle": "Edit recipient",
+    "emptyTitle": "You have not saved any number yet",
+    "emptyDescription": "Save the accounts and phones bank messages name, with a name and what they are, so the inbox knows what each transfer was.",
+    "identifierLabel": "Number",
+    "identifierHint": "The account or phone as the message shows it. Only the digits are kept.",
+    "nameLabel": "Name",
+    "kindLabel": "What it is",
+    "kind": {
+      "own_account": "One of my accounts",
+      "person": "A person",
+      "payee": "A merchant or fixed expense"
+    },
+    "accountLabel": "Account",
+    "debtAccountLabel": "Their «Owes me» account (optional)",
+    "categoryLabel": "Category of its expenses",
+    "none": "None",
+    "created": "Recipient saved",
+    "updated": "Recipient updated",
+    "deleted": "Recipient deleted",
+    "deleteTitle": "Delete this recipient?",
+    "deleteDescription": "«{name}» is no longer recognised in new messages. Those already received keep their text.",
     "errors": {
       "identifierInvalid": "The number must have 4 to 20 digits.",
       "nameRequired": "Enter a name.",

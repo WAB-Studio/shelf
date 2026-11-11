@@ -220,6 +220,7 @@
     "data": "Datos",
     "audit": "Auditoría",
     "webhooks": "Correos del banco",
+    "recipients": "Destinatarios",
     "roleLeader": "Propietario",
     "roleMember": "Miembro"
   },
@@ -1666,7 +1667,9 @@
       "proposed": "Sugerida: la usaste antes con esta descripción.",
       "complete": "Completar",
       "completed": "Movimiento completado"
-    }
+    },
+    "saveNumber": "Guardar este número",
+    "recipientIs": "Destinatario: {name}"
   },
   "review": {
     "entry": "Revisar el mes",
@@ -1912,6 +1915,30 @@
     }
   },
   "recipients": {
+    "title": "Destinatarios",
+    "add": "Añadir destinatario",
+    "addTitle": "Añadir destinatario",
+    "editTitle": "Editar destinatario",
+    "emptyTitle": "Aún no guardas ningún número",
+    "emptyDescription": "Guarda las cuentas y celulares que aparecen en los avisos del banco, con un nombre y qué son, para que la Bandeja sepa de qué fue cada transferencia.",
+    "identifierLabel": "Número",
+    "identifierHint": "La cuenta o el celular, como lo muestra el aviso. Solo se guardan los dígitos.",
+    "nameLabel": "Nombre",
+    "kindLabel": "Qué es",
+    "kind": {
+      "own_account": "Una cuenta mía",
+      "person": "Una persona",
+      "payee": "Un comercio o gasto fijo"
+    },
+    "accountLabel": "Cuenta",
+    "debtAccountLabel": "Su cuenta «Me debe» (opcional)",
+    "categoryLabel": "Categoría de sus gastos",
+    "none": "Ninguna",
+    "created": "Destinatario guardado",
+    "updated": "Destinatario actualizado",
+    "deleted": "Destinatario eliminado",
+    "deleteTitle": "¿Eliminar este destinatario?",
+    "deleteDescription": "«{name}» deja de reconocerse en los avisos nuevos. Los que ya llegaron conservan su texto.",
     "errors": {
       "identifierInvalid": "El número debe tener entre 4 y 20 dígitos.",
       "nameRequired": "Escribe un nombre.",

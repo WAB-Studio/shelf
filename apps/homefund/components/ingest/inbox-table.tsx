@@ -37,6 +37,8 @@ export type InboxTableRow = {
   // What the proposal would record: money out unless the message says money in.
   direction: "income" | "expense" | "transfer";
   isComplete: boolean;
+  // The message names a number nobody saved yet (RF-189).
+  canSaveNumber: boolean;
   // The proposal's own day, set only when it is before the account opened.
   beforeOpeningOn: string | null;
 };
@@ -67,9 +69,11 @@ export function InboxTable({
   onAccept,
   onReview,
   onReject,
+  onSaveNumber,
 }: {
   rows: InboxTableRow[];
   empty?: ReactNode;
+  onSaveNumber: (id: string) => void;
   onAccept: (id: string) => void;
   onReview: (id: string) => void;
   onReject: (id: string) => void;
@@ -208,6 +212,9 @@ export function InboxTable({
                   label: t("openForm"),
                   onSelect: () => onReview(row.id),
                 },
+                ...(row.canSaveNumber
+                  ? [{ key: "saveNumber", label: t("saveNumber"), onSelect: () => onSaveNumber(row.id) }]
+                  : []),
                 {
                   key: "reject",
                   label: t("reject"),
