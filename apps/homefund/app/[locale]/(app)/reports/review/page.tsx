@@ -6,6 +6,7 @@ import { notFound } from "next/navigation";
 import { MonthReviewScreen } from "@/components/reports/month-review-screen";
 import { Page } from "@/components/ui";
 import { getMonthReview } from "@/db/queries/month-review";
+import { resolveCreatorNames } from "@/db/queries/transaction-form";
 import { redirect } from "@/i18n/navigation";
 import { routing } from "@/i18n/routing";
 import { MONTH_PATTERN, lastClosedMonth } from "@/lib/dates";
@@ -39,9 +40,14 @@ export default async function MonthReviewPage(props: ReviewPageProps) {
     return redirect({ href: "/reports/review", locale });
   }
 
+  // Who entered each of a twin's movements, by the id the item carries.
+  const creatorNames = Object.fromEntries(
+    await resolveCreatorNames(review.items.flatMap((item) => item.entries.map((entry) => entry.createdBy))),
+  );
+
   return (
     <Page>
-      <MonthReviewScreen review={review} lastClosed={lastClosed} />
+      <MonthReviewScreen review={review} lastClosed={lastClosed} creatorNames={creatorNames} />
     </Page>
   );
 }

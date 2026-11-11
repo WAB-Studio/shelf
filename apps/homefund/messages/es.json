@@ -1560,14 +1560,18 @@
     "prev": "‹ mes anterior",
     "next": "mes siguiente ›",
     "rules": {
-      "above_usual": "Muy por encima de lo usual",
-      "twin": "Dos iguales el mismo día",
-      "from_words": "Monto leído de palabras",
-      "reconciliation_gap": "Diferencia al cuadrar"
+      "above_usual": "¿Es correcto este monto?",
+      "twin": "¿Se registró dos veces?",
+      "from_words": "¿Leímos bien este monto?",
+      "reconciliation_gap": "¿De dónde sale esta diferencia al cuadrar?"
     },
     "meta": "{account} · {date}",
     "metaCategory": "{account} · {date} · {category}",
-    "usual": "Lo usual: {amount}",
+    "usual": "Lo usual: {amount} (mediana de los últimos {months} meses)",
+    "usualCategory": "Lo usual en {category}: {amount} (mediana de los últimos {months} meses)",
+    "noDescription": "Sin descripción",
+    "entryBy": "anotó {who} a las {time}",
+    "entryAt": "anotado a las {time}",
     "counted": "Contaste {amount}",
     "twinCount": "{count} movimientos iguales",
     "ok": "Está bien",

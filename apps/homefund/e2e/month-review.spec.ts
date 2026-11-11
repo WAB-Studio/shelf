@@ -76,15 +76,16 @@ for (const width of [360, 1280]) {
     await page.setViewportSize({ width, height: 900 });
     await page.goto(`/es/reports/review?month=${month}`);
     await expect(page.getByRole("heading", { level: 1, name: /^Revisar / })).toBeVisible();
-    await expect(page.getByText("Muy por encima de lo usual")).toBeVisible();
-    await expect(page.getByText("Lo usual: $ 100.000")).toBeVisible();
-    await expect(page.getByText("Dos iguales el mismo día")).toHaveCount(1);
+    await expect(page.getByText("¿Es correcto este monto?")).toBeVisible();
+    await expect(page.getByText(/Lo usual en Mercado .*: \$ 100\.000 \(mediana de los últimos 6 meses\)/)).toBeVisible();
+    await expect(page.getByText("¿Se registró dos veces?")).toHaveCount(1);
     await expect(page.getByText("2 movimientos iguales")).toBeVisible();
-    await expect(page.getByText("Monto leído de palabras")).toBeVisible();
-    await expect(page.getByText("Diferencia al cuadrar")).toBeVisible();
+    await expect(page.getByText("¿Leímos bien este monto?")).toBeVisible();
+    await expect(page.getByText("¿De dónde sale esta diferencia al cuadrar?")).toBeVisible();
     await expect(page.getByText("Contaste $ 1.010.000")).toBeVisible();
-    // The over-the-usual, the twin and the from-words item each name the movement they flag.
-    await expect(page.getByText(`Revisión ${stamp}`, { exact: true })).toHaveCount(3);
+    // The over-the-usual and the from-words item name the movement they flag; the twin lists both of its own.
+    await expect(page.getByText(`Revisión ${stamp}`, { exact: true })).toHaveCount(2);
+    await expect(page.getByRole("link", { name: new RegExp(`^Revisión ${stamp} · `) })).toHaveCount(2);
     await expect(okButtons(page)).toHaveCount(4);
     const fixes = page.getByRole("link", { name: "Corregir" });
     await expect(fixes).toHaveCount(4);
@@ -99,8 +100,8 @@ for (const width of [360, 1280]) {
     );
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
     // Each row stands off the panel's edge, as a panel's rows do.
-    const panel = page.getByText("Muy por encima de lo usual").locator("xpath=ancestor::*[@data-variant='stack'][1]");
-    const [edge, words] = await Promise.all([panel.boundingBox(), page.getByText("Muy por encima de lo usual").boundingBox()]);
+    const panel = page.getByText("¿Es correcto este monto?").locator("xpath=ancestor::*[@data-variant='stack'][1]");
+    const [edge, words] = await Promise.all([panel.boundingBox(), page.getByText("¿Es correcto este monto?").boundingBox()]);
     expect((words?.x ?? 0) - (edge?.x ?? 0)).toBeGreaterThanOrEqual(16);
   });
 }
@@ -191,7 +192,7 @@ test("deleting a twin opened from «Corregir» lands back on the month, where th
   await page.getByRole("button", { name: "Eliminar", exact: true }).locator("visible=true").click();
   await page.getByRole("alertdialog").getByRole("button", { name: "Eliminar", exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`/es/reports/review\\?month=${month}$`));
-  await expect(page.getByText("Dos iguales el mismo día")).toHaveCount(0);
+  await expect(page.getByText("¿Se registró dos veces?")).toHaveCount(0);
   await expect(okButtons(page)).toHaveCount(3);
 });
 
@@ -228,7 +229,7 @@ test.describe("as a member who only reads the leader's account", () => {
 
   test("the items show with who fixes them, and no «Está bien» nor «Corregir»", async ({ page }) => {
     await page.goto(`/es/reports/review?month=${month}`);
-    await expect(page.getByText("Muy por encima de lo usual")).toBeVisible();
+    await expect(page.getByText("¿Es correcto este monto?")).toBeVisible();
     await expect(page.getByText(`Lo corrige quien maneja ${accountName}.`)).toHaveCount(4);
     await expect(okButtons(page)).toHaveCount(0);
     await expect(page.getByRole("link", { name: "Corregir" })).toHaveCount(0);

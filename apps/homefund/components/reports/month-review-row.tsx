@@ -17,9 +17,10 @@ import { useActionErrorToast } from "@/lib/use-action-toast";
  * One item of «Revisar el mes» (RF-155): what stood out and why, named by its description. A person
  * who may write it marks it «Está bien», takes the mark back with «Deshacer» (RF-163), or opens it
  * with «Corregir», whose back arrow returns here (a gap: into the accounts, where «Saldo real»
- * lives). A reader sees the item and who fixes it. A twin is one item for both movements.
+ * lives). A reader sees the item and who fixes it. A twin is one item for both movements, each listed
+ * with its description, who entered it and when, and a link to open it.
  */
-export function MonthReviewRow({ item }: { item: ReviewItem }) {
+export function MonthReviewRow({ item, creatorNames }: { item: ReviewItem; creatorNames: Record<string, string> }) {
   const moneyText = useMoneyText();
   const t = useTranslations("review");
   const format = useFormatter();
@@ -38,7 +39,7 @@ export function MonthReviewRow({ item }: { item: ReviewItem }) {
         <Text weight="medium">{t(`rules.${item.rule}`)}</Text>
         <Money minor={item.amountCents} currency={currency} signed={false} />
       </Flex>
-      {item.description && <Text>{item.description}</Text>}
+      {item.rule !== "twin" && item.description && <Text>{item.description}</Text>}
       <Text size="2" color="gray">
         {item.categoryName
           ? t("metaCategory", { account: item.accountName, date, category: item.categoryName })
@@ -46,13 +47,32 @@ export function MonthReviewRow({ item }: { item: ReviewItem }) {
       </Text>
       {item.rule === "above_usual" && item.usualCents !== null && (
         <Text size="2" color="gray">
-          {t("usual", { amount: moneyText(item.usualCents, currency, locale) })}
+          {t(item.categoryName ? "usualCategory" : "usual", {
+            category: item.categoryName ?? "",
+            amount: moneyText(item.usualCents, currency, locale),
+            months: item.usualWindowMonths,
+          })}
         </Text>
       )}
       {item.rule === "twin" && (
-        <Text size="2" color="gray">
-          {t("twinCount", { count: item.transactionIds.length })}
-        </Text>
+        <>
+          <Text size="2" color="gray">
+            {t("twinCount", { count: item.transactionIds.length })}
+          </Text>
+          {item.entries.map((entry) => {
+            const who = creatorNames[entry.createdBy];
+            const time = format.dateTime(new Date(entry.createdAt), { hour: "numeric", minute: "2-digit" });
+            return (
+              <Link key={entry.id} asChild size="2">
+                <LocaleLink prefetch={false} href={`/movements/${entry.id}?review=${item.occurredAt.slice(0, 7)}`}>
+                  {entry.description ?? t("noDescription")}
+                  {" · "}
+                  {who ? t("entryBy", { who, time }) : t("entryAt", { time })}
+                </LocaleLink>
+              </Link>
+            );
+          })}
+        </>
       )}
       {item.rule === "reconciliation_gap" && item.countedCents !== null && (
         <Text size="2" color="gray">
