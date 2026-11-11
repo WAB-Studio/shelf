@@ -245,7 +245,7 @@ function readStored(file: string): HarnessSession | null {
   }
 }
 
-export async function refreshSession(
+async function refreshSession(
   refreshToken: string,
 ): Promise<HarnessSession | null> {
   const response = await fetch(
@@ -282,6 +282,11 @@ async function mintSession(email: string): Promise<HarnessSession> {
   }
   minted = true;
 
+  return sessionFromTokenHash(hash);
+}
+
+/** A new session from a waiting magic-link token row, by its hash. */
+export async function sessionFromTokenHash(hash: string): Promise<HarnessSession> {
   // 303, with the tokens in the URL fragment rather than the query.
   const verified = await fetch(
     `${SUPABASE_URL}/auth/v1/verify?type=magiclink&token=${hash}`,

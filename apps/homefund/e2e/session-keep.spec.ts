@@ -12,32 +12,28 @@ import { expect, type BrowserContext } from "@playwright/test";
 
 import es from "@/messages/es.json";
 
-import { cookiesOf, HARNESS_BASE_URL, refreshSession, type HarnessSession } from "../scripts/harness/session";
+import { cookiesOf, HARNESS_BASE_URL, sessionFromTokenHash, type HarnessSession } from "../scripts/harness/session";
 import { fixtureSql } from "../scripts/harness/fixtures";
 import { readScope, test } from "./global-setup";
 
 const DAY_SECONDS = 24 * 60 * 60;
 
-// A fresh session of the harness user, sharing the original's login but none of its refresh tokens.
+// A new session of the harness user by a real sign-in: a magic-link token row landed here and
+// verified by Auth, never a copy of a session row. Its refresh tokens are its own, so a refresh
+// or a sign-out leaves the cached session, the only way back in, alone.
 async function cloneSession(userId: string): Promise<{ session: HarnessSession; sessionId: string }> {
-  const sessionId = randomUUID();
-  const token = randomUUID().replaceAll("-", "");
+  const hash = randomUUID().replaceAll("-", "");
+  const [{ email }] = await fixtureSql<{ email: string }[]>`select email from auth.users where id = ${userId}`;
+  await fixtureSql`
+    insert into auth.one_time_tokens (id, user_id, token_type, token_hash, relates_to, created_at, updated_at)
+    values (${randomUUID()}, ${userId}, 'magiclink', ${hash}, ${email}, now(), now())`;
 
-  await fixtureSql.begin(async (tx) => {
-    await tx`create temp table session_clone on commit drop as
-      select * from auth.sessions where user_id = ${userId} order by created_at desc limit 1`;
-    await tx`update session_clone set id = ${sessionId}`;
-    await tx`insert into auth.sessions select * from session_clone`;
-    await tx`
-      insert into auth.refresh_tokens (instance_id, token, user_id, revoked, created_at, updated_at, session_id)
-      select instance_id, ${token}, user_id, false, now(), now(), ${sessionId}
-      from auth.refresh_tokens where user_id = ${userId} limit 1`;
-  });
+  const session = await sessionFromTokenHash(hash);
+  const claims = JSON.parse(Buffer.from(session.access_token.split(".")[1], "base64url").toString("utf8")) as {
+    session_id: string;
+  };
 
-  const session = await refreshSession(token);
-  if (!session) throw new Error("the cloned session would not refresh");
-
-  return { session, sessionId };
+  return { session, sessionId: claims.session_id };
 }
 
 async function dropClone(sessionId: string): Promise<void> {
