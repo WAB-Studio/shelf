@@ -894,6 +894,8 @@ test("an account edit nobody else touched saves, even after the dialog sat open"
 test("lists a pocket under its parent, the parent with the total of both and its own part as «Libre»", async ({
   page,
 }) => {
+  // The dense table renders from `lg` up; both projects drive it at the laptop's width, as «the laptop row» does.
+  await page.setViewportSize({ width: 1280, height: 900 });
   // Kills: a pocket drawn as a loose account, a parent that shows only its own balance, a total counted twice.
   const parent = await seedAccount({ openingCents: 249_816_00 });
   const pocket = await seedAccount({ openingCents: 5_252_338_00 });
