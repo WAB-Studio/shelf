@@ -57,6 +57,29 @@ export type AccountRow = {
 export const { foreignOwner: foreignOwnerSql, ownerName: ownerNameSql } =
   ownerColumns("accounts.owner_user_id");
 
+export type AccountNameRow = {
+  id: string;
+  name: string;
+  settlementCurrency: CurrencyCode;
+  groupId: string | null;
+  archived: boolean;
+};
+
+// Who an id is, with no balances: a screen that only names accounts, archived ones too.
+export async function listAccountNames(outerTx?: Transaction): Promise<AccountNameRow[]> {
+  return withUserDbOrTx(outerTx, async (tx) =>
+    tx
+      .select({
+        id: accounts.id,
+        name: accounts.name,
+        settlementCurrency: accounts.settlementCurrency,
+        groupId: accounts.groupId,
+        archived: sql<boolean>`${accounts.archivedAt} is not null`,
+      })
+      .from(accounts),
+  );
+}
+
 export async function listAccounts(
   options: { archived: boolean },
   outerTx?: Transaction,

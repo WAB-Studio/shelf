@@ -13,6 +13,7 @@ import { lastClosedMonth } from "@/lib/dates";
 import { ActionError } from "@/lib/errors";
 import { env } from "@/lib/env";
 import { pgErrorCode } from "@/lib/db-error";
+import { BatchRefusal, registerInboxTools } from "@/lib/mcp/inbox-tools";
 import { registerLedgerTools } from "@/lib/mcp/write-tools";
 import { statementImportSchema, statementSchema } from "@/lib/validation/statement-import";
 
@@ -56,6 +57,9 @@ async function run(ctx: ServerContext, load: (owner: string) => Promise<unknown>
   } catch (error) {
     if (error instanceof StatementError) {
       return text({ error: t(`errors.statement.${error.key}`), line: error.line }, true);
+    }
+    if (error instanceof BatchRefusal) {
+      return text({ error: refusal(error.messageKey), deliveryId: error.deliveryId, ...(error.field ? { field: error.field } : {}) }, true);
     }
     if (error instanceof ActionError) return text({ error: refusal(error.messageKey) }, true);
     console.error("mcp tool failed:", error instanceof Error ? error.name : "unknown", pgErrorCode(error) ?? "");
@@ -144,6 +148,7 @@ export function buildHandler(): (request: Request) => Promise<Response> {
     registerReadTools(server);
     registerStatementTools(server);
     registerLedgerTools(server, run, (key) => t(key as never));
+    registerInboxTools(server, run, (key) => t(key as never));
   }, {
     serverInfo: { name: "homefund", version: pkg.version },
     instructions: t("instructions"),

@@ -104,7 +104,7 @@ async function resolveCounterAmount(movement: {
 // «De quién» is required on an income into a fund account (RF-167). The rule is the
 // refinement the form runs, against what the destination really is. An edit that sends
 // nothing keeps who the movement already credits, so it is asked only when that is nobody.
-async function assertContributorGiven(
+export async function assertContributorGiven(
   movement: {
     fromAccountId: string | null;
     toAccountId: string | null;
