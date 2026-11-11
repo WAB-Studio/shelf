@@ -515,6 +515,11 @@ Board C1h corrected the same day: a card in credit reads «Según HomeFund −$ 
   - Still to fix from the same critic, no decision needed: the row names the movement's description; «Corregir» comes back
     to the review; the debt detail's header reads the Q9 line as its «Saldo» tile does (Q18 left the header in pesos).
 
+## Decisions of 2026-11-11: HomeFund from an iPhone, by the user
+
+- «Ajustes · Correos del banco» has an «Atajo de iPhone» card under «App para Android»: one line on what it does, the
+  ingest URL to copy, then «Gasto escrito» (six numbered steps) and «SMS del banco» (three), and a gray line saying a
+  delivery waits in the Bandeja. Steps name the Shortcuts actions as iOS names them in the person's language.
 ## Decisions of 2026-11-11: HomeFund installed on an iPhone, by the user
 
 - The launch image is the app's mark, a third of the screen's width, centred on `#ffffff` or `#110c20`: what the page

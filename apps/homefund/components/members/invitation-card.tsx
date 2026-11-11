@@ -56,6 +56,9 @@ export function InvitationCard({
   const accept = useAction(acceptInvitationAction, {
     onSuccess() {
       toast.success(t("invitationAccepted", { fund: fundName }));
+      // The router's refresh, not the action's: on the build, an action's refresh redraws the page
+      // but leaves the tab titled «HomeFund» instead of the fund just joined.
+      router.refresh();
     },
     onError,
   });

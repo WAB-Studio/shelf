@@ -15,7 +15,7 @@ The why: `docs/agentes/historia.md` § Verification.
   only place a broken build is caught before production.
 - Make the orbit suite run less, or shard it across harness lanes. At 8 shards setup is 189 of a shard's 574 s
   (run 42927479636), so cache it: `.github/actions/npm-install` restores `node_modules` by lockfile and Node,
-  `.github/actions/playwright-chromium` the browser, and each orbit shard its own Turbopack build and dev caches.
+  `.github/actions/playwright-chromium` the browser, and the orbit shards their Turbopack build cache.
 - Install with those two actions in a new job, never a bare `npm ci` or `playwright install`.
 - Append an assertion at the end of its suite, in `apps/homefund/scripts/check-queries.ts` and
   `apps/homefund/scripts/check-http.ts` alike. `Q` and `H` count calls at runtime; inserting in the middle renumbers
@@ -99,4 +99,5 @@ The why: `docs/agentes/historia.md` § Verification.
 - `build-pulsar` (`next build` for GoalLog) runs on a pull request only; on a push `pulsar-e2e` and `pulsar-checks` build the same tree.
 - `voyager-e2e` runs 2 shards (`voyager-e2e-shard`); the job `voyager-e2e` merges them. The WordBook model-free checks (`check:sync`, `grants`, `sign-in-budget`, `allow-email`, `sign-in-code`, `translate`, `translate-model`, `unlisted`, `admission`) run in the `policies` job, with no paid model. `check:decoration` and `check:notes` run in `voyager-e2e-shard` on shard 1, after the suite (the first seeds today's `model_spend` row), with a blank `OPENAI_API_KEY`. HomeFund's `check:unit` runs in `fast`.
 - `pulsar-e2e` runs 6 shards; `pulsar-e2e-report` merges them. Past six, `pulsar-checks` and orbit's `e2e` set the wall time (`private/reportes/ci-costo.md`).
-- Orbit's e2e runs 4 shards (`e2e-shard`), each building the app before its dev server; the job `e2e` merges them. A spec that spawns `next start` reads that build.
+- Orbit's e2e runs 4 shards (`e2e-shard`), each on `next start` over its own build, never `next dev`; the job `e2e` merges them.
+- Cache only `.next/cache` (the build's) in CI. Never `.next/dev/cache`: restored, it hung a shard on its first compile.
