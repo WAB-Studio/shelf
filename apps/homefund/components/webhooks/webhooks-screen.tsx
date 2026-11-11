@@ -1,7 +1,7 @@
 "use client";
 
 import { EllipsisVertical, Plus, Webhook } from "lucide-react";
-import { useFormatter, useTranslations } from "next-intl";
+import { useFormatter, useLocale, useTranslations } from "next-intl";
 import { useAction } from "next-safe-action/hooks";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -32,7 +32,7 @@ import type {
   WebhookCredentialOptions,
   WebhookCredentialRow,
 } from "@/db/queries/webhook-credentials";
-import { ANDROID_APP_RELEASES_URL } from "@/lib/android-app";
+import { ANDROID_APK_PATH } from "@/lib/android-app";
 import { scopedCategoryName } from "@/lib/fund/category-names";
 import { TIME_ZONE } from "@/lib/locales";
 import { useActionErrorToast } from "@/lib/use-action-toast";
@@ -68,17 +68,20 @@ export function WebhooksScreen({
   ingestUrl,
   mcpUrl,
   oauthLine,
+  apkReady,
 }: {
   credentials: WebhookCredentialRow[];
   options: WebhookCredentialOptions;
   ingestUrl: string;
   mcpUrl: string;
   oauthLine: string | null;
+  apkReady: boolean;
 }) {
   const t = useTranslations("webhooks");
   // Root-scoped: `common`'s labels are full catalogue paths.
   const tKey = useTranslations();
   const format = useFormatter();
+  const locale = useLocale();
 
   const [issuing, setIssuing] = useState(false);
   const [revokeTarget, setRevokeTarget] = useState<string | null>(null);
@@ -305,15 +308,13 @@ export function WebhooksScreen({
           <Text size="2" color="gray">
             {t("androidDescription")}
           </Text>
-          <Link
-            href={ANDROID_APP_RELEASES_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            {t("androidDownload")}
-          </Link>
+          {apkReady ? (
+            <Link href={`/${locale}${ANDROID_APK_PATH}`} download>
+              {t("androidDownload")}
+            </Link>
+          ) : null}
           <Text size="2" color="gray">
-            {t("androidDownloadHint")}
+            {apkReady ? t("androidDownloadHint") : t("androidDownloadMissing")}
           </Text>
         </Flex>
       </Card>

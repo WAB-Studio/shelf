@@ -1542,7 +1542,8 @@
     "androidHeading": "App para Android",
     "androidDescription": "Viene lista para Bancolombia y Banco de Bogotá",
     "androidDownload": "Descargar HomeFund Avisos",
-    "androidDownloadHint": "Se descarga con tu cuenta de GitHub de WAB-Studio",
+    "androidDownloadHint": "Al abrir el archivo, Android pide permitir instalar desde este navegador",
+    "androidDownloadMissing": "La descarga aún no está lista. Pídele a quien administra HomeFund que la active.",
     "bankEmails": {
       "heading": "Correos del banco",
       "description": "Cada 10 minutos los correos de tu banco (Bancolombia, Nequi, Nu, Lulo, Falabella, Banco de Bogotá, PSE…) llegan solos a la Bandeja. Solo lee correo; nada más sale de tu computador.",
