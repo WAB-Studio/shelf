@@ -1,0 +1,62 @@
+name: Deploy production
+
+# HomeFund's production: its migrations first, then the Vercel deploy, so the code never runs ahead of its schema.
+# Approving the `production` environment is the user's authorization to migrate production.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Two deploys never migrate at once; a newer one waits for the older instead of cancelling it mid-migration.
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      MIGRATION_DATABASE_URL: ${{ secrets.MIGRATION_DATABASE_URL }}
+    steps:
+      # The only database this job may touch is the secret's; with no secret there is no fallback, it stops.
+      - name: Check the secret
+        run: |
+          if [ -z "$MIGRATION_DATABASE_URL" ]; then
+            echo "::error::MIGRATION_DATABASE_URL is not set in the production environment. Nothing was migrated."
+            exit 1
+          fi
+          case "$MIGRATION_DATABASE_URL" in
+            *localhost*|*127.0.0.1*|*@db:*)
+              echo "::error::MIGRATION_DATABASE_URL points at a local database. Nothing was migrated."
+              exit 1 ;;
+          esac
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - uses: ./.github/actions/npm-install
+      - name: Migrations applied before
+        run: psql "$MIGRATION_DATABASE_URL" -tAc 'select count(*) from drizzle.__drizzle_migrations'
+      - name: Migrate
+        run: npm run db:migrate:env -w apps/homefund
+      - name: Migrations applied after
+        run: psql "$MIGRATION_DATABASE_URL" -tAc 'select count(*) from drizzle.__drizzle_migrations'
+
+  deploy:
+    needs: migrate
+    runs-on: ubuntu-latest
+    env:
+      VERCEL_DEPLOY_HOOK: ${{ secrets.VERCEL_DEPLOY_HOOK }}
+    steps:
+      - name: Trigger the Vercel deploy
+        run: |
+          if [ -z "$VERCEL_DEPLOY_HOOK" ]; then
+            echo "::error::VERCEL_DEPLOY_HOOK is not set. The migrations ran; production was not deployed."
+            exit 1
+          fi
+          curl -fsS -X POST "$VERCEL_DEPLOY_HOOK"
