@@ -228,8 +228,9 @@ Each entry names the rule and the file it lives in now.
   `check:queries`, `check:http` or a unit test (`private/analisis-fallos-ci.md`).
 - Before: 55 specs, 26.5k lines of e2e, 736 test blocks (each run twice, desktop and
   mobile), about 40 min of browser time over 8 shards (59 min of runner).
-- After: 51 specs, 12.0k lines, 176 test blocks: 138 desktop plus 38 tagged `@mobile`. A local run executed 202 tests
-  (164 desktop, 38 mobile), 202 passed, 7.7 min of test time, 7.9 min wall on one worker; 4 shards in CI.
-- The deleted rules each sit in a database check or a unit test; the list is `private/poda-e2e.md` of the PR.
+- After: 51 specs, 11.3k lines, 169 test blocks: 131 desktop plus 38 tagged `@mobile`. A first local run executed 202 tests,
+  7.7 min of test time; a second, after cutting the desktop route loop to 4 routes and `destructive` to one path, executed
+  178 tests (140 desktop, 38 mobile), all passed, 6.5 min of test time, 6.8 min wall on one worker; 4 shards in CI.
+- The deleted rules each sit in a database check or a unit test; the per-spec list is in the body of PR #847.
   What is lost is browser-only: copy, the place of a refusal's message, pending and cancel states, 360 px
   overflow and style measurements.
