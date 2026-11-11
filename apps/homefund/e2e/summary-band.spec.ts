@@ -17,6 +17,7 @@ import { addCivilDays, todayInBogota } from "@/lib/dates";
 import messages from "@/messages/es.json";
 
 import { fixtureSql } from "../scripts/harness/fixtures";
+import { pageOverflow } from "./fit";
 import { asHarnessUser, clearLedger, readScope, test } from "./global-setup";
 
 const scope = readScope();
@@ -208,10 +209,6 @@ test.describe("dashboard band on a narrow phone", () => {
       return Math.max(...[...range.getClientRects()].map((rect) => rect.right)) - inner;
     });
     expect(overflow).toBeLessThanOrEqual(0);
-    expect(
-      await page.evaluate(
-        () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
-      ),
-    ).toBeLessThanOrEqual(0);
+    expect(await pageOverflow(page)).toBeLessThanOrEqual(0);
   });
 });

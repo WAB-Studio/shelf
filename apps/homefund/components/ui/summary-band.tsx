@@ -1,5 +1,5 @@
-import type { ComponentProps, CSSProperties, ReactNode } from "react";
-import { Flex, Heading, Theme } from "@radix-ui/themes";
+import type { ComponentProps, ReactNode } from "react";
+import { Flex, Theme } from "@radix-ui/themes";
 
 import styles from "./summary-band.module.css";
 
@@ -66,20 +66,6 @@ export function BandCard({
         children
       )}
     </div>
-  );
-}
-
-// A headline figure that grows to 40px from `md`. `length`, the characters it
-// draws, lets the featured card shrink a long one to its width.
-export function BandFigure({ children, length }: { children: ReactNode; length?: number }) {
-  return (
-    <Heading
-      size="8"
-      className={styles.figure}
-      style={length === undefined ? undefined : ({ "--figure-length": length } as CSSProperties)}
-    >
-      {children}
-    </Heading>
   );
 }
 

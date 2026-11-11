@@ -157,8 +157,8 @@ export {
   SummaryBand,
   BandCards,
   BandCard,
-  BandFigure,
   BandStats,
   ReportCard,
   ReportRow,
 } from "./summary-band";
+export { BandFigure } from "./band-figure";
