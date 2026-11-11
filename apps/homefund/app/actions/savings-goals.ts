@@ -1,7 +1,6 @@
 "use server";
 
 import { refresh } from "next/cache";
-import type { z } from "zod";
 
 import { getUserGroup } from "@/db/queries/groups";
 import {
@@ -187,12 +186,7 @@ export const contributeGoalAction = authActionClient
   .action(async ({ parsedInput: { goalId, amount } }) => {
     // An aporte is set aside in the goal's own currency, whatever it earmarks.
     const currency = await resolveGoalCurrency({ goalId });
-    const verdict = z
-      .custom<{ amount: string }>()
-      .superRefine(refineContributionAmount(currency))
-      .safeParse({ amount });
-
-    if (!verdict.success) throw new ActionError(verdict.error.issues[0].message);
+    assertRefined({ amount }, refineContributionAmount(currency));
 
     const amountCents = requireMinor(amount);
 
