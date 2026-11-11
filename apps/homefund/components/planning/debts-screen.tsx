@@ -30,6 +30,7 @@ import {
   Disc,
   EmptyState,
   Figure,
+  FigureRow,
   Flex,
   Heading,
   Money,
@@ -611,36 +612,39 @@ function CardHead({
 
   return (
     <Flex direction="column" gap="2">
-      <Flex align="center" gap="3">
-        <Disc
-          size={42}
-          radius={5}
-          surface={`var(--${tint}-a3)`}
-          ink={`var(--${tint}-11)`}
-        >
-          <Icon size={20} />
-        </Disc>
-        <Flex direction="column" flexGrow="1" minWidth="0">
-          <Flex align="center" gap="2" minWidth="0">
-            <Text weight="bold">{name}</Text>
-            <OwnerMark personal={personal} foreignOwner={foreignOwner} ownerName={ownerName} />
-          </Flex>
-          <Text size="1" color="gray">
-            {meta}
-          </Text>
+      <FigureRow
+        lead={
+          <Disc
+            size={42}
+            radius={5}
+            surface={`var(--${tint}-a3)`}
+            ink={`var(--${tint}-11)`}
+          >
+            <Icon size={20} />
+          </Disc>
+        }
+        figure={
+          beside ? undefined : (
+            <Flex direction="column" align="end">
+              <PocketFigure
+                owedCents={owedCents}
+                creditCents={creditCents}
+                currency={currency}
+                bold
+              />
+              <OtherOwed pockets={otherOwed} />
+            </Flex>
+          )
+        }
+      >
+        <Flex align="center" gap="2" wrap="wrap" minWidth="0">
+          <Text weight="bold">{name}</Text>
+          <OwnerMark personal={personal} foreignOwner={foreignOwner} ownerName={ownerName} />
         </Flex>
-        {!beside && (
-          <Flex direction="column" align="end">
-            <PocketFigure
-              owedCents={owedCents}
-              creditCents={creditCents}
-              currency={currency}
-              bold
-            />
-            <OtherOwed pockets={otherOwed} />
-          </Flex>
-        )}
-      </Flex>
+        <Text size="1" color="gray">
+          {meta}
+        </Text>
+      </FigureRow>
       {beside && (
         // The credit with a pocket owed is a line too long to sit beside the
         // name: it takes the card's whole width under the head, wrapping at its
