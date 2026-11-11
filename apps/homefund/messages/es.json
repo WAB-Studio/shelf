@@ -1266,6 +1266,11 @@
       "toAccountInvalid": "Elige la deuda que vas a abonar."
     }
   },
+  "session": {
+    "label": "Mantener la sesión abierta",
+    "always": "Siempre",
+    "afterDays": "Tras {count, plural, one {# día} other {# días}} sin abrirla"
+  },
   "language": {
     "label": "Idioma",
     "endonym": {

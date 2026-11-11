@@ -202,7 +202,13 @@ export async function pruneSupersededSessions(email: string): Promise<number> {
 export async function sessionCookies(
   email: string = HARNESS_EMAIL,
 ): Promise<{ name: string; value: string }[]> {
-  const session = await harnessSession(email);
+  return cookiesOf(await harnessSession(email));
+}
+
+/** The cookies a browser holds for one session, which need not be the cached one. */
+export function cookiesOf(
+  session: HarnessSession,
+): { name: string; value: string }[] {
   const encoded = `base64-${Buffer.from(JSON.stringify(session), "utf8").toString("base64")}`;
 
   if (encoded.length <= MAX_CHUNK_SIZE) {
@@ -276,6 +282,11 @@ async function mintSession(email: string): Promise<HarnessSession> {
   }
   minted = true;
 
+  return sessionFromTokenHash(hash);
+}
+
+/** A new session from a waiting magic-link token row, by its hash. */
+export async function sessionFromTokenHash(hash: string): Promise<HarnessSession> {
   // 303, with the tokens in the URL fragment rather than the query.
   const verified = await fetch(
     `${SUPABASE_URL}/auth/v1/verify?type=magiclink&token=${hash}`,

@@ -4,6 +4,14 @@ import createMiddleware from "next-intl/middleware";
 import { NextRequest, NextResponse } from "next/server";
 
 import { routing } from "@/i18n/routing";
+import {
+  inactivityVerdict,
+  keepDaysFromClaims,
+  LAST_SEEN_COOKIE,
+  LAST_SEEN_MAX_AGE,
+  parseLastSeen,
+} from "@/lib/auth/inactivity";
+import { sharedRefreshFetch } from "@/lib/auth/refresh-dedupe";
 import { env } from "@/lib/env";
 
 const handleLocaleRouting = createMiddleware(routing);
@@ -24,6 +32,10 @@ function resolvedPathname(
   return rewrite
     ? new URL(rewrite, request.url).pathname
     : request.nextUrl.pathname;
+}
+
+function issuedAt(claims: Record<string, unknown>): number | null {
+  return typeof claims.iat === "number" ? claims.iat * 1000 : null;
 }
 
 // A redirect that carries `Set-Cookie` and no cache directives is the hole an
@@ -62,6 +74,8 @@ export async function proxy(request: NextRequest) {
     env.NEXT_PUBLIC_SUPABASE_URL,
     env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
     {
+      // Requests arriving together with one expired token share one refresh (RF-190).
+      global: { fetch: sharedRefreshFetch() },
       cookies: {
         getAll() {
           return request.cookies.getAll();
@@ -83,6 +97,41 @@ export async function proxy(request: NextRequest) {
   // Before anything commits a response: a refresh landing after the response is
   // written is lost, and the request after it refreshes all over again.
   const { data } = await supabase.auth.getClaims();
+  let claims = data?.claims;
+
+  // RF-190: the limit the person chose, counted from this device's last request.
+  if (claims) {
+    const now = Date.now();
+    const verdict = inactivityVerdict({
+      // No stamp yet (a device that has not been here since the stamp shipped): the token's own
+      // issue time stands in, so the first request is not taken as a visit just now.
+      lastSeen: parseLastSeen(request.cookies.get(LAST_SEEN_COOKIE)?.value) ?? issuedAt(claims),
+      now,
+      days: keepDaysFromClaims(claims),
+    });
+
+    if (verdict === "expired") {
+      // This device's session alone; the others keep theirs.
+      await supabase.auth.signOut({ scope: "local" }).catch(() => undefined);
+      response.cookies.delete(LAST_SEEN_COOKIE);
+      // Whether or not Auth answered the sign-out, this device holds no session any more.
+      for (const { name } of request.cookies.getAll()) {
+        if (/^sb-.+-auth-token(\.\d+)?$/.test(name)) response.cookies.delete(name);
+      }
+      claims = undefined;
+    } else if (verdict === "stamp") {
+      response.cookies.set(LAST_SEEN_COOKIE, String(now), {
+        path: "/",
+        maxAge: LAST_SEEN_MAX_AGE,
+        httpOnly: true,
+        sameSite: "lax",
+        secure: request.nextUrl.protocol === "https:",
+      });
+    }
+  } else if (request.cookies.has(LAST_SEEN_COOKIE)) {
+    // A stale stamp must not sign the next login out at once.
+    response.cookies.delete(LAST_SEEN_COOKIE);
+  }
 
   const pathname = resolvedPathname(request, response);
   const segment = pathname.split("/")[1];
@@ -90,7 +139,7 @@ export async function proxy(request: NextRequest) {
   if (!hasLocale(routing.locales, segment)) return response;
 
   const loginPathname = `/${segment}/login`;
-  const signedIn = Boolean(data?.claims);
+  const signedIn = Boolean(claims);
 
   if (!signedIn && pathname !== loginPathname) {
     const url = new URL(loginPathname, request.url);

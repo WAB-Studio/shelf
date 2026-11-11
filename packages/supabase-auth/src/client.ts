@@ -3,7 +3,12 @@ import "server-only";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 
-export type SupabaseConfig = { url: string; publishableKey: string };
+export type SupabaseConfig = {
+  url: string;
+  publishableKey: string;
+  /** Replaces the client's `fetch`; an app uses it to keep this client from refreshing a token. */
+  fetch?: typeof fetch;
+};
 
 /**
  * Auth only. Callers with the Data API off — `.from`, `.rpc` and storage —
@@ -21,6 +26,7 @@ export async function createSupabaseServerClient(
   const cookieStore = await cookies();
 
   return createServerClient(config.url, config.publishableKey, {
+    ...(config.fetch ? { global: { fetch: config.fetch } } : null),
     cookies: {
       getAll() {
         return cookieStore.getAll();
