@@ -3,8 +3,9 @@ import "server-only";
 import { sql, type SQL } from "drizzle-orm";
 
 import { withUserDb } from "@/db/session";
-import { shiftMonth, todayInBogota } from "@/lib/dates";
+import { monthRange, shiftMonth, todayInBogota } from "@/lib/dates";
 import { ABOVE_USUAL_FACTOR, USUAL_MIN_LINES, USUAL_WINDOW_MONTHS } from "@/lib/month-review-rules";
+import { CATEGORY_PATH_SEPARATOR } from "@/lib/spreadsheet/sheet-layout";
 
 export type Cadence = "monthly" | "weekly";
 
@@ -70,7 +71,8 @@ export type SpendingPatterns = {
 const MIN_OCCURRENCES = 3;
 // A series is still running while its next charge is at most this many days late.
 const GRACE_DAYS = { monthly: 10, weekly: 3 } as const;
-// A category grows when its recent monthly average is over 125 % of the months before.
+// A category grows when its average over the recent months is over this percent of the months before.
+export const GROWTH_PERCENT = 125;
 const RECENT_MONTHS = 3;
 const MAX_OUTLIERS = 50;
 
@@ -101,7 +103,7 @@ function windowOf(months: number, today: string): Window {
 // person's own accounts and the fund's they see are read, and no other.
 function patternsSql(w: Window): SQL {
   const start = `${w.fromMonth}-01`;
-  const endExclusive = `${shiftMonth(w.currentMonth, 1)}-01`;
+  const { endExclusive } = monthRange(`${w.currentMonth}-01`);
   const historyStart = `${shiftMonth(w.fromMonth, -USUAL_WINDOW_MONTHS)}-01`;
   return sql`
     with tx as materialized (
@@ -116,7 +118,7 @@ function patternsSql(w: Window): SQL {
       from tx t join transaction_splits s on s.transaction_id = t.id
     ),
     names as (
-      select c.id, case when p.id is null then c.name else p.name || ' › ' || c.name end as path
+      select c.id, case when p.id is null then c.name else p.name || ${CATEGORY_PATH_SEPARATOR}::text || c.name end as path
       from categories c left join categories p on p.id = c.parent_id
     ),
     spending as (
@@ -143,16 +145,17 @@ function patternsSql(w: Window): SQL {
       group by 1, 2, 3, 4
     ),
     gaps as (
-      select c.*, c.occurred_at - lag(c.occurred_at) over w as gap,
-        row_number() over (partition by c.pattern_key, c.account_id, c.currency order by c.occurred_at desc) as recency
+      select c.*, c.occurred_at - lag(c.occurred_at)
+        over (partition by c.pattern_key, c.account_id, c.currency order by c.occurred_at) as gap
       from charges c
-      window w as (partition by c.pattern_key, c.account_id, c.currency order by c.occurred_at)
     ),
     series as (
       select pattern_key, account_id, currency, count(*)::int as occurrences,
         percentile_disc(0.5) within group (order by gap) as median_gap,
         percentile_disc(0.5) within group (order by amount_cents) as typical_cents,
-        min(occurred_at) as first_date, max(occurred_at) as last_date
+        min(occurred_at) as first_date, max(occurred_at) as last_date,
+        (array_agg(description order by occurred_at desc))[1] as description,
+        (array_agg(transaction_id order by occurred_at desc))[1] as transaction_id
       from gaps
       group by 1, 2, 3
       having count(*) >= ${MIN_OCCURRENCES}
@@ -165,23 +168,20 @@ function patternsSql(w: Window): SQL {
         as b(cadence, lo, hi, grace) on s.median_gap between b.lo and b.hi
     ),
     recurring as (
-      select c.*, latest.description, latest.transaction_id
+      select c.*
       from cadenced c
-      join gaps latest on (latest.pattern_key, latest.account_id, latest.currency) = (c.pattern_key, c.account_id, c.currency)
-        and latest.recency = 1
-      where (
-        select 3 * count(*) filter (where 5 * g.amount_cents between 4 * c.typical_cents and 6 * c.typical_cents) >= 2 * c.occurrences
-          and 3 * count(*) filter (where g.gap between c.lo and c.hi) >= 2 * (c.occurrences - 1)
-        from gaps g
-        where (g.pattern_key, g.account_id, g.currency) = (c.pattern_key, c.account_id, c.currency)
-      )
+      join gaps g using (pattern_key, account_id, currency)
+      group by c.pattern_key, c.account_id, c.currency, c.occurrences, c.median_gap, c.typical_cents, c.first_date,
+        c.last_date, c.description, c.transaction_id, c.cadence, c.lo, c.hi, c.grace, c.next_expected
+      having 3 * count(*) filter (where 5 * g.amount_cents between 4 * c.typical_cents and 6 * c.typical_cents) >= 2 * c.occurrences
+        and 3 * count(*) filter (where g.gap between c.lo and c.hi) >= 2 * (c.occurrences - 1)
     ),
     -- RF-155's «above usual»: a line over three times its category's median in the six months
     -- before its month, once that median rests on three lines.
     cells as (
-      select distinct category_id, currency, month,
+      select category_id, currency, month,
         to_char(to_date(month, 'YYYY-MM') - make_interval(months => ${USUAL_WINDOW_MONTHS}::int), 'YYYY-MM') as from_month
-      from lines where occurred_at >= ${start}::date
+      from spending
     ),
     usual as (
       select c.category_id, c.currency, c.month,
@@ -200,10 +200,11 @@ function patternsSql(w: Window): SQL {
       where l.amount_cents > ${ABOVE_USUAL_FACTOR}::int * u.median_cents
       order by l.transaction_id, l.amount_cents desc
     ),
+    -- Monthly averages: a month with no spending counts as zero.
     growth as (
       select category_id, currency,
-        coalesce(sum(cents) filter (where month >= ${w.recentFrom}), 0) as recent,
-        coalesce(sum(cents) filter (where month < ${w.recentFrom}), 0) as base
+        coalesce(sum(cents) filter (where month >= ${w.recentFrom}), 0)::numeric / nullif(${w.recentCount}::int, 0) as recent,
+        coalesce(sum(cents) filter (where month < ${w.recentFrom}), 0)::numeric / ${w.baselineCount}::int as base
       from spending
       where month < ${w.currentMonth}
       group by 1, 2
@@ -262,15 +263,12 @@ export async function getSpendingPatterns(months: number, today: string = todayI
           limit ${MAX_OUTLIERS}) x) as outliers,
         (select json_agg(json_build_object(
             'categoryId', g.category_id, 'category', n.path, 'currency', g.currency,
-            'recentMonthlyCents', round(g.recent::numeric / nullif(${w.recentCount}::int, 0))::bigint,
-            'baselineMonthlyCents', round(g.base::numeric / ${w.baselineCount}::int)::bigint,
-            'changePercent', round((g.recent * ${w.baselineCount}::int - g.base * ${w.recentCount}::int) * 100::numeric
-              / (g.base * ${w.recentCount}::int))::int
-          ) order by g.currency, g.recent * ${w.baselineCount}::int - g.base * ${w.recentCount}::int desc)
+            'recentMonthlyCents', round(g.recent)::bigint, 'baselineMonthlyCents', round(g.base)::bigint,
+            'changePercent', round((g.recent / g.base - 1) * 100)::int
+          ) order by g.currency, g.recent - g.base desc)
           from growth g
           left join names n on n.id = g.category_id
-          where ${w.recentCount}::int > 0 and g.base > 0
-            and g.recent * ${w.baselineCount}::int * 4 > g.base * ${w.recentCount}::int * 5) as growing`);
+          where g.base > 0 and g.recent * 100 > g.base * ${GROWTH_PERCENT}::int) as growing`);
 
     return {
       today: w.today,
