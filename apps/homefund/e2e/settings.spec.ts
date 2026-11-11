@@ -206,6 +206,22 @@ test("the webhooks screen renders a credential with its own rate limit", async (
   await fixtureSql`delete from webhook_credentials where id = ${credentialId}`;
 });
 
+test("the webhooks screen walks an iPhone Shortcut to the ingest URL (RF-186)", async ({
+  page,
+}) => {
+  await page.goto("/es/settings/webhooks");
+
+  await expect(
+    page.getByRole("heading", { name: messages.webhooks.iphone.heading, exact: true }),
+  ).toBeVisible();
+  await expect(page.locator("#iphone-shortcut-url")).toHaveValue(
+    /\/api\/webhooks\/ingest$/,
+  );
+  await expect(
+    page.getByText(messages.webhooks.iphone.expenseStep5, { exact: true }),
+  ).toBeVisible();
+});
+
 test.describe("the members screen", () => {
   const groupId = randomUUID();
   const leaderId = randomUUID();
