@@ -2,34 +2,27 @@ import assert from "node:assert/strict";
 import { createHmac } from "node:crypto";
 import { test } from "node:test";
 
-import {
-  emailToMessage,
-  keyFromAddresses,
-  readInboundEmail,
-  verifySvixSignature,
-} from "./email";
+import { emailToMessage, keyInPayloads, readInboundEmail, verifySvixSignature } from "./email";
 
-const KEY = "whk_AbC-dEf_123";
+const KEY = `whk_${"AbC-dEf_1".repeat(4)}1234567`;
 
-test("a Resend event and a flat body read the same recipients", () => {
-  const resend = readInboundEmail({
-    type: "email.received",
-    data: { email_id: "e1", to: [`${KEY}@in.example.com`], subject: "S" },
-  });
-  const flat = readInboundEmail({ to: `Yo <${KEY}@in.example.com>`, text: "T" });
-
-  assert.equal(resend?.emailId, "e1");
-  assert.equal(keyFromAddresses(resend?.to ?? []), KEY);
-  assert.equal(keyFromAddresses(flat?.to ?? []), KEY);
+test("Resend's event and a flat body read the same fields", () => {
+  assert.equal(readInboundEmail({ type: "email.received", data: { email_id: "e1" } })?.emailId, "e1");
+  assert.equal(readInboundEmail({ subject: "S", text: "T" })?.text, "T");
   assert.equal(readInboundEmail("nope"), null);
 });
 
-test("the key rides as the local part or as a plus tag, case kept", () => {
-  assert.equal(keyFromAddresses([`casa+${KEY}@in.example.com`]), KEY);
-  assert.equal(keyFromAddresses(["otro@in.example.com"]), null);
+test("the key is found as a recipient, a plus tag or a forwarding header, case kept", () => {
+  assert.equal(keyInPayloads({ data: { to: [`${KEY}@in.example.com`] } }), KEY);
+  assert.equal(keyInPayloads({ to: `Casa <casa+${KEY}@in.example.com>` }), KEY);
+  assert.equal(
+    keyInPayloads({ to: ["yo@gmail.com"] }, { headers: { "x-forwarded-to": `${KEY}@in.example.com` } }),
+    KEY,
+  );
+  assert.equal(keyInPayloads({ to: ["otro@in.example.com"] }), null);
 });
 
-test("a forwarded email keeps the bank's words without the forward header", () => {
+test("a forwarded email drops the forward header and keeps the bank's own date line", () => {
   const message = emailToMessage({
     subject: "RV: Alertas y Notificaciones",
     text: [
@@ -40,26 +33,27 @@ test("a forwarded email keeps the bank's words without the forward header", () =
       "Para: yo@example.com",
       "",
       "> Bancolombia: Compraste $52.300,00 en EXITO",
-      "> con tu T.Deb *1234, el 11/11/2026.",
+      "> Fecha: 10/11/2026",
     ].join("\n"),
     html: "",
   });
 
   assert.equal(
     message,
-    "Alertas y Notificaciones Bancolombia: Compraste $52.300,00 en EXITO con tu T.Deb *1234, el 11/11/2026.",
+    "Alertas y Notificaciones Bancolombia: Compraste $52.300,00 en EXITO Fecha: 10/11/2026",
   );
 });
 
-test("an HTML-only email is read as text and cut to the ingest ceiling", () => {
+test("an HTML-only email decodes its accents and is cut around its amount", () => {
   const message = emailToMessage({
     subject: "",
     text: "",
-    html: `<style>p{}</style><p>Pagaste&nbsp;&#36;10.000</p><div>${"x".repeat(400)}</div>`,
+    html: `<head><title>Banco</title></head><p>${"Hola ".repeat(80)}</p><p>Transacci&oacute;n en CAF&Eacute; por &#x24;12.000</p>`,
   });
 
-  assert.ok(message.startsWith("Pagaste $10.000 x"));
-  assert.equal(message.length, 320);
+  assert.ok(message.includes("Transacción en CAFÉ por $12.000"));
+  assert.ok(!message.includes("Banco"));
+  assert.ok(message.length <= 320);
 });
 
 test("a Svix signature verifies only with its secret, body and a fresh timestamp", () => {

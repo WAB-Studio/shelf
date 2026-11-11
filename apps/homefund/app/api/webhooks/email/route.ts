@@ -1,105 +1,90 @@
-import { recordIngestDelivery } from "@/db/queries/webhook-ingest";
-import { resolveWebhookCredential } from "@/db/queries/webhook-credentials";
+import { authorizeIngest, bearerOf, deliver } from "@/app/api/webhooks/respond";
 import { env } from "@/lib/env";
 import {
   emailToMessage,
-  keyFromAddresses,
+  keyInPayloads,
   readInboundEmail,
   verifySvixSignature,
-  type InboundEmail,
 } from "@/lib/ingest/email";
 import { webhookPayloadSchema } from "@/lib/validation/webhook";
 
 // RF-187: a forwarded bank email lands in the inbox as one more delivery (RF-90).
-// Two callers: Resend Inbound, signed with Svix, whose recipient address carries
-// the webhook key; or any forwarder that sends the key as a bearer.
+// Two callers: Resend Inbound, signed with Svix, whose recipient carries the
+// webhook key; or any forwarder that sends the key as a bearer.
 export const runtime = "nodejs";
 
-const BEARER_PREFIX = "Bearer ";
 const RESEND_RECEIVED_EMAIL_URL = "https://api.resend.com/emails/receiving/";
+const RESEND_TIMEOUT_MS = 5_000;
 
-function unauthorized(): Response {
-  return Response.json({ error: "unauthorized" }, { status: 401 });
+function parseJson(body: string): unknown {
+  try {
+    return JSON.parse(body);
+  } catch {
+    return null;
+  }
 }
 
-// Resend's event carries no body: it is read back by id, with the account's API key.
-async function withBody(email: InboundEmail): Promise<InboundEmail> {
-  if (email.text.trim() || email.html.trim() || !email.emailId || !env.RESEND_API_KEY) {
-    return email;
+// Resend's event carries no body or headers: they are read back by id with the account's API key.
+async function fetchReceivedEmail(emailId: string): Promise<unknown> {
+  if (!env.RESEND_API_KEY) return null;
+  try {
+    const response = await fetch(`${RESEND_RECEIVED_EMAIL_URL}${encodeURIComponent(emailId)}`, {
+      headers: { authorization: `Bearer ${env.RESEND_API_KEY}` },
+      signal: AbortSignal.timeout(RESEND_TIMEOUT_MS),
+    });
+    return response.ok ? await response.json() : null;
+  } catch {
+    return null;
   }
-  const response = await fetch(
-    `${RESEND_RECEIVED_EMAIL_URL}${encodeURIComponent(email.emailId)}`,
-    { headers: { authorization: `Bearer ${env.RESEND_API_KEY}` } },
-  );
-  if (!response.ok) return email;
-  const full = readInboundEmail(await response.json());
-  return full ? { ...email, text: full.text, html: full.html } : email;
 }
 
 export async function POST(request: Request): Promise<Response> {
-  const body = await request.text();
+  const signature = request.headers.get("svix-signature");
 
-  let raw: unknown;
-  try {
-    raw = JSON.parse(body);
-  } catch {
-    return Response.json({ error: "invalid_json" }, { status: 400 });
+  // A bearer caller is resolved before its body is read, as on the ingest route.
+  if (signature === null) {
+    const cred = await authorizeIngest(bearerOf(request));
+    if (cred instanceof Response) return cred;
+    const email = readInboundEmail(parseJson(await request.text()));
+    const parsed = webhookPayloadSchema.safeParse({ text: email && emailToMessage(email) });
+    if (!parsed.success) return Response.json({ error: "invalid_payload" }, { status: 422 });
+    return deliver(cred, parsed.data);
   }
-  const email = readInboundEmail(raw);
-  if (email === null) {
+
+  const body = await request.text();
+  const signed =
+    env.INBOUND_EMAIL_WEBHOOK_SECRET !== undefined &&
+    verifySvixSignature({
+      secret: env.INBOUND_EMAIL_WEBHOOK_SECRET,
+      id: request.headers.get("svix-id"),
+      timestamp: request.headers.get("svix-timestamp"),
+      signature,
+      body,
+      nowSeconds: Math.floor(Date.now() / 1000),
+    });
+  if (!signed) return Response.json({ error: "unauthorized" }, { status: 401 });
+
+  const event = parseJson(body);
+  const email = readInboundEmail(event);
+  if (email === null || email.emailId === null) {
     return Response.json({ error: "invalid_payload" }, { status: 422 });
   }
-
-  // An unsigned call, a bad signature and an unknown key all read the same 401.
-  let token: string | null;
-  const signature = request.headers.get("svix-signature");
-  if (signature !== null) {
-    const signed =
-      env.INBOUND_EMAIL_WEBHOOK_SECRET !== undefined &&
-      verifySvixSignature({
-        secret: env.INBOUND_EMAIL_WEBHOOK_SECRET,
-        id: request.headers.get("svix-id"),
-        timestamp: request.headers.get("svix-timestamp"),
-        signature,
-        body,
-        nowSeconds: Math.floor(Date.now() / 1000),
-      });
-    token = signed ? keyFromAddresses(email.to) : null;
-  } else {
-    const header = request.headers.get("authorization");
-    token = header?.startsWith(BEARER_PREFIX) ? header.slice(BEARER_PREFIX.length) : null;
+  const hasBody = Boolean(email.text.trim() || email.html.trim());
+  const received = hasBody ? null : await fetchReceivedEmail(email.emailId);
+  const full = hasBody ? email : readInboundEmail(received);
+  // A body that did not come back answers 503, so Svix retries instead of storing the subject alone.
+  if (!full || !(full.text.trim() || full.html.trim())) {
+    return Response.json({ error: "body_unavailable" }, { status: 503 });
   }
-  if (!token) return unauthorized();
 
-  const cred = await resolveWebhookCredential(token, "ingest");
-  if (cred === null) return unauthorized();
-  if (cred.throttled) {
-    return Response.json({ error: "rate_limited" }, { status: 429 });
-  }
+  const cred = await authorizeIngest(keyInPayloads(event, received));
+  if (cred instanceof Response) return cred;
 
   const parsed = webhookPayloadSchema.safeParse({
-    text: emailToMessage(await withBody(email)),
+    text: emailToMessage({ ...full, subject: full.subject || email.subject }),
+    // Resend's id: a Svix retry is one delivery, two alerts worded alike are two.
+    external_ref: email.emailId,
   });
-  if (!parsed.success) {
-    return Response.json({ error: "invalid_payload" }, { status: 422 });
-  }
-
-  try {
-    const result = await recordIngestDelivery({
-      ownerUserId: cred.ownerUserId,
-      credentialId: cred.credentialId,
-      defaultAccountId: cred.defaultAccountId,
-      defaultCategoryId: cred.defaultCategoryId,
-      payload: parsed.data,
-    });
-
-    return Response.json(
-      { deliveryId: result.deliveryId, status: result.status, duplicate: result.duplicate },
-      { status: 200 },
-    );
-  } catch {
-    // Never the message: a bank email must not reach the server log.
-    console.error("email ingest failed", { credentialOwner: cred.ownerUserId });
-    return Response.json({ error: "unexpected" }, { status: 500 });
-  }
+  if (!parsed.success) return Response.json({ error: "invalid_payload" }, { status: 422 });
+  return deliver(cred, parsed.data);
 }
