@@ -7,6 +7,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 
 import { revokeWebhookCredentialAction } from "@/app/actions/webhook-credentials";
+import { BankEmails } from "@/components/webhooks/bank-emails";
 import { ClaudeKey } from "@/components/webhooks/claude-key";
 import { IphoneShortcut } from "@/components/webhooks/iphone-shortcut";
 import { WebhookCredentialDialog } from "@/components/webhooks/webhook-credential-dialog";
@@ -66,11 +67,13 @@ export function WebhooksScreen({
   options,
   ingestUrl,
   mcpUrl,
+  oauthLine,
 }: {
   credentials: WebhookCredentialRow[];
   options: WebhookCredentialOptions;
   ingestUrl: string;
   mcpUrl: string;
+  oauthLine: string | null;
 }) {
   const t = useTranslations("webhooks");
   // Root-scoped: `common`'s labels are full catalogue paths.
@@ -244,6 +247,10 @@ export function WebhooksScreen({
           )}
         </Flex>
       </Box>
+
+      <Card>
+        <BankEmails oauthLine={oauthLine} onIssue={() => setIssuing(true)} />
+      </Card>
 
       {/* Shown even with no credential: a person reads what a delivery looks
           like before deciding to issue one. */}

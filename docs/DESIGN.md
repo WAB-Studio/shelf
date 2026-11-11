@@ -521,6 +521,13 @@ Board C1h corrected the same day: a card in credit reads «Según HomeFund −$ 
   «Gasto escrito» (six numbered steps) and «SMS del banco» (three), pointing at the URL of «Cómo enviar un movimiento»,
   and a gray line saying a delivery waits in the Bandeja. Steps name the Shortcuts actions as iOS names them.
 
+## Decisions of 2026-11-11: Gmail's bank emails from the PC, by the user
+
+- «Ajustes · Correos del banco» has a «Correos del banco» card above «Cómo enviar un movimiento»: one line on what it does, six
+  numbered steps for a member who is not technical (step 4 carries «Crear credencial», which opens the same dialog as the
+  table's), and «Datos de Google» with the `<id> <secreto>` line in a copy block, or one gray note when the server has no
+  such data.
+
 ## Decisions of 2026-11-11: HomeFund installed on an iPhone, by the user
 
 - The launch image is the app's mark, a third of the screen's width, centred on `#ffffff` or `#110c20`: what the page
