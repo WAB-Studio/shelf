@@ -30,7 +30,7 @@ import {
 } from "@/db/queries/transactions";
 import { pgConstraintName, pgErrorCode } from "@/lib/db-error";
 import { ActionError } from "@/lib/errors";
-import { parseAmount } from "@/lib/money";
+import { toCents } from "@/lib/money";
 import type { SheetEntity } from "@/lib/spreadsheet/schema";
 import { TIME_ZONE } from "@/lib/locales";
 import type { CreateAccountInput } from "@/lib/validation/account";
@@ -226,17 +226,6 @@ type Cell = string | number | boolean | null;
 // A returning row every insert reads back: the real id the triggers stamped, and the key
 // the same insert wrote or the trigger backfilled.
 type Inserted = { id: string; external_ref: string | null };
-
-// A validated peso string turned into the integer cents the model stores (RNF-05,
-// RF-126); the schema already proved it parses, so a null here would be a schema
-// that let one through. Reads through `parseAmount`, not `parsePesos`, so a row's
-// own centavos — a bank's interest, its 4x1000, a settled foreign purchase —
-// reach the column exactly instead of being rounded away on the way in.
-function toCents(peso: string): number {
-  const cents = parseAmount(peso);
-  if (cents === null) throw new Error("import-commit: an amount reached the writer unparsed");
-  return cents;
-}
 
 // A reference that still holds a placeholder after remapping never reaches a column: a
 // missed link would silently orphan a movement, so it fails the whole transaction (RF-51).

@@ -24,3 +24,22 @@ export function categoriesInScope<T extends { scope: CategoryScope }>(
   if (scope === null) return categories;
   return categories.filter((c) => c.scope === scope);
 }
+
+// A proposed category of another scope than the proposed account is read as no
+// category: the split trigger would refuse it, so it is neither shown nor sent,
+// and the person picks one of the account's own scope (RF-140).
+export function proposedCategoryId(
+  delivery: { proposedCategoryId: string | null; proposedAccountId: string | null },
+  options: {
+    categories: { id: string; scope: CategoryScope; children: readonly { id: string }[] }[];
+    accounts: ScopedAccount[];
+  },
+): string | null {
+  const categoryId = delivery.proposedCategoryId;
+  if (categoryId === null) return null;
+  const category = options.categories.find(
+    (one) => one.id === categoryId || one.children.some((child) => child.id === categoryId),
+  );
+  const scope = scopeOfAccounts([delivery.proposedAccountId], options.accounts);
+  return category && scope !== null && category.scope !== scope ? null : categoryId;
+}

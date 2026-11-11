@@ -10,7 +10,7 @@ import {
   ingestMerchants,
   ingestShapes,
 } from "@/db/schema";
-import { withUserDb } from "@/db/session";
+import { withUserDb, withUserDbOrTx, type Transaction } from "@/db/session";
 
 export type PendingDeliveryRow = {
   id: string;
@@ -31,6 +31,9 @@ export type PendingDeliveryRow = {
   // The proposal is dated before its account opened, so the database would refuse it (MO001).
   beforeOpening: boolean;
   createdAt: Date;
+  // Set once the delivery left the queue: when, and the movement an acceptance wrote.
+  resolvedAt: Date | null;
+  transactionId: string | null;
 };
 
 export type SilencedShapeRow = {
@@ -113,11 +116,11 @@ export function listPendingDeliveries(): Promise<PendingDeliveryRow[]> {
 export async function listDeliveries({
   status = "pending",
   ids,
-  limit = Number.MAX_SAFE_INTEGER,
-  offset = 0,
+  limit,
+  offset,
 }: ListDeliveriesOptions): Promise<PendingDeliveryRow[]> {
   return withUserDb(async (tx) => {
-    const rows = await tx
+    const query = tx
       .select({
         id: ingestDeliveries.id,
         rawText: ingestDeliveries.rawText,
@@ -134,6 +137,8 @@ export async function listDeliveries({
         proposedOccurredAt: ingestDeliveries.proposedOccurredAt,
         proposedDescription: ingestDeliveries.proposedDescription,
         createdAt: ingestDeliveries.createdAt,
+        resolvedAt: ingestDeliveries.resolvedAt,
+        transactionId: ingestDeliveries.transactionId,
         accountOpeningOn: accounts.initialBalanceOn,
       })
       .from(ingestDeliveries)
@@ -151,8 +156,8 @@ export async function listDeliveries({
           : eq(ingestDeliveries.status, status),
       )
       .orderBy(status === "pending" ? asc(ingestDeliveries.createdAt) : desc(ingestDeliveries.createdAt))
-      .limit(limit)
-      .offset(offset);
+      .$dynamic();
+    const rows = await (limit === undefined ? query : query.limit(limit).offset(offset ?? 0));
 
     return rows.map(({ accountOpeningOn, ...row }) => ({
       ...row,
@@ -204,8 +209,8 @@ export async function acceptDelivery({
   splits,
   labelIds,
   contributedByMemberId,
-}: AcceptDeliveryArgs): Promise<{ transactionId: string }> {
-  return withUserDb(async (tx) => {
+}: AcceptDeliveryArgs, outerTx?: Transaction): Promise<{ transactionId: string }> {
+  return withUserDbOrTx(outerTx, async (tx) => {
     const [delivery] = await tx
       .select({
         externalRef: ingestDeliveries.externalRef,
@@ -277,8 +282,8 @@ export async function acceptDelivery({
 export async function rejectDelivery({
   deliveryId,
   silenceShape,
-}: RejectDeliveryArgs): Promise<void> {
-  return withUserDb(async (tx) => {
+}: RejectDeliveryArgs, outerTx?: Transaction): Promise<void> {
+  return withUserDbOrTx(outerTx, async (tx) => {
     const [delivery] = await tx
       .update(ingestDeliveries)
       .set({ status: "rejected", resolvedAt: sql`now()` })

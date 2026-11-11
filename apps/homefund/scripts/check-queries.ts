@@ -4131,6 +4131,7 @@ async function main(): Promise<void> {
   await receiptLinesSuite();
   await mcpCleanupSuite();
   await mcpInboxSuite();
+  await mcpInboxReviewSuite();
 }
 
 // A member recorded without a login is someone in the fund: a leader whose fund holds one is not alone, so an
@@ -17286,4 +17287,96 @@ async function mcpInboxSuite(): Promise<void> {
   );
 
   await fixtureSql`delete from ingest_deliveries where owner_user_id in (${owner.id}, ${stranger.id})`;
+}
+
+// RF-177 review: a lone side, a transfer's missing side, an archived account, a date before the opening, a category the card would not read, and what a resolved delivery lists.
+async function mcpInboxReviewSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const { POST } = await import("@/app/mcp/route");
+  const owner = await createMembershipFreeUser();
+  const mkAccount = (name: string) =>
+    asUser(owner, () =>
+      createAccount({
+        kind: "asset", subtype: "bank", groupId: null, isShared: false, institution: null, settlementCurrency: BASE_CURRENCY,
+        balanceOn: "2026-01-01", ownerUserId: owner.id, name: `Harness rf177b ${name} ${tag}`, amountMinor: 1_000_000_00,
+      }),
+    );
+  const [main, savings, old] = [await mkAccount("a"), await mkAccount("b"), await mkAccount("vieja")];
+  for (const row of [main, savings, old]) track("accounts", row.accountId);
+  const category = randomUUID();
+  await fixtureSql`insert into categories (id, owner_user_id, name, kind, color) values (${category}, ${owner.id}, ${`Harness rf177b Comida ${tag}`}, 'expense', ${CATEGORY_COLORS[0]})`;
+  track("categories", category);
+  const deliver = (name: string, account: string, source: string | null, date = "2026-03-10") =>
+    fixtureSql.begin(async (tx) => {
+      await tx`select set_config('request.jwt.claims', ${JSON.stringify({ sub: owner.id, role: "authenticated", aud: "authenticated" })}, true)`;
+      const [row] = await tx<{ id: string }[]>`
+        insert into ingest_deliveries (external_ref, raw_text, shape_hash, proposed_amount_cents, proposed_account_id, proposed_category_id,
+          category_source, proposed_direction, proposed_occurred_at, proposed_description)
+        values (${`harness-rf177b-${name}-${tag}`}, ${`Harness rf177b ${name}`}, ${createHash("sha256").update(`rf177b-${name}-${tag}`).digest("hex")},
+          ${4_000_00}, ${account}, ${category}, ${source}, 'expense', ${date}, ${`Harness rf177b ${name}`})
+        returning id`;
+      return row.id;
+    });
+  const [lone, transfer, archived, early, byDefault] = [
+    await deliver("lado", main.accountId, "interpreter"),
+    await deliver("traslado", main.accountId, "merchant"),
+    await deliver("archivada", old.accountId, "merchant"),
+    await deliver("antes", main.accountId, "merchant", "2026-03-11"),
+    await deliver("defecto", main.accountId, "credential_default", "2026-03-12"),
+  ];
+  await fixtureSql`update accounts set archived_at = now() where id = ${old.accountId}`;
+  const { id: keyId, token } = await asUser(owner, () =>
+    issueWebhookCredential({ name: `Harness rf177b ${tag}`, purpose: "mcp", defaultAccountId: null, defaultCategoryId: null }),
+  );
+  keep("webhook_credentials", keyId);
+  const { tool } = mcpClient(POST, token);
+  const status = async (id: string) => (await fixtureSql`select status from ingest_deliveries where id = ${id}`)[0]?.status as string;
+  type Listed = { id: string; notDetected?: string[]; resolvedAt?: string; transactionId?: string | null; beforeAccountOpening?: boolean; proposal: { accountName: string | null } }[];
+  const pending = (await tool("list_inbox")).value as Listed;
+  const notDetected = (id: string) => pending.find((row) => row.id === id)?.notDetected ?? [];
+  assert(
+    next("RF-177: list_inbox reads the proposal as the card does: an archived account and a category not named by the merchant or interpreter are not detected, and the account is still named"),
+    notDetected(archived).includes("account") && pending.find((row) => row.id === archived)?.proposal.accountName?.includes("vieja") === true &&
+      notDetected(byDefault).includes("category") && !notDetected(lone).includes("category") && !notDetected(lone).includes("account"),
+    `archived ${notDetected(archived)}, default ${notDetected(byDefault)}, lone ${notDetected(lone)}`,
+  );
+
+  const refusals = await Promise.all([
+    tool("accept_deliveries", { deliveries: [{ id: lone, fromAccountId: main.accountId }] }),
+    tool("accept_deliveries", { deliveries: [{ id: archived }] }),
+    tool("accept_deliveries", { deliveries: [{ id: early, date: "2025-12-01" }] }),
+    tool("accept_deliveries", { deliveries: [{ id: lone }, { id: "no-uuid" }] }),
+  ]);
+  const named = refusals.map((r) => (r.value as { deliveryId?: string }).deliveryId);
+  assert(
+    next("RF-177: a lone side without kind transfer, an archived account, a date before the opening and a bad id are each refused naming the delivery, writing nothing"),
+    refusals.every((r) => r.isError) && named[0] === lone && named[1] === archived && named[2] === early && named[3] === "no-uuid" &&
+      (await status(lone)) === "pending" && (await status(early)) === "pending",
+    `refusals ${JSON.stringify(refusals.map((r) => r.value))}`,
+  );
+
+  const moved = await tool("accept_deliveries", { deliveries: [{ id: transfer, kind: "transfer", toAccountId: savings.accountId }] });
+  const [booked] = await fixtureSql`
+    select t.from_account_id, t.to_account_id from transactions t join ingest_deliveries d on d.transaction_id = t.id where d.id = ${transfer}`;
+  const revived = await tool("accept_deliveries", { deliveries: [{ id: archived, accountId: main.accountId }] });
+  for (const id of [transfer, archived]) {
+    const row = (await fixtureSql`select transaction_id from ingest_deliveries where id = ${id}`)[0];
+    if (row?.transaction_id) track("transactions", row.transaction_id as string);
+  }
+  assert(
+    next("RF-177: kind transfer takes the missing side from the proposal's account, and an override rescues an archived proposal"),
+    !moved.isError && booked?.from_account_id === main.accountId && booked.to_account_id === savings.accountId && !revived.isError,
+    `moved ${JSON.stringify(moved.value)}, revived ${JSON.stringify(revived.value)}`,
+  );
+
+  const done = (await tool("list_inbox", { status: "accepted" })).value as Listed;
+  const first = done.find((row) => row.id === transfer);
+  assert(
+    next("RF-177: a resolved delivery lists its movement and resolvedAt and carries neither notDetected nor beforeAccountOpening"),
+    typeof first?.transactionId === "string" && typeof first.resolvedAt === "string" && first.notDetected === undefined && first.beforeAccountOpening === undefined,
+    `listed ${JSON.stringify(first)}`,
+  );
+
+  await fixtureSql`delete from ingest_deliveries where owner_user_id = ${owner.id}`;
 }

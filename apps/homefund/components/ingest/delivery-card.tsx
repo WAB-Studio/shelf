@@ -38,7 +38,7 @@ import type { TransactionFormOptions } from "@/db/queries/transaction-form";
 import { civilDateToDate, todayInBogota } from "@/lib/dates";
 import { categoryNamesById } from "@/lib/fund/category-names";
 import { deliveryCurrency } from "@/lib/fund/glance";
-import { scopeOfAccounts } from "@/lib/fund/category-scope";
+import { proposedCategoryId } from "@/lib/fund/category-scope";
 import { centsToDecimal } from "@/lib/money";
 import { useActionErrorToast } from "@/lib/use-action-toast";
 import type { AcceptDeliveryInput } from "@/lib/validation/ingest";
@@ -51,26 +51,6 @@ type ReviewDefaults = {
   description: string | null;
   splits: { categoryId: string; amount: string }[];
 };
-
-// A proposed category of another scope than the proposed account is read as no
-// category: the split trigger would refuse it, so it is neither shown nor sent,
-// and the person picks one of the account's own scope (RF-140).
-function proposedCategoryId(
-  delivery: PendingDeliveryRow,
-  options: TransactionFormOptions,
-): string | null {
-  const categoryId = delivery.proposedCategoryId;
-  if (categoryId === null) return null;
-  const category = options.categories.find(
-    (one) =>
-      one.id === categoryId ||
-      one.children.some((child) => child.id === categoryId),
-  );
-  const scope = scopeOfAccounts([delivery.proposedAccountId], options.accounts);
-  return category && scope !== null && category.scope !== scope
-    ? null
-    : categoryId;
-}
 
 function movementDefaults(
   delivery: PendingDeliveryRow,

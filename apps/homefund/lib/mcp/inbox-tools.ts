@@ -3,8 +3,8 @@ import "server-only";
 import type { CallToolResult, McpServer, ServerContext } from "@modelcontextprotocol/server";
 import { z } from "zod";
 
-import { listAccounts } from "@/db/queries/accounts";
-import { listScopedCategories } from "@/db/queries/categories";
+import { listAccountNames, type AccountNameRow } from "@/db/queries/accounts";
+import { listScopedCategories, type ScopedCategoryNode } from "@/db/queries/categories";
 import {
   acceptDelivery,
   DeliveryNotPending,
@@ -12,12 +12,14 @@ import {
   rejectDelivery,
   type PendingDeliveryRow,
 } from "@/db/queries/ingest-review";
-import { mapTransactionError } from "@/db/queries/ledger-write";
-import { withSharedTransaction } from "@/db/session";
+import { assertContributorGiven, mapTransactionError } from "@/db/queries/ledger-write";
+import { withSharedTransaction, withUserDb } from "@/db/session";
 import { todayInBogota } from "@/lib/dates";
 import { ActionError } from "@/lib/errors";
 import { categoryNamesById, categoryPathsById } from "@/lib/fund/category-names";
-import { centsToDecimal, parseAmount } from "@/lib/money";
+import { proposedCategoryId } from "@/lib/fund/category-scope";
+import { centsToDecimal, toCents } from "@/lib/money";
+import { pgErrorCode } from "@/lib/db-error";
 import { acceptDeliverySchema } from "@/lib/validation/ingest";
 
 type Say = (key: string) => string;
@@ -50,39 +52,74 @@ const acceptItem = z.object({
     .optional(),
   description: z.string().nullable().optional(),
   date: z.string().optional(),
+  contributedByMemberId: z.string().nullish(),
 });
 
 type AcceptItem = z.infer<typeof acceptItem>;
 
-function toCents(amount: string): number {
-  const cents = parseAmount(amount);
-  if (cents === null) throw new ActionError("errors.unexpected");
-  return cents;
+// What the tools need to read a proposal as the screen does: every account by id, archived ones too,
+// and the categories with their scope.
+type Lookup = { accounts: Map<string, AccountNameRow>; categories: ScopedCategoryNode[] };
+
+async function readLookup(owner: string): Promise<Lookup> {
+  const [accounts, categories] = await Promise.all([listAccountNames(), listScopedCategories(owner)]);
+  return { accounts: new Map(accounts.map((account) => [account.id, account])), categories };
+}
+
+// The proposed account when it can still take a movement: an archived one reads as none.
+function usableAccount(delivery: PendingDeliveryRow, lookup: Lookup): string | null {
+  const account = delivery.proposedAccountId === null ? undefined : lookup.accounts.get(delivery.proposedAccountId);
+  return account && !account.archived ? account.id : null;
+}
+
+// Read exactly as the card reads it (RF-140): a category outside the account's scope is no category.
+function proposedCategory(delivery: PendingDeliveryRow, lookup: Lookup): string | null {
+  return proposedCategoryId(delivery, { categories: lookup.categories, accounts: [...lookup.accounts.values()] });
+}
+
+// What the message did not give, by the card's own rule: a category counts only when the merchant or the
+// interpreter named it, and an income into a fund account still asks «De quién».
+function notDetectedOf(delivery: PendingDeliveryRow, lookup: Lookup): string[] {
+  const account = delivery.proposedAccountId === null ? undefined : lookup.accounts.get(delivery.proposedAccountId);
+  const named = delivery.categorySource === "merchant" || delivery.categorySource === "interpreter";
+  const absent: Record<string, boolean> = {
+    amount: delivery.proposedAmountCents === null,
+    kind: delivery.proposedDirection === null,
+    account: usableAccount(delivery, lookup) === null,
+    category: proposedCategory(delivery, lookup) === null || !named,
+    date: delivery.proposedOccurredAt === null,
+    description: delivery.proposedDescription === null,
+    contributor: delivery.proposedDirection === "income" && account?.groupId != null,
+  };
+  return Object.keys(absent).filter((field) => absent[field]);
 }
 
 // The form a person would have submitted from the card: the proposal, with each override laid over it.
 // A field neither side gives is refused by name, before anything is written.
-function acceptForm(delivery: PendingDeliveryRow, item: AcceptItem) {
+function acceptForm(delivery: PendingDeliveryRow, item: AcceptItem, lookup: Lookup) {
   const missing = (field: string): never => {
     throw new BatchRefusal(`mcp.errors.inbox.missing.${field}`, delivery.id, field);
   };
   const amountCents = item.amountCents ?? delivery.proposedAmountCents ?? missing("amount");
-  const transfer = item.kind === "transfer" || (item.kind === undefined && item.fromAccountId && item.toAccountId);
+  const transfer = item.kind === "transfer" || (item.kind === undefined && !!item.fromAccountId && !!item.toAccountId);
+  if (!transfer && (item.fromAccountId || item.toAccountId)) {
+    throw new BatchRefusal("mcp.errors.inbox.sideNeedsTransfer", delivery.id);
+  }
   const income = (item.kind ?? delivery.proposedDirection) === "income";
-  const accountId = item.accountId ?? delivery.proposedAccountId;
+  const proposed = usableAccount(delivery, lookup);
 
   let fromAccountId: string | null;
   let toAccountId: string | null;
   if (transfer) {
-    fromAccountId = item.fromAccountId ?? missing("fromAccount");
-    toAccountId = item.toAccountId ?? missing("toAccount");
+    fromAccountId = item.fromAccountId ?? proposed ?? missing("fromAccount");
+    toAccountId = item.toAccountId ?? (item.fromAccountId ? proposed : null) ?? missing("toAccount");
   } else {
-    const own = accountId ?? missing("account");
+    const own = item.accountId ?? proposed ?? missing("account");
     fromAccountId = income ? null : own;
     toAccountId = income ? own : null;
   }
 
-  const categoryId = item.categoryId ?? delivery.proposedCategoryId;
+  const categoryId = item.categoryId ?? proposedCategory(delivery, lookup);
   const lines = item.splits ?? (categoryId ? [{ categoryId, amountCents }] : []);
   if (!transfer && lines.length === 0) missing("category");
 
@@ -93,6 +130,7 @@ function acceptForm(delivery: PendingDeliveryRow, item: AcceptItem) {
     amount: centsToDecimal(amountCents),
     occurredAt: item.date ?? delivery.proposedOccurredAt ?? todayInBogota(),
     description: item.description === undefined ? delivery.proposedDescription : item.description,
+    contributedByMemberId: item.contributedByMemberId,
     splits: transfer
       ? []
       : lines.map((line) => ({
@@ -104,17 +142,21 @@ function acceptForm(delivery: PendingDeliveryRow, item: AcceptItem) {
   };
 }
 
+// Whatever stops a batch answers as a refusal naming the delivery that stopped it.
 function refuse(deliveryId: string, error: unknown): never {
   if (error instanceof BatchRefusal) throw error;
   if (error instanceof DeliveryNotPending) throw new BatchRefusal("errors.notFound", deliveryId);
   if (error instanceof ActionError) throw new BatchRefusal(error.messageKey, deliveryId);
+  const code = pgErrorCode(error);
+  if (code === "MO001") throw new BatchRefusal("errors.movementBeforeOpening", deliveryId);
+  if (code === "23505") throw new BatchRefusal("mcp.errors.inbox.duplicate", deliveryId);
   try {
     mapTransactionError(error);
   } catch (mapped) {
     if (mapped instanceof ActionError) throw new BatchRefusal(mapped.messageKey, deliveryId);
-    throw mapped;
+    console.error("mcp inbox failed:", mapped instanceof Error ? mapped.name : "unknown", pgErrorCode(mapped) ?? "");
+    throw new BatchRefusal("mcp.errors.unknown", deliveryId);
   }
-  throw error;
 }
 
 // Every id must name one of the person's own pending deliveries: a stranger's, a resolved one and a
@@ -148,46 +190,39 @@ export function registerInboxTools(server: McpServer, run: Run, t: Say): void {
       annotations: { readOnlyHint: true },
     },
     (input: { status?: "pending" | "accepted" | "rejected"; limit?: number; offset?: number }, ctx) =>
-      run(ctx, async (owner) => {
-        const [rows, accounts, categories] = await Promise.all([
-          listDeliveries({ status: input.status, limit: input.limit ?? 50, offset: input.offset }),
-          listAccounts({ archived: false }),
-          listScopedCategories(owner),
-        ]);
-        const accountById = new Map(accounts.map((account) => [account.id, account]));
-        const paths = categoryPathsById(categories, categoryNamesById(categories, (name) => name));
-        return rows.map((row) => {
-          const account = row.proposedAccountId === null ? undefined : accountById.get(row.proposedAccountId);
-          const proposal = {
-            amountCents: row.proposedAmountCents,
-            currency: account?.settlementCurrency ?? null,
-            kind: row.proposedDirection,
-            accountId: row.proposedAccountId,
-            accountName: account?.name ?? null,
-            categoryId: row.proposedCategoryId,
-            categoryPath: row.proposedCategoryId === null ? null : (paths.get(row.proposedCategoryId) ?? null),
-            date: row.proposedOccurredAt,
-            description: row.proposedDescription,
-          };
-          const absent = {
-            amount: proposal.amountCents,
-            kind: proposal.kind,
-            account: proposal.accountId,
-            category: proposal.categoryId,
-            date: proposal.date,
-            description: proposal.description,
-          };
-          return {
-            id: row.id,
-            receivedAt: row.createdAt,
-            rawText: row.rawText,
-            proposal,
+      run(ctx, (owner) =>
+        withSharedTransaction(async () => {
+          const status = input.status ?? "pending";
+          const [rows, lookup] = await Promise.all([
+            listDeliveries({ status, limit: input.limit ?? 50, offset: input.offset }),
+            readLookup(owner),
+          ]);
+          const paths = categoryPathsById(lookup.categories, categoryNamesById(lookup.categories, (name) => name));
+          return rows.map((row) => {
+            const account = row.proposedAccountId === null ? undefined : lookup.accounts.get(row.proposedAccountId);
+            const categoryId = proposedCategory(row, lookup);
+            const base = {
+              id: row.id,
+              receivedAt: row.createdAt,
+              rawText: row.rawText,
+              proposal: {
+                amountCents: row.proposedAmountCents,
+                currency: account?.settlementCurrency ?? null,
+                kind: row.proposedDirection,
+                accountId: row.proposedAccountId,
+                accountName: account?.name ?? null,
+                categoryId,
+                categoryPath: categoryId === null ? null : (paths.get(categoryId) ?? null),
+                date: row.proposedOccurredAt,
+                description: row.proposedDescription,
+              },
+            };
+            if (status !== "pending") return { ...base, resolvedAt: row.resolvedAt, transactionId: row.transactionId };
             // What the message did not give: Claude fills these in the list it shows, never silently.
-            notDetected: Object.entries(absent).filter(([, value]) => value === null).map(([field]) => field),
-            beforeAccountOpening: row.beforeOpening,
-          };
-        });
-      }),
+            return { ...base, notDetected: notDetectedOf(row, lookup), beforeAccountOpening: row.beforeOpening };
+          });
+        }),
+      ),
   );
 
   server.registerTool(
@@ -198,35 +233,47 @@ export function registerInboxTools(server: McpServer, run: Run, t: Say): void {
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
     },
     (input: { deliveries: AcceptItem[] }, ctx) =>
-      run(ctx, async () => {
-        const pending = await loadPending(input.deliveries.map((item) => item.id));
-        // Everything is read and validated first; the writes then share one transaction, so a refusal
-        // anywhere leaves every delivery pending and no movement written.
-        const forms = input.deliveries.map((item) => {
-          const form = acceptForm(pending.get(item.id)!, item);
-          const verdict = acceptDeliverySchema.safeParse(form);
-          if (!verdict.success) throw new BatchRefusal(verdict.error.issues[0].message, item.id);
-          return verdict.data;
-        });
-        return withSharedTransaction(async () => {
+      run(ctx, async (owner) => {
+        // Everything is read and validated first, each item by the form's own schema and contributor rule;
+        // the writes then share one transaction, so a refusal anywhere leaves every delivery pending.
+        const [pending, lookup] = await withSharedTransaction(() =>
+          Promise.all([loadPending(input.deliveries.map((item) => item.id)), readLookup(owner)]),
+        );
+        const forms = await Promise.all(
+          input.deliveries.map(async (item) => {
+            try {
+              const form = acceptForm(pending.get(item.id)!, item, lookup);
+              const verdict = acceptDeliverySchema.safeParse(form);
+              if (!verdict.success) throw new BatchRefusal(verdict.error.issues[0].message, item.id);
+              await assertContributorGiven(verdict.data);
+              return verdict.data;
+            } catch (error) {
+              return refuse(item.id, error);
+            }
+          }),
+        );
+        return withUserDb(async (tx) => {
           const accepted: { deliveryId: string; transactionId: string }[] = [];
           for (const form of forms) {
             try {
-              const { transactionId } = await acceptDelivery({
-                deliveryId: form.deliveryId,
-                fromAccountId: form.fromAccountId,
-                toAccountId: form.toAccountId,
-                amountCents: toCents(form.amount),
-                occurredAt: form.occurredAt,
-                description: form.description,
-                splits: form.splits.map((split) => ({
-                  categoryId: split.categoryId,
-                  amountCents: toCents(split.amount),
-                  description: split.description,
-                })),
-                labelIds: form.labelIds,
-                contributedByMemberId: form.contributedByMemberId ?? null,
-              });
+              const { transactionId } = await acceptDelivery(
+                {
+                  deliveryId: form.deliveryId,
+                  fromAccountId: form.fromAccountId,
+                  toAccountId: form.toAccountId,
+                  amountCents: toCents(form.amount),
+                  occurredAt: form.occurredAt,
+                  description: form.description,
+                  splits: form.splits.map((split) => ({
+                    categoryId: split.categoryId,
+                    amountCents: toCents(split.amount),
+                    description: split.description,
+                  })),
+                  labelIds: form.labelIds,
+                  contributedByMemberId: form.contributedByMemberId ?? null,
+                },
+                tx,
+              );
               accepted.push({ deliveryId: form.deliveryId, transactionId });
             } catch (error) {
               refuse(form.deliveryId, error);
@@ -247,10 +294,10 @@ export function registerInboxTools(server: McpServer, run: Run, t: Say): void {
     (input: { ids: string[] }, ctx) =>
       run(ctx, async () => {
         await loadPending(input.ids);
-        return withSharedTransaction(async () => {
+        return withUserDb(async (tx) => {
           for (const id of input.ids) {
             try {
-              await rejectDelivery({ deliveryId: id, silenceShape: false });
+              await rejectDelivery({ deliveryId: id, silenceShape: false }, tx);
             } catch (error) {
               refuse(id, error);
             }
