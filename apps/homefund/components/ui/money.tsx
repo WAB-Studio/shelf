@@ -66,15 +66,37 @@ export type MoneyProps = {
  * stored integer in, the currency's own figure out — no screen divides by the
  * stored scale, none writes the currency's mark and none writes its own sign.
  */
-export function Money({
+export function Money(props: MoneyProps) {
+  const { tone = "plain", size = "row", words } = props;
+  const figure = useMoneyFigure(props);
+
+  return (
+    <span
+      style={{
+        ...SIZE_STYLE[size],
+        color: TONE_COLOR[tone],
+        fontVariantNumeric: "tabular-nums",
+        whiteSpace: "nowrap",
+      }}
+    >
+      {words?.before}
+      {figure}
+      {words?.after}
+    </span>
+  );
+}
+
+/**
+ * The text `Money` draws for these props, mask and sign included: what a caller
+ * that sizes a figure by its length measures, so it never re-derives the sign.
+ */
+export function useMoneyFigure({
   minor: amountMinor,
   currency,
   tone = "plain",
-  size = "row",
   signed = true,
   estimate = false,
-  words,
-}: MoneyProps) {
+}: MoneyProps): string {
   const locale = useLocale();
   const { hidden } = usePrivacy();
 
@@ -97,20 +119,5 @@ export function Money({
             ? MINUS
             : "";
 
-  const figure = `${estimate ? `${APPROXIMATELY}\u00a0` : ""}${sign}${formatMoneyMasked(amountMinor, currency, locale, hidden)}`;
-
-  return (
-    <span
-      style={{
-        ...SIZE_STYLE[size],
-        color: TONE_COLOR[tone],
-        fontVariantNumeric: "tabular-nums",
-        whiteSpace: "nowrap",
-      }}
-    >
-      {words?.before}
-      {figure}
-      {words?.after}
-    </span>
-  );
+  return `${estimate ? `${APPROXIMATELY}\u00a0` : ""}${sign}${formatMoneyMasked(amountMinor, currency, locale, hidden)}`;
 }
