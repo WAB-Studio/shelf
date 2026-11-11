@@ -1467,3 +1467,41 @@ test.describe("a card in credit with a dollar purchase, and the next payment", (
     });
   }
 });
+
+test.describe("a long debt with a wide balance on a narrow phone", () => {
+  const longId = randomUUID();
+  const longName = `Crédito hipotecario del apartamento de Chapinero ${stamp}`;
+
+  test.beforeAll(async () => {
+    await asHarnessUser(async (tx) => {
+      await tx`
+        insert into accounts (
+          id, owner_user_id, name, kind, subtype, initial_balance_cents, initial_balance_on)
+        values (${longId}, ${scope.userId}, ${longName}, 'liability', 'loan', -98765432198,
+          (now() at time zone ${TIME_ZONE})::date)`;
+    });
+  });
+
+  test.afterAll(async () => {
+    await asHarnessUser(async (tx) => {
+      await tx`delete from accounts where id = ${longId}`;
+    });
+  });
+
+  test("keeps the name at least 7rem wide and the balance inside the card @mobile", async ({
+    page,
+  }, testInfo) => {
+    // Kills: the balance holding the name's row, which stacked «Crédito / hipotecario / del / …» a word per line.
+    test.skip(testInfo.project.name !== "mobile", "the phone's cards");
+    await page.goto("/es/planning/debts");
+
+    const name = page.getByText(longName, { exact: true }).filter({ visible: true });
+    const card = page.locator(".rt-Card").filter({ visible: true }).filter({ has: name });
+    const balance = card.getByText(/987\.654\.321/).first();
+    await expect(balance).toBeVisible();
+
+    expect((await name.boundingBox())!.width).toBeGreaterThanOrEqual(112);
+    const [balanceBox, cardBox] = await Promise.all([balance.boundingBox(), card.boundingBox()]);
+    expect(balanceBox!.x + balanceBox!.width).toBeLessThanOrEqual(cardBox!.x + cardBox!.width);
+  });
+});

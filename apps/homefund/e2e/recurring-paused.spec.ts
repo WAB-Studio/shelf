@@ -98,3 +98,24 @@ test("resuming a rule the run paused takes the line away, and it stays gone afte
   await expect(row(page)).toBeVisible();
   await expect(page.getByText(FAILED_LINE)).toHaveCount(0);
 });
+
+test.describe("a wide amount on a narrow phone", () => {
+  test("keeps the rule's title readable and the amount inside the card @mobile", async ({
+    page,
+  }, testInfo) => {
+    // Kills: the amount refusing to give its line away, which cut the title to «Suscri…».
+    test.skip(testInfo.project.name !== "mobile", "the phone's cards");
+    await seed({ active: true, reason: null });
+    await fixtureSql`update recurring_rules set amount_cents = 2345678901 where id = ${ids.rule}`;
+    await page.goto("/es/planning/recurring");
+
+    const title = page.getByText(RULE, { exact: true }).filter({ visible: true });
+    const card = page.locator(".rt-Card").filter({ visible: true }).filter({ has: title });
+    const amount = card.getByText(/23\.456\.789/);
+    await expect(amount).toBeVisible();
+
+    expect((await title.boundingBox())!.width).toBeGreaterThanOrEqual(80);
+    const [amountBox, cardBox] = await Promise.all([amount.boundingBox(), card.boundingBox()]);
+    expect(amountBox!.x + amountBox!.width).toBeLessThanOrEqual(cardBox!.x + cardBox!.width);
+  });
+});

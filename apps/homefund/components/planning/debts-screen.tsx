@@ -611,7 +611,8 @@ function CardHead({
 
   return (
     <Flex direction="column" gap="2">
-      <Flex align="center" gap="3">
+      {/* The name keeps 7rem; past that a wide figure drops to its own line on the right. */}
+      <Flex align="center" gap="3" wrap="wrap">
         <Disc
           size={42}
           radius={5}
@@ -620,7 +621,7 @@ function CardHead({
         >
           <Icon size={20} />
         </Disc>
-        <Flex direction="column" flexGrow="1" minWidth="0">
+        <Flex direction="column" flexGrow="1" flexBasis="7rem" minWidth="0">
           <Flex align="center" gap="2" minWidth="0">
             <Text weight="bold">{name}</Text>
             <OwnerMark personal={personal} foreignOwner={foreignOwner} ownerName={ownerName} />
@@ -630,7 +631,7 @@ function CardHead({
           </Text>
         </Flex>
         {!beside && (
-          <Flex direction="column" align="end">
+          <Flex direction="column" align="end" ml="auto">
             <PocketFigure
               owedCents={owedCents}
               creditCents={creditCents}

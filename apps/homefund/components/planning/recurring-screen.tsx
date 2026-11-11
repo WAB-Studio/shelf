@@ -283,11 +283,12 @@ function RuleCard({
 
   return (
     <Card>
-      <ToneSurface align="center" gap="3" faded={!rule.isActive}>
+      {/* The title keeps 7rem; past that a wide amount drops to its own line on the right. */}
+      <ToneSurface align="center" gap="3" wrap="wrap" faded={!rule.isActive}>
         <Disc size={40} surface="var(--accent-a3)" ink="var(--accent-11)">
           <Repeat size={19} />
         </Disc>
-        <Flex direction="column" gap="1" flexGrow="1" minWidth="0">
+        <Flex direction="column" gap="1" flexGrow="1" flexBasis="7rem" minWidth="0">
           <Flex align="center" gap="2">
             <Text size="3" weight="medium" truncate>
               {rule.description ?? t("noConcept")}
@@ -306,6 +307,7 @@ function RuleCard({
           weight="medium"
           color={isIncome ? "grass" : undefined}
           nowrap
+          ml="auto"
         >
           {moneyText(rule.amountCents, rule.currency, locale)}
         </Figure>
