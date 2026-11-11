@@ -9,7 +9,6 @@ import {
   chartColor,
   isRedish,
   dayNet,
-  groupByDay,
   nearestLimit,
   nextDebtPayment,
   shares,
@@ -60,18 +59,6 @@ test("topWithRest folds the tail into one remainder", () => {
 test("averageOfActive ignores empty months", () => {
   assert.equal(averageOfActive([0, 100, 300, 0]), 200);
   assert.equal(averageOfActive([0, 0]), null);
-});
-
-test("groupByDay keeps first-seen order", () => {
-  const groups = groupByDay([
-    { occurredAt: "2026-10-30", n: 1 },
-    { occurredAt: "2026-10-30", n: 2 },
-    { occurredAt: "2026-10-29", n: 3 },
-  ]);
-  assert.deepEqual(groups.map((group) => [group.date, group.rows.length]), [
-    ["2026-10-30", 2],
-    ["2026-10-29", 1],
-  ]);
 });
 
 test("budgetTotals sums per currency and never across them", () => {

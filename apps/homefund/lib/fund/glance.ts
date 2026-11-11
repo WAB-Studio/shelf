@@ -114,20 +114,6 @@ export function averageOfActive(values: number[]): number | null {
   return Math.round(active.reduce((sum, value) => sum + value, 0) / active.length);
 }
 
-export type DayGroup<T> = { date: string; rows: T[] };
-
-// Rows already in ledger order grouped by their civil date, in the order the
-// dates first appear.
-export function groupByDay<T extends { occurredAt: string }>(rows: T[]): DayGroup<T>[] {
-  const groups: DayGroup<T>[] = [];
-  for (const row of rows) {
-    const last = groups[groups.length - 1];
-    if (last && last.date === row.occurredAt) last.rows.push(row);
-    else groups.push({ date: row.occurredAt, rows: [row] });
-  }
-  return groups;
-}
-
 /**
  * One running total per currency, in the order the rows introduce them, so a line never
  * adds two currencies together (RF-124). Every row hands over its currency and the

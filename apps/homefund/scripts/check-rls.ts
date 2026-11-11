@@ -5966,7 +5966,7 @@ async function checkGroupMemberUserIdLock() {
         `claim returned ${claimedId ?? "null"}, row visible to the caller = ${claimedRow ? "yes" : "no"}`,
       );
 
-      // The acceptance M68 writes, run as the owner so 181 and 182 keep a member to attack with.
+      // The acceptance the definer functions write, run as the owner so 181 and 182 keep a member to attack with.
       await tx.execute(dsql`reset role`);
       await tx.execute(
         dsql`update group_members set user_id = ${memberUser}, invite_email = null, invite_state = 'accepted'
@@ -11766,7 +11766,7 @@ async function checkMemberAddress() {
   );
 }
 
-// Assertions 389-394: why a rule is paused (M49). `paused_reason` is the run's to write: the app
+// Assertions 389-394: why a rule is paused. `paused_reason` is the run's to write: the app
 // reads it and its person cannot forge it, on insert or update; the column admits only 'failed'; the
 // run writes it when a rule's generation raises and writes nothing for a rule that merely ended.
 // The run is scoped to the fixture's own user, so no other tenant's due rule is touched.
@@ -11864,7 +11864,7 @@ async function checkRecurringPauseReason() {
 //   - `group_members.invite_state` is text, 'pending' | 'accepted' | 'declined', not null.
 //   - A row the leader inserts with an `invite_email`, exactly as the app does today, reads 'pending'.
 //   - A pending row has no `user_id`; an accepted row has one and no `invite_email`; a declined row is archived.
-//   - Accepting and declining are written by the server (the definer functions of M68), never by a caller's
+//   - Accepting and declining are written by the server (the definer functions), never by a caller's
 //     own UPDATE: the rows here write them as the owner, after `reset role`.
 //   - Signing in (`private.claim_group_invite()`, today's claim) joins nobody.
 // The sign-in path is driven in every setup as today's "claimed" contrast; the rows say what it must leave.

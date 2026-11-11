@@ -43,18 +43,6 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* A row that is a real button; strip the user-agent chrome so it reads as one.
-   Only the family is inherited — the `font` shorthand would drag the ambient
-   line-height in with it and leave this row taller than the links above it. */
-.trigger {
-  appearance: none;
-  width: 100%;
-  border: 0;
-  background: none;
-  font-family: inherit;
-  cursor: pointer;
-}
-
 /* The sidebar's rail (88px, below 1280px): the icon over its label, the count on
    the icon's corner. */
 @media (max-width: 1279.98px) {
