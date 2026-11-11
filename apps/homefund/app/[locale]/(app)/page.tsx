@@ -101,9 +101,9 @@ const ASIDE_BUDGETS = 3;
 // guide. The names are the accounts screen's own (RF-56 names the cash one), and
 // the subtype rides the query the accounts screen opens its form from.
 const ACCOUNT_CLASSES = [
-  { subtype: "bank", label: "subtypeBancaria", surface: "var(--blue-3)", ink: "var(--blue-11)" },
-  { subtype: "cash", label: "subtypeEfectivo", surface: "var(--jade-3)", ink: "var(--jade-11)" },
-  { subtype: "card", label: "subtypeTarjeta", surface: "var(--violet-3)", ink: "var(--violet-11)" },
+  { subtype: "bank", label: "subtypeBank", surface: "var(--blue-3)", ink: "var(--blue-11)" },
+  { subtype: "cash", label: "subtypeCash", surface: "var(--jade-3)", ink: "var(--jade-11)" },
+  { subtype: "card", label: "subtypeCard", surface: "var(--violet-3)", ink: "var(--violet-11)" },
 ] as const satisfies readonly { subtype: (typeof ACCOUNT_SUBTYPES)[number]; label: string; surface: string; ink: string }[];
 
 // The signed-in landing. A user may run personal-only (RF-55), so an absent

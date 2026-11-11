@@ -230,7 +230,7 @@ test("creates an account from the form and stores its opening balance signed by 
     .getByRole("radio", { name: accounts.kindLiability, exact: true })
     .click();
   await dialog
-    .getByRole("radio", { name: accounts.subtypeTarjeta, exact: true })
+    .getByRole("radio", { name: accounts.subtypeCard, exact: true })
     .click();
   // The amount field renames itself with the kind, so this also proves the
   // toggle above landed.

@@ -45,9 +45,9 @@ import {
 
 // The message key naming each subtype's segment, kept beside the enum it maps.
 const SUBTYPE_LABEL_KEYS = {
-  bank: "subtypeBancaria",
-  cash: "subtypeEfectivo",
-  card: "subtypeTarjeta",
+  bank: "subtypeBank",
+  cash: "subtypeCash",
+  card: "subtypeCard",
   loan: "subtypeLoan",
 } as const;
 
