@@ -17,9 +17,10 @@ import { useActionErrorToast } from "@/lib/use-action-toast";
  * One item of «Revisar el mes» (RF-155): what stood out and why, named by its description. A person
  * who may write it marks it «Está bien», takes the mark back with «Deshacer» (RF-163), or opens it
  * with «Corregir», whose back arrow returns here (a gap: into the accounts, where «Saldo real»
- * lives). A reader sees the item and who fixes it. A twin is one item for both movements.
+ * lives). A reader sees the item and who fixes it. A twin is one item for both movements, each listed
+ * with its description, who entered it and when, and a link to open it.
  */
-export function MonthReviewRow({ item }: { item: ReviewItem }) {
+export function MonthReviewRow({ item, creatorNames }: { item: ReviewItem; creatorNames: Record<string, string> }) {
   const moneyText = useMoneyText();
   const t = useTranslations("review");
   const format = useFormatter();
@@ -46,13 +47,43 @@ export function MonthReviewRow({ item }: { item: ReviewItem }) {
       </Text>
       {item.rule === "above_usual" && item.usualCents !== null && (
         <Text size="2" color="gray">
-          {t("usual", { amount: moneyText(item.usualCents, currency, locale) })}
+          {t(item.categoryName ? "usualCategory" : "usual", {
+            category: item.categoryName ?? "",
+            amount: moneyText(item.usualCents, currency, locale),
+            months: item.usualWindowMonths,
+          })}
         </Text>
       )}
       {item.rule === "twin" && (
-        <Text size="2" color="gray">
-          {t("twinCount", { count: item.transactionIds.length })}
-        </Text>
+        <>
+          <Text size="2" color="gray">
+            {t("twinCount", { count: item.transactionIds.length })}
+          </Text>
+          {item.entries.map((entry) => {
+            const who = creatorNames[entry.createdBy];
+            const entered = new Date(entry.createdAt);
+            const time = format.dateTime(entered, { hour: "numeric", minute: "2-digit" });
+            const day = format.dateTime(entered, { day: "numeric", month: "short" });
+            // The day shows only when the movement was entered on another day than it is dated.
+            const sameDay = format.dateTime(entered, { year: "numeric", month: "2-digit", day: "2-digit" }) ===
+              format.dateTime(civilDateToDate(item.occurredAt), { year: "numeric", month: "2-digit", day: "2-digit" });
+            const line = `${entry.description ?? t("noDescription")} · ${
+              t(who ? (sameDay ? "entryBy" : "entryByOn") : sameDay ? "entryAt" : "entryAtOn", { who: who ?? "", time, day })
+            }`;
+            // A reader cannot fix it, so the row is plain text.
+            return item.canMark ? (
+              <Link key={entry.id} asChild size="2">
+                <LocaleLink prefetch={false} href={`/movements/${entry.id}?review=${item.occurredAt.slice(0, 7)}`}>
+                  {line}
+                </LocaleLink>
+              </Link>
+            ) : (
+              <Text key={entry.id} size="2" color="gray">
+                {line}
+              </Text>
+            );
+          })}
+        </>
       )}
       {item.rule === "reconciliation_gap" && item.countedCents !== null && (
         <Text size="2" color="gray">

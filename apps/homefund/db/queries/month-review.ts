@@ -6,7 +6,10 @@ import { transactionReviews } from "@/db/schema";
 import { withUserDb } from "@/db/session";
 import { addCivilMonths, lastClosedMonth, monthRange } from "@/lib/dates";
 
-import type { ReviewRule } from "@/lib/month-review-rules";
+import { USUAL_WINDOW_MONTHS, type ReviewRule } from "@/lib/month-review-rules";
+
+// One of a twin's equal movements, so the person sees what to compare.
+export type ReviewEntry = { id: string; description: string | null; createdBy: string; createdAt: string };
 
 export type ReviewItem = {
   rule: ReviewRule;
@@ -18,6 +21,8 @@ export type ReviewItem = {
   categoryName: string | null;
   description: string | null;
   usualCents: number | null;
+  usualWindowMonths: number;
+  entries: ReviewEntry[];
   countedCents: number | null;
   reviewed: boolean;
   canMark: boolean;
@@ -30,12 +35,12 @@ export type MonthReview = { month: string; firstMonth: string | null; noted: boo
 // the item read and the pending count share. RLS scopes every table it touches.
 function reviewItemsSql(month: string): SQL {
   const { start, endExclusive } = monthRange(`${month}-01`);
-  const historyStart = addCivilMonths(start, -6);
+  const historyStart = addCivilMonths(start, -USUAL_WINDOW_MONTHS);
   return sql`
     with month_tx as materialized (
       select t.id, t.occurred_at, t.amount_cents, t.currency, t.from_account_id, t.to_account_id,
         coalesce(t.from_account_id, t.to_account_id) as account_id, t.reconciliation_id, t.amount_from_words,
-        t.description
+        t.description, t.created_by, t.created_at
       from transactions t
       where t.occurred_at >= ${start}::date and t.occurred_at < ${endExclusive}::date
     ),
@@ -92,6 +97,9 @@ function reviewItemsSql(month: string): SQL {
         case when f.rule = 'reconciliation_gap' then null else coalesce(f.category_id,
           (select s.category_id from transaction_splits s where s.transaction_id = t.id limit 1)) end
           as category_id,
+        case when f.rule = 'twin' then (select json_agg(json_build_object(
+          'id', e.id, 'description', e.description, 'createdBy', e.created_by, 'createdAt', e.created_at
+        ) order by e.created_at, e.id) from month_tx e where e.id = any(f.ids)) end as entries,
         (select count(*) from ${transactionReviews} m
           where m.rule = f.rule and m.transaction_id = any(f.ids)) = cardinality(f.ids) as reviewed,
         coalesce(private.can_write_transaction(t.from_account_id, t.to_account_id), false) as can_mark
@@ -115,7 +123,8 @@ export async function getMonthReview(month: string): Promise<MonthReview> {
         (select json_agg(json_build_object(
           'rule', m.rule, 'transactionIds', m.ids, 'occurredAt', m.occurred_at,
           'amountCents', m.amount_cents, 'currency', m.currency, 'accountName', a.name,
-          'categoryName', c.name, 'description', m.description, 'usualCents', m.usual_cents, 'countedCents', m.counted_cents,
+          'categoryName', c.name, 'description', m.description, 'usualCents', m.usual_cents, 'usualWindowMonths', ${USUAL_WINDOW_MONTHS}::int,
+          'entries', coalesce(m.entries, '[]'::json), 'countedCents', m.counted_cents,
           'reviewed', m.reviewed, 'canMark', m.can_mark
         ) order by m.occurred_at, m.rule, m.ids[1])
         from marked m
