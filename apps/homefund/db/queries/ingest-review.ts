@@ -9,6 +9,7 @@ import {
   ingestDeliveries,
   ingestMerchants,
   ingestShapes,
+  recipients,
 } from "@/db/schema";
 import { withUserDb, withUserDbOrTx, type Transaction } from "@/db/session";
 
@@ -23,8 +24,14 @@ export type PendingDeliveryRow = {
   proposedAmountCents: number | null;
   proposedAccountId: string | null;
   proposedCategoryId: string | null;
-  categorySource: "merchant" | "interpreter" | "credential_default" | null;
-  proposedDirection: "income" | "expense" | null;
+  categorySource: "merchant" | "interpreter" | "credential_default" | "recipient" | null;
+  proposedDirection: "income" | "expense" | "transfer" | null;
+  // A transfer leaves proposedAccountId and lands here (RF-189).
+  proposedToAccountId: string | null;
+  // The number the message names, and the saved recipient it matched.
+  extractedIdentifier: string | null;
+  recipientId: string | null;
+  recipientName: string | null;
   proposedOccurredAt: string | null;
   proposedDescription: string | null;
   isComplete: boolean;
@@ -85,6 +92,8 @@ function isComplete(
     PendingDeliveryRow,
     | "proposedAmountCents"
     | "proposedAccountId"
+    | "proposedToAccountId"
+    | "proposedDirection"
     | "proposedCategoryId"
     | "categorySource"
     | "proposedOccurredAt"
@@ -92,12 +101,22 @@ function isComplete(
 ): boolean {
   // A day before the account opened cannot be one tap.
   if (isBeforeOpening(row)) return false;
+  // A transfer needs both accounts and no category.
+  if (row.proposedDirection === "transfer") {
+    return (
+      row.proposedAmountCents !== null &&
+      row.proposedAccountId !== null &&
+      row.proposedToAccountId !== null
+    );
+  }
 
   return (
     row.proposedAmountCents !== null &&
     row.proposedAccountId !== null &&
     row.proposedCategoryId !== null &&
-    (row.categorySource === "merchant" || row.categorySource === "interpreter")
+    (row.categorySource === "merchant" ||
+      row.categorySource === "interpreter" ||
+      row.categorySource === "recipient")
   );
 }
 
@@ -134,6 +153,10 @@ export async function listDeliveries({
         proposedCategoryId: ingestDeliveries.proposedCategoryId,
         categorySource: ingestDeliveries.categorySource,
         proposedDirection: ingestDeliveries.proposedDirection,
+        proposedToAccountId: ingestDeliveries.proposedToAccountId,
+        extractedIdentifier: ingestDeliveries.extractedIdentifier,
+        recipientId: ingestDeliveries.recipientId,
+        recipientName: recipients.name,
         proposedOccurredAt: ingestDeliveries.proposedOccurredAt,
         proposedDescription: ingestDeliveries.proposedDescription,
         createdAt: ingestDeliveries.createdAt,
@@ -143,6 +166,7 @@ export async function listDeliveries({
       })
       .from(ingestDeliveries)
       .leftJoin(accounts, eq(accounts.id, ingestDeliveries.proposedAccountId))
+      .leftJoin(recipients, eq(recipients.id, ingestDeliveries.recipientId))
       .leftJoin(
         ingestMerchants,
         and(

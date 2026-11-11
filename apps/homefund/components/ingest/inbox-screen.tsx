@@ -88,11 +88,12 @@ function movementDefaults(
       : centsToDecimal(delivery.proposedAmountCents);
   const accountId = delivery.proposedAccountId;
   const isIncome = delivery.proposedDirection === "income";
-  const categoryId = proposedCategoryId(delivery, options);
+  const isTransfer = delivery.proposedDirection === "transfer";
+  const categoryId = isTransfer ? null : proposedCategoryId(delivery, options);
 
   return {
     fromAccountId: isIncome ? null : accountId,
-    toAccountId: isIncome ? accountId : null,
+    toAccountId: isTransfer ? delivery.proposedToAccountId : isIncome ? accountId : null,
     amount,
     occurredAt: delivery.proposedOccurredAt ?? todayInBogota(),
     description: delivery.proposedDescription,
@@ -108,7 +109,9 @@ function completeInput(
     !delivery.isComplete ||
     delivery.proposedAmountCents === null ||
     delivery.proposedAccountId === null ||
-    proposedCategoryId(delivery, options) === null
+    (delivery.proposedDirection === "transfer"
+      ? delivery.proposedToAccountId === null
+      : proposedCategoryId(delivery, options) === null)
   ) {
     return null;
   }
@@ -219,10 +222,13 @@ export function InboxScreen({
       proposedCategoryId(delivery, options),
     ),
     account: delivery.proposedAccountId
-      ? (accountNames.get(delivery.proposedAccountId) ?? null)
+      ? [delivery.proposedAccountId, delivery.proposedToAccountId]
+          .filter((id) => id !== null)
+          .map((id) => accountNames.get(id) ?? "")
+          .join(" → ")
       : null,
     amountMinor: delivery.proposedAmountCents,
-    direction: delivery.proposedDirection === "income" ? "income" : "expense",
+    direction: delivery.proposedDirection ?? "expense",
     currency: deliveryCurrency(delivery, options),
     isComplete: delivery.isComplete,
     beforeOpeningOn: delivery.beforeOpening ? delivery.proposedOccurredAt : null,

@@ -7,12 +7,14 @@ import {
   categories,
   ingestDeliveries,
   ingestMerchants,
+  recipients,
 } from "@/db/schema";
 import { withImpersonatedDb } from "@/db/session";
 import { BASE_CURRENCY } from "@/lib/currency";
 import { pgErrorCode } from "@/lib/db-error";
 import { todayInBogota } from "@/lib/dates";
 import { fingerprintMessage } from "@/lib/ingest/fingerprint";
+import { applyRecipient, extractNumber, matchRecipient } from "@/lib/ingest/recipient-number";
 import { parseAmount } from "@/lib/money";
 import { interpretQuickEntry } from "@/lib/transactions/interpret";
 import type { WebhookPayloadInput } from "@/lib/validation/webhook";
@@ -58,10 +60,11 @@ export async function recordIngestDelivery({
   const fingerprint = fingerprintMessage(payload.text);
   const today = todayInBogota();
   const externalRef = payload.external_ref ?? fingerprint.contentHash;
+  const extractedIdentifier = extractNumber(payload.text);
 
   return withImpersonatedDb(ownerUserId, async (tx) => {
     // Do not read ingest_shapes here; the insert trigger owns that decision.
-    const [categoryRows, accountRows, merchantRows] = await Promise.all([
+    const [categoryRows, accountRows, merchantRows, recipientRows] = await Promise.all([
       tx
         .select({ id: categories.id, name: categories.name, kind: categories.kind })
         .from(categories),
@@ -84,6 +87,19 @@ export async function recordIngestDelivery({
             .where(eq(ingestMerchants.merchantKey, fingerprint.merchant.key))
             .limit(1)
         : Promise.resolve(null),
+      extractedIdentifier
+        ? tx
+            .select({
+              id: recipients.id,
+              identifier: recipients.identifier,
+              name: recipients.name,
+              kind: recipients.kind,
+              accountId: recipients.accountId,
+              categoryId: recipients.categoryId,
+            })
+            .from(recipients)
+            .where(sql`${recipients.identifier} like ${"%" + extractedIdentifier}`)
+        : Promise.resolve([]),
     ]);
 
     const proposal = interpretQuickEntry(payload.text, {
@@ -105,26 +121,51 @@ export async function recordIngestDelivery({
     const merchant = merchantRows?.[0] ?? null;
     const trustedCategoryId =
       merchant?.state === "trusted" ? merchant.trustedCategoryId : null;
-    const proposedCategoryId =
+    const recipient = matchRecipient(extractedIdentifier, recipientRows);
+
+    let proposedCategoryId =
       trustedCategoryId ?? proposal.categoryId ?? defaultCategoryId ?? null;
-    const categorySource = trustedCategoryId
-      ? ("merchant" as const)
-      : proposal.categoryId
-        ? ("interpreter" as const)
-        : defaultCategoryId
-          ? ("credential_default" as const)
-          : null;
+    let categorySource: "merchant" | "interpreter" | "credential_default" | "recipient" | null =
+      trustedCategoryId
+        ? "merchant"
+        : proposal.categoryId
+          ? "interpreter"
+          : defaultCategoryId
+            ? "credential_default"
+            : null;
 
-    const description = proposal.description.trim().slice(0, MAX_DESCRIPTION_LENGTH);
+    let description = proposal.description.trim().slice(0, MAX_DESCRIPTION_LENGTH);
 
-    const proposedAccountId = payload.account_id ?? proposal.accountId;
+    let proposedAccountId = payload.account_id ?? proposal.accountId;
+    let proposedToAccountId: string | null = null;
+    let proposedDirection: "income" | "expense" | "transfer" | null =
+      payload.direction ?? proposal.direction;
+
+    // A saved number says what the message could not (RF-189): its name is the description, and its kind
+    // decides the shape. The delivery still waits for a person.
+    if (recipient) {
+      const applied = applyRecipient(
+        { direction: payload.direction ?? proposal.direction, accountId: proposedAccountId },
+        recipient,
+      );
+      description = applied.description;
+      proposedDirection = applied.direction;
+      proposedAccountId = applied.accountId;
+      proposedToAccountId = applied.toAccountId;
+      if (applied.direction === "transfer") {
+        proposedCategoryId = null;
+        categorySource = null;
+      } else if (applied.categoryId) {
+        proposedCategoryId = applied.categoryId;
+        categorySource = "recipient";
+      }
+    }
     // A delivery that names an account settling outside BASE_CURRENCY is
     // forced rejected below (errors.foreignCurrencyUnsupported): `pesos`
     // above read the amount as pesos, which only that settlement makes true.
     const proposedAccount = accountRows.find((row) => row.id === proposedAccountId);
     const foreignCurrencyAccount =
       proposedAccount !== undefined && proposedAccount.settlementCurrency !== BASE_CURRENCY;
-    const proposedDirection = payload.direction ?? proposal.direction;
     const proposedOccurredAt = resolveOccurredAt(
       payload.occurred_at,
       proposal.occurredAt,
@@ -151,7 +192,10 @@ export async function recordIngestDelivery({
             category_source,
             proposed_direction,
             proposed_occurred_at,
-            proposed_description
+            proposed_description,
+            proposed_to_account_id,
+            extracted_identifier,
+            recipient_id
           ) values (
             ${credentialId},
             ${externalRef},
@@ -165,7 +209,10 @@ export async function recordIngestDelivery({
             ${categorySource},
             ${proposedDirection},
             ${proposedOccurredAt},
-            ${proposedDescription}
+            ${proposedDescription},
+            ${proposedToAccountId},
+            ${extractedIdentifier},
+            ${recipient?.id ?? null}
           )
           returning id, status
         `),
