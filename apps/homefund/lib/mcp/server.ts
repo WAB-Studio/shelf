@@ -17,7 +17,10 @@ import { statementImportSchema, statementSchema } from "@/lib/validation/stateme
 import es from "../../messages/es.json";
 import pkg from "../../package.json";
 
-export const MCP_URL = `${env.NEXT_PUBLIC_SITE_URL.replace(/\/+$/, "")}/mcp`;
+// The configured origin: issuer, resource and the 401's metadata link on the host a request does not name.
+export const ISSUER = env.NEXT_PUBLIC_SITE_URL.replace(/\/+$/, "");
+
+export const MCP_URL = `${ISSUER}/mcp`;
 
 export const RESOURCE_METADATA_PATH = "/.well-known/oauth-protected-resource/mcp";
 

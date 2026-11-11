@@ -1458,7 +1458,7 @@
       "scopeViolation": "That category belongs to another scope than the account. Pick a fund category for a fund account, or one of yours for your own account."
     },
     "mcpHeading": "Connect Claude",
-    "mcpDescription": "Add HomeFund as an HTTP MCP connector with this URL and a key for Claude. On claude.ai pick «No sign-in» and add the «X-API-Key» header with the key; in Claude Code it goes in «Authorization: Bearer». A webhook key does not open this door. Claude sees your accounts and «Review the month» with your own permissions; revoking the key disconnects it.",
+    "mcpDescription": "On claude.ai (web, desktop or mobile), add a custom connector with the URL above: it asks you to sign in with HomeFund and that is all. Claude sees your accounts and «Review the month» with your own permissions; revoking its key in the list disconnects it. A key you create here still works: in Claude Code it goes in «Authorization: Bearer», and in a connector with no sign-in in the «X-API-Key» header. A webhook key does not open this door.",
     "mcpIssue": "Create a key for Claude"
   },
   "ingest": {
@@ -1600,6 +1600,33 @@
         "invalidLines": "Some lines are invalid: fix or remove them and preview again.",
         "lineRefused": "A line could not be recorded; nothing was imported."
       }
+    }
+  },
+  "oauth": {
+    "title": "Connect with Claude",
+    "heading": "Connect {client} to HomeFund",
+    "returnsTo": "When you decide you will return to <host>{address}</host>.",
+    "mayLabel": "It will be able to",
+    "may": {
+      "accounts": "See your accounts and balances, with your own permissions.",
+      "review": "Review the month and read its movements.",
+      "import": "Preview and import bank statements, after you confirm."
+    },
+    "neverLabel": "It will never be able to",
+    "never": {
+      "delete": "Delete your accounts or your data."
+    },
+    "allow": "Allow",
+    "deny": "Cancel",
+    "footer": "You are connecting as {email}. You can disconnect it any time in Settings · Bank emails.",
+    "invalid": {
+      "title": "This request is not valid",
+      "body": "The link that brought you here is incomplete or comes from an app HomeFund does not know. Go back to Claude and start again.",
+      "home": "Go to HomeFund"
+    },
+    "errors": {
+      "clientUnknown": "HomeFund does not know this app. Go back to Claude and start again.",
+      "redirectMismatch": "The return address is not the one this app registered."
     }
   }
 }

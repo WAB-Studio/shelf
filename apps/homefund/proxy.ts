@@ -114,6 +114,7 @@ export async function proxy(request: NextRequest) {
 
 export const config = {
   // Route handlers under `/auth` and `/api` own their cookies and must never be
-  // locale-prefixed; the rest is static assets.
-  matcher: ["/((?!api|auth|mcp|_next|_vercel|.*\\..*).*)"],
+  // locale-prefixed, nor `/oauth/register` and `/oauth/token`, which a client calls with no session
+  // (`/oauth/authorize` is a screen and is); the rest is static assets.
+  matcher: ["/((?!api|auth|mcp|oauth/register|oauth/token|_next|_vercel|.*\\..*).*)"],
 };

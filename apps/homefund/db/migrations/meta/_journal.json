@@ -582,6 +582,13 @@
       "when": 1794355410275,
       "tag": "0082_a_renumbered_leg_keeps_its_birth",
       "breakpoints": true
+    },
+    {
+      "idx": 83,
+      "version": "7",
+      "when": 1794357011263,
+      "tag": "0083_an_assistant_signs_in_with_oauth",
+      "breakpoints": true
     }
   ]
 }
