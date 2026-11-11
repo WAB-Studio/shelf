@@ -313,6 +313,11 @@ function renderCases({ transactionId, debtAccountId }: HttpScope): RenderCase[] 
       landsOn: `/${LOCALE}/onboarding`,
       why: "step three presumes the fund from step one",
     },
+    {
+      path: `/${LOCALE}/settings/recipients`,
+      status: 200,
+      title: title("recipients.title"),
+    },
   ];
 }
 
