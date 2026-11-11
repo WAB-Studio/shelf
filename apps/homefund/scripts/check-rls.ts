@@ -320,6 +320,7 @@ async function main() {
   await checkO7M11Survivors();
   await checkTransactionReviews();
   await checkDeferrals();
+  await checkOauthExchange();
 }
 
 // RF-136: a deferral is read and written exactly when its purchase's liability account is, carries 2 to 72
@@ -3270,7 +3271,7 @@ async function checkAuditLogPolicies() {
     from pg_class c
     join pg_namespace n on n.oid = c.relnamespace
     where n.nspname = 'finances' and c.relkind = 'r' and c.relrowsecurity
-      and c.relname <> 'audit_log'
+      and c.relname not in ('audit_log', 'oauth_calls')
       and not exists (
         select 1 from pg_trigger t
         where t.tgrelid = c.oid and t.tgname = 'capture_audit' and not t.tgisinternal)`;
@@ -5286,6 +5287,11 @@ const INSERT_GRANT_GAPS: Record<string, string[]> = {
   installment_lines: ["created_at", "id", "paid_transaction_id"],
   installment_plans: ["created_at", "id", "updated_at"],
   labels: ["created_at", "id", "updated_at"],
+  // The OAuth tables carry no grant (RF-168), bar the consent's insert of a code: only the server's own pool writes them.
+  oauth_calls: ["bucket", "calls", "source", "window_start"],
+  oauth_clients: ["client_name", "created_at", "id", "last_active_at", "redirect_uris"],
+  // The consent inserts these five as the signed-in person; the rest is the table's or the exchange's.
+  oauth_codes: ["created_at", "credential_id", "expires_at", "id", "used_at"],
   planned_payments: [
     "created_at",
     "created_by",
@@ -5462,6 +5468,21 @@ const UPDATE_GRANT_GAPS: Record<string, string[]> = {
     "updated_at",
   ],
   labels: ["created_at", "external_ref", "group_id", "id", "owner_user_id", "updated_at"],
+  // The OAuth tables carry no grant (RF-168), bar the consent's insert of a code: only the server's own pool writes them.
+  oauth_calls: ["bucket", "calls", "source", "window_start"],
+  oauth_clients: ["client_name", "created_at", "id", "last_active_at", "redirect_uris"],
+  oauth_codes: [
+    "client_id",
+    "code_challenge",
+    "code_hash",
+    "created_at",
+    "credential_id",
+    "expires_at",
+    "id",
+    "owner_user_id",
+    "redirect_uri",
+    "used_at",
+  ],
   planned_payments: ["created_at", "created_by", "group_id", "id", "owner_user_id", "updated_at"],
   recurring_rules: ["created_at", "created_by", "group_id", "id", "owner_user_id", "paused_reason", "updated_at"],
   savings_goals: ["created_at", "external_ref", "group_id", "id", "owner_user_id", "updated_at"],
@@ -13891,6 +13912,178 @@ async function checkTransactionReviews() {
     afterUser === "postgres" && groups === 0 && movements === 0,
     `current_user = ${afterUser}, groups ${groups}, movements ${movements} named 'rls o7m2%'`,
   );
+}
+
+// RF-168: `private.exchange_oauth_code` redeems an authorization code once, for the PKCE verifier, the client and
+// the redirect it was issued to, and mints the consenting person's `mcp` key; `private.claim_oauth_call` caps
+// the unauthenticated registration. Every row rolls back.
+async function checkOauthExchange() {
+  console.log("");
+  const labels = [
+    "oauth-1. a code redeemed with its challenge, client and redirect mints one `mcp` key owned by the consenting user, and answers that user",
+    "oauth-2. a wrong challenge, another client, another redirect and an expired code each answer null and mint nothing",
+    "oauth-3. a second redemption answers null and revokes the key the first one bought",
+    "oauth-4. the call counter admits `cap` calls in a window, then answers the seconds left; another caller is counted apart",
+    "oauth-5. no API role holds a privilege on the OAuth tables or the three functions, bar the consent's INSERT of a code",
+    "oauth-6. a client with recent activity survives any age and an idle one goes after 30 days, with its codes; a spent code goes after a day",
+    "oauth-7. a new key replaces the same person's live keys for the same client and no one else's",
+    "oauth-8. the consent writes a code as the person, naming them in the audit log; it refuses another person as owner",
+  ];
+  const hash = (value: string) => createHash("sha256").update(value).digest("hex");
+  const REDIRECT = "https://claude.ai/api/mcp/auth_callback";
+
+  await m1Rows([labels[0], labels[1], labels[2]], async (tx) => {
+    const user = randomUUID();
+    await tx`insert into auth.users (id) values (${user})`;
+    await tx`insert into app_users (id) values (${user})`;
+    const [{ id: client }] = await tx<{ id: string }[]>`
+      insert into oauth_clients (client_name, redirect_uris) values ('rls oauth', ${tx.array([REDIRECT])}) returning id`;
+    const [{ id: other }] = await tx<{ id: string }[]>`
+      insert into oauth_clients (client_name, redirect_uris) values ('rls oauth other', ${tx.array([REDIRECT])}) returning id`;
+    const issue = async (code: string, expired = false) => {
+      await tx`insert into oauth_codes (owner_user_id, client_id, code_hash, code_challenge, redirect_uri, expires_at)
+        values (${user}, ${client}, ${hash(code)}, 'challenge-a', ${REDIRECT},
+          ${expired ? tx`now() - interval '1 minute'` : tx`now() + interval '10 minutes'`})`;
+    };
+    const exchange = async (code: string, challenge: string, clientId: string, redirect: string, token: string) => {
+      const [row] = await tx<{ owner: string | null }[]>`
+        select private.exchange_oauth_code(${hash(code)}, ${challenge}, ${clientId}::uuid, ${redirect}, ${hash(token)}, 600) as owner`;
+      return row.owner;
+    };
+    const keys = async () => tx<{ owner_user_id: string; purpose: string; revoked_at: string | null; name: string }[]>`
+      select owner_user_id, purpose, revoked_at, name from webhook_credentials where owner_user_id = ${user}`;
+
+    await issue("code-bad");
+    await issue("code-old", true);
+    const refused = [
+      await exchange("code-bad", "challenge-b", client, REDIRECT, "tok-1"),
+      await exchange("code-bad", "challenge-a", other, REDIRECT, "tok-2"),
+      await exchange("code-bad", "challenge-a", client, "https://claude.ai/other", "tok-3"),
+      await exchange("code-old", "challenge-a", client, REDIRECT, "tok-4"),
+      await exchange("code-unknown", "challenge-a", client, REDIRECT, "tok-5"),
+    ];
+    const none = (await keys()).length;
+
+    await issue("code-good");
+    const answered = await exchange("code-good", "challenge-a", client, REDIRECT, "tok-good");
+    const minted = await keys();
+    const [{ credential_id: bought, used: used }] = await tx<{ credential_id: string | null; used: boolean }[]>`
+      select credential_id, used_at is not null as used from oauth_codes where code_hash = ${hash("code-good")}`;
+    const resolved = await tx<{ owner_user_id: string }[]>`
+      select owner_user_id from private.resolve_webhook_credential(${hash("tok-good")}, 'mcp')`;
+
+    const replay = await exchange("code-good", "challenge-a", client, REDIRECT, "tok-replay");
+    const after = await keys();
+    const afterReplay = await tx<{ n: number }[]>`
+      select count(*)::int as n from private.resolve_webhook_credential(${hash("tok-good")}, 'mcp')`;
+
+    return [
+      {
+        ok: answered === user && minted.length === 1 && minted[0].owner_user_id === user && minted[0].purpose === "mcp" &&
+          minted[0].name === "rls oauth" && bought !== null && used && resolved.length === 1 && resolved[0].owner_user_id === user,
+        detail: `answered the user = ${answered === user}, keys = ${minted.length}, owner = ${minted[0]?.owner_user_id === user}, purpose ${minted[0]?.purpose}, code used ${used}, resolves as the user ${resolved[0]?.owner_user_id === user}`,
+      },
+      { ok: refused.every((row) => row === null) && none === 0, detail: `answers ${JSON.stringify(refused)}, keys minted ${none}` },
+      {
+        ok: replay === null && after.length === 1 && after[0].revoked_at !== null && afterReplay[0].n === 0,
+        detail: `replay ${replay}, keys ${after.length}, revoked ${after[0]?.revoked_at !== null}, still resolves ${afterReplay[0].n}`,
+      },
+    ];
+  });
+
+  await m1Rows([labels[3], labels[4]], async (tx) => {
+    const claim = async (source: string) => {
+      const [row] = await tx<{ wait: number }[]>`select private.claim_oauth_call('register', ${source}, 2, 3600) as wait`;
+      return row.wait;
+    };
+    const first = [await claim("a"), await claim("a"), await claim("a")];
+    const apart = await claim("b");
+    const [{ roles }] = await tx<{ roles: number }[]>`
+      select count(*)::int as roles from unnest(array['anon', 'authenticated', 'service_role']) r
+      cross join unnest(array['oauth_clients', 'oauth_codes', 'oauth_calls']) t
+      where has_any_column_privilege(r, ('finances.' || t)::regclass, 'SELECT, INSERT, UPDATE, REFERENCES')
+        and not (r = 'authenticated' and t = 'oauth_codes' and
+          not has_any_column_privilege(r, 'finances.oauth_codes'::regclass, 'SELECT, UPDATE, REFERENCES'))`;
+    const [{ fns }] = await tx<{ fns: number }[]>`
+      select count(*)::int as fns from unnest(array['anon', 'authenticated', 'service_role']) r
+      where has_function_privilege(r, 'private.exchange_oauth_code(text, text, uuid, text, text, integer)', 'EXECUTE')
+         or has_function_privilege(r, 'private.claim_oauth_call(text, text, integer, integer)', 'EXECUTE')
+         or has_function_privilege(r, 'private.register_oauth_client(text, text[])', 'EXECUTE')`;
+
+    return [
+      {
+        ok: first[0] === 0 && first[1] === 0 && first[2] > 0 && first[2] <= 3600 && apart === 0,
+        detail: `caller a: ${JSON.stringify(first)}, caller b: ${apart}`,
+      },
+      { ok: roles === 0 && fns === 0, detail: `roles with a table privilege = ${roles}, with EXECUTE = ${fns}` },
+    ];
+  });
+
+  await m1Rows([labels[5], labels[6], labels[7]], async (tx) => {
+    const user = randomUUID();
+    const other = randomUUID();
+    await tx`insert into auth.users (id) values (${user}), (${other})`;
+    await tx`insert into app_users (id) values (${user}), (${other})`;
+    const [{ id: client }] = await tx<{ id: string }[]>`
+      select private.register_oauth_client('rls oauth sweep', ${tx.array([REDIRECT])}) as id`;
+    const [{ id: idle }] = await tx<{ id: string }[]>`
+      select private.register_oauth_client('rls oauth idle', ${tx.array([REDIRECT])}) as id`;
+    const [{ id: old }] = await tx<{ id: string }[]>`
+      select private.register_oauth_client('rls oauth old', ${tx.array([REDIRECT])}) as id`;
+    // Created long ago but used last week: it must survive. Idle for 31 days: it must go.
+    await tx`update oauth_clients set created_at = now() - interval '90 days', last_active_at = now() - interval '7 days' where id = ${old}`;
+    await tx`update oauth_clients set created_at = now() - interval '90 days', last_active_at = now() - interval '31 days' where id = ${idle}`;
+    await tx`insert into oauth_codes (owner_user_id, client_id, code_hash, code_challenge, redirect_uri, expires_at, used_at)
+      values (${user}, ${client}, ${hash("sweep-spent")}, 'c', ${REDIRECT}, now() - interval '2 days', now() - interval '2 days'),
+             (${user}, ${client}, ${hash("sweep-fresh")}, 'c', ${REDIRECT}, now() + interval '5 minutes', null)`;
+    await tx`select private.register_oauth_client('rls oauth trigger', ${tx.array([REDIRECT])})`;
+    const clients = await tx<{ id: string }[]>`select id from oauth_clients where id in (${client}, ${idle}, ${old})`;
+    const codes = await tx<{ code_hash: string }[]>`select code_hash from oauth_codes where client_id = ${client}`;
+    const sweepOk =
+      clients.some((row) => row.id === old) && clients.some((row) => row.id === client) && !clients.some((row) => row.id === idle) &&
+      codes.length === 1 && codes[0].code_hash === hash("sweep-fresh");
+
+    const issue = async (owner: string, code: string, clientId: string) =>
+      tx`insert into oauth_codes (owner_user_id, client_id, code_hash, code_challenge, redirect_uri)
+        values (${owner}, ${clientId}, ${hash(code)}, 'c', ${REDIRECT})`;
+    const exchange = async (code: string, clientId: string, token: string) =>
+      tx`select private.exchange_oauth_code(${hash(code)}, 'c', ${clientId}::uuid, ${REDIRECT}, ${hash(token)}, 600)`;
+    const [{ id: second }] = await tx<{ id: string }[]>`
+      select private.register_oauth_client('rls oauth second', ${tx.array([REDIRECT])}) as id`;
+    await issue(user, "r-1", client);
+    await issue(user, "r-2", client);
+    await issue(user, "r-3", second);
+    await issue(other, "r-4", client);
+    await exchange("r-1", client, "key-1");
+    await exchange("r-3", second, "key-3");
+    await exchange("r-4", client, "key-4");
+    await exchange("r-2", client, "key-2");
+    const live = async (token: string) =>
+      (await tx<{ n: number }[]>`select count(*)::int as n from private.resolve_webhook_credential(${hash(token)}, 'mcp')`)[0].n;
+    const state = [await live("key-1"), await live("key-2"), await live("key-3"), await live("key-4")];
+
+    // The consent's own insert, as the signed-in person: the audit row names them as the actor.
+    await tx`select set_config('request.jwt.claim.sub', '', true)`;
+    await enterUserContext(tx, user);
+    await tx`insert into finances.oauth_codes (owner_user_id, client_id, code_hash, code_challenge, redirect_uri)
+      values (${user}, ${client}, ${hash("as-user")}, 'c', ${REDIRECT})`;
+    const stranger = await m1Refusal(tx, (sp) =>
+      sp`insert into finances.oauth_codes (owner_user_id, client_id, code_hash, code_challenge, redirect_uri)
+        values (${other}, ${client}, ${hash("as-other")}, 'c', ${REDIRECT})`);
+    await tx`reset role`;
+    const audited = await tx<{ actor_user_id: string | null; owner_user_id: string | null }[]>`
+      select actor_user_id, owner_user_id from finances.audit_log
+      where entity = 'oauth_codes' and action = 'INSERT' and after_data->>'code_hash' = ${hash("as-user")}`;
+
+    return [
+      { ok: sweepOk, detail: `kept the active client ${clients.some((row) => row.id === old)}, dropped the idle one ${!clients.some((row) => row.id === idle)}, codes left ${codes.length}` },
+      { ok: JSON.stringify(state) === "[0,1,1,1]", detail: `live keys 1..4 = ${JSON.stringify(state)} (the first, replaced, is the only one revoked)` },
+      {
+        ok: stranger === "42501" && audited.length === 1 && audited[0].actor_user_id === user && audited[0].owner_user_id === user,
+        detail: `another owner ${stranger}, audit rows ${audited.length}, actor = the person ${audited[0]?.actor_user_id === user}`,
+      },
+    ];
+  });
 }
 
 // Wrapped in an async IIFE (not top-level await) so the runner can transpile

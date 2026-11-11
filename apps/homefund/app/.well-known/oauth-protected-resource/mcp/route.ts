@@ -1,10 +1,13 @@
-import { MCP_URL } from "@/lib/mcp/server";
+import { ISSUER } from "@/lib/mcp/server";
+import { discoveryPreflight, resourceMetadataResponse } from "@/lib/oauth/discovery";
+import { requestHost, servedOrigin } from "@/lib/oauth/hosts";
 
-// RFC 9728: where a 401 from /mcp points. HomeFund runs no authorization server: the bearer is a key
-// the person mints under «Ajustes · Webhooks», sent in the header (RF-144).
-export function GET(): Response {
-  return Response.json(
-    { resource: MCP_URL, bearer_methods_supported: ["header"], resource_name: "HomeFund" },
-    { headers: { "Cache-Control": "max-age=3600" } },
-  );
+export const runtime = "nodejs";
+
+// RFC 9728: where a 401 from /mcp points. Claude on claude.ai signs in with HomeFund's own authorization
+// server (RF-168); a key minted under «Ajustes · Webhooks» in the header still opens the door (RF-144).
+export function GET(request: Request): Response {
+  return resourceMetadataResponse(servedOrigin(requestHost(request), ISSUER));
 }
+
+export { discoveryPreflight as OPTIONS };
