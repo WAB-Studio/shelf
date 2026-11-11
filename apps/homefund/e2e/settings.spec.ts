@@ -225,7 +225,7 @@ test("the webhooks screen shows the Gmail line or says there is none (RF-192)", 
   await page.goto("/es/settings/webhooks");
 
   await expect(
-    page.getByRole("heading", { name: messages.webhooks.bankEmails.heading, exact: true }),
+    page.getByRole("heading", { name: messages.webhooks.bankEmails.heading, exact: true, level: 2 }),
   ).toBeVisible();
   await expect(
     page.getByText(`6. ${messages.webhooks.bankEmails.step6}`, { exact: true }),
