@@ -3,6 +3,7 @@
 import type { CurrencyCode } from "@/lib/currency";
 import type { Locale } from "@/lib/locales";
 import { formatCompactMoney, formatMoney } from "@/lib/money";
+import { createStoredFlag } from "@/lib/stored-flag";
 
 export const PRIVACY_STORAGE_KEY = "hide-amounts";
 
@@ -16,41 +17,11 @@ const FIGURE_END = "";
 const FIGURE_PATTERN = /([^]*)/g;
 const DIGITS_PATTERN = /\d[\d.,\s  ]*\d|\d/;
 
-const listeners = new Set<() => void>();
+const hiddenFlag = createStoredFlag(PRIVACY_STORAGE_KEY);
 
-// Visible when nothing is stored or storage throws.
-export function readStoredHidden(): boolean {
-  try {
-    return localStorage.getItem(PRIVACY_STORAGE_KEY) === "1";
-  } catch {
-    return false;
-  }
-}
-
-export function writeStoredHidden(hidden: boolean): void {
-  try {
-    if (hidden) localStorage.setItem(PRIVACY_STORAGE_KEY, "1");
-    else localStorage.removeItem(PRIVACY_STORAGE_KEY);
-  } catch {
-    // Storage unavailable; the choice holds for this page's life only.
-  }
-  for (const listener of listeners) listener();
-}
-
-export function subscribeToPrivacy(listener: () => void): () => void {
-  listeners.add(listener);
-
-  // Another tab wrote the storage key.
-  const onStorage = (event: StorageEvent) => {
-    if (event.key === PRIVACY_STORAGE_KEY) listener();
-  };
-  window.addEventListener("storage", onStorage);
-
-  return () => {
-    listeners.delete(listener);
-    window.removeEventListener("storage", onStorage);
-  };
-}
+export const readStoredHidden = hiddenFlag.read;
+export const writeStoredHidden = hiddenFlag.write;
+export const subscribeToPrivacy = hiddenFlag.subscribe;
 
 // Swaps the digits of an already-drawn figure for the mask, keeping the rest.
 export function maskFigure(figure: string): string {
