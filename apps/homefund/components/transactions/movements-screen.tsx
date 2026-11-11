@@ -219,7 +219,7 @@ export function MovementsScreen({
     occurredAt: row.occurredAt,
     title: row.description || rowTitle(row, categoryNames, t),
     category: rowCategory(row, categoryNames, categoryColors),
-    account: rowSubtitle(row, accountNames) ?? "",
+    account: rowSubtitle(row, accountNames, t) ?? "",
     label: row.labels[0]?.name ?? null,
     amountMinor:
       row.reconciliationId !== null && row.toAccountId === null
@@ -658,11 +658,11 @@ export function MovementsScreen({
                           row.description
                             ? [
                                 rowTitle(row, categoryNames, t),
-                                rowSubtitle(row, accountNames),
+                                rowSubtitle(row, accountNames, t),
                               ]
                                 .filter(Boolean)
                                 .join(" · ")
-                            : rowSubtitle(row, accountNames)
+                            : rowSubtitle(row, accountNames, t)
                         }
                         color={rowColor(row, categoryColors)}
                         categoryName={rowTitle(row, categoryNames, t)}
@@ -815,6 +815,17 @@ function rowTitle(
 // A transfer reads "origin → destination"; an income names its destination, an
 // expense its source.
 function rowSubtitle(
+  row: TransactionListRow,
+  accountNames: Map<string, string>,
+  t: ReturnType<typeof useTranslations>,
+): string | undefined {
+  const account = accountOfRow(row, accountNames);
+  return row.splits.length > 1
+    ? [account, t("linesCount", { count: row.splits.length })].filter(Boolean).join(" · ")
+    : account;
+}
+
+function accountOfRow(
   row: TransactionListRow,
   accountNames: Map<string, string>,
 ): string | undefined {

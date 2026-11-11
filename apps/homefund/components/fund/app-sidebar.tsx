@@ -11,10 +11,12 @@ import {
   destinations,
   isCurrent,
 } from "@/components/fund/destinations";
+import { PrivacyToggle } from "@/components/fund/privacy-toggle";
 import { SettingsPanel } from "@/components/fund/settings-panel";
 import { useQuickEntry } from "@/components/transactions/quick-entry-provider";
 import {
   Badge,
+  Flex,
   IconButton,
   NavList,
   type NavListItem,
@@ -101,9 +103,11 @@ export function AppSidebar({
       <SidebarHead
         title={fundName}
         action={
-          // `/settings/group` refuses a caller without one, so the chevron drops
-          // with it: the list already drops Miembros the same way.
-          hasGroup && (
+          <Flex align="center" gap="1">
+            <PrivacyToggle size="1" />
+            {/* `/settings/group` refuses a caller without one, so the chevron drops
+                with it: the list already drops Miembros the same way. */}
+            {hasGroup && (
             <IconButton
               asChild
               tap
@@ -116,7 +120,8 @@ export function AppSidebar({
                 <ChevronDown size={16} strokeWidth={2} />
               </LocaleLink>
             </IconButton>
-          )
+            )}
+          </Flex>
         }
       />
 

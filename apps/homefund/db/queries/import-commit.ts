@@ -21,7 +21,13 @@ import type { Transaction } from "@/db/session";
 import { BASE_CURRENCY } from "@/lib/currency";
 import { insertRow } from "@/db/insert-row";
 import { jsonbParam } from "@/db/jsonb-param";
-import { contributorMark, contributorStillInFund, householdMark } from "@/db/queries/transactions";
+import {
+  contributorMark,
+  contributorStillInFund,
+  householdMark,
+  insertSplitRows,
+  type TransactionSplitInput,
+} from "@/db/queries/transactions";
 import { pgConstraintName, pgErrorCode } from "@/lib/db-error";
 import { ActionError } from "@/lib/errors";
 import { parseAmount } from "@/lib/money";
@@ -795,7 +801,7 @@ type ResolvedTransaction = {
   // destination's fund, the member row it points at.
   contributedByName: string | null;
   contributedByMemberId: string | null;
-  splits: { categoryId: string; amountCents: number }[];
+  splits: TransactionSplitInput[];
 };
 
 function resolveTransaction(
@@ -981,22 +987,31 @@ async function updateTransactionsBatch(
   if (updated.length === 0) return;
 
   const ids = sql`(select value::uuid from jsonb_array_elements_text(${jsonbParam(updated.map((row) => row.id))}))`;
-  await tx.execute(sql`delete from ${transactionSplits} where transaction_id in ${ids}`);
+  // A statement line carries no product name, so the names a person gave the lines survive the rewrite:
+  // each rewritten line takes the name of a deleted one with the same category and amount.
+  const deleted = (await tx.execute(
+    sql`delete from ${transactionSplits} where transaction_id in ${ids}
+      returning transaction_id, category_id, amount_cents::text as amount_cents, description`,
+  )) as unknown as { transaction_id: string; category_id: string; amount_cents: string; description: string | null }[];
+  const names = new Map<string, string[]>();
+  for (const row of deleted) {
+    if (row.description === null) continue;
+    const key = `${row.transaction_id}|${row.category_id}|${row.amount_cents}`;
+    names.set(key, [...(names.get(key) ?? []), row.description]);
+  }
   await tx.execute(sql`delete from ${transactionLabels} where transaction_id in ${ids}`);
 
   const splitsByRef = new Map(chunk.map((item) => [item.row.externalRef, item.splits]));
-  const splits = updated.flatMap((row) =>
-    (splitsByRef.get(row.external_ref) ?? []).map((split) => ({
-      transaction_id: row.id,
-      category_id: split.categoryId,
-      amount_cents: split.amountCents,
-    })),
+  await insertSplitRows(
+    tx,
+    updated.flatMap((row) =>
+      (splitsByRef.get(row.external_ref) ?? []).map((split) => ({
+        transactionId: row.id,
+        ...split,
+        description: names.get(`${row.id}|${split.categoryId}|${split.amountCents}`)?.shift() ?? null,
+      })),
+    ),
   );
-  if (splits.length === 0) return;
-  await tx.execute(sql`
-    insert into ${transactionSplits} (transaction_id, category_id, amount_cents)
-    select transaction_id, category_id, amount_cents
-    from jsonb_to_recordset(${jsonbParam(splits)}) as r(transaction_id uuid, category_id uuid, amount_cents bigint)`);
 }
 
 // New rows land in chunked, multi-row inserts (RNF-15): the movements first, then their
@@ -1063,18 +1078,9 @@ async function insertNewTransactionsBatch(
       returning id`,
   )) as unknown as { id: string }[];
 
-  const splitValues: ReturnType<typeof sql>[] = [];
-  chunk.forEach((item, index) => {
-    const transactionId = inserted[index].id;
-    for (const split of item.splits) {
-      splitValues.push(sql`(${transactionId}, ${split.categoryId}, ${split.amountCents})`);
-    }
-  });
-  if (splitValues.length === 0) return;
-
-  await tx.execute(
-    sql`insert into ${transactionSplits} (transaction_id, category_id, amount_cents)
-      values ${sql.join(splitValues, sql`, `)}`,
+  await insertSplitRows(
+    tx,
+    chunk.flatMap((item, index) => item.splits.map((split) => ({ transactionId: inserted[index].id, ...split }))),
   );
 }
 
@@ -1094,31 +1100,11 @@ async function insertNewTransactionsSerially(
             ${item.counterAmountCents}, ${item.counterIsEstimate}, ${householdSql(item)}, ${contributorSql(item)}, ${item.row.object.occurredAt}, ${item.row.object.description}, ${item.row.externalRef})
           returning id`,
       )) as unknown as { id: string }[];
-      await writeSplits(tx, inserted.id, item.splits);
+      await insertSplitRows(tx, item.splits.map((split) => ({ transactionId: inserted.id, ...split })));
     } catch (error) {
       throw rowFailure("transactions", item.row.sheetRow, transactionReasonKey(error), error);
     }
   }
-}
-
-// The single split an income or expense carries (a transfer carries none); the deferred
-// sum trigger checks it at commit, so it need not balance the instant it lands. Its own
-// explicit-column insert, since the split table carries no `external_ref` to return.
-async function writeSplits(
-  tx: Transaction,
-  transactionId: string,
-  splits: { categoryId: string; amountCents: number }[],
-): Promise<void> {
-  if (splits.length === 0) return;
-  const values = sql.join(
-    splits.map(
-      (split) => sql`(${transactionId}, ${split.categoryId}, ${split.amountCents})`,
-    ),
-    sql`, `,
-  );
-  await tx.execute(
-    sql`insert into ${transactionSplits} (transaction_id, category_id, amount_cents) values ${values}`,
-  );
 }
 
 // The owner and group columns a budget or a goal lands with, by the place its row names.

@@ -30,6 +30,10 @@ const WIDTHS = {
   menu: "36px",
 } as const;
 
+// What a table row draws: an account, or the free part of one that holds pockets (RF-173),
+// which reads under its parent as the first of them.
+type Line = { row: AccountRow; free: boolean };
+
 /**
  * The dense Cuentas of `private/design-desktop/SPEC-A3.md` (RF-114): every
  * account's balance arrives already derived from `account_balances` and only
@@ -77,13 +81,30 @@ export function AccountsTable({
   const ownerLabel = (row: AccountRow) =>
     row.foreignOwner ? ownerOf(row.ownerName) : t("ownerPersonal");
 
-  const columns: DataColumn<AccountRow>[] = [
+  // The free line shows the parent's own balance and nothing else, so only the name and balance cells draw it.
+  const lines: Line[] = rows.flatMap((row) =>
+    row.totalBalances ? [{ row, free: false }, { row, free: true }] : [{ row, free: false }],
+  );
+  // Each cell of the other columns draws the account itself; the free line leaves them empty.
+  const ofAccount =
+    (cell: (row: AccountRow) => ReactNode) =>
+    ({ row, free }: Line): ReactNode =>
+      free ? null : cell(row);
+
+  const columns: DataColumn<Line>[] = [
     {
       key: "name",
       header: t("nameLabel"),
       width: WIDTHS.name,
-      cell: (row) => (
-        <Flex direction="column" gap="1" minWidth="0">
+      cell: ({ row, free }) =>
+        free ? (
+          <Flex pl="5">
+            <Text size="2" color="gray">
+              {t("freePart")}
+            </Text>
+          </Flex>
+        ) : (
+        <Flex direction="column" gap="1" minWidth="0" pl={row.parentAccountId ? "5" : "0"}>
           <Flex align="center" gap="2" minWidth="0">
             <Text size="2" weight="medium" truncate>
               {row.name}
@@ -98,13 +119,13 @@ export function AccountsTable({
             {row.ownerUserId ? ownerLabel(row) : t("ownerFund")}
           </Text>
         </Flex>
-      ),
+        ),
     },
     {
       key: "institution",
       header: t("institutionLabel"),
       width: WIDTHS.institution,
-      cell: (row) =>
+      cell: ofAccount((row) =>
         row.institution ? (
           <Text size="2" color="gray" truncate>
             {row.institution}
@@ -112,13 +133,14 @@ export function AccountsTable({
         ) : (
           absent()
         ),
+      ),
     },
     {
       key: "lastFour",
       header: t("lastFourLabel"),
       width: WIDTHS.lastFour,
       numeric: true,
-      cell: (row) =>
+      cell: ofAccount((row) =>
         row.lastFour ? (
           <Text size="2" color="gray">
             {row.lastFour}
@@ -126,16 +148,17 @@ export function AccountsTable({
         ) : (
           absent()
         ),
+      ),
     },
     {
       key: "kind",
       header: t("kindLabel"),
       width: WIDTHS.kind,
-      cell: (row) => (
+      cell: ofAccount((row) => (
         <Badge color={row.kind === "liability" ? "red" : "green"}>
           {t(row.kind === "liability" ? "kindLiability" : "kindAsset")}
         </Badge>
-      ),
+      )),
     },
     {
       key: "balance",
@@ -149,8 +172,9 @@ export function AccountsTable({
       // the same cut the phone's card makes; no cell here adds two currencies
       // together (RF-124). The figure carries its own minus, so no expense tone
       // is borrowed to draw one.
-      cell: (row) => {
-        const [settlement, ...others] = row.balances;
+      cell: ({ row, free }) => {
+        // A parent leads with the total of itself and its pockets; its free line is its own part (RF-173).
+        const [settlement, ...others] = free ? row.balances : (row.totalBalances ?? row.balances);
 
         return (
           <Flex direction="column" gap="1" align="end">
@@ -161,7 +185,7 @@ export function AccountsTable({
                 tone="plain"
               />
             )}
-            {others.map((balance) => (
+            {!free && others.map((balance) => (
               <Text key={balance.currency} size="1" color="gray">
                 {t.rich("balanceInCurrency", {
                   amount: () => (
@@ -186,7 +210,7 @@ export function AccountsTable({
       width: WIDTHS.menu,
       align: "end",
       // Nothing here acts on another member's personal account.
-      cell: (row) => row.foreignOwner ? null : (
+      cell: ofAccount((row) => row.foreignOwner ? null : (
         <RowMenu
           rowName={row.name}
           items={[
@@ -237,7 +261,7 @@ export function AccountsTable({
             },
           ]}
         />
-      ),
+      )),
     },
   ];
 
@@ -245,8 +269,8 @@ export function AccountsTable({
     <DataTable
       label={t("title")}
       columns={columns}
-      rows={rows}
-      rowKey={(row) => row.id}
+      rows={lines}
+      rowKey={({ row, free }) => (free ? `${row.id}:free` : row.id)}
       empty={empty}
     />
   );

@@ -54,13 +54,8 @@ import {
   OFFERED_CURRENCIES,
 } from "@/lib/currency";
 import { civilDateToDate, todayInBogota } from "@/lib/dates";
-import {
-  amountToInput,
-  convertMinor,
-  deriveRate,
-  formatMoney,
-  parseAmount,
-} from "@/lib/money";
+import { amountToInput, convertMinor, deriveRate, parseAmount } from "@/lib/money";
+import { useMoneyText } from "@/lib/use-privacy";
 import { useActionErrorToast } from "@/lib/use-action-toast";
 import {
   acceptDeliverySchema,
@@ -75,6 +70,7 @@ import {
   updateTransactionSchema,
   type CreateTransactionInput,
   type SettlementCurrencies,
+  type SplitFields,
   type UpdateTransactionInput,
 } from "@/lib/validation/transaction";
 
@@ -95,7 +91,7 @@ type MovementFormValues = {
   occurredAt: string;
   description: string | null;
   externalRef?: string;
-  splits: { categoryId: string; amount: string }[];
+  splits: SplitFields[];
   labelIds: string[];
   causedByTransactionId: string | null;
 };
@@ -194,7 +190,7 @@ export function MovementForm({
     amount?: string;
     occurredAt?: string;
     description?: string | null;
-    splits?: { categoryId: string; amount: string }[];
+    splits?: SplitFields[];
   };
   // A notice dated before its account opened: the form opens with the refusal already beside the
   // date, which is brought into view.
@@ -203,6 +199,7 @@ export function MovementForm({
   onSaved?: () => void;
   onDone: () => void;
 }) {
+  const moneyText = useMoneyText();
   const t = useTranslations("transactions");
   const tIngest = useTranslations("ingest");
   const tKey = useTranslations();
@@ -304,6 +301,7 @@ export function MovementForm({
           splits: movement.splits.map((split) => ({
             categoryId: split.categoryId,
             amount: amountToInput(split.amountCents, movement.currency, locale),
+            description: split.description,
           })),
           labelIds: movement.labels.map((label) => label.id),
           causedByTransactionId,
@@ -572,7 +570,7 @@ export function MovementForm({
       day: "numeric",
       month: "short",
     });
-    return `${name} · ${day} · ${formatMoney(row.amountCents, row.currency, locale)}`;
+    return `${name} · ${day} · ${moneyText(row.amountCents, row.currency, locale)}`;
   }
 
   const kindLabel =
@@ -656,7 +654,7 @@ export function MovementForm({
           the kind read-only, never a control (RF-18). */}
       <Flex direction="column" align="center" gap="2" mb="5">
         <Figure as="h1" size="8" color={kindColor}>
-          {`${sign}${formatMoney(amountMinor ?? 0, currency, locale)}`}
+          {`${sign}${moneyText(amountMinor ?? 0, currency, locale)}`}
         </Figure>
         {kindLabel && (
           <Flex align="center" gap="2">

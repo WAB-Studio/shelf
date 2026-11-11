@@ -75,6 +75,8 @@ type FieldColumn<Model> = {
   readonly flag?: true;
   // A rate the ledger keeps as a fraction and the sheet shows as a percentage.
   readonly percent?: true;
+  // A civil day the export writes as a real date cell, not text.
+  readonly date?: true;
 };
 
 // A cell with no backing `$inferSelect` column: the export derives it from a
@@ -428,7 +430,7 @@ export const accountSheetDescriptor = {
     { key: "placement", field: "ownerUserId" },
     { key: "institution", field: "institution" },
     { key: "amount", field: "initialBalanceCents", money: moneyBoundary },
-    { key: "balanceOn", field: "initialBalanceOn" },
+    { key: "balanceOn", field: "initialBalanceOn", date: true },
     { key: "settlementCurrency", field: "settlementCurrency" },
   ],
   rowSchema: accountRowSchema,
@@ -483,8 +485,8 @@ export const recurringRuleSheetDescriptor = {
     { key: "frequency", field: "frequency" },
     { key: "intervalN", field: "intervalN" },
     { key: "dayOfMonth", field: "dayOfMonth" },
-    { key: "nextRunOn", field: "nextRunOn" },
-    { key: "endsOn", field: "endsOn" },
+    { key: "nextRunOn", field: "nextRunOn", date: true },
+    { key: "endsOn", field: "endsOn", date: true },
   ],
   rowSchema: recurringRuleRowSchema,
 } satisfies SheetDescriptor<RecurringRuleModel, typeof recurringRuleRowSchema>;
@@ -508,7 +510,7 @@ export const transactionSheetDescriptor = {
     { key: "forHousehold", field: "forHousehold" },
     { key: "contributedBy", synthetic: true },
     { key: "category", synthetic: true, ref: { entity: "categories" } },
-    { key: "occurredAt", field: "occurredAt" },
+    { key: "occurredAt", field: "occurredAt", date: true },
     { key: "description", field: "description" },
     { key: "adjustment", field: "reconciliationId", flag: true },
     { key: "labels", synthetic: true, ref: { entity: "labels" } },
@@ -542,7 +544,7 @@ export const goalSheetDescriptor = {
     { key: "name", field: "name" },
     { key: "placement", field: "ownerUserId" },
     { key: "targetAmount", field: "targetAmountCents", money: moneyBoundary },
-    { key: "targetDate", field: "targetDate" },
+    { key: "targetDate", field: "targetDate", date: true },
     { key: "account", field: "accountId", ref: { entity: "accounts" } },
     { key: "archived", field: "archivedAt", flag: true },
   ],
@@ -557,7 +559,7 @@ export const goalContributionSheetDescriptor = {
     { key: "externalRef", field: "externalRef" },
     { key: "goal", field: "goalId", ref: { entity: "goals" } },
     { key: "amount", field: "amountCents", money: moneyBoundary },
-    { key: "contributedOn", field: "createdAt" },
+    { key: "contributedOn", field: "createdAt", date: true },
     { key: "movement", field: "transactionId", ref: { entity: "transactions" } },
   ],
   rowSchema: goalContributionRowSchema,
@@ -589,9 +591,9 @@ export const statementSheetDescriptor = {
   refField: "cutOffDate",
   columns: [
     { key: "account", field: "accountId", ref: { entity: "accounts" } },
-    { key: "periodStart", field: "periodStart" },
-    { key: "cutOffDate", field: "cutOffDate" },
-    { key: "paymentDueDate", field: "paymentDueDate" },
+    { key: "periodStart", field: "periodStart", date: true },
+    { key: "cutOffDate", field: "cutOffDate", date: true },
+    { key: "paymentDueDate", field: "paymentDueDate", date: true },
     { key: "openingBalance", field: "openingBalanceCents", money: moneyBoundary },
     { key: "closingBalance", field: "closingBalanceCents", money: moneyBoundary },
     { key: "credits", field: "creditsCents", money: moneyBoundary },

@@ -534,6 +534,12 @@ Board C1h corrected the same day: a card in credit reads «Según HomeFund −$ 
   selects, «Más» shows all); splitting across several categories sits behind «Dividir» and opens the split editor. No
   validation message shows before a submit attempt. Frequency is the count of the person's movements per category, read
   in the form options' one fan-out (the user, 2026-10-30).
+- **Decided by the user 2026-11-10** («Cuando te mande una factura que sea grupal por mcp quiero que haya separación de cada
+  producto en solo un movimiento, o sea movimiento y sub movimientos»; «sub clasificación de cada sub movimiento»): a receipt is
+  one movement and its lines are sub-movements. The split editor gives each line an optional «Detalle» (the product) under its
+  category and amount; a line's category may be a subcategory, read «Mercado › Lácteos». The movement's detail lists the lines
+  under it, each with its name, its category path and its amount. The movements list keeps one row and adds «N líneas» beside the
+  account. A discount is subtracted from the lines it applies to.
 - A fund category's name is bare, except where two can share it: a selector that lists both scopes puts them under
   «Categorías del fondo» and «Mis categorías», and Reportes and Inicio's month glance write «· fondo» after the fund's
   (the user, 2026-11-08, over 2026-10-30). A personal account (and a personal category where a component, not a string,
@@ -561,3 +567,12 @@ Elegidas por el crítico; el usuario puede cambiarlas («Elige lo que recomiende
   pestañas de escritorio que repetían la barra lateral se quitan.
 - Una cifra titular bajo el título: Presupuestos «Quedan $ X de $ Y», Movimientos el neto del mes, Metas lo apartado.
 - «Aportes del mes»: el usuario eligió el campo «De quién» en el ingreso al fondo (ver RF de aportes).
+- Ocultar montos (RF-174), decidido por el usuario 2026-11-10: «crea un botón para ocultar el dinero». Un ojo (`Eye` /
+  `EyeOff`, «Ocultar montos» / «Mostrar montos») arriba a la derecha de la tarjeta «Patrimonio neto» de Inicio y en el
+  encabezado de la app (la barra lateral en laptop, la barra superior en el teléfono): un solo estado por dispositivo.
+  Oculto, cada cifra queda como «$ ••••••», con la marca de la moneda y la misma altura de línea; los porcentajes siguen
+  visibles y lo que la persona escribe en un campo de monto no se oculta.
+
+## Decisión del 2026-11-10: bolsillos en Cuentas, por el usuario
+
+Un bolsillo es una cuenta dentro de otra, como los de Bancolombia: «Bolsillo Dinero» vive dentro de «Ahorros Bancolombia 3397». En la lista de Cuentas la cuenta madre muestra el total de ella y sus bolsillos; debajo, sangrada, la línea «Libre» con lo que queda en la madre misma, y luego cada bolsillo con su propio saldo, también sangrado. En el celular el bolsillo es una tarjeta sangrada bajo la de su madre y la madre muestra el total con «Libre» debajo. El formulario de la cuenta, al crear y al editar, trae un campo opcional «Dentro de» con las cuentas de ahorro de la misma persona o fondo y la misma moneda, y «Ninguna». Pasar dinero a un bolsillo es una transferencia normal entre las dos cuentas.

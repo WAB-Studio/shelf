@@ -43,7 +43,7 @@ import { deriveRate } from "@/lib/money";
 import { foreignSettlementCurrency } from "@/lib/validation/transaction";
 import { useActionErrorToast } from "@/lib/use-action-toast";
 import { accountNamesById, touchesForeignAccount } from "@/lib/fund/account-names";
-import { categoryNamesById } from "@/lib/fund/category-names";
+import { categoryNamesById, categoryPathsById } from "@/lib/fund/category-names";
 
 // A rate is read, not counted with: enough figures to recognise it, whichever
 // way round the two currencies are.
@@ -125,6 +125,7 @@ export function MovementDetail({
   const categoryNames = categoryNamesById(options.categories, (name) =>
     tc("scopedName", { name }),
   );
+  const categoryPaths = categoryPathsById(options.categories, categoryNames);
   const categoryColors = new Map<string, string | null>();
   for (const category of options.categories) {
     categoryColors.set(category.id, category.color);
@@ -373,6 +374,30 @@ export function MovementDetail({
             )}
           </Flex>
         </Card>
+
+        {/* The lines of a receipt: each with its name, its category path and its amount (RF-175). */}
+        {(movement.splits.length > 1 || movement.splits.some((split) => split.description)) && (
+          <Card>
+            <Flex direction="column">
+              <Text size="2" color="gray">
+                {t("splitsTitle")}
+              </Text>
+              {movement.splits.map((split, index) => (
+                <Fragment key={index}>
+                  <Separator size="4" my="3" />
+                  <DetailRow
+                    label={
+                      split.description
+                        ? t("splitLineLabel", { description: split.description, category: categoryPaths.get(split.categoryId) ?? "" })
+                        : (categoryPaths.get(split.categoryId) ?? "")
+                    }
+                    value={<Money minor={split.amountCents} currency={movement.currency} signed={false} />}
+                  />
+                </Fragment>
+              ))}
+            </Flex>
+          </Card>
+        )}
 
         {/* The movement that produced this one, one hop back and no further
             (RF-132): the card is the link. */}

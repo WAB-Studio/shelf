@@ -6,6 +6,7 @@ import { beforeEach, mock, test } from "node:test";
 import ExcelJS from "exceljs";
 import JSZip from "jszip";
 
+import { sheetDescriptors } from "@/lib/spreadsheet/schema";
 import { maxAmountMinor, parseAmount } from "@/lib/money";
 
 // M2 (RF-51, RF-52). The real pipeline runs, over a real .xlsx; the database read and the request
@@ -867,4 +868,79 @@ test("a second row for one account's terms, or one account's cut-off, is refused
     assert.deepEqual(second.errors, [{ key: "data.import.errors.repeatedRow", column: "account", value: null }], entity);
     assert.equal(second.object, null, entity);
   }
+});
+
+// ---- the export workbook's layout and its round trip -----------------------------------------------
+
+const sheetLabels = {
+  sheetName: (entity: string) => messages.data.sheets[entity],
+  columnHeader: (key: string) => messages.data.columns[key],
+};
+
+async function exportedWorkbook() {
+  const { buildWorkbook } = await import("./workbook");
+  const data = {
+    accounts: [{ ...CHECKING, name: "Checking", kind: "asset", initialBalanceCents: 0 }],
+    members: [],
+    transactions: [
+      { externalRef: "tx-1", fromAccount: "Checking", amount: 123456789, category: "Food", occurredAt: "2026-01-10", description: "Groceries" },
+    ],
+  };
+  const wb = buildWorkbook({ data: data as never, labels: sheetLabels });
+  const bytes = new Uint8Array(await wb.xlsx.writeBuffer());
+  const loaded = new ExcelJS.Workbook();
+  await loaded.xlsx.load(buffer(bytes));
+  return { bytes, loaded };
+}
+
+test("the export opens on Transactions, readable sheets first, background sheets hidden", async () => {
+  const { loaded } = await exportedWorkbook();
+  assert.deepEqual(
+    loaded.worksheets.map((s) => [s.name, s.state]),
+    [
+      [messages.data.sheets.transactions, "visible"],
+      [messages.data.sheets.accounts, "visible"],
+      [messages.data.sheets.members, "hidden"],
+    ],
+  );
+  assert.equal(loaded.views[0].activeTab, 0);
+});
+
+test("the Transactions sheet has a frozen bold header, a filter, a date cell and a formatted amount", async () => {
+  const { loaded } = await exportedWorkbook();
+  const sheet = loaded.getWorksheet(messages.data.sheets.transactions)!;
+  assert.equal(sheet.getRow(1).getCell(1).font?.bold, true);
+  assert.equal(sheet.views[0].state, "frozen");
+  assert.equal(sheet.views[0].ySplit, 1);
+  assert.ok(sheet.autoFilter);
+
+  const column = (key: string) => sheetDescriptors.transactions.columns.findIndex((c) => c.key === key) + 1;
+  const date = sheet.getRow(2).getCell(column("occurredAt"));
+  assert.ok(date.value instanceof Date);
+  assert.equal(date.numFmt, "dd/mm/yyyy");
+  const amount = sheet.getRow(2).getCell(column("amount"));
+  assert.equal(amount.value, 1234567.89);
+  assert.equal(amount.numFmt, "#,##0.00;[Red]-#,##0.00");
+  assert.ok((sheet.getColumn(column("description")).width ?? 0) >= 10);
+  assert.ok((sheet.getColumn(column("amount")).width ?? 0) >= "1,234,567.89".length);
+});
+
+test("an exported workbook, background sheets hidden and dates as cells, round-trips through the import", async () => {
+  const { bytes } = await exportedWorkbook();
+  const rows = await run(bytes);
+  assert.equal(rows.length, 1);
+  assert.deepEqual(rows[0].errors, []);
+  assert.equal(rows[0].externalRef, "tx-1");
+});
+
+test("a sheet picked by name stays visible, and a hidden sheet still formats its dates", async () => {
+  const { buildWorkbook } = await import("./workbook");
+  const data = { recurringRules: [{ externalRef: "r", nextRunOn: "2026-02-01" }] };
+  const picked = buildWorkbook({ data: data as never, labels: sheetLabels, hideBackground: false });
+  assert.equal(picked.worksheets[0].state, "visible");
+  const full = buildWorkbook({ data: { ...data, accounts: [] } as never, labels: sheetLabels });
+  const rules = full.getWorksheet(messages.data.sheets.recurringRules)!;
+  assert.equal(rules.state, "hidden");
+  const nextRunOn = sheetDescriptors.recurringRules.columns.findIndex((c) => c.key === "nextRunOn") + 1;
+  assert.equal(rules.getRow(2).getCell(nextRunOn).numFmt, "dd/mm/yyyy");
 });

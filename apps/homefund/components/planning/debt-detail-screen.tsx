@@ -31,7 +31,7 @@ import type { DebtPocket } from "@/db/queries/debt-overview";
 import type { PendingSettlement } from "@/db/queries/debt-statements";
 import type { CurrencyCode } from "@/lib/currency";
 import { civilDateToDate, todayInBogota } from "@/lib/dates";
-import { formatMoney } from "@/lib/money";
+import { useMoneyText } from "@/lib/use-privacy";
 
 // The em dash a cell or a tile with nothing to name reads as (SPEC-A3), not a
 // word a translator would ever change.
@@ -46,6 +46,7 @@ const NO_VALUE = "—";
  * no action at all (`canWrite`).
  */
 export function DebtDetailScreen({ data }: { data: DebtDetailData }) {
+  const moneyText = useMoneyText();
   const t = useTranslations("installments");
   const tDebts = useTranslations("debts");
   const format = useFormatter();
@@ -195,7 +196,7 @@ export function DebtDetailScreen({ data }: { data: DebtDetailData }) {
           : tDebts("tileAvailableCreditNote", {
               // JSX cannot travel through `t()`, so the one path from a stored
               // integer to a figure is called straight (RF-121).
-              amount: formatMoney(terms.creditLimitCents, currency, locale),
+              amount: moneyText(terms.creditLimitCents, currency, locale),
             }),
     },
   ];

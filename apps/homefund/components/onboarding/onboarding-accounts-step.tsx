@@ -14,7 +14,7 @@ import {
 } from "@/components/ui";
 import type { AccountRow } from "@/db/queries/accounts";
 import { Link as LocaleLink } from "@/i18n/navigation";
-import { formatMoney } from "@/lib/money";
+import { useMoneyText } from "@/lib/use-privacy";
 
 // The list is the server's `accounts` prop: `createAccountAction` calls
 // `refresh()`, so a new account re-renders here without any client copy.
@@ -70,6 +70,7 @@ export function OnboardingAccountsStep({
 }
 
 function AddedAccountCard({ account }: { account: AccountRow }) {
+  const moneyText = useMoneyText();
   const t = useTranslations("accounts");
   const locale = useLocale();
 
@@ -88,7 +89,7 @@ function AddedAccountCard({ account }: { account: AccountRow }) {
             currency and no locale. `formatMoney` takes the magnitude, and the
             badge beside it is what says which side the account is on. */}
         <Text weight="medium">
-          {formatMoney(
+          {moneyText(
             account.initialBalanceCents,
             account.settlementCurrency,
             locale,

@@ -890,3 +890,30 @@ test("an account edit nobody else touched saves, even after the dialog sat open"
 
   await dropAccount(account.id);
 });
+
+test("lists a pocket under its parent, the parent with the total of both and its own part as «Libre»", async ({
+  page,
+}) => {
+  // The dense table renders from `lg` up; both projects drive it at the laptop's width, as «the laptop row» does.
+  await page.setViewportSize({ width: 1280, height: 900 });
+  // Kills: a pocket drawn as a loose account, a parent that shows only its own balance, a total counted twice.
+  const parent = await seedAccount({ openingCents: 249_816_00 });
+  const pocket = await seedAccount({ openingCents: 5_252_338_00 });
+  await asHarnessUser(async (tx) => {
+    await tx`update accounts set parent_account_id = ${parent.id} where id = ${pocket.id}`;
+  });
+
+  await page.goto("/es/settings/accounts");
+  const table = page.getByRole("table", { name: accounts.title });
+  const rows = table.getByRole("row").filter({ hasText: new RegExp(`${parent.name}|${accounts.freePart}|${pocket.name}`) });
+  await expect(rows).toHaveCount(3);
+  await expect(rows.nth(0)).toContainText(parent.name);
+  await expect(rows.nth(1)).toContainText(accounts.freePart);
+  await expect(rows.nth(2)).toContainText(pocket.name);
+  expect(pesosOf(await rows.nth(0).getByRole("cell").nth(4).innerText())).toBe(5_502_154);
+  expect(pesosOf(await rows.nth(1).getByRole("cell").nth(4).innerText())).toBe(249_816);
+  expect(pesosOf(await rows.nth(2).getByRole("cell").nth(4).innerText())).toBe(5_252_338);
+
+  await dropAccount(pocket.id);
+  await dropAccount(parent.id);
+});

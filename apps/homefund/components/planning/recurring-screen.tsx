@@ -40,7 +40,7 @@ import type { TransactionFormOptions } from "@/db/queries/transaction-form";
 import { useRouter } from "@/i18n/navigation";
 import { civilDateToDate } from "@/lib/dates";
 import { categoryNamesById } from "@/lib/fund/category-names";
-import { formatMoney } from "@/lib/money";
+import { useMoneyText } from "@/lib/use-privacy";
 import { useActionErrorToast } from "@/lib/use-action-toast";
 
 /**
@@ -237,6 +237,7 @@ function RuleCard({
   onEdit: () => void;
   onViewGenerated: () => void;
 }) {
+  const moneyText = useMoneyText();
   const t = useTranslations("recurringRules");
   const tKey = useTranslations();
   const format = useFormatter();
@@ -306,7 +307,7 @@ function RuleCard({
           color={isIncome ? "grass" : undefined}
           nowrap
         >
-          {formatMoney(rule.amountCents, rule.currency, locale)}
+          {moneyText(rule.amountCents, rule.currency, locale)}
         </Figure>
       </ToneSurface>
       <Flex align="center" justify="end" gap="3" mt="3">

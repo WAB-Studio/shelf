@@ -589,6 +589,20 @@
       "when": 1794357011263,
       "tag": "0083_an_assistant_signs_in_with_oauth",
       "breakpoints": true
+    },
+    {
+      "idx": 84,
+      "version": "7",
+      "when": 1794363534343,
+      "tag": "0084_a_pocket_sits_inside_an_account",
+      "breakpoints": true
+    },
+    {
+      "idx": 85,
+      "version": "7",
+      "when": 1794364983731,
+      "tag": "0085_a_receipt_line_has_a_name",
+      "breakpoints": true
     }
   ]
 }

@@ -40,7 +40,7 @@ import { deriveRate } from "@/lib/money";
 import { foreignSettlementCurrency } from "@/lib/validation/transaction";
 import { useActionErrorToast } from "@/lib/use-action-toast";
 import { accountNamesById, touchesForeignAccount } from "@/lib/fund/account-names";
-import { categoryNamesById } from "@/lib/fund/category-names";
+import { categoryNamesById, categoryPathsById } from "@/lib/fund/category-names";
 
 // The side pane of the DetalleMovimiento artboard, beside a main pane that takes
 // what is left.
@@ -122,6 +122,7 @@ export function MovementDetailDesktop({
   const categoryNames = categoryNamesById(options.categories, (name) =>
     tc("scopedName", { name }),
   );
+  const categoryPaths = categoryPathsById(options.categories, categoryNames);
   const categoryColors = new Map<string, string | null>();
   for (const category of options.categories) {
     categoryColors.set(category.id, category.color);
@@ -362,7 +363,7 @@ export function MovementDetailDesktop({
               }
             >
               {movement.splits.map((split, index) => (
-                <Fragment key={split.categoryId}>
+                <Fragment key={index}>
                   {index > 0 && <Separator size="4" />}
                   <Flex align="center" justify="between" gap="4" px="4" py="3">
                     <Flex align="center" gap="2" minWidth="0">
@@ -370,9 +371,16 @@ export function MovementDetailDesktop({
                         color={categoryColors.get(split.categoryId) ?? null}
                         size={9}
                       />
-                      <Text size="2" color="gray" truncate>
-                        {categoryNames.get(split.categoryId)}
-                      </Text>
+                      <Flex direction="column" minWidth="0">
+                        {split.description && (
+                          <Text size="2" truncate>
+                            {split.description}
+                          </Text>
+                        )}
+                        <Text size="2" color="gray" truncate>
+                          {categoryPaths.get(split.categoryId)}
+                        </Text>
+                      </Flex>
                     </Flex>
                     <Money
                       minor={split.amountCents}

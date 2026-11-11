@@ -15,12 +15,15 @@ import {
   IconButton,
   Select,
   Text,
+  TextField,
   ToneSurface,
 } from "@/components/ui";
 import type { ScopedCategory } from "@/db/queries/transaction-form";
 import type { CurrencyCode } from "@/lib/currency";
 import { scopedCategoryName } from "@/lib/fund/category-names";
-import { formatMoney, parseAmount } from "@/lib/money";
+import { parseAmount } from "@/lib/money";
+import { useMoneyText } from "@/lib/use-privacy";
+import type { SplitFields } from "@/lib/validation/transaction";
 
 // How many categories the grid shows before «Más».
 const GRID_SIZE = 8;
@@ -28,7 +31,7 @@ const GRID_SIZE = 8;
 // A split as the form owns it: a category and a typed string, minor units only
 // under the hood. Kept identical to the form's `splits` element so
 // `value`/`onChange` hand straight to a React Hook Form field.
-type Split = { categoryId: string; amount: string };
+type Split = SplitFields;
 
 // A row's typed string in minor units, or zero while it is empty or half-typed:
 // the remainder must read as the whole total until a figure lands, never as NaN.
@@ -63,6 +66,7 @@ export function SplitEditor({
   value: Split[];
   onChange: (splits: Split[]) => void;
 }) {
+  const moneyText = useMoneyText();
   const t = useTranslations("transactions");
   const tc = useTranslations("categories");
   const locale = useLocale();
@@ -82,12 +86,14 @@ export function SplitEditor({
             id: category.id,
             name: category.name,
             label: scopedCategoryName(category.name, category.scope, mark),
+            path: scopedCategoryName(category.name, category.scope, mark),
             color: category.color,
           },
           ...category.children.map((child) => ({
             id: child.id,
             name: child.name,
             label: scopedCategoryName(child.name, category.scope, mark),
+            path: `${scopedCategoryName(category.name, category.scope, mark)} › ${child.name}`,
             color: child.color,
           })),
         ]),
@@ -96,7 +102,7 @@ export function SplitEditor({
 
   // One category is the default and one tap: the grid shows the busiest few and
   // «Más» the rest. Splitting across several is a step behind «Dividir».
-  const [dividing, setDividing] = useState(value.length > 1);
+  const [dividing, setDividing] = useState(value.length > 1 || Boolean(value[0]?.description));
   const [showAll, setShowAll] = useState(false);
   const ranked = useMemo(() => {
     const rank = new Map(frequentIds.map((id, at) => [id, at]));
@@ -146,7 +152,7 @@ export function SplitEditor({
               color={option.color}
               pressed={option.id === chosen}
               onClick={() =>
-                onChange([{ categoryId: option.id, amount: value[0]?.amount ?? total }])
+                onChange([{ ...value[0], categoryId: option.id, amount: value[0]?.amount ?? total }])
               }
             />
           ))}
@@ -176,54 +182,64 @@ export function SplitEditor({
           null;
 
         return (
-          <Flex key={index} align="center" gap="3">
-            <CategoryTile color={color} size={14} />
-            {/* The artboard draws the category and its amount on one 42px line.
-                Only from `md` up: a phone has no width to spare, and the wider
-                trigger pushes the sheet past the viewport. */}
-            <Select.Root
-              size={{ initial: "2", md: "3" }}
-              value={split.categoryId || undefined}
-              onValueChange={(categoryId) => updateSplit(index, { categoryId })}
-            >
-              {/* Takes the row and gives it back. Radix pins `flex-shrink: 0`
-                  on its own trigger, so the floor at zero alone leaves the row
-                  as wide as the longest category name and the sheet grows past
-                  a phone's width to hold it. */}
-              <Flex asChild flexGrow="1" flexShrink="1" minWidth="0">
-                <Select.Trigger
-                  placeholder={t("categoryLabel")}
-                  aria-label={t("splitRowCategory", { position })}
-                />
-              </Flex>
-              <Select.Content position="popper">
-                {options.map((option) => (
-                  <Select.Item key={option.id} value={option.id}>
-                    {option.label}
-                  </Select.Item>
-                ))}
-              </Select.Content>
-            </Select.Root>
-            <AmountField
-              size="3"
-              width={110}
-              value={split.amount}
-              onChange={(event) =>
-                updateSplit(index, { amount: event.target.value })
-              }
-              inputMode="numeric"
-              aria-label={t("splitRowAmount", { position })}
+          <Flex key={index} direction="column" gap="2">
+            <Flex align="center" gap="3">
+              <CategoryTile color={color} size={14} />
+              {/* The artboard draws the category and its amount on one 42px line.
+                  Only from `md` up: a phone has no width to spare, and the wider
+                  trigger pushes the sheet past the viewport. */}
+              <Select.Root
+                size={{ initial: "2", md: "3" }}
+                value={split.categoryId || undefined}
+                onValueChange={(categoryId) => updateSplit(index, { categoryId })}
+              >
+                {/* Takes the row and gives it back. Radix pins `flex-shrink: 0`
+                    on its own trigger, so the floor at zero alone leaves the row
+                    as wide as the longest category name and the sheet grows past
+                    a phone's width to hold it. */}
+                <Flex asChild flexGrow="1" flexShrink="1" minWidth="0">
+                  <Select.Trigger
+                    placeholder={t("categoryLabel")}
+                    aria-label={t("splitRowCategory", { position })}
+                  />
+                </Flex>
+                <Select.Content position="popper">
+                  {options.map((option) => (
+                    <Select.Item key={option.id} value={option.id}>
+                      {option.path}
+                    </Select.Item>
+                  ))}
+                </Select.Content>
+              </Select.Root>
+              <AmountField
+                size="3"
+                width={110}
+                value={split.amount}
+                onChange={(event) =>
+                  updateSplit(index, { amount: event.target.value })
+                }
+                inputMode="numeric"
+                aria-label={t("splitRowAmount", { position })}
+              />
+              <IconButton
+                type="button"
+                tap
+                variant="ghost"
+                color="gray"
+                aria-label={t("splitRowRemove", { position })}
+                onClick={() => removeSplit(index)}
+              >
+                <XIcon size={16} />
+              </IconButton>
+            </Flex>
+            <TextField.Root
+              size="2"
+              value={split.description ?? ""}
+              maxLength={200}
+              placeholder={t("splitDescriptionPlaceholder")}
+              aria-label={t("splitRowDescription", { position })}
+              onChange={(event) => updateSplit(index, { description: event.target.value })}
             />
-            <IconButton
-              type="button"
-              tap
-              variant="ghost"
-              color="gray"
-              aria-label={t("splitRowRemove", { position })}
-              onClick={() => removeSplit(index)}
-            >
-              <XIcon size={16} />
-            </IconButton>
           </Flex>
         );
       })}
@@ -259,7 +275,7 @@ export function SplitEditor({
           weight="bold"
           color={remainderMinor === 0 ? "grass" : "red"}
         >
-          {formatMoney(remainderMinor, currency, locale)}
+          {moneyText(remainderMinor, currency, locale)}
         </Figure>
       </ToneSurface>
     </Flex>

@@ -41,7 +41,8 @@ import type {
 } from "@/db/queries/transaction-form";
 import { BASE_CURRENCY } from "@/lib/currency";
 import { todayInBogota } from "@/lib/dates";
-import { amountToInput, formatMoney } from "@/lib/money";
+import { amountToInput } from "@/lib/money";
+import { useMoneyText } from "@/lib/use-privacy";
 import {
   interpretQuickEntry,
   type AmountAsk,
@@ -136,6 +137,7 @@ function QuickEntryForm({
   onOpenChange: (open: boolean) => void;
   onOpenFull: () => void;
 }) {
+  const moneyText = useMoneyText();
   const t = useTranslations("transactions");
   const locale = useLocale();
   const onActionError = useActionErrorToast();
@@ -403,7 +405,7 @@ function QuickEntryForm({
             >
               {ask.choices.map(({ cents }, index) => (
                 <RadioCards.Item key={index} value={String(index)}>
-                  {formatMoney(cents, accountCurrency, locale)}
+                  {moneyText(cents, accountCurrency, locale)}
                 </RadioCards.Item>
               ))}
             </RadioCards.Root>

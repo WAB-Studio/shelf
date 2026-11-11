@@ -38,6 +38,7 @@ import { getShellSummary } from "@/db/queries/app-shell";
 import {
   archiveAccount,
   createAccount,
+  deleteAccount,
   listAccounts,
   restoreAccount,
   updateAccount,
@@ -4126,6 +4127,9 @@ async function main(): Promise<void> {
   await fundPotSuite();
   await otherMembersRowsSuite();
   await deferralImportSuite();
+  await accountPocketSuite();
+  await receiptLinesSuite();
+  await mcpCleanupSuite();
 }
 
 // A member recorded without a login is someone in the fund: a leader whose fund holds one is not alone, so an
@@ -15231,7 +15235,7 @@ async function mcpDoorSuite(): Promise<void> {
   assert(
     next("RF-144: /mcp answers 401 with no key, an unknown one or a webhook's, and lists its tools to a key for Claude"),
     anonymous.status === 401 && forged.status === 401 && webhookKey.status === 401 &&
-      JSON.stringify(names) === JSON.stringify(["create_account", "create_category", "delete_movement", "import_statement", "list_accounts", "list_categories", "list_movements", "preview_statement", "record_movement", "review_month", "update_account", "update_movement"]),
+      JSON.stringify(names) === JSON.stringify(["create_account", "create_category", "delete_movement", "import_statement", "list_accounts", "list_categories", "list_movements", "merge_movements", "move_category_movements", "preview_statement", "record_movement", "review_month", "update_account", "update_category", "update_movement"]),
     `no key ${anonymous.status}, unknown key ${forged.status}, webhook key ${webhookKey.status}, tools ${JSON.stringify(names)}`,
   );
 
@@ -16692,5 +16696,472 @@ async function otherMembersRowsSuite(): Promise<void> {
     next("RF-58: the owner still gets their own reminder"),
     own.rows.some((row) => row.id === payment.plannedPaymentId),
     `reminders ${JSON.stringify(own.rows.map((row) => row.id))}`,
+  );
+}
+
+// RF-173: a pocket is an account inside a savings account. It keeps its own movements, the parent's row
+// carries the total with its own part apart, and the database refuses a parent that cannot hold it.
+async function accountPocketSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const { POST } = await import("@/app/mcp/route");
+  const owner = await createMembershipFreeUser();
+  const stranger = await createMembershipFreeUser();
+  const base = {
+    kind: "asset" as const, subtype: "bank" as const, groupId: null, isShared: false, institution: null,
+    settlementCurrency: BASE_CURRENCY, balanceOn: "2026-01-01",
+  };
+  const open = (user: HarnessUser, name: string, amountMinor: number, extra: Partial<Parameters<typeof createAccount>[0]> = {}) =>
+    asUser(user, () => createAccount({ ...base, ownerUserId: user.id, name: `Harness rf173 ${name} ${tag}`, amountMinor, ...extra }));
+  const refusedWith = async (attempt: () => Promise<unknown>) => {
+    try {
+      await attempt();
+      return "none";
+    } catch (error) {
+      return pgErrorCode(error) ?? "unknown";
+    }
+  };
+
+  const parent = await open(owner, "ahorros", 249_816_00);
+  track("accounts", parent.accountId);
+  const pocket = await open(owner, "bolsillo", 5_252_338_00, { parentAccountId: parent.accountId });
+  track("accounts", pocket.accountId);
+  const [loose] = [await open(owner, "nequi", 111_384_00)];
+  track("accounts", loose.accountId);
+
+  const listed = await asUser(owner, () => listAccounts({ archived: false }));
+  const rows = listed.filter((row) => [parent.accountId, pocket.accountId, loose.accountId].includes(row.id));
+  const listedParent = rows.find((row) => row.id === parent.accountId);
+  const listedPocket = rows.find((row) => row.id === pocket.accountId);
+  assert(
+    next("RF-173: a pocket opens under an asset account and the list puts it right after its parent"),
+    listedPocket?.parentAccountId === parent.accountId &&
+      listed.findIndex((row) => row.id === pocket.accountId) === listed.findIndex((row) => row.id === parent.accountId) + 1,
+    `pocket ${JSON.stringify(listedPocket && [listedPocket.parentAccountId])}, order ${JSON.stringify(listed.map((row) => row.name))}`,
+  );
+  assert(
+    next("RF-173: the parent's row totals its own balance plus its pockets', its own part stays apart, and a row with no pockets has no total"),
+    listedParent?.balances[0]?.balanceCents === 249_816_00 &&
+      listedParent.totalBalances?.[0]?.balanceCents === 5_502_154_00 &&
+      listedPocket?.totalBalances === undefined &&
+      rows.find((row) => row.id === loose.accountId)?.totalBalances === undefined,
+    `parent ${JSON.stringify(listedParent && [listedParent.balances, listedParent.totalBalances])}`,
+  );
+  const worth = netWorthByOwner(listed, await asUser(owner, () => getAccountBalances())).filter(
+    (bucket) => bucket.bucket === "member" && bucket.ownerUserId === owner.id && bucket.currency === BASE_CURRENCY,
+  );
+  assert(
+    next("RF-173: net worth counts each account once, so the parent's total is not added to its pockets"),
+    worth.length === 1 && worth[0].netWorthCents === 249_816_00 + 5_252_338_00 + 111_384_00,
+    `net worth ${JSON.stringify(worth)}`,
+  );
+
+  const card = await open(owner, "tarjeta", 1_000_00, { kind: "liability", subtype: "card" });
+  track("accounts", card.accountId);
+  const strangerAccount = await open(stranger, "ajena", 0);
+  track("accounts", strangerAccount.accountId);
+  const dollars = await open(owner, "dolares", 0, { settlementCurrency: "USD" });
+  track("accounts", dollars.accountId);
+  const refusals = await Promise.all([
+    refusedWith(() => open(owner, "bolsillo de tarjeta", 0, { parentAccountId: card.accountId })),
+    refusedWith(() => open(owner, "bolsillo anidado", 0, { parentAccountId: pocket.accountId })),
+    refusedWith(() => open(owner, "bolsillo en dolares", 0, { parentAccountId: dollars.accountId })),
+    refusedWith(() => open(owner, "bolsillo ajeno", 0, { parentAccountId: strangerAccount.accountId })),
+    refusedWith(() => open(owner, "tarjeta bolsillo", 0, { kind: "liability", subtype: "card", parentAccountId: parent.accountId })),
+  ]);
+  assert(
+    next("RF-173: a pocket is refused under a liability, under another pocket, in another currency, under another person's account, and as a liability"),
+    JSON.stringify(refusals) === JSON.stringify(["PK001", "PK001", "PK001", "PK001", "23514"]),
+    `codes ${JSON.stringify(refusals)}`,
+  );
+  const becomePocket = await refusedWith(() =>
+    asUser(owner, () => updateAccount({
+      accountId: parent.accountId, name: `Harness rf173 ahorros ${tag}`, subtype: "bank", isShared: false, institution: null,
+      parentAccountId: loose.accountId, settlementCurrency: BASE_CURRENCY, amountMinor: 249_816_00, balanceOn: "2026-01-01",
+    })),
+  );
+  assert(
+    next("RF-173: an account that holds pockets cannot itself become a pocket"),
+    becomePocket === "PK001",
+    `code ${becomePocket}`,
+  );
+
+  const archiveParent = await refusedWith(() => asUser(owner, () => archiveAccount({ accountId: parent.accountId })));
+  const deleteParent = await refusedWith(() => asUser(owner, () => deleteAccount({ accountId: parent.accountId })));
+  await asUser(owner, () => archiveAccount({ accountId: pocket.accountId }));
+  const archiveAfter = await refusedWith(() => asUser(owner, () => archiveAccount({ accountId: parent.accountId })));
+  const restorePocket = await refusedWith(() => asUser(owner, () => restoreAccount({ accountId: pocket.accountId })));
+  assert(
+    next("RF-173: a parent with live pockets is neither archived (PK002) nor deleted (23503); once its pockets are archived it archives, and a pocket cannot come back under an archived parent"),
+    archiveParent === "PK002" && deleteParent === "23503" && archiveAfter === "none" && restorePocket === "PK001",
+    `archive ${archiveParent}, delete ${deleteParent}, after ${archiveAfter}, restore ${restorePocket}`,
+  );
+
+  // The same writes through /mcp, which reads the same schema and the same trigger.
+  const { id: keyId, token } = await asUser(owner, () =>
+    issueWebhookCredential({ name: `Harness rf173 ${tag}`, purpose: "mcp", defaultAccountId: null, defaultCategoryId: null }),
+  );
+  keep("webhook_credentials", keyId);
+  const writer = mcpClient(POST, token);
+  const made = await writer.tool("create_account", {
+    name: `Harness rf173 mcp ahorros ${tag}`, kind: "asset", subtype: "bank", openingBalanceCents: 10_000, balanceOn: "2026-01-01",
+  });
+  const madeId = (made.value as { accountId?: string } | null)?.accountId ?? "";
+  if (madeId) track("accounts", madeId);
+  const madePocket = await writer.tool("create_account", {
+    name: `Harness rf173 mcp bolsillo ${tag}`, kind: "asset", subtype: "bank", openingBalanceCents: 5_000, balanceOn: "2026-01-01",
+    parentAccountId: madeId,
+  });
+  const madePocketId = (madePocket.value as { accountId?: string } | null)?.accountId ?? "";
+  if (madePocketId) track("accounts", madePocketId);
+  const alienPocket = await writer.tool("create_account", {
+    name: `Harness rf173 mcp ajeno ${tag}`, kind: "asset", subtype: "bank", openingBalanceCents: 0, balanceOn: "2026-01-01",
+    parentAccountId: strangerAccount.accountId,
+  });
+  const seen = (await writer.tool("list_accounts")).value as { id: string; parentAccountId: string | null; updatedAt: string }[];
+  const seenPocket = seen.find((one) => one.id === madePocketId);
+  assert(
+    next("RF-173: create_account takes parentAccountId and list_accounts returns it; another person's account as parent is refused"),
+    !made.isError && !madePocket.isError && seenPocket?.parentAccountId === madeId && alienPocket.isError &&
+      seen.find((one) => one.id === madeId)?.parentAccountId === null,
+    `pocket ${JSON.stringify(madePocket.value)}, listed ${JSON.stringify(seenPocket)}, alien ${JSON.stringify(alienPocket.value)}`,
+  );
+  const detached = await writer.tool("update_account", { accountId: madePocketId, expectedUpdatedAt: seenPocket?.updatedAt ?? "", parentAccountId: null });
+  const [afterDetach] = await fixtureSql<{ parent_account_id: string | null }[]>`select parent_account_id from accounts where id = ${madePocketId || randomUUID()}`;
+  const fresh = ((await writer.tool("list_accounts")).value as { id: string; updatedAt: string }[]).find((one) => one.id === madePocketId);
+  const reattached = await writer.tool("update_account", { accountId: madePocketId, expectedUpdatedAt: fresh?.updatedAt ?? "", parentAccountId: madeId });
+  const [afterAttach] = await fixtureSql<{ parent_account_id: string | null }[]>`select parent_account_id from accounts where id = ${madePocketId || randomUUID()}`;
+  assert(
+    next("RF-173: update_account takes a pocket out of its parent with null and puts it back with the parent's id"),
+    !detached.isError && afterDetach?.parent_account_id === null && !reattached.isError && afterAttach?.parent_account_id === madeId,
+    `detach ${JSON.stringify(detached.value)} -> ${afterDetach?.parent_account_id}, attach ${JSON.stringify(reattached.value)} -> ${afterAttach?.parent_account_id}`,
+  );
+}
+
+// RF-175: a receipt is one movement whose splits are its lines, each with a product name and a category,
+// several of them sharing one; budgets still derive from the splits by category and a subcategory counts in its parent.
+async function receiptLinesSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const { POST } = await import("@/app/mcp/route");
+  const owner = await createMembershipFreeUser();
+  const account = await asUser(owner, () =>
+    createAccount({
+      kind: "asset", subtype: "bank", groupId: null, isShared: false, institution: null, settlementCurrency: BASE_CURRENCY,
+      balanceOn: "2026-01-01", ownerUserId: owner.id, name: `Harness rf175 cuenta ${tag}`, amountMinor: 1_000_000_00,
+    }),
+  );
+  track("accounts", account.accountId);
+  const [market, dairy, cleaning, home] = [randomUUID(), randomUUID(), randomUUID(), randomUUID()];
+  await fixtureSql.begin(async (tx) => {
+    const claims = JSON.stringify({ sub: owner.id, role: "authenticated", aud: "authenticated" });
+    await tx`select set_config('request.jwt.claims', ${claims}, true)`;
+    for (const [id, name, parent] of [
+      [market, "Mercado", null], [dairy, "Lácteos", market], [cleaning, "Aseo", market], [home, "Hogar y arreglos", null],
+    ] as const) {
+      await tx`insert into categories (id, owner_user_id, name, kind, color, parent_id)
+        values (${id}, ${owner.id}, ${`Harness rf175 ${name} ${tag}`}, 'expense', '#4C8C4A', ${parent})`;
+      track("categories", id);
+    }
+  });
+  const budget = async (categoryId: string) => {
+    const { budgetId } = await asUser(owner, () =>
+      createBudget({
+        ownerUserId: owner.id, groupId: null, categoryId, accountId: null, labelId: null, period: "monthly",
+        limitCents: 900_000_00, thresholdPct: 80, name: `Harness rf175 presupuesto ${tag} ${categoryId.slice(0, 4)}`,
+      }),
+    );
+    keep("budgets", budgetId);
+    return budgetId;
+  };
+  const [marketBudget, homeBudget] = [await budget(market), await budget(home)];
+  const today = todayInBogota();
+  const refusedWith = async (attempt: () => Promise<unknown>) => {
+    try {
+      await attempt();
+      return "none";
+    } catch (error) {
+      return pgErrorCode(error) ?? "unknown";
+    }
+  };
+  const lines = [
+    { categoryId: dairy, amountCents: 4_000_00, description: "Leche entera" },
+    { categoryId: dairy, amountCents: 3_000_00, description: "Yogurt" },
+    { categoryId: cleaning, amountCents: 2_000_00, description: "Jabón de loza" },
+    { categoryId: home, amountCents: 5_000_00, description: "Bombillo" },
+  ];
+  const receipt = (splits: typeof lines, amountCents: number) =>
+    createTransaction({
+      fromAccountId: account.accountId, toAccountId: null, amountCents, occurredAt: today,
+      description: `Harness rf175 factura ${tag}`, externalRef: null, splits, labelIds: [],
+    });
+
+  const { transactionId } = await asUser(owner, () => receipt(lines, 14_000_00));
+  track("transactions", transactionId);
+  const [read] = await asUser(owner, () => listTransactions({ id: transactionId }));
+  const byName = new Map((read?.splits ?? []).map((split) => [split.description, split]));
+  assert(
+    next("RF-175: one movement carries four lines summing to its total, two in the same category, each with its product name"),
+    read !== undefined && read.splits.length === 4 && read.amountCents === 14_000_00 &&
+      byName.get("Leche entera")?.categoryId === dairy && byName.get("Yogurt")?.categoryId === dairy &&
+      byName.get("Bombillo")?.amountCents === 5_000_00,
+    `splits ${JSON.stringify(read?.splits)}`,
+  );
+
+  const mismatch = await refusedWith(() => asUser(owner, () => receipt(lines, 14_000_01)));
+  const tooLong = await refusedWith(() =>
+    asUser(owner, () => receipt([{ categoryId: home, amountCents: 1_000_00, description: "x".repeat(201) }], 1_000_00)),
+  );
+  assert(
+    next("RF-175: lines that do not sum to the movement are refused, and so is a product name over 200 characters"),
+    mismatch === "23514" && tooLong === "23514",
+    `mismatch ${mismatch}, too long ${tooLong}`,
+  );
+
+  // A discount is not a line of its own: a negative one is refused, so it rides inside the lines it lowers.
+  const negative = await refusedWith(() =>
+    asUser(owner, () =>
+      receipt([{ categoryId: home, amountCents: 10_500_00, description: "Bombillo" }, { categoryId: home, amountCents: -500_00, description: "Descuento" }], 10_000_00),
+    ),
+  );
+  const { transactionId: discounted } = await asUser(owner, () =>
+    receipt([{ categoryId: home, amountCents: 9_500_00, description: "Bombillo (con descuento)" }], 9_500_00),
+  );
+  track("transactions", discounted);
+  assert(
+    next("RF-175: a discount is a negative line refused by the amount check, so it is subtracted from the lines it applies to"),
+    negative === "23514",
+    `negative line ${negative}`,
+  );
+
+  const budgets = await asUser(owner, () => listBudgetsWithStatus());
+  const spent = (id: string) => budgets.find((row) => row.id === id)?.spentCents;
+  assert(
+    next("RF-175: a budget's spent counts each line by its category, the two lines of one subcategory and the other subcategory all in the parent's"),
+    spent(marketBudget) === 9_000_00 && spent(homeBudget) === 14_500_00,
+    `Mercado ${spent(marketBudget)} (want 900000), Hogar ${spent(homeBudget)} (want 1450000)`,
+  );
+
+  const { id: keyId, token } = await asUser(owner, () =>
+    issueWebhookCredential({ name: `Harness rf175 ${tag}`, purpose: "mcp", defaultAccountId: null, defaultCategoryId: null }),
+  );
+  keep("webhook_credentials", keyId);
+  const writer = mcpClient(POST, token);
+  const booked = await writer.tool("record_movement", {
+    fromAccountId: account.accountId, toAccountId: null, amountCents: 7_000_00, occurredAt: today, description: `Harness rf175 mcp ${tag}`,
+    splits: [{ categoryId: dairy, amountCents: 4_000_00, description: "Leche" }, { categoryId: cleaning, amountCents: 3_000_00, description: "Cloro" }],
+    requestRef: randomUUID(),
+  });
+  const bookedId = (booked.value as { transactionId?: string } | null)?.transactionId ?? "";
+  if (bookedId) track("transactions", bookedId);
+  const listed = (await writer.tool("list_movements", { accountId: account.accountId, from: today, to: today })).value as
+    | { id: string; splits: { categoryId: string; amountCents: number; description: string | null }[] }[]
+    | null;
+  const listedLines = listed?.find((row) => row.id === bookedId)?.splits ?? [];
+  assert(
+    next("RF-175: record_movement takes described splits and list_movements returns them"),
+    !booked.isError && listedLines.length === 2 && listedLines.some((l) => l.description === "Leche" && l.categoryId === dairy) &&
+      listedLines.some((l) => l.description === "Cloro" && l.amountCents === 3_000_00),
+    `booked ${JSON.stringify(booked.value)}, lines ${JSON.stringify(listedLines)}`,
+  );
+
+  // A statement re-import rewrites a movement's lines; the names a person gave them survive it.
+  const ref = `harness-rf175-${tag}`;
+  const { transactionId: named } = await asUser(owner, () =>
+    createTransaction({
+      fromAccountId: account.accountId, toAccountId: null, amountCents: 2_000_00, occurredAt: today, description: `Harness rf175 reimport ${tag}`,
+      externalRef: ref, splits: [{ categoryId: home, amountCents: 2_000_00, description: "Bombillo LED" }], labelIds: [],
+    }),
+  );
+  track("transactions", named);
+  await asUser(owner, () =>
+    withUserDb((tx) =>
+      commitImport(
+        tx,
+        {
+          members: [], categories: [], accounts: [], recurringRules: [], adjustments: [],
+          transactions: [
+            {
+              status: "update", index: 0, sheetRow: 2, externalRef: ref, placeholderId: null,
+              object: {
+                fromAccountId: account.accountId, toAccountId: null, amount: "2000", occurredAt: today,
+                description: `Harness rf175 reimport ${tag}`, externalRef: ref, splits: [{ categoryId: home, amount: "2000" }], labelIds: [],
+              },
+            },
+          ],
+        } as never,
+        { userId: owner.id, groupId: null },
+      ),
+    ),
+  );
+  const [afterImport] = await fixtureSql<{ description: string | null }[]>`
+    select description from transaction_splits where transaction_id = ${named}`;
+  assert(
+    next("RF-175: a re-import that rewrites a movement's lines keeps the product names of the lines that did not change"),
+    afterImport?.description === "Bombillo LED",
+    `description after re-import ${JSON.stringify(afterImport)}`,
+  );
+}
+
+// RF-176: Claude fixes a badly categorised account through the MCP: merge receipts, move lines, reparent a category, page by category.
+async function mcpCleanupSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const { POST } = await import("@/app/mcp/route");
+  const owner = await createMembershipFreeUser();
+  const stranger = await createMembershipFreeUser();
+  const mkAccount = (user: HarnessUser, name: string) =>
+    asUser(user, () =>
+      createAccount({
+        kind: "asset", subtype: "bank", groupId: null, isShared: false, institution: null, settlementCurrency: BASE_CURRENCY,
+        balanceOn: "2026-01-01", ownerUserId: user.id, name: `Harness rf176 ${name} ${tag}`, amountMinor: 1_000_000_00,
+      }),
+    );
+  const [account, other, strangerAccount] = [await mkAccount(owner, "a"), await mkAccount(owner, "b"), await mkAccount(stranger, "ajena")];
+  for (const row of [account, other, strangerAccount]) track("accounts", row.accountId);
+  const [market, dairy, flat, home, salary] = [randomUUID(), randomUUID(), randomUUID(), randomUUID(), randomUUID()];
+  await fixtureSql.begin(async (tx) => {
+    const claims = JSON.stringify({ sub: owner.id, role: "authenticated", aud: "authenticated" });
+    await tx`select set_config('request.jwt.claims', ${claims}, true)`;
+    for (const [id, name, kind, parent] of [
+      [market, "Mercado", "expense", null], [dairy, "Lácteos", "expense", market], [flat, "Plano", "expense", null],
+      [home, "Hogar", "expense", null], [salary, "Sueldo", "income", null],
+    ] as const) {
+      await tx`insert into categories (id, owner_user_id, name, kind, color, parent_id)
+        values (${id}, ${owner.id}, ${`Harness rf176 ${name} ${tag}`}, ${kind}, ${CATEGORY_COLORS[0]}, ${parent})`;
+      track("categories", id);
+    }
+  });
+  const book = async (user: HarnessUser, accountId: string, amountCents: number, occurredAt: string, description: string, splits: { categoryId: string; amountCents: number; description?: string }[], income = false) => {
+    const { transactionId } = await asUser(user, () =>
+      createTransaction({
+        fromAccountId: income ? null : accountId, toAccountId: income ? accountId : null, amountCents, occurredAt,
+        description, externalRef: null, splits, labelIds: [],
+      }),
+    );
+    track("transactions", transactionId);
+    return transactionId;
+  };
+  const strangerCategory = randomUUID();
+  await fixtureSql`insert into categories (id, owner_user_id, name, kind, color) values (${strangerCategory}, ${stranger.id}, ${`Harness rf176 ajena ${tag}`}, 'expense', '#4C8C4A')`;
+  track("categories", strangerCategory);
+  const m1 = await book(owner, account.accountId, 3_000_00, "2026-03-05", "Leche", [{ categoryId: flat, amountCents: 3_000_00 }]);
+  const m2 = await book(owner, account.accountId, 5_000_00, "2026-03-04", "Pan y huevos", [
+    { categoryId: flat, amountCents: 2_000_00, description: "Pan" }, { categoryId: home, amountCents: 3_000_00, description: "Huevos" },
+  ]);
+  const m3 = await book(owner, account.accountId, 1_500_00, "2026-03-06", "Cloro", [{ categoryId: home, amountCents: 1_500_00 }]);
+  const inc = await book(owner, account.accountId, 9_000_00, "2026-03-05", "Pago", [{ categoryId: salary, amountCents: 9_000_00 }], true);
+  const onOther = await book(owner, other.accountId, 700_00, "2026-03-05", "Otra cuenta", [{ categoryId: flat, amountCents: 700_00 }]);
+  const foreign = await book(stranger, strangerAccount.accountId, 800_00, "2026-03-05", "Ajeno", [{ categoryId: strangerCategory, amountCents: 800_00 }]);
+  const transfer = (await asUser(owner, () =>
+    createTransaction({ fromAccountId: account.accountId, toAccountId: other.accountId, amountCents: 100_00, occurredAt: "2026-03-05", description: "Traslado", externalRef: null, splits: [], labelIds: [] }),
+  )).transactionId;
+  track("transactions", transfer);
+
+  const { id: keyId, token } = await asUser(owner, () =>
+    issueWebhookCredential({ name: `Harness rf176 ${tag}`, purpose: "mcp", defaultAccountId: null, defaultCategoryId: null }),
+  );
+  keep("webhook_credentials", keyId);
+  const { tool } = mcpClient(POST, token);
+  const rows = async () =>
+    (await tool("list_movements", { accountId: account.accountId, limit: 200 })).value as { id: string; updatedAt: string; amountCents: number; date: string; description: string | null; splits: { categoryId: string; amountCents: number; description: string | null }[] }[];
+
+  const refusals = await Promise.all([
+    tool("merge_movements", { transactionIds: [m1, onOther] }),
+    tool("merge_movements", { transactionIds: [m1, inc] }),
+    tool("merge_movements", { transactionIds: [m1, transfer] }),
+    tool("merge_movements", { transactionIds: [m1, foreign] }),
+    tool("merge_movements", { transactionIds: [m1, m1] }),
+  ]);
+  const untouched = (await rows()).length;
+  assert(
+    next("RF-176: merge_movements refuses mixed accounts, mixed kinds, a transfer, a movement that is not the person's and fewer than two, writing nothing"),
+    refusals.every((r) => r.isError) && untouched === 5,
+    `refusals ${JSON.stringify(refusals.map((r) => r.value))}, rows ${untouched}`,
+  );
+
+  const merged = await tool("merge_movements", { transactionIds: [m1, m2, m3], description: `Harness rf176 factura ${tag}` });
+  const mergedId = (merged.value as { transactionId?: string } | null)?.transactionId ?? "";
+  if (mergedId) track("transactions", mergedId);
+  const after = await rows();
+  const one = after.find((row) => row.id === mergedId);
+  const byName = (name: string) => one?.splits.find((line) => line.description === name);
+  assert(
+    next("RF-176: merge_movements writes one movement with the sum, the originals' lines named, and deletes the originals"),
+    !merged.isError && after.length === 3 && one?.amountCents === 9_500_00 && one.date === "2026-03-04" && one.splits.length === 4 &&
+      byName("Leche")?.categoryId === flat && byName("Leche")?.amountCents === 3_000_00 && byName("Pan")?.amountCents === 2_000_00 &&
+      byName("Huevos")?.categoryId === home && byName("Cloro")?.amountCents === 1_500_00 && ![m1, m2, m3].some((id) => after.some((row) => row.id === id)),
+    `merged ${JSON.stringify(merged.value)}, rows ${JSON.stringify(after)}`,
+  );
+
+  const [sourceId] = [await book(owner, account.accountId, 400_00, "2026-03-07", "Del extracto", [{ categoryId: home, amountCents: 400_00 }])];
+  await fixtureSql`insert into transaction_sources (transaction_id, account_id, source_ref) values (${sourceId}, ${account.accountId}, ${`rf176-${tag}`})`;
+  const linked = await tool("merge_movements", { transactionIds: [sourceId, mergedId] });
+  assert(
+    next("RF-176: merge_movements refuses a movement tied to a statement and leaves both"),
+    linked.isError && (await rows()).some((row) => row.id === sourceId) && (await rows()).some((row) => row.id === mergedId),
+    `linked ${JSON.stringify(linked.value)}`,
+  );
+
+  // Category: a cycle, a kind mismatch, a rename and a move.
+  const cycle = await tool("update_category", { categoryId: market, parentId: dairy });
+  const selfParent = await tool("update_category", { categoryId: market, parentId: market });
+  const nested = await tool("update_category", { categoryId: market, parentId: home });
+  const kind = await tool("update_category", { categoryId: flat, parentId: salary });
+  const moved = await tool("update_category", { categoryId: flat, name: `Harness rf176 Frutas ${tag}`, parentId: market });
+  const asChild = (await tool("list_categories")).value as { id: string; name: string; parentId: string | null }[];
+  const unparented = await tool("update_category", { categoryId: flat, parentId: null });
+  const back = ((await tool("list_categories")).value as { id: string; parentId: string | null }[]).find((row) => row.id === flat);
+  assert(
+    next("RF-176: update_category refuses a cycle, a parent with children going under another and a kind mismatch; it renames, reparents and returns to top level"),
+    cycle.isError && selfParent.isError && nested.isError && kind.isError && !moved.isError &&
+      asChild.some((row) => row.id === flat && row.parentId === market && row.name.includes("Frutas")) && !unparented.isError && back?.parentId === null,
+    `cycle ${JSON.stringify(cycle.value)}, self ${JSON.stringify(selfParent.value)}, nested ${JSON.stringify(nested.value)}, kind ${JSON.stringify(kind.value)}`,
+  );
+
+  // Move lines: only category A, only the range, only the same kind.
+  const mixedKind = await tool("move_category_movements", { fromCategoryId: home, toCategoryId: salary });
+  const inRange = await tool("move_category_movements", { fromCategoryId: home, toCategoryId: dairy, from: "2026-03-07", to: "2026-03-07" });
+  const lineOf = async (id: string) => (await rows()).find((row) => row.id === id)?.splits.map((line) => line.categoryId);
+  const scoped = (await lineOf(sourceId))?.[0] === dairy && (await lineOf(mergedId))?.filter((c) => c === home).length === 2;
+  const rest = await tool("move_category_movements", { fromCategoryId: home, toCategoryId: dairy });
+  const byCategory = (await tool("list_movements", { accountId: account.accountId, categoryId: market })).value as { id: string }[];
+  const paged = (await tool("list_movements", { accountId: account.accountId, limit: 1, offset: 1 })).value as { id: string }[];
+  assert(
+    next("RF-176: move_category_movements moves only the category's lines inside the range, refuses another kind, and list_movements filters by category and pages"),
+    mixedKind.isError && (inRange.value as { moved: number }).moved === 1 && scoped && (rest.value as { moved: number }).moved === 2 &&
+      byCategory.some((row) => row.id === mergedId) && paged.length === 1 && paged[0].id !== (await rows())[0].id,
+    `mixed ${JSON.stringify(mixedKind.value)}, range ${JSON.stringify(inRange.value)}, rest ${JSON.stringify(rest.value)}, by ${byCategory.length}`,
+  );
+
+  // Review fixes: a dry run counts without writing, a move bumps the stamp, causes and external refs block a merge.
+  const probe = await book(owner, account.accountId, 600_00, "2026-04-01", "Cargo", [{ categoryId: flat, amountCents: 600_00 }]);
+  const stamp = async () => (await rows()).find((row) => row.id === probe)?.updatedAt;
+  const before = await stamp();
+  const dry = await tool("move_category_movements", { fromCategoryId: flat, toCategoryId: market, dryRun: true });
+  const untouchedLine = (await lineOf(probe))?.[0] === flat && (await stamp()) === before;
+  const wet = await tool("move_category_movements", { fromCategoryId: flat, toCategoryId: market });
+  const bumped = (await stamp()) !== before && (await lineOf(probe))?.[0] === market;
+  assert(
+    next("RF-176: move_category_movements with dryRun counts and writes nothing; a real move gives each movement a new updatedAt"),
+    (dry.value as { moved: number }).moved >= 1 && (dry.value as { dryRun: boolean }).dryRun && untouchedLine && (wet.value as { moved: number }).moved >= 1 && bumped,
+    `dry ${JSON.stringify(dry.value)}, wet ${JSON.stringify(wet.value)}`,
+  );
+  const charge = await book(owner, account.accountId, 50_00, "2026-04-01", "Comisión", [{ categoryId: home, amountCents: 50_00 }]);
+  await fixtureSql`update transactions set caused_by_transaction_id = ${probe} where id = ${charge}`;
+  const withRef = await book(owner, account.accountId, 70_00, "2026-04-01", "Con ref", [{ categoryId: home, amountCents: 70_00 }]);
+  await fixtureSql`update transactions set external_ref = ${`rf176-ref-${tag}`} where id = ${withRef}`;
+  const plain = await book(owner, account.accountId, 80_00, "2026-04-01", "Suelto", [{ categoryId: home, amountCents: 80_00 }]);
+  const blocked = await Promise.all([
+    tool("merge_movements", { transactionIds: [probe, plain] }),
+    tool("merge_movements", { transactionIds: [charge, plain] }),
+    tool("merge_movements", { transactionIds: [withRef, plain] }),
+    tool("merge_movements", { transactionIds: [plain, mergedId], description: "x".repeat(201) }),
+  ]);
+  const stillThere = (await rows()).filter((row) => [probe, charge, withRef, plain].includes(row.id)).length;
+  assert(
+    next("RF-176: merge_movements refuses an original that caused a charge, one that is a charge, one with an external reference, and a description over 200"),
+    blocked.every((r) => r.isError) && stillThere === 4,
+    `blocked ${JSON.stringify(blocked.map((r) => r.value))}, rows ${stillThere}`,
   );
 }

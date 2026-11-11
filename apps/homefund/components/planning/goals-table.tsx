@@ -18,7 +18,7 @@ import {
 } from "@/components/ui";
 import type { GoalProgress } from "@/db/queries/savings-goals";
 import { civilDateToDate } from "@/lib/dates";
-import { formatMoney } from "@/lib/money";
+import { useMoneyText } from "@/lib/use-privacy";
 
 // The em dash a cell with nothing to name reads as (SPEC-A3), not a word a
 // translator would ever change.
@@ -102,6 +102,7 @@ export function GoalsTable({
   onRestore: (goal: GoalProgress) => void;
   onDelete: (goal: GoalProgress) => void;
 }) {
+  const moneyText = useMoneyText();
   const t = useTranslations("goals");
   const tKey = useTranslations();
   const format = useFormatter();
@@ -112,7 +113,7 @@ export function GoalsTable({
   const to = Math.min(page * pageSize, total);
 
   function figure(cents: number, currency: string): string {
-    return formatMoney(cents, currency, locale);
+    return moneyText(cents, currency, locale);
   }
 
   // The rows on screen, which is what the total row states: a page sums itself,

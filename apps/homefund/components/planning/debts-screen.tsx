@@ -48,7 +48,7 @@ import {
   type OfferedCurrency,
 } from "@/lib/currency";
 import { civilDateToDate } from "@/lib/dates";
-import { formatMoney } from "@/lib/money";
+import { useMoneyText } from "@/lib/use-privacy";
 import type { Locale } from "@/lib/locales";
 
 const PAGE_SIZE = 10;
@@ -124,6 +124,7 @@ export function DebtsScreen({
   data: DebtsScreenData;
   hasGroup: boolean;
 }) {
+  const moneyText = useMoneyText();
   const t = useTranslations("debts");
   const tKey = useTranslations();
   const format = useFormatter();
@@ -317,7 +318,7 @@ export function DebtsScreen({
           set.creditLimitCents === null
             ? undefined
             : t("tileAvailableCreditNote", {
-                amount: formatMoney(set.creditLimitCents, set.currency, locale),
+                amount: moneyText(set.creditLimitCents, set.currency, locale),
               }),
       },
     ];
@@ -430,7 +431,7 @@ export function DebtsScreen({
                     : t("total")}
                 </Text>
                 <Figure as="h2" size="8">
-                  {formatMoney(set.owedCents, set.currency, locale)}
+                  {moneyText(set.owedCents, set.currency, locale)}
                 </Figure>
                 {totals.nextPayment === null && set === currencySets[0] && (
                   <Flex gap="2" align="baseline">
@@ -449,7 +450,7 @@ export function DebtsScreen({
                   totals.nextPayment.currency === set.currency && (
                     <Text size="2" color="gray">
                       {t("nextPayment", {
-                        amount: formatMoney(
+                        amount: moneyText(
                           totals.nextPayment.amountCents,
                           totals.nextPayment.currency,
                           locale,
@@ -465,7 +466,7 @@ export function DebtsScreen({
                   {set.monthlyInterestCents === 0
                     ? t("tileNoInterest")
                     : t("monthlyInterest", {
-                        amount: formatMoney(
+                        amount: moneyText(
                           set.monthlyInterestCents,
                           set.currency,
                           locale,
@@ -718,6 +719,7 @@ function RevolvingCard({
   row: OverviewCard;
   onPay?: () => void;
 }) {
+  const moneyText = useMoneyText();
   const t = useTranslations("debts");
   const format = useFormatter();
   const locale = useLocale() as Locale;
@@ -763,7 +765,7 @@ function RevolvingCard({
                 {showMinimum && (
                   <Stat
                     label={t("minimumPayment")}
-                    value={formatMoney(
+                    value={moneyText(
                       row.minimumPaymentCents!,
                       row.currency,
                       locale,
@@ -785,7 +787,7 @@ function RevolvingCard({
             {row.availableCreditCents !== null && (
               <Text size="1" color="gray">
                 {t("availableCredit", {
-                  amount: formatMoney(
+                  amount: moneyText(
                     row.availableCreditCents,
                     row.currency,
                     locale,
@@ -809,6 +811,7 @@ function InstallmentCard({
   row: OverviewCard;
   onPay?: () => void;
 }) {
+  const moneyText = useMoneyText();
   const t = useTranslations("debts");
   const format = useFormatter();
   const locale = useLocale() as Locale;
@@ -838,7 +841,7 @@ function InstallmentCard({
         <Flex justify="between" gap="3">
           <Stat
             label={t("dueInstallments")}
-            value={formatMoney(dueCents, row.currency, locale)}
+            value={moneyText(dueCents, row.currency, locale)}
           />
           {row.nextDueDate !== null && (
             <Stat

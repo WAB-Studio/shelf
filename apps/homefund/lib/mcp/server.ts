@@ -79,6 +79,8 @@ function registerReadTools(server: McpServer): void {
           scope: account.groupId === null ? "personal" : "fund",
           institution: account.institution,
           lastFour: account.lastFour ?? null,
+          // The account this one is a pocket of, null for an account of its own (RF-173); a parent's balances are its free part.
+          parentAccountId: account.parentAccountId ?? null,
           settlementCurrency: account.settlementCurrency,
           // What update_account takes back: the opening as the form shows it (a liability's debt positive), its date and the stamp.
           openingBalanceCents: account.kind === "liability" ? -account.initialBalanceCents : account.initialBalanceCents,

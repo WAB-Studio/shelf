@@ -174,10 +174,27 @@ export const occurredAtSchema = z.string().superRefine((value, ctx) => {
   }
 });
 
+export const descriptionSchema = z
+  .string()
+  .trim()
+  .max(200, { error: "transactions.errors.descriptionTooLong" })
+  .nullable();
+
 const splitSchema = z.object({
   categoryId: z.uuid({ error: "transactions.errors.splitCategoryInvalid" }),
   amount: splitAmountSchema,
+  // The product a receipt line names (RF-175); the form sends "" for none.
+  description: z
+    .string()
+    .trim()
+    .max(200, { error: "transactions.errors.splitDescriptionTooLong" })
+    .nullish()
+    .transform((value) => value || null)
+    .optional(),
 });
+
+// A line as the form holds it, before the schema reads it.
+export type SplitFields = z.input<typeof splitSchema>;
 
 export const transactionFields = {
   fromAccountId: accountRefSchema,
@@ -201,11 +218,7 @@ export const transactionFields = {
   // «De quién» (RF-167): the fund member an income into a fund account is credited to. Read only there.
   contributedByMemberId: z.uuid({ error: "transactions.errors.contributorInvalid" }).nullish(),
   occurredAt: occurredAtSchema,
-  description: z
-    .string()
-    .trim()
-    .max(200, { error: "transactions.errors.descriptionTooLong" })
-    .nullable(),
+  description: descriptionSchema,
   externalRef: z
     .string()
     .trim()
@@ -227,7 +240,7 @@ type TransactionFields = {
   toAccountId: string | null;
   amount: string;
   currency?: CurrencyCode;
-  splits: { categoryId: string; amount: string }[];
+  splits: SplitFields[];
 };
 
 // What the two named accounts settle in, read off the accounts and never off
