@@ -49,12 +49,103 @@ const OPTIONS_SHEET = "options";
 // as long as its list, so the dropdown carries no trailing blank entries.
 const TEMPLATE_DATA_ROWS = 500;
 
+// The tabs a person reads, in reading order, transactions first. The rest follow in
+// `SHEET_ENTITIES` order. The import matches sheets by tab name, never by position,
+// so this order is free to differ from the import's.
+const READING_ORDER: readonly SheetEntity[] = [
+  "transactions",
+  "accounts",
+  "categories",
+  "budgets",
+  "goals",
+  "debts",
+];
+
+// The sheets that only restore references (people, tags, schedules, contributions,
+// statements). The export hides them rather than dropping them: they stay in the
+// file, so a re-import still finds them, but a person opening it sees none.
+const BACKGROUND_SHEETS: ReadonlySet<SheetEntity> = new Set([
+  "members",
+  "labels",
+  "recurringRules",
+  "goalContributions",
+  "statements",
+]);
+
+// Column keys that hold a civil day. The export writes them as real date cells.
+const DATE_KEYS: ReadonlySet<string> = new Set([
+  "balanceOn",
+  "nextRunOn",
+  "endsOn",
+  "occurredAt",
+  "targetDate",
+  "periodStart",
+  "cutOffDate",
+  "paymentDueDate",
+]);
+
+const DATE_FORMAT = "dd/mm/yyyy";
+// Thousands separator, 2 decimals, a negative in red with its minus sign.
+const MONEY_FORMAT = "#,##0.00;[Red]-#,##0.00";
+const HEADER_FILL = "FFE8EEF4";
+const MIN_WIDTH = 10;
+const MAX_WIDTH = 50;
+
+function orderedEntities(): SheetEntity[] {
+  const rest = SHEET_ENTITIES.filter((entity) => !READING_ORDER.includes(entity));
+  return [...READING_ORDER, ...rest];
+}
+
+// A civil day written as a date cell at UTC midnight, so no zone shifts the day on
+// the way out; `readCell` reads it back through the same UTC day.
+function civilDayCell(value: CellValue): CellValue | Date {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+  return new Date(`${value}T00:00:00Z`);
+}
+
+// Bold light-filled header row, frozen, with widths fitted to the content and the
+// date and money columns formatted as such. `filter` adds the header autofilter.
+function styleSheet(
+  sheet: ExcelJS.Worksheet,
+  columns: readonly ColumnView[],
+  filter: boolean,
+): void {
+  const header = sheet.getRow(1);
+  header.font = { bold: true };
+  header.fill = { type: "pattern", pattern: "solid", fgColor: { argb: HEADER_FILL } };
+  sheet.views = [{ state: "frozen", ySplit: 1 }];
+
+  columns.forEach((column, index) => {
+    const target = sheet.getColumn(index + 1);
+    let width = String(header.getCell(index + 1).value ?? "").length;
+    sheet.eachRow((row, rowNumber) => {
+      if (rowNumber === 1) return;
+      const value = row.getCell(index + 1).value;
+      width = Math.max(width, value instanceof Date ? 10 : String(value ?? "").length);
+    });
+    target.width = Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, width + 2));
+
+    if (DATE_KEYS.has(column.key)) target.numFmt = DATE_FORMAT;
+    else if (column.money) target.numFmt = MONEY_FORMAT;
+  });
+
+  // A column format reaches the header cell too; the header stays text.
+  header.eachCell((cell) => {
+    cell.numFmt = "General";
+  });
+
+  if (filter && columns.length > 0) {
+    sheet.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: columns.length } };
+  }
+}
+
 // One cell's written value: a money column crosses the cents→pesos boundary right
 // here (the only float in the pipeline), a null becomes an empty cell, the rest
 // pass through as the resolved name or scalar `readExport` already produced.
-function cellValue(column: ColumnView, value: CellValue): CellValue {
+function cellValue(column: ColumnView, value: CellValue): CellValue | Date {
   if (value == null) return null;
   if (column.money) return column.money.toSheet(value as number);
+  if (DATE_KEYS.has(column.key)) return civilDayCell(value);
   return value;
 }
 
@@ -81,7 +172,8 @@ function optionRange(columnIndex: number, count: number): string | null {
 
 /**
  * The export workbook (RF-50): one worksheet per entity present in `data`, walked
- * in the fixed `SHEET_ENTITIES` order so every download shares the same layout. A
+ * in the fixed reading order (transactions first, the active tab) so every download
+ * shares the same layout; the background sheets come last and hidden. A
  * header row from the descriptor's column order leads, the caller's rows follow,
  * each cell crossing the money boundary only where the descriptor marks it.
  */
@@ -91,11 +183,18 @@ export function buildWorkbook(input: {
 }): ExcelJS.Workbook {
   const workbook = new ExcelJS.Workbook();
 
-  for (const entity of SHEET_ENTITIES) {
-    const rows = input.data[entity];
-    if (rows === undefined) continue;
+  const present = orderedEntities().filter((entity) => input.data[entity] !== undefined);
+  // Hiding every sheet leaves nothing to open, so a selection of only background
+  // sheets stays visible.
+  const hideBackground = present.some((entity) => !BACKGROUND_SHEETS.has(entity));
 
-    const sheet = workbook.addWorksheet(input.labels.sheetName(entity));
+  for (const entity of present) {
+    const rows = input.data[entity] ?? [];
+
+    const hidden = hideBackground && BACKGROUND_SHEETS.has(entity);
+    const sheet = workbook.addWorksheet(input.labels.sheetName(entity), {
+      state: hidden ? "hidden" : "visible",
+    });
     const columns = sheetDescriptors[entity].columns as readonly ColumnView[];
 
     sheet.addRow(columns.map((column) => input.labels.columnHeader(column.key)));
@@ -104,7 +203,13 @@ export function buildWorkbook(input: {
       const record = row as Record<string, CellValue>;
       sheet.addRow(columns.map((column) => cellValue(column, record[column.key])));
     }
+
+    if (!hidden) styleSheet(sheet, columns, entity === "transactions");
   }
+
+  workbook.views = [
+    { x: 0, y: 0, width: 10000, height: 20000, firstSheet: 0, activeTab: 0, visibility: "visible" },
+  ];
 
   return workbook;
 }
@@ -138,11 +243,14 @@ export function buildTemplate(input: {
     categories: optionRange(2, input.categoryNames.length),
   };
 
-  for (const entity of SHEET_ENTITIES) {
+  // The options sheet is first in the file but hidden, so the active tab is the first
+  // visible one: transactions.
+  for (const entity of orderedEntities()) {
     const sheet = workbook.addWorksheet(input.labels.sheetName(entity));
     const columns = sheetDescriptors[entity].columns as readonly ColumnView[];
 
     sheet.addRow(columns.map((column) => input.labels.columnHeader(column.key)));
+    styleSheet(sheet, columns, entity === "transactions");
 
     columns.forEach((column, index) => {
       if (!column.ref) return;
@@ -159,6 +267,10 @@ export function buildTemplate(input: {
       }
     });
   }
+
+  workbook.views = [
+    { x: 0, y: 0, width: 10000, height: 20000, firstSheet: 1, activeTab: 1, visibility: "visible" },
+  ];
 
   return workbook;
 }
