@@ -4150,6 +4150,7 @@ async function main(): Promise<void> {
   await memberDebtsSuite();
   await memberDebtDeleteSuite();
   await recipientsSuite();
+  await mcpLabelsSuite();
 }
 
 // A member recorded without a login is someone in the fund: a leader whose fund holds one is not alone, so an
@@ -15269,7 +15270,7 @@ async function mcpDoorSuite(): Promise<void> {
   assert(
     next("RF-144: /mcp answers 401 with no key, an unknown one or a webhook's, and lists its tools to a key for Claude"),
     anonymous.status === 401 && forged.status === 401 && webhookKey.status === 401 &&
-      JSON.stringify(names) === JSON.stringify(["accept_deliveries", "create_account", "create_category", "delete_movement", "delete_recipient", "import_statement", "list_accounts", "list_categories", "list_inbox", "list_member_debts", "list_members", "list_movements", "list_recipients", "merge_movements", "move_account_to_fund", "move_category_movements", "preview_statement", "record_member_debt", "record_movement", "reject_deliveries", "review_month", "save_recipient", "spending_patterns", "update_account", "update_category", "update_movement"]),
+      JSON.stringify(names) === JSON.stringify(["accept_deliveries", "create_account", "create_category", "create_label", "delete_movement", "delete_recipient", "import_statement", "list_accounts", "list_categories", "list_inbox", "list_labels", "list_member_debts", "list_members", "list_movements", "list_recipients", "merge_movements", "move_account_to_fund", "move_category_movements", "preview_statement", "record_member_debt", "record_movement", "reject_deliveries", "review_month", "save_recipient", "spending_patterns", "update_account", "update_category", "update_label", "update_movement"]),
     `no key ${anonymous.status}, unknown key ${forged.status}, webhook key ${webhookKey.status}, tools ${JSON.stringify(names)}`,
   );
 
@@ -18598,5 +18599,121 @@ async function recipientsSuite(): Promise<void> {
     next("RF-189: another person sees none of the recipients, a delete removes one and its deliveries keep their number with no recipient"),
     theirs.length === 0 && !del.isError && after.length === 3 && orphan.length > 0 && orphan.every((row) => row.recipient === null),
     `stranger ${theirs.length}, delete ${JSON.stringify(del.value)}, left ${after.length}, orphans ${JSON.stringify(orphan)}`,
+  );
+}
+
+// RF-193: Claude manages labels through the MCP by the Labels screen's rules: a group's only by its leader, and a
+// movement takes labels of its own scope by id or name, on record, on update and in the list filter.
+async function mcpLabelsSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const today = todayInBogota();
+  const { POST } = await import("@/app/mcp/route");
+  const [leader, member] = [await createMembershipFreeUser(), await createMembershipFreeUser()];
+  const ids = { group: randomUUID(), leader: randomUUID(), member: randomUUID(), mine: randomUUID(), cash: randomUUID(), personalCategory: randomUUID(), fundCategory: randomUUID() };
+  const name = (what: string) => `Harness rf193 ${what} ${tag}`;
+  await fixtureSql.begin(async (tx) => {
+    await tx`insert into groups (id, name, cash_mode) values (${ids.group}, ${name("fondo")}, 'shared')`;
+    await tx`insert into group_members (id, group_id, user_id, name, role) values
+      (${ids.leader}, ${ids.group}, ${leader.id}, ${name("lider")}, 'leader'), (${ids.member}, ${ids.group}, ${member.id}, ${name("miembro")}, 'member')`;
+    await tx`insert into accounts (id, owner_user_id, name, kind, subtype, initial_balance_cents, initial_balance_on)
+      values (${ids.mine}, ${leader.id}, ${name("tarjeta")}, 'asset', 'bank', 0, '2026-01-01')`;
+    await tx`insert into accounts (id, group_id, is_shared, name, kind, subtype, initial_balance_cents, initial_balance_on)
+      values (${ids.cash}, ${ids.group}, true, ${name("caja")}, 'asset', 'cash', 0, '2026-01-01')`;
+    await tx`insert into categories (id, owner_user_id, name, kind, color) values (${ids.personalCategory}, ${leader.id}, ${name("propia")}, 'expense', '#8C4A4A')`;
+    await tx`insert into categories (id, group_id, name, kind, color) values (${ids.fundCategory}, ${ids.group}, ${name("fondo")}, 'expense', '#8C4A4A')`;
+  });
+  track("groups", ids.group);
+  for (const id of [ids.leader, ids.member]) track("group_members", id);
+  track("accounts", ids.mine);
+  track("accounts", ids.cash);
+  track("categories", ids.personalCategory);
+  track("categories", ids.fundCategory);
+  const clientOf = async (user: HarnessUser) => {
+    const { id, token } = await asUser(user, () => issueWebhookCredential({ name: name("clave"), purpose: "mcp", defaultAccountId: null, defaultCategoryId: null }));
+    keep("webhook_credentials", id);
+    return mcpClient(POST, token).tool;
+  };
+  const [tool, memberTool] = [await clientOf(leader), await clientOf(member)];
+  type Listed = { id: string; name: string; color: string; scope: string; movementCount: number; budgetCount: number; canManage: boolean };
+
+  const trip = await tool("create_label", { name: name("viaje") });
+  const home = await tool("create_label", { name: name("hogar"), placement: "group", color: "#06B6D4" });
+  const blank = await tool("create_label", { name: "   " });
+  const refusedGroup = await memberTool("create_label", { name: name("intruso"), placement: "group" });
+  const tripId = (trip.value as { labelId: string }).labelId;
+  const homeId = (home.value as { labelId: string }).labelId;
+  const mineAsMember = await memberTool("create_label", { name: name("de miembro") });
+  assert(
+    next("RF-193: create_label makes a personal label with a free colour and a group's for its leader; a blank name is refused by the screen's schema, a plain member creating a group's is refused in the screen's words, and the same member's own label is fine"),
+    !trip.isError && !home.isError && blank.isError && refusedGroup.isError &&
+      String((refusedGroup.value as { error?: string }).error).includes("Solo el propietario") && !mineAsMember.isError,
+    `trip ${JSON.stringify(trip.value)}, home ${JSON.stringify(home.value)}, blank ${JSON.stringify(blank.value)}, member on group ${JSON.stringify(refusedGroup.value)}`,
+  );
+
+  const listed = (await tool("list_labels")).value as Listed[];
+  const asMember = ((await memberTool("list_labels")).value as Listed[]).find((one) => one.id === homeId);
+  assert(
+    next("RF-193: list_labels answers the person's labels and their fund's with scope, counts and whether they can manage each, a plain member reading the fund's as not manageable"),
+    listed.find((one) => one.id === tripId)?.scope === "personal" && listed.find((one) => one.id === tripId)?.canManage === true &&
+      listed.find((one) => one.id === homeId)?.scope === "fund" && listed.find((one) => one.id === homeId)?.canManage === true &&
+      listed.find((one) => one.id === homeId)?.color === "#06B6D4" && listed.every((one) => one.movementCount === 0 && one.budgetCount === 0) &&
+      asMember?.scope === "fund" && asMember.canManage === false,
+    JSON.stringify({ listed, asMember }),
+  );
+
+  const renamed = await tool("update_label", { labelId: tripId, name: name("viajes") });
+  const refusedRename = await memberTool("update_label", { labelId: homeId, name: name("robado") });
+  const after = (await tool("list_labels")).value as Listed[];
+  const stillHome = after.find((one) => one.id === homeId);
+  const trips = after.find((one) => one.id === tripId);
+  assert(
+    next("RF-193: update_label renames and keeps the colour it was not given; a plain member renaming the fund's label is refused and it keeps its name"),
+    !renamed.isError && trips?.name === name("viajes") && trips.color === (listed.find((one) => one.id === tripId) as Listed).color &&
+      refusedRename.isError && stillHome?.name === name("hogar"),
+    `renamed ${JSON.stringify(renamed.value)}, member ${JSON.stringify(refusedRename.value)}, after ${JSON.stringify({ trips, stillHome })}`,
+  );
+
+  const expense = (extra: Record<string, unknown>) => ({
+    fromAccountId: ids.mine, toAccountId: null, amountCents: 12_000_00, occurredAt: today, description: name("gasto"),
+    categoryId: ids.personalCategory, ...extra,
+  });
+  const byName = await tool("record_movement", expense({ labels: [name("viajes").toUpperCase()] }));
+  const byId = await tool("record_movement", expense({ labels: [tripId, name("viajes")] }));
+  const unknown = await tool("record_movement", expense({ labels: [name("no existe")] }));
+  const wrongScope = await tool("record_movement", expense({ labels: [homeId] }));
+  const plain = await tool("record_movement", expense({}));
+  const fund = await tool("record_movement", {
+    fromAccountId: ids.cash, toAccountId: null, amountCents: 5_000_00, occurredAt: today, description: name("fondo"), categoryId: ids.fundCategory, labels: [homeId],
+  });
+  const read = async (filter: Record<string, unknown> = {}) =>
+    ((await tool("list_movements", { accountId: ids.mine, ...filter })).value as { id: string; labelIds: string[]; updatedAt: string }[]);
+  const withTrip = await read({ label: name("viajes") });
+  const byIdFilter = await read({ label: tripId });
+  const everything = await read();
+  const fundRows = ((await tool("list_movements", { accountId: ids.cash, label: homeId })).value as { id: string }[]);
+  assert(
+    next("RF-193: record_movement takes labels by name (any case) or id and dedupes them, refuses an unknown name and a label of another scope, and list_movements filters by label name or id"),
+    !byName.isError && !byId.isError && !plain.isError && unknown.isError && wrongScope.isError && !fund.isError &&
+      withTrip.length === 2 && withTrip.every((row) => row.labelIds.length === 1 && row.labelIds[0] === tripId) &&
+      byIdFilter.length === 2 && everything.length === 3 && fundRows.length === 1,
+    `byName ${JSON.stringify(byName.value)}, unknown ${JSON.stringify(unknown.value)}, wrongScope ${JSON.stringify(wrongScope.value)}, fund ${JSON.stringify(fund.value)}, filtered ${withTrip.length}/${byIdFilter.length}/${everything.length}/${fundRows.length}`,
+  );
+
+  const counted = ((await tool("list_labels")).value as Listed[]).find((one) => one.id === tripId);
+  const target = withTrip[0];
+  const keeps = await tool("update_movement", { transactionId: target.id, expectedUpdatedAt: target.updatedAt, description: name("otro texto") });
+  const keptRow = (await read({ label: tripId })).find((row) => row.id === target.id);
+  const other = await tool("create_label", { name: name("otra") });
+  const otherId = (other.value as { labelId: string }).labelId;
+  const swaps = await tool("update_movement", { transactionId: target.id, expectedUpdatedAt: keptRow?.updatedAt, labels: [name("otra")] });
+  const swappedRow = (await read()).find((row) => row.id === target.id);
+  const clears = await tool("update_movement", { transactionId: target.id, expectedUpdatedAt: swappedRow?.updatedAt, labels: [] });
+  const clearedRow = (await read()).find((row) => row.id === target.id);
+  assert(
+    next("RF-193: list_labels counts the movements a label wears; update_movement keeps the labels when none are sent, replaces them with a list and removes them with an empty one"),
+    counted?.movementCount === 2 && !keeps.isError && keptRow?.labelIds.length === 1 && !swaps.isError &&
+      JSON.stringify(swappedRow?.labelIds) === JSON.stringify([otherId]) && !clears.isError && clearedRow?.labelIds.length === 0,
+    `count ${counted?.movementCount}, keeps ${JSON.stringify(keeps.value)}, kept ${JSON.stringify(keptRow?.labelIds)}, swaps ${JSON.stringify(swaps.value)}, swapped ${JSON.stringify(swappedRow?.labelIds)}, cleared ${JSON.stringify(clearedRow?.labelIds)}`,
   );
 }
