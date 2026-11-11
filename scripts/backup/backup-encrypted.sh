@@ -19,6 +19,8 @@ if git -C "$repo" fetch -q origin "$branch" 2> /dev/null; then git -C "$repo" ch
 dir="$("$here/backup.sh" | tail -1)"
 name="$(basename "$dir")"
 tar -C "$(dirname "$dir")" -czf - "$name" | age -R "$here/recipient.txt" -o "$repo/$name.tar.gz.age"
+# BACKUP_ROWS_FILE keeps the row counts, which the encrypted copy hides from a log.
+if [ -n "${BACKUP_ROWS_FILE:-}" ]; then cp "$dir/rows.txt" "$BACKUP_ROWS_FILE"; fi
 rm -rf "$dir"
 
 # Names are UTC times, so they sort as dates.
