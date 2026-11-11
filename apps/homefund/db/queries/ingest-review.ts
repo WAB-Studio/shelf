@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, asc, desc, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 
 import { insertTransaction } from "@/db/queries/transactions";
 import type { CreateTransactionArgs } from "@/db/queries/transactions";
@@ -98,7 +98,24 @@ function isComplete(
   );
 }
 
-export async function listPendingDeliveries(): Promise<PendingDeliveryRow[]> {
+export type ListDeliveriesOptions = {
+  status?: "pending" | "accepted" | "rejected";
+  ids?: string[];
+  limit?: number;
+  offset?: number;
+};
+
+export function listPendingDeliveries(): Promise<PendingDeliveryRow[]> {
+  return listDeliveries({});
+}
+
+// Pending ones oldest first, as the queue reads; a resolved status newest first, as a history does.
+export async function listDeliveries({
+  status = "pending",
+  ids,
+  limit = Number.MAX_SAFE_INTEGER,
+  offset = 0,
+}: ListDeliveriesOptions): Promise<PendingDeliveryRow[]> {
   return withUserDb(async (tx) => {
     const rows = await tx
       .select({
@@ -128,8 +145,14 @@ export async function listPendingDeliveries(): Promise<PendingDeliveryRow[]> {
           eq(ingestMerchants.merchantKey, ingestDeliveries.merchantKey),
         ),
       )
-      .where(eq(ingestDeliveries.status, "pending"))
-      .orderBy(asc(ingestDeliveries.createdAt));
+      .where(
+        ids
+          ? and(eq(ingestDeliveries.status, status), inArray(ingestDeliveries.id, ids))
+          : eq(ingestDeliveries.status, status),
+      )
+      .orderBy(status === "pending" ? asc(ingestDeliveries.createdAt) : desc(ingestDeliveries.createdAt))
+      .limit(limit)
+      .offset(offset);
 
     return rows.map(({ accountOpeningOn, ...row }) => ({
       ...row,

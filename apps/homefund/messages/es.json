@@ -1611,7 +1611,10 @@
       "createCategory": "Crea una categoría (expense o income), opcionalmente bajo una madre del mismo tipo y alcance. placement «personal» o «group». CONFIRMA con la persona antes de llamarla y revisa con list_categories que no exista ya.",
       "updateCategory": "Renombra una categoría o la mueve bajo otra madre del mismo tipo (parentId) o al primer nivel (parentId null). Es un parche: envía solo lo que cambia. Una categoría con subcategorías no puede ir bajo otra, y una madre de otro tipo se rechaza. Revisa antes con list_categories. Muestra el cambio a la persona y pide un solo sí antes de llamarla.",
       "mergeMovements": "Junta 2 o más gastos, o 2 o más ingresos, de UNA misma cuenta en un solo movimiento (una factura registrada como un movimiento por producto): sus líneas son las de los originales (la categoría y el monto de cada uno, su descripción como nombre de la línea; un original con líneas aporta cada una) y el total es la suma. Los originales se BORRAN, todo o nada. Descripción y occurredAt opcionales (por defecto, la fecha más antigua). El movimiento nuevo no hereda las marcas de revisión ni la regla recurrente de los originales. Se rechaza: transferencias, cuentas o tipos mezclados, movimientos importados de un extracto o ligados a un pago planeado, meta, aplazamiento o cuota, los que causaron o son un cargo de otro, los que tienen referencia externa o esperan contraparte, y los ajenos. Búscalos con list_movements, muestra a la persona la lista (originales, líneas resultantes, total) y pide un solo sí antes de llamarla.",
-      "moveCategoryMovements": "Mueve todas las líneas de movimientos de EXACTAMENTE la categoría fromCategoryId (no las de sus subcategorías, aunque list_movements por categoría sí las incluye) a toCategoryId, en una sola sentencia, opcionalmente solo las fechadas de from a to; ambas deben ser del mismo tipo. Llámala PRIMERO con dryRun true: no escribe nada y devuelve cuántas líneas se moverían. Muestra ese número a la persona, pide un solo sí y llámala entonces sin dryRun. Cada movimiento movido recibe un updatedAt nuevo: vuelve a leerlo con list_movements antes de editarlo."
+      "moveCategoryMovements": "Mueve todas las líneas de movimientos de EXACTAMENTE la categoría fromCategoryId (no las de sus subcategorías, aunque list_movements por categoría sí las incluye) a toCategoryId, en una sola sentencia, opcionalmente solo las fechadas de from a to; ambas deben ser del mismo tipo. Llámala PRIMERO con dryRun true: no escribe nada y devuelve cuántas líneas se moverían. Muestra ese número a la persona, pide un solo sí y llámala entonces sin dryRun. Cada movimiento movido recibe un updatedAt nuevo: vuelve a leerlo con list_movements antes de editarlo.",
+      "listInbox": "La bandeja de entrada: las entregas (SMS, correos del banco, webhook) que esperan que la persona las apruebe. Cada una trae id, receivedAt, rawText (el mensaje tal cual llegó) y proposal (amountCents, currency, kind expense o income, accountId y accountName, categoryId y categoryPath, date, description). notDetected nombra los campos que el mensaje no dio. status (por defecto pending) filtra; limit y offset paginan. Úsala PRIMERO. Luego muestra a la persona UNA lista compacta (fecha, monto, cuenta, categoría, descripción), con cada campo que falte ya completado por tu propuesta y marcado como tal, y pide UN solo sí para toda la lista, o sus correcciones. Después llama accept_deliveries; lo que la persona descarte se rechaza con reject_deliveries, confirmado en esa misma lista.",
+      "acceptDeliveries": "Aprueba una o más entregas de la bandeja: cada una se vuelve un movimiento, por el mismo camino y las mismas reglas que el botón «Aceptar» de HomeFund (tipo derivado de las cuentas, auditoría, la referencia de la entrega evita duplicados). Cada ítem lleva el id de list_inbox y, solo si cambia o falta, accountId (la cuenta del gasto o ingreso), categoryId o splits (líneas con categoryId, amountCents y description del producto, que suman el monto), amountCents, description, date (AAAA-MM-DD), kind (expense, income o transfer) y, en una transferencia, fromAccountId y toAccountId. Todo o nada: si una entrega falla (por ejemplo, sin cuenta, monto o categoría, ya resuelta o ajena) no se acepta ninguna y el error trae deliveryId y el campo que falta. NUNCA la llames sin antes haber llamado list_inbox, mostrado a la persona la lista compacta (fecha, monto, cuenta, categoría, descripción) y recibido UN solo sí para toda la lista.",
+      "rejectDeliveries": "Rechaza una o más entregas de la bandeja por id, por el mismo camino que «Rechazar» en HomeFund; no escribe movimientos. Todo o nada: si un id no es una entrega pendiente de la persona, no rechaza ninguna. Muestra primero la lista (fecha, monto, descripción) de lo que rechazarás, junto con la de accept_deliveries, y pide UN solo sí para todo."
     },
     "deferralProposal": "Diferir en {count} cuotas",
     "errors": {
@@ -1624,6 +1627,9 @@
         "previewChanged": "Las líneas no son las de la vista previa: vuelve a llamar preview_statement.",
         "invalidLines": "Hay líneas inválidas: corrígelas o quítalas y vuelve a previsualizar.",
         "lineRefused": "Una línea no se pudo registrar; no se importó nada."
+      },
+      "inbox": {
+        "missing": {"amount": "La entrega no trae monto: indícalo en amountCents.", "account": "La entrega no trae cuenta: indícala en accountId.", "fromAccount": "Una transferencia necesita fromAccountId.", "toAccount": "Una transferencia necesita toAccountId.", "category": "La entrega no trae categoría: indica categoryId o splits."}
       },
       "merge": {
         "count": "Indica dos o más movimientos distintos para juntar.",
@@ -1673,7 +1679,10 @@
       "fromCategoryId": "La categoría cuyas líneas se mueven (id de list_categories).",
       "toCategoryId": "La categoría que las recibe, del mismo tipo (id de list_categories).",
       "categoryRef": "El id de la categoría (de list_categories).",
-      "dryRun": "true: no escribe nada y solo devuelve cuántas líneas se moverían."
+      "dryRun": "true: no escribe nada y solo devuelve cuántas líneas se moverían.",
+      "inboxStatus": "pending (por defecto), accepted o rejected.",
+      "deliveries": "Las entregas a aceptar, de 1 a 50: cada una con su id y, opcional, los datos que corrigen o completan su propuesta.",
+      "deliveryIds": "Los ids (de list_inbox) de 1 a 50 entregas pendientes a rechazar."
     }
   },
   "oauth": {

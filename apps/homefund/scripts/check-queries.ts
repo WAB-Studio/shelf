@@ -4130,6 +4130,7 @@ async function main(): Promise<void> {
   await accountPocketSuite();
   await receiptLinesSuite();
   await mcpCleanupSuite();
+  await mcpInboxSuite();
 }
 
 // A member recorded without a login is someone in the fund: a leader whose fund holds one is not alone, so an
@@ -15235,7 +15236,7 @@ async function mcpDoorSuite(): Promise<void> {
   assert(
     next("RF-144: /mcp answers 401 with no key, an unknown one or a webhook's, and lists its tools to a key for Claude"),
     anonymous.status === 401 && forged.status === 401 && webhookKey.status === 401 &&
-      JSON.stringify(names) === JSON.stringify(["create_account", "create_category", "delete_movement", "import_statement", "list_accounts", "list_categories", "list_movements", "merge_movements", "move_category_movements", "preview_statement", "record_movement", "review_month", "update_account", "update_category", "update_movement"]),
+      JSON.stringify(names) === JSON.stringify(["accept_deliveries", "create_account", "create_category", "delete_movement", "import_statement", "list_accounts", "list_categories", "list_inbox", "list_movements", "merge_movements", "move_category_movements", "preview_statement", "record_movement", "reject_deliveries", "review_month", "update_account", "update_category", "update_movement"]),
     `no key ${anonymous.status}, unknown key ${forged.status}, webhook key ${webhookKey.status}, tools ${JSON.stringify(names)}`,
   );
 
@@ -17164,4 +17165,125 @@ async function mcpCleanupSuite(): Promise<void> {
     blocked.every((r) => r.isError) && stillThere === 4,
     `blocked ${JSON.stringify(blocked.map((r) => r.value))}, rows ${stillThere}`,
   );
+}
+
+// RF-177: Claude clears the inbox through the MCP: list the pending, accept with overrides all or nothing, reject, never another person's.
+async function mcpInboxSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const { POST } = await import("@/app/mcp/route");
+  const owner = await createMembershipFreeUser();
+  const stranger = await createMembershipFreeUser();
+  const mkAccount = (user: HarnessUser, name: string) =>
+    asUser(user, () =>
+      createAccount({
+        kind: "asset", subtype: "bank", groupId: null, isShared: false, institution: null, settlementCurrency: BASE_CURRENCY,
+        balanceOn: "2026-01-01", ownerUserId: user.id, name: `Harness rf177 ${name} ${tag}`, amountMinor: 1_000_000_00,
+      }),
+    );
+  const [account, strangerAccount] = [await mkAccount(owner, "a"), await mkAccount(stranger, "ajena")];
+  for (const row of [account, strangerAccount]) track("accounts", row.accountId);
+  const [food, other] = [randomUUID(), randomUUID()];
+  await fixtureSql`insert into categories (id, owner_user_id, name, kind, color) values (${food}, ${owner.id}, ${`Harness rf177 Comida ${tag}`}, 'expense', ${CATEGORY_COLORS[0]})`;
+  await fixtureSql`insert into categories (id, owner_user_id, name, kind, color) values (${other}, ${owner.id}, ${`Harness rf177 Otra ${tag}`}, 'expense', ${CATEGORY_COLORS[0]})`;
+  track("categories", food);
+  track("categories", other);
+
+  const deliver = (user: HarnessUser, name: string, proposal: { amount?: number; account?: string; category?: string; date?: string }) =>
+    fixtureSql.begin(async (tx) => {
+      await tx`select set_config('request.jwt.claims', ${JSON.stringify({ sub: user.id, role: "authenticated", aud: "authenticated" })}, true)`;
+      const [row] = await tx<{ id: string }[]>`
+        insert into ingest_deliveries (external_ref, raw_text, shape_hash, proposed_amount_cents, proposed_account_id, proposed_category_id,
+          category_source, proposed_direction, proposed_occurred_at, proposed_description)
+        values (${`harness-rf177-${name}-${tag}`}, ${`Harness rf177 mensaje ${name}`}, ${createHash("sha256").update(`rf177-${name}-${tag}`).digest("hex")},
+          ${proposal.amount ?? null}, ${proposal.account ?? null}, ${proposal.category ?? null}, ${proposal.category ? "interpreter" : null},
+          'expense', ${proposal.date ?? null}, ${`Harness rf177 ${name}`})
+        returning id`;
+      return row.id;
+    });
+  const full = await deliver(owner, "full", { amount: 12_000_00, account: account.accountId, category: food, date: "2026-03-10" });
+  const noAccount = await deliver(owner, "sin cuenta", { amount: 5_000_00, date: "2026-03-11" });
+  const toReject = await deliver(owner, "rechazar", { amount: 900_00, account: account.accountId, category: food, date: "2026-03-12" });
+  const foreign = await deliver(stranger, "ajena", { amount: 700_00, account: strangerAccount.accountId });
+
+  const { id: keyId, token } = await asUser(owner, () =>
+    issueWebhookCredential({ name: `Harness rf177 ${tag}`, purpose: "mcp", defaultAccountId: null, defaultCategoryId: null }),
+  );
+  keep("webhook_credentials", keyId);
+  const { tool } = mcpClient(POST, token);
+  type Listed = { id: string; rawText: string; notDetected: string[]; proposal: { accountName: string | null; categoryPath: string | null; amountCents: number | null } }[];
+  const inbox = async (args: Record<string, unknown> = {}) => (await tool("list_inbox", args)).value as Listed;
+  const status = async (id: string) => (await fixtureSql`select status from ingest_deliveries where id = ${id}`)[0]?.status as string;
+  const movementsOf = async (id: string) => (await fixtureSql`select t.id, t.created_by, t.description from transactions t join ingest_deliveries d on d.transaction_id = t.id where d.id = ${id}`);
+
+  const pending = await inbox();
+  const ids = pending.map((row) => row.id).sort();
+  const listedFull = pending.find((row) => row.id === full);
+  const accepted0 = await inbox({ status: "accepted" });
+  assert(
+    next("RF-177: list_inbox lists the person's pending deliveries with message and proposal, names what was not detected, hides another person's, and filters by status"),
+    JSON.stringify(ids) === JSON.stringify([full, noAccount, toReject].sort()) && !ids.includes(foreign) &&
+      listedFull?.rawText === "Harness rf177 mensaje full" && listedFull.proposal.accountName?.includes("rf177") === true &&
+      listedFull.proposal.categoryPath?.includes("Comida") === true && listedFull.notDetected.length === 0 &&
+      pending.find((row) => row.id === noAccount)?.notDetected.includes("account") === true && accepted0.length === 0,
+    `pending ${JSON.stringify(pending.map((row) => row.id))}, accepted ${accepted0.length}`,
+  );
+
+  const refused = await tool("accept_deliveries", { deliveries: [{ id: full }, { id: noAccount }] });
+  const refusedValue = refused.value as { field?: string; deliveryId?: string };
+  assert(
+    next("RF-177: accept_deliveries refuses a delivery that lacks an account naming it and the field, and accepts none of the batch"),
+    refused.isError && refusedValue.field === "account" && refusedValue.deliveryId === noAccount &&
+      (await status(full)) === "pending" && (await status(noAccount)) === "pending",
+    `refused ${JSON.stringify(refused.value)}`,
+  );
+
+  const done = await tool("accept_deliveries", {
+    deliveries: [
+      { id: full, categoryId: other, description: `Harness rf177 corregida ${tag}` },
+      { id: noAccount, accountId: account.accountId, categoryId: food, splits: [
+        { categoryId: food, amountCents: 3_000_00, description: "Pan" }, { categoryId: other, amountCents: 2_000_00, description: "Aseo" },
+      ] },
+    ],
+  });
+  const [movementFull] = await movementsOf(full);
+  const [movementLines] = await movementsOf(noAccount);
+  const lines = await fixtureSql`select count(*)::int as n from transaction_splits where transaction_id = ${movementLines?.id}`;
+  for (const row of [movementFull, movementLines]) if (row) track("transactions", row.id as string);
+  assert(
+    next("RF-177: accept_deliveries with overrides books the movements as the owner, with the lines, and the deliveries leave pending"),
+    !done.isError && (await status(full)) === "accepted" && (await status(noAccount)) === "accepted" &&
+      movementFull?.created_by === owner.id && movementFull.description === `Harness rf177 corregida ${tag}` && lines[0].n === 2 &&
+      (await inbox()).map((row) => row.id).join() === toReject,
+    `done ${JSON.stringify(done.value)}`,
+  );
+
+  const again = await tool("accept_deliveries", { deliveries: [{ id: full }] });
+  const count = await fixtureSql`select count(*)::int as n from transactions where description like ${`Harness rf177 corregida ${tag}`}`;
+  assert(
+    next("RF-177: re-accepting a delivery is refused as not found and books nothing more"),
+    again.isError && count[0].n === 1,
+    `again ${JSON.stringify(again.value)}, movements ${count[0].n}`,
+  );
+
+  const strangers = await Promise.all([
+    tool("accept_deliveries", { deliveries: [{ id: foreign, accountId: account.accountId, categoryId: food }] }),
+    tool("reject_deliveries", { ids: [foreign] }),
+    tool("reject_deliveries", { ids: [toReject, foreign] }),
+  ]);
+  assert(
+    next("RF-177: another person's delivery is refused as not found, and a batch holding it rejects none"),
+    strangers.every((r) => r.isError) && (await status(foreign)) === "pending" && (await status(toReject)) === "pending",
+    `strangers ${JSON.stringify(strangers.map((r) => r.value))}`,
+  );
+
+  const rejected = await tool("reject_deliveries", { ids: [toReject] });
+  const rejectedAgain = await tool("reject_deliveries", { ids: [toReject] });
+  assert(
+    next("RF-177: reject_deliveries rejects through the UI's write and a second call is refused"),
+    !rejected.isError && (await status(toReject)) === "rejected" && rejectedAgain.isError && (await inbox({ status: "rejected" })).some((row) => row.id === toReject),
+    `rejected ${JSON.stringify(rejected.value)}, again ${JSON.stringify(rejectedAgain.value)}`,
+  );
+
+  await fixtureSql`delete from ingest_deliveries where owner_user_id in (${owner.id}, ${stranger.id})`;
 }
