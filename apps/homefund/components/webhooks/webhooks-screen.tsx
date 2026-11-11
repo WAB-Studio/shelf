@@ -312,7 +312,7 @@ export function WebhooksScreen({
       </Card>
 
       <Card>
-        <IphoneShortcut ingestUrl={ingestUrl} />
+        <IphoneShortcut />
       </Card>
 
       <WebhookCredentialDialog
