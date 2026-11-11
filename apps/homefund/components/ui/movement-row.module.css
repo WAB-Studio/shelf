@@ -17,6 +17,5 @@
 
 /* The amount keeps every digit and the room it needs; the title gives way. */
 .amount {
-  flex-shrink: 0;
   white-space: nowrap;
 }

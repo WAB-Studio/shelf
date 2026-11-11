@@ -293,7 +293,7 @@ function PaymentCard({
   return (
     <Card>
       <Flex direction="column" gap="2">
-      <Flex align="center" gap="2">
+      <Flex align="start" gap="2">
         <Flex flexGrow="1" minWidth="0">
           <MovementRow
             tile={
