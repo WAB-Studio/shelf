@@ -25,6 +25,10 @@ export const env = createEnv({
     // both, the cron mails nothing and says so.
     SMTP_USER: z.string().min(1).optional(),
     SMTP_PASS: z.string().min(1).optional(),
+    // RF-187's inbound email: Resend's webhook signing secret and the API key that reads a received
+    // email's body. Without the secret a signed delivery is refused; a bearer caller needs neither.
+    INBOUND_EMAIL_WEBHOOK_SECRET: z.string().startsWith("whsec_").optional(),
+    RESEND_API_KEY: z.string().startsWith("re_").optional(),
   },
   client: {
     NEXT_PUBLIC_SUPABASE_URL: z.url(),
