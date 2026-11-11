@@ -5,7 +5,7 @@ import { notFound } from "next/navigation";
 
 import { DebtsScreen } from "@/components/planning/debts-screen";
 import { MemberDebtsSection } from "@/components/planning/member-debts-section";
-import { Flex, Page } from "@/components/ui";
+import { Page } from "@/components/ui";
 import { getDebtsScreenData } from "@/db/queries/debts-screen";
 import { getMemberDebts } from "@/db/queries/member-debts";
 import { getUserGroup } from "@/db/queries/groups";
@@ -37,10 +37,9 @@ export default async function DebtsPage(
 
   return (
     <Page>
-      <Flex direction="column" gap="6">
-        <DebtsScreen data={data} hasGroup={group !== null} />
+      <DebtsScreen data={data} hasGroup={group !== null}>
         {memberDebts && <MemberDebtsSection data={memberDebts} />}
-      </Flex>
+      </DebtsScreen>
     </Page>
   );
 }

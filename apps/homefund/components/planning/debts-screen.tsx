@@ -10,7 +10,7 @@ import {
 import type { LucideIcon } from "lucide-react";
 import { CalendarDays, CircleAlert, CreditCard, Plus } from "lucide-react";
 import { useFormatter, useLocale, useTranslations } from "next-intl";
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 
 import { OwnerMark } from "@/components/fund/owner-mark";
 import { DebtFormDialog } from "@/components/planning/debt-form-dialog";
@@ -119,9 +119,12 @@ function OtherOwed({ pockets }: { pockets: DebtPocket[] }) {
 export function DebtsScreen({
   data,
   hasGroup,
+  children,
 }: {
   data: DebtsScreenData;
   hasGroup: boolean;
+  // What the fund's members owe each other (RF-183), under the debts at every width.
+  children?: ReactNode;
 }) {
   const moneyText = useMoneyText();
   const t = useTranslations("debts");
@@ -544,6 +547,8 @@ export function DebtsScreen({
           )}
         </Flex>
       </Box>
+
+      {children}
 
       <DebtFormDialog
         open={target?.mode === "create" || target?.mode === "complete"}
