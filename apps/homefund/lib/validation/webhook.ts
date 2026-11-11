@@ -39,6 +39,19 @@ export const webhookPayloadSchema = z.object({
 // feeds `ingestWebhookMovement` unchanged; the route (C7) exercises that pass.
 export type WebhookPayloadInput = z.infer<typeof webhookPayloadSchema>;
 
+// What a key is for, picked when it is made (RF-194); never read off its name.
+export const credentialKindSchema = z.enum(["android", "iphone", "bank_emails", "other"], {
+  error: "webhooks.errors.kindInvalid",
+});
+export type CredentialKind = z.infer<typeof credentialKindSchema>;
+
+// The badge a key wears: a Claude key (`mcp`) is Claude whatever its kind column holds.
+export type CredentialBadge = CredentialKind | "claude";
+
+export function credentialBadge(purpose: "ingest" | "mcp", kind: CredentialKind): CredentialBadge {
+  return purpose === "mcp" ? "claude" : kind;
+}
+
 // A credential names no scope: the owner is trigger-stamped, so the payload
 // carries only its name, its optional defaults and an optional throttle.
 export const issueWebhookCredentialSchema = z.object({
@@ -47,6 +60,7 @@ export const issueWebhookCredentialSchema = z.object({
     .trim()
     .min(1, { error: "webhooks.errors.nameRequired" })
     .max(80, { error: "webhooks.errors.nameTooLong" }),
+  kind: credentialKindSchema.default("other"),
   defaultAccountId: z.uuid({ error: "webhooks.errors.accountInvalid" }).nullish(),
   defaultCategoryId: z.uuid({ error: "webhooks.errors.categoryInvalid" }).nullish(),
   rateLimitPerMin: z

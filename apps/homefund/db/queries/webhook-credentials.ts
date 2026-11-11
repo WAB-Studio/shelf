@@ -9,9 +9,10 @@ import { insertRow } from "@/db/insert-row";
 import { listAccounts } from "@/db/queries/accounts";
 import { listScopedCategories } from "@/db/queries/categories";
 import type { ScopedCategoryNode } from "@/db/queries/categories";
-import { webhookCredentials } from "@/db/schema";
+import { ingestDeliveries, webhookCredentials } from "@/db/schema";
 import { requireUser, withUserDb } from "@/db/session";
 import { sha256Hex } from "@/lib/hash";
+import type { CredentialKind } from "@/lib/validation/webhook";
 
 // The bearer a webhook presents, and the SHA-256 of it the row keeps. Only the
 // hash is ever stored, so a raw token exists in exactly two places: this file's
@@ -29,6 +30,8 @@ export type IssueWebhookCredentialArgs = {
   name: string;
   // What the key opens (RF-144); a webhook key unless named.
   purpose?: CredentialPurpose;
+  // What the key is for (RF-194); `other` unless named.
+  kind?: CredentialKind;
   defaultAccountId: string | null;
   defaultCategoryId: string | null;
   rateLimitPerMin?: number;
@@ -46,6 +49,7 @@ export async function issueWebhookCredential({
   defaultCategoryId,
   rateLimitPerMin = 60,
   purpose = "ingest",
+  kind = "other",
 }: IssueWebhookCredentialArgs): Promise<{ id: string; token: string }> {
   const token = `whk_${randomBytes(32).toString("base64url")}`;
   const tokenHash = tokenHashOf(token);
@@ -56,7 +60,7 @@ export async function issueWebhookCredential({
     const [row] = await insertRow(
       tx,
       webhookCredentials,
-      { name, tokenHash, defaultAccountId, defaultCategoryId, rateLimitPerMin, purpose },
+      { name, tokenHash, defaultAccountId, defaultCategoryId, rateLimitPerMin, purpose, kind },
       { returning: { id: webhookCredentials.id } },
     );
 
@@ -71,6 +75,9 @@ export type WebhookCredentialRow = {
   defaultCategoryId: string | null;
   rateLimitPerMin: number;
   purpose: CredentialPurpose;
+  kind: CredentialKind;
+  // Inbox deliveries that came in through this key in the last 30 days (RF-194).
+  deliveriesLast30Days: number;
   lastUsedAt: Date | null;
   revokedAt: Date | null;
   createdAt: Date;
@@ -89,6 +96,13 @@ export async function listWebhookCredentials(): Promise<WebhookCredentialRow[]> 
         defaultCategoryId: webhookCredentials.defaultCategoryId,
         rateLimitPerMin: webhookCredentials.rateLimitPerMin,
         purpose: sql<CredentialPurpose>`${webhookCredentials.purpose}`,
+        kind: sql<CredentialKind>`${webhookCredentials.kind}`,
+        // A correlated subquery, so the counts ride the list's own round trip.
+        deliveriesLast30Days: sql<number>`(
+          select count(*)::int from ${ingestDeliveries}
+          where ${ingestDeliveries.credentialId} = ${webhookCredentials.id}
+            and ${ingestDeliveries.createdAt} >= now() - interval '30 days'
+        )`,
         lastUsedAt: webhookCredentials.lastUsedAt,
         revokedAt: webhookCredentials.revokedAt,
         createdAt: webhookCredentials.createdAt,

@@ -27,6 +27,8 @@ export type InboxTableRow = {
   id: string;
   createdAt: Date;
   merchantLabel: string | null;
+  // «Llegó por <kind> · <key name>», or null once the key is gone (RF-194).
+  via: string | null;
   rawText: string;
   category: { name: string; color: string | null } | null;
   account: string | null;
@@ -49,6 +51,7 @@ export type InboxTableRow = {
 const WIDTHS = {
   arrived: "88px",
   message: "minmax(0, 1fr)",
+  via: "180px",
   merchant: "120px",
   category: "120px",
   account: "120px",
@@ -107,6 +110,18 @@ export function InboxTable({
         <Flex minWidth="0">
           <Text size="2" color="gray" truncate>
             {row.rawText}
+          </Text>
+        </Flex>
+      ),
+    },
+    {
+      key: "via",
+      header: t("connectionLabel"),
+      width: WIDTHS.via,
+      cell: (row) => (
+        <Flex minWidth="0">
+          <Text size="2" color="gray" truncate>
+            {row.via ?? NO_VALUE}
           </Text>
         </Flex>
       ),

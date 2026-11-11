@@ -1596,11 +1596,24 @@
       "amountInvalid": "Enter a valid amount.",
       "amountTooLarge": "The amount is too large.",
       "directionInvalid": "The «direction» field only accepts «expense» or «income».",
-      "scopeViolation": "That category belongs to another scope than the account. Pick a fund category for a fund account, or one of yours for your own account."
+      "scopeViolation": "That category belongs to another scope than the account. Pick a fund category for a fund account, or one of yours for your own account.",
+      "kindInvalid": "Pick what the credential is for."
     },
     "mcpHeading": "Connect Claude",
     "mcpDescription": "On claude.ai (web, desktop or mobile), add a custom connector with the URL above: it asks you to sign in with HomeFund and that is all. Claude reads your accounts, movements and «Review the month», and records movements or creates and edits accounts, categories and labels, and labels movements, once you confirm, always with your own permissions; revoking its key in the list disconnects it. A key you create here still works: in Claude Code it goes in «Authorization: Bearer», and in a connector with no sign-in in the «X-API-Key» header. A webhook key does not open this door. To talk to HomeFund and GoalLog in one chat, the repository github.com/WAB-Studio/asistente (private to WAB-Studio) has it all set up: follow its README.",
-    "mcpIssue": "Create a key for Claude"
+    "mcpIssue": "Create a key for Claude",
+    "kind": {
+      "android": "Android",
+      "iphone": "iPhone",
+      "bank_emails": "Bank emails",
+      "claude": "Claude",
+      "other": "Other"
+    },
+    "kindLabel": "What it is for",
+    "deliveries30": "{count, plural, =0 {No deliveries} one {# delivery} other {# deliveries}} in 30 days",
+    "columnDeliveries": "Deliveries (30 days)",
+    "showRevoked": "Show revoked ({count})",
+    "hideRevoked": "Hide revoked ({count})"
   },
   "ingest": {
     "title": "Inbox",
@@ -1683,7 +1696,9 @@
       "completed": "Movement completed"
     },
     "saveNumber": "Save this number",
-    "recipientIs": "Recipient: {name}"
+    "recipientIs": "Recipient: {name}",
+    "arrivedVia": "Arrived via {kind} · {name}",
+    "connectionLabel": "Connection"
   },
   "review": {
     "entry": "Review the month",

@@ -11,7 +11,7 @@ import { expect, type Locator, type Page } from "@playwright/test";
 import messages from "@/messages/es.json";
 
 import { fixtureSql } from "../scripts/harness/fixtures";
-import { clearLedger, readScope, seedQueue, test } from "./global-setup";
+import { asHarnessUser, clearLedger, readScope, seedQueue, test } from "./global-setup";
 
 const ingest = messages.ingest;
 const transactions = messages.transactions;
@@ -119,6 +119,30 @@ test.describe("the inbox queue", () => {
         await expect(field).toBeVisible();
         await expect(field).toHaveAttribute("data-accent-color", "amber");
       }
+    });
+
+    test("says which key a delivery came through, in the row and in the card (RF-194)", async ({
+      page,
+    }) => {
+      const [deliveryId] = await seedQueue([complete]);
+      await asHarnessUser(async (tx) => {
+        const [key] = await tx<{ id: string }[]>`
+          insert into webhook_credentials (name, token_hash, kind)
+          values ('Mi celular e2e', ${"e".repeat(64)}, 'android')
+          returning id`;
+        await tx`update ingest_deliveries set credential_id = ${key.id} where id = ${deliveryId}`;
+      });
+      const via = messages.ingest.arrivedVia
+        .replace("{kind}", messages.webhooks.kind.android)
+        .replace("{name}", "Mi celular e2e");
+
+      await page.goto("/es/inbox");
+      await expect(
+        page.getByRole("table", { name: ingest.title }).getByText(via),
+      ).toBeVisible();
+
+      await page.setViewportSize({ width: 390, height: 800 });
+      await expect(page.getByText(via)).toBeVisible();
     });
 
     test("records the movement from the row menu and drops the row, but only opens the form for an incomplete one", async ({

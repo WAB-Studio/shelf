@@ -1596,11 +1596,24 @@
       "amountInvalid": "Escribe un monto válido.",
       "amountTooLarge": "El monto es demasiado alto.",
       "directionInvalid": "El campo «direction» solo acepta «expense» o «income».",
-      "scopeViolation": "Esa categoría es de otro ámbito que la cuenta. Elige una del fondo para una cuenta del fondo, o una tuya para una cuenta tuya."
+      "scopeViolation": "Esa categoría es de otro ámbito que la cuenta. Elige una del fondo para una cuenta del fondo, o una tuya para una cuenta tuya.",
+      "kindInvalid": "Elige para qué es la credencial."
     },
     "mcpHeading": "Conectar con Claude",
     "mcpDescription": "En claude.ai (web, escritorio o móvil), agrega un conector personalizado con la URL de arriba: te pedirá entrar con HomeFund y listo. Claude lee tus cuentas, movimientos y «Revisar el mes», y registra movimientos o crea y edita cuentas, categorías y etiquetas, y etiqueta movimientos, cuando se lo confirmas, siempre con tus mismos permisos; revocar su clave en la lista lo desconecta. Una clave que crees aquí sigue sirviendo: en Claude Code va en «Authorization: Bearer», y en un conector sin inicio de sesión en el encabezado «X-API-Key». Una clave de webhook no abre esta puerta. Para hablar con HomeFund y GoalLog en un mismo chat, el repositorio github.com/WAB-Studio/asistente (privado de WAB-Studio) trae todo listo: sigue su README.",
-    "mcpIssue": "Crear clave para Claude"
+    "mcpIssue": "Crear clave para Claude",
+    "kind": {
+      "android": "Android",
+      "iphone": "iPhone",
+      "bank_emails": "Correos del banco",
+      "claude": "Claude",
+      "other": "Otro"
+    },
+    "kindLabel": "Para qué es",
+    "deliveries30": "{count, plural, =0 {Sin entregas} one {# entrega} other {# entregas}} en 30 días",
+    "columnDeliveries": "Entregas (30 días)",
+    "showRevoked": "Ver revocadas ({count})",
+    "hideRevoked": "Ocultar revocadas ({count})"
   },
   "ingest": {
     "title": "Bandeja",
@@ -1683,7 +1696,9 @@
       "completed": "Movimiento completado"
     },
     "saveNumber": "Guardar este número",
-    "recipientIs": "Destinatario: {name}"
+    "recipientIs": "Destinatario: {name}",
+    "arrivedVia": "Llegó por {kind} · {name}",
+    "connectionLabel": "Conexión"
   },
   "review": {
     "entry": "Revisar el mes",

@@ -11,7 +11,7 @@ import {
 } from "@/app/actions/ingest";
 import { deleteTransactionAction } from "@/app/actions/transactions";
 import { AwaitingCounterparty } from "@/components/ingest/awaiting-counterparty";
-import { DeliveryCard } from "@/components/ingest/delivery-card";
+import { arrivedVia, DeliveryCard } from "@/components/ingest/delivery-card";
 import { InboxTable, type InboxTableRow } from "@/components/ingest/inbox-table";
 import { RecipientFormDialog, type RecipientDraft } from "@/components/recipients/recipient-form-dialog";
 import { SilencedShapes } from "@/components/ingest/silenced-shapes";
@@ -217,6 +217,9 @@ export function InboxScreen({
     id: delivery.id,
     createdAt: delivery.createdAt,
     merchantLabel: delivery.merchantLabel,
+    via: arrivedVia(delivery, (badge, name) =>
+      t("arrivedVia", { kind: tKey(`webhooks.kind.${badge}`), name }),
+    ),
     rawText: delivery.rawText,
     category: categoryInfo(
       options,
