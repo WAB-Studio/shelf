@@ -8,6 +8,7 @@ import {
   CreditCard,
   Database,
   House,
+  Contact,
   Inbox,
   Repeat,
   ScrollText,
@@ -45,6 +46,7 @@ const CATALOGUE = {
   categories: { href: "/settings/categories", icon: Tags },
   labels: { href: "/settings/labels", icon: Tag },
   webhooks: { href: "/settings/webhooks", icon: Webhook },
+  recipients: { href: "/settings/recipients", icon: Contact },
   data: { href: "/settings/data", icon: Database },
   audit: { href: "/settings/audit", icon: ScrollText },
 } as const satisfies Record<string, { href: string; icon: LucideIcon }>;
@@ -107,6 +109,7 @@ export const SETTINGS_KEYS = [
   "categories",
   "labels",
   "webhooks",
+  "recipients",
   "data",
   "audit",
 ] as const;
