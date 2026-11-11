@@ -17653,7 +17653,7 @@ async function mcpSpendingPatternsSuite(): Promise<void> {
   assert(
     next("RF-184: spending_patterns finds the owner's monthly charge with its typical amount and next date, and never another person's"),
     !answer.isError && series.length === 1 && series[0].cadence === "monthly" && series[0].typicalCents === 44_900_00 &&
-      series[0].occurrences === 4 && series[0].nextExpected === today && series[0].active &&
+      series[0].occurrences === 4 && series[0].nextExpected === addCivilMonths(addCivilMonths(today, -1), 1) && series[0].active &&
       series[0].category?.includes("Streaming") === true && !foreign,
     `isError ${answer.isError}, series ${JSON.stringify(series)}, stranger's ${foreign}`,
   );

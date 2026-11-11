@@ -4,7 +4,7 @@ import { sql, type SQL } from "drizzle-orm";
 
 import { withUserDb } from "@/db/session";
 import { shiftMonth, todayInBogota } from "@/lib/dates";
-import { USUAL_WINDOW_MONTHS } from "@/lib/month-review-rules";
+import { ABOVE_USUAL_FACTOR, USUAL_MIN_LINES, USUAL_WINDOW_MONTHS } from "@/lib/month-review-rules";
 
 export type Cadence = "monthly" | "weekly";
 
@@ -105,11 +105,7 @@ function patternsSql(w: Window): SQL {
   const historyStart = `${shiftMonth(w.fromMonth, -USUAL_WINDOW_MONTHS)}-01`;
   return sql`
     with tx as materialized (
-      select t.id, t.occurred_at, t.amount_cents, t.currency, t.from_account_id, t.description,
-        -- The description without case, accents, digits or punctuation: «NETFLIX.COM 4412» and
-        -- «Netflix.com 9921» are one series.
-        nullif(btrim(regexp_replace(translate(lower(coalesce(t.description, '')), 'áéíóúüñ', 'aeiouun'),
-          '[^a-z]+', ' ', 'g')), '') as pattern_key
+      select t.id, t.occurred_at, t.amount_cents, t.currency, t.from_account_id, t.description
       from transactions t
       where t.kind = 'expense' and t.reconciliation_id is null
         and t.occurred_at >= ${historyStart}::date and t.occurred_at < ${endExclusive}::date
@@ -128,12 +124,22 @@ function patternsSql(w: Window): SQL {
       from lines where occurred_at >= ${start}::date
       group by 1, 2, 3
     ),
+    -- One row per series and day. A series is a description without case, accents, digits or
+    -- punctuation on one account and currency: «NETFLIX.COM 4412» and «Netflix.com 9921» are one.
+    keyed as (
+      select t.*, nullif(btrim(regexp_replace(
+          translate(lower(coalesce(t.description, '')), 'áàâäãéèêëíìîïóòôöõúùûüñç', 'aaaaaeeeeiiiiooooouuuunc'),
+          '[^a-z]+', ' ', 'g')), '') as pattern_key
+      from tx t
+      where t.occurred_at >= ${start}::date
+    ),
     charges as (
       select pattern_key, from_account_id as account_id, currency, occurred_at,
-        sum(amount_cents)::bigint as amount_cents, (array_agg(id order by id))[1] as transaction_id,
-        (array_agg(description order by id))[1] as description
-      from tx
-      where pattern_key is not null and occurred_at >= ${start}::date
+        sum(amount_cents)::bigint as amount_cents,
+        (array_agg(id order by amount_cents desc, id))[1] as transaction_id,
+        (array_agg(description order by amount_cents desc, id))[1] as description
+      from keyed
+      where pattern_key is not null
       group by 1, 2, 3, 4
     ),
     gaps as (
@@ -173,25 +179,25 @@ function patternsSql(w: Window): SQL {
     -- RF-155's «above usual»: a line over three times its category's median in the six months
     -- before its month, once that median rests on three lines.
     cells as (
-      select distinct category_id, currency, month from lines where occurred_at >= ${start}::date
+      select distinct category_id, currency, month,
+        to_char(to_date(month, 'YYYY-MM') - make_interval(months => ${USUAL_WINDOW_MONTHS}::int), 'YYYY-MM') as from_month
+      from lines where occurred_at >= ${start}::date
     ),
     usual as (
-      select c.category_id, c.currency, c.month, u.median_cents
+      select c.category_id, c.currency, c.month,
+        percentile_disc(0.5) within group (order by h.amount_cents) as median_cents
       from cells c
-      cross join lateral (
-        select percentile_disc(0.5) within group (order by h.amount_cents) as median_cents, count(*) as n
-        from lines h
-        where h.category_id = c.category_id and h.currency = c.currency
-          and h.month < c.month and h.month >= to_char(to_date(c.month, 'YYYY-MM') - make_interval(months => ${USUAL_WINDOW_MONTHS}::int), 'YYYY-MM')
-      ) u
-      where u.n >= 3
+      join lines h using (category_id, currency)
+      where h.month < c.month and h.month >= c.from_month
+      group by 1, 2, 3
+      having count(*) >= ${USUAL_MIN_LINES}::int
     ),
     outliers as (
       select distinct on (l.transaction_id) l.transaction_id, l.occurred_at, l.currency, l.category_id,
         l.amount_cents, u.median_cents
       from lines l
       join usual u using (category_id, currency, month)
-      where l.amount_cents > 3 * u.median_cents
+      where l.amount_cents > ${ABOVE_USUAL_FACTOR}::int * u.median_cents
       order by l.transaction_id, l.amount_cents desc
     ),
     growth as (
@@ -204,7 +210,8 @@ function patternsSql(w: Window): SQL {
     )`;
 }
 
-function recurringJson(today: string): SQL {
+// The repeated charges as JSON; it reads `recurring` and `names` from `patternsSql`'s chain.
+function recurringJson(w: Window): SQL {
   return sql`(select json_agg(json_build_object(
       'name', r.description, 'accountId', r.account_id, 'accountName', a.name,
       'scope', case when a.group_id is null then 'personal' else 'fund' end,
@@ -213,7 +220,7 @@ function recurringJson(today: string): SQL {
       'currency', r.currency, 'cadence', r.cadence, 'typicalCents', r.typical_cents,
       'occurrences', r.occurrences, 'firstDate', to_char(r.first_date, 'YYYY-MM-DD'),
       'lastDate', to_char(r.last_date, 'YYYY-MM-DD'), 'nextExpected', to_char(r.next_expected, 'YYYY-MM-DD'),
-      'active', r.next_expected + r.grace >= ${today}::date
+      'active', r.next_expected + r.grace >= ${w.today}::date
     ) order by r.next_expected, r.description)
     from recurring r join accounts a on a.id = r.account_id)`;
 }
@@ -231,23 +238,7 @@ export async function getSpendingPatterns(months: number, today: string = todayI
       recurring: RecurringCharge[] | null;
       outliers: SpendingOutlier[] | null;
       growing: GrowingCategory[] | null;
-    }>(spendingPatternsSql(w));
-
-    return {
-      today: w.today,
-      fromMonth: w.fromMonth,
-      currentMonth: w.currentMonth,
-      recentMonths: Array.from({ length: w.recentCount }, (_, i) => shiftMonth(w.recentFrom, i)),
-      spending: row?.spending ?? [],
-      recurring: row?.recurring ?? [],
-      outliers: row?.outliers ?? [],
-      growing: row?.growing ?? [],
-    };
-  });
-}
-
-function spendingPatternsSql(w: Window): SQL {
-  return sql`
+    }>(sql`
       ${patternsSql(w)}
       select
         (select json_agg(json_build_object(
@@ -257,7 +248,7 @@ function spendingPatternsSql(w: Window): SQL {
               json_object_agg(month, cents order by month) as months
             from spending group by 1, 2) s
           left join names n on n.id = s.category_id) as spending,
-        ${recurringJson(w.today)} as recurring,
+        ${recurringJson(w)} as recurring,
         (select json_agg(x.item order by x.occurred_at desc, x.transaction_id) from (
           select o.occurred_at, o.transaction_id, json_build_object(
               'transactionId', o.transaction_id, 'date', to_char(o.occurred_at, 'YYYY-MM-DD'),
@@ -279,5 +270,17 @@ function spendingPatternsSql(w: Window): SQL {
           from growth g
           left join names n on n.id = g.category_id
           where ${w.recentCount}::int > 0 and g.base > 0
-            and g.recent * ${w.baselineCount}::int * 4 > g.base * ${w.recentCount}::int * 5) as growing`;
+            and g.recent * ${w.baselineCount}::int * 4 > g.base * ${w.recentCount}::int * 5) as growing`);
+
+    return {
+      today: w.today,
+      fromMonth: w.fromMonth,
+      currentMonth: w.currentMonth,
+      recentMonths: Array.from({ length: w.recentCount }, (_, i) => shiftMonth(w.recentFrom, i)),
+      spending: row?.spending ?? [],
+      recurring: row?.recurring ?? [],
+      outliers: row?.outliers ?? [],
+      growing: row?.growing ?? [],
+    };
+  });
 }
