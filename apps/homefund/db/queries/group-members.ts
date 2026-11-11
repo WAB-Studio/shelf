@@ -166,7 +166,7 @@ export type PendingInvitation = {
   inviterName: string;
   fundName: string;
   // The fund the caller already lives in, and whether someone else lives or waits there:
-  // a person alone in their own fund may still accept (Q32).
+  // a person alone in their own fund may still accept.
   currentFundName: string | null;
   currentFundHasCompany: boolean;
 };

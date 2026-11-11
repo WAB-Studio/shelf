@@ -1,5 +1,4 @@
-import type { ComponentPropsWithoutRef, ReactNode } from "react";
-import { forwardRef } from "react";
+import type { ReactNode } from "react";
 import { Flex, Link } from "@radix-ui/themes";
 
 import { Link as LocaleLink } from "@/i18n/navigation";
@@ -78,22 +77,3 @@ export function NavList({
   );
 }
 
-// A sidebar row that opens something instead of going somewhere. It forwards the
-// ref and the props a trigger clones onto it (asChild), so a NavPanel can drive
-// it directly, and it wears the same pill as the rows above it.
-export const NavListTrigger = forwardRef<
-  HTMLButtonElement,
-  { icon: ReactNode; label: ReactNode } & ComponentPropsWithoutRef<"button">
->(function NavListTrigger({ icon, label, ...props }, ref) {
-  return (
-    <button
-      ref={ref}
-      type="button"
-      className={`${styles.row} ${styles.trigger}`}
-      {...props}
-    >
-      {icon}
-      <span className={styles.label}>{label}</span>
-    </button>
-  );
-});

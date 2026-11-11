@@ -1,60 +1,22 @@
 "use server";
 
 import { refresh } from "next/cache";
-import { z } from "zod";
 
 import { recordDebtPayment } from "@/db/queries/installment-plans";
 import { getSettlementCurrencies } from "@/db/queries/transactions";
 import { BASE_CURRENCY } from "@/lib/currency";
-import { pgErrorCode } from "@/lib/db-error";
+import { requireMinor, assertRefined } from "@/lib/action-amounts";
+import { pgErrorCode, pgErrorMentions } from "@/lib/db-error";
 import { ActionError } from "@/lib/errors";
-import { parseAmount } from "@/lib/money";
 import { authActionClient } from "@/lib/safe-action";
 import {
   recordDebtPaymentSchema,
   refineDebtPaymentAmount,
 } from "@/lib/validation/installment-plan";
 
-// An amount arrives as a Zod-validated string; turning it into the integer the
-// column keeps can only fail if the refinement above let something through it
-// should not have.
-function toMinor(amount: string): number {
-  const minor = parseAmount(amount);
-  if (minor === null) throw new ActionError("errors.unexpected");
-  return minor;
-}
-
-// The refinement the form runs, run again here against the currency read off the
-// account rather than the one the payload claims (RNF-10). The first issue is
-// what the caller is told, as every other refusal in this file reports one.
-function assertAmounts<T>(
-  data: T,
-  refine: (data: T, ctx: z.RefinementCtx) => void,
-): void {
-  const verdict = z.custom<T>().superRefine(refine).safeParse(data);
-  if (!verdict.success) throw new ActionError(verdict.error.issues[0].message);
-}
-
 // The query's own kinds guard, both halves of it, raised before anything is written.
 const ASSET_SOURCE_REFUSAL = "comes from an asset account";
 const LIABILITY_TARGET_REFUSAL = "credits a liability account";
-
-// The driver hangs its message off the cause chain the way it hangs its sqlstate:
-// the error thrown only says which query failed.
-function refusalMentions(error: unknown, fragment: string): boolean {
-  let current: unknown = error;
-
-  for (let hop = 0; hop < 5; hop++) {
-    if (typeof current !== "object" || current === null) return false;
-
-    const { message, cause } = current as { message?: unknown; cause?: unknown };
-    if (typeof message === "string" && message.includes(fragment)) return true;
-
-    current = cause;
-  }
-
-  return false;
-}
 
 // Two refusals share 23514: the two halves of the kinds guard above, told apart by the message and
 // each answered with its own key; anything else the constraint refuses reads as an invalid payment. A
@@ -67,10 +29,10 @@ function mapPaymentError(error: unknown): never {
   // carry a rate, and this path names no second amount for it (migration `0032`).
   if (code === "23901") throw new ActionError("transactions.errors.currencyMismatch");
   if (code === "23514") {
-    if (refusalMentions(error, ASSET_SOURCE_REFUSAL)) {
+    if (pgErrorMentions(error, ASSET_SOURCE_REFUSAL)) {
       throw new ActionError("installments.errors.notFromAsset");
     }
-    if (refusalMentions(error, LIABILITY_TARGET_REFUSAL)) {
+    if (pgErrorMentions(error, LIABILITY_TARGET_REFUSAL)) {
       throw new ActionError("installments.errors.notLiability");
     }
     throw new ActionError("installments.errors.paymentInvalid");
@@ -97,9 +59,9 @@ export const recordDebtPaymentAction = authActionClient
     const settlement = await getSettlementCurrencies({ fromAccountId, toAccountId });
     const currency = settlement.from ?? BASE_CURRENCY;
 
-    assertAmounts({ amount }, refineDebtPaymentAmount(currency));
+    assertRefined({ amount }, refineDebtPaymentAmount(currency));
 
-    const amountCents = toMinor(amount);
+    const amountCents = requireMinor(amount);
 
     let result: Awaited<ReturnType<typeof recordDebtPayment>>;
     try {

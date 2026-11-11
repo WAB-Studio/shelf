@@ -14,6 +14,7 @@ import { expect, type Locator, type Page } from "@playwright/test";
 import messages from "@/messages/es.json";
 
 import { fixtureSql } from "../scripts/harness/fixtures";
+import { rightOverhang } from "./fit";
 import { asHarnessUser, readScope, test } from "./global-setup";
 
 const rules = messages.recurringRules;
@@ -25,9 +26,9 @@ const stamp = randomUUID().slice(0, 8);
 const ids = { account: randomUUID(), category: randomUUID(), rule: randomUUID() };
 const RULE = `Regla pausada ${stamp}`;
 
-type Seed = { active: boolean; reason: "failed" | null; endsOn?: "past" };
+type Seed = { active: boolean; reason: "failed" | null; endsOn?: "past"; amountCents?: number };
 
-async function seed({ active, reason, endsOn }: Seed) {
+async function seed({ active, reason, endsOn, amountCents = 1500000 }: Seed) {
   await asHarnessUser(async (tx) => {
     await tx`
       insert into accounts (id, owner_user_id, name, kind, subtype, initial_balance_cents, initial_balance_on)
@@ -39,7 +40,7 @@ async function seed({ active, reason, endsOn }: Seed) {
       insert into recurring_rules (
         id, from_account_id, amount_cents, category_id, description, frequency, interval_n, day_of_month,
         next_run_on, is_active, ends_on)
-      values (${ids.rule}, ${ids.account}, 1500000, ${ids.category}, ${RULE}, 'weekly', 1, null,
+      values (${ids.rule}, ${ids.account}, ${amountCents}, ${ids.category}, ${RULE}, 'weekly', 1, null,
         (now() at time zone 'America/Bogota')::date + 20, ${active},
         ${endsOn === "past" ? fixtureSql`(now() at time zone 'America/Bogota')::date - 5` : null})`;
   });
@@ -97,4 +98,23 @@ test("resuming a rule the run paused takes the line away, and it stays gone afte
   await page.reload();
   await expect(row(page)).toBeVisible();
   await expect(page.getByText(FAILED_LINE)).toHaveCount(0);
+});
+
+test.describe("a wide amount on a narrow phone", () => {
+  test("keeps the rule's title readable and the amount inside the card @mobile", async ({
+    page,
+  }) => {
+    // Kills: an amount that never gives its line away, so the title is cut to its first letters.
+    await seed({ active: true, reason: null, amountCents: 2345678901 });
+    await page.goto("/es/planning/recurring");
+
+    const title = page.getByText(RULE, { exact: true }).filter({ visible: true });
+    const card = page.locator(".rt-Card").filter({ visible: true }).filter({ has: title });
+    const amount = card.getByText(/23\.456\.789/);
+    await expect(amount).toBeVisible();
+
+    // The whole title is drawn: none of it hides behind the ellipsis.
+    expect(await title.evaluate((el) => el.scrollWidth - el.clientWidth)).toBeLessThanOrEqual(0);
+    expect(await rightOverhang(amount, card)).toBeLessThanOrEqual(0);
+  });
 });

@@ -31,7 +31,6 @@ const updates: { groupId: string; memberId: string; name: string; inviteEmail?: 
 let updateAnswer: unknown;
 let updateFails: unknown;
 let mxAsked = 0;
-let groupAsked = 0;
 
 const double = {
   restoreMember: async () => {
@@ -39,7 +38,6 @@ const double = {
     return restoreAnswer;
   },
   group: async () => {
-    groupAsked++;
     entered.push("group");
     await gate;
     return { id: "group-1" };
@@ -145,7 +143,6 @@ beforeEach(() => {
   gate = Promise.resolve();
   memberAsked = [];
   mxAsked = 0;
-  groupAsked = 0;
   updates.length = 0;
   updateAnswer = undefined;
   updateFails = undefined;

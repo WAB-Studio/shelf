@@ -92,19 +92,3 @@ export async function upsertDebtTerms(
   });
 }
 
-// The boolean reports whether the policy admitted the delete; the cascade removes
-// nothing else — plans and statements sit on the account, not on its terms.
-export async function deleteDebtTerms({
-  accountId,
-}: {
-  accountId: string;
-}): Promise<boolean> {
-  return withUserDb(async (tx) => {
-    const rows = await tx
-      .delete(debtTerms)
-      .where(eq(debtTerms.accountId, accountId))
-      .returning({ accountId: debtTerms.accountId });
-
-    return rows.length > 0;
-  });
-}

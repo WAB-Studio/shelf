@@ -42,3 +42,20 @@ export function pgConstraintName(error: unknown): string | undefined {
 
   return undefined;
 }
+
+// The driver hangs its message off the cause chain the way it hangs its sqlstate:
+// the error thrown only says which query failed.
+export function pgErrorMentions(error: unknown, fragment: string): boolean {
+  let current: unknown = error;
+
+  for (let hop = 0; hop < MAX_CAUSE_HOPS; hop++) {
+    if (typeof current !== "object" || current === null) return false;
+
+    const { message, cause } = current as { message?: unknown; cause?: unknown };
+    if (typeof message === "string" && message.includes(fragment)) return true;
+
+    current = cause;
+  }
+
+  return false;
+}
