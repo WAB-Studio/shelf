@@ -280,18 +280,10 @@ export async function insertTransaction(
 
   const transactionId = row.id;
 
-  if (splits.length > 0) {
-    await tx.execute(sql`
-      insert into transaction_splits (transaction_id, category_id, amount_cents, description)
-      values ${sql.join(
-        splits.map(
-          (split) =>
-            sql`(${transactionId}, ${split.categoryId}, ${split.amountCents}, ${split.description ?? null})`,
-        ),
-        sql`, `,
-      )}
-    `);
-  }
+  await insertSplitRows(
+    tx,
+    splits.map((split) => ({ transactionId, ...split })),
+  );
 
   if (labelIds.length > 0) {
     await insertRow(
@@ -609,6 +601,22 @@ export async function getTransactionTotals(
         })),
     };
   });
+}
+
+// The one multi-row insert of a movement's lines: the column list lives here and nowhere else. The deferred
+// sum trigger checks the set at commit, so it need not balance the instant it lands.
+export async function insertSplitRows(
+  tx: Transaction,
+  rows: (TransactionSplitInput & { transactionId: string })[],
+): Promise<void> {
+  if (rows.length === 0) return;
+  await tx.execute(sql`
+    insert into transaction_splits (transaction_id, category_id, amount_cents, description)
+    values ${sql.join(
+      rows.map((row) => sql`(${row.transactionId}, ${row.categoryId}, ${row.amountCents}, ${row.description ?? null})`),
+      sql`, `,
+    )}
+  `);
 }
 
 /**

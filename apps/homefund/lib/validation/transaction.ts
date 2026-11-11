@@ -182,8 +182,13 @@ const splitSchema = z.object({
     .string()
     .trim()
     .max(200, { error: "transactions.errors.splitDescriptionTooLong" })
-    .nullish(),
+    .nullish()
+    .transform((value) => value || null)
+    .optional(),
 });
+
+// A line as the form holds it, before the schema reads it.
+export type SplitFields = z.input<typeof splitSchema>;
 
 export const transactionFields = {
   fromAccountId: accountRefSchema,
@@ -233,7 +238,7 @@ type TransactionFields = {
   toAccountId: string | null;
   amount: string;
   currency?: CurrencyCode;
-  splits: { categoryId: string; amount: string; description?: string | null }[];
+  splits: SplitFields[];
 };
 
 // What the two named accounts settle in, read off the accounts and never off

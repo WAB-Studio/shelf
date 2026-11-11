@@ -20,8 +20,9 @@ import {
 } from "@/components/ui";
 import type { ScopedCategory } from "@/db/queries/transaction-form";
 import type { CurrencyCode } from "@/lib/currency";
-import { categoryNamesById, categoryPathsById, scopedCategoryName } from "@/lib/fund/category-names";
+import { scopedCategoryName } from "@/lib/fund/category-names";
 import { formatMoney, parseAmount } from "@/lib/money";
+import type { SplitFields } from "@/lib/validation/transaction";
 
 // How many categories the grid shows before «Más».
 const GRID_SIZE = 8;
@@ -29,7 +30,7 @@ const GRID_SIZE = 8;
 // A split as the form owns it: a category and a typed string, minor units only
 // under the hood. Kept identical to the form's `splits` element so
 // `value`/`onChange` hand straight to a React Hook Form field.
-type Split = { categoryId: string; amount: string; description?: string | null };
+type Split = SplitFields;
 
 // A row's typed string in minor units, or zero while it is empty or half-typed:
 // the remainder must read as the whole total until a figure lands, never as NaN.
@@ -83,19 +84,19 @@ export function SplitEditor({
             id: category.id,
             name: category.name,
             label: scopedCategoryName(category.name, category.scope, mark),
+            path: scopedCategoryName(category.name, category.scope, mark),
             color: category.color,
           },
           ...category.children.map((child) => ({
             id: child.id,
             name: child.name,
             label: scopedCategoryName(child.name, category.scope, mark),
+            path: `${scopedCategoryName(category.name, category.scope, mark)} › ${child.name}`,
             color: child.color,
           })),
         ]),
     [categories, scope, kind, mark],
   );
-
-  const paths = useMemo(() => categoryPathsById(categories, categoryNamesById(categories, mark)), [categories, mark]);
 
   // One category is the default and one tap: the grid shows the busiest few and
   // «Más» the rest. Splitting across several is a step behind «Dividir».
@@ -203,7 +204,7 @@ export function SplitEditor({
                 <Select.Content position="popper">
                   {options.map((option) => (
                     <Select.Item key={option.id} value={option.id}>
-                      {paths.get(option.id)}
+                      {option.path}
                     </Select.Item>
                   ))}
                 </Select.Content>

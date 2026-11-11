@@ -123,7 +123,6 @@ export function MovementsScreen({
   const t = useTranslations("transactions");
   const tc = useTranslations("categories");
   const tKey = useTranslations();
-  const linesHint = (count: number) => t("linesCount", { count });
   const format = useFormatter();
   const locale = useLocale();
   const pathname = usePathname();
@@ -220,7 +219,7 @@ export function MovementsScreen({
     occurredAt: row.occurredAt,
     title: row.description || rowTitle(row, categoryNames, t),
     category: rowCategory(row, categoryNames, categoryColors),
-    account: rowSubtitle(row, accountNames, linesHint) ?? "",
+    account: rowSubtitle(row, accountNames, t) ?? "",
     label: row.labels[0]?.name ?? null,
     amountMinor:
       row.reconciliationId !== null && row.toAccountId === null
@@ -659,11 +658,11 @@ export function MovementsScreen({
                           row.description
                             ? [
                                 rowTitle(row, categoryNames, t),
-                                rowSubtitle(row, accountNames, linesHint),
+                                rowSubtitle(row, accountNames, t),
                               ]
                                 .filter(Boolean)
                                 .join(" · ")
-                            : rowSubtitle(row, accountNames, linesHint)
+                            : rowSubtitle(row, accountNames, t)
                         }
                         color={rowColor(row, categoryColors)}
                         categoryName={rowTitle(row, categoryNames, t)}
@@ -818,11 +817,11 @@ function rowTitle(
 function rowSubtitle(
   row: TransactionListRow,
   accountNames: Map<string, string>,
-  linesHint: (count: number) => string,
+  t: ReturnType<typeof useTranslations>,
 ): string | undefined {
   const account = accountOfRow(row, accountNames);
   return row.splits.length > 1
-    ? [account, linesHint(row.splits.length)].filter(Boolean).join(" · ")
+    ? [account, t("linesCount", { count: row.splits.length })].filter(Boolean).join(" · ")
     : account;
 }
 

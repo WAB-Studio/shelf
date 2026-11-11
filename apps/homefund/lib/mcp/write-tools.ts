@@ -6,7 +6,7 @@ import { z } from "zod";
 import { listAccounts, updateAccount } from "@/db/queries/accounts";
 import { freeCategoryColor, listScopedCategories } from "@/db/queries/categories";
 import { bookMovement, dropMovement, openAccount, openCategory, reviseMovement } from "@/db/queries/ledger-write";
-import { getTransactionById, listTransactions, type TransactionListRow } from "@/db/queries/transactions";
+import { getTransactionById, listTransactions, type TransactionListRow, type TransactionSplitInput } from "@/db/queries/transactions";
 import { pgErrorCode } from "@/lib/db-error";
 import { ActionError } from "@/lib/errors";
 import { centsToDecimal, parseAmount } from "@/lib/money";
@@ -45,7 +45,7 @@ function movementShape(t: Say) {
 }
 
 type MovementInput = z.infer<z.ZodObject<ReturnType<typeof movementShape>>>;
-type Split = { categoryId: string; amountCents: number; description?: string | null };
+type Split = TransactionSplitInput;
 
 function movementForm(input: MovementInput) {
   const splits = input.splits ?? (input.categoryId ? [{ categoryId: input.categoryId, amountCents: input.amountCents }] : []);
@@ -69,6 +69,18 @@ function movementForm(input: MovementInput) {
   };
 }
 
+// The lines an edit leaves the movement with, or undefined when the form should build them from `categoryId` alone.
+// A transfer carries none; a lone line follows an amount that changed and keeps its name when its category does.
+function splitsFor(current: TransactionListRow, patch: Partial<MovementInput>, amountCents: number, isTransfer: boolean): Split[] | undefined {
+  if (patch.splits) return patch.splits;
+  if (isTransfer) return undefined;
+  const [only] = current.splits;
+  if (current.splits.length === 1) {
+    return [{ categoryId: patch.categoryId ?? only.categoryId, amountCents, description: only.description }];
+  }
+  return patch.categoryId ? undefined : current.splits;
+}
+
 // An edit sends what changes; what it omits is the stored row's, read back as the form would have loaded it.
 function patched(current: TransactionListRow, patch: Partial<MovementInput>): MovementInput {
   const pick = <K extends keyof MovementInput>(key: K, stored: MovementInput[K]): MovementInput[K] =>
@@ -76,16 +88,7 @@ function patched(current: TransactionListRow, patch: Partial<MovementInput>): Mo
   const fromAccountId = pick("fromAccountId", current.fromAccountId);
   const toAccountId = pick("toAccountId", current.toAccountId);
   const amountCents = pick("amountCents", current.amountCents);
-  const only = current.splits.length === 1 ? current.splits[0] : undefined;
-  // A transfer carries no split; a lone split follows an amount that changed and keeps its name when its category does.
-  const isTransfer = fromAccountId !== null && toAccountId !== null;
-  const splits =
-    patch.splits ??
-    (isTransfer || (patch.categoryId && !only)
-      ? undefined
-      : only
-        ? [{ categoryId: patch.categoryId ?? only.categoryId, amountCents, description: only.description }]
-        : current.splits);
+  const splits = splitsFor(current, patch, amountCents, fromAccountId !== null && toAccountId !== null);
   return {
     fromAccountId,
     toAccountId,
@@ -95,7 +98,7 @@ function patched(current: TransactionListRow, patch: Partial<MovementInput>): Mo
     counterIsEstimate: pick("counterIsEstimate", current.counterIsEstimate),
     occurredAt: pick("occurredAt", current.occurredAt),
     description: pick("description", current.description),
-    categoryId: splits === undefined ? patch.categoryId : undefined,
+    categoryId: patch.categoryId,
     splits,
     contributedByMemberId: pick("contributedByMemberId", current.contributedByMemberId),
     forHousehold: pick("forHousehold", current.forHousehold),

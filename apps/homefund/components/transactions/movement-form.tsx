@@ -75,6 +75,7 @@ import {
   updateTransactionSchema,
   type CreateTransactionInput,
   type SettlementCurrencies,
+  type SplitFields,
   type UpdateTransactionInput,
 } from "@/lib/validation/transaction";
 
@@ -95,7 +96,7 @@ type MovementFormValues = {
   occurredAt: string;
   description: string | null;
   externalRef?: string;
-  splits: { categoryId: string; amount: string; description?: string | null }[];
+  splits: SplitFields[];
   labelIds: string[];
   causedByTransactionId: string | null;
 };
@@ -194,7 +195,7 @@ export function MovementForm({
     amount?: string;
     occurredAt?: string;
     description?: string | null;
-    splits?: { categoryId: string; amount: string; description?: string | null }[];
+    splits?: SplitFields[];
   };
   // A notice dated before its account opened: the form opens with the refusal already beside the
   // date, which is brought into view.

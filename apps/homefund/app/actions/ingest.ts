@@ -23,8 +23,7 @@ import {
   rejectDeliverySchema,
   restoreShapeSchema,
 } from "@/lib/validation/ingest";
-
-type SplitInput = { categoryId: string; amount: string; description?: string | null };
+import type { SplitFields } from "@/lib/validation/transaction";
 
 // The amount and each split arrive as Zod-validated strings, already bound to
 // the stored scale by the schema (RF-128); turning them into integers here can
@@ -36,11 +35,11 @@ function toCents(amount: string): number {
   return cents;
 }
 
-function toSplitCents(splits: SplitInput[]): TransactionSplitInput[] {
+function toSplitCents(splits: SplitFields[]): TransactionSplitInput[] {
   return splits.map((split) => ({
     categoryId: split.categoryId,
     amountCents: toCents(split.amount),
-    description: split.description?.trim() || null,
+    description: split.description,
   }));
 }
 
