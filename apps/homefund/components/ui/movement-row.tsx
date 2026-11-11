@@ -33,7 +33,7 @@ export function MovementRow({
   wrap?: boolean;
 }) {
   return (
-    <Flex align="center" gap="3" wrap="wrap" className={styles.row}>
+    <Flex align="center" gapX="3" gapY="1" wrap="wrap" className={styles.row}>
       {tile}
       <Box className={styles.body}>
         <Flex align="center" gap="2">

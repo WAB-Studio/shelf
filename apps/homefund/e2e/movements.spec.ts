@@ -545,7 +545,7 @@ test.describe("the «Descuadre» filter (RF-138, boards C2a-C2e)", () => {
 test.describe("a wide amount on a narrow phone", () => {
   const LONG_DESCRIPTION = "Compra en Amazon de electrodomésticos importados";
 
-  // After the outer `beforeEach`, which clears the ledger for every test here.
+  // After the outer `beforeEach`, which resets the ledger and seeds its two rows.
   test.beforeEach(async () => {
     await asHarnessUser(async (tx) => {
       const [movement] = await tx<{ id: string }[]>`
@@ -560,8 +560,7 @@ test.describe("a wide amount on a narrow phone", () => {
 
   test("keeps the title at least 7rem wide and the amount inside the row @mobile", async ({
     page,
-  }, testInfo) => {
-    test.skip(testInfo.project.name !== "mobile", "the phone's list");
+  }) => {
     await page.goto("/es/movements");
 
     const title = page.getByText(LONG_DESCRIPTION, { exact: true }).filter({ visible: true });
@@ -569,10 +568,10 @@ test.describe("a wide amount on a narrow phone", () => {
     await expect(title).toBeVisible();
     await expect(amount).toBeVisible();
 
-    // Squeezed beside the amount, the title read «Compra en…» in about 70 px.
     expect((await title.boundingBox())!.width).toBeGreaterThanOrEqual(112);
     const card = page.locator(".rt-Card").filter({ visible: true }).filter({ has: title }).last();
     const [amountBox, cardBox] = await Promise.all([amount.boundingBox(), card.boundingBox()]);
     expect(amountBox!.x + amountBox!.width).toBeLessThanOrEqual(cardBox!.x + cardBox!.width);
+    expect(cardBox!.x + cardBox!.width).toBeLessThanOrEqual(page.viewportSize()!.width);
   });
 });

@@ -140,9 +140,8 @@ test.describe("confirming the delete of a settling movement", () => {
 });
 
 test.describe("an overdue payment on a narrow phone", () => {
-  test("shows its whole amount and its menu inside the card @mobile", async ({ page }, testInfo) => {
-    // Kills: the row's longest word and the amount refusing to wrap, which pushed «$ 12.345.6» and the menu out of the card.
-    test.skip(testInfo.project.name !== "mobile", "the phone's cards");
+  test("shows its whole amount and its menu inside the card @mobile", async ({ page }) => {
+    // Kills: a row that refuses to wrap, so its longest word and its amount push the menu out of the card.
     const label = "Administración del edificio";
     await asHarnessUser(async (tx) => {
       await tx`
@@ -165,5 +164,6 @@ test.describe("an overdue payment on a narrow phone", () => {
       const box = (await inside.boundingBox())!;
       expect(box.x + box.width).toBeLessThanOrEqual(cardBox.x + cardBox.width);
     }
+    expect(cardBox.x + cardBox.width).toBeLessThanOrEqual(page.viewportSize()!.width);
   });
 });
