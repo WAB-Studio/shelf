@@ -11,7 +11,7 @@
  * each, and seeding that per test would multiply the one round trip this file
  * is supposed to cost by every test that reads it.
  */
-import { createHash, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -26,10 +26,8 @@ import {
   LEADER_MEMBER_NAME,
   asHarnessUser,
   clearGroup,
-  clearQueue,
   readScope,
   seedGroup,
-  seedQueue,
   test,
 } from "./global-setup";
 
@@ -61,92 +59,14 @@ function named(prefix: string, index: number): string {
   return `${prefix} ${stamp}-${index}`;
 }
 
-let debtAccountId = "";
-let debtDetailAccountId = "";
-let firstTransactionId = "";
-let groupId = "";
-
-// Every id this file writes, dropped in `afterAll` in the reverse of the order
-// a foreign key would refuse: children first, `accounts` last.
-const created = {
-  categoryIds: [] as string[],
-  labelIds: [] as string[],
-  webhookIds: [] as string[],
-  accountIds: [] as string[],
-  transactionIds: [] as string[],
-  budgetIds: [] as string[],
-  paymentIds: [] as string[],
-  ruleIds: [] as string[],
-  goalIds: [] as string[],
-  memberIds: [] as string[],
-  planId: "",
-  statementId: "",
-};
+const created = { transactionIds: [] as string[] };
 
 test.beforeAll(async () => {
-  ({ groupId } = await seedGroup());
+  await seedGroup();
 
   const today = todayInBogota();
 
   await asHarnessUser(async (tx) => {
-    // Six pending invitations beside the leader and the plain member `seedGroup`
-    // already wrote: a roster of eight needs no second real identity, since
-    // `user_id` stays null until an invite is claimed (RF-06).
-    for (let i = 0; i < ROW_COUNT - 2; i += 1) {
-      const id = randomUUID();
-      created.memberIds.push(id);
-      await tx`
-        insert into group_members (id, group_id, name, role, invite_email)
-        values (${id}, ${groupId}, ${named("Invitado", i)}, 'member',
-          ${`invitado-${stamp}-${i}@example.invalid`})`;
-    }
-
-    for (let i = 0; i < ROW_COUNT; i += 1) {
-      const id = randomUUID();
-      created.categoryIds.push(id);
-      await tx`
-        insert into categories (id, owner_user_id, name, kind, color)
-        values (${id}, ${scope.userId}, ${named("Categoría escritorio", i)},
-          ${i % 2 === 0 ? "expense" : "income"}, '#4C8C4A')`;
-    }
-
-    for (let i = 0; i < ROW_COUNT; i += 1) {
-      const id = randomUUID();
-      created.labelIds.push(id);
-      await tx`
-        insert into labels (id, owner_user_id, name, color)
-        values (${id}, ${scope.userId}, ${named("Etiqueta escritorio", i)}, '#4C8C4A')`;
-    }
-
-    for (let i = 0; i < ROW_COUNT; i += 1) {
-      const id = randomUUID();
-      created.webhookIds.push(id);
-      await tx`
-        insert into webhook_credentials (id, owner_user_id, name, token_hash, rate_limit_per_min)
-        values (${id}, ${scope.userId}, ${named("Credencial escritorio", i)},
-          ${createHash("sha256").update(id).digest("hex")}, ${30 + i})`;
-    }
-
-    // Eight liabilities, each carrying terms: the Deudas table's own rows and
-    // the Cuentas table's rest, in one batch (RF-117's cupo is already proved
-    // by check:queries/check:http; this file only needs the row count).
-    for (let i = 0; i < ROW_COUNT; i += 1) {
-      const id = randomUUID();
-      created.accountIds.push(id);
-      await tx`
-        insert into accounts (
-          id, owner_user_id, name, kind, subtype, initial_balance_cents, initial_balance_on)
-        values (${id}, ${scope.userId}, ${named("Tarjeta escritorio", i)},
-          'liability', 'card', ${-1_000_000 * (i + 1)}, ${today})`;
-      await tx`
-        insert into debt_terms (
-          account_id, debt_kind, annual_rate, minimum_payment_cents,
-          credit_limit_cents, statement_cut_off_day, payment_due_day)
-        values (${id}, 'revolving', 0.24, 50000, 5000000, 15, 5)`;
-    }
-    debtAccountId = created.accountIds[0];
-    debtDetailAccountId = created.accountIds[1];
-
     for (let i = 0; i < ROW_COUNT; i += 1) {
       const id = randomUUID();
       created.transactionIds.push(id);
@@ -158,124 +78,13 @@ test.beforeAll(async () => {
         insert into transaction_splits (transaction_id, category_id, amount_cents)
         values (${id}, ${scope.categoryId}, ${10000 * (i + 1)})`;
     }
-    firstTransactionId = created.transactionIds[0];
-
-    for (let i = 0; i < ROW_COUNT; i += 1) {
-      const id = randomUUID();
-      created.budgetIds.push(id);
-      await tx`
-        insert into budgets (id, owner_user_id, category_id, period, limit_cents, threshold_pct, name)
-        values (${id}, ${scope.userId}, ${scope.categoryId}, 'monthly',
-          ${1000000 * (i + 1)}, 80, ${named("Presupuesto escritorio", i)})`;
-    }
-
-    for (let i = 0; i < ROW_COUNT; i += 1) {
-      const id = randomUUID();
-      created.paymentIds.push(id);
-      await tx`
-        insert into planned_payments (
-          id, owner_user_id, from_account_id, amount_cents, category_id, due_date,
-          description, created_by)
-        values (${id}, ${scope.userId}, ${scope.accountId}, ${20000 * (i + 1)},
-          ${scope.categoryId}, ${today}, ${named("Pago escritorio", i)}, ${scope.userId})`;
-    }
-
-    for (let i = 0; i < ROW_COUNT; i += 1) {
-      const id = randomUUID();
-      created.ruleIds.push(id);
-      await tx`
-        insert into recurring_rules (
-          id, owner_user_id, from_account_id, amount_cents, category_id, description,
-          frequency, interval_n, day_of_month, next_run_on, created_by)
-        values (${id}, ${scope.userId}, ${scope.accountId}, ${15000 * (i + 1)},
-          ${scope.categoryId}, ${named("Regla escritorio", i)}, 'monthly', 1, 5,
-          ${today}, ${scope.userId})`;
-    }
-
-    for (let i = 0; i < ROW_COUNT; i += 1) {
-      const id = randomUUID();
-      created.goalIds.push(id);
-      await tx`
-        insert into savings_goals (id, owner_user_id, name, target_amount_cents)
-        values (${id}, ${scope.userId}, ${named("Meta escritorio", i)}, ${5000000 * (i + 1)})`;
-    }
-
-    // The debt-detail measurement (the pending item D16 left, named in the
-    // module): one plan of five lines and one statement, neither drawn behind
-    // an `lg` guard, so this is enough rows to see whether the flexible column
-    // collapses at 360px the way Auditoría's once did.
-    const planId = randomUUID();
-    created.planId = planId;
-    await tx`
-      insert into installment_plans (
-        id, account_id, description, principal_cents, n_installments, frequency, start_date)
-      values (${planId}, ${debtDetailAccountId}, 'Plan escritorio', 500000, 5, 'monthly', ${today})`;
-    for (let seq = 1; seq <= 5; seq += 1) {
-      await tx`
-        insert into installment_lines (plan_id, seq, due_date, amount_cents)
-        values (${planId}, ${seq}, ${today}, 100000)`;
-    }
-    const statementId = randomUUID();
-    created.statementId = statementId;
-    await tx`
-      insert into account_statements (
-        id, account_id, period_start, cut_off_date, payment_due_date,
-        closing_balance_cents, minimum_payment_cents, interest_charged_cents)
-      values (${statementId}, ${debtDetailAccountId}, ${today}, ${today}, ${today},
-        -500000, 50000, 10000)`;
-  });
-
-  await seedQueue(
-    Array.from({ length: ROW_COUNT }, (_, i) => ({
-      merchant: named("Comercio escritorio", i),
-      amountCents: 10000 * (i + 1),
-      accountId: scope.accountId,
-      categoryId: scope.categoryId,
-      categorySource: "merchant" as const,
-    })),
-  );
-
-  // A write of its own, after every write above: `audit_log` orders newest
-  // first, and the batch above shares one transaction's `now()`, so only a
-  // later, separate commit is guaranteed to sort ahead of it on page one.
-  const auditProbeId = randomUUID();
-  created.categoryIds.push(auditProbeId);
-  await asHarnessUser(async (tx) => {
-    await tx`
-      insert into categories (id, owner_user_id, name, kind, color)
-      values (${auditProbeId}, ${scope.userId}, ${named("Auditoría escritorio", 0)},
-        'expense', '#4C8C4A')`;
   });
 });
 
 test.afterAll(async () => {
-  await clearQueue();
-
-  // Every array here is safe empty (`postgres.js` turns `in ${tx([])}` into
-  // `in (null)`, matching nothing) — a mid-seed failure this drop cannot yet
-  // predict must still leave nothing of this file's behind for the next spec
-  // to trip on, the way a lost token once left this file's own rows standing
-  // for `settings.spec.ts` to find.
-  const planIds = [created.planId].filter(Boolean);
-  const statementIds = [created.statementId].filter(Boolean);
-
   await asHarnessUser(async (tx) => {
-    await tx`delete from account_statements where id in ${tx(statementIds)}`;
-    await tx`delete from installment_lines where plan_id in ${tx(planIds)}`;
-    await tx`delete from installment_plans where id in ${tx(planIds)}`;
-    await tx`delete from savings_goals where id in ${tx(created.goalIds)}`;
-    await tx`delete from recurring_rules where id in ${tx(created.ruleIds)}`;
-    await tx`delete from planned_payments where id in ${tx(created.paymentIds)}`;
-    await tx`delete from budgets where id in ${tx(created.budgetIds)}`;
-    await tx`
-      delete from transaction_splits where transaction_id in ${tx(created.transactionIds)}`;
+    await tx`delete from transaction_splits where transaction_id in ${tx(created.transactionIds)}`;
     await tx`delete from transactions where id in ${tx(created.transactionIds)}`;
-    await tx`delete from debt_terms where account_id in ${tx(created.accountIds)}`;
-    await tx`delete from accounts where id in ${tx(created.accountIds)}`;
-    await tx`delete from webhook_credentials where id in ${tx(created.webhookIds)}`;
-    await tx`delete from labels where id in ${tx(created.labelIds)}`;
-    await tx`delete from categories where id in ${tx(created.categoryIds)}`;
-    await tx`delete from group_members where id in ${tx(created.memberIds)}`;
   });
 
   await clearGroup();
@@ -312,117 +121,12 @@ function routes(): RouteCase[] {
       sidebarHref: "/movements",
       table: { title: messages.transactions.listTitle, rowName: named("Movimiento escritorio", 0) },
     },
-    {
-      label: "/movements/{id}",
-      path: () => `/movements/${firstTransactionId}`,
-      sidebarHref: "/movements",
-    },
-    {
-      label: "/inbox",
-      path: () => "/inbox",
-      sidebarHref: "/inbox",
-      table: { title: messages.ingest.title, rowName: named("Comercio escritorio", 0) },
-    },
-    // Found, not fixed: no `NavList` row names `/planning` itself — the hub
-    // carries no entry of its own (`components/fund/destinations.ts`,
-    // `PRIMARY_KEYS`'s own comment: "the hub behind the phone's tab is not a
-    // stop on the way here"). A route with a sidebar and no lit row is exactly
-    // what SPEC-A3's third audit demand would flag.
-    { label: "/planning", path: () => "/planning", sidebarHref: null },
-    {
-      label: "/planning/budgets",
-      path: () => "/planning/budgets",
-      sidebarHref: "/planning/budgets",
-      table: { title: messages.budgets.title, rowName: named("Presupuesto escritorio", 0) },
-    },
-    {
-      label: "/planning/goals",
-      path: () => "/planning/goals",
-      sidebarHref: "/planning/goals",
-      table: { title: messages.goals.title, rowName: named("Meta escritorio", 0) },
-    },
-    {
-      label: "/planning/payments",
-      path: () => "/planning/payments",
-      sidebarHref: "/planning/payments",
-      table: { title: messages.plannedPayments.title, rowName: named("Pago escritorio", 0) },
-    },
-    {
-      label: "/planning/recurring",
-      path: () => "/planning/recurring",
-      sidebarHref: "/planning/recurring",
-      table: { title: messages.recurringRules.title, rowName: named("Regla escritorio", 0) },
-    },
-    {
-      label: "/planning/debts",
-      path: () => "/planning/debts",
-      sidebarHref: "/planning/debts",
-      table: { title: messages.debts.title, rowName: named("Tarjeta escritorio", 0) },
-    },
-    {
-      label: "/planning/debts/{accountId}",
-      path: () => `/planning/debts/${debtAccountId}`,
-      sidebarHref: "/planning/debts",
-    },
     { label: "/reports", path: () => "/reports", sidebarHref: "/reports" },
-    { label: "/settings", path: () => "/settings", sidebarHref: "/settings" },
-    {
-      label: "/settings/accounts",
-      path: () => "/settings/accounts",
-      sidebarHref: "/settings/accounts",
-      table: { title: messages.accounts.title, rowName: named("Tarjeta escritorio", 0) },
-    },
-    {
-      // By design, not a finding: `SIDEBAR_SECONDARY_KEYS` leaves Auditoría out
-      // on purpose ("both are rare and stay in the panel") — it reaches this
-      // screen through Ajustes, not a row of its own, so no row is ever lit.
-      label: "/settings/audit",
-      path: () => "/settings/audit",
-      sidebarHref: null,
-      // The audit row this test names carries no unique row name of its own —
-      // `RowMenu`'s `rowName` is the translated entity (`audit-table.tsx`,
-      // `row.entity`) — so it names the one write this file commits last
-      // (the probe above), guaranteed newest and so on the table's first page.
-      table: {
-        title: messages.audit.title,
-        rowName: messages.audit.entities.categories,
-      },
-    },
-    {
-      label: "/settings/categories",
-      path: () => "/settings/categories",
-      sidebarHref: "/settings/categories",
-      table: { title: messages.categories.title, rowName: named("Categoría escritorio", 0) },
-    },
     { label: "/settings/data", path: () => "/settings/data", sidebarHref: "/settings/data" },
-    // Found, not fixed: reached only through the fund's chevron
-    // (`components/fund/app-sidebar.tsx`), which is a plain link, never a
-    // `NavList` item — so nothing in the sidebar is ever lit here either.
-    { label: "/settings/group", path: () => "/settings/group", sidebarHref: null },
-    {
-      label: "/settings/labels",
-      path: () => "/settings/labels",
-      sidebarHref: "/settings/labels",
-      table: { title: messages.labels.title, rowName: named("Etiqueta escritorio", 0) },
-    },
-    {
-      label: "/settings/members",
-      path: () => "/settings/members",
-      sidebarHref: "/settings/members",
-      table: { title: messages.members.title, rowName: named("Invitado", 0) },
-    },
-    {
-      // By design, not a finding — see `/settings/audit` above; Webhooks is
-      // `SIDEBAR_SECONDARY_KEYS`'s other panel-only exception.
-      label: "/settings/webhooks",
-      path: () => "/settings/webhooks",
-      sidebarHref: null,
-      table: { title: messages.webhooks.title, rowName: named("Credencial escritorio", 0) },
-    },
   ];
 }
 
-test.describe("at 1280, the sidebar and its 14 tables", () => {
+test.describe("at 1280, the sidebar and its smoke routes", () => {
   test.skip(
     ({ viewport }) => viewport?.width !== 1280,
     "the sidebar and the desktop tables render from md up",

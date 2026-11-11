@@ -621,7 +621,7 @@ jobs:
       needs.changes.outputs.orbit == 'true'
     # The suite is one happy path per screen plus the real-bug regressions, and the
     # phone project runs only what is tagged `@mobile` (docs/agentes/verificacion.md
-    # § E2E scope). Four shards keep each near two minutes of tests (7.7 min in all) plus the setup.
+    # § E2E scope). Four shards keep each near two minutes of tests (6.5 min in all) plus the setup.
     timeout-minutes: 30
     # Each shard owns a runner and so a stack of its own; the lane stays 9 in
     # all four. `e2e` below is the one check name for the suite.
