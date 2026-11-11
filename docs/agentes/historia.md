@@ -220,6 +220,21 @@ Each entry names the rule and the file it lives in now.
   hard rules in `AGENTS.md` § Code, the local stack, CI on the train's PR.
 
 
+## E2E prune (`docs/agentes/verificacion.md` § E2E scope), 2026-11-10
+
+- The user: «Sí, simplifica el testing mucho». Over 30 days of PR runs, HomeFund e2e caught 2 real bugs (the split
+  editor's error under Categoría; the lost «Próximo pago» line on debts), 19 of its 21 failures were flaky or
+  test-only, and the mobile project caught 0 unique ones. Every money, data, scope and performance bug came from
+  `check:queries`, `check:http` or a unit test (`private/analisis-fallos-ci.md`).
+- Before: 55 specs, 26.5k lines of e2e, 736 test blocks (each run twice, desktop and
+  mobile), about 40 min of browser time over 8 shards (59 min of runner).
+- After: 51 specs, 11.3k lines, 169 test blocks: 131 desktop plus 38 tagged `@mobile`. A first local run executed 202 tests,
+  7.7 min of test time; a second, after cutting the desktop route loop to 4 routes and `destructive` to one path, executed
+  178 tests (140 desktop, 38 mobile), all passed, 6.5 min of test time, 6.8 min wall on one worker; 4 shards in CI.
+- The deleted rules each sit in a database check or a unit test; the per-spec list is in the body of PR #847.
+  What is lost is browser-only: copy, the place of a refusal's message, pending and cancel states, 360 px
+  overflow and style measurements.
+
 ## Simplify CI noise (2026-11-10)
 
 - Measured over 30 days of CI reds (`private/analisis-fallos-ci.md`): 8 builds failed to download Google Fonts, 9 `supabase start` runs failed on docker networking, 5 WordBook specs gave 18 red attempts and 0 bugs, all mobile-only timing. Decided by the user 2026-11-10: simplify the testing a lot.

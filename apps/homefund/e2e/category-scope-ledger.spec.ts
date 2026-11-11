@@ -92,57 +92,6 @@ test("the detail of the fund's expense reads «· fondo» and the personal one b
   await expect(page.getByText("· fondo")).toHaveCount(0);
 });
 
-test("a split whose category the caller cannot read keeps the kind word", async ({ page }) => {
-  // Kills: a missing id answered with mark("") instead of the fallback.
-  await fixtureSql`
-    insert into categories (id, owner_user_id, name, kind, color)
-    values (${ids.foreign}, ${scope.memberUserId}, ${`Ajena ${STAMP}`}, 'expense', '#4C4A8C')`;
-  // The scope trigger refuses this pairing on purpose; it is switched off for
-  // the seed alone, to reach the one state the app no longer writes.
-  const movement = await fixtureSql.begin(async (tx) => {
-    await tx`set local session_replication_role = replica`;
-    const [row] = await tx<{ id: string }[]>`
-      insert into transactions (from_account_id, amount_cents, occurred_at, created_by, group_id, currency)
-      select ${ids.account}, ${CENTS}, (now() at time zone ${TIME_ZONE})::date, ${scope.userId}, group_id, settlement_currency
-      from accounts where id = ${ids.account}
-      returning id`;
-    await tx`
-      insert into transaction_splits (transaction_id, category_id, amount_cents)
-      values (${row.id}, ${ids.foreign}, ${CENTS})`;
-    return row;
-  });
-  movementIds.foreign = movement.id;
-
-  await page.goto(`/es/movements/${movement.id}`);
-  await expect(visible(page, transactions.kindExpense).first()).toBeVisible();
-  await expect(page.getByText("· fondo")).toHaveCount(0);
-});
-
-test.describe("the edit form's split editor (C3c)", () => {
-  async function openEdit(page: Page, id: string) {
-    await page.goto(`/es/movements/${id}`);
-    await page
-      .getByRole("button", { name: transactions.edit, exact: true })
-      .filter({ visible: true })
-      .first()
-      .click();
-    return page.getByRole("dialog");
-  }
-
-  test("the fund's category is the pressed tile and the grid holds the fund's set bare", async ({ page }) => {
-    // Kills: the chosen category left off the grid; the scope filter dropped.
-    const form = await openEdit(page, movementIds.fund);
-    await expect(form.getByRole("button", { name: NAME, exact: true, pressed: true })).toBeVisible();
-    const tiles = form.getByRole("button", { pressed: false });
-    await expect(tiles.first()).toBeVisible();
-  });
-
-  test("a personal expense's category is the pressed tile, bare", async ({ page }) => {
-    const form = await openEdit(page, movementIds.own);
-    await expect(form.getByRole("button", { name: NAME, exact: true, pressed: true })).toBeVisible();
-  });
-});
-
 test.describe("quick entry", () => {
   test.beforeEach(({}, testInfo) => {
     test.skip(testInfo.project.name !== "mobile", "the sheet is the phone's");
@@ -159,13 +108,7 @@ test.describe("quick entry", () => {
     return sheet;
   }
 
-  test("still infers the category from a typed bare name and shows it pressed", async ({ page }) => {
-    // Kills: the interpreter fed the scoped names.
-    const sheet = await openSheet(page, `45000 ${NAME}`);
-    await expect(sheet.getByRole("button", { name: MARKED, exact: true, pressed: true })).toBeVisible();
-  });
-
-  test("a long marked name does not widen the sheet at 360 px", async ({ page }) => {
+  test("a long marked name does not widen the sheet at 360 px @mobile", async ({ page }) => {
     const sheet = await openSheet(page, `45000 ${LONG_NAME}`);
     await expect(sheet.getByRole("button", { name: LONG_NAME, exact: true, pressed: true })).toBeVisible();
     const overflow = await page.evaluate(
@@ -175,13 +118,4 @@ test.describe("quick entry", () => {
     const clipped = await sheet.evaluate((el) => el.scrollWidth - el.clientWidth);
     expect(clipped).toBeLessThanOrEqual(0);
   });
-});
-
-test("the dashboard's recent lines mark the fund's category and leave the personal one bare (C3d)", async ({
-  page,
-}) => {
-  // Kills: the page's names map left bare.
-  await page.goto("/es");
-  await expect(visible(page, MARKED).first()).toBeVisible();
-  await expect(visible(page, NAME).first()).toBeVisible();
 });

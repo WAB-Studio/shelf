@@ -8,11 +8,8 @@ import { expect } from "@playwright/test";
 import messages from "@/messages/es.json";
 
 import {
-  clearLedger,
-  clearQueue,
   readScope,
   seedQueue,
-  seedUnreviewedMovement,
   test,
 } from "./global-setup";
 
@@ -77,7 +74,7 @@ test.describe("the phone's navigation", () => {
     "the bottom bar and its sheet render below md",
   );
 
-  test("reaches the inbox from the settings sheet, which closes behind it", async ({
+  test("reaches the inbox from the settings sheet, which closes behind it @mobile", async ({
     page,
   }) => {
     await page.goto("/es");
@@ -92,7 +89,7 @@ test.describe("the phone's navigation", () => {
     await expect(sheet).toBeHidden();
   });
 
-  test("carries the inbox count on Ajustes and in the sheet's Bandeja row", async ({
+  test("carries the inbox count on Ajustes and in the sheet's Bandeja row @mobile", async ({
     page,
   }) => {
     await seedQueue([pending]);
@@ -108,7 +105,7 @@ test.describe("the phone's navigation", () => {
     ).toBeVisible();
   });
 
-  test("keeps its three tabs, each at least 32 px on its shorter side", async ({
+  test("keeps its three tabs, each at least 32 px on its shorter side @mobile", async ({
     page,
   }) => {
     await page.goto("/es");
@@ -137,64 +134,5 @@ test.describe("the dashboard's pending badge", () => {
 
     await badge.click();
     await expect(page).toHaveURL("/es/inbox");
-  });
-
-  test("leaves no gap at zero", async ({ page }) => {
-    test.skip(
-      test.info().project.name !== "mobile",
-      "the badge and the month figures share a column only below md: from there up they are two cards of the Inicio row, side by side",
-    );
-
-    // No generated movement either: the other badge would hold the row open.
-    await clearLedger();
-    await seedQueue([pending]);
-    await page.goto("/es");
-
-    const below = page.getByText(messages.dashboard.monthIncome, { exact: true });
-    // Painted before it is measured: `boundingBox` waits for the element to be
-    // attached and answers null for anything the layout has not placed yet.
-    await expect(below).toBeVisible();
-    const withBadge = await below.boundingBox();
-
-    await clearQueue();
-    await page.reload();
-    // The gate goes first here too, so the count below is read off the dashboard
-    // this reload drew and not off a document still on its way.
-    await expect(below).toBeVisible();
-    await expect(
-      page.getByRole("link", { name: PENDING_BADGE, exact: true }),
-    ).toHaveCount(0);
-
-    // The row is conditional, not merely empty: what stood below it moves up by
-    // the badge's own height rather than keeping its place.
-    const withoutBadge = await below.boundingBox();
-    expect(withBadge).not.toBeNull();
-    expect(withoutBadge).not.toBeNull();
-    expect(withoutBadge!.y).toBeLessThan(withBadge!.y);
-  });
-
-  test("sits beside the unreviewed badge with no overflow at 360 px", async ({
-    page,
-  }) => {
-    test.skip(
-      test.info().project.name !== "mobile",
-      "RNF-08's base case is the mobile project's viewport",
-    );
-
-    await clearLedger();
-    await seedQueue([pending]);
-    await seedUnreviewedMovement();
-    await page.goto("/es");
-
-    await expect(
-      page.getByRole("link", { name: PENDING_BADGE, exact: true }),
-    ).toBeVisible();
-    await expect(page.getByRole("link", { name: /sin revisar/ })).toBeVisible();
-
-    const overflow = await page.evaluate(() => ({
-      scrollWidth: document.documentElement.scrollWidth,
-      clientWidth: document.documentElement.clientWidth,
-    }));
-    expect(overflow.scrollWidth).toBeLessThanOrEqual(overflow.clientWidth);
   });
 });

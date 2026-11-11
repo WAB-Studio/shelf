@@ -20,7 +20,6 @@ import { fixtureSql } from "../scripts/harness/fixtures";
 import { asHarnessUser, clearLedger, readScope, test } from "./global-setup";
 
 const transactions = messages.transactions;
-const common = messages.common;
 const scope = readScope();
 
 const chargeCategoryId = randomUUID();
@@ -118,60 +117,5 @@ test("the charge marks the ledger and both details link the two, with the combin
 
   // The charge's own detail names its cause, one hop back (RF-132).
   await page.goto(`/es/movements/${chargeId}`);
-  await expect(page.getByRole("link", { name: TRANSFER_DESCRIPTION })).toBeVisible();
-});
-
-test("editing the charge from the ledger's row menu leaves its cause intact (D12, RF-132)", async ({
-  page,
-}, testInfo) => {
-  test.skip(testInfo.project.name !== "desktop", "the row menu is the laptop's");
-
-  await page.goto("/es/movements");
-  await page
-    .getByRole("button", {
-      name: common.actionsFor.replace("{name}", CHARGE_DESCRIPTION),
-      exact: true,
-    })
-    .click();
-  await page.getByRole("menuitem", { name: transactions.edit, exact: true }).click();
-
-  // The picker seeds from what the movement already names — an edit that never
-  // opens it must still resend the value, but the form only offers to touch it
-  // at all if it can show what is already chosen.
-  const causePicker = page.getByLabel(transactions.causeField);
-  await expect(causePicker).toContainText(TRANSFER_DESCRIPTION);
-
-  // A field the picker has nothing to do with: proof the cause survives an
-  // edit that never mentions it.
-  await page.getByLabel(transactions.amountLabel, { exact: true }).fill("50000");
-  await page
-    .locator("form")
-    .getByRole("button", { name: transactions.saveMovement, exact: true })
-    .click();
-  await expect(page.getByRole("dialog")).toHaveCount(0);
-
-  await page.goto(`/es/movements/${chargeId}`);
-  await expect(page.getByRole("link", { name: TRANSFER_DESCRIPTION })).toBeVisible();
-});
-
-test("editing the charge from its own desktop pane leaves its cause intact (RF-132)", async ({
-  page,
-}, testInfo) => {
-  test.skip(testInfo.project.name !== "desktop", "MovementDetailDesktop is the laptop's pane");
-
-  await page.goto(`/es/movements/${chargeId}`);
-  await page.getByRole("button", { name: transactions.edit, exact: true }).click();
-
-  const causePicker = page.getByLabel(transactions.causeField);
-  await expect(causePicker).toContainText(TRANSFER_DESCRIPTION);
-
-  await page.getByLabel(transactions.amountLabel, { exact: true }).fill("60000");
-  await page
-    .locator("form")
-    .getByRole("button", { name: transactions.saveMovement, exact: true })
-    .click();
-  await expect(page.getByRole("dialog")).toHaveCount(0);
-
-  await page.reload();
   await expect(page.getByRole("link", { name: TRANSFER_DESCRIPTION })).toBeVisible();
 });

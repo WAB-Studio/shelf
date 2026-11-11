@@ -70,28 +70,6 @@ async function stored() {
   return row;
 }
 
-test("a save after the run moved the rule is refused as stale, keeping what was typed and changing nothing", async ({
-  page,
-}) => {
-  // Kills: no expected version sent, or the stale answer ignored, so the save lands over the run's advance.
-  const dialog = await openEdit(page);
-  await dialog.getByRole("textbox", { name: rules.amountLabel }).fill("27000");
-
-  // What the daily run does to a due rule: the cursor moves forward and the row is stamped anew.
-  await fixtureSql`
-    update recurring_rules set next_run_on = next_run_on + 7 where id = ${ids.rule}`;
-  const afterRun = await stored();
-
-  await save(dialog).click();
-
-  await expect(dialog.getByText(messages.errors.stale, { exact: true })).toBeVisible();
-  await expect(dialog).toBeVisible();
-  await expect(dialog.getByRole("textbox", { name: rules.amountLabel })).toHaveValue(/^27\D?000$/);
-  await expect(save(dialog)).toBeEnabled();
-  expect(await stored()).toEqual(afterRun);
-  expect(afterRun.amount_cents).toBe("1500000");
-});
-
 test("a rule nobody touched saves, even after the dialog sat open", async ({ page }) => {
   // Kills: an expected version that never matches, so every ordinary edit is refused.
   const dialog = await openEdit(page);

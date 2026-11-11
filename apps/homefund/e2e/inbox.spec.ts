@@ -19,10 +19,6 @@ const common = messages.common;
 
 const scope = readScope();
 
-// The refusal's words, read from the file the form reads.
-const BEFORE_OPENING = messages.errors.movementBeforeOpening;
-const BEFORE_OPENING_NOTE = /anterior a la apertura de la cuenta/;
-
 // 45.000 pesos, as the card reads it and as the prefilled form carries it.
 const AMOUNT_CENTS = 4500000;
 // The form groups thousands as they are written into the field.
@@ -87,22 +83,6 @@ function rowActions(page: Page, name: string): Locator {
     name: common.actionsFor.replace("{name}", name),
     exact: true,
   });
-}
-
-// The card's menu is the only way to the rejection, and the dialog it raises is
-// where both choices live.
-async function openRejectDialog(page: import("@playwright/test").Page) {
-  // The menu names its own row now, so match the prefix rather than the whole
-  // label: which delivery it belongs to varies per test.
-  await page
-    .getByRole("button", { name: messages.common.actionsFor.split("{")[0].trim() })
-    .click();
-  await page.getByRole("menuitem", { name: ingest.reject, exact: true }).click();
-
-  const dialog = page.getByRole("alertdialog");
-  await expect(dialog).toBeVisible();
-
-  return dialog;
 }
 
 test.describe("the inbox queue", () => {
@@ -197,7 +177,7 @@ test.describe("the inbox queue", () => {
   test.describe("the phone list", () => {
     test.use({ viewport: { width: 360, height: 740 } });
 
-    test("shows one card per delivery, one to accept and one to review", async ({
+    test("shows one card per delivery, one to accept and one to review @mobile", async ({
       page,
     }) => {
       await seedQueue([complete, incomplete]);
@@ -225,7 +205,7 @@ test.describe("the inbox queue", () => {
       }
     });
 
-    test("records the movement on accept and drops the card", async ({
+    test("records the movement on accept and drops the card @mobile", async ({
       page,
     }) => {
       await clearLedger();
@@ -254,70 +234,6 @@ test.describe("the inbox queue", () => {
       expect(delivery.transaction_id).toBe(movements[0].id);
     });
   });
-
-  test("discards the message once and leaves its shape unsilenced", async ({
-    page,
-  }) => {
-    const [deliveryId] = await seedQueue([complete]);
-    await page.goto("/es/inbox");
-
-    const dialog = await openRejectDialog(page);
-    // The permanence is stated by the silence control itself — "y no volver a
-    // preguntar" — not by the description above it, so both are on offer here.
-    await expect(
-      dialog.getByRole("button", { name: ingest.rejectAndSilence, exact: true }),
-    ).toBeVisible();
-    await dialog
-      .getByRole("button", { name: ingest.rejectOnce, exact: true })
-      .click();
-
-    await expect(dialog).toBeHidden();
-    await expect(page.getByRole("heading", { name: TRUSTED })).toHaveCount(0);
-
-    const [delivery] = await fixtureSql<{ status: string }[]>`
-      select status from ingest_deliveries where id = ${deliveryId}`;
-    expect(delivery.status).toBe("rejected");
-
-    // Once is once: nothing about the message's shape was remembered, so the
-    // next one like it still arrives.
-    const shapes = await fixtureSql`
-      select id from ingest_shapes where owner_user_id = ${scope.userId}`;
-    expect(shapes).toHaveLength(0);
-  });
-
-  test("discards the message and silences every message of its shape", async ({
-    page,
-  }) => {
-    const [deliveryId] = await seedQueue([complete]);
-    await page.goto("/es/inbox");
-
-    const dialog = await openRejectDialog(page);
-    await dialog
-      .getByRole("button", { name: ingest.rejectAndSilence, exact: true })
-      .click();
-
-    await expect(dialog).toBeHidden();
-    await expect(page.getByRole("heading", { name: TRUSTED })).toHaveCount(0);
-
-    const [delivery] = await fixtureSql<
-      { status: string; shape_hash: string; raw_text: string }[]
-    >`
-      select status, shape_hash, raw_text from ingest_deliveries
-      where id = ${deliveryId}`;
-    expect(delivery.status).toBe("rejected");
-
-    // The silence is the shape row: the ingest reads it to drop the next message
-    // that hashes the same, and it keeps the text that taught it.
-    const shapes = await fixtureSql<
-      { shape_hash: string; decision: string; sample_text: string }[]
-    >`
-      select shape_hash, decision, sample_text from ingest_shapes
-      where owner_user_id = ${scope.userId}`;
-    expect(shapes).toHaveLength(1);
-    expect(shapes[0].shape_hash).toBe(delivery.shape_hash);
-    expect(shapes[0].decision).toBe("rejected");
-    expect(shapes[0].sample_text).toBe(delivery.raw_text);
-  });
 });
 
 test.describe("a category that came from a credential default", () => {
@@ -331,37 +247,6 @@ test.describe("a category that came from a credential default", () => {
 
   test.describe("the laptop band", () => {
     test.use({ viewport: { width: 1280, height: 900 } });
-
-    // The table's columns carry no per-field source (plan module 35's own
-    // contract names only llegó, mensaje, comercio, categoría, cuenta, monto,
-    // estado), so the row states the same fact the badge does the only way this
-    // band can: it stays "Incompleto" despite every field reading, and its own
-    // "accept" item opens the form instead of writing (RF-91).
-    test("keeps it incomplete despite every field reading, and its own accept opens the form", async ({
-      page,
-    }) => {
-      await page.goto("/es/inbox");
-
-      const table = page.getByRole("table", { name: ingest.title });
-      const row = table.getByRole("row").filter({ hasText: DEFAULTED });
-      await expect(row).toHaveCount(1);
-      await expect(
-        row.getByText(ingest.stateIncomplete, { exact: true }),
-      ).toBeVisible();
-
-      await rowActions(page, DEFAULTED).click();
-      await page
-        .getByRole("menuitem", { name: ingest.accept, exact: true })
-        .click();
-
-      // The open dialog is a modal: it marks the row behind it `aria-hidden`,
-      // by design, so what proves nothing was recorded is the ledger itself,
-      // not the row's own reachability while the form sits over it.
-      await expect(page.getByRole("dialog")).toBeVisible();
-      const movements = await fixtureSql<{ id: string }[]>`
-        select id from transactions where owner_user_id = ${scope.userId}`;
-      expect(movements).toHaveLength(0);
-    });
 
     test("opens the form already carrying the read amount, account and category", async ({
       page,
@@ -393,18 +278,6 @@ test.describe("a category that came from a credential default", () => {
 
   test.describe("the phone list", () => {
     test.use({ viewport: { width: 360, height: 740 } });
-
-    test("says so on the badge and offers review, not accept", async ({
-      page,
-    }) => {
-      await page.goto("/es/inbox");
-
-      await expect(
-        band(page).getByText(ingest.categoryFromDefault, { exact: true }),
-      ).toBeVisible();
-      await expect(reviewButton(page)).toHaveCount(1);
-      await expect(acceptButton(page)).toHaveCount(0);
-    });
 
     test("opens the form already carrying the read amount, account and category", async ({
       page,
@@ -438,7 +311,7 @@ test.describe("the queue at 360 px", () => {
     "RNF-08's base case is the mobile project's viewport",
   );
 
-  test("holds with no horizontal overflow and no control under 32 px", async ({
+  test("holds with no horizontal overflow and no control under 32 px @mobile", async ({
     page,
   }) => {
     await seedQueue([complete, incomplete]);
@@ -466,106 +339,5 @@ test.describe("the queue at 360 px", () => {
         `control ${index} named ${JSON.stringify(await control.textContent())}`,
       ).toBeGreaterThanOrEqual(32);
     }
-  });
-});
-
-// A notice dated before its account opened can never be recorded (MO001), so it
-// reads as incomplete and its accept opens the form carrying that date; a notice
-// dated on the opening day keeps the one tap.
-test.describe("a notice dated before its account opened", () => {
-  async function dateDelivery(id: string, offsetDays: number): Promise<string> {
-    const [row] = await fixtureSql<{ day: string }[]>`
-      update ingest_deliveries
-      set proposed_occurred_at = (
-        select initial_balance_on + ${offsetDays}::int from accounts where id = ${scope.accountId})
-      where id = ${id}
-      returning proposed_occurred_at::text as day`;
-    return row.day;
-  }
-
-  test.beforeEach(async () => {
-    await clearLedger();
-  });
-
-  test.describe("the laptop band", () => {
-    test.use({ viewport: { width: 1280, height: 900 } });
-
-    test("is incomplete and its accept opens the form with that date, writing nothing", async ({
-      page,
-    }) => {
-      const [id] = await seedQueue([complete]);
-      const day = await dateDelivery(id, -1);
-      await page.goto("/es/inbox");
-
-      const row = page
-        .getByRole("table", { name: ingest.title })
-        .getByRole("row")
-        .filter({ hasText: TRUSTED });
-      await expect(
-        row.getByText(ingest.stateIncomplete, { exact: true }),
-      ).toBeVisible();
-      await expect(row.getByText(BEFORE_OPENING_NOTE)).toBeVisible();
-
-      await rowActions(page, TRUSTED).click();
-      await page
-        .getByRole("menuitem", { name: ingest.accept, exact: true })
-        .click();
-
-      const dialog = page.getByRole("dialog");
-      await expect(dialog).toBeVisible();
-      await expect(dialog.getByLabel(transactions.dateLabel)).toHaveValue(day.split("-").reverse().join("/"));
-      await expect(dialog.getByText(BEFORE_OPENING)).toBeVisible();
-      await expect(dialog.getByLabel(transactions.dateLabel)).toBeInViewport();
-
-      const movements = await fixtureSql<{ id: string }[]>`
-        select id from transactions where owner_user_id = ${scope.userId}`;
-      expect(movements).toHaveLength(0);
-    });
-
-    test("keeps the one tap on the opening day", async ({ page }) => {
-      const [id] = await seedQueue([complete]);
-      await dateDelivery(id, 0);
-      await page.goto("/es/inbox");
-
-      const row = page
-        .getByRole("table", { name: ingest.title })
-        .getByRole("row")
-        .filter({ hasText: TRUSTED });
-      await expect(
-        row.getByText(ingest.stateComplete, { exact: true }),
-      ).toBeVisible();
-      await expect(row.getByText(BEFORE_OPENING_NOTE)).toHaveCount(0);
-    });
-  });
-
-  test.describe("the phone list", () => {
-    test.use({ viewport: { width: 360, height: 740 } });
-
-    test("offers review, never the one tap, and opens the form with that date", async ({
-      page,
-    }) => {
-      const [id] = await seedQueue([complete]);
-      const day = await dateDelivery(id, -1);
-      await page.goto("/es/inbox");
-
-      await expect(acceptButton(page)).toHaveCount(0);
-      await expect(band(page).getByText(BEFORE_OPENING_NOTE)).toBeVisible();
-      await reviewButton(page).click();
-
-      const dialog = page.getByRole("dialog");
-      await expect(dialog).toBeVisible();
-      await expect(dialog.getByLabel(transactions.dateLabel)).toHaveValue(day.split("-").reverse().join("/"));
-      await expect(dialog.getByText(BEFORE_OPENING)).toBeVisible();
-      await expect(dialog.getByLabel(transactions.dateLabel)).toBeInViewport();
-    });
-
-    test("keeps the one tap on the opening day", async ({ page }) => {
-      const [id] = await seedQueue([complete]);
-      await dateDelivery(id, 0);
-      await page.goto("/es/inbox");
-
-      await expect(acceptButton(page)).toHaveCount(1);
-      await expect(reviewButton(page)).toHaveCount(0);
-    });
   });
 });

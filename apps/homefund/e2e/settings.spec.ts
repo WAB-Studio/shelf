@@ -24,18 +24,12 @@ import messages from "@/messages/es.json";
 
 import { fixtureSql } from "../scripts/harness/fixtures";
 import {
-  LEADER_MEMBER_NAME,
-  MEMBER_STORAGE_STATE,
-  PLAIN_MEMBER_NAME,
   asHarnessUser,
   clearGroup,
   readScope,
   seedGroup,
   test,
 } from "./global-setup";
-
-const members = messages.members;
-const common = messages.common;
 const group = messages.group;
 
 const scope = readScope();
@@ -262,106 +256,6 @@ test.describe("the members screen", () => {
   });
 });
 
-// The menu names its own row, so match the prefix: the count is what says how
-// many rows carry a menu at all, and the rename below says which row it was.
-function rowMenus(page: Page): Locator {
-  return page.getByRole("button", {
-    name: common.actionsFor.split("{")[0].trim(),
-  });
-}
-
-// Whichever of the two the browser signs in as is named by the sidebar as well,
-// so both rows are read from the band this width displays, not the sidebar's.
-async function expectRosterRendered(page: Page): Promise<void> {
-  const roster = band(page);
-
-  await expect(roster.getByText(LEADER_MEMBER_NAME, { exact: true })).toBeVisible();
-  await expect(roster.getByText(PLAIN_MEMBER_NAME, { exact: true })).toBeVisible();
-}
-
-// Whose row an open menu belonged to: the name its rename arrives prefilled with.
-async function expectRenameSubject(page: Page, name: string): Promise<void> {
-  await page
-    .getByRole("menu")
-    .getByRole("menuitem", { name: common.edit, exact: true })
-    .click();
-
-  await expect(
-    page.getByRole("dialog").getByRole("textbox", { name: members.nameLabel }),
-  ).toHaveValue(name);
-}
-
-test.describe("RF-100 on the roster", () => {
-  // The two identities and their one group, held for these describes alone: a
-  // group alive during the tests above would move their scope from personal to
-  // the fund's, and the categories screen reads a different set under each.
-  test.beforeAll(async () => {
-    await seedGroup();
-  });
-
-  test.afterAll(async () => {
-    await clearGroup();
-  });
-
-  test.describe("the members roster under its leader", () => {
-    test("offers the add control and a menu over another member's row", async ({
-      page,
-    }) => {
-      await page.goto("/es/settings/members");
-      await expectRosterRendered(page);
-
-      await expect(
-        page.getByRole("button", { name: members.add, exact: true }),
-      ).toBeVisible();
-
-      await expect(rowMenus(page)).toHaveCount(2);
-
-      // The second row by name is the plain member's, which is not the leader's own.
-      await rowMenus(page).nth(1).click();
-      // The transfer sits between the rename and the archive on a live member
-      // who has a login, and on no other row (RF-59).
-      await expect(page.getByRole("menu").getByRole("menuitem")).toHaveText([
-        common.edit,
-        members.transfer,
-        common.archive,
-        common.delete,
-      ]);
-
-      await expectRenameSubject(page, PLAIN_MEMBER_NAME);
-    });
-  });
-
-  test.describe("the members roster under a plain member", () => {
-    test.use({ storageState: MEMBER_STORAGE_STATE });
-
-    test("renders the roster and offers no add control", async ({ page }) => {
-      await page.goto("/es/settings/members");
-      await expectRosterRendered(page);
-
-      await expect(
-        page.getByRole("button", { name: members.add, exact: true }),
-      ).toHaveCount(0);
-    });
-
-    test("offers one menu, over their own row, and it renames and nothing else", async ({
-      page,
-    }) => {
-      await page.goto("/es/settings/members");
-      await expectRosterRendered(page);
-
-      // Two rows, one menu: the other member's row carries none.
-      await expect(rowMenus(page)).toHaveCount(1);
-
-      await rowMenus(page).click();
-      await expect(page.getByRole("menu").getByRole("menuitem")).toHaveText([
-        common.edit,
-      ]);
-
-      await expectRenameSubject(page, PLAIN_MEMBER_NAME);
-    });
-  });
-});
-
 test.describe("the group's own settings", () => {
   // The one test that writes rewrites this group, and `seedGroup` opens by
   // dropping whatever the last one left, so either test meets the fund named and
@@ -433,42 +327,5 @@ test.describe("the group's own settings", () => {
       where group_id = ${groupId} and subtype = 'cash' and archived_at is null`;
     expect(cash).toHaveLength(1);
     expect(cash[0].name).toBe(GROUP_CASH_ACCOUNT_NAME.es);
-  });
-
-  test.describe("under a plain member", () => {
-    test.use({ storageState: MEMBER_STORAGE_STATE });
-
-    test("reads the two values and is offered no way to write them", async ({
-      page,
-    }) => {
-      const [seeded] = await fixtureSql<{ name: string }[]>`
-        select name from groups where id = ${groupId}`;
-
-      await page.goto("/es/settings/group");
-
-      // The sidebar names the fund too, so the pair is read from the screen's
-      // own landmark.
-      const settings = page.getByRole("main");
-
-      await expect(settings.getByText(seeded.name, { exact: true })).toBeVisible();
-      await expect(
-        settings.getByText(group.cashModePerMember, { exact: true }),
-      ).toBeVisible();
-      // The currency reads as plain text here, the same way the cash mode does
-      // above — no member changes where the fund settles (RF-121).
-      await expect(settings.getByText("COP", { exact: true })).toBeVisible();
-
-      // RF-57: the configuration is the leader's, and this screen hands a plain
-      // member neither the field nor the button that would reach the action.
-      await expect(
-        page.getByRole("textbox", { name: group.nameLabel }),
-      ).toHaveCount(0);
-      await expect(
-        page.getByRole("radio", { name: "USD", exact: true }),
-      ).toHaveCount(0);
-      await expect(
-        page.getByRole("button", { name: group.save, exact: true }),
-      ).toHaveCount(0);
-    });
   });
 });
