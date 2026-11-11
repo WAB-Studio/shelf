@@ -280,9 +280,9 @@ export function MovementsScreen({
 
   function updateFilters(next: MovementsFilters) {
     // Search text rewrites the entry it came from, so a typed word never fills the back button.
-    const replacing = next.q !== filters.q;
-    const navigate = replacing ? router.replace : router.push;
-    navigate({ pathname, query: toQuery(next) }, { scroll: false });
+    const href = { pathname, query: toQuery(next) };
+    if (next.q !== filters.q) router.replace(href, { scroll: false });
+    else router.push(href, { scroll: false });
   }
 
   function patchFilters(patch: Partial<MovementsFilters>) {
