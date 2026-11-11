@@ -2,8 +2,6 @@
 
 import { refresh } from "next/cache";
 
-import { z } from "zod";
-
 import { getUserGroup } from "@/db/queries/groups";
 import {
   addGoalContribution,
@@ -18,9 +16,9 @@ import {
   type GoalContributionRow,
 } from "@/db/queries/savings-goals";
 import type { CurrencyCode } from "@/lib/currency";
+import { assertRefined, requireMinor } from "@/lib/action-amounts";
 import { pgErrorCode } from "@/lib/db-error";
 import { ActionError } from "@/lib/errors";
-import { parseAmount } from "@/lib/money";
 import { authActionClient } from "@/lib/safe-action";
 import {
   archiveGoalSchema,
@@ -45,26 +43,15 @@ function toGoalMinor(
   amounts: { targetAmount: string; initialContribution?: string | null },
   currency: CurrencyCode,
 ): { targetAmountCents: number; initialContributionCents: number | null } {
-  const verdict = z
-    .custom<typeof amounts>()
-    .superRefine(refineGoalAmounts(currency))
-    .safeParse(amounts);
-
-  if (!verdict.success) throw new ActionError(verdict.error.issues[0].message);
+  assertRefined(amounts, refineGoalAmounts(currency));
 
   return {
-    targetAmountCents: toMinor(amounts.targetAmount),
+    targetAmountCents: requireMinor(amounts.targetAmount),
     initialContributionCents:
       amounts.initialContribution != null
-        ? toMinor(amounts.initialContribution)
+        ? requireMinor(amounts.initialContribution)
         : null,
   };
-}
-
-function toMinor(amount: string): number {
-  const minor = parseAmount(amount);
-  if (minor === null) throw new ActionError("errors.unexpected");
-  return minor;
 }
 
 // A scope mismatch on the goal's account, or on a contributed movement, raises
@@ -199,14 +186,9 @@ export const contributeGoalAction = authActionClient
   .action(async ({ parsedInput: { goalId, amount } }) => {
     // An aporte is set aside in the goal's own currency, whatever it earmarks.
     const currency = await resolveGoalCurrency({ goalId });
-    const verdict = z
-      .custom<{ amount: string }>()
-      .superRefine(refineContributionAmount(currency))
-      .safeParse({ amount });
+    assertRefined({ amount }, refineContributionAmount(currency));
 
-    if (!verdict.success) throw new ActionError(verdict.error.issues[0].message);
-
-    const amountCents = toMinor(amount);
+    const amountCents = requireMinor(amount);
 
     let contributionId: string;
     try {
