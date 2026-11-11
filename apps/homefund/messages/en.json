@@ -614,6 +614,8 @@
     "filteredEmptyDescription": "No movement matches these filters in the chosen period.",
     "clearFilters": "Clear filters",
     "filtersLabel": "Filters",
+    "searchLabel": "Search",
+    "searchPlaceholder": "Description or amount",
     "rangeFrom": "From",
     "rangeTo": "To",
     "allAccounts": "All accounts",
@@ -1605,11 +1607,13 @@
   "ingest": {
     "title": "Inbox",
     "emptyTitle": "Nothing to review",
-    "emptyDescription": "Bank messages you forward land here. To start, point your bank at this address.",
-    "emptyAddressLabel": "Receiving address",
-    "emptyStep1": "Create a credential in Settings · Bank emails.",
-    "emptyStep2": "Set your bank's email or rule to send each notice to this address with your token.",
-    "emptyStep3": "When one arrives it shows up here for you to review.",
+    "emptyDescription": "When something arrives from one of these sources, it shows up here for you to review. Connect the one you use.",
+    "emptySource": {
+      "android": { "label": "On Android, the HomeFund Avisos app forwards your bank's notices.", "link": "Install HomeFund Avisos" },
+      "iphone": { "label": "On iPhone, a Shortcut sends the bank's text message or an expense you type.", "link": "Create the Shortcut" },
+      "gmail": { "label": "With Gmail, your bank's emails arrive on their own.", "link": "Connect Gmail" },
+      "claude": { "label": "With Claude, you ask it to record or import movements for you.", "link": "Connect Claude" }
+    },
     "copy": "Copy",
     "copied": "Copied",
     "copyFailed": "Could not copy. Select the text and copy it by hand.",

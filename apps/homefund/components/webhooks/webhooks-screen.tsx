@@ -248,7 +248,7 @@ export function WebhooksScreen({
         </Flex>
       </Box>
 
-      <Card>
+      <Card id="bank-emails">
         <BankEmails oauthLine={oauthLine} onIssue={() => setIssuing(true)} />
       </Card>
 
@@ -281,7 +281,7 @@ export function WebhooksScreen({
       </Card>
 
       {/* RF-144: the same key opens HomeFund to Claude, which reads and imports through `/mcp`. */}
-      <Card>
+      <Card id="claude">
         <Flex direction="column" gap="4">
           <Heading as="h2" size="3">{t("mcpHeading")}</Heading>
           <CopyField
@@ -299,7 +299,7 @@ export function WebhooksScreen({
         </Flex>
       </Card>
 
-      <Card>
+      <Card id="android">
         <Flex direction="column" gap="2">
           <Heading as="h2" size="3">{t("androidHeading")}</Heading>
           <Text size="2" color="gray">
@@ -318,7 +318,7 @@ export function WebhooksScreen({
         </Flex>
       </Card>
 
-      <Card>
+      <Card id="iphone">
         <IphoneShortcut />
       </Card>
 

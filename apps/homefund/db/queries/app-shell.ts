@@ -4,16 +4,15 @@ import { sql } from "drizzle-orm";
 
 import type { GroupMember } from "@/db/schema";
 import { getSessionUser, withUserDb } from "@/db/session";
+import { inboxPendingCount } from "@/lib/ingest/inbox-pending";
 
 export type ShellSummary = {
   // The caller's own name in their roster, or null when they run personal-only.
   memberName: string | null;
   role: GroupMember["role"] | null;
-  // Deliveries waiting in the queue (RF-90), the sidebar's amber count.
-  pendingDeliveries: number;
-  // Movements one side known, waiting to be completed («Por completar»): with
-  // the deliveries, what the phone's Bandeja tab counts.
-  awaitingCounterparty: number;
+  // What Bandeja waits on (RF-90 deliveries and «Por completar» movements), the one
+  // count the sidebar, the phone's bar and Inicio all show.
+  inboxPending: number;
   // The caller's live fund (RF-55), read as getUserGroup reads it; null runs personal-only.
   group: { id: string; name: string } | null;
 };
@@ -28,7 +27,7 @@ export type ShellSummary = {
  */
 export async function getShellSummary(): Promise<ShellSummary> {
   const user = await getSessionUser();
-  if (!user) return { memberName: null, role: null, pendingDeliveries: 0, awaitingCounterparty: 0, group: null };
+  if (!user) return { memberName: null, role: null, inboxPending: 0, group: null };
 
   return withUserDb(async (tx) => {
     const [row] = await tx.execute<{
@@ -55,8 +54,10 @@ export async function getShellSummary(): Promise<ShellSummary> {
     return {
       memberName: row.member_name,
       role: row.role,
-      pendingDeliveries: row.pending_deliveries,
-      awaitingCounterparty: row.awaiting_counterparty,
+      inboxPending: inboxPendingCount({
+        deliveries: row.pending_deliveries,
+        awaitingCounterparty: row.awaiting_counterparty,
+      }),
       group: row.group_id !== null && row.group_name !== null
         ? { id: row.group_id, name: row.group_name } : null,
     };
