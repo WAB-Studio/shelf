@@ -97,11 +97,12 @@ export async function listWebhookCredentials(): Promise<WebhookCredentialRow[]> 
         rateLimitPerMin: webhookCredentials.rateLimitPerMin,
         purpose: sql<CredentialPurpose>`${webhookCredentials.purpose}`,
         kind: sql<CredentialKind>`${webhookCredentials.kind}`,
-        // A correlated subquery, so the counts ride the list's own round trip.
+        // A correlated subquery, so the counts ride the list's own round trip. Drizzle drops the table
+        // qualifier from a column in a one-table select, so the outer key is spelled out by hand.
         deliveriesLast30Days: sql<number>`(
-          select count(*)::int from ${ingestDeliveries}
-          where ${ingestDeliveries.credentialId} = ${webhookCredentials.id}
-            and ${ingestDeliveries.createdAt} >= now() - interval '30 days'
+          select count(*)::int from ${ingestDeliveries} as d
+          where d.credential_id = "webhook_credentials"."id"
+            and d.created_at >= now() - interval '30 days'
         )`,
         lastUsedAt: webhookCredentials.lastUsedAt,
         revokedAt: webhookCredentials.revokedAt,
