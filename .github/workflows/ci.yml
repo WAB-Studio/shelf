@@ -671,8 +671,9 @@ jobs:
 
       - run: npm run build -w apps/homefund
 
+      # The four shards build the same tree; one saves it.
       - name: Save the Turbopack build cache
-        if: steps.turbopack.outputs.cache-hit != 'true'
+        if: steps.turbopack.outputs.cache-hit != 'true' && matrix.shard == 1
         uses: actions/cache/save@v4
         with:
           path: apps/homefund/.next/cache
