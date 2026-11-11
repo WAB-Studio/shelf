@@ -177,6 +177,12 @@ export const occurredAtSchema = z.string().superRefine((value, ctx) => {
 const splitSchema = z.object({
   categoryId: z.uuid({ error: "transactions.errors.splitCategoryInvalid" }),
   amount: splitAmountSchema,
+  // The product a receipt line names (RF-175); the form sends "" for none.
+  description: z
+    .string()
+    .trim()
+    .max(200, { error: "transactions.errors.descriptionTooLong" })
+    .nullish(),
 });
 
 export const transactionFields = {
@@ -227,7 +233,7 @@ type TransactionFields = {
   toAccountId: string | null;
   amount: string;
   currency?: CurrencyCode;
-  splits: { categoryId: string; amount: string }[];
+  splits: { categoryId: string; amount: string; description?: string | null }[];
 };
 
 // What the two named accounts settle in, read off the accounts and never off

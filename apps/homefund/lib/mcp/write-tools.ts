@@ -38,14 +38,14 @@ function movementShape(t: Say) {
     occurredAt: z.string().describe(d("occurredAt")),
     description: z.string().nullable().describe(d("description")),
     categoryId: z.string().optional().describe(d("categoryId")),
-    splits: z.array(z.object({ categoryId: z.string(), amountCents: cents })).optional().describe(d("splits")),
+    splits: z.array(z.object({ categoryId: z.string(), amountCents: cents, description: z.string().nullish() })).optional().describe(d("splits")),
     contributedByMemberId: z.string().nullish().describe(d("contributedByMemberId")),
     forHousehold: z.boolean().optional().describe(d("forHousehold")),
   };
 }
 
 type MovementInput = z.infer<z.ZodObject<ReturnType<typeof movementShape>>>;
-type Split = { categoryId: string; amountCents: number };
+type Split = { categoryId: string; amountCents: number; description?: string | null };
 
 function movementForm(input: MovementInput) {
   const splits = input.splits ?? (input.categoryId ? [{ categoryId: input.categoryId, amountCents: input.amountCents }] : []);
@@ -60,7 +60,11 @@ function movementForm(input: MovementInput) {
     description: input.description,
     contributedByMemberId: input.contributedByMemberId,
     forHousehold: input.forHousehold,
-    splits: splits.map((split: Split) => ({ categoryId: split.categoryId, amount: centsToDecimal(split.amountCents) })),
+    splits: splits.map((split: Split) => ({
+      categoryId: split.categoryId,
+      amount: centsToDecimal(split.amountCents),
+      description: split.description,
+    })),
     labelIds: [],
   };
 }
@@ -79,7 +83,7 @@ function patched(current: TransactionListRow, patch: Partial<MovementInput>): Mo
     (patch.categoryId || (fromAccountId !== null && toAccountId !== null)
       ? undefined
       : only
-        ? [{ categoryId: only.categoryId, amountCents }]
+        ? [{ categoryId: only.categoryId, amountCents, description: only.description }]
         : current.splits);
   return {
     fromAccountId,

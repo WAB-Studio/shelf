@@ -95,7 +95,7 @@ type MovementFormValues = {
   occurredAt: string;
   description: string | null;
   externalRef?: string;
-  splits: { categoryId: string; amount: string }[];
+  splits: { categoryId: string; amount: string; description?: string | null }[];
   labelIds: string[];
   causedByTransactionId: string | null;
 };
@@ -194,7 +194,7 @@ export function MovementForm({
     amount?: string;
     occurredAt?: string;
     description?: string | null;
-    splits?: { categoryId: string; amount: string }[];
+    splits?: { categoryId: string; amount: string; description?: string | null }[];
   };
   // A notice dated before its account opened: the form opens with the refusal already beside the
   // date, which is brought into view.
@@ -304,6 +304,7 @@ export function MovementForm({
           splits: movement.splits.map((split) => ({
             categoryId: split.categoryId,
             amount: amountToInput(split.amountCents, movement.currency, locale),
+            description: split.description,
           })),
           labelIds: movement.labels.map((label) => label.id),
           causedByTransactionId,

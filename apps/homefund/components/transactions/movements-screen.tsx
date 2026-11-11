@@ -123,6 +123,7 @@ export function MovementsScreen({
   const t = useTranslations("transactions");
   const tc = useTranslations("categories");
   const tKey = useTranslations();
+  const linesHint = (count: number) => t("linesCount", { count });
   const format = useFormatter();
   const locale = useLocale();
   const pathname = usePathname();
@@ -219,7 +220,7 @@ export function MovementsScreen({
     occurredAt: row.occurredAt,
     title: row.description || rowTitle(row, categoryNames, t),
     category: rowCategory(row, categoryNames, categoryColors),
-    account: rowSubtitle(row, accountNames) ?? "",
+    account: rowSubtitle(row, accountNames, linesHint) ?? "",
     label: row.labels[0]?.name ?? null,
     amountMinor:
       row.reconciliationId !== null && row.toAccountId === null
@@ -658,11 +659,11 @@ export function MovementsScreen({
                           row.description
                             ? [
                                 rowTitle(row, categoryNames, t),
-                                rowSubtitle(row, accountNames),
+                                rowSubtitle(row, accountNames, linesHint),
                               ]
                                 .filter(Boolean)
                                 .join(" · ")
-                            : rowSubtitle(row, accountNames)
+                            : rowSubtitle(row, accountNames, linesHint)
                         }
                         color={rowColor(row, categoryColors)}
                         categoryName={rowTitle(row, categoryNames, t)}
@@ -815,6 +816,17 @@ function rowTitle(
 // A transfer reads "origin → destination"; an income names its destination, an
 // expense its source.
 function rowSubtitle(
+  row: TransactionListRow,
+  accountNames: Map<string, string>,
+  linesHint?: (count: number) => string,
+): string | undefined {
+  const account = accountOfRow(row, accountNames);
+  return row.splits.length > 1 && linesHint
+    ? [account, linesHint(row.splits.length)].filter(Boolean).join(" · ")
+    : account;
+}
+
+function accountOfRow(
   row: TransactionListRow,
   accountNames: Map<string, string>,
 ): string | undefined {

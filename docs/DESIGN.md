@@ -534,6 +534,12 @@ Board C1h corrected the same day: a card in credit reads «Según HomeFund −$ 
   selects, «Más» shows all); splitting across several categories sits behind «Dividir» and opens the split editor. No
   validation message shows before a submit attempt. Frequency is the count of the person's movements per category, read
   in the form options' one fan-out (the user, 2026-10-30).
+- **Decided by the user 2026-11-10** («Cuando te mande una factura que sea grupal por mcp quiero que haya separación de cada
+  producto en solo un movimiento, o sea movimiento y sub movimientos»; «sub clasificación de cada sub movimiento»): a receipt is
+  one movement and its lines are sub-movements. The split editor gives each line an optional «Detalle» (the product) under its
+  category and amount; a line's category may be a subcategory, read «Mercado › Lácteos». The movement's detail lists the lines
+  under it, each with its name, its category path and its amount. The movements list keeps one row and adds «N líneas» beside the
+  account. A discount is subtracted from the lines it applies to.
 - A fund category's name is bare, except where two can share it: a selector that lists both scopes puts them under
   «Categorías del fondo» and «Mis categorías», and Reportes and Inicio's month glance write «· fondo» after the fund's
   (the user, 2026-11-08, over 2026-10-30). A personal account (and a personal category where a component, not a string,
