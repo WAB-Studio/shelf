@@ -100,6 +100,7 @@ export { Page } from "./page";
 
 export { CategoryChoice, CategoryChoiceGrid } from "./category-choice";
 export { PersonalMark } from "./personal-mark";
+export { FigureRow } from "./figure-row";
 export { MovementRow } from "./movement-row";
 
 export { CategoryTile } from "./category-tile";
@@ -156,8 +157,8 @@ export {
   SummaryBand,
   BandCards,
   BandCard,
-  BandFigure,
   BandStats,
   ReportCard,
   ReportRow,
 } from "./summary-band";
+export { BandFigure } from "./band-figure";

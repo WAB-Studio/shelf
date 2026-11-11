@@ -82,14 +82,11 @@ export function DashboardSummary({ data }: { data: DashboardData }) {
                   </Text>
                   {index === 0 && <PrivacyToggle />}
                 </Flex>
-                <BandFigure>
-                  <Money
-                    minor={total.netWorthCents}
-                    currency={total.currency}
-                    tone={signTone(total.netWorthCents)}
-                    size="inherit"
-                  />
-                </BandFigure>
+                <BandFigure
+                  minor={total.netWorthCents}
+                  currency={total.currency}
+                  tone={signTone(total.netWorthCents)}
+                />
               </Flex>
             ))}
 
