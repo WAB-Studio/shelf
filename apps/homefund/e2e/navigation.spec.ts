@@ -172,9 +172,13 @@ test("the empty inbox links each source to its place in Ajustes", async ({ page 
 test("a movement waiting for its counterparty counts in Inicio's badge", async ({ page }) => {
   await clearQueue();
   await asHarnessUser(async (tx) => {
-    await tx`
+    const [movement] = await tx<{ id: string }[]>`
       insert into transactions (from_account_id, amount_cents, occurred_at, description, awaiting_counterparty)
-      values (${scope.accountId}, 1000000, (now() at time zone 'America/Bogota')::date, 'Por completar badge', true)`;
+      values (${scope.accountId}, 1000000, (now() at time zone 'America/Bogota')::date, 'Por completar badge', true)
+      returning id`;
+    await tx`
+      insert into transaction_splits (transaction_id, category_id, amount_cents)
+      values (${movement.id}, ${scope.categoryId}, 1000000)`;
   });
   try {
     await page.goto("/es");
