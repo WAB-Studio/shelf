@@ -15231,7 +15231,7 @@ async function mcpDoorSuite(): Promise<void> {
   assert(
     next("RF-144: /mcp answers 401 with no key, an unknown one or a webhook's, and lists its tools to a key for Claude"),
     anonymous.status === 401 && forged.status === 401 && webhookKey.status === 401 &&
-      JSON.stringify(names) === JSON.stringify(["create_account", "create_category", "delete_movement", "import_statement", "list_accounts", "list_categories", "list_movements", "preview_statement", "record_movement", "review_month", "update_movement"]),
+      JSON.stringify(names) === JSON.stringify(["create_account", "create_category", "delete_movement", "import_statement", "list_accounts", "list_categories", "list_movements", "preview_statement", "record_movement", "review_month", "update_account", "update_movement"]),
     `no key ${anonymous.status}, unknown key ${forged.status}, webhook key ${webhookKey.status}, tools ${JSON.stringify(names)}`,
   );
 
@@ -15467,7 +15467,7 @@ async function mcpDoorSuite(): Promise<void> {
   );
 
   const viaWebhook = await Promise.all(
-    ["record_movement", "update_movement", "delete_movement", "create_account", "create_category", "list_categories", "list_movements"].map((name) =>
+    ["record_movement", "update_movement", "delete_movement", "create_account", "update_account", "create_category", "list_categories", "list_movements"].map((name) =>
       mcpClient(POST, ingestToken).rpc(ingestToken, "tools/call", { name, arguments: {} }),
     ),
   );
@@ -15475,6 +15475,39 @@ async function mcpDoorSuite(): Promise<void> {
     next("RF-169: no write or read tool of the ledger opens to a webhook key"),
     viaWebhook.every((one) => one.status === 401),
     `statuses ${JSON.stringify(viaWebhook.map((one) => one.status))}`,
+  );
+
+  // RF-172: update_account edits through the dialog's schema and write, with the stamp list_accounts returned.
+  const listedAccounts = await writer.tool("list_accounts");
+  const toEdit = (listedAccounts.value as { id: string; updatedAt: string; openingBalanceCents: number }[] | null)?.find((one) => one.id === accountId);
+  const balanceOf = async (id: string) => {
+    const [row] = await fixtureSql<{ balance_cents: string }[]>`select balance_cents::text from account_balances where id = ${id}`;
+    return row?.balance_cents;
+  };
+  const balanceBefore = await balanceOf(accountId);
+  const renamedAccount = await writer.tool("update_account", {
+    accountId, expectedUpdatedAt: toEdit?.updatedAt ?? "", name: `Harness rf172 ahorros ${tag}`, openingBalanceCents: 600_000_00,
+  });
+  const [editedAccount] = await fixtureSql<{ name: string; initial_balance_cents: string }[]>`
+    select name, initial_balance_cents::text from accounts where id = ${accountId}`;
+  assert(
+    next("RF-172: update_account edits the owner's account (name, opening balance) and the derived balance moves"),
+    !renamedAccount.isError && toEdit?.openingBalanceCents === 500_000_00 && editedAccount?.name === `Harness rf172 ahorros ${tag}` &&
+      editedAccount.initial_balance_cents === "60000000" && balanceBefore === "50000000" && (await balanceOf(accountId)) === "60000000",
+    `edit ${JSON.stringify(renamedAccount.value)}, row ${JSON.stringify(editedAccount)}, balance ${balanceBefore} -> ${await balanceOf(accountId)}`,
+  );
+  const staleAccount = await writer.tool("update_account", {
+    accountId, expectedUpdatedAt: toEdit?.updatedAt ?? "", openingBalanceCents: 700_000_00,
+  });
+  const alienEdit = await writer.tool("update_account", {
+    accountId: strangerAccount, expectedUpdatedAt: toEdit?.updatedAt ?? "", name: `Harness rf172 ajena ${tag}`,
+  });
+  const [afterStale] = await fixtureSql<{ initial_balance_cents: string }[]>`select initial_balance_cents::text from accounts where id = ${accountId}`;
+  const [alienRow] = await fixtureSql<{ name: string }[]>`select name from accounts where id = ${strangerAccount}`;
+  assert(
+    next("RF-172: update_account with a stale stamp is refused and writes nothing; another person's account is refused"),
+    staleAccount.isError && afterStale?.initial_balance_cents === "60000000" && alienEdit.isError && !alienRow?.name.includes("rf172"),
+    `stale ${JSON.stringify(staleAccount.value)}, opening ${afterStale?.initial_balance_cents}, alien ${JSON.stringify(alienEdit.value)}`,
   );
 }
 
