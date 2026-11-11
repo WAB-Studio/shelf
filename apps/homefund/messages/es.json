@@ -689,6 +689,7 @@
     "withdrawAction": "Retirar efectivo",
     "withdrawTitle": "Retirar efectivo",
     "sourceLabel": "Desde",
+    "sourceBalance": "Saldo:",
     "amountLabel": "Monto",
     "destinationLabel": "A efectivo",
     "willCreateHint": "Se creará tu cuenta de efectivo.",

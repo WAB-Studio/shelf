@@ -24,6 +24,7 @@ import {
   Spinner,
   Text,
   AmountField,
+  Money,
 } from "@/components/ui";
 import type { AccountRow } from "@/db/queries/accounts";
 import { useActionErrorToast } from "@/lib/use-action-toast";
@@ -165,6 +166,7 @@ function WithdrawForm({
                   ))}
                 </Select.Content>
               </Select.Root>
+              <SourceBalance account={sources.find((account) => account.id === field.value)} />
               <FieldMessage error={fieldState.error} />
             </Field>
           )}
@@ -226,5 +228,19 @@ function WithdrawForm({
         </Flex>
       </FieldGroup>
     </form>
+  );
+}
+
+// What the chosen account holds in its own currency, so the amount is typed knowing it.
+function SourceBalance({ account }: { account: AccountRow | undefined }) {
+  const t = useTranslations("cash");
+  if (!account) return null;
+  const cents =
+    account.balances.find((balance) => balance.currency === account.settlementCurrency)?.balanceCents ?? 0;
+  return (
+    <FieldDescription>
+      {t("sourceBalance")}{" "}
+      <Money minor={cents} currency={account.settlementCurrency} size="inherit" />
+    </FieldDescription>
   );
 }

@@ -689,6 +689,7 @@
     "withdrawAction": "Withdraw cash",
     "withdrawTitle": "Withdraw cash",
     "sourceLabel": "From",
+    "sourceBalance": "Balance:",
     "amountLabel": "Amount",
     "destinationLabel": "To cash",
     "willCreateHint": "Your cash account will be created.",
