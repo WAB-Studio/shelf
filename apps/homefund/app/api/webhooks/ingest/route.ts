@@ -16,7 +16,8 @@ export async function POST(request: Request): Promise<Response> {
   if (!header || !header.startsWith(BEARER_PREFIX)) {
     return Response.json({ error: "unauthorized" }, { status: 401 });
   }
-  const token = header.slice(BEARER_PREFIX.length);
+  // A Shortcut's header field keeps a stray space a person typed after «Bearer».
+  const token = header.slice(BEARER_PREFIX.length).trim();
 
   // Resolve and throttle before parsing, so an unauthorized or over-limit
   // caller is rejected without the cost of reading the body.

@@ -13,7 +13,7 @@ const EXPENSE_STEPS = [
 
 const SMS_STEPS = ["smsStep1", "smsStep2", "smsStep3"] as const;
 
-// RF-186: an iOS Shortcut posts to the same ingest route the Android app uses; nothing on the server differs.
+// RF-186: the steps name the Shortcuts actions as iOS labels them in the person's language.
 export function IphoneShortcut({ ingestUrl }: { ingestUrl: string }) {
   const t = useTranslations("webhooks.iphone");
   const tCopy = useTranslations("webhooks");
