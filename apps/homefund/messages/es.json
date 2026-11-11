@@ -1543,6 +1543,20 @@
     "androidDescription": "Viene lista para Bancolombia y Banco de Bogotá",
     "androidDownload": "Descargar HomeFund Avisos",
     "androidDownloadHint": "Se descarga con tu cuenta de GitHub de WAB-Studio",
+    "bankEmails": {
+      "heading": "Correos del banco",
+      "description": "Cada 10 minutos los correos de tu banco (Bancolombia, Nequi, Nu, Lulo, Falabella, Banco de Bogotá, PSE…) llegan solos a la Bandeja. Solo lee correo; nada más sale de tu computador.",
+      "step1": "Instala ActivityWatch + TimeLog en tu computador con Windows.",
+      "step1Link": "Descargar ActivityWatch + TimeLog",
+      "step2": "Haz clic derecho en el ícono de ActivityWatch, junto al reloj, y elige «Gmail: conectar cuenta…». La primera vez te pide la línea de abajo: pégala.",
+      "step3": "Elige tu cuenta de Gmail. Google avisa «Google no verificó esta app»: haz clic en «Configuración avanzada», luego en «Ir a Asistente (no seguro)» y por último en «Continuar».",
+      "step4": "Crea una llave aquí y pégala en ese mismo menú con «HomeFund: pegar llave…».",
+      "step4Action": "Crear credencial",
+      "step5": "Repite el paso 2 con cada otra cuenta de Gmail.",
+      "step6": "En ese menú puedes prender o apagar TimeLog con «TimeLog: subir mi tiempo»: los correos funcionan sin TimeLog.",
+      "lineLabel": "Línea para pegar en el paso 2",
+      "lineMissing": "Esta instalación no tiene todavía los datos de Google. Pídeselos a quien administra HomeFund."
+    },
     "iphone": {
       "heading": "Atajo de iPhone",
       "description": "Un Atajo de iOS manda a la Bandeja un gasto que escribes o el SMS que te mandó el banco. Primero toca «Crear credencial» arriba (no la clave para Claude) y copia su token, que empieza por «whk_».",

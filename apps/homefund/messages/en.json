@@ -1543,6 +1543,20 @@
     "androidDescription": "Comes ready for Bancolombia and Banco de Bogotá",
     "androidDownload": "Download HomeFund Avisos",
     "androidDownloadHint": "Download it with your WAB-Studio GitHub account",
+    "bankEmails": {
+      "heading": "Bank emails",
+      "description": "Every 10 minutes your bank's emails (Bancolombia, Nequi, Nu, Lulo, Falabella, Banco de Bogotá, PSE…) reach the Inbox by themselves. It only reads mail; nothing else leaves your computer.",
+      "step1": "Install ActivityWatch + TimeLog on your Windows computer.",
+      "step1Link": "Download ActivityWatch + TimeLog",
+      "step2": "Right-click the ActivityWatch icon next to the clock and choose «Gmail: conectar cuenta…». The first time it asks for the line below: paste it.",
+      "step3": "Choose your Gmail account. Google warns «Google no verificó esta app»: click «Configuración avanzada», then «Ir a Asistente (no seguro)», then «Continuar».",
+      "step4": "Create a key here and paste it in that same menu with «HomeFund: pegar llave…».",
+      "step4Action": "Create credential",
+      "step5": "Repeat step 2 for every other Gmail account.",
+      "step6": "In that menu you can turn TimeLog on or off with «TimeLog: subir mi tiempo»: emails work without TimeLog.",
+      "lineLabel": "Line to paste in step 2",
+      "lineMissing": "This installation has no Google data yet. Ask whoever runs HomeFund for it."
+    },
     "iphone": {
       "heading": "iPhone Shortcut",
       "description": "An iOS Shortcut sends the Inbox an expense you type or the text your bank sent you. First tap «Create credential» above (not the key for Claude) and copy its token, which starts with «whk_».",

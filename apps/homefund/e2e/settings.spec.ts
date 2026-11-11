@@ -219,6 +219,27 @@ test("the webhooks screen walks an iPhone Shortcut step by step (RF-186)", async
   ).toBeVisible();
 });
 
+test("the webhooks screen shows the Gmail line or says there is none (RF-192)", async ({
+  page,
+}) => {
+  await page.goto("/es/settings/webhooks");
+
+  await expect(
+    page.getByRole("heading", { name: messages.webhooks.bankEmails.heading, exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByText(`6. ${messages.webhooks.bankEmails.step6}`, { exact: true }),
+  ).toBeVisible();
+
+  const id = process.env.GMAIL_OAUTH_CLIENT_ID;
+  const secret = process.env.GMAIL_OAUTH_CLIENT_SECRET;
+  if (id && secret) {
+    await expect(page.locator("#gmail-oauth-line")).toHaveValue(`${id} ${secret}`);
+  } else {
+    await expect(page.getByText(messages.webhooks.bankEmails.lineMissing)).toBeVisible();
+  }
+});
+
 test.describe("the members screen", () => {
   const groupId = randomUUID();
   const leaderId = randomUUID();

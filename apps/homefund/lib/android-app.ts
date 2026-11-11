@@ -8,3 +8,7 @@ export function androidSetupLink(webhookUrl: string, key: string): string {
   const query = new URLSearchParams({ url: webhookUrl, key });
   return `homefundavisos://configurar?${query.toString()}`;
 }
+
+// The Windows uploader whose menu connects Gmail (RF-192).
+export const ACTIVITYWATCH_RELEASES_URL =
+  "https://github.com/WAB-Studio/activitywatch/releases/latest";
