@@ -19,6 +19,7 @@
   border: 1px solid var(--hf-line);
   box-shadow: var(--hf-shadow);
   border-radius: var(--hf-card-radius);
+  container-type: inline-size;
 }
 
 .label {
@@ -29,8 +30,10 @@
   color: var(--gray-11);
 }
 
+/* A figure never leaves its card: «$ 12.722.184,04» is about 6.9em wide, so on a phone's half-width
+   tile it shrinks to fit instead of running past the border. */
 .value {
-  font-size: 23px;
+  font-size: min(23px, 13cqi);
   font-weight: 700;
   letter-spacing: -0.025em;
   font-variant-numeric: tabular-nums;
