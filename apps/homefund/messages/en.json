@@ -1731,7 +1731,9 @@
       "moveCategoryMovements": "Moves every movement line of EXACTLY category fromCategoryId (not the lines of its subcategories, although list_movements by category includes them) to toCategoryId, in one statement, optionally only those dated from..to; both must have the same kind. Call it FIRST with dryRun true: it writes nothing and returns how many lines would move. Show that count to the person, ask one yes, then call it without dryRun. Each movement moved gets a new updatedAt, so re-read it with list_movements before editing it.",
       "listInbox": "The inbox: the deliveries (bank SMS, emails, webhook) waiting for the person's approval. Each carries id, receivedAt, rawText (the message as it arrived) and proposal (amountCents, currency, kind expense or income, accountId and accountName, categoryId and categoryPath, date, description). notDetected names the fields the message did not give. status (default pending) filters; limit and offset page. Call it FIRST. Then show the person ONE compact list (date, amount, account, category, description), with every missing field filled in from your proposal and marked as such, and ask for ONE yes for the whole list, or their corrections. Then call accept_deliveries; whatever the person drops is rejected with reject_deliveries, confirmed in that same list.",
       "acceptDeliveries": "Approves one or more inbox deliveries: each becomes a movement, by the same path and rules as HomeFund's «Accept» button (kind derived from the accounts, audit, the delivery's reference prevents duplicates). Each item carries the id from list_inbox and, only when it changes or is missing, accountId (the expense or income account), categoryId or splits (lines with categoryId, amountCents and the product's description, summing to the amount), amountCents, description, date (YYYY-MM-DD), kind (expense, income or transfer) and, for a transfer, fromAccountId and toAccountId (without kind transfer a lone side is refused; with transfer, the missing side is the proposal's account). For an income into a fund account (notDetected carries contributor), pass contributedByMemberId («De quién»). All or nothing: if one delivery fails (for example no account, amount or category, already resolved, or someone else's) none is accepted and the error carries deliveryId and the missing field. NEVER call it without first calling list_inbox, showing the person the compact list (date, amount, account, category, description) and receiving ONE yes for the whole list. For a movement in a fund account, an item may carry madeByMemberId (from list_members) to say who made it.",
-      "rejectDeliveries": "Rejects one or more inbox deliveries by id, by the same path as «Reject» in HomeFund; it writes no movement. All or nothing: if an id is not one of the person's pending deliveries, none is rejected. First show the list (date, amount, description) of what you will reject, together with the accept_deliveries one, and ask for ONE yes for all of it."
+      "rejectDeliveries": "Rejects one or more inbox deliveries by id, by the same path as «Reject» in HomeFund; it writes no movement. All or nothing: if an id is not one of the person's pending deliveries, none is rejected. First show the list (date, amount, description) of what you will reject, together with the accept_deliveries one, and ask for ONE yes for all of it.",
+      "listMemberDebts": "What fund members owe each other: «balances» has each pair with its pending amount in cents and its currency (debtorName owes pendingCents to creditorName), derived from the entries; «entries» has each entry (kind debt is a debt, payment a repayment), newest first.",
+      "recordMemberDebt": "Records an entry between two fund members: kind debt (a new debt: «Dad owes Adrian $200,000 for the motorbike») or payment (a partial or full repayment of it). Debtor and creditor are ids from list_members, and differ. A payment larger than what the debtor still owes that creditor in that currency is refused. Before writing, CONFIRM with the person who owes whom, the amount, the date and the description, and wait for their yes."
     },
     "deferralProposal": "Defer in {count} instalments",
     "errors": {
@@ -1810,7 +1812,11 @@
       "dryRun": "true: write nothing and only return how many lines would move.",
       "inboxStatus": "pending (default), accepted or rejected.",
       "deliveries": "The deliveries to accept, 1 to 50: each with its id and, optionally, the data that corrects or completes its proposal.",
-      "deliveryIds": "The ids (from list_inbox) of 1 to 50 pending deliveries to reject."
+      "deliveryIds": "The ids (from list_inbox) of 1 to 50 pending deliveries to reject.",
+      "memberDebtKind": "debt for a new debt, payment for a repayment of an existing one.",
+      "debtorMemberId": "The member who owes (an id from list_members).",
+      "creditorMemberId": "The member who is owed (an id from list_members).",
+      "occurredOn": "The entry's date, YYYY-MM-DD; today or earlier."
     }
   },
   "oauth": {
@@ -1848,5 +1854,19 @@
     "title": "Add it to your Home Screen",
     "steps": "In Safari tap Share, then «Add to Home Screen». It opens like an app, full screen.",
     "dismiss": "Hide notice"
+  },
+  "memberDebts": {
+    "errors": {
+      "noFund": "You are not in a fund, so there are no debts between members.",
+      "memberNotInFund": "That member is not in your fund.",
+      "sameMember": "The debtor and the creditor must be different people.",
+      "debtorRequired": "Choose who owes.",
+      "creditorRequired": "Choose who is owed.",
+      "amountRequired": "Enter the amount.",
+      "amountInvalid": "Enter an amount above zero, with up to two decimals.",
+      "amountTooLarge": "The amount is too large.",
+      "currencyInvalid": "Choose a currency from the list.",
+      "overpaid": "The payment is larger than what those two people still owe each other in that currency."
+    }
   }
 }
