@@ -1,6 +1,6 @@
 "use client";
 
-import { Fraunces, IBM_Plex_Sans } from "next/font/google";
+import localFont from "next/font/local";
 import { NextIntlClientProvider, useTranslations } from "next-intl";
 import { THEME_BOOT_SCRIPT } from "@/lib/theme-choice";
 
@@ -14,17 +14,22 @@ import "./theme.css";
 // `app/layout.tsx` outright while it is mounted, so it carries its own
 // `<html>`/`<body>`, fonts and stylesheets rather than assuming the ones the
 // root layout would have set are still in force.
-const sans = IBM_Plex_Sans({
+const sans = localFont({
+  src: [
+    { path: "./fonts/ibm-plex-sans-400.woff2", weight: "400" },
+    { path: "./fonts/ibm-plex-sans-500.woff2", weight: "500" },
+    { path: "./fonts/ibm-plex-sans-600.woff2", weight: "600" },
+    { path: "./fonts/ibm-plex-sans-700.woff2", weight: "700" },
+  ],
   variable: "--font-sans",
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
   fallback: ["system-ui", "sans-serif"],
   display: "swap",
 });
 
-const display = Fraunces({
+const display = localFont({
+  src: "./fonts/fraunces.woff2",
+  weight: "100 900",
   variable: "--font-display",
-  subsets: ["latin"],
   fallback: ["Georgia", "serif"],
   display: "swap",
 });

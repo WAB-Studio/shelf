@@ -1,19 +1,19 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
-import { Inter, JetBrains_Mono, Space_Grotesk } from "next/font/google";
+import localFont from "next/font/local";
 import { NextIntlClientProvider } from "next-intl";
 import { getLocale, getTranslations } from "next-intl/server";
 
 import "./theme.css";
 
 // Sentences (docs/timelog/DESIGN.md).
-const sans = Inter({ variable: "--font-sans", subsets: ["latin"], display: "swap" });
+const sans = localFont({ src: "./fonts/inter.woff2", weight: "100 900", variable: "--font-sans", display: "swap" });
 
 // Titles: a technical grotesque with character.
-const display = Space_Grotesk({ variable: "--font-display", subsets: ["latin"], weight: ["600", "700"], display: "swap" });
+const display = localFont({ src: "./fonts/space-grotesk.woff2", weight: "300 700", variable: "--font-display", display: "swap" });
 
 // Every duration.
-const mono = JetBrains_Mono({ variable: "--font-mono", subsets: ["latin"], weight: ["400", "500"], display: "swap" });
+const mono = localFont({ src: "./fonts/jetbrains-mono.woff2", weight: "100 800", variable: "--font-mono", display: "swap" });
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations("common");

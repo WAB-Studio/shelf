@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
-import { Archivo, Archivo_Black, Chivo_Mono } from "next/font/google";
+import localFont from "next/font/local";
 import { NextIntlClientProvider } from "next-intl";
 import { getTranslations } from "next-intl/server";
 import { Theme } from "@radix-ui/themes";
@@ -10,27 +10,28 @@ import "@radix-ui/themes/styles.css";
 import "./theme.css";
 
 // Sentences, headings, commitment names and controls (docs/goallog/DESIGN.md "Type").
-const sans = Archivo({
+const sans = localFont({
+  src: "./fonts/archivo.woff2",
+  weight: "100 900",
   variable: "--font-sans",
-  subsets: ["latin"],
   fallback: ["system-ui", "sans-serif"],
   display: "swap",
 });
 
 // Screen titles and the brand: one heavy weight, set large (docs/goallog/DESIGN.md "Naranja y marino").
-const display = Archivo_Black({
-  variable: "--font-display",
-  subsets: ["latin"],
+const display = localFont({
+  src: "./fonts/archivo-black.woff2",
   weight: "400",
+  variable: "--font-display",
   fallback: ["Archivo", "system-ui", "sans-serif"],
   display: "swap",
 });
 
 // Every figure: hours, counts, minutes, dates and quantities.
-const mono = Chivo_Mono({
+const mono = localFont({
+  src: "./fonts/chivo-mono.woff2",
+  weight: "100 900",
   variable: "--font-mono",
-  subsets: ["latin"],
-  weight: ["400", "500"],
   fallback: ["ui-monospace", "monospace"],
   display: "swap",
 });
