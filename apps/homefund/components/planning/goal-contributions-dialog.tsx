@@ -26,7 +26,7 @@ import type {
 } from "@/db/queries/savings-goals";
 import { Link as LocaleLink } from "@/i18n/navigation";
 import { civilDateToDate } from "@/lib/dates";
-import { formatMoney } from "@/lib/money";
+import { useMoneyText } from "@/lib/use-privacy";
 import { useActionErrorToast } from "@/lib/use-action-toast";
 
 /**
@@ -60,6 +60,7 @@ export function GoalContributionsDialog({
 }
 
 function ContributionList({ goal }: { goal: GoalProgress }) {
+  const moneyText = useMoneyText();
   const t = useTranslations("goals");
   const format = useFormatter();
   const locale = useLocale();
@@ -110,7 +111,7 @@ function ContributionList({ goal }: { goal: GoalProgress }) {
             // An aporte earmarking a movement is in that movement's currency; a
             // virtual one is set aside in the goal's own (RF-121).
             currency={row.currency ?? goal.currency}
-            amount={formatMoney(
+            amount={moneyText(
               row.amountCents,
               row.currency ?? goal.currency,
               locale,

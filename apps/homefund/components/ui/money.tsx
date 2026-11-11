@@ -1,8 +1,11 @@
+"use client";
+
 import type { CSSProperties } from "react";
 import { useLocale } from "next-intl";
 
 import type { CurrencyCode } from "@/lib/currency";
-import { formatMoney } from "@/lib/money";
+import { formatMoneyMasked } from "@/lib/privacy";
+import { usePrivacy } from "@/lib/use-privacy";
 
 // The ledger's minus is U+2212, never the hyphen a keyboard types (SPEC-A3).
 const MINUS = "−";
@@ -73,6 +76,7 @@ export function Money({
   words,
 }: MoneyProps) {
   const locale = useLocale();
+  const { hidden } = usePrivacy();
 
   // A movement's sign comes from the accounts it touches, which is what its tone
   // says; a plain figure has no tone to read it from, so a signed one carries the
@@ -93,7 +97,7 @@ export function Money({
             ? MINUS
             : "";
 
-  const figure = `${estimate ? `${APPROXIMATELY}\u00a0` : ""}${sign}${formatMoney(amountMinor, currency, locale)}`;
+  const figure = `${estimate ? `${APPROXIMATELY}\u00a0` : ""}${sign}${formatMoneyMasked(amountMinor, currency, locale, hidden)}`;
 
   return (
     <span

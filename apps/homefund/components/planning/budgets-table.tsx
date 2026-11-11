@@ -15,7 +15,7 @@ import {
   Text,
   type DataColumn,
 } from "@/components/ui";
-import { formatMoney } from "@/lib/money";
+import { useMoneyText } from "@/lib/use-privacy";
 
 // The minus U+2212 money.tsx reserves for a signed figure — this column signs
 // its own, since `quedan` runs negative on an overspent budget and Money only
@@ -80,12 +80,13 @@ export function BudgetsTable({
   onRestore: (row: BudgetTableRow) => void;
   onDelete: (row: BudgetTableRow) => void;
 }) {
+  const moneyText = useMoneyText();
   const t = useTranslations("budgets");
   const tKey = useTranslations();
   const locale = useLocale();
 
   function figure(cents: number, currency: string): string {
-    return formatMoney(cents, currency, locale);
+    return moneyText(cents, currency, locale);
   }
 
   // The percentage a bar and its aria-label read, clamped so an overspend never

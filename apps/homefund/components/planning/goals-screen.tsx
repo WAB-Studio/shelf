@@ -45,7 +45,7 @@ import type { GoalProgress } from "@/db/queries/savings-goals";
 import type { TransactionFormOptions } from "@/db/queries/transaction-form";
 import { usePathname, useRouter } from "@/i18n/navigation";
 import { civilDateToDate } from "@/lib/dates";
-import { formatMoney } from "@/lib/money";
+import { useMoneyText } from "@/lib/use-privacy";
 import { useActionErrorToast } from "@/lib/use-action-toast";
 
 const PAGE_SIZE = 10;
@@ -422,6 +422,7 @@ function GoalCard({
   onRestore: () => void;
   onDelete: () => void;
 }) {
+  const moneyText = useMoneyText();
   const t = useTranslations("goals");
   const tKey = useTranslations();
   const locale = useLocale();
@@ -439,7 +440,7 @@ function GoalCard({
                 currency and no other (RF-124). */}
             <Text size="1" color="gray">
               {t("metaInCurrency", {
-                amount: formatMoney(
+                amount: moneyText(
                   goal.targetAmountCents,
                   goal.currency,
                   locale,
@@ -508,7 +509,7 @@ function GoalCard({
           color={goal.behindPace ? "amber" : undefined}
           aria-label={t("progressLabel", {
             name: goal.name,
-            amount: formatMoney(goal.savedCents, goal.currency, locale),
+            amount: moneyText(goal.savedCents, goal.currency, locale),
             pct: goal.progressPct,
           })}
         />
@@ -520,7 +521,7 @@ function GoalCard({
               color={goal.reachedTarget ? "jade" : undefined}
               weight="medium"
             >
-              {formatMoney(goal.savedCents, goal.currency, locale)}
+              {moneyText(goal.savedCents, goal.currency, locale)}
             </Figure>
           </Text>
           {/* Archiving is what stops money reaching the goal, so it stops here too. */}
@@ -548,7 +549,7 @@ function GoalCard({
             {goal.requiredMonthlyCents !== null && (
               <>
                 {" · "}
-                {formatMoney(goal.requiredMonthlyCents, goal.currency, locale)}
+                {moneyText(goal.requiredMonthlyCents, goal.currency, locale)}
                 {t("perMonth")}
               </>
             )}

@@ -28,7 +28,7 @@ import {
 } from "@/components/ui";
 import type { AccountRow } from "@/db/queries/accounts";
 import type { ReconcileSheet } from "@/db/queries/account-reconciliations";
-import { formatMoney } from "@/lib/money";
+import { useMoneyText } from "@/lib/use-privacy";
 import { civilDateToDate, isCivilDate, todayInBogota } from "@/lib/dates";
 import { useActionErrorToast, type MessageKey } from "@/lib/use-action-toast";
 import {
@@ -63,6 +63,7 @@ export function ReconcileDialog({
 }
 
 function ReconcileForm({ account }: { account: AccountRow }) {
+  const moneyText = useMoneyText();
   const t = useTranslations("accounts");
   const tKey = useTranslations();
   const format = useFormatter();
@@ -166,7 +167,7 @@ function ReconcileForm({ account }: { account: AccountRow }) {
   // A figure as the field takes it: an asset as stored, a debt in magnitude, a minus below zero.
   const typedFigure = (cents: number) => {
     const shown = isLiability ? -cents : cents;
-    return `${shown < 0 ? "−" : ""}${formatMoney(Math.abs(shown), currency, locale)}`;
+    return `${shown < 0 ? "−" : ""}${moneyText(Math.abs(shown), currency, locale)}`;
   };
 
   return (

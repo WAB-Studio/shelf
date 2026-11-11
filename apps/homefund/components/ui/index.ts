@@ -45,6 +45,8 @@ export { AppTheme } from "./theme";
 
 export { Toaster } from "./toaster";
 
+export { Figures } from "./figures";
+
 export {
   Avatar,
   DropdownMenu,

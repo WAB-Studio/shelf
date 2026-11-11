@@ -31,7 +31,7 @@ import type { CurrencyCode } from "@/lib/currency";
 import { scopedCategoryName } from "@/lib/fund/category-names";
 import { averageOfActive, categoryChartColor, shares } from "@/lib/fund/glance";
 import type { Locale } from "@/lib/locales";
-import { formatCompactMoney, formatMoney } from "@/lib/money";
+import { useCompactMoneyText, useMoneyText } from "@/lib/use-privacy";
 
 // The two flow series carry the fund's colours: jade for what comes in, violet
 // for what goes out. Red is kept for what was exceeded.
@@ -274,6 +274,8 @@ function CurrencyTrend({
   currency: CurrencyCode;
   months: MonthFlow[];
 }) {
+  const moneyText = useMoneyText();
+  const compactMoneyText = useCompactMoneyText();
   const t = useTranslations("reports");
   const format = useFormatter();
   const locale = useLocale() as Locale;
@@ -311,12 +313,12 @@ function CurrencyTrend({
       <BarChart
         data={chartData}
         seriesColors={SERIES_COLORS}
-        formatValue={(cents) => formatCompactMoney(cents, currency, locale)}
+        formatValue={(cents) => compactMoneyText(cents, currency, locale)}
         averageCents={average}
         averageLabel={
           average === null
             ? undefined
-            : t("averageLabel", { amount: formatMoney(average, currency, locale) })
+            : t("averageLabel", { amount: moneyText(average, currency, locale) })
         }
         aria-label={`${t("comparisonTitle")} ${inCurrency}`}
       />

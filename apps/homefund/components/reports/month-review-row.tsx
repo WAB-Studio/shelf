@@ -10,7 +10,7 @@ import { Link as LocaleLink } from "@/i18n/navigation";
 import type { CurrencyCode } from "@/lib/currency";
 import { civilDateToDate } from "@/lib/dates";
 import type { Locale } from "@/lib/locales";
-import { formatMoney } from "@/lib/money";
+import { useMoneyText } from "@/lib/use-privacy";
 import { useActionErrorToast } from "@/lib/use-action-toast";
 
 /**
@@ -20,6 +20,7 @@ import { useActionErrorToast } from "@/lib/use-action-toast";
  * lives). A reader sees the item and who fixes it. A twin is one item for both movements.
  */
 export function MonthReviewRow({ item }: { item: ReviewItem }) {
+  const moneyText = useMoneyText();
   const t = useTranslations("review");
   const format = useFormatter();
   const locale = useLocale() as Locale;
@@ -45,7 +46,7 @@ export function MonthReviewRow({ item }: { item: ReviewItem }) {
       </Text>
       {item.rule === "above_usual" && item.usualCents !== null && (
         <Text size="2" color="gray">
-          {t("usual", { amount: formatMoney(item.usualCents, currency, locale) })}
+          {t("usual", { amount: moneyText(item.usualCents, currency, locale) })}
         </Text>
       )}
       {item.rule === "twin" && (
@@ -55,7 +56,7 @@ export function MonthReviewRow({ item }: { item: ReviewItem }) {
       )}
       {item.rule === "reconciliation_gap" && item.countedCents !== null && (
         <Text size="2" color="gray">
-          {t("counted", { amount: formatMoney(item.countedCents, currency, locale) })}
+          {t("counted", { amount: moneyText(item.countedCents, currency, locale) })}
         </Text>
       )}
       {item.canMark ? (

@@ -15,6 +15,7 @@ import { civilDateToDate } from "@/lib/dates";
 import { categoryNamesById } from "@/lib/fund/category-names";
 import { nearestLimit, sumByCurrency } from "@/lib/fund/glance";
 import { formatMoney } from "@/lib/money";
+import { tagFigure } from "@/lib/privacy";
 import { routing } from "@/i18n/routing";
 
 export async function generateMetadata(
@@ -69,8 +70,8 @@ export default async function PlanningPage(
     .map(([currency, [spentCents, limitCents]]) =>
       t("budgetsSummary", {
         count: budgets.filter((b) => b.currency === currency).length,
-        spent: formatMoney(spentCents, currency, locale),
-        limit: formatMoney(limitCents, currency, locale),
+        spent: tagFigure(formatMoney(spentCents, currency, locale)),
+        limit: tagFigure(formatMoney(limitCents, currency, locale)),
       }),
     )
     .join(" · ");
@@ -79,7 +80,7 @@ export default async function PlanningPage(
     .map(([currency, [savedCents]]) =>
       t("goalsSummary", {
         count: goals.filter((g) => g.currency === currency).length,
-        saved: formatMoney(savedCents, currency, locale),
+        saved: tagFigure(formatMoney(savedCents, currency, locale)),
       }),
     )
     .join(" · ");
@@ -108,7 +109,7 @@ export default async function PlanningPage(
   // line with no figure at all.
   const owing = debts.totals.byCurrency.filter((set) => set.owedCents !== 0);
   const total = (owing.length > 0 ? owing : debts.totals.byCurrency.slice(0, 1))
-    .map((set) => formatMoney(set.owedCents, set.currency, locale))
+    .map((set) => tagFigure(formatMoney(set.owedCents, set.currency, locale)))
     .join(" · ");
   const hasDebts = debts.withTerms.length > 0 || debts.withoutTerms.length > 0;
   const debtsSummary = !hasDebts
