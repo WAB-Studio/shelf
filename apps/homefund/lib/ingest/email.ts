@@ -38,6 +38,10 @@ export function readInboundEmail(raw: unknown): InboundEmail | null {
   };
 }
 
+export function hasBody(email: InboundEmail): boolean {
+  return Boolean(email.text.trim() || email.html.trim());
+}
+
 // A key as an address's local part or plus tag: `whk_` and 43 base64url characters, then `@`.
 const ADDRESSED_KEY = /(?:^|[^A-Za-z0-9_-])(whk_[A-Za-z0-9_-]{43})@/;
 

@@ -1,10 +1,13 @@
 import { authorizeIngest, bearerOf, deliver } from "@/app/api/webhooks/respond";
 import { env } from "@/lib/env";
+import type { ResolvedWebhookCredential } from "@/db/queries/webhook-credentials";
 import {
   emailToMessage,
+  hasBody,
   keyInPayloads,
   readInboundEmail,
   verifySvixSignature,
+  type InboundEmail,
 } from "@/lib/ingest/email";
 import { webhookPayloadSchema } from "@/lib/validation/webhook";
 
@@ -38,6 +41,20 @@ async function fetchReceivedEmail(emailId: string): Promise<unknown> {
   }
 }
 
+// The message the email carries, as one more delivery of the credential the key opened.
+function finish(
+  cred: ResolvedWebhookCredential,
+  email: InboundEmail,
+  externalRef?: string,
+): Promise<Response> | Response {
+  const parsed = webhookPayloadSchema.safeParse({
+    text: emailToMessage(email),
+    external_ref: externalRef,
+  });
+  if (!parsed.success) return Response.json({ error: "invalid_payload" }, { status: 422 });
+  return deliver(cred, parsed.data);
+}
+
 export async function POST(request: Request): Promise<Response> {
   const signature = request.headers.get("svix-signature");
 
@@ -46,9 +63,8 @@ export async function POST(request: Request): Promise<Response> {
     const cred = await authorizeIngest(bearerOf(request));
     if (cred instanceof Response) return cred;
     const email = readInboundEmail(parseJson(await request.text()));
-    const parsed = webhookPayloadSchema.safeParse({ text: email && emailToMessage(email) });
-    if (!parsed.success) return Response.json({ error: "invalid_payload" }, { status: 422 });
-    return deliver(cred, parsed.data);
+    if (email === null) return Response.json({ error: "invalid_payload" }, { status: 422 });
+    return finish(cred, email);
   }
 
   const body = await request.text();
@@ -69,22 +85,23 @@ export async function POST(request: Request): Promise<Response> {
   if (email === null || email.emailId === null) {
     return Response.json({ error: "invalid_payload" }, { status: 422 });
   }
-  const hasBody = Boolean(email.text.trim() || email.html.trim());
-  const received = hasBody ? null : await fetchReceivedEmail(email.emailId);
-  const full = hasBody ? email : readInboundEmail(received);
+
+  // The key is usually in the event's `to`, so a revoked one never costs a call to Resend;
+  // an auto-forward leaves it only in the headers the full email carries.
+  const eventKey = keyInPayloads(event);
+  let cred = eventKey ? await authorizeIngest(eventKey) : null;
+  if (cred instanceof Response) return cred;
+
+  const received = hasBody(email) ? null : await fetchReceivedEmail(email.emailId);
+  const full = received === null ? email : readInboundEmail(received);
   // A body that did not come back answers 503, so Svix retries instead of storing the subject alone.
-  if (!full || !(full.text.trim() || full.html.trim())) {
+  if (!full || !hasBody(full)) {
     return Response.json({ error: "body_unavailable" }, { status: 503 });
   }
 
-  const cred = await authorizeIngest(keyInPayloads(event, received));
+  cred ??= await authorizeIngest(keyInPayloads(received));
   if (cred instanceof Response) return cred;
 
-  const parsed = webhookPayloadSchema.safeParse({
-    text: emailToMessage({ ...full, subject: full.subject || email.subject }),
-    // Resend's id: a Svix retry is one delivery, two alerts worded alike are two.
-    external_ref: email.emailId,
-  });
-  if (!parsed.success) return Response.json({ error: "invalid_payload" }, { status: 422 });
-  return deliver(cred, parsed.data);
+  // Resend's id as the reference: a Svix retry is one delivery, two alerts worded alike are two.
+  return finish(cred, { ...full, subject: full.subject || email.subject }, email.emailId);
 }

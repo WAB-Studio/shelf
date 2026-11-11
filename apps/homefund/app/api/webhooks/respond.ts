@@ -7,11 +7,11 @@ import {
 } from "@/db/queries/webhook-credentials";
 import type { WebhookPayloadInput } from "@/lib/validation/webhook";
 
-const BEARER_PREFIX = "Bearer ";
+// As `/mcp` reads it: any case, any spacing, a header typed by hand in an iOS Shortcut included.
+const BEARER = /^Bearer\s+(\S+)\s*$/i;
 
 export function bearerOf(request: Request): string | null {
-  const header = request.headers.get("authorization");
-  return header?.startsWith(BEARER_PREFIX) ? header.slice(BEARER_PREFIX.length) : null;
+  return request.headers.get("authorization")?.match(BEARER)?.[1] ?? null;
 }
 
 /**
