@@ -230,7 +230,7 @@ test("creates an account from the form and stores its opening balance signed by 
     .getByRole("radio", { name: accounts.kindLiability, exact: true })
     .click();
   await dialog
-    .getByRole("radio", { name: accounts.subtypeTarjeta, exact: true })
+    .getByRole("radio", { name: accounts.subtypeCard, exact: true })
     .click();
   // The amount field renames itself with the kind, so this also proves the
   // toggle above landed.
@@ -319,14 +319,14 @@ test.describe("the laptop row", () => {
       from account_balances where id = ${account.id}`;
     expect(Number(derived.balance_cents)).toBe(openingCents - movementCents);
 
-    // The fifth of the six tracks, after the name, the entity, the last four
-    // digits and the class.
+    // The fourth of the five tracks, after the name, the entity and the last four
+    // digits.
     const cell = page
       .getByRole("table", { name: accounts.title })
       .getByRole("row")
       .filter({ hasText: account.name })
       .getByRole("cell")
-      .nth(4);
+      .nth(3);
     await expect(cell).toBeVisible();
 
     // The table states no opening figure, so what says the column is derived is
@@ -391,9 +391,6 @@ test("refuses to delete an account carrying a movement, and archives it instead"
   await expect(
     page.getByText(errors.accountHasMovements, { exact: true }),
   ).toBeVisible();
-  await expect(page.getByText(errors.accountHasHistory, { exact: true })).toHaveCount(
-    0,
-  );
   await expect(page.getByText(errors.referenceGone, { exact: true })).toHaveCount(0);
 
   // A refused confirmation stays open, which is what keeps the list under an
@@ -530,9 +527,9 @@ test("lists a pocket under its parent, the parent with the total of both and its
   await expect(rows.nth(0)).toContainText(parent.name);
   await expect(rows.nth(1)).toContainText(accounts.freePart);
   await expect(rows.nth(2)).toContainText(pocket.name);
-  expect(pesosOf(await rows.nth(0).getByRole("cell").nth(4).innerText())).toBe(5_502_154);
-  expect(pesosOf(await rows.nth(1).getByRole("cell").nth(4).innerText())).toBe(249_816);
-  expect(pesosOf(await rows.nth(2).getByRole("cell").nth(4).innerText())).toBe(5_252_338);
+  expect(pesosOf(await rows.nth(0).getByRole("cell").nth(3).innerText())).toBe(5_502_154);
+  expect(pesosOf(await rows.nth(1).getByRole("cell").nth(3).innerText())).toBe(249_816);
+  expect(pesosOf(await rows.nth(2).getByRole("cell").nth(3).innerText())).toBe(5_252_338);
 
   await dropAccount(pocket.id);
   await dropAccount(parent.id);

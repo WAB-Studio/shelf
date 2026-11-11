@@ -358,7 +358,7 @@ function LegendItem({ color, label }: { color: string; label: string }) {
 // (`docs/FLOWS.md` §4). Each figure is one currency's and never added to another's.
 function ContributionsBody({ data }: { data: ReportsData }) {
   const t = useTranslations("reports");
-  const { contributions, fundCash, fundSpending, unassigned, hasGroup } = data;
+  const { contributions, fundCash, fundSpending, unassigned, spendingByMaker, hasGroup } = data;
 
   if (!hasGroup) {
     return (
@@ -422,6 +422,20 @@ function ContributionsBody({ data }: { data: ReportsData }) {
               <Money minor={figure.cashCents} currency={currency} size="inherit" />
             </PotRow>
           )}
+        </Flex>
+      ))}
+      {[...new Set(spendingByMaker.map((row) => row.currency))].map((currency) => (
+        <Flex key={currency} direction="column" gap="2">
+          <Text size="2" color="gray">
+            {t("spendingByMakerIn", { currency })}
+          </Text>
+          {spendingByMaker
+            .filter((row) => row.currency === currency)
+            .map((row) => (
+              <PotRow key={row.memberId ?? "household"} label={row.name ?? t("madeByHousehold")}>
+                <Money minor={row.spentCents} currency={currency} signed={false} size="inherit" />
+              </PotRow>
+            ))}
         </Flex>
       ))}
       {unassigned.length > 0 && (

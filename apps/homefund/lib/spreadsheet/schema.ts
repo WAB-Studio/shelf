@@ -123,8 +123,8 @@ type StatementModel = typeof accountStatements.$inferSelect;
 const externalRefSchema = z.string().trim().max(200).nullish();
 
 // A cross-entity reference travels as the referenced row's name (RF-49), bounded
-// like the entities' own name (1..80). Names are not unique in a scope, so the
-// later import PR resolves a name to an id and raises a per-row error on a
+// like the entities' own name (1..80). Names are not unique in a scope, so
+// `import-pipeline.ts` resolves a name to an id and raises a per-row error on a
 // duplicate — the sheet only guards the string shape here.
 const referenceNameSchema = z.string().trim().min(1).max(80);
 
@@ -137,7 +137,7 @@ const nullableReferenceNameSchema = referenceNameSchema.nullable();
 
 // A light civil-date guard for the two dates the ledger's own schema does not
 // export; the authoritative not-future and ordering rules live in the entity's
-// createX schema, run by the later import PR after name→id resolution.
+// createX schema, run by `import-pipeline.ts` after name→id resolution.
 const sheetCivilDateSchema = z.string().trim().refine(isCivilDate);
 
 // Accounts and members carry no cross-entity reference, so their row keeps the
@@ -200,8 +200,8 @@ export type MemberRow = z.infer<typeof memberRowSchema>;
 
 // A category's parent is another category by name (RF-49); a top-level category
 // has none, so `parent` is optional and nullable. The id-shaped rules —
-// createCategorySchema, with its colour-at-top-level refinement — run in the later
-// import PR after `parent` is resolved to an id.
+// createCategorySchema, with its colour-at-top-level refinement — run in
+// `import-pipeline.ts` after `parent` is resolved to an id.
 export const categoryRowSchema = z.object({
   externalRef: externalRefSchema,
   name: referenceNameSchema,
@@ -237,7 +237,7 @@ export function labelNames(cell: string | null | undefined): string[] {
 // A rule is one-sided (RF-29): one account by name, income or expense, never a
 // transfer; its category is named too. Frequency, interval and day-of-month get a
 // light guard here — the authoritative createRecurringRuleSchema, with its
-// one-account and cadence refinements, runs in the later import PR after resolution.
+// one-account and cadence refinements, runs in `import-pipeline.ts` after resolution.
 export const recurringRuleRowSchema = z.object({
   externalRef: externalRefSchema,
   fromAccount: nullableReferenceNameSchema,
@@ -311,6 +311,8 @@ export const transactionRowSchema = z.object({
     .transform((cell) => cell ?? false),
   // The fund member an income into a fund account is credited to (RF-167), by name; blank names nobody.
   contributedBy: z.string().trim().max(80).nullish(),
+  // «Lo hizo» (RF-182): the fund member who made the movement, by name; blank is its account's holder, else the household.
+  madeBy: z.string().trim().max(80).nullish(),
   // Every label's name, joined by `LABEL_SEPARATOR`; each resolves like a category.
   labels: z
     .string()
@@ -528,6 +530,7 @@ export const transactionSheetDescriptor = {
     { key: "category", synthetic: true, ref: { entity: "categories" } },
     { key: "labels", synthetic: true, ref: { entity: "labels" } },
     { key: "contributedBy", synthetic: true },
+    { key: "madeBy", synthetic: true },
     { key: "forHousehold", field: "forHousehold", choice: "flag" },
     { key: "adjustment", field: "reconciliationId", flag: true, choice: "flag" },
     { key: "counterAmount", field: "counterAmountCents", money: moneyBoundary },

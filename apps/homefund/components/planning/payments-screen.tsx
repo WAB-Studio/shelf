@@ -20,17 +20,15 @@ import {
   Callout,
   Card,
   ConfirmDialog,
-  Disc,
+  DateTile,
   DropdownMenu,
   EmptyState,
   Eyebrow,
-  Figure,
   Flex,
   FundChip,
   ScreenHeader,
   IconButton,
   MovementRow,
-  Text,
   type DataSection,
 } from "@/components/ui";
 import type { PlannedPaymentRow } from "@/db/queries/planned-payments";
@@ -293,7 +291,7 @@ function PaymentCard({
   return (
     <Card>
       <Flex direction="column" gap="2">
-      <Flex align="center" gap="2">
+      <Flex align="start" gap="2">
         <Flex flexGrow="1" minWidth="0">
           <MovementRow
             tile={
@@ -350,22 +348,5 @@ function PaymentCard({
       )}
       </Flex>
     </Card>
-  );
-}
-
-// The reminder's date tile: the due day over its abbreviated month, both already
-// formatted by the caller in the active locale.
-function DateTile({ day, month }: { day: string; month: string }) {
-  return (
-    <Disc size={44} radius={14} surface="var(--accent-a3)">
-      <Flex direction="column" align="center" justify="center">
-        <Figure size="2" weight="bold" tight>
-          {day}
-        </Figure>
-        <Text size="1" color="gray">
-          {month}
-        </Text>
-      </Flex>
-    </Disc>
   );
 }

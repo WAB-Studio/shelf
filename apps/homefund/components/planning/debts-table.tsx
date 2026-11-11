@@ -82,7 +82,7 @@ function closed(words: { before: string; after: string }, more: boolean) {
 }
 
 /**
- * Whether a debt in credit also owes in another currency (Q9 a): the one case
+ * Whether a debt in credit also owes in another currency: the one case
  * its balance reads as a line of two figures instead of one.
  */
 export function owesBesideCredit(

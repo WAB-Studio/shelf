@@ -101,6 +101,10 @@ function requireSubtypeUnderKind(
 // trigger holds it; the one rule the form alone can see is that a pocket holds value.
 const accountParentSchema = z.uuid({ error: "accounts.errors.parentInvalid" }).nullable().optional();
 
+// The fund member who holds a fund account (RF-181), absent or null for an account of everyone. That the
+// member belongs to the account's own fund is a read of another row, so the composite key holds it.
+const accountHolderSchema = z.uuid({ error: "accounts.errors.holderInvalid" }).nullable().optional();
+
 function requirePocketIsAsset(
   data: { kind: (typeof ACCOUNT_KINDS)[number]; parentAccountId?: string | null },
   ctx: z.RefinementCtx,
@@ -144,6 +148,15 @@ function requireAmountInCurrency(
   }
 }
 
+function requireHolderInFund(
+  data: { placement: (typeof ACCOUNT_PLACEMENTS)[number]; holderMemberId?: string | null },
+  ctx: z.RefinementCtx,
+) {
+  if (data.holderMemberId && data.placement === "personal") {
+    ctx.addIssue({ code: "custom", message: "accounts.errors.holderInvalid", path: ["holderMemberId"] });
+  }
+}
+
 export const createAccountSchema = z
   .object({
     name: accountNameSchema,
@@ -154,12 +167,14 @@ export const createAccountSchema = z
     institution: accountInstitutionSchema,
     lastFour: accountLastFourSchema.optional(),
     parentAccountId: accountParentSchema,
+    holderMemberId: accountHolderSchema,
     settlementCurrency: accountCurrencySchema,
     amount: accountAmountSchema,
     balanceOn: accountBalanceOnSchema,
   })
   .superRefine(requireSubtypeUnderKind)
   .superRefine(requirePocketIsAsset)
+  .superRefine(requireHolderInFund)
   .superRefine(requireAmountInCurrency);
 
 export type CreateAccountInput = z.infer<typeof createAccountSchema>;
@@ -178,6 +193,7 @@ export const updateAccountSchema = z
     institution: accountInstitutionSchema,
     lastFour: accountLastFourSchema.optional(),
     parentAccountId: accountParentSchema,
+    holderMemberId: accountHolderSchema,
     settlementCurrency: accountCurrencySchema,
     amount: accountAmountSchema,
     balanceOn: accountBalanceOnSchema,

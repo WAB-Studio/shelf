@@ -68,7 +68,6 @@ export const createBudgetAction = authActionClient
   .action(
     async ({
       parsedInput: { limit, accountId, labelId, name, ...budget },
-      ctx,
     }) => {
       const place = await resolveBudgetPlace({
         categoryId: budget.categoryId,

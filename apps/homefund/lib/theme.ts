@@ -7,6 +7,12 @@ export const THEMES = ["light", "dark", "system"] as const;
 export type Theme = (typeof THEMES)[number];
 export type Appearance = "light" | "dark";
 
+// The page's own background, which the status bar and the iOS launch image paint too.
+export const PAGE_BACKGROUND: Record<Appearance, string> = {
+  light: "#ffffff",
+  dark: "#110c20",
+};
+
 const listeners = new Set<() => void>();
 
 export function isTheme(value: string | null): value is Theme {

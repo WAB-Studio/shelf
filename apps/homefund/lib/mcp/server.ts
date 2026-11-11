@@ -6,14 +6,18 @@ import { createTranslator } from "next-intl";
 import { z } from "zod";
 
 import { listAccounts } from "@/db/queries/accounts";
+import { listCallerMembers } from "@/db/queries/group-members";
 import { getMonthReview } from "@/db/queries/month-review";
+import { getSpendingPatterns, GROWTH_PERCENT } from "@/db/queries/spending-patterns";
 import { importStatement, previewStatement, StatementError } from "@/db/queries/statement-import";
 import { actAsCredentialOwner } from "@/db/session";
-import { lastClosedMonth } from "@/lib/dates";
+import { MONTH_PATTERN, lastClosedMonth } from "@/lib/dates";
+import { ABOVE_USUAL_FACTOR, USUAL_WINDOW_MONTHS } from "@/lib/month-review-rules";
 import { ActionError } from "@/lib/errors";
 import { env } from "@/lib/env";
 import { pgErrorCode } from "@/lib/db-error";
 import { BatchRefusal, registerInboxTools } from "@/lib/mcp/inbox-tools";
+import { registerMemberDebtTools } from "@/lib/mcp/member-debt-tools";
 import { registerLedgerTools } from "@/lib/mcp/write-tools";
 import { statementImportSchema, statementSchema } from "@/lib/validation/statement-import";
 
@@ -23,7 +27,6 @@ import pkg from "../../package.json";
 // The configured origin: issuer, resource and the 401's metadata link on the host a request does not name.
 export const ISSUER = env.NEXT_PUBLIC_SITE_URL.replace(/\/+$/, "");
 
-export const MCP_URL = `${ISSUER}/mcp`;
 
 export const RESOURCE_METADATA_PATH = "/.well-known/oauth-protected-resource/mcp";
 
@@ -67,7 +70,7 @@ async function run(ctx: ServerContext, load: (owner: string) => Promise<unknown>
   }
 }
 
-const MONTH = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/);
+const MONTH = z.string().regex(MONTH_PATTERN);
 
 function registerReadTools(server: McpServer): void {
   server.registerTool(
@@ -85,6 +88,9 @@ function registerReadTools(server: McpServer): void {
           lastFour: account.lastFour ?? null,
           // The account this one is a pocket of, null for an account of its own (RF-173); a parent's balances are its free part.
           parentAccountId: account.parentAccountId ?? null,
+          // The fund member this account is in the name of (RF-181), null for an account of everyone.
+          holderMemberId: account.holderMemberId ?? null,
+          holderName: account.holderName ?? null,
           settlementCurrency: account.settlementCurrency,
           // What update_account takes back: the opening as the form shows it (a liability's debt positive), its date and the stamp.
           openingBalanceCents: account.kind === "liability" ? -account.initialBalanceCents : account.initialBalanceCents,
@@ -92,6 +98,20 @@ function registerReadTools(server: McpServer): void {
           updatedAt: account.updatedAt,
           balances: account.balances,
           canWrite: account.canWrite,
+        })),
+      ),
+  );
+
+  // RF-181, RF-182: the ids holderMemberId, contributedByMemberId and madeByMemberId take.
+  server.registerTool(
+    "list_members",
+    { description: t("tools.listMembers"), inputSchema: z.object({}), annotations: { readOnlyHint: true } },
+    (_input, ctx) =>
+      run(ctx, async (owner) =>
+        (await listCallerMembers(owner, { archived: false })).map((member) => ({
+          id: member.id,
+          name: member.name,
+          hasLogin: member.userId !== null,
         })),
       ),
   );
@@ -111,6 +131,17 @@ function registerReadTools(server: McpServer): void {
       if (month > lastClosedMonth()) return Promise.resolve(text({ error: t("errors.openMonth") }, true));
       return run(ctx, () => getMonthReview(month));
     },
+  );
+
+  // RF-184: the patterns by fixed rules; Claude finds what to act on in the conversation, the app calls no model.
+  server.registerTool(
+    "spending_patterns",
+    {
+      description: t("tools.spendingPatterns", { factor: ABOVE_USUAL_FACTOR, window: USUAL_WINDOW_MONTHS, growth: GROWTH_PERCENT }),
+      inputSchema: z.object({ months: z.number().int().min(1).max(24).optional().describe(t("tools.monthsParam")) }),
+      annotations: { readOnlyHint: true },
+    },
+    (input: { months?: number }, ctx) => run(ctx, () => getSpendingPatterns(input.months ?? 12)),
   );
 }
 
@@ -149,6 +180,7 @@ export function buildHandler(): (request: Request) => Promise<Response> {
     registerStatementTools(server);
     registerLedgerTools(server, run, (key) => t(key as never));
     registerInboxTools(server, run, (key) => t(key as never));
+    registerMemberDebtTools(server, run, (key) => t(key as never));
   }, {
     serverInfo: { name: "homefund", version: pkg.version },
     instructions: t("instructions"),

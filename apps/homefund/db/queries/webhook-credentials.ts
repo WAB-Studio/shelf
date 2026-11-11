@@ -135,7 +135,8 @@ export async function resolveWebhookCredential(
   token: string,
   purpose: CredentialPurpose,
 ): Promise<ResolvedWebhookCredential | null> {
-  const tokenHash = tokenHashOf(token);
+  // A header typed by hand (an iOS Shortcut) may keep a space after «Bearer»; a token holds none.
+  const tokenHash = tokenHashOf(token.trim());
 
   const rows = await db.execute<{
     id: string;

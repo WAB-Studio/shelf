@@ -321,6 +321,7 @@ async function main() {
   await checkTransactionReviews();
   await checkDeferrals();
   await checkOauthExchange();
+  await checkMemberDebts();
 }
 
 // RF-136: a deferral is read and written exactly when its purchase's liability account is, carries 2 to 72
@@ -5287,6 +5288,8 @@ const INSERT_GRANT_GAPS: Record<string, string[]> = {
   installment_lines: ["created_at", "id", "paid_transaction_id"],
   installment_plans: ["created_at", "id", "updated_at"],
   labels: ["created_at", "id", "updated_at"],
+  // `created_by` is the column default from `auth.uid()` (RF-183).
+  member_debts: ["created_at", "created_by", "id"],
   // The OAuth tables carry no grant (RF-168), bar the consent's insert of a code: only the server's own pool writes them.
   oauth_calls: ["bucket", "calls", "source", "window_start"],
   oauth_clients: ["client_name", "created_at", "id", "last_active_at", "redirect_uris"],
@@ -5468,6 +5471,8 @@ const UPDATE_GRANT_GAPS: Record<string, string[]> = {
     "updated_at",
   ],
   labels: ["created_at", "external_ref", "group_id", "id", "owner_user_id", "updated_at"],
+  // An entry is replaced by deleting it and writing it again (RF-183): no column is writable.
+  member_debts: ["amount_cents", "created_at", "created_by", "creditor_member_id", "currency", "debtor_member_id", "description", "group_id", "id", "kind", "occurred_on"],
   // The OAuth tables carry no grant (RF-168), bar the consent's insert of a code: only the server's own pool writes them.
   oauth_calls: ["bucket", "calls", "source", "window_start"],
   oauth_clients: ["client_name", "created_at", "id", "last_active_at", "redirect_uris"],
@@ -5546,6 +5551,7 @@ const DELETE_GRANTS: string[] = [
   "installment_lines",
   "installment_plans",
   "labels",
+  "member_debts",
   "planned_payments",
   "recurring_rules",
   "savings_goals",
@@ -5966,7 +5972,7 @@ async function checkGroupMemberUserIdLock() {
         `claim returned ${claimedId ?? "null"}, row visible to the caller = ${claimedRow ? "yes" : "no"}`,
       );
 
-      // The acceptance M68 writes, run as the owner so 181 and 182 keep a member to attack with.
+      // The acceptance the definer functions write, run as the owner so 181 and 182 keep a member to attack with.
       await tx.execute(dsql`reset role`);
       await tx.execute(
         dsql`update group_members set user_id = ${memberUser}, invite_email = null, invite_state = 'accepted'
@@ -8843,7 +8849,7 @@ async function checkAccountHandOver() {
   const labels = [
     "265. a member hands a history-free account to the group and it lands as a shared group account",
     "266. the leader could not write that account before the hand-over and writes it after",
-    "267. an account carrying a movement is refused the hand-over and keeps its owner",
+    "267. an account a personal goal points at is refused the hand-over (MV003) and keeps its owner",
     "268. an account already in the group is refused a second hand-over",
     "269. another person's account, another group's, and no row at all answer the same refusal",
     "270. authenticated holds no UPDATE on accounts.owner_user_id or accounts.group_id",
@@ -8945,6 +8951,11 @@ async function checkAccountHandOver() {
           values (${usedAccount.id}, ${usedTarget.id}, 430000,
             (now() at time zone 'America/Bogota')::date) returning id`,
       );
+      // RF-180: history moves with the account; a personal goal on it is what a move cannot carry.
+      await tx.execute(
+        dsql`insert into savings_goals (owner_user_id, name, target_amount_cents, account_id)
+          values (${memberUser}, 'rls hand over goal', 100000, ${usedAccount.id})`,
+      );
 
       // Read the leader's reach before the hand-over: `can_write_account` sees a personal account of
       // someone else and filters the row out, so the update reports the row it never saw.
@@ -9001,8 +9012,8 @@ async function checkAccountHandOver() {
       );
       assert(
         labels[2],
-        usedRefusal.includes("23514") &&
-          usedRefusal.includes("carries history") &&
+        usedRefusal.includes("MV003") &&
+          usedRefusal.includes("personal budget or goal") &&
           usedStill.owner_user_id === memberUser &&
           usedStill.group_id === null,
         `${usedRefusal}; the account still names ${usedStill.owner_user_id === memberUser ? "its owner" : "someone else"} and group_id = ${usedStill.group_id ?? "null"}`,
@@ -9014,7 +9025,7 @@ async function checkAccountHandOver() {
       const secondRefusal = await handOverRefusal(freeAccount.id);
       assert(
         labels[3],
-        secondRefusal.includes("23514") && secondRefusal.includes("already belongs to a group"),
+        secondRefusal.includes("MV007") && secondRefusal.includes("already belongs to a group"),
         secondRefusal,
       );
 
@@ -9025,7 +9036,7 @@ async function checkAccountHandOver() {
       const missingRefusal = maskIds(await handOverRefusal(missingAccount));
       assert(
         labels[4],
-        strangerRefusal.includes("23514") &&
+        strangerRefusal.includes("MV006") &&
           strangerRefusal === otherGroupRefusal &&
           otherGroupRefusal === missingRefusal,
         `another person's → ${strangerRefusal}; another group's → ${otherGroupRefusal}; no row → ${missingRefusal}`,
@@ -11766,7 +11777,7 @@ async function checkMemberAddress() {
   );
 }
 
-// Assertions 389-394: why a rule is paused (M49). `paused_reason` is the run's to write: the app
+// Assertions 389-394: why a rule is paused. `paused_reason` is the run's to write: the app
 // reads it and its person cannot forge it, on insert or update; the column admits only 'failed'; the
 // run writes it when a rule's generation raises and writes nothing for a rule that merely ended.
 // The run is scoped to the fixture's own user, so no other tenant's due rule is touched.
@@ -11864,7 +11875,7 @@ async function checkRecurringPauseReason() {
 //   - `group_members.invite_state` is text, 'pending' | 'accepted' | 'declined', not null.
 //   - A row the leader inserts with an `invite_email`, exactly as the app does today, reads 'pending'.
 //   - A pending row has no `user_id`; an accepted row has one and no `invite_email`; a declined row is archived.
-//   - Accepting and declining are written by the server (the definer functions of M68), never by a caller's
+//   - Accepting and declining are written by the server (the definer functions), never by a caller's
 //     own UPDATE: the rows here write them as the owner, after `reset role`.
 //   - Signing in (`private.claim_group_invite()`, today's claim) joins nobody.
 // The sign-in path is driven in every setup as today's "claimed" contrast; the rows say what it must leave.
@@ -14083,6 +14094,94 @@ async function checkOauthExchange() {
         detail: `another owner ${stranger}, audit rows ${audited.length}, actor = the person ${audited[0]?.actor_user_id === user}`,
       },
     ];
+  });
+}
+
+// RF-183: an entry between two members is read, written and removed by a member with a login of its fund
+// alone; nobody updates one; the debtor and the creditor differ and both belong to the entry's fund.
+async function checkMemberDebts() {
+  console.log("");
+  const labels = {
+    writer: "rf183-1. a member with a login writes a debt between two members of the fund, one without a login, stamped as her; the leader reads it",
+    stranger: "rf183-2. a user of another fund reads none of it, writes none into it (42501) and removes nothing",
+    shape: "rf183-3. the same member twice is 23514, a member of another fund is 23503 even for the owner role, and a zero amount is 23514",
+    final: "rf183-4. no entry can be updated; a member of the fund removes one",
+    grants: "rf183-5. anon and service_role hold no privilege on member_debts; authenticated holds no UPDATE",
+  };
+
+  // Group A with a leader and a member who sign in and a person who does not; group B with its own leader.
+  const fixture = async (tx: M1Tx) => {
+    const a = await m1Group(tx);
+    const b = await m1Group(tx);
+    const rows = await tx<{ id: string; user_id: string | null; group_id: string }[]>`
+      select id, user_id, group_id from group_members where group_id in (${a.groupId}, ${b.groupId})`;
+    const row = (user: string) => rows.find((r) => r.user_id === user)!.id;
+    const [{ id: papa }] = await tx<{ id: string }[]>`
+      insert into group_members (group_id, name) values (${a.groupId}, 'rls rf183 papá') returning id`;
+    return { a, b, leaderRow: row(a.leader), memberRow: row(a.member), papa, outsiderRow: row(b.leader) };
+  };
+  const insertDebt = (groupId: string, debtor: string, creditor: string, amount = 200_000_00) => (sp: M1Tx) =>
+    sp`insert into member_debts (group_id, kind, debtor_member_id, creditor_member_id, amount_cents, currency, occurred_on, description)
+      values (${groupId}, 'debt', ${debtor}, ${creditor}, ${amount}, 'COP', '2026-11-01', 'préstamo para la moto')`;
+
+  await rf136Rows([labels.writer, labels.stranger], async (tx) => {
+    const f = await fixture(tx);
+    await enterUserContext(tx, f.a.member);
+    const written = await m1Refusal(tx, insertDebt(f.a.groupId, f.papa, f.memberRow));
+    await enterUserContext(tx, f.a.leader);
+    const leaderSees = await tx<{ created_by: string; amount_cents: string }[]>`
+      select created_by, amount_cents::text from member_debts where group_id = ${f.a.groupId}`;
+    await enterUserContext(tx, f.b.leader);
+    const strangerSees = (await tx`select id from member_debts where group_id = ${f.a.groupId}`).length;
+    const strangerWrites = await m1Refusal(tx, insertDebt(f.a.groupId, f.papa, f.leaderRow));
+    const strangerRemoves = (await tx`delete from member_debts where group_id = ${f.a.groupId} returning id`).length;
+    await tx`reset role`;
+    const [{ left }] = await tx<{ left: number }[]>`select count(*)::int as left from member_debts where group_id = ${f.a.groupId}`;
+    return [
+      {
+        ok: written === null && leaderSees.length === 1 && leaderSees[0].created_by === f.a.member && leaderSees[0].amount_cents === "20000000",
+        detail: `write ${written ?? "accepted"}, leader sees ${JSON.stringify(leaderSees)}`,
+      },
+      {
+        ok: strangerSees === 0 && strangerWrites === "42501" && strangerRemoves === 0 && left === 1,
+        detail: `stranger sees ${strangerSees}, writes ${strangerWrites ?? "accepted"}, removes ${strangerRemoves}; ${left} stored`,
+      },
+    ];
+  });
+
+  await rf136Rows([labels.shape], async (tx) => {
+    const f = await fixture(tx);
+    await enterUserContext(tx, f.a.member);
+    const same = await m1Refusal(tx, insertDebt(f.a.groupId, f.papa, f.papa));
+    const outsider = await m1Refusal(tx, insertDebt(f.a.groupId, f.papa, f.outsiderRow));
+    const zero = await m1Refusal(tx, insertDebt(f.a.groupId, f.papa, f.memberRow, 0));
+    await tx`reset role`;
+    const ownerOutsider = await m1Refusal(tx, insertDebt(f.a.groupId, f.outsiderRow, f.leaderRow));
+    return [{
+      ok: same === "23514" && outsider === "23503" && zero === "23514" && ownerOutsider === "23503",
+      detail: `same member ${same}, outsider ${outsider}, zero ${zero}, outsider as owner ${ownerOutsider}`,
+    }];
+  });
+
+  await rf136Rows([labels.final], async (tx) => {
+    const f = await fixture(tx);
+    await enterUserContext(tx, f.a.member);
+    await insertDebt(f.a.groupId, f.papa, f.memberRow)(tx);
+    const update = await m1Refusal(tx, (sp) => sp`update member_debts set amount_cents = 1 where group_id = ${f.a.groupId}`);
+    await enterUserContext(tx, f.a.leader);
+    const removed = (await tx`delete from member_debts where group_id = ${f.a.groupId} returning id`).length;
+    await tx`reset role`;
+    return [{ ok: update === "42501" && removed === 1, detail: `update ${update ?? "accepted"}, leader removes ${removed}` }];
+  });
+
+  await rf136Rows([labels.grants], async (tx) => {
+    const [{ held }] = await tx<{ held: number }[]>`
+      select count(*)::int as held from unnest(array['anon', 'service_role']) r
+      where has_any_column_privilege(r, 'finances.member_debts'::regclass, 'SELECT, INSERT, UPDATE, REFERENCES')
+         or has_table_privilege(r, 'finances.member_debts'::regclass, 'DELETE, TRUNCATE')`;
+    const [{ update }] = await tx<{ update: boolean }[]>`
+      select has_any_column_privilege('authenticated', 'finances.member_debts'::regclass, 'UPDATE') as update`;
+    return [{ ok: held === 0 && !update, detail: `anon/service_role with a privilege ${held}, authenticated UPDATE ${update}` }];
   });
 }
 

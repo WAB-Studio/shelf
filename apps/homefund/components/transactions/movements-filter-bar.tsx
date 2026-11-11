@@ -13,7 +13,7 @@ import {
 import type { TransactionFormOptions } from "@/db/queries/transaction-form";
 import { civilDateToDate } from "@/lib/dates";
 import { categoryNamesById } from "@/lib/fund/category-names";
-import type { MovementTypeValue } from "@/lib/validation/transaction";
+import { HOUSEHOLD_MAKER, type MovementTypeValue } from "@/lib/validation/transaction";
 
 // The type filter's value, mirrored one-to-one onto the `?type=` query and, on
 // the server, onto the movement's generated kind (RF-19, RF-23).
@@ -24,6 +24,8 @@ export type MovementsFilters = {
   from: string | null;
   to: string | null;
   member: string | null;
+  // «Lo hizo» (RF-182): a fund member id.
+  madeBy: string | null;
   account: string | null;
   category: string | null;
   label: string | null;
@@ -155,6 +157,16 @@ export function MovementsFilterBar({
       clear: { member: null },
     });
   }
+  if (filters.madeBy) {
+    const maker = [...options.fundMembers, ...options.formerMembers].find((one) => one.id === filters.madeBy);
+    chips.push({
+      key: "madeBy",
+      label: `${t("madeByLabel")}: ${
+        filters.madeBy === HOUSEHOLD_MAKER ? t("madeByNone") : (maker?.name ?? t("madeByUnknown"))
+      }`,
+      clear: { madeBy: null },
+    });
+  }
   if (filters.from) {
     chips.push({
       key: "from",
@@ -263,6 +275,23 @@ export function MovementsFilterBar({
             { value: ANY, label: t("allMembers") },
             ...options.members.map((member) => ({
               value: member.userId,
+              label: member.name,
+            })),
+          ]}
+          width={180}
+        />
+      )}
+
+      {options.fundMembers.length > 0 && (
+        <FilterSelect
+          label={t("madeByLabel")}
+          value={filters.madeBy ?? ANY}
+          onValueChange={(value) => set({ madeBy: value === ANY ? null : value })}
+          items={[
+            { value: ANY, label: t("allMembers") },
+            { value: HOUSEHOLD_MAKER, label: t("madeByNone") },
+            ...[...options.fundMembers, ...options.formerMembers].map((member) => ({
+              value: member.id,
               label: member.name,
             })),
           ]}

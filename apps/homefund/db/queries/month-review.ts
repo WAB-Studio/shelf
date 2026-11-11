@@ -6,7 +6,7 @@ import { transactionReviews } from "@/db/schema";
 import { withUserDb } from "@/db/session";
 import { addCivilMonths, lastClosedMonth, monthRange } from "@/lib/dates";
 
-import { USUAL_WINDOW_MONTHS, type ReviewRule } from "@/lib/month-review-rules";
+import { ABOVE_USUAL_FACTOR, USUAL_MIN_LINES, USUAL_WINDOW_MONTHS, type ReviewRule } from "@/lib/month-review-rules";
 
 // One of a twin's equal movements, so the person sees what to compare.
 export type ReviewEntry = { id: string; description: string | null; createdBy: string; createdAt: string };
@@ -59,14 +59,14 @@ function reviewItemsSql(month: string): SQL {
       from expense_splits
       where occurred_at < ${start}::date
       group by category_id, currency
-      having count(*) >= 3
+      having count(*) >= ${USUAL_MIN_LINES}
     ),
     -- One item per movement: its largest split over three times its category's usual.
     above_usual as (
       select distinct on (e.transaction_id) e.transaction_id, e.category_id, e.amount_cents, u.median_cents
       from expense_splits e
       join usual u using (category_id, currency)
-      where e.occurred_at >= ${start}::date and e.amount_cents > 3 * u.median_cents
+      where e.occurred_at >= ${start}::date and e.amount_cents > ${ABOVE_USUAL_FACTOR} * u.median_cents
       order by e.transaction_id, e.amount_cents desc
     ),
     flagged as (

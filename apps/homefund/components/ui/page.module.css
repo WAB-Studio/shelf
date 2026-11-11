@@ -7,6 +7,15 @@
   max-width: 1440px;
   margin-inline: auto;
   padding-bottom: calc(var(--space-6) + env(safe-area-inset-bottom, 0px));
+  /* A phone on its side puts the notch on one edge; the gutter grows past it. From
+     `sm` the sidebar holds the left edge and clears the notch itself. */
+  padding-right: max(var(--space-6), env(safe-area-inset-right, 0px));
+}
+
+@media (max-width: 767px) {
+  .page {
+    padding-left: max(var(--space-6), env(safe-area-inset-left, 0px));
+  }
 }
 
 /* The phone keeps `p="6"` on every side; only the desktop pane hands the

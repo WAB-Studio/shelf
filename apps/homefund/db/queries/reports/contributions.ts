@@ -87,6 +87,8 @@ export async function getMemberContributions(range: {
           end
         )) as booked(currency, amount_cents)
         where t.kind = 'transfer'
+          -- RF-181: a held account is its holder's own pocket, so money into or out of it is no one's contribution.
+          and fa.holder_member_id is null and ta.holder_member_id is null
           and t.occurred_at >= ${range.start} and t.occurred_at < ${range.endExclusive}
         union all
         -- RF-139: a household bill paid from a member's personal account and marked «del hogar»
@@ -107,6 +109,30 @@ export async function getMemberContributions(range: {
           and t.occurred_at >= ${range.start} and t.occurred_at < ${range.endExclusive}
           and exists (select 1 from group_members m where m.user_id = fa.owner_user_id)
         union all
+        -- RF-181: a fund account held by a member counts as that member's own. A transfer from it into an
+        -- account of everyone is their contribution, one back into it is returned to them; a transfer
+        -- between two held accounts, or two accounts of everyone, moves no contribution. Booked in the
+        -- currency the receiving fund settles, as the personal branch above.
+        select
+          null::uuid,
+          coalesce(fa.holder_member_id, ta.holder_member_id),
+          case when t.currency <> pot.settlement
+            and t.counter_amount_cents is not null and not t.counter_is_estimate
+          then pot.settlement else t.currency end,
+          case when fa.holder_member_id is not null then 1 else -1 end * case when t.currency <> pot.settlement
+            and t.counter_amount_cents is not null and not t.counter_is_estimate
+          then t.counter_amount_cents else t.amount_cents end
+        from transactions t
+        join accounts fa on fa.id = t.from_account_id
+        join accounts ta on ta.id = t.to_account_id
+        cross join lateral (values (
+          case when fa.holder_member_id is not null then ta.settlement_currency else fa.settlement_currency end
+        )) as pot(settlement)
+        where t.kind = 'transfer'
+          and fa.group_id is not null and ta.group_id is not null
+          and (fa.holder_member_id is null) <> (ta.holder_member_id is null)
+          and t.occurred_at >= ${range.start} and t.occurred_at < ${range.endExclusive}
+        union all
         -- RF-167: an income into a fund account credited to the member who put it in, booked as the
         -- account settled it. An income naming nobody (every one before the field) stays out.
         select
@@ -123,6 +149,7 @@ export async function getMemberContributions(range: {
         join group_members cm on cm.id = t.contributed_by_member_id
         where t.from_account_id is null
           and ta.group_id is not null
+          and ta.holder_member_id is null
           and t.reconciliation_id is null
           and t.occurred_at >= ${range.start} and t.occurred_at < ${range.endExclusive}
       ) member
@@ -172,7 +199,7 @@ export async function getFundCashBalances(range: {
       from (
         select a.id, a.settlement_currency as currency, a.initial_balance_cents as amount_cents, true as is_settlement
         from accounts a
-        where a.group_id is not null and a.subtype = 'cash' and a.archived_at is null
+        where a.group_id is not null and a.holder_member_id is null and a.subtype = 'cash' and a.archived_at is null
           and a.initial_balance_on < ${range.endExclusive}
         union all
         select a.id, v.currency, v.amount_cents, v.currency = a.settlement_currency
@@ -182,7 +209,7 @@ export async function getFundCashBalances(range: {
           (t.currency, case when t.currency <> a.settlement_currency and t.counter_amount_cents is not null and not t.counter_is_estimate then 0::bigint else t.amount_cents end),
           (a.settlement_currency, case when t.currency <> a.settlement_currency and t.counter_amount_cents is not null and not t.counter_is_estimate then t.counter_amount_cents else 0::bigint end)
         ) as v(currency, amount_cents)
-        where a.group_id is not null and a.subtype = 'cash' and a.archived_at is null
+        where a.group_id is not null and a.holder_member_id is null and a.subtype = 'cash' and a.archived_at is null
           and t.occurred_at < ${range.endExclusive}
         union all
         select a.id, v.currency, -v.amount_cents, v.currency = a.settlement_currency
@@ -192,7 +219,7 @@ export async function getFundCashBalances(range: {
           (t.currency, case when t.currency <> a.settlement_currency and t.counter_amount_cents is not null and not t.counter_is_estimate then 0::bigint else t.amount_cents end),
           (a.settlement_currency, case when t.currency <> a.settlement_currency and t.counter_amount_cents is not null and not t.counter_is_estimate then t.counter_amount_cents else 0::bigint end)
         ) as v(currency, amount_cents)
-        where a.group_id is not null and a.subtype = 'cash' and a.archived_at is null
+        where a.group_id is not null and a.holder_member_id is null and a.subtype = 'cash' and a.archived_at is null
           and t.occurred_at < ${range.endExclusive}
       ) s
       group by s.currency
@@ -238,6 +265,7 @@ export async function getUnassignedIncome(range: {
         and ta.group_id is not null
         and t.reconciliation_id is null
         and t.contributed_by_member_id is null
+        and ta.holder_member_id is null
         and t.occurred_at >= ${range.start} and t.occurred_at < ${range.endExclusive}
       group by 1
       order by 1
@@ -284,6 +312,50 @@ export async function getFundSpending(range: {
     `);
 
     return rows.map((row) => ({
+      currency: row.currency,
+      spentCents: Number(row.spent_cents),
+    }));
+  });
+}
+
+export type SpendingByMaker = {
+  // The fund member who made the expenses; null is the household (RF-182).
+  memberId: string | null;
+  currency: CurrencyCode;
+  spentCents: number;
+};
+
+/**
+ * What each member spent in one window, per currency, in ONE round trip (RF-182): the expenses out of a
+ * fund account, grouped by «Lo hizo» and booked exactly as `getFundSpending` books them, so a currency's
+ * rows add up to the fund's spending figure. An expense that names nobody is its held account's holder's
+ * (RF-181), else the household's; a household bill paid from a personal card is a contribution (RF-139), not
+ * fund spending, and is not here.
+ */
+export async function getSpendingByMaker(range: {
+  start: string;
+  endExclusive: string;
+}): Promise<SpendingByMaker[]> {
+  return withUserDb(async (tx) => {
+    const rows = await tx.execute<{ member_id: string | null; currency: string; spent_cents: string }>(sql`
+      select
+        coalesce(t.made_by_member_id, fa.holder_member_id) as member_id,
+        fa.settlement_currency as currency,
+        sum(case when t.currency <> fa.settlement_currency
+          and t.counter_amount_cents is not null and not t.counter_is_estimate
+        then t.counter_amount_cents else t.amount_cents end) as spent_cents
+      from transactions t
+      join accounts fa on fa.id = t.from_account_id
+      where t.kind = 'expense'
+        and fa.group_id is not null
+        and t.reconciliation_id is null
+        and t.occurred_at >= ${range.start} and t.occurred_at < ${range.endExclusive}
+      group by 1, fa.settlement_currency
+      order by fa.settlement_currency, spent_cents desc
+    `);
+
+    return rows.map((row) => ({
+      memberId: row.member_id,
       currency: row.currency,
       spentCents: Number(row.spent_cents),
     }));

@@ -8,6 +8,7 @@ import { toast } from "sonner";
 
 import { revokeWebhookCredentialAction } from "@/app/actions/webhook-credentials";
 import { ClaudeKey } from "@/components/webhooks/claude-key";
+import { IphoneShortcut } from "@/components/webhooks/iphone-shortcut";
 import { WebhookCredentialDialog } from "@/components/webhooks/webhook-credential-dialog";
 import { WebhooksTable } from "@/components/webhooks/webhooks-table";
 import {
@@ -308,6 +309,10 @@ export function WebhooksScreen({
             {t("androidDownloadHint")}
           </Text>
         </Flex>
+      </Card>
+
+      <Card>
+        <IphoneShortcut />
       </Card>
 
       <WebhookCredentialDialog

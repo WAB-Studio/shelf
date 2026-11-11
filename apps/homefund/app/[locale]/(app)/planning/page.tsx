@@ -10,10 +10,12 @@ import { getDebtsScreenData } from "@/db/queries/debts-screen";
 import { listPlannedPayments } from "@/db/queries/planned-payments";
 import { listRecurringRules } from "@/db/queries/recurring-rules";
 import { listGoalsWithProgress } from "@/db/queries/savings-goals";
+import { listRecurringCharges } from "@/db/queries/spending-patterns";
 import { getTransactionFormOptions } from "@/db/queries/transaction-form";
 import { civilDateToDate } from "@/lib/dates";
 import { categoryNamesById } from "@/lib/fund/category-names";
 import { nearestLimit, sumByCurrency } from "@/lib/fund/glance";
+import { monthlyByCurrency } from "@/lib/fund/subscriptions";
 import { formatMoney } from "@/lib/money";
 import { tagFigure } from "@/lib/privacy";
 import { routing } from "@/i18n/routing";
@@ -41,13 +43,14 @@ export default async function PlanningPage(
   const mine = <T extends { foreignOwner: boolean }>(rows: T[]) =>
     rows.filter((row) => !row.foreignOwner);
 
-  const [budgets, goals, payments, debts, rules, options, t, format, tc] =
+  const [budgets, goals, payments, debts, rules, charges, options, t, format, tc] =
     await Promise.all([
       listBudgetsWithStatus().then(mine),
       listGoalsWithProgress().then(mine),
       listPlannedPayments({ status: "pending" }).then(mine),
       getDebtsScreenData({ withoutForeign: true }),
       listRecurringRules().then(mine),
+      listRecurringCharges().then((rows) => rows.filter((row) => row.active)),
       getTransactionFormOptions(),
       getTranslations({ locale, namespace: "planning" }),
       getFormatter({ locale }),
@@ -137,6 +140,17 @@ export default async function PlanningPage(
       })
     : t("recurringEmpty");
 
+  // The count once, then a month's cost per currency, never summed across currencies.
+  const subscriptionsSummary =
+    charges.length === 0
+      ? t("subscriptionsEmpty")
+      : t("subscriptionsSummary", {
+          count: charges.length,
+          amounts: monthlyByCurrency(charges)
+            .map(([currency, cents]) => t("perMonth", { amount: tagFigure(formatMoney(cents, currency, locale)) }))
+            .join(" · "),
+        });
+
   return (
     <Page>
       <PlanningHub
@@ -145,6 +159,7 @@ export default async function PlanningPage(
         paymentsSummary={paymentsSummary}
         debtsSummary={debtsSummary}
         recurringSummary={recurringSummary}
+        subscriptionsSummary={subscriptionsSummary}
         budgetsTop={nearestLimit(budgets, 5)}
         budgetNames={categoryNames}
         goal={goals[0] ?? null}

@@ -7,6 +7,8 @@ import { notFound } from "next/navigation";
 import { ThemeScript } from "@/components/theme-script";
 import { AppTheme, Flex, Toaster } from "@/components/ui";
 import { routing } from "@/i18n/routing";
+import { SPLASHES, splashMedia } from "@/lib/splash";
+import { PAGE_BACKGROUND } from "@/lib/theme";
 import "../theme.css";
 
 // The text and its figures (DESIGN.md «Violeta y lima»).
@@ -44,8 +46,8 @@ export const viewport: Viewport = {
    * system preference, which is what that choice defaults to.
    */
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
-    { media: "(prefers-color-scheme: dark)", color: "#110c20" },
+    { media: "(prefers-color-scheme: light)", color: PAGE_BACKGROUND.light },
+    { media: "(prefers-color-scheme: dark)", color: PAGE_BACKGROUND.dark },
   ],
 };
 
@@ -76,6 +78,11 @@ export async function generateMetadata(
       // Short enough for the home screen to write it under the icon whole.
       title: common("fund"),
       statusBarStyle: "default",
+      // RF-188: the installed app opens on its mark instead of a white flash.
+      startupImage: SPLASHES.map((splash) => ({
+        url: `/splash/${splash.name}`,
+        media: splashMedia(splash),
+      })),
     },
   };
 }

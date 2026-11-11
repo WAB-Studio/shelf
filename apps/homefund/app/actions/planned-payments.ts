@@ -2,8 +2,6 @@
 
 import { refresh } from "next/cache";
 
-import { z } from "zod";
-
 import {
   cancelPlannedPayment,
   createPlannedPayment,
@@ -14,9 +12,9 @@ import {
 } from "@/db/queries/planned-payments";
 import type { SettlePlannedPaymentResult } from "@/db/queries/planned-payments";
 import { getSettlementCurrencies } from "@/db/queries/transactions";
+import { assertRefined, requireMinor } from "@/lib/action-amounts";
 import { pgErrorCode } from "@/lib/db-error";
 import { ActionError } from "@/lib/errors";
-import { parseAmount } from "@/lib/money";
 import { authActionClient } from "@/lib/safe-action";
 import {
   cancelPlannedPaymentSchema,
@@ -39,16 +37,8 @@ async function toMinor(
   accounts: { fromAccountId: string | null; toAccountId: string | null },
 ): Promise<number> {
   const settlement = await getSettlementCurrencies(accounts);
-  const verdict = z
-    .custom<{ amount: string }>()
-    .superRefine(refinePaymentAmount(settlement))
-    .safeParse({ amount });
-
-  if (!verdict.success) throw new ActionError(verdict.error.issues[0].message);
-
-  const minor = parseAmount(amount);
-  if (minor === null) throw new ActionError("errors.unexpected");
-  return minor;
+  assertRefined({ amount }, refinePaymentAmount(settlement));
+  return requireMinor(amount);
 }
 
 // The scope trigger raises 23514 when the accounts disagree on scope; a denied

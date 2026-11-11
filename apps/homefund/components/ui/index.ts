@@ -72,7 +72,7 @@ export { NavPanel } from "./nav-panel";
 
 export { BottomNav, BottomNavTrigger, type BottomNavTab } from "./bottom-nav";
 
-export { NavList, NavListTrigger, type NavListItem } from "./nav-list";
+export { NavList, type NavListItem } from "./nav-list";
 
 export {
   Sidebar,
@@ -100,6 +100,7 @@ export { Page } from "./page";
 
 export { CategoryChoice, CategoryChoiceGrid } from "./category-choice";
 export { PersonalMark } from "./personal-mark";
+export { FigureRow } from "./figure-row";
 export { MovementRow } from "./movement-row";
 
 export { CategoryTile } from "./category-tile";
@@ -135,13 +136,14 @@ export { Panel, PanelBlock, PanelRow, PanelButton, type PanelCell } from "./pane
 
 export { StatTiles } from "./stat-tiles";
 
-export { SubNav } from "./sub-nav";
 
 export { Figure } from "./figure";
 
 export { AmountField } from "./amount-field";
 
 export { Disc } from "./disc";
+
+export { DateTile } from "./date-tile";
 
 export { PlainLink } from "./plain-link";
 
@@ -157,8 +159,8 @@ export {
   SummaryBand,
   BandCards,
   BandCard,
-  BandFigure,
   BandStats,
   ReportCard,
   ReportRow,
 } from "./summary-band";
+export { BandFigure } from "./band-figure";

@@ -4,6 +4,7 @@ import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 
 import { AppSidebar } from "@/components/fund/app-sidebar";
+import { InstallHint } from "@/components/fund/install-hint";
 import { PrivacyToggle } from "@/components/fund/privacy-toggle";
 import { AppTabs } from "@/components/fund/app-tabs";
 import { QuickEntryProvider } from "@/components/transactions/quick-entry-provider";
@@ -98,6 +99,7 @@ export default async function AppLayout(props: LayoutProps<"/[locale]">) {
               </header>
             </Flex>
           </Box>
+          <InstallHint />
           {props.children}
         </Flex>
       </Flex>

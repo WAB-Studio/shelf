@@ -3,7 +3,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useTranslations } from "next-intl";
 import { useAction } from "next-safe-action/hooks";
-import { Controller, useForm, type Resolver } from "react-hook-form";
+import { Controller, useForm, useWatch, type Resolver } from "react-hook-form";
 import { toast } from "sonner";
 
 import {
@@ -179,7 +179,7 @@ function CategoryForm({
   // parent at all, and a category that already has children never appears as
   // an option — except the option that is already this subcategory's parent,
   // kept selectable so an existing value is never orphaned mid-edit.
-  const placement = form.watch("placement");
+  const placement = useWatch({ control: form.control, name: "placement" });
   const parentOptions = hasChildren
     ? []
     : parentsByPlacement[placement].filter(

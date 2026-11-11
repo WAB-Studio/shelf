@@ -177,6 +177,7 @@ function QuickEntryForm({
       counterIsEstimate: false,
       occurredAt: todayInBogota(),
       description: null,
+      madeByMemberId: null,
       splits: [],
       labelIds: [],
     },
@@ -362,7 +363,11 @@ function QuickEntryForm({
         : t("quickUnrecognized");
 
   function onSubmit(values: QuickEntryValues) {
-    create.execute({ ...values, requestRef, amountFromWords: values.amount === wordsAmount });
+    create.execute({
+      ...values,
+      madeByMemberId: scope === "group" ? values.madeByMemberId : null,
+      requestRef, amountFromWords: values.amount === wordsAmount,
+    });
   }
 
   return (
@@ -530,6 +535,36 @@ function QuickEntryForm({
             )}
           />
         </Flex>
+
+        {scope === "group" && (
+          <Controller
+            name="madeByMemberId"
+            control={form.control}
+            render={({ field }) => (
+              <Field>
+                <FieldLabel htmlFor="quick-made-by">{t("madeByLabel")}</FieldLabel>
+                <Select.Root
+                  size="3"
+                  value={field.value ?? "none"}
+                  onValueChange={(value) => field.onChange(value === "none" ? null : value)}
+                  disabled={create.isPending}
+                >
+                  <FieldControl>
+                    <Select.Trigger id="quick-made-by" />
+                  </FieldControl>
+                  <Select.Content position="popper">
+                    <Select.Item value="none">{t("madeByNone")}</Select.Item>
+                    {options.fundMembers.map((member) => (
+                      <Select.Item key={member.id} value={member.id}>
+                        {member.name}
+                      </Select.Item>
+                    ))}
+                  </Select.Content>
+                </Select.Root>
+              </Field>
+            )}
+          />
+        )}
 
         <Flex justify="center">
           <Link href="#" onClick={(event) => { event.preventDefault(); onOpenFull(); }}>

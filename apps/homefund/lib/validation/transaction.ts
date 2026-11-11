@@ -217,6 +217,8 @@ export const transactionFields = {
   forHousehold: z.boolean().optional(),
   // «De quién» (RF-167): the fund member an income into a fund account is credited to. Read only there.
   contributedByMemberId: z.uuid({ error: "transactions.errors.contributorInvalid" }).nullish(),
+  // «Lo hizo» (RF-182): the fund member who made it; absent or null is the household.
+  madeByMemberId: z.uuid({ error: "transactions.errors.madeByInvalid" }).nullish(),
   occurredAt: occurredAtSchema,
   description: descriptionSchema,
   externalRef: z
@@ -605,11 +607,16 @@ export function movementTypeFilter(type: MovementTypeValue): {
 // The movement list's filter set exactly as it travels in the URL (RF-23, RF-89).
 // The list page, the filter bar and the filtered export all parse this one
 // schema, so no second copy can drift from it (RNF-10).
+// The «Lo hizo» filter value for the movements nobody made: the household's (RF-182).
+export const HOUSEHOLD_MAKER = "household";
+
 export const movementFiltersSchema = z.object({
   type: z.enum(MOVEMENT_TYPES).catch("all"),
   from: filterCivilDate,
   to: filterCivilDate,
   member: filterReference,
+  // «Lo hizo» (RF-182): a fund member id.
+  madeBy: filterReference,
   account: filterReference,
   category: filterReference,
   label: filterReference,

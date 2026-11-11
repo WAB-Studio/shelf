@@ -54,6 +54,10 @@ export const transactions = finances.table(
     // Which member of the fund put this income in (RF-167): only an income into a fund account carries it,
     // and the policy keeps the member inside that account's fund.
     contributedByMemberId: uuid().references(() => groupMembers.id, { onDelete: "set null" }),
+    // Who made this movement (RF-182): a member of the fund the movement belongs to, login or not. Empty
+    // means the household. A separate column from the income's «De quién»: that one says whose money came
+    // in, this one who acted, and an expense carries only this. `created_by` stays whoever typed it.
+    madeByMemberId: uuid().references(() => groupMembers.id, { onDelete: "set null" }),
     // The type is derived, never chosen (RF-18): a stored generated column no INSERT can target.
     kind: text().generatedAlwaysAs(
       sql`case when from_account_id is null then 'income' when to_account_id is null then 'expense' else 'transfer' end`,
@@ -203,7 +207,7 @@ export const transactions = finances.table(
     pgPolicy("transactions_insert_writable", {
       for: "insert",
       to: authenticatedRole,
-      withCheck: sql`(select private.can_write_transaction(${table.fromAccountId}, ${table.toAccountId})) and (select private.contributor_in_fund(${table.contributedByMemberId}, ${table.toAccountId}))`,
+      withCheck: sql`(select private.can_write_transaction(${table.fromAccountId}, ${table.toAccountId})) and (select private.contributor_in_fund(${table.contributedByMemberId}, ${table.toAccountId})) and (select private.maker_in_fund(${table.madeByMemberId}, ${table.fromAccountId}, ${table.toAccountId}, ${table.forHousehold}))`,
     }),
     // An adjustment is refused here, never by a trigger: the harness deletes ledgers as the owner
     // role, and a trigger would strand its rows.
@@ -211,7 +215,7 @@ export const transactions = finances.table(
       for: "update",
       to: authenticatedRole,
       using: sql`(select private.can_write_transaction(${table.fromAccountId}, ${table.toAccountId})) and ${table.reconciliationId} is null`,
-      withCheck: sql`(select private.can_write_transaction(${table.fromAccountId}, ${table.toAccountId})) and (select private.contributor_in_fund(${table.contributedByMemberId}, ${table.toAccountId}))`,
+      withCheck: sql`(select private.can_write_transaction(${table.fromAccountId}, ${table.toAccountId})) and (select private.contributor_in_fund(${table.contributedByMemberId}, ${table.toAccountId})) and (select private.maker_in_fund(${table.madeByMemberId}, ${table.fromAccountId}, ${table.toAccountId}, ${table.forHousehold}))`,
     }),
     pgPolicy("transactions_delete_writable", {
       for: "delete",

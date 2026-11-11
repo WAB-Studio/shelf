@@ -3,7 +3,7 @@ import "server-only";
 import type { CallToolResult, McpServer, ServerContext } from "@modelcontextprotocol/server";
 import { z } from "zod";
 
-import { listAccounts, updateAccount } from "@/db/queries/accounts";
+import { handAccountToGroup, listAccounts, updateAccount } from "@/db/queries/accounts";
 import { freeCategoryColor, listScopedCategories, updateCategory } from "@/db/queries/categories";
 import {
   bookMovement,
@@ -19,21 +19,14 @@ import { getTransactionById, listTransactions, type TransactionListRow, type Tra
 import { pgErrorCode } from "@/lib/db-error";
 import { ActionError } from "@/lib/errors";
 import { CATEGORY_COLORS } from "@/lib/fund/category-color";
+import { parseForm } from "@/lib/mcp/parse-form";
 import { centsToDecimal, parseAmount } from "@/lib/money";
 import { createAccountSchema, updateAccountSchema } from "@/lib/validation/account";
 import { createCategoryInputSchema, updateCategorySchema } from "@/lib/validation/category";
-import { createTransactionSchema, descriptionSchema, occurredAtSchema, updateTransactionSchema } from "@/lib/validation/transaction";
+import { createTransactionSchema, descriptionSchema, HOUSEHOLD_MAKER, occurredAtSchema, updateTransactionSchema } from "@/lib/validation/transaction";
 
 type Run = (ctx: ServerContext, load: (owner: string) => Promise<unknown>) => Promise<CallToolResult>;
 type Say = (key: string) => string;
-
-// Claude speaks integer cents; the forms' schemas read the decimal text a person types. The text is
-// built from the integer, so the schema then judges it exactly as it judges a form (RNF-10).
-function parseForm<S extends z.ZodType>(schema: S, data: unknown): z.output<S> {
-  const verdict = schema.safeParse(data);
-  if (!verdict.success) throw new ActionError(verdict.error.issues[0].message);
-  return verdict.data;
-}
 
 function movementShape(t: Say) {
   const d = (key: string) => t(`params.${key}`);
@@ -51,6 +44,7 @@ function movementShape(t: Say) {
     splits: z.array(z.object({ categoryId: z.string(), amountCents: cents, description: z.string().nullish() })).optional().describe(d("splits")),
     contributedByMemberId: z.string().nullish().describe(d("contributedByMemberId")),
     forHousehold: z.boolean().optional().describe(d("forHousehold")),
+    madeByMemberId: z.string().nullish().describe(d("madeByMemberId")),
   };
 }
 
@@ -70,6 +64,7 @@ function movementForm(input: MovementInput) {
     description: input.description,
     contributedByMemberId: input.contributedByMemberId,
     forHousehold: input.forHousehold,
+    madeByMemberId: input.madeByMemberId,
     splits: splits.map((split: Split) => ({
       categoryId: split.categoryId,
       amount: centsToDecimal(split.amountCents),
@@ -112,6 +107,8 @@ function patched(current: TransactionListRow, patch: Partial<MovementInput>): Mo
     splits,
     contributedByMemberId: pick("contributedByMemberId", current.contributedByMemberId),
     forHousehold: pick("forHousehold", current.forHousehold),
+    // Left absent when the patch names none: the edit keeps who made it while that still fits the movement.
+    madeByMemberId: patch.madeByMemberId,
   };
 }
 
@@ -148,17 +145,24 @@ export function registerLedgerTools(server: McpServer, run: Run, t: Say): void {
         from: z.string().optional().describe(d("from")),
         to: z.string().optional().describe(d("to")),
         categoryId: z.string().optional().describe(d("filterCategoryId")),
+        madeByMemberId: z.string().optional().describe(d("filterMadeByMemberId")),
         limit: z.number().int().min(1).max(200).optional().describe(d("limit")),
         offset: z.number().int().min(0).optional().describe(d("offset")),
       }),
       annotations: { readOnlyHint: true },
     },
-    (input: { accountId?: string; categoryId?: string; from?: string; to?: string; limit?: number; offset?: number }, ctx) =>
+    (input: { accountId?: string; categoryId?: string; madeByMemberId?: string; from?: string; to?: string; limit?: number; offset?: number }, ctx) =>
       run(ctx, async () => {
         const accountId = input.accountId === undefined ? undefined : idOf("transactions.errors.accountInvalid", input.accountId);
         const categoryId = input.categoryId === undefined ? undefined : idOf("errors.notFound", input.categoryId);
+        const madeByMemberId =
+          input.madeByMemberId === undefined
+            ? undefined
+            : input.madeByMemberId === HOUSEHOLD_MAKER
+              ? null
+              : idOf("transactions.errors.madeByInvalid", input.madeByMemberId);
         const rows = await listTransactions(
-          { accountId, categoryId, from: input.from, to: input.to },
+          { accountId, categoryId, madeByMemberId, from: input.from, to: input.to },
           { limit: input.limit ?? 50, offset: input.offset },
         );
         // Everything update_movement can resend or patch, and the stamp it must quote back.
@@ -175,6 +179,8 @@ export function registerLedgerTools(server: McpServer, run: Run, t: Say): void {
           toAccountId: row.toAccountId,
           contributedByMemberId: row.contributedByMemberId,
           forHousehold: row.forHousehold,
+          madeByMemberId: row.madeByMemberId,
+          madeByName: row.madeByName,
           labelIds: row.labels.map((label) => label.id),
           splits: row.splits,
           updatedAt: row.updatedAt,
@@ -256,6 +262,7 @@ export function registerLedgerTools(server: McpServer, run: Run, t: Say): void {
         institution: z.string().nullable().default(null).describe(d("institution")),
         lastFour: z.string().optional().describe(d("lastFour")),
         parentAccountId: z.string().nullable().default(null).describe(d("parentAccountId")),
+        holderMemberId: z.string().nullable().default(null).describe(d("holderMemberId")),
       }),
       annotations: write,
     },
@@ -282,6 +289,7 @@ export function registerLedgerTools(server: McpServer, run: Run, t: Say): void {
         institution: z.string().nullable().optional().describe(d("institution")),
         lastFour: z.string().nullable().optional().describe(d("lastFour")),
         parentAccountId: z.string().nullable().optional().describe(d("parentAccountId")),
+        holderMemberId: z.string().nullable().optional().describe(d("holderMemberId")),
       }),
       annotations: { ...write, idempotentHint: true },
     },
@@ -302,6 +310,7 @@ export function registerLedgerTools(server: McpServer, run: Run, t: Say): void {
           institution: pick("institution", current.institution) ?? "",
           lastFour: pick("lastFour", current.lastFour) ?? undefined,
           parentAccountId: pick("parentAccountId", current.parentAccountId ?? null),
+          holderMemberId: pick("holderMemberId", current.holderMemberId ?? null),
           settlementCurrency: pick("settlementCurrency", current.settlementCurrency),
           amount: centsToDecimal(input.openingBalanceCents === undefined ? storedCents : (input.openingBalanceCents as number)),
           balanceOn: pick("balanceOn", current.initialBalanceOn),
@@ -322,6 +331,22 @@ export function registerLedgerTools(server: McpServer, run: Run, t: Say): void {
         }
         if (updated === "stale") throw new ActionError("errors.stale");
         if (!updated) throw new ActionError("errors.notFound");
+        return { accountId: id };
+      }),
+  );
+
+  // The same write as «Pasar al fondo»: the account keeps its id, balance, movements and pockets (RF-180).
+  server.registerTool(
+    "move_account_to_fund",
+    {
+      description: t("tools.moveAccountToFund"),
+      inputSchema: z.object({ accountId: z.string().describe(d("accountId")) }),
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
+    },
+    (input: { accountId: string }, ctx) =>
+      run(ctx, async () => {
+        const id = idOf("errors.notFound", input.accountId);
+        await handAccountToGroup({ accountId: id });
         return { accountId: id };
       }),
   );
