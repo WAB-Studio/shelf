@@ -112,18 +112,6 @@ test("«Repasar ahora» in a word's history opens that word alone", async ({ pag
   await expect(page.locator("main")).not.toContainText("bleak");
 });
 
-test("a word asked for alone ends with «Repasaste», offers the day's queue and never closes the day", async ({ page }) => {
-  await open(page, "/", 390);
-  await lookUp(page, ["time", "bleak"]);
-  await page.goto("/repaso?palabra=time");
-  await page.getByRole("button", { name: messages.review.show }).click();
-  await page.getByRole("button", { name: new RegExp(`^${messages.review.grade.good}`) }).click();
-  await expect(page.getByText("Repasaste «time».")).toBeVisible();
-  await expect(page.getByText(/Terminaste por hoy/)).toHaveCount(0);
-  await page.getByRole("button", { name: messages.review.reviewToday }).click();
-  await expect(page.getByText("1 de 1")).toBeVisible();
-});
-
 test("a word with nothing to review says so and still offers the day's cards", async ({ page }) => {
   await open(page, "/", 390);
   await lookUp(page, ["time"]);

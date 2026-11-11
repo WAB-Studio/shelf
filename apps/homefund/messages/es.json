@@ -363,11 +363,16 @@
     "kindLabel": "Tipo",
     "kindAsset": "Lo que tengo",
     "kindLiability": "Lo que debo",
+    "sectionAccounts": "Cuentas",
+    "sectionLoans": "Préstamos",
+    "sectionCards": "Tarjetas de crédito",
+    "netLabel": "Neto",
     "kindLocked": "El tipo no se puede cambiar después de crear la cuenta.",
     "subtypeLabel": "Clase",
     "subtypeBancaria": "Bancaria",
     "subtypeEfectivo": "Efectivo",
     "subtypeTarjeta": "Tarjeta",
+    "subtypeLoan": "Préstamo",
     "ownerLabel": "Propietario",
     "ownerPersonal": "Personal",
     "ownerFund": "El fondo",
@@ -389,7 +394,6 @@
     "activeTab": "Activas",
     "archivedTab": "Archivadas",
     "statusLabel": "Estado",
-    "allTypes": "Todos los tipos",
     "allOwners": "Todos los propietarios",
     "allInstitutions": "Todas las entidades",
     "listMeta": "{count, plural, =1 {# cuenta} other {# cuentas}}",
@@ -1308,7 +1312,8 @@
       "importReady": "Todas las filas son válidas. Confirma para escribirlas.",
       "confirmImport": "Confirmar importación",
       "importDone": "Importación aplicada.",
-      "commitRowError": "Fila {row} de {sheet}: {reason}"
+      "commitRowError": "Fila {row} de {sheet}: {reason}",
+      "editedRowsHint": "Si cambiaste fecha, monto o descripción, se agrega como nuevo."
     },
     "sheets": {
       "accounts": "Cuentas",
@@ -1337,9 +1342,8 @@
       "email": "Correo",
       "parent": "Categoría principal",
       "color": "Color",
-      "externalRef": "Referencia externa",
-      "fromAccount": "De (origen)",
-      "toAccount": "Para (destino)",
+      "fromAccount": "De",
+      "toAccount": "Hacia",
       "category": "Categoría",
       "description": "Descripción",
       "frequency": "Frecuencia",
@@ -1363,7 +1367,6 @@
       "targetDate": "Fecha objetivo",
       "goal": "Meta",
       "contributedOn": "Fecha del aporte",
-      "movement": "Movimiento (referencia)",
       "debtKind": "Tipo de deuda",
       "annualRate": "Tasa efectiva anual (%)",
       "minimumPayment": "Pago mínimo",
@@ -1381,7 +1384,50 @@
       "debits": "Cargos",
       "interestCharged": "Intereses",
       "feesCharged": "Comisiones",
-      "source": "Origen"
+      "source": "Origen",
+      "externalRef": "Referencia externa"
+    },
+    "choices": {
+      "accountKind": {
+        "asset": "Activo",
+        "liability": "Deuda"
+      },
+      "accountSubtype": {
+        "bank": "Bancaria",
+        "cash": "Efectivo",
+        "card": "Tarjeta",
+        "loan": "Préstamo"
+      },
+      "categoryKind": {
+        "expense": "Gasto",
+        "income": "Ingreso"
+      },
+      "placement": {
+        "personal": "Personal",
+        "group": "Del hogar"
+      },
+      "frequency": {
+        "monthly": "Mensual",
+        "weekly": "Semanal",
+        "yearly": "Anual"
+      },
+      "budgetPeriod": {
+        "monthly": "Mensual",
+        "weekly": "Semanal",
+        "yearly": "Anual"
+      },
+      "debtKind": {
+        "revolving": "Rotativa",
+        "installment": "A cuotas"
+      },
+      "statementSource": {
+        "recorded": "Registrado",
+        "imported": "Importado"
+      },
+      "flag": {
+        "yes": "Sí",
+        "no": "No"
+      }
     },
     "filenames": {
       "export": "finanzas-datos",
@@ -1446,6 +1492,12 @@
     "tokenWarning": "Cópialo ahora: es la única vez que se muestra y no hay forma de recuperarlo. Si lo pierdes, revoca esta credencial y crea otra.",
     "tokenLabel": "Token",
     "tokenAcknowledge": "Ya lo guardé",
+    "androidSetup": "Configurar en Android",
+    "androidSetupHint": "Abre HomeFund Avisos en este teléfono con la URL y el token ya puestos. Desde un computador, copia el token y pégalo en la app.",
+    "androidHeading": "App para Android",
+    "androidDescription": "Viene lista para Bancolombia y Banco de Bogotá",
+    "androidDownload": "Descargar HomeFund Avisos",
+    "androidDownloadHint": "Se descarga con tu cuenta de GitHub de WAB-Studio",
     "created": "Credencial creada.",
     "endpointHeading": "Cómo enviar un movimiento",
     "endpointUrlLabel": "URL",
@@ -1560,14 +1612,20 @@
     "prev": "‹ mes anterior",
     "next": "mes siguiente ›",
     "rules": {
-      "above_usual": "Muy por encima de lo usual",
-      "twin": "Dos iguales el mismo día",
-      "from_words": "Monto leído de palabras",
-      "reconciliation_gap": "Diferencia al cuadrar"
+      "above_usual": "¿Es correcto este monto?",
+      "twin": "¿Se registró dos veces?",
+      "from_words": "¿Leímos bien este monto?",
+      "reconciliation_gap": "¿De dónde sale esta diferencia al cuadrar?"
     },
     "meta": "{account} · {date}",
     "metaCategory": "{account} · {date} · {category}",
-    "usual": "Lo usual: {amount}",
+    "usual": "Lo usual: {amount} (mediana de los últimos {months} meses)",
+    "usualCategory": "Lo usual en {category}: {amount} (mediana de los últimos {months} meses)",
+    "noDescription": "Sin descripción",
+    "entryBy": "anotó {who} a las {time}",
+    "entryAt": "anotado a las {time}",
+    "entryByOn": "anotó {who} el {day} a las {time}",
+    "entryAtOn": "anotado el {day} a las {time}",
     "counted": "Contaste {amount}",
     "twinCount": "{count} movimientos iguales",
     "ok": "Está bien",
@@ -1611,7 +1669,10 @@
       "createCategory": "Crea una categoría (expense o income), opcionalmente bajo una madre del mismo tipo y alcance. placement «personal» o «group». CONFIRMA con la persona antes de llamarla y revisa con list_categories que no exista ya.",
       "updateCategory": "Renombra una categoría o la mueve bajo otra madre del mismo tipo (parentId) o al primer nivel (parentId null). Es un parche: envía solo lo que cambia. Una categoría con subcategorías no puede ir bajo otra, y una madre de otro tipo se rechaza. Revisa antes con list_categories. Muestra el cambio a la persona y pide un solo sí antes de llamarla.",
       "mergeMovements": "Junta 2 o más gastos, o 2 o más ingresos, de UNA misma cuenta en un solo movimiento (una factura registrada como un movimiento por producto): sus líneas son las de los originales (la categoría y el monto de cada uno, su descripción como nombre de la línea; un original con líneas aporta cada una) y el total es la suma. Los originales se BORRAN, todo o nada. Descripción y occurredAt opcionales (por defecto, la fecha más antigua). El movimiento nuevo no hereda las marcas de revisión ni la regla recurrente de los originales. Se rechaza: transferencias, cuentas o tipos mezclados, movimientos importados de un extracto o ligados a un pago planeado, meta, aplazamiento o cuota, los que causaron o son un cargo de otro, los que tienen referencia externa o esperan contraparte, y los ajenos. Búscalos con list_movements, muestra a la persona la lista (originales, líneas resultantes, total) y pide un solo sí antes de llamarla.",
-      "moveCategoryMovements": "Mueve todas las líneas de movimientos de EXACTAMENTE la categoría fromCategoryId (no las de sus subcategorías, aunque list_movements por categoría sí las incluye) a toCategoryId, en una sola sentencia, opcionalmente solo las fechadas de from a to; ambas deben ser del mismo tipo. Llámala PRIMERO con dryRun true: no escribe nada y devuelve cuántas líneas se moverían. Muestra ese número a la persona, pide un solo sí y llámala entonces sin dryRun. Cada movimiento movido recibe un updatedAt nuevo: vuelve a leerlo con list_movements antes de editarlo."
+      "moveCategoryMovements": "Mueve todas las líneas de movimientos de EXACTAMENTE la categoría fromCategoryId (no las de sus subcategorías, aunque list_movements por categoría sí las incluye) a toCategoryId, en una sola sentencia, opcionalmente solo las fechadas de from a to; ambas deben ser del mismo tipo. Llámala PRIMERO con dryRun true: no escribe nada y devuelve cuántas líneas se moverían. Muestra ese número a la persona, pide un solo sí y llámala entonces sin dryRun. Cada movimiento movido recibe un updatedAt nuevo: vuelve a leerlo con list_movements antes de editarlo.",
+      "listInbox": "La bandeja de entrada: las entregas (SMS, correos del banco, webhook) que esperan que la persona las apruebe. Cada una trae id, receivedAt, rawText (el mensaje tal cual llegó) y proposal (amountCents, currency, kind expense o income, accountId y accountName, categoryId y categoryPath, date, description). notDetected nombra los campos que el mensaje no dio. status (por defecto pending) filtra; limit y offset paginan. Úsala PRIMERO. Luego muestra a la persona UNA lista compacta (fecha, monto, cuenta, categoría, descripción), con cada campo que falte ya completado por tu propuesta y marcado como tal, y pide UN solo sí para toda la lista, o sus correcciones. Después llama accept_deliveries; lo que la persona descarte se rechaza con reject_deliveries, confirmado en esa misma lista.",
+      "acceptDeliveries": "Aprueba una o más entregas de la bandeja: cada una se vuelve un movimiento, por el mismo camino y las mismas reglas que el botón «Aceptar» de HomeFund (tipo derivado de las cuentas, auditoría, la referencia de la entrega evita duplicados). Cada ítem lleva el id de list_inbox y, solo si cambia o falta, accountId (la cuenta del gasto o ingreso), categoryId o splits (líneas con categoryId, amountCents y description del producto, que suman el monto), amountCents, description, date (AAAA-MM-DD), kind (expense, income o transfer) y, en una transferencia, fromAccountId y toAccountId (sin kind transfer, un solo lado se rechaza; con transfer, el lado que falta es la cuenta de la propuesta). Si es un ingreso a una cuenta del fondo (notDetected trae contributor), pasa contributedByMemberId («De quién»). Todo o nada: si una entrega falla (por ejemplo, sin cuenta, monto o categoría, ya resuelta o ajena) no se acepta ninguna y el error trae deliveryId y el campo que falta. NUNCA la llames sin antes haber llamado list_inbox, mostrado a la persona la lista compacta (fecha, monto, cuenta, categoría, descripción) y recibido UN solo sí para toda la lista.",
+      "rejectDeliveries": "Rechaza una o más entregas de la bandeja por id, por el mismo camino que «Rechazar» en HomeFund; no escribe movimientos. Todo o nada: si un id no es una entrega pendiente de la persona, no rechaza ninguna. Muestra primero la lista (fecha, monto, descripción) de lo que rechazarás, junto con la de accept_deliveries, y pide UN solo sí para todo."
     },
     "deferralProposal": "Diferir en {count} cuotas",
     "errors": {
@@ -1624,6 +1685,17 @@
         "previewChanged": "Las líneas no son las de la vista previa: vuelve a llamar preview_statement.",
         "invalidLines": "Hay líneas inválidas: corrígelas o quítalas y vuelve a previsualizar.",
         "lineRefused": "Una línea no se pudo registrar; no se importó nada."
+      },
+      "inbox": {
+        "missing": {
+          "amount": "La entrega no trae monto: indícalo en amountCents.",
+          "account": "La entrega no trae cuenta: indícala en accountId.",
+          "fromAccount": "Una transferencia necesita fromAccountId.",
+          "toAccount": "Una transferencia necesita toAccountId.",
+          "category": "La entrega no trae categoría: indica categoryId o splits."
+        },
+        "sideNeedsTransfer": "Un solo fromAccountId o toAccountId solo vale en una transferencia: pasa kind transfer o usa accountId.",
+        "duplicate": "Esa entrega ya está registrada como un movimiento."
       },
       "merge": {
         "count": "Indica dos o más movimientos distintos para juntar.",
@@ -1654,7 +1726,7 @@
       "limit": "Cuántos devolver, de 1 a 200; por defecto 50.",
       "accountName": "Nombre de la cuenta.",
       "accountKind": "asset (bank o cash) o liability (card).",
-      "accountSubtype": "bank, cash o card.",
+      "accountSubtype": "bank, cash, card o loan (un préstamo; solo con kind liability).",
       "accountPlacement": "personal (por defecto) o group, la del fondo.",
       "settlementCurrency": "COP (por defecto) o USD.",
       "openingBalanceCents": "Saldo inicial en centavos; en una tarjeta, lo que se debe, positivo.",
@@ -1673,7 +1745,10 @@
       "fromCategoryId": "La categoría cuyas líneas se mueven (id de list_categories).",
       "toCategoryId": "La categoría que las recibe, del mismo tipo (id de list_categories).",
       "categoryRef": "El id de la categoría (de list_categories).",
-      "dryRun": "true: no escribe nada y solo devuelve cuántas líneas se moverían."
+      "dryRun": "true: no escribe nada y solo devuelve cuántas líneas se moverían.",
+      "inboxStatus": "pending (por defecto), accepted o rejected.",
+      "deliveries": "Las entregas a aceptar, de 1 a 50: cada una con su id y, opcional, los datos que corrigen o completan su propuesta.",
+      "deliveryIds": "Los ids (de list_inbox) de 1 a 50 entregas pendientes a rechazar."
     }
   },
   "oauth": {

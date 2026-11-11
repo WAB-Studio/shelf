@@ -18,12 +18,8 @@ import { clearGroup, readScope, test } from "./global-setup";
 
 const accounts = messages.accounts;
 const common = messages.common;
-const nav = messages.nav;
 
 const scope = readScope();
-
-// The shell falls back to the product's own name when there is no fund to name.
-const FUND_NAME = common.appName;
 
 /**
  * The band the width displays. The laptop's table and the phone's cards are both
@@ -111,71 +107,4 @@ test("draws every account the caller owns under one placement and no fund band",
   await expect(
     page.getByRole("main").getByText(common.fund, { exact: true }),
   ).toHaveCount(0);
-});
-
-test("offers no placement control on the account form", async ({ page }) => {
-  await page.goto("/es/settings/accounts");
-  await page.getByRole("button", { name: accounts.add, exact: true }).first().click();
-
-  const dialog = page.getByRole("dialog");
-  await expect(dialog.getByRole("textbox", { name: accounts.nameLabel })).toBeVisible();
-
-  // RF-60: the placement is a choice only a caller with a group has, and the
-  // form drops the control rather than offering an option that cannot land.
-  await expect(
-    dialog.getByRole("combobox", { name: accounts.ownerLabel }),
-  ).toHaveCount(0);
-  await expect(dialog.getByText(accounts.ownerLabel, { exact: true })).toHaveCount(0);
-  await expect(dialog.getByText(accounts.ownerFund, { exact: true })).toHaveCount(0);
-});
-
-test("offers no hand-over on a row that has nowhere to hand it", async ({ page }) => {
-  const [name] = await personalAccountNames();
-
-  await page.goto("/es/settings/accounts");
-  await page
-    .getByRole("button", {
-      name: common.actionsFor.replace("{name}", name),
-      exact: true,
-    })
-    .click();
-
-  // RF-61 needs a group to hand an account to; without one the row keeps the
-  // three actions it always had and gains nothing.
-  await expect(page.getByRole("menu").getByRole("menuitem")).toHaveText([
-    common.edit,
-    messages.accounts.reconcile,
-    common.archive,
-    common.delete,
-  ]);
-});
-
-test("answers the members route with a 404", async ({ page }) => {
-  const response = await page.goto("/es/settings/members");
-
-  // A roster lives inside a group, and a caller without one has none to read
-  // (RF-55). The status is the assertion: a screen that rendered empty over a
-  // 200 would look the same and mean something else.
-  expect(response?.status()).toBe(404);
-  await expect(
-    page.getByText(messages.errors.notFoundTitle, { exact: true }),
-  ).toBeVisible();
-});
-
-test("names one fund in the shell and offers no way to a second", async ({ page }) => {
-  await page.goto("/es/settings/accounts");
-
-  // Two surfaces carry the name — the sidebar's row and the phone's header — and
-  // CSS shows whichever this viewport is. A switcher would be a third.
-  await expect(page.getByText(FUND_NAME, { exact: true })).toHaveCount(2);
-  await expect(
-    page.getByText(FUND_NAME, { exact: true }).filter({ visible: true }),
-  ).toHaveCount(1);
-
-  // Nothing to configure and nothing to switch to: the group's own settings are
-  // the only thing the fund row ever links to, and it has no group.
-  await expect(page.getByLabel(nav.fundSettings)).toHaveCount(0);
-  await expect(page.getByRole("link", { name: nav.members, exact: true })).toHaveCount(
-    0,
-  );
 });

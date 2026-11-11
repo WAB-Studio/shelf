@@ -817,7 +817,7 @@ function rowTitle(
 function rowSubtitle(
   row: TransactionListRow,
   accountNames: Map<string, string>,
-  t: ReturnType<typeof useTranslations>,
+  t: ReturnType<typeof useTranslations<"transactions">>,
 ): string | undefined {
   const account = accountOfRow(row, accountNames);
   return row.splits.length > 1

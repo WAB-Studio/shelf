@@ -48,12 +48,13 @@ const SUBTYPE_LABEL_KEYS = {
   bank: "subtypeBancaria",
   cash: "subtypeEfectivo",
   card: "subtypeTarjeta",
+  loan: "subtypeLoan",
 } as const;
 
 // A Radix Select item may not carry an empty value, so "no parent" rides this sentinel.
 const NO_PARENT = "none";
 
-// The kind that admits a class, mirroring SUBTYPES_BY_KIND: a card is money owed,
+// The kind that admits a class, mirroring SUBTYPES_BY_KIND: a card or a loan is money owed,
 // anything else holds value.
 function kindForSubtype(
   subtype: (typeof ACCOUNT_SUBTYPES)[number],

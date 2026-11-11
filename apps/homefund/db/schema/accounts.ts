@@ -31,9 +31,9 @@ export const accounts = finances.table(
     name: text().notNull(),
     kind: text({ enum: ["asset", "liability"] }).notNull(),
     // The durable marker of what the account is: a bank account, physical cash, or a card. A cash
-    // account (RF-56) is `subtype = 'cash'`. `bank`/`card` follow the kind, so a caller that names
+    // account (RF-56) is `subtype = 'cash'`. `bank`/`card` follow the kind (`loan` is kept as named), so a caller that names
     // neither has one derived by `set_account_subtype`; the default lets it be omitted.
-    subtype: text({ enum: ["bank", "cash", "card"] }).notNull().default("bank"),
+    subtype: text({ enum: ["bank", "cash", "card", "loan"] }).notNull().default("bank"),
     institution: text(),
     lastFour: text(),
     // The ISO 4217 code the account settles in (RF-121): what the issuer bills, what the bank holds.
@@ -56,11 +56,11 @@ export const accounts = finances.table(
   (table) => [
     check("accounts_name_length", sql`length(btrim(${table.name})) between 1 and 80`),
     check("accounts_kind_valid", sql`${table.kind} in ('asset', 'liability')`),
-    check("accounts_subtype_valid", sql`${table.subtype} in ('bank', 'cash', 'card')`),
-    // Cash and bank hold value (asset); a card is money owed (liability). The subtype pins the kind.
+    check("accounts_subtype_valid", sql`${table.subtype} in ('bank', 'cash', 'card', 'loan')`),
+    // Cash and bank hold value (asset); a card or a loan is money owed (liability). The subtype pins the kind.
     check(
       "accounts_subtype_kind",
-      sql`(${table.subtype} in ('cash', 'bank') and ${table.kind} = 'asset') or (${table.subtype} = 'card' and ${table.kind} = 'liability')`,
+      sql`(${table.subtype} in ('cash', 'bank') and ${table.kind} = 'asset') or (${table.subtype} in ('card', 'loan') and ${table.kind} = 'liability')`,
     ),
     // A liability's opening balance is stored negative; an asset's is stored non-negative.
     check(

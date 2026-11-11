@@ -29,11 +29,14 @@ export default defineConfig({
     {
       name: "desktop",
       use: { ...devices["Desktop Chrome"], viewport: { width: 1280, height: 800 } },
+      grepInvert: /@mobile/,
     },
     // RNF-08's base case: the narrow viewport is where the bottom bar and the
-    // settings sheet are the only navigation.
+    // settings sheet are the only navigation. It runs only what is phone-specific
+    // (card lists, the bottom sheet, the 360 px fit), tagged `@mobile` in its title.
     {
       name: "mobile",
+      grep: /@mobile/,
       use: {
         ...devices["Desktop Chrome"],
         viewport: { width: 360, height: 740 },

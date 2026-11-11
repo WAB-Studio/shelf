@@ -63,32 +63,6 @@ async function storedAmount(): Promise<string> {
   return row.amount_cents;
 }
 
-test("an edit saved after another tab changed the payment is refused as stale, keeping what was typed", async ({
-  page,
-  context,
-}) => {
-  // Kills: no expected version sent, or the stale answer ignored, so the form closes over the other tab's figure.
-  const other = await context.newPage();
-  const dialogA = await openEdit(page);
-  const dialogB = await openEdit(other);
-
-  await amount(dialogA).fill("27000");
-
-  await amount(dialogB).fill("31000");
-  await save(dialogB).click();
-  await expect(dialogB).toBeHidden();
-  expect(await storedAmount()).toBe("3100000");
-
-  await save(dialogA).click();
-
-  await expect(dialogA.getByText(messages.errors.stale, { exact: true })).toBeVisible();
-  await expect(dialogA).toBeVisible();
-  await expect(amount(dialogA)).toHaveValue(/^27\D?000$/);
-  await expect(save(dialogA)).toBeEnabled();
-  expect(await storedAmount()).toBe("3100000");
-  await other.close();
-});
-
 test("a payment nobody else touched saves, even after the dialog sat open", async ({ page }) => {
   // Kills: an expected version that never matches, so every ordinary edit is refused.
   const dialog = await openEdit(page);

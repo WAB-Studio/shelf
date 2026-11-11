@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import type { Metadata, Viewport } from "next";
 import { headers } from "next/headers";
-import { Fraunces, IBM_Plex_Sans } from "next/font/google";
+import localFont from "next/font/local";
 import { NextIntlClientProvider } from "next-intl";
 import { getTranslations } from "next-intl/server";
 import { THEME_BOOT_SCRIPT } from "@/lib/theme-choice";
@@ -15,18 +15,23 @@ import "@radix-ui/themes/styles.css";
 import "./theme.css";
 
 // Labels, metadata, controls and interface copy (docs/wordbook/DESIGN.md "Type").
-const sans = IBM_Plex_Sans({
+const sans = localFont({
+  src: [
+    { path: "./fonts/ibm-plex-sans-400.woff2", weight: "400" },
+    { path: "./fonts/ibm-plex-sans-500.woff2", weight: "500" },
+    { path: "./fonts/ibm-plex-sans-600.woff2", weight: "600" },
+    { path: "./fonts/ibm-plex-sans-700.woff2", weight: "700" },
+  ],
   variable: "--font-sans",
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
   fallback: ["system-ui", "sans-serif"],
   display: "swap",
 });
 
 // The app's one serif: titles, headwords and translations (docs/wordbook/DESIGN.md "Verde botella").
-const display = Fraunces({
+const display = localFont({
+  src: "./fonts/fraunces.woff2",
+  weight: "100 900",
   variable: "--font-display",
-  subsets: ["latin"],
   fallback: ["Georgia", "serif"],
   display: "swap",
 });

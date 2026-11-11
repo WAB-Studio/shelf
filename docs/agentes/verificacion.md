@@ -27,6 +27,19 @@ The why: `docs/agentes/historia.md` § Verification.
   its footprint captured (an actual quota error code, not an inference), or on the suite locking a real user out of
   signing in. Save the log the first time.
 
+## E2E scope (decided by the user 2026-11-10)
+
+- Write an HomeFund e2e test only for a happy path of a screen or a user flow, or for the regression of a bug that
+  only a browser caught. Two stand today: the split editor's error under Categoría (`movement-money`) and the
+  line that says why there is no next payment (`debts`, «Próximo pago»).
+- Put a rule about money, data, scope, permission, refusal or arithmetic in `check:queries`, `check-rls`,
+  `check:http` or a unit test, never in e2e. Append the assertion at the end of the suite.
+- Run the phone project only on tests tagged `@mobile` in the title (`grep` in `playwright.config.ts`; the desktop
+  project has `grepInvert`). Tag only what is phone-specific: card lists, the bottom sheet, the 360 px fit, the
+  phone's navigation.
+- Never write a variant per role, scope, width, theme or state of one screen. The measurement is in
+  `docs/agentes/historia.md` § E2E prune.
+
 ## Harness accounting
 
 - Run `npm run harness:census` before and after a session that runs suites. The two numbers are its footprint.
@@ -86,4 +99,4 @@ The why: `docs/agentes/historia.md` § Verification.
 - `build-pulsar` (`next build` for GoalLog) runs on a pull request only; on a push `pulsar-e2e` and `pulsar-checks` build the same tree.
 - `voyager-e2e` runs 2 shards (`voyager-e2e-shard`); the job `voyager-e2e` merges them. The WordBook model-free checks (`check:sync`, `grants`, `sign-in-budget`, `allow-email`, `sign-in-code`, `translate`, `translate-model`, `unlisted`, `admission`) run in the `policies` job, with no paid model. `check:decoration` and `check:notes` run in `voyager-e2e-shard` on shard 1, after the suite (the first seeds today's `model_spend` row), with a blank `OPENAI_API_KEY`. HomeFund's `check:unit` runs in `fast`.
 - `pulsar-e2e` runs 6 shards; `pulsar-e2e-report` merges them. Past six, `pulsar-checks` and orbit's `e2e` set the wall time (`private/reportes/ci-costo.md`).
-- Orbit's e2e runs 8 shards (`e2e-shard`), each building the app before its dev server; the job `e2e` merges them. A spec that spawns `next start` reads that build.
+- Orbit's e2e runs 4 shards (`e2e-shard`), each building the app before its dev server; the job `e2e` merges them. A spec that spawns `next start` reads that build.

@@ -3,12 +3,12 @@ import { getTranslations } from "next-intl/server";
 import { notFound } from "next/navigation";
 import type { NextRequest } from "next/server";
 
-import { readExport } from "@/db/queries/export";
+import { readExportWithOptions } from "@/db/queries/export";
 import type { TransactionExportFilters } from "@/db/queries/export";
 import { requireUser } from "@/db/session";
 import { TIME_ZONE } from "@/lib/locales";
 import { SHEET_ENTITIES, type SheetEntity } from "@/lib/spreadsheet/schema";
-import { buildWorkbook, type SheetLabels } from "@/lib/spreadsheet/workbook";
+import { buildWorkbook, choiceLabelFrom, type SheetLabels } from "@/lib/spreadsheet/workbook";
 import { movementFiltersSchema, movementTypeFilter } from "@/lib/validation/transaction";
 import { routing } from "@/i18n/routing";
 
@@ -70,9 +70,9 @@ export async function GET(
     recurringRuleId: filters.rule,
   };
 
-  const [, data, t] = await Promise.all([
+  const [, { data, options }, t] = await Promise.all([
     requireUser(),
-    readExport({
+    readExportWithOptions({
       entityKeys,
       from: filters.from,
       to: filters.to,
@@ -86,11 +86,13 @@ export async function GET(
     // The key is a descriptor column key, a fixed member of `data.columns`, but its
     // static type is a bare string, so the catalogue lookup is asserted.
     columnHeader: (key) => t(`columns.${key}` as Parameters<typeof t>[0]),
+    choiceLabel: choiceLabelFrom(t),
   };
 
   const workbook = buildWorkbook({
     data,
     labels,
+    options,
     hideBackground: entityKeys.length === SHEET_ENTITIES.length,
   });
   const buffer = await workbook.xlsx.writeBuffer();

@@ -12,14 +12,14 @@ import { MonthReviewRow } from "./month-review-row";
 
 type ReviewItem = MonthReview["items"][number];
 
-function ReviewList({ items }: { items: ReviewItem[] }) {
+function ReviewList({ items, creatorNames }: { items: ReviewItem[]; creatorNames: Record<string, string> }) {
   return (
     <Panel>
       {items.map((item, index) => (
         <Fragment key={`${item.rule}:${item.transactionIds.join(",")}`}>
           {index > 0 && <Separator size="4" />}
           <PanelBlock>
-            <MonthReviewRow item={item} />
+            <MonthReviewRow item={item} creatorNames={creatorNames} />
           </PanelBlock>
         </Fragment>
       ))}
@@ -32,7 +32,15 @@ function ReviewList({ items }: { items: ReviewItem[] }) {
  * the ones still to look at first and the marked ones folded under «Revisados».
  * ‹ › step between closed months, from the first movement's to last month.
  */
-export function MonthReviewScreen({ review, lastClosed }: { review: MonthReview; lastClosed: string }) {
+export function MonthReviewScreen({
+  review,
+  lastClosed,
+  creatorNames,
+}: {
+  review: MonthReview;
+  lastClosed: string;
+  creatorNames: Record<string, string>;
+}) {
   const t = useTranslations("review");
   const format = useFormatter();
   const [showReviewed, setShowReviewed] = useState(false);
@@ -70,7 +78,7 @@ export function MonthReviewScreen({ review, lastClosed }: { review: MonthReview;
       ) : pending.length === 0 ? (
         <Text as="p">{t("allDone", { month: monthName })}</Text>
       ) : (
-        <ReviewList items={pending} />
+        <ReviewList items={pending} creatorNames={creatorNames} />
       )}
 
       {reviewed.length > 0 && (
@@ -78,7 +86,7 @@ export function MonthReviewScreen({ review, lastClosed }: { review: MonthReview;
           <Button variant="ghost" aria-expanded={showReviewed} onClick={() => setShowReviewed((open) => !open)}>
             {t("reviewed", { count: reviewed.length })}
           </Button>
-          {showReviewed && <ReviewList items={reviewed} />}
+          {showReviewed && <ReviewList items={reviewed} creatorNames={creatorNames} />}
         </Flex>
       )}
     </Flex>

@@ -8,15 +8,15 @@ import { POSTGRES_TIMESTAMPTZ_TEXT } from "@/lib/validation/transaction";
 // The list the screens and both sides of validation read for an account's kind (RF-09).
 export const ACCOUNT_KINDS = ["asset", "liability"] as const;
 
-// What the account is: a bank account, physical cash, or a card (RF-56).
-export const ACCOUNT_SUBTYPES = ["bank", "cash", "card"] as const;
+// What the account is: a bank account, physical cash, a card (RF-56) or a loan (RF-178).
+export const ACCOUNT_SUBTYPES = ["bank", "cash", "card", "loan"] as const;
 
 // Which subtypes each kind admits, mirroring the accounts_subtype_kind DB CHECK:
-// cash and bank hold value (asset); a card is money owed (liability). The form
+// cash and bank hold value (asset); a card and a loan are money owed (liability). The form
 // offers only these per kind, and the refinement below rejects the rest.
 export const SUBTYPES_BY_KIND = {
   asset: ["bank", "cash"],
-  liability: ["card"],
+  liability: ["card", "loan"],
 } as const satisfies Record<
   (typeof ACCOUNT_KINDS)[number],
   readonly (typeof ACCOUNT_SUBTYPES)[number][]
