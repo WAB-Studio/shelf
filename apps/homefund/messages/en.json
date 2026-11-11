@@ -1459,7 +1459,7 @@
       "scopeViolation": "That category belongs to another scope than the account. Pick a fund category for a fund account, or one of yours for your own account."
     },
     "mcpHeading": "Connect Claude",
-    "mcpDescription": "On claude.ai (web, desktop or mobile), add a custom connector with the URL above: it asks you to sign in with HomeFund and that is all. Claude sees your accounts and «Review the month» with your own permissions; revoking its key in the list disconnects it. A key you create here still works: in Claude Code it goes in «Authorization: Bearer», and in a connector with no sign-in in the «X-API-Key» header. A webhook key does not open this door.",
+    "mcpDescription": "On claude.ai (web, desktop or mobile), add a custom connector with the URL above: it asks you to sign in with HomeFund and that is all. Claude reads your accounts, movements and «Review the month», and records movements or creates and edits accounts and categories once you confirm, always with your own permissions; revoking its key in the list disconnects it. A key you create here still works: in Claude Code it goes in «Authorization: Bearer», and in a connector with no sign-in in the «X-API-Key» header. A webhook key does not open this door. To talk to HomeFund and GoalLog in one chat, the repository github.com/WAB-Studio/asistente (private to WAB-Studio) has it all set up: follow its README.",
     "mcpIssue": "Create a key for Claude"
   },
   "ingest": {
