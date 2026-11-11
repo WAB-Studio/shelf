@@ -3,7 +3,7 @@ import "server-only";
 import type { CallToolResult, McpServer, ServerContext } from "@modelcontextprotocol/server";
 import { z } from "zod";
 
-import { listAccounts, updateAccount } from "@/db/queries/accounts";
+import { handAccountToGroup, listAccounts, updateAccount } from "@/db/queries/accounts";
 import { freeCategoryColor, listScopedCategories, updateCategory } from "@/db/queries/categories";
 import {
   bookMovement,
@@ -325,6 +325,22 @@ export function registerLedgerTools(server: McpServer, run: Run, t: Say): void {
         }
         if (updated === "stale") throw new ActionError("errors.stale");
         if (!updated) throw new ActionError("errors.notFound");
+        return { accountId: id };
+      }),
+  );
+
+  // The same write as «Pasar al fondo»: the account keeps its id, balance, movements and pockets (RF-180).
+  server.registerTool(
+    "move_account_to_fund",
+    {
+      description: t("tools.moveAccountToFund"),
+      inputSchema: z.object({ accountId: z.string().describe(d("accountId")) }),
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
+    },
+    (input: { accountId: string }, ctx) =>
+      run(ctx, async () => {
+        const id = idOf("errors.notFound", input.accountId);
+        await handAccountToGroup({ accountId: id });
         return { accountId: id };
       }),
   );

@@ -417,7 +417,7 @@
     "deleteDescription": "Esta acción no se puede deshacer y solo se permite si la cuenta no tiene movimientos.",
     "handOver": "Pasar al fondo",
     "handOverTitle": "Pasar la cuenta al fondo",
-    "handOverDescription": "La cuenta deja de ser tuya y cualquier miembro del fondo podrá registrar movimientos en ella.",
+    "handOverDescription": "La cuenta deja de ser tuya y pasa al fondo con todo lo que tiene: saldo, movimientos y bolsillos. Cualquier miembro del fondo la verá y podrá registrar movimientos en ella. Sus movimientos pasan a contar en el fondo y dejan de contar en tus presupuestos personales; también los traslados a tus otras cuentas pasan a verlos todos los miembros. Sus categorías personales se cambian por la del fondo con el mismo nombre; si falta alguna, no se pasa. Los ingresos que ya tiene quedan «Sin asignar» en los aportes. No se deshace.",
     "created": "Cuenta creada.",
     "updated": "Cuenta actualizada.",
     "archived": "Cuenta archivada.",
@@ -435,6 +435,15 @@
       "parentInvalid": "Elige una cuenta de activo abierta del mismo dueño y la misma moneda.",
       "pocketMustBeAsset": "Solo una cuenta de ahorros o de efectivo puede ser un bolsillo.",
       "hasPockets": "Esta cuenta tiene bolsillos. Mueve o archiva primero sus bolsillos.",
+      "moveNoFund": "Para pasar una cuenta al fondo primero debes pertenecer a uno.",
+      "moveNotYours": "Solo puedes pasar al fondo una cuenta tuya.",
+      "moveAlready": "Esa cuenta ya es del fondo.",
+      "moveArchived": "Restaura la cuenta antes de pasarla al fondo.",
+      "moveMovementRef": "Un movimiento o una regla de esta cuenta tiene una referencia que el fondo ya usa en otro. Cámbiala y vuelve a intentarlo.",
+      "moveCategories": "Sus movimientos usan categorías personales que el fondo no tiene con el mismo nombre. Crea esas categorías en el fondo y vuelve a intentarlo.",
+      "moveLabels": "Sus movimientos usan etiquetas personales que el fondo no tiene con el mismo nombre. Crea esas etiquetas en el fondo y vuelve a intentarlo.",
+      "moveBudgetsGoals": "Un presupuesto o una meta personal apunta a esta cuenta o a sus movimientos. Edítalo o bórralo y vuelve a intentarlo.",
+      "movePocket": "Un bolsillo se pasa junto con su cuenta principal. Pasa la cuenta principal.",
       "currencyLocked": "Esta cuenta ya tiene movimientos: no se le puede cambiar la moneda. Crea otra cuenta en la moneda que necesitas.",
       "subtypeInvalid": "Elige una clase de cuenta válida.",
       "subtypeKindMismatch": "Esta clase no corresponde al tipo de cuenta.",
@@ -1278,7 +1287,6 @@
     "alreadyInFund": "Ya estás en otro fondo. Para unirte a este, sal primero desde «Ajustes del fondo».",
     "leaderStays": "No puedes salir todavía. Antes de salir, pasa el liderazgo a otro miembro desde «Miembros».",
     "accountHasMovements": "Esta cuenta tiene movimientos. Archívala en su lugar.",
-    "accountHasHistory": "No puedes pasar al fondo una cuenta con movimientos. Archívala en su lugar.",
     "accountRefTaken": "El fondo ya tiene una cuenta con la misma referencia de importación. Archiva esta cuenta en su lugar.",
     "labelInUse": "Un presupuesto usa esta etiqueta. Quítala del presupuesto para eliminarla.",
     "foreignCurrencyUnsupported": "Esta operación no admite otra moneda. Elige una cuenta en la moneda de liquidación.",
@@ -1319,7 +1327,8 @@
       "importReady": "Todas las filas son válidas. Confirma para escribirlas.",
       "confirmImport": "Confirmar importación",
       "importDone": "Importación aplicada.",
-      "commitRowError": "Fila {row} de {sheet}: {reason}"
+      "commitRowError": "Fila {row} de {sheet}: {reason}",
+      "editedRowsHint": "Si cambiaste fecha, monto o descripción, se agrega como nuevo."
     },
     "sheets": {
       "accounts": "Cuentas",
@@ -1348,9 +1357,8 @@
       "email": "Correo",
       "parent": "Categoría principal",
       "color": "Color",
-      "externalRef": "Referencia externa",
-      "fromAccount": "De (origen)",
-      "toAccount": "Para (destino)",
+      "fromAccount": "De",
+      "toAccount": "Hacia",
       "category": "Categoría",
       "description": "Descripción",
       "frequency": "Frecuencia",
@@ -1374,7 +1382,6 @@
       "targetDate": "Fecha objetivo",
       "goal": "Meta",
       "contributedOn": "Fecha del aporte",
-      "movement": "Movimiento (referencia)",
       "debtKind": "Tipo de deuda",
       "annualRate": "Tasa efectiva anual (%)",
       "minimumPayment": "Pago mínimo",
@@ -1392,7 +1399,50 @@
       "debits": "Cargos",
       "interestCharged": "Intereses",
       "feesCharged": "Comisiones",
-      "source": "Origen"
+      "source": "Origen",
+      "externalRef": "Referencia externa"
+    },
+    "choices": {
+      "accountKind": {
+        "asset": "Activo",
+        "liability": "Deuda"
+      },
+      "accountSubtype": {
+        "bank": "Bancaria",
+        "cash": "Efectivo",
+        "card": "Tarjeta",
+        "loan": "Préstamo"
+      },
+      "categoryKind": {
+        "expense": "Gasto",
+        "income": "Ingreso"
+      },
+      "placement": {
+        "personal": "Personal",
+        "group": "Del hogar"
+      },
+      "frequency": {
+        "monthly": "Mensual",
+        "weekly": "Semanal",
+        "yearly": "Anual"
+      },
+      "budgetPeriod": {
+        "monthly": "Mensual",
+        "weekly": "Semanal",
+        "yearly": "Anual"
+      },
+      "debtKind": {
+        "revolving": "Rotativa",
+        "installment": "A cuotas"
+      },
+      "statementSource": {
+        "recorded": "Registrado",
+        "imported": "Importado"
+      },
+      "flag": {
+        "yes": "Sí",
+        "no": "No"
+      }
     },
     "filenames": {
       "export": "finanzas-datos",
@@ -1577,14 +1627,20 @@
     "prev": "‹ mes anterior",
     "next": "mes siguiente ›",
     "rules": {
-      "above_usual": "Muy por encima de lo usual",
-      "twin": "Dos iguales el mismo día",
-      "from_words": "Monto leído de palabras",
-      "reconciliation_gap": "Diferencia al cuadrar"
+      "above_usual": "¿Es correcto este monto?",
+      "twin": "¿Se registró dos veces?",
+      "from_words": "¿Leímos bien este monto?",
+      "reconciliation_gap": "¿De dónde sale esta diferencia al cuadrar?"
     },
     "meta": "{account} · {date}",
     "metaCategory": "{account} · {date} · {category}",
-    "usual": "Lo usual: {amount}",
+    "usual": "Lo usual: {amount} (mediana de los últimos {months} meses)",
+    "usualCategory": "Lo usual en {category}: {amount} (mediana de los últimos {months} meses)",
+    "noDescription": "Sin descripción",
+    "entryBy": "anotó {who} a las {time}",
+    "entryAt": "anotado a las {time}",
+    "entryByOn": "anotó {who} el {day} a las {time}",
+    "entryAtOn": "anotado el {day} a las {time}",
     "counted": "Contaste {amount}",
     "twinCount": "{count} movimientos iguales",
     "ok": "Está bien",
@@ -1626,6 +1682,7 @@
       "deleteMovement": "Borra un movimiento que la persona puede escribir. No se deshace: CONFIRMA con la persona cuál es antes de llamarla.",
       "createAccount": "Crea una cuenta con saldo inicial en centavos a una fecha: asset (bank o cash) o liability (card, lo que se debe va en positivo). placement «personal» o «group» (la del fondo). parentAccountId la vuelve bolsillo de una cuenta de activo abierta del mismo dueño y la misma moneda, un solo nivel. holderMemberId, solo en placement «group», nombra al miembro del fondo titular de la cuenta (de list_members). CONFIRMA con la persona nombre, tipo, moneda y saldo antes de llamarla, y revisa con list_accounts que no exista ya.",
       "updateAccount": "Corrige una cuenta que la persona puede escribir: nombre, subtipo, moneda, entidad, últimos cuatro dígitos, parentAccountId (la cuenta en la que está como bolsillo, null para sacarla), holderMemberId (el miembro titular, de list_members; null para que sea de todos), saldo inicial en centavos y su fecha. Es un parche: envía solo lo que cambia. Pasa el updatedAt que leíste en list_accounts como expectedUpdatedAt: si alguien la editó mientras tanto, se rechaza. CONFIRMA con la persona el cambio antes de llamarla, sobre todo el saldo inicial.",
+      "moveAccountToFund": "Pasa una cuenta PERSONAL de la persona al fondo al que pertenece, con todo lo que tiene: mismo id, saldo, movimientos y bolsillos (un bolsillo se pasa con su cuenta principal, nunca solo). Desde ahí cualquier miembro del fondo la ve y la escribe; sus movimientos dejan de contar en los presupuestos personales; sus categorías y etiquetas personales se cambian por las del fondo con el mismo nombre (si falta alguna, se rechaza y dice cuál clase); los ingresos que ya tiene quedan sin «De quién». Se rechaza si hay un presupuesto o una meta personal que apunta a la cuenta. No se deshace: CONFIRMA con la persona qué cuenta pasa y que entiende todo esto antes de llamarla. Revisa antes con list_accounts y list_categories.",
       "createCategory": "Crea una categoría (expense o income), opcionalmente bajo una madre del mismo tipo y alcance. placement «personal» o «group». CONFIRMA con la persona antes de llamarla y revisa con list_categories que no exista ya.",
       "updateCategory": "Renombra una categoría o la mueve bajo otra madre del mismo tipo (parentId) o al primer nivel (parentId null). Es un parche: envía solo lo que cambia. Una categoría con subcategorías no puede ir bajo otra, y una madre de otro tipo se rechaza. Revisa antes con list_categories. Muestra el cambio a la persona y pide un solo sí antes de llamarla.",
       "mergeMovements": "Junta 2 o más gastos, o 2 o más ingresos, de UNA misma cuenta en un solo movimiento (una factura registrada como un movimiento por producto): sus líneas son las de los originales (la categoría y el monto de cada uno, su descripción como nombre de la línea; un original con líneas aporta cada una) y el total es la suma. Los originales se BORRAN, todo o nada. Descripción y occurredAt opcionales (por defecto, la fecha más antigua). El movimiento nuevo no hereda las marcas de revisión ni la regla recurrente de los originales. Se rechaza: transferencias, cuentas o tipos mezclados, movimientos importados de un extracto o ligados a un pago planeado, meta, aplazamiento o cuota, los que causaron o son un cargo de otro, los que tienen referencia externa o esperan contraparte, y los ajenos. Búscalos con list_movements, muestra a la persona la lista (originales, líneas resultantes, total) y pide un solo sí antes de llamarla.",
@@ -1647,7 +1704,13 @@
         "lineRefused": "Una línea no se pudo registrar; no se importó nada."
       },
       "inbox": {
-        "missing": {"amount": "La entrega no trae monto: indícalo en amountCents.", "account": "La entrega no trae cuenta: indícala en accountId.", "fromAccount": "Una transferencia necesita fromAccountId.", "toAccount": "Una transferencia necesita toAccountId.", "category": "La entrega no trae categoría: indica categoryId o splits."},
+        "missing": {
+          "amount": "La entrega no trae monto: indícalo en amountCents.",
+          "account": "La entrega no trae cuenta: indícala en accountId.",
+          "fromAccount": "Una transferencia necesita fromAccountId.",
+          "toAccount": "Una transferencia necesita toAccountId.",
+          "category": "La entrega no trae categoría: indica categoryId o splits."
+        },
         "sideNeedsTransfer": "Un solo fromAccountId o toAccountId solo vale en una transferencia: pasa kind transfer o usa accountId.",
         "duplicate": "Esa entrega ya está registrada como un movimiento."
       },

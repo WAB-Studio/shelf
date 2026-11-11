@@ -242,7 +242,7 @@ export function AccountsTable({
                     label: tKey("common.archive"),
                     onSelect: () => onArchive(row),
                   },
-                  ...(hasGroup && row.ownerUserId !== null
+                  ...(hasGroup && row.ownerUserId !== null && row.parentAccountId === null
                     ? [
                         {
                           key: "handOver",

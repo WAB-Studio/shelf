@@ -2,9 +2,6 @@ import "server-only";
 
 import { and, asc, desc, eq, isNotNull, isNull, sql } from "drizzle-orm";
 
-import { pgConstraintName } from "@/lib/db-error";
-import { ActionError } from "@/lib/errors";
-
 import { ownerColumns } from "@/db/queries/owner-columns";
 import { insertRow } from "@/db/insert-row";
 import { accounts, groupMembers } from "@/db/schema";
@@ -12,6 +9,8 @@ import type { Account } from "@/db/schema";
 import type { Transaction } from "@/db/session";
 import { withUserDb, withUserDbOrTx } from "@/db/session";
 import type { CurrencyCode } from "@/lib/currency";
+import { pgConstraintName, pgErrorCode } from "@/lib/db-error";
+import { ActionError } from "@/lib/errors";
 
 type AccountKind = Account["kind"];
 type AccountSubtype = Account["subtype"];
@@ -356,23 +355,48 @@ export async function updateAccount({
   }));
 }
 
-// RF-61: a personal account becomes the group's in one statement. No group id
-// crosses the boundary — `private.hand_account_to_group` reads auth.uid(), takes
-// the caller's own group and refuses an account carrying any history, which is
-// archived instead. `AccountRow` is unchanged: the next `listAccounts` reads the
-// new placement. A refusal is a 23514 the action layer reads.
+// RF-61, RF-180: a personal account becomes the group's in one statement, with its movements,
+// pockets and balance. No group id crosses the boundary — `private.hand_account_to_group`
+// reads auth.uid() and takes the caller's own group. `AccountRow` is unchanged: the next
+// `listAccounts` reads the new placement. A refusal is thrown as an `ActionError` with its catalogue key.
 export async function handAccountToGroup({
   accountId,
 }: {
   accountId: string;
 }): Promise<boolean> {
-  return withUserDb(async (tx) => {
-    const rows = await tx.execute<{ ok: boolean }>(
-      sql`select private.hand_account_to_group(${accountId}) as ok`,
-    );
+  try {
+    return await withUserDb(async (tx) => {
+      const rows = await tx.execute<{ ok: boolean }>(
+        sql`select private.hand_account_to_group(${accountId}) as ok`,
+      );
 
-    return rows[0]?.ok === true;
-  });
+      return rows[0]?.ok === true;
+    });
+  } catch (error) {
+    const key = moveRefusalKey(error);
+    if (key) throw new ActionError(key);
+    throw error;
+  }
+}
+
+// What each refusal of the move means to the person (RF-180); null for an error that is not one of them.
+// A 23505 is an `external_ref` the fund already uses: the account's own, or that of a movement or rule it carries.
+function moveRefusalKey(error: unknown): string | null {
+  const code = pgErrorCode(error);
+  if (code === "MV001") return "accounts.errors.moveCategories";
+  if (code === "MV002") return "accounts.errors.moveLabels";
+  if (code === "MV003") return "accounts.errors.moveBudgetsGoals";
+  if (code === "MV004") return "accounts.errors.movePocket";
+  if (code === "MV005") return "accounts.errors.moveNoFund";
+  if (code === "MV006") return "accounts.errors.moveNotYours";
+  if (code === "MV007") return "accounts.errors.moveAlready";
+  if (code === "MV008") return "accounts.errors.moveArchived";
+  if (code === "23505") {
+    const constraint = pgConstraintName(error) ?? "";
+    if (constraint.startsWith("accounts_")) return "errors.accountRefTaken";
+    if (constraint.startsWith("transactions_") || constraint.startsWith("recurring_rules_")) return "accounts.errors.moveMovementRef";
+  }
+  return null;
 }
 
 export async function archiveAccount({

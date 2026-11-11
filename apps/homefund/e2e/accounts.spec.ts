@@ -391,9 +391,6 @@ test("refuses to delete an account carrying a movement, and archives it instead"
   await expect(
     page.getByText(errors.accountHasMovements, { exact: true }),
   ).toBeVisible();
-  await expect(page.getByText(errors.accountHasHistory, { exact: true })).toHaveCount(
-    0,
-  );
   await expect(page.getByText(errors.referenceGone, { exact: true })).toHaveCount(0);
 
   // A refused confirmation stays open, which is what keeps the list under an
