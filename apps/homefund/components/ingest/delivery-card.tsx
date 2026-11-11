@@ -62,11 +62,12 @@ function movementDefaults(
       : centsToDecimal(delivery.proposedAmountCents);
   const accountId = delivery.proposedAccountId;
   const isIncome = delivery.proposedDirection === "income";
-  const categoryId = proposedCategoryId(delivery, options);
+  const isTransfer = delivery.proposedDirection === "transfer";
+  const categoryId = isTransfer ? null : proposedCategoryId(delivery, options);
 
   return {
     fromAccountId: isIncome ? null : accountId,
-    toAccountId: isIncome ? accountId : null,
+    toAccountId: isTransfer ? delivery.proposedToAccountId : isIncome ? accountId : null,
     amount,
     occurredAt: delivery.proposedOccurredAt ?? todayInBogota(),
     description: delivery.proposedDescription,
@@ -82,7 +83,9 @@ function completeInput(
     !delivery.isComplete ||
     delivery.proposedAmountCents === null ||
     delivery.proposedAccountId === null ||
-    proposedCategoryId(delivery, options) === null
+    (delivery.proposedDirection === "transfer"
+      ? delivery.proposedToAccountId === null
+      : proposedCategoryId(delivery, options) === null)
   ) {
     return null;
   }
@@ -97,9 +100,12 @@ function completeInput(
 export function DeliveryCard({
   delivery,
   options,
+  onSaveNumber,
 }: {
   delivery: PendingDeliveryRow;
   options: TransactionFormOptions;
+  // Offered when the message names a number nobody saved yet (RF-189).
+  onSaveNumber: () => void;
 }) {
   const t = useTranslations("ingest");
   const tKey = useTranslations();
@@ -107,6 +113,7 @@ export function DeliveryCard({
   const onActionError = useActionErrorToast();
 
   const isIncome = delivery.proposedDirection === "income";
+  const isTransfer = delivery.proposedDirection === "transfer";
   const currency = deliveryCurrency(delivery, options);
 
   const [rawTextOpen, setRawTextOpen] = useState(false);
@@ -152,9 +159,13 @@ export function DeliveryCard({
   const input = completeInput(delivery, options);
   const defaults = movementDefaults(delivery, options);
   const categoryId = proposedCategoryId(delivery, options);
-  const account =
-    options.accounts.find((one) => one.id === delivery.proposedAccountId)
-      ?.name ?? null;
+  const accountName = (id: string | null) =>
+    options.accounts.find((one) => one.id === id)?.name ?? null;
+  const account = isTransfer
+    ? [accountName(delivery.proposedAccountId), accountName(delivery.proposedToAccountId)]
+        .map((name) => name ?? "?")
+        .join(" → ")
+    : accountName(delivery.proposedAccountId);
   const category =
     categoryId === null
       ? null
@@ -237,7 +248,7 @@ export function DeliveryCard({
               />
             </Heading>
             <Badge color={isIncome ? "jade" : "gray"} variant="soft" radius="full">
-              {t(isIncome ? "kindIncome" : "kindExpense")}
+              {t(isIncome ? "kindIncome" : isTransfer ? "kindTransfer" : "kindExpense")}
             </Badge>
           </Flex>
         )}
@@ -256,9 +267,11 @@ export function DeliveryCard({
               })}
             </Text>
           )}
-          <Text color={category ? undefined : "amber"}>
-            {category ?? t("categoryMissing")}
-          </Text>
+          {!isTransfer && (
+            <Text color={category ? undefined : "amber"}>
+              {category ?? t("categoryMissing")}
+            </Text>
+          )}
           <Flex gap="2" wrap="wrap">
             {delivery.categorySource && (
               <Badge color="gray">
@@ -267,7 +280,9 @@ export function DeliveryCard({
                     ? "categoryFromMerchant"
                     : delivery.categorySource === "interpreter"
                       ? "categoryFromText"
-                      : "categoryFromDefault",
+                      : delivery.categorySource === "recipient"
+                        ? "categoryFromRecipient"
+                        : "categoryFromDefault",
                 )}
               </Badge>
             )}
@@ -297,6 +312,19 @@ export function DeliveryCard({
             </Text>
           )}
         </Flex>
+
+        {delivery.recipientName && (
+          <Text size="2" color="gray">
+            {t("recipientIs", { name: delivery.recipientName })}
+          </Text>
+        )}
+        {delivery.extractedIdentifier && !delivery.recipientId && (
+          <Flex align="start">
+            <Button type="button" size="3" variant="soft" onClick={onSaveNumber}>
+              {t("saveNumber")}
+            </Button>
+          </Flex>
+        )}
 
         <Flex direction="column" align="start" gap="2">
           <Button

@@ -18,8 +18,8 @@ the repo's `.claude/settings.json`, hooks, `CLAUDE.md`, agents and skills load, 
 - Variables: none required. A cloud session holds no production secret.
   - Optional `OPENAI_API_KEY`, as a network secret, to call the real model on purpose.
   - `scripts/supabase-local.sh exec` overlays the local stack's database, keys and empty paid keys on every command.
-- Production migrations run in `.github/workflows/deploy-prod.yml` on the merge to `main`, after the user approves
-  the `production` job. Nothing else touches production from the cloud.
+- Production migrations run in the production Vercel build (`apps/homefund/scripts/vercel-build.sh`) on the merge
+  to `main`, which the user does. Nothing else touches production from the cloud.
 - Never set `GH_TOKEN` by hand; the proxy injects it.
 
 ## What runs on start

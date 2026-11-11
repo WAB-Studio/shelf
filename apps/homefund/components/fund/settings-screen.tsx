@@ -1,5 +1,6 @@
 import { getTranslations } from "next-intl/server";
 
+import { KeepSignedInSelect } from "@/components/auth/keep-signed-in-select";
 import { SignOutButton } from "@/components/auth/sign-out-button";
 import { FUND_SETTINGS, SETTINGS_KEYS, destinations } from "@/components/fund/destinations";
 import { LanguageSwitcher } from "@/components/language-switcher";
@@ -24,7 +25,7 @@ import {
  * The fund's settings lead the phone's list alone: from `sm` up the chevron beside
  * the fund name reaches them, and no surface offers a destination twice.
  */
-export async function SettingsScreen({ hasGroup }: { hasGroup: boolean }) {
+export async function SettingsScreen({ hasGroup, keepSignedIn }: { hasGroup: boolean; keepSignedIn: string }) {
   const t = await getTranslations("nav");
 
   // Every destination named here sits below this route, so no row of the list is
@@ -78,6 +79,7 @@ export async function SettingsScreen({ hasGroup }: { hasGroup: boolean }) {
           >
             <LanguageSwitcher width={{ initial: "100%", md: "11rem" }} showText />
             <ThemeSwitcher width={{ initial: "100%", md: "11rem" }} showText />
+            <KeepSignedInSelect saved={keepSignedIn} width={{ initial: "100%", md: "16rem" }} />
             <SignOutButton />
           </Flex>
         </Card>

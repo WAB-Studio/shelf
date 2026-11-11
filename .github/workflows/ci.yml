@@ -104,6 +104,8 @@ jobs:
   # so it leaves no row. The npm script sets its own NODE_PATH.
   pulsar-policies:
     runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.pulsar == 'true'
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7

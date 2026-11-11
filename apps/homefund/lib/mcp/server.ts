@@ -18,6 +18,7 @@ import { env } from "@/lib/env";
 import { pgErrorCode } from "@/lib/db-error";
 import { BatchRefusal, registerInboxTools } from "@/lib/mcp/inbox-tools";
 import { registerMemberDebtTools } from "@/lib/mcp/member-debt-tools";
+import { registerRecipientTools } from "@/lib/mcp/recipient-tools";
 import { registerLedgerTools } from "@/lib/mcp/write-tools";
 import { statementImportSchema, statementSchema } from "@/lib/validation/statement-import";
 
@@ -181,6 +182,7 @@ export function buildHandler(): (request: Request) => Promise<Response> {
     registerLedgerTools(server, run, (key) => t(key as never));
     registerInboxTools(server, run, (key) => t(key as never));
     registerMemberDebtTools(server, run, (key) => t(key as never));
+    registerRecipientTools(server, run, (key) => t(key as never));
   }, {
     serverInfo: { name: "homefund", version: pkg.version },
     instructions: t("instructions"),

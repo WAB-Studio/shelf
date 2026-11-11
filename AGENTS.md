@@ -98,7 +98,8 @@ This file is the core every agent loads. Read the file the index names before th
 - Do git work without asking: commit, push, open a PR, merge into `integracion`, delete a branch; report it. Ride a docs
   change along with the work that produced it.
 - Ask before taking `integracion` to `main`. That merge is the deploy: once per slice, at most once a day.
-- Migrate production only through `deploy-prod.yml`: the user's approval of its `production` job is the authorization.
+- Production migrates in its own Vercel build, before `next build`: the user's merge to `main` is the authorization.
+  Decided by the user 2026-11-11: «si, migrar en el build».
 - Fetch before you compare. Ask GitHub whether a branch landed: a squash merge is never an ancestor.
 
 ## Verification

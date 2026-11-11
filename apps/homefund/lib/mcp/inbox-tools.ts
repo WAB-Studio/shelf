@@ -82,12 +82,17 @@ function proposedCategory(delivery: PendingDeliveryRow, lookup: Lookup): string 
 // interpreter named it, and an income into a fund account still asks «De quién».
 function notDetectedOf(delivery: PendingDeliveryRow, lookup: Lookup): string[] {
   const account = delivery.proposedAccountId === null ? undefined : lookup.accounts.get(delivery.proposedAccountId);
-  const named = delivery.categorySource === "merchant" || delivery.categorySource === "interpreter";
+  const named =
+    delivery.categorySource === "merchant" ||
+    delivery.categorySource === "interpreter" ||
+    delivery.categorySource === "recipient";
+  const transfer = delivery.proposedDirection === "transfer";
   const absent: Record<string, boolean> = {
     amount: delivery.proposedAmountCents === null,
     kind: delivery.proposedDirection === null,
     account: usableAccount(delivery, lookup) === null,
-    category: proposedCategory(delivery, lookup) === null || !named,
+    toAccount: transfer && delivery.proposedToAccountId === null,
+    category: !transfer && (proposedCategory(delivery, lookup) === null || !named),
     date: delivery.proposedOccurredAt === null,
     description: delivery.proposedDescription === null,
     contributor: delivery.proposedDirection === "income" && account?.groupId != null,
@@ -102,7 +107,10 @@ function acceptForm(delivery: PendingDeliveryRow, item: AcceptItem, lookup: Look
     throw new BatchRefusal(`mcp.errors.inbox.missing.${field}`, delivery.id, field);
   };
   const amountCents = item.amountCents ?? delivery.proposedAmountCents ?? missing("amount");
-  const transfer = item.kind === "transfer" || (item.kind === undefined && !!item.fromAccountId && !!item.toAccountId);
+  const transfer =
+    item.kind === "transfer" ||
+    (item.kind === undefined &&
+      ((!!item.fromAccountId && !!item.toAccountId) || delivery.proposedDirection === "transfer"));
   if (!transfer && (item.fromAccountId || item.toAccountId)) {
     throw new BatchRefusal("mcp.errors.inbox.sideNeedsTransfer", delivery.id);
   }
@@ -113,7 +121,8 @@ function acceptForm(delivery: PendingDeliveryRow, item: AcceptItem, lookup: Look
   let toAccountId: string | null;
   if (transfer) {
     fromAccountId = item.fromAccountId ?? proposed ?? missing("fromAccount");
-    toAccountId = item.toAccountId ?? (item.fromAccountId ? proposed : null) ?? missing("toAccount");
+    toAccountId =
+      item.toAccountId ?? (item.fromAccountId ? proposed : delivery.proposedToAccountId) ?? missing("toAccount");
   } else {
     const own = item.accountId ?? proposed ?? missing("account");
     fromAccountId = income ? null : own;
@@ -202,17 +211,26 @@ export function registerInboxTools(server: McpServer, run: Run, t: Say): void {
           const paths = categoryPathsById(lookup.categories, categoryNamesById(lookup.categories, (name) => name));
           return rows.map((row) => {
             const account = row.proposedAccountId === null ? undefined : lookup.accounts.get(row.proposedAccountId);
-            const categoryId = proposedCategory(row, lookup);
+            const categoryId = row.proposedDirection === "transfer" ? null : proposedCategory(row, lookup);
+            const toAccount = row.proposedToAccountId === null ? undefined : lookup.accounts.get(row.proposedToAccountId);
             const base = {
               id: row.id,
               receivedAt: row.createdAt,
               rawText: row.rawText,
+              // RF-189: the number the message names and whom it is saved as; null recipient means ask the
+              // person what it is and save it with save_recipient.
+              extractedNumber: row.extractedIdentifier,
+              recipientId: row.recipientId,
+              recipientName: row.recipientName,
               proposal: {
                 amountCents: row.proposedAmountCents,
                 currency: account?.settlementCurrency ?? null,
                 kind: row.proposedDirection,
                 accountId: row.proposedAccountId,
                 accountName: account?.name ?? null,
+                // A transfer leaves accountId and lands here.
+                toAccountId: row.proposedToAccountId,
+                toAccountName: toAccount?.name ?? null,
                 categoryId,
                 categoryPath: categoryId === null ? null : (paths.get(categoryId) ?? null),
                 date: row.proposedOccurredAt,

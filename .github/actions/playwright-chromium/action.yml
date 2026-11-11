@@ -16,16 +16,21 @@ runs:
         path: ~/.cache/ms-playwright
         key: playwright-chromium-${{ runner.os }}-${{ steps.version.outputs.version }}
 
-    # The apt libraries live outside the cache, so a hit still installs them.
-    - name: Install the system libraries
-      if: steps.browser.outputs.cache-hit == 'true'
-      shell: bash
-      run: npx playwright install-deps chromium
-
-    - name: Install the browser and its libraries
+    - name: Install the browser
       if: steps.browser.outputs.cache-hit != 'true'
       shell: bash
-      run: npx playwright install --with-deps chromium
+      run: npx playwright install chromium
+
+    # The apt libraries live outside the cache, so a hit still installs them. The runner image already carries what
+    # Chromium needs; an apt mirror that does not resolve costs the fonts, never the run.
+    - name: Install the system libraries
+      shell: bash
+      run: |
+        for attempt in 1 2 3; do
+          timeout 120 npx playwright install-deps chromium && exit 0
+          sleep $((attempt * 10))
+        done
+        echo "::warning::playwright install-deps failed three times; running on the runner image's libraries."
 
     - name: Save the browser
       if: steps.browser.outputs.cache-hit != 'true'

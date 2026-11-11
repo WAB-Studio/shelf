@@ -220,6 +220,7 @@
     "data": "Datos",
     "audit": "Auditoría",
     "webhooks": "Correos del banco",
+    "recipients": "Destinatarios",
     "roleLeader": "Propietario",
     "roleMember": "Miembro"
   },
@@ -1265,6 +1266,11 @@
       "toAccountInvalid": "Elige la deuda que vas a abonar."
     }
   },
+  "session": {
+    "label": "Mantener la sesión abierta",
+    "always": "Siempre",
+    "afterDays": "Tras {count, plural, one {# día} other {# días}} sin abrirla"
+  },
   "language": {
     "label": "Idioma",
     "endonym": {
@@ -1597,6 +1603,7 @@
     "noMerchant": "Sin comercio",
     "kindExpense": "Gasto",
     "kindIncome": "Ingreso",
+    "kindTransfer": "Transferencia",
     "amountMissing": "Falta el monto",
     "accountMissing": "Falta la cuenta",
     "categoryMissing": "Falta la categoría",
@@ -1613,6 +1620,7 @@
     "categoryFromMerchant": "Categoría del comercio",
     "categoryFromText": "Categoría del mensaje",
     "categoryFromDefault": "Categoría por defecto",
+    "categoryFromRecipient": "Categoría del destinatario",
     "rawTextLabel": "Mensaje del banco",
     "showRawText": "Ver el mensaje",
     "hideRawText": "Ocultar el mensaje",
@@ -1659,7 +1667,9 @@
       "proposed": "Sugerida: la usaste antes con esta descripción.",
       "complete": "Completar",
       "completed": "Movimiento completado"
-    }
+    },
+    "saveNumber": "Guardar este número",
+    "recipientIs": "Destinatario: {name}"
   },
   "review": {
     "entry": "Revisar el mes",
@@ -1729,11 +1739,14 @@
       "updateCategory": "Renombra una categoría o la mueve bajo otra madre del mismo tipo (parentId) o al primer nivel (parentId null). Es un parche: envía solo lo que cambia. Una categoría con subcategorías no puede ir bajo otra, y una madre de otro tipo se rechaza. Revisa antes con list_categories. Muestra el cambio a la persona y pide un solo sí antes de llamarla.",
       "mergeMovements": "Junta 2 o más gastos, o 2 o más ingresos, de UNA misma cuenta en un solo movimiento (una factura registrada como un movimiento por producto): sus líneas son las de los originales (la categoría y el monto de cada uno, su descripción como nombre de la línea; un original con líneas aporta cada una) y el total es la suma. Los originales se BORRAN, todo o nada. Descripción y occurredAt opcionales (por defecto, la fecha más antigua). El movimiento nuevo no hereda las marcas de revisión ni la regla recurrente de los originales. Se rechaza: transferencias, cuentas o tipos mezclados, movimientos importados de un extracto o ligados a un pago planeado, meta, aplazamiento o cuota, los que causaron o son un cargo de otro, los que tienen referencia externa o esperan contraparte, y los ajenos. Búscalos con list_movements, muestra a la persona la lista (originales, líneas resultantes, total) y pide un solo sí antes de llamarla. Los movimientos a juntar deben compartir quién los hizo (madeByMemberId); el resultante lo conserva.",
       "moveCategoryMovements": "Mueve todas las líneas de movimientos de EXACTAMENTE la categoría fromCategoryId (no las de sus subcategorías, aunque list_movements por categoría sí las incluye) a toCategoryId, en una sola sentencia, opcionalmente solo las fechadas de from a to; ambas deben ser del mismo tipo. Llámala PRIMERO con dryRun true: no escribe nada y devuelve cuántas líneas se moverían. Muestra ese número a la persona, pide un solo sí y llámala entonces sin dryRun. Cada movimiento movido recibe un updatedAt nuevo: vuelve a leerlo con list_movements antes de editarlo.",
-      "listInbox": "La bandeja de entrada: las entregas (SMS, correos del banco, webhook) que esperan que la persona las apruebe. Cada una trae id, receivedAt, rawText (el mensaje tal cual llegó) y proposal (amountCents, currency, kind expense o income, accountId y accountName, categoryId y categoryPath, date, description). notDetected nombra los campos que el mensaje no dio. status (por defecto pending) filtra; limit y offset paginan. Úsala PRIMERO. Luego muestra a la persona UNA lista compacta (fecha, monto, cuenta, categoría, descripción), con cada campo que falte ya completado por tu propuesta y marcado como tal, y pide UN solo sí para toda la lista, o sus correcciones. Después llama accept_deliveries; lo que la persona descarte se rechaza con reject_deliveries, confirmado en esa misma lista.",
+      "listInbox": "La bandeja de entrada: las entregas (SMS, correos del banco, webhook) que esperan que la persona las apruebe. Cada una trae id, receivedAt, rawText (el mensaje tal cual llegó) y proposal (amountCents, currency, kind expense o income, accountId y accountName, categoryId y categoryPath, date, description). notDetected nombra los campos que el mensaje no dio. status (por defecto pending) filtra; limit y offset paginan. Úsala PRIMERO. Luego muestra a la persona UNA lista compacta (fecha, monto, cuenta, categoría, descripción), con cada campo que falte ya completado por tu propuesta y marcado como tal, y pide UN solo sí para toda la lista, o sus correcciones. Después llama accept_deliveries; lo que la persona descarte se rechaza con reject_deliveries, confirmado en esa misma lista. Cada entrega trae también extractedNumber (el número que nombra el mensaje, p. ej. la cuenta o el celular de destino), recipientId y recipientName (el destinatario guardado que coincide, o null). Si extractedNumber existe y recipientName es null, el número es desconocido: PREGUNTA UNA VEZ a la persona qué es (una cuenta suya, una persona o un comercio o gasto fijo), y tras su sí guárdalo con save_recipient; las siguientes entregas de ese número ya llegan con su nombre y propuesta. Una entrega con kind transfer trae también toAccountId y toAccountName.",
       "acceptDeliveries": "Aprueba una o más entregas de la bandeja: cada una se vuelve un movimiento, por el mismo camino y las mismas reglas que el botón «Aceptar» de HomeFund (tipo derivado de las cuentas, auditoría, la referencia de la entrega evita duplicados). Cada ítem lleva el id de list_inbox y, solo si cambia o falta, accountId (la cuenta del gasto o ingreso), categoryId o splits (líneas con categoryId, amountCents y description del producto, que suman el monto), amountCents, description, date (AAAA-MM-DD), kind (expense, income o transfer) y, en una transferencia, fromAccountId y toAccountId (sin kind transfer, un solo lado se rechaza; con transfer, el lado que falta es la cuenta de la propuesta). Si es un ingreso a una cuenta del fondo (notDetected trae contributor), pasa contributedByMemberId («De quién»). Todo o nada: si una entrega falla (por ejemplo, sin cuenta, monto o categoría, ya resuelta o ajena) no se acepta ninguna y el error trae deliveryId y el campo que falta. NUNCA la llames sin antes haber llamado list_inbox, mostrado a la persona la lista compacta (fecha, monto, cuenta, categoría, descripción) y recibido UN solo sí para toda la lista. En un movimiento a una cuenta del fondo, un ítem puede llevar madeByMemberId (de list_members) para decir quién lo hizo.",
       "rejectDeliveries": "Rechaza una o más entregas de la bandeja por id, por el mismo camino que «Rechazar» en HomeFund; no escribe movimientos. Todo o nada: si un id no es una entrega pendiente de la persona, no rechaza ninguna. Muestra primero la lista (fecha, monto, descripción) de lo que rechazarás, junto con la de accept_deliveries, y pide UN solo sí para todo.",
       "listMemberDebts": "Lo que los miembros del fondo se deben entre sí: «balances» trae cada pareja con su saldo pendiente en centavos y su moneda (debtorName le debe pendingCents a creditorName), derivado de los asientos; «entries» trae cada asiento (kind debt es una deuda, payment un abono), del más nuevo al más viejo.",
-      "recordMemberDebt": "Registra un asiento entre dos miembros del fondo: kind debt (una deuda nueva: «Papá le debe a Adrian $200.000 por la moto») o payment (un abono parcial o total a esa deuda). Deudor y acreedor son ids de list_members, distintos. Un abono mayor a lo que el deudor aún le debe a ese acreedor en esa moneda se rechaza. Antes de escribir, CONFIRMA con la persona quién le debe a quién, el monto, la fecha y la descripción, y espera su sí."
+      "recordMemberDebt": "Registra un asiento entre dos miembros del fondo: kind debt (una deuda nueva: «Papá le debe a Adrian $200.000 por la moto») o payment (un abono parcial o total a esa deuda). Deudor y acreedor son ids de list_members, distintos. Un abono mayor a lo que el deudor aún le debe a ese acreedor en esa moneda se rechaza. Antes de escribir, CONFIRMA con la persona quién le debe a quién, el monto, la fecha y la descripción, y espera su sí.",
+      "listRecipients": "Los destinatarios guardados de la persona: números (cuenta bancaria, celular, llave) que los avisos del banco nombran, cada uno con id, identifier (solo dígitos), name, kind (own_account: una cuenta de la persona, con accountId; person: una persona, con su cuenta de deuda en accountId si la tiene; payee: un comercio o gasto fijo, con su categoryId), accountId, accountName, categoryId y categoryName.",
+      "saveRecipient": "Guarda un destinatario, o lo actualiza si pasas su id. Úsala cuando list_inbox traiga un extractedNumber sin recipientName: pregunta UNA vez a la persona qué es ese número y guárdalo solo después de su sí. identifier es el número tal cual lo muestra el aviso (con o sin *; se guardan solo los dígitos); name, un nombre claro como «Nequi de mamá» o «Arriendo Don José»; kind own_account exige accountId (id de list_accounts), person admite accountId opcional (su cuenta «Me debe») y payee admite categoryId (id de list_categories) para sus gastos. Un número ya guardado se rechaza: actualízalo con su id.",
+      "deleteRecipient": "Borra un destinatario guardado (id de list_recipients). Las entregas ya recibidas conservan su texto. Pide confirmación a la persona antes."
     },
     "deferralProposal": "Diferir en {count} cuotas",
     "errors": {
@@ -1816,7 +1829,13 @@
       "memberDebtKind": "debt para una deuda nueva, payment para un abono a una existente.",
       "debtorMemberId": "El miembro que debe (id de list_members).",
       "creditorMemberId": "El miembro a quien se le debe (id de list_members).",
-      "occurredOn": "La fecha del asiento, AAAA-MM-DD; hoy o antes."
+      "occurredOn": "La fecha del asiento, AAAA-MM-DD; hoy o antes.",
+      "recipientId": "El id del destinatario (de list_recipients); al guardar, solo para actualizar uno existente.",
+      "recipientIdentifier": "El número que muestra el aviso: cuenta, celular o llave, completo o su cola (p. ej. 6870).",
+      "recipientName": "Cómo lo llama la persona, hasta 80 caracteres.",
+      "recipientKind": "own_account, person o payee.",
+      "recipientAccountId": "Solo own_account y person: el id de la cuenta (de list_accounts).",
+      "recipientCategoryId": "Solo payee: la categoría por defecto de sus gastos (id de list_categories)."
     }
   },
   "oauth": {
@@ -1893,6 +1912,42 @@
       "currencyInvalid": "Elige una moneda de la lista.",
       "overpaid": "El abono es mayor que lo que aún se debe entre esas dos personas en esa moneda.",
       "debtPaid": "Esa deuda ya tiene abonos: borra primero los pagos que la saldan."
+    }
+  },
+  "recipients": {
+    "title": "Destinatarios",
+    "add": "Añadir destinatario",
+    "addTitle": "Añadir destinatario",
+    "editTitle": "Editar destinatario",
+    "emptyTitle": "Aún no guardas ningún número",
+    "emptyDescription": "Guarda las cuentas y celulares que aparecen en los avisos del banco, con un nombre y qué son, para que la Bandeja sepa de qué fue cada transferencia.",
+    "identifierLabel": "Número",
+    "identifierHint": "La cuenta o el celular, como lo muestra el aviso. Solo se guardan los dígitos.",
+    "nameLabel": "Nombre",
+    "kindLabel": "Qué es",
+    "kind": {
+      "own_account": "Una cuenta mía",
+      "person": "Una persona",
+      "payee": "Un comercio o gasto fijo"
+    },
+    "accountLabel": "Cuenta",
+    "debtAccountLabel": "Su cuenta «Me debe» (opcional)",
+    "categoryLabel": "Categoría de sus gastos",
+    "none": "Ninguna",
+    "created": "Destinatario guardado",
+    "updated": "Destinatario actualizado",
+    "deleted": "Destinatario eliminado",
+    "deleteTitle": "¿Eliminar este destinatario?",
+    "deleteDescription": "«{name}» deja de reconocerse en los avisos nuevos. Los que ya llegaron conservan su texto.",
+    "errors": {
+      "identifierInvalid": "El número debe tener entre 4 y 20 dígitos.",
+      "nameRequired": "Escribe un nombre.",
+      "nameTooLong": "El nombre admite hasta 80 caracteres.",
+      "kindInvalid": "Elige qué es: una cuenta tuya, una persona o un comercio.",
+      "accountRequired": "Elige la cuenta que es.",
+      "accountInvalid": "Esa cuenta no es válida.",
+      "categoryInvalid": "Esa categoría no es válida.",
+      "duplicate": "Ya guardaste ese número."
     }
   }
 }

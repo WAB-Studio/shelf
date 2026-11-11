@@ -13,6 +13,7 @@ import { deleteTransactionAction } from "@/app/actions/transactions";
 import { AwaitingCounterparty } from "@/components/ingest/awaiting-counterparty";
 import { DeliveryCard } from "@/components/ingest/delivery-card";
 import { InboxTable, type InboxTableRow } from "@/components/ingest/inbox-table";
+import { RecipientFormDialog, type RecipientDraft } from "@/components/recipients/recipient-form-dialog";
 import { SilencedShapes } from "@/components/ingest/silenced-shapes";
 import {
   MovementForm,
@@ -88,11 +89,12 @@ function movementDefaults(
       : centsToDecimal(delivery.proposedAmountCents);
   const accountId = delivery.proposedAccountId;
   const isIncome = delivery.proposedDirection === "income";
-  const categoryId = proposedCategoryId(delivery, options);
+  const isTransfer = delivery.proposedDirection === "transfer";
+  const categoryId = isTransfer ? null : proposedCategoryId(delivery, options);
 
   return {
     fromAccountId: isIncome ? null : accountId,
-    toAccountId: isIncome ? accountId : null,
+    toAccountId: isTransfer ? delivery.proposedToAccountId : isIncome ? accountId : null,
     amount,
     occurredAt: delivery.proposedOccurredAt ?? todayInBogota(),
     description: delivery.proposedDescription,
@@ -108,7 +110,9 @@ function completeInput(
     !delivery.isComplete ||
     delivery.proposedAmountCents === null ||
     delivery.proposedAccountId === null ||
-    proposedCategoryId(delivery, options) === null
+    (delivery.proposedDirection === "transfer"
+      ? delivery.proposedToAccountId === null
+      : proposedCategoryId(delivery, options) === null)
   ) {
     return null;
   }
@@ -159,6 +163,7 @@ export function InboxScreen({
   // The row a menu targeted; both dialogs are mounted once for the whole page,
   // as the ledger does for its own edit and delete (RF-24).
   const [reviewId, setReviewId] = useState<string | null>(null);
+  const [numberDraft, setNumberDraft] = useState<RecipientDraft | null>(null);
   const [rejectId, setRejectId] = useState<string | null>(null);
   const silenceShape = useRef(false);
 
@@ -219,16 +224,25 @@ export function InboxScreen({
       proposedCategoryId(delivery, options),
     ),
     account: delivery.proposedAccountId
-      ? (accountNames.get(delivery.proposedAccountId) ?? null)
+      ? [delivery.proposedAccountId, delivery.proposedToAccountId]
+          .filter((id) => id !== null)
+          .map((id) => accountNames.get(id) ?? "")
+          .join(" → ")
       : null,
     amountMinor: delivery.proposedAmountCents,
-    direction: delivery.proposedDirection === "income" ? "income" : "expense",
+    direction: delivery.proposedDirection ?? "expense",
     currency: deliveryCurrency(delivery, options),
     isComplete: delivery.isComplete,
+    canSaveNumber: delivery.extractedIdentifier !== null && delivery.recipientId === null,
     beforeOpeningOn: delivery.beforeOpening ? delivery.proposedOccurredAt : null,
   }));
 
   const reviewing = deliveries.find((one) => one.id === reviewId) ?? null;
+
+  // The number the message names, prefilled; the person says what it is.
+  function saveNumber(delivery: PendingDeliveryRow) {
+    setNumberDraft({ identifier: delivery.extractedIdentifier ?? "", kind: "person" });
+  }
 
   const emptyState = (
     <EmptyState
@@ -271,6 +285,10 @@ export function InboxScreen({
               onAccept={acceptOrReview}
               onReview={setReviewId}
               onReject={setRejectId}
+              onSaveNumber={(id) => {
+                const delivery = deliveries.find((one) => one.id === id);
+                if (delivery) saveNumber(delivery);
+              }}
             />
           )}
         </Flex>
@@ -289,6 +307,7 @@ export function InboxScreen({
                   key={delivery.id}
                   delivery={delivery}
                   options={options}
+                  onSaveNumber={() => saveNumber(delivery)}
                 />
               ))}
             </Flex>
@@ -321,6 +340,12 @@ export function InboxScreen({
           )}
         </Dialog.Content>
       </Dialog.Root>
+
+      <RecipientFormDialog
+        draft={numberDraft}
+        options={options}
+        onOpenChange={(open) => !open && setNumberDraft(null)}
+      />
 
       <ConfirmDialog
         open={rejectId !== null}
