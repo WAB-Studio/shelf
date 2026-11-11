@@ -88,6 +88,7 @@ type MovementFormValues = {
   counterIsEstimate: boolean;
   forHousehold: boolean;
   contributedByMemberId: string | null;
+  madeByMemberId: string | null;
   occurredAt: string;
   description: string | null;
   externalRef?: string;
@@ -296,6 +297,7 @@ export function MovementForm({
           counterIsEstimate: movement.counterIsEstimate,
           forHousehold: movement.forHousehold,
           contributedByMemberId: movement.contributedByMemberId,
+          madeByMemberId: movement.madeByMemberId,
           occurredAt: movement.occurredAt,
           description: movement.description,
           splits: movement.splits.map((split) => ({
@@ -326,6 +328,7 @@ export function MovementForm({
           counterIsEstimate: false,
           forHousehold: false,
           contributedByMemberId: null,
+          madeByMemberId: null,
           occurredAt: defaults?.occurredAt ?? todayInBogota(),
           description:
             defaults?.description !== undefined ? defaults.description : null,
@@ -345,6 +348,7 @@ export function MovementForm({
     name: "counterIsEstimate",
   });
   const splits = useWatch({ control: form.control, name: "splits" });
+  const forHouseholdMark = useWatch({ control: form.control, name: "forHousehold" });
   // Errors wait for a submit attempt: an untouched form is not a wrong one.
   const submitted = form.formState.isSubmitted;
 
@@ -426,6 +430,12 @@ export function MovementForm({
     { fromAccountId, toAccountId },
     intoFundAccount(toAccountId),
   );
+
+  // «Lo hizo» (RF-182) is asked of a fund movement: one touching a fund account, or a household bill.
+  const offersMadeBy =
+    intoFundAccount(fromAccountId) ||
+    intoFundAccount(toAccountId) ||
+    (offersHousehold && forHouseholdMark);
 
   // A movement is never its own cause (RF-132), so the movement under edit is
   // dropped from what the picker offers; the rest arrive already ordered.
@@ -541,6 +551,7 @@ export function MovementForm({
       ...submitted,
       forHousehold: offersHousehold && submitted.forHousehold,
       contributedByMemberId: offersContributor ? submitted.contributedByMemberId : null,
+      madeByMemberId: offersMadeBy ? submitted.madeByMemberId : null,
     };
     // The resolver already parsed `values` for this mode, dropping the field the
     // other mode's action refuses: `external_ref` on edit, `transaction_id` on
@@ -1061,6 +1072,36 @@ export function MovementForm({
                       {isAccept && (
                         <Select.Item value={NO_ACCOUNT}>{t("contributorNone")}</Select.Item>
                       )}
+                      {options.fundMembers.map((member) => (
+                        <Select.Item key={member.id} value={member.id}>
+                          {member.name}
+                        </Select.Item>
+                      ))}
+                    </Select.Content>
+                  </Select.Root>
+                  <FieldMessage error={fieldState.error} />
+                </Field>
+              )}
+            />
+          )}
+          {offersMadeBy && (
+            <Controller
+              name="madeByMemberId"
+              control={form.control}
+              render={({ field, fieldState }) => (
+                <Field invalid={fieldState.invalid}>
+                  <FieldLabel htmlFor="movement-made-by">{t("madeByLabel")}</FieldLabel>
+                  <Select.Root
+                    size="3"
+                    value={field.value ?? NO_ACCOUNT}
+                    onValueChange={(value) => field.onChange(value === NO_ACCOUNT ? null : value)}
+                    disabled={isPending}
+                  >
+                    <FieldControl>
+                      <Select.Trigger id="movement-made-by" />
+                    </FieldControl>
+                    <Select.Content position="popper">
+                      <Select.Item value={NO_ACCOUNT}>{t("madeByNone")}</Select.Item>
                       {options.fundMembers.map((member) => (
                         <Select.Item key={member.id} value={member.id}>
                           {member.name}

@@ -413,6 +413,12 @@ export function MovementDetailDesktop({
               )}
               <Separator size="4" />
               <Fact label={t("dateLabel")} value={longDate} />
+              {movement.madeByName && (
+                <>
+                  <Separator size="4" />
+                  <Fact label={t("madeByLabel")} value={movement.madeByName} />
+                </>
+              )}
               {creatorName && (
                 <>
                   <Separator size="4" />

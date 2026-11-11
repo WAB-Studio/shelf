@@ -2,7 +2,7 @@ import "server-only";
 
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 
-import { insertTransaction } from "@/db/queries/transactions";
+import { defaultMadeBy, insertTransaction } from "@/db/queries/transactions";
 import type { CreateTransactionArgs } from "@/db/queries/transactions";
 import {
   accounts,
@@ -209,6 +209,7 @@ export async function acceptDelivery({
   splits,
   labelIds,
   contributedByMemberId,
+  madeByMemberId,
 }: AcceptDeliveryArgs, outerTx?: Transaction): Promise<{ transactionId: string }> {
   return withUserDbOrTx(outerTx, async (tx) => {
     const [delivery] = await tx
@@ -240,6 +241,7 @@ export async function acceptDelivery({
       splits,
       labelIds,
       contributedByMemberId,
+      madeByMemberId: madeByMemberId ?? defaultMadeBy(fromAccountId, toAccountId),
     });
 
     const updated = await tx

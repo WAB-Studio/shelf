@@ -5,6 +5,7 @@ import { z } from "zod";
 
 import { listAccounts, updateAccount } from "@/db/queries/accounts";
 import { freeCategoryColor, listScopedCategories, updateCategory } from "@/db/queries/categories";
+import { listCallerMembers } from "@/db/queries/group-members";
 import {
   bookMovement,
   categoryConstraintErrorKey,
@@ -51,6 +52,7 @@ function movementShape(t: Say) {
     splits: z.array(z.object({ categoryId: z.string(), amountCents: cents, description: z.string().nullish() })).optional().describe(d("splits")),
     contributedByMemberId: z.string().nullish().describe(d("contributedByMemberId")),
     forHousehold: z.boolean().optional().describe(d("forHousehold")),
+    madeByMemberId: z.string().nullish().describe(d("madeByMemberId")),
   };
 }
 
@@ -70,6 +72,7 @@ function movementForm(input: MovementInput) {
     description: input.description,
     contributedByMemberId: input.contributedByMemberId,
     forHousehold: input.forHousehold,
+    madeByMemberId: input.madeByMemberId,
     splits: splits.map((split: Split) => ({
       categoryId: split.categoryId,
       amount: centsToDecimal(split.amountCents),
@@ -112,6 +115,8 @@ function patched(current: TransactionListRow, patch: Partial<MovementInput>): Mo
     splits,
     contributedByMemberId: pick("contributedByMemberId", current.contributedByMemberId),
     forHousehold: pick("forHousehold", current.forHousehold),
+    // Left absent when the patch names none: the edit keeps who made it while that still fits the movement.
+    madeByMemberId: patch.madeByMemberId,
   };
 }
 
@@ -139,6 +144,20 @@ export function registerLedgerTools(server: McpServer, run: Run, t: Say): void {
       ),
   );
 
+  // The ids «De quién» and «Lo hizo» name: the people of the fund, with or without a login.
+  server.registerTool(
+    "list_members",
+    { description: t("tools.listMembers"), inputSchema: z.object({}), annotations: { readOnlyHint: true } },
+    (_input, ctx) =>
+      run(ctx, async (owner) =>
+        (await listCallerMembers(owner, { archived: false })).map((member) => ({
+          id: member.id,
+          name: member.name,
+          hasLogin: member.userId !== null,
+        })),
+      ),
+  );
+
   server.registerTool(
     "list_movements",
     {
@@ -148,17 +167,19 @@ export function registerLedgerTools(server: McpServer, run: Run, t: Say): void {
         from: z.string().optional().describe(d("from")),
         to: z.string().optional().describe(d("to")),
         categoryId: z.string().optional().describe(d("filterCategoryId")),
+        madeByMemberId: z.string().optional().describe(d("filterMadeByMemberId")),
         limit: z.number().int().min(1).max(200).optional().describe(d("limit")),
         offset: z.number().int().min(0).optional().describe(d("offset")),
       }),
       annotations: { readOnlyHint: true },
     },
-    (input: { accountId?: string; categoryId?: string; from?: string; to?: string; limit?: number; offset?: number }, ctx) =>
+    (input: { accountId?: string; categoryId?: string; madeByMemberId?: string; from?: string; to?: string; limit?: number; offset?: number }, ctx) =>
       run(ctx, async () => {
         const accountId = input.accountId === undefined ? undefined : idOf("transactions.errors.accountInvalid", input.accountId);
         const categoryId = input.categoryId === undefined ? undefined : idOf("errors.notFound", input.categoryId);
+        const madeByMemberId = input.madeByMemberId === undefined ? undefined : idOf("transactions.errors.madeByInvalid", input.madeByMemberId);
         const rows = await listTransactions(
-          { accountId, categoryId, from: input.from, to: input.to },
+          { accountId, categoryId, madeByMemberId, from: input.from, to: input.to },
           { limit: input.limit ?? 50, offset: input.offset },
         );
         // Everything update_movement can resend or patch, and the stamp it must quote back.
@@ -175,6 +196,8 @@ export function registerLedgerTools(server: McpServer, run: Run, t: Say): void {
           toAccountId: row.toAccountId,
           contributedByMemberId: row.contributedByMemberId,
           forHousehold: row.forHousehold,
+          madeByMemberId: row.madeByMemberId,
+          madeByName: row.madeByName,
           labelIds: row.labels.map((label) => label.id),
           splits: row.splits,
           updatedAt: row.updatedAt,

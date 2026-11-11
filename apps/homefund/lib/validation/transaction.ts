@@ -217,6 +217,8 @@ export const transactionFields = {
   forHousehold: z.boolean().optional(),
   // «De quién» (RF-167): the fund member an income into a fund account is credited to. Read only there.
   contributedByMemberId: z.uuid({ error: "transactions.errors.contributorInvalid" }).nullish(),
+  // «Lo hizo» (RF-182): the fund member who made it; absent or null is the household.
+  madeByMemberId: z.uuid({ error: "transactions.errors.madeByInvalid" }).nullish(),
   occurredAt: occurredAtSchema,
   description: descriptionSchema,
   externalRef: z
@@ -610,6 +612,8 @@ export const movementFiltersSchema = z.object({
   from: filterCivilDate,
   to: filterCivilDate,
   member: filterReference,
+  // «Lo hizo» (RF-182): a fund member id.
+  madeBy: filterReference,
   account: filterReference,
   category: filterReference,
   label: filterReference,

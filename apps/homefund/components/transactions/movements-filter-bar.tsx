@@ -24,6 +24,8 @@ export type MovementsFilters = {
   from: string | null;
   to: string | null;
   member: string | null;
+  // «Lo hizo» (RF-182): a fund member id.
+  madeBy: string | null;
   account: string | null;
   category: string | null;
   label: string | null;
@@ -155,6 +157,14 @@ export function MovementsFilterBar({
       clear: { member: null },
     });
   }
+  if (filters.madeBy) {
+    const maker = options.fundMembers.find((one) => one.id === filters.madeBy);
+    chips.push({
+      key: "madeBy",
+      label: `${t("madeByLabel")}: ${maker?.name ?? filters.madeBy}`,
+      clear: { madeBy: null },
+    });
+  }
   if (filters.from) {
     chips.push({
       key: "from",
@@ -265,6 +275,19 @@ export function MovementsFilterBar({
               value: member.userId,
               label: member.name,
             })),
+          ]}
+          width={180}
+        />
+      )}
+
+      {options.fundMembers.length > 0 && (
+        <FilterSelect
+          label={t("madeByLabel")}
+          value={filters.madeBy ?? ANY}
+          onValueChange={(value) => set({ madeBy: value === ANY ? null : value })}
+          items={[
+            { value: ANY, label: t("allMembers") },
+            ...options.fundMembers.map((member) => ({ value: member.id, label: member.name })),
           ]}
           width={180}
         />

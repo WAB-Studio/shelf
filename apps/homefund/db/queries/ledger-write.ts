@@ -9,6 +9,7 @@ import type { CategoryScope } from "@/db/queries/categories";
 import { getUserGroup } from "@/db/queries/groups";
 import {
   createTransaction,
+  defaultMadeBy,
   deleteTransaction,
   getSettlementCurrencies,
   insertTransaction,
@@ -176,6 +177,7 @@ export async function bookMovement(
       amountFromWords: input.amountFromWords ?? false,
       forHousehold: input.forHousehold ?? false,
       contributedByMemberId: input.contributedByMemberId ?? null,
+      madeByMemberId: input.madeByMemberId ?? defaultMadeBy(input.fromAccountId, input.toAccountId),
       occurredAt: input.occurredAt,
       description: input.description,
       externalRef: input.externalRef ?? null,
@@ -217,6 +219,7 @@ export async function reviseMovement(
       ...counter,
       forHousehold: input.forHousehold,
       contributedByMemberId: input.contributedByMemberId,
+      madeByMemberId: input.madeByMemberId,
       occurredAt: input.occurredAt,
       description: input.description,
       splits: toSplitMinor(input.splits),
@@ -351,6 +354,7 @@ export async function mergeMovements(input: {
             account(row) !== account(first) ||
             row.currency !== first.currency ||
             row.contributedByMemberId !== first.contributedByMemberId ||
+            row.madeByMemberId !== first.madeByMemberId ||
             row.forHousehold !== first.forHousehold,
         ) ||
         (counters.length > 0 && counters.length < found.length)
@@ -394,6 +398,7 @@ export async function mergeMovements(input: {
         counterIsEstimate: found.some((row) => row.counterIsEstimate),
         forHousehold: first.forHousehold,
         contributedByMemberId: first.contributedByMemberId,
+        madeByMemberId: first.madeByMemberId,
         occurredAt: input.occurredAt ?? dates[0],
         description: input.description,
         externalRef: null,

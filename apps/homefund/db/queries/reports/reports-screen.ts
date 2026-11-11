@@ -6,12 +6,14 @@ import {
   getFundCashBalances,
   getFundSpending,
   getMemberContributions,
+  getSpendingByMaker,
   getUnassignedIncome,
 } from "@/db/queries/reports/contributions";
 import type {
   FundCashBalance,
   FundSpending,
   MemberContribution,
+  SpendingByMaker,
   UnassignedIncome,
 } from "@/db/queries/reports/contributions";
 import { getExpensesByCategory } from "@/db/queries/reports/expenses-by-category";
@@ -40,6 +42,8 @@ export type ReportsData = {
   fundSpending: FundSpending[];
   // Incomes into the fund that name no member: «Sin asignar» in Aportes (RF-167).
   unassigned: UnassignedIncome[];
+  // Who spent how much in the month, by «Lo hizo» (RF-182); the member's name is null for the household.
+  spendingByMaker: (Omit<SpendingByMaker, "memberId"> & { name: string | null })[];
   hasGroup: boolean;
 };
 
@@ -62,7 +66,7 @@ export async function getReportsData(monthStart: string = currentMonthStart()): 
     members: found ? await listMembers(found.id, { archived: false }) : [],
   }));
 
-  const [expensesByCategory, sixMonthFlow, contributionRows, fundCash, fundSpending, unassigned, { group, members }, sessionUser] =
+  const [expensesByCategory, sixMonthFlow, contributionRows, fundCash, fundSpending, unassigned, makerRows, { group, members }, sessionUser] =
     await Promise.all([
       getExpensesByCategory(monthRange(monthStart)),
       getSixMonthFlow(monthStart),
@@ -70,6 +74,7 @@ export async function getReportsData(monthStart: string = currentMonthStart()): 
       getFundCashBalances(monthRange(monthStart)),
       getFundSpending(monthRange(monthStart)),
       getUnassignedIncome(monthRange(monthStart)),
+      getSpendingByMaker(monthRange(monthStart)),
       groupAndMembers,
       getSessionUser(),
     ]);
@@ -90,6 +95,11 @@ export async function getReportsData(monthStart: string = currentMonthStart()): 
     fundCash,
     fundSpending,
     unassigned,
+    spendingByMaker: makerRows.map(({ memberId, currency, spentCents }) => ({
+      name: memberId ? (nameByMemberId.get(memberId) ?? null) : null,
+      currency,
+      spentCents,
+    })),
     hasGroup: group !== null,
   };
 }

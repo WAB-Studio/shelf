@@ -63,6 +63,7 @@ export async function GET(
   const transactionFilters: TransactionExportFilters = {
     ...movementTypeFilter(filters.type),
     memberUserId: filters.member,
+    madeByMemberId: filters.madeBy,
     accountId: filters.account,
     categoryId: filters.category,
     labelId: filters.label,

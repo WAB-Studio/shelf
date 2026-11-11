@@ -54,6 +54,8 @@ export type CreateTransactionArgs = {
   forHousehold?: boolean;
   // «De quién» (RF-167): stored only on an income into a fund account (`contributorMark`).
   contributedByMemberId?: string | null;
+  // «Lo hizo» (RF-182): the fund member who made the movement; null is the household.
+  madeByMemberId?: string | null;
   // RF-133: one side is not known yet and waits for a person; insert only.
   awaitingCounterparty?: boolean;
   occurredAt: string;
@@ -76,6 +78,8 @@ export type UpdateTransactionArgs = {
   forHousehold?: boolean;
   // `undefined` leaves the contributor alone (RF-167).
   contributedByMemberId?: string | null;
+  // `undefined` leaves «Lo hizo» alone (RF-182); `null` clears it.
+  madeByMemberId?: string | null;
   occurredAt: string;
   description: string | null;
   splits: TransactionSplitInput[];
@@ -94,6 +98,8 @@ export type TransactionListFilters = {
   memberUserId?: string;
   accountId?: string;
   categoryId?: string;
+  // «Lo hizo» (RF-182): the fund member who made the movement.
+  madeByMemberId?: string;
   // The label a movement carries through the join, RF-89.
   labelId?: string;
   kind?: string;
@@ -122,6 +128,9 @@ export type TransactionListRow = {
   forHousehold: boolean;
   // The member an income into a fund account is credited to (RF-167).
   contributedByMemberId: string | null;
+  // Who made it, by member and by name (RF-182); null is the household.
+  madeByMemberId: string | null;
+  madeByName: string | null;
   occurredAt: string;
   description: string | null;
   fromAccountId: string | null;
@@ -238,6 +247,7 @@ export async function insertTransaction(
     amountFromWords = false,
     forHousehold = false,
     contributedByMemberId = null,
+    madeByMemberId = null,
     awaitingCounterparty = false,
     occurredAt,
     description,
@@ -257,6 +267,7 @@ export async function insertTransaction(
       amount_from_words,
       for_household,
       contributed_by_member_id,
+      made_by_member_id,
       awaiting_counterparty,
       occurred_at,
       description,
@@ -271,6 +282,7 @@ export async function insertTransaction(
       ${amountFromWords},
       ${householdMark(sql`${fromAccountId}::uuid`, sql`${toAccountId}::uuid`, sql`${forHousehold}`)},
       ${contributorMark(sql`${fromAccountId}::uuid`, sql`${toAccountId}::uuid`, sql`${contributedByMemberId}::uuid`)},
+      ${madeByMemberId},
       ${awaitingCounterparty},
       ${occurredAt},
       ${description},
@@ -319,6 +331,15 @@ export function contributorMark(from: SQL, to: SQL, member: SQL): SQL {
   return sql`(case when ${from} is null
     and exists (select 1 from accounts a where a.id = ${to} and a.group_id is not null)
     then ${member} end)`;
+}
+
+/**
+ * Who a movement is credited to as its maker when nobody says (RF-182): the household. RF-181 will answer
+ * with the holder of the fund account it touches; every write that names no maker asks here.
+ */
+export function defaultMadeBy(fromAccountId: string | null, toAccountId: string | null): string | null {
+  void [fromAccountId, toAccountId];
+  return null;
 }
 
 /**
@@ -372,6 +393,7 @@ export async function updateTransaction({
   counterIsEstimate = false,
   forHousehold,
   contributedByMemberId,
+  madeByMemberId,
   occurredAt,
   description,
   splits,
@@ -410,6 +432,13 @@ export async function updateTransaction({
               )
             : sql`${contributedByMemberId}::uuid`,
         ),
+        // Absent keeps who made it, but only while the member still fits the movement (RF-182).
+        madeByMemberId:
+          madeByMemberId === undefined
+            ? sql`(case when private.maker_in_fund(${transactions.madeByMemberId}, ${fromAccountId}::uuid, ${toAccountId}::uuid,
+                ${householdMark(sql`${fromAccountId}::uuid`, sql`${toAccountId}::uuid`, sql`${transactions.forHousehold}`)})
+                then ${transactions.madeByMemberId} end)`
+            : sql`${madeByMemberId}::uuid`,
         occurredAt,
         description,
         reviewedAt: sql`case when ${transactions.recurringRuleId} is not null and ${transactions.reviewedAt} is null then now() else ${transactions.reviewedAt} end`,
@@ -495,6 +524,9 @@ export function transactionListConditions(filters: TransactionListFilters): SQL[
   if (filters.to) conditions.push(lte(transactions.occurredAt, filters.to));
   if (filters.memberUserId) {
     conditions.push(eq(transactions.createdBy, filters.memberUserId));
+  }
+  if (filters.madeByMemberId) {
+    conditions.push(eq(transactions.madeByMemberId, filters.madeByMemberId));
   }
   if (filters.accountId) {
     conditions.push(
@@ -638,6 +670,7 @@ export async function listTransactions(
   // bare inside a projection, and a bare `id` binds to the subquery's own table,
   // which turns the correlation into a constant and empties both sets.
   const outerId = sql`"transactions"."id"`;
+  const outerMadeBy = sql`"transactions"."made_by_member_id"`;
 
   const splitsJson = sql<{ categoryId: string; amountCents: number; description: string | null }[]>`coalesce((
     select jsonb_agg(jsonb_build_object('categoryId', s.category_id, 'amountCents', s.amount_cents, 'description', s.description))
@@ -669,6 +702,8 @@ export async function listTransactions(
         counterIsEstimate: transactions.counterIsEstimate,
         forHousehold: transactions.forHousehold,
         contributedByMemberId: transactions.contributedByMemberId,
+        madeByMemberId: transactions.madeByMemberId,
+        madeByName: sql<string | null>`(select m.name from group_members m where m.id = ${outerMadeBy})`,
         occurredAt: transactions.occurredAt,
         description: transactions.description,
         fromAccountId: transactions.fromAccountId,

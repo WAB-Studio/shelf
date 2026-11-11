@@ -250,6 +250,7 @@ export function MovementsScreen({
       filters.from ||
       filters.to ||
       filters.member ||
+      filters.madeBy ||
       filters.account ||
       filters.category ||
       filters.label ||
@@ -264,6 +265,7 @@ export function MovementsScreen({
     if (next.from) query.from = next.from;
     if (next.to) query.to = next.to;
     if (next.member) query.member = next.member;
+    if (next.madeBy) query.madeBy = next.madeBy;
     if (next.account) query.account = next.account;
     if (next.category) query.category = next.category;
     if (next.label) query.label = next.label;
@@ -588,6 +590,29 @@ export function MovementsScreen({
                   </FilterField>
                 )}
 
+                {options.fundMembers.length > 0 && (
+                  <FilterField label={t("madeByLabel")}>
+                    {(id) => (
+                      <Select.Root
+                        value={filters.madeBy ?? ANY}
+                        onValueChange={(value) =>
+                          patchFilters({ madeBy: value === ANY ? null : value })
+                        }
+                      >
+                        <Select.Trigger id={id} />
+                        <Select.Content position="popper">
+                          <Select.Item value={ANY}>{t("allMembers")}</Select.Item>
+                          {options.fundMembers.map((member) => (
+                            <Select.Item key={member.id} value={member.id}>
+                              {member.name}
+                            </Select.Item>
+                          ))}
+                        </Select.Content>
+                      </Select.Root>
+                    )}
+                  </FilterField>
+                )}
+
                 {filtersActive && (
                   <Button
                     type="button"
@@ -820,9 +845,13 @@ function rowSubtitle(
   t: ReturnType<typeof useTranslations<"transactions">>,
 ): string | undefined {
   const account = accountOfRow(row, accountNames);
-  return row.splits.length > 1
-    ? [account, t("linesCount", { count: row.splits.length })].filter(Boolean).join(" · ")
-    : account;
+  // Who made it comes first: it is what a person scans a household ledger for (RF-182).
+  const parts = [
+    row.madeByName,
+    account,
+    row.splits.length > 1 ? t("linesCount", { count: row.splits.length }) : null,
+  ].filter(Boolean);
+  return parts.length > 0 ? parts.join(" · ") : undefined;
 }
 
 function accountOfRow(

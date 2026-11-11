@@ -289,3 +289,45 @@ export async function getFundSpending(range: {
     }));
   });
 }
+
+export type SpendingByMaker = {
+  // The fund member who made the expenses; null is the household (RF-182).
+  memberId: string | null;
+  currency: CurrencyCode;
+  spentCents: number;
+};
+
+/**
+ * What each member spent in one window, per currency, in ONE round trip (RF-182): the expenses out of a
+ * fund account and the household bills paid from a personal one, grouped by «Lo hizo», booked as
+ * `getFundSpending` books them. An expense that names nobody is the household's.
+ */
+export async function getSpendingByMaker(range: {
+  start: string;
+  endExclusive: string;
+}): Promise<SpendingByMaker[]> {
+  return withUserDb(async (tx) => {
+    const rows = await tx.execute<{ member_id: string | null; currency: string; spent_cents: string }>(sql`
+      select
+        t.made_by_member_id as member_id,
+        fa.settlement_currency as currency,
+        sum(case when t.currency <> fa.settlement_currency
+          and t.counter_amount_cents is not null and not t.counter_is_estimate
+        then t.counter_amount_cents else t.amount_cents end)::text as spent_cents
+      from transactions t
+      join accounts fa on fa.id = t.from_account_id
+      where t.kind = 'expense'
+        and (fa.group_id is not null or t.for_household)
+        and t.reconciliation_id is null
+        and t.occurred_at >= ${range.start} and t.occurred_at < ${range.endExclusive}
+      group by t.made_by_member_id, fa.settlement_currency
+      order by fa.settlement_currency, sum(t.amount_cents) desc
+    `);
+
+    return rows.map((row) => ({
+      memberId: row.member_id,
+      currency: row.currency,
+      spentCents: Number(row.spent_cents),
+    }));
+  });
+}

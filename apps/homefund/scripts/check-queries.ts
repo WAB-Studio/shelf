@@ -110,6 +110,7 @@ import {
   getFundCashBalances,
   getFundSpending,
   getMemberContributions,
+  getSpendingByMaker,
   getUnassignedIncome,
 } from "@/db/queries/reports/contributions";
 import { getDashboardData } from "@/db/queries/reports/dashboard";
@@ -3351,6 +3352,7 @@ async function reconcileSuite(
     (await trips(() => getFundCashBalances(range))) +
     (await trips(() => getFundSpending(range))) +
     (await trips(() => getUnassignedIncome(range))) +
+    (await trips(() => getSpendingByMaker(range))) +
     (await trips(() => getUserGroup())) +
     (await trips(() => getSessionUser())) +
     (group ? await trips(() => listMembers(group.id, { archived: false })) : 0);
@@ -4133,6 +4135,7 @@ async function main(): Promise<void> {
   await mcpInboxSuite();
   await mcpInboxReviewSuite();
   await accountLoanSuite();
+  await madeBySuite();
 }
 
 // A member recorded without a login is someone in the fund: a leader whose fund holds one is not alone, so an
@@ -15238,7 +15241,7 @@ async function mcpDoorSuite(): Promise<void> {
   assert(
     next("RF-144: /mcp answers 401 with no key, an unknown one or a webhook's, and lists its tools to a key for Claude"),
     anonymous.status === 401 && forged.status === 401 && webhookKey.status === 401 &&
-      JSON.stringify(names) === JSON.stringify(["accept_deliveries", "create_account", "create_category", "delete_movement", "import_statement", "list_accounts", "list_categories", "list_inbox", "list_movements", "merge_movements", "move_category_movements", "preview_statement", "record_movement", "reject_deliveries", "review_month", "update_account", "update_category", "update_movement"]),
+      JSON.stringify(names) === JSON.stringify(["accept_deliveries", "create_account", "create_category", "delete_movement", "import_statement", "list_accounts", "list_categories", "list_inbox", "list_members", "list_movements", "merge_movements", "move_category_movements", "preview_statement", "record_movement", "reject_deliveries", "review_month", "update_account", "update_category", "update_movement"]),
     `no key ${anonymous.status}, unknown key ${forged.status}, webhook key ${webhookKey.status}, tools ${JSON.stringify(names)}`,
   );
 
@@ -17416,4 +17419,184 @@ async function accountLoanSuite(): Promise<void> {
     code = pgErrorCode(error) ?? "unknown";
   }
   assert(next("RF-178: the database refuses a loan on an asset"), code === "23514", `code ${code}`);
+}
+
+// RF-182: «Lo hizo» names the fund member who made a fund movement: set, cleared, kept inside the fund,
+// refused on a personal movement, split per member in Reports, and carried through the MCP.
+async function madeBySuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const range = currentMonthRange();
+  const leader = await createMembershipFreeUser();
+  const outsider = await createMembershipFreeUser();
+  const ids = {
+    group: randomUUID(), other: randomUUID(), leaderMember: randomUUID(), guest: randomUUID(), outsiderMember: randomUUID(),
+    cash: randomUUID(), card: randomUUID(), category: randomUUID(), mine: randomUUID(),
+  };
+  await fixtureSql.begin(async (tx) => {
+    await tx`insert into groups (id, name, cash_mode) values (${ids.group}, ${`Harness rf182 fondo ${tag}`}, 'shared'), (${ids.other}, ${`Harness rf182 otro ${tag}`}, 'shared')`;
+    await tx`
+      insert into group_members (id, group_id, user_id, name, role)
+      values (${ids.leaderMember}, ${ids.group}, ${leader.id}, 'Harness rf182 lider', 'leader'),
+             (${ids.outsiderMember}, ${ids.other}, ${outsider.id}, 'Harness rf182 ajeno', 'leader')`;
+    await tx`insert into group_members (id, group_id, name, role) values (${ids.guest}, ${ids.group}, 'Harness rf182 papa', 'member')`;
+    await tx`
+      insert into accounts (id, group_id, is_shared, name, kind, subtype, initial_balance_cents, initial_balance_on)
+      values (${ids.cash}, ${ids.group}, true, ${`Harness rf182 caja ${tag}`}, 'asset', 'cash', 0, '2026-01-01')`;
+    await tx`
+      insert into accounts (id, owner_user_id, name, kind, subtype, initial_balance_cents, initial_balance_on)
+      values (${ids.card}, ${leader.id}, ${`Harness rf182 tarjeta ${tag}`}, 'asset', 'bank', 0, '2026-01-01')`;
+    await tx`
+      insert into categories (id, group_id, name, kind, color)
+      values (${ids.category}, ${ids.group}, ${`Harness rf182 gasto ${tag}`}, 'expense', '#8C4A4A')`;
+    await tx`
+      insert into categories (id, owner_user_id, name, kind, color)
+      values (${ids.mine}, ${leader.id}, ${`Harness rf182 propio ${tag}`}, 'expense', '#8C4A4A')`;
+  });
+  track("groups", ids.group);
+  track("groups", ids.other);
+  for (const id of [ids.leaderMember, ids.guest, ids.outsiderMember]) track("group_members", id);
+  track("accounts", ids.cash);
+  track("accounts", ids.card);
+  track("categories", ids.category);
+  track("categories", ids.mine);
+
+  const expense = (from: string, cents: number, extra: Record<string, unknown> = {}) => ({
+    fromAccountId: from,
+    toAccountId: null,
+    amountCents: cents,
+    occurredAt: todayInBogota(),
+    description: `Harness rf182 ${tag}`,
+    splits: [{ categoryId: from === ids.card ? ids.mine : ids.category, amountCents: cents }],
+    labelIds: [],
+    externalRef: null,
+    ...extra,
+  });
+  const read = async (id: string) =>
+    (await asUser(leader, () => listTransactions({ id })))[0];
+  const errorCode = async (run: () => Promise<unknown>) => {
+    try {
+      await run();
+      return "none";
+    } catch (error) {
+      return pgErrorCode(error) ?? "unknown";
+    }
+  };
+
+  const set = await asUser(leader, () => createTransaction(expense(ids.cash, 300_00, { madeByMemberId: ids.guest })));
+  keep("transactions", set.transactionId);
+  const stored = await read(set.transactionId);
+  assert(
+    next("RF-182: a fund movement stores «Lo hizo» and the list reads the member's name beside it"),
+    stored?.madeByMemberId === ids.guest && stored.madeByName === "Harness rf182 papa" && stored.createdBy === leader.id,
+    `row ${JSON.stringify([stored?.madeByMemberId, stored?.madeByName, stored?.createdBy])}`,
+  );
+
+  const filtered = await asUser(leader, () => listTransactions({ madeByMemberId: ids.guest }));
+  assert(
+    next("RF-182: the «Lo hizo» filter keeps only that member's movements"),
+    filtered.length === 1 && filtered[0].id === set.transactionId,
+    `filtered ${filtered.map((row) => row.id)}`,
+  );
+
+  const household = await asUser(leader, () => createTransaction(expense(ids.cash, 100_00)));
+  keep("transactions", household.transactionId);
+  const kept = await asUser(leader, () =>
+    updateTransaction({
+      transactionId: set.transactionId, fromAccountId: ids.cash, toAccountId: null, amountCents: 300_00, occurredAt: todayInBogota(),
+      description: "Harness rf182 editado", splits: [{ categoryId: ids.category, amountCents: 300_00 }], labelIds: [],
+    }),
+  );
+  assert(
+    next("RF-182: an edit that names no maker keeps who made the movement"),
+    kept === "done" && (await read(set.transactionId))?.madeByMemberId === ids.guest,
+    `outcome ${kept}`,
+  );
+  const cleared = await asUser(leader, () =>
+    updateTransaction({
+      transactionId: set.transactionId, fromAccountId: ids.cash, toAccountId: null, amountCents: 300_00, occurredAt: todayInBogota(),
+      description: "Harness rf182 editado", splits: [{ categoryId: ids.category, amountCents: 300_00 }], labelIds: [],
+      madeByMemberId: null,
+    }),
+  );
+  assert(
+    next("RF-182: an edit that sends null clears «Lo hizo»: the movement is the household's again"),
+    cleared === "done" && (await read(set.transactionId))?.madeByMemberId === null,
+    `outcome ${cleared}`,
+  );
+
+  const foreign = await errorCode(() =>
+    asUser(leader, () => createTransaction(expense(ids.cash, 50_00, { madeByMemberId: ids.outsiderMember }))),
+  );
+  const personal = await errorCode(() =>
+    asUser(leader, () => createTransaction(expense(ids.card, 50_00, { madeByMemberId: ids.guest }))),
+  );
+  assert(
+    next("RF-182: a member of another fund is refused, and so is a maker on a purely personal movement"),
+    foreign === "42501" && personal === "42501",
+    `foreign ${foreign}, personal ${personal}`,
+  );
+
+  const billed = await asUser(leader, () =>
+    createTransaction(expense(ids.card, 70_00, { forHousehold: true, madeByMemberId: ids.guest })),
+  );
+  keep("transactions", billed.transactionId);
+  assert(
+    next("RF-182: a household bill paid from a personal card may name who made it"),
+    (await read(billed.transactionId))?.madeByMemberId === ids.guest,
+    "household bill refused",
+  );
+
+  const split = await asUser(leader, () => getSpendingByMaker(range));
+  const spentBy = (member: string | null) => split.find((row) => row.memberId === member && row.currency === "COP")?.spentCents;
+  assert(
+    next("RF-182: Reports split the month's spending by maker, the household's apart"),
+    spentBy(ids.guest) === 70_00 && spentBy(null) === 400_00,
+    `split ${JSON.stringify(split)}; expected papa 7000 and household 40000`,
+  );
+
+  const { POST } = await import("@/app/mcp/route");
+  const { id: keyId, token } = await asUser(leader, () =>
+    issueWebhookCredential({ name: `Harness rf182 ${tag}`, purpose: "mcp", defaultAccountId: null, defaultCategoryId: null }),
+  );
+  keep("webhook_credentials", keyId);
+  const { tool } = mcpClient(POST, token);
+  const members = (await tool("list_members")).value as { id: string; name: string; hasLogin: boolean }[];
+  assert(
+    next("RF-182: list_members names the fund's people, with and without a login, and no one of another fund"),
+    members.some((row) => row.id === ids.guest && !row.hasLogin) && members.some((row) => row.id === ids.leaderMember && row.hasLogin) &&
+      !members.some((row) => row.id === ids.outsiderMember),
+    `members ${JSON.stringify(members)}`,
+  );
+  const recorded = await tool("record_movement", {
+    fromAccountId: ids.cash, toAccountId: null, amountCents: 90_00, occurredAt: todayInBogota(), description: `Harness rf182 mcp ${tag}`,
+    categoryId: ids.category, madeByMemberId: ids.guest, requestRef: randomUUID(),
+  });
+  const mcpId = (recorded.value as { transactionId?: string }).transactionId ?? "";
+  if (mcpId) keep("transactions", mcpId);
+  type Listed = { id: string; madeByMemberId: string | null; madeByName: string | null; updatedAt: string }[];
+  const listed = async (extra: Record<string, unknown> = {}) =>
+    (await tool("list_movements", { accountId: ids.cash, limit: 50, ...extra })).value as Listed;
+  const mine = (await listed()).find((row) => row.id === mcpId);
+  assert(
+    next("RF-182: record_movement carries madeByMemberId and list_movements returns it with the member's name"),
+    !recorded.isError && mine?.madeByMemberId === ids.guest && mine.madeByName === "Harness rf182 papa",
+    `recorded ${JSON.stringify(recorded.value)}, listed ${JSON.stringify(mine)}`,
+  );
+  const byFilter = await listed({ madeByMemberId: ids.guest });
+  assert(
+    next("RF-182: list_movements filters by madeByMemberId"),
+    byFilter.length === 1 && byFilter[0].id === mcpId,
+    `filtered ${JSON.stringify(byFilter.map((row) => row.id))}`,
+  );
+  const unset = await tool("update_movement", { transactionId: mcpId, expectedUpdatedAt: mine?.updatedAt, madeByMemberId: null });
+  const refusedMcp = await tool("record_movement", {
+    fromAccountId: ids.card, toAccountId: null, amountCents: 10_00, occurredAt: todayInBogota(), description: `Harness rf182 mcp ${tag}`,
+    categoryId: ids.mine, madeByMemberId: ids.guest, requestRef: randomUUID(),
+  });
+  assert(
+    next("RF-182: update_movement clears the maker with null, and record_movement refuses one on a personal account"),
+    !unset.isError && (await listed()).find((row) => row.id === mcpId)?.madeByMemberId === null && refusedMcp.isError,
+    `update ${JSON.stringify(unset.value)}, personal ${JSON.stringify(refusedMcp.value)}`,
+  );
 }
