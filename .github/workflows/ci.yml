@@ -622,7 +622,7 @@ jobs:
     # The suite is one happy path per screen plus the real-bug regressions, and the
     # phone project runs only what is tagged `@mobile` (docs/agentes/verificacion.md
     # § E2E scope). Four shards keep each near two minutes of tests (6.5 min in all) plus the setup.
-    timeout-minutes: 30
+    timeout-minutes: 15
     # Each shard owns a runner and so a stack of its own; the lane stays 9 in
     # all four. `e2e` below is the one check name for the suite.
     strategy:
@@ -657,65 +657,42 @@ jobs:
       # Lane 9's two identities and their token rows. Idempotent.
       - run: npm run harness:token -w apps/homefund
 
-      # `next start` describes in `sign-in.spec.ts` spawn a production server of
-      # their own on a free port. `next dev` writes `.next/dev`, so the build in
-      # `.next` and the dev server coexist.
-      # Turbopack keeps the build's work in .next/cache and the dev server's in .next/dev/cache; each
-      # shard starts from what its last run compiled, so a route is compiled again only when it changed.
-      - name: Restore the Turbopack caches
+      # The suite runs on the build, never on `next dev`: a dev server restored from an earlier run's
+      # `.next/dev/cache` stuck compiling one route and the shard ran out its timeout (historia.md § E2E on the build).
+      # Only the build's own cache is kept; `next build` writes it whole before the step ends.
+      - name: Restore the Turbopack build cache
         uses: actions/cache/restore@v4
         id: turbopack
         with:
-          path: |
-            apps/homefund/.next/cache
-            apps/homefund/.next/dev/cache
-          # The v2 drops the shard-4 cache saved at a06e9b6f: every run that restored it hung compiling /planning/payments.
-          key: next-homefund-v2-shard${{ matrix.shard }}-${{ hashFiles('package-lock.json') }}-${{ github.sha }}
+          path: apps/homefund/.next/cache
+          key: next-homefund-build-${{ hashFiles('package-lock.json') }}-${{ github.sha }}
           restore-keys: |
-            next-homefund-v2-shard${{ matrix.shard }}-${{ hashFiles('package-lock.json') }}-
+            next-homefund-build-${{ hashFiles('package-lock.json') }}-
 
       - run: npm run build -w apps/homefund
 
-      - name: Start the dev server and wait for it to answer
+      # The four shards build the same tree; one saves it.
+      - name: Save the Turbopack build cache
+        if: steps.turbopack.outputs.cache-hit != 'true' && matrix.shard == 1
+        uses: actions/cache/save@v4
+        with:
+          path: apps/homefund/.next/cache
+          key: ${{ steps.turbopack.outputs.cache-primary-key }}
+
+      - name: Start the server and wait for it to answer
         run: |
-          # Its own process group, so the stop below reaches next and not only npm.
-          setsid npm run dev -w apps/homefund > /tmp/next-dev.log 2>&1 &
-          echo $! > /tmp/next-dev.pid
-          # Curl rather than a `wait-on` install: nothing outside SPEC.md §4 is
-          # installed. Dev compiles a route on its first hit, so the wait is for
-          # the first page to render, not for the port to open.
-          for _ in $(seq 1 60); do
+          npm run start -w apps/homefund > /tmp/next.log 2>&1 &
+          # Curl rather than a `wait-on` install: nothing outside SPEC.md §4 is installed.
+          for _ in $(seq 1 30); do
             if curl -sf -o /dev/null http://localhost:3000/es; then
               echo "up after ${SECONDS}s"; exit 0
             fi
-            sleep 2
+            sleep 1
           done
-          echo "the dev server never answered"; tail -50 /tmp/next-dev.log; exit 1
+          echo "the server never answered"; tail -50 /tmp/next.log; exit 1
 
       - name: Run shard ${{ matrix.shard }} of ${{ env.SHARD_TOTAL }}
         run: npm run check:e2e -w apps/homefund -- --shard=${{ matrix.shard }}/${{ env.SHARD_TOTAL }} --reporter=blob,list
-
-      # Turbopack writes its cache as it shuts down; saved while it runs, the cache would be half written.
-      - name: Stop the dev server
-        if: always()
-        run: |
-          group="-$(cat /tmp/next-dev.pid)"
-          kill -INT -- "$group" 2>/dev/null || true
-          # The port closes before Turbopack finishes writing; wait for the processes themselves.
-          for _ in $(seq 1 60); do
-            kill -0 -- "$group" 2>/dev/null || exit 0
-            sleep 1
-          done
-          kill -KILL -- "$group" 2>/dev/null || true
-
-      - name: Save the Turbopack caches
-        if: steps.turbopack.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
-        with:
-          path: |
-            apps/homefund/.next/cache
-            apps/homefund/.next/dev/cache
-          key: ${{ steps.turbopack.outputs.cache-primary-key }}
 
       - name: Upload the blob report
         if: always()
@@ -726,12 +703,12 @@ jobs:
           retention-days: 3
 
       # The server log is where a red spec is explained.
-      - name: Upload the dev server log
+      - name: Upload the server log
         if: always()
         uses: actions/upload-artifact@v5
         with:
-          name: next-dev-log-${{ matrix.shard }}
-          path: /tmp/next-dev.log
+          name: next-log-${{ matrix.shard }}
+          path: /tmp/next.log
 
       - name: Upload the Playwright artefacts
         if: failure()
