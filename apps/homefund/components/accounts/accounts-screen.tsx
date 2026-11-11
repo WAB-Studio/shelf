@@ -488,6 +488,7 @@ export function AccountsScreen({
                             onHandOver={
                               groupName !== null &&
                               account.ownerUserId !== null &&
+                              account.parentAccountId === null &&
                               !archived
                                 ? () => setRowAction({ kind: "handOver", account })
                                 : null
