@@ -1856,7 +1856,7 @@
       "labelId": "The label's id (from list_labels).",
       "labelName": "The label's name, up to 80 characters.",
       "labelPlacement": "personal: one of the person's labels; group: the fund's (its leader only).",
-      "labelColor": "A color from the category palette, such as #0E7490. When absent, a free one is chosen.",
+      "labelColor": "A color from the category palette, such as #06B6D4. When absent, a free one is chosen.",
       "labels": "The movement's labels: ids from list_labels or their names. They must share the movement's scope (personal if it is personal, the fund's if it is the fund's). In update_movement it replaces the ones it had; absent keeps them and [] removes them.",
       "filterLabel": "Only movements with this label (an id from list_labels or its name)."
     }

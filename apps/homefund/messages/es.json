@@ -1856,7 +1856,7 @@
       "labelId": "El id de la etiqueta (de list_labels).",
       "labelName": "El nombre de la etiqueta, hasta 80 caracteres.",
       "labelPlacement": "personal: una etiqueta de la persona; group: del fondo (solo su líder).",
-      "labelColor": "Un color de la paleta de categorías, como #0E7490. Si falta, se elige uno libre.",
+      "labelColor": "Un color de la paleta de categorías, como #06B6D4. Si falta, se elige uno libre.",
       "labels": "Las etiquetas del movimiento: ids de list_labels o sus nombres. Deben ser del mismo ámbito que el movimiento (personales si es personal, del fondo si es del fondo). En update_movement reemplaza las que tenía; ausente las conserva y [] las quita.",
       "filterLabel": "Solo movimientos con esta etiqueta (id de list_labels o su nombre)."
     }

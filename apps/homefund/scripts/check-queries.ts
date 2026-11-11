@@ -18638,7 +18638,7 @@ async function mcpLabelsSuite(): Promise<void> {
   type Listed = { id: string; name: string; color: string; scope: string; movementCount: number; budgetCount: number; canManage: boolean };
 
   const trip = await tool("create_label", { name: name("viaje") });
-  const home = await tool("create_label", { name: name("hogar"), placement: "group", color: "#0E7490" });
+  const home = await tool("create_label", { name: name("hogar"), placement: "group", color: "#06B6D4" });
   const blank = await tool("create_label", { name: "   " });
   const refusedGroup = await memberTool("create_label", { name: name("intruso"), placement: "group" });
   const tripId = (trip.value as { labelId: string }).labelId;
@@ -18657,7 +18657,7 @@ async function mcpLabelsSuite(): Promise<void> {
     next("RF-193: list_labels answers the person's labels and their fund's with scope, counts and whether they can manage each, a plain member reading the fund's as not manageable"),
     listed.find((one) => one.id === tripId)?.scope === "personal" && listed.find((one) => one.id === tripId)?.canManage === true &&
       listed.find((one) => one.id === homeId)?.scope === "fund" && listed.find((one) => one.id === homeId)?.canManage === true &&
-      listed.find((one) => one.id === homeId)?.color === "#0E7490" && listed.every((one) => one.movementCount === 0 && one.budgetCount === 0) &&
+      listed.find((one) => one.id === homeId)?.color === "#06B6D4" && listed.every((one) => one.movementCount === 0 && one.budgetCount === 0) &&
       asMember?.scope === "fund" && asMember.canManage === false,
     JSON.stringify({ listed, asMember }),
   );
