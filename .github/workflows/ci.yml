@@ -669,9 +669,10 @@ jobs:
           path: |
             apps/homefund/.next/cache
             apps/homefund/.next/dev/cache
-          key: next-homefund-shard${{ matrix.shard }}-${{ hashFiles('package-lock.json') }}-${{ github.sha }}
+          # The v2 drops the shard-4 cache saved at a06e9b6f: every run that restored it hung compiling /planning/payments.
+          key: next-homefund-v2-shard${{ matrix.shard }}-${{ hashFiles('package-lock.json') }}-${{ github.sha }}
           restore-keys: |
-            next-homefund-shard${{ matrix.shard }}-${{ hashFiles('package-lock.json') }}-
+            next-homefund-v2-shard${{ matrix.shard }}-${{ hashFiles('package-lock.json') }}-
 
       - run: npm run build -w apps/homefund
 
