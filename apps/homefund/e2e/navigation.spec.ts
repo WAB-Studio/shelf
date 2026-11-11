@@ -8,6 +8,9 @@ import { expect } from "@playwright/test";
 import messages from "@/messages/es.json";
 
 import {
+  asHarnessUser,
+  clearLedger,
+  clearQueue,
   readScope,
   seedQueue,
   test,
@@ -105,6 +108,16 @@ test.describe("the phone's navigation", () => {
     ).toBeVisible();
   });
 
+  // RF-197: the phone has no Ajustes screen of its own, so the sheet carries the sign-in limit.
+  test("offers «Mantener la sesión abierta» in the settings sheet @mobile", async ({ page }) => {
+    await page.goto("/es");
+    await page.getByRole("button", { name: new RegExp(`^${nav.settings}(,|$)`) }).click();
+
+    await expect(
+      page.getByRole("dialog").getByRole("combobox", { name: messages.session.label }),
+    ).toBeVisible();
+  });
+
   test("keeps its three tabs, each at least 32 px on its shorter side @mobile", async ({
     page,
   }) => {
@@ -135,4 +148,38 @@ test.describe("the dashboard's pending badge", () => {
     await badge.click();
     await expect(page).toHaveURL("/es/inbox");
   });
+});
+
+// RF-200: the empty Bandeja names the four places things arrive from, each a link to its card.
+test("the empty inbox links each source to its place in Ajustes", async ({ page }) => {
+  await clearQueue();
+  await page.goto("/es/inbox");
+
+  const sources = messages.ingest.emptySource;
+  for (const [key, anchor] of [
+    ["android", "android"],
+    ["iphone", "iphone"],
+    ["gmail", "bank-emails"],
+    ["claude", "claude"],
+  ] as const) {
+    await expect(
+      page.getByRole("link", { name: sources[key].link, exact: true }).filter({ visible: true }),
+    ).toHaveAttribute("href", `/es/settings/webhooks#${anchor}`);
+  }
+});
+
+// RF-199: Inicio's badge, the sidebar and the phone's bar count one sum.
+test("a movement waiting for its counterparty counts in Inicio's badge", async ({ page }) => {
+  await clearQueue();
+  await asHarnessUser(async (tx) => {
+    await tx`
+      insert into transactions (from_account_id, amount_cents, occurred_at, description, awaiting_counterparty)
+      values (${scope.accountId}, 1000000, (now() at time zone 'America/Bogota')::date, 'Por completar badge', true)`;
+  });
+  try {
+    await page.goto("/es");
+    await expect(page.getByRole("link", { name: PENDING_BADGE, exact: true })).toBeVisible();
+  } finally {
+    await clearLedger();
+  }
 });

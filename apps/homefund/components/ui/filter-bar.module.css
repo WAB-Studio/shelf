@@ -44,7 +44,23 @@
   font-variant-numeric: tabular-nums;
 }
 
-.date:focus-visible {
+/* A typed field, painted like the date beside it; the width is the caller's. */
+.search {
+  box-sizing: border-box;
+  height: 44px;
+  min-width: 0;
+  padding: 0 11px;
+  border-radius: 8px;
+  background-color: var(--color-panel-solid);
+  border: 1px solid var(--gray-a5);
+  color: var(--gray-12);
+  font-family: inherit;
+  /* 16px keeps iOS from zooming the page when the field takes focus. */
+  font-size: 16px;
+}
+
+.date:focus-visible,
+.search:focus-visible {
   outline: 2px solid var(--accent-9);
   outline-offset: -1px;
 }

@@ -53,6 +53,7 @@ export default async function MovementsPage(
     labelId: parsed.label,
     unreviewed: parsed.unreviewed,
     recurringRuleId: parsed.rule,
+    search: parsed.q,
   };
 
   // The headline net follows the screen's period: the dates the filters name, or
@@ -87,6 +88,7 @@ export default async function MovementsPage(
           label: parsed.label ?? null,
           unreviewed: parsed.unreviewed,
           rule: parsed.rule ?? null,
+          q: parsed.q ?? null,
         }}
       />
     </Page>
