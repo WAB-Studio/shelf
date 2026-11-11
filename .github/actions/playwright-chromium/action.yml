@@ -27,7 +27,7 @@ runs:
       shell: bash
       run: |
         for attempt in 1 2 3; do
-          npx playwright install-deps chromium && exit 0
+          timeout 120 npx playwright install-deps chromium && exit 0
           sleep $((attempt * 10))
         done
         echo "::warning::playwright install-deps failed three times; running on the runner image's libraries."
