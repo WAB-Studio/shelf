@@ -1,6 +1,6 @@
 "use client";
 
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 
 import {
   BandCard,
@@ -24,6 +24,8 @@ import type { OwnerNetWorthNamed } from "@/db/queries/reports/dashboard";
 import { PrivacyToggle } from "@/components/fund/privacy-toggle";
 import { Link as LocaleLink } from "@/i18n/navigation";
 import type { CurrencyCode } from "@/lib/currency";
+import type { Locale } from "@/lib/locales";
+import { formatMoney } from "@/lib/money";
 
 /**
  * The home dashboard's headline: the fund's total net worth over a pill per owner
@@ -45,6 +47,7 @@ export function DashboardSummary({ data }: { data: DashboardData }) {
   const tc = useTranslations("common");
   const tr = useTranslations("reports");
   const tn = useTranslations("nav");
+  const locale = useLocale() as Locale;
 
   const {
     netWorth,
@@ -82,7 +85,12 @@ export function DashboardSummary({ data }: { data: DashboardData }) {
                   </Text>
                   {index === 0 && <PrivacyToggle />}
                 </Flex>
-                <BandFigure>
+                <BandFigure
+                  length={
+                    formatMoney(total.netWorthCents, total.currency, locale).length +
+                    (total.netWorthCents < 0 ? 1 : 0)
+                  }
+                >
                   <Money
                     minor={total.netWorthCents}
                     currency={total.currency}

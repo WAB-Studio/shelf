@@ -162,9 +162,13 @@ test.describe("lint", () => {
   });
 });
 
+// A regression row for the phone sweep, outside the header's before/after contract:
+// it is red on every commit before the figure was capped to its card.
 test.describe("dashboard band on a narrow phone", () => {
   const accountId = randomUUID();
 
+  // Owed in dollars, so the dollar net worth is the longest figure the card draws:
+  // «−US$ 1.222.222.221,23».
   test.beforeAll(async () => {
     await asHarnessUser(async (tx) => {
       await tx`
@@ -172,8 +176,8 @@ test.describe("dashboard band on a narrow phone", () => {
           id, owner_user_id, name, kind, subtype, initial_balance_cents,
           initial_balance_on, settlement_currency)
         values (
-          ${accountId}, ${scope.userId}, ${`Dólares ${stamp}`}, 'asset', 'bank',
-          12222222123, ${todayInBogota()}, 'USD')`;
+          ${accountId}, ${scope.userId}, ${`Dólares ${stamp}`}, 'liability', 'loan',
+          -122222222123, ${todayInBogota()}, 'USD')`;
     });
   });
 
@@ -183,21 +187,27 @@ test.describe("dashboard band on a narrow phone", () => {
     });
   });
 
-  test("a hundred-million dollar net worth stays inside the net card @mobile", async ({
+  test("a billion-dollar net worth stays inside the net card @mobile", async ({
     page,
   }, testInfo) => {
     test.skip(testInfo.project.name !== "mobile", "the phone's column");
     await page.goto("/es");
 
     const net = card(page, "net");
-    const figure = net.locator(".rt-Heading").filter({ hasText: "122.222.221,23" });
+    const figure = net.locator(".rt-Heading").filter({ hasText: "1.222.222.221,23" });
     await expect(figure).toBeVisible();
 
-    const [figureBox, cardBox] = await Promise.all([figure.boundingBox(), net.boundingBox()]);
-    expect(figureBox!.x + figureBox!.width).toBeLessThanOrEqual(cardBox!.x + cardBox!.width);
-    expect(
-      await figure.evaluate((el) => el.scrollWidth - el.clientWidth),
-    ).toBeLessThanOrEqual(0);
+    // The text's own boxes, not the heading's: a block heading ends at the card's
+    // edge whatever its text does.
+    const overflow = await figure.evaluate((heading) => {
+      const card = heading.closest("[data-card]")!;
+      const style = getComputedStyle(card);
+      const inner = card.getBoundingClientRect().right - parseFloat(style.paddingRight);
+      const range = document.createRange();
+      range.selectNodeContents(heading);
+      return Math.max(...[...range.getClientRects()].map((rect) => rect.right)) - inner;
+    });
+    expect(overflow).toBeLessThanOrEqual(0);
     expect(
       await page.evaluate(
         () => document.documentElement.scrollWidth - document.documentElement.clientWidth,

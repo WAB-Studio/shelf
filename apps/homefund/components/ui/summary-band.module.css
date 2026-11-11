@@ -125,11 +125,17 @@
   color: var(--brand-lime);
 }
 
-/* «US$ 122.222.221,23» is about 9.2em wide: on a phone the figure shrinks to the
-   card instead of running past its edge and scrolling the page sideways. */
-@media (max-width: 1023px) {
+/* A figure takes about 0.56em per character: past what the card holds at its
+   display size it shrinks to fit, so «−US$ 1.222.222.221,23» never runs past the
+   edge and scrolls the page sideways, while «$ 50.000» keeps its size. */
+.card[data-featured] .figure.figure {
+  --figure-fit: calc(100cqi / (var(--figure-length, 18) * 0.56));
+  font-size: min(var(--font-size-8), var(--figure-fit));
+}
+
+@media (min-width: 1024px) {
   .card[data-featured] .figure.figure {
-    font-size: min(var(--font-size-8), 10cqi);
+    font-size: min(clamp(44px, 4.4vw, 64px), var(--figure-fit));
   }
 }
 
