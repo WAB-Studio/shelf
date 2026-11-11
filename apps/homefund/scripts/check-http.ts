@@ -429,6 +429,12 @@ const landedDeliveries: string[] = [];
 // drop never reaches it and the ingest tables the webhook suite fills would
 // otherwise outlive every run.
 let httpUserId: string | undefined;
+let httpCookie = "";
+
+// Pages added after the render cases were numbered: rendered at the run's end so no earlier `H` shifts.
+const LATE_RENDER_CASES: RenderCase[] = [
+  { path: `/${LOCALE}/planning/subscriptions`, status: 200, title: title("subscriptions.title") },
+];
 
 async function guardSuite(routes: AppRoute[]): Promise<void> {
   for (const { path } of routes) {
@@ -815,7 +821,8 @@ async function main(): Promise<void> {
 
   await guardSuite(routes);
   console.log("");
-  coverageSuite(cases, routes);
+  httpCookie = cookie;
+  coverageSuite([...cases, ...LATE_RENDER_CASES], routes);
   await renderSuite(cases, cookie);
   console.log("");
   await localeSuite(cookie);
@@ -956,6 +963,7 @@ void (async () => {
     await credentialDefaultCategorySuite();
     await failureNoStoreSuite();
     await emailIngestSuite();
+    await renderSuite(LATE_RENDER_CASES, httpCookie);
   } catch (error) {
     assert(
       next("the run completed"),
