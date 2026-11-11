@@ -40,8 +40,7 @@ function reviewItemsSql(month: string): SQL {
     with month_tx as materialized (
       select t.id, t.occurred_at, t.amount_cents, t.currency, t.from_account_id, t.to_account_id,
         coalesce(t.from_account_id, t.to_account_id) as account_id, t.reconciliation_id, t.amount_from_words,
-        t.description, t.created_by, t.created_at,
-        (select count(*) from transaction_splits s where s.transaction_id = t.id) as line_count
+        t.description, t.created_by, t.created_at
       from transactions t
       where t.occurred_at >= ${start}::date and t.occurred_at < ${endExclusive}::date
     ),
@@ -72,29 +71,29 @@ function reviewItemsSql(month: string): SQL {
     ),
     flagged as (
       select 'above_usual'::text as rule, array[a.transaction_id] as ids, a.amount_cents,
-        a.category_id, a.median_cents::bigint as usual_cents, null::bigint as counted_cents
+        a.category_id, a.median_cents::bigint as usual_cents, null::bigint as counted_cents,
+        true as one_description
       from above_usual a
       union all
-      -- Equal in day, accounts, amount and description; a movement with several lines (a receipt,
-      -- RF-175) is one movement, so it is never half of a pair.
-      select 'twin', array_agg(t.id order by t.id), t.amount_cents, null, null, null
+      select 'twin', array_agg(t.id order by t.id), t.amount_cents, null, null, null,
+        count(distinct coalesce(t.description, '')) = 1
       from month_tx t
-      where t.reconciliation_id is null and t.line_count <= 1
-      group by t.occurred_at, t.from_account_id, t.to_account_id, t.amount_cents, t.currency,
-        lower(btrim(coalesce(t.description, '')))
+      where t.reconciliation_id is null
+      group by t.occurred_at, t.from_account_id, t.to_account_id, t.amount_cents, t.currency
       having count(*) >= 2
       union all
-      select 'from_words', array[t.id], t.amount_cents, null, null, null
+      select 'from_words', array[t.id], t.amount_cents, null, null, null, true
       from month_tx t where t.amount_from_words
       union all
-      select 'reconciliation_gap', array[t.id], t.amount_cents, null, null, r.counted_balance_cents
+      select 'reconciliation_gap', array[t.id], t.amount_cents, null, null, r.counted_balance_cents, true
       from month_tx t join account_reconciliations r on r.id = t.reconciliation_id
     ),
-    -- A twin's ids share their day, accounts and description, so its first movement speaks for all of them.
+    -- A twin's ids share their day and accounts, so its first movement speaks for all of them; its
+    -- description too, unless the twin's movements read differently.
     marked as (
       select f.rule, f.ids, f.amount_cents, f.usual_cents, f.counted_cents, t.occurred_at, t.currency,
         t.account_id,
-        t.description,
+        case when f.one_description then t.description end as description,
         case when f.rule = 'reconciliation_gap' then null else coalesce(f.category_id,
           (select s.category_id from transaction_splits s where s.transaction_id = t.id limit 1)) end
           as category_id,

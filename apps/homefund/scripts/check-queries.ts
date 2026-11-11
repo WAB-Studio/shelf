@@ -14536,8 +14536,8 @@ async function o8m5ReviewSurvivorsSuite(): Promise<void> {
     items.find((item) => item.rule === "twin" && item.transactionIds.includes(ids[0]));
   const named = await asUser(holder, () => getMonthReview(month));
   assert(
-    next("O8-M9 twin description: movements read differently are no twin; read alike they are one and name the description"),
-    twinOf(named.items, apart) === undefined && twinOf(named.items, alike)?.description === `Harness o8m9 gas ${tag}`,
+    next("O8-M9 twin description: a twin read differently names neither movement; read alike it names them"),
+    twinOf(named.items, apart)?.description === null && twinOf(named.items, alike)?.description === `Harness o8m9 gas ${tag}`,
     `apart ${twinOf(named.items, apart)?.description}, alike ${twinOf(named.items, alike)?.description}`,
   );
   // «Deshacer» under one rule leaves the movement's mark under another.
@@ -17167,8 +17167,7 @@ async function mcpCleanupSuite(): Promise<void> {
   );
 }
 
-// «Revisar el mes», made clear: a twin lists the equal movements it names, one needs the same description, a
-// receipt's lines never pair it, and «above usual» says its window.
+// «Revisar el mes», made clear: a twin lists the equal movements it names and «above usual» says its window.
 async function monthReviewClearSuite(): Promise<void> {
   console.log("");
   const tag = randomUUID().slice(0, 8);
@@ -17187,12 +17186,11 @@ async function monthReviewClearSuite(): Promise<void> {
     createCategory({ scope: { ownerUserId: holder.id }, name: `Harness clear mascotas ${tag}`, kind: "expense", parentId: null, color: "#B4542F" }),
   );
   track("categories", pets);
-  const spend = async (amountCents: number, occurredAt: string, description: string, lines = 1) => {
-    const each = amountCents / lines;
+  const spend = async (amountCents: number, occurredAt: string, description: string) => {
     const { transactionId } = await asUser(holder, () =>
       createTransaction({
         fromAccountId: bank, toAccountId: null, amountCents, occurredAt, description, externalRef: null,
-        splits: Array.from({ length: lines }, (_, n) => ({ categoryId: pets, amountCents: each, description: `línea ${n}` })), labelIds: [],
+        splits: [{ categoryId: pets, amountCents }], labelIds: [],
       }),
     );
     track("transactions", transactionId);
@@ -17200,10 +17198,7 @@ async function monthReviewClearSuite(): Promise<void> {
   };
 
   const catA = await spend(560_000, day(7), `Gatarina ${tag}`);
-  const catB = await spend(560_000, day(7), `  gatarina ${tag}`);
-  await spend(560_000, day(7), `Arena ${tag}`);
-  await spend(900_000, day(9), `Factura ${tag}`, 3);
-  await spend(900_000, day(9), `Factura ${tag}`, 3);
+  const catB = await spend(560_000, day(7), `Arena ${tag}`);
   for (const back of [4, 3, 2]) await spend(560_000, day(11, back), `Historia ${tag}`);
   const big = await spend(2_925_000, day(12), `Carne ${tag}`);
 
@@ -17212,10 +17207,10 @@ async function monthReviewClearSuite(): Promise<void> {
   const above = items.find((item) => item.rule === "above_usual");
   const entries = twins[0]?.entries ?? [];
   assert(
-    next("RF-155: a twin needs an equal description (case and edge spaces aside) and lists each movement; a receipt's lines are never half of a pair"),
+    next("RF-155: a twin lists each equal movement with who entered it and when, whatever each was called"),
     twins.length === 1 && [...twins[0].transactionIds].sort().join() === [catA, catB].sort().join() &&
       entries.length === 2 && entries.every((e) => e.createdBy === holder.id && typeof e.createdAt === "string") &&
-      entries.map((e) => e.id).sort().join() === [catA, catB].sort().join(),
+      entries.map((e) => e.description).sort().join() === [`Arena ${tag}`, `Gatarina ${tag}`].join(),
     `twins ${twins.length}, entries ${entries.length}`,
   );
   assert(

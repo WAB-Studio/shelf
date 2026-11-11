@@ -1572,6 +1572,8 @@
     "noDescription": "No description",
     "entryBy": "entered by {who} at {time}",
     "entryAt": "entered at {time}",
+    "entryByOn": "entered by {who} on {day} at {time}",
+    "entryAtOn": "entered on {day} at {time}",
     "counted": "You counted {amount}",
     "twinCount": "{count} equal movements",
     "ok": "Looks fine",

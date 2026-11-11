@@ -83,8 +83,8 @@ for (const width of [360, 1280]) {
     await expect(page.getByText("¿Leímos bien este monto?")).toBeVisible();
     await expect(page.getByText("¿De dónde sale esta diferencia al cuadrar?")).toBeVisible();
     await expect(page.getByText("Contaste $ 1.010.000")).toBeVisible();
-    // The over-the-usual and the from-words item name the movement they flag; the twin lists both of its own.
-    await expect(page.getByText(`Revisión ${stamp}`, { exact: true })).toHaveCount(2);
+    // The over-the-usual, the twin and the from-words item each name the movement they flag; the twin also lists both.
+    await expect(page.getByText(`Revisión ${stamp}`, { exact: true })).toHaveCount(3);
     await expect(page.getByRole("link", { name: new RegExp(`^Revisión ${stamp} · `) })).toHaveCount(2);
     await expect(okButtons(page)).toHaveCount(4);
     const fixes = page.getByRole("link", { name: "Corregir" });

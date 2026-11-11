@@ -39,7 +39,7 @@ export function MonthReviewRow({ item, creatorNames }: { item: ReviewItem; creat
         <Text weight="medium">{t(`rules.${item.rule}`)}</Text>
         <Money minor={item.amountCents} currency={currency} signed={false} />
       </Flex>
-      {item.rule !== "twin" && item.description && <Text>{item.description}</Text>}
+      {item.description && <Text>{item.description}</Text>}
       <Text size="2" color="gray">
         {item.categoryName
           ? t("metaCategory", { account: item.accountName, date, category: item.categoryName })
@@ -61,15 +61,26 @@ export function MonthReviewRow({ item, creatorNames }: { item: ReviewItem; creat
           </Text>
           {item.entries.map((entry) => {
             const who = creatorNames[entry.createdBy];
-            const time = format.dateTime(new Date(entry.createdAt), { hour: "numeric", minute: "2-digit" });
-            return (
+            const entered = new Date(entry.createdAt);
+            const time = format.dateTime(entered, { hour: "numeric", minute: "2-digit" });
+            const day = format.dateTime(entered, { day: "numeric", month: "short" });
+            // The day shows only when the movement was entered on another day than it is dated.
+            const sameDay = format.dateTime(entered, { year: "numeric", month: "2-digit", day: "2-digit" }) ===
+              format.dateTime(civilDateToDate(item.occurredAt), { year: "numeric", month: "2-digit", day: "2-digit" });
+            const line = `${entry.description ?? t("noDescription")} · ${
+              t(who ? (sameDay ? "entryBy" : "entryByOn") : sameDay ? "entryAt" : "entryAtOn", { who: who ?? "", time, day })
+            }`;
+            // A reader cannot fix it, so the row is plain text.
+            return item.canMark ? (
               <Link key={entry.id} asChild size="2">
                 <LocaleLink prefetch={false} href={`/movements/${entry.id}?review=${item.occurredAt.slice(0, 7)}`}>
-                  {entry.description ?? t("noDescription")}
-                  {" · "}
-                  {who ? t("entryBy", { who, time }) : t("entryAt", { time })}
+                  {line}
                 </LocaleLink>
               </Link>
+            ) : (
+              <Text key={entry.id} size="2" color="gray">
+                {line}
+              </Text>
             );
           })}
         </>

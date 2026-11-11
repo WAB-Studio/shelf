@@ -1572,6 +1572,8 @@
     "noDescription": "Sin descripción",
     "entryBy": "anotó {who} a las {time}",
     "entryAt": "anotado a las {time}",
+    "entryByOn": "anotó {who} el {day} a las {time}",
+    "entryAtOn": "anotado el {day} a las {time}",
     "counted": "Contaste {amount}",
     "twinCount": "{count} movimientos iguales",
     "ok": "Está bien",
