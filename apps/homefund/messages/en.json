@@ -1265,6 +1265,11 @@
       "toAccountInvalid": "Choose the debt you are paying down."
     }
   },
+  "session": {
+    "label": "Keep me signed in",
+    "always": "Always",
+    "afterDays": "After {count, plural, one {# day} other {# days}} unused"
+  },
   "language": {
     "label": "Language",
     "endonym": {

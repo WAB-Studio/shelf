@@ -202,7 +202,13 @@ export async function pruneSupersededSessions(email: string): Promise<number> {
 export async function sessionCookies(
   email: string = HARNESS_EMAIL,
 ): Promise<{ name: string; value: string }[]> {
-  const session = await harnessSession(email);
+  return cookiesOf(await harnessSession(email));
+}
+
+/** The cookies a browser holds for one session, which need not be the cached one. */
+export function cookiesOf(
+  session: HarnessSession,
+): { name: string; value: string }[] {
   const encoded = `base64-${Buffer.from(JSON.stringify(session), "utf8").toString("base64")}`;
 
   if (encoded.length <= MAX_CHUNK_SIZE) {
@@ -239,7 +245,7 @@ function readStored(file: string): HarnessSession | null {
   }
 }
 
-async function refreshSession(
+export async function refreshSession(
   refreshToken: string,
 ): Promise<HarnessSession | null> {
   const response = await fetch(
