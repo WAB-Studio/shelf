@@ -14,6 +14,7 @@ import { expect, type Locator, type Page } from "@playwright/test";
 import messages from "@/messages/es.json";
 
 import { fixtureSql } from "../scripts/harness/fixtures";
+import { rightOverhang } from "./fit";
 import { asHarnessUser, readScope, test } from "./global-setup";
 
 const rules = messages.recurringRules;
@@ -114,7 +115,6 @@ test.describe("a wide amount on a narrow phone", () => {
 
     // The whole title is drawn: none of it hides behind the ellipsis.
     expect(await title.evaluate((el) => el.scrollWidth - el.clientWidth)).toBeLessThanOrEqual(0);
-    const [amountBox, cardBox] = await Promise.all([amount.boundingBox(), card.boundingBox()]);
-    expect(amountBox!.x + amountBox!.width).toBeLessThanOrEqual(cardBox!.x + cardBox!.width);
+    expect(await rightOverhang(amount, card)).toBeLessThanOrEqual(0);
   });
 });

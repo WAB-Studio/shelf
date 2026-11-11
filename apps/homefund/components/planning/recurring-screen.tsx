@@ -25,6 +25,7 @@ import {
   Disc,
   EmptyState,
   Figure,
+  FigureRow,
   Flex,
   FundChip,
   ScreenHeader,
@@ -283,34 +284,34 @@ function RuleCard({
 
   return (
     <Card>
-      {/* The title keeps 7rem; past that a wide amount drops to its own line on the right. */}
-      <ToneSurface align="center" gapX="3" gapY="1" wrap="wrap" faded={!rule.isActive}>
-        <Disc size={40} surface="var(--accent-a3)" ink="var(--accent-11)">
-          <Repeat size={19} />
-        </Disc>
-        <Flex direction="column" gap="1" flexGrow="1" flexBasis="7rem" minWidth="0">
-          <Flex align="center" gap="2" wrap="wrap" minWidth="0">
-            <Text size="3" weight="medium" truncate>
-              {rule.description ?? t("noConcept")}
-            </Text>
-            <Badge color="jade" variant="soft" radius="full">
-              {t("autoBadge")}
-            </Badge>
-            <OwnerMark foreignOwner={rule.foreignOwner} ownerName={rule.ownerName} />
-          </Flex>
-          <Text size="2" color="gray" truncate>
-            {subtitle}
-          </Text>
-        </Flex>
-        <Figure
-          size="3"
-          weight="medium"
-          color={isIncome ? "grass" : undefined}
-          nowrap
-          ml="auto"
+      <ToneSurface faded={!rule.isActive}>
+        <FigureRow
+          lead={
+            <Disc size={40} surface="var(--accent-a3)" ink="var(--accent-11)">
+              <Repeat size={19} />
+            </Disc>
+          }
+          figure={
+            <Figure size="3" weight="medium" color={isIncome ? "grass" : undefined} nowrap>
+              {moneyText(rule.amountCents, rule.currency, locale)}
+            </Figure>
+          }
         >
-          {moneyText(rule.amountCents, rule.currency, locale)}
-        </Figure>
+          <Flex direction="column" gap="1">
+            <Flex align="center" gap="2" wrap="wrap" minWidth="0">
+              <Text size="3" weight="medium" truncate>
+                {rule.description ?? t("noConcept")}
+              </Text>
+              <Badge color="jade" variant="soft" radius="full">
+                {t("autoBadge")}
+              </Badge>
+              <OwnerMark foreignOwner={rule.foreignOwner} ownerName={rule.ownerName} />
+            </Flex>
+            <Text size="2" color="gray" truncate>
+              {subtitle}
+            </Text>
+          </Flex>
+        </FigureRow>
       </ToneSurface>
       <Flex align="center" justify="end" gap="3" mt="3">
         <Flex align="center" gap="2">

@@ -33,6 +33,7 @@ import {
   readScope,
   test,
 } from "./global-setup";
+import { MIN_TITLE_PX, rightOverhang } from "./fit";
 
 const debts = messages.debts;
 const installments = messages.installments;
@@ -1499,13 +1500,12 @@ test.describe("a long debt with a wide balance on a narrow phone", () => {
     const balance = card.getByText(/987\.654\.321/).first();
     await expect(balance).toBeVisible();
 
-    expect((await name.boundingBox())!.width).toBeGreaterThanOrEqual(112);
-    const [balanceBox, cardBox] = await Promise.all([balance.boundingBox(), card.boundingBox()]);
-    expect(balanceBox!.x + balanceBox!.width).toBeLessThanOrEqual(cardBox!.x + cardBox!.width);
+    const [nameBox, balanceBox] = await Promise.all([name.boundingBox(), balance.boundingBox()]);
+    expect(nameBox!.width).toBeGreaterThanOrEqual(MIN_TITLE_PX);
+    expect(await rightOverhang(balance, card)).toBeLessThanOrEqual(0);
     // Beside the name or under it, never over it.
-    const nameBox = (await name.boundingBox())!;
     expect(
-      balanceBox!.y >= nameBox.y + nameBox.height || balanceBox!.x >= nameBox.x + nameBox.width,
+      balanceBox!.y >= nameBox!.y + nameBox!.height || balanceBox!.x >= nameBox!.x + nameBox!.width,
     ).toBe(true);
   });
 });
