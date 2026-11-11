@@ -302,25 +302,6 @@ async function settle(page: Page): Promise<void> {
 const PHRASE = "frisking from side to side";
 const PHRASE_ES = "correteando de lado a lado";
 
-test("a phrase typed key by key is translated once and noted once", async ({ page }) => {
-  await disableDeviceTranslator(page);
-  const translations = await stubTranslateCalls(page, () => ({ text: PHRASE_ES }));
-  const notes = recordNotes(page);
-  await waitForDictionary(page);
-  await freezeTimers(page);
-
-  const searchBox = page.getByRole("textbox", { name: messages.search.label });
-  await searchBox.pressSequentially(PHRASE, { delay: 40 });
-  await pastDebounce(page);
-  await expect(page.getByText(PHRASE_ES)).toBeVisible({ timeout: 5000 });
-  await settle(page);
-
-  expect(translations.texts, "a debounce turns the keys into one translation").toEqual([PHRASE]);
-  expect(notes, "one translation owes exactly one notes request").toEqual([
-    { source: PHRASE, translation: PHRASE_ES },
-  ]);
-});
-
 test("typing after a translation raises no notes request until the next translation lands", async ({ page }) => {
   await disableDeviceTranslator(page);
   await stubTranslateCalls(page, (text) => ({ text: text === PHRASE ? PHRASE_ES : "otra traduccion nueva" }));

@@ -1,7 +1,7 @@
 import { hasLocale, NextIntlClientProvider } from "next-intl";
 import { getTranslations } from "next-intl/server";
 import type { Metadata, Viewport } from "next";
-import { Bricolage_Grotesque, Figtree, Geist_Mono } from "next/font/google";
+import localFont from "next/font/local";
 import { notFound } from "next/navigation";
 
 import { ThemeScript } from "@/components/theme-script";
@@ -10,20 +10,23 @@ import { routing } from "@/i18n/routing";
 import "../theme.css";
 
 // The text and its figures (DESIGN.md «Violeta y lima»).
-const sans = Figtree({
+const sans = localFont({
+  src: "../fonts/figtree.woff2",
+  weight: "300 900",
   variable: "--font-sans",
-  subsets: ["latin"],
 });
 
 // The titles: a grotesque with character, where the screen names itself.
-const heading = Bricolage_Grotesque({
+const heading = localFont({
+  src: "../fonts/bricolage-grotesque.woff2",
+  weight: "200 800",
   variable: "--font-heading",
-  subsets: ["latin"],
 });
 
-const geistMono = Geist_Mono({
+const geistMono = localFont({
+  src: "../fonts/geist-mono.woff2",
+  weight: "100 900",
   variable: "--font-geist-mono",
-  subsets: ["latin"],
 });
 
 export function generateStaticParams() {

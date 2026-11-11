@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, asc, desc, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 
 import { insertTransaction } from "@/db/queries/transactions";
 import type { CreateTransactionArgs } from "@/db/queries/transactions";
@@ -10,7 +10,7 @@ import {
   ingestMerchants,
   ingestShapes,
 } from "@/db/schema";
-import { withUserDb } from "@/db/session";
+import { withUserDb, withUserDbOrTx, type Transaction } from "@/db/session";
 
 export type PendingDeliveryRow = {
   id: string;
@@ -31,6 +31,9 @@ export type PendingDeliveryRow = {
   // The proposal is dated before its account opened, so the database would refuse it (MO001).
   beforeOpening: boolean;
   createdAt: Date;
+  // Set once the delivery left the queue: when, and the movement an acceptance wrote.
+  resolvedAt: Date | null;
+  transactionId: string | null;
 };
 
 export type SilencedShapeRow = {
@@ -98,9 +101,26 @@ function isComplete(
   );
 }
 
-export async function listPendingDeliveries(): Promise<PendingDeliveryRow[]> {
+export type ListDeliveriesOptions = {
+  status?: "pending" | "accepted" | "rejected";
+  ids?: string[];
+  limit?: number;
+  offset?: number;
+};
+
+export function listPendingDeliveries(): Promise<PendingDeliveryRow[]> {
+  return listDeliveries({});
+}
+
+// Pending ones oldest first, as the queue reads; a resolved status newest first, as a history does.
+export async function listDeliveries({
+  status = "pending",
+  ids,
+  limit,
+  offset,
+}: ListDeliveriesOptions): Promise<PendingDeliveryRow[]> {
   return withUserDb(async (tx) => {
-    const rows = await tx
+    const query = tx
       .select({
         id: ingestDeliveries.id,
         rawText: ingestDeliveries.rawText,
@@ -117,6 +137,8 @@ export async function listPendingDeliveries(): Promise<PendingDeliveryRow[]> {
         proposedOccurredAt: ingestDeliveries.proposedOccurredAt,
         proposedDescription: ingestDeliveries.proposedDescription,
         createdAt: ingestDeliveries.createdAt,
+        resolvedAt: ingestDeliveries.resolvedAt,
+        transactionId: ingestDeliveries.transactionId,
         accountOpeningOn: accounts.initialBalanceOn,
       })
       .from(ingestDeliveries)
@@ -128,8 +150,14 @@ export async function listPendingDeliveries(): Promise<PendingDeliveryRow[]> {
           eq(ingestMerchants.merchantKey, ingestDeliveries.merchantKey),
         ),
       )
-      .where(eq(ingestDeliveries.status, "pending"))
-      .orderBy(asc(ingestDeliveries.createdAt));
+      .where(
+        ids
+          ? and(eq(ingestDeliveries.status, status), inArray(ingestDeliveries.id, ids))
+          : eq(ingestDeliveries.status, status),
+      )
+      .orderBy(status === "pending" ? asc(ingestDeliveries.createdAt) : desc(ingestDeliveries.createdAt))
+      .$dynamic();
+    const rows = await (limit === undefined ? query : query.limit(limit).offset(offset ?? 0));
 
     return rows.map(({ accountOpeningOn, ...row }) => ({
       ...row,
@@ -181,8 +209,8 @@ export async function acceptDelivery({
   splits,
   labelIds,
   contributedByMemberId,
-}: AcceptDeliveryArgs): Promise<{ transactionId: string }> {
-  return withUserDb(async (tx) => {
+}: AcceptDeliveryArgs, outerTx?: Transaction): Promise<{ transactionId: string }> {
+  return withUserDbOrTx(outerTx, async (tx) => {
     const [delivery] = await tx
       .select({
         externalRef: ingestDeliveries.externalRef,
@@ -254,8 +282,8 @@ export async function acceptDelivery({
 export async function rejectDelivery({
   deliveryId,
   silenceShape,
-}: RejectDeliveryArgs): Promise<void> {
-  return withUserDb(async (tx) => {
+}: RejectDeliveryArgs, outerTx?: Transaction): Promise<void> {
+  return withUserDbOrTx(outerTx, async (tx) => {
     const [delivery] = await tx
       .update(ingestDeliveries)
       .set({ status: "rejected", resolvedAt: sql`now()` })

@@ -219,3 +219,9 @@ Each entry names the rule and the file it lives in now.
 - Dropped: boards before a screen, tester/validator/mutator chains, per-step reports and roadmap updates. Kept: the
   hard rules in `AGENTS.md` § Code, the local stack, CI on the train's PR.
 
+
+## Simplify CI noise (2026-11-10)
+
+- Measured over 30 days of CI reds (`private/analisis-fallos-ci.md`): 8 builds failed to download Google Fonts, 9 `supabase start` runs failed on docker networking, 5 WordBook specs gave 18 red attempts and 0 bugs, all mobile-only timing. Decided by the user 2026-11-10: simplify the testing a lot.
+- Fonts moved to `next/font/local` (woff2 committed in each app's `app/fonts`, latin subset, OFL); `supabase-local.sh start` retries twice with `stop --no-backup` between tries.
+- Deleted: `sw-nuevo-con-shell` (10 reds; its route callback outlived the test and failed `sw-reglas:41` in the next one), `phrase:78`, `critica-despliegue:115`, `frase-notas:305` (each covered by a neighbour in its file).

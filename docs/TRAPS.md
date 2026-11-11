@@ -3437,3 +3437,10 @@ Measured 2026-11-02: `papel-fila-detalle.spec.ts:313` read a row 30.75pt on 2 No
 
 - Measure a printed row with at least two pixels of slack (1.5pt) plus float noise; a real regression is a line of text, 15pt.
 - Reproduce a date-dependent paper failure with `PULSAR_CLOCK=YYYY-MM-DD` on the server and the spec.
+
+## A route callback that outlives its test fails the next test in the worker
+
+Measured 2026-11-10: `sw-nuevo-con-shell` ran `route.fetch` on the service worker's own `sw.js` request; the callback was still running when the test ended and Playwright charged `route.fetch: Test ended` to `sw-reglas.spec.ts:41`.
+
+- Never `context.route` the worker's script; end such a test with `page.unrouteAll({ behavior: "ignoreErrors" })`.
+- Read a red in a test that touches no route as the previous test's leftover.

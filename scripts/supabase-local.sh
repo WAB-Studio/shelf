@@ -81,7 +81,18 @@ cmd_start() {
     echo '[]' > "$ROOT/supabase/signing_keys.json"
     cli gen signing-key --algorithm ES256 --append >/dev/null
   fi
-  cli start -x "$EXCLUDED"
+  # Docker's container networking fails now and then on a runner; a clean stop and a second try clears it.
+  local attempt
+  for attempt in 1 2 3; do
+    echo "supabase-local: start attempt ${attempt}/3" >&2
+    cli start -x "$EXCLUDED" && break
+    if [ "$attempt" -eq 3 ]; then
+      echo "supabase-local: start failed after 3 attempts" >&2
+      return 1
+    fi
+    echo "supabase-local: start attempt ${attempt} failed; stopping before the next" >&2
+    cli stop --no-backup || true
+  done
   cmd_migrate
 }
 

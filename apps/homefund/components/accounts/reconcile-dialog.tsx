@@ -289,7 +289,7 @@ function ReconcileForm({ account }: { account: AccountRow }) {
 
         <Flex gap="3" justify="end">
           <Dialog.Close>
-            <Button type="button" size="3" tap variant="ghost" color="gray" disabled={isPending}>
+            <Button type="button" size="3" tap variant="soft" color="gray" disabled={isPending}>
               {tKey("common.cancel")}
             </Button>
           </Dialog.Close>

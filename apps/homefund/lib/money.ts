@@ -1,3 +1,4 @@
+import { ActionError } from "@/lib/errors";
 import { type CurrencyCode, minorUnitExponent } from "@/lib/currency";
 import { FORMAT_LOCALE, type Locale } from "@/lib/locales";
 
@@ -149,6 +150,14 @@ function parseWritten(raw: string): number | null {
  */
 export function parseAmount(raw: string): number | null {
   return parseWritten(raw);
+}
+
+// A string a Zod schema already bound to the stored scale, as integer cents; a null parse means the
+// schema let through what it should not have, so it is `errors.unexpected`, not a field message.
+export function toCents(amount: string): number {
+  const cents = parseAmount(amount);
+  if (cents === null) throw new ActionError("errors.unexpected");
+  return cents;
 }
 
 /**
