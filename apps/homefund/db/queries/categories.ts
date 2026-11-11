@@ -303,6 +303,34 @@ export async function updateCategory({
   });
 }
 
+// One statement: every line in `fromCategoryId` goes to `toCategoryId`, of movements inside the dates
+// when given. The split trigger refuses a kind or scope that disagrees (23514), rolling all back.
+export async function moveCategoryLines({
+  fromCategoryId,
+  toCategoryId,
+  from,
+  to,
+}: {
+  fromCategoryId: string;
+  toCategoryId: string;
+  from?: string;
+  to?: string;
+}): Promise<number> {
+  return withUserDb(async (tx) => {
+    const rows = await tx.execute<{ id: string }>(sql`
+      update transaction_splits s set category_id = ${toCategoryId}
+      from transactions t
+      where t.id = s.transaction_id
+        and s.category_id = ${fromCategoryId}
+        and t.reconciliation_id is null
+        ${from ? sql`and t.occurred_at >= ${from}::date` : sql``}
+        ${to ? sql`and t.occurred_at <= ${to}::date` : sql``}
+      returning s.id
+    `);
+    return rows.length;
+  });
+}
+
 // The composite foreign key's ON DELETE cascade removes the children; no second statement.
 export async function deleteCategory({
   categoryId,
