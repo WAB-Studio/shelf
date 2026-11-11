@@ -1856,6 +1856,31 @@
     "dismiss": "Ocultar aviso"
   },
   "memberDebts": {
+    "title": "Entre miembros",
+    "recordDebt": "Registrar deuda",
+    "recordPayment": "Registrar pago",
+    "empty": "Nadie del fondo le debe nada a nadie.",
+    "alone": "Agrega otra persona al fondo para registrar lo que se deben.",
+    "owes": "{debtor} le debe {amount} a {creditor}",
+    "showEntries": "{count, plural, one {Ver # asiento} other {Ver # asientos}}",
+    "hideEntries": "Ocultar asientos",
+    "debtLine": "Deuda · {debtor} le debe a {creditor}",
+    "paymentLine": "Pago · {debtor} le pagó a {creditor}",
+    "delete": "Borrar asiento",
+    "deleteTitle": "¿Borrar este asiento?",
+    "deleteDescription": "El saldo entre las dos personas se vuelve a calcular sin él.",
+    "deleted": "Asiento borrado",
+    "debtorLabel": "Quién debe",
+    "creditorLabel": "A quién le debe",
+    "amountLabel": "Monto",
+    "currencyLabel": "Moneda",
+    "dateLabel": "Fecha",
+    "descriptionLabel": "Descripción",
+    "descriptionPlaceholder": "Préstamo para la moto",
+    "save": "Guardar",
+    "debtRecorded": "Deuda registrada",
+    "paymentRecorded": "Pago registrado",
+    "settled": "{first} y {second} están a paz y salvo",
     "errors": {
       "noFund": "No perteneces a un fondo, así que no hay deudas entre miembros.",
       "memberNotInFund": "Ese miembro no pertenece a tu fondo.",
@@ -1866,7 +1891,8 @@
       "amountInvalid": "Escribe un monto mayor que cero, con hasta dos decimales.",
       "amountTooLarge": "El monto es demasiado grande.",
       "currencyInvalid": "Elige una moneda de la lista.",
-      "overpaid": "El abono es mayor que lo que aún se debe entre esas dos personas en esa moneda."
+      "overpaid": "El abono es mayor que lo que aún se debe entre esas dos personas en esa moneda.",
+      "debtPaid": "Esa deuda ya tiene abonos: borra primero los pagos que la saldan."
     }
   }
 }

@@ -44,5 +44,9 @@ export const recordMemberDebtSchema = z
     };
   });
 
+export type RecordMemberDebtFields = z.input<typeof recordMemberDebtSchema>;
 export type RecordMemberDebtInput = z.output<typeof recordMemberDebtSchema>;
 
+export const deleteMemberDebtSchema = z.object({
+  id: z.uuid({ error: "errors.notFound" }),
+});

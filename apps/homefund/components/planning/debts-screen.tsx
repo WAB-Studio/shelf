@@ -44,7 +44,7 @@ import type { DebtOverviewRow, DebtPocket } from "@/db/queries/debt-overview";
 import { Link as LocaleLink, useRouter } from "@/i18n/navigation";
 import {
   BASE_CURRENCY,
-  OFFERED_CURRENCIES,
+  isOfferedCurrency,
   type CurrencyCode,
   type OfferedCurrency,
 } from "@/lib/currency";
@@ -91,9 +91,7 @@ type OverviewCard = DebtOverviewRow & {
 // settle in a code that reached the ledger before the list did; its terms are
 // then typed in the base currency's scale, which is the one the column keeps.
 function offeredCurrency(currency: CurrencyCode): OfferedCurrency {
-  return (OFFERED_CURRENCIES as readonly string[]).includes(currency)
-    ? (currency as OfferedCurrency)
-    : BASE_CURRENCY;
+  return isOfferedCurrency(currency) ? currency : BASE_CURRENCY;
 }
 
 // The pockets a debt holds beside the one it bills in, each drawn in its own
