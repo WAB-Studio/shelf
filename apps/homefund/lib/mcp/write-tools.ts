@@ -231,6 +231,7 @@ export function registerLedgerTools(server: McpServer, run: Run, t: Say): void {
         balanceOn: z.string().describe(d("balanceOn")),
         institution: z.string().nullable().default(null).describe(d("institution")),
         lastFour: z.string().optional().describe(d("lastFour")),
+        parentAccountId: z.string().nullable().default(null).describe(d("parentAccountId")),
       }),
       annotations: write,
     },
@@ -256,6 +257,7 @@ export function registerLedgerTools(server: McpServer, run: Run, t: Say): void {
         balanceOn: z.string().optional().describe(d("balanceOn")),
         institution: z.string().nullable().optional().describe(d("institution")),
         lastFour: z.string().nullable().optional().describe(d("lastFour")),
+        parentAccountId: z.string().nullable().optional().describe(d("parentAccountId")),
       }),
       annotations: { ...write, idempotentHint: true },
     },
@@ -275,6 +277,7 @@ export function registerLedgerTools(server: McpServer, run: Run, t: Say): void {
           isShared: current.isShared,
           institution: pick("institution", current.institution) ?? "",
           lastFour: pick("lastFour", current.lastFour) ?? undefined,
+          parentAccountId: pick("parentAccountId", current.parentAccountId ?? null),
           settlementCurrency: pick("settlementCurrency", current.settlementCurrency),
           amount: centsToDecimal(input.openingBalanceCents === undefined ? storedCents : (input.openingBalanceCents as number)),
           balanceOn: pick("balanceOn", current.initialBalanceOn),
@@ -289,6 +292,8 @@ export function registerLedgerTools(server: McpServer, run: Run, t: Say): void {
           if (pgErrorCode(error) === "42501") throw new ActionError("errors.notLeader");
           if (pgErrorCode(error) === "23514") throw new ActionError("accounts.errors.currencyInvalid");
           if (pgErrorCode(error) === "AC001") throw new ActionError("accounts.errors.currencyLocked");
+          if (pgErrorCode(error) === "PK001") throw new ActionError("accounts.errors.parentInvalid");
+          if (pgErrorCode(error) === "PK002") throw new ActionError("accounts.errors.hasPockets");
           throw error;
         }
         if (updated === "stale") throw new ActionError("errors.stale");

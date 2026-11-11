@@ -386,8 +386,9 @@ export function AccountsScreen({
                   </Text>
                   <Flex direction="column" gap="2">
                     {group.accounts.map((account) => (
+                      // A pocket reads under its parent, set in from it (RF-173).
+                      <Box key={account.id} ml={account.parentAccountId ? "5" : "0"}>
                       <AccountCard
-                        key={account.id}
                         account={account}
                         archived={archived}
                         pending={pendingFor(account)}
@@ -407,6 +408,7 @@ export function AccountsScreen({
                             : null
                         }
                       />
+                      </Box>
                     ))}
                   </Flex>
                 </Flex>
@@ -424,6 +426,7 @@ export function AccountsScreen({
         }}
         account={formTarget === "new" ? undefined : (formTarget ?? undefined)}
         defaultSubtype={newSubtype ?? undefined}
+        parentCandidates={accounts}
       />
 
       {billedTarget !== null && (
@@ -538,7 +541,9 @@ function AccountCard({
 
   // The query orders the settlement currency first (RF-121), so the lead figure
   // is the first entry and every other currency the account holds follows it.
-  const [settlement, ...others] = account.balances;
+  // A parent leads with the total of itself and its pockets and names its own part under it (RF-173).
+  const [settlement, ...others] = account.totalBalances ?? account.balances;
+  const freePart = account.totalBalances ? account.balances[0] : undefined;
 
   const ownerOf = useOwnerLabel();
   const ownerLabel = account.foreignOwner ? ownerOf(account.ownerName) : t("ownerPersonal");
@@ -583,6 +588,14 @@ function AccountCard({
                   currency={settlement.currency}
                   tone="plain"
                 />
+              </Flex>
+            )}
+            {freePart && (
+              <Flex align="center" gap="1" wrap="wrap">
+                <Text size="2" color="gray">
+                  {t("freePart")}
+                </Text>
+                <Money minor={freePart.balanceCents} currency={freePart.currency} tone="plain" />
               </Flex>
             )}
             {others.map((balance) => (

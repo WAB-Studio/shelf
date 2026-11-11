@@ -270,6 +270,8 @@ export async function openAccount(
     // the shape check refuses. Every other 23514 on this table is a placement
     // the form cannot express.
     if (pgErrorCode(error) === "23514") throw new ActionError("accounts.errors.currencyInvalid");
+    // PK001: the parent is no live asset of this scope and currency (RF-173).
+    if (pgErrorCode(error) === "PK001") throw new ActionError("accounts.errors.parentInvalid");
     throw error;
   }
 }
