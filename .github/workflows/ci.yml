@@ -698,11 +698,14 @@ jobs:
       - name: Stop the dev server
         if: always()
         run: |
-          kill -INT -- "-$(cat /tmp/next-dev.pid)" 2>/dev/null || true
-          for _ in $(seq 1 30); do
-            curl -s -o /dev/null http://localhost:3000 || exit 0
+          group="-$(cat /tmp/next-dev.pid)"
+          kill -INT -- "$group" 2>/dev/null || true
+          # The port closes before Turbopack finishes writing; wait for the processes themselves.
+          for _ in $(seq 1 60); do
+            kill -0 -- "$group" 2>/dev/null || exit 0
             sleep 1
           done
+          kill -KILL -- "$group" 2>/dev/null || true
 
       - name: Save the Turbopack caches
         if: steps.turbopack.outputs.cache-hit != 'true'
