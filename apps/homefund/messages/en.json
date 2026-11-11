@@ -1781,5 +1781,10 @@
   "privacy": {
     "hide": "Hide amounts",
     "show": "Show amounts"
+  },
+  "installHint": {
+    "title": "Add it to your Home Screen",
+    "steps": "In Safari tap Share, then «Add to Home Screen». It opens like an app, full screen.",
+    "dismiss": "Hide notice"
   }
 }

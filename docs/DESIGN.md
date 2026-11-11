@@ -515,6 +515,13 @@ Board C1h corrected the same day: a card in credit reads «Según HomeFund −$ 
   - Still to fix from the same critic, no decision needed: the row names the movement's description; «Corregir» comes back
     to the review; the debt detail's header reads the Q9 line as its «Saldo» tile does (Q18 left the header in pesos).
 
+## Decisions of 2026-11-11: HomeFund installed on an iPhone, by the user
+
+- The launch image is the app's mark, a third of the screen's width, centred on `#ffffff` or `#110c20`: what the page
+  paints first, so opening reads as one surface.
+- «Agrégala a tu inicio» is a card under the phone's header: a Share icon, the title, one gray line of steps and an
+  «×». Dismissed once, it never returns on that device.
+
 ## Decisions of 2026-10-30: a bank statement through Claude, by the user («dejala ya funcional»)
 
 - «Ajustes · Webhooks» has a «Conectar con Claude» card: the `/mcp` address and «Crear clave para Claude». The key opens

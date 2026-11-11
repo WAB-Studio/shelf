@@ -1781,5 +1781,10 @@
   "privacy": {
     "hide": "Ocultar montos",
     "show": "Mostrar montos"
+  },
+  "installHint": {
+    "title": "Agrégala a tu inicio",
+    "steps": "En Safari toca Compartir y luego «Agregar a pantalla de inicio». Se abre como una app, a pantalla completa.",
+    "dismiss": "Ocultar aviso"
   }
 }
