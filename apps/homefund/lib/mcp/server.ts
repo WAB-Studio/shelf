@@ -77,7 +77,13 @@ function registerReadTools(server: McpServer): void {
           kind: account.kind,
           subtype: account.subtype,
           scope: account.groupId === null ? "personal" : "fund",
+          institution: account.institution,
+          lastFour: account.lastFour ?? null,
           settlementCurrency: account.settlementCurrency,
+          // What update_account takes back: the opening as the form shows it (a liability's debt positive), its date and the stamp.
+          openingBalanceCents: account.kind === "liability" ? -account.initialBalanceCents : account.initialBalanceCents,
+          balanceOn: account.initialBalanceOn,
+          updatedAt: account.updatedAt,
           balances: account.balances,
           canWrite: account.canWrite,
         })),

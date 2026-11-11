@@ -1593,6 +1593,7 @@
       "updateMovement": "Corrige un movimiento que la persona puede escribir. Es un parche: envía solo lo que cambia y lo demás queda como está. Pasa el updatedAt que leíste en list_movements como expectedUpdatedAt: si alguien lo editó mientras tanto, se rechaza. CONFIRMA con la persona el cambio antes de llamarla.",
       "deleteMovement": "Borra un movimiento que la persona puede escribir. No se deshace: CONFIRMA con la persona cuál es antes de llamarla.",
       "createAccount": "Crea una cuenta con saldo inicial en centavos a una fecha: asset (bank o cash) o liability (card, lo que se debe va en positivo). placement «personal» o «group» (la del fondo). CONFIRMA con la persona nombre, tipo, moneda y saldo antes de llamarla, y revisa con list_accounts que no exista ya.",
+      "updateAccount": "Corrige una cuenta que la persona puede escribir: nombre, subtipo, moneda, entidad, últimos cuatro dígitos, saldo inicial en centavos y su fecha. Es un parche: envía solo lo que cambia. Pasa el updatedAt que leíste en list_accounts como expectedUpdatedAt: si alguien la editó mientras tanto, se rechaza. CONFIRMA con la persona el cambio antes de llamarla, sobre todo el saldo inicial.",
       "createCategory": "Crea una categoría (expense o income), opcionalmente bajo una madre del mismo tipo y alcance. placement «personal» o «group». CONFIRMA con la persona antes de llamarla y revisa con list_categories que no exista ya."
     },
     "deferralProposal": "Diferir en {count} cuotas",
