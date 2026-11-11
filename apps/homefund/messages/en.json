@@ -1395,7 +1395,8 @@
       "accountSubtype": {
         "bank": "Bank",
         "cash": "Cash",
-        "card": "Card"
+        "card": "Card",
+        "loan": "Loan"
       },
       "categoryKind": {
         "expense": "Expense",
@@ -1680,7 +1681,13 @@
         "lineRefused": "A line could not be recorded; nothing was imported."
       },
       "inbox": {
-        "missing": {"amount": "The delivery has no amount: give amountCents.", "account": "The delivery has no account: give accountId.", "fromAccount": "A transfer needs fromAccountId.", "toAccount": "A transfer needs toAccountId.", "category": "The delivery has no category: give categoryId or splits."},
+        "missing": {
+          "amount": "The delivery has no amount: give amountCents.",
+          "account": "The delivery has no account: give accountId.",
+          "fromAccount": "A transfer needs fromAccountId.",
+          "toAccount": "A transfer needs toAccountId.",
+          "category": "The delivery has no category: give categoryId or splits."
+        },
         "sideNeedsTransfer": "A lone fromAccountId or toAccountId only applies to a transfer: pass kind transfer or use accountId.",
         "duplicate": "That delivery is already booked as a movement."
       },

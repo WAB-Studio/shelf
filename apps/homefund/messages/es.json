@@ -1395,7 +1395,8 @@
       "accountSubtype": {
         "bank": "Bancaria",
         "cash": "Efectivo",
-        "card": "Tarjeta"
+        "card": "Tarjeta",
+        "loan": "Préstamo"
       },
       "categoryKind": {
         "expense": "Gasto",
@@ -1680,7 +1681,13 @@
         "lineRefused": "Una línea no se pudo registrar; no se importó nada."
       },
       "inbox": {
-        "missing": {"amount": "La entrega no trae monto: indícalo en amountCents.", "account": "La entrega no trae cuenta: indícala en accountId.", "fromAccount": "Una transferencia necesita fromAccountId.", "toAccount": "Una transferencia necesita toAccountId.", "category": "La entrega no trae categoría: indica categoryId o splits."},
+        "missing": {
+          "amount": "La entrega no trae monto: indícalo en amountCents.",
+          "account": "La entrega no trae cuenta: indícala en accountId.",
+          "fromAccount": "Una transferencia necesita fromAccountId.",
+          "toAccount": "Una transferencia necesita toAccountId.",
+          "category": "La entrega no trae categoría: indica categoryId o splits."
+        },
         "sideNeedsTransfer": "Un solo fromAccountId o toAccountId solo vale en una transferencia: pasa kind transfer o usa accountId.",
         "duplicate": "Esa entrega ya está registrada como un movimiento."
       },

@@ -17434,6 +17434,8 @@ async function accountLoanSuite(): Promise<void> {
     code = pgErrorCode(error) ?? "unknown";
   }
   assert(next("RF-178: the database refuses a loan on an asset"), code === "23514", `code ${code}`);
+}
+
 // RF-179: a fund built in the app (no movement carries a key) exports and imports back unchanged
 // without adding a row; a twin deleted in the app is restored, and a path names the right child.
 async function sheetRoundTripSuite(): Promise<void> {
