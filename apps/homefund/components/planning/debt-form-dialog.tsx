@@ -33,7 +33,7 @@ import {
   type OfferedCurrency,
 } from "@/lib/currency";
 import { todayInBogota } from "@/lib/dates";
-import { formatMoney } from "@/lib/money";
+import { useMoneyText } from "@/lib/use-privacy";
 import { useActionErrorToast } from "@/lib/use-action-toast";
 import {
   ACCOUNT_PLACEMENTS,
@@ -167,6 +167,7 @@ function DebtForm({
   onCreated: (accountId: string) => void;
   onOpenChange: (open: boolean) => void;
 }) {
+  const moneyText = useMoneyText();
   const t = useTranslations("debts");
   // Root-scoped: the keys under `common` sit outside the `debts` namespace.
   const tKey = useTranslations();
@@ -334,7 +335,7 @@ function DebtForm({
                 <Text size="3">
                   {/* JSX cannot travel through `t()`, and this is the same figure
                     `Money` draws, character for character (RF-121). */}
-                  {formatMoney(
+                  {moneyText(
                     Math.abs(account?.owedCents ?? 0),
                     currency,
                     locale,

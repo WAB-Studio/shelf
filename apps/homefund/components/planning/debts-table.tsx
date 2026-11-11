@@ -20,7 +20,7 @@ import type { DebtOverviewRow, DebtPocket } from "@/db/queries/debt-overview";
 import type { CurrencyCode } from "@/lib/currency";
 import { civilDateToDate } from "@/lib/dates";
 import type { Locale } from "@/lib/locales";
-import { formatMoney } from "@/lib/money";
+import { useMoneyText } from "@/lib/use-privacy";
 
 // The em dash a cell with nothing to name reads as (SPEC-A3), not a word a
 // translator would ever change.
@@ -194,6 +194,7 @@ export function PocketFigure({
   // A pocket that owes reads «Debes US$ 20,00» instead of the bare amount.
   named?: boolean;
 }) {
+  const moneyText = useMoneyText();
   const t = useTranslations("debts");
   const locale = useLocale() as Locale;
   const size = bold || inherit ? undefined : "1";
@@ -220,7 +221,7 @@ export function PocketFigure({
       weight={bold ? "bold" : undefined}
       color={bold || inherit ? undefined : "gray"}
     >
-      {formatMoney(owedCents, currency, locale)}
+      {moneyText(owedCents, currency, locale)}
     </Figure>
   );
 }

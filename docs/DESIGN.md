@@ -567,6 +567,11 @@ Elegidas por el crítico; el usuario puede cambiarlas («Elige lo que recomiende
   pestañas de escritorio que repetían la barra lateral se quitan.
 - Una cifra titular bajo el título: Presupuestos «Quedan $ X de $ Y», Movimientos el neto del mes, Metas lo apartado.
 - «Aportes del mes»: el usuario eligió el campo «De quién» en el ingreso al fondo (ver RF de aportes).
+- Ocultar montos (RF-174), decidido por el usuario 2026-11-10: «crea un botón para ocultar el dinero». Un ojo (`Eye` /
+  `EyeOff`, «Ocultar montos» / «Mostrar montos») arriba a la derecha de la tarjeta «Patrimonio neto» de Inicio y en el
+  encabezado de la app (la barra lateral en laptop, la barra superior en el teléfono): un solo estado por dispositivo.
+  Oculto, cada cifra queda como «$ ••••••», con la marca de la moneda y la misma altura de línea; los porcentajes siguen
+  visibles y lo que la persona escribe en un campo de monto no se oculta.
 
 ## Decisión del 2026-11-10: bolsillos en Cuentas, por el usuario
 

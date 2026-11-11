@@ -27,6 +27,7 @@ import {
   CategoryTile,
   Columns,
   EmptyState,
+  Figures,
   Flex,
   Heading,
   MovementRow,
@@ -57,6 +58,7 @@ import { PERSONAL_CASH_ACCOUNT_NAME } from "@/lib/fund/seed";
 import type { Locale } from "@/lib/locales";
 import type { ACCOUNT_SUBTYPES } from "@/lib/validation/account";
 import { formatMoney } from "@/lib/money";
+import { tagFigure } from "@/lib/privacy";
 import { accountNamesById } from "@/lib/fund/account-names";
 import { categoryNamesById } from "@/lib/fund/category-names";
 import { nearestLimit, nextDebtPayment } from "@/lib/fund/glance";
@@ -405,7 +407,7 @@ export default async function HomePage(props: PageProps<"/[locale]">) {
                         accountNames,
                         kindLabels,
                       )}
-                      amount={rowAmount(row, locale)}
+                      amount={<Figures>{rowAmount(row, locale)}</Figures>}
                       tone={rowTone(row)}
                     />
                   </LocaleLink>
@@ -474,5 +476,5 @@ function rowAmount(row: TransactionListRow, locale: Locale): string {
         : row.kind === "expense"
           ? "−"
           : "";
-  return `${sign}${formatMoney(row.amountCents, row.currency, locale)}`;
+  return `${sign}${tagFigure(formatMoney(row.amountCents, row.currency, locale))}`;
 }

@@ -26,7 +26,7 @@ import {
 } from "@/components/ui";
 import type { DeferralRow } from "@/db/queries/deferrals";
 import type { CurrencyCode } from "@/lib/currency";
-import { formatMoney } from "@/lib/money";
+import { useMoneyText } from "@/lib/use-privacy";
 import { useActionErrorToast } from "@/lib/use-action-toast";
 import { deferPurchaseSchema, type DeferPurchaseInput } from "@/lib/validation/deferral";
 
@@ -35,6 +35,7 @@ import { deferPurchaseSchema, type DeferPurchaseInput } from "@/lib/validation/d
  * never moves with it (RF-136).
  */
 export function useDeferralLine() {
+  const moneyText = useMoneyText();
   const t = useTranslations("deferrals");
   const locale = useLocale();
 
@@ -44,7 +45,7 @@ export function useDeferralLine() {
       : t("step", {
           current: row.status.current,
           total: row.status.total,
-          amount: formatMoney(row.status.shareCents, row.currency as CurrencyCode, locale),
+          amount: moneyText(row.status.shareCents, row.currency as CurrencyCode, locale),
         });
 }
 
@@ -171,6 +172,7 @@ function DeferForm({ transactionId, onDone }: { transactionId: string; onDone: (
  * row leads to the movement, where the deferral is removed.
  */
 export function DeferredPurchases({ rows }: { rows: DeferralRow[] }) {
+  const moneyText = useMoneyText();
   const t = useTranslations("deferrals");
   const line = useDeferralLine();
   const locale = useLocale();
@@ -185,7 +187,7 @@ export function DeferredPurchases({ rows }: { rows: DeferralRow[] }) {
           cells={[
             {
               key: "purchase",
-              content: row.description ?? formatMoney(row.amountCents, row.currency as CurrencyCode, locale),
+              content: row.description ?? moneyText(row.amountCents, row.currency as CurrencyCode, locale),
             },
             { key: "step", content: line(row), align: "end" },
           ]}

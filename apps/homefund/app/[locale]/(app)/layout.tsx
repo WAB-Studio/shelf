@@ -4,6 +4,7 @@ import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 
 import { AppSidebar } from "@/components/fund/app-sidebar";
+import { PrivacyToggle } from "@/components/fund/privacy-toggle";
 import { AppTabs } from "@/components/fund/app-tabs";
 import { QuickEntryProvider } from "@/components/transactions/quick-entry-provider";
 import { AppMark, Box, Flex, Heading } from "@/components/ui";
@@ -88,9 +89,12 @@ export default async function AppLayout(props: LayoutProps<"/[locale]">) {
             <Flex asChild align="center" gap="3" px="4" pt="4" pb="1">
               <header>
                 <AppMark size={28} />
-                <Heading as="h2" size="5" truncate>
-                  {fundName}
-                </Heading>
+                <Flex flexGrow="1" minWidth="0">
+                  <Heading as="h2" size="5" truncate>
+                    {fundName}
+                  </Heading>
+                </Flex>
+                <PrivacyToggle />
               </header>
             </Flex>
           </Box>

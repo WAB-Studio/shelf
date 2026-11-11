@@ -21,7 +21,8 @@ import {
 import type { ScopedCategory } from "@/db/queries/transaction-form";
 import type { CurrencyCode } from "@/lib/currency";
 import { scopedCategoryName } from "@/lib/fund/category-names";
-import { formatMoney, parseAmount } from "@/lib/money";
+import { parseAmount } from "@/lib/money";
+import { useMoneyText } from "@/lib/use-privacy";
 import type { SplitFields } from "@/lib/validation/transaction";
 
 // How many categories the grid shows before «Más».
@@ -65,6 +66,7 @@ export function SplitEditor({
   value: Split[];
   onChange: (splits: Split[]) => void;
 }) {
+  const moneyText = useMoneyText();
   const t = useTranslations("transactions");
   const tc = useTranslations("categories");
   const locale = useLocale();
@@ -273,7 +275,7 @@ export function SplitEditor({
           weight="bold"
           color={remainderMinor === 0 ? "grass" : "red"}
         >
-          {formatMoney(remainderMinor, currency, locale)}
+          {moneyText(remainderMinor, currency, locale)}
         </Figure>
       </ToneSurface>
     </Flex>

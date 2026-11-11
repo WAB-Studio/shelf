@@ -38,7 +38,7 @@ import type { TransactionFormOptions } from "@/db/queries/transaction-form";
 import { civilDateToDate, todayInBogota } from "@/lib/dates";
 import { categoryNamesById } from "@/lib/fund/category-names";
 import { isOverdue } from "@/lib/fund/glance";
-import { formatMoney } from "@/lib/money";
+import { useMoneyText } from "@/lib/use-privacy";
 import { useActionErrorToast } from "@/lib/use-action-toast";
 
 /**
@@ -280,6 +280,7 @@ function PaymentCard({
   onCancel: () => void;
   onDelete: () => void;
 }) {
+  const moneyText = useMoneyText();
   const t = useTranslations("plannedPayments");
   const tKey = useTranslations();
   const format = useFormatter();
@@ -303,7 +304,7 @@ function PaymentCard({
             }
             title={payment.description ?? t("noConcept")}
             subtitle={overdue ? t("overdueReminder") : t("reminder")}
-            amount={formatMoney(payment.amountCents, payment.currency, locale)}
+            amount={moneyText(payment.amountCents, payment.currency, locale)}
             tone="transfer"
             wrap
           />

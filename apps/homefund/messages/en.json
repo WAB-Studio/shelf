@@ -1686,5 +1686,9 @@
       "clientUnknown": "HomeFund does not know this app. Go back to Claude and start again.",
       "redirectMismatch": "The return address is not the one this app registered."
     }
+  },
+  "privacy": {
+    "hide": "Hide amounts",
+    "show": "Show amounts"
   }
 }

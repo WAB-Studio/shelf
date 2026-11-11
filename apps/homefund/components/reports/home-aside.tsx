@@ -1,3 +1,5 @@
+"use client";
+
 import { useFormatter, useLocale, useTranslations } from "next-intl";
 
 import {
@@ -16,7 +18,7 @@ import type { GoalProgress } from "@/db/queries/savings-goals";
 import type { CurrencyCode } from "@/lib/currency";
 import { civilDateToDate } from "@/lib/dates";
 import type { Locale } from "@/lib/locales";
-import { formatMoney } from "@/lib/money";
+import { useMoneyText } from "@/lib/use-privacy";
 import type { NextDebtPayment } from "@/lib/fund/glance";
 
 /**
@@ -38,6 +40,7 @@ export function HomeAside({
   debt: NextDebtPayment | null;
   debtName: string | null;
 }) {
+  const moneyText = useMoneyText();
   const t = useTranslations("dashboard");
   const format = useFormatter();
   const locale = useLocale() as Locale;
@@ -138,6 +141,6 @@ export function HomeAside({
   // Plain-text figure for a line that carries a sentence; a standalone amount
   // uses `Money`.
   function money(cents: number, currency: string): string {
-    return formatMoney(cents, currency as CurrencyCode, locale);
+    return moneyText(cents, currency as CurrencyCode, locale);
   }
 }

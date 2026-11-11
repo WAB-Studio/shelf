@@ -21,6 +21,7 @@ import {
 import type { MoneyTone } from "@/components/ui";
 import type { DashboardData } from "@/db/queries/reports/dashboard";
 import type { OwnerNetWorthNamed } from "@/db/queries/reports/dashboard";
+import { PrivacyToggle } from "@/components/fund/privacy-toggle";
 import { Link as LocaleLink } from "@/i18n/navigation";
 import type { CurrencyCode } from "@/lib/currency";
 
@@ -72,11 +73,15 @@ export function DashboardSummary({ data }: { data: DashboardData }) {
               </Text>
             )}
 
-            {totalNetWorth.map((total) => (
+            {totalNetWorth.map((total, index) => (
               <Flex key={total.currency} direction="column" gap="1">
-                <Text size="2" color="gray">
-                  {t("netWorthIn", { currency: total.currency })}
-                </Text>
+                {/* One switch for the whole app, on the first figure's label row. */}
+                <Flex align="center" justify="between" gap="2">
+                  <Text size="2" color="gray">
+                    {t("netWorthIn", { currency: total.currency })}
+                  </Text>
+                  {index === 0 && <PrivacyToggle />}
+                </Flex>
                 <BandFigure>
                   <Money
                     minor={total.netWorthCents}

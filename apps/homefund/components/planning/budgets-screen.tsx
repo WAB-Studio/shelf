@@ -41,7 +41,7 @@ import { categoryNamesById, scopedCategoryParts } from "@/lib/fund/category-name
 import type { CurrencyCode } from "@/lib/currency";
 import type { Locale } from "@/lib/locales";
 import { budgetTotals } from "@/lib/fund/glance";
-import { formatMoney } from "@/lib/money";
+import { useMoneyText } from "@/lib/use-privacy";
 import { useActionErrorToast } from "@/lib/use-action-toast";
 
 // The subject of a menu action, not a dialog's own field state: closing any of
@@ -77,6 +77,7 @@ export function BudgetsScreen({
   month: string;
   archived: boolean;
 }) {
+  const moneyText = useMoneyText();
   const t = useTranslations("budgets");
   const tKey = useTranslations();
   const locale = useLocale();
@@ -115,7 +116,7 @@ export function BudgetsScreen({
   });
 
   const figureOf = (cents: number, currency: string) =>
-    formatMoney(cents, currency as CurrencyCode, locale as Locale);
+    moneyText(cents, currency as CurrencyCode, locale as Locale);
 
   // A name and colour per category id — children included — so a card reads its
   // title and dot without a second lookup.
@@ -369,6 +370,7 @@ function BudgetCard({
   onRestore: () => void;
   onDelete: () => void;
 }) {
+  const moneyText = useMoneyText();
   const t = useTranslations("budgets");
   const tKey = useTranslations();
   const locale = useLocale();
@@ -390,7 +392,7 @@ function BudgetCard({
 
   const status = budget.overspent
     ? t("overspent", {
-        amount: formatMoney(
+        amount: moneyText(
           budget.spentCents - budget.limitCents,
           budget.currency,
           locale,
@@ -399,7 +401,7 @@ function BudgetCard({
     : budget.overThreshold
       ? t("nearLimit", { pct, threshold: budget.thresholdPct })
       : t("remaining", {
-          amount: formatMoney(budget.remainingCents, budget.currency, locale),
+          amount: moneyText(budget.remainingCents, budget.currency, locale),
           pct,
         });
 
@@ -463,10 +465,10 @@ function BudgetCard({
         weight="medium"
         color={budget.overspent ? "red" : undefined}
         >
-        {formatMoney(budget.spentCents, budget.currency, locale)}
+        {moneyText(budget.spentCents, budget.currency, locale)}
         <Text color="gray" weight="regular">
           {t("ofLimit", {
-            amount: formatMoney(budget.limitCents, budget.currency, locale),
+            amount: moneyText(budget.limitCents, budget.currency, locale),
           })}
         </Text>
       </Figure>

@@ -2,6 +2,7 @@ import { getFormatter, getLocale, getTranslations } from "next-intl/server";
 
 import { PLANNING_KEYS } from "@/components/fund/destinations";
 import {
+  Figures,
   Flex,
   Heading,
   Money,
@@ -21,6 +22,7 @@ import type { CurrencyCode } from "@/lib/currency";
 import { civilDateToDate } from "@/lib/dates";
 import type { Locale } from "@/lib/locales";
 import { formatMoney } from "@/lib/money";
+import { tagFigure } from "@/lib/privacy";
 
 /**
  * The Planeación hub: one card per area, each carrying a live one-line summary
@@ -57,8 +59,9 @@ export async function PlanningHub({
   const t = await getTranslations("planning");
   const format = await getFormatter();
   const locale = (await getLocale()) as Locale;
+  // Tagged, because only the browser knows whether amounts are hidden.
   const money = (cents: number, currency: string) =>
-    formatMoney(cents, currency as CurrencyCode, locale);
+    tagFigure(formatMoney(cents, currency as CurrencyCode, locale));
   const shortDate = (date: string) =>
     format.dateTime(civilDateToDate(date), { day: "numeric", month: "short" });
 
@@ -78,7 +81,7 @@ export async function PlanningHub({
       <Mosaic>
           <MosaicTile href="/planning/budgets" size="large">
             <Heading as="h2" size="5">{titles.budgets}</Heading>
-            <Text size="2" color="gray">{budgetsSummary}</Text>
+            <Text size="2" color="gray"><Figures>{budgetsSummary}</Figures></Text>
             <Flex direction="column" gap="4" mt="2">
               {budgetsTop.map((budget) => {
                 const pct = (budget.spentCents / budget.limitCents) * 100;
@@ -97,10 +100,10 @@ export async function PlanningHub({
                       aria-label={name}
                     />
                     <Text size="2" color="gray">
-                      {t("spentOf", {
+                      <Figures>{t("spentOf", {
                         spent: money(budget.spentCents, budget.currency),
                         limit: money(budget.limitCents, budget.currency),
-                      })}
+                      })}</Figures>
                     </Text>
                   </Flex>
                 );
@@ -118,24 +121,26 @@ export async function PlanningHub({
                 <Flex direction="column" gap="1" minWidth="0">
                   <Text size="3" weight="medium" truncate>{goal.name}</Text>
                   <Text size="2" color="gray">
-                    {goal.requiredMonthlyCents === null
-                      ? t("goalLeft", { amount: money(goal.remainingCents, goal.currency) })
-                      : t("goalLeftPace", {
-                          amount: money(goal.remainingCents, goal.currency),
-                          pace: money(goal.requiredMonthlyCents, goal.currency),
-                        })}
+                    <Figures>
+                      {goal.requiredMonthlyCents === null
+                        ? t("goalLeft", { amount: money(goal.remainingCents, goal.currency) })
+                        : t("goalLeftPace", {
+                            amount: money(goal.remainingCents, goal.currency),
+                            pace: money(goal.requiredMonthlyCents, goal.currency),
+                          })}
+                    </Figures>
                   </Text>
                 </Flex>
               </Flex>
             ) : (
-              <Text size="2" color="gray">{goalsSummary}</Text>
+              <Text size="2" color="gray"><Figures>{goalsSummary}</Figures></Text>
             )}
           </MosaicTile>
 
           <MosaicTile href="/planning/debts" size="medium" tone="ink">
             <Heading as="h2" size="5">{titles.debts}</Heading>
-            <MosaicFigure>{debtsTotal}</MosaicFigure>
-            <MosaicNote>{debtsNext ?? debtsSummary}</MosaicNote>
+            <MosaicFigure><Figures>{debtsTotal}</Figures></MosaicFigure>
+            <MosaicNote><Figures>{debtsNext ?? debtsSummary}</Figures></MosaicNote>
           </MosaicTile>
 
           <MosaicTile href="/planning/payments" size="wide">
