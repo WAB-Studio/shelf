@@ -38,6 +38,7 @@ import { getShellSummary } from "@/db/queries/app-shell";
 import {
   archiveAccount,
   createAccount,
+  deleteAccount,
   listAccounts,
   restoreAccount,
   updateAccount,
@@ -4126,6 +4127,7 @@ async function main(): Promise<void> {
   await fundPotSuite();
   await otherMembersRowsSuite();
   await deferralImportSuite();
+  await accountPocketSuite();
 }
 
 // A member recorded without a login is someone in the fund: a leader whose fund holds one is not alone, so an
@@ -16692,5 +16694,144 @@ async function otherMembersRowsSuite(): Promise<void> {
     next("RF-58: the owner still gets their own reminder"),
     own.rows.some((row) => row.id === payment.plannedPaymentId),
     `reminders ${JSON.stringify(own.rows.map((row) => row.id))}`,
+  );
+}
+
+// RF-173: a pocket is an account inside a savings account. It keeps its own movements, the parent's row
+// carries the total with its own part apart, and the database refuses a parent that cannot hold it.
+async function accountPocketSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const { POST } = await import("@/app/mcp/route");
+  const owner = await createMembershipFreeUser();
+  const stranger = await createMembershipFreeUser();
+  const base = {
+    kind: "asset" as const, subtype: "bank" as const, groupId: null, isShared: false, institution: null,
+    settlementCurrency: BASE_CURRENCY, balanceOn: "2026-01-01",
+  };
+  const open = (user: HarnessUser, name: string, amountMinor: number, extra: Partial<Parameters<typeof createAccount>[0]> = {}) =>
+    asUser(user, () => createAccount({ ...base, ownerUserId: user.id, name: `Harness rf173 ${name} ${tag}`, amountMinor, ...extra }));
+  const refusedWith = async (attempt: () => Promise<unknown>) => {
+    try {
+      await attempt();
+      return "none";
+    } catch (error) {
+      return pgErrorCode(error) ?? "unknown";
+    }
+  };
+
+  const parent = await open(owner, "ahorros", 249_816_00);
+  track("accounts", parent.accountId);
+  const pocket = await open(owner, "bolsillo", 5_252_338_00, { parentAccountId: parent.accountId });
+  track("accounts", pocket.accountId);
+  const [loose] = [await open(owner, "nequi", 111_384_00)];
+  track("accounts", loose.accountId);
+
+  const listed = await asUser(owner, () => listAccounts({ archived: false }));
+  const rows = listed.filter((row) => [parent.accountId, pocket.accountId, loose.accountId].includes(row.id));
+  const listedParent = rows.find((row) => row.id === parent.accountId);
+  const listedPocket = rows.find((row) => row.id === pocket.accountId);
+  assert(
+    next("RF-173: a pocket opens under an asset account and the list puts it right after its parent"),
+    listedPocket?.parentAccountId === parent.accountId &&
+      listed.findIndex((row) => row.id === pocket.accountId) === listed.findIndex((row) => row.id === parent.accountId) + 1,
+    `pocket ${JSON.stringify(listedPocket && [listedPocket.parentAccountId])}, order ${JSON.stringify(listed.map((row) => row.name))}`,
+  );
+  assert(
+    next("RF-173: the parent's row totals its own balance plus its pockets', its own part stays apart, and a row with no pockets has no total"),
+    listedParent?.balances[0]?.balanceCents === 249_816_00 &&
+      listedParent.totalBalances?.[0]?.balanceCents === 5_502_154_00 &&
+      listedPocket?.totalBalances === undefined &&
+      rows.find((row) => row.id === loose.accountId)?.totalBalances === undefined,
+    `parent ${JSON.stringify(listedParent && [listedParent.balances, listedParent.totalBalances])}`,
+  );
+  const worth = netWorthByOwner(listed, await asUser(owner, () => getAccountBalances())).filter(
+    (bucket) => bucket.bucket === "member" && bucket.ownerUserId === owner.id && bucket.currency === BASE_CURRENCY,
+  );
+  assert(
+    next("RF-173: net worth counts each account once, so the parent's total is not added to its pockets"),
+    worth.length === 1 && worth[0].netWorthCents === 249_816_00 + 5_252_338_00 + 111_384_00,
+    `net worth ${JSON.stringify(worth)}`,
+  );
+
+  const card = await open(owner, "tarjeta", 1_000_00, { kind: "liability", subtype: "card" });
+  track("accounts", card.accountId);
+  const strangerAccount = await open(stranger, "ajena", 0);
+  track("accounts", strangerAccount.accountId);
+  const dollars = await open(owner, "dolares", 0, { settlementCurrency: "USD" });
+  track("accounts", dollars.accountId);
+  const refusals = await Promise.all([
+    refusedWith(() => open(owner, "bolsillo de tarjeta", 0, { parentAccountId: card.accountId })),
+    refusedWith(() => open(owner, "bolsillo anidado", 0, { parentAccountId: pocket.accountId })),
+    refusedWith(() => open(owner, "bolsillo en dolares", 0, { parentAccountId: dollars.accountId })),
+    refusedWith(() => open(owner, "bolsillo ajeno", 0, { parentAccountId: strangerAccount.accountId })),
+    refusedWith(() => open(owner, "tarjeta bolsillo", 0, { kind: "liability", subtype: "card", parentAccountId: parent.accountId })),
+  ]);
+  assert(
+    next("RF-173: a pocket is refused under a liability, under another pocket, in another currency, under another person's account, and as a liability"),
+    JSON.stringify(refusals) === JSON.stringify(["PK001", "PK001", "PK001", "PK001", "23514"]),
+    `codes ${JSON.stringify(refusals)}`,
+  );
+  const becomePocket = await refusedWith(() =>
+    asUser(owner, () => updateAccount({
+      accountId: parent.accountId, name: `Harness rf173 ahorros ${tag}`, subtype: "bank", isShared: false, institution: null,
+      parentAccountId: loose.accountId, settlementCurrency: BASE_CURRENCY, amountMinor: 249_816_00, balanceOn: "2026-01-01",
+    })),
+  );
+  assert(
+    next("RF-173: an account that holds pockets cannot itself become a pocket"),
+    becomePocket === "PK001",
+    `code ${becomePocket}`,
+  );
+
+  const archiveParent = await refusedWith(() => asUser(owner, () => archiveAccount({ accountId: parent.accountId })));
+  const deleteParent = await refusedWith(() => asUser(owner, () => deleteAccount({ accountId: parent.accountId })));
+  await asUser(owner, () => archiveAccount({ accountId: pocket.accountId }));
+  const archiveAfter = await refusedWith(() => asUser(owner, () => archiveAccount({ accountId: parent.accountId })));
+  const restorePocket = await refusedWith(() => asUser(owner, () => restoreAccount({ accountId: pocket.accountId })));
+  assert(
+    next("RF-173: a parent with live pockets is neither archived (PK002) nor deleted (23503); once its pockets are archived it archives, and a pocket cannot come back under an archived parent"),
+    archiveParent === "PK002" && deleteParent === "23503" && archiveAfter === "none" && restorePocket === "PK001",
+    `archive ${archiveParent}, delete ${deleteParent}, after ${archiveAfter}, restore ${restorePocket}`,
+  );
+
+  // The same writes through /mcp, which reads the same schema and the same trigger.
+  const { id: keyId, token } = await asUser(owner, () =>
+    issueWebhookCredential({ name: `Harness rf173 ${tag}`, purpose: "mcp", defaultAccountId: null, defaultCategoryId: null }),
+  );
+  keep("webhook_credentials", keyId);
+  const writer = mcpClient(POST, token);
+  const made = await writer.tool("create_account", {
+    name: `Harness rf173 mcp ahorros ${tag}`, kind: "asset", subtype: "bank", openingBalanceCents: 10_000, balanceOn: "2026-01-01",
+  });
+  const madeId = (made.value as { accountId?: string } | null)?.accountId ?? "";
+  if (madeId) track("accounts", madeId);
+  const madePocket = await writer.tool("create_account", {
+    name: `Harness rf173 mcp bolsillo ${tag}`, kind: "asset", subtype: "bank", openingBalanceCents: 5_000, balanceOn: "2026-01-01",
+    parentAccountId: madeId,
+  });
+  const madePocketId = (madePocket.value as { accountId?: string } | null)?.accountId ?? "";
+  if (madePocketId) track("accounts", madePocketId);
+  const alienPocket = await writer.tool("create_account", {
+    name: `Harness rf173 mcp ajeno ${tag}`, kind: "asset", subtype: "bank", openingBalanceCents: 0, balanceOn: "2026-01-01",
+    parentAccountId: strangerAccount.accountId,
+  });
+  const seen = (await writer.tool("list_accounts")).value as { id: string; parentAccountId: string | null; updatedAt: string }[];
+  const seenPocket = seen.find((one) => one.id === madePocketId);
+  assert(
+    next("RF-173: create_account takes parentAccountId and list_accounts returns it; another person's account as parent is refused"),
+    !made.isError && !madePocket.isError && seenPocket?.parentAccountId === madeId && alienPocket.isError &&
+      seen.find((one) => one.id === madeId)?.parentAccountId === null,
+    `pocket ${JSON.stringify(madePocket.value)}, listed ${JSON.stringify(seenPocket)}, alien ${JSON.stringify(alienPocket.value)}`,
+  );
+  const detached = await writer.tool("update_account", { accountId: madePocketId, expectedUpdatedAt: seenPocket?.updatedAt ?? "", parentAccountId: null });
+  const [afterDetach] = await fixtureSql<{ parent_account_id: string | null }[]>`select parent_account_id from accounts where id = ${madePocketId || randomUUID()}`;
+  const fresh = ((await writer.tool("list_accounts")).value as { id: string; updatedAt: string }[]).find((one) => one.id === madePocketId);
+  const reattached = await writer.tool("update_account", { accountId: madePocketId, expectedUpdatedAt: fresh?.updatedAt ?? "", parentAccountId: madeId });
+  const [afterAttach] = await fixtureSql<{ parent_account_id: string | null }[]>`select parent_account_id from accounts where id = ${madePocketId || randomUUID()}`;
+  assert(
+    next("RF-173: update_account takes a pocket out of its parent with null and puts it back with the parent's id"),
+    !detached.isError && afterDetach?.parent_account_id === null && !reattached.isError && afterAttach?.parent_account_id === madeId,
+    `detach ${JSON.stringify(detached.value)} -> ${afterDetach?.parent_account_id}, attach ${JSON.stringify(reattached.value)} -> ${afterAttach?.parent_account_id}`,
   );
 }

@@ -10,7 +10,7 @@ import {
   updateAccount,
 } from "@/db/queries/accounts";
 import { openAccount } from "@/db/queries/ledger-write";
-import { pgErrorCode } from "@/lib/db-error";
+import { pgConstraintName, pgErrorCode } from "@/lib/db-error";
 import { ActionError } from "@/lib/errors";
 import { parseAmount } from "@/lib/money";
 import { authActionClient } from "@/lib/safe-action";
@@ -58,6 +58,9 @@ export const updateAccountAction = authActionClient
       // AC001: an account with movements or a count keeps the currency they are in.
       if (pgErrorCode(error) === "AC001")
         throw new ActionError("accounts.errors.currencyLocked");
+      // RF-173: a pocket's parent must hold, and a parent keeps what its pockets were opened in.
+      if (pgErrorCode(error) === "PK001") throw new ActionError("accounts.errors.parentInvalid");
+      if (pgErrorCode(error) === "PK002") throw new ActionError("accounts.errors.hasPockets");
       throw error;
     }
     if (updated === "stale") throw new ActionError("errors.stale");
@@ -69,7 +72,14 @@ export const updateAccountAction = authActionClient
 export const archiveAccountAction = authActionClient
   .inputSchema(archiveAccountSchema)
   .action(async ({ parsedInput: { accountId } }) => {
-    const archived = await archiveAccount({ accountId });
+    let archived: boolean;
+    try {
+      archived = await archiveAccount({ accountId });
+    } catch (error) {
+      // PK002: an account with live pockets stays (RF-173).
+      if (pgErrorCode(error) === "PK002") throw new ActionError("accounts.errors.hasPockets");
+      throw error;
+    }
     if (!archived) throw new ActionError("errors.notFound");
 
     refresh();
@@ -122,6 +132,9 @@ export const deleteAccountAction = authActionClient
     try {
       deleted = await deleteAccount({ accountId });
     } catch (error) {
+      // The foreign key a pocket holds on its parent: an account with pockets stays (RF-173).
+      if (pgConstraintName(error) === "accounts_parent_account_id_accounts_id_fk")
+        throw new ActionError("accounts.errors.hasPockets");
       if (pgErrorCode(error) === "23503")
         throw new ActionError("errors.accountHasMovements");
       throw error;

@@ -23,12 +23,17 @@ export type AccountRow = {
   ownerUserId: string | null;
   groupId: string | null;
   isShared: boolean;
+  // The account this one is a pocket of (RF-173); null for an account of its own.
+  parentAccountId?: string | null;
   settlementCurrency: CurrencyCode;
   initialBalanceCents: number;
   initialBalanceOn: string;
   // One balance per currency the account holds, its settlement currency first
   // (RF-121, RF-124). No caller adds two of them together.
   balances: { currency: CurrencyCode; balanceCents: number }[];
+  // Only on an account with live pockets: its own balances plus theirs, summed at read time per
+  // currency. `balances` stays its own free part (RF-173); no total adds this twice.
+  totalBalances?: { currency: CurrencyCode; balanceCents: number }[];
   // What the policies would admit on this account, so a screen offers no action
   // the database would refuse (RF-58, RF-100).
   canWrite: boolean;
@@ -86,6 +91,7 @@ export async function listAccounts(
         ownerUserId: accounts.ownerUserId,
         groupId: accounts.groupId,
         isShared: accounts.isShared,
+        parentAccountId: accounts.parentAccountId,
         settlementCurrency: accounts.settlementCurrency,
         initialBalanceCents: accounts.initialBalanceCents,
         initialBalanceOn: accounts.initialBalanceOn,
@@ -110,13 +116,39 @@ export async function listAccounts(
 
     // A bigint sum rides the aggregate as text; the ledger keeps the amount a
     // number, in the minor unit of the currency beside it.
-    return rows.map((row) => ({
+    const listed: AccountRow[] = rows.map((row) => ({
       ...row,
       balances: row.balances.map((balance) => ({
         currency: balance.currency,
         balanceCents: Number(balance.balanceCents),
       })),
     }));
+
+    return nestPockets(listed);
+  });
+}
+
+// A pocket follows its parent (RF-173) and the parent carries the total of both. A pocket whose
+// parent is not in this list (the other tab) stands alone, so a row never vanishes.
+function nestPockets(rows: AccountRow[]): AccountRow[] {
+  const pockets = Map.groupBy(
+    rows.filter((row) => row.parentAccountId && rows.some((p) => p.id === row.parentAccountId)),
+    (row) => row.parentAccountId as string,
+  );
+
+  return rows.flatMap((row) => {
+    if (row.parentAccountId && pockets.has(row.parentAccountId)) return [];
+    const mine = pockets.get(row.id);
+    if (!mine) return [row];
+
+    const total = new Map(row.balances.map((balance) => [balance.currency, balance.balanceCents]));
+    for (const balance of mine.flatMap((pocket) => pocket.balances)) {
+      total.set(balance.currency, (total.get(balance.currency) ?? 0) + balance.balanceCents);
+    }
+    return [
+      { ...row, totalBalances: [...total].map(([currency, balanceCents]) => ({ currency, balanceCents })) },
+      ...mine,
+    ];
   });
 }
 
@@ -131,6 +163,7 @@ export type CreateAccountArgs = {
   isShared: boolean;
   institution: string | null;
   lastFour?: string | null;
+  parentAccountId?: string | null;
   // The currency the account settles in, and the opening amount as an integer
   // in that currency's minor unit (RF-121, RNF-05).
   settlementCurrency: CurrencyCode;
@@ -157,6 +190,7 @@ async function insertAccount(
     isShared,
     institution,
     lastFour,
+    parentAccountId,
     settlementCurrency,
     amountMinor,
     balanceOn,
@@ -176,6 +210,7 @@ async function insertAccount(
       // A blank field means "no institution", the same as an absent one.
       institution: institution === "" ? null : institution,
       lastFour: lastFour ? lastFour : null,
+      parentAccountId: parentAccountId ?? null,
       settlementCurrency,
       // A liability opens negative so net worth stays a plain sum (RNF-05). The
       // amount arrives already in this currency's minor unit and is written as
@@ -199,6 +234,7 @@ export type UpdateAccountArgs = {
   isShared: boolean;
   institution: string | null;
   lastFour?: string | null;
+  parentAccountId?: string | null;
   settlementCurrency: CurrencyCode;
   amountMinor: number;
   balanceOn: string;
@@ -217,6 +253,7 @@ export async function updateAccount({
   isShared,
   institution,
   lastFour,
+  parentAccountId,
   settlementCurrency,
   amountMinor,
   balanceOn,
@@ -232,6 +269,8 @@ export async function updateAccount({
         isShared,
         institution: institution === "" ? null : institution,
         lastFour: lastFour ? lastFour : null,
+        // Absent leaves the placement as it is; null takes the account out of its parent.
+        ...(parentAccountId === undefined ? {} : { parentAccountId }),
         // Granted for update since 0031, so the opening amount and the unit it
         // is counted in always change together.
         settlementCurrency,

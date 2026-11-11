@@ -96,6 +96,24 @@ function requireSubtypeUnderKind(
   }
 }
 
+// The account a pocket sits inside (RF-173), absent or null for an account of its own. Whether that
+// parent is an asset of the same scope and currency is a read of another row, so the database
+// trigger holds it; the one rule the form alone can see is that a pocket holds value.
+const accountParentSchema = z.uuid({ error: "accounts.errors.parentInvalid" }).nullable().optional();
+
+function requirePocketIsAsset(
+  data: { kind: (typeof ACCOUNT_KINDS)[number]; parentAccountId?: string | null },
+  ctx: z.RefinementCtx,
+) {
+  if (data.parentAccountId && data.kind === "liability") {
+    ctx.addIssue({
+      code: "custom",
+      message: "accounts.errors.pocketMustBeAsset",
+      path: ["parentAccountId"],
+    });
+  }
+}
+
 // The opening amount, read in the currency the account settles in (RF-121): a
 // field alone cannot do this, since "10,50" is a dollar amount and no peso
 // amount at all. Zod skips an object refinement whose shape failed, so both
@@ -135,11 +153,13 @@ export const createAccountSchema = z
     placement: z.enum(ACCOUNT_PLACEMENTS, { error: "accounts.errors.placementInvalid" }),
     institution: accountInstitutionSchema,
     lastFour: accountLastFourSchema.optional(),
+    parentAccountId: accountParentSchema,
     settlementCurrency: accountCurrencySchema,
     amount: accountAmountSchema,
     balanceOn: accountBalanceOnSchema,
   })
   .superRefine(requireSubtypeUnderKind)
+  .superRefine(requirePocketIsAsset)
   .superRefine(requireAmountInCurrency);
 
 export type CreateAccountInput = z.infer<typeof createAccountSchema>;
@@ -157,6 +177,7 @@ export const updateAccountSchema = z
     isShared: z.boolean(),
     institution: accountInstitutionSchema,
     lastFour: accountLastFourSchema.optional(),
+    parentAccountId: accountParentSchema,
     settlementCurrency: accountCurrencySchema,
     amount: accountAmountSchema,
     balanceOn: accountBalanceOnSchema,
@@ -167,6 +188,7 @@ export const updateAccountSchema = z
       .optional(),
   })
   .superRefine(requireSubtypeUnderKind)
+  .superRefine(requirePocketIsAsset)
   .superRefine(requireAmountInCurrency);
 
 export type UpdateAccountInput = z.infer<typeof updateAccountSchema>;

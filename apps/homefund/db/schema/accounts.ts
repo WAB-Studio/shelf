@@ -5,6 +5,7 @@ import {
   check,
   date,
   index,
+  type AnyPgColumn,
   pgPolicy,
   text,
   timestamp,
@@ -42,6 +43,9 @@ export const accounts = finances.table(
     // balance column exists anywhere (RNF-07).
     initialBalanceCents: bigint({ mode: "number" }).notNull().default(0),
     initialBalanceOn: date().notNull(),
+    // A pocket (RF-173) sits inside one asset account of the same scope and currency; one level only.
+    // `private.assert_account_pocket` holds the rules a CHECK cannot read off another row.
+    parentAccountId: uuid().references((): AnyPgColumn => accounts.id),
     archivedAt: timestamp({ withTimezone: true }),
     // The stable per-scope import key (RF-51): a re-import matches on it to update instead of duplicate.
     // Auto-filled to `id::text` by a trigger when omitted; a webhook or upsert value survives untouched.
@@ -71,6 +75,12 @@ export const accounts = finances.table(
     check("accounts_last_four_digits", sql`${table.lastFour} is null or ${table.lastFour} ~ '^[0-9]{4}$'`),
     // The shape of ISO 4217, not a list of codes: which ones a person may pick is an interface question.
     check("accounts_settlement_currency_iso", sql`${table.settlementCurrency} ~ '^[A-Z]{3}$'`),
+    // A pocket holds value like its parent and is never its own parent.
+    check(
+      "accounts_pocket_asset",
+      sql`${table.parentAccountId} is null or (${table.kind} = 'asset' and ${table.parentAccountId} <> ${table.id})`,
+    ),
+    index("accounts_parent_account_id_idx").on(table.parentAccountId),
     index("accounts_group_id_idx").on(table.groupId),
     index("accounts_owner_user_id_idx").on(table.ownerUserId),
     // `external_ref` is unique within a scope, so re-importing the same row updates instead of duplicating (RF-51).

@@ -50,6 +50,9 @@ const SUBTYPE_LABEL_KEYS = {
   card: "subtypeTarjeta",
 } as const;
 
+// A Radix Select item may not carry an empty value, so "no parent" rides this sentinel.
+const NO_PARENT = "none";
+
 // The kind that admits a class, mirroring SUBTYPES_BY_KIND: a card is money owed,
 // anything else holds value.
 function kindForSubtype(
@@ -72,6 +75,8 @@ type AccountFormValues = {
   isShared: boolean;
   institution: string;
   lastFour: string;
+  // The id of the account this one is a pocket of; null for an account of its own (RF-173).
+  parentAccountId: string | null;
   settlementCurrency: (typeof OFFERED_CURRENCIES)[number];
   amount: string;
   balanceOn: string;
@@ -83,11 +88,14 @@ export function AccountFormDialog({
   onOpenChange,
   account,
   defaultSubtype,
+  parentCandidates = [],
 }: {
   hasGroup: boolean;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   account?: AccountRow;
+  // Every account the screen lists; the form keeps the ones that may hold a pocket (RF-173).
+  parentCandidates?: AccountRow[];
   // The class a new account starts on, when the screen was reached asking for one.
   defaultSubtype?: (typeof ACCOUNT_SUBTYPES)[number];
 }) {
@@ -104,6 +112,7 @@ export function AccountFormDialog({
           hasGroup={hasGroup}
           account={account}
           defaultSubtype={defaultSubtype}
+          parentCandidates={parentCandidates}
           onOpenChange={onOpenChange}
         />
       </Dialog.Content>
@@ -115,11 +124,13 @@ function AccountForm({
   hasGroup,
   account,
   defaultSubtype,
+  parentCandidates,
   onOpenChange,
 }: {
   hasGroup: boolean;
   account?: AccountRow;
   defaultSubtype?: (typeof ACCOUNT_SUBTYPES)[number];
+  parentCandidates: AccountRow[];
   onOpenChange: (open: boolean) => void;
 }) {
   const t = useTranslations("accounts");
@@ -146,6 +157,7 @@ function AccountForm({
           isShared: account.isShared,
           institution: account.institution ?? "",
           lastFour: account.lastFour ?? "",
+          parentAccountId: account.parentAccountId ?? null,
           settlementCurrency: account
             .settlementCurrency as (typeof OFFERED_CURRENCIES)[number],
           // The stored integer is already in this currency's minor unit, so the
@@ -168,6 +180,7 @@ function AccountForm({
           isShared: false,
           institution: "",
           lastFour: "",
+          parentAccountId: null,
           settlementCurrency: BASE_CURRENCY as (typeof OFFERED_CURRENCIES)[number],
           amount: "",
           balanceOn: todayInBogota(),
@@ -183,6 +196,23 @@ function AccountForm({
   // an asset stays bank-or-cash, a liability is always a card. On edit the kind is
   // locked, so this is fixed; on create it follows the kind toggle below.
   const subtypeOptions = SUBTYPES_BY_KIND[kind];
+
+  // A parent is an open, writable asset that is no pocket itself, of the scope and currency this
+  // account settles in; one that already holds pockets cannot become a pocket (RF-173).
+  const placement = useWatch({ control: form.control, name: "placement" });
+  const currency = useWatch({ control: form.control, name: "settlementCurrency" });
+  const hasPockets = !!account && parentCandidates.some((row) => row.parentAccountId === account.id);
+  const parentOptions = parentCandidates.filter(
+    (row) =>
+      row.id !== account?.id &&
+      row.kind === "asset" &&
+      !row.parentAccountId &&
+      !row.archivedAt &&
+      row.canWrite &&
+      !row.foreignOwner &&
+      row.settlementCurrency === currency &&
+      (row.ownerUserId !== null) === (placement === "personal"),
+  );
 
   function onActionSuccess() {
     toast.success(t(isEdit ? "updated" : "created"));
@@ -345,6 +375,38 @@ function AccountForm({
                     <Select.Item value="group">{t("ownerFund")}</Select.Item>
                   </Select.Content>
                 </Select.Root>
+                <FieldMessage error={fieldState.error} />
+              </Field>
+            )}
+          />
+        )}
+        {/* Optional: an asset may sit inside a savings account of the same scope and currency (RF-173). */}
+        {kind === "asset" && !hasPockets && (
+          <Controller
+            name="parentAccountId"
+            control={form.control}
+            render={({ field, fieldState }) => (
+              <Field invalid={fieldState.invalid}>
+                <FieldLabel htmlFor="account-parent">{t("parentLabel")}</FieldLabel>
+                <Select.Root
+                  size="3"
+                  value={field.value ?? NO_PARENT}
+                  onValueChange={(value) => field.onChange(value === NO_PARENT ? null : value)}
+                  disabled={isPending}
+                >
+                  <FieldControl>
+                    <Select.Trigger id="account-parent" />
+                  </FieldControl>
+                  <Select.Content position="popper">
+                    <Select.Item value={NO_PARENT}>{t("parentNone")}</Select.Item>
+                    {parentOptions.map((row) => (
+                      <Select.Item key={row.id} value={row.id}>
+                        {row.name}
+                      </Select.Item>
+                    ))}
+                  </Select.Content>
+                </Select.Root>
+                <FieldDescription>{t("parentDescription")}</FieldDescription>
                 <FieldMessage error={fieldState.error} />
               </Field>
             )}

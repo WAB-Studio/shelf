@@ -561,3 +561,7 @@ Elegidas por el crítico; el usuario puede cambiarlas («Elige lo que recomiende
   pestañas de escritorio que repetían la barra lateral se quitan.
 - Una cifra titular bajo el título: Presupuestos «Quedan $ X de $ Y», Movimientos el neto del mes, Metas lo apartado.
 - «Aportes del mes»: el usuario eligió el campo «De quién» en el ingreso al fondo (ver RF de aportes).
+
+## Decisión del 2026-11-10: bolsillos en Cuentas, por el usuario
+
+Un bolsillo es una cuenta dentro de otra, como los de Bancolombia: «Bolsillo Dinero» vive dentro de «Ahorros Bancolombia 3397». En la lista de Cuentas la cuenta madre muestra el total de ella y sus bolsillos; debajo, sangrada, la línea «Libre» con lo que queda en la madre misma, y luego cada bolsillo con su propio saldo, también sangrado. En el celular el bolsillo es una tarjeta sangrada bajo la de su madre y la madre muestra el total con «Libre» debajo. El formulario de la cuenta, al crear y al editar, trae un campo opcional «Dentro de» con las cuentas de ahorro de la misma persona o fondo y la misma moneda, y «Ninguna». Pasar dinero a un bolsillo es una transferencia normal entre las dos cuentas.
