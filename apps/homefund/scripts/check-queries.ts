@@ -17797,6 +17797,76 @@ async function accountToFundSuite(): Promise<void> {
     secondCash === "accounts.errors.moveSecondCash" && (await placement(wallet)).owner_user_id === mover.id && bankStill === "none",
     `cash ${secondCash}, owner ${(await placement(wallet)).owner_user_id}, bank ${bankStill}`,
   );
+
+  // MV003 also reads a personal goal that earmarks one of the account's movements and a personal budget narrowed to it.
+  const [earmarked, budgeted] = await Promise.all([open(mover, "aporte a meta", 1_000_00), open(mover, "con presupuesto", 1_000_00)]);
+  const earmark = await book(earmarked, 100_00, ids.market);
+  await asUser(mover, async () => {
+    const { goalId } = await createGoal({
+      ownerUserId: mover.id, groupId: null, name: name("meta suelta"), targetAmountCents: 1_000_00, targetDate: null, accountId: null, initialContributionCents: null,
+    });
+    track("savings_goals", goalId);
+    track("goal_contributions", (await addGoalContribution({ goalId, transactionId: earmark, amountCents: 100_00 })).contributionId);
+    const { budgetId } = await createBudget({
+      ownerUserId: mover.id, groupId: null, categoryId: ids.market, accountId: budgeted, labelId: null, period: "monthly", limitCents: 1_000_00, thresholdPct: 80, name: null,
+    });
+    track("budgets", budgetId);
+  });
+  const goalRefusals = await Promise.all([refusedWith(mover, earmarked), refusedWith(mover, budgeted)]);
+  const unmoved = await Promise.all([earmarked, budgeted].map(placement));
+  assert(
+    next("RF-180: an account whose movement a personal goal earmarks, and one a personal budget names, are each refused with MV003 and stay personal"),
+    goalRefusals.every((key) => key === "accounts.errors.moveBudgetsGoals") && unmoved.every((row) => row.owner_user_id === mover.id && row.group_id === null),
+    `earmarked, budgeted ${goalRefusals}`,
+  );
+
+  const scheduled = await open(mover, "con regla", 1_000_00);
+  const scheduledOn = { fromAccountId: scheduled, toAccountId: null, amountCents: 100_00, categoryId: ids.market, description: name("programado") };
+  const [{ recurringRuleId }, { plannedPaymentId }] = await asUser(mover, () =>
+    Promise.all([
+      createRecurringRule({ ...scheduledOn, frequency: "monthly", intervalN: 1, dayOfMonth: 5, nextRunOn: "2026-12-05", endsOn: null }),
+      createPlannedPayment({ ...scheduledOn, dueDate: "2026-12-05", remindOn: null }),
+    ]),
+  );
+  track("recurring_rules", recurringRuleId);
+  track("planned_payments", plannedPaymentId);
+  const scheduledMove = await refusedWith(mover, scheduled);
+  type Scheduled = { category_id: string | null; owner_user_id: string | null; group_id: string | null };
+  const [[ruleAfter], [plannedAfter]] = await Promise.all([
+    fixtureSql<Scheduled[]>`select category_id, owner_user_id, group_id from recurring_rules where id = ${recurringRuleId}`,
+    fixtureSql<Scheduled[]>`select category_id, owner_user_id, group_id from planned_payments where id = ${plannedPaymentId}`,
+  ]);
+  assert(
+    next("RF-180: a recurring rule and a planned payment on a moved account take the fund's scope and the fund's twin of their personal category"),
+    scheduledMove === "none" && [ruleAfter, plannedAfter].every((row) => row.category_id === ids.fundMarket && row.owner_user_id === null && row.group_id === ids.group),
+    `move ${scheduledMove}, rule ${JSON.stringify(ruleAfter)}, planned ${JSON.stringify(plannedAfter)}; expected ${ids.fundMarket} in ${ids.group}`,
+  );
+
+  // A twin shares kind and parent name: the fund's income «Sueldo» is no twin of an expense «Sueldo», nor its
+  // top-level «Mercado» of a «Mercado» under «Hogar».
+  const personalCategory = async (label: string, parentId: string | null) => {
+    const { categoryId } = await asUser(mover, () =>
+      createCategory({ scope: { ownerUserId: mover.id }, name: name(label), kind: "expense", parentId, color: CATEGORY_COLORS[0] }),
+    );
+    track("categories", categoryId);
+    return categoryId;
+  };
+  const [expenseSalary, home] = await Promise.all([personalCategory("Sueldo", null), personalCategory("Hogar", null)]);
+  const homeMarket = await personalCategory("Mercado", home);
+  const misfits = await Promise.all(
+    [["otra clase", expenseSalary], ["otra madre", homeMarket]].map(async ([label, categoryId]) => {
+      const accountId = await open(mover, label, 1_000_00);
+      await book(accountId, 100_00, categoryId);
+      return accountId;
+    }),
+  );
+  const twinRefusals = await Promise.all(misfits.map((id) => refusedWith(mover, id)));
+  const misfitsAfter = await Promise.all(misfits.map(placement));
+  assert(
+    next("RF-180: a category whose namesake in the fund is of the other kind, or sits under another parent, has no twin (MV001)"),
+    twinRefusals.every((key) => key === "accounts.errors.moveCategories") && misfitsAfter.every((row) => row.group_id === null),
+    `other kind, other parent ${twinRefusals}`,
+  );
 }
 
 // RF-181: a fund account names its holder, a member of that fund; what moves between a held account and an
@@ -17913,12 +17983,68 @@ async function accountHolderSuite(): Promise<void> {
   const intoHeld = { leader: await ofLeader(), mama: await figure() };
   await move(bbva, pot, 100_000);
   const through = { leader: await ofLeader(), mama: await figure() };
-  await open("efectivo", { subtype: "cash", holderMemberId: ids.mama, amountMinor: 5_000_00 });
+  const heldCash = await open("efectivo", { subtype: "cash", holderMemberId: ids.mama, amountMinor: 5_000_00 });
   const potCash = (await asUser(leader, () => getFundCashBalances(range))).find((row) => row.currency === BASE_CURRENCY)?.balanceCents;
   assert(
     next("RF-181: money from a personal account into a held one is no contribution, through to the pot it counts once for the holder, and a held account is off the fund's cash"),
     intoHeld.leader === leaderBefore && intoHeld.mama === 500_000 && through.leader === leaderBefore && through.mama === 600_000 && potCash === undefined,
     `into held ${JSON.stringify(intoHeld)}, through ${JSON.stringify(through)}, leader before ${leaderBefore}, fund cash ${potCash}; expected the leader unchanged, 500000 then 600000, no cash`,
+  );
+
+  // A held account's money is its holder's own: what moves in or out of it never reaches the fund's cash.
+  await open("caja comun", { subtype: "cash", amountMinor: 1_000_00 });
+  const fundCash = async () => (await asUser(leader, () => getFundCashBalances(range))).find((row) => row.currency === BASE_CURRENCY)?.balanceCents;
+  const cashBefore = await fundCash();
+  await move(pot, heldCash, 200_00);
+  const cashIn = await fundCash();
+  await move(heldCash, pot, 50_00);
+  const cashOut = await fundCash();
+  assert(
+    next("RF-181: a transfer into a held cash account and one out of it leave the fund's cash as it was"),
+    cashBefore === 1_000_00 && cashIn === 1_000_00 && cashOut === 1_000_00,
+    `fund cash ${cashBefore}, after a deposit into the held cash ${cashIn}, after a withdrawal from it ${cashOut}; expected 100000 throughout`,
+  );
+
+  const figures = async () => {
+    const rows = await asUser(leader, () => getMemberContributions(range));
+    const of = (memberId: string) => rows.find((row) => row.memberId === memberId && row.currency === BASE_CURRENCY)?.contributionCents ?? 0;
+    return { leader: of(ids.lead), mama: of(ids.mama) };
+  };
+  const heldBefore = await figures();
+  await move(bbva, own, 70_000);
+  const heldOut = await figures();
+  assert(
+    next("RF-181: a transfer from a held fund account to a personal one moves neither the holder's contribution nor the personal account owner's"),
+    JSON.stringify(heldOut) === JSON.stringify(heldBefore),
+    `before ${JSON.stringify(heldBefore)}, after ${JSON.stringify(heldOut)}`,
+  );
+
+  const { categoryId: salary } = await asUser(leader, () =>
+    createCategory({ scope: { groupId: ids.group }, name: `Harness rf181 sueldo ${tag}`, kind: "income", parentId: null, color: CATEGORY_COLORS[0] }),
+  );
+  track("categories", salary);
+  const credit = async (contributedByMemberId: string | null) => {
+    const { transactionId } = await asUser(leader, () =>
+      createTransaction({
+        fromAccountId: null, toAccountId: bbva, amountCents: 40_000, occurredAt: todayInBogota(), description: `Harness rf181 ingreso ${tag}`,
+        externalRef: null, splits: [{ categoryId: salary, amountCents: 40_000 }], labelIds: [], contributedByMemberId,
+      }),
+    );
+    track("transactions", transactionId);
+  };
+  const unassigned = async () =>
+    (await asUser(leader, () => getUnassignedIncome(range))).find((row) => row.currency === BASE_CURRENCY)?.incomeCents ?? 0;
+  const incomeFigures = async () => {
+    const [members, unassignedCents] = await Promise.all([figures(), unassigned()]);
+    return { ...members, unassigned: unassignedCents };
+  };
+  const incomeBefore = await incomeFigures();
+  await Promise.all([credit(ids.lead), credit(null)]);
+  const incomeAfter = await incomeFigures();
+  assert(
+    next("RF-181: an income into a held account is no one's contribution, named in «De quién» or not, and never «Sin asignar»"),
+    JSON.stringify(incomeAfter) === JSON.stringify(incomeBefore),
+    `before ${JSON.stringify(incomeBefore)}, after ${JSON.stringify(incomeAfter)}`,
   );
 }
 
