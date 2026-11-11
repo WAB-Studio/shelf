@@ -3,8 +3,7 @@ import "server-only";
 import { sql } from "drizzle-orm";
 
 import { callerGroupId } from "@/db/queries/groups";
-import { listCallerMembers } from "@/db/queries/group-members";
-import { requireUser, withUserDb, type Transaction } from "@/db/session";
+import { requireUser, withUserDb } from "@/db/session";
 import { pgConstraintName, pgErrorCode } from "@/lib/db-error";
 import { ActionError } from "@/lib/errors";
 import { memberDebtBalances, type MemberDebtBalance, type MemberDebtEntry } from "@/lib/member-debts";
@@ -16,35 +15,36 @@ export type MemberDebtsData = {
   entries: MemberDebtEntry[];
 };
 
-const MEMBER_REFERENCES = new Set(["member_debts_debtor_in_fund_fk", "member_debts_creditor_in_fund_fk"]);
+// The references that keep both members inside the entry's fund; a delete of a member named here is refused by them.
+export const MEMBER_DEBT_REFERENCES = new Set(["member_debts_debtor_in_fund_fk", "member_debts_creditor_in_fund_fk"]);
 
 type RawEntry = Omit<MemberDebtEntry, "amountCents"> & { amountCents: string };
 
-// The fund's entries, newest first, each with both members' names (an archived member keeps theirs).
-async function readEntries(tx: Transaction, userId: string): Promise<MemberDebtEntry[]> {
-  const rows = await tx.execute<RawEntry>(sql`
-    select d.id, d.kind, d.debtor_member_id as "debtorMemberId", dm.name as "debtorName",
-      d.creditor_member_id as "creditorMemberId", cm.name as "creditorName", d.amount_cents::text as "amountCents",
-      d.currency, d.occurred_on::text as "occurredOn", d.description
-    from member_debts d
-    join group_members dm on dm.id = d.debtor_member_id
-    join group_members cm on cm.id = d.creditor_member_id
-    where d.group_id = ${callerGroupId(userId)}
-    order by d.occurred_on desc, d.created_at desc`);
-  return rows.map((row) => ({ ...row, amountCents: Number(row.amountCents) }));
-}
-
-/** RF-183: the caller's fund's live members, every entry between them and what each pair still owes. Null outside a fund. */
+/**
+ * RF-183: the caller's fund's live members, every entry between them, newest first, and what each pair still
+ * owes, in one statement. An archived member keeps their name on an entry. Null outside a fund.
+ */
 export async function getMemberDebts(): Promise<MemberDebtsData | null> {
   const user = await requireUser();
   return withUserDb(async (tx) => {
-    const [members, entries] = await Promise.all([listCallerMembers(user.id, { archived: false }, tx), readEntries(tx, user.id)]);
-    if (members.length === 0) return null;
-    return {
-      members: members.map((member) => ({ id: member.id, name: member.name })),
-      balances: memberDebtBalances(entries),
-      entries,
-    };
+    const [row] = await tx.execute<{ groupId: string | null; members: MemberDebtsData["members"]; entries: RawEntry[] }>(sql`
+      with g as (select ${callerGroupId(user.id)} as id)
+      select g.id as "groupId",
+        coalesce((select json_agg(json_build_object('id', m.id, 'name', m.name) order by m.name)
+          from group_members m where m.group_id = g.id and m.archived_at is null), '[]') as members,
+        coalesce((select json_agg(json_build_object(
+            'id', d.id, 'kind', d.kind, 'debtorMemberId', d.debtor_member_id, 'debtorName', dm.name,
+            'creditorMemberId', d.creditor_member_id, 'creditorName', cm.name, 'amountCents', d.amount_cents::text,
+            'currency', d.currency, 'occurredOn', d.occurred_on::text, 'description', d.description)
+            order by d.occurred_on desc, d.created_at desc)
+          from member_debts d
+          join group_members dm on dm.id = d.debtor_member_id
+          join group_members cm on cm.id = d.creditor_member_id
+          where d.group_id = g.id), '[]') as entries
+      from g`);
+    if (!row?.groupId) return null;
+    const entries = row.entries.map((entry) => ({ ...entry, amountCents: Number(entry.amountCents) }));
+    return { members: row.members, balances: memberDebtBalances(entries), entries };
   });
 }
 
@@ -69,7 +69,7 @@ export async function recordMemberDebt(input: RecordMemberDebtInput): Promise<{ 
   try {
     return await withUserDb(async (tx) => {
       if (input.kind === "payment") {
-        await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended('member_debts:' || coalesce(${group}::text, ''), 0))`);
+        await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended('member_debts:' || g.id::text, 0)) from (select ${group} as id) g where g.id is not null`);
       }
       const [row] = await tx.execute<{ groupId: string | null; id: string | null }>(sql`
         with g as (select ${group} as id),
@@ -87,7 +87,7 @@ export async function recordMemberDebt(input: RecordMemberDebtInput): Promise<{ 
       return { id: row.id };
     });
   } catch (error) {
-    if (pgErrorCode(error) === "23503" && MEMBER_REFERENCES.has(pgConstraintName(error) ?? "")) {
+    if (pgErrorCode(error) === "23503" && MEMBER_DEBT_REFERENCES.has(pgConstraintName(error) ?? "")) {
       throw new ActionError("memberDebts.errors.memberNotInFund");
     }
     throw error;

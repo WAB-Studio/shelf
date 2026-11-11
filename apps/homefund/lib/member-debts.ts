@@ -1,8 +1,9 @@
 import type { CurrencyCode } from "@/lib/currency";
+import type { MEMBER_DEBT_KINDS } from "@/lib/validation/member-debt";
 
 export type MemberDebtEntry = {
   id: string;
-  kind: "debt" | "payment";
+  kind: (typeof MEMBER_DEBT_KINDS)[number];
   debtorMemberId: string;
   debtorName: string;
   creditorMemberId: string;

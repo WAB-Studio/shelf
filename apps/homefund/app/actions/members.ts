@@ -16,6 +16,7 @@ import {
   type UpdateMemberStatus,
 } from "@/db/queries/group-members";
 import { getUserGroup } from "@/db/queries/groups";
+import { MEMBER_DEBT_REFERENCES } from "@/db/queries/member-debts";
 import { deliverabilityExempt, isDomainDeliverable } from "@/lib/auth/deliverability";
 import { pgConstraintName, pgErrorCode } from "@/lib/db-error";
 import { env } from "@/lib/env";
@@ -224,7 +225,9 @@ export const deleteMemberAction = authActionClient
       deleted = await deleteMember({ groupId, memberId });
     } catch (error) {
       const code = pgErrorCode(error);
-      if (code === "23514" || code === "23503") throw new ActionError("errors.memberHasHistory");
+      if (code === "23514" || (code === "23503" && MEMBER_DEBT_REFERENCES.has(pgConstraintName(error) ?? ""))) {
+        throw new ActionError("errors.memberHasHistory");
+      }
       throw error;
     }
     if (!deleted) notLeader();

@@ -19,6 +19,7 @@ import { getTransactionById, listTransactions, type TransactionListRow, type Tra
 import { pgErrorCode } from "@/lib/db-error";
 import { ActionError } from "@/lib/errors";
 import { CATEGORY_COLORS } from "@/lib/fund/category-color";
+import { parseForm } from "@/lib/mcp/parse-form";
 import { centsToDecimal, parseAmount } from "@/lib/money";
 import { createAccountSchema, updateAccountSchema } from "@/lib/validation/account";
 import { createCategoryInputSchema, updateCategorySchema } from "@/lib/validation/category";
@@ -26,14 +27,6 @@ import { createTransactionSchema, descriptionSchema, HOUSEHOLD_MAKER, occurredAt
 
 type Run = (ctx: ServerContext, load: (owner: string) => Promise<unknown>) => Promise<CallToolResult>;
 type Say = (key: string) => string;
-
-// Claude speaks integer cents; the forms' schemas read the decimal text a person types. The text is
-// built from the integer, so the schema then judges it exactly as it judges a form (RNF-10).
-export function parseForm<S extends z.ZodType>(schema: S, data: unknown): z.output<S> {
-  const verdict = schema.safeParse(data);
-  if (!verdict.success) throw new ActionError(verdict.error.issues[0].message);
-  return verdict.data;
-}
 
 function movementShape(t: Say) {
   const d = (key: string) => t(`params.${key}`);

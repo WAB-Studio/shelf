@@ -5,7 +5,7 @@ import { z } from "zod";
 
 import { getMemberDebts, recordMemberDebt } from "@/db/queries/member-debts";
 import { ActionError } from "@/lib/errors";
-import { parseForm } from "@/lib/mcp/write-tools";
+import { parseForm } from "@/lib/mcp/parse-form";
 import { centsToDecimal } from "@/lib/money";
 import { MEMBER_DEBT_KINDS, recordMemberDebtSchema } from "@/lib/validation/member-debt";
 
@@ -39,13 +39,13 @@ export function registerMemberDebtTools(server: McpServer, run: Run, t: Say): vo
         amountCents: z.number().int().describe(d("amountCents")),
         currency: z.string().optional().describe(d("currency")),
         occurredOn: z.string().describe(d("occurredOn")),
-        description: z.string().nullable().optional().describe(d("description")),
+        description: z.string().nullable().default(null).describe(d("description")),
       }),
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
     },
     (input, ctx) =>
       run(ctx, () =>
-        recordMemberDebt(parseForm(recordMemberDebtSchema, { ...input, amount: centsToDecimal(input.amountCents), description: input.description ?? null })),
+        recordMemberDebt(parseForm(recordMemberDebtSchema, { ...input, amount: centsToDecimal(input.amountCents) })),
       ),
   );
 }
