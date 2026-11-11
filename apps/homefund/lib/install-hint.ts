@@ -43,5 +43,15 @@ export function dismissInstallHint(): void {
 
 export function subscribeToInstallHint(listener: () => void): () => void {
   listeners.add(listener);
-  return () => listeners.delete(listener);
+
+  // Another tab dismissed it.
+  const onStorage = (event: StorageEvent) => {
+    if (event.key === STORAGE_KEY) listener();
+  };
+  window.addEventListener("storage", onStorage);
+
+  return () => {
+    listeners.delete(listener);
+    window.removeEventListener("storage", onStorage);
+  };
 }

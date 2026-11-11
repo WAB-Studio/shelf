@@ -519,7 +519,7 @@ Board C1h corrected the same day: a card in credit reads «Según HomeFund −$ 
 
 - The launch image is the app's mark, a third of the screen's width, centred on `#ffffff` or `#110c20`: what the page
   paints first, so opening reads as one surface.
-- «Agrégala a tu inicio» is a card under the phone's header: a Share icon, the title, one gray line of steps and an
+- «Agrégala a tu inicio» is a card at the top of the screen, above its content: a Share icon, the title, one gray line of steps and an
   «×». Dismissed once, it never returns on that device.
 
 ## Decisions of 2026-10-30: a bank statement through Claude, by the user («dejala ya funcional»)

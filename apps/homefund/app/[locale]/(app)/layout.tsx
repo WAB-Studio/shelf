@@ -98,8 +98,8 @@ export default async function AppLayout(props: LayoutProps<"/[locale]">) {
                 <PrivacyToggle />
               </header>
             </Flex>
-            <InstallHint />
           </Box>
+          <InstallHint />
           {props.children}
         </Flex>
       </Flex>

@@ -27,25 +27,25 @@ export function InstallHint() {
   if (!shown) return null;
 
   return (
-    <Box px="4" pt="2">
+    <Box px={{ initial: "4", sm: "6" }} pt={{ initial: "2", sm: "6" }}>
       <Card role="note" aria-label={t("title")}>
-      <Flex align="start" gap="3">
-        <Share size={18} aria-hidden />
-        <Flex direction="column" gap="1" flexGrow="1" minWidth="0">
-          <Text size="2" weight="medium">{t("title")}</Text>
-          <Text size="2" color="gray">{t("steps")}</Text>
+        <Flex align="start" gap="3">
+          <Share size={18} aria-hidden />
+          <Flex direction="column" gap="1" flexGrow="1" minWidth="0">
+            <Text size="2" weight="medium">{t("title")}</Text>
+            <Text size="2" color="gray">{t("steps")}</Text>
+          </Flex>
+          <IconButton
+            type="button"
+            size="1"
+            variant="ghost"
+            color="gray"
+            aria-label={t("dismiss")}
+            onClick={dismissInstallHint}
+          >
+            <X size={16} />
+          </IconButton>
         </Flex>
-        <IconButton
-          type="button"
-          size="1"
-          variant="ghost"
-          color="gray"
-          aria-label={t("dismiss")}
-          onClick={dismissInstallHint}
-        >
-          <X size={16} />
-        </IconButton>
-      </Flex>
       </Card>
     </Box>
   );
