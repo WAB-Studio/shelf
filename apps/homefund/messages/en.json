@@ -1295,6 +1295,7 @@
       "totalsUpdate": "{count} updated",
       "totalsError": "{count} with errors",
       "reportSheet": "Sheet",
+      "hiddenSheet": "{sheet} (hidden sheet: right-click the tabs → Unhide)",
       "reportRow": "Row",
       "reportColumn": "Column",
       "reportValue": "Value",

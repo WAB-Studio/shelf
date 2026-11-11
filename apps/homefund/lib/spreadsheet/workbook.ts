@@ -3,6 +3,7 @@ import "server-only";
 import ExcelJS from "exceljs";
 
 import type { ExportResult } from "@/db/queries/export";
+import { BACKGROUND_SHEETS, READING_ORDER } from "@/lib/spreadsheet/sheet-layout";
 import {
   SHEET_ENTITIES,
   sheetDescriptors,
@@ -23,6 +24,7 @@ type ColumnView = {
   readonly field: string;
   readonly money?: { readonly toSheet: (cents: number) => number };
   readonly ref?: { readonly entity: RefEntity };
+  readonly date?: true;
 };
 
 // The read side of the same column: the export writes a cell with `toSheet`, the
@@ -49,41 +51,6 @@ const OPTIONS_SHEET = "options";
 // as long as its list, so the dropdown carries no trailing blank entries.
 const TEMPLATE_DATA_ROWS = 500;
 
-// The tabs a person reads, in reading order, transactions first. The rest follow in
-// `SHEET_ENTITIES` order. The import matches sheets by tab name, never by position,
-// so this order is free to differ from the import's.
-const READING_ORDER: readonly SheetEntity[] = [
-  "transactions",
-  "accounts",
-  "categories",
-  "budgets",
-  "goals",
-  "debts",
-];
-
-// The sheets that only restore references (people, tags, schedules, contributions,
-// statements). The export hides them rather than dropping them: they stay in the
-// file, so a re-import still finds them, but a person opening it sees none.
-const BACKGROUND_SHEETS: ReadonlySet<SheetEntity> = new Set([
-  "members",
-  "labels",
-  "recurringRules",
-  "goalContributions",
-  "statements",
-]);
-
-// Column keys that hold a civil day. The export writes them as real date cells.
-const DATE_KEYS: ReadonlySet<string> = new Set([
-  "balanceOn",
-  "nextRunOn",
-  "endsOn",
-  "occurredAt",
-  "targetDate",
-  "periodStart",
-  "cutOffDate",
-  "paymentDueDate",
-]);
-
 const DATE_FORMAT = "dd/mm/yyyy";
 // Thousands separator, 2 decimals, a negative in red with its minus sign.
 const MONEY_FORMAT = "#,##0.00;[Red]-#,##0.00";
@@ -103,34 +70,50 @@ function civilDayCell(value: CellValue): CellValue | Date {
   return new Date(`${value}T00:00:00Z`);
 }
 
-// Bold light-filled header row, frozen, with widths fitted to the content and the
-// date and money columns formatted as such. `filter` adds the header autofilter.
-function styleSheet(
+// The characters a cell shows: a money cell as its formatted text (separators,
+// two decimals, the minus), a date cell as `dd/mm/yyyy`, anything else as itself.
+function shownLength(value: CellValue | Date, column: ColumnView): number {
+  if (value instanceof Date) return DATE_FORMAT.length;
+  if (typeof value === "number" && column.money) {
+    return value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).length;
+  }
+  return String(value ?? "").length;
+}
+
+// One sheet laid out: a bold light-filled header over the columns only, frozen, the
+// date and money columns formatted as such, and widths fitted to the longest shown
+// cell, measured as the rows go in. `filter` adds the header autofilter.
+function fillSheet(
   sheet: ExcelJS.Worksheet,
   columns: readonly ColumnView[],
+  headers: readonly string[],
+  rows: readonly (CellValue | Date)[][],
   filter: boolean,
 ): void {
-  const header = sheet.getRow(1);
-  header.font = { bold: true };
-  header.fill = { type: "pattern", pattern: "solid", fgColor: { argb: HEADER_FILL } };
+  const widths = headers.map((header) => header.length);
+  sheet.addRow(headers);
+  for (const row of rows) {
+    sheet.addRow(row);
+    columns.forEach((column, index) => {
+      widths[index] = Math.max(widths[index], shownLength(row[index], column));
+    });
+  }
+
+  sheet.getRow(1).eachCell((cell) => {
+    cell.font = { bold: true };
+    cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: HEADER_FILL } };
+  });
   sheet.views = [{ state: "frozen", ySplit: 1 }];
 
   columns.forEach((column, index) => {
     const target = sheet.getColumn(index + 1);
-    let width = String(header.getCell(index + 1).value ?? "").length;
-    sheet.eachRow((row, rowNumber) => {
-      if (rowNumber === 1) return;
-      const value = row.getCell(index + 1).value;
-      width = Math.max(width, value instanceof Date ? 10 : String(value ?? "").length);
-    });
-    target.width = Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, width + 2));
-
-    if (DATE_KEYS.has(column.key)) target.numFmt = DATE_FORMAT;
+    target.width = Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, widths[index] + 2));
+    if (column.date) target.numFmt = DATE_FORMAT;
     else if (column.money) target.numFmt = MONEY_FORMAT;
   });
 
   // A column format reaches the header cell too; the header stays text.
-  header.eachCell((cell) => {
+  sheet.getRow(1).eachCell((cell) => {
     cell.numFmt = "General";
   });
 
@@ -139,13 +122,22 @@ function styleSheet(
   }
 }
 
+// Opens the workbook on its first visible sheet, so a hidden leading tab (the
+// template's options) never becomes the active one.
+function openOnFirstVisible(workbook: ExcelJS.Workbook): void {
+  const first = workbook.worksheets.findIndex((sheet) => sheet.state === "visible");
+  workbook.views = [
+    { x: 0, y: 0, width: 10000, height: 20000, firstSheet: 0, activeTab: Math.max(first, 0), visibility: "visible" },
+  ];
+}
+
 // One cell's written value: a money column crosses the cents→pesos boundary right
 // here (the only float in the pipeline), a null becomes an empty cell, the rest
 // pass through as the resolved name or scalar `readExport` already produced.
 function cellValue(column: ColumnView, value: CellValue): CellValue | Date {
   if (value == null) return null;
   if (column.money) return column.money.toSheet(value as number);
-  if (DATE_KEYS.has(column.key)) return civilDayCell(value);
+  if (column.date) return civilDayCell(value);
   return value;
 }
 
@@ -180,37 +172,39 @@ function optionRange(columnIndex: number, count: number): string | null {
 export function buildWorkbook(input: {
   data: ExportResult;
   labels: SheetLabels;
+  // Hide the background sheets. The full export does; a sheet the person picked
+  // by name stays visible.
+  hideBackground?: boolean;
 }): ExcelJS.Workbook {
   const workbook = new ExcelJS.Workbook();
 
   const present = orderedEntities().filter((entity) => input.data[entity] !== undefined);
   // Hiding every sheet leaves nothing to open, so a selection of only background
   // sheets stays visible.
-  const hideBackground = present.some((entity) => !BACKGROUND_SHEETS.has(entity));
+  const hideBackground =
+    (input.hideBackground ?? true) && present.some((entity) => !BACKGROUND_SHEETS.has(entity));
 
   for (const entity of present) {
     const rows = input.data[entity] ?? [];
-
+    const columns = sheetDescriptors[entity].columns as readonly ColumnView[];
     const hidden = hideBackground && BACKGROUND_SHEETS.has(entity);
     const sheet = workbook.addWorksheet(input.labels.sheetName(entity), {
       state: hidden ? "hidden" : "visible",
     });
-    const columns = sheetDescriptors[entity].columns as readonly ColumnView[];
 
-    sheet.addRow(columns.map((column) => input.labels.columnHeader(column.key)));
-
-    for (const row of rows) {
-      const record = row as Record<string, CellValue>;
-      sheet.addRow(columns.map((column) => cellValue(column, record[column.key])));
-    }
-
-    if (!hidden) styleSheet(sheet, columns, entity === "transactions");
+    fillSheet(
+      sheet,
+      columns,
+      columns.map((column) => input.labels.columnHeader(column.key)),
+      rows.map((row) => {
+        const record = row as Record<string, CellValue>;
+        return columns.map((column) => cellValue(column, record[column.key]));
+      }),
+      entity === "transactions",
+    );
   }
 
-  workbook.views = [
-    { x: 0, y: 0, width: 10000, height: 20000, firstSheet: 0, activeTab: 0, visibility: "visible" },
-  ];
-
+  openOnFirstVisible(workbook);
   return workbook;
 }
 
@@ -243,14 +237,17 @@ export function buildTemplate(input: {
     categories: optionRange(2, input.categoryNames.length),
   };
 
-  // The options sheet is first in the file but hidden, so the active tab is the first
-  // visible one: transactions.
   for (const entity of orderedEntities()) {
     const sheet = workbook.addWorksheet(input.labels.sheetName(entity));
     const columns = sheetDescriptors[entity].columns as readonly ColumnView[];
 
-    sheet.addRow(columns.map((column) => input.labels.columnHeader(column.key)));
-    styleSheet(sheet, columns, entity === "transactions");
+    fillSheet(
+      sheet,
+      columns,
+      columns.map((column) => input.labels.columnHeader(column.key)),
+      [],
+      entity === "transactions",
+    );
 
     columns.forEach((column, index) => {
       if (!column.ref) return;
@@ -268,10 +265,7 @@ export function buildTemplate(input: {
     });
   }
 
-  workbook.views = [
-    { x: 0, y: 0, width: 10000, height: 20000, firstSheet: 1, activeTab: 1, visibility: "visible" },
-  ];
-
+  openOnFirstVisible(workbook);
   return workbook;
 }
 
