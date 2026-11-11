@@ -1,8 +1,6 @@
 // RF-188: Safari on an iPhone or iPad offers no install prompt, so the app explains the
-// Share sheet once, until dismissed. Storage is touched here and nowhere else.
-const STORAGE_KEY = "install-hint-dismissed";
-
-const listeners = new Set<() => void>();
+// Share sheet once, until dismissed.
+import { createStoredFlag } from "@/lib/stored-flag";
 
 // Chrome, Firefox, Edge, Opera and the in-app browsers of iOS name themselves; Safari does not.
 const OTHER_IOS_BROWSER = /CriOS|FxiOS|EdgiOS|OPiOS|GSA\/|FBAN|FBAV|Instagram|Line\//;
@@ -19,39 +17,15 @@ export function isIosSafariTab(
   return ios && /Safari\//.test(userAgent) && !OTHER_IOS_BROWSER.test(userAgent);
 }
 
-function readDismissed(): boolean {
-  try {
-    return localStorage.getItem(STORAGE_KEY) === "1";
-  } catch {
-    return false;
-  }
-}
+const dismissed = createStoredFlag("install-hint-dismissed");
 
 export function readInstallHintShown(): boolean {
   const nav = navigator as Navigator & { standalone?: boolean };
-  return isIosSafariTab(nav.userAgent, nav.standalone, nav.maxTouchPoints) && !readDismissed();
+  return isIosSafariTab(nav.userAgent, nav.standalone, nav.maxTouchPoints) && !dismissed.read();
 }
 
 export function dismissInstallHint(): void {
-  try {
-    localStorage.setItem(STORAGE_KEY, "1");
-  } catch {
-    // Storage unavailable; the hint stays away for this page's life only.
-  }
-  for (const listener of listeners) listener();
+  dismissed.write(true);
 }
 
-export function subscribeToInstallHint(listener: () => void): () => void {
-  listeners.add(listener);
-
-  // Another tab dismissed it.
-  const onStorage = (event: StorageEvent) => {
-    if (event.key === STORAGE_KEY) listener();
-  };
-  window.addEventListener("storage", onStorage);
-
-  return () => {
-    listeners.delete(listener);
-    window.removeEventListener("storage", onStorage);
-  };
-}
+export const subscribeToInstallHint = dismissed.subscribe;

@@ -4,6 +4,7 @@
  */
 import { expect } from "@playwright/test";
 
+import { SPLASHES } from "@/lib/splash";
 import messages from "@/messages/es.json";
 
 import { test } from "./global-setup";
@@ -18,7 +19,7 @@ test("every launch image the head names is a PNG of the device's own pixels", as
   await page.goto("/es");
 
   const links = page.locator('link[rel="apple-touch-startup-image"]');
-  await expect(links).toHaveCount(24);
+  await expect(links).toHaveCount(SPLASHES.length);
   const href = await links
     .and(page.locator('[media*="device-width: 393px"][media*="dark"]'))
     .getAttribute("href");

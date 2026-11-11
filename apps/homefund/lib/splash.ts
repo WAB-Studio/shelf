@@ -1,3 +1,5 @@
+import type { Appearance } from "@/lib/theme";
+
 // iOS draws a launch image only when one matches the device's CSS size, pixel ratio,
 // orientation and theme exactly; these are the iPhones that run a current iOS, portrait.
 const IPHONES = [
@@ -15,21 +17,13 @@ const IPHONES = [
   [375, 667, 2],
 ] as const;
 
-export type SplashTheme = "light" | "dark";
-
 export type Splash = {
   width: number;
   height: number;
   ratio: number;
-  theme: SplashTheme;
+  theme: Appearance;
   // The file name under `/splash/`, e.g. `393x852-3-dark.png`.
   name: string;
-};
-
-// The page's own background, as the viewport's theme colour paints the status bar.
-export const SPLASH_BACKGROUND: Record<SplashTheme, string> = {
-  light: "#ffffff",
-  dark: "#110c20",
 };
 
 export const SPLASHES: Splash[] = IPHONES.flatMap(([width, height, ratio]) =>

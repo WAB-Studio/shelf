@@ -7,7 +7,8 @@ import { notFound } from "next/navigation";
 import { ThemeScript } from "@/components/theme-script";
 import { AppTheme, Flex, Toaster } from "@/components/ui";
 import { routing } from "@/i18n/routing";
-import { SPLASH_BACKGROUND, SPLASHES, splashMedia } from "@/lib/splash";
+import { SPLASHES, splashMedia } from "@/lib/splash";
+import { PAGE_BACKGROUND } from "@/lib/theme";
 import "../theme.css";
 
 // The text and its figures (DESIGN.md «Violeta y lima»).
@@ -45,8 +46,8 @@ export const viewport: Viewport = {
    * system preference, which is what that choice defaults to.
    */
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: SPLASH_BACKGROUND.light },
-    { media: "(prefers-color-scheme: dark)", color: SPLASH_BACKGROUND.dark },
+    { media: "(prefers-color-scheme: light)", color: PAGE_BACKGROUND.light },
+    { media: "(prefers-color-scheme: dark)", color: PAGE_BACKGROUND.dark },
   ],
 };
 
