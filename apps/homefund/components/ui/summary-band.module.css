@@ -114,6 +114,7 @@
   display: flex;
   flex-direction: column;
   padding: 20px;
+  container-type: inline-size;
   background-color: var(--brand-ink);
   border: 1px solid transparent;
   border-radius: 20px;
@@ -122,6 +123,14 @@
 /* Lime on the ink: 14.31:1. */
 .card[data-featured] .figure {
   color: var(--brand-lime);
+}
+
+/* «US$ 122.222.221,23» is about 9.2em wide: on a phone the figure shrinks to the
+   card instead of running past its edge and scrolling the page sideways. */
+@media (max-width: 1023px) {
+  .card[data-featured] .figure.figure {
+    font-size: min(var(--font-size-8), 10cqi);
+  }
 }
 
 

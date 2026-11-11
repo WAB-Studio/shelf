@@ -161,3 +161,47 @@ test.describe("lint", () => {
     expect(files).toEqual(["app/[[]locale]/layout.tsx"]);
   });
 });
+
+test.describe("dashboard band on a narrow phone", () => {
+  const accountId = randomUUID();
+
+  test.beforeAll(async () => {
+    await asHarnessUser(async (tx) => {
+      await tx`
+        insert into accounts (
+          id, owner_user_id, name, kind, subtype, initial_balance_cents,
+          initial_balance_on, settlement_currency)
+        values (
+          ${accountId}, ${scope.userId}, ${`Dólares ${stamp}`}, 'asset', 'bank',
+          12222222123, ${todayInBogota()}, 'USD')`;
+    });
+  });
+
+  test.afterAll(async () => {
+    await asHarnessUser(async (tx) => {
+      await tx`delete from accounts where id = ${accountId}`;
+    });
+  });
+
+  test("a hundred-million dollar net worth stays inside the net card @mobile", async ({
+    page,
+  }, testInfo) => {
+    test.skip(testInfo.project.name !== "mobile", "the phone's column");
+    await page.goto("/es");
+
+    const net = card(page, "net");
+    const figure = net.locator(".rt-Heading").filter({ hasText: "122.222.221,23" });
+    await expect(figure).toBeVisible();
+
+    const [figureBox, cardBox] = await Promise.all([figure.boundingBox(), net.boundingBox()]);
+    expect(figureBox!.x + figureBox!.width).toBeLessThanOrEqual(cardBox!.x + cardBox!.width);
+    expect(
+      await figure.evaluate((el) => el.scrollWidth - el.clientWidth),
+    ).toBeLessThanOrEqual(0);
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      ),
+    ).toBeLessThanOrEqual(0);
+  });
+});
