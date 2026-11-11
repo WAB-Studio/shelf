@@ -113,7 +113,7 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - run: npm ci
+      - uses: ./.github/actions/npm-install
 
       # The stack is the runner's own: no database secret is read. The action
       # exports its values before the build, which inlines NEXT_PUBLIC_*;
@@ -125,7 +125,7 @@ jobs:
       - name: Land the lane's harness identities
         run: npm run harness:token -w apps/homefund
 
-      - run: npx playwright install --with-deps chromium
+      - uses: ./.github/actions/playwright-chromium
       - run: sudo apt-get install -y poppler-utils
 
       - run: npm run build -w apps/goallog

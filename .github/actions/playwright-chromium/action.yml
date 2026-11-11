@@ -1,0 +1,35 @@
+name: playwright-chromium
+description: Restore Chromium for the installed Playwright, or download it and save it; the system libraries install either way.
+
+runs:
+  using: composite
+  steps:
+    - name: Read the Playwright version
+      id: version
+      shell: bash
+      run: echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
+
+    - name: Restore the browser
+      id: browser
+      uses: actions/cache/restore@v4
+      with:
+        path: ~/.cache/ms-playwright
+        key: playwright-chromium-${{ runner.os }}-${{ steps.version.outputs.version }}
+
+    # The apt libraries live outside the cache, so a hit still installs them.
+    - name: Install the system libraries
+      if: steps.browser.outputs.cache-hit == 'true'
+      shell: bash
+      run: npx playwright install-deps chromium
+
+    - name: Install the browser and its libraries
+      if: steps.browser.outputs.cache-hit != 'true'
+      shell: bash
+      run: npx playwright install --with-deps chromium
+
+    - name: Save the browser
+      if: steps.browser.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v4
+      with:
+        path: ~/.cache/ms-playwright
+        key: ${{ steps.browser.outputs.cache-primary-key }}

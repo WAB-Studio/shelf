@@ -29,7 +29,7 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - run: npm ci
+      - uses: ./.github/actions/npm-install
       # PageProps and LayoutProps live in generated, gitignored route types.
       # One app at a time: typegen reads the app's own `app/` directory.
       - run: npx next typegen
@@ -76,7 +76,7 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - run: npm ci
+      - uses: ./.github/actions/npm-install
       # `check:sync` reads `--env-file=.env.local`, which the action writes.
       - uses: ./.github/actions/supabase-local
         with:
@@ -111,7 +111,7 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - run: npm ci
+      - uses: ./.github/actions/npm-install
       # `check:policies` reads `--env-file=.env.local`, which the action writes.
       - uses: ./.github/actions/supabase-local
         with:
@@ -131,7 +131,7 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - run: npm ci
+      - uses: ./.github/actions/npm-install
       - uses: ./.github/actions/supabase-local
         with:
           apps: timelog
@@ -238,7 +238,7 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - run: npm ci
+      - uses: ./.github/actions/npm-install
 
       # Named here, or an empty secret surfaces inside the build as a Zod error on
       # a variable nobody set and reads like the schema broke.
@@ -281,7 +281,7 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - run: npm ci
+      - uses: ./.github/actions/npm-install
 
       # Named here, or an empty secret surfaces inside the build as a Zod error on
       # a variable nobody set and reads like the schema broke.
@@ -330,14 +330,14 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - run: npm ci
+      - uses: ./.github/actions/npm-install
 
       # `check:e2e` and the harness scripts its global setup spawns all read
       # `--env-file=.env.local`, which the action writes.
       - uses: ./.github/actions/supabase-local
         with:
           apps: goallog
-      - run: npx playwright install --with-deps chromium
+      - uses: ./.github/actions/playwright-chromium
       - run: sudo apt-get install -y poppler-utils
 
       - run: npm run build -w apps/goallog
@@ -446,7 +446,7 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - run: npm ci
+      - uses: ./.github/actions/npm-install
 
       - uses: actions/download-artifact@v5
         with:
@@ -492,7 +492,7 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - run: npm ci
+      - uses: ./.github/actions/npm-install
 
       # Orbit is there for `harness:token`.
       - uses: ./.github/actions/supabase-local
@@ -565,7 +565,7 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - run: npm ci
+      - uses: ./.github/actions/npm-install
       - run: npx next typegen
         working-directory: apps/homefund
 
@@ -642,7 +642,7 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - run: npm ci
+      - uses: ./.github/actions/npm-install
       - run: npx next typegen
         working-directory: apps/homefund
 
@@ -652,7 +652,7 @@ jobs:
         with:
           apps: homefund
 
-      - run: npx playwright install --with-deps chromium
+      - uses: ./.github/actions/playwright-chromium
 
       # Lane 9's two identities and their token rows. Idempotent.
       - run: npm run harness:token -w apps/homefund
@@ -660,11 +660,26 @@ jobs:
       # `next start` describes in `sign-in.spec.ts` spawn a production server of
       # their own on a free port. `next dev` writes `.next/dev`, so the build in
       # `.next` and the dev server coexist.
+      # Turbopack keeps the build's work in .next/cache and the dev server's in .next/dev/cache; each
+      # shard starts from what its last run compiled, so a route is compiled again only when it changed.
+      - name: Restore the Turbopack caches
+        uses: actions/cache/restore@v4
+        id: turbopack
+        with:
+          path: |
+            apps/homefund/.next/cache
+            apps/homefund/.next/dev/cache
+          key: next-homefund-shard${{ matrix.shard }}-${{ hashFiles('package-lock.json') }}-${{ github.sha }}
+          restore-keys: |
+            next-homefund-shard${{ matrix.shard }}-${{ hashFiles('package-lock.json') }}-
+
       - run: npm run build -w apps/homefund
 
       - name: Start the dev server and wait for it to answer
         run: |
-          npm run dev -w apps/homefund > /tmp/next-dev.log 2>&1 &
+          # Its own process group, so the stop below reaches next and not only npm.
+          setsid npm run dev -w apps/homefund > /tmp/next-dev.log 2>&1 &
+          echo $! > /tmp/next-dev.pid
           # Curl rather than a `wait-on` install: nothing outside SPEC.md §4 is
           # installed. Dev compiles a route on its first hit, so the wait is for
           # the first page to render, not for the port to open.
@@ -678,6 +693,25 @@ jobs:
 
       - name: Run shard ${{ matrix.shard }} of ${{ env.SHARD_TOTAL }}
         run: npm run check:e2e -w apps/homefund -- --shard=${{ matrix.shard }}/${{ env.SHARD_TOTAL }} --reporter=blob,list
+
+      # Turbopack writes its cache as it shuts down; saved while it runs, the cache would be half written.
+      - name: Stop the dev server
+        if: always()
+        run: |
+          kill -INT -- "-$(cat /tmp/next-dev.pid)" 2>/dev/null || true
+          for _ in $(seq 1 30); do
+            curl -s -o /dev/null http://localhost:3000 || exit 0
+            sleep 1
+          done
+
+      - name: Save the Turbopack caches
+        if: steps.turbopack.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            apps/homefund/.next/cache
+            apps/homefund/.next/dev/cache
+          key: ${{ steps.turbopack.outputs.cache-primary-key }}
 
       - name: Upload the blob report
         if: always()
@@ -714,7 +748,7 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - run: npm ci
+      - uses: ./.github/actions/npm-install
 
       - uses: actions/download-artifact@v5
         with:
@@ -765,7 +799,7 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - run: npm ci
+      - uses: ./.github/actions/npm-install
       - run: npx next typegen
         working-directory: apps/wordbook
 
@@ -775,7 +809,7 @@ jobs:
         with:
           apps: wordbook
 
-      - run: npx playwright install --with-deps chromium
+      - uses: ./.github/actions/playwright-chromium
 
       # Production, not dev: the config says so, and module 22's counting
       # assertions need the single effect run production gives
@@ -849,7 +883,7 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - run: npm ci
+      - uses: ./.github/actions/npm-install
 
       - uses: actions/download-artifact@v5
         with:
