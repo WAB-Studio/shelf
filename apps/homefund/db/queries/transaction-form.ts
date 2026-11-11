@@ -48,6 +48,8 @@ export type TransactionFormOptions = {
   // Every active member of the fund, login or not, for «De quién» on an income into a fund
   // account (RF-167); the form opens it empty and requires one.
   fundMembers: { id: string; name: string }[];
+  // Archived members, named only so a «Lo hizo» that points at one still reads as a name (RF-182).
+  formerMembers: { id: string; name: string }[];
   lastUsedAccountId: string | null;
   // What each selectable account settles in (RF-121), so the form knows when to
   // ask for the second amount without going back to the server for it.
@@ -97,13 +99,15 @@ export const getTransactionFormOptions = cache(
         listAccounts({ archived: true }, tx),
         listScopedCategories(user.id, tx),
         listScopedLabels(user.id, tx),
-        listCallerMembers(user.id, { archived: false }, tx),
+        listCallerMembers(user.id, { archived: "all" }, tx),
         getLastUsedAccountId(tx),
         listCurrencyOptions(tx),
         listTransactions({}, { limit: CAUSE_CANDIDATE_LIMIT, tx }),
         listFrequentCategoryIds(user.id, tx),
       ]),
     );
+
+    const activeMembers = members.filter((member) => member.archivedAt === null);
 
     return {
       accounts: accountRows,
@@ -116,10 +120,13 @@ export const getTransactionFormOptions = cache(
       categories,
       labels,
       // Only members who have claimed a login can be a movement's creator (RF-25).
-      members: members.flatMap((member) =>
+      members: activeMembers.flatMap((member) =>
         member.userId ? [{ userId: member.userId, name: member.name }] : [],
       ),
-      fundMembers: members.map((member) => ({ id: member.id, name: member.name })),
+      fundMembers: activeMembers.map((member) => ({ id: member.id, name: member.name })),
+      formerMembers: members
+        .filter((member) => member.archivedAt !== null)
+        .map((member) => ({ id: member.id, name: member.name })),
       lastUsedAccountId,
       accountCurrencies: currencies.accountCurrencies,
       scopeCurrency: currencies.scopeCurrency,

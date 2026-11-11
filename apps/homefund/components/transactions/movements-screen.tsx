@@ -69,6 +69,7 @@ import { accountNamesById, touchesForeignAccount } from "@/lib/fund/account-name
 import { categoryNamesById } from "@/lib/fund/category-names";
 import { dayNet } from "@/lib/fund/glance";
 import { useActionErrorToast } from "@/lib/use-action-toast";
+import { HOUSEHOLD_MAKER } from "@/lib/validation/transaction";
 
 // A Radix Select item may not carry an empty value, so the "any" option rides
 // this sentinel and maps back to null the moment it is picked.
@@ -602,7 +603,8 @@ export function MovementsScreen({
                         <Select.Trigger id={id} />
                         <Select.Content position="popper">
                           <Select.Item value={ANY}>{t("allMembers")}</Select.Item>
-                          {options.fundMembers.map((member) => (
+                          <Select.Item value={HOUSEHOLD_MAKER}>{t("madeByNone")}</Select.Item>
+                          {[...options.fundMembers, ...options.formerMembers].map((member) => (
                             <Select.Item key={member.id} value={member.id}>
                               {member.name}
                             </Select.Item>

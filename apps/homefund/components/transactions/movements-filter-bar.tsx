@@ -13,7 +13,7 @@ import {
 import type { TransactionFormOptions } from "@/db/queries/transaction-form";
 import { civilDateToDate } from "@/lib/dates";
 import { categoryNamesById } from "@/lib/fund/category-names";
-import type { MovementTypeValue } from "@/lib/validation/transaction";
+import { HOUSEHOLD_MAKER, type MovementTypeValue } from "@/lib/validation/transaction";
 
 // The type filter's value, mirrored one-to-one onto the `?type=` query and, on
 // the server, onto the movement's generated kind (RF-19, RF-23).
@@ -158,10 +158,12 @@ export function MovementsFilterBar({
     });
   }
   if (filters.madeBy) {
-    const maker = options.fundMembers.find((one) => one.id === filters.madeBy);
+    const maker = [...options.fundMembers, ...options.formerMembers].find((one) => one.id === filters.madeBy);
     chips.push({
       key: "madeBy",
-      label: `${t("madeByLabel")}: ${maker?.name ?? filters.madeBy}`,
+      label: `${t("madeByLabel")}: ${
+        filters.madeBy === HOUSEHOLD_MAKER ? t("madeByNone") : (maker?.name ?? t("madeByUnknown"))
+      }`,
       clear: { madeBy: null },
     });
   }
@@ -287,7 +289,11 @@ export function MovementsFilterBar({
           onValueChange={(value) => set({ madeBy: value === ANY ? null : value })}
           items={[
             { value: ANY, label: t("allMembers") },
-            ...options.fundMembers.map((member) => ({ value: member.id, label: member.name })),
+            { value: HOUSEHOLD_MAKER, label: t("madeByNone") },
+            ...[...options.fundMembers, ...options.formerMembers].map((member) => ({
+              value: member.id,
+              label: member.name,
+            })),
           ]}
           width={180}
         />

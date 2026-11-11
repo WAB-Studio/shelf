@@ -432,7 +432,7 @@ function ContributionsBody({ data }: { data: ReportsData }) {
           {spendingByMaker
             .filter((row) => row.currency === currency)
             .map((row) => (
-              <PotRow key={row.name ?? "household"} label={row.name ?? t("madeByHousehold")}>
+              <PotRow key={row.memberId ?? "household"} label={row.name ?? t("madeByHousehold")}>
                 <Money minor={row.spentCents} currency={currency} signed={false} size="inherit" />
               </PotRow>
             ))}

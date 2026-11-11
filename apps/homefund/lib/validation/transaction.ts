@@ -607,6 +607,9 @@ export function movementTypeFilter(type: MovementTypeValue): {
 // The movement list's filter set exactly as it travels in the URL (RF-23, RF-89).
 // The list page, the filter bar and the filtered export all parse this one
 // schema, so no second copy can drift from it (RNF-10).
+// The «Lo hizo» filter value for the movements nobody made: the household's (RF-182).
+export const HOUSEHOLD_MAKER = "household";
+
 export const movementFiltersSchema = z.object({
   type: z.enum(MOVEMENT_TYPES).catch("all"),
   from: filterCivilDate,

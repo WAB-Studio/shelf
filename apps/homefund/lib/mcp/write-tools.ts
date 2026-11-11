@@ -23,7 +23,7 @@ import { CATEGORY_COLORS } from "@/lib/fund/category-color";
 import { centsToDecimal, parseAmount } from "@/lib/money";
 import { createAccountSchema, updateAccountSchema } from "@/lib/validation/account";
 import { createCategoryInputSchema, updateCategorySchema } from "@/lib/validation/category";
-import { createTransactionSchema, descriptionSchema, occurredAtSchema, updateTransactionSchema } from "@/lib/validation/transaction";
+import { createTransactionSchema, descriptionSchema, HOUSEHOLD_MAKER, occurredAtSchema, updateTransactionSchema } from "@/lib/validation/transaction";
 
 type Run = (ctx: ServerContext, load: (owner: string) => Promise<unknown>) => Promise<CallToolResult>;
 type Say = (key: string) => string;
@@ -177,7 +177,12 @@ export function registerLedgerTools(server: McpServer, run: Run, t: Say): void {
       run(ctx, async () => {
         const accountId = input.accountId === undefined ? undefined : idOf("transactions.errors.accountInvalid", input.accountId);
         const categoryId = input.categoryId === undefined ? undefined : idOf("errors.notFound", input.categoryId);
-        const madeByMemberId = input.madeByMemberId === undefined ? undefined : idOf("transactions.errors.madeByInvalid", input.madeByMemberId);
+        const madeByMemberId =
+          input.madeByMemberId === undefined
+            ? undefined
+            : input.madeByMemberId === HOUSEHOLD_MAKER
+              ? null
+              : idOf("transactions.errors.madeByInvalid", input.madeByMemberId);
         const rows = await listTransactions(
           { accountId, categoryId, madeByMemberId, from: input.from, to: input.to },
           { limit: input.limit ?? 50, offset: input.offset },

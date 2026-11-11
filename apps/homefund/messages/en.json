@@ -704,6 +704,7 @@
     "contributorNone": "Unassigned",
     "contributorPlaceholder": "Choose who",
     "madeByLabel": "Made by",
+    "madeByUnknown": "Someone else",
     "madeByNone": "The household"
   },
   "cash": {
@@ -1692,7 +1693,7 @@
       "categoryPlacement": "personal or group; absent, the fund when the person has one.",
       "color": "A palette colour; absent, the first free one.",
       "madeByMemberId": "«Made by»: the fund member who made the movement (id from list_members). Only for a fund movement; null or absent is the household.",
-      "filterMadeByMemberId": "Only movements made by this fund member (id from list_members).",
+      "filterMadeByMemberId": "Only movements made by this fund member (id from list_members), or \"household\" for the fund movements nobody made.",
       "filterCategoryId": "Only movements with a line in this category or one of its subcategories (id from list_categories).",
       "offset": "How many to skip, for paging; default 0.",
       "transactionIds": "The ids (from list_movements) of 2 to 50 movements of one account and one kind, expense or income.",

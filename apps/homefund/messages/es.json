@@ -704,6 +704,7 @@
     "contributorNone": "Sin asignar",
     "contributorPlaceholder": "Elige quién",
     "madeByLabel": "Lo hizo",
+    "madeByUnknown": "Otra persona",
     "madeByNone": "El hogar"
   },
   "cash": {
@@ -1692,7 +1693,7 @@
       "categoryPlacement": "personal o group; si falta, el fondo si la persona tiene uno.",
       "color": "Un color de la paleta; si falta, el primero libre.",
       "madeByMemberId": "«Lo hizo»: el miembro del fondo que hizo el movimiento (id de list_members). Solo en un movimiento del fondo; null o ausente es el hogar.",
-      "filterMadeByMemberId": "Solo movimientos hechos por este miembro del fondo (id de list_members).",
+      "filterMadeByMemberId": "Solo movimientos hechos por este miembro del fondo (id de list_members), o \"household\" para los movimientos del fondo que nadie hizo.",
       "filterCategoryId": "Solo movimientos con una línea en esta categoría o en una de sus subcategorías (id de list_categories).",
       "offset": "Cuántos saltar, para paginar; por defecto 0.",
       "transactionIds": "Los ids (de list_movements) de 2 a 50 movimientos de una misma cuenta y un mismo tipo, gasto o ingreso.",

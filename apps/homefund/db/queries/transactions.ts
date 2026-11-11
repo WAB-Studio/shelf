@@ -98,8 +98,8 @@ export type TransactionListFilters = {
   memberUserId?: string;
   accountId?: string;
   categoryId?: string;
-  // «Lo hizo» (RF-182): the fund member who made the movement.
-  madeByMemberId?: string;
+  // «Lo hizo» (RF-182): the fund member who made the movement; `null` keeps the fund movements nobody made.
+  madeByMemberId?: string | null;
   // The label a movement carries through the join, RF-89.
   labelId?: string;
   kind?: string;
@@ -334,6 +334,28 @@ export function contributorMark(from: SQL, to: SQL, member: SQL): SQL {
 }
 
 /**
+ * Whether a maker fits the movement as the policy will judge it (RF-182), so a screen or Claude is told
+ * «pick a fund member» instead of «not found». `household` is the mark as the write will store it.
+ */
+export async function makerFits({
+  memberId,
+  fromAccountId,
+  toAccountId,
+  forHousehold,
+}: {
+  memberId: string;
+  fromAccountId: string | null;
+  toAccountId: string | null;
+  forHousehold: boolean;
+}): Promise<boolean> {
+  const [row] = await withUserDb((tx) =>
+    tx.execute<{ fits: boolean }>(sql`select private.maker_in_fund(${memberId}::uuid, ${fromAccountId}::uuid, ${toAccountId}::uuid,
+      ${householdMark(sql`${fromAccountId}::uuid`, sql`${toAccountId}::uuid`, sql`${forHousehold}`)}) as fits`),
+  );
+  return row?.fits === true;
+}
+
+/**
  * Who a movement is credited to as its maker when nobody says (RF-182): the household. RF-181 will answer
  * with the holder of the fund account it touches; every write that names no maker asks here.
  */
@@ -436,7 +458,11 @@ export async function updateTransaction({
         madeByMemberId:
           madeByMemberId === undefined
             ? sql`(case when private.maker_in_fund(${transactions.madeByMemberId}, ${fromAccountId}::uuid, ${toAccountId}::uuid,
-                ${householdMark(sql`${fromAccountId}::uuid`, sql`${toAccountId}::uuid`, sql`${transactions.forHousehold}`)})
+                ${householdMark(
+                  sql`${fromAccountId}::uuid`,
+                  sql`${toAccountId}::uuid`,
+                  forHousehold === undefined ? sql`${transactions.forHousehold}` : sql`${forHousehold}`,
+                )})
                 then ${transactions.madeByMemberId} end)`
             : sql`${madeByMemberId}::uuid`,
         occurredAt,
@@ -527,6 +553,10 @@ export function transactionListConditions(filters: TransactionListFilters): SQL[
   }
   if (filters.madeByMemberId) {
     conditions.push(eq(transactions.madeByMemberId, filters.madeByMemberId));
+  } else if (filters.madeByMemberId === null) {
+    conditions.push(
+      sql`(${transactions.madeByMemberId} is null and (${transactions.groupId} is not null or ${transactions.forHousehold}))`,
+    );
   }
   if (filters.accountId) {
     conditions.push(

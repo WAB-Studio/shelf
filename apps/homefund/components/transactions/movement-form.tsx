@@ -1102,7 +1102,10 @@ export function MovementForm({
                     </FieldControl>
                     <Select.Content position="popper">
                       <Select.Item value={NO_ACCOUNT}>{t("madeByNone")}</Select.Item>
-                      {options.fundMembers.map((member) => (
+                      {[
+                        ...options.fundMembers,
+                        ...options.formerMembers.filter((member) => member.id === field.value),
+                      ].map((member) => (
                         <Select.Item key={member.id} value={member.id}>
                           {member.name}
                         </Select.Item>

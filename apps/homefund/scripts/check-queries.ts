@@ -17547,12 +17547,15 @@ async function madeBySuite(): Promise<void> {
     "household bill refused",
   );
 
+  const papa = await asUser(leader, () => createTransaction(expense(ids.cash, 70_00, { madeByMemberId: ids.guest })));
+  keep("transactions", papa.transactionId);
   const split = await asUser(leader, () => getSpendingByMaker(range));
+  const fundTotal = (await asUser(leader, () => getFundSpending(range))).find((row) => row.currency === "COP")?.spentCents;
   const spentBy = (member: string | null) => split.find((row) => row.memberId === member && row.currency === "COP")?.spentCents;
   assert(
-    next("RF-182: Reports split the month's spending by maker, the household's apart"),
-    spentBy(ids.guest) === 70_00 && spentBy(null) === 400_00,
-    `split ${JSON.stringify(split)}; expected papa 7000 and household 40000`,
+    next("RF-182: Reports split the fund's month by maker, the household's apart, and the rows add up to the fund's spending"),
+    spentBy(ids.guest) === 70_00 && spentBy(null) === 400_00 && fundTotal === 470_00,
+    `split ${JSON.stringify(split)}, fund ${fundTotal}; expected papa 7000, household 40000, fund 47000`,
   );
 
   const { POST } = await import("@/app/mcp/route");
@@ -17586,7 +17589,7 @@ async function madeBySuite(): Promise<void> {
   const byFilter = await listed({ madeByMemberId: ids.guest });
   assert(
     next("RF-182: list_movements filters by madeByMemberId"),
-    byFilter.length === 1 && byFilter[0].id === mcpId,
+    byFilter.some((row) => row.id === mcpId) && byFilter.every((row) => row.madeByMemberId === ids.guest),
     `filtered ${JSON.stringify(byFilter.map((row) => row.id))}`,
   );
   const unset = await tool("update_movement", { transactionId: mcpId, expectedUpdatedAt: mine?.updatedAt, madeByMemberId: null });
@@ -17598,5 +17601,24 @@ async function madeBySuite(): Promise<void> {
     next("RF-182: update_movement clears the maker with null, and record_movement refuses one on a personal account"),
     !unset.isError && (await listed()).find((row) => row.id === mcpId)?.madeByMemberId === null && refusedMcp.isError,
     `update ${JSON.stringify(unset.value)}, personal ${JSON.stringify(refusedMcp.value)}`,
+  );
+
+  const householdOnly = await asUser(leader, () => listTransactions({ madeByMemberId: null }));
+  assert(
+    next("RF-182: the household filter keeps the fund movements nobody made and no personal one"),
+    householdOnly.length > 0 && householdOnly.every((row) => row.madeByMemberId === null && row.id !== billed.transactionId) &&
+      householdOnly.some((row) => row.id === household.transactionId),
+    `household rows ${householdOnly.length}`,
+  );
+  const viaMcp = (await tool("list_movements", { madeByMemberId: "household", limit: 50 })).value as { id: string }[];
+  const refused = await tool("record_movement", {
+    fromAccountId: ids.cash, toAccountId: null, amountCents: 10_00, occurredAt: todayInBogota(), description: `Harness rf182 ajeno ${tag}`,
+    categoryId: ids.category, madeByMemberId: ids.outsiderMember, requestRef: randomUUID(),
+  });
+  assert(
+    next("RF-182: list_movements filters the household, and a maker outside the fund is told to pick a fund member, not «not found»"),
+    viaMcp.some((row) => row.id === household.transactionId) &&
+      refused.isError && JSON.stringify(refused.value).includes("fondo"),
+    `household ${viaMcp.length}, refused ${JSON.stringify(refused.value)}`,
   );
 }

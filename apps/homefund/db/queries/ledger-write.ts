@@ -14,6 +14,7 @@ import {
   getSettlementCurrencies,
   insertTransaction,
   listTransactions,
+  makerFits,
   readContributorContext,
   ResendChangedError,
   updateTransaction,
@@ -132,6 +133,24 @@ export async function assertContributorGiven(
   if (!verdict.success) throw new ActionError(verdict.error.issues[0].message);
 }
 
+// «Lo hizo» must be a member of the fund the movement sits in (RF-182): said here, not left to the policy,
+// whose refusal reads as «not found».
+async function assertMakerFits(movement: {
+  fromAccountId: string | null;
+  toAccountId: string | null;
+  forHousehold?: boolean;
+  madeByMemberId?: string | null;
+}): Promise<void> {
+  if (!movement.madeByMemberId) return;
+  const fits = await makerFits({
+    memberId: movement.madeByMemberId,
+    fromAccountId: movement.fromAccountId,
+    toAccountId: movement.toAccountId,
+    forHousehold: movement.forHousehold ?? false,
+  });
+  if (!fits) throw new ActionError("transactions.errors.madeByInvalid");
+}
+
 // `transactions_verify_currency` raises this and nothing else does: a movement
 // whose currency does not agree with the accounts it names (migration `0032`).
 const CURRENCY_REFUSAL = "23901";
@@ -165,7 +184,12 @@ export async function bookMovement(
   input: CreateTransactionInput,
   alsoCheck: () => Promise<void> = async () => {},
 ): Promise<{ transactionId: string }> {
-  const [, , counter] = await Promise.all([alsoCheck(), assertContributorGiven(input), resolveCounterAmount(input)]);
+  const [, , , counter] = await Promise.all([
+    alsoCheck(),
+    assertContributorGiven(input),
+    assertMakerFits(input),
+    resolveCounterAmount(input),
+  ]);
 
   try {
     return await createTransaction({
@@ -202,9 +226,10 @@ export async function reviseMovement(
 ): Promise<void> {
   // RF-156: an edit sent without the stamp its form loaded is stale, refused before any write.
   if (!input.expectedUpdatedAt) throw new ActionError("errors.stale");
-  const [, , counter] = await Promise.all([
+  const [, , , counter] = await Promise.all([
     alsoCheck(),
     assertContributorGiven(input, input.transactionId),
+    assertMakerFits(input),
     resolveCounterAmount(input),
   ]);
 

@@ -43,7 +43,7 @@ export type ReportsData = {
   // Incomes into the fund that name no member: «Sin asignar» in Aportes (RF-167).
   unassigned: UnassignedIncome[];
   // Who spent how much in the month, by «Lo hizo» (RF-182); the member's name is null for the household.
-  spendingByMaker: (Omit<SpendingByMaker, "memberId"> & { name: string | null })[];
+  spendingByMaker: (SpendingByMaker & { name: string | null })[];
   hasGroup: boolean;
 };
 
@@ -63,7 +63,7 @@ export async function getReportsData(monthStart: string = currentMonthStart()): 
   // roster chains off the group inside the fan-out, so it adds no wave of its own.
   const groupAndMembers = getUserGroup().then(async (found) => ({
     group: found,
-    members: found ? await listMembers(found.id, { archived: false }) : [],
+    members: found ? await listMembers(found.id, { archived: "all" }) : [],
   }));
 
   const [expensesByCategory, sixMonthFlow, contributionRows, fundCash, fundSpending, unassigned, makerRows, { group, members }, sessionUser] =
@@ -95,10 +95,9 @@ export async function getReportsData(monthStart: string = currentMonthStart()): 
     fundCash,
     fundSpending,
     unassigned,
-    spendingByMaker: makerRows.map(({ memberId, currency, spentCents }) => ({
-      name: memberId ? (nameByMemberId.get(memberId) ?? null) : null,
-      currency,
-      spentCents,
+    spendingByMaker: makerRows.map((row) => ({
+      ...row,
+      name: row.memberId ? (nameByMemberId.get(row.memberId) ?? null) : null,
     })),
     hasGroup: group !== null,
   };
