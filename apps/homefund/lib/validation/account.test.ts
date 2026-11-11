@@ -41,10 +41,10 @@ function issues(schema: z.ZodType, input: unknown) {
 }
 
 test("the form's list is the new words", () => {
-  assert.deepEqual([...ACCOUNT_SUBTYPES], ["bank", "cash", "card"]);
+  assert.deepEqual([...ACCOUNT_SUBTYPES], ["bank", "cash", "card", "loan"]);
   assert.deepEqual(
     { asset: [...SUBTYPES_BY_KIND.asset], liability: [...SUBTYPES_BY_KIND.liability] },
-    { asset: ["bank", "cash"], liability: ["card"] },
+    { asset: ["bank", "cash"], liability: ["card", "loan"] },
   );
 });
 

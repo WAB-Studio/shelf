@@ -7,6 +7,7 @@ import { z } from "zod";
 
 import {
   readImportScope,
+  type FileWindow,
   type ImportScope,
   type ScopedAccount,
   type ScopedCategory,
@@ -26,7 +27,8 @@ import {
   STATEMENT_SOURCES,
   type SheetEntity,
 } from "@/lib/spreadsheet/schema";
-import { parseWorkbook, type ParsedRow, type ReverseSheetLabels } from "@/lib/spreadsheet/workbook";
+import { CATEGORY_PATH_SEPARATOR, identityKeys } from "@/lib/spreadsheet/sheet-layout";
+import { buildChoiceReader, choiceLabelFrom, parseWorkbook, type ParsedRow, type ParsedWorkbook, type ReverseSheetLabels } from "@/lib/spreadsheet/workbook";
 import { importedAdjustmentSchema } from "@/lib/validation/account-reconciliation";
 import { ACCOUNT_PLACEMENTS, createAccountSchema } from "@/lib/validation/account";
 import { createCategorySchema } from "@/lib/validation/category";
@@ -98,12 +100,11 @@ const PLACEHOLDER_NAMESPACE = "finances-app/import";
 // it lands archived (RF-120).
 const restoredFields = { placement: z.enum(ACCOUNT_PLACEMENTS), archived: z.boolean() };
 
-// A contribution restored with its day and the movement it earmarks, by that movement's key.
+// A contribution restored with its day.
 const restoredContributionSchema = z.object({
   goalId: z.uuid(),
   amount: z.string(),
   contributedOn: z.string().refine(isCivilDate),
-  movement: z.string().nullable(),
 });
 
 // A closed statement as the ledger holds it (RF-129): its figures signed, its days in order.
@@ -204,8 +205,6 @@ export type EffectiveRefs = {
   categories: Map<string, string[]>;
   labels: Map<string, string[]>;
   goals: Map<string, string[]>;
-  // Every movement key a contribution may name: the fund's and the file's (RF-87).
-  movementKeys: Set<string>;
   // Where a row whose placement is personal, or group, lands; null for a fund the caller lacks.
   places: { personal: ScopeKey; group: ScopeKey | null };
   accountCurrencies: Map<string, string>;
@@ -272,10 +271,15 @@ function buildEffectiveMap(
   fileRows: RawRow[],
   seedPrefix: string,
 ): Map<string, string[]> {
-  const entities: { id: string; name: string }[] = existing.map((row) => ({
+  // A category is also named by its path, «Parent › Child», which tells apart two children of
+  // one name; a cell is matched as written, never cut to its child's name.
+  const entities: { id: string; name: string; path: string }[] = existing.map((row) => ({
     id: row.id,
     name: row.name,
+    path: "path" in row ? String(row.path) : row.name,
   }));
+  const pathOf = (raw: RawRow, name: string) =>
+    seedPrefix === "categories" && text(raw.parent).length > 0 ? `${text(raw.parent)}${CATEGORY_PATH_SEPARATOR}${name}` : name;
 
   const indexByRef = new Map<string, number>();
   existing.forEach((row, index) => {
@@ -289,19 +293,24 @@ function buildEffectiveMap(
 
     if (existingIndex !== undefined) {
       // Same entity as an existing row (an update); a rename overrides its name.
-      if (name.length > 0) entities[existingIndex].name = name;
+      if (name.length > 0) {
+        entities[existingIndex].name = name;
+        entities[existingIndex].path = pathOf(raw, name);
+      }
       return;
     }
 
-    entities.push({ id: placeholderFor(seedPrefix, ref, rowIndex), name });
+    entities.push({ id: placeholderFor(seedPrefix, ref, rowIndex), name, path: pathOf(raw, name) });
   });
 
   const map = new Map<string, string[]>();
   for (const entity of entities) {
     if (entity.name.length === 0) continue;
-    const ids = map.get(entity.name) ?? [];
-    ids.push(entity.id);
-    map.set(entity.name, ids);
+    for (const key of new Set([entity.name, entity.path])) {
+      const ids = map.get(key) ?? [];
+      ids.push(entity.id);
+      map.set(key, ids);
+    }
   }
   return map;
 }
@@ -736,16 +745,11 @@ function resolveAndShape(
     }
 
     case "goalContributions": {
-      const movement = (data.movement ?? null) as string | null;
-      if (movement !== null && !refs.movementKeys.has(movement)) {
-        errors.push({ key: UNKNOWN_REFERENCE, column: "movement", value: rawCellValue(entity, raw, "movement") });
-      }
       return {
         object: {
           goalId: resolveInto(data.goal, refs.goals, "goal"),
           amount: data.amount,
           contributedOn: data.contributedOn,
-          movement,
         },
         errors,
       };
@@ -1034,13 +1038,13 @@ export function processRow(
 }
 
 // A blank reference becomes a key derived from the row's own content, so the same file imported
-// again lands on the same rows (RF-52). `twins` counts the identical rows already keyed in the
-// sheet: two equal rows keep two keys, and neither depends on where it sits.
-function withContentKeys(entity: SheetEntity, rows: ParsedRow[]): void {
+// again lands on the same rows (RF-52). `twins` counts every row of one content in the sheet,
+// adopted or not: two equal rows keep two keys, and neither depends on where it sits. A key the
+// fund or the file already holds is skipped, so a derived key never repeats an adopted one.
+function withContentKeys(entity: SheetEntity, rows: ParsedRow[], reserved: Set<string>): void {
   const twins = new Map<string, number>();
   for (const row of rows) {
     const record = row.record as RawRow;
-    if (text(record.externalRef).length > 0) continue;
     const content = Object.keys(record)
       .filter((key) => key !== "externalRef")
       .sort()
@@ -1050,10 +1054,73 @@ function withContentKeys(entity: SheetEntity, rows: ParsedRow[]): void {
         return cell == null || cell === "" ? [] : [[key, cell]];
       });
     const body = JSON.stringify([entity, content]);
-    const k = twins.get(body) ?? 0;
+    let k = twins.get(body) ?? 0;
     twins.set(body, k + 1);
-    const digest = createHash("sha256").update(`${body}\u0000${k}`).digest("hex");
-    record.externalRef = `imp:${digest.slice(0, 32)}`;
+    if (text(record.externalRef).length > 0) continue;
+    let key: string;
+    do {
+      key = `imp:${createHash("sha256").update(`${body}\u0000${k}`).digest("hex").slice(0, 32)}`;
+      k += 1;
+    } while (reserved.has(key));
+    reserved.add(key);
+    record.externalRef = key;
+  }
+}
+
+// A file row with no key that repeats a row the fund holds takes that row's key, so a file
+// exported from the fund and imported back updates rather than duplicates (RF-179). A key is
+// given once: the next twin takes the next one, or none.
+function adoptKnownKeys(entity: SheetEntity, rows: ParsedRow[], known: Map<string, string[]> | undefined): void {
+  if (known === undefined) return;
+  const used = new Set<string>();
+  for (const row of rows) {
+    const record = row.record as RawRow;
+    if (text(record.externalRef).length > 0) continue;
+    for (const identity of identityKeys(entity, record)) {
+      const ref = known.get(identity)?.find((candidate) => !used.has(candidate));
+      if (ref === undefined) continue;
+      used.add(ref);
+      record.externalRef = ref;
+      break;
+    }
+  }
+}
+
+// Every key the entity already answers to: the fund's own and the ones the file names itself.
+function reservedKeys(known: Map<string, string[]> | undefined, rows: ParsedRow[]): Set<string> {
+  const reserved = new Set<string>();
+  for (const list of known?.values() ?? []) for (const ref of list) reserved.add(ref);
+  for (const row of rows) {
+    const ref = text((row.record as RawRow).externalRef);
+    if (ref.length > 0) reserved.add(ref);
+  }
+  return reserved;
+}
+
+// The days the file's movements span and the accounts they name, so the fund is read only
+// where a row could repeat one.
+export function windowOf(parsed: ParsedWorkbook): FileWindow {
+  const rows = (parsed.transactions ?? []).map((row) => row.record as RawRow);
+  const days = rows.map((record) => text(record.occurredAt)).filter(isCivilDate).sort();
+  const accountNames = new Set(
+    rows.flatMap((record) => [text(record.fromAccount), text(record.toAccount)]).filter((name) => name.length > 0),
+  );
+  return {
+    ...(days.length > 0 ? { from: days[0], to: days[days.length - 1] } : {}),
+    ...(accountNames.size > 0 ? { accountNames: [...accountNames] } : {}),
+  };
+}
+
+export function entitiesIn(parsed: ParsedWorkbook): SheetEntity[] {
+  return SHEET_ENTITIES.filter((entity) => (parsed[entity]?.length ?? 0) > 0);
+}
+
+// Every row of a parsed file given the key it imports under: the key of the fund row it
+// repeats, else one derived from its own content.
+export function keyParsedRows(parsed: ParsedWorkbook, scope: ImportScope): void {
+  for (const entity of SHEET_ENTITIES) {
+    adoptKnownKeys(entity, parsed[entity] ?? [], scope.knownKeys[entity]);
+    withContentKeys(entity, parsed[entity] ?? [], reservedKeys(scope.knownKeys[entity], parsed[entity] ?? []));
   }
 }
 
@@ -1070,14 +1137,18 @@ async function reverseLabels(): Promise<ReverseSheetLabels> {
   const columnKeyByHeader = new Map(
     SHEET_ENTITIES.map((entity) => {
       const columns = sheetDescriptors[entity].columns as readonly { key: string }[];
-      const headerToKey = new Map(
-        columns.map((column) => [t(`columns.${column.key}` as Key), column.key] as const),
-      );
+      // An older file's key column is still read, as the row's key; no sheet writes it.
+      const headerToKey = new Map([
+        ...columns.map((column) => [t(`columns.${column.key}` as Key), column.key] as const),
+        [t("columns.externalRef" as Key), "externalRef"] as const,
+      ]);
       return [entity, headerToKey] as const;
     }),
   );
 
-  return { entityBySheetName, columnKeyByHeader };
+  const choiceByLabel = buildChoiceReader(choiceLabelFrom(t));
+
+  return { entityBySheetName, columnKeyByHeader, choiceByLabel };
 }
 
 export function buildEffectiveRefs(
@@ -1094,10 +1165,6 @@ export function buildEffectiveRefs(
     categories: buildEffectiveMap(scope.categories, recordsOf("categories"), "categories"),
     labels: buildEffectiveMap(scope.labels, recordsOf("labels"), "labels"),
     goals: buildEffectiveMap(scope.goals, recordsOf("goals"), "goals"),
-    movementKeys: new Set([
-      ...scope.existingRefs.transactions,
-      ...recordsOf("transactions").flatMap((raw) => (text(raw.externalRef).length > 0 ? [text(raw.externalRef)] : [])),
-    ]),
     places,
     accountCurrencies: buildAccountCurrencies(scope.accounts, recordsOf("accounts")),
     accountCurrencyByRef: new Map(
@@ -1133,13 +1200,12 @@ export function buildEffectiveRefs(
 export async function runImportPipeline(input: { buffer: ArrayBuffer }): Promise<ImportResult> {
   if (!zipWithin(new Uint8Array(input.buffer), ZIP_CAPS)) throw new ActionError(NOT_A_WORKBOOK);
   const parsed = await parseWorkbook({ buffer: input.buffer, labels: await reverseLabels() });
-  for (const entity of SHEET_ENTITIES) withContentKeys(entity, parsed[entity] ?? []);
-
   // The cap is measured before any per-row work, across every sheet (RNF-15).
   const total = SHEET_ENTITIES.reduce((sum, entity) => sum + (parsed[entity]?.length ?? 0), 0);
   if (total > MAX_DATA_ROWS) throw new ActionError(TOO_MANY_ROWS);
 
-  const scope: ImportScope = await readImportScope();
+  const scope: ImportScope = await readImportScope(entitiesIn(parsed), windowOf(parsed));
+  keyParsedRows(parsed, scope);
 
   // Every downstream cross-row check (the effective sets, RF-27's kind map) reads
   // the record only — the row it came from is meaningless before it is resolved.
