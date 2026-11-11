@@ -818,10 +818,10 @@ function rowTitle(
 function rowSubtitle(
   row: TransactionListRow,
   accountNames: Map<string, string>,
-  linesHint?: (count: number) => string,
+  linesHint: (count: number) => string,
 ): string | undefined {
   const account = accountOfRow(row, accountNames);
-  return row.splits.length > 1 && linesHint
+  return row.splits.length > 1
     ? [account, linesHint(row.splits.length)].filter(Boolean).join(" · ")
     : account;
 }

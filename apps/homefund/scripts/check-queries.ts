@@ -16963,4 +16963,41 @@ async function receiptLinesSuite(): Promise<void> {
       listedLines.some((l) => l.description === "Cloro" && l.amountCents === 3_000_00),
     `booked ${JSON.stringify(booked.value)}, lines ${JSON.stringify(listedLines)}`,
   );
+
+  // A statement re-import rewrites a movement's lines; the names a person gave them survive it.
+  const ref = `harness-rf175-${tag}`;
+  const { transactionId: named } = await asUser(owner, () =>
+    createTransaction({
+      fromAccountId: account.accountId, toAccountId: null, amountCents: 2_000_00, occurredAt: today, description: `Harness rf175 reimport ${tag}`,
+      externalRef: ref, splits: [{ categoryId: home, amountCents: 2_000_00, description: "Bombillo LED" }], labelIds: [],
+    }),
+  );
+  track("transactions", named);
+  await asUser(owner, () =>
+    withUserDb((tx) =>
+      commitImport(
+        tx,
+        {
+          members: [], categories: [], accounts: [], recurringRules: [], adjustments: [],
+          transactions: [
+            {
+              status: "update", index: 0, sheetRow: 2, externalRef: ref, placeholderId: null,
+              object: {
+                fromAccountId: account.accountId, toAccountId: null, amount: "2000", occurredAt: today,
+                description: `Harness rf175 reimport ${tag}`, externalRef: ref, splits: [{ categoryId: home, amount: "2000" }], labelIds: [],
+              },
+            },
+          ],
+        } as never,
+        { userId: owner.id, groupId: null },
+      ),
+    ),
+  );
+  const [afterImport] = await fixtureSql<{ description: string | null }[]>`
+    select description from transaction_splits where transaction_id = ${named}`;
+  assert(
+    next("RF-175: a re-import that rewrites a movement's lines keeps the product names of the lines that did not change"),
+    afterImport?.description === "Bombillo LED",
+    `description after re-import ${JSON.stringify(afterImport)}`,
+  );
 }

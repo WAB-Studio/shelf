@@ -24,7 +24,7 @@ import {
   restoreShapeSchema,
 } from "@/lib/validation/ingest";
 
-type SplitInput = { categoryId: string; amount: string };
+type SplitInput = { categoryId: string; amount: string; description?: string | null };
 
 // The amount and each split arrive as Zod-validated strings, already bound to
 // the stored scale by the schema (RF-128); turning them into integers here can
@@ -40,6 +40,7 @@ function toSplitCents(splits: SplitInput[]): TransactionSplitInput[] {
   return splits.map((split) => ({
     categoryId: split.categoryId,
     amountCents: toCents(split.amount),
+    description: split.description?.trim() || null,
   }));
 }
 

@@ -122,7 +122,7 @@ export function MovementDetailDesktop({
   const categoryNames = categoryNamesById(options.categories, (name) =>
     tc("scopedName", { name }),
   );
-  const categoryPaths = categoryPathsById(options.categories, (name) => tc("scopedName", { name }));
+  const categoryPaths = categoryPathsById(options.categories, categoryNames);
   const categoryColors = new Map<string, string | null>();
   for (const category of options.categories) {
     categoryColors.set(category.id, category.color);

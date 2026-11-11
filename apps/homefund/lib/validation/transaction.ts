@@ -181,7 +181,7 @@ const splitSchema = z.object({
   description: z
     .string()
     .trim()
-    .max(200, { error: "transactions.errors.descriptionTooLong" })
+    .max(200, { error: "transactions.errors.splitDescriptionTooLong" })
     .nullish(),
 });
 

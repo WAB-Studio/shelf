@@ -77,13 +77,14 @@ function patched(current: TransactionListRow, patch: Partial<MovementInput>): Mo
   const toAccountId = pick("toAccountId", current.toAccountId);
   const amountCents = pick("amountCents", current.amountCents);
   const only = current.splits.length === 1 ? current.splits[0] : undefined;
-  // A transfer carries no split; a lone split follows an amount that changed.
+  // A transfer carries no split; a lone split follows an amount that changed and keeps its name when its category does.
+  const isTransfer = fromAccountId !== null && toAccountId !== null;
   const splits =
     patch.splits ??
-    (patch.categoryId || (fromAccountId !== null && toAccountId !== null)
+    (isTransfer || (patch.categoryId && !only)
       ? undefined
       : only
-        ? [{ categoryId: only.categoryId, amountCents, description: only.description }]
+        ? [{ categoryId: patch.categoryId ?? only.categoryId, amountCents, description: only.description }]
         : current.splits);
   return {
     fromAccountId,
@@ -94,7 +95,7 @@ function patched(current: TransactionListRow, patch: Partial<MovementInput>): Mo
     counterIsEstimate: pick("counterIsEstimate", current.counterIsEstimate),
     occurredAt: pick("occurredAt", current.occurredAt),
     description: pick("description", current.description),
-    categoryId: patch.categoryId,
+    categoryId: splits === undefined ? patch.categoryId : undefined,
     splits,
     contributedByMemberId: pick("contributedByMemberId", current.contributedByMemberId),
     forHousehold: pick("forHousehold", current.forHousehold),

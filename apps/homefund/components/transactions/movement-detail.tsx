@@ -125,7 +125,7 @@ export function MovementDetail({
   const categoryNames = categoryNamesById(options.categories, (name) =>
     tc("scopedName", { name }),
   );
-  const categoryPaths = categoryPathsById(options.categories, (name) => tc("scopedName", { name }));
+  const categoryPaths = categoryPathsById(options.categories, categoryNames);
   const categoryColors = new Map<string, string | null>();
   for (const category of options.categories) {
     categoryColors.set(category.id, category.color);
@@ -386,7 +386,11 @@ export function MovementDetail({
                 <Fragment key={index}>
                   <Separator size="4" my="3" />
                   <DetailRow
-                    label={split.description ? `${split.description} · ${categoryPaths.get(split.categoryId) ?? ""}` : (categoryPaths.get(split.categoryId) ?? "")}
+                    label={
+                      split.description
+                        ? t("splitLineLabel", { description: split.description, category: categoryPaths.get(split.categoryId) ?? "" })
+                        : (categoryPaths.get(split.categoryId) ?? "")
+                    }
                     value={<Money minor={split.amountCents} currency={movement.currency} signed={false} />}
                   />
                 </Fragment>

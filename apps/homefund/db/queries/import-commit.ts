@@ -795,7 +795,7 @@ type ResolvedTransaction = {
   // destination's fund, the member row it points at.
   contributedByName: string | null;
   contributedByMemberId: string | null;
-  splits: { categoryId: string; amountCents: number }[];
+  splits: { categoryId: string; amountCents: number; description?: string | null }[];
 };
 
 function resolveTransaction(
@@ -981,6 +981,17 @@ async function updateTransactionsBatch(
   if (updated.length === 0) return;
 
   const ids = sql`(select value::uuid from jsonb_array_elements_text(${jsonbParam(updated.map((row) => row.id))}))`;
+  // A statement line carries no product name, so the names a person gave the lines survive the rewrite:
+  // each rewritten line takes the name of a stored one with the same category and amount.
+  const named = (await tx.execute(
+    sql`select transaction_id, category_id, amount_cents::text as amount_cents, description
+      from ${transactionSplits} where transaction_id in ${ids} and description is not null`,
+  )) as unknown as { transaction_id: string; category_id: string; amount_cents: string; description: string }[];
+  const names = new Map<string, string[]>();
+  for (const row of named) {
+    const key = `${row.transaction_id}|${row.category_id}|${row.amount_cents}`;
+    names.set(key, [...(names.get(key) ?? []), row.description]);
+  }
   await tx.execute(sql`delete from ${transactionSplits} where transaction_id in ${ids}`);
   await tx.execute(sql`delete from ${transactionLabels} where transaction_id in ${ids}`);
 
@@ -990,13 +1001,14 @@ async function updateTransactionsBatch(
       transaction_id: row.id,
       category_id: split.categoryId,
       amount_cents: split.amountCents,
+      description: names.get(`${row.id}|${split.categoryId}|${split.amountCents}`)?.shift() ?? null,
     })),
   );
   if (splits.length === 0) return;
   await tx.execute(sql`
-    insert into ${transactionSplits} (transaction_id, category_id, amount_cents)
-    select transaction_id, category_id, amount_cents
-    from jsonb_to_recordset(${jsonbParam(splits)}) as r(transaction_id uuid, category_id uuid, amount_cents bigint)`);
+    insert into ${transactionSplits} (transaction_id, category_id, amount_cents, description)
+    select transaction_id, category_id, amount_cents, description
+    from jsonb_to_recordset(${jsonbParam(splits)}) as r(transaction_id uuid, category_id uuid, amount_cents bigint, description text)`);
 }
 
 // New rows land in chunked, multi-row inserts (RNF-15): the movements first, then their
@@ -1067,13 +1079,13 @@ async function insertNewTransactionsBatch(
   chunk.forEach((item, index) => {
     const transactionId = inserted[index].id;
     for (const split of item.splits) {
-      splitValues.push(sql`(${transactionId}, ${split.categoryId}, ${split.amountCents})`);
+      splitValues.push(sql`(${transactionId}, ${split.categoryId}, ${split.amountCents}, ${split.description ?? null})`);
     }
   });
   if (splitValues.length === 0) return;
 
   await tx.execute(
-    sql`insert into ${transactionSplits} (transaction_id, category_id, amount_cents)
+    sql`insert into ${transactionSplits} (transaction_id, category_id, amount_cents, description)
       values ${sql.join(splitValues, sql`, `)}`,
   );
 }
@@ -1107,17 +1119,17 @@ async function insertNewTransactionsSerially(
 async function writeSplits(
   tx: Transaction,
   transactionId: string,
-  splits: { categoryId: string; amountCents: number }[],
+  splits: { categoryId: string; amountCents: number; description?: string | null }[],
 ): Promise<void> {
   if (splits.length === 0) return;
   const values = sql.join(
     splits.map(
-      (split) => sql`(${transactionId}, ${split.categoryId}, ${split.amountCents})`,
+      (split) => sql`(${transactionId}, ${split.categoryId}, ${split.amountCents}, ${split.description ?? null})`,
     ),
     sql`, `,
   );
   await tx.execute(
-    sql`insert into ${transactionSplits} (transaction_id, category_id, amount_cents) values ${values}`,
+    sql`insert into ${transactionSplits} (transaction_id, category_id, amount_cents, description) values ${values}`,
   );
 }
 
