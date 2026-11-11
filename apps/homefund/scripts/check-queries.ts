@@ -4137,6 +4137,7 @@ async function main(): Promise<void> {
   await mcpInboxReviewSuite();
   await accountLoanSuite();
   await sheetRoundTripSuite();
+  await monthReviewClearSuite();
 }
 
 // A member recorded without a login is someone in the fund: a leader whose fund holds one is not alone, so an
@@ -17184,6 +17185,60 @@ async function mcpCleanupSuite(): Promise<void> {
     next("RF-176: merge_movements refuses an original that caused a charge, one that is a charge, one with an external reference, and a description over 200"),
     blocked.every((r) => r.isError) && stillThere === 4,
     `blocked ${JSON.stringify(blocked.map((r) => r.value))}, rows ${stillThere}`,
+  );
+}
+
+// «Revisar el mes», made clear: a twin lists the equal movements it names and «above usual» says its window.
+async function monthReviewClearSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const today = todayInBogota();
+  const month = shiftMonth(today, -1);
+  const day = (n: number, back = 1) => `${shiftMonth(today, -back)}-${String(n).padStart(2, "0")}`;
+  const holder = await createMembershipFreeUser();
+  const { accountId: bank } = await asUser(holder, () =>
+    createAccount({
+      name: `Harness clear banco ${tag}`, kind: "asset", subtype: "bank", ownerUserId: holder.id, groupId: null,
+      isShared: false, institution: null, lastFour: null, settlementCurrency: "COP", amountMinor: 900_000_000, balanceOn: day(1, 9),
+    }),
+  );
+  track("accounts", bank);
+  const { categoryId: pets } = await asUser(holder, () =>
+    createCategory({ scope: { ownerUserId: holder.id }, name: `Harness clear mascotas ${tag}`, kind: "expense", parentId: null, color: "#B4542F" }),
+  );
+  track("categories", pets);
+  const spend = async (amountCents: number, occurredAt: string, description: string) => {
+    const { transactionId } = await asUser(holder, () =>
+      createTransaction({
+        fromAccountId: bank, toAccountId: null, amountCents, occurredAt, description, externalRef: null,
+        splits: [{ categoryId: pets, amountCents }], labelIds: [],
+      }),
+    );
+    track("transactions", transactionId);
+    return transactionId;
+  };
+
+  const catA = await spend(560_000, day(7), `Gatarina ${tag}`);
+  const catB = await spend(560_000, day(7), `Arena ${tag}`);
+  for (const back of [4, 3, 2]) await spend(560_000, day(11, back), `Historia ${tag}`);
+  const big = await spend(2_925_000, day(12), `Carne ${tag}`);
+
+  const items = (await asUser(holder, () => getMonthReview(month))).items;
+  const twins = items.filter((item) => item.rule === "twin");
+  const above = items.find((item) => item.rule === "above_usual");
+  const entries = twins[0]?.entries ?? [];
+  assert(
+    next("RF-155: a twin lists each equal movement with who entered it and when, whatever each was called"),
+    twins.length === 1 && [...twins[0].transactionIds].sort().join() === [catA, catB].sort().join() &&
+      entries.length === 2 && entries.every((e) => e.createdBy === holder.id && typeof e.createdAt === "string") &&
+      entries.map((e) => e.description).sort().join() === [`Arena ${tag}`, `Gatarina ${tag}`].join(),
+    `twins ${twins.length}, entries ${entries.length}`,
+  );
+  assert(
+    next("RF-155: an above-usual item names its category, the median it compares against and the six-month window"),
+    above?.transactionIds[0] === big && above.categoryName === `Harness clear mascotas ${tag}` && above.usualCents === 560_000 &&
+      above.usualWindowMonths === 6 && above.entries.length === 0,
+    `above ${JSON.stringify(above)}`,
   );
 }
 
