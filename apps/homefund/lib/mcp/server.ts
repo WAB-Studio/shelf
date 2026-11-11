@@ -8,9 +8,11 @@ import { z } from "zod";
 import { listAccounts } from "@/db/queries/accounts";
 import { listCallerMembers } from "@/db/queries/group-members";
 import { getMonthReview } from "@/db/queries/month-review";
+import { getSpendingPatterns, GROWTH_PERCENT } from "@/db/queries/spending-patterns";
 import { importStatement, previewStatement, StatementError } from "@/db/queries/statement-import";
 import { actAsCredentialOwner } from "@/db/session";
 import { lastClosedMonth } from "@/lib/dates";
+import { ABOVE_USUAL_FACTOR, USUAL_WINDOW_MONTHS } from "@/lib/month-review-rules";
 import { ActionError } from "@/lib/errors";
 import { env } from "@/lib/env";
 import { pgErrorCode } from "@/lib/db-error";
@@ -129,6 +131,17 @@ function registerReadTools(server: McpServer): void {
       if (month > lastClosedMonth()) return Promise.resolve(text({ error: t("errors.openMonth") }, true));
       return run(ctx, () => getMonthReview(month));
     },
+  );
+
+  // RF-184: the patterns by fixed rules; Claude finds what to act on in the conversation, the app calls no model.
+  server.registerTool(
+    "spending_patterns",
+    {
+      description: t("tools.spendingPatterns", { factor: ABOVE_USUAL_FACTOR, window: USUAL_WINDOW_MONTHS, growth: GROWTH_PERCENT }),
+      inputSchema: z.object({ months: z.number().int().min(1).max(24).optional().describe(t("tools.monthsParam")) }),
+      annotations: { readOnlyHint: true },
+    },
+    (input: { months?: number }, ctx) => run(ctx, () => getSpendingPatterns(input.months ?? 12)),
   );
 }
 
