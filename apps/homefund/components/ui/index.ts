@@ -143,6 +143,8 @@ export { AmountField } from "./amount-field";
 
 export { Disc } from "./disc";
 
+export { DateTile } from "./date-tile";
+
 export { PlainLink } from "./plain-link";
 
 export { RawText } from "./raw-text";

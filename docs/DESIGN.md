@@ -593,3 +593,14 @@ Un bolsillo es una cuenta dentro de otra, como los de Bancolombia: «Bolsillo Di
 ## Decisión del 2026-11-10: Cuentas por tipo, por el usuario
 
 «Me molesta que las tarjetas sean cuentas, entiendo que todos van en el mismo pero puede ser que lo separemos por tipos.» La lista de Cuentas se parte en secciones, cada una con su título y su subtotal por moneda: «Cuentas» (bancarias y efectivo, con sus bolsillos como hasta ahora), «Tarjetas de crédito» y «Préstamos» (subtipo `loan`, RF-178, decidido el mismo día). Una sección sin cuentas no aparece, y dentro de cada una las cuentas personales y las del fondo siguen separadas. Un préstamo cuenta como deuda donde cuenta cualquier pasivo (deudas, extractos); desde Deudas solo se crea una tarjeta. Salen la insignia «Lo que tengo / Lo que debo» de cada fila, la columna Tipo y el filtro Tipo, porque la sección ya lo dice. Encima de la lista (no en Archivadas), tres cifras: lo que tengo, lo que debo (con signo: una tarjeta a favor sale en negativo) y el neto, por moneda y sin sumar monedas distintas; un tipo vacío muestra 0; respetan el botón de ocultar montos. En el celular son las mismas secciones, con tarjetas.
+
+## Decisión del 2026-11-11: «Suscripciones» en Planeación, por el usuario
+
+Los cobros que se repiten (RF-185), encontrados con reglas fijas, sin guardar nada. Bajo el título, la cifra titular: lo que
+cuestan al mes, una por moneda. Dos grupos con su rótulo: «N activas», con el próximo cobro primero, y «N sin cobro reciente».
+Cada cobro es una tarjeta: a la izquierda el disco de la fecha (el próximo cobro, o el último si ya no se cobra), el nombre
+como llegó en el último movimiento, «Cada mes · Cuenta · Categoría» y el monto típico; debajo, «Próximo cobro estimado: 12 de
+diciembre · 4 cobros vistos». Una columna en el celular, dos desde `md` y tres desde `xl`, sin tabla. Abajo, una nota gris dice
+cómo se encuentran y que son estimados, e invita a revisarlas con Claude. Sin cobros, un estado vacío dice cuándo aparecerán.
+En el mosaico de Planeación, una ficha pequeña: «N activas · $ X al mes».
+
