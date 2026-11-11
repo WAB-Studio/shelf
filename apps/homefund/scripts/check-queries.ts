@@ -17454,7 +17454,7 @@ async function accountHolderSuite(): Promise<void> {
       await attempt();
       return "none";
     } catch (error) {
-      return pgErrorCode(error) ?? "unknown";
+      return error instanceof ActionError ? error.messageKey : (pgErrorCode(error) ?? "unknown");
     }
   };
   const bbva = await open("bbva", { holderMemberId: ids.mama });
@@ -17492,9 +17492,9 @@ async function accountHolderSuite(): Promise<void> {
     ),
   );
   assert(
-    next("RF-181: the database refuses a holder from another fund, on an edit and on a create, and a holder on a personal account"),
-    otherFund === "23503" && onCreate === "23503" && personal === "23514",
-    `edit ${otherFund}, create ${onCreate}, personal ${personal}; expected 23503, 23503 and 23514`,
+    next("RF-181: the write refuses (holderInvalid) a holder from another fund, on an edit and on a create, and a holder on a personal account"),
+    [otherFund, onCreate, personal].every((key) => key === "accounts.errors.holderInvalid"),
+    `edit ${otherFund}, create ${onCreate}, personal ${personal}; expected accounts.errors.holderInvalid three times`,
   );
 
   const move = async (fromAccountId: string, toAccountId: string, amountCents: number) => {
