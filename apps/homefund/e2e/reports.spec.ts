@@ -198,7 +198,7 @@ test("the six-month series draws each month's figures", async ({ page }) => {
 /**
  * RF-138 on the two report surfaces: the month's adjustment (what a
  * reconciliation booked) is its own line, apart from income, expense and net.
- * Written from the plan's M5 Done table and boards B11/B12, before the line exists.
+ * Written from boards B11/B12, before the line exists.
  *
  * A reconciliation is seeded as the person's own insert; the database books the
  * adjustment movement, so no marked movement is ever written here. Every figure

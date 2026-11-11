@@ -35,7 +35,7 @@ const FREQUENCY_LABEL = {
 
 // The tracks of the Recurrentes artboard, in order. Each range holds the
 // artboard's width as its maximum, so the 1440 canvas draws exactly what
-// SPEC-A3 specifies; below it the seven fixed tracks would together leave the
+// the desktop design specifies; below it the seven fixed tracks would together leave the
 // concept nothing, so they give room back until the rule's name reaches its
 // floor of 168px — enough for a name and the "Auto" badge beside it. The amount
 // never shrinks: a figure would spill out of the cell rather than truncate.
@@ -76,7 +76,7 @@ export type RecurringTableRow = {
 };
 
 /**
- * The dense Recurrentes of `private/design-desktop/SPEC-A3.md` (RF-29..32): a
+ * The dense Recurrentes of the desktop design (RF-29..32): a
  * rule per row carrying its own switch, named for the rule it pauses or resumes
  * (RF-32) — never a bare "Pausar" a screen reader could not place. Editing opens
  * the caller's dialog; deleting reaches `deleteRecurringRuleAction` with this

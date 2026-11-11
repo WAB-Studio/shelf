@@ -26,7 +26,7 @@ export function refineDebtPaymentAmount(currency: CurrencyCode) {
   };
 }
 
-// A payment credits a liability from an asset (RF-16, RF-82): both accounts are
+// A payment credits a liability from an asset (RF-16; the allocation retired with RF-81): both accounts are
 // required and the date obeys the ledger's own not-future rule. The FIFO
 // allocation onto lines is the query's, so no line ids travel here.
 export const recordDebtPaymentSchema = z.object({

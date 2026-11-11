@@ -43,7 +43,7 @@ import { useActionErrorToast } from "@/lib/use-action-toast";
  * The planned-payments area: pending payments read as dated reminder rows grouped
  * by their due month, soonest first (RF-74). Each row's dropdown settles it into a
  * real movement, edits it, cancels it or deletes it; settling runs the reused
- * action and removes the row on refresh (RF-75). Money stays integer cents and
+ * action and removes the row on refresh (RF-161). Money stays integer cents and
  * every figure is drawn in the settlement currency of the account the payment
  * names (RF-121).
  */
@@ -204,7 +204,7 @@ export function PaymentsScreen({
       </Box>
 
       {/* A planned payment only reminds; the person records the real movement
-          when they settle it (RF-74, RF-75). */}
+          when they settle it (RF-74, RF-161). */}
       <Callout.Root color="gray" variant="soft">
         <Callout.Icon>
           <Info size={16} aria-hidden />

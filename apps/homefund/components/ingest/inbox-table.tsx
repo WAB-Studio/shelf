@@ -16,7 +16,7 @@ import {
 import type { CurrencyCode } from "@/lib/currency";
 import { civilDateToDate } from "@/lib/dates";
 
-// The em dash a cell with nothing to name reads as (SPEC-A3), not a word a
+// The em dash a cell with nothing to name reads as in the desktop design, not a word a
 // translator would ever change.
 const NO_VALUE = "—";
 
@@ -101,7 +101,7 @@ export function InboxTable({
       width: WIDTHS.message,
       // Flex, not a bare `Text`: a raw SMS runs well past this column, and a
       // truncated inline element only actually shrinks once it is a flex item
-      // with `minWidth="0"` to give up (SPEC-A3's own fix for the same gap in
+      // with `minWidth="0"` to give up (the desktop design's own fix for the same gap in
       // the ledger's description column).
       cell: (row) => (
         <Flex minWidth="0">

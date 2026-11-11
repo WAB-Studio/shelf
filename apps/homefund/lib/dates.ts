@@ -151,7 +151,7 @@ export function addCivilDays(reference: string, n: number): string {
   return dateToCivilDate(date);
 }
 
-// The half-open window a budget's period spans around `reference` (RF-72).
+// The half-open window a budget's period spans around `reference` (RF-160).
 export function periodRange(
   period: "monthly" | "weekly" | "yearly",
   reference: string,

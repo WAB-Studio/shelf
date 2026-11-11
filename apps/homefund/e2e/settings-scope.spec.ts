@@ -135,7 +135,7 @@ test.describe("labels", () => {
   });
 });
 
-// Every «Añadir categoría» a person can see: the header's and an empty state's (RF-57, Q1 a of 2026-10-17).
+// Every «Añadir categoría» a person can see: the header's and an empty state's (RF-57).
 function addButtons(page: Page): Locator {
   return page
     .getByRole("button", { name: messages.categories.add, exact: true })
@@ -194,7 +194,7 @@ test.describe("the fund's categories by role (C3i)", () => {
 });
 
 // ---------------------------------------------------------------------------
-// «Mis categorías» and «Dónde va» (decidido-17, M8; boards C3i and C3j).
+// «Mis categorías» and «Dónde va» (boards C3i and C3j).
 // ---------------------------------------------------------------------------
 
 const categories = messages.categories;

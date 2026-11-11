@@ -13,7 +13,7 @@ import styles from "./filter-bar.module.css";
 /**
  * The row of narrowing controls under a screen header (RF-23, RF-89, RF-125).
  * Below `md` it keeps the page's gutter; from `md` up it takes the 32px of
- * SPEC-A3 so it lines up with the table beneath it.
+ * the desktop design so it lines up with the table beneath it.
  */
 export function FilterBar({ children }: { children: ReactNode }) {
   return <div className={styles.bar}>{children}</div>;
@@ -89,7 +89,7 @@ export function FilterSelect({
 /**
  * One date bound of a range filter. It wears the bar's own label and field
  * chrome instead of the theme's, so DESDE and HASTA read as part of the row
- * rather than as a form dropped into it (SPEC-A3).
+ * rather than as a form dropped into it.
  */
 export function FilterDate({
   label,

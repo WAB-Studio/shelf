@@ -100,7 +100,7 @@ function splitWritten(raw: string): WrittenFigure | null {
 // What quick entry hands on: the figure with its group marks dropped and one
 // decimal mark left, or the text untouched when it is no figure, so
 // `parseAmount` refuses it later instead of this guessing.
-function normalizeGroupMarks(raw: string): string {
+export function normalizeGroupMarks(raw: string): string {
   const figure = splitWritten(raw);
   if (figure === null) return raw.trim();
   return figure.fraction === "" ? figure.major : `${figure.major},${figure.fraction}`;
@@ -223,7 +223,7 @@ const FORMATTERS = new Map<string, Intl.NumberFormat>();
  *
  * Takes a magnitude on purpose, applying `Math.abs` itself, so no sign can
  * leave here: `Intl` writes a hyphen-minus, and the only minus this app draws
- * is the primitive's U+2212 (SPEC-A3).
+ * is the primitive's U+2212.
  *
  * The locale is a parameter, not a hook: half the callers are not components.
  */
@@ -280,34 +280,6 @@ export function formatCompactMoney(
     notation: "compact",
     maximumFractionDigits: 1,
   }).format(value);
-}
-
-// COP-only wrappers, marked to retire. Callers still bound to them date from
-// when every amount was a peso stored as a hundredth of itself. Each caller
-// drops its own as the screen it serves starts carrying a currency (RF-121).
-// They count whole pesos, which is a third scale and the reason they go: only
-// `pesosToCents` bridges them to the integer a column holds.
-
-/** @deprecated Normalising is `parseAmount`'s own business. */
-export function normalizeAmountInput(raw: string): string {
-  return normalizeGroupMarks(raw);
-}
-
-/**
- * @deprecated Parse with `parseAmount(raw)`, which keeps the centavos this
- * refuses. Kept only for a caller still bound to whole pesos through
- * `pesosToCents`'s own `* 100`, which a fractional peso count would not
- * survive as a float.
- *
- * A remainder finer than one peso is refused, not truncated: RF-95 says these
- * callers take no fractional peso, and dropping the centavos instead wrote
- * "12,45" to the ledger as 12,00 and read "0,45" as an amount that was never
- * there. Refusing says so; truncating loses a person's money in silence.
- */
-export function parsePesos(raw: string): number | null {
-  const minor = parseAmount(raw);
-  if (minor === null || minor % STORAGE_UNIT !== 0) return null;
-  return minor / STORAGE_UNIT;
 }
 
 // Splits a finite number's shortest round-trip decimal string (what a person

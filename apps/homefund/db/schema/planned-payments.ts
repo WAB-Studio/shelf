@@ -20,7 +20,7 @@ import { groups } from "./groups";
 import { transactions } from "./transactions";
 
 // A one-off deferred movement (RF-74): its accounts, amount, category and due date, with an optional
-// reminder, kept distinct from recurring rules. Settling records the transaction and links it (RF-75).
+// reminder, kept distinct from recurring rules. Settling records the transaction and links it (RF-161).
 export const plannedPayments = finances.table(
   "planned_payments",
   {
@@ -40,7 +40,7 @@ export const plannedPayments = finances.table(
     status: text({ enum: ["pending", "done", "cancelled"] })
       .notNull()
       .default("pending"),
-    // The transaction this payment settled into, once hand-settled (RF-75); cleared if that movement is deleted.
+    // The transaction this payment settled into, once hand-settled (RF-161); cleared if that movement is deleted.
     settledTransactionId: uuid().references(() => transactions.id, { onDelete: "set null" }),
     createdBy: uuid()
       .notNull()

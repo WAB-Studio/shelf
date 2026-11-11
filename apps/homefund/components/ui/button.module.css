@@ -1,4 +1,4 @@
-/* The 44px floor SPEC-A3 holds every control to on its short side. A ghost
+/* The 44px floor the desktop design holds every control to on its short side. A ghost
    variant is sized by its glyph and its padding, never by a control height, so
    the floor is pinned rather than inherited.
 

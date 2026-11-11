@@ -3,6 +3,7 @@ import { test } from "node:test";
 
 import {
   averageOfActive,
+  budgetPercent,
   budgetTotals,
   CHART_PALETTE,
   categoryChartColor,
@@ -106,4 +107,15 @@ test("sumByCurrency keeps first-seen order and never adds two currencies", () =>
     sumByCurrency([["COP", 1], ["USD", 2], ["COP", 3]], ([currency, n]) => [currency as string, [n as number]]),
     [["COP", [4]], ["USD", [2]]],
   );
+});
+
+test("budgetPercent rounds half up in integer math and reads a no-limit budget by whether anything was spent", () => {
+  assert.equal(budgetPercent(1, 3), 33);
+  assert.equal(budgetPercent(2, 3), 67);
+  assert.equal(budgetPercent(1, 8), 13);
+  assert.equal(budgetPercent(145, 1000), 15);
+  assert.equal(budgetPercent(250, 100), 250);
+  assert.equal(budgetPercent(0, 100), 0);
+  assert.equal(budgetPercent(5, 0), 100);
+  assert.equal(budgetPercent(0, 0), 0);
 });

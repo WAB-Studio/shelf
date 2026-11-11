@@ -317,6 +317,7 @@ export function registerLedgerTools(server: McpServer, run: Run, t: Say): void {
           name: pick("name", current.name),
           kind: current.kind,
           subtype: pick("subtype", current.subtype),
+          placement: current.ownerUserId ? "personal" : "group",
           isShared: current.isShared,
           institution: pick("institution", current.institution) ?? "",
           lastFour: pick("lastFour", current.lastFour) ?? undefined,

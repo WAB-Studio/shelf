@@ -1,4 +1,4 @@
-/* The phone keeps the page's gutter; only the desktop pane draws the band of SPEC-A3. */
+/* The phone keeps the page's gutter; only the desktop pane draws the band of the desktop design. */
 .header {
   padding: 0;
 }
@@ -26,7 +26,7 @@
   white-space: nowrap;
 }
 
-/* A datum of several lines or one long line (a debt's Q9 line) breaks between its words. */
+/* A datum of several lines or one long line breaks between its words. */
 .metaWraps {
   white-space: normal;
   min-width: 0;

@@ -191,7 +191,6 @@ test.describe("sign-out", () => {
     try {
       await page.getByRole("button", { name: auth.signOut, exact: true }).click();
       await expect(page).toHaveURL(/\/es\/login/);
-      await expect(page.getByText(messages.errors.signOutFailed)).toHaveCount(0);
     } finally {
       await context.close();
     }

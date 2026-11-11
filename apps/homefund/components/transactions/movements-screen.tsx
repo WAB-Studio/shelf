@@ -92,7 +92,7 @@ type DayGroup = { key: string; label: string; rows: TransactionListRow[] };
  * The filterable ledger: the filter row and the type chips rewrite the URL query
  * so a year of data is narrowed in Postgres and the view stays shareable (RNF-09,
  * RF-23, RF-89). The returned rows page through TanStack Table on the client,
- * then render as the dense table of SPEC-A3 on a laptop and as day-grouped cards
+ * then render as the dense table of the desktop design on a laptop and as day-grouped cards
  * on a phone. A filter combination with no match offers to clear them; a ledger
  * with nothing in it at all invites recording the first movement instead.
  * Money stays integer cents; the sign and the format are display only.
@@ -288,7 +288,7 @@ export function MovementsScreen({
   }
 
   // The download route parses the same schema this screen writes to the URL, so
-  // the sheet holds exactly the rows the table is showing (RF-118, RF-50).
+  // the sheet holds exactly the rows the table is showing (RF-118, RF-142).
   const exportQuery = new URLSearchParams(toQuery(filters));
   exportQuery.set("entities", "transactions");
   const exportHref = `/${locale}/settings/data/export?${exportQuery.toString()}`;
@@ -633,7 +633,7 @@ export function MovementsScreen({
 
       {/* Both shapes stay mounted and one is displayed: the laptop keeps the
           ledger's frame and headers with the empty state inside them, the phone
-          drops straight to the state (SPEC-A3). */}
+          drops straight to the state. */}
       <Box display={{ initial: "none", lg: "block" }}>
         <MovementsTable
           rows={tableRows}

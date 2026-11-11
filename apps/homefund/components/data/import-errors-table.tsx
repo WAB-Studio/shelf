@@ -4,7 +4,7 @@ import { useTranslations } from "next-intl";
 
 import { DataTable, Text, type DataColumn } from "@/components/ui";
 
-// The em dash a cell with nothing to name reads as (SPEC-A3): here, honestly,
+// The em dash a cell with nothing to name reads as in the desktop design: here, honestly,
 // only for the rare check that spans more than one cell, never for every row.
 const NO_VALUE = "—";
 

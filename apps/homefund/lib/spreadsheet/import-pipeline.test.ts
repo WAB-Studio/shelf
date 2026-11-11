@@ -9,7 +9,7 @@ import JSZip from "jszip";
 import { sheetDescriptors } from "@/lib/spreadsheet/schema";
 import { maxAmountMinor, parseAmount } from "@/lib/money";
 
-// M2 (RF-51, RF-52). The real pipeline runs, over a real .xlsx; the database read and the request
+// (RF-51, RF-52). The real pipeline runs, over a real .xlsx; the database read and the request
 // locale are doubled at module resolution, and the scope is whatever each test seeds.
 
 const messages = JSON.parse(readFileSync(new URL("../../messages/en.json", import.meta.url), "utf8")) as {
@@ -328,7 +328,7 @@ test("RF-52: a foreign row keeps its reference, so importing the file twice upda
   assert.equal(again.status, "update");
 });
 
-// ---- M3: an account's opening off a backup, and the cap on a second amount (RF-142, RF-51, RF-126) --
+// ---- An account's opening off a backup, and the cap on a second amount (RF-142, RF-51, RF-126) --
 
 const ACCOUNT_COLUMNS = ["name", "kind", "subtype", "placement", "institution", "amount", "balanceOn", "settlementCurrency"] as const;
 
@@ -529,7 +529,7 @@ test("the entries fixture really holds the entry count it names", async () => {
   assert.equal(new DataView(zip.buffer, zip.byteOffset).getUint16(end + 10, true), 200);
 });
 
-// ---- O6-M7: a row dated before the opening of an account it names (RF-162) ---------------------------
+// ---- A row dated before the opening of an account it names (RF-162) ---------------------------
 
 const BEFORE_OPENING = "data.import.errors.beforeOpening";
 

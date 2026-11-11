@@ -135,6 +135,15 @@ export function sumByCurrency<Row>(
   return [...totals.entries()];
 }
 
+/**
+ * Whole percent of a limit spent, rounded half up, in integer math. A limit of nothing reads 100 once
+ * anything is spent and 0 before. It is not clamped: a bar clamps it to 100 itself.
+ */
+export function budgetPercent(spentCents: number, limitCents: number): number {
+  if (limitCents <= 0) return spentCents > 0 ? 100 : 0;
+  return Math.floor((spentCents * 2 * 100 + limitCents) / (limitCents * 2));
+}
+
 export type BudgetTotal = { currency: string; limitCents: number; spentCents: number };
 
 // Limit and spend per currency (RF-124).

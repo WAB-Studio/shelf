@@ -22,7 +22,7 @@ import { civilDateToDate } from "@/lib/dates";
 import type { Locale } from "@/lib/locales";
 import { useMoneyText } from "@/lib/use-privacy";
 
-// The em dash a cell with nothing to name reads as (SPEC-A3), not a word a
+// The em dash a cell with nothing to name reads as in the desktop design, not a word a
 // translator would ever change.
 const NO_VALUE = "—";
 
@@ -227,7 +227,7 @@ export function PocketFigure({
 }
 
 /**
- * The dense Deudas of `private/design-desktop/SPEC-A3.md` (RF-83, RF-117): a debt
+ * The dense Deudas of the desktop design (RF-83, RF-117): a debt
  * per row with its cupo, its monthly interest, its minimum, its two dates and
  * what it owes. Every figure arrives derived from the server and is only
  * formatted here — none is computed and none is stored (RNF-07). The caller owns

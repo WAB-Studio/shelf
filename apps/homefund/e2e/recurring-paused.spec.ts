@@ -1,8 +1,8 @@
 /**
- * A rule the night's run paused says why on its row (RF-157, Q17), and a rule the
- * run ended refuses to resume with a line that says what to change (Q404).
+ * A rule the night's run paused says why on its row (RF-157), and a rule the
+ * run ended refuses to resume with a line that says what to change.
  *
- * Written from the contract in the plan's M51 and Q17, not from the row component:
+ * Written from the contract, not from the row component:
  * the lines are the words the user decided, spelled out here so a rewording of the
  * catalogue cannot pass unnoticed. `paused_reason` and ended rules are seeded by
  * SQL on the harness user; the unscoped run is never called.

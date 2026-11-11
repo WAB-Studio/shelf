@@ -42,7 +42,7 @@ function icon(Icon: LucideIcon, current: boolean) {
 }
 
 /**
- * The desktop shell (`private/design-desktop/SPEC-A3.md`): every primary screen one
+ * The desktop shell: every primary screen one
  * click away from every other, Ajustes among them, and quick entry (RF-22)
  * without leaving the screen. The person's own row keeps the settings panel, which
  * is their menu and not an index of destinations. Below `sm` it does not render —

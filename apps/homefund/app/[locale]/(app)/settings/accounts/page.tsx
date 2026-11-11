@@ -7,8 +7,9 @@ import { AccountsScreen } from "@/components/accounts/accounts-screen";
 import { Page } from "@/components/ui";
 import { listAccounts } from "@/db/queries/accounts";
 import { listPendingAssetSettlements } from "@/db/queries/debt-statements";
-import { listMembers } from "@/db/queries/group-members";
+import { listCallerMembers } from "@/db/queries/group-members";
 import { getUserGroup } from "@/db/queries/groups";
+import { requireUser } from "@/db/session";
 import { routing } from "@/i18n/routing";
 import { createAccountSchema } from "@/lib/validation/account";
 
@@ -43,14 +44,15 @@ export default async function AccountsPage(
   // accounts, a group member sees the group's too (RF-58).
   // The pending foreign estimates ride the same fan-out; an archived account is
   // read-only, so its tab asks for none.
-  const groupRead = getUserGroup();
+  const user = await requireUser();
   const [accounts, group, pending, roster] = await Promise.all([
     listAccounts({ archived }),
-    groupRead,
+    getUserGroup(),
     archived ? Promise.resolve([]) : listPendingAssetSettlements(),
     // The people a fund account can be held by (RF-181); an archived tab edits nothing and a caller
-    // with no fund has no roster. Archived members come too, so a holder who left still reads by name.
-    archived ? Promise.resolve([]) : groupRead.then((fund) => (fund ? listMembers(fund.id, { archived: "all" }) : [])),
+    // with no fund has no roster (the fund rides as a subselect). Archived members come too, so a holder
+    // who left still reads by name.
+    archived ? Promise.resolve([]) : listCallerMembers(user.id, { archived: "all" }),
   ]);
   const heldBy = new Set(accounts.map((account) => account.holderMemberId));
   const members = roster.filter((member) => !member.archivedAt || heldBy.has(member.id));

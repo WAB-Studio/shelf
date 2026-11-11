@@ -1,9 +1,9 @@
-/* The card of SPEC-A3, in the brand's finish: tinted line, soft shadow, 20px corner. */
+/* The card of the desktop design, in the brand's finish: tinted line, soft shadow, 20px corner. */
 .panel {
   background-color: var(--color-panel-solid);
   border: 1px solid var(--hf-line);
   box-shadow: var(--hf-shadow);
-  /* SPEC-A3 gives a card 16px and its dense table 14px, and has not said which
+  /* the desktop design gives a card 16px and its dense table 14px, and has not said which
      one a card that carries a list of rows takes. */
   border-radius: var(--hf-card-radius);
   /* What holds a row's content off the card's edge, `PanelRow` and `PanelBlock` alike. */
@@ -35,7 +35,7 @@
 }
 
 .head {
-  /* SPEC-A3 pads a card 16px 18px and a table's column head 10px 18px; a head
+  /* the desktop design pads a card 16px 18px and a table's column head 10px 18px; a head
      that titles a list of rows is neither, and the design has not named it. */
   padding: 14px 18px;
 }
@@ -46,11 +46,11 @@
   grid-template-columns: var(--panel-row-columns);
   align-items: center;
   gap: 14px;
-  /* SPEC-A3's dense row measures ~44px, which is the table's; what a row inside
+  /* the desktop design's dense row measures ~44px, which is the table's; what a row inside
      a card measures is unsettled. */
   height: 54px;
   padding: 0 var(--panel-inset);
-  /* SPEC-A3 rules each row underneath and leaves the last one bare. Ruling on
+  /* the desktop design rules each row underneath and leaves the last one bare. Ruling on
      top instead spares the head a rule of its own, and no artboard settles it. */
   border-top: 1px solid var(--gray-a3);
   color: inherit;
