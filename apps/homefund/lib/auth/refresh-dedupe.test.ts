@@ -52,3 +52,15 @@ test("RF-190: any other call goes straight through", async () => {
 
   assert.equal(calls.length, 2);
 });
+
+test("RF-190: a caller that waited on a refusal asks Auth itself once", async () => {
+  const { calls, fetch } = counting(400);
+  const [first, second] = await Promise.all([
+    fetch(URL_REFRESH, refreshInit("waited-token")),
+    fetch(URL_REFRESH, refreshInit("waited-token")),
+  ]);
+
+  assert.equal(first.status, 400);
+  assert.equal(second.status, 400);
+  assert.equal(calls.length, 2);
+});

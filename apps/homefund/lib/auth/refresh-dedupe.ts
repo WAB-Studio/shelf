@@ -1,7 +1,9 @@
 // Refresh tokens rotate: a second request that spends an already-rotated one after Auth's reuse
 // interval revokes the whole session. A phone waking up sends several requests at once, each with
 // its own client and the same expired access token, so each would spend the same refresh token.
-// Calls with one refresh token share one answer for a short window instead.
+// Calls with one refresh token share one answer for a short window instead. It only covers one
+// server instance; that every other client refuses to refresh (`no-refresh.ts`) is what keeps the
+// proxy the single place a token is spent.
 const WINDOW_MS = 20_000;
 
 type Snapshot = { status: number; statusText: string; headers: [string, string][]; body: string };
@@ -45,6 +47,7 @@ export function sharedRefreshFetch(base: typeof fetch = fetch): typeof fetch {
     for (const [key, entry] of answers) if (now - entry.at > WINDOW_MS) answers.delete(key);
 
     let entry = answers.get(refreshToken);
+    const joined = entry !== undefined;
     if (!entry) {
       entry = { at: now, snapshot: snapshotOf(base(input, init)) };
       answers.set(refreshToken, entry);
@@ -58,8 +61,11 @@ export function sharedRefreshFetch(base: typeof fetch = fetch): typeof fetch {
       if (answers.get(refreshToken) === owned) answers.delete(refreshToken);
       throw error;
     }
-    // A refusal is not shared: the next caller asks Auth itself.
-    if (snapshot.status >= 400 && answers.get(refreshToken) === owned) answers.delete(refreshToken);
+    // A refusal is not shared: the next caller asks Auth itself, and so does one that was waiting.
+    if (snapshot.status >= 400) {
+      if (answers.get(refreshToken) === owned) answers.delete(refreshToken);
+      if (joined) return base(input, init);
+    }
 
     return new Response(snapshot.body, {
       status: snapshot.status,

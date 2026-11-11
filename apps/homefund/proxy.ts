@@ -34,6 +34,10 @@ function resolvedPathname(
     : request.nextUrl.pathname;
 }
 
+function issuedAt(claims: Record<string, unknown>): number | null {
+  return typeof claims.iat === "number" ? claims.iat * 1000 : null;
+}
+
 // A redirect that carries `Set-Cookie` and no cache directives is the hole an
 // edge cache falls into, handing one member's session to the other.
 function carryOver(
@@ -99,7 +103,9 @@ export async function proxy(request: NextRequest) {
   if (claims) {
     const now = Date.now();
     const verdict = inactivityVerdict({
-      lastSeen: parseLastSeen(request.cookies.get(LAST_SEEN_COOKIE)?.value),
+      // No stamp yet (a device that has not been here since the stamp shipped): the token's own
+      // issue time stands in, so the first request is not taken as a visit just now.
+      lastSeen: parseLastSeen(request.cookies.get(LAST_SEEN_COOKIE)?.value) ?? issuedAt(claims),
       now,
       days: keepDaysFromClaims(claims),
     });
@@ -108,6 +114,10 @@ export async function proxy(request: NextRequest) {
       // This device's session alone; the others keep theirs.
       await supabase.auth.signOut({ scope: "local" }).catch(() => undefined);
       response.cookies.delete(LAST_SEEN_COOKIE);
+      // Whether or not Auth answered the sign-out, this device holds no session any more.
+      for (const { name } of request.cookies.getAll()) {
+        if (/^sb-.+-auth-token(\.\d+)?$/.test(name)) response.cookies.delete(name);
+      }
       claims = undefined;
     } else if (verdict === "stamp") {
       response.cookies.set(LAST_SEEN_COOKIE, String(now), {

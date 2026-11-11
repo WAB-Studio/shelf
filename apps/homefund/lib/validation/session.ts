@@ -17,3 +17,12 @@ export type KeepSignedInInput = z.infer<typeof keepSignedInSchema>;
 export function keepDaysOf(choice: KeepSignedInChoice): number | null {
   return choice === "always" ? null : Number(choice);
 }
+
+export function isKeepSignedInChoice(value: string): value is KeepSignedInChoice {
+  return (KEEP_SIGNED_IN_CHOICES as readonly string[]).includes(value);
+}
+
+/** The form value of a stored limit; a number nobody offers keeps its own value, never «Siempre». */
+export function choiceOfDays(days: number | null): string {
+  return days === null ? "always" : String(days);
+}
