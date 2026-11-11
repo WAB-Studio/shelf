@@ -4,15 +4,25 @@ import type { CallToolResult, McpServer, ServerContext } from "@modelcontextprot
 import { z } from "zod";
 
 import { listAccounts, updateAccount } from "@/db/queries/accounts";
-import { freeCategoryColor, listScopedCategories } from "@/db/queries/categories";
-import { bookMovement, dropMovement, openAccount, openCategory, reviseMovement } from "@/db/queries/ledger-write";
+import { freeCategoryColor, listScopedCategories, updateCategory } from "@/db/queries/categories";
+import {
+  bookMovement,
+  categoryConstraintErrorKey,
+  dropMovement,
+  mergeMovements,
+  moveCategoryMovements,
+  openAccount,
+  openCategory,
+  reviseMovement,
+} from "@/db/queries/ledger-write";
 import { getTransactionById, listTransactions, type TransactionListRow, type TransactionSplitInput } from "@/db/queries/transactions";
 import { pgErrorCode } from "@/lib/db-error";
 import { ActionError } from "@/lib/errors";
+import { CATEGORY_COLORS } from "@/lib/fund/category-color";
 import { centsToDecimal, parseAmount } from "@/lib/money";
 import { createAccountSchema, updateAccountSchema } from "@/lib/validation/account";
-import { createCategoryInputSchema } from "@/lib/validation/category";
-import { createTransactionSchema, updateTransactionSchema } from "@/lib/validation/transaction";
+import { createCategoryInputSchema, updateCategorySchema } from "@/lib/validation/category";
+import { createTransactionSchema, descriptionSchema, occurredAtSchema, updateTransactionSchema } from "@/lib/validation/transaction";
 
 type Run = (ctx: ServerContext, load: (owner: string) => Promise<unknown>) => Promise<CallToolResult>;
 type Say = (key: string) => string;
@@ -137,14 +147,20 @@ export function registerLedgerTools(server: McpServer, run: Run, t: Say): void {
         accountId: z.string().optional().describe(d("accountId")),
         from: z.string().optional().describe(d("from")),
         to: z.string().optional().describe(d("to")),
+        categoryId: z.string().optional().describe(d("filterCategoryId")),
         limit: z.number().int().min(1).max(200).optional().describe(d("limit")),
+        offset: z.number().int().min(0).optional().describe(d("offset")),
       }),
       annotations: { readOnlyHint: true },
     },
-    (input: { accountId?: string; from?: string; to?: string; limit?: number }, ctx) =>
+    (input: { accountId?: string; categoryId?: string; from?: string; to?: string; limit?: number; offset?: number }, ctx) =>
       run(ctx, async () => {
         const accountId = input.accountId === undefined ? undefined : idOf("transactions.errors.accountInvalid", input.accountId);
-        const rows = await listTransactions({ accountId, from: input.from, to: input.to }, { limit: input.limit ?? 50 });
+        const categoryId = input.categoryId === undefined ? undefined : idOf("errors.notFound", input.categoryId);
+        const rows = await listTransactions(
+          { accountId, categoryId, from: input.from, to: input.to },
+          { limit: input.limit ?? 50, offset: input.offset },
+        );
         // Everything update_movement can resend or patch, and the stamp it must quote back.
         return rows.map((row) => ({
           id: row.id,
@@ -330,4 +346,114 @@ export function registerLedgerTools(server: McpServer, run: Run, t: Say): void {
         return openCategory(parseForm(createCategoryInputSchema, { ...input, color }), owner);
       }),
   );
+
+  // Name, parent and colour go through the categories screen's schema and `updateCategory`; the kind never moves (RF-176).
+  server.registerTool(
+    "update_category",
+    {
+      description: t("tools.updateCategory"),
+      inputSchema: z.object({
+        categoryId: z.string().describe(d("categoryRef")),
+        name: z.string().optional().describe(d("categoryName")),
+        parentId: z.string().nullable().optional().describe(d("parentId")),
+        color: z.string().optional().describe(d("color")),
+      }),
+      annotations: { ...write, idempotentHint: true },
+    },
+    (input: { categoryId: string; name?: string; parentId?: string | null; color?: string }, ctx) =>
+      run(ctx, async (owner) => {
+        const id = idOf("errors.notFound", input.categoryId);
+        const all = await categoryIndex(owner);
+        const current = all.get(id);
+        if (!current) throw new ActionError("errors.notFound");
+        const parentId = input.parentId === undefined ? current.parentId : input.parentId;
+        const parent = parentId === null ? undefined : all.get(parentId);
+        if (parentId !== null && !parent) throw new ActionError("categories.errors.parentInvalid");
+        if (parent && parent.kind !== current.kind) throw new ActionError("errors.categoryKindMismatch");
+        const form = parseForm(updateCategorySchema, {
+          categoryId: id,
+          name: input.name ?? current.name,
+          parentId,
+          // Validated as a palette colour only when Claude sends one; a stored one is written back untouched.
+          color: input.color ?? CATEGORY_COLORS[0],
+        });
+        let updated: boolean;
+        try {
+          updated = await updateCategory({ ...form, color: input.color ?? current.color });
+        } catch (error) {
+          if (pgErrorCode(error) === "42501") throw new ActionError("errors.notLeader");
+          if (pgErrorCode(error) === "23514") throw new ActionError(categoryConstraintErrorKey(form.parentId));
+          throw error;
+        }
+        if (!updated) throw new ActionError("errors.notFound");
+        return { categoryId: id };
+      }),
+  );
+
+  server.registerTool(
+    "merge_movements",
+    {
+      description: t("tools.mergeMovements"),
+      inputSchema: z.object({
+        transactionIds: z.array(z.string()).min(2).max(50).describe(d("transactionIds")),
+        description: z.string().nullable().optional().describe(d("description")),
+        occurredAt: z.string().optional().describe(d("occurredAt")),
+      }),
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false },
+    },
+    (input: { transactionIds: string[]; description?: string | null; occurredAt?: string }, ctx) =>
+      run(ctx, async () =>
+        mergeMovements({
+          transactionIds: input.transactionIds.map((id) => idOf("errors.notFound", id)),
+          description: parseForm(descriptionSchema, input.description ?? null) || null,
+          occurredAt: input.occurredAt === undefined ? undefined : parseForm(occurredAtSchema, input.occurredAt),
+        }),
+      ),
+  );
+
+  server.registerTool(
+    "move_category_movements",
+    {
+      description: t("tools.moveCategoryMovements"),
+      inputSchema: z.object({
+        fromCategoryId: z.string().describe(d("fromCategoryId")),
+        toCategoryId: z.string().describe(d("toCategoryId")),
+        from: z.string().optional().describe(d("from")),
+        to: z.string().optional().describe(d("to")),
+        dryRun: z.boolean().optional().describe(d("dryRun")),
+      }),
+      annotations: { ...write, idempotentHint: true },
+    },
+    (input: { fromCategoryId: string; toCategoryId: string; from?: string; to?: string; dryRun?: boolean }, ctx) =>
+      run(ctx, async (owner) => {
+        const fromCategoryId = idOf("errors.notFound", input.fromCategoryId);
+        const toCategoryId = idOf("errors.notFound", input.toCategoryId);
+        const all = await categoryIndex(owner);
+        const [source, target] = [all.get(fromCategoryId), all.get(toCategoryId)];
+        if (!source || !target || fromCategoryId === toCategoryId) throw new ActionError("errors.notFound");
+        if (source.kind !== target.kind) throw new ActionError("errors.categoryKindMismatch");
+        const day = z.iso.date({ error: "errors.unexpected" }).optional();
+        return moveCategoryMovements({
+          fromCategoryId,
+          toCategoryId,
+          from: parseForm(day, input.from),
+          to: parseForm(day, input.to),
+          dryRun: input.dryRun,
+        });
+      }),
+  );
+}
+
+type CategoryRow = { name: string; kind: "expense" | "income"; color: string | null; parentId: string | null };
+
+// Every category the person can see by id, a subcategory carrying its parent's kind.
+async function categoryIndex(owner: string): Promise<Map<string, CategoryRow>> {
+  const index = new Map<string, CategoryRow>();
+  for (const parent of await listScopedCategories(owner)) {
+    index.set(parent.id, { name: parent.name, kind: parent.kind, color: parent.color, parentId: null });
+    for (const child of parent.children) {
+      index.set(child.id, { name: child.name, kind: parent.kind, color: child.color, parentId: parent.id });
+    }
+  }
+  return index;
 }

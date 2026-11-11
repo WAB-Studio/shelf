@@ -1,21 +1,25 @@
 import "server-only";
 
+import { sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { createAccount } from "@/db/queries/accounts";
-import { createCategory } from "@/db/queries/categories";
+import { createCategory, moveCategoryLines } from "@/db/queries/categories";
 import type { CategoryScope } from "@/db/queries/categories";
 import { getUserGroup } from "@/db/queries/groups";
 import {
   createTransaction,
   deleteTransaction,
   getSettlementCurrencies,
+  insertTransaction,
+  listTransactions,
   readContributorContext,
   ResendChangedError,
   updateTransaction,
 } from "@/db/queries/transactions";
 import type { TransactionSplitInput } from "@/db/queries/transactions";
 import { BASE_CURRENCY, type CurrencyCode } from "@/lib/currency";
+import { withUserDb } from "@/db/session";
 import { pgErrorCode } from "@/lib/db-error";
 import { ActionError } from "@/lib/errors";
 import { parseAmount } from "@/lib/money";
@@ -311,5 +315,110 @@ export async function openCategory(
       throw new ActionError(categoryConstraintErrorKey(input.parentId));
     }
     throw error;
+  }
+}
+
+/**
+ * Folds several expenses or incomes of one account into one movement whose lines are theirs (RF-176):
+ * an original that already has lines gives each, one without gives its single category with its own
+ * description as the line's (also for a line of its own that has no name). One transaction: the new movement is written and the originals deleted
+ * together or not at all. A movement a statement, a payment, a goal, a deferral, an instalment or a
+ * charge it caused points to, one that caused or is a charge, one with an external reference or awaiting
+ * a counterparty is refused: deleting it would drop that link (a statement's reference is what stops a
+ * re-import from booking it again).
+ */
+export async function mergeMovements(input: {
+  transactionIds: string[];
+  description: string | null;
+  occurredAt?: string;
+}): Promise<{ transactionId: string; lines: number }> {
+  const ids = [...new Set(input.transactionIds)];
+  const idList = sql.join(ids.map((id) => sql`${id}::uuid`), sql`, `);
+  if (ids.length < 2) throw new ActionError("mcp.errors.merge.count");
+
+  try {
+    return await withUserDb(async (tx) => {
+      const found = await listTransactions({ ids }, { tx });
+      if (found.length !== ids.length) throw new ActionError("errors.notFound");
+      const [first] = found;
+      if (found.some((row) => row.kind === "transfer")) throw new ActionError("mcp.errors.merge.transfer");
+      const account = (row: (typeof found)[number]) => row.fromAccountId ?? row.toAccountId;
+      const counters = found.filter((row) => row.counterAmountCents !== null);
+      if (
+        found.some(
+          (row) =>
+            row.kind !== first.kind ||
+            account(row) !== account(first) ||
+            row.currency !== first.currency ||
+            row.contributedByMemberId !== first.contributedByMemberId ||
+            row.forHousehold !== first.forHousehold,
+        ) ||
+        (counters.length > 0 && counters.length < found.length)
+      ) {
+        throw new ActionError("mcp.errors.merge.mixed");
+      }
+      const linked = await tx.execute<{ id: string }>(sql`
+        select t.id from transactions t
+        where t.id in (${idList})
+          and (
+            t.reconciliation_id is not null
+            -- external_ref is the id by default and «form:» for a form; any other is a source's key
+            or (t.external_ref <> t.id::text and t.external_ref not like 'form:%')
+            or t.awaiting_counterparty
+            or t.caused_by_transaction_id is not null
+            or exists (select 1 from transactions c where c.caused_by_transaction_id = t.id)
+            or exists (select 1 from transaction_sources s where s.transaction_id = t.id)
+            or exists (select 1 from planned_payments p where p.settled_transaction_id = t.id)
+            or exists (select 1 from goal_contributions g where g.transaction_id = t.id)
+            or exists (select 1 from deferrals d where d.transaction_id = t.id)
+            or exists (select 1 from installment_lines i where i.paid_transaction_id = t.id)
+          )
+      `);
+      if (linked.length > 0) throw new ActionError("mcp.errors.merge.linked");
+
+      const lines = found.flatMap((row) =>
+        row.splits.map((split) => ({ ...split, description: split.description ?? row.description })),
+      );
+      const deleted = await tx.execute<{ id: string }>(sql`
+        delete from transactions where id in (${idList}) returning id
+      `);
+      if (deleted.length !== ids.length) throw new ActionError("errors.notFound");
+
+      const dates = found.map((row) => row.occurredAt).sort();
+      const created = await insertTransaction(tx, {
+        fromAccountId: first.fromAccountId,
+        toAccountId: first.toAccountId,
+        amountCents: found.reduce((sum, row) => sum + row.amountCents, 0),
+        currency: first.currency,
+        counterAmountCents: counters.length > 0 ? counters.reduce((sum, row) => sum + (row.counterAmountCents ?? 0), 0) : null,
+        counterIsEstimate: found.some((row) => row.counterIsEstimate),
+        forHousehold: first.forHousehold,
+        contributedByMemberId: first.contributedByMemberId,
+        occurredAt: input.occurredAt ?? dates[0],
+        description: input.description,
+        externalRef: null,
+        splits: lines,
+        labelIds: [...new Set(found.flatMap((row) => row.labels.map((label) => label.id)))],
+      });
+      return { transactionId: created.transactionId, lines: lines.length };
+    });
+  } catch (error) {
+    if (error instanceof ActionError) throw error;
+    return mapTransactionError(error);
+  }
+}
+
+/** Moves every line of one category to another of the same kind, optionally inside a date range (RF-176). */
+export async function moveCategoryMovements(input: {
+  fromCategoryId: string;
+  toCategoryId: string;
+  from?: string;
+  to?: string;
+  dryRun?: boolean;
+}): Promise<{ moved: number; dryRun: boolean }> {
+  try {
+    return { moved: await moveCategoryLines(input), dryRun: input.dryRun ?? false };
+  } catch (error) {
+    return mapTransactionError(error);
   }
 }

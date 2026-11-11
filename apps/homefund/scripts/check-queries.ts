@@ -4129,6 +4129,7 @@ async function main(): Promise<void> {
   await deferralImportSuite();
   await accountPocketSuite();
   await receiptLinesSuite();
+  await mcpCleanupSuite();
 }
 
 // A member recorded without a login is someone in the fund: a leader whose fund holds one is not alone, so an
@@ -15234,7 +15235,7 @@ async function mcpDoorSuite(): Promise<void> {
   assert(
     next("RF-144: /mcp answers 401 with no key, an unknown one or a webhook's, and lists its tools to a key for Claude"),
     anonymous.status === 401 && forged.status === 401 && webhookKey.status === 401 &&
-      JSON.stringify(names) === JSON.stringify(["create_account", "create_category", "delete_movement", "import_statement", "list_accounts", "list_categories", "list_movements", "preview_statement", "record_movement", "review_month", "update_account", "update_movement"]),
+      JSON.stringify(names) === JSON.stringify(["create_account", "create_category", "delete_movement", "import_statement", "list_accounts", "list_categories", "list_movements", "merge_movements", "move_category_movements", "preview_statement", "record_movement", "review_month", "update_account", "update_category", "update_movement"]),
     `no key ${anonymous.status}, unknown key ${forged.status}, webhook key ${webhookKey.status}, tools ${JSON.stringify(names)}`,
   );
 
@@ -16999,5 +17000,168 @@ async function receiptLinesSuite(): Promise<void> {
     next("RF-175: a re-import that rewrites a movement's lines keeps the product names of the lines that did not change"),
     afterImport?.description === "Bombillo LED",
     `description after re-import ${JSON.stringify(afterImport)}`,
+  );
+}
+
+// RF-176: Claude fixes a badly categorised account through the MCP: merge receipts, move lines, reparent a category, page by category.
+async function mcpCleanupSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const { POST } = await import("@/app/mcp/route");
+  const owner = await createMembershipFreeUser();
+  const stranger = await createMembershipFreeUser();
+  const mkAccount = (user: HarnessUser, name: string) =>
+    asUser(user, () =>
+      createAccount({
+        kind: "asset", subtype: "bank", groupId: null, isShared: false, institution: null, settlementCurrency: BASE_CURRENCY,
+        balanceOn: "2026-01-01", ownerUserId: user.id, name: `Harness rf176 ${name} ${tag}`, amountMinor: 1_000_000_00,
+      }),
+    );
+  const [account, other, strangerAccount] = [await mkAccount(owner, "a"), await mkAccount(owner, "b"), await mkAccount(stranger, "ajena")];
+  for (const row of [account, other, strangerAccount]) track("accounts", row.accountId);
+  const [market, dairy, flat, home, salary] = [randomUUID(), randomUUID(), randomUUID(), randomUUID(), randomUUID()];
+  await fixtureSql.begin(async (tx) => {
+    const claims = JSON.stringify({ sub: owner.id, role: "authenticated", aud: "authenticated" });
+    await tx`select set_config('request.jwt.claims', ${claims}, true)`;
+    for (const [id, name, kind, parent] of [
+      [market, "Mercado", "expense", null], [dairy, "Lácteos", "expense", market], [flat, "Plano", "expense", null],
+      [home, "Hogar", "expense", null], [salary, "Sueldo", "income", null],
+    ] as const) {
+      await tx`insert into categories (id, owner_user_id, name, kind, color, parent_id)
+        values (${id}, ${owner.id}, ${`Harness rf176 ${name} ${tag}`}, ${kind}, ${CATEGORY_COLORS[0]}, ${parent})`;
+      track("categories", id);
+    }
+  });
+  const book = async (user: HarnessUser, accountId: string, amountCents: number, occurredAt: string, description: string, splits: { categoryId: string; amountCents: number; description?: string }[], income = false) => {
+    const { transactionId } = await asUser(user, () =>
+      createTransaction({
+        fromAccountId: income ? null : accountId, toAccountId: income ? accountId : null, amountCents, occurredAt,
+        description, externalRef: null, splits, labelIds: [],
+      }),
+    );
+    track("transactions", transactionId);
+    return transactionId;
+  };
+  const strangerCategory = randomUUID();
+  await fixtureSql`insert into categories (id, owner_user_id, name, kind, color) values (${strangerCategory}, ${stranger.id}, ${`Harness rf176 ajena ${tag}`}, 'expense', '#4C8C4A')`;
+  track("categories", strangerCategory);
+  const m1 = await book(owner, account.accountId, 3_000_00, "2026-03-05", "Leche", [{ categoryId: flat, amountCents: 3_000_00 }]);
+  const m2 = await book(owner, account.accountId, 5_000_00, "2026-03-04", "Pan y huevos", [
+    { categoryId: flat, amountCents: 2_000_00, description: "Pan" }, { categoryId: home, amountCents: 3_000_00, description: "Huevos" },
+  ]);
+  const m3 = await book(owner, account.accountId, 1_500_00, "2026-03-06", "Cloro", [{ categoryId: home, amountCents: 1_500_00 }]);
+  const inc = await book(owner, account.accountId, 9_000_00, "2026-03-05", "Pago", [{ categoryId: salary, amountCents: 9_000_00 }], true);
+  const onOther = await book(owner, other.accountId, 700_00, "2026-03-05", "Otra cuenta", [{ categoryId: flat, amountCents: 700_00 }]);
+  const foreign = await book(stranger, strangerAccount.accountId, 800_00, "2026-03-05", "Ajeno", [{ categoryId: strangerCategory, amountCents: 800_00 }]);
+  const transfer = (await asUser(owner, () =>
+    createTransaction({ fromAccountId: account.accountId, toAccountId: other.accountId, amountCents: 100_00, occurredAt: "2026-03-05", description: "Traslado", externalRef: null, splits: [], labelIds: [] }),
+  )).transactionId;
+  track("transactions", transfer);
+
+  const { id: keyId, token } = await asUser(owner, () =>
+    issueWebhookCredential({ name: `Harness rf176 ${tag}`, purpose: "mcp", defaultAccountId: null, defaultCategoryId: null }),
+  );
+  keep("webhook_credentials", keyId);
+  const { tool } = mcpClient(POST, token);
+  const rows = async () =>
+    (await tool("list_movements", { accountId: account.accountId, limit: 200 })).value as { id: string; updatedAt: string; amountCents: number; date: string; description: string | null; splits: { categoryId: string; amountCents: number; description: string | null }[] }[];
+
+  const refusals = await Promise.all([
+    tool("merge_movements", { transactionIds: [m1, onOther] }),
+    tool("merge_movements", { transactionIds: [m1, inc] }),
+    tool("merge_movements", { transactionIds: [m1, transfer] }),
+    tool("merge_movements", { transactionIds: [m1, foreign] }),
+    tool("merge_movements", { transactionIds: [m1, m1] }),
+  ]);
+  const untouched = (await rows()).length;
+  assert(
+    next("RF-176: merge_movements refuses mixed accounts, mixed kinds, a transfer, a movement that is not the person's and fewer than two, writing nothing"),
+    refusals.every((r) => r.isError) && untouched === 5,
+    `refusals ${JSON.stringify(refusals.map((r) => r.value))}, rows ${untouched}`,
+  );
+
+  const merged = await tool("merge_movements", { transactionIds: [m1, m2, m3], description: `Harness rf176 factura ${tag}` });
+  const mergedId = (merged.value as { transactionId?: string } | null)?.transactionId ?? "";
+  if (mergedId) track("transactions", mergedId);
+  const after = await rows();
+  const one = after.find((row) => row.id === mergedId);
+  const byName = (name: string) => one?.splits.find((line) => line.description === name);
+  assert(
+    next("RF-176: merge_movements writes one movement with the sum, the originals' lines named, and deletes the originals"),
+    !merged.isError && after.length === 3 && one?.amountCents === 9_500_00 && one.date === "2026-03-04" && one.splits.length === 4 &&
+      byName("Leche")?.categoryId === flat && byName("Leche")?.amountCents === 3_000_00 && byName("Pan")?.amountCents === 2_000_00 &&
+      byName("Huevos")?.categoryId === home && byName("Cloro")?.amountCents === 1_500_00 && ![m1, m2, m3].some((id) => after.some((row) => row.id === id)),
+    `merged ${JSON.stringify(merged.value)}, rows ${JSON.stringify(after)}`,
+  );
+
+  const [sourceId] = [await book(owner, account.accountId, 400_00, "2026-03-07", "Del extracto", [{ categoryId: home, amountCents: 400_00 }])];
+  await fixtureSql`insert into transaction_sources (transaction_id, account_id, source_ref) values (${sourceId}, ${account.accountId}, ${`rf176-${tag}`})`;
+  const linked = await tool("merge_movements", { transactionIds: [sourceId, mergedId] });
+  assert(
+    next("RF-176: merge_movements refuses a movement tied to a statement and leaves both"),
+    linked.isError && (await rows()).some((row) => row.id === sourceId) && (await rows()).some((row) => row.id === mergedId),
+    `linked ${JSON.stringify(linked.value)}`,
+  );
+
+  // Category: a cycle, a kind mismatch, a rename and a move.
+  const cycle = await tool("update_category", { categoryId: market, parentId: dairy });
+  const selfParent = await tool("update_category", { categoryId: market, parentId: market });
+  const nested = await tool("update_category", { categoryId: market, parentId: home });
+  const kind = await tool("update_category", { categoryId: flat, parentId: salary });
+  const moved = await tool("update_category", { categoryId: flat, name: `Harness rf176 Frutas ${tag}`, parentId: market });
+  const asChild = (await tool("list_categories")).value as { id: string; name: string; parentId: string | null }[];
+  const unparented = await tool("update_category", { categoryId: flat, parentId: null });
+  const back = ((await tool("list_categories")).value as { id: string; parentId: string | null }[]).find((row) => row.id === flat);
+  assert(
+    next("RF-176: update_category refuses a cycle, a parent with children going under another and a kind mismatch; it renames, reparents and returns to top level"),
+    cycle.isError && selfParent.isError && nested.isError && kind.isError && !moved.isError &&
+      asChild.some((row) => row.id === flat && row.parentId === market && row.name.includes("Frutas")) && !unparented.isError && back?.parentId === null,
+    `cycle ${JSON.stringify(cycle.value)}, self ${JSON.stringify(selfParent.value)}, nested ${JSON.stringify(nested.value)}, kind ${JSON.stringify(kind.value)}`,
+  );
+
+  // Move lines: only category A, only the range, only the same kind.
+  const mixedKind = await tool("move_category_movements", { fromCategoryId: home, toCategoryId: salary });
+  const inRange = await tool("move_category_movements", { fromCategoryId: home, toCategoryId: dairy, from: "2026-03-07", to: "2026-03-07" });
+  const lineOf = async (id: string) => (await rows()).find((row) => row.id === id)?.splits.map((line) => line.categoryId);
+  const scoped = (await lineOf(sourceId))?.[0] === dairy && (await lineOf(mergedId))?.filter((c) => c === home).length === 2;
+  const rest = await tool("move_category_movements", { fromCategoryId: home, toCategoryId: dairy });
+  const byCategory = (await tool("list_movements", { accountId: account.accountId, categoryId: market })).value as { id: string }[];
+  const paged = (await tool("list_movements", { accountId: account.accountId, limit: 1, offset: 1 })).value as { id: string }[];
+  assert(
+    next("RF-176: move_category_movements moves only the category's lines inside the range, refuses another kind, and list_movements filters by category and pages"),
+    mixedKind.isError && (inRange.value as { moved: number }).moved === 1 && scoped && (rest.value as { moved: number }).moved === 2 &&
+      byCategory.some((row) => row.id === mergedId) && paged.length === 1 && paged[0].id !== (await rows())[0].id,
+    `mixed ${JSON.stringify(mixedKind.value)}, range ${JSON.stringify(inRange.value)}, rest ${JSON.stringify(rest.value)}, by ${byCategory.length}`,
+  );
+
+  // Review fixes: a dry run counts without writing, a move bumps the stamp, causes and external refs block a merge.
+  const probe = await book(owner, account.accountId, 600_00, "2026-04-01", "Cargo", [{ categoryId: flat, amountCents: 600_00 }]);
+  const stamp = async () => (await rows()).find((row) => row.id === probe)?.updatedAt;
+  const before = await stamp();
+  const dry = await tool("move_category_movements", { fromCategoryId: flat, toCategoryId: market, dryRun: true });
+  const untouchedLine = (await lineOf(probe))?.[0] === flat && (await stamp()) === before;
+  const wet = await tool("move_category_movements", { fromCategoryId: flat, toCategoryId: market });
+  const bumped = (await stamp()) !== before && (await lineOf(probe))?.[0] === market;
+  assert(
+    next("RF-176: move_category_movements with dryRun counts and writes nothing; a real move gives each movement a new updatedAt"),
+    (dry.value as { moved: number }).moved >= 1 && (dry.value as { dryRun: boolean }).dryRun && untouchedLine && (wet.value as { moved: number }).moved >= 1 && bumped,
+    `dry ${JSON.stringify(dry.value)}, wet ${JSON.stringify(wet.value)}`,
+  );
+  const charge = await book(owner, account.accountId, 50_00, "2026-04-01", "Comisión", [{ categoryId: home, amountCents: 50_00 }]);
+  await fixtureSql`update transactions set caused_by_transaction_id = ${probe} where id = ${charge}`;
+  const withRef = await book(owner, account.accountId, 70_00, "2026-04-01", "Con ref", [{ categoryId: home, amountCents: 70_00 }]);
+  await fixtureSql`update transactions set external_ref = ${`rf176-ref-${tag}`} where id = ${withRef}`;
+  const plain = await book(owner, account.accountId, 80_00, "2026-04-01", "Suelto", [{ categoryId: home, amountCents: 80_00 }]);
+  const blocked = await Promise.all([
+    tool("merge_movements", { transactionIds: [probe, plain] }),
+    tool("merge_movements", { transactionIds: [charge, plain] }),
+    tool("merge_movements", { transactionIds: [withRef, plain] }),
+    tool("merge_movements", { transactionIds: [plain, mergedId], description: "x".repeat(201) }),
+  ]);
+  const stillThere = (await rows()).filter((row) => [probe, charge, withRef, plain].includes(row.id)).length;
+  assert(
+    next("RF-176: merge_movements refuses an original that caused a charge, one that is a charge, one with an external reference, and a description over 200"),
+    blocked.every((r) => r.isError) && stillThere === 4,
+    `blocked ${JSON.stringify(blocked.map((r) => r.value))}, rows ${stillThere}`,
   );
 }

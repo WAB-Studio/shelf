@@ -174,6 +174,12 @@ export const occurredAtSchema = z.string().superRefine((value, ctx) => {
   }
 });
 
+export const descriptionSchema = z
+  .string()
+  .trim()
+  .max(200, { error: "transactions.errors.descriptionTooLong" })
+  .nullable();
+
 const splitSchema = z.object({
   categoryId: z.uuid({ error: "transactions.errors.splitCategoryInvalid" }),
   amount: splitAmountSchema,
@@ -212,11 +218,7 @@ export const transactionFields = {
   // «De quién» (RF-167): the fund member an income into a fund account is credited to. Read only there.
   contributedByMemberId: z.uuid({ error: "transactions.errors.contributorInvalid" }).nullish(),
   occurredAt: occurredAtSchema,
-  description: z
-    .string()
-    .trim()
-    .max(200, { error: "transactions.errors.descriptionTooLong" })
-    .nullable(),
+  description: descriptionSchema,
   externalRef: z
     .string()
     .trim()
