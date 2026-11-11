@@ -26,7 +26,7 @@ import { tagFigure } from "@/lib/privacy";
 
 /**
  * The Planeación hub: one card per area, each carrying a live one-line summary
- * derived on the server and a link into its screen. Its five areas and their
+ * derived on the server and a link into its screen. Its six areas and their
  * routes come from `destinations.ts`, the one file that lists them.
  */
 export async function PlanningHub({
@@ -35,6 +35,7 @@ export async function PlanningHub({
   paymentsSummary,
   debtsSummary,
   recurringSummary,
+  subscriptionsSummary,
   budgetsTop,
   budgetNames,
   goal,
@@ -55,6 +56,7 @@ export async function PlanningHub({
   paymentsSummary: string;
   debtsSummary: string;
   recurringSummary: string;
+  subscriptionsSummary: string;
 }) {
   const t = await getTranslations("planning");
   const format = await getFormatter();
@@ -71,6 +73,7 @@ export async function PlanningHub({
     payments: t("paymentsTitle"),
     debts: t("debtsTitle"),
     recurring: t("recurringTitle"),
+    subscriptions: t("subscriptionsTitle"),
   };
   return (
     <Flex direction="column" gap="4">
@@ -169,6 +172,11 @@ export async function PlanningHub({
           <MosaicTile href="/planning/recurring" size="small">
             <Heading as="h2" size="5">{titles.recurring}</Heading>
             <Text size="2" color="gray">{recurringSummary}</Text>
+          </MosaicTile>
+
+          <MosaicTile href="/planning/subscriptions" size="small">
+            <Heading as="h2" size="5">{titles.subscriptions}</Heading>
+            <Text size="2" color="gray"><Figures>{subscriptionsSummary}</Figures></Text>
           </MosaicTile>
       </Mosaic>
 

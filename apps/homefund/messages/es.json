@@ -204,6 +204,7 @@
     "goals": "Metas",
     "payments": "Pagos",
     "recurring": "Recurrentes",
+    "subscriptions": "Suscripciones",
     "debts": "Deudas",
     "reports": "Reportes",
     "inbox": "Bandeja",
@@ -759,6 +760,10 @@
     "recurringTitle": "Recurrentes",
     "recurringSummary": "{count, plural, one {# regla · {concept} el {date}} other {# reglas · próxima {concept} el {date}}}",
     "recurringEmpty": "Sin reglas activas",
+    "subscriptionsTitle": "Suscripciones",
+    "subscriptionsSummary": "{count, plural, one {# activa} other {# activas}} · {amounts}",
+    "perMonth": "{amount} al mes",
+    "subscriptionsEmpty": "Sin cobros repetidos",
     "nav": "Secciones de planeación",
     "over": "Superado",
     "spentOf": "{spent} de {limit}",
@@ -1062,6 +1067,20 @@
       "scopeViolation": "La cuenta o la categoría no pertenecen al mismo ámbito.",
       "ended": "Esta regla ya terminó. Cambia su fecha de fin para reanudarla."
     }
+  },
+  "subscriptions": {
+    "title": "Suscripciones",
+    "perMonth": "{amount} al mes",
+    "monthly": "Cada mes",
+    "weekly": "Cada semana",
+    "running": "{count, plural, one {# activa} other {# activas}}",
+    "stopped": "{count, plural, one {# sin cobro reciente} other {# sin cobro reciente}}",
+    "nextCharge": "Próximo cobro estimado: {date} · {count} cobros vistos",
+    "lateCharge": "Debió cobrarse el {date} y aún no aparece · {count} cobros vistos",
+    "lastCharge": "Último cobro: {date}",
+    "emptyTitle": "Aún no hay cobros repetidos",
+    "emptyDescription": "Cuando un mismo cobro aparezca al menos tres veces, cada mes o cada semana, lo verás aquí con su próxima fecha.",
+    "hint": "HomeFund las encuentra solo: un cobro con la misma descripción, en la misma cuenta, cada mes o cada semana, al menos tres veces en el último año. El monto y la fecha son estimados. Pídele a Claude que las revise contigo para decidir cuáles cancelar."
   },
   "debts": {
     "title": "Deudas",

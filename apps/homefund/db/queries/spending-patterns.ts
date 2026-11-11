@@ -78,6 +78,8 @@ const MAX_OUTLIERS = 50;
 
 type Window = {
   today: string;
+  // How far before the window the above-usual medians read; zero when no outlier is asked for.
+  historyMonths: number;
   fromMonth: string;
   currentMonth: string;
   recentFrom: string;
@@ -85,12 +87,13 @@ type Window = {
   baselineCount: number;
 };
 
-function windowOf(months: number, today: string): Window {
+function windowOf(months: number, today: string, historyMonths: number = USUAL_WINDOW_MONTHS): Window {
   const currentMonth = today.slice(0, 7);
   const fromMonth = shiftMonth(currentMonth, -months);
   const recentCount = Math.min(RECENT_MONTHS, Math.floor(months / 2));
   return {
     today,
+    historyMonths,
     fromMonth,
     currentMonth,
     recentFrom: shiftMonth(currentMonth, -recentCount),
@@ -104,7 +107,7 @@ function windowOf(months: number, today: string): Window {
 function patternsSql(w: Window): SQL {
   const start = `${w.fromMonth}-01`;
   const { endExclusive } = monthRange(`${w.currentMonth}-01`);
-  const historyStart = `${shiftMonth(w.fromMonth, -USUAL_WINDOW_MONTHS)}-01`;
+  const historyStart = `${shiftMonth(w.fromMonth, -w.historyMonths)}-01`;
   return sql`
     with tx as materialized (
       select t.id, t.occurred_at, t.amount_cents, t.currency, t.from_account_id, t.description
@@ -280,5 +283,19 @@ export async function getSpendingPatterns(months: number, today: string = todayI
       outliers: row?.outliers ?? [],
       growing: row?.growing ?? [],
     };
+  });
+}
+
+/**
+ * «Suscripciones» (RF-185): the repeated charges `spending_patterns` finds over the last twelve
+ * closed months plus the current one, by the same rules. One statement, one round trip.
+ */
+export async function listRecurringCharges(today: string = todayInBogota()): Promise<RecurringCharge[]> {
+  const w = windowOf(12, today, 0);
+  return withUserDb(async (tx) => {
+    const [row] = await tx.execute<{ recurring: RecurringCharge[] | null }>(sql`
+      ${patternsSql(w)}
+      select ${recurringJson(w)} as recurring`);
+    return row?.recurring ?? [];
   });
 }

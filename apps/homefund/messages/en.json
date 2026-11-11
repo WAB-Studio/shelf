@@ -204,6 +204,7 @@
     "goals": "Goals",
     "payments": "Payments",
     "recurring": "Recurring",
+    "subscriptions": "Subscriptions",
     "debts": "Debts",
     "reports": "Reports",
     "inbox": "Inbox",
@@ -759,6 +760,10 @@
     "recurringTitle": "Recurring",
     "recurringSummary": "{count, plural, one {# rule · {concept} on {date}} other {# rules · next {concept} on {date}}}",
     "recurringEmpty": "No active rules",
+    "subscriptionsTitle": "Subscriptions",
+    "subscriptionsSummary": "{count, plural, one {# active} other {# active}} · {amounts}",
+    "perMonth": "{amount} a month",
+    "subscriptionsEmpty": "No repeated charges",
     "nav": "Planning sections",
     "over": "Over",
     "spentOf": "{spent} of {limit}",
@@ -1062,6 +1067,20 @@
       "scopeViolation": "The account or category does not belong to the same scope.",
       "ended": "This rule has already ended. Change its end date to resume it."
     }
+  },
+  "subscriptions": {
+    "title": "Subscriptions",
+    "perMonth": "{amount} a month",
+    "monthly": "Every month",
+    "weekly": "Every week",
+    "running": "{count, plural, one {# active} other {# active}}",
+    "stopped": "{count, plural, one {# with no recent charge} other {# with no recent charge}}",
+    "nextCharge": "Next charge expected: {date} · {count} charges seen",
+    "lateCharge": "Due on {date} and not seen yet · {count} charges seen",
+    "lastCharge": "Last charge: {date}",
+    "emptyTitle": "No repeated charges yet",
+    "emptyDescription": "When the same charge shows up at least three times, every month or every week, you will see it here with its next date.",
+    "hint": "HomeFund finds them on its own: a charge with the same description, on the same account, every month or every week, at least three times in the last year. The amount and the date are estimates. Ask Claude to go over them with you and decide which to cancel."
   },
   "debts": {
     "title": "Debts",
