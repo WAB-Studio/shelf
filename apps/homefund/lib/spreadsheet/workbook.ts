@@ -99,10 +99,6 @@ function fillSheet(
     });
   }
 
-  sheet.getRow(1).eachCell((cell) => {
-    cell.font = { bold: true };
-    cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: HEADER_FILL } };
-  });
   sheet.views = [{ state: "frozen", ySplit: 1 }];
 
   columns.forEach((column, index) => {
@@ -112,8 +108,10 @@ function fillSheet(
     else if (column.money) target.numFmt = MONEY_FORMAT;
   });
 
-  // A column format reaches the header cell too; the header stays text.
+  // Styled after the column formats, which reach the header cell too: it stays text.
   sheet.getRow(1).eachCell((cell) => {
+    cell.font = { bold: true };
+    cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: HEADER_FILL } };
     cell.numFmt = "General";
   });
 
