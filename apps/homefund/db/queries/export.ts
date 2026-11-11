@@ -154,6 +154,7 @@ async function readEntityRows<E extends SheetEntity>(
   if (entity === "transactions") {
     projection["id"] = columns["id"];
     projection["contributedByMemberId"] = columns["contributedByMemberId"];
+    projection["madeByMemberId"] = columns["madeByMemberId"];
   }
 
   if (withKeys && "externalRef" in columns) {
@@ -278,8 +279,8 @@ function toExportRows<E extends SheetEntity>(
     const cell: Record<string, CellValue> = {};
 
     for (const column of columns) {
-      if ("synthetic" in column && column.key === "contributedBy") {
-        const memberId = row.contributedByMemberId as string | null | undefined;
+      if ("synthetic" in column && (column.key === "contributedBy" || column.key === "madeBy")) {
+        const memberId = (column.key === "madeBy" ? row.madeByMemberId : row.contributedByMemberId) as string | null | undefined;
         cell[column.key] = memberId ? children.memberNames.get(memberId) ?? null : null;
         continue;
       }

@@ -311,6 +311,8 @@ export const transactionRowSchema = z.object({
     .transform((cell) => cell ?? false),
   // The fund member an income into a fund account is credited to (RF-167), by name; blank names nobody.
   contributedBy: z.string().trim().max(80).nullish(),
+  // «Lo hizo» (RF-182): the fund member who made the movement, by name; blank is its account's holder, else the household.
+  madeBy: z.string().trim().max(80).nullish(),
   // Every label's name, joined by `LABEL_SEPARATOR`; each resolves like a category.
   labels: z
     .string()
@@ -528,6 +530,7 @@ export const transactionSheetDescriptor = {
     { key: "category", synthetic: true, ref: { entity: "categories" } },
     { key: "labels", synthetic: true, ref: { entity: "labels" } },
     { key: "contributedBy", synthetic: true },
+    { key: "madeBy", synthetic: true },
     { key: "forHousehold", field: "forHousehold", choice: "flag" },
     { key: "adjustment", field: "reconciliationId", flag: true, choice: "flag" },
     { key: "counterAmount", field: "counterAmountCents", money: moneyBoundary },

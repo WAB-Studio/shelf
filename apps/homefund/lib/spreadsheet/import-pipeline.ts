@@ -936,6 +936,7 @@ function resolveAndShape(
               : {}),
           ...(data.forHousehold ? { forHousehold: true } : {}),
           ...(data.contributedBy ? { contributedByName: data.contributedBy } : {}),
+          ...(data.madeBy ? { madeByName: data.madeBy } : {}),
           occurredAt: data.occurredAt,
           description: data.description,
           externalRef: data.externalRef,
@@ -1026,11 +1027,12 @@ export function processRow(
   // in the account's currency, rides back beside it for the commit.
   const counter = (resolved.object as { counterAmountCents?: number }).counterAmountCents;
   // «De quién» (RF-167) is a name the commit resolves; the schema has no field for it, so it rides back too.
-  const contributor = (resolved.object as { contributedByName?: string }).contributedByName;
+  const { contributedByName: contributor, madeByName: maker } = resolved.object as { contributedByName?: string; madeByName?: string };
   const object = {
     ...checked.data,
     ...(counter !== undefined ? { counterAmountCents: counter } : {}),
     ...(contributor !== undefined ? { contributedByName: contributor } : {}),
+    ...(maker !== undefined ? { madeByName: maker } : {}),
   };
   const owned = ownedKey(entity, object);
   const ownedStatus = owned === null ? status : existingRefs.has(owned) ? "update" : "new";

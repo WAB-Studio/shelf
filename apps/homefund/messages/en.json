@@ -1378,6 +1378,7 @@
       "counterIsEstimate": "Estimated amount",
       "forHousehold": "For the household",
       "contributedBy": "From whom",
+      "madeBy": "Made by",
       "labels": "Labels",
       "account": "Account",
       "label": "Label",
@@ -1475,7 +1476,8 @@
         "noFund": "The row belongs to a fund and you have none.",
         "repeatedRow": "Another row in the file already carries this for the same account. Keep only one.",
         "lockedField": "This row changes the category or the place, which cannot change. Add it as a new row instead.",
-        "contributorUnknown": "The «From whom» member is not in the destination account's fund."
+        "contributorUnknown": "The «From whom» member is not in the destination account's fund.",
+        "makerUnknown": "The «Made by» member is not in the movement's fund."
       }
     }
   },

@@ -24,6 +24,7 @@ import { jsonbParam } from "@/db/jsonb-param";
 import {
   contributorMark,
   contributorStillInFund,
+  defaultMadeBy,
   householdMark,
   insertSplitRows,
   type TransactionSplitInput,
@@ -163,6 +164,7 @@ function transactionReasonKey(error: unknown): string {
 // «De quién» (RF-167), which the commit resolves inside the destination account's fund.
 export type ImportedTransactionInput = CreateTransactionInput & {
   contributedByName?: string | null;
+  madeByName?: string | null;
 };
 
 // The whole file's passing rows, in the entity buckets the pipeline produced. The
@@ -802,6 +804,9 @@ type ResolvedTransaction = {
   // destination's fund, the member row it points at.
   contributedByName: string | null;
   contributedByMemberId: string | null;
+  // «Lo hizo» (RF-182) by name and, once `resolveMakers` has read the movement's fund, its member row.
+  madeByName: string | null;
+  madeByMemberId: string | null;
   splits: TransactionSplitInput[];
 };
 
@@ -840,6 +845,8 @@ function resolveTransaction(
     forHousehold: object.forHousehold ?? false,
     contributedByName: object.contributedByName?.trim() || null,
     contributedByMemberId: null,
+    madeByName: object.madeByName?.trim() || null,
+    madeByMemberId: null,
     splits,
   };
 }
@@ -891,6 +898,33 @@ async function resolveContributors(
   }
 }
 
+// Reads, in one statement, the members of the fund each named movement sits in (the fund of either of its
+// accounts, or for a household bill the payer's own) and points every named «Lo hizo» at its member row (RF-182).
+// A name that points at none is a row failure; the database still checks the member fits (`maker_in_fund`).
+async function resolveMakers(tx: Transaction, items: ResolvedTransaction[]): Promise<void> {
+  const named = items.filter((item) => item.madeByName !== null);
+  if (named.length === 0) return;
+
+  const accountIds = [...new Set(named.flatMap((item) => [item.fromAccountId, item.toAccountId]).filter((id) => id !== null))];
+  const found = (await tx.execute(sql`
+    select a.id as account_id, m.id as member_id, m.name
+    from accounts a
+    join group_members m on m.group_id = coalesce(a.group_id,
+      (select own.group_id from group_members own where own.user_id = a.owner_user_id and own.archived_at is null))
+    where a.id in (select value::uuid from jsonb_array_elements_text(${jsonbParam(accountIds)}))
+  `)) as unknown as { account_id: string; member_id: string; name: string }[];
+  const members = new Map(found.map((row) => [`${row.account_id}|${row.name}`, row.member_id]));
+
+  for (const item of named) {
+    const memberId =
+      members.get(`${item.fromAccountId}|${item.madeByName}`) ?? members.get(`${item.toAccountId}|${item.madeByName}`);
+    if (memberId === undefined) {
+      throw rowFailure("transactions", item.row.sheetRow, "data.import.errors.makerUnknown", null);
+    }
+    item.madeByMemberId = memberId;
+  }
+}
+
 // Transactions carry a child split, so a new row writes the movement then its splits,
 // and an update overwrites the row and replaces the split wholesale (delete + insert),
 // mirroring `updateTransaction`. Both batch (RNF-15).
@@ -922,7 +956,7 @@ async function commitUpdatedTransactions(
 ): Promise<void> {
   if (rows.length === 0) return;
   const resolved = resolveRows(rows, accountMap, categoryMap, placeholders);
-  await resolveContributors(tx, resolved);
+  await Promise.all([resolveContributors(tx, resolved), resolveMakers(tx, resolved)]);
 
   try {
     await tx.transaction(async (sp) => {
@@ -956,6 +990,7 @@ async function updateTransactionsBatch(
     counter_is_estimate: item.counterIsEstimate,
     for_household: item.forHousehold,
     contributed_by_member_id: item.contributedByMemberId,
+    made_by_member_id: item.madeByMemberId,
     occurred_at: item.row.object.occurredAt,
     description: item.row.object.description,
   }));
@@ -978,11 +1013,13 @@ async function updateTransactionsBatch(
           sql`r.to_account_id`,
         )})`,
       )},
+      made_by_member_id = coalesce(r.made_by_member_id, case when private.maker_in_fund(t.made_by_member_id, r.from_account_id,
+        r.to_account_id, ${householdMark(sql`r.from_account_id`, sql`r.to_account_id`, sql`r.for_household`)}) then t.made_by_member_id end),
       occurred_at = r.occurred_at, description = r.description,
       reviewed_at = case when t.recurring_rule_id is not null and t.reviewed_at is null then now() else t.reviewed_at end
     from jsonb_to_recordset(${jsonbParam(records)}) as r(
       external_ref text, from_account_id uuid, to_account_id uuid, amount_cents bigint, currency text,
-      counter_amount_cents bigint, counter_is_estimate boolean, for_household boolean, contributed_by_member_id uuid, occurred_at date, description text)
+      counter_amount_cents bigint, counter_is_estimate boolean, for_household boolean, contributed_by_member_id uuid, made_by_member_id uuid, occurred_at date, description text)
     where t.external_ref = r.external_ref and ${inScope(scope)}
     returning t.id, t.external_ref`)) as unknown as { id: string; external_ref: string }[];
   if (updated.length === 0) return;
@@ -1032,7 +1069,7 @@ async function commitNewTransactions(
   if (rows.length === 0) return;
 
   const resolved = resolveRows(rows, accountMap, categoryMap, placeholders);
-  await resolveContributors(tx, resolved);
+  await Promise.all([resolveContributors(tx, resolved), resolveMakers(tx, resolved)]);
 
   try {
     await tx.transaction(async (sp) => {
@@ -1055,6 +1092,10 @@ const contributorSql = (item: ResolvedTransaction) =>
     sql`${item.contributedByMemberId}::uuid`,
   );
 
+// Blank «Lo hizo» is the holder of the account the money leaves, else the household, as in a typed movement.
+const makerSql = (item: ResolvedTransaction) =>
+  item.madeByMemberId === null ? defaultMadeBy(item.fromAccountId) : sql`${item.madeByMemberId}::uuid`;
+
 const householdSql = (item: ResolvedTransaction) =>
   householdMark(sql`${item.fromAccountId}::uuid`, sql`${item.toAccountId}::uuid`, sql`${item.forHousehold}`);
 
@@ -1066,7 +1107,7 @@ async function insertNewTransactionsBatch(
     chunk.map(
       (item) =>
         sql`(${item.fromAccountId}, ${item.toAccountId}, ${item.amountCents}, ${item.currency},
-          ${item.counterAmountCents}, ${item.counterIsEstimate}, ${householdSql(item)}, ${contributorSql(item)},
+          ${item.counterAmountCents}, ${item.counterIsEstimate}, ${householdSql(item)}, ${contributorSql(item)}, ${makerSql(item)},
           ${item.row.object.occurredAt}, ${item.row.object.description}, ${item.row.externalRef})`,
     ),
     sql`, `,
@@ -1074,7 +1115,7 @@ async function insertNewTransactionsBatch(
   const inserted = (await tx.execute(
     sql`insert into ${transactions}
       (from_account_id, to_account_id, amount_cents, currency, counter_amount_cents, counter_is_estimate,
-        for_household, contributed_by_member_id, occurred_at, description, external_ref)
+        for_household, contributed_by_member_id, made_by_member_id, occurred_at, description, external_ref)
       values ${rowValues}
       returning id`,
   )) as unknown as { id: string }[];
@@ -1096,9 +1137,9 @@ async function insertNewTransactionsSerially(
       const [inserted] = (await tx.execute(
         sql`insert into ${transactions}
           (from_account_id, to_account_id, amount_cents, currency, counter_amount_cents, counter_is_estimate,
-            for_household, contributed_by_member_id, occurred_at, description, external_ref)
+            for_household, contributed_by_member_id, made_by_member_id, occurred_at, description, external_ref)
           values (${item.fromAccountId}, ${item.toAccountId}, ${item.amountCents}, ${item.currency},
-            ${item.counterAmountCents}, ${item.counterIsEstimate}, ${householdSql(item)}, ${contributorSql(item)}, ${item.row.object.occurredAt}, ${item.row.object.description}, ${item.row.externalRef})
+            ${item.counterAmountCents}, ${item.counterIsEstimate}, ${householdSql(item)}, ${contributorSql(item)}, ${makerSql(item)}, ${item.row.object.occurredAt}, ${item.row.object.description}, ${item.row.externalRef})
           returning id`,
       )) as unknown as { id: string }[];
       await insertSplitRows(tx, item.splits.map((split) => ({ transactionId: inserted.id, ...split })));
