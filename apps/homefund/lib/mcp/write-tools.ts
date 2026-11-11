@@ -3,9 +3,8 @@ import "server-only";
 import type { CallToolResult, McpServer, ServerContext } from "@modelcontextprotocol/server";
 import { z } from "zod";
 
-import { listAccounts, updateAccount } from "@/db/queries/accounts";
+import { handAccountToGroup, listAccounts, updateAccount } from "@/db/queries/accounts";
 import { freeCategoryColor, listScopedCategories, updateCategory } from "@/db/queries/categories";
-import { listCallerMembers } from "@/db/queries/group-members";
 import {
   bookMovement,
   categoryConstraintErrorKey,
@@ -144,20 +143,6 @@ export function registerLedgerTools(server: McpServer, run: Run, t: Say): void {
       ),
   );
 
-  // The ids «De quién» and «Lo hizo» name: the people of the fund, with or without a login.
-  server.registerTool(
-    "list_members",
-    { description: t("tools.listMembers"), inputSchema: z.object({}), annotations: { readOnlyHint: true } },
-    (_input, ctx) =>
-      run(ctx, async (owner) =>
-        (await listCallerMembers(owner, { archived: false })).map((member) => ({
-          id: member.id,
-          name: member.name,
-          hasLogin: member.userId !== null,
-        })),
-      ),
-  );
-
   server.registerTool(
     "list_movements",
     {
@@ -284,6 +269,7 @@ export function registerLedgerTools(server: McpServer, run: Run, t: Say): void {
         institution: z.string().nullable().default(null).describe(d("institution")),
         lastFour: z.string().optional().describe(d("lastFour")),
         parentAccountId: z.string().nullable().default(null).describe(d("parentAccountId")),
+        holderMemberId: z.string().nullable().default(null).describe(d("holderMemberId")),
       }),
       annotations: write,
     },
@@ -310,6 +296,7 @@ export function registerLedgerTools(server: McpServer, run: Run, t: Say): void {
         institution: z.string().nullable().optional().describe(d("institution")),
         lastFour: z.string().nullable().optional().describe(d("lastFour")),
         parentAccountId: z.string().nullable().optional().describe(d("parentAccountId")),
+        holderMemberId: z.string().nullable().optional().describe(d("holderMemberId")),
       }),
       annotations: { ...write, idempotentHint: true },
     },
@@ -330,6 +317,7 @@ export function registerLedgerTools(server: McpServer, run: Run, t: Say): void {
           institution: pick("institution", current.institution) ?? "",
           lastFour: pick("lastFour", current.lastFour) ?? undefined,
           parentAccountId: pick("parentAccountId", current.parentAccountId ?? null),
+          holderMemberId: pick("holderMemberId", current.holderMemberId ?? null),
           settlementCurrency: pick("settlementCurrency", current.settlementCurrency),
           amount: centsToDecimal(input.openingBalanceCents === undefined ? storedCents : (input.openingBalanceCents as number)),
           balanceOn: pick("balanceOn", current.initialBalanceOn),
@@ -350,6 +338,22 @@ export function registerLedgerTools(server: McpServer, run: Run, t: Say): void {
         }
         if (updated === "stale") throw new ActionError("errors.stale");
         if (!updated) throw new ActionError("errors.notFound");
+        return { accountId: id };
+      }),
+  );
+
+  // The same write as «Pasar al fondo»: the account keeps its id, balance, movements and pockets (RF-180).
+  server.registerTool(
+    "move_account_to_fund",
+    {
+      description: t("tools.moveAccountToFund"),
+      inputSchema: z.object({ accountId: z.string().describe(d("accountId")) }),
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
+    },
+    (input: { accountId: string }, ctx) =>
+      run(ctx, async () => {
+        const id = idOf("errors.notFound", input.accountId);
+        await handAccountToGroup({ accountId: id });
         return { accountId: id };
       }),
   );

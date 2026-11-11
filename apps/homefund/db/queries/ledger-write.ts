@@ -201,7 +201,7 @@ export async function bookMovement(
       amountFromWords: input.amountFromWords ?? false,
       forHousehold: input.forHousehold ?? false,
       contributedByMemberId: input.contributedByMemberId ?? null,
-      madeByMemberId: input.madeByMemberId ?? defaultMadeBy(input.fromAccountId, input.toAccountId),
+      madeByMemberId: input.madeByMemberId ?? defaultMadeBy(input.fromAccountId),
       occurredAt: input.occurredAt,
       description: input.description,
       externalRef: input.externalRef ?? null,

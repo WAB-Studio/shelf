@@ -6,6 +6,7 @@ import { createTranslator } from "next-intl";
 import { z } from "zod";
 
 import { listAccounts } from "@/db/queries/accounts";
+import { listCallerMembers } from "@/db/queries/group-members";
 import { getMonthReview } from "@/db/queries/month-review";
 import { importStatement, previewStatement, StatementError } from "@/db/queries/statement-import";
 import { actAsCredentialOwner } from "@/db/session";
@@ -85,6 +86,9 @@ function registerReadTools(server: McpServer): void {
           lastFour: account.lastFour ?? null,
           // The account this one is a pocket of, null for an account of its own (RF-173); a parent's balances are its free part.
           parentAccountId: account.parentAccountId ?? null,
+          // The fund member this account is in the name of (RF-181), null for an account of everyone.
+          holderMemberId: account.holderMemberId ?? null,
+          holderName: account.holderName ?? null,
           settlementCurrency: account.settlementCurrency,
           // What update_account takes back: the opening as the form shows it (a liability's debt positive), its date and the stamp.
           openingBalanceCents: account.kind === "liability" ? -account.initialBalanceCents : account.initialBalanceCents,
@@ -92,6 +96,20 @@ function registerReadTools(server: McpServer): void {
           updatedAt: account.updatedAt,
           balances: account.balances,
           canWrite: account.canWrite,
+        })),
+      ),
+  );
+
+  // RF-181, RF-182: the ids holderMemberId, contributedByMemberId and madeByMemberId take.
+  server.registerTool(
+    "list_members",
+    { description: t("tools.listMembers"), inputSchema: z.object({}), annotations: { readOnlyHint: true } },
+    (_input, ctx) =>
+      run(ctx, async (owner) =>
+        (await listCallerMembers(owner, { archived: false })).map((member) => ({
+          id: member.id,
+          name: member.name,
+          hasLogin: member.userId !== null,
         })),
       ),
   );

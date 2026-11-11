@@ -55,7 +55,7 @@ export type CreateTransactionArgs = {
   // «De quién» (RF-167): stored only on an income into a fund account (`contributorMark`).
   contributedByMemberId?: string | null;
   // «Lo hizo» (RF-182): the fund member who made the movement; null is the household.
-  madeByMemberId?: string | null;
+  madeByMemberId?: string | null | SQL;
   // RF-133: one side is not known yet and waits for a person; insert only.
   awaitingCounterparty?: boolean;
   occurredAt: string;
@@ -356,12 +356,11 @@ export async function makerFits({
 }
 
 /**
- * Who a movement is credited to as its maker when nobody says (RF-182): the household. RF-181 will answer
- * with the holder of the fund account it touches; every write that names no maker asks here.
+ * Who a movement is credited to as its maker when nobody says (RF-182): the holder (RF-181) of the account the
+ * money leaves, else the household. Evaluated inside the insert, so it costs no round trip.
  */
-export function defaultMadeBy(fromAccountId: string | null, toAccountId: string | null): string | null {
-  void [fromAccountId, toAccountId];
-  return null;
+export function defaultMadeBy(fromAccountId: string | null): SQL {
+  return sql`(select a.holder_member_id from accounts a where a.id = ${fromAccountId}::uuid)`;
 }
 
 /**

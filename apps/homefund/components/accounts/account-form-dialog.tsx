@@ -53,6 +53,8 @@ const SUBTYPE_LABEL_KEYS = {
 
 // A Radix Select item may not carry an empty value, so "no parent" rides this sentinel.
 const NO_PARENT = "none";
+// The same for «nobody, it is everyone's» in the holder select (RF-181).
+const NO_HOLDER = "none";
 
 // The kind that admits a class, mirroring SUBTYPES_BY_KIND: a card or a loan is money owed,
 // anything else holds value.
@@ -78,6 +80,8 @@ type AccountFormValues = {
   lastFour: string;
   // The id of the account this one is a pocket of; null for an account of its own (RF-173).
   parentAccountId: string | null;
+  // The fund member who holds the account (RF-181); null for an account of everyone.
+  holderMemberId: string | null;
   settlementCurrency: (typeof OFFERED_CURRENCIES)[number];
   amount: string;
   balanceOn: string;
@@ -90,6 +94,7 @@ export function AccountFormDialog({
   account,
   defaultSubtype,
   parentCandidates = [],
+  members = [],
 }: {
   hasGroup: boolean;
   open: boolean;
@@ -97,6 +102,8 @@ export function AccountFormDialog({
   account?: AccountRow;
   // Every account the screen lists; the form keeps the ones that may hold a pocket (RF-173).
   parentCandidates?: AccountRow[];
+  // The fund's members, who may hold a fund account (RF-181).
+  members?: { id: string; name: string }[];
   // The class a new account starts on, when the screen was reached asking for one.
   defaultSubtype?: (typeof ACCOUNT_SUBTYPES)[number];
 }) {
@@ -114,6 +121,7 @@ export function AccountFormDialog({
           account={account}
           defaultSubtype={defaultSubtype}
           parentCandidates={parentCandidates}
+          members={members}
           onOpenChange={onOpenChange}
         />
       </Dialog.Content>
@@ -126,12 +134,14 @@ function AccountForm({
   account,
   defaultSubtype,
   parentCandidates,
+  members,
   onOpenChange,
 }: {
   hasGroup: boolean;
   account?: AccountRow;
   defaultSubtype?: (typeof ACCOUNT_SUBTYPES)[number];
   parentCandidates: AccountRow[];
+  members: { id: string; name: string }[];
   onOpenChange: (open: boolean) => void;
 }) {
   const t = useTranslations("accounts");
@@ -159,6 +169,7 @@ function AccountForm({
           institution: account.institution ?? "",
           lastFour: account.lastFour ?? "",
           parentAccountId: account.parentAccountId ?? null,
+          holderMemberId: account.holderMemberId ?? null,
           settlementCurrency: account
             .settlementCurrency as (typeof OFFERED_CURRENCIES)[number],
           // The stored integer is already in this currency's minor unit, so the
@@ -182,6 +193,7 @@ function AccountForm({
           institution: "",
           lastFour: "",
           parentAccountId: null,
+          holderMemberId: null,
           settlementCurrency: BASE_CURRENCY as (typeof OFFERED_CURRENCIES)[number],
           amount: "",
           balanceOn: todayInBogota(),
@@ -363,7 +375,11 @@ function AccountForm({
                 <Select.Root
                   size="3"
                   value={field.value}
-                  onValueChange={field.onChange}
+                  onValueChange={(value) => {
+                    field.onChange(value);
+                    // A holder belongs to a fund account only.
+                    if (value === "personal") form.setValue("holderMemberId", null);
+                  }}
                   disabled={isPending}
                 >
                   <FieldControl>
@@ -408,6 +424,38 @@ function AccountForm({
                   </Select.Content>
                 </Select.Root>
                 <FieldDescription>{t("parentDescription")}</FieldDescription>
+                <FieldMessage error={fieldState.error} />
+              </Field>
+            )}
+          />
+        )}
+        {/* Only a fund account has a holder: the member whose name it is in (RF-181). */}
+        {placement === "group" && members.length > 0 && (
+          <Controller
+            name="holderMemberId"
+            control={form.control}
+            render={({ field, fieldState }) => (
+              <Field invalid={fieldState.invalid}>
+                <FieldLabel htmlFor="account-holder">{t("holderLabel")}</FieldLabel>
+                <Select.Root
+                  size="3"
+                  value={field.value ?? NO_HOLDER}
+                  onValueChange={(value) => field.onChange(value === NO_HOLDER ? null : value)}
+                  disabled={isPending}
+                >
+                  <FieldControl>
+                    <Select.Trigger id="account-holder" />
+                  </FieldControl>
+                  <Select.Content position="popper">
+                    <Select.Item value={NO_HOLDER}>{t("holderNone")}</Select.Item>
+                    {members.map((member) => (
+                      <Select.Item key={member.id} value={member.id}>
+                        {member.name}
+                      </Select.Item>
+                    ))}
+                  </Select.Content>
+                </Select.Root>
+                <FieldDescription>{t("holderDescription")}</FieldDescription>
                 <FieldMessage error={fieldState.error} />
               </Field>
             )}

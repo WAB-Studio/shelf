@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.wabstudio.homefund.forwarder",
+      "sha256_cert_fingerprints": [
+        "A2:B3:DF:9C:3A:F4:D4:21:94:D8:E0:BA:6C:54:F8:D9:6C:66:D0:D1:3D:60:15:68:B4:E3:FD:32:ED:A8:06:32"
+      ]
+    }
+  }
+]

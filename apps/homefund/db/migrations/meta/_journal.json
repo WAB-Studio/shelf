@@ -612,6 +612,27 @@
       "breakpoints": true
     },
     {
+      "idx": 87,
+      "version": "7",
+      "when": 1794371811602,
+      "tag": "0087_an_account_moves_to_the_fund_with_its_history",
+      "breakpoints": true
+    },
+    {
+      "idx": 88,
+      "version": "7",
+      "when": 1794371686233,
+      "tag": "0088_a_fund_account_names_its_holder",
+      "breakpoints": true
+    },
+    {
+      "idx": 89,
+      "version": "7",
+      "when": 1794372000000,
+      "tag": "0089_a_holder_leaves_with_their_member",
+      "breakpoints": true
+    },
+    {
       "idx": 90,
       "version": "7",
       "when": 1794372100000,

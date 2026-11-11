@@ -39,6 +39,7 @@ import {
   archiveAccount,
   createAccount,
   deleteAccount,
+  handAccountToGroup,
   listAccounts,
   restoreAccount,
   updateAccount,
@@ -151,15 +152,18 @@ import {
 import { updateRecurringRule } from "@/db/queries/recurring-rules";
 import {
   buildEffectiveRefs,
+  entitiesIn,
+  keyParsedRows,
   processRow,
   refuseRepeated,
+  runImportPipeline,
   type RawRow,
 } from "@/lib/spreadsheet/import-pipeline";
 import { commitImport } from "@/db/queries/import-commit";
 import * as importCommitModule from "@/db/queries/import-commit";
 import { commitImportAction } from "@/app/actions/import";
 import { ActionError } from "@/lib/errors";
-import { buildWorkbook, parseWorkbook } from "@/lib/spreadsheet/workbook";
+import { buildChoiceReader, buildWorkbook, parseWorkbook } from "@/lib/spreadsheet/workbook";
 import type { ReverseSheetLabels } from "@/lib/spreadsheet/workbook";
 import type { CommitInput } from "@/db/queries/import-commit";
 import { getUserLocale, upsertUserLocale } from "@/db/queries/user-locale";
@@ -3429,7 +3433,7 @@ async function reimportSuite(userId: string, scope: HarnessScope): Promise<void>
   });
 
   // What a person would export: the fixture's own accounts and the movements that touch them.
-  const exported = await readExport({ entityKeys: ["accounts", "transactions"] });
+  const exported = await readExport({ entityKeys: ["accounts", "transactions"], withKeys: true });
   const sheetAccounts = (exported.accounts ?? []).filter((row) => String(row.name).startsWith(prefix));
   const sheetMovements = (exported.transactions ?? []).filter(
     (row) =>
@@ -4135,6 +4139,10 @@ async function main(): Promise<void> {
   await mcpInboxSuite();
   await mcpInboxReviewSuite();
   await accountLoanSuite();
+  await sheetRoundTripSuite();
+  await monthReviewClearSuite();
+  await accountToFundSuite();
+  await accountHolderSuite();
   await madeBySuite();
 }
 
@@ -4778,7 +4786,7 @@ async function ledgerGuardSuite(userId: string, scope: HarnessScope): Promise<vo
   });
   keep("transactions", foreignOnPeso.transactionId);
 
-  const exported = await readExport({ entityKeys: ["accounts", "transactions"] });
+  const exported = await readExport({ entityKeys: ["accounts", "transactions"], withKeys: true });
   const sheetAccounts = (exported.accounts ?? []).filter((r) => String(r.name).startsWith(prefix));
   const sheetMovements = (exported.transactions ?? []).filter(
     (r) => String(r.fromAccount ?? "").startsWith(prefix) || String(r.toAccount ?? "").startsWith(prefix),
@@ -7113,6 +7121,7 @@ async function importCategoryScopeSuite(): Promise<void> {
     labels: [],
     goals: [],
     existingRefs: emptyRefs(),
+    knownKeys: {},
   });
 
   type Files = Partial<Record<"accounts" | "categories", RawRow[]>>;
@@ -11055,20 +11064,22 @@ async function importCommitSetSuite(): Promise<void> {
     const exported = await readExport({ entityKeys: ["accounts", "transactions"] });
     return { accountId, transactionId, exported };
   });
-  const tabsRef = `m3-${tag}-pestanas-cuenta`;
+  const tabsName = `Harness m3 pestanas nueva ${tag}`;
   const exportedAccount = (tabsFixture.exported.accounts ?? []).find((r) => String(r.name).includes(`pestanas banco ${tag}`));
-  const exportedMovement = (tabsFixture.exported.transactions ?? []).find((r) => r.externalRef === `m3-${tag}-pestanas`);
+  const exportedMovement = (tabsFixture.exported.transactions ?? []).find((r) => r.description === `m3 ${tag} pestanas antes`);
   // The harness's next-intl answers each key with itself, so the pipeline reads a tab named by its key.
   const sheetLabels = {
     sheetName: (entity: string) => `sheets.${entity}`,
     columnHeader: (key: string) => `columns.${key}`,
+    choiceLabel: (_set: string, value: string) => value,
   };
   const workbook = buildWorkbook({
     data: {
       accounts: exportedAccount
-        ? [{ ...exportedAccount, name: `Harness m3 pestanas nueva ${tag}`, externalRef: tabsRef }]
+        ? [{ ...exportedAccount, name: `Harness m3 pestanas nueva ${tag}` }]
         : [],
-      transactions: exportedMovement ? [{ ...exportedMovement, description: `m3 ${tag} pestanas despues` }] : [],
+      // Unchanged: the file repeats the movement the fund holds, so it updates it and contends for its row.
+      transactions: exportedMovement ? [exportedMovement] : [],
     },
     labels: sheetLabels,
   });
@@ -11105,7 +11116,7 @@ async function importCommitSetSuite(): Promise<void> {
     return r;
   });
   const tabsCopies = await fixtureSql<{ id: string }[]>`
-    select id from accounts where owner_user_id = ${tabs.id} and external_ref = ${tabsRef}`;
+    select id from accounts where owner_user_id = ${tabs.id} and name = ${tabsName}`;
   for (const r of tabsCopies) track("accounts", r.id);
   const okTabs = answers.filter((a) => a.startsWith("data ")).length;
   const toldWhy = answers.filter((a) => a === "serverError data.import.errors.alreadyCommitting").length;
@@ -12323,6 +12334,7 @@ async function dollarBackupSuite(): Promise<void> {
 
   const labels: ReverseSheetLabels = {
     entityBySheetName: new Map(SHEET_ENTITIES.map((entity) => [`sheets.${entity}`, entity] as const)),
+    choiceByLabel: buildChoiceReader((_set, value) => value),
     columnKeyByHeader: new Map(
       SHEET_ENTITIES.map(
         (entity) =>
@@ -12333,6 +12345,7 @@ async function dollarBackupSuite(): Promise<void> {
   const sheetLabels = {
     sheetName: (entity: string) => `sheets.${entity}`,
     columnHeader: (key: string) => `columns.${key}`,
+    choiceLabel: (_set: string, value: string) => value,
   };
 
   // The fund's own backup. Accounts and categories carry the stable key a re-import matches on.
@@ -12341,7 +12354,8 @@ async function dollarBackupSuite(): Promise<void> {
     (rows ?? []).filter((row) => String(row.name) in names).map((row) => ({ ...row, externalRef: names[String(row.name)] }));
   const accountRows = keyed(exported.accounts, { [cardName]: refOf("card"), [bankName]: refOf("bank") });
   const categoryRows = keyed(exported.categories, { [categoryName]: refOf("category") });
-  const movementRows = (exported.transactions ?? []).filter((row) => String(row.externalRef).startsWith(`o5m15-${tag}-`));
+  const descOf = (suffix: string) => `Harness o5m15 ${suffix} ${tag}`;
+  const movementRows = (exported.transactions ?? []).filter((row) => String(row.description).startsWith("Harness o5m15 ") && String(row.description).endsWith(` ${tag}`));
   const fileOf = async (movements: typeof movementRows) => {
     const workbook = buildWorkbook({
       data: { accounts: accountRows as never, categories: categoryRows as never, transactions: movements as never },
@@ -12357,7 +12371,7 @@ async function dollarBackupSuite(): Promise<void> {
     const header = (sheet.getRow(1).values as unknown[]).slice(1);
     const at = (key: string) => header.indexOf(`columns.${key}`) + 1;
     for (let r = 2; r <= sheet.rowCount; r += 1) {
-      if (sheet.getRow(r).getCell(at("externalRef")).value === refOf(ref)) {
+      if (sheet.getRow(r).getCell(at("description")).value === descOf(ref)) {
         const value = sheet.getRow(r).getCell(at(column)).value;
         return value === undefined ? null : value;
       }
@@ -12369,7 +12383,7 @@ async function dollarBackupSuite(): Promise<void> {
     cell("usd", "currency") === "USD" &&
       cell("usd", "amount") === 25 &&
       cell("usd", "counterAmount") === 105_000 &&
-      cell("usd", "counterIsEstimate") === true,
+      cell("usd", "counterIsEstimate") === "yes",
     `currency ${cell("usd", "currency")}, amount ${cell("usd", "amount")}, counterAmount ${cell("usd", "counterAmount")}, counterIsEstimate ${cell("usd", "counterIsEstimate")}`,
   );
   assert(
@@ -12384,7 +12398,8 @@ async function dollarBackupSuite(): Promise<void> {
   // ---- The reader: a file in, the commit input out.
   const prepare = async (user: HarnessUser, bytes: Uint8Array) => {
     const parsed = await parseWorkbook({ buffer: bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer, labels });
-    const importScope = await asUser(user, () => readImportScope());
+    const importScope = await asUser(user, () => readImportScope(entitiesIn(parsed)));
+    keyParsedRows(parsed, importScope);
     const recordsOf = (entity: (typeof SHEET_ENTITIES)[number]) => (parsed[entity] ?? []).map((row) => row.record as RawRow);
     const refs = buildEffectiveRefs(importScope, recordsOf);
     const rows = (entity: (typeof SHEET_ENTITIES)[number]) =>
@@ -12422,12 +12437,12 @@ async function dollarBackupSuite(): Promise<void> {
   const said = (result: Committed) => (result.error === undefined ? "ok" : `threw ${refusal(result.error)}`);
   const stored = (user: HarnessUser) =>
     fixtureSql<{ ref: string; currency: string; amount: string; counter: string | null; estimate: boolean }[]>`
-      select t.external_ref as ref, t.currency, t.amount_cents::text as amount,
+      select t.description as ref, t.currency, t.amount_cents::text as amount,
         t.counter_amount_cents::text as counter, t.counter_is_estimate as estimate
       from transactions t
       join accounts a on a.id = coalesce(t.from_account_id, t.to_account_id)
       where a.owner_user_id = ${user.id}
-      order by t.external_ref`;
+      order by t.description`;
   const balances = (user: HarnessUser) =>
     fixtureSql<{ name: string; currency: string; balance: string }[]>`
       select a.name, b.currency, b.balance_cents::text as balance
@@ -12454,21 +12469,21 @@ async function dollarBackupSuite(): Promise<void> {
   const firstCommit = await commitAs(clean, first.input);
   await trackOwned(clean);
   const restored = await stored(clean);
-  const byRef = (rows: typeof restored, suffix: string) => rows.find((r) => r.ref === refOf(suffix));
+  const byRef = (rows: typeof restored, suffix: string) => rows.find((r) => r.ref === descOf(suffix));
   assert(
     next("Importing the backup into a clean fund gives the dollar purchase back as USD 25.00 charged 105000.00 on the card, still an estimate"),
     first.errors.length === 0 &&
       said(firstCommit) === "ok" &&
       JSON.stringify(byRef(restored, "usd")) ===
-        JSON.stringify({ ref: refOf("usd"), currency: "USD", amount: String(USD_CENTS), counter: String(ESTIMATE_CENTS), estimate: true }),
+        JSON.stringify({ ref: descOf("usd"), currency: "USD", amount: String(USD_CENTS), counter: String(ESTIMATE_CENTS), estimate: true }),
     `file errors [${first.errors.join(",")}]; commit ${said(firstCommit)}; restored ${JSON.stringify(byRef(restored, "usd"))}`,
   );
   assert(
     next("The billed dollar purchase comes back billed and the peso movement comes back in pesos with no second amount"),
     JSON.stringify(byRef(restored, "billed")) ===
-      JSON.stringify({ ref: refOf("billed"), currency: "USD", amount: String(BILLED_USD_CENTS), counter: String(BILLED_CENTS), estimate: false }) &&
+      JSON.stringify({ ref: descOf("billed"), currency: "USD", amount: String(BILLED_USD_CENTS), counter: String(BILLED_CENTS), estimate: false }) &&
       JSON.stringify(byRef(restored, "cop")) ===
-        JSON.stringify({ ref: refOf("cop"), currency: "COP", amount: String(COP_CENTS), counter: null, estimate: false }),
+        JSON.stringify({ ref: descOf("cop"), currency: "COP", amount: String(COP_CENTS), counter: null, estimate: false }),
     `billed ${JSON.stringify(byRef(restored, "billed"))}; peso ${JSON.stringify(byRef(restored, "cop"))}`,
   );
 
@@ -12508,7 +12523,7 @@ async function dollarBackupSuite(): Promise<void> {
       JSON.stringify(await balances(clean)) === JSON.stringify(before),
     `commit ${said(secondCommit)} ${JSON.stringify(secondCommit.outcome)}; rows ${JSON.stringify(restoredAgain)}`,
   );
-  const copOnly = await commitAs(clean, { ...again.input, transactions: again.input.transactions.filter((row) => row.externalRef === refOf("cop")) });
+  const copOnly = await commitAs(clean, { ...again.input, transactions: again.input.transactions.filter((row) => (row.object as { description?: string }).description === descOf("cop")) });
   assert(
     next("Updating the dollar rows costs the commit no more round trips than updating one peso row: the updates stay one statement per kind"),
     secondCommit.error === undefined &&
@@ -12520,7 +12535,7 @@ async function dollarBackupSuite(): Promise<void> {
 
   // ---- RF-52: the file says the bank has now billed 106000.
   const corrected = movementRows.map((row) =>
-    row.externalRef === refOf("usd") ? { ...row, counterAmount: 10_600_000, counterIsEstimate: false } : row,
+    row.description === descOf("usd") ? { ...row, counterAmount: 10_600_000, counterIsEstimate: false } : row,
   );
   const correctedFile = await fileOf(corrected);
   const third = await prepare(clean, correctedFile.bytes);
@@ -12531,14 +12546,14 @@ async function dollarBackupSuite(): Promise<void> {
     third.errors.length === 0 &&
       thirdCommit.outcome?.inserted === 0 &&
       JSON.stringify(byRef(restoredCorrected, "usd")) ===
-        JSON.stringify({ ref: refOf("usd"), currency: "USD", amount: String(USD_CENTS), counter: "10600000", estimate: false }),
+        JSON.stringify({ ref: descOf("usd"), currency: "USD", amount: String(USD_CENTS), counter: "10600000", estimate: false }),
     `commit ${said(thirdCommit)}; row ${JSON.stringify(byRef(restoredCorrected, "usd"))}`,
   );
 
   // ---- All or nothing: a movement the database refuses takes the whole file with it.
   const doomed = await createMembershipFreeUser();
   const whole = await prepare(doomed, original.bytes);
-  const peso = whole.input.transactions.find((row) => row.externalRef === refOf("cop"))!;
+  const peso = whole.input.transactions.find((row) => (row.object as { description?: string }).description === descOf("cop"))!;
   const bad = {
     ...peso,
     sheetRow: 99,
@@ -13177,6 +13192,7 @@ async function o6m3BackupRestoreSuite(): Promise<void> {
 
   const labels: ReverseSheetLabels = {
     entityBySheetName: new Map(SHEET_ENTITIES.map((entity) => [`sheets.${entity}`, entity] as const)),
+    choiceByLabel: buildChoiceReader((_set, value) => value),
     columnKeyByHeader: new Map(
       SHEET_ENTITIES.map(
         (entity) =>
@@ -13187,6 +13203,7 @@ async function o6m3BackupRestoreSuite(): Promise<void> {
   const sheetLabels = {
     sheetName: (entity: string) => `sheets.${entity}`,
     columnHeader: (key: string) => `columns.${key}`,
+    choiceLabel: (_set: string, value: string) => value,
   };
   type Rows = Record<string, unknown>[];
   const fileOf = async (data: { accounts?: Rows; categories?: Rows; transactions?: Rows }) =>
@@ -13195,7 +13212,8 @@ async function o6m3BackupRestoreSuite(): Promise<void> {
   // A file in, the commit input out, each row as the pipeline left it: its errors ride along.
   const prepare = async (user: HarnessUser, bytes: Uint8Array) => {
     const parsed = await parseWorkbook({ buffer: bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer, labels });
-    const importScope = await asUser(user, () => readImportScope());
+    const importScope = await asUser(user, () => readImportScope(entitiesIn(parsed)));
+    keyParsedRows(parsed, importScope);
     const recordsOf = (entity: (typeof SHEET_ENTITIES)[number]) => (parsed[entity] ?? []).map((row) => row.record as RawRow);
     const refs = buildEffectiveRefs(importScope, recordsOf);
     const rows = (entity: (typeof SHEET_ENTITIES)[number]) =>
@@ -13252,18 +13270,19 @@ async function o6m3BackupRestoreSuite(): Promise<void> {
   };
   const storedMovements = (user: HarnessUser) =>
     fixtureSql<{ ref: string; currency: string; amount: string; counter: string | null; estimate: boolean }[]>`
-      select t.external_ref as ref, t.currency, t.amount_cents::text as amount,
+      select t.description as ref, t.currency, t.amount_cents::text as amount,
         t.counter_amount_cents::text as counter, t.counter_is_estimate as estimate
       from transactions t
       join accounts a on a.id = coalesce(t.from_account_id, t.to_account_id)
       where a.owner_user_id = ${user.id}
-      order by t.external_ref`;
+      order by t.description`;
 
   // ---- The fund's own backup, as the export writes it.
   const exported = await asUser(source, () => readExport({ entityKeys: ["accounts", "categories", "transactions"] }));
   const accountRows = (exported.accounts ?? []).filter((row) => [cardName, bankName].includes(String(row.name))) as Rows;
   const categoryRows = (exported.categories ?? []).filter((row) => String(row.name) === categoryName) as Rows;
-  const movementRows = (exported.transactions ?? []).filter((row) => String(row.externalRef).startsWith(`o6m3-${tag}-`)) as Rows;
+  const descOf = (suffix: string) => `Harness o6m3 ${suffix} ${tag}`;
+  const movementRows = (exported.transactions ?? []).filter((row) => String(row.description).startsWith("Harness o6m3 ") && String(row.description).endsWith(` ${tag}`)) as Rows;
   const exportedCard = accountRows.find((row) => row.name === cardName);
   assert(
     next("RF-142: the export writes a card opened at 150000 owed as -15000000 cents, the shape an older backup already carries"),
@@ -13305,7 +13324,7 @@ async function o6m3BackupRestoreSuite(): Promise<void> {
   assert(
     next("No double sign, update: re-importing the backup over the restored card, signed or not, updates it and leaves its opening at -15000000"),
     again.errors.length === 0 &&
-      again.accounts.find((row) => row.externalRef === exportedCard?.externalRef)?.status === "update" &&
+      again.accounts.find((row) => (row.object as { name?: string } | null)?.name === cardName)?.status === "update" &&
       said(againCommit) === "ok" &&
       againCommit.outcome?.inserted === 0 &&
       afterSigned === String(-OPENING) &&
@@ -13358,7 +13377,7 @@ async function o6m3BackupRestoreSuite(): Promise<void> {
     await fileOf({ accounts: [bankAt(`Harness o6m3 limpia ${tag}`, "clean", 10_000), bankAt(`Harness o6m3 negativa ${tag}`, "negative-2", -10_000)] }),
   );
   const besideCommit = await commitAs(doomed, beside.input);
-  const strayMovement = { ...movementRows.find((row) => row.externalRef === refOf("bank"))!, externalRef: refOf("stray"), fromAccount: `Harness o6m3 nadie ${tag}` };
+  const strayMovement = { ...movementRows.find((row) => row.description === descOf("bank"))!, externalRef: refOf("stray"), fromAccount: `Harness o6m3 nadie ${tag}` };
   const cleanAccountErroredMovement = await prepare(
     doomed,
     await fileOf({ accounts: [bankAt(`Harness o6m3 limpia dos ${tag}`, "clean-2", 10_000)], categories: categoryRows, transactions: [strayMovement] }),
@@ -13383,12 +13402,12 @@ async function o6m3BackupRestoreSuite(): Promise<void> {
 
   // ---- C6, C7: an old sheet's blank currency over a stored dollar purchase.
   const blankCurrency = movementRows
-    .filter((row) => row.externalRef === refOf("usd"))
+    .filter((row) => row.description === descOf("usd"))
     .map((row) => ({ ...row, currency: null, counterAmount: null, counterIsEstimate: null }));
-  const storedBefore = (await storedMovements(source)).find((row) => row.ref === refOf("usd"));
+  const storedBefore = (await storedMovements(source)).find((row) => row.ref === descOf("usd"));
   const blank = await prepare(source, await fileOf({ transactions: blankCurrency }));
   const blankCommit = await commitAs(source, blank.input);
-  const storedAfter = (await storedMovements(source)).find((row) => row.ref === refOf("usd"));
+  const storedAfter = (await storedMovements(source)).find((row) => row.ref === descOf("usd"));
   assert(
     next("C6 / C7: a blank-currency re-import over a dollar purchase keeps its 105000 on the card and its estimate mark as stored"),
     storedBefore?.counter === String(ESTIMATE_CENTS) &&
@@ -13426,6 +13445,7 @@ async function o6m3BackupRestoreSuite(): Promise<void> {
   const largeCommit = await commitAs(batcher, large.input);
   await trackOwned(batcher);
   const batched = await storedMovements(batcher);
+  const lote = (suffix: string) => `Harness o6m3 lote ${suffix} ${tag}`;
   const counterOf = (ref: string) => batched.find((row) => row.ref === ref)?.counter ?? null;
   assert(
     next("C8: importing 3 or 12 new movements runs the batch: the same round trips either way, every movement written, the dollar ones with their 105000"),
@@ -13437,9 +13457,9 @@ async function o6m3BackupRestoreSuite(): Promise<void> {
       largeCommit.outcome?.inserted === 12 &&
       batched.length === 15 &&
       smallCommit.trips === largeCommit.trips &&
-      counterOf(refOf("small-0")) === String(ESTIMATE_CENTS) &&
-      counterOf(refOf("large-0")) === String(ESTIMATE_CENTS),
-    `3 rows: ${said(smallCommit)} in ${smallCommit.trips} trips; 12 rows: ${said(largeCommit)} in ${largeCommit.trips} trips; stored ${batched.length}; dollar counters ${counterOf(refOf("small-0"))}, ${counterOf(refOf("large-0"))}; errors [${[...small.errors, ...large.errors].join(",")}]`,
+      counterOf(lote("small-0")) === String(ESTIMATE_CENTS) &&
+      counterOf(lote("large-0")) === String(ESTIMATE_CENTS),
+    `3 rows: ${said(smallCommit)} in ${smallCommit.trips} trips; 12 rows: ${said(largeCommit)} in ${largeCommit.trips} trips; stored ${batched.length}; dollar counters ${counterOf(lote("small-0"))}, ${counterOf(lote("large-0"))}; errors [${[...small.errors, ...large.errors].join(",")}]`,
   );
 }
 
@@ -14648,6 +14668,7 @@ async function everyEntityBackupSuite(): Promise<void> {
   // The real file: written by the workbook, read back by the workbook, as the import reads an upload.
   const reverse: ReverseSheetLabels = {
     entityBySheetName: new Map(SHEET_ENTITIES.map((entity) => [`sheets.${entity}`, entity] as const)),
+    choiceByLabel: buildChoiceReader((_set, value) => value),
     columnKeyByHeader: new Map(
       SHEET_ENTITIES.map(
         (entity) =>
@@ -14658,13 +14679,14 @@ async function everyEntityBackupSuite(): Promise<void> {
   const exported = await asUser(source, () => readExport({ entityKeys: [...SHEET_ENTITIES] }));
   const workbook = buildWorkbook({
     data: exported,
-    labels: { sheetName: (entity) => `sheets.${entity}`, columnHeader: (key) => `columns.${key}` },
+    labels: { sheetName: (entity) => `sheets.${entity}`, columnHeader: (key) => `columns.${key}`, choiceLabel: (_set: string, value: string) => value },
   });
   const bytes = new Uint8Array(await workbook.xlsx.writeBuffer());
 
   const restore = async (user: HarnessUser, alter?: (input: CommitInput) => void) => {
     const parsed = await parseWorkbook({ buffer: bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer, labels: reverse });
-    const importScope = await asUser(user, () => readImportScope());
+    const importScope = await asUser(user, () => readImportScope(entitiesIn(parsed)));
+    keyParsedRows(parsed, importScope);
     const recordsOf = (entity: (typeof SHEET_ENTITIES)[number]) => (parsed[entity] ?? []).map((row) => row.record as RawRow);
     const refs = buildEffectiveRefs(importScope, recordsOf);
     const rows = (entity: (typeof SHEET_ENTITIES)[number]) => {
@@ -14715,8 +14737,8 @@ async function everyEntityBackupSuite(): Promise<void> {
         (select string_agg(name || ':' || (archived_at is not null)::text || ':' || coalesce(target_date::text, ''), ',' order by name)
           from savings_goals where owner_user_id = ${user.id}) as goal_states,
         (select count(*)::int from goal_contributions gc join savings_goals g on g.id = gc.goal_id where g.owner_user_id = ${user.id}) as contributions,
-        (select string_agg(gc.amount_cents::text || '@' || (gc.created_at at time zone 'America/Bogota')::date::text || ':' || (t.description is not null)::text, ',' order by gc.amount_cents, gc.created_at)
-          from goal_contributions gc join savings_goals g on g.id = gc.goal_id left join transactions t on t.id = gc.transaction_id
+        (select string_agg(gc.amount_cents::text || '@' || (gc.created_at at time zone 'America/Bogota')::date::text, ',' order by gc.amount_cents, gc.created_at)
+          from goal_contributions gc join savings_goals g on g.id = gc.goal_id
           where g.owner_user_id = ${user.id}) as contribution_rows,
         (select concat_ws('|', d.debt_kind, d.annual_rate::float8, d.minimum_payment_pct::float8, d.credit_limit_cents, d.statement_cut_off_day, d.payment_due_day)
           from debt_terms d join accounts a on a.id = d.account_id where a.owner_user_id = ${user.id}) as debt,
@@ -14746,7 +14768,7 @@ async function everyEntityBackupSuite(): Promise<void> {
     ["the label, and the label on its movement", "movement_labels"],
     ["the budget with its period, limit, warning, category and label", "budget"],
     ["both savings goals, the archived one archived and the live one with its target day", "goal_states"],
-    ["the three contributions with their amounts and days, the earmarked one still on its movement", "contribution_rows"],
+    ["the three contributions with their amounts and days (the sheet no longer names an earmarked movement)", "contribution_rows"],
     ["the card's debt terms, its rate and minimum as the fractions it had", "debt"],
     ["the closed statement with its days and its signed figures", "statement"],
   ] as const) {
@@ -15241,7 +15263,7 @@ async function mcpDoorSuite(): Promise<void> {
   assert(
     next("RF-144: /mcp answers 401 with no key, an unknown one or a webhook's, and lists its tools to a key for Claude"),
     anonymous.status === 401 && forged.status === 401 && webhookKey.status === 401 &&
-      JSON.stringify(names) === JSON.stringify(["accept_deliveries", "create_account", "create_category", "delete_movement", "import_statement", "list_accounts", "list_categories", "list_inbox", "list_members", "list_movements", "merge_movements", "move_category_movements", "preview_statement", "record_movement", "reject_deliveries", "review_month", "update_account", "update_category", "update_movement"]),
+      JSON.stringify(names) === JSON.stringify(["accept_deliveries", "create_account", "create_category", "delete_movement", "import_statement", "list_accounts", "list_categories", "list_inbox", "list_members", "list_movements", "merge_movements", "move_account_to_fund", "move_category_movements", "preview_statement", "record_movement", "reject_deliveries", "review_month", "update_account", "update_category", "update_movement"]),
     `no key ${anonymous.status}, unknown key ${forged.status}, webhook key ${webhookKey.status}, tools ${JSON.stringify(names)}`,
   );
 
@@ -17172,6 +17194,60 @@ async function mcpCleanupSuite(): Promise<void> {
   );
 }
 
+// «Revisar el mes», made clear: a twin lists the equal movements it names and «above usual» says its window.
+async function monthReviewClearSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const today = todayInBogota();
+  const month = shiftMonth(today, -1);
+  const day = (n: number, back = 1) => `${shiftMonth(today, -back)}-${String(n).padStart(2, "0")}`;
+  const holder = await createMembershipFreeUser();
+  const { accountId: bank } = await asUser(holder, () =>
+    createAccount({
+      name: `Harness clear banco ${tag}`, kind: "asset", subtype: "bank", ownerUserId: holder.id, groupId: null,
+      isShared: false, institution: null, lastFour: null, settlementCurrency: "COP", amountMinor: 900_000_000, balanceOn: day(1, 9),
+    }),
+  );
+  track("accounts", bank);
+  const { categoryId: pets } = await asUser(holder, () =>
+    createCategory({ scope: { ownerUserId: holder.id }, name: `Harness clear mascotas ${tag}`, kind: "expense", parentId: null, color: "#B4542F" }),
+  );
+  track("categories", pets);
+  const spend = async (amountCents: number, occurredAt: string, description: string) => {
+    const { transactionId } = await asUser(holder, () =>
+      createTransaction({
+        fromAccountId: bank, toAccountId: null, amountCents, occurredAt, description, externalRef: null,
+        splits: [{ categoryId: pets, amountCents }], labelIds: [],
+      }),
+    );
+    track("transactions", transactionId);
+    return transactionId;
+  };
+
+  const catA = await spend(560_000, day(7), `Gatarina ${tag}`);
+  const catB = await spend(560_000, day(7), `Arena ${tag}`);
+  for (const back of [4, 3, 2]) await spend(560_000, day(11, back), `Historia ${tag}`);
+  const big = await spend(2_925_000, day(12), `Carne ${tag}`);
+
+  const items = (await asUser(holder, () => getMonthReview(month))).items;
+  const twins = items.filter((item) => item.rule === "twin");
+  const above = items.find((item) => item.rule === "above_usual");
+  const entries = twins[0]?.entries ?? [];
+  assert(
+    next("RF-155: a twin lists each equal movement with who entered it and when, whatever each was called"),
+    twins.length === 1 && [...twins[0].transactionIds].sort().join() === [catA, catB].sort().join() &&
+      entries.length === 2 && entries.every((e) => e.createdBy === holder.id && typeof e.createdAt === "string") &&
+      entries.map((e) => e.description).sort().join() === [`Arena ${tag}`, `Gatarina ${tag}`].join(),
+    `twins ${twins.length}, entries ${entries.length}`,
+  );
+  assert(
+    next("RF-155: an above-usual item names its category, the median it compares against and the six-month window"),
+    above?.transactionIds[0] === big && above.categoryName === `Harness clear mascotas ${tag}` && above.usualCents === 560_000 &&
+      above.usualWindowMonths === 6 && above.entries.length === 0,
+    `above ${JSON.stringify(above)}`,
+  );
+}
+
 // RF-177: Claude clears the inbox through the MCP: list the pending, accept with overrides all or nothing, reject, never another person's.
 async function mcpInboxSuite(): Promise<void> {
   console.log("");
@@ -17421,6 +17497,410 @@ async function accountLoanSuite(): Promise<void> {
   assert(next("RF-178: the database refuses a loan on an asset"), code === "23514", `code ${code}`);
 }
 
+// RF-179: a fund built in the app (no movement carries a key) exports and imports back unchanged
+// without adding a row; a twin deleted in the app is restored, and a path names the right child.
+async function sheetRoundTripSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const today = todayInBogota();
+  const user = await createMembershipFreeUser();
+  const open = async (name: string) => {
+    const { accountId } = await asUser(user, () =>
+      createAccount({
+        name: `Harness rf179 ${name} ${tag}`,
+        kind: "asset",
+        subtype: "bank",
+        ownerUserId: user.id,
+        groupId: null,
+        isShared: false,
+        institution: null,
+        lastFour: null,
+        settlementCurrency: "COP",
+        amountMinor: 100_000_00,
+        balanceOn: shiftDate(today, -30),
+      }),
+    );
+    track("accounts", accountId);
+    return accountId;
+  };
+  const bank = await open("banco");
+  const { categoryId: parent } = await asUser(user, () =>
+    createCategory({ scope: { ownerUserId: user.id }, name: `Harness rf179 padre ${tag}`, kind: "expense", parentId: null, color: CATEGORY_COLORS[0] }),
+  );
+  track("categories", parent);
+  const { categoryId: child } = await asUser(user, () =>
+    createCategory({ scope: { ownerUserId: user.id }, name: `Hijo ${tag}`, kind: "expense", parentId: parent, color: CATEGORY_COLORS[1] }),
+  );
+  track("categories", child);
+  const book = async (description: string, amountCents: number) => {
+    const { transactionId } = await asUser(user, () =>
+      createTransaction({
+        fromAccountId: bank,
+        toAccountId: null,
+        amountCents,
+        occurredAt: shiftDate(today, -3),
+        description,
+        externalRef: null,
+        splits: [{ categoryId: child, amountCents }],
+        labelIds: [],
+      } as never),
+    );
+    track("transactions", transactionId);
+    return transactionId;
+  };
+  await book(`rf179 gemelo ${tag}`, 12_000_00);
+  const twin = await book(`rf179 gemelo ${tag}`, 12_000_00);
+  await book(`rf179 solo ${tag}`, 5_000_00);
+
+  const counts = async () => {
+    const [row] = await fixtureSql<{ accounts: number; categories: number; movements: number }[]>`
+      select (select count(*)::int from accounts where owner_user_id = ${user.id}) as accounts,
+        (select count(*)::int from categories where owner_user_id = ${user.id}) as categories,
+        (select count(*)::int from transactions where owner_user_id = ${user.id}) as movements`;
+    return row;
+  };
+  const labels = {
+    sheetName: (entity: string) => `sheets.${entity}`,
+    columnHeader: (key: string) => `columns.${key}`,
+    choiceLabel: (_set: string, value: string) => value,
+  };
+  const importAgain = async (data: Parameters<typeof buildWorkbook>[0]["data"]) => {
+    const bytes = new Uint8Array(await buildWorkbook({ data, labels }).xlsx.writeBuffer());
+    const form = new FormData();
+    form.append("file", new File([bytes], `rf179-${tag}.xlsx`));
+    const answer = await asUser(user, () => commitImportAction(form));
+    const preview = await asUser(user, () => runImportPipeline({ buffer: bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer }));
+    const problems = preview.perEntity.flatMap((e) => e.rows.flatMap((r) => r.errors.map((x) => `${e.entity}#${r.sheetRow}:${x.key}@${x.column ?? ""}=${x.value ?? ""} obj=${JSON.stringify(r.status)}`)));
+    return { serverError: answer?.serverError, problems };
+  };
+  const exported = await asUser(user, () => readExport({ entityKeys: ["accounts", "categories", "transactions"] }));
+
+  const before = await counts();
+  const first = await importAgain(exported);
+  const after = await counts();
+  assert(
+    next("RF-179: an unchanged export of a fund built in the app imports back without adding an account, a category or a movement"),
+    first?.serverError === undefined && before.movements === 3 && JSON.stringify(after) === JSON.stringify(before),
+    `serverError ${first?.serverError} ${first?.problems.join(",")}; before ${JSON.stringify(before)}; after ${JSON.stringify(after)}`,
+  );
+
+  await fixtureSql`delete from transactions where id = ${twin}`;
+  const second = await importAgain(exported);
+  const restored = await counts();
+  assert(
+    next("RF-179: a twin movement deleted in the app comes back on a re-import, once, beside the one that stayed"),
+    second?.serverError === undefined && restored.movements === 3 && restored.accounts === before.accounts,
+    `serverError ${second?.serverError} ${second?.problems.join(",")}; movements ${restored.movements}`,
+  );
+  for (const r of await fixtureSql<{ id: string }[]>`select id from transactions where owner_user_id = ${user.id}`) track("transactions", r.id);
+}
+
+// RF-180: a personal account moves into its fund with its whole history; what cannot be carried is refused, and the MCP does the same write.
+async function accountToFundSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const { POST } = await import("@/app/mcp/route");
+  const [leader, mover, stranger, outsider] = [
+    await createMembershipFreeUser(), await createMembershipFreeUser(), await createMembershipFreeUser(), await createMembershipFreeUser(),
+  ];
+  const ids = { group: randomUUID(), other: randomUUID(), fundMarket: randomUUID(), fundSalary: randomUUID(), market: randomUUID(), salary: randomUUID(), leisure: randomUUID(), label: randomUUID() };
+  const name = (what: string) => `Harness rf180 ${what} ${tag}`;
+  await fixtureSql.begin(async (tx) => {
+    await tx`insert into groups (id, name, cash_mode) values (${ids.group}, ${name("fondo")}, 'per_member'), (${ids.other}, ${name("otro")}, 'per_member')`;
+    await tx`insert into group_members (group_id, user_id, name, role) values
+      (${ids.group}, ${leader.id}, ${name("lider")}, 'leader'), (${ids.group}, ${mover.id}, ${name("miembro")}, 'member'), (${ids.other}, ${stranger.id}, ${name("ajeno")}, 'leader')`;
+    for (const [id, owner, group, label, kind] of [
+      [ids.fundMarket, null, ids.group, "Mercado", "expense"], [ids.fundSalary, null, ids.group, "Sueldo", "income"],
+      [ids.market, mover.id, null, "mercado", "expense"], [ids.salary, mover.id, null, "Sueldo", "income"], [ids.leisure, mover.id, null, "Ocio", "expense"],
+    ] as const) {
+      await tx`insert into categories (id, owner_user_id, group_id, name, kind, color) values (${id}, ${owner}, ${group}, ${name(label)}, ${kind}, ${CATEGORY_COLORS[0]})`;
+    }
+    // The twin is found by name apart from case: personal «mercado» meets the fund's «Mercado».
+    await tx`insert into labels (id, owner_user_id, name) values (${ids.label}, ${mover.id}, ${name("etiqueta")})`;
+  });
+  track("groups", ids.group);
+  track("groups", ids.other);
+  for (const id of [ids.fundMarket, ids.fundSalary, ids.market, ids.salary, ids.leisure]) track("categories", id);
+  const open = async (user: HarnessUser, what: string, amountMinor: number, extra: Partial<Parameters<typeof createAccount>[0]> = {}) => {
+    const row = await asUser(user, () =>
+      createAccount({
+        kind: "asset", subtype: "bank", groupId: null, isShared: false, institution: null, settlementCurrency: BASE_CURRENCY,
+        balanceOn: "2026-01-01", ownerUserId: user.id, name: name(what), amountMinor, ...extra,
+      }),
+    );
+    track("accounts", row.accountId);
+    return row.accountId;
+  };
+  const book = async (accountId: string, amountCents: number, categoryId: string, income = false, labelIds: string[] = []) => {
+    const { transactionId } = await asUser(mover, () =>
+      createTransaction({
+        fromAccountId: income ? null : accountId, toAccountId: income ? accountId : null, amountCents, occurredAt: "2026-03-05",
+        description: name("movimiento"), externalRef: null, splits: [{ categoryId, amountCents }], labelIds,
+      }),
+    );
+    track("transactions", transactionId);
+    return transactionId;
+  };
+  // The refusal comes back as the catalogue key the screen and Claude translate.
+  const refusedWith = async (user: HarnessUser, accountId: string) => {
+    try {
+      await asUser(user, () => handAccountToGroup({ accountId }));
+      return "none";
+    } catch (error) {
+      return error instanceof Error ? error.message : "unknown";
+    }
+  };
+  const placement = async (accountId: string) =>
+    (await fixtureSql<{ owner_user_id: string | null; group_id: string | null; is_shared: boolean }[]>`select owner_user_id, group_id, is_shared from accounts where id = ${accountId}`)[0];
+
+  const main = await open(mover, "principal", 120_000_00);
+  const pocket = await open(mover, "bolsillo", 30_000_00, { parentAccountId: main });
+  const side = await open(mover, "lateral", 10_000_00);
+  const spent = await book(main, 40_000_00, ids.market);
+  const earned = await book(main, 90_000_00, ids.salary, true);
+  await book(pocket, 5_000_00, ids.market);
+  const { transactionId: moved } = await asUser(mover, () =>
+    createTransaction({ fromAccountId: main, toAccountId: side, amountCents: 1_000_00, occurredAt: "2026-03-06", description: name("traslado"), externalRef: null, splits: [], labelIds: [] }),
+  );
+  track("transactions", moved);
+  const read = async (user: HarnessUser) => (await asUser(user, () => listAccounts({ archived: false }))).filter((row) => row.name.endsWith(tag));
+  const before = (await read(mover)).find((row) => row.id === main);
+  const pocketBefore = (await read(mover)).find((row) => row.id === pocket);
+  const countBefore = (await fixtureSql`select id from transactions where from_account_id = any(${[main, pocket]}) or to_account_id = any(${[main, pocket]})`).length;
+
+  await asUser(mover, () => handAccountToGroup({ accountId: main }));
+  const after = (await read(leader)).find((row) => row.id === main);
+  const pocketAfter = (await read(leader)).find((row) => row.id === pocket);
+  const where = await placement(main);
+  const scopes = await fixtureSql<{ owner_user_id: string | null; group_id: string | null }[]>`select owner_user_id, group_id from transactions where id = any(${[spent, earned, moved]})`;
+  const lines = await fixtureSql<{ group_id: string | null }[]>`
+    select c.group_id from transaction_splits s join categories c on c.id = s.category_id where s.transaction_id = any(${[spent, earned]})`;
+  const countAfter = (await fixtureSql`select id from transactions where from_account_id = any(${[main, pocket]}) or to_account_id = any(${[main, pocket]})`).length;
+  assert(
+    next("RF-180: a moved account keeps its id, balance, movements and pocket, and the fund's leader reads and writes it"),
+    after !== undefined && JSON.stringify(after.balances) === JSON.stringify(before?.balances) && after.canWrite && after.groupId === ids.group && after.ownerUserId === null &&
+      where.is_shared && pocketAfter?.parentAccountId === main && JSON.stringify(pocketAfter.balances) === JSON.stringify(pocketBefore?.balances) &&
+      (await placement(pocket)).group_id === ids.group && countAfter === countBefore,
+    `before ${JSON.stringify(before?.balances)}, after ${JSON.stringify(after?.balances)}, pocket ${JSON.stringify(pocketAfter?.balances)}, ${countBefore} -> ${countAfter} movements`,
+  );
+  assert(
+    next("RF-180: its movements take the fund's scope, the personal categories on their lines become the fund's twins, and an income already in it keeps no «De quién»"),
+    scopes.length === 3 && scopes.every((row) => row.group_id === ids.group && row.owner_user_id === null) &&
+      lines.length === 2 && lines.every((row) => row.group_id === ids.group) &&
+      (await fixtureSql`select id from transactions where id = ${earned} and contributed_by_member_id is null`).length === 1,
+    `scopes ${JSON.stringify(scopes)}, lines ${JSON.stringify(lines)}`,
+  );
+  const [audited] = await fixtureSql<{ n: string }[]>`
+    select count(*)::text as n from audit_log where actor_user_id = ${mover.id} and action = 'UPDATE' and (
+      (entity = 'accounts' and record_id = ${main}) or (entity = 'transactions' and record_id = ${spent}))`;
+  assert(next("RF-180: the move is audited under the person, on the account and on its movements (RF-45)"), Number(audited.n) >= 2, `audit rows ${audited.n}`);
+
+  const other = await open(mover, "ajena", 1_000_00);
+  const outsiderAccount = await open(outsider, "sin fondo", 1_000_00);
+  const refusals = [await refusedWith(stranger, other), await refusedWith(outsider, other), await refusedWith(outsider, outsiderAccount), await refusedWith(mover, main), await refusedWith(mover, randomUUID())];
+  assert(
+    next("RF-180: another person's account and an account that does not exist answer alike, and a person with no fund and an account already in the fund each have their own refusal; nothing moves"),
+    refusals.join() === "accounts.errors.moveNotYours,accounts.errors.moveNoFund,accounts.errors.moveNoFund,accounts.errors.moveAlready,accounts.errors.moveNotYours" && (await placement(other)).owner_user_id === mover.id && (await placement(outsiderAccount)).owner_user_id === outsider.id,
+    `codes ${refusals}`,
+  );
+
+  const needsCategory = await open(mover, "sin par", 1_000_00);
+  await book(needsCategory, 100_00, ids.leisure);
+  const needsLabel = await open(mover, "etiquetada", 1_000_00);
+  await book(needsLabel, 100_00, ids.market, false, [ids.label]);
+  const goalled = await open(mover, "con meta", 1_000_00);
+  await fixtureSql`insert into savings_goals (owner_user_id, name, target_amount_cents, account_id) values (${mover.id}, ${name("meta")}, 100000, ${goalled})`;
+  const loosePocket = await open(mover, "bolsillo suelto", 100_00, { parentAccountId: other });
+  const archived = await open(mover, "archivada", 0);
+  await fixtureSql`update accounts set archived_at = now() where id = ${archived}`;
+  const codes = [needsCategory, needsLabel, goalled, loosePocket, archived].map((id) => refusedWith(mover, id));
+  const refused = await Promise.all(codes);
+  const stayed = await Promise.all([needsCategory, needsLabel, goalled, loosePocket, archived].map(placement));
+  assert(
+    next("RF-180: a personal category or label with no twin in the fund (MV001, MV002), a personal goal on the account (MV003), a pocket alone (MV004) and an archived account (MV008) are each refused and stay personal"),
+    refused.join() === "accounts.errors.moveCategories,accounts.errors.moveLabels,accounts.errors.moveBudgetsGoals,accounts.errors.movePocket,accounts.errors.moveArchived" && stayed.every((row) => row.owner_user_id === mover.id && row.group_id === null),
+    `codes ${refused}`,
+  );
+
+  const { id: keyId, token } = await asUser(mover, () => issueWebhookCredential({ name: name("clave"), purpose: "mcp", defaultAccountId: null, defaultCategoryId: null }));
+  keep("webhook_credentials", keyId);
+  const { tool } = mcpClient(POST, token);
+  const viaMcp = await open(mover, "por claude", 7_000_00);
+  await book(viaMcp, 100_00, ids.market);
+  const strangerOne = await tool("move_account_to_fund", { accountId: outsiderAccount });
+  const pocketOne = await tool("move_account_to_fund", { accountId: loosePocket });
+  const listed = ((await tool("list_accounts")).value as { id: string }[]).some((row) => row.id === viaMcp);
+  const done = await tool("move_account_to_fund", { accountId: viaMcp });
+  const [mcpMoved] = await fixtureSql<{ group_id: string | null }[]>`select group_id from accounts where id = ${viaMcp}`;
+  const again = await tool("move_account_to_fund", { accountId: viaMcp });
+  assert(
+    next("RF-180: move_account_to_fund moves the person's account like the screen, refuses another person's account, a lone pocket and a second move"),
+    listed && !done.isError && mcpMoved.group_id === ids.group && strangerOne.isError && pocketOne.isError && again.isError,
+    `done ${JSON.stringify(done.value)}, stranger ${JSON.stringify(strangerOne.value)}, pocket ${JSON.stringify(pocketOne.value)}, again ${JSON.stringify(again.value)}`,
+  );
+
+  // Two personal labels of one movement that share a twin collapse to one row; a delivery or a webhook default naming a
+  // personal category follows it to the fund's twin; a reference the fund already uses is refused by its own words.
+  const crowded = await open(mover, "etiquetas", 2_000_00);
+  const [personalTrip, personalTripLower, fundTrip] = [randomUUID(), randomUUID(), randomUUID()];
+  await fixtureSql`insert into labels (id, owner_user_id, name) values (${personalTrip}, ${mover.id}, ${name("Viaje")}), (${personalTripLower}, ${mover.id}, ${name("viaje")})`;
+  await fixtureSql`insert into labels (id, group_id, name) values (${fundTrip}, ${ids.group}, ${name("Viaje")})`;
+  const labelled = await book(crowded, 100_00, ids.market, false, [personalTrip, personalTripLower]);
+  const delivery = randomUUID();
+  await fixtureSql.begin(async (tx) => {
+    await tx`select set_config('request.jwt.claims', ${JSON.stringify({ sub: mover.id, role: "authenticated", aud: "authenticated" })}, true)`;
+    await tx`insert into ingest_deliveries (id, external_ref, raw_text, shape_hash, proposed_amount_cents, proposed_account_id, proposed_category_id, category_source, proposed_direction, proposed_occurred_at)
+      values (${delivery}, ${name("entrega")}, ${name("entrega")}, ${createHash("sha256").update(name("entrega")).digest("hex")}, 100, ${crowded}, ${ids.market}, 'merchant', 'expense', '2026-03-10')`;
+  });
+  const { id: defaultsKey } = await asUser(mover, () =>
+    issueWebhookCredential({ name: name("defecto"), purpose: "ingest", defaultAccountId: crowded, defaultCategoryId: ids.market }),
+  );
+  keep("webhook_credentials", defaultsKey);
+  const taken = await open(mover, "referencia", 1_000_00);
+  const ref = name("ref");
+  for (const [user, account] of [[mover, taken], [leader, main]] as const) {
+    const { transactionId } = await asUser(user, () =>
+      createTransaction({ fromAccountId: account, toAccountId: null, amountCents: 100_00, occurredAt: "2026-03-07", description: name("ref"), externalRef: ref, splits: [{ categoryId: account === main ? ids.fundMarket : ids.market, amountCents: 100_00 }], labelIds: [] }),
+    );
+    track("transactions", transactionId);
+  }
+  const clash = await refusedWith(mover, taken);
+  const crowdedMove = await refusedWith(mover, crowded);
+  const kept = await fixtureSql<{ label_id: string }[]>`select label_id from transaction_labels where transaction_id = ${labelled}`;
+  const [proposed] = await fixtureSql<{ proposed_category_id: string | null }[]>`select proposed_category_id from ingest_deliveries where id = ${delivery}`;
+  const [defaults] = await fixtureSql<{ default_category_id: string | null }[]>`select default_category_id from webhook_credentials where id = ${defaultsKey}`;
+  await fixtureSql`delete from ingest_deliveries where id = ${delivery}`;
+  assert(
+    next("RF-180: two personal labels with one twin leave one row, a delivery and a webhook default follow their category to the twin, and a movement reference the fund uses is refused with its own words"),
+    crowdedMove === "none" && kept.length === 1 && kept[0].label_id === fundTrip && proposed.proposed_category_id === ids.fundMarket &&
+      defaults.default_category_id === ids.fundMarket && clash === "accounts.errors.moveMovementRef" && (await placement(taken)).owner_user_id === mover.id,
+    `move ${crowdedMove}, labels ${JSON.stringify(kept)}, delivery ${proposed.proposed_category_id}, default ${defaults.default_category_id}, clash ${clash}`,
+  );
+}
+
+// RF-181: a fund account names its holder, a member of that fund; what moves between a held account and an
+// account of everyone is that member's contribution.
+async function accountHolderSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const range = currentMonthRange();
+  const leader = await createMembershipFreeUser();
+  const outsider = await createMembershipFreeUser();
+  const ids = { group: randomUUID(), other: randomUUID(), lead: randomUUID(), mama: randomUUID(), stranger: randomUUID() };
+  await fixtureSql.begin(async (tx) => {
+    await tx`insert into groups (id, name, cash_mode) values (${ids.group}, ${`Harness rf181 fondo ${tag}`}, 'shared'), (${ids.other}, ${`Harness rf181 otro ${tag}`}, 'shared')`;
+    await tx`
+      insert into group_members (id, group_id, user_id, name, role)
+      values (${ids.lead}, ${ids.group}, ${leader.id}, 'Harness rf181 Adrian', 'leader'),
+             (${ids.stranger}, ${ids.other}, ${outsider.id}, 'Harness rf181 Ajeno', 'leader')`;
+    await tx`insert into group_members (id, group_id, name, role) values (${ids.mama}, ${ids.group}, 'Harness rf181 Mama', 'member')`;
+  });
+  track("groups", ids.group);
+  track("groups", ids.other);
+  for (const member of [ids.lead, ids.mama, ids.stranger]) track("group_members", member);
+
+  const base = {
+    kind: "asset" as const, subtype: "bank" as const, ownerUserId: null, groupId: ids.group, isShared: true, institution: null,
+    settlementCurrency: BASE_CURRENCY, balanceOn: "2026-01-01",
+  };
+  const open = async (name: string, extra: Partial<Parameters<typeof createAccount>[0]> = {}) => {
+    const { accountId } = await asUser(leader, () => createAccount({ ...base, name: `Harness rf181 ${name} ${tag}`, amountMinor: 0, ...extra }));
+    track("accounts", accountId);
+    return accountId;
+  };
+  const refusedWith = async (attempt: () => Promise<unknown>) => {
+    try {
+      await attempt();
+      return "none";
+    } catch (error) {
+      return error instanceof ActionError ? error.messageKey : (pgErrorCode(error) ?? "unknown");
+    }
+  };
+  const bbva = await open("bbva", { holderMemberId: ids.mama });
+  const pot = await open("caja");
+  const listed = async () => (await asUser(leader, () => listAccounts({ archived: false }))).find((row) => row.id === bbva);
+  const first = await listed();
+  assert(
+    next("RF-181: a fund account opens with a holder from its own fund, and the list answers the member and their name"),
+    first?.holderMemberId === ids.mama && first.holderName === "Harness rf181 Mama",
+    `row ${JSON.stringify(first && [first.holderMemberId, first.holderName])}`,
+  );
+
+  const patch = (holderMemberId: string | null) =>
+    asUser(leader, () =>
+      updateAccount({
+        accountId: bbva, name: `Harness rf181 bbva ${tag}`, subtype: "bank", isShared: true, institution: null,
+        settlementCurrency: BASE_CURRENCY, amountMinor: 0, balanceOn: "2026-01-01", holderMemberId,
+      }),
+    );
+  await patch(null);
+  const cleared = await listed();
+  await patch(ids.mama);
+  const reset = await listed();
+  assert(
+    next("RF-181: the holder is cleared with null and set again"),
+    cleared?.holderMemberId === null && cleared.holderName === null && reset?.holderMemberId === ids.mama,
+    `cleared ${JSON.stringify(cleared?.holderMemberId)}, reset ${JSON.stringify(reset?.holderMemberId)}`,
+  );
+
+  const otherFund = await refusedWith(() => patch(ids.stranger));
+  const onCreate = await refusedWith(() => open("ajeno", { holderMemberId: ids.stranger }));
+  const personal = await refusedWith(() =>
+    asUser(leader, () =>
+      createAccount({ ...base, ownerUserId: leader.id, groupId: null, isShared: false, name: `Harness rf181 personal ${tag}`, amountMinor: 0, holderMemberId: ids.lead }),
+    ),
+  );
+  assert(
+    next("RF-181: the write refuses (holderInvalid) a holder from another fund, on an edit and on a create, and a holder on a personal account"),
+    [otherFund, onCreate, personal].every((key) => key === "accounts.errors.holderInvalid"),
+    `edit ${otherFund}, create ${onCreate}, personal ${personal}; expected accounts.errors.holderInvalid three times`,
+  );
+
+  const move = async (fromAccountId: string, toAccountId: string, amountCents: number) => {
+    const { transactionId } = await asUser(leader, () =>
+      createTransaction({
+        fromAccountId, toAccountId, amountCents, occurredAt: todayInBogota(), description: `Harness rf181 ${tag}`,
+        externalRef: null, splits: [], labelIds: [],
+      }),
+    );
+    track("transactions", transactionId);
+  };
+  const figure = async () =>
+    (await asUser(leader, () => getMemberContributions(range))).find((row) => row.memberId === ids.mama && row.currency === BASE_CURRENCY)?.contributionCents;
+  await move(bbva, pot, 800_000);
+  const put = await figure();
+  await move(pot, bbva, 300_000);
+  const net = await figure();
+  const nobody = await open("otra");
+  await move(nobody, pot, 100_000);
+  const unmoved = await figure();
+  assert(
+    next("RF-181: a transfer from a held account into one of everyone is the holder's contribution, one back reduces it, and two accounts without a holder move none"),
+    put === 800_000 && net === 500_000 && unmoved === 500_000,
+    `after paying in ${put}, after the return ${net}, after a transfer between two of everyone ${unmoved}; expected 800000, 500000, 500000`,
+  );
+
+  // 100 from the leader's own account through the held one into the pot is one contribution, the holder's.
+  const own = (await asUser(leader, () =>
+    createAccount({ ...base, ownerUserId: leader.id, groupId: null, isShared: false, name: `Harness rf181 propia ${tag}`, amountMinor: 1_000_000 }),
+  )).accountId;
+  track("accounts", own);
+  const ofLeader = async () =>
+    (await asUser(leader, () => getMemberContributions(range))).find((row) => row.memberId === ids.lead && row.currency === BASE_CURRENCY)?.contributionCents ?? 0;
+  const leaderBefore = await ofLeader();
+  await move(own, bbva, 100_000);
+  const intoHeld = { leader: await ofLeader(), mama: await figure() };
+  await move(bbva, pot, 100_000);
+  const through = { leader: await ofLeader(), mama: await figure() };
+  await open("efectivo", { subtype: "cash", holderMemberId: ids.mama, amountMinor: 5_000_00 });
+  const potCash = (await asUser(leader, () => getFundCashBalances(range))).find((row) => row.currency === BASE_CURRENCY)?.balanceCents;
+  assert(
+    next("RF-181: money from a personal account into a held one is no contribution, through to the pot it counts once for the holder, and a held account is off the fund's cash"),
+    intoHeld.leader === leaderBefore && intoHeld.mama === 500_000 && through.leader === leaderBefore && through.mama === 600_000 && potCash === undefined,
+    `into held ${JSON.stringify(intoHeld)}, through ${JSON.stringify(through)}, leader before ${leaderBefore}, fund cash ${potCash}; expected the leader unchanged, 500000 then 600000, no cash`,
+  );
+}
+
 // RF-182: «Lo hizo» names the fund member who made a fund movement: set, cleared, kept inside the fund,
 // refused on a personal movement, split per member in Reports, and carried through the MCP.
 async function madeBySuite(): Promise<void> {
@@ -17620,5 +18100,25 @@ async function madeBySuite(): Promise<void> {
     viaMcp.some((row) => row.id === household.transactionId) &&
       refused.isError && JSON.stringify(refused.value).includes("fondo"),
     `household ${viaMcp.length}, refused ${JSON.stringify(refused.value)}`,
+  );
+
+  const held = randomUUID();
+  await fixtureSql`
+    insert into accounts (id, group_id, is_shared, holder_member_id, name, kind, subtype, initial_balance_cents, initial_balance_on)
+    values (${held}, ${ids.group}, true, ${ids.guest}, ${`Harness rf182 de papa ${tag}`}, 'asset', 'bank', 0, '2026-01-01')`;
+  track("accounts", held);
+  const heldBefore = (await asUser(leader, () => getSpendingByMaker(range))).find((row) => row.memberId === ids.guest)?.spentCents ?? 0;
+  const fromHeld = await tool("record_movement", {
+    fromAccountId: held, toAccountId: null, amountCents: 40_00, occurredAt: todayInBogota(), description: `Harness rf182 titular ${tag}`,
+    categoryId: ids.category, requestRef: randomUUID(),
+  });
+  const heldId = (fromHeld.value as { transactionId?: string }).transactionId ?? "";
+  if (heldId) keep("transactions", heldId);
+  const heldRow = (await tool("list_movements", { accountId: held, limit: 10 })).value as Listed;
+  const heldAfter = (await asUser(leader, () => getSpendingByMaker(range))).find((row) => row.memberId === ids.guest)?.spentCents ?? 0;
+  assert(
+    next("RF-182: a movement out of a held account that names no maker is its holder's, and its spending counts for them"),
+    !fromHeld.isError && heldRow.find((row) => row.id === heldId)?.madeByMemberId === ids.guest && heldAfter - heldBefore === 40_00,
+    `record ${JSON.stringify(fromHeld.value)}, maker ${heldRow.find((row) => row.id === heldId)?.madeByMemberId}, spent ${heldBefore} -> ${heldAfter}`,
   );
 }

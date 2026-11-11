@@ -241,7 +241,7 @@ export async function acceptDelivery({
       splits,
       labelIds,
       contributedByMemberId,
-      madeByMemberId: madeByMemberId ?? defaultMadeBy(fromAccountId, toAccountId),
+      madeByMemberId: madeByMemberId ?? defaultMadeBy(fromAccountId),
     });
 
     const updated = await tx

@@ -329,6 +329,9 @@ export function DataScreen({
                   })}
                 </Badge>
               </Flex>
+              <Text size="2" color="gray">
+                {t("screen.editedRowsHint")}
+              </Text>
 
               {importPreview.totals.error > 0 ? (
                 <>
