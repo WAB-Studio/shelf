@@ -28,24 +28,3 @@ test("/en Movements reads its title and offers the quick entry in English", asyn
   await expect(page.getByRole("heading", { name: en.transactions.listTitle, exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: en.nav.quickEntry, exact: true })).toBeVisible();
 });
-
-test("/en Planning → Budgets reads its title and «New budget»", async ({ page }) => {
-  await page.goto("/en/planning/budgets");
-  await expect(page.getByRole("heading", { name: en.budgets.title, exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: en.budgets.add, exact: true }).first()).toBeVisible();
-});
-
-test("/en Settings → Categories reads its title and «Add category»", async ({ page }) => {
-  await page.goto("/en/settings/categories");
-  await expect(page.getByRole("heading", { name: en.categories.title, exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: en.categories.add, exact: true }).first()).toBeVisible();
-});
-
-test("/en quick entry sheet reads its title and «Save»", async ({ page }) => {
-  await page.goto("/en");
-  await page.getByRole("button", { name: en.transactions.quickPlaceholder, exact: true }).click();
-  const sheet = page.getByRole("dialog");
-  await expect(sheet).toBeVisible();
-  await expect(sheet.getByRole("textbox", { name: en.transactions.quickTitle, exact: true })).toBeVisible();
-  await expect(sheet.getByRole("button", { name: en.transactions.quickSave, exact: true })).toBeVisible();
-});

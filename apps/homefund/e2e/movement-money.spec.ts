@@ -24,11 +24,7 @@ import { fixtureSql } from "../scripts/harness/fixtures";
 import { asHarnessUser, clearLedger, readScope, test } from "./global-setup";
 
 const transactions = messages.transactions;
-const common = messages.common;
 const cash = messages.cash;
-
-// The contract's text (RF-158), written here so a missing message key fails the test, not the compile.
-const RESEND_CHANGED = "Ya guardamos este movimiento con otro monto; ábrelo para corregirlo.";
 
 const scope = readScope();
 const stamp = randomUUID().slice(0, 8);
@@ -189,10 +185,6 @@ async function fillAccounts(
 const saveButton = (dialog: Locator) =>
   dialog.getByRole("button", { name: transactions.saveMovement, exact: true });
 
-// The chevron that leaves the form is the one control named «Cancelar».
-const cancelButton = (dialog: Locator) =>
-  dialog.getByRole("button", { name: common.cancel, exact: true });
-
 // One category is a tile of the grid; «Más» shows the rest of the catalogue.
 async function pickCategory(dialog: Locator, name: string) {
   const tile = dialog.getByRole("button", { name, exact: true });
@@ -289,21 +281,6 @@ test.describe("on the laptop", () => {
     expect(await balanceOf(ids.target)).toBe(targetBefore + 3_000_000);
   });
 
-  test("the same account on both sides is refused with its message and writes nothing", async ({
-    page,
-  }, testInfo) => {
-    // Kills: the schema that no longer compares the two accounts (RF-101).
-    const dialog = await openFullForm(page, testInfo);
-
-    await fillAccounts(page, dialog, { from: SOURCE_NAME, to: SOURCE_NAME });
-    await field(dialog, "movement-amount").fill("1000");
-    await saveButton(dialog).click();
-
-    await expect(dialog.getByText(messages.transactions.errors.accountSame, { exact: true })).toBeVisible();
-    await expect(dialog).toBeVisible();
-    expect(await movements()).toEqual([]);
-  });
-
   test("an expense split in two, 30 000 and 20 000, stores two splits that sum to the 50 000 amount", async ({
     page,
   }, testInfo) => {
@@ -362,89 +339,6 @@ test.describe("on the laptop", () => {
     expect(await movements()).toEqual([]);
   });
 
-  test("an empty amount says so under the field and posts no action", async ({ page }, testInfo) => {
-    // Kills: the form's resolver removed, so an empty amount is sent to the server.
-    const dialog = await openFullForm(page, testInfo);
-
-    await fillAccounts(page, dialog, { from: SOURCE_NAME, to: null });
-    await pickCategory(dialog, scope.categoryName);
-
-    const posts = countActionPosts(page);
-    await saveButton(dialog).click();
-
-    await expect(dialog.getByText(messages.transactions.errors.amountRequired, { exact: true })).toBeVisible();
-    expect(posts()).toBe(0);
-    expect(await movements()).toEqual([]);
-  });
-
-  test("«Cancelar» after typing closes the form and writes nothing", async ({ page }, testInfo) => {
-    // Kills: leaving the form submitting what was typed.
-    const dialog = await openFullForm(page, testInfo);
-
-    await fillAccounts(page, dialog, { from: SOURCE_NAME, to: null });
-    await field(dialog, "movement-amount").fill("9999");
-    await pickCategory(dialog, scope.categoryName);
-
-    const posts = countActionPosts(page);
-    await cancelButton(dialog).click();
-
-    await expect(dialog).toBeHidden();
-    // Nothing was posted at the moment of leaving, and nothing lands afterwards.
-    expect(posts()).toBe(0);
-    await page.waitForLoadState("networkidle");
-    expect(await movements()).toEqual([]);
-  });
-
-  test.describe("while the save is in flight", () => {
-    let release: () => void = () => {};
-
-    test.beforeEach(({ page }) => {
-      const gate = new Promise<void>((resolveGate) => (release = resolveGate));
-      return page.route(
-        (url) => url.pathname.startsWith("/es"),
-        async (route) => {
-          const request = route.request();
-          if (request.method() === "POST" && request.headers()["next-action"]) await gate;
-          await route.continue().catch(() => {});
-        },
-      );
-    });
-
-    test.afterEach(() => release());
-
-    test("the save button reads as busy and cannot be pressed a second time", async ({ page }, testInfo) => {
-      // Kills: the save button left enabled while the action runs, so a double tap writes twice.
-      const dialog = await openFullForm(page, testInfo);
-      await fillAccounts(page, dialog, { from: SOURCE_NAME, to: null });
-      await field(dialog, "movement-amount").fill("4000");
-      await pickCategory(dialog, scope.categoryName);
-
-      await saveButton(dialog).click();
-
-      await expect(saveButton(dialog)).toBeDisabled();
-      release();
-      await expect(dialog).toBeHidden();
-      expect(await movements()).toHaveLength(1);
-    });
-
-    test("«Cancelar» cannot be pressed either, so the form is not left while the money is being written", async ({
-      page,
-    }, testInfo) => {
-      // Kills: the way out left enabled while the action runs.
-      const dialog = await openFullForm(page, testInfo);
-      await fillAccounts(page, dialog, { from: SOURCE_NAME, to: null });
-      await field(dialog, "movement-amount").fill("4000");
-      await pickCategory(dialog, scope.categoryName);
-
-      await saveButton(dialog).click();
-
-      await expect(saveButton(dialog)).toBeDisabled();
-      await expect(cancelButton(dialog)).toBeDisabled();
-      release();
-      await expect(dialog).toBeHidden();
-    });
-  });
-
   test("editing 15 000 into 27 000 stores 2 700 000 cents and the list shows the new figure", async ({
     page,
   }) => {
@@ -485,25 +379,6 @@ test.describe("on the laptop", () => {
     await expect(page).toHaveURL(/\/es\/movements$/);
     expect(await movements()).toEqual([]);
     expect(await balanceOf(ids.source)).toBe(before);
-  });
-
-  test("«Cancelar» in the delete confirmation keeps the movement", async ({ page }) => {
-    // Kills: the cancel button that confirms.
-    const before = await balanceOf(ids.source);
-    const id = await seedExpense({ amountCents: 1_500_000, description: `E9 conservar ${stamp}` });
-
-    await page.goto(`/es/movements/${id}`);
-    await page.getByRole("button", { name: transactions.delete, exact: true }).click();
-    const confirm = page.getByRole("alertdialog");
-    await expect(confirm.getByText(transactions.deleteTitle, { exact: true })).toBeVisible();
-    await confirm.getByRole("button", { name: common.cancel, exact: true }).click();
-
-    await expect(confirm).toBeHidden();
-    await page.waitForLoadState("networkidle");
-    const rows = await movements();
-    expect(rows).toHaveLength(1);
-    expect(rows[0].id).toBe(id);
-    expect(await balanceOf(ids.source)).toBe(before - 1_500_000);
   });
 
   test("withdrawing 100 000 from the bank is one transfer into the caller's cash: 10 000 000 cents on both legs", async ({
@@ -550,7 +425,7 @@ test.describe("at 360 px", () => {
     expect(overflow).toBeLessThanOrEqual(0);
   }
 
-  test("the movement form fits the phone, its save button inside the screen", async ({ page }, testInfo) => {
+  test("the movement form fits the phone, its save button inside the screen @mobile", async ({ page }, testInfo) => {
     // Kills: the two-column body kept below the breakpoint, which pushes the dialog past 360.
     const dialog = await openFullForm(page, testInfo);
     await fillAccounts(page, dialog, { from: SOURCE_NAME, to: null });
@@ -561,7 +436,7 @@ test.describe("at 360 px", () => {
     expect(save!.x + save!.width).toBeLessThanOrEqual(360);
   });
 
-  test("the withdrawal dialog fits the phone", async ({ page }) => {
+  test("the withdrawal dialog fits the phone @mobile", async ({ page }) => {
     // Kills: a fixed width on the withdrawal dialog.
     await page.goto("/es");
     await page.getByRole("button", { name: cash.withdrawAction, exact: true }).click();
@@ -571,7 +446,7 @@ test.describe("at 360 px", () => {
     await expectFits(page, dialog);
   });
 
-  test("the delete confirmation fits the phone", async ({ page }) => {
+  test("the delete confirmation fits the phone @mobile", async ({ page }) => {
     // Kills: a fixed width on the confirmation dialog.
     const id = await seedExpense({ amountCents: 1_500_000, description: `E9 confirmar ${stamp}` });
     await page.goto(`/es/movements/${id}`);
@@ -580,212 +455,5 @@ test.describe("at 360 px", () => {
     await expect(confirm).toBeVisible();
 
     await expectFits(page, confirm);
-  });
-});
-
-// A save whose answer never reached the browser (RNF-10): the server ran the
-// first POST, the browser saw it fail, and the person presses save again.
-test.describe("a resent save and a stale edit", () => {
-  test.skip(({ viewport }) => viewport?.width === 360, "the database facts are read once, on the laptop");
-
-  test("a save whose answer was lost, saved again, leaves exactly one movement", async ({ page }, testInfo) => {
-    // Kills: a new request ref minted on every click, so the resend writes a second row.
-    let dropped = 0;
-    await page.route(
-      (url) => url.pathname.startsWith("/es"),
-      async (route) => {
-        const request = route.request();
-        if (request.method() === "POST" && request.headers()["next-action"] && dropped === 0) {
-          dropped += 1;
-          await route.fetch();
-          await route.abort("failed");
-          return;
-        }
-        await route.continue();
-      },
-    );
-
-    const dialog = await openFullForm(page, testInfo);
-    await fillAccounts(page, dialog, { from: SOURCE_NAME, to: null });
-    await field(dialog, "movement-amount").fill("4000");
-    await pickCategory(dialog, scope.categoryName);
-
-    await saveButton(dialog).click();
-    await expect.poll(() => dropped).toBe(1);
-    // The server ran it; the person never heard.
-    await expect.poll(async () => (await movements()).length).toBe(1);
-    await expect(dialog).toBeVisible();
-    await expect(saveButton(dialog)).toBeEnabled();
-
-    await saveButton(dialog).click();
-    await expect(dialog).toBeHidden();
-
-    const rows = await movements();
-    expect(rows).toHaveLength(1);
-    expect(rows[0].amount_cents).toBe("400000");
-    expect(await splitsOf(rows[0].id)).toHaveLength(1);
-  });
-
-  test("a save whose answer was lost, saved again with another amount, shows the refusal and keeps the first amount", async ({ page }, testInfo) => {
-    // Kills: a resend answered ok whatever the amount, so the form closes over a figure never saved.
-    let dropped = 0;
-    await page.route(
-      (url) => url.pathname.startsWith("/es"),
-      async (route) => {
-        const request = route.request();
-        if (request.method() === "POST" && request.headers()["next-action"] && dropped === 0) {
-          dropped += 1;
-          await route.fetch();
-          await route.abort("failed");
-          return;
-        }
-        await route.continue();
-      },
-    );
-
-    const dialog = await openFullForm(page, testInfo);
-    await fillAccounts(page, dialog, { from: SOURCE_NAME, to: null });
-    await field(dialog, "movement-amount").fill("4000");
-    await pickCategory(dialog, scope.categoryName);
-
-    await saveButton(dialog).click();
-    await expect.poll(() => dropped).toBe(1);
-    await expect.poll(async () => (await movements()).length).toBe(1);
-    await expect(saveButton(dialog)).toBeEnabled();
-
-    await field(dialog, "movement-amount").fill("9000");
-    await saveButton(dialog).click();
-
-    await expect(dialog.getByText(RESEND_CHANGED, { exact: true })).toBeVisible();
-    await expect(dialog).toBeVisible();
-    await expect(field(dialog, "movement-amount")).toHaveValue(/9\D?000/);
-    const rows = await movements();
-    expect(rows).toHaveLength(1);
-    expect(rows[0].amount_cents).toBe("400000");
-  });
-
-  test("two separate openings, saved once each, leave two movements", async ({ page }, testInfo) => {
-    // Kills: a request ref that outlives its opening, so the second save answers the first movement.
-    // The page is not reloaded between them: a ref held by the module would survive.
-    await page.goto("/es");
-    for (const amount of ["4000", "5000"]) {
-      const dialog = await openFullForm(page, testInfo, false);
-      await fillAccounts(page, dialog, { from: SOURCE_NAME, to: null });
-      await field(dialog, "movement-amount").fill(amount);
-      await pickCategory(dialog, scope.categoryName);
-      await saveButton(dialog).click();
-      await expect(dialog).toBeHidden();
-    }
-
-    const rows = await movements();
-    expect(rows.map((row) => row.amount_cents).sort()).toEqual(["400000", "500000"]);
-  });
-
-  test("a stale edit keeps the form open with what was typed, shows the refusal and writes nothing", async ({
-    page,
-    context,
-  }) => {
-    // Kills: the stale answer ignored, so the form closes over the other tab's change.
-    const id = await seedExpense({ amountCents: 1_500_000, description: `E9 vencido ${stamp}` });
-    const other = await context.newPage();
-
-    const openEdit = async (tab: Page) => {
-      await tab.goto(`/es/movements/${id}`);
-      await tab.getByRole("button", { name: transactions.edit, exact: true }).click();
-      return tab.getByRole("dialog");
-    };
-    const dialogA = await openEdit(page);
-    const dialogB = await openEdit(other);
-
-    await field(dialogA, "movement-amount").fill("27000");
-
-    await field(dialogB, "movement-amount").fill("31000");
-    await saveButton(dialogB).click();
-    await expect(dialogB).toBeHidden();
-    expect((await movements())[0].amount_cents).toBe("3100000");
-
-    await saveButton(dialogA).click();
-
-    await expect(dialogA.getByText(messages.errors.stale, { exact: true })).toBeVisible();
-    await expect(dialogA).toBeVisible();
-    await expect(field(dialogA, "movement-amount")).toHaveValue(/^27\D?000$/);
-    await expect(saveButton(dialogA)).toBeEnabled();
-    // The other tab's figure stands.
-    const rows = await movements();
-    expect(rows).toHaveLength(1);
-    expect(rows[0].amount_cents).toBe("3100000");
-    await other.close();
-  });
-
-  test("an edit nobody else touched saves, even after the form was open for a while", async ({ page }) => {
-    // Kills: an expected stamp that never matches, so every ordinary edit is refused.
-    const id = await seedExpense({ amountCents: 1_500_000, description: `E9 vigente ${stamp}` });
-    await page.goto(`/es/movements/${id}`);
-    await page.getByRole("button", { name: transactions.edit, exact: true }).click();
-    const dialog = page.getByRole("dialog");
-    await field(dialog, "movement-amount").fill("18000");
-    await saveButton(dialog).click();
-    await expect(dialog).toBeHidden();
-    expect((await movements())[0].amount_cents).toBe("1800000");
-  });
-});
-
-// A withdrawal whose answer never reached the browser (RNF-10, Q24): the server moved
-// the money, the browser saw the request fail, and the person presses save again.
-test.describe("a cash withdrawal sent again", () => {
-  test.skip(({ viewport }) => viewport?.width === 360, "the laptop's button sits beside quick entry; the phone's keeps its own");
-
-  const save = (page: Page) =>
-    page.getByRole("button", { name: cash.withdrawSave, exact: true }).filter({ visible: true });
-
-  test("a withdrawal whose answer was lost, saved again, moves the money once", async ({ page }) => {
-    // Kills: a new request ref per click, or none sent, so the resend is a second transfer.
-    let dropped = 0;
-    await page.route(
-      (url) => url.pathname.startsWith("/es"),
-      async (route) => {
-        const request = route.request();
-        if (request.method() === "POST" && request.headers()["next-action"] && dropped === 0) {
-          dropped += 1;
-          await route.fetch();
-          await route.abort("failed");
-          return;
-        }
-        await route.continue();
-      },
-    );
-    const bankBefore = await balanceOf(ids.source);
-
-    await page.goto("/es");
-    await page.getByRole("button", { name: cash.withdrawAction, exact: true }).filter({ visible: true }).click();
-    await choose(page, page.locator("#withdraw-source"), SOURCE_NAME);
-    await page.locator("#withdraw-amount").fill("100000");
-    await save(page).click();
-    await expect.poll(() => dropped).toBe(1);
-    await expect.poll(async () => (await movements()).length).toBe(1);
-    await expect(save(page)).toBeEnabled();
-
-    await save(page).click();
-    await expect(page.getByText(cash.withdrawSaved, { exact: true })).toBeVisible();
-
-    const rows = await movements();
-    expect(rows).toHaveLength(1);
-    expect(rows[0].amount_cents).toBe("10000000");
-    expect(await balanceOf(ids.source)).toBe(bankBefore - 10_000_000);
-  });
-
-  test("two withdrawals one after the other, without reloading, are two transfers", async ({ page }) => {
-    // Kills: a request ref that outlives its attempt, so the second withdrawal answers the first.
-    await page.goto("/es");
-    for (const amount of ["100000", "50000"]) {
-      await page.getByRole("button", { name: cash.withdrawAction, exact: true }).filter({ visible: true }).click();
-    await choose(page, page.locator("#withdraw-source"), SOURCE_NAME);
-      await page.locator("#withdraw-amount").fill(amount);
-      await save(page).click();
-      await expect(page.getByRole("dialog")).toBeHidden();
-    }
-
-    const rows = await movements();
-    expect(rows.map((row) => row.amount_cents).sort()).toEqual(["10000000", "5000000"]);
   });
 });

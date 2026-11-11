@@ -219,3 +219,17 @@ Each entry names the rule and the file it lives in now.
 - Dropped: boards before a screen, tester/validator/mutator chains, per-step reports and roadmap updates. Kept: the
   hard rules in `AGENTS.md` § Code, the local stack, CI on the train's PR.
 
+
+## E2E prune (`docs/agentes/verificacion.md` § E2E scope), 2026-11-10
+
+- The user: «Sí, simplifica el testing mucho». Over 30 days of PR runs, HomeFund e2e caught 2 real bugs (the split
+  editor's error under Categoría; the lost «Próximo pago» line on debts), 19 of its 21 failures were flaky or
+  test-only, and the mobile project caught 0 unique ones. Every money, data, scope and performance bug came from
+  `check:queries`, `check:http` or a unit test (`private/analisis-fallos-ci.md`).
+- Before: 55 specs, 26.5k lines of e2e, 736 test blocks (each run twice, desktop and
+  mobile), about 40 min of browser time over 8 shards (59 min of runner).
+- After: 51 specs, 12.0k lines, 176 test blocks: 138 desktop plus 38 tagged `@mobile`. A local run executed 202 tests
+  (164 desktop, 38 mobile), 202 passed, 7.7 min of test time, 7.9 min wall on one worker; 4 shards in CI.
+- The deleted rules each sit in a database check or a unit test; the list is `private/poda-e2e.md` of the PR.
+  What is lost is browser-only: copy, the place of a refusal's message, pending and cancel states, 360 px
+  overflow and style measurements.

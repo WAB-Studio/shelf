@@ -109,7 +109,7 @@ async function expectOptionClamped(page: Page, trigger: Locator, name: string) {
 }
 
 test.describe("a 60-character fund category in a dialog", () => {
-  test("the payment dialog keeps «Guardar» on screen and the option its whole name", async ({ page }) => {
+  test("the payment dialog keeps «Guardar» on screen and the option its whole name @mobile", async ({ page }) => {
     // Kills: dropping the Box maxWidth around the item; slicing the name in JS.
     await page.goto("/es/planning/payments");
     await page.getByRole("button", { name: messages.plannedPayments.add, exact: true }).first().click();
@@ -121,35 +121,6 @@ test.describe("a 60-character fund category in a dialog", () => {
 
     await expectSaveReachable(page, dialog, messages.plannedPayments.save);
   });
-
-  test("the recurring dialog keeps «Guardar regla» on screen", async ({ page }) => {
-    // Kills: dropping the Box maxWidth around the item in recurring-form-dialog.
-    await page.goto("/es/planning/recurring");
-    await page.getByRole("button", { name: messages.recurringRules.add, exact: true }).first().click();
-    const dialog = page.getByRole("dialog");
-    await expect(dialog).toBeVisible();
-
-    await pick(page, dialog.locator("#rule-account"), FUND_ACCOUNT);
-    await expectOptionClamped(page, dialog.locator("#rule-category"), LONG_CATEGORY + FUND_MARK);
-    await pick(page, dialog.locator("#rule-category"), LONG_CATEGORY + FUND_MARK);
-
-    await expectSaveReachable(page, dialog, messages.recurringRules.save);
-  });
-
-  test("the webhook dialog keeps «Crear credencial» on screen", async ({ page }) => {
-    // Kills: dropping the Box maxWidth around the item in webhook-credential-dialog.
-    await page.goto("/es/settings/webhooks");
-    await page.getByRole("button", { name: messages.webhooks.add, exact: true }).first().click();
-    const dialog = page.getByRole("dialog");
-    await expect(dialog).toBeVisible();
-
-    // The item also carries the kind badge, so the name is the whole name and then some.
-    await expectOptionClamped(page, dialog.locator("#webhook-category"), LONG_CATEGORY + FUND_MARK);
-    await dialog.locator("#webhook-category").click();
-    await page.getByRole("option", { name: LONG_CATEGORY + FUND_MARK }).click();
-
-    await expectSaveReachable(page, dialog, messages.webhooks.issue);
-  });
 });
 
 test.describe("a budget card at 360 px", () => {
@@ -158,7 +129,7 @@ test.describe("a budget card at 360 px", () => {
     return page.locator(".rt-Card").filter({ hasText: name });
   }
 
-  test("a fund budget on a 60-character category stays inside its card", async ({ page }) => {
+  test("a fund budget on a 60-character category stays inside its card @mobile", async ({ page }) => {
     // Kills: an unclamped name pushing the card past the phone's width.
     await page.goto("/es/planning/budgets");
     const card = cardOf(page, LONG_CATEGORY);
@@ -166,13 +137,5 @@ test.describe("a budget card at 360 px", () => {
     const cardBox = await card.boundingBox();
     expect(cardBox!.x + cardBox!.width).toBeLessThanOrEqual(360);
     expect(await overflow(page)).toBeLessThanOrEqual(0);
-  });
-
-  test("a personal budget's card carries no mark", async ({ page }) => {
-    // Kills: always rendering the mark.
-    await page.goto("/es/planning/budgets");
-    const card = cardOf(page, PERSONAL_CATEGORY);
-    await expect(card).toHaveCount(1);
-    await expect(card.getByText(PERSONAL_CATEGORY, { exact: true })).toBeVisible();
   });
 });

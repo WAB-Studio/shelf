@@ -17,7 +17,7 @@
  */
 import { randomUUID } from "node:crypto";
 
-import { expect, type Locator } from "@playwright/test";
+import { expect, } from "@playwright/test";
 
 import { TIME_ZONE } from "@/lib/locales";
 import messages from "@/messages/es.json";
@@ -179,75 +179,6 @@ test("names every progress bar after its own goal and percentage", async ({
   }
 });
 
-test("paints the bar of a goal behind its straight line amber", async ({
-  page,
-}) => {
-  const behind = SEED[4];
-  const onTrack = SEED[1];
-
-  await page.goto("/es/planning/goals");
-
-  // The colour of the bar is the band both shapes carry: the ritmo badge beside
-  // it is the dense table's alone, and the card has only this.
-  await expect(
-    page.getByRole("progressbar", { name: progressName(behind.name, pctOf(behind)) }),
-  ).toHaveAttribute("data-accent-color", "amber");
-  // A goal opened today has spent none of its span, so nothing it is due in 90
-  // days can put it behind — the band is the pace's, not every unfinished goal's.
-  await expect(
-    page.getByRole("progressbar", {
-      name: progressName(onTrack.name, pctOf(onTrack)),
-    }),
-  ).not.toHaveAttribute("data-accent-color", "amber");
-});
-
-test.describe("the laptop table", () => {
-  test.skip(
-    ({ viewport }) => viewport?.width !== 1280,
-    "the total row and the ritmo column are the dense table's, which renders from lg up",
-  );
-
-  test("reads the goal opened in the past as atrasada, and lists it first", async ({
-    page,
-  }) => {
-    const behind = SEED[4];
-    const onTrack = SEED[1];
-
-    await page.goto("/es/planning/goals");
-
-    const rows = page.getByRole("table", { name: goals.title }).getByRole("row");
-    // The rows arrive ordered by ritmo out of Postgres, atrasada first, so the
-    // band and the place it holds are one claim (RF-87, RNF-07).
-    const first = rows.nth(1);
-    await expect(first).toContainText(behind.name);
-    await expect(first.getByText(goals.paceBehind, { exact: true })).toBeVisible();
-
-    await expect(
-      rows
-        .filter({ hasText: onTrack.name })
-        .getByText(goals.paceOnTrack, { exact: true }),
-    ).toBeVisible();
-  });
-
-  test("totals the apartado of the rows it is showing", async ({ page }) => {
-    await page.goto("/es/planning/goals");
-
-    const rows = page.getByRole("table", { name: goals.title }).getByRole("row");
-    // The header, one row per seeded goal, and the total.
-    await expect(rows).toHaveCount(SEED.length + 2);
-
-    let sumPesos = 0;
-    for (let index = 1; index <= SEED.length; index++) {
-      sumPesos += await pesosOf(rows.nth(index));
-    }
-
-    expect(await pesosOf(rows.last())).toBe(sumPesos);
-    // And the figure being summed is the one the aportes add up to in Postgres,
-    // not merely one the screen agrees with itself about (RF-87, RNF-07).
-    expect(sumPesos * 100).toBe(SEED.reduce((sum, goal) => sum + savedOf(goal), 0));
-  });
-});
-
 test("removes the aporte a person picks and leaves the goal beside it alone", async ({
   page,
 }) => {
@@ -320,14 +251,6 @@ function removeName(): RegExp {
 
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-// The apartado a row is showing, in whole pesos: COP rounds to the peso, so the
-// digits of the figure are the cents behind it divided by a hundred.
-async function pesosOf(row: Locator): Promise<number> {
-  const text = (await row.getByRole("cell").nth(3).textContent()) ?? "";
-
-  return Number(text.replace(/\D/g, ""));
 }
 
 // What the goal has set aside, summed from the aportes its progress derives from

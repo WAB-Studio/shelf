@@ -14,16 +14,12 @@ import messages from "@/messages/es.json";
 
 import { fixtureSql } from "../scripts/harness/fixtures";
 import {
-  MEMBER_STORAGE_STATE,
   asHarnessUser,
-  clearGroup,
   readScope,
-  seedGroup,
   test,
 } from "./global-setup";
 
 const settlement = messages.debts.settlement;
-const debtErrors = messages.debts.errors;
 
 const scope = readScope();
 const stamp = randomUUID().slice(0, 8);
@@ -63,18 +59,6 @@ async function seedForeignPurchase(): Promise<{ accountId: string; name: string;
       values (${movementId}, ${categoryId}, ${USD_CENTS})`;
   });
   return { accountId, name, movementId, description };
-}
-
-async function seedPlainAccount(): Promise<{ accountId: string; name: string }> {
-  const accountId = randomUUID();
-  const name = `Débito sin compras ${stamp}`;
-  await asHarnessUser(async (tx) => {
-    await tx`
-      insert into accounts (id, owner_user_id, name, kind, subtype, initial_balance_cents, initial_balance_on)
-      values (${accountId}, ${scope.userId}, ${name}, 'asset', 'bank', ${OPENING_CENTS}, ${todayInBogota()})`;
-  });
-  created.push(accountId);
-  return { accountId, name };
 }
 
 async function movementState(id: string) {
@@ -137,66 +121,4 @@ test("Done: confirming stores the billed amount, toasts, and the purchase leaves
     select balance_cents::text as balance_cents from account_balances
     where id = ${seeded.accountId} and currency = 'COP'`;
   expect(Number(pocket.balance_cents)).toBe(OPENING_CENTS - BILLED_CENTS);
-});
-
-test("Refused: a reconciliation on the purchase's day shows M54's line, keeps the dialog, writes nothing", async ({ page }) => {
-  const seeded = await seedForeignPurchase();
-  await asHarnessUser(async (tx) => {
-    await tx`
-      insert into account_reconciliations (account_id, reconciled_on, counted_balance_cents)
-      values (${seeded.accountId}, ${todayInBogota()}, ${OPENING_CENTS})`;
-  });
-  const before = await fixtureSql<{ n: string }[]>`
-    select count(*)::text as n from transactions
-    where from_account_id = ${seeded.accountId} or to_account_id = ${seeded.accountId}`;
-
-  await page.goto("/es/settings/accounts");
-  await visible(page, CONFIRM).click();
-  const dialog = page.getByRole("dialog");
-  await dialog.getByLabel(settlement.billedLabel).fill(String(BILLED_PESOS));
-  await dialog.getByRole("button", { name: settlement.save, exact: true }).click();
-
-  await expect(dialog.getByText(debtErrors.beforeReconciliation, { exact: true })).toBeVisible();
-  await expect(dialog).toBeVisible();
-  await expect(page.getByText(settlement.saved, { exact: true })).toHaveCount(0);
-
-  expect(await movementState(seeded.movementId)).toEqual({ counter: String(ESTIMATE_CENTS), estimate: true });
-  const after = await fixtureSql<{ n: string }[]>`
-    select count(*)::text as n from transactions
-    where from_account_id = ${seeded.accountId} or to_account_id = ${seeded.accountId}`;
-  expect(after[0].n).toBe(before[0].n);
-});
-
-test("Empty: an asset account with no estimate draws no section and no button", async ({ page }) => {
-  const plain = await seedPlainAccount();
-  await page.goto("/es/settings/accounts");
-
-  await expect(page.getByText(plain.name, { exact: false }).filter({ visible: true }).first()).toBeVisible();
-  await expect(page.getByText(settlement.title, { exact: true }).filter({ visible: true })).toHaveCount(0);
-  await expect(visible(page, CONFIRM)).toHaveCount(0);
-});
-
-test.describe("under a plain member", () => {
-  test.use({ storageState: MEMBER_STORAGE_STATE });
-
-  // A shared group account is any member's to write; the leader's own account is one a member reads and
-  // cannot write, which is the case the button must respect (as debts.spec seeds its reader).
-  test("a member reading the leader's account is offered no «Confirmar monto»", async ({ page }) => {
-    await seedGroup();
-    try {
-      const seeded = await seedForeignPurchase();
-      await page.goto("/es/settings/accounts");
-
-      await expect(page.getByText(seeded.name, { exact: false }).filter({ visible: true }).first()).toBeVisible();
-      await expect(visible(page, CONFIRM)).toHaveCount(0);
-      expect((await movementState(seeded.movementId)).estimate).toBe(true);
-    } finally {
-      while (created.length > 0) {
-        const id = created.pop() as string;
-        await fixtureSql`delete from transactions where from_account_id = ${id} or to_account_id = ${id}`;
-        await fixtureSql`delete from accounts where id = ${id}`;
-      }
-      await clearGroup();
-    }
-  });
 });

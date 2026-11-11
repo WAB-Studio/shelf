@@ -146,60 +146,6 @@ test.afterAll(async () => {
 test.describe("a plain member", () => {
   test.use({ storageState: MEMBER_STORAGE_STATE });
 
-  test("sees the card on «Grupo» with the board's words", async ({ page }) => {
-    await page.goto("/es/settings/group");
-    await expect(cardButton(page)).toBeVisible();
-    await expect(page.getByText(copy.cardBody, { exact: true })).toBeVisible();
-  });
-
-  test("the confirm names what stays and what goes", async ({ page }) => {
-    const dialog = await openConfirm(page);
-
-    await expect(dialog.getByText(copy.askTitle, { exact: true })).toBeVisible();
-    await expect(dialog.getByText(copy.stays, { exact: true })).toBeVisible();
-    await expect(dialog.getByText(copy.goes, { exact: true })).toBeVisible();
-    await expect(dialog.getByRole("button", { name: copy.cancel, exact: true })).toBeEnabled();
-    await expect(dialog.getByRole("button", { name: copy.leave, exact: true })).toBeEnabled();
-  });
-
-  test("Cancelar writes nothing", async ({ page }) => {
-    const before = await memberRows();
-    const dialog = await openConfirm(page);
-
-    await dialog.getByRole("button", { name: copy.cancel, exact: true }).click();
-    await expect(dialog).toBeHidden();
-    await expect(cardButton(page)).toBeVisible();
-    await expect(page).toHaveURL(/\/es\/settings\/group$/);
-
-    expect(await memberRows()).toEqual(before);
-    expect((await memberRows()).every((row) => row.archived_at === null)).toBe(true);
-  });
-
-  test("disables both buttons and reads «Saliendo…» while it runs", async ({ page }) => {
-    let release!: () => void;
-    const held = new Promise<void>((resolve) => (release = resolve));
-    let reached = false;
-    await page.route("**/*", async (route) => {
-      const request = route.request();
-      if (request.method() !== "POST" || !request.headers()["next-action"]) return route.continue();
-      reached = true;
-      await held;
-      await route.continue();
-    });
-
-    const dialog = await openConfirm(page);
-    await dialog.getByRole("button", { name: copy.leave, exact: true }).click();
-
-    await expect.poll(() => reached).toBe(true);
-    await expect(dialog.getByRole("button", { name: copy.leaving, exact: true })).toBeDisabled();
-    await expect(dialog.getByRole("button", { name: copy.cancel, exact: true })).toBeDisabled();
-    // Nothing is written while the answer is held.
-    expect((await memberRows()).every((row) => row.archived_at === null)).toBe(true);
-
-    release();
-    await expect(page.getByText(copy.doneToast, { exact: true })).toBeVisible();
-  });
-
   test("leaves: lands on Inicio with the toast, keeps what she wrote in the fund, her accounts leave the leader's view", async ({
     page,
   }) => {
@@ -258,17 +204,6 @@ test.describe("a leader", () => {
     await expect(dialog).toBeHidden();
     await expect(page).toHaveURL(/\/es\/settings\/group$/);
     expect(await memberRows()).toEqual(before);
-  });
-
-  test("alone in the fund is not offered the card", async ({ page }) => {
-    await fixtureSql`delete from group_members where group_id = ${groupId} and user_id = ${scope.memberUserId}`;
-    expect(await memberRows()).toHaveLength(1);
-
-    await page.goto("/es/settings/group");
-    // The leader's form is the proof the screen rendered before the card is counted.
-    await expect(page.getByLabel("Nombre del fondo")).toBeVisible();
-    await expect(cardButton(page)).toHaveCount(0);
-    await expect(page.getByText(copy.cardBody, { exact: true })).toHaveCount(0);
   });
 });
 

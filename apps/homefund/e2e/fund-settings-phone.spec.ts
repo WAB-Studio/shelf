@@ -17,7 +17,6 @@ import { expect, type Locator, type Page } from "@playwright/test";
 import messages from "@/messages/es.json";
 
 import {
-  LEADER_MEMBER_NAME,
   MEMBER_STORAGE_STATE,
   clearGroup,
   seedGroup,
@@ -80,16 +79,6 @@ async function expectNoRow(surface: Locator) {
   await expect(surface.locator(`a[href="${GROUP_HREF}"]`)).toHaveCount(0);
 }
 
-// From md up the phone's list may stay in the DOM; what matters is that nobody sees the row.
-async function expectNoVisibleRow(surface: Locator) {
-  await expect(
-    surface.getByRole("link", { name: nav.fundSettings }).filter({ visible: true }),
-  ).toHaveCount(0);
-  await expect(
-    surface.locator(`a[href="${GROUP_HREF}"]`).filter({ visible: true }),
-  ).toHaveCount(0);
-}
-
 test.describe("at 360, a member of a fund", () => {
   test.skip(({ viewport }) => !isPhone(viewport), "the phone's lists render below md");
   test.use({ storageState: MEMBER_STORAGE_STATE });
@@ -97,7 +86,7 @@ test.describe("at 360, a member of a fund", () => {
     await seedGroup();
   });
 
-  test("a plain member finds «Ajustes del fondo» first on the Ajustes screen and lands on the fund's settings", async ({
+  test("a plain member finds «Ajustes del fondo» first on the Ajustes screen and lands on the fund's settings @mobile", async ({
     page,
   }) => {
     const screen = await openScreen(page);
@@ -110,7 +99,7 @@ test.describe("at 360, a member of a fund", () => {
     ).toBeVisible();
   });
 
-  test("a plain member finds it first in the bottom bar's sheet, which closes behind the tap", async ({
+  test("a plain member finds it first in the bottom bar's sheet, which closes behind the tap @mobile", async ({
     page,
   }) => {
     const sheet = await openSheet(page);
@@ -122,30 +111,13 @@ test.describe("at 360, a member of a fund", () => {
   });
 });
 
-test.describe("at 360, the leader of a fund", () => {
-  test.skip(({ viewport }) => !isPhone(viewport), "the phone's lists render below md");
-  test.beforeEach(async () => {
-    await seedGroup();
-  });
-
-  test("finds it first on the Ajustes screen and in the sheet, and lands on the fund's settings", async ({
-    page,
-  }) => {
-    await expectFirstRow(await openScreen(page), nav.inbox);
-    await expectFirstRow(await openSheet(page), nav.inbox);
-
-    await page.getByRole("dialog").getByRole("link", { name: nav.fundSettings, exact: true }).click();
-    await expect(page).toHaveURL(GROUP_HREF);
-  });
-});
-
 test.describe("at 360, a person with no fund", () => {
   test.skip(({ viewport }) => !isPhone(viewport), "the phone's lists render below md");
   test.beforeEach(async () => {
     await clearGroup();
   });
 
-  test("sees no «Ajustes del fondo» and no «Miembros» on the screen or in the sheet", async ({
+  test("sees no «Ajustes del fondo» and no «Miembros» on the screen or in the sheet @mobile", async ({
     page,
   }) => {
     // The screen's list leads on Bandeja, the sheet's on Planeación.
@@ -156,62 +128,5 @@ test.describe("at 360, a person with no fund", () => {
       // The list is still there: the first row is the one it always had.
       expect((await rows(surface))[0]?.name).toBe(first);
     }
-  });
-});
-
-test.describe("from md up, a member of a fund", () => {
-  test.skip(({ viewport }) => isPhone(viewport), "the desktop list is the one under test");
-  test.beforeEach(async () => {
-    await seedGroup();
-  });
-
-  test("the Ajustes screen and the person's panel hold no «Ajustes del fondo» row; the chevron still leads there", async ({
-    page,
-  }) => {
-    const screen = await openScreen(page);
-    await expectNoVisibleRow(screen);
-    // The rest of the list is untouched: its first row is the inbox.
-    expect((await rows(screen))[0]?.name).toBe(nav.inbox);
-
-    await page.goto("/es");
-    await page.getByRole("button", { name: LEADER_MEMBER_NAME }).click();
-    const panel = page.getByRole("dialog", { name: nav.settings });
-    await expect(panel).toBeVisible();
-    await expectNoVisibleRow(panel);
-
-    await page.keyboard.press("Escape");
-    await expect(page.getByRole("link", { name: nav.fundSettings, exact: true })).toHaveAttribute(
-      "href",
-      GROUP_HREF,
-    );
-  });
-});
-
-test.describe("at 360, the controls under the list", () => {
-  test.skip(({ viewport }) => !isPhone(viewport), "the phone's lists render below md");
-
-  for (const open of [openScreen, openSheet]) {
-    test(`${open.name}: language, theme and sign-out show their words and carry them as names`, async ({
-      page,
-    }) => {
-      const surface = await open(page);
-      for (const name of [messages.language.endonym.es, messages.auth.signOut]) {
-        await expect(surface.getByText(name, { exact: true }).first()).toBeVisible();
-      }
-      await expect(surface.getByRole("combobox", { name: messages.language.label })).toContainText(
-        messages.language.endonym.es,
-      );
-      await expect(surface.getByRole("combobox", { name: messages.theme.label })).toContainText(
-        new RegExp(`${messages.theme.light}|${messages.theme.dark}|${messages.theme.system}`),
-      );
-      await expect(surface.getByRole("button", { name: messages.auth.signOut, exact: true })).toBeVisible();
-    });
-  }
-
-  test("«Ajustes del fondo» leads back to Ajustes", async ({ page }) => {
-    await seedGroup();
-    await page.goto(GROUP_HREF);
-    await page.getByRole("link", { name: nav.settings, exact: true }).first().click();
-    await expect(page).toHaveURL("/es/settings");
   });
 });

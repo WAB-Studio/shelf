@@ -272,7 +272,7 @@ function mobileOnly(project: string): boolean {
 
 
 test.describe("planning hub", () => {
-  test("on the phone a destination is a plain link tile and none overflows", async ({
+  test("on the phone a destination is a plain link tile and none overflows @mobile", async ({
     page,
   }, testInfo) => {
     test.skip(!mobileOnly(testInfo.project.name), "the phone's one column");
@@ -290,7 +290,7 @@ test.describe("planning hub", () => {
 });
 
 test.describe("debts", () => {
-  test("the owed total is tabular, the disc is 42 square, the name wraps whole and the cut-off column reads right", async ({
+  test("the owed total is tabular, the disc is 42 square, the name wraps whole and the cut-off column reads right @mobile", async ({
     page,
   }, testInfo) => {
     test.skip(!mobileOnly(testInfo.project.name), "the phone's cards");
@@ -323,19 +323,10 @@ test.describe("debts", () => {
 
     await noOverflow(page);
   });
-
-  test("the owed figure of a card is tabular", async ({ page }, testInfo) => {
-    test.skip(!mobileOnly(testInfo.project.name), "the phone's cards");
-    await page.goto("/es/planning/debts");
-
-    const card = page.locator(".rt-Card:visible").filter({ hasText: names.debt }).first();
-    const owed = card.getByText(/^\$\s[\d.,]+$/).first();
-    expect(await computed(owed, "font-variant-numeric")).toContain("tabular-nums");
-  });
 });
 
 test.describe("budgets", () => {
-  test("a budget within its limit has no wash and an overspent one is washed red", async ({
+  test("a budget within its limit has no wash and an overspent one is washed red @mobile", async ({
     page,
   }, testInfo) => {
     test.skip(!mobileOnly(testInfo.project.name), "the phone's cards");
@@ -359,56 +350,10 @@ test.describe("budgets", () => {
       "ellipsis",
     );
   });
-
-  test("the month label opens with a capital taken from the string, not from CSS", async ({
-    page,
-  }, testInfo) => {
-    test.skip(!mobileOnly(testInfo.project.name), "the phone's month bar");
-    await page.goto("/es/planning/budgets");
-
-    const label = page
-      .getByRole("button", { name: messages.common.previousMonth })
-      .locator("xpath=following-sibling::*[1]");
-    const text = (await label.textContent()) ?? "";
-    expect(text.charAt(0)).toBe(text.charAt(0).toLocaleUpperCase("es"));
-    expect(text.charAt(0)).not.toBe(text.charAt(0).toLocaleLowerCase("es"));
-    expect(await computed(label, "text-transform")).toBe("none");
-  });
-
-  test("the threshold slider fills its row and its value is tabular", async ({ page }, testInfo) => {
-    test.skip(!mobileOnly(testInfo.project.name), "the phone's form");
-    await page.goto("/es/planning/budgets");
-
-    await page.getByRole("button", { name: messages.budgets.add }).first().click();
-    const dialog = page.getByRole("dialog");
-    const slider = dialog.getByRole("slider");
-    await expect(slider).toBeVisible();
-
-    const root = slider.locator("xpath=ancestor::span[contains(@class,'rt-SliderRoot')]");
-    const [sliderWidth, rowWidth] = await root.evaluate((el) => [
-      el.getBoundingClientRect().width,
-      (el.parentElement?.parentElement ?? el).getBoundingClientRect().width,
-    ]);
-    // The value beside it is about three characters wide; the slider takes the rest.
-    expect(sliderWidth / rowWidth).toBeGreaterThan(0.7);
-
-    const value = dialog.getByText(/%/).last();
-    expect(await computed(value, "font-variant-numeric")).toContain("tabular-nums");
-  });
-
-  test("the «en COP» cell never wraps (laptop tables)", async ({ page }, testInfo) => {
-    test.skip(testInfo.project.name !== "desktop", "the dense table");
-    for (const path of ["/es/planning/budgets", "/es/planning/goals"]) {
-      await page.goto(path);
-      const cell = page.getByText(/^en COP$/).locator("visible=true").first();
-      await expect(cell).toBeVisible();
-      expect(await computed(cell, "white-space")).toBe("nowrap");
-    }
-  });
 });
 
 test.describe("goals", () => {
-  test("the saved figure is tabular and the title truncates", async ({ page }, testInfo) => {
+  test("the saved figure is tabular and the title truncates @mobile", async ({ page }, testInfo) => {
     test.skip(!mobileOnly(testInfo.project.name), "the phone's cards");
     await page.goto("/es/planning/goals");
 
@@ -422,66 +367,8 @@ test.describe("goals", () => {
   });
 });
 
-test.describe("payments", () => {
-  test("the month eyebrow is upper case with 0.06em spacing and the day tile is 44 square with a 14px radius", async ({
-    page,
-  }, testInfo) => {
-    test.skip(!mobileOnly(testInfo.project.name), "the phone's cards");
-    await page.goto("/es/planning/payments");
-
-    const card = page.locator(".rt-Card").filter({ hasText: names.payment }).first();
-    await expect(card).toBeVisible();
-
-    const tile = await squares(card, 44);
-    expect(await computed(tile, "border-top-left-radius")).toBe("14px");
-
-    const eyebrow = page
-      .locator("main")
-      .getByText(/^[\p{L}]+\s+(de\s+)?\d{4}$/u)
-      .first();
-    expect(await computed(eyebrow, "text-transform")).toBe("uppercase");
-    const spacing = parseFloat(await computed(eyebrow, "letter-spacing"));
-    const size = parseFloat(await computed(eyebrow, "font-size"));
-    expect(spacing / size).toBeCloseTo(0.06, 2);
-  });
-});
-
-test.describe("recurring rules", () => {
-  test("an active rule is opaque, a paused one is dimmed to 0.55", async ({ page }, testInfo) => {
-    test.skip(!mobileOnly(testInfo.project.name), "the phone's cards");
-    await page.goto("/es/planning/recurring");
-
-    for (const [name, opacity] of [
-      [names.active, "1"],
-      [names.paused, "0.55"],
-    ] as const) {
-      const text = page.getByText(name, { exact: true }).first();
-      await expect(text).toBeVisible();
-      const dimmed = await text.evaluate((el) => {
-        let node: Element | null = el;
-        while (node) {
-          const value = getComputedStyle(node).opacity;
-          if (value !== "1") return value;
-          node = node.parentElement;
-        }
-        return "1";
-      });
-      expect(dimmed).toBe(opacity);
-    }
-  });
-
-  test("the unreviewed callout is a link with no underline", async ({ page }, testInfo) => {
-    test.skip(!mobileOnly(testInfo.project.name), "the phone's page");
-    await page.goto("/es/planning/recurring");
-
-    const link = page.locator("main a[href*='unreviewed=1']").first();
-    await expect(link).toBeVisible();
-    expect(await computed(link, "text-decoration-line")).toBe("none");
-  });
-});
-
 test.describe("inbox", () => {
-  test("a long SMS wraps inside its card", async ({ page }, testInfo) => {
+  test("a long SMS wraps inside its card @mobile", async ({ page }, testInfo) => {
     test.skip(!mobileOnly(testInfo.project.name), "360px");
     await page.goto("/es/inbox");
 
@@ -492,202 +379,6 @@ test.describe("inbox", () => {
     expect(await computed(body, "white-space")).toBe("pre-wrap");
     expect(await computed(body, "overflow-wrap")).toBe("anywhere");
     await noOverflow(page);
-  });
-
-  test("a silenced sample wraps the same way", async ({ page }, testInfo) => {
-    test.skip(!mobileOnly(testInfo.project.name), "360px");
-    await page.goto("/es/inbox");
-
-    const toggles = page.getByRole("button", { name: messages.ingest.showRawText });
-    await toggles.last().click();
-    const bodies = page.getByText(`Compra ${LONG_TOKEN}`, { exact: true });
-    const last = bodies.last();
-    await expect(last).toBeVisible();
-    expect(await computed(last, "white-space")).toBe("pre-wrap");
-    expect(await computed(last, "overflow-wrap")).toBe("anywhere");
-    await noOverflow(page);
-  });
-});
-
-test.describe("welcome", () => {
-  test("the check disc is 96 square and round", async ({ page }) => {
-    await page.goto("/es/bienvenida");
-
-    const disc = await squares(page.locator("main"), 96);
-    expect(await computed(disc, "border-top-left-radius")).not.toBe("0px");
-    const [width, radius] = await disc.evaluate((el) => [
-      el.getBoundingClientRect().width,
-      parseFloat(getComputedStyle(el).borderTopLeftRadius),
-    ]);
-    expect(radius).toBeGreaterThanOrEqual(width / 2);
-    expect(await computed(disc, "background-color")).toBe(
-      await resolved(page, "background-color", "var(--accent-9)"),
-    );
-  });
-});
-
-test.describe("withdraw", () => {
-  test("the row is a button at least 44px tall", async ({
-    page,
-  }, testInfo) => {
-    test.skip(!mobileOnly(testInfo.project.name), "the phone's dashboard");
-    await page.goto("/es");
-
-    const row = page.getByRole("button", { name: messages.cash.withdrawAction }).first();
-    await expect(row).toBeVisible();
-    const height = await row.evaluate((el) => el.getBoundingClientRect().height);
-    expect(height).toBeGreaterThanOrEqual(44);
-  });
-});
-
-test.describe("onboarding stepper", () => {
-  test("on step three the first two discs are checked, the third is the accent and the connectors are 2px", async ({
-    page,
-  }) => {
-    await page.goto("/es/onboarding/invite");
-
-    const main = page.locator("main");
-    const accent = await resolved(page, "background-color", "var(--accent-9)");
-
-    const discs = await main.evaluate((el) => {
-      const found: { bg: string; checked: boolean; radius: number; width: number }[] = [];
-      el.querySelectorAll<HTMLElement>("*").forEach((node) => {
-        const box = node.getBoundingClientRect();
-        if (Math.round(box.width) === 32 && Math.round(box.height) === 32) {
-          found.push({
-            bg: getComputedStyle(node).backgroundColor,
-            checked: node.querySelector("svg") !== null,
-            radius: parseFloat(getComputedStyle(node).borderTopLeftRadius),
-            width: box.width,
-          });
-        }
-      });
-      return found;
-    });
-    expect(discs).toHaveLength(3);
-    expect(discs.map((d) => d.bg)).toEqual([accent, accent, accent]);
-    expect(discs.map((d) => d.checked)).toEqual([true, true, false]);
-    expect(discs.every((d) => d.radius >= d.width / 2)).toBe(true);
-
-    const connectors = await main.evaluate((el) => {
-      const heights: number[] = [];
-      el.querySelectorAll<HTMLElement>("*").forEach((node) => {
-        const box = node.getBoundingClientRect();
-        if (Math.round(box.height) === 2 && box.width > 8) heights.push(box.height);
-      });
-      return heights;
-    });
-    expect(connectors).toEqual([2, 2]);
-  });
-});
-
-test.describe("movement form", () => {
-  // The quick sheet's «¿Ingreso o traspaso?» link raises the full form, and an
-  // origin turns it into an expense, which is what shows the splits.
-  async function openExpenseForm(page: Page): Promise<Locator> {
-    await page.goto("/es");
-    await page
-      .getByRole("button", { name: messages.transactions.quickPlaceholder, exact: true })
-      .first()
-      .click();
-    await page.getByRole("dialog").getByText(messages.transactions.quickTypeLink).click();
-
-    const form = page.getByRole("dialog");
-    await form
-      .getByRole("combobox", { name: messages.transactions.fromLabel, exact: true })
-      .click();
-    await page.getByRole("option", { name: scope.accountName, exact: true }).click();
-    // The sheet carries its account over as the destination too; a transfer has
-    // no category to split.
-    const to = form.getByRole("combobox", { name: messages.transactions.toLabel, exact: true });
-    if ((await to.textContent()) !== messages.transactions.accountNone) {
-      await to.click();
-      await page.getByRole("option", { name: messages.transactions.accountNone, exact: true }).click();
-    }
-    await form
-      .getByRole("textbox", { name: messages.transactions.amountLabel, exact: true })
-      .fill("45910");
-    return form;
-  }
-
-  test("the header figure is tabular", async ({ page }) => {
-    const form = await openExpenseForm(page);
-
-    const figure = form.getByRole("heading", { level: 1 }).filter({ hasText: /\$/ }).first();
-    await expect(figure).toBeVisible();
-    expect(await computed(figure, "font-variant-numeric")).toContain("tabular-nums");
-  });
-
-  test("the split amount is 110px wide and tabular", async ({ page }, testInfo) => {
-    test.skip(testInfo.project.name !== "desktop", "the phone's row is narrower than the field");
-    const form = await openExpenseForm(page);
-    await form.getByRole("button", { name: messages.transactions.splitDivide, exact: true }).click();
-
-    const amount = form.getByRole("textbox", {
-      name: messages.transactions.splitRowAmount.replace("{position}", "1"),
-      exact: true,
-    });
-    await expect(amount).toBeVisible();
-    const field = amount.locator("xpath=ancestor::div[contains(@class,'rt-TextFieldRoot')][1]");
-    const width = await field.evaluate((el) => el.getBoundingClientRect().width);
-    expect(Math.round(width)).toBe(110);
-    expect(await computed(amount, "font-variant-numeric")).toContain("tabular-nums");
-  });
-
-  test("the exchange-rate line is tabular", async ({ page }) => {
-    await page.goto("/es");
-    await page
-      .getByRole("button", { name: messages.transactions.quickPlaceholder, exact: true })
-      .first()
-      .click();
-    await page.getByRole("dialog").getByText(messages.transactions.quickTypeLink).click();
-
-    const form = page.getByRole("dialog");
-    await form
-      .getByRole("combobox", { name: messages.transactions.fromLabel, exact: true })
-      .click();
-    await page.getByRole("option", { name: scope.accountName, exact: true }).click();
-    await form
-      .getByRole("combobox", { name: messages.transactions.toLabel, exact: true })
-      .click();
-    await page.getByRole("option", { name: names.usd, exact: true }).click();
-    await form
-      .getByRole("textbox", { name: messages.transactions.amountLabel, exact: true })
-      .fill("40000");
-    await form.locator("#movement-counter-amount").fill("10");
-
-    const line = form
-      .getByText(messages.transactions.rateLabel, { exact: true })
-      .locator("xpath=following-sibling::span[1]");
-    await expect(line).toBeVisible();
-    expect(await computed(line, "font-variant-numeric")).toContain("tabular-nums");
-  });
-
-  test("the remainder is washed green at zero and red otherwise", async ({ page }) => {
-    const form = await openExpenseForm(page);
-    // The remainder belongs to the split editor, which sits behind «Dividir».
-    await form.getByRole("button", { name: messages.transactions.splitDivide, exact: true }).click();
-
-    const amount = form.getByRole("textbox", {
-      name: messages.transactions.splitRowAmount.replace("{position}", "1"),
-      exact: true,
-    });
-    const remainder = form
-      .getByText(messages.transactions.splitUnassigned, { exact: true })
-      .locator("xpath=..");
-    const figure = remainder.locator("span").last();
-
-    await expect
-      .poll(() => computed(remainder, "background-color"))
-      .toBe(await resolved(page, "background-color", "var(--grass-a3)"));
-    expect(await computed(figure, "font-variant-numeric")).toContain("tabular-nums");
-
-    // A lone split mirrors the total; a second row lets the first one drift.
-    await form.getByRole("button", { name: messages.transactions.splitAddCategory }).click();
-    await amount.fill("1000");
-    await expect
-      .poll(() => computed(remainder, "background-color"))
-      .toBe(await resolved(page, "background-color", "var(--red-a3)"));
   });
 });
 
