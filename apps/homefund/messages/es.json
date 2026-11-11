@@ -689,6 +689,7 @@
     "withdrawAction": "Retirar efectivo",
     "withdrawTitle": "Retirar efectivo",
     "sourceLabel": "Desde",
+    "sourceBalance": "Saldo:",
     "amountLabel": "Monto",
     "destinationLabel": "A efectivo",
     "willCreateHint": "Se creará tu cuenta de efectivo.",
@@ -1458,7 +1459,7 @@
       "scopeViolation": "Esa categoría es de otro ámbito que la cuenta. Elige una del fondo para una cuenta del fondo, o una tuya para una cuenta tuya."
     },
     "mcpHeading": "Conectar con Claude",
-    "mcpDescription": "En claude.ai (web, escritorio o móvil), agrega un conector personalizado con la URL de arriba: te pedirá entrar con HomeFund y listo. Claude ve tus cuentas y «Revisar el mes» con tus mismos permisos; revocar su clave en la lista lo desconecta. Una clave que crees aquí sigue sirviendo: en Claude Code va en «Authorization: Bearer», y en un conector sin inicio de sesión en el encabezado «X-API-Key». Una clave de webhook no abre esta puerta.",
+    "mcpDescription": "En claude.ai (web, escritorio o móvil), agrega un conector personalizado con la URL de arriba: te pedirá entrar con HomeFund y listo. Claude lee tus cuentas, movimientos y «Revisar el mes», y registra movimientos o crea y edita cuentas y categorías cuando se lo confirmas, siempre con tus mismos permisos; revocar su clave en la lista lo desconecta. Una clave que crees aquí sigue sirviendo: en Claude Code va en «Authorization: Bearer», y en un conector sin inicio de sesión en el encabezado «X-API-Key». Una clave de webhook no abre esta puerta. Para hablar con HomeFund y GoalLog en un mismo chat, el repositorio github.com/WAB-Studio/asistente (privado de WAB-Studio) trae todo listo: sigue su README.",
     "mcpIssue": "Crear clave para Claude"
   },
   "ingest": {
