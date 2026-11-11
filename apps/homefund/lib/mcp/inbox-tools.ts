@@ -53,6 +53,7 @@ const acceptItem = z.object({
   description: z.string().nullable().optional(),
   date: z.string().optional(),
   contributedByMemberId: z.string().nullish(),
+  madeByMemberId: z.string().nullish(),
 });
 
 type AcceptItem = z.infer<typeof acceptItem>;
@@ -131,6 +132,7 @@ function acceptForm(delivery: PendingDeliveryRow, item: AcceptItem, lookup: Look
     occurredAt: item.date ?? delivery.proposedOccurredAt ?? todayInBogota(),
     description: item.description === undefined ? delivery.proposedDescription : item.description,
     contributedByMemberId: item.contributedByMemberId,
+    madeByMemberId: item.madeByMemberId,
     splits: transfer
       ? []
       : lines.map((line) => ({
@@ -271,6 +273,7 @@ export function registerInboxTools(server: McpServer, run: Run, t: Say): void {
                   })),
                   labelIds: form.labelIds,
                   contributedByMemberId: form.contributedByMemberId ?? null,
+                  madeByMemberId: form.madeByMemberId ?? null,
                 },
                 tx,
               );

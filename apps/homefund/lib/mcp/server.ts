@@ -102,7 +102,7 @@ function registerReadTools(server: McpServer): void {
       ),
   );
 
-  // RF-181: the ids update_account and create_account take as holderMemberId.
+  // RF-181, RF-182: the ids holderMemberId, contributedByMemberId and madeByMemberId take.
   server.registerTool(
     "list_members",
     { description: t("tools.listMembers"), inputSchema: z.object({}), annotations: { readOnlyHint: true } },

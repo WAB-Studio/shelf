@@ -338,6 +338,12 @@ export function MovementDetail({
                 <DetailRow label={t("forHousehold")} value={t("forHouseholdCounts")} />
               </>
             )}
+            {movement.madeByName && (
+              <>
+                <Separator size="4" my="3" />
+                <DetailRow label={t("madeByLabel")} value={movement.madeByName} />
+              </>
+            )}
             {creatorName && (
               <>
                 <Separator size="4" my="3" />

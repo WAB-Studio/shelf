@@ -9,7 +9,7 @@ import { getRecurringRuleName } from "@/db/queries/recurring-rules";
 import { getTransactionFormOptions } from "@/db/queries/transaction-form";
 import { getTransactionTotals, listTransactions } from "@/db/queries/transactions";
 import type { TransactionListFilters } from "@/db/queries/transactions";
-import { movementFiltersSchema, movementTypeFilter } from "@/lib/validation/transaction";
+import { HOUSEHOLD_MAKER, movementFiltersSchema, movementTypeFilter } from "@/lib/validation/transaction";
 import { routing } from "@/i18n/routing";
 import { currentMonthRange } from "@/lib/dates";
 
@@ -47,6 +47,7 @@ export default async function MovementsPage(
     from: parsed.from,
     to: parsed.to,
     memberUserId: parsed.member,
+    madeByMemberId: parsed.madeBy === HOUSEHOLD_MAKER ? null : parsed.madeBy,
     accountId: parsed.account,
     categoryId: parsed.category,
     labelId: parsed.label,
@@ -80,6 +81,7 @@ export default async function MovementsPage(
           from: parsed.from ?? null,
           to: parsed.to ?? null,
           member: parsed.member ?? null,
+          madeBy: parsed.madeBy ?? null,
           account: parsed.account ?? null,
           category: parsed.category ?? null,
           label: parsed.label ?? null,

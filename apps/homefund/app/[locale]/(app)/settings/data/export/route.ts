@@ -9,7 +9,7 @@ import { requireUser } from "@/db/session";
 import { TIME_ZONE } from "@/lib/locales";
 import { SHEET_ENTITIES, type SheetEntity } from "@/lib/spreadsheet/schema";
 import { buildWorkbook, choiceLabelFrom, type SheetLabels } from "@/lib/spreadsheet/workbook";
-import { movementFiltersSchema, movementTypeFilter } from "@/lib/validation/transaction";
+import { HOUSEHOLD_MAKER, movementFiltersSchema, movementTypeFilter } from "@/lib/validation/transaction";
 import { routing } from "@/i18n/routing";
 
 // ExcelJS writes with Node streams and zlib, so the workbook build stays on the
@@ -63,6 +63,7 @@ export async function GET(
   const transactionFilters: TransactionExportFilters = {
     ...movementTypeFilter(filters.type),
     memberUserId: filters.member,
+    madeByMemberId: filters.madeBy === HOUSEHOLD_MAKER ? null : filters.madeBy,
     accountId: filters.account,
     categoryId: filters.category,
     labelId: filters.label,

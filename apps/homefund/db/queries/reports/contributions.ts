@@ -317,3 +317,47 @@ export async function getFundSpending(range: {
     }));
   });
 }
+
+export type SpendingByMaker = {
+  // The fund member who made the expenses; null is the household (RF-182).
+  memberId: string | null;
+  currency: CurrencyCode;
+  spentCents: number;
+};
+
+/**
+ * What each member spent in one window, per currency, in ONE round trip (RF-182): the expenses out of a
+ * fund account, grouped by «Lo hizo» and booked exactly as `getFundSpending` books them, so a currency's
+ * rows add up to the fund's spending figure. An expense that names nobody is its held account's holder's
+ * (RF-181), else the household's; a household bill paid from a personal card is a contribution (RF-139), not
+ * fund spending, and is not here.
+ */
+export async function getSpendingByMaker(range: {
+  start: string;
+  endExclusive: string;
+}): Promise<SpendingByMaker[]> {
+  return withUserDb(async (tx) => {
+    const rows = await tx.execute<{ member_id: string | null; currency: string; spent_cents: string }>(sql`
+      select
+        coalesce(t.made_by_member_id, fa.holder_member_id) as member_id,
+        fa.settlement_currency as currency,
+        sum(case when t.currency <> fa.settlement_currency
+          and t.counter_amount_cents is not null and not t.counter_is_estimate
+        then t.counter_amount_cents else t.amount_cents end) as spent_cents
+      from transactions t
+      join accounts fa on fa.id = t.from_account_id
+      where t.kind = 'expense'
+        and fa.group_id is not null
+        and t.reconciliation_id is null
+        and t.occurred_at >= ${range.start} and t.occurred_at < ${range.endExclusive}
+      group by 1, fa.settlement_currency
+      order by fa.settlement_currency, spent_cents desc
+    `);
+
+    return rows.map((row) => ({
+      memberId: row.member_id,
+      currency: row.currency,
+      spentCents: Number(row.spent_cents),
+    }));
+  });
+}
