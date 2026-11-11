@@ -46,10 +46,8 @@ import type { AccountPendingSettlement } from "@/db/queries/debt-statements";
 import { usePathname, useRouter } from "@/i18n/navigation";
 import { civilDateToDate } from "@/lib/dates";
 import { useActionErrorToast } from "@/lib/use-action-toast";
-import type { CurrencyCode } from "@/lib/currency";
+import { BASE_CURRENCY, type CurrencyCode } from "@/lib/currency";
 import type { ACCOUNT_SUBTYPES } from "@/lib/validation/account";
-
-type Group = { key: string; label: string; accounts: AccountRow[] };
 
 // A Radix Select item may not carry an empty value, so "any" rides this
 // sentinel and maps back to no query param the moment it is picked.
@@ -65,31 +63,52 @@ type RowAction =
 
 type Figure = { currency: CurrencyCode; cents: number };
 
-// A section's own figure per currency, never one sum across currencies (RF-124).
-// Each row's `balances` is its own free part, so a pocket and its parent add up
-// once; a liability's cents are already negative.
-function sumByCurrency(rows: AccountRow[]): Figure[] {
+type Section = {
+  key: "accounts" | "cards" | "loans";
+  label: string;
+  // Whether the section adds up what is owed: its figures then carry the debt as a positive number.
+  owes: boolean;
+  rows: AccountRow[];
+  figures: Figure[];
+};
+
+// A figure per currency, never one sum across currencies (RF-124), always in the
+// same alphabetical order so every tile and band reads alike. Each row's
+// `balances` is its own free part, so a pocket and its parent add up once;
+// `sign` -1 turns a liability's negative cents into the debt they stand for.
+function sumByCurrency(rows: AccountRow[], sign: 1 | -1 = 1): Figure[] {
   const totals = new Map<CurrencyCode, number>();
   for (const row of rows) {
     for (const balance of row.balances) {
-      totals.set(balance.currency, (totals.get(balance.currency) ?? 0) + balance.balanceCents);
+      totals.set(balance.currency, (totals.get(balance.currency) ?? 0) + sign * balance.balanceCents);
     }
   }
-  return [...totals].map(([currency, cents]) => ({ currency, cents }));
+  return [...totals]
+    .map(([currency, cents]) => ({ currency, cents }))
+    .sort((a, b) => a.currency.localeCompare(b.currency));
 }
 
-function Figures({ figures, owed }: { figures: Figure[]; owed?: boolean }) {
+function mergeFigures(parts: { figures: Figure[]; sign: 1 | -1 }[]): Figure[] {
+  const totals = new Map<CurrencyCode, number>();
+  for (const { figures, sign } of parts) {
+    for (const { currency, cents } of figures) {
+      totals.set(currency, (totals.get(currency) ?? 0) + sign * cents);
+    }
+  }
+  return [...totals]
+    .map(([currency, cents]) => ({ currency, cents }))
+    .sort((a, b) => a.currency.localeCompare(b.currency));
+}
+
+// What a person owes reads as a positive figure and a card in their favour as a
+// negative one (RF-114); the signed figure carries the minus itself.
+function Figures({ figures }: { figures: Figure[] }) {
+  // A kind with nothing in it still reads as zero, never a blank tile.
+  const shown = figures.length > 0 ? figures : [{ currency: BASE_CURRENCY, cents: 0 }];
   return (
     <Flex direction="column" gap="1" align="start">
-      {figures.map(({ currency, cents }) => (
-        <Money
-          key={currency}
-          minor={owed ? Math.abs(cents) : cents}
-          currency={currency}
-          tone="plain"
-          size="inherit"
-          signed={!owed}
-        />
+      {shown.map(({ currency, cents }) => (
+        <Money key={currency} minor={cents} currency={currency} tone="plain" size="inherit" />
       ))}
     </Flex>
   );
@@ -170,6 +189,8 @@ export function AccountsScreen({
   function patchQuery(patch: Record<string, string | null>) {
     const query = new URLSearchParams(searchParams.toString());
     query.delete("new");
+    // The Tipo filter is gone; a shared link that still carries it is ignored and cleared.
+    query.delete("type");
     for (const [key, value] of Object.entries(patch)) {
       if (value === null) query.delete(key);
       else query.set(key, value);
@@ -185,7 +206,7 @@ export function AccountsScreen({
   }
 
   // The desktop table's own rows: the tab already scoped what Postgres
-  // returned, these three filters only narrow the array further, in memory.
+  // returned, these two filters only narrow the array further, in memory.
   const filteredAccounts = accounts.filter((account) => {
     if (ownerFilter !== ANY) {
       const placement = account.ownerUserId ? "personal" : "group";
@@ -206,35 +227,54 @@ export function AccountsScreen({
     ),
   ).sort((a, b) => a.localeCompare(b));
 
-  // One section per type: what is held, then the cards owed. The model has no
-  // loan subtype (liability admits only card), so no third section exists.
-  function sectionsOf(list: AccountRow[]) {
-    return [
-      { key: "accounts", label: t("sectionAccounts"), rows: list.filter((a) => a.kind === "asset") },
-      { key: "cards", label: t("sectionCards"), rows: list.filter((a) => a.kind === "liability") },
-    ]
+  // One section per type: what is held, the cards owed, the loans owed; an empty
+  // one is left out. Built once per list, and the tiles read their figures from it.
+  function sectionsOf(list: AccountRow[]): Section[] {
+    const types: { key: Section["key"]; label: string; owes: boolean; has: (a: AccountRow) => boolean }[] = [
+      { key: "accounts", label: t("sectionAccounts"), owes: false, has: (a) => a.kind === "asset" },
+      { key: "cards", label: t("sectionCards"), owes: true, has: (a) => a.kind === "liability" && a.subtype === "card" },
+      { key: "loans", label: t("sectionLoans"), owes: true, has: (a) => a.kind === "liability" && a.subtype === "loan" },
+    ];
+    return types
+      .map(({ has, ...type }) => ({ ...type, rows: list.filter(has) }))
       .filter((section) => section.rows.length > 0)
-      .map((section) => ({
-        ...section,
-        figures: sumByCurrency(section.rows),
-        owed: section.key === "cards",
-      }));
+      .map((section) => ({ ...section, figures: sumByCurrency(section.rows, section.owes ? -1 : 1) }));
   }
 
-  function totalsFor(list: AccountRow[]) {
-    const have = sumByCurrency(list.filter((a) => a.kind === "asset"));
-    const owe = sumByCurrency(list.filter((a) => a.kind === "liability"));
-    const net = sumByCurrency(list);
+  // Inside a type the personal accounts and the fund's stay apart, as RF-60 had
+  // them; a type that holds only one placement needs no split.
+  function splitByPlacement(section: Section) {
+    const personal = section.rows.filter((a) => a.ownerUserId);
+    const group = section.rows.filter((a) => !a.ownerUserId);
+    if (personal.length === 0 || group.length === 0) {
+      return [{ key: section.key, label: "", rows: section.rows }];
+    }
+    return [
+      { key: `${section.key}:personal`, label: t("ownerPersonal"), rows: personal },
+      { key: `${section.key}:group`, label: groupName ?? tKey("common.fund"), rows: group },
+    ];
+  }
+
+  function totalsOf(list: Section[]) {
+    const have = list.filter((x) => !x.owes).map((x) => ({ figures: x.figures, sign: 1 as const }));
+    const owe = list.filter((x) => x.owes).map((x) => ({ figures: x.figures, sign: 1 as const }));
     return (
       <StatTiles
         tiles={[
-          { key: "have", label: t("kindAsset"), value: <Figures figures={have} /> },
-          { key: "owe", label: t("kindLiability"), value: <Figures figures={owe} owed /> },
-          { key: "net", label: t("netLabel"), value: <Figures figures={net} /> },
+          { key: "have", label: t("kindAsset"), value: <Figures figures={mergeFigures(have)} /> },
+          { key: "owe", label: t("kindLiability"), value: <Figures figures={mergeFigures(owe)} /> },
+          {
+            key: "net",
+            label: t("netLabel"),
+            value: <Figures figures={mergeFigures([...have, ...owe.map((x) => ({ ...x, sign: -1 as const }))])} />,
+          },
         ]}
       />
     );
   }
+
+  const deskSections = sectionsOf(filteredAccounts);
+  const phoneSections = sectionsOf(accounts);
 
   const pendingFor = (account: AccountRow) =>
     pendingSettlements.filter((movement) => movement.accountId === account.id);
@@ -326,13 +366,26 @@ export function AccountsScreen({
             />
           </FilterBar>
 
-          {filteredAccounts.length > 0 && totalsFor(filteredAccounts)}
+          {!archived && deskSections.length > 0 && totalsOf(deskSections)}
 
           <AccountsTable
-            sections={sectionsOf(filteredAccounts).map(({ figures, owed, ...section }) => ({
-              ...section,
-              aside: <Figures figures={figures} owed={owed} />,
-            }))}
+            sections={deskSections.flatMap((section) => {
+              const parts = splitByPlacement(section);
+              return parts.map((part) => ({
+                key: part.key,
+                label: part.label ? `${section.label} · ${part.label}` : section.label,
+                rows: part.rows,
+                aside: (
+                  <Figures
+                    figures={
+                      parts.length === 1
+                        ? section.figures
+                        : sumByCurrency(part.rows, section.owes ? -1 : 1)
+                    }
+                  />
+                ),
+              }));
+            })}
             archived={archived}
             empty={
               accounts.length === 0 ? (
@@ -346,7 +399,7 @@ export function AccountsScreen({
                       type="button"
                       mt="2"
                       onClick={() =>
-                        patchQuery({ owner: null, institution: null })
+                        patchQuery({ owner: null, institution: null, type: null })
                       }
                     >
                       {t("clearFilters")}
@@ -400,18 +453,24 @@ export function AccountsScreen({
             emptyState
           ) : (
             <>
-              {totalsFor(accounts)}
+              {!archived && totalsOf(phoneSections)}
               <Flex direction="column" gap="5">
-                {sectionsOf(accounts).map((section) => (
+                {phoneSections.map((section) => (
                   <Flex key={section.key} direction="column" gap="3">
                     <Flex justify="between" align="start" gap="3">
                       <Text size="2" weight="bold" color="gray">
                         {section.label}
                       </Text>
-                      <Figures figures={section.figures} owed={section.owed} />
+                      <Figures figures={section.figures} />
                     </Flex>
-                    <Flex direction="column" gap="2">
-                      {section.rows.map((account) => (
+                    {splitByPlacement(section).map((part) => (
+                      <Flex key={part.key} direction="column" gap="2">
+                        {part.label && (
+                          <Text size="1" weight="medium" color="gray">
+                            {part.label}
+                          </Text>
+                        )}
+                      {part.rows.map((account) => (
                         // A pocket reads under its parent, set in from it (RF-173).
                         <Box key={account.id} ml={account.parentAccountId ? "5" : "0"}>
                           <AccountCard
@@ -436,7 +495,8 @@ export function AccountsScreen({
                           />
                         </Box>
                       ))}
-                    </Flex>
+                      </Flex>
+                    ))}
                   </Flex>
                 ))}
               </Flex>

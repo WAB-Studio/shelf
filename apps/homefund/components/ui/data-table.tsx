@@ -113,7 +113,7 @@ export function DataTable<Row>({
               <div role="row" className={styles.band}>
                 <div role="cell" aria-colspan={columns.length} className={styles.bandCell}>
                   <span>{group.label}</span>
-                  {group.aside && <span className={styles.bandAside}>{group.aside}</span>}
+                  {group.aside && <div className={styles.bandAside}>{group.aside}</div>}
                 </div>
               </div>
             )}
