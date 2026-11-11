@@ -5530,6 +5530,8 @@ const UPDATE_GRANT_GAPS: Record<string, string[]> = {
   webhook_credentials: [
     "created_at",
     "id",
+    // Fixed at minting, as purpose is: a key never changes what it is for.
+    "kind",
     "last_used_at",
     "owner_user_id",
     // Fixed at minting: a key never changes what it opens.

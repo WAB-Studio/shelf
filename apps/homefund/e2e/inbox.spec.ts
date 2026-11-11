@@ -142,7 +142,7 @@ test.describe("the inbox queue", () => {
       ).toBeVisible();
 
       await page.setViewportSize({ width: 390, height: 800 });
-      await expect(page.getByText(via)).toBeVisible();
+      await expect(page.getByText(via).locator("visible=true")).toHaveCount(1);
     });
 
     test("records the movement from the row menu and drops the row, but only opens the form for an incomplete one", async ({
