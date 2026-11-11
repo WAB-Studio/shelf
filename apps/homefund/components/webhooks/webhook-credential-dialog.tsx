@@ -29,6 +29,7 @@ import {
   TextField,
 } from "@/components/ui";
 import type { WebhookCredentialOptions } from "@/db/queries/webhook-credentials";
+import { androidSetupLink } from "@/lib/android-app";
 import { categoriesInScope } from "@/lib/fund/category-scope";
 import { useActionErrorToast } from "@/lib/use-action-toast";
 import { issueWebhookCredentialSchema } from "@/lib/validation/webhook";
@@ -54,10 +55,12 @@ export function WebhookCredentialDialog({
   open,
   onOpenChange,
   options,
+  ingestUrl,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   options: WebhookCredentialOptions;
+  ingestUrl: string;
 }) {
   // Mirrors the step the body is on. The token itself never leaves the body.
   const [showingToken, setShowingToken] = useState(false);
@@ -89,6 +92,7 @@ export function WebhookCredentialDialog({
             holds — is born fresh on the next open. No key flips it mid-exit. */}
         <WebhookCredentialBody
           options={options}
+          ingestUrl={ingestUrl}
           onTokenIssued={() => setShowingToken(true)}
           onClose={close}
         />
@@ -99,10 +103,12 @@ export function WebhookCredentialDialog({
 
 function WebhookCredentialBody({
   options,
+  ingestUrl,
   onTokenIssued,
   onClose,
 }: {
   options: WebhookCredentialOptions;
+  ingestUrl: string;
   onTokenIssued: () => void;
   onClose: () => void;
 }) {
@@ -212,6 +218,16 @@ function WebhookCredentialBody({
           failedLabel={t("copyFailed")}
           tone="secret"
         />
+        {/* The only moment the token can reach the phone; the link is built
+            from it on render and held nowhere. */}
+        <Flex direction="column" gap="2">
+          <Button asChild variant="soft">
+            <a href={androidSetupLink(ingestUrl, token)}>{t("androidSetup")}</a>
+          </Button>
+          <Text size="2" color="gray">
+            {t("androidSetupHint")}
+          </Text>
+        </Flex>
         {/* Always enabled: a clipboard write may legitimately fail, and the
             value stays selectable, so gating the exit would trap a person. */}
         <Flex justify="end">

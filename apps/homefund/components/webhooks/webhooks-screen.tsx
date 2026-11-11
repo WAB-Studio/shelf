@@ -22,6 +22,7 @@ import {
   Flex,
   Heading,
   IconButton,
+  Link,
   ScreenHeader,
   Text,
 } from "@/components/ui";
@@ -29,6 +30,7 @@ import type {
   WebhookCredentialOptions,
   WebhookCredentialRow,
 } from "@/db/queries/webhook-credentials";
+import { ANDROID_APP_RELEASES_URL } from "@/lib/android-app";
 import { scopedCategoryName } from "@/lib/fund/category-names";
 import { TIME_ZONE } from "@/lib/locales";
 import { useActionErrorToast } from "@/lib/use-action-toast";
@@ -289,10 +291,30 @@ export function WebhooksScreen({
         </Flex>
       </Card>
 
+      <Card>
+        <Flex direction="column" gap="2">
+          <Heading as="h2" size="3">{t("androidHeading")}</Heading>
+          <Text size="2" color="gray">
+            {t("androidDescription")}
+          </Text>
+          <Link
+            href={ANDROID_APP_RELEASES_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            {t("androidDownload")}
+          </Link>
+          <Text size="2" color="gray">
+            {t("androidDownloadHint")}
+          </Text>
+        </Flex>
+      </Card>
+
       <WebhookCredentialDialog
         open={issuing}
         onOpenChange={setIssuing}
         options={options}
+        ingestUrl={ingestUrl}
       />
 
       {revokeTarget !== null && (
