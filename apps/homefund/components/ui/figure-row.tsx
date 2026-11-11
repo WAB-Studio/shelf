@@ -13,13 +13,14 @@ export function FigureRow({
 }: {
   lead: ReactNode;
   children: ReactNode;
-  figure: ReactNode;
+  // Absent when the row's figure is drawn elsewhere.
+  figure?: ReactNode;
 }) {
   return (
     <Flex align="center" gapX="3" gapY="1" wrap="wrap" className={styles.row}>
       {lead}
       <div className={styles.body}>{children}</div>
-      <div className={styles.figure}>{figure}</div>
+      {figure !== undefined && <div className={styles.figure}>{figure}</div>}
     </Flex>
   );
 }
