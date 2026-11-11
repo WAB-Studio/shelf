@@ -450,10 +450,13 @@ export async function importStatement(
       const unlinked = preview.removals.filter((one) => one.effect === "unlinks");
       const deleted = preview.removals.filter((one) => one.effect === "deletes");
       const dropped = [...unlinked, ...kept].map((one) => heldSource.get(one.transactionId)!);
+      // A kept leg goes back in with the moment it first came in: `createdHere` compares it with its
+      // movement's, so a renumbered line stays deletable by a later re-import.
+      let born: Record<string, string> = {};
       // One round trip for what leaves: the movements this import created and the source rows. Each
       // count must be the one the preview said, else a policy skipped a row and nothing is written.
       if (dropped.length > 0 || deleted.length > 0) {
-        const [done] = await tx.execute<{ sources: number; movements: number }>(sql`
+        const [done] = await tx.execute<{ sources: number; movements: number; born: Record<string, string> | null }>(sql`
           with gone as (
             delete from transactions
             where id in (select jsonb_array_elements_text(${idsParam(deleted.map((one) => one.transactionId))})::uuid)
@@ -461,20 +464,23 @@ export async function importStatement(
           freed as (
             delete from transaction_sources
             where id in (select jsonb_array_elements_text(${idsParam(dropped)})::uuid)
-            returning id)
-          select (select count(*)::int from freed) as sources, (select count(*)::int from gone) as movements`);
+            returning transaction_id, created_at)
+          select (select count(*)::int from freed) as sources, (select count(*)::int from gone) as movements,
+            (select jsonb_object_agg(transaction_id, created_at) from freed) as born`);
         if (done?.movements !== deleted.length || done.sources !== dropped.length) {
           throw new StatementError("lineRefused");
         }
+        born = done.born ?? {};
       }
       legs.push(...kept);
       if (legs.length > 0) {
         await tx.execute(sql`
-          insert into transaction_sources (transaction_id, account_id, statement_id, source_ref, source_seq)
+          insert into transaction_sources (transaction_id, account_id, statement_id, source_ref, source_seq, created_at)
           values ${sql.join(
             legs.map((leg) => {
               const { ref, seq } = sourceOf(leg.row);
-              return sql`(${leg.transactionId}::uuid, ${input.accountId}::uuid, ${statementId}::uuid, ${ref}, ${seq}::int)`;
+              const at = born[leg.transactionId] ?? null;
+              return sql`(${leg.transactionId}::uuid, ${input.accountId}::uuid, ${statementId}::uuid, ${ref}, ${seq}::int, coalesce(${at}::timestamptz, now()))`;
             }),
             sql`, `,
           )}`);

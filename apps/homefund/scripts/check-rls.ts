@@ -5312,7 +5312,8 @@ const INSERT_GRANT_GAPS: Record<string, string[]> = {
   transaction_labels: [],
   // `marked_by` is stamped by the trigger from auth.uid(); the movement and the rule are the input.
   transaction_reviews: ["id", "marked_at", "marked_by"],
-  transaction_sources: ["created_at", "id"],
+  // A re-import puts a renumbered leg back with the moment it first came in.
+  transaction_sources: ["id"],
   transaction_splits: ["id"],
   transactions: [
     "created_at",

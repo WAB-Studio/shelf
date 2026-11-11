@@ -15705,15 +15705,16 @@ async function deferralImportSuite(): Promise<void> {
     return row?.cents;
   };
 
+  const march = { periodStart: "2026-03-01", cutOffDate: "2026-03-31" };
   const rows = [
     { line: 1, date: "2026-03-15", description: "NEVERA 1/36", amountCents: -360_000_000, categoryId: ids.food, instalments: 36 },
     { line: 2, date: "2026-03-16", description: "CAFE", amountCents: -1_000_000, categoryId: ids.food },
   ];
   type Line = { line: number; status: string; reason?: string; deferral?: { instalments: number; proposal: string } };
-  const preview = await tool("preview_statement", { accountId: ids.card, rows });
+  const preview = await tool("preview_statement", { accountId: ids.card, rows, statement: march });
   const lines = (preview.value?.lines ?? []) as Line[];
   const [none] = await fixtureSql<{ n: number }[]>`select count(*)::int as n from deferrals where account_id = ${ids.card}`;
-  const wrongSide = await tool("preview_statement", { accountId: ids.bank, rows: [rows[0]] });
+  const wrongSide = await tool("preview_statement", { accountId: ids.bank, rows: [rows[0]], statement: march });
   assert(
     next("RF-136: the preview proposes the deferral and writes nothing; on an asset account the line is invalid"),
     !preview.isError && lines[0]?.status === "new" && lines[0].deferral?.instalments === 36 &&
@@ -15722,8 +15723,8 @@ async function deferralImportSuite(): Promise<void> {
     `preview ${JSON.stringify(lines)}, deferrals ${none?.n}, asset ${JSON.stringify(wrongSide.value?.lines)}`,
   );
 
-  const imported = await tool("import_statement", { accountId: ids.card, rows, previewKey: preview.value?.previewKey });
-  const again = await tool("import_statement", { accountId: ids.card, rows, previewKey: preview.value?.previewKey });
+  const imported = await tool("import_statement", { accountId: ids.card, rows, statement: march, previewKey: preview.value?.previewKey });
+  const again = await tool("import_statement", { accountId: ids.card, rows, statement: march, previewKey: preview.value?.previewKey });
   const stored = await fixtureSql<{ instalments: number; description: string; created_by: string }[]>`
     select d.instalments, t.description, d.created_by from deferrals d join transactions t on t.id = d.transaction_id
     where d.account_id = ${ids.card}`;
@@ -15752,7 +15753,7 @@ async function deferralImportSuite(): Promise<void> {
   const transferLine = {
     line: 1, date: "2026-03-20", description: "TRASLADO 1/6", amountCents: -700_000, categoryId: ids.food, instalments: 6,
   };
-  const matched = await tool("preview_statement", { accountId: ids.card, rows: [transferLine] });
+  const matched = await tool("preview_statement", { accountId: ids.card, rows: [transferLine], statement: march });
   const matchedLine = (matched.value?.lines as Line[] | undefined)?.[0];
   const transferState = await asUser(owner, () => getMovementDeferral(transferId));
   const [purchaseId] = await fixtureSql<{ id: string }[]>`
