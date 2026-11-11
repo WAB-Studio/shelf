@@ -1,7 +1,8 @@
 import { withMcpAuth } from "mcp-handler";
 
 import { resolveWebhookCredential, type ResolvedWebhookCredential } from "@/db/queries/webhook-credentials";
-import { buildHandler, MCP_URL, RESOURCE_METADATA_PATH } from "@/lib/mcp/server";
+import { buildHandler, ISSUER, RESOURCE_METADATA_PATH } from "@/lib/mcp/server";
+import { requestHost, servedOrigin } from "@/lib/oauth/hosts";
 
 export const runtime = "nodejs";
 
@@ -19,21 +20,31 @@ async function verify(request: Request) {
   return { token: "redacted", clientId: credential.credentialId, scopes: [], extra: { ownerUserId: credential.ownerUserId } };
 }
 
-const door = withMcpAuth(buildHandler(), verify, {
-  required: true,
-  resourceMetadataPath: RESOURCE_METADATA_PATH,
-  resourceUrl: new URL(MCP_URL).origin,
-});
+const handler = buildHandler();
+
+// The 401 names the metadata of the host the request came on (when this app serves it), so a connector typed
+// with either address discovers an issuer that matches the address it knows.
+function doorFor(request: Request) {
+  return withMcpAuth(handler, verify, {
+    required: true,
+    resourceMetadataPath: RESOURCE_METADATA_PATH,
+    resourceUrl: servedOrigin(requestHost(request), ISSUER),
+  });
+}
 
 async function handle(request: Request): Promise<Response> {
-  const bearer = request.headers.get("authorization")?.match(BEARER)?.[1]?.trim();
+  // claude.ai keeps `Authorization` for its own OAuth and drops a custom one, so a connector there
+  // carries the key in `X-API-Key`.
+  const bearer =
+    request.headers.get("authorization")?.match(BEARER)?.[1]?.trim() ||
+    request.headers.get("x-api-key")?.trim();
   const credential = bearer ? await resolveWebhookCredential(bearer, "mcp") : null;
   // A live key over its window is not a bad key: 429 tells the client to wait, not to sign in again.
   if (credential?.throttled) {
     return Response.json({ error: "rate_limited" }, { status: 429, headers: { "Cache-Control": "no-store", "Retry-After": "60" } });
   }
   if (credential) resolved.set(request, credential);
-  const response = await door(request);
+  const response = await doorFor(request)(request);
   const headers = new Headers(response.headers);
   headers.set("Cache-Control", "no-store");
   return new Response(response.body, { status: response.status, statusText: response.statusText, headers });

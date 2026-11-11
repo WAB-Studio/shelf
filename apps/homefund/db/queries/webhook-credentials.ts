@@ -1,6 +1,6 @@
 import "server-only";
 
-import { createHash, randomBytes } from "node:crypto";
+import { randomBytes } from "node:crypto";
 
 import { desc, eq, sql } from "drizzle-orm";
 
@@ -11,13 +11,17 @@ import { listScopedCategories } from "@/db/queries/categories";
 import type { ScopedCategoryNode } from "@/db/queries/categories";
 import { webhookCredentials } from "@/db/schema";
 import { requireUser, withUserDb } from "@/db/session";
+import { sha256Hex } from "@/lib/hash";
 
 // The bearer a webhook presents, and the SHA-256 of it the row keeps. Only the
 // hash is ever stored, so a raw token exists in exactly two places: this file's
 // `issue` return and `resolve`'s input. It is shown once and never re-derivable.
 function tokenHashOf(token: string): string {
-  return createHash("sha256").update(token).digest("hex");
+  return sha256Hex(token);
 }
+
+// A conversation spends several requests per answer, so a Claude key gets a window wider than a webhook's (RF-144).
+export const CLAUDE_KEY_RATE_LIMIT_PER_MIN = 600;
 
 export type CredentialPurpose = "ingest" | "mcp";
 

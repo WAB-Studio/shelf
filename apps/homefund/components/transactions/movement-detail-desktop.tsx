@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import { markMovementReviewedAction } from "@/app/actions/recurring-rules";
 import { deleteTransactionAction } from "@/app/actions/transactions";
 import { useOwnerLabel } from "@/components/fund/owner-mark";
+import { DeferralControl } from "@/components/planning/deferral-control";
 import {
   MovementForm,
   movementFormDialogWidth,
@@ -29,6 +30,7 @@ import {
   VisuallyHidden,
 } from "@/components/ui";
 import type { MoneyTone } from "@/components/ui";
+import type { MovementDeferral } from "@/db/queries/deferrals";
 import type { TransactionFormOptions } from "@/db/queries/transaction-form";
 import type { TransactionListRow } from "@/db/queries/transactions";
 import { useRouter } from "@/i18n/navigation";
@@ -67,6 +69,7 @@ export function MovementDetailDesktop({
   creatorName,
   cause = null,
   causedCharges = [],
+  deferral = null,
   back,
 }: {
   movement: TransactionListRow;
@@ -77,6 +80,8 @@ export function MovementDetailDesktop({
   cause?: TransactionListRow | null;
   // The charges this movement caused, newest first, as the caller ordered them.
   causedCharges?: TransactionListRow[];
+  // Whether the purchase is deferred (RF-136) and whether a person may defer it.
+  deferral?: MovementDeferral | null;
   // Where the back arrow and a delete lead: the movements list unless the caller came from elsewhere.
   back: { href: string; label: string };
 }) {
@@ -464,6 +469,14 @@ export function MovementDetailDesktop({
                 ))}
               </Flex>
             </Panel>
+          )}
+
+          {deferral && (
+            <DeferralControl
+              transactionId={movement.id}
+              deferral={deferral.deferral}
+              canDefer={deferral.canDefer}
+            />
           )}
 
           {/* Only a generated movement still awaiting review offers Confirmar; a

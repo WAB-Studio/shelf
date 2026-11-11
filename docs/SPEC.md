@@ -89,7 +89,7 @@ accounting exports, native apps. None of this gets built or left
 - [x] **RF-129** — Every account, asset or liability, keeps a statement history: one immutable record per period with its bounds, the closing balance the statement printed and the opening balance, credits and debits it printed. The difference between that closing balance and the balance derived from the account's own movements, in its own settlement currency, is derived on read and shown, never stored.
 - [x] **RF-130** — A liability's statement record also carries what the statement charged for that period: interest, fees and the minimum, as printed. A closed period's statement history shows this charged figure, or that none was recorded; it never estimates a closed period. This does not change how the app estimates the current, still-open period's interest (RF-79).
 - [x] **RF-131** — A liability's next payment due derives from its latest statement's cut-off and due dates when one exists; the cut-off and due days on its terms are used only until a statement exists.
-- [ ] **RF-136** — A purchase may be deferred into a number of instalments. Its whole amount joins the balance the month it is billed, never fractioned; what the instalment fractions is that line's contribution to the minimum payment. A payment covering the balance extinguishes the plan without penalty, and the statement publishes it already extinguished. The app never concludes on its own that a purchase was deferred: it proposes it and a person confirms.
+- [x] **RF-136** — A purchase may be deferred into a number of instalments. Its whole amount joins the balance the month it is billed, never fractioned; what the instalment fractions is that line's contribution to the minimum payment. A payment covering the balance extinguishes the plan without penalty, and the statement publishes it already extinguished. The app never concludes on its own that a purchase was deferred: it proposes it and a person confirms.
 
 #### Transactions
 
@@ -199,8 +199,12 @@ accounting exports, native apps. None of this gets built or left
 - [x] **RF-97** — An account may store its last four digits; webhook ingest proposes the uniquely matching account named by a bank message before falling back to the credential default, while an explicit account override still wins.
 - [x] **RF-98** — Webhook ingest proposes the date the bank message carries, written with a two- or four-digit year and interpreted in `America/Bogota`; a caller-supplied date still overrides it, and a message whose date is unreadable or later than the day of delivery falls back to that day.
 - [x] **RF-99** — A person sees the message shapes they have silenced, each with the message that silenced it, and returns one to the queue: later messages of that shape wait for review again, and every message of that shape the silence discarded on its own comes back to the queue with it, indistinguishable from one never silenced. A message a person discarded stays discarded.
-- [ ] **RF-134** — A movement keeps one source reference per account leg — the statement it came from, the reference that statement gave that leg, and the line within it — so a transfer read from either side's statement is recognised as the movement already recorded, and re-importing a statement replaces exactly that statement's rows. Partly built 2026-10-30: each imported leg keeps its reference or line (`transaction_sources`) and a re-import or the other side's statement links instead of duplicating; the statement row (`statement_id`) and replacing a re-imported statement's rows are still open.
+- [x] **RF-134** — A movement keeps one source reference per account leg — the statement it came from, the reference that statement gave that leg, and the line within it — so a transfer read from either side's statement is recognised as the movement already recorded, and re-importing a statement replaces exactly that statement's rows. Built 2026-10-30 and 2026-11-10: each imported leg keeps its reference or line (`transaction_sources`) and the statement it came from (`statement_id`, a statement being told apart by its account and cut-off date); a re-import or the other side's statement links instead of duplicating, and a re-import of a statement drops the lines it no longer names (the movement when that statement was its only source, else only that leg's source) while keeping and adding the rest, as the preview says beforehand.
 - [x] **RF-144** — Bank statements are imported through an MCP server that Claude drives: the person hands the file to Claude in a conversation, Claude reads it and calls a preview tool, the person confirms, and then an import tool writes. No paid model runs inside the app. The preview is mandatory, and re-importing the same statement never duplicates a movement (RF-134, RF-52). Earlier statements serve as examples, never as a template. Decided by the user 2026-10-15. Built 2026-10-30: `/mcp` with `preview_statement` and `import_statement`; a key minted for Claude opens it, a webhook key never does. A transfer across currencies is imported with the amount the person confirms on the other account (the TRM).
+- [x] **RF-168** — Claude on claude.ai (web, desktop or mobile) connects to HomeFund as a custom connector with the URL `https://<host>/mcp` and signs in with HomeFund through OAuth: the connector registers itself, the person is sent to HomeFund's own sign-in if signed out and then to a screen that says what Claude may and may never do, and «Permitir» hands Claude a key. That key is the `mcp` key of RF-144: «Ajustes · Correos del banco» lists it and revoking it disconnects Claude; a code is redeemed once and with its PKCE verifier, and a replayed code revokes the key it bought, and a new connection of the same client replaces that person's earlier key, so each connection shows one key; registration is open to anyone but limited to ten a caller an hour. The key made by hand for Claude Code keeps working. Decided by the user 2026-11-10. Built 2026-11-10: `/.well-known/oauth-authorization-server`, `/oauth/register`, `/oauth/authorize`, `/oauth/token`; no refresh token, the key lasts until revoked.
+- [x] **RF-169** — Claude records movements through the MCP (RF-144) from what the person hands it in the conversation (a photo of a receipt, a bank message, an invoice): `record_movement` writes an expense, income or transfer, `update_movement` and `delete_movement` fix one the person can write. Each runs the same Zod schema and the same write as the movement form (the kind derived from the accounts, «De quién» required on an income into a fund account, the category's scope against the account's, the opening date, the second amount across currencies), as the key's owner under the same policies, and answers a refusal in the form's own words in Spanish, never a stack. A tool's description tells Claude to confirm with the person what it is about to write and to look for a duplicate first. No model runs inside the app.
+- [x] **RF-170** — Claude creates accounts and categories through the MCP: `create_account` and `create_category` take the fields of the account form and the categories screen, personal or in the fund, validated by the same schemas and written by the same code, with the same refusals.
+- [x] **RF-171** — Claude reads what it needs to write well through the MCP: `list_categories` answers the person's categories and their fund's with kind, parent and scope, and `list_movements` the recent movements of an account or of all, filtered by dates, so a duplicate is found before a movement is written. Both run as the key's owner; a webhook key opens none of the tools.
 - [x] **RF-135** — A counterparty is remembered per user: a description pattern earns an account and a side after two consecutive agreeing completions, and a completion naming a different account marks the pattern ambiguous, which no later agreement undoes. A remembered pattern prefills the missing side and never fills it on its own.
 
 The webhook (RF-90) reuses RF-22 (quick entry), RF-25 (created_by) and RF-45 (no write bypasses audit) unchanged: the same interpreter reads the payload text and the same insert path records the movement, so the created-by stamp and the audit hold as on any manual write. RF-52's idempotency shape is mirrored, not reused — RF-52 stays a spreadsheet-import requirement; the webhook applies the same stable-external-reference rule to its own deliveries. The review queue keeps that reuse: it runs RF-22's interpreter to propose rather than to decide, and RF-25 and RF-45 hold unchanged because an accepted proposal is still written through the same insert path.
@@ -305,6 +309,9 @@ erDiagram
     accounts ||--o| webhook_credentials : "default"
     categories ||--o| webhook_credentials : "default"
     webhook_credentials ||--o{ ingest_deliveries : "delivers"
+    app_users ||--o{ oauth_codes : "approves"
+    oauth_clients ||--o{ oauth_codes : "asks"
+    webhook_credentials ||--o| oauth_codes : "bought by"
     transactions ||--o| ingest_deliveries : "records (once accepted)"
     categories ||--o{ ingest_merchants : "remembers"
 
@@ -345,6 +352,8 @@ erDiagram
 
     recurring_rules ||--o{ transactions : "generates"
     group_members ||--o{ transactions : "puts in (De quién)"
+    transactions ||--o| deferrals : "deferred into instalments"
+    accounts ||--o{ deferrals : "its liability leg"
     transactions ||--o{ transaction_reviews : "reviewed once per rule"
     app_users ||--o{ transaction_reviews : "marks"
     planned_payments ||--o{ reminder_mails : "mailed once per date"
@@ -506,6 +515,15 @@ erDiagram
         bigint amount_cents
     }
 
+    deferrals {
+        uuid id PK
+        uuid transaction_id FK "unique: one deferral per purchase"
+        uuid account_id FK "the purchase's liability leg"
+        smallint instalments "2 to 72"
+        uuid created_by FK "auth.uid() by default"
+        timestamptz created_at
+    }
+
     transaction_sources {
         uuid id PK
         uuid transaction_id FK
@@ -633,6 +651,34 @@ erDiagram
         timestamptz revoked_at
         timestamptz created_at
         timestamptz updated_at
+    }
+
+    oauth_clients {
+        uuid id PK
+        text client_name "1 to 80 characters"
+        text_array redirect_uris "1 to 5, each https or loopback"
+        timestamptz created_at
+        timestamptz last_active_at "moved when a code is issued; idle for 30 days, it is swept"
+    }
+
+    oauth_codes {
+        uuid id PK
+        uuid owner_user_id FK "who said yes"
+        uuid client_id FK
+        text code_hash "sha-256 hex, stored never shown"
+        text code_challenge "PKCE S256"
+        text redirect_uri
+        timestamptz expires_at "ten minutes"
+        timestamptz used_at "a second redemption revokes credential_id"
+        uuid credential_id FK "the mcp key the code bought"
+        timestamptz created_at
+    }
+
+    oauth_calls {
+        text bucket PK "register"
+        text source PK "sha-256 of the caller address"
+        timestamptz window_start PK
+        integer calls "ten registrations an hour per caller"
     }
 
     ingest_deliveries {

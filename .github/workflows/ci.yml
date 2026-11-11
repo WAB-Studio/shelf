@@ -620,16 +620,17 @@ jobs:
        github.event.pull_request.head.repo.full_name == github.repository) &&
       needs.changes.outputs.orbit == 'true'
     # 1348 tests on one worker ran past 40 minutes (about 1070 done at 38).
-    # Four shards leave each near a quarter of that plus the setup.
+    # Four shards took 13 to 18 minutes (run 42920660564), the run's wall time;
+    # eight leave each near seven plus the setup.
     timeout-minutes: 30
     # Each shard owns a runner and so a stack of its own; the lane stays 9 in
-    # all four. `e2e` below is the one check name for the suite.
+    # all eight. `e2e` below is the one check name for the suite.
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3, 4]
+        shard: [1, 2, 3, 4, 5, 6, 7, 8]
     env:
-      SHARD_TOTAL: 4
+      SHARD_TOTAL: 8
       # Its own harness identities and seeded rows, so a CI run never touches the
       # rows a local lane is driving. Lanes 1 to 5 are the checkouts.
       HARNESS_LANE: 9

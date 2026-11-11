@@ -3,6 +3,7 @@
 import { refresh } from "next/cache";
 
 import {
+  CLAUDE_KEY_RATE_LIMIT_PER_MIN,
   getWebhookCredentialOptions,
   issueWebhookCredential,
   revokeWebhookCredential,
@@ -93,7 +94,7 @@ export const issueClaudeKeyAction = authActionClient
       purpose: "mcp",
       defaultAccountId: null,
       defaultCategoryId: null,
-      rateLimitPerMin: 600,
+      rateLimitPerMin: CLAUDE_KEY_RATE_LIMIT_PER_MIN,
     });
     refresh();
     return credential;

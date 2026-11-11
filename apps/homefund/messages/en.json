@@ -283,7 +283,8 @@
       "reminder_mails": "Reminder emails",
       "allowed_emails": "Allowed emails",
       "sign_in_claims": "Sign-ins",
-      "other": "Other record"
+      "other": "Other record",
+      "deferrals": "Deferred purchases"
     }
   },
   "members": {
@@ -1084,8 +1085,6 @@
     "tableDueDate": "Due",
     "tableBalance": "Balance",
     "nextPaymentBadge": "Next payment",
-    "installmentPosition": "Installments · {paid} of {total}",
-    "nextInstallment": "Next installment · {date}",
     "pageRange": "{from}–{to} of {total}",
     "previousPage": "Previous",
     "nextPage": "Next",
@@ -1129,30 +1128,32 @@
       "notLiability": "The account is not a liability."
     }
   },
+  "deferrals": {
+    "title": "Deferred purchases",
+    "step": "Instalment {current} of {total} · {amount} a month",
+    "extinguished": "Extinguished",
+    "action": "Defer in instalments",
+    "remove": "Remove deferral",
+    "dialogTitle": "Defer in instalments",
+    "dialogBody": "The purchase stays whole in your balance; the bank only fractions its part of the minimum payment into instalments, and your minimum payment does not change here. Confirm how many instalments the bank gave.",
+    "instalmentsLabel": "Number of instalments",
+    "save": "Confirm deferral",
+    "saved": "Purchase deferred.",
+    "removed": "Deferral removed.",
+    "removeTitle": "Remove the deferral?",
+    "removeBody": "The purchase stays in your balance; it only stops counting as deferred.",
+    "errors": {
+      "instalmentsInvalid": "Enter a number of instalments between 2 and 72.",
+      "notPurchase": "Only a purchase on a card or debt can be deferred.",
+      "alreadyDeferred": "This purchase is already deferred."
+    }
+  },
   "installments": {
-    "planDeleted": "Plan deleted.",
     "paymentTitle": "Pay down the debt",
     "fromLabel": "Pay from",
     "amountLabel": "Amount",
     "dateLabel": "Date",
     "paymentSave": "Record payment",
-    "paymentPaidLines": "{count, plural, =0 {The payment completed no installment.} =1 {You paid # installment.} other {You paid # installments.}}",
-    "paymentRemainder": "{amount} left over: not enough for the next installment.",
-    "tableSeq": "Installment",
-    "tableDueDate": "Due",
-    "tableAmount": "Amount",
-    "tableStatus": "Status",
-    "tableMovement": "Movement",
-    "tablePending": "Pending",
-    "viewMovement": "See movement",
-    "statusPaid": "Paid",
-    "statusPending": "Pending",
-    "plansTitle": "Installments",
-    "planPosition": "{paid} of {total}",
-    "planUntitled": "Installment purchase",
-    "tilePending": "Pending in installments",
-    "deleteTitle": "Delete plan",
-    "deleteDescription": "The plan's {count} installments go. The movements that paid some of them stay, unlinked.",
     "statementPeriod": "Period",
     "statementCutOff": "Cut-off",
     "statementDueDate": "Due",
@@ -1457,7 +1458,7 @@
       "scopeViolation": "That category belongs to another scope than the account. Pick a fund category for a fund account, or one of yours for your own account."
     },
     "mcpHeading": "Connect Claude",
-    "mcpDescription": "Add HomeFund as an HTTP MCP connector with this URL and a key for Claude in the «Authorization: Bearer» header. A webhook key does not open this door. Claude sees your accounts and «Review the month» with your own permissions; revoking the key disconnects it.",
+    "mcpDescription": "On claude.ai (web, desktop or mobile), add a custom connector with the URL above: it asks you to sign in with HomeFund and that is all. Claude sees your accounts and «Review the month» with your own permissions; revoking its key in the list disconnects it. A key you create here still works: in Claude Code it goes in «Authorization: Bearer», and in a connector with no sign-in in the «X-API-Key» header. A webhook key does not open this door.",
     "mcpIssue": "Create a key for Claude"
   },
   "ingest": {
@@ -1579,14 +1580,22 @@
     "footer": "You are getting this because you set a reminder date in HomeFund."
   },
   "mcp": {
-    "instructions": "HomeFund is a household's books: accounts, movements and a shared fund. Amounts are whole cents with their currency. Read with the tools; never invent movements.",
+    "instructions": "HomeFund is a household's books: accounts, movements and a shared fund. Amounts are whole cents with their currency. Read with the tools; never invent movements. Write only what the person confirmed.",
     "tools": {
       "listAccounts": "The open accounts the person can see, personal and the fund's, with their balance per currency in cents.",
       "reviewMonth": "«Review the month»: the movements that stand out in a closed month by fixed rules (an amount far above its category's usual, two equal on one day, an amount read from words, a reconciliation gap), and whether each is already marked fine.",
       "monthParam": "The month, YYYY-MM. Absent, the last closed month.",
-      "previewStatement": "Step 1 of importing a bank statement: says what each line would do, writing nothing. Each line: «new» (will be created), «matches» (already recorded by hand or as a transfer's other side; only linked), «already_imported» (skipped) or «invalid» (with its reason). «proposal» is the account the person used before for that description: ask them before passing it as counterAccountId. A transfer with an account in another currency carries «counter»: ask the person how much arrived (or left) in that account, pass it as counterAmountCents and confirm the resulting rate with them. Show the summary to the person before step 2.",
-      "importStatement": "Step 2: imports exactly what preview_statement showed, with its previewKey. All or nothing: if a line changed, or what the preview said about it, or one is invalid, nothing is written and it asks for a new preview. Repeating it never duplicates movements: what was imported shows as «already_imported»."
+      "previewStatement": "Step 1 of importing a bank statement: says what each line would do, writing nothing. Each line: «new» (will be created), «matches» (already recorded by hand or as a transfer's other side; only linked), «already_imported» (skipped) or «invalid» (with its reason). «proposal» is the account the person used before for that description: ask them before passing it as counterAccountId. A transfer with an account in another currency carries «counter»: ask the person how much arrived (or left) in that account, pass it as counterAmountCents and confirm the resulting rate with them. Always pass «statement» (periodStart and cutOffDate as the statement prints them, and its closing balance when printed): the cut-off date is how a re-import finds the same statement, and every line must fall inside the period. «removals» lists what a re-import of that statement would drop because its lines no longer name it («deletes» removes the movement, «unlinks» only this statement's link to it): show it to the person. Show the summary to the person before step 2.",
+      "importStatement": "Step 2: imports exactly what preview_statement showed, with its previewKey. All or nothing: if a line changed, or what the preview said about it, or one is invalid, nothing is written and it asks for a new preview. Repeating it never duplicates movements: what was imported shows as «already_imported». Re-importing a statement replaces its rows: lines it no longer names are removed (as the preview's «removals» said), new ones are added and unchanged ones keep their category, labels and notes.",
+      "listCategories": "The categories the person can use, personal and the fund's, with id, name, kind (expense or income), parent and scope (personal or fund). Always pick one from here for a movement; if none fits, propose creating one with create_category.",
+      "listMovements": "Recent movements, newest first, of one account or all, filtered by dates (YYYY-MM-DD): id, date, description, amount in cents, currency, source and destination accounts and categories. Call it BEFORE record_movement to see whether it is already recorded and not duplicate it.",
+      "recordMovement": "Records an expense (fromAccountId only), an income (toAccountId only) or a transfer (both); the kind comes from the accounts. Amount in whole cents, date YYYY-MM-DD, never in the future. An expense or income carries a category (categoryId, or splits summing to the amount); a transfer none. An income into a fund account needs contributedByMemberId («Whose»). BEFORE calling it, look for a duplicate with list_movements and CONFIRM with the person what you are about to write (account, amount, date, category). Generate a requestRef (UUID) per movement and reuse it on a retry: it never duplicates. Returns the movement id.",
+      "updateMovement": "Fixes a movement the person can write. It is a patch: send only what changes and the rest stays as it is. Pass the updatedAt you read in list_movements as expectedUpdatedAt: if someone edited it meanwhile, it is refused. CONFIRM the change with the person before calling it.",
+      "deleteMovement": "Deletes a movement the person can write. It cannot be undone: CONFIRM with the person which one before calling it.",
+      "createAccount": "Creates an account with an opening balance in cents on a date: asset (bank or cash) or liability (card, what is owed goes positive). placement «personal» or «group» (the fund's). CONFIRM name, kind, currency and balance with the person before calling it, and check with list_accounts that it does not exist yet.",
+      "createCategory": "Creates a category (expense or income), optionally under a parent of the same kind and scope. placement «personal» or «group». CONFIRM with the person before calling it and check with list_categories that it does not exist yet."
     },
+    "deferralProposal": "Defer in {count} instalments",
     "errors": {
       "unauthorized": "The key is not valid or was revoked.",
       "unknown": "It could not be done. Try again.",
@@ -1598,6 +1607,68 @@
         "invalidLines": "Some lines are invalid: fix or remove them and preview again.",
         "lineRefused": "A line could not be recorded; nothing was imported."
       }
+    },
+    "params": {
+      "fromAccountId": "Source account (id from list_accounts): null on an income.",
+      "toAccountId": "Destination account (id from list_accounts): null on an expense.",
+      "amountCents": "Amount in whole cents, positive.",
+      "currency": "COP or USD; absent, the accounts' own.",
+      "counterAmountCents": "What left or arrived, in cents, in the account of another currency.",
+      "counterIsEstimate": "true while that second amount is an estimate, not what the bank billed.",
+      "occurredAt": "Movement date, YYYY-MM-DD, never in the future.",
+      "description": "Short text: merchant or concept; any note goes here too.",
+      "categoryId": "Shortcut: one category (id from list_categories) for the whole amount.",
+      "splits": "Split by category; the amounts sum to the movement's.",
+      "contributedByMemberId": "«Whose»: the fund member; required on an income into a fund account.",
+      "forHousehold": "true for a household expense paid from a personal account.",
+      "requestRef": "A UUID you generate per movement the person wants; on a retry reuse the same one and it never duplicates.",
+      "transactionId": "The movement's id (from list_movements).",
+      "expectedUpdatedAt": "The updatedAt list_movements returned; if someone edited it since, it is refused as stale.",
+      "accountId": "An account id; absent, all.",
+      "from": "From this date, YYYY-MM-DD.",
+      "to": "Up to this date, YYYY-MM-DD.",
+      "limit": "How many to return, 1 to 200; default 50.",
+      "accountName": "The account's name.",
+      "accountKind": "asset (bank or cash) or liability (card).",
+      "accountSubtype": "bank, cash or card.",
+      "accountPlacement": "personal (default) or group, the fund's.",
+      "settlementCurrency": "COP (default) or USD.",
+      "openingBalanceCents": "Opening balance in cents; on a card, what is owed, positive.",
+      "balanceOn": "The date the opening balance is true as of, YYYY-MM-DD.",
+      "institution": "Bank or institution, optional.",
+      "lastFour": "Last four digits, optional.",
+      "categoryName": "The category's name.",
+      "categoryKind": "expense or income.",
+      "parentId": "Parent category id of the same kind, or null.",
+      "categoryPlacement": "personal or group; absent, the fund when the person has one.",
+      "color": "A palette colour; absent, the first free one."
+    }
+  },
+  "oauth": {
+    "title": "Connect with Claude",
+    "heading": "Connect {client} to HomeFund",
+    "returnsTo": "When you decide you will return to <host>{address}</host>.",
+    "mayLabel": "It will be able to",
+    "may": {
+      "accounts": "See your accounts and balances, with your own permissions.",
+      "review": "Review the month and read its movements.",
+      "import": "Preview and import bank statements, after you confirm."
+    },
+    "neverLabel": "It will never be able to",
+    "never": {
+      "delete": "Delete your accounts or your data."
+    },
+    "allow": "Allow",
+    "deny": "Cancel",
+    "footer": "You are connecting as {email}. You can disconnect it any time in Settings · Bank emails.",
+    "invalid": {
+      "title": "This request is not valid",
+      "body": "The link that brought you here is incomplete or comes from an app HomeFund does not know. Go back to Claude and start again.",
+      "home": "Go to HomeFund"
+    },
+    "errors": {
+      "clientUnknown": "HomeFund does not know this app. Go back to Claude and start again.",
+      "redirectMismatch": "The return address is not the one this app registered."
     }
   }
 }

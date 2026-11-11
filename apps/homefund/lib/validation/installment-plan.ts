@@ -40,8 +40,3 @@ export const recordDebtPaymentSchema = z.object({
 });
 
 export type RecordDebtPaymentInput = z.infer<typeof recordDebtPaymentSchema>;
-
-export const deleteInstallmentPlanSchema = z.object({
-  planId: z.uuid({ error: "installments.errors.planInvalid" }),
-});
-

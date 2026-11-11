@@ -236,6 +236,11 @@ async function main() {
     return;
   }
 
+  if (process.env.RLS_ONLY === "rf136") {
+    await checkDeferrals();
+    return;
+  }
+
   if (process.env.RLS_ONLY === "o7m2") {
     await checkTransactionReviews();
     return;
@@ -314,6 +319,185 @@ async function main() {
   await checkMovementBeforeOpening();
   await checkO7M11Survivors();
   await checkTransactionReviews();
+  await checkDeferrals();
+  await checkOauthExchange();
+}
+
+// RF-136: a deferral is read and written exactly when its purchase's liability account is, carries 2 to 72
+// instalments, is replaced by delete and insert, and goes with its movement. Every row rolls back.
+async function rf136Rows(labels: string[], body: (tx: M1Tx) => Promise<M1Verdict[]>): Promise<void> {
+  let verdicts: M1Verdict[] = labels.map(() => ({ ok: false, detail: "the body never ran" }));
+  await sql
+    .begin(async (tx) => {
+      verdicts = await body(tx);
+      throw M1_ROLLBACK;
+    })
+    .catch((error: unknown) => {
+      if (error === M1_ROLLBACK) return;
+      verdicts = labels.map(() => ({ ok: false, detail: `aborted — ${describeRefusal(error)}` }));
+    });
+  labels.forEach((label, i) => assert(label, verdicts[i].ok, verdicts[i].detail));
+}
+
+// A's personal card with one purchase on it, and a user of another fund who reads neither. Leaves the role reset.
+async function rf136Fixture(tx: M1Tx) {
+  const f = await o6m1bFund(tx);
+  await enterUserContext(tx, f.member);
+  const [{ id: card }] = await tx<{ id: string }[]>`
+    insert into accounts (owner_user_id, name, kind, subtype, initial_balance_on)
+    values (${f.member}, 'rls rf136 card', 'liability', 'card', ${todayInBogota()}) returning id`;
+  const purchase = await o6m1Movement(tx, card, f.personalCategory, 9_000_000, "rls rf136 purchase");
+  await tx`reset role`;
+  const { leader: stranger } = await m1Group(tx);
+  await tx`reset role`;
+  return { ...f, card, purchase, stranger };
+}
+
+async function checkDeferrals() {
+  console.log("");
+  const labels = {
+    writer: "rf136-1. the owner of the card defers a purchase, the count is 2 to 72, a second deferral of it is 23505, and created_by is auth.uid()",
+    scope: "rf136-2. a fund member who only reads the card reads the deferral and cannot defer or remove; a user of another fund reads and writes nothing: 42501",
+    final: "rf136-3. no deferral can be updated; the owner removes it and defers again; deleting the purchase takes its deferral",
+    pairing: "rf136-5. a deferral must name an expense whose source is the named liability: another card, a refund into the card, a transfer out of it and an asset's purchase are each 23514",
+    edited: "rf136-6. editing the purchase's source, or giving it a destination, takes its deferral; an edit that keeps both leaves it",
+    grants: "rf136-4. anon and service_role hold no privilege on deferrals; authenticated holds select, insert (transaction_id, account_id, instalments) and delete alone",
+  };
+
+  await rf136Rows([labels.writer], async (tx) => {
+    const f = await rf136Fixture(tx);
+    await enterUserContext(tx, f.member);
+    const defer = (count: number) => (sp: M1Tx) =>
+      sp`insert into deferrals (transaction_id, account_id, instalments) values (${f.purchase}, ${f.card}, ${count})`;
+    const tooFew = await m1Refusal(tx, defer(1));
+    const tooMany = await m1Refusal(tx, defer(73));
+    const saved = await m1Refusal(tx, defer(36));
+    const twice = await m1Refusal(tx, defer(12));
+    await tx`reset role`;
+    const stored = await tx<{ instalments: number; created_by: string }[]>`
+      select instalments, created_by from finances.deferrals where transaction_id = ${f.purchase}`;
+    return [{
+      ok: tooFew === "23514" && tooMany === "23514" && saved === null && twice === "23505" &&
+        stored.length === 1 && stored[0].instalments === 36 && stored[0].created_by === f.member,
+      detail: `1: ${tooFew}, 73: ${tooMany}, 36: ${saved ?? "accepted"}, again: ${twice}; stored ${JSON.stringify(stored)}`,
+    }];
+  });
+
+  await rf136Rows([labels.scope], async (tx) => {
+    const f = await rf136Fixture(tx);
+    await enterUserContext(tx, f.member);
+    await tx`insert into deferrals (transaction_id, account_id, instalments) values (${f.purchase}, ${f.card}, 24)`;
+    await enterUserContext(tx, f.leader);
+    const seen = (await tx`select id from deferrals where transaction_id = ${f.purchase}`).length;
+    const insert = await m1Refusal(tx, (sp) => sp`
+      insert into deferrals (transaction_id, account_id, instalments) values (${f.purchase}, ${f.card}, 6)`);
+    const removed = (await tx`delete from deferrals where transaction_id = ${f.purchase} returning id`).length;
+    await enterUserContext(tx, f.stranger);
+    const strangerSees = (await tx`select id from deferrals where transaction_id = ${f.purchase}`).length;
+    const strangerInsert = await m1Refusal(tx, (sp) => sp`
+      insert into deferrals (transaction_id, account_id, instalments) values (${f.purchase}, ${f.card}, 6)`);
+    const strangerRemoved = (await tx`delete from deferrals where transaction_id = ${f.purchase} returning id`).length;
+    await tx`reset role`;
+    const [{ left }] = await tx<{ left: number }[]>`select count(*)::int as left from finances.deferrals where transaction_id = ${f.purchase}`;
+    return [{
+      ok: seen === 1 && insert !== null && removed === 0 && strangerSees === 0 && strangerInsert === "42501" &&
+        strangerRemoved === 0 && left === 1,
+      detail: `reader sees ${seen}, defers ${insert ?? "accepted"}, removes ${removed}; stranger sees ${strangerSees}, ` +
+        `defers ${strangerInsert ?? "accepted"}, removes ${strangerRemoved}; ${left} stored`,
+    }];
+  });
+
+  await rf136Rows([labels.final], async (tx) => {
+    const f = await rf136Fixture(tx);
+    await enterUserContext(tx, f.member);
+    const id = (await tx<{ id: string }[]>`
+      insert into deferrals (transaction_id, account_id, instalments) values (${f.purchase}, ${f.card}, 24) returning id`)[0].id;
+    const update = await m1Refusal(tx, (sp) => sp`update deferrals set instalments = 3 where id = ${id}`);
+    const removed = (await tx`delete from deferrals where id = ${id} returning id`).length;
+    const again = await m1Refusal(tx, (sp) => sp`
+      insert into deferrals (transaction_id, account_id, instalments) values (${f.purchase}, ${f.card}, 3)`);
+    await tx`delete from transactions where id = ${f.purchase}`;
+    await tx`reset role`;
+    const [{ left }] = await tx<{ left: number }[]>`select count(*)::int as left from finances.deferrals where account_id = ${f.card}`;
+    return [{
+      ok: update === "42501" && removed === 1 && again === null && left === 0,
+      detail: `update ${update ?? "accepted"}, delete took ${removed}, defer again ${again ?? "accepted"}, ${left} left after the purchase went`,
+    }];
+  });
+
+  await rf136Rows([labels.pairing], async (tx) => {
+    const f = await rf136Fixture(tx);
+    await enterUserContext(tx, f.member);
+    const [{ id: other }] = await tx<{ id: string }[]>`
+      insert into accounts (owner_user_id, name, kind, subtype, initial_balance_on)
+      values (${f.member}, 'rls rf136 other card', 'liability', 'card', ${todayInBogota()}) returning id`;
+    const [{ id: refund }] = await tx<{ id: string }[]>`
+      insert into transactions (to_account_id, amount_cents, occurred_at) values (${f.card}, 1000, ${todayInBogota()}) returning id`;
+    const [{ id: transfer }] = await tx<{ id: string }[]>`
+      insert into transactions (from_account_id, to_account_id, amount_cents, occurred_at)
+      values (${f.card}, ${f.personal}, 1000, ${todayInBogota()}) returning id`;
+    const assetPurchase = await o6m1Movement(tx, f.personal, f.personalCategory, 1000, "rls rf136 asset purchase");
+    const attempt = (transactionId: string, accountId: string) =>
+      m1Refusal(tx, (sp) => sp`
+        insert into deferrals (transaction_id, account_id, instalments) values (${transactionId}, ${accountId}, 6)`);
+    const codes = {
+      otherCard: await attempt(f.purchase, other),
+      refund: await attempt(refund, f.card),
+      transfer: await attempt(transfer, f.card),
+      asset: await attempt(assetPurchase, f.personal),
+    };
+    const own = await attempt(f.purchase, f.card);
+    return [{
+      ok: Object.values(codes).every((code) => code === "23514") && own === null,
+      detail: `other card ${codes.otherCard}, refund ${codes.refund}, transfer ${codes.transfer}, asset ${codes.asset}; the purchase on its own card ${own ?? "accepted"}`,
+    }];
+  });
+
+  await rf136Rows([labels.edited], async (tx) => {
+    const f = await rf136Fixture(tx);
+    await enterUserContext(tx, f.member);
+    const [{ id: other }] = await tx<{ id: string }[]>`
+      insert into accounts (owner_user_id, name, kind, subtype, initial_balance_on)
+      values (${f.member}, 'rls rf136 other card', 'liability', 'card', ${todayInBogota()}) returning id`;
+    const count = async () =>
+      (await tx`select id from deferrals where transaction_id = ${f.purchase}`).length;
+    await tx`insert into deferrals (transaction_id, account_id, instalments) values (${f.purchase}, ${f.card}, 12)`;
+    await tx`update transactions set amount_cents = 9100000, description = 'rls rf136 edited' where id = ${f.purchase}`;
+    await tx`update transactions set from_account_id = ${f.card} where id = ${f.purchase}`;
+    const kept = await count();
+    await tx`update transactions set from_account_id = ${other} where id = ${f.purchase}`;
+    const moved = await count();
+    await tx`insert into deferrals (transaction_id, account_id, instalments) values (${f.purchase}, ${other}, 12)`;
+    await tx`update transactions set to_account_id = ${f.personal} where id = ${f.purchase}`;
+    const transferred = await count();
+    return [{
+      ok: kept === 1 && moved === 0 && transferred === 0,
+      detail: `after an edit that keeps the source ${kept} deferral, after moving the source ${moved}, after giving it a destination ${transferred}`,
+    }];
+  });
+
+  await rf136Rows([labels.grants], async (tx) => {
+    const held = await tx<{ role: string; privilege: string }[]>`
+      select r.role, p.privilege
+      from unnest(array['anon', 'service_role']) as r(role)
+      cross join unnest(${O7M2_PRIVILEGES as unknown as string[]}::text[]) as p(privilege)
+      where has_table_privilege(r.role, 'finances.deferrals', p.privilege)
+         or (p.privilege in ('SELECT', 'INSERT', 'UPDATE', 'REFERENCES')
+             and has_any_column_privilege(r.role, 'finances.deferrals', p.privilege))`;
+    const [mine] = await tx<{ update_any: boolean; del: boolean }[]>`
+      select has_any_column_privilege('authenticated', 'finances.deferrals', 'UPDATE') as update_any,
+        has_table_privilege('authenticated', 'finances.deferrals', 'DELETE') as del`;
+    const insertable = await tx<{ column_name: string }[]>`
+      select column_name from information_schema.columns
+      where table_schema = 'finances' and table_name = 'deferrals'
+        and has_column_privilege('authenticated', 'finances.deferrals', column_name, 'INSERT')
+      order by column_name`;
+    const columns = insertable.map((row) => row.column_name).join(", ");
+    return [{
+      ok: held.length === 0 && !mine.update_any && mine.del && columns === "account_id, instalments, transaction_id",
+      detail: `anon/service_role hold [${held.map((h) => `${h.role} ${h.privilege}`).join(", ")}]; update ${mine.update_any}, delete ${mine.del}; insertable [${columns}]`,
+    }];
+  });
 }
 
 // Assertions 9-26: the repivoted schema. A group holds accounts and categories a user XOR a group
@@ -3087,7 +3271,7 @@ async function checkAuditLogPolicies() {
     from pg_class c
     join pg_namespace n on n.oid = c.relnamespace
     where n.nspname = 'finances' and c.relkind = 'r' and c.relrowsecurity
-      and c.relname <> 'audit_log'
+      and c.relname not in ('audit_log', 'oauth_calls')
       and not exists (
         select 1 from pg_trigger t
         where t.tgrelid = c.oid and t.tgname = 'capture_audit' and not t.tgisinternal)`;
@@ -5057,6 +5241,8 @@ const INSERT_GRANT_GAPS: Record<string, string[]> = {
   budgets: ["archived_at", "created_at", "id", "updated_at"],
   categories: ["created_at", "id", "updated_at"],
   debt_terms: ["created_at", "updated_at"],
+  // `created_by` is the column default from `auth.uid()`; the movement, the account and the count are the input.
+  deferrals: ["created_at", "created_by", "id"],
   goal_contributions: ["id"],
   group_members: ["archived_at", "created_at", "id", "invite_state", "updated_at"],
   groups: ["created_at", "updated_at"],
@@ -5101,6 +5287,11 @@ const INSERT_GRANT_GAPS: Record<string, string[]> = {
   installment_lines: ["created_at", "id", "paid_transaction_id"],
   installment_plans: ["created_at", "id", "updated_at"],
   labels: ["created_at", "id", "updated_at"],
+  // The OAuth tables carry no grant (RF-168), bar the consent's insert of a code: only the server's own pool writes them.
+  oauth_calls: ["bucket", "calls", "source", "window_start"],
+  oauth_clients: ["client_name", "created_at", "id", "last_active_at", "redirect_uris"],
+  // The consent inserts these five as the signed-in person; the rest is the table's or the exchange's.
+  oauth_codes: ["created_at", "credential_id", "expires_at", "id", "used_at"],
   planned_payments: [
     "created_at",
     "created_by",
@@ -5127,7 +5318,8 @@ const INSERT_GRANT_GAPS: Record<string, string[]> = {
   transaction_labels: [],
   // `marked_by` is stamped by the trigger from auth.uid(); the movement and the rule are the input.
   transaction_reviews: ["id", "marked_at", "marked_by"],
-  transaction_sources: ["created_at", "id"],
+  // A re-import puts a renumbered leg back with the moment it first came in.
+  transaction_sources: ["id"],
   transaction_splits: ["id"],
   transactions: [
     "created_at",
@@ -5202,6 +5394,8 @@ const UPDATE_GRANT_GAPS: Record<string, string[]> = {
   budgets: ["category_id", "created_at", "external_ref", "group_id", "id", "owner_user_id", "updated_at"],
   categories: ["created_at", "group_id", "id", "kind", "owner_user_id", "seed_key", "updated_at"],
   debt_terms: ["account_id", "created_at", "updated_at"],
+  // A deferral is replaced by deleting it and deferring again: no column is writable.
+  deferrals: ["account_id", "created_at", "created_by", "id", "instalments", "transaction_id"],
   goal_contributions: ["amount_cents", "created_at", "external_ref", "goal_id", "id", "transaction_id"],
   group_members: [
     "created_at",
@@ -5274,6 +5468,21 @@ const UPDATE_GRANT_GAPS: Record<string, string[]> = {
     "updated_at",
   ],
   labels: ["created_at", "external_ref", "group_id", "id", "owner_user_id", "updated_at"],
+  // The OAuth tables carry no grant (RF-168), bar the consent's insert of a code: only the server's own pool writes them.
+  oauth_calls: ["bucket", "calls", "source", "window_start"],
+  oauth_clients: ["client_name", "created_at", "id", "last_active_at", "redirect_uris"],
+  oauth_codes: [
+    "client_id",
+    "code_challenge",
+    "code_hash",
+    "created_at",
+    "credential_id",
+    "expires_at",
+    "id",
+    "owner_user_id",
+    "redirect_uri",
+    "used_at",
+  ],
   planned_payments: ["created_at", "created_by", "group_id", "id", "owner_user_id", "updated_at"],
   recurring_rules: ["created_at", "created_by", "group_id", "id", "owner_user_id", "paused_reason", "updated_at"],
   savings_goals: ["created_at", "external_ref", "group_id", "id", "owner_user_id", "updated_at"],
@@ -5328,6 +5537,7 @@ const DELETE_GRANTS: string[] = [
   "budgets",
   "categories",
   "debt_terms",
+  "deferrals",
   "goal_contributions",
   "group_members",
   "ingest_counterparties",
@@ -13702,6 +13912,178 @@ async function checkTransactionReviews() {
     afterUser === "postgres" && groups === 0 && movements === 0,
     `current_user = ${afterUser}, groups ${groups}, movements ${movements} named 'rls o7m2%'`,
   );
+}
+
+// RF-168: `private.exchange_oauth_code` redeems an authorization code once, for the PKCE verifier, the client and
+// the redirect it was issued to, and mints the consenting person's `mcp` key; `private.claim_oauth_call` caps
+// the unauthenticated registration. Every row rolls back.
+async function checkOauthExchange() {
+  console.log("");
+  const labels = [
+    "oauth-1. a code redeemed with its challenge, client and redirect mints one `mcp` key owned by the consenting user, and answers that user",
+    "oauth-2. a wrong challenge, another client, another redirect and an expired code each answer null and mint nothing",
+    "oauth-3. a second redemption answers null and revokes the key the first one bought",
+    "oauth-4. the call counter admits `cap` calls in a window, then answers the seconds left; another caller is counted apart",
+    "oauth-5. no API role holds a privilege on the OAuth tables or the three functions, bar the consent's INSERT of a code",
+    "oauth-6. a client with recent activity survives any age and an idle one goes after 30 days, with its codes; a spent code goes after a day",
+    "oauth-7. a new key replaces the same person's live keys for the same client and no one else's",
+    "oauth-8. the consent writes a code as the person, naming them in the audit log; it refuses another person as owner",
+  ];
+  const hash = (value: string) => createHash("sha256").update(value).digest("hex");
+  const REDIRECT = "https://claude.ai/api/mcp/auth_callback";
+
+  await m1Rows([labels[0], labels[1], labels[2]], async (tx) => {
+    const user = randomUUID();
+    await tx`insert into auth.users (id) values (${user})`;
+    await tx`insert into app_users (id) values (${user})`;
+    const [{ id: client }] = await tx<{ id: string }[]>`
+      insert into oauth_clients (client_name, redirect_uris) values ('rls oauth', ${tx.array([REDIRECT])}) returning id`;
+    const [{ id: other }] = await tx<{ id: string }[]>`
+      insert into oauth_clients (client_name, redirect_uris) values ('rls oauth other', ${tx.array([REDIRECT])}) returning id`;
+    const issue = async (code: string, expired = false) => {
+      await tx`insert into oauth_codes (owner_user_id, client_id, code_hash, code_challenge, redirect_uri, expires_at)
+        values (${user}, ${client}, ${hash(code)}, 'challenge-a', ${REDIRECT},
+          ${expired ? tx`now() - interval '1 minute'` : tx`now() + interval '10 minutes'`})`;
+    };
+    const exchange = async (code: string, challenge: string, clientId: string, redirect: string, token: string) => {
+      const [row] = await tx<{ owner: string | null }[]>`
+        select private.exchange_oauth_code(${hash(code)}, ${challenge}, ${clientId}::uuid, ${redirect}, ${hash(token)}, 600) as owner`;
+      return row.owner;
+    };
+    const keys = async () => tx<{ owner_user_id: string; purpose: string; revoked_at: string | null; name: string }[]>`
+      select owner_user_id, purpose, revoked_at, name from webhook_credentials where owner_user_id = ${user}`;
+
+    await issue("code-bad");
+    await issue("code-old", true);
+    const refused = [
+      await exchange("code-bad", "challenge-b", client, REDIRECT, "tok-1"),
+      await exchange("code-bad", "challenge-a", other, REDIRECT, "tok-2"),
+      await exchange("code-bad", "challenge-a", client, "https://claude.ai/other", "tok-3"),
+      await exchange("code-old", "challenge-a", client, REDIRECT, "tok-4"),
+      await exchange("code-unknown", "challenge-a", client, REDIRECT, "tok-5"),
+    ];
+    const none = (await keys()).length;
+
+    await issue("code-good");
+    const answered = await exchange("code-good", "challenge-a", client, REDIRECT, "tok-good");
+    const minted = await keys();
+    const [{ credential_id: bought, used: used }] = await tx<{ credential_id: string | null; used: boolean }[]>`
+      select credential_id, used_at is not null as used from oauth_codes where code_hash = ${hash("code-good")}`;
+    const resolved = await tx<{ owner_user_id: string }[]>`
+      select owner_user_id from private.resolve_webhook_credential(${hash("tok-good")}, 'mcp')`;
+
+    const replay = await exchange("code-good", "challenge-a", client, REDIRECT, "tok-replay");
+    const after = await keys();
+    const afterReplay = await tx<{ n: number }[]>`
+      select count(*)::int as n from private.resolve_webhook_credential(${hash("tok-good")}, 'mcp')`;
+
+    return [
+      {
+        ok: answered === user && minted.length === 1 && minted[0].owner_user_id === user && minted[0].purpose === "mcp" &&
+          minted[0].name === "rls oauth" && bought !== null && used && resolved.length === 1 && resolved[0].owner_user_id === user,
+        detail: `answered the user = ${answered === user}, keys = ${minted.length}, owner = ${minted[0]?.owner_user_id === user}, purpose ${minted[0]?.purpose}, code used ${used}, resolves as the user ${resolved[0]?.owner_user_id === user}`,
+      },
+      { ok: refused.every((row) => row === null) && none === 0, detail: `answers ${JSON.stringify(refused)}, keys minted ${none}` },
+      {
+        ok: replay === null && after.length === 1 && after[0].revoked_at !== null && afterReplay[0].n === 0,
+        detail: `replay ${replay}, keys ${after.length}, revoked ${after[0]?.revoked_at !== null}, still resolves ${afterReplay[0].n}`,
+      },
+    ];
+  });
+
+  await m1Rows([labels[3], labels[4]], async (tx) => {
+    const claim = async (source: string) => {
+      const [row] = await tx<{ wait: number }[]>`select private.claim_oauth_call('register', ${source}, 2, 3600) as wait`;
+      return row.wait;
+    };
+    const first = [await claim("a"), await claim("a"), await claim("a")];
+    const apart = await claim("b");
+    const [{ roles }] = await tx<{ roles: number }[]>`
+      select count(*)::int as roles from unnest(array['anon', 'authenticated', 'service_role']) r
+      cross join unnest(array['oauth_clients', 'oauth_codes', 'oauth_calls']) t
+      where has_any_column_privilege(r, ('finances.' || t)::regclass, 'SELECT, INSERT, UPDATE, REFERENCES')
+        and not (r = 'authenticated' and t = 'oauth_codes' and
+          not has_any_column_privilege(r, 'finances.oauth_codes'::regclass, 'SELECT, UPDATE, REFERENCES'))`;
+    const [{ fns }] = await tx<{ fns: number }[]>`
+      select count(*)::int as fns from unnest(array['anon', 'authenticated', 'service_role']) r
+      where has_function_privilege(r, 'private.exchange_oauth_code(text, text, uuid, text, text, integer)', 'EXECUTE')
+         or has_function_privilege(r, 'private.claim_oauth_call(text, text, integer, integer)', 'EXECUTE')
+         or has_function_privilege(r, 'private.register_oauth_client(text, text[])', 'EXECUTE')`;
+
+    return [
+      {
+        ok: first[0] === 0 && first[1] === 0 && first[2] > 0 && first[2] <= 3600 && apart === 0,
+        detail: `caller a: ${JSON.stringify(first)}, caller b: ${apart}`,
+      },
+      { ok: roles === 0 && fns === 0, detail: `roles with a table privilege = ${roles}, with EXECUTE = ${fns}` },
+    ];
+  });
+
+  await m1Rows([labels[5], labels[6], labels[7]], async (tx) => {
+    const user = randomUUID();
+    const other = randomUUID();
+    await tx`insert into auth.users (id) values (${user}), (${other})`;
+    await tx`insert into app_users (id) values (${user}), (${other})`;
+    const [{ id: client }] = await tx<{ id: string }[]>`
+      select private.register_oauth_client('rls oauth sweep', ${tx.array([REDIRECT])}) as id`;
+    const [{ id: idle }] = await tx<{ id: string }[]>`
+      select private.register_oauth_client('rls oauth idle', ${tx.array([REDIRECT])}) as id`;
+    const [{ id: old }] = await tx<{ id: string }[]>`
+      select private.register_oauth_client('rls oauth old', ${tx.array([REDIRECT])}) as id`;
+    // Created long ago but used last week: it must survive. Idle for 31 days: it must go.
+    await tx`update oauth_clients set created_at = now() - interval '90 days', last_active_at = now() - interval '7 days' where id = ${old}`;
+    await tx`update oauth_clients set created_at = now() - interval '90 days', last_active_at = now() - interval '31 days' where id = ${idle}`;
+    await tx`insert into oauth_codes (owner_user_id, client_id, code_hash, code_challenge, redirect_uri, expires_at, used_at)
+      values (${user}, ${client}, ${hash("sweep-spent")}, 'c', ${REDIRECT}, now() - interval '2 days', now() - interval '2 days'),
+             (${user}, ${client}, ${hash("sweep-fresh")}, 'c', ${REDIRECT}, now() + interval '5 minutes', null)`;
+    await tx`select private.register_oauth_client('rls oauth trigger', ${tx.array([REDIRECT])})`;
+    const clients = await tx<{ id: string }[]>`select id from oauth_clients where id in (${client}, ${idle}, ${old})`;
+    const codes = await tx<{ code_hash: string }[]>`select code_hash from oauth_codes where client_id = ${client}`;
+    const sweepOk =
+      clients.some((row) => row.id === old) && clients.some((row) => row.id === client) && !clients.some((row) => row.id === idle) &&
+      codes.length === 1 && codes[0].code_hash === hash("sweep-fresh");
+
+    const issue = async (owner: string, code: string, clientId: string) =>
+      tx`insert into oauth_codes (owner_user_id, client_id, code_hash, code_challenge, redirect_uri)
+        values (${owner}, ${clientId}, ${hash(code)}, 'c', ${REDIRECT})`;
+    const exchange = async (code: string, clientId: string, token: string) =>
+      tx`select private.exchange_oauth_code(${hash(code)}, 'c', ${clientId}::uuid, ${REDIRECT}, ${hash(token)}, 600)`;
+    const [{ id: second }] = await tx<{ id: string }[]>`
+      select private.register_oauth_client('rls oauth second', ${tx.array([REDIRECT])}) as id`;
+    await issue(user, "r-1", client);
+    await issue(user, "r-2", client);
+    await issue(user, "r-3", second);
+    await issue(other, "r-4", client);
+    await exchange("r-1", client, "key-1");
+    await exchange("r-3", second, "key-3");
+    await exchange("r-4", client, "key-4");
+    await exchange("r-2", client, "key-2");
+    const live = async (token: string) =>
+      (await tx<{ n: number }[]>`select count(*)::int as n from private.resolve_webhook_credential(${hash(token)}, 'mcp')`)[0].n;
+    const state = [await live("key-1"), await live("key-2"), await live("key-3"), await live("key-4")];
+
+    // The consent's own insert, as the signed-in person: the audit row names them as the actor.
+    await tx`select set_config('request.jwt.claim.sub', '', true)`;
+    await enterUserContext(tx, user);
+    await tx`insert into finances.oauth_codes (owner_user_id, client_id, code_hash, code_challenge, redirect_uri)
+      values (${user}, ${client}, ${hash("as-user")}, 'c', ${REDIRECT})`;
+    const stranger = await m1Refusal(tx, (sp) =>
+      sp`insert into finances.oauth_codes (owner_user_id, client_id, code_hash, code_challenge, redirect_uri)
+        values (${other}, ${client}, ${hash("as-other")}, 'c', ${REDIRECT})`);
+    await tx`reset role`;
+    const audited = await tx<{ actor_user_id: string | null; owner_user_id: string | null }[]>`
+      select actor_user_id, owner_user_id from finances.audit_log
+      where entity = 'oauth_codes' and action = 'INSERT' and after_data->>'code_hash' = ${hash("as-user")}`;
+
+    return [
+      { ok: sweepOk, detail: `kept the active client ${clients.some((row) => row.id === old)}, dropped the idle one ${!clients.some((row) => row.id === idle)}, codes left ${codes.length}` },
+      { ok: JSON.stringify(state) === "[0,1,1,1]", detail: `live keys 1..4 = ${JSON.stringify(state)} (the first, replaced, is the only one revoked)` },
+      {
+        ok: stranger === "42501" && audited.length === 1 && audited[0].actor_user_id === user && audited[0].owner_user_id === user,
+        detail: `another owner ${stranger}, audit rows ${audited.length}, actor = the person ${audited[0]?.actor_user_id === user}`,
+      },
+    ];
+  });
 }
 
 // Wrapped in an async IIFE (not top-level await) so the runner can transpile

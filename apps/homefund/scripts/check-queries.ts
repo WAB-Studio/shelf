@@ -83,12 +83,8 @@ import {
   listSilencedShapes,
   restoreShape,
 } from "@/db/queries/ingest-review";
-import {
-  createInstallmentPlan,
-  listPlanPositions,
-  listPlansForAccount,
-  recordDebtPayment,
-} from "@/db/queries/installment-plans";
+import { createDeferral, getMovementDeferral, listDeferralsForAccount } from "@/db/queries/deferrals";
+import { recordDebtPayment } from "@/db/queries/installment-plans";
 import {
   createLabel,
   listLabels,
@@ -488,7 +484,6 @@ const CARD_LINE_CENTS = 40000000;
 // Three equal lines, so a payment of two of them plus a few cents leaves a
 // remainder no line can take.
 const PLAN_LINE_CENTS = 100000;
-const PLAN_REMAINDER_CENTS = 5000;
 
 // The day of the month the fixture debt cuts its statements on.
 const CUT_OFF_DAY = 15;
@@ -598,17 +593,6 @@ async function seedDebtFixture(
   track("installment_plans", fixture.planId);
 
   return fixture;
-}
-
-// Which of a plan's lines a movement closed, read as the owner and in due order:
-// the allocation is oldest-first, so WHICH lines were taken is the assertion, not
-// how many.
-async function readPaidLines(planId: string): Promise<string> {
-  const rows = await fixtureSql<{ seq: number; paid: boolean }[]>`
-    select seq, paid_transaction_id is not null as paid
-    from installment_lines where plan_id = ${planId} order by due_date, seq`;
-
-  return rows.map((row) => `${row.seq}:${row.paid}`).join(", ");
 }
 
 type WriteResults = {
@@ -1392,36 +1376,6 @@ async function writeSuite(
   );
 
   await checkWrite(
-    "createInstallmentPlan",
-    () =>
-      createInstallmentPlan({
-        accountId,
-        description: "Harness nevera",
-        principalCents: CARD_LINE_CENTS * 3,
-        nInstallments: 3,
-        frequency: "monthly",
-        interestRate: "0.0200",
-        downPaymentCents: null,
-        avalCents: null,
-        startDate: today,
-        merchant: "Harness store",
-        lines: [
-          { seq: 1, dueDate: today, amountCents: CARD_LINE_CENTS },
-          { seq: 2, dueDate: today, amountCents: CARD_LINE_CENTS },
-          { seq: 3, dueDate: today, amountCents: CARD_LINE_CENTS },
-        ],
-      }),
-    async ({ planId }) => {
-      keep("installment_plans", planId);
-      const stored = await readColumn<string | number>("installment_plans", "id", planId, "n_installments");
-      return {
-        ok: Number(stored) === 3,
-        detail: `plan ${planId}, n_installments = ${stored}`,
-      };
-    },
-  );
-
-  await checkWrite(
     "recordDebtPayment",
     () =>
       recordDebtPayment({
@@ -1430,39 +1384,13 @@ async function writeSuite(
         amountCents: CARD_LINE_CENTS,
         occurredAt: today,
       }),
-    async ({ transactionId, paidLineIds }) => {
+    async ({ transactionId }) => {
       keep("transactions", transactionId);
       const kind = await readColumn<string>("transactions", "id", transactionId, "kind");
       const stored = await readColumn<string | number>("transactions", "id", transactionId, "amount_cents");
       return {
-        ok: kind === "transfer" && Number(stored) === CARD_LINE_CENTS && paidLineIds.length === 1,
-        detail: `movement ${transactionId}, lines paid = ${paidLineIds.length}, kind = ${kind}, amount_cents = ${stored}`,
-      };
-    },
-  );
-
-  // RF-82 end to end through the app's own allocator: two lines closed oldest
-  // first, the third left standing because the payment does not cover it whole,
-  // and the cents over the two returned unallocated.
-  await checkWrite(
-    "recordDebtPayment closes the oldest lines and hands back the remainder",
-    () =>
-      recordDebtPayment({
-        fromAccountId: scope.assetAccountId,
-        toAccountId: scope.liabilityAccountId,
-        amountCents: PLAN_LINE_CENTS * 2 + PLAN_REMAINDER_CENTS,
-        occurredAt: today,
-      }),
-    async ({ transactionId, paidLineIds, remainderCents }) => {
-      keep("transactions", transactionId);
-      const paid = await readPaidLines(debt.planId);
-
-      return {
-        ok:
-          paidLineIds.length === 2 &&
-          remainderCents === PLAN_REMAINDER_CENTS &&
-          paid === "1:true, 2:true, 3:false",
-        detail: `${paidLineIds.length} lines closed, remainder ${remainderCents} cents of the ${PLAN_LINE_CENTS * 2 + PLAN_REMAINDER_CENTS} paid, lines by seq = ${paid}`,
+        ok: kind === "transfer" && Number(stored) === CARD_LINE_CENTS,
+        detail: `movement ${transactionId}, kind = ${kind}, amount_cents = ${stored}`,
       };
     },
   );
@@ -1962,7 +1890,7 @@ async function readSuite(
   await checkRead("countUnreviewedGenerated", () => countUnreviewedGenerated());
   await checkRead("getDebtsScreenData", () => getDebtsScreenData());
   await checkRead("getDebtOverview", () => getDebtOverview());
-  // The screen fans four reads out (RNF-09); the count is what says they never
+  // The screen fans three reads out (RNF-09: the plan positions are retired with RF-81); the count is what says they never
   // chained and never went one read per debt — the writability of every debt
   // rides the roster's own projection, not a statement of its own. The first call
   // is unmeasured on
@@ -1982,7 +1910,7 @@ async function readSuite(
       return { unit, trips: roundTrips() - before };
     },
     ({ unit, trips }) => ({
-      ok: trips === unit * 4,
+      ok: trips === unit * 3,
       detail: `${trips} round trips for the screen, ${unit} for a single read`,
     }),
   );
@@ -2221,24 +2149,17 @@ async function readSuite(
 
       let refused: string | null = null;
       try {
-        const { planId } = await asUser(fellow, () =>
-          createInstallmentPlan({
-            accountId: debtAccountId,
-            description: "Harness plan a member may not write",
-            principalCents: 300000,
-            nInstallments: 3,
-            frequency: "monthly",
-            interestRate: null,
-            downPaymentCents: null,
-            avalCents: null,
-            startDate: todayInBogota(),
-            merchant: null,
-            lines: [],
+        const { transactionId } = await asUser(fellow, () =>
+          recordDebtPayment({
+            fromAccountId: scope.assetAccountId,
+            toAccountId: debtAccountId,
+            amountCents: 300000,
+            occurredAt: todayInBogota(),
           }),
         );
         // It landed, which is the failure this assertion is here to catch; the
         // row is tracked so the run still drops what it wrote.
-        track("installment_plans", planId);
+        track("transactions", transactionId);
       } catch (error) {
         refused = pgErrorCode(error) ?? "none";
       }
@@ -2264,57 +2185,7 @@ async function readSuite(
           seenByBoth.length === owned.length &&
           read.every((row) => !row.canWrite) &&
           refused === "42501",
-        detail: `the owner writes ${owned.filter((row) => row.canWrite).length} of ${owned.length} debts; the member reads ${seenByBoth.length} of them and writes ${read.filter((row) => row.canWrite).length}, and her plan was refused with ${refused ?? "nothing"}`,
-      };
-    },
-  );
-
-  // RF-82: the position a debt's lines add up to, read across its plans. The
-  // write suite closed one of the card's three lines with a movement.
-  await checkReadValue(
-    "listPlanPositions states the paid-down card's position",
-    () => listPlanPositions(),
-    (positions) => {
-      const card = positions.find((position) => position.accountId === debtAccountId);
-
-      return {
-        ok:
-          card?.linesTotal === 3 &&
-          card.linesPaid === 1 &&
-          card.pendingCents === CARD_LINE_CENTS * 2 &&
-          card.nextDueDate === todayInBogota() &&
-          card.nextAmountCents === CARD_LINE_CENTS,
-        detail: `${card?.linesPaid ?? "no"} of ${card?.linesTotal ?? "no"} lines paid, ${card?.pendingCents ?? "no"} cents pending, next ${card?.nextAmountCents ?? "no"} cents on ${card?.nextDueDate ?? "no date"}`,
-      };
-    },
-  );
-
-  // A plan sits on any liability: one whose account carries no `debt_terms` row
-  // still has a position to state (RF-81).
-  await checkReadValue(
-    "listPlanPositions states the position of a debt with no terms",
-    async () => {
-      const [positions, terms] = await Promise.all([
-        listPlanPositions(),
-        getDebtTerms(scope.liabilityAccountId),
-      ]);
-
-      return { positions, terms };
-    },
-    ({ positions, terms }) => {
-      const plan = positions.find(
-        (position) => position.accountId === scope.liabilityAccountId,
-      );
-
-      return {
-        ok:
-          terms === null &&
-          plan?.linesTotal === 3 &&
-          plan.linesPaid === 2 &&
-          plan.pendingCents === PLAN_LINE_CENTS &&
-          plan.nextDueDate === debt.dueDates[2] &&
-          plan.nextAmountCents === PLAN_LINE_CENTS,
-        detail: `terms = ${terms === null ? "none" : "some"}, ${plan?.linesPaid ?? "no"} of ${plan?.linesTotal ?? "no"} lines paid, ${plan?.pendingCents ?? "no"} cents pending, next ${plan?.nextAmountCents ?? "no"} cents on ${plan?.nextDueDate ?? "no date"}`,
+        detail: `the owner writes ${owned.filter((row) => row.canWrite).length} of ${owned.length} debts; the member reads ${seenByBoth.length} of them and writes ${read.filter((row) => row.canWrite).length}, and her payment was refused with ${refused ?? "nothing"}`,
       };
     },
   );
@@ -2389,7 +2260,6 @@ async function readSuite(
   );
 
   await checkRead("getDebtTerms", () => getDebtTerms(debtAccountId));
-  await checkRead("listPlansForAccount", () => listPlansForAccount(debtAccountId));
   await checkRead("listAuditLog", () => listAuditLog({ limit: 20, offset: 0 }));
   await checkRead("getAuditFilterOptions", () => getAuditFilterOptions());
   await checkRead("listWebhookCredentials", () => listWebhookCredentials());
@@ -4255,6 +4125,7 @@ async function main(): Promise<void> {
   await incomeContributorEditsSuite();
   await fundPotSuite();
   await otherMembersRowsSuite();
+  await deferralImportSuite();
 }
 
 // A member recorded without a login is someone in the fund: a leader whose fund holds one is not alone, so an
@@ -8020,12 +7891,11 @@ async function recurringVersionSuite(): Promise<void> {
   );
 }
 
-// M44: two payments of one card never share an installment line, and a resent payment books once.
+// M44: two payments of one card each book their own movement, and a resent payment books once.
 async function debtPaymentSuite(): Promise<void> {
   console.log("");
   const tag = randomUUID().slice(0, 8);
   const today = todayInBogota();
-  const LINE = 100_000;
   const user = await createMembershipFreeUser();
   const open = async (kind: "asset" | "liability", name: string) => {
     const { accountId } = await asUser(user, () =>
@@ -8048,36 +7918,7 @@ async function debtPaymentSuite(): Promise<void> {
   };
   const bank = await open("asset", "bank");
 
-  // A card owing two lines of one payment each, the older line due first.
-  const newCard = async (name: string): Promise<{ cardId: string; l1: string; l2: string; planId: string }> => {
-    const cardId = await open("liability", name);
-    const { planId } = await asUser(user, () =>
-      createInstallmentPlan({
-        accountId: cardId,
-        description: `m44 ${name} ${tag}`,
-        principalCents: LINE * 2,
-        nInstallments: 2,
-        frequency: "monthly",
-        interestRate: null,
-        downPaymentCents: null,
-        avalCents: null,
-        startDate: shiftDate(today, -30),
-        merchant: null,
-        lines: [
-          { seq: 1, dueDate: shiftDate(today, -30), amountCents: LINE },
-          { seq: 2, dueDate: shiftDate(today, -1), amountCents: LINE },
-        ],
-      }),
-    );
-    keep("installment_plans", planId);
-    const lines = await fixtureSql<{ id: string }[]>`
-      select id from installment_lines where plan_id = ${planId} order by seq`;
-    return { cardId, planId, l1: lines[0].id, l2: lines[1].id };
-  };
-  type Answer = {
-    serverError?: string;
-    data?: { transactionId: string; paidLineIds: string[]; remainderCents: number };
-  };
+  type Answer = { serverError?: string; data?: { transactionId: string } };
   const pay = (cardId: string, over: Record<string, unknown> = {}) =>
     asUser(user, () =>
       recordDebtPaymentAction({
@@ -8088,9 +7929,6 @@ async function debtPaymentSuite(): Promise<void> {
         ...over,
       } as Parameters<typeof recordDebtPaymentAction>[0]),
     ) as Promise<Answer | undefined>;
-  const links = (planId: string) =>
-    fixtureSql<{ id: string; paid: string | null }[]>`
-      select id, paid_transaction_id as paid from installment_lines where plan_id = ${planId} order by seq`;
   const movements = async (cardId: string) => {
     const rows = await fixtureSql<{ id: string; external_ref: string | null; amount_cents: string }[]>`
       select id, external_ref, amount_cents::text from transactions where to_account_id = ${cardId}`;
@@ -8101,116 +7939,47 @@ async function debtPaymentSuite(): Promise<void> {
   // Q: two payments at once, repeated so a lucky ordering cannot hide the overlap
   let worst = "";
   let allRight = true;
-  let answersTrue = true;
-  let answerDetail = "";
   for (let round = 0; round < 5; round++) {
-    const card = await newCard(`race${round}`);
-    const [a, b] = await Promise.all([pay(card.cardId), pay(card.cardId)]);
-    const rows = await movements(card.cardId);
-    const stored = await links(card.planId);
-    const linked = stored.map((l) => l.paid);
-    const ids = rows.map((r) => r.id);
-    const right =
-      rows.length === 2 &&
-      linked.every((p) => p !== null && ids.includes(p)) &&
-      new Set(linked).size === 2;
-    if (!right) {
+    const card = await open("liability", `race${round}`);
+    const [a, b] = await Promise.all([pay(card), pay(card)]);
+    const rows = await movements(card);
+    const ids = rows.map((r) => r.id).sort().join();
+    const said = [a?.data?.transactionId, b?.data?.transactionId].sort().join();
+    if (rows.length !== 2 || ids !== said) {
       allRight = false;
-      worst ||= `round ${round}: ${rows.length} movement(s), links ${JSON.stringify(linked)}, ids ${JSON.stringify(ids)}`;
-    }
-    for (const answer of [a, b]) {
-      const mine = stored.filter((l) => l.paid === answer?.data?.transactionId).map((l) => l.id).sort();
-      const said = [...(answer?.data?.paidLineIds ?? [])].sort();
-      if (answer?.data === undefined || JSON.stringify(mine) !== JSON.stringify(said)) {
-        answersTrue = false;
-        answerDetail ||= `round ${round}: said ${JSON.stringify(said)}, stored ${JSON.stringify(mine)}, answer ${JSON.stringify(answer)}`;
-      }
+      worst ||= `round ${round}: ${rows.length} movement(s), ids ${ids}, answers ${said}`;
     }
   }
   assert(
-    next("Two payments of one card at once book two movements, and lines L1 and L2 each link to a different one"),
+    next("Two payments of one card at once book two movements, and each answer names its own"),
     allRight,
     worst || "5 rounds clean",
   );
 
-  // Q: the answer matches the stored links
-  assert(
-    next("Each concurrent payment's paidLineIds names exactly the lines stored against its own movement"),
-    answersTrue,
-    answerDetail || "5 rounds clean",
-  );
-
-  // Q: the lock is taken on the card, as the first thing the payment does
-  const held = await newCard("lock");
-  const lockKey = held.cardId;
-  let settled = false;
-  let settledWhileHeld = false;
-  let blocked: Promise<Answer | undefined> | undefined;
-  await fixtureSql.begin(async (tx) => {
-    await tx`select pg_advisory_xact_lock(hashtextextended(${lockKey}::text, 0))`;
-    blocked = pay(held.cardId);
-    blocked.then(() => {
-      settled = true;
-    });
-    await new Promise((r) => setTimeout(r, 1500));
-    // Read before the commit releases the lock; after it the payment settles by design.
-    settledWhileHeld = settled;
-  });
-  const afterRelease = await blocked;
-  const heldLinks = await links(held.planId);
-  await movements(held.cardId);
-  assert(
-    next("A payment of a card waits on the advisory lock keyed by the card id, then books once it is released"),
-    !settledWhileHeld &&
-      afterRelease?.data?.paidLineIds.length === 1 &&
-      heldLinks[0].paid === afterRelease.data.transactionId,
-    `settled while held = ${settledWhileHeld}, answer = ${JSON.stringify(afterRelease)}`,
-  );
-
   // Q: one request sent twice
-  const resend = await newCard("resend");
+  const resend = await open("liability", "resend");
   const ref = randomUUID();
-  const first = await pay(resend.cardId, { requestRef: ref });
-  const second = await pay(resend.cardId, { requestRef: ref });
-  const sent = await movements(resend.cardId);
-  const sentLinks = await links(resend.planId);
+  const first = await pay(resend, { requestRef: ref });
+  const second = await pay(resend, { requestRef: ref });
+  const sent = await movements(resend);
   assert(
     next("A payment sent twice with the same requestRef books one movement under form:<ref>, and both answers name it"),
     sent.length === 1 &&
       sent[0].external_ref === `form:${ref}` &&
       first?.data?.transactionId === sent[0].id &&
-      second?.data?.transactionId === sent[0].id &&
-      sentLinks[0].paid === sent[0].id &&
-      sentLinks[1].paid === null,
-    `${sent.length} movement(s), refs ${JSON.stringify(sent.map((r) => r.external_ref))}, links ${JSON.stringify(sentLinks.map((l) => l.paid))}, first = ${JSON.stringify(first)}, second = ${JSON.stringify(second)}`,
+      second?.data?.transactionId === sent[0].id,
+    `${sent.length} movement(s), refs ${JSON.stringify(sent.map((r) => r.external_ref))}, first = ${JSON.stringify(first)}, second = ${JSON.stringify(second)}`,
   );
 
   // Q: two requests, two payments
-  const apart = await newCard("apart");
-  const x = await pay(apart.cardId, { requestRef: randomUUID() });
-  const y = await pay(apart.cardId, { requestRef: randomUUID() });
-  const both = await movements(apart.cardId);
-  const apartLinks = await links(apart.planId);
+  const apart = await open("liability", "apart");
+  const x = await pay(apart, { requestRef: randomUUID() });
+  const y = await pay(apart, { requestRef: randomUUID() });
+  const both = await movements(apart);
   assert(
-    next("Two payments with different requestRefs book two movements, each closing its own line"),
-    both.length === 2 &&
-      x?.data?.transactionId !== y?.data?.transactionId &&
-      apartLinks[0].paid === x?.data?.transactionId &&
-      apartLinks[1].paid === y?.data?.transactionId,
-    `${both.length} movement(s), links ${JSON.stringify(apartLinks.map((l) => l.paid))}, x = ${JSON.stringify(x)}, y = ${JSON.stringify(y)}`,
-  );
-
-  // Q: the sequential allocation stays oldest first and its answer is true
-  const seq = await newCard("seq");
-  const both2 = await pay(seq.cardId, { amount: "2000" });
-  const seqLinks = await links(seq.planId);
-  await movements(seq.cardId);
-  assert(
-    next("One payment covering two lines links both to its movement and reports both"),
-    both2?.data !== undefined &&
-      seqLinks.every((l) => l.paid === both2.data?.transactionId) &&
-      [...both2.data.paidLineIds].sort().join() === [seq.l1, seq.l2].sort().join(),
-    `answer = ${JSON.stringify(both2)}, links ${JSON.stringify(seqLinks.map((l) => l.paid))}`,
+    next("Two payments with different requestRefs book two movements"),
+    both.length === 2 && x?.data?.transactionId !== y?.data?.transactionId,
+    `${both.length} movement(s), x = ${JSON.stringify(x)}, y = ${JSON.stringify(y)}`,
   );
 
   // M53: a card in credit owes nothing; it never adds to what the screen says is owed.
@@ -12282,7 +12051,6 @@ async function debtCreditSideSuite(): Promise<void> {
       [`${row.accountId} owed`, row.owedCents],
       [`${row.accountId} credit`, row.creditCents],
       [`${row.accountId} interest`, row.monthlyInterestCents],
-      [`${row.accountId} due installments`, row.dueInstallmentsCents],
     );
     if (row.availableCreditCents !== null) figures.push([`${row.accountId} available`, row.availableCreditCents]);
     if (row.minimumPaymentCents !== null) figures.push([`${row.accountId} minimum`, row.minimumPaymentCents]);
@@ -12913,7 +12681,7 @@ async function o6m2DebtsAndSettledSuite(): Promise<void> {
     };
     for (const row of [...overview, ...screen.withTerms]) {
       integerFigures.push([`${where} owed`, row.owedCents], [`${where} credit`, row.creditCents]);
-      integerFigures.push([`${where} interest`, row.monthlyInterestCents], [`${where} installments`, row.dueInstallmentsCents]);
+      integerFigures.push([`${where} interest`, row.monthlyInterestCents]);
       if (row.availableCreditCents !== null) integerFigures.push([`${where} available`, row.availableCreditCents]);
       if (row.minimumPaymentCents !== null) integerFigures.push([`${where} minimum`, row.minimumPaymentCents]);
       pockets(row.accountId, row.otherOwed);
@@ -15147,8 +14915,8 @@ async function moneyFormsStaleSuite(): Promise<void> {
   );
 }
 
-// RF-83, RF-136: the next payment is the debt's minimum alone. An instalment falling due is already inside that
-// minimum, so a card carrying one never adds it a second time.
+// RF-83, RF-136: the next payment is the debt's minimum alone. A deferred purchase only fractions its share of that
+// minimum, so a card carrying one never adds anything to it.
 async function nextPaymentMinimumSuite(): Promise<void> {
   console.log("");
   const tag = randomUUID().slice(0, 8);
@@ -15175,35 +14943,39 @@ async function nextPaymentMinimumSuite(): Promise<void> {
   await fixtureSql`
     insert into debt_terms (account_id, debt_kind, annual_rate, minimum_payment_cents, statement_cut_off_day, payment_due_day)
     values (${cardId}, 'revolving', 0.30, ${MINIMUM}, 1, 28)`;
-  const { planId } = await asUser(holder, () =>
-    createInstallmentPlan({
-      accountId: cardId,
-      description: `Harness rf136 cuotas ${tag}`,
-      principalCents: 30_000_000,
-      nInstallments: 3,
-      frequency: "monthly",
-      interestRate: null,
-      downPaymentCents: null,
-      avalCents: null,
-      startDate: shiftDate(today, -40),
-      merchant: null,
-      // The first line already due, so it falls before the card's next due day.
-      lines: [
-        { seq: 1, dueDate: shiftDate(today, -10), amountCents: 10_000_000 },
-        { seq: 2, dueDate: shiftDate(today, 20), amountCents: 10_000_000 },
-        { seq: 3, dueDate: shiftDate(today, 50), amountCents: 10_000_000 },
-      ],
+  // A purchase a person deferred into three instalments: the whole of it stays in the balance.
+  const { categoryId } = await asUser(holder, () =>
+    createCategory({
+      scope: { ownerUserId: holder.id },
+      name: `Harness rf136 compra ${tag}`,
+      kind: "expense",
+      parentId: null,
+      color: "#B4542F",
     }),
   );
-  track("installment_plans", planId);
+  keep("categories", categoryId);
+  const { transactionId } = await asUser(holder, () =>
+    createTransaction({
+      fromAccountId: cardId,
+      toAccountId: null,
+      amountCents: 30_000_000,
+      occurredAt: shiftDate(today, -10),
+      description: `Harness rf136 cuotas ${tag}`,
+      externalRef: null,
+      splits: [{ categoryId, amountCents: 30_000_000 }],
+      labelIds: [],
+    }),
+  );
+  track("transactions", transactionId);
+  const deferred = await asUser(holder, () => createDeferral({ transactionId, instalments: 3 }));
 
   const screen = await asUser(holder, () => getDebtsScreenData());
   const card = screen.withTerms.find((row) => row.accountId === cardId);
   const tile = screen.totals.nextPayment;
   assert(
-    next("RF-136: a card with an instalment falling due names its minimum alone as the next payment"),
-    card !== undefined && card.dueInstallmentsCents > 0 && tile?.accountId === cardId && tile.amountCents === MINIMUM,
-    `next payment ${tile?.amountCents ?? "none"} on ${tile?.accountId === cardId ? "the card" : "another debt"}; minimum ${MINIMUM}, instalments due ${card?.dueInstallmentsCents ?? "no row"}`,
+    next("RF-136: a card with a deferred purchase names its minimum alone as the next payment"),
+    deferred && card?.minimumPaymentCents === MINIMUM && tile?.accountId === cardId && tile.amountCents === MINIMUM,
+    `next payment ${tile?.amountCents ?? "none"} on ${tile?.accountId === cardId ? "the card" : "another debt"}; minimum ${MINIMUM}, deferred ${deferred}`,
   );
 }
 
@@ -15459,7 +15231,7 @@ async function mcpDoorSuite(): Promise<void> {
   assert(
     next("RF-144: /mcp answers 401 with no key, an unknown one or a webhook's, and lists its tools to a key for Claude"),
     anonymous.status === 401 && forged.status === 401 && webhookKey.status === 401 &&
-      JSON.stringify(names) === JSON.stringify(["import_statement", "list_accounts", "preview_statement", "review_month"]),
+      JSON.stringify(names) === JSON.stringify(["create_account", "create_category", "delete_movement", "import_statement", "list_accounts", "list_categories", "list_movements", "preview_statement", "record_movement", "review_month", "update_movement"]),
     `no key ${anonymous.status}, unknown key ${forged.status}, webhook key ${webhookKey.status}, tools ${JSON.stringify(names)}`,
   );
 
@@ -15498,6 +15270,211 @@ async function mcpDoorSuite(): Promise<void> {
     next("RF-144: an open month is refused; a key over its window answers 429, not 401; /mcp never spends a webhook key's window"),
     openMonth.isError && throttled.status === 429 && ingestWindow?.rate_count === 0,
     `open month isError ${openMonth.isError}, throttled /mcp ${throttled.status}, webhook key's count ${ingestWindow?.rate_count}`,
+  );
+
+  // claude.ai drops a custom Authorization header, so its connector sends the key as X-API-Key.
+  await fixtureSql`update webhook_credentials set rate_limit_per_min = 60, rate_count = 0 where id = ${credentialId}`;
+  const viaHeader = (key: string) =>
+    POST(
+      new Request("http://localhost/mcp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json, text/event-stream", "X-API-Key": key },
+        body: JSON.stringify({ jsonrpc: "2.0", id: 99, method: "tools/list" }),
+      }),
+    );
+  const [apiKey, apiWebhookKey] = await Promise.all([viaHeader(token), viaHeader(ingestToken)]);
+  assert(
+    next("RF-144: a key for Claude opens /mcp in X-API-Key too; a webhook key there still answers 401"),
+    apiKey.status === 200 && apiWebhookKey.status === 401,
+    `X-API-Key ${apiKey.status}, webhook key in X-API-Key ${apiWebhookKey.status}`,
+  );
+
+  // RF-169, RF-170, RF-171: Claude writes through the forms' own schemas and writes, as the key's owner.
+  const food = randomUUID();
+  const alienFood = randomUUID();
+  for (const [user, id, name] of [
+    [owner, food, `Harness rf169 comida ${tag}`],
+    [stranger, alienFood, `Harness rf169 ajena ${tag}`],
+  ] as const) {
+    await fixtureSql.begin(async (tx) => {
+      const claims = JSON.stringify({ sub: user.id, role: "authenticated", aud: "authenticated" });
+      await tx`select set_config('request.jwt.claims', ${claims}, true)`;
+      await tx`insert into categories (id, owner_user_id, name, kind, color) values (${id}, ${user.id}, ${name}, 'expense', '#4C8C4A')`;
+    });
+    track("categories", id);
+  }
+  const { id: writeKeyId, token: writeToken } = await asUser(owner, () =>
+    issueWebhookCredential({ name: `Harness rf169 ${tag}`, purpose: "mcp", defaultAccountId: null, defaultCategoryId: null }),
+  );
+  keep("webhook_credentials", writeKeyId);
+  const writer = mcpClient(POST, writeToken);
+  const owed = async (account: string) => {
+    const [row] = await fixtureSql<{ n: number }[]>`
+      select count(*)::int as n from transactions where from_account_id = ${account} or to_account_id = ${account}`;
+    return row!.n;
+  };
+  const { transactionId: alienMovement } = await asUser(stranger, () =>
+    createTransaction({
+      fromAccountId: strangerAccount, toAccountId: null, amountCents: 1_000_00, occurredAt: "2026-09-01",
+      description: `Harness rf169 ajeno ${tag}`, externalRef: null, splits: [{ categoryId: alienFood, amountCents: 1_000_00 }], labelIds: [],
+    }),
+  );
+
+  const categories = await writer.tool("list_categories");
+  const categoryIds = (categories.value as { id: string }[] | null)?.map((one) => one.id) ?? [];
+  assert(
+    next("RF-171: list_categories answers the owner's categories with kind and scope, never another person's"),
+    !categories.isError && categoryIds.includes(food) && !categoryIds.includes(alienFood),
+    `isError ${categories.isError}, own ${categoryIds.includes(food)}, stranger's ${categoryIds.includes(alienFood)}`,
+  );
+
+  const purchase = {
+    fromAccountId: ownAccount, toAccountId: null, amountCents: 250_000_00, occurredAt: "2026-09-20",
+    description: `Mercado ${tag}`, categoryId: food,
+  };
+  const recorded = await writer.tool("record_movement", purchase);
+  const recordedId = (recorded.value as { transactionId?: string } | null)?.transactionId ?? "";
+  const [stored] = await fixtureSql<{ kind: string; amount_cents: string; category_id: string }[]>`
+    select t.kind, t.amount_cents::text, s.category_id from transactions t
+    join transaction_splits s on s.transaction_id = t.id where t.id = ${recordedId}`;
+  assert(
+    next("RF-169: record_movement books an expense with its kind derived from the accounts and its category, and answers the movement's id"),
+    !recorded.isError && stored?.kind === "expense" && stored.amount_cents === "25000000" && stored.category_id === food,
+    `recorded ${JSON.stringify(recorded.value)}, stored ${JSON.stringify(stored)}`,
+  );
+
+  const before = await owed(strangerAccount);
+  const toAlien = await writer.tool("record_movement", { ...purchase, fromAccountId: strangerAccount });
+  const alienCategory = await writer.tool("record_movement", { ...purchase, categoryId: alienFood });
+  const future = await writer.tool("record_movement", { ...purchase, occurredAt: "2999-01-01" });
+  const ownAfter = await owed(ownAccount);
+  assert(
+    next("RF-169: record_movement refuses another person's account, a category of another scope and a future date, in the form's words, writing nothing"),
+    toAlien.isError && alienCategory.isError && future.isError &&
+      (await owed(strangerAccount)) === before && ownAfter === 1 &&
+      typeof (future.value as { error?: string } | null)?.error === "string" && !/at |Error:/.test(JSON.stringify(future.value)),
+    `alien ${JSON.stringify(toAlien.value)}, category ${JSON.stringify(alienCategory.value)}, future ${JSON.stringify(future.value)}, own rows ${ownAfter}`,
+  );
+
+  const movements = await writer.tool("list_movements", { accountId: ownAccount, from: "2026-09-01", to: "2026-09-30" });
+  const alienListed = await writer.tool("list_movements", { accountId: strangerAccount });
+  const movementIds = (movements.value as { id: string }[] | null)?.map((one) => one.id) ?? [];
+  assert(
+    next("RF-171: list_movements answers the account's movements in a date range, and none of another person's account"),
+    !movements.isError && movementIds.includes(recordedId) && !alienListed.isError &&
+      !((alienListed.value as { id: string }[] | null) ?? []).some((one) => one.id === alienMovement),
+    `listed ${JSON.stringify(movements.value)?.slice(0, 160)}, alien ${JSON.stringify(alienListed.value)}`,
+  );
+
+  const [{ updatedAt }] = (movements.value as { id: string; updatedAt: string }[]).filter((one) => one.id === recordedId);
+  const edited = await writer.tool("update_movement", { transactionId: recordedId, expectedUpdatedAt: updatedAt, amountCents: 300_000_00 });
+  const [after] = await fixtureSql<{ amount_cents: string; category_id: string }[]>`
+    select t.amount_cents::text, s.category_id from transactions t join transaction_splits s on s.transaction_id = t.id where t.id = ${recordedId}`;
+  const editedAlien = await writer.tool("update_movement", { transactionId: alienMovement, expectedUpdatedAt: updatedAt, fromAccountId: ownAccount });
+  assert(
+    next("RF-169: update_movement patches a movement the owner can write (what it omits stays, a lone split follows the amount), and refuses another person's as not found"),
+    !edited.isError && after?.amount_cents === "30000000" && after.category_id === food && editedAlien.isError,
+    `edited ${JSON.stringify(edited.value)}, row ${JSON.stringify(after)}, alien ${JSON.stringify(editedAlien.value)}`,
+  );
+
+  const stale = await writer.tool("update_movement", { transactionId: recordedId, expectedUpdatedAt: updatedAt, amountCents: 310_000_00 });
+  const badId = await writer.tool("delete_movement", { transactionId: "no-es-un-uuid" });
+  const [unchanged] = await fixtureSql<{ amount_cents: string }[]>`select amount_cents::text from transactions where id = ${recordedId}`;
+  assert(
+    next("RF-156: update_movement with a stamp an earlier save moved answers stale and writes nothing; a malformed id answers a catalogue sentence"),
+    stale.isError && /desactualizad|cambi|otra persona/i.test(JSON.stringify(stale.value)) && unchanged?.amount_cents === "30000000" &&
+      badId.isError && !/uuid|Invalid/i.test(JSON.stringify(badId.value)),
+    `stale ${JSON.stringify(stale.value)}, amount ${unchanged?.amount_cents}, bad id ${JSON.stringify(badId.value)}`,
+  );
+
+  const dollars = randomUUID();
+  await fixtureSql.begin(async (tx) => {
+    const claims = JSON.stringify({ sub: owner.id, role: "authenticated", aud: "authenticated" });
+    await tx`select set_config('request.jwt.claims', ${claims}, true)`;
+    await tx`
+      insert into accounts (id, owner_user_id, name, kind, subtype, settlement_currency, initial_balance_cents, initial_balance_on)
+      values (${dollars}, ${owner.id}, ${`Harness rf169 dolares ${tag}`}, 'asset', 'bank', 'USD', 0, '2026-01-01')`;
+  });
+  track("accounts", dollars);
+  const ref = randomUUID();
+  const card = { fromAccountId: dollars, toAccountId: null, amountCents: 1_000_00, occurredAt: "2026-09-21", description: `Compra USD ${tag}`, categoryId: food, requestRef: ref };
+  const [first, second] = [await writer.tool("record_movement", card), await writer.tool("record_movement", card)];
+  const [booked] = await fixtureSql<{ n: number }[]>`select count(*)::int as n from transactions where from_account_id = ${dollars}`;
+  assert(
+    next("RF-169: record_movement sent twice with the same requestRef books once and answers the same id"),
+    !first.isError && !second.isError &&
+      (first.value as { transactionId: string }).transactionId === (second.value as { transactionId: string }).transactionId && booked?.n === 1,
+    `first ${JSON.stringify(first.value)}, second ${JSON.stringify(second.value)}, rows ${booked?.n}`,
+  );
+
+  const billed = {
+    fromAccountId: dollars, toAccountId: null, currency: "COP", amountCents: 400_000_00, counterAmountCents: 100_00, counterIsEstimate: true,
+    occurredAt: "2026-09-22", description: `Compra en COP ${tag}`, categoryId: food,
+  };
+  const estimated = await writer.tool("record_movement", billed);
+  const estimatedId = (estimated.value as { transactionId?: string } | null)?.transactionId ?? "";
+  const estimatedList = await writer.tool("list_movements", { accountId: dollars, from: "2026-09-22", to: "2026-09-22" });
+  const listedEstimate = (estimatedList.value as { id: string; updatedAt: string; counterAmountCents: number | null; counterIsEstimate: boolean }[]).find(
+    (one) => one.id === estimatedId,
+  );
+  const renamed = await writer.tool("update_movement", {
+    transactionId: estimatedId, expectedUpdatedAt: listedEstimate?.updatedAt, description: `Cambio ${tag}`,
+  });
+  const [kept] = await fixtureSql<{ counter_amount_cents: string; counter_is_estimate: boolean; description: string }[]>`
+    select counter_amount_cents::text, counter_is_estimate, description from transactions where id = ${estimatedId || randomUUID()}`;
+  assert(
+    next("RF-169: list_movements returns what a patch keeps (the second amount and its estimate mark); update_movement leaves what it omits"),
+    !estimated.isError && listedEstimate?.counterAmountCents === 10_000 && listedEstimate.counterIsEstimate === true &&
+      !renamed.isError && kept?.counter_amount_cents === "10000" && kept.counter_is_estimate === true && kept.description === `Cambio ${tag}`,
+    `estimated ${JSON.stringify(estimated.value)}, listed ${JSON.stringify(listedEstimate)}, renamed ${JSON.stringify(renamed.value)}, row ${JSON.stringify(kept)}`,
+  );
+
+  const deletedAlien = await writer.tool("delete_movement", { transactionId: alienMovement });
+  const deleted = await writer.tool("delete_movement", { transactionId: recordedId });
+  const [alienKept] = await fixtureSql<{ n: number }[]>`select count(*)::int as n from transactions where id = ${alienMovement}`;
+  assert(
+    next("RF-169: delete_movement removes a movement the owner can write and refuses another person's"),
+    !deleted.isError && deletedAlien.isError && (await owed(ownAccount)) === 0 && alienKept?.n === 1,
+    `deleted ${JSON.stringify(deleted.value)}, alien ${JSON.stringify(deletedAlien.value)}, kept ${alienKept?.n}`,
+  );
+
+  const account = await writer.tool("create_account", {
+    name: `Harness rf170 ahorros ${tag}`, kind: "asset", subtype: "bank", openingBalanceCents: 500_000_00, balanceOn: "2026-01-01",
+  });
+  const accountId = (account.value as { accountId?: string } | null)?.accountId ?? "";
+  if (accountId) track("accounts", accountId);
+  const [openedAccount] = await fixtureSql<{ owner_user_id: string; initial_balance_cents: string }[]>`
+    select owner_user_id, initial_balance_cents::text from accounts where id = ${accountId || randomUUID()}`;
+  const noFund = await writer.tool("create_account", {
+    name: `Harness rf170 fondo ${tag}`, kind: "asset", subtype: "bank", placement: "group", openingBalanceCents: 0, balanceOn: "2026-01-01",
+  });
+  assert(
+    next("RF-170: create_account opens a personal account for the key's owner with its opening balance; a fund account with no fund is refused"),
+    !account.isError && openedAccount?.owner_user_id === owner.id && openedAccount.initial_balance_cents === "50000000" && noFund.isError,
+    `account ${JSON.stringify(account.value)}, row ${JSON.stringify(openedAccount)}, no fund ${JSON.stringify(noFund.value)}`,
+  );
+
+  const category = await writer.tool("create_category", { name: `Harness rf170 hijo ${tag}`, kind: "expense", parentId: food });
+  const categoryId = (category.value as { categoryId?: string } | null)?.categoryId ?? "";
+  if (categoryId) track("categories", categoryId);
+  const wrongKind = await writer.tool("create_category", { name: `Harness rf170 ingreso ${tag}`, kind: "income", parentId: food });
+  const alienParent = await writer.tool("create_category", { name: `Harness rf170 ajeno ${tag}`, kind: "expense", parentId: alienFood });
+  const [child] = await fixtureSql<{ parent_id: string }[]>`select parent_id from categories where id = ${categoryId || randomUUID()}`;
+  assert(
+    next("RF-170: create_category writes a subcategory under the owner's parent; a parent of the wrong kind or of another person is refused"),
+    !category.isError && child?.parent_id === food && wrongKind.isError && alienParent.isError,
+    `category ${JSON.stringify(category.value)}, child ${JSON.stringify(child)}, wrong kind ${JSON.stringify(wrongKind.value)}, alien parent ${JSON.stringify(alienParent.value)}`,
+  );
+
+  const viaWebhook = await Promise.all(
+    ["record_movement", "update_movement", "delete_movement", "create_account", "create_category", "list_categories", "list_movements"].map((name) =>
+      mcpClient(POST, ingestToken).rpc(ingestToken, "tools/call", { name, arguments: {} }),
+    ),
+  );
+  assert(
+    next("RF-169: no write or read tool of the ledger opens to a webhook key"),
+    viaWebhook.every((one) => one.status === 401),
+    `statuses ${JSON.stringify(viaWebhook.map((one) => one.status))}`,
   );
 }
 
@@ -15560,7 +15537,12 @@ async function statementImportSuite(): Promise<void> {
     insert into ingest_counterparties (owner_user_id, pattern_key, pattern_label, side, state, trusted_account_id)
     values (${owner.id}, ${counterpartyPatternKey("TRANSF A BOLSILLO 7781")}, 'TRANSF A BOLSILLO', 'to', 'trusted', ${ids.card})`;
 
-  const { tool } = mcpClient(POST, token);
+  const { tool: callTool } = mcpClient(POST, token);
+  // A statement is named by its cut-off date; unless a call names one, it is the span of its lines.
+  const tool = (name: string, args: Record<string, unknown>) => {
+    const days = ((args.rows ?? []) as { date: string }[]).map((row) => row.date).sort();
+    return callTool(name, args.statement ? args : { ...args, statement: { periodStart: days[0], cutOffDate: days[days.length - 1] } });
+  };
   const count = async () => {
     const [row] = await fixtureSql<{ movements: number; sources: number }[]>`
       select (select count(*)::int from transactions where from_account_id = ${ids.bank} or to_account_id = ${ids.bank}) as movements,
@@ -15700,6 +15682,340 @@ async function statementImportSuite(): Promise<void> {
     inboundImport.value?.created === 1 && received?.currency === "COP" && received.counter_amount_cents === "1000" &&
       dollarSide.value?.lines?.[0]?.status === "matches",
     `imported ${JSON.stringify(inboundImport.value)}, received ${JSON.stringify(received)}, dollar side ${JSON.stringify(dollarSide.value?.lines)}`,
+  );
+
+  // RF-134: each leg names its statement; a re-import replaces exactly that statement's rows.
+  // A movement the person wrote by hand, which the card statement's line 5 names again.
+  const { transactionId: handCardId } = await asUser(owner, () =>
+    createTransaction({
+      fromAccountId: ids.card,
+      toAccountId: null,
+      amountCents: 120_000,
+      occurredAt: "2026-10-11",
+      description: "PROPINA A MANO",
+      externalRef: null,
+      splits: [{ categoryId: ids.food, amountCents: 120_000 }],
+      labelIds: [],
+    }),
+  );
+  const october = { periodStart: "2026-10-01", cutOffDate: "2026-10-31" };
+  const cardRows = [
+    { line: 1, date: "2026-10-03", description: "CAFE", amountCents: -500_000, categoryId: ids.food },
+    { line: 2, date: "2026-10-05", description: "LIBRERIA", amountCents: -700_000, categoryId: ids.food },
+    { line: 3, date: "2026-10-07", description: "ENVIO A BANCO", amountCents: -2_000_000, counterAccountId: ids.bank },
+    { line: 4, date: "2026-10-09", description: "TAXI", amountCents: -300_000, categoryId: ids.food },
+    { line: 5, date: "2026-10-11", description: "PROPINA", amountCents: -120_000, categoryId: ids.food },
+  ];
+  const cardFirst = await tool("preview_statement", { accountId: ids.card, rows: cardRows, statement: october });
+  const cardImport = await tool("import_statement", {
+    accountId: ids.card, rows: cardRows, statement: october, previewKey: cardFirst.value?.previewKey,
+  });
+  const sourcesOf = (accountId: string) => fixtureSql<{ statement_id: string | null; description: string; transaction_id: string }[]>`
+    select s.statement_id, t.description, t.id as transaction_id from transaction_sources s
+    join transactions t on t.id = s.transaction_id where s.account_id = ${accountId} order by t.occurred_at`;
+  const cardSources = await sourcesOf(ids.card);
+  const cardStatements = await fixtureSql<{ id: string; source: string; cut_off_date: string }[]>`
+    select id, source, cut_off_date::text from account_statements where account_id = ${ids.card}`;
+  assert(
+    next("RF-134: an import finds or cuts its statement's row and stamps every leg it writes with it"),
+    !cardImport.isError && cardImport.value?.created === 4 && cardImport.value?.linked === 1 &&
+      cardStatements.length === 1 && cardStatements[0]?.source === "imported" && cardStatements[0].cut_off_date === "2026-10-31" &&
+      cardSources.length === 5 && cardSources.every((one) => one.statement_id === cardStatements[0]?.id),
+    `import ${JSON.stringify(cardImport.value)}, statements ${JSON.stringify(cardStatements)}, sources ${JSON.stringify(cardSources)}`,
+  );
+
+  // The bank's own statement names the same transfer from the other side.
+  const bankRows = [{ line: 1, date: "2026-10-07", description: "RECIBO DE TARJETA", amountCents: 2_000_000 }];
+  const bankPreview = await tool("preview_statement", { accountId: ids.bank, rows: bankRows, statement: october });
+  const bankImport = await tool("import_statement", {
+    accountId: ids.bank, rows: bankRows, statement: october, previewKey: bankPreview.value?.previewKey,
+  });
+  const bankSources = await sourcesOf(ids.bank);
+  const bankSide = bankSources.find((one) => one.description === "ENVIO A BANCO");
+  const keptCafe = cardSources.find((one) => one.description === "CAFE");
+  await fixtureSql`update transactions set description = 'CAFE CON LECHE' where id = ${keptCafe?.transaction_id ?? null}`;
+
+  const edited = [
+    cardRows[0]!,
+    { ...cardRows[3]!, amountCents: -350_000 },
+  ];
+  const replacePreview = await tool("preview_statement", { accountId: ids.card, rows: edited, statement: october });
+  const removals = (replacePreview.value?.removals ?? []) as { description: string; effect: string }[];
+  const effectOf = (description: string) => removals.find((one) => one.description === description)?.effect;
+  const replaced = await tool("import_statement", {
+    accountId: ids.card, rows: edited, statement: october, previewKey: replacePreview.value?.previewKey,
+  });
+  const afterCard = await sourcesOf(ids.card);
+  const afterStatements = await fixtureSql<{ n: number }[]>`
+    select count(*)::int as n from account_statements where account_id = ${ids.card}`;
+  const [transfer] = await fixtureSql<{ n: number; amount: string }[]>`
+    select count(*)::int as n, coalesce(max(amount_cents), 0)::text as amount from transactions where id = ${bankSide?.transaction_id ?? null}`;
+  const goneRows = await fixtureSql<{ description: string; amount_cents: string }[]>`
+    select description, amount_cents::text from transactions
+    where from_account_id = ${ids.card} and description in ('LIBRERIA', 'TAXI')`;
+  const [handKept] = await fixtureSql<{ n: number; sources: number }[]>`
+    select count(*)::int as n,
+      (select count(*)::int from transaction_sources where transaction_id = ${handCardId}) as sources
+    from transactions where id = ${handCardId}`;
+  const [survivor] = await fixtureSql<{ id: string; description: string }[]>`
+    select id, description from transactions where id = ${keptCafe?.transaction_id ?? null}`;
+  assert(
+    next("RF-134: a re-import drops what its statement no longer names, keeps and updates the rest, and a transfer the other side's statement names stays"),
+    !bankImport.isError && bankImport.value?.linked === 1 && bankSide !== undefined &&
+      bankSide.statement_id !== null && bankSide.statement_id !== cardStatements[0]?.id &&
+      effectOf("LIBRERIA") === "deletes" && effectOf("TAXI") === "deletes" && effectOf("ENVIO A BANCO") === "unlinks" && effectOf("PROPINA A MANO") === "unlinks" &&
+      replacePreview.value?.counts?.already_imported === 1 && replacePreview.value?.counts?.new === 1 &&
+      !replaced.isError && replaced.value?.removed === 2 && replaced.value?.unlinked === 2 && handKept?.n === 1 && handKept.sources === 0 && replaced.value?.created === 1 &&
+      goneRows.length === 1 && goneRows[0]?.description === "TAXI" && goneRows[0].amount_cents === "350000" &&
+      survivor?.description === "CAFE CON LECHE" &&
+      afterCard.length === 2 && afterCard.every((one) => one.statement_id === cardStatements[0]?.id) &&
+      afterStatements[0]?.n === 1 && transfer?.n === 1 && transfer.amount === "2000000" &&
+      (await sourcesOf(ids.bank)).some((one) => one.transaction_id === bankSide.transaction_id),
+    `removals ${JSON.stringify(removals)}, replaced ${JSON.stringify(replaced.value)}, card sources ${JSON.stringify(afterCard)}, gone ${JSON.stringify(goneRows)}, transfer ${JSON.stringify(transfer)}`,
+  );
+
+  // A statement without its period is refused: the cut-off date is what a re-import is found by.
+  const unnamed = await callTool("preview_statement", { accountId: ids.card, rows: cardRows });
+  // A line outside the period it names is refused too.
+  const outside = await callTool("preview_statement", {
+    accountId: ids.card, rows: cardRows, statement: { periodStart: "2026-10-05", cutOffDate: "2026-10-31" },
+  });
+  assert(
+    next("RF-134: a statement names its period, and no line may fall outside it"),
+    unnamed.isError && outside.isError,
+    `unnamed ${JSON.stringify(unnamed.value)}, outside ${JSON.stringify(outside.value)}`,
+  );
+
+  // Re-import with lines added before, a reference given to a line that had none and a reconciled line:
+  // kept legs are renumbered, none is recreated, and the statement stays one.
+  const november = { periodStart: "2026-11-01", cutOffDate: "2026-11-08" };
+  const novRows = [
+    { line: 1, date: "2026-11-02", description: "UNO", amountCents: -100_000, categoryId: ids.food },
+    { line: 2, date: "2026-11-03", description: "DOS", amountCents: -200_000, categoryId: ids.food },
+    { line: 3, date: "2026-11-04", description: "TRES", amountCents: -300_000, categoryId: ids.food },
+  ];
+  const novFirst = await tool("preview_statement", { accountId: ids.card, rows: novRows, statement: november });
+  await tool("import_statement", { accountId: ids.card, rows: novRows, statement: november, previewKey: novFirst.value?.previewKey });
+  const novMovement = async (description: string) =>
+    (await fixtureSql<{ id: string }[]>`
+      select id from transactions where from_account_id = ${ids.card} and description = ${description}`)[0]?.id;
+  const [dosId, tresId, unoId] = [await novMovement("DOS"), await novMovement("TRES"), await novMovement("UNO")];
+  // A reconciliation's adjustment is the one reconciled movement: a single leg with no split. A line
+  // of this statement names it, so the statement holds it as a leg (as a leg matched earlier would).
+  const adjustmentId = await fixtureSql.begin(async (tx) => {
+    const claims = JSON.stringify({ sub: owner.id, role: "authenticated", aud: "authenticated" });
+    await tx`select set_config('request.jwt.claims', ${claims}, true)`;
+    const [reconciliation] = await tx<{ id: string }[]>`
+      insert into account_reconciliations (account_id, reconciled_on, counted_balance_cents)
+      values (${ids.card}, '2026-11-05', private.account_settlement_balance_on(${ids.card}, '2026-11-05') + 70000)
+      returning id`;
+    const [adjustment] = await tx<{ id: string }[]>`
+      select id from transactions where reconciliation_id = ${reconciliation!.id}`;
+    await tx`
+      insert into transaction_sources (transaction_id, account_id, statement_id, source_seq)
+      select ${adjustment!.id}, ${ids.card}, s.id, 9 from account_statements s
+      where s.account_id = ${ids.card} and s.cut_off_date = '2026-11-08'`;
+    return adjustment!.id;
+  });
+  const novNext = [
+    { line: 1, date: "2026-11-01", description: "CERO", amountCents: -50_000, categoryId: ids.food },
+    { ...novRows[0]!, line: 2 },
+    { ...novRows[1]!, line: 3 },
+    { line: 4, date: "2026-11-05", description: "AJUSTE", amountCents: 70_000, categoryId: ids.pay },
+    { ...novRows[2]!, line: 5, reference: `T-${tag}` },
+  ];
+  const novPreview = await tool("preview_statement", { accountId: ids.card, rows: novNext, statement: november });
+  const novImport = await tool("import_statement", {
+    accountId: ids.card, rows: novNext, statement: november, previewKey: novPreview.value?.previewKey,
+  });
+  const novSources = await fixtureSql<{ id: string; source_seq: number | null; source_ref: string | null }[]>`
+    select t.id, s.source_seq, s.source_ref from transaction_sources s join transactions t on t.id = s.transaction_id
+    where s.account_id = ${ids.card} and t.occurred_at >= '2026-11-01'`;
+  const seqOf = (id: string | undefined) => novSources.find((one) => one.id === id);
+  const novCount = await fixtureSql<{ n: number }[]>`
+    select count(*)::int as n from transactions
+    where from_account_id = ${ids.card} and description in ('CERO', 'UNO', 'DOS', 'TRES')`;
+  assert(
+    next("RF-134: a re-import renumbers the legs it keeps, matches a reconciled leg it holds, and gives a held leg the reference it lacked"),
+    !novImport.isError && novImport.value?.created === 1 && novImport.value?.skipped === 4 && novImport.value?.removed === 0 &&
+      novCount[0]?.n === 4 &&
+      seqOf(unoId)?.source_seq === 2 && seqOf(dosId)?.source_seq === 3 && seqOf(adjustmentId)?.source_seq === 4 &&
+      seqOf(tresId)?.source_ref === `T-${tag}` && seqOf(tresId)?.source_seq === null,
+    `preview ${JSON.stringify(novPreview.value?.counts)}, import ${JSON.stringify(novImport.value)}, sources ${JSON.stringify(novSources)}, movements ${novCount[0]?.n}`,
+  );
+
+  // Dropping the statement's last line names the same statement, so exactly that line goes.
+  const novLast = novNext.slice(0, 4);
+  const lastPreview = await tool("preview_statement", { accountId: ids.card, rows: novLast, statement: november });
+  const lastImport = await tool("import_statement", {
+    accountId: ids.card, rows: novLast, statement: november, previewKey: lastPreview.value?.previewKey,
+  });
+  const novStatements = await fixtureSql<{ n: number }[]>`
+    select count(*)::int as n from account_statements where account_id = ${ids.card} and cut_off_date = '2026-11-08'`;
+  assert(
+    next("RF-134: dropping a statement's last line replaces within the same statement: that movement goes, no second statement is cut"),
+    !lastImport.isError && lastImport.value?.removed === 1 && novStatements[0]?.n === 1 && (await novMovement("TRES")) === undefined,
+    `import ${JSON.stringify(lastImport.value)}, statements ${novStatements[0]?.n}`,
+  );
+}
+
+
+// RF-136: a statement line that prints «1/36» is proposed as deferred by the preview and written as a
+// deferral by the import; only a purchase on a liability can be, and the balance never moves with it.
+async function deferralImportSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const { POST } = await import("@/app/mcp/route");
+  const owner = await createMembershipFreeUser();
+  const ids = { card: randomUUID(), bank: randomUUID(), food: randomUUID() };
+  await fixtureSql.begin(async (tx) => {
+    const claims = JSON.stringify({ sub: owner.id, role: "authenticated", aud: "authenticated" });
+    await tx`select set_config('request.jwt.claims', ${claims}, true)`;
+    await tx`
+      insert into accounts (id, owner_user_id, name, kind, subtype, initial_balance_cents, initial_balance_on)
+      values (${ids.card}, ${owner.id}, ${`Harness rf136 tarjeta ${tag}`}, 'liability', 'card', 0, '2026-01-01'),
+        (${ids.bank}, ${owner.id}, ${`Harness rf136 banco ${tag}`}, 'asset', 'bank', 0, '2026-01-01')`;
+    await tx`
+      insert into categories (id, owner_user_id, name, kind, color)
+      values (${ids.food}, ${owner.id}, ${`Harness rf136 hogar ${tag}`}, 'expense', '#4C8C4A')`;
+  });
+  track("accounts", ids.card);
+  track("accounts", ids.bank);
+  track("categories", ids.food);
+  const { id: credentialId, token } = await asUser(owner, () =>
+    issueWebhookCredential({ name: `Harness rf136 ${tag}`, purpose: "mcp", defaultAccountId: null, defaultCategoryId: null }),
+  );
+  keep("webhook_credentials", credentialId);
+  const { tool } = mcpClient(POST, token);
+  const balance = async () => {
+    const [row] = await fixtureSql<{ cents: string }[]>`
+      select balance_cents::text as cents from account_balances where id = ${ids.card}`;
+    return row?.cents;
+  };
+
+  const march = { periodStart: "2026-03-01", cutOffDate: "2026-03-31" };
+  const rows = [
+    { line: 1, date: "2026-03-15", description: "NEVERA 1/36", amountCents: -360_000_000, categoryId: ids.food, instalments: 36 },
+    { line: 2, date: "2026-03-16", description: "CAFE", amountCents: -1_000_000, categoryId: ids.food },
+  ];
+  type Line = { line: number; status: string; reason?: string; deferral?: { instalments: number; proposal: string } };
+  const preview = await tool("preview_statement", { accountId: ids.card, rows, statement: march });
+  const lines = (preview.value?.lines ?? []) as Line[];
+  const [none] = await fixtureSql<{ n: number }[]>`select count(*)::int as n from deferrals where account_id = ${ids.card}`;
+  const wrongSide = await tool("preview_statement", { accountId: ids.bank, rows: [rows[0]], statement: march });
+  assert(
+    next("RF-136: the preview proposes the deferral and writes nothing; on an asset account the line is invalid"),
+    !preview.isError && lines[0]?.status === "new" && lines[0].deferral?.instalments === 36 &&
+      lines[0].deferral.proposal === "Diferir en 36 cuotas" && lines[1]?.deferral === undefined &&
+      none?.n === 0 && (wrongSide.value?.lines as Line[])?.[0]?.reason === "cannot_defer",
+    `preview ${JSON.stringify(lines)}, deferrals ${none?.n}, asset ${JSON.stringify(wrongSide.value?.lines)}`,
+  );
+
+  const imported = await tool("import_statement", { accountId: ids.card, rows, statement: march, previewKey: preview.value?.previewKey });
+  const again = await tool("import_statement", { accountId: ids.card, rows, statement: march, previewKey: preview.value?.previewKey });
+  const stored = await fixtureSql<{ instalments: number; description: string; created_by: string }[]>`
+    select d.instalments, t.description, d.created_by from deferrals d join transactions t on t.id = d.transaction_id
+    where d.account_id = ${ids.card}`;
+  assert(
+    next("RF-136: the import writes the deferral of the proposed line, stamped by its owner, and the whole purchase stays in the balance"),
+    !imported.isError && imported.value?.created === 2 && stored.length === 1 &&
+      stored[0]?.instalments === 36 && stored[0].description === "NEVERA 1/36" && stored[0].created_by === owner.id &&
+      again.isError && (await balance()) === "-361000000",
+    `imported ${JSON.stringify(imported.value)}, stored ${JSON.stringify(stored)}, balance ${await balance()}`,
+  );
+
+  // A transfer out of the card is not a purchase: a line that matches it and carries instalments is refused.
+  const { transactionId: transferId } = await asUser(owner, () =>
+    createTransaction({
+      fromAccountId: ids.card,
+      toAccountId: ids.bank,
+      amountCents: 700_000,
+      occurredAt: "2026-03-20",
+      description: "Harness rf136 traslado",
+      externalRef: null,
+      splits: [],
+      labelIds: [],
+    }),
+  );
+  track("transactions", transferId);
+  const transferLine = {
+    line: 1, date: "2026-03-20", description: "TRASLADO 1/6", amountCents: -700_000, categoryId: ids.food, instalments: 6,
+  };
+  const matched = await tool("preview_statement", { accountId: ids.card, rows: [transferLine], statement: march });
+  const matchedLine = (matched.value?.lines as Line[] | undefined)?.[0];
+  const transferState = await asUser(owner, () => getMovementDeferral(transferId));
+  const [purchaseId] = await fixtureSql<{ id: string }[]>`
+    select t.id from transactions t where t.from_account_id = ${ids.card} and t.description = 'NEVERA 1/36'`;
+  const purchaseState = await asUser(owner, () => getMovementDeferral(purchaseId!.id));
+  assert(
+    next("RF-136: a line matching a transfer out of the card is invalid (cannot_defer), and only the purchase offers a deferral"),
+    matchedLine?.status === "invalid" && matchedLine.reason === "cannot_defer" &&
+      !transferState.canDefer && transferState.deferral === null &&
+      purchaseState.canDefer && purchaseState.deferral?.instalments === 36,
+    `line ${JSON.stringify(matchedLine)}, transfer ${JSON.stringify(transferState)}, purchase ${JSON.stringify(purchaseState)}`,
+  );
+
+  // RF-136: the plan ends when a payment covers a balance that was owed, and never for a card in credit.
+  const open = async (name: string, initialCents: number) => {
+    const id = randomUUID();
+    await fixtureSql.begin(async (tx) => {
+      const claims = JSON.stringify({ sub: owner.id, role: "authenticated", aud: "authenticated" });
+      await tx`select set_config('request.jwt.claims', ${claims}, true)`;
+      await tx`
+        insert into accounts (id, owner_user_id, name, kind, subtype, initial_balance_cents, initial_balance_on)
+        values (${id}, ${owner.id}, ${`Harness rf136 ${name} ${tag}`}, 'liability', 'card', ${initialCents}, '2026-01-01')`;
+    });
+    track("accounts", id);
+    return id;
+  };
+  const move = async (from: string | null, to: string | null, cents: number, day: string) => {
+    const { transactionId } = await asUser(owner, () =>
+      createTransaction({
+        fromAccountId: from,
+        toAccountId: to,
+        amountCents: cents,
+        occurredAt: day,
+        description: `Harness rf136 ${day}`,
+        externalRef: null,
+        splits: from !== null && to === null ? [{ categoryId: ids.food, amountCents: cents }] : [],
+        labelIds: [],
+      }),
+    );
+    track("transactions", transactionId);
+    return transactionId;
+  };
+  const stateOf = async (accountId: string) =>
+    (await asUser(owner, () => listDeferralsForAccount(accountId)))[0]?.status.state;
+
+  const owing = await open("deuda", 0);
+  const owingPurchase = await move(owing, null, 3_600_000, "2026-03-15");
+  await asUser(owner, () => createDeferral({ transactionId: owingPurchase, instalments: 36 }));
+  const beforePayment = await stateOf(owing);
+  await move(ids.bank, owing, 1_000_000, "2026-04-01");
+  const afterPartial = await stateOf(owing);
+  await move(ids.bank, owing, 2_600_000, "2026-05-02");
+  const afterCovering = await stateOf(owing);
+
+  // The opening of a liability is never positive: the credit comes from an overpayment before the purchase.
+  const inCredit = await open("saldo a favor", 0);
+  await move(ids.bank, inCredit, 10_000_000, "2026-02-01");
+  const creditPurchase = await move(inCredit, null, 3_600_000, "2026-03-15");
+  await asUser(owner, () => createDeferral({ transactionId: creditPurchase, instalments: 36 }));
+  const creditAtPurchase = await stateOf(inCredit);
+  await move(ids.bank, inCredit, 500_000, "2026-04-01");
+  const creditAfterPayment = await stateOf(inCredit);
+
+  const sameDay = await open("mismo dia", 0);
+  const sameDayPurchase = await move(sameDay, null, 1_000_000, "2026-03-15");
+  await asUser(owner, () => createDeferral({ transactionId: sameDayPurchase, instalments: 12 }));
+  await move(ids.bank, sameDay, 1_000_000, "2026-03-15");
+  const coveredTheSameDay = await stateOf(sameDay);
+  assert(
+    next("RF-136: a deferral stays running until a payment covers a balance that was owed; a card in credit never reads extinguished"),
+    beforePayment === "running" && afterPartial === "running" && afterCovering === "extinguished" &&
+      creditAtPurchase === "running" && creditAfterPayment === "running" &&
+      coveredTheSameDay === "running",
+    `owing: ${beforePayment}, ${afterPartial}, ${afterCovering}; in credit: ${creditAtPurchase}, ${creditAfterPayment}; paid the same day: ${coveredTheSameDay}`,
   );
 }
 

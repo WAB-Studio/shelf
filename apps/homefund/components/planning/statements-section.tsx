@@ -201,7 +201,6 @@ export function StatementsSection({
 
   const emptyState = (
     <EmptyState
-      variant="filtered"
       title={t("statementsEmpty")}
       description={t("statementsEmptyRecord")}
     />

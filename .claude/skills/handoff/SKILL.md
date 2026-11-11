@@ -15,11 +15,9 @@ The one document that survives a session. `private/handoffs/HANDOFF-<YYYY-MM-DD>
 4. Compare what the handoff says against what the repo shows. Say every difference out loud.
 5. Take the first item of its `Lo que sigue` and start. Ask nothing the handoff already answers.
 
-## Closing — "cerremos handoff", or on the window's own warning
+## Closing — "cerremos handoff"
 
-The `context-watch.sh` hook says when the window passes 500k tokens. From then on dispatch nothing
-new, let every running agent finish, and close when none runs. Never ask the user whether to keep going
-or close: the hook says when.
+Close only when the user says so. Autocompact keeps the window in bounds; a long session is never a reason to close.
 
 1. **Wait for every subagent still running.** Never `TaskStop` one, except one with no progress in
    30 minutes: say in the file what it was doing and what it had proved.

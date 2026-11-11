@@ -1,6 +1,6 @@
 import "server-only";
 
-import { desc, eq, sql } from "drizzle-orm";
+import { desc, eq, sql, type SQL } from "drizzle-orm";
 
 import { insertRow } from "@/db/insert-row";
 import { accounts, accountStatements } from "@/db/schema";
@@ -8,6 +8,22 @@ import type { AccountStatement } from "@/db/schema";
 import { withUserDb } from "@/db/session";
 import type { CurrencyCode } from "@/lib/currency";
 import { pgErrorCode } from "@/lib/db-error";
+
+/**
+ * The account's balance at a day, in its settlement currency (RF-129). `account` names the row of
+ * `accounts` in the enclosing query, `day` a date expression. The walk starts at the opening balance,
+ * one row in the settlement currency, and lands each leg the way `account_balances` lands it (RF-121,
+ * RF-124): its own amount while spent in that currency, what the issuer billed once a confirmed second
+ * amount says so, and nothing while that figure is still an estimate.
+ */
+export const derivedBalanceAt = (account: SQL, day: SQL) => sql<string>`
+  ${account}.initial_balance_cents + coalesce((select sum(
+    (case when t.to_account_id = ${account}.id then 1 else -1 end) * (case
+      when t.currency = ${account}.settlement_currency then t.amount_cents
+      when t.counter_amount_cents is not null and not t.counter_is_estimate then t.counter_amount_cents
+      else 0 end))
+    from transactions t
+    where (t.to_account_id = ${account}.id or t.from_account_id = ${account}.id) and t.occurred_at <= ${day}), 0)`;
 
 export type AccountStatementRow = AccountStatement & {
   // The account's own balance at the cut-off, in its settlement currency.
@@ -39,25 +55,7 @@ export async function listAccountStatements(
         // while it was spent in that currency, what the issuer billed once a
         // confirmed second amount says so, and nothing while that figure is still
         // an estimate.
-        derivedBalanceCents: sql<string>`
-          accounts.initial_balance_cents
-            + coalesce((select sum(case
-                when t.currency = accounts.settlement_currency then t.amount_cents
-                when t.counter_amount_cents is not null and not t.counter_is_estimate
-                  then t.counter_amount_cents
-                else 0
-              end) from transactions t
-              where t.to_account_id = account_statements.account_id
-                and t.occurred_at <= account_statements.cut_off_date), 0)
-            - coalesce((select sum(case
-                when t.currency = accounts.settlement_currency then t.amount_cents
-                when t.counter_amount_cents is not null and not t.counter_is_estimate
-                  then t.counter_amount_cents
-                else 0
-              end) from transactions t
-              where t.from_account_id = account_statements.account_id
-                and t.occurred_at <= account_statements.cut_off_date), 0)
-        `,
+        derivedBalanceCents: derivedBalanceAt(sql`accounts`, sql`account_statements.cut_off_date`),
       })
       .from(accountStatements)
       .innerJoin(accounts, eq(accounts.id, accountStatements.accountId))

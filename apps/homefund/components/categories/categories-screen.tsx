@@ -428,7 +428,6 @@ export function CategoriesScreen({
           sections={sections}
           empty={
             <EmptyState
-              variant="filtered"
               title={t("emptyTitle")}
               description={t("emptyDescription")}
               action={addButton}

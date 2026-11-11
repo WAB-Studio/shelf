@@ -30,7 +30,9 @@ Each entry names the rule and the file it lives in now.
   module 14 drew data no query selects.
 - Never hold work behind a judge. Decided by the user 2026-10-11: «esperar a los agentes multiplica el tiempo».
 - The window's close at 500k. Decided by the user 2026-10-10; raised from 300k on 2026-10-11: 300k drained the
-  session before the trains were done.
+  session before the trains were done. Retired 2026-11-10 with its hook (`context-watch.sh`): autocompact at 400k
+  keeps the window in bounds, and the hook fell back to the whole transcript's bytes and read 1144k.
+  User: «por qué tienes handoff si tenemos autocompact, no tiene sentido».
 - Risk table, module size cap, judge-performance table and pruning, and «a reviewer with no findings is a valid
   result». Decided by the user 2026-10-14 («hagamos todo lo de investigación estratégicas»), from
   `private/investigacion-estrategias.md` Part C and A5.

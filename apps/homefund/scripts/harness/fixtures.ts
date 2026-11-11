@@ -60,6 +60,7 @@ const CLEANUP_ORDER = [
   ["goal_contributions", "id"],
   ["transaction_labels", "transaction_id"],
   ["transaction_splits", "transaction_id"],
+  ["deferrals", "id"],
   ["installment_lines", "id"],
   ["installment_plans", "id"],
   ["account_statements", "id"],
@@ -248,6 +249,9 @@ export async function purgeIdentity(userId: string): Promise<void> {
     // These three hang off an account rather than off a user. `debt_terms` goes
     // before `accounts` in particular: its row is what makes an account's deletion
     // fail rather than cascade.
+    await tx`
+      delete from deferrals
+      where account_id in (select id from accounts where owner_user_id = ${userId})`;
     await tx`
       delete from installment_plans
       where account_id in (select id from accounts where owner_user_id = ${userId})`;

@@ -185,7 +185,6 @@ export function RecurringScreen({
           rows={tableRows}
           empty={
             <EmptyState
-              variant="filtered"
               title={t("emptyTitle")}
               description={t("emptyDescription")}
               action={addButton}
