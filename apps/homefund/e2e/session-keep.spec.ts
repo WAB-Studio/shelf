@@ -24,9 +24,11 @@ const DAY_SECONDS = 24 * 60 * 60;
 async function cloneSession(userId: string): Promise<{ session: HarnessSession; sessionId: string }> {
   const hash = randomUUID().replaceAll("-", "");
   const [{ email }] = await fixtureSql<{ email: string }[]>`select email from auth.users where id = ${userId}`;
+  // Auth files a confirmed user's magic link as a recovery token, in the user row and in its token table.
+  await fixtureSql`update auth.users set recovery_token = ${hash}, recovery_sent_at = now() where id = ${userId}`;
   await fixtureSql`
     insert into auth.one_time_tokens (id, user_id, token_type, token_hash, relates_to, created_at, updated_at)
-    values (${randomUUID()}, ${userId}, 'magiclink', ${hash}, ${email}, now(), now())`;
+    values (${randomUUID()}, ${userId}, 'recovery_token', ${hash}, ${email}, now(), now())`;
 
   const session = await sessionFromTokenHash(hash);
   const claims = JSON.parse(Buffer.from(session.access_token.split(".")[1], "base64url").toString("utf8")) as {
