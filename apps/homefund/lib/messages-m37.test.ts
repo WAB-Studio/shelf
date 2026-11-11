@@ -1,22 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { IntlMessageFormat } from "intl-messageformat";
 import es from "../messages/es.json";
 import en from "../messages/en.json";
-
-test("paymentPaidLines says no installment completed at zero", () => {
-  const render = (m: string, count: number) =>
-    String(new IntlMessageFormat(m, "es").format({ count }));
-  assert.equal(
-    render(es.installments.paymentPaidLines, 0),
-    "El pago no completó ninguna cuota.",
-  );
-  assert.equal(render(es.installments.paymentPaidLines, 2), "Pagaste 2 cuotas.");
-  assert.equal(
-    String(new IntlMessageFormat(en.installments.paymentPaidLines, "en").format({ count: 0 })),
-    "The payment completed no installment.",
-  );
-});
 
 test("reminderHint promises the date, not a notification", () => {
   const hint = Object.values(es).flatMap((v) =>

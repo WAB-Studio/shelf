@@ -236,6 +236,11 @@ async function main() {
     return;
   }
 
+  if (process.env.RLS_ONLY === "rf136") {
+    await checkDeferrals();
+    return;
+  }
+
   if (process.env.RLS_ONLY === "o7m2") {
     await checkTransactionReviews();
     return;
@@ -314,6 +319,184 @@ async function main() {
   await checkMovementBeforeOpening();
   await checkO7M11Survivors();
   await checkTransactionReviews();
+  await checkDeferrals();
+}
+
+// RF-136: a deferral is read and written exactly when its purchase's liability account is, carries 2 to 72
+// instalments, is replaced by delete and insert, and goes with its movement. Every row rolls back.
+async function rf136Rows(labels: string[], body: (tx: M1Tx) => Promise<M1Verdict[]>): Promise<void> {
+  let verdicts: M1Verdict[] = labels.map(() => ({ ok: false, detail: "the body never ran" }));
+  await sql
+    .begin(async (tx) => {
+      verdicts = await body(tx);
+      throw M1_ROLLBACK;
+    })
+    .catch((error: unknown) => {
+      if (error === M1_ROLLBACK) return;
+      verdicts = labels.map(() => ({ ok: false, detail: `aborted — ${describeRefusal(error)}` }));
+    });
+  labels.forEach((label, i) => assert(label, verdicts[i].ok, verdicts[i].detail));
+}
+
+// A's personal card with one purchase on it, and a user of another fund who reads neither. Leaves the role reset.
+async function rf136Fixture(tx: M1Tx) {
+  const f = await o6m1bFund(tx);
+  await enterUserContext(tx, f.member);
+  const [{ id: card }] = await tx<{ id: string }[]>`
+    insert into accounts (owner_user_id, name, kind, subtype, initial_balance_on)
+    values (${f.member}, 'rls rf136 card', 'liability', 'card', ${todayInBogota()}) returning id`;
+  const purchase = await o6m1Movement(tx, card, f.personalCategory, 9_000_000, "rls rf136 purchase");
+  await tx`reset role`;
+  const { leader: stranger } = await m1Group(tx);
+  await tx`reset role`;
+  return { ...f, card, purchase, stranger };
+}
+
+async function checkDeferrals() {
+  console.log("");
+  const labels = {
+    writer: "rf136-1. the owner of the card defers a purchase, the count is 2 to 72, a second deferral of it is 23505, and created_by is auth.uid()",
+    scope: "rf136-2. a fund member who only reads the card reads the deferral and cannot defer or remove; a user of another fund reads and writes nothing: 42501",
+    final: "rf136-3. no deferral can be updated; the owner removes it and defers again; deleting the purchase takes its deferral",
+    pairing: "rf136-5. a deferral must name an expense whose source is the named liability: another card, a refund into the card, a transfer out of it and an asset's purchase are each 23514",
+    edited: "rf136-6. editing the purchase's source, or giving it a destination, takes its deferral; an edit that keeps both leaves it",
+    grants: "rf136-4. anon and service_role hold no privilege on deferrals; authenticated holds select, insert (transaction_id, account_id, instalments) and delete alone",
+  };
+
+  await rf136Rows([labels.writer], async (tx) => {
+    const f = await rf136Fixture(tx);
+    await enterUserContext(tx, f.member);
+    const defer = (count: number) => (sp: M1Tx) =>
+      sp`insert into deferrals (transaction_id, account_id, instalments) values (${f.purchase}, ${f.card}, ${count})`;
+    const tooFew = await m1Refusal(tx, defer(1));
+    const tooMany = await m1Refusal(tx, defer(73));
+    const saved = await m1Refusal(tx, defer(36));
+    const twice = await m1Refusal(tx, defer(12));
+    await tx`reset role`;
+    const stored = await tx<{ instalments: number; created_by: string }[]>`
+      select instalments, created_by from finances.deferrals where transaction_id = ${f.purchase}`;
+    return [{
+      ok: tooFew === "23514" && tooMany === "23514" && saved === null && twice === "23505" &&
+        stored.length === 1 && stored[0].instalments === 36 && stored[0].created_by === f.member,
+      detail: `1: ${tooFew}, 73: ${tooMany}, 36: ${saved ?? "accepted"}, again: ${twice}; stored ${JSON.stringify(stored)}`,
+    }];
+  });
+
+  await rf136Rows([labels.scope], async (tx) => {
+    const f = await rf136Fixture(tx);
+    await enterUserContext(tx, f.member);
+    await tx`insert into deferrals (transaction_id, account_id, instalments) values (${f.purchase}, ${f.card}, 24)`;
+    await enterUserContext(tx, f.leader);
+    const seen = (await tx`select id from deferrals where transaction_id = ${f.purchase}`).length;
+    const insert = await m1Refusal(tx, (sp) => sp`
+      insert into deferrals (transaction_id, account_id, instalments) values (${f.purchase}, ${f.card}, 6)`);
+    const removed = (await tx`delete from deferrals where transaction_id = ${f.purchase} returning id`).length;
+    await enterUserContext(tx, f.stranger);
+    const strangerSees = (await tx`select id from deferrals where transaction_id = ${f.purchase}`).length;
+    const strangerInsert = await m1Refusal(tx, (sp) => sp`
+      insert into deferrals (transaction_id, account_id, instalments) values (${f.purchase}, ${f.card}, 6)`);
+    const strangerRemoved = (await tx`delete from deferrals where transaction_id = ${f.purchase} returning id`).length;
+    await tx`reset role`;
+    const [{ left }] = await tx<{ left: number }[]>`select count(*)::int as left from finances.deferrals where transaction_id = ${f.purchase}`;
+    return [{
+      ok: seen === 1 && insert !== null && removed === 0 && strangerSees === 0 && strangerInsert === "42501" &&
+        strangerRemoved === 0 && left === 1,
+      detail: `reader sees ${seen}, defers ${insert ?? "accepted"}, removes ${removed}; stranger sees ${strangerSees}, ` +
+        `defers ${strangerInsert ?? "accepted"}, removes ${strangerRemoved}; ${left} stored`,
+    }];
+  });
+
+  await rf136Rows([labels.final], async (tx) => {
+    const f = await rf136Fixture(tx);
+    await enterUserContext(tx, f.member);
+    const id = (await tx<{ id: string }[]>`
+      insert into deferrals (transaction_id, account_id, instalments) values (${f.purchase}, ${f.card}, 24) returning id`)[0].id;
+    const update = await m1Refusal(tx, (sp) => sp`update deferrals set instalments = 3 where id = ${id}`);
+    const removed = (await tx`delete from deferrals where id = ${id} returning id`).length;
+    const again = await m1Refusal(tx, (sp) => sp`
+      insert into deferrals (transaction_id, account_id, instalments) values (${f.purchase}, ${f.card}, 3)`);
+    await tx`delete from transactions where id = ${f.purchase}`;
+    await tx`reset role`;
+    const [{ left }] = await tx<{ left: number }[]>`select count(*)::int as left from finances.deferrals where account_id = ${f.card}`;
+    return [{
+      ok: update === "42501" && removed === 1 && again === null && left === 0,
+      detail: `update ${update ?? "accepted"}, delete took ${removed}, defer again ${again ?? "accepted"}, ${left} left after the purchase went`,
+    }];
+  });
+
+  await rf136Rows([labels.pairing], async (tx) => {
+    const f = await rf136Fixture(tx);
+    await enterUserContext(tx, f.member);
+    const [{ id: other }] = await tx<{ id: string }[]>`
+      insert into accounts (owner_user_id, name, kind, subtype, initial_balance_on)
+      values (${f.member}, 'rls rf136 other card', 'liability', 'card', ${todayInBogota()}) returning id`;
+    const [{ id: refund }] = await tx<{ id: string }[]>`
+      insert into transactions (to_account_id, amount_cents, occurred_at) values (${f.card}, 1000, ${todayInBogota()}) returning id`;
+    const [{ id: transfer }] = await tx<{ id: string }[]>`
+      insert into transactions (from_account_id, to_account_id, amount_cents, occurred_at)
+      values (${f.card}, ${f.personal}, 1000, ${todayInBogota()}) returning id`;
+    const assetPurchase = await o6m1Movement(tx, f.personal, f.personalCategory, 1000, "rls rf136 asset purchase");
+    const attempt = (transactionId: string, accountId: string) =>
+      m1Refusal(tx, (sp) => sp`
+        insert into deferrals (transaction_id, account_id, instalments) values (${transactionId}, ${accountId}, 6)`);
+    const codes = {
+      otherCard: await attempt(f.purchase, other),
+      refund: await attempt(refund, f.card),
+      transfer: await attempt(transfer, f.card),
+      asset: await attempt(assetPurchase, f.personal),
+    };
+    const own = await attempt(f.purchase, f.card);
+    return [{
+      ok: Object.values(codes).every((code) => code === "23514") && own === null,
+      detail: `other card ${codes.otherCard}, refund ${codes.refund}, transfer ${codes.transfer}, asset ${codes.asset}; the purchase on its own card ${own ?? "accepted"}`,
+    }];
+  });
+
+  await rf136Rows([labels.edited], async (tx) => {
+    const f = await rf136Fixture(tx);
+    await enterUserContext(tx, f.member);
+    const [{ id: other }] = await tx<{ id: string }[]>`
+      insert into accounts (owner_user_id, name, kind, subtype, initial_balance_on)
+      values (${f.member}, 'rls rf136 other card', 'liability', 'card', ${todayInBogota()}) returning id`;
+    const count = async () =>
+      (await tx`select id from deferrals where transaction_id = ${f.purchase}`).length;
+    await tx`insert into deferrals (transaction_id, account_id, instalments) values (${f.purchase}, ${f.card}, 12)`;
+    await tx`update transactions set amount_cents = 9100000, description = 'rls rf136 edited' where id = ${f.purchase}`;
+    await tx`update transactions set from_account_id = ${f.card} where id = ${f.purchase}`;
+    const kept = await count();
+    await tx`update transactions set from_account_id = ${other} where id = ${f.purchase}`;
+    const moved = await count();
+    await tx`insert into deferrals (transaction_id, account_id, instalments) values (${f.purchase}, ${other}, 12)`;
+    await tx`update transactions set to_account_id = ${f.personal} where id = ${f.purchase}`;
+    const transferred = await count();
+    return [{
+      ok: kept === 1 && moved === 0 && transferred === 0,
+      detail: `after an edit that keeps the source ${kept} deferral, after moving the source ${moved}, after giving it a destination ${transferred}`,
+    }];
+  });
+
+  await rf136Rows([labels.grants], async (tx) => {
+    const held = await tx<{ role: string; privilege: string }[]>`
+      select r.role, p.privilege
+      from unnest(array['anon', 'service_role']) as r(role)
+      cross join unnest(${O7M2_PRIVILEGES as unknown as string[]}::text[]) as p(privilege)
+      where has_table_privilege(r.role, 'finances.deferrals', p.privilege)
+         or (p.privilege in ('SELECT', 'INSERT', 'UPDATE', 'REFERENCES')
+             and has_any_column_privilege(r.role, 'finances.deferrals', p.privilege))`;
+    const [mine] = await tx<{ update_any: boolean; del: boolean }[]>`
+      select has_any_column_privilege('authenticated', 'finances.deferrals', 'UPDATE') as update_any,
+        has_table_privilege('authenticated', 'finances.deferrals', 'DELETE') as del`;
+    const insertable = await tx<{ column_name: string }[]>`
+      select column_name from information_schema.columns
+      where table_schema = 'finances' and table_name = 'deferrals'
+        and has_column_privilege('authenticated', 'finances.deferrals', column_name, 'INSERT')
+      order by column_name`;
+    const columns = insertable.map((row) => row.column_name).join(", ");
+    return [{
+      ok: held.length === 0 && !mine.update_any && mine.del && columns === "account_id, instalments, transaction_id",
+      detail: `anon/service_role hold [${held.map((h) => `${h.role} ${h.privilege}`).join(", ")}]; update ${mine.update_any}, delete ${mine.del}; insertable [${columns}]`,
+    }];
+  });
 }
 
 // Assertions 9-26: the repivoted schema. A group holds accounts and categories a user XOR a group
@@ -5057,6 +5240,8 @@ const INSERT_GRANT_GAPS: Record<string, string[]> = {
   budgets: ["archived_at", "created_at", "id", "updated_at"],
   categories: ["created_at", "id", "updated_at"],
   debt_terms: ["created_at", "updated_at"],
+  // `created_by` is the column default from `auth.uid()`; the movement, the account and the count are the input.
+  deferrals: ["created_at", "created_by", "id"],
   goal_contributions: ["id"],
   group_members: ["archived_at", "created_at", "id", "invite_state", "updated_at"],
   groups: ["created_at", "updated_at"],
@@ -5202,6 +5387,8 @@ const UPDATE_GRANT_GAPS: Record<string, string[]> = {
   budgets: ["category_id", "created_at", "external_ref", "group_id", "id", "owner_user_id", "updated_at"],
   categories: ["created_at", "group_id", "id", "kind", "owner_user_id", "seed_key", "updated_at"],
   debt_terms: ["account_id", "created_at", "updated_at"],
+  // A deferral is replaced by deleting it and deferring again: no column is writable.
+  deferrals: ["account_id", "created_at", "created_by", "id", "instalments", "transaction_id"],
   goal_contributions: ["amount_cents", "created_at", "external_ref", "goal_id", "id", "transaction_id"],
   group_members: [
     "created_at",
@@ -5328,6 +5515,7 @@ const DELETE_GRANTS: string[] = [
   "budgets",
   "categories",
   "debt_terms",
+  "deferrals",
   "goal_contributions",
   "group_members",
   "ingest_counterparties",

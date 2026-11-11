@@ -17,7 +17,6 @@ import {
   type DataColumn,
 } from "@/components/ui";
 import type { DebtOverviewRow, DebtPocket } from "@/db/queries/debt-overview";
-import type { PlanPosition } from "@/db/queries/installment-plans";
 import type { CurrencyCode } from "@/lib/currency";
 import { civilDateToDate } from "@/lib/dates";
 import type { Locale } from "@/lib/locales";
@@ -48,8 +47,7 @@ const COLUMN_GAP = "8px";
 /**
  * One liability the screen draws. `terms` is null on a debt with no `debt_terms`
  * row: every derived figure it would carry then reads absent, and only its owed
- * magnitude and its invitation remain (RF-79). `planPosition` is independent of
- * terms — a plan sits on any liability (RF-81). `canWrite` is what the policies
+ * magnitude and its invitation remain (RF-79). `canWrite` is what the policies
  * would admit on this debt, which is what decides the actions it offers.
  */
 export type DebtTableRow = {
@@ -64,7 +62,6 @@ export type DebtTableRow = {
   owedCents: number;
   creditCents: number;
   otherOwed: DebtPocket[];
-  planPosition: PlanPosition | null;
   terms: DebtOverviewRow | null;
   canWrite: boolean;
 };
@@ -530,9 +527,8 @@ export function DebtsTable({
 }
 
 /**
- * The line under a debt's name. A plan states its position whether or not the
- * debt carries terms (RF-81); without a plan the terms' own kind speaks; with
- * neither, the debt owes without a rate and the row invites the terms it lacks
+ * The line under a debt's name. The terms' own kind speaks; without
+ * terms, the debt owes without a rate and the row invites the terms it lacks
  * (RF-78, RF-79).
  */
 function DebtMeta({
@@ -544,17 +540,6 @@ function DebtMeta({
 }) {
   const t = useTranslations("debts");
   const format = useFormatter();
-
-  if (row.planPosition !== null) {
-    return (
-      <Text size="2" color="gray">
-        {t("installmentPosition", {
-          paid: row.planPosition.linesPaid,
-          total: row.planPosition.linesTotal,
-        })}
-      </Text>
-    );
-  }
 
   if (row.terms === null) {
     // A caller who cannot write the debt is told what it lacks, not invited to

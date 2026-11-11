@@ -89,7 +89,7 @@ accounting exports, native apps. None of this gets built or left
 - [x] **RF-129** — Every account, asset or liability, keeps a statement history: one immutable record per period with its bounds, the closing balance the statement printed and the opening balance, credits and debits it printed. The difference between that closing balance and the balance derived from the account's own movements, in its own settlement currency, is derived on read and shown, never stored.
 - [x] **RF-130** — A liability's statement record also carries what the statement charged for that period: interest, fees and the minimum, as printed. A closed period's statement history shows this charged figure, or that none was recorded; it never estimates a closed period. This does not change how the app estimates the current, still-open period's interest (RF-79).
 - [x] **RF-131** — A liability's next payment due derives from its latest statement's cut-off and due dates when one exists; the cut-off and due days on its terms are used only until a statement exists.
-- [ ] **RF-136** — A purchase may be deferred into a number of instalments. Its whole amount joins the balance the month it is billed, never fractioned; what the instalment fractions is that line's contribution to the minimum payment. A payment covering the balance extinguishes the plan without penalty, and the statement publishes it already extinguished. The app never concludes on its own that a purchase was deferred: it proposes it and a person confirms.
+- [x] **RF-136** — A purchase may be deferred into a number of instalments. Its whole amount joins the balance the month it is billed, never fractioned; what the instalment fractions is that line's contribution to the minimum payment. A payment covering the balance extinguishes the plan without penalty, and the statement publishes it already extinguished. The app never concludes on its own that a purchase was deferred: it proposes it and a person confirms.
 
 #### Transactions
 
@@ -345,6 +345,8 @@ erDiagram
 
     recurring_rules ||--o{ transactions : "generates"
     group_members ||--o{ transactions : "puts in (De quién)"
+    transactions ||--o| deferrals : "deferred into instalments"
+    accounts ||--o{ deferrals : "its liability leg"
     transactions ||--o{ transaction_reviews : "reviewed once per rule"
     app_users ||--o{ transaction_reviews : "marks"
     planned_payments ||--o{ reminder_mails : "mailed once per date"
@@ -504,6 +506,15 @@ erDiagram
         uuid transaction_id FK
         uuid category_id FK
         bigint amount_cents
+    }
+
+    deferrals {
+        uuid id PK
+        uuid transaction_id FK "unique: one deferral per purchase"
+        uuid account_id FK "the purchase's liability leg"
+        smallint instalments "2 to 72"
+        uuid created_by FK "auth.uid() by default"
+        timestamptz created_at
     }
 
     transaction_sources {

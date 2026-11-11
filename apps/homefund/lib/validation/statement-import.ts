@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { MAX_INSTALMENTS, MIN_INSTALMENTS } from "@/lib/deferral";
 import { occurredAtSchema } from "@/lib/validation/transaction";
 
 // RF-144: one line of a bank statement as Claude read it. The sign says which way the money went on
@@ -22,6 +23,9 @@ export const statementRowSchema = z.object({
   counterAmountCents: z.number().int().positive().max(Number.MAX_SAFE_INTEGER).optional(),
   // The other side is not known: the movement waits for a person to name it (RF-133).
   unsure: z.boolean().optional(),
+  // The statement printed «1/36» on this purchase: it is proposed as deferred into 36 instalments, and
+  // the person confirming the preview is the confirmation (RF-136).
+  instalments: z.number().int().min(MIN_INSTALMENTS).max(MAX_INSTALMENTS).optional(),
 });
 
 export const statementSchema = z

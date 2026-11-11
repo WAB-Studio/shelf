@@ -2,7 +2,7 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useState } from "react";
-import { useLocale, useTranslations } from "next-intl";
+import { useTranslations } from "next-intl";
 import { useAction } from "next-safe-action/hooks";
 import { Controller, useForm } from "react-hook-form";
 import { toast } from "sonner";
@@ -11,7 +11,6 @@ import { recordDebtPaymentAction } from "@/app/actions/installment-plans";
 import { CreditAndOwedLine, owesBesideCredit } from "@/components/planning/debts-table";
 import {
   Button,
-  Callout,
   Dialog,
   Field,
   FieldControl,
@@ -33,7 +32,6 @@ import {
   type CurrencyCode,
 } from "@/lib/currency";
 import { todayInBogota } from "@/lib/dates";
-import { formatMoney } from "@/lib/money";
 import { useActionErrorToast } from "@/lib/use-action-toast";
 import {
   recordDebtPaymentSchema,
@@ -108,23 +106,19 @@ function PaymentForm({
   const t = useTranslations("installments");
   // Root-scoped: the keys under `common` and `debts` sit outside this namespace.
   const tKey = useTranslations();
-  const locale = useLocale();
   // The words around the amount, which `Money` draws inside its own span.
   const inFavour = tKey("debts.inFavour", { amount: "\u0000" }).split("\u0000");
 
   // One key per opening: a payment sent again after a lost answer carries the same one, and
   // the form unmounts on close, so the next opening mints its own.
   const [requestRef] = useState(() => crypto.randomUUID());
-  const [refusal, setRefusal] = useState<
-    "errors.stale" | "errors.resendChanged" | null
-  >(null);
 
   const form = useForm<RecordDebtPaymentInput>({
     resolver: zodResolver(recordDebtPaymentSchema),
     defaultValues: {
       fromAccountId: payFrom[0]?.id ?? "",
       // The destination is fixed, never a control: it is the debt the caller
-      // opened this on, and the allocation walks that account's lines (RF-82).
+      // opened this on.
       toAccountId: debt.accountId,
       amount: "",
       occurredAt: todayInBogota(),
@@ -133,43 +127,12 @@ function PaymentForm({
 
   const onActionError = useActionErrorToast();
 
-  // The lines the payment closed and what it left over come back from the
-  // allocation itself; the remainder is stated here and nowhere else, because
-  // nothing stores it — the unpaid lines are the whole record (RF-82).
   const pay = useAction(recordDebtPaymentAction, {
-    onSuccess({ data }) {
-      const remainderCents = data?.remainderCents ?? 0;
-
-      // The installment lines speak only for a debt that has a plan: on a
-      // revolving card "no cuota closed" would read as a failed payment.
-      if (!data?.hasPlans) {
-        toast.success(t("paymentSaved"));
-        onOpenChange(false);
-        return;
-      }
-
-      toast.success(
-        t("paymentPaidLines", { count: data.paidLineIds.length }),
-        remainderCents > 0
-          ? {
-              description: t("paymentRemainder", {
-                // JSX cannot travel through `t()`, so the one path from a stored
-                // integer to a figure is called straight (RF-121).
-                amount: formatMoney(remainderCents, currency, locale),
-              }),
-            }
-          : undefined,
-      );
+    onSuccess() {
+      toast.success(t("paymentSaved"));
       onOpenChange(false);
     },
-    onError: (result) => {
-      const refused = result.error.serverError;
-      if (refused === "errors.stale" || refused === "errors.resendChanged") {
-        setRefusal(refused);
-      } else {
-        onActionError(result);
-      }
-    },
+    onError: onActionError,
   });
 
   const isPending = pay.isPending;
@@ -177,7 +140,6 @@ function PaymentForm({
   return (
     <form
       onSubmit={form.handleSubmit((values) => {
-        setRefusal(null);
         pay.execute({ ...values, requestRef });
       })}
       noValidate
@@ -300,12 +262,6 @@ function PaymentForm({
             </Field>
           )}
         />
-
-        {refusal && (
-          <Callout.Root color="red" variant="soft" role="alert">
-            <Callout.Text>{tKey(refusal)}</Callout.Text>
-          </Callout.Root>
-        )}
 
         <Field>
           <Flex gap="3" justify="end">

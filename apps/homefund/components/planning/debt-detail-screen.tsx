@@ -2,11 +2,9 @@
 
 import type { ReactNode } from "react";
 import { useFormatter, useLocale, useTranslations } from "next-intl";
-import { useAction } from "next-safe-action/hooks";
 import { Fragment, useState } from "react";
-import { toast } from "sonner";
 
-import { deleteInstallmentPlanAction } from "@/app/actions/installment-plans";
+import { DeferredPurchases } from "@/components/planning/deferral-control";
 import { OwnerMark } from "@/components/fund/owner-mark";
 import { DebtPaymentDialog } from "@/components/planning/debt-payment-dialog";
 import {
@@ -17,53 +15,31 @@ import {
 import { SettlementRow } from "@/components/planning/settlement-row";
 import { StatementsSection } from "@/components/planning/statements-section";
 import {
-  Badge,
   Button,
-  ConfirmDialog,
-  DataTable,
   EmptyState,
   Flex,
   Heading,
-  Link,
   Money,
   Panel,
-  RowMenu,
   ScreenHeader,
   Separator,
   StatTiles,
   Text,
-  type DataColumn,
 } from "@/components/ui";
 import type { DebtDetailData } from "@/db/queries/debt-detail";
 import type { DebtPocket } from "@/db/queries/debt-overview";
 import type { PendingSettlement } from "@/db/queries/debt-statements";
-import type {
-  InstallmentPlanLine,
-  InstallmentPlanRow,
-} from "@/db/queries/installment-plans";
-import { Link as LocaleLink } from "@/i18n/navigation";
 import type { CurrencyCode } from "@/lib/currency";
 import { civilDateToDate, todayInBogota } from "@/lib/dates";
 import { formatMoney } from "@/lib/money";
-import { useActionErrorToast } from "@/lib/use-action-toast";
 
 // The em dash a cell or a tile with nothing to name reads as (SPEC-A3), not a
 // word a translator would ever change.
 const NO_VALUE = "—";
 
-// The tracks of the two tables, both dense enough to read a whole plan at once.
-const LINE_WIDTHS = {
-  seq: "88px",
-  dueDate: "110px",
-  amount: "140px",
-  status: "120px",
-  movement: "minmax(0, 1fr)",
-} as const;
-
 /**
- * One liability read in full (RF-16, RF-81, RF-82, RF-129): its derived saldo over
- * the four figures it owes against, a table per installment plan with the dated
- * lines and the movement that settled each, and its statement history under the
+ * One liability read in full (RF-16, RF-129, RF-136): its derived saldo over
+ * the four figures it owes against, the purchases a person deferred, and its statement history under the
  * open period. Every figure arrives derived from the server — the stored
  * statement balances are read exactly as they were frozen at their cut-off, and
  * no interest is recomputed here. A caller the policies would refuse is offered
@@ -72,15 +48,13 @@ const LINE_WIDTHS = {
 export function DebtDetailScreen({ data }: { data: DebtDetailData }) {
   const t = useTranslations("installments");
   const tDebts = useTranslations("debts");
-  const tKey = useTranslations();
   const format = useFormatter();
   const locale = useLocale();
-  const onActionError = useActionErrorToast();
 
   const {
     account,
     terms,
-    plans,
+    deferrals,
     statements,
     currentStatement,
     pendingSettlements,
@@ -93,18 +67,6 @@ export function DebtDetailScreen({ data }: { data: DebtDetailData }) {
   const currency = account.settlementCurrency;
 
   const [dialog, setDialog] = useState<"pay" | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<InstallmentPlanRow | null>(
-    null,
-  );
-
-  const remove = useAction(deleteInstallmentPlanAction, {
-    onSuccess() {
-      toast.success(t("planDeleted"));
-      setDeleteTarget(null);
-    },
-    onError: onActionError,
-  });
-
   // The pocket it bills in, read by its sign off the balance the view derives
   // from movements: below zero it owes, above zero it holds a credit that owes
   // nothing and reads «A favor» (RF-80).
@@ -120,10 +82,6 @@ export function DebtDetailScreen({ data }: { data: DebtDetailData }) {
       creditCents: Math.max(0, pocket.balanceCents),
       toBillCents: pocket.toBillCents,
     }));
-
-  // What the plans still owe: the unpaid lines the server summed, never a
-  // stored figure (RF-82).
-  const pendingCents = plans.reduce((sum, plan) => sum + plan.pendingCents, 0);
 
   // The limit plus the signed pocket, the figure the list states: a credit
   // lifts the cupo past the limit. With no limit there is no cupo, which is not
@@ -199,24 +157,6 @@ export function DebtDetailScreen({ data }: { data: DebtDetailData }) {
       label: tDebts("tableBalance"),
       value: balanceLine,
     },
-    // Plans already stored stay readable; none can be opened any more, so a debt
-    // with none states nothing about them.
-    ...(plans.length === 0
-      ? []
-      : [
-          {
-            key: "pending",
-            label: t("tilePending"),
-            value: (
-              <Money
-                minor={pendingCents}
-                currency={currency}
-                signed={false}
-                size="inherit"
-              />
-            ),
-          },
-        ]),
     {
       key: "nextPayment",
       label: tDebts("tileNextPayment"),
@@ -290,24 +230,11 @@ export function DebtDetailScreen({ data }: { data: DebtDetailData }) {
 
       <StatTiles tiles={tiles} />
 
-      {plans.length > 0 && (
-        <>
-          <Flex direction="column" px={{ initial: "0", md: "6" }}>
-            <Heading as="h2" size="3">
-              {t("plansTitle")}
-            </Heading>
-          </Flex>
-
-          {plans.map((plan) => (
-            <PlanTable
-              key={plan.id}
-              plan={plan}
-              currency={currency}
-              canWrite={canWrite}
-              onDelete={() => setDeleteTarget(plan)}
-            />
-          ))}
-        </>
+      {/* Purchases a person confirmed as deferred: the balance holds them whole (RF-136). */}
+      {deferrals.length > 0 && (
+        <Flex direction="column" px={{ initial: "0", md: "6" }}>
+          <DeferredPurchases rows={deferrals} />
+        </Flex>
       )}
 
       <SettlementSection
@@ -408,22 +335,6 @@ export function DebtDetailScreen({ data }: { data: DebtDetailData }) {
         />
       )}
 
-      {deleteTarget !== null && (
-        <ConfirmDialog
-          open
-          onOpenChange={(open) => !open && setDeleteTarget(null)}
-          title={t("deleteTitle")}
-          // Names both halves of what a delete does: the lines go, and the
-          // movements that paid some of them stay, unlinked.
-          description={t("deleteDescription", {
-            count: deleteTarget.lines.length,
-          })}
-          confirmLabel={tKey("common.delete")}
-          cancelLabel={tKey("common.cancel")}
-          pending={remove.isPending}
-          onConfirm={() => remove.execute({ planId: deleteTarget.id })}
-        />
-      )}
     </Flex>
   );
 }
@@ -439,153 +350,6 @@ function Fact({ label, value }: { label: string; value: ReactNode }) {
         {value}
       </Text>
     </Flex>
-  );
-}
-
-/**
- * One plan's dated lines (RF-81, RF-82). A line reads paid exactly when a
- * movement is linked to it, and that movement is reachable from the row; the
- * total states the pending the server summed over the unpaid lines. The menu
- * offers only the delete — a plan has no edit form.
- */
-function PlanTable({
-  plan,
-  currency,
-  canWrite,
-  onDelete,
-}: {
-  plan: InstallmentPlanRow;
-  // A plan schedules the balance the card bills, so its lines read in that
-  // currency and never in the one a purchase happened in.
-  currency: CurrencyCode;
-  canWrite: boolean;
-  onDelete: () => void;
-}) {
-  const t = useTranslations("installments");
-  const tKey = useTranslations();
-  const format = useFormatter();
-
-  // The merchant is what a person recognises; the description is the fallback,
-  // and a plan that names neither still has to be addressable.
-  const title = plan.merchant || plan.description || t("planUntitled");
-  const paid = plan.lines.filter(
-    (line) => line.paidTransactionId !== null,
-  ).length;
-
-  const columns: DataColumn<InstallmentPlanLine>[] = [
-    {
-      key: "seq",
-      header: t("tableSeq"),
-      width: LINE_WIDTHS.seq,
-      numeric: true,
-      cell: (line) => <Text size="2">{line.seq}</Text>,
-    },
-    {
-      key: "dueDate",
-      header: t("tableDueDate"),
-      width: LINE_WIDTHS.dueDate,
-      numeric: true,
-      cell: (line) => (
-        <Text size="2" color="gray">
-          {format.dateTime(civilDateToDate(line.dueDate), {
-            day: "numeric",
-            month: "short",
-          })}
-        </Text>
-      ),
-    },
-    {
-      key: "amount",
-      header: t("tableAmount"),
-      width: LINE_WIDTHS.amount,
-      align: "end",
-      numeric: true,
-      cell: (line) => (
-        <Money
-          minor={line.amountCents}
-          currency={currency}
-          signed={false}
-        />
-      ),
-    },
-    {
-      key: "status",
-      header: t("tableStatus"),
-      width: LINE_WIDTHS.status,
-      cell: (line) =>
-        line.paidTransactionId === null ? (
-          <Text size="2" color="gray">
-            {t("statusPending")}
-          </Text>
-        ) : (
-          <Badge color="jade" variant="soft" radius="full">
-            {t("statusPaid")}
-          </Badge>
-        ),
-    },
-    {
-      key: "movement",
-      header: t("tableMovement"),
-      width: LINE_WIDTHS.movement,
-      cell: (line) =>
-        line.paidTransactionId === null ? (
-          <Text size="2" color="gray">
-            {NO_VALUE}
-          </Text>
-        ) : (
-          <Link asChild size="2">
-            <LocaleLink href={`/movements/${line.paidTransactionId}`}>
-              {t("viewMovement")}
-            </LocaleLink>
-          </Link>
-        ),
-    },
-  ];
-
-  return (
-    <DataTable
-      label={title}
-      caption={
-        <>
-          <Flex direction="column" minWidth="0">
-            <Text size="2" weight="medium" truncate>
-              {title}
-            </Text>
-            <Text size="1" color="gray">
-              {t("planPosition", { paid, total: plan.lines.length })}
-            </Text>
-          </Flex>
-          {canWrite && (
-            <RowMenu
-              rowName={title}
-              items={[
-                {
-                  key: "delete",
-                  label: tKey("common.delete"),
-                  tone: "danger",
-                  onSelect: onDelete,
-                },
-              ]}
-            />
-          )}
-        </>
-      }
-      columns={columns}
-      rows={plan.lines}
-      rowKey={(line) => line.id}
-      total={[
-        <Text key="label" size="2" color="gray">
-          {t("tablePending")}
-        </Text>,
-        null,
-        <Money
-          key="pending"
-          minor={plan.pendingCents}
-          currency={currency}
-          signed={false}
-        />,
-      ]}
-    />
   );
 }
 

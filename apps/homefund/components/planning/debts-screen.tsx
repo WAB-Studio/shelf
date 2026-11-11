@@ -40,7 +40,6 @@ import {
 } from "@/components/ui";
 import type { DebtCurrencyTotals, DebtsScreenData } from "@/db/queries/debts-screen";
 import type { DebtOverviewRow, DebtPocket } from "@/db/queries/debt-overview";
-import type { PlanPosition } from "@/db/queries/installment-plans";
 import { Link as LocaleLink, useRouter } from "@/i18n/navigation";
 import {
   BASE_CURRENCY,
@@ -79,13 +78,12 @@ type DialogTarget =
       currency: CurrencyCode;
     };
 
-// A row carrying its plan position, which is what the phone's cards read.
+// A row with its name and owner, which is what the phone's cards read.
 type OverviewCard = DebtOverviewRow & {
   name: string;
   personal: boolean;
   foreignOwner: boolean;
   ownerName: string | null;
-  planPosition: PlanPosition | null;
 };
 
 // What the currency picker offers and what the terms schema takes. A row may
@@ -117,7 +115,7 @@ function OtherOwed({ pockets }: { pockets: DebtPocket[] }) {
  * backend and stays integer cents; the peso and percent readings are display
  * only. One `DebtFormDialog` serves the header's "new debt" and each bare
  * liability's "complete terms", and the same target state opens the payment
- * (RF-16, RF-82) and the plan (RF-81).
+ * (RF-16).
  */
 export function DebtsScreen({
   data,
@@ -166,7 +164,6 @@ export function DebtsScreen({
         owedCents: row.owedCents,
         creditCents: row.creditCents,
         otherOwed: row.otherOwed,
-        planPosition: row.planPosition,
         terms: row,
         canWrite: row.canWrite,
       })),
@@ -816,19 +813,9 @@ function InstallmentCard({
   const format = useFormatter();
   const locale = useLocale() as Locale;
 
-  const position = row.planPosition;
-  const nextLine =
-    position !== null &&
-    position.nextDueDate !== null &&
-    position.nextAmountCents !== null
-      ? { date: position.nextDueDate, amountCents: position.nextAmountCents }
-      : null;
-  // A loan with no counted plan lines still bills its terms' payment: the same
+  // The next payment is the minimum, with no instalment added to it (RF-136): the same
   // figure the desktop table's «Pago mínimo» column reads.
-  const dueCents =
-    row.dueInstallmentsCents > 0 || row.owedCents === 0
-      ? row.dueInstallmentsCents
-      : (row.minimumPaymentCents ?? 0);
+  const dueCents = row.minimumPaymentCents ?? 0;
 
   return (
     <Card>
@@ -840,16 +827,7 @@ function InstallmentCard({
           personal={row.personal}
           foreignOwner={row.foreignOwner}
           ownerName={row.ownerName}
-          // A debt whose plan the server counted states its position; one that
-          // carries no plan only states its kind (RF-81).
-          meta={
-            position === null
-              ? t("installmentMeta")
-              : t("installmentPosition", {
-                  paid: position.linesPaid,
-                  total: position.linesTotal,
-                })
-          }
+          meta={t("installmentMeta")}
           currency={row.currency}
           owedCents={row.owedCents}
           creditCents={row.creditCents}
@@ -873,27 +851,6 @@ function InstallmentCard({
             />
           )}
         </Flex>
-
-        {nextLine && (
-          <Flex justify="between" align="center" gap="3">
-            <Text size="1" color="gray">
-              {t("nextInstallment", {
-                date: format.dateTime(civilDateToDate(nextLine.date), {
-                  day: "numeric",
-                  month: "short",
-                }),
-              })}
-            </Text>
-            <Text size="2" weight="medium">
-              <Money
-                minor={nextLine.amountCents}
-                currency={row.currency}
-                signed={false}
-                size="inherit"
-              />
-            </Text>
-          </Flex>
-        )}
 
         <CardActions accountId={row.accountId} onPay={onPay} />
       </Flex>
