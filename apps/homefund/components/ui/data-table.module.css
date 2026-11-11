@@ -99,6 +99,12 @@
   min-width: 0;
 }
 
+/* A truncating Text is an inline span, which never clips: as the cell's own child it becomes a block, so a
+   long value ends in an ellipsis inside its column instead of running over the next one. */
+.cell > :global(.rt-truncate) {
+  display: block;
+}
+
 .empty {
   padding: var(--space-7) var(--space-4);
 }
