@@ -19,6 +19,7 @@ import { getTransactionById, listTransactions, type TransactionListRow, type Tra
 import { pgErrorCode } from "@/lib/db-error";
 import { ActionError } from "@/lib/errors";
 import { CATEGORY_COLORS } from "@/lib/fund/category-color";
+import { resolveLabelIds } from "@/lib/mcp/label-tools";
 import { parseForm } from "@/lib/mcp/parse-form";
 import { centsToDecimal, parseAmount } from "@/lib/money";
 import { createAccountSchema, updateAccountSchema } from "@/lib/validation/account";
@@ -45,6 +46,7 @@ function movementShape(t: Say) {
     contributedByMemberId: z.string().nullish().describe(d("contributedByMemberId")),
     forHousehold: z.boolean().optional().describe(d("forHousehold")),
     madeByMemberId: z.string().nullish().describe(d("madeByMemberId")),
+    labels: z.array(z.string()).optional().describe(d("labels")),
   };
 }
 
@@ -146,13 +148,14 @@ export function registerLedgerTools(server: McpServer, run: Run, t: Say): void {
         to: z.string().optional().describe(d("to")),
         categoryId: z.string().optional().describe(d("filterCategoryId")),
         madeByMemberId: z.string().optional().describe(d("filterMadeByMemberId")),
+        label: z.string().optional().describe(d("filterLabel")),
         limit: z.number().int().min(1).max(200).optional().describe(d("limit")),
         offset: z.number().int().min(0).optional().describe(d("offset")),
       }),
       annotations: { readOnlyHint: true },
     },
-    (input: { accountId?: string; categoryId?: string; madeByMemberId?: string; from?: string; to?: string; limit?: number; offset?: number }, ctx) =>
-      run(ctx, async () => {
+    (input: { accountId?: string; categoryId?: string; madeByMemberId?: string; label?: string; from?: string; to?: string; limit?: number; offset?: number }, ctx) =>
+      run(ctx, async (owner) => {
         const accountId = input.accountId === undefined ? undefined : idOf("transactions.errors.accountInvalid", input.accountId);
         const categoryId = input.categoryId === undefined ? undefined : idOf("errors.notFound", input.categoryId);
         const madeByMemberId =
@@ -161,8 +164,9 @@ export function registerLedgerTools(server: McpServer, run: Run, t: Say): void {
             : input.madeByMemberId === HOUSEHOLD_MAKER
               ? null
               : idOf("transactions.errors.madeByInvalid", input.madeByMemberId);
+        const [labelId] = input.label === undefined ? [] : await resolveLabelIds(owner, [input.label]);
         const rows = await listTransactions(
-          { accountId, categoryId, madeByMemberId, from: input.from, to: input.to },
+          { accountId, categoryId, madeByMemberId, labelId, from: input.from, to: input.to },
           { limit: input.limit ?? 50, offset: input.offset },
         );
         // Everything update_movement can resend or patch, and the stamp it must quote back.
@@ -196,8 +200,14 @@ export function registerLedgerTools(server: McpServer, run: Run, t: Say): void {
       annotations: { ...write, idempotentHint: true },
     },
     (input: MovementInput & { requestRef?: string }, ctx) =>
-      run(ctx, async () =>
-        bookMovement(parseForm(createTransactionSchema, { ...movementForm(input), requestRef: input.requestRef })),
+      run(ctx, async (owner) =>
+        bookMovement(
+          parseForm(createTransactionSchema, {
+            ...movementForm(input),
+            labelIds: await resolveLabelIds(owner, input.labels ?? []),
+            requestRef: input.requestRef,
+          }),
+        ),
       ),
   );
 
@@ -214,7 +224,7 @@ export function registerLedgerTools(server: McpServer, run: Run, t: Say): void {
       annotations: { ...write, idempotentHint: true },
     },
     (input: Partial<MovementInput> & { transactionId: string; expectedUpdatedAt: string }, ctx) =>
-      run(ctx, async () => {
+      run(ctx, async (owner) => {
         const { transactionId, expectedUpdatedAt, ...patch } = input;
         const id = idOf("errors.notFound", transactionId);
         const current = await getTransactionById(id);
@@ -223,7 +233,8 @@ export function registerLedgerTools(server: McpServer, run: Run, t: Say): void {
           parseForm(updateTransactionSchema, {
             ...movementForm(patched(current, patch)),
             transactionId: id,
-            labelIds: current.labels.map((label) => label.id),
+            // Absent keeps the movement's labels; a list replaces them, as the form's picker does.
+            labelIds: patch.labels === undefined ? current.labels.map((label) => label.id) : await resolveLabelIds(owner, patch.labels),
             causedByTransactionId: current.causedByTransactionId,
             expectedUpdatedAt,
           }),
