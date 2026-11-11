@@ -15,7 +15,7 @@ import { ingestMerchants } from "@/db/schema";
 import { withUserDb } from "@/db/session";
 import { pgErrorCode } from "@/lib/db-error";
 import { ActionError } from "@/lib/errors";
-import { parseAmount } from "@/lib/money";
+import { toCents } from "@/lib/money";
 import { authActionClient } from "@/lib/safe-action";
 import {
   acceptDeliverySchema,
@@ -24,16 +24,6 @@ import {
   restoreShapeSchema,
 } from "@/lib/validation/ingest";
 import type { SplitFields } from "@/lib/validation/transaction";
-
-// The amount and each split arrive as Zod-validated strings, already bound to
-// the stored scale by the schema (RF-128); turning them into integers here can
-// only fail if the schema let something through it should not have, so a null
-// parse is `errors.unexpected`, not a field message.
-function toCents(amount: string): number {
-  const cents = parseAmount(amount);
-  if (cents === null) throw new ActionError("errors.unexpected");
-  return cents;
-}
 
 function toSplitCents(splits: SplitFields[]): TransactionSplitInput[] {
   return splits.map((split) => ({
