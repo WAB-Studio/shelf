@@ -5,7 +5,6 @@ import { useTranslations } from "next-intl";
 
 import { useOwnerLabel } from "@/components/fund/owner-mark";
 import {
-  Badge,
   DataTable,
   Flex,
   PersonalMark,
@@ -13,6 +12,7 @@ import {
   RowMenu,
   Text,
   type DataColumn,
+  type DataSection,
 } from "@/components/ui";
 import type { AccountRow } from "@/db/queries/accounts";
 
@@ -25,7 +25,6 @@ const WIDTHS = {
   name: "minmax(0, 1fr)",
   institution: "196px",
   lastFour: "148px",
-  kind: "108px",
   balance: "168px",
   menu: "36px",
 } as const;
@@ -42,7 +41,7 @@ type Line = { row: AccountRow; free: boolean };
  * whether a row offers to archive or to restore it, mirroring the phone's card.
  */
 export function AccountsTable({
-  rows,
+  sections,
   archived,
   hasGroup,
   empty,
@@ -53,7 +52,8 @@ export function AccountsTable({
   onDelete,
   onHandOver,
 }: {
-  rows: AccountRow[];
+  // One band per type, each with the figure it adds up to; the caller drops the empty ones.
+  sections: { key: string; label: string; aside?: ReactNode; rows: AccountRow[] }[];
   archived: boolean;
   // Only a personal, live account of a caller who has a group has anywhere to
   // go (RF-60, RF-61), mirroring the phone's card.
@@ -82,9 +82,14 @@ export function AccountsTable({
     row.foreignOwner ? ownerOf(row.ownerName) : t("ownerPersonal");
 
   // The free line shows the parent's own balance and nothing else, so only the name and balance cells draw it.
-  const lines: Line[] = rows.flatMap((row) =>
-    row.totalBalances ? [{ row, free: false }, { row, free: true }] : [{ row, free: false }],
-  );
+  const linesOf = (rows: AccountRow[]): Line[] =>
+    rows.flatMap((row) =>
+      row.totalBalances ? [{ row, free: false }, { row, free: true }] : [{ row, free: false }],
+    );
+  const bands: DataSection<Line>[] = sections.map((section) => ({
+    ...section,
+    rows: linesOf(section.rows),
+  }));
   // Each cell of the other columns draws the account itself; the free line leaves them empty.
   const ofAccount =
     (cell: (row: AccountRow) => ReactNode) =>
@@ -149,16 +154,6 @@ export function AccountsTable({
           absent()
         ),
       ),
-    },
-    {
-      key: "kind",
-      header: t("kindLabel"),
-      width: WIDTHS.kind,
-      cell: ofAccount((row) => (
-        <Badge color={row.kind === "liability" ? "red" : "green"}>
-          {t(row.kind === "liability" ? "kindLiability" : "kindAsset")}
-        </Badge>
-      )),
     },
     {
       key: "balance",
@@ -269,7 +264,7 @@ export function AccountsTable({
     <DataTable
       label={t("title")}
       columns={columns}
-      rows={lines}
+      sections={bands}
       rowKey={({ row, free }) => (free ? `${row.id}:free` : row.id)}
       empty={empty}
     />

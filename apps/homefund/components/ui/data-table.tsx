@@ -21,7 +21,8 @@ export type DataColumn<Row> = {
   cell: (row: Row) => ReactNode;
 };
 
-export type DataSection<Row> = { key: string; label: string; rows: Row[] };
+// `aside` rides the band's far end: the figure a section adds up to.
+export type DataSection<Row> = { key: string; label: string; aside?: ReactNode; rows: Row[] };
 
 /**
  * The dense list of SPEC-A3 (RF-125, RNF-08). Grid tracks lay it out and explicit
@@ -110,8 +111,9 @@ export function DataTable<Row>({
           <div role="rowgroup" key={group.key} className={styles.group}>
             {group.label && (
               <div role="row" className={styles.band}>
-                <div role="cell" aria-colspan={columns.length}>
-                  {group.label}
+                <div role="cell" aria-colspan={columns.length} className={styles.bandCell}>
+                  <span>{group.label}</span>
+                  {group.aside && <span className={styles.bandAside}>{group.aside}</span>}
                 </div>
               </div>
             )}

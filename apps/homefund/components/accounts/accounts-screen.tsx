@@ -23,7 +23,6 @@ import {
 import { ReconcileDialog } from "@/components/accounts/reconcile-dialog";
 import { AccountsTable } from "@/components/accounts/accounts-table";
 import {
-  Badge,
   Box,
   Button,
   Card,
@@ -39,6 +38,7 @@ import {
   ScreenHeader,
   SegmentedControl,
   Separator,
+  StatTiles,
   Text,
 } from "@/components/ui";
 import type { AccountRow } from "@/db/queries/accounts";
@@ -46,6 +46,7 @@ import type { AccountPendingSettlement } from "@/db/queries/debt-statements";
 import { usePathname, useRouter } from "@/i18n/navigation";
 import { civilDateToDate } from "@/lib/dates";
 import { useActionErrorToast } from "@/lib/use-action-toast";
+import type { CurrencyCode } from "@/lib/currency";
 import type { ACCOUNT_SUBTYPES } from "@/lib/validation/account";
 
 type Group = { key: string; label: string; accounts: AccountRow[] };
@@ -62,31 +63,36 @@ type RowAction =
   | { kind: "delete"; account: AccountRow }
   | { kind: "handOver"; account: AccountRow };
 
-// `listAccounts` already orders personal accounts ahead of the group's, then by
-// name, so one pass that starts a new group on a placement change reproduces
-// that split without a second sort to keep in step (RF-60).
-function groupByPlacement(
-  accounts: AccountRow[],
-  personalLabel: string,
-  groupLabel: string,
-): Group[] {
-  const groups: Group[] = [];
+type Figure = { currency: CurrencyCode; cents: number };
 
-  for (const account of accounts) {
-    const key = account.ownerUserId ? "personal" : "group";
-    const current = groups.at(-1);
-    if (current && current.key === key) {
-      current.accounts.push(account);
-    } else {
-      groups.push({
-        key,
-        label: key === "personal" ? personalLabel : groupLabel,
-        accounts: [account],
-      });
+// A section's own figure per currency, never one sum across currencies (RF-124).
+// Each row's `balances` is its own free part, so a pocket and its parent add up
+// once; a liability's cents are already negative.
+function sumByCurrency(rows: AccountRow[]): Figure[] {
+  const totals = new Map<CurrencyCode, number>();
+  for (const row of rows) {
+    for (const balance of row.balances) {
+      totals.set(balance.currency, (totals.get(balance.currency) ?? 0) + balance.balanceCents);
     }
   }
+  return [...totals].map(([currency, cents]) => ({ currency, cents }));
+}
 
-  return groups;
+function Figures({ figures, owed }: { figures: Figure[]; owed?: boolean }) {
+  return (
+    <Flex direction="column" gap="1" align="start">
+      {figures.map(({ currency, cents }) => (
+        <Money
+          key={currency}
+          minor={owed ? Math.abs(cents) : cents}
+          currency={currency}
+          tone="plain"
+          size="inherit"
+          signed={!owed}
+        />
+      ))}
+    </Flex>
+  );
 }
 
 export function AccountsScreen({
@@ -112,8 +118,7 @@ export function AccountsScreen({
   const onActionError = useActionErrorToast();
 
   // The desktop table's own narrowing (RF-89): the tab already scopes the rows
-  // Postgres returns, these three only narrow the array already in hand.
-  const typeFilter = searchParams.get("type") ?? ANY;
+  // Postgres returns, these two only narrow the array already in hand.
   const ownerFilter = searchParams.get("owner") ?? ANY;
   const institutionFilter = searchParams.get("institution") ?? ANY;
 
@@ -179,16 +184,9 @@ export function AccountsScreen({
     patchQuery({ tab: value === "archived" ? "archived" : null });
   }
 
-  const groups = groupByPlacement(
-    accounts,
-    t("ownerPersonal"),
-    groupName ?? tKey("common.fund"),
-  );
-
   // The desktop table's own rows: the tab already scoped what Postgres
   // returned, these three filters only narrow the array further, in memory.
   const filteredAccounts = accounts.filter((account) => {
-    if (typeFilter !== ANY && account.kind !== typeFilter) return false;
     if (ownerFilter !== ANY) {
       const placement = account.ownerUserId ? "personal" : "group";
       if (placement !== ownerFilter) return false;
@@ -207,6 +205,37 @@ export function AccountsScreen({
         .filter((institution): institution is string => Boolean(institution)),
     ),
   ).sort((a, b) => a.localeCompare(b));
+
+  // One section per type: what is held, then the cards owed. The model has no
+  // loan subtype (liability admits only card), so no third section exists.
+  function sectionsOf(list: AccountRow[]) {
+    return [
+      { key: "accounts", label: t("sectionAccounts"), rows: list.filter((a) => a.kind === "asset") },
+      { key: "cards", label: t("sectionCards"), rows: list.filter((a) => a.kind === "liability") },
+    ]
+      .filter((section) => section.rows.length > 0)
+      .map((section) => ({
+        ...section,
+        figures: sumByCurrency(section.rows),
+        owed: section.key === "cards",
+      }));
+  }
+
+  function totalsFor(list: AccountRow[]) {
+    const have = sumByCurrency(list.filter((a) => a.kind === "asset"));
+    const owe = sumByCurrency(list.filter((a) => a.kind === "liability"));
+    const net = sumByCurrency(list);
+    return (
+      <StatTiles
+        tiles={[
+          { key: "have", label: t("kindAsset"), value: <Figures figures={have} /> },
+          { key: "owe", label: t("kindLiability"), value: <Figures figures={owe} owed /> },
+          { key: "net", label: t("netLabel"), value: <Figures figures={net} /> },
+        ]}
+      />
+    );
+  }
+
   const pendingFor = (account: AccountRow) =>
     pendingSettlements.filter((movement) => movement.accountId === account.id);
   const withPending = filteredAccounts.filter(
@@ -268,19 +297,6 @@ export function AccountsScreen({
               width={140}
             />
             <FilterSelect
-              label={t("kindLabel")}
-              value={typeFilter}
-              onValueChange={(value) =>
-                patchQuery({ type: value === ANY ? null : value })
-              }
-              items={[
-                { value: ANY, label: t("allTypes") },
-                { value: "asset", label: t("kindAsset") },
-                { value: "liability", label: t("kindLiability") },
-              ]}
-              width={150}
-            />
-            <FilterSelect
               label={t("ownerLabel")}
               value={ownerFilter}
               onValueChange={(value) =>
@@ -310,8 +326,13 @@ export function AccountsScreen({
             />
           </FilterBar>
 
+          {filteredAccounts.length > 0 && totalsFor(filteredAccounts)}
+
           <AccountsTable
-            rows={filteredAccounts}
+            sections={sectionsOf(filteredAccounts).map(({ figures, owed, ...section }) => ({
+              ...section,
+              aside: <Figures figures={figures} owed={owed} />,
+            }))}
             archived={archived}
             empty={
               accounts.length === 0 ? (
@@ -325,7 +346,7 @@ export function AccountsScreen({
                       type="button"
                       mt="2"
                       onClick={() =>
-                        patchQuery({ type: null, owner: null, institution: null })
+                        patchQuery({ owner: null, institution: null })
                       }
                     >
                       {t("clearFilters")}
@@ -378,42 +399,48 @@ export function AccountsScreen({
           {accounts.length === 0 ? (
             emptyState
           ) : (
-            <Flex direction="column" gap="5">
-              {groups.map((group) => (
-                <Flex key={group.key} direction="column" gap="3">
-                  <Text size="2" weight="bold" color="gray">
-                    {group.label}
-                  </Text>
-                  <Flex direction="column" gap="2">
-                    {group.accounts.map((account) => (
-                      // A pocket reads under its parent, set in from it (RF-173).
-                      <Box key={account.id} ml={account.parentAccountId ? "5" : "0"}>
-                      <AccountCard
-                        account={account}
-                        archived={archived}
-                        pending={pendingFor(account)}
-                        onConfirm={setBilledTarget}
-                        onEdit={() => setFormTarget(account)}
-                        onReconcile={() => setReconcileTarget(account)}
-                        onArchive={() => setRowAction({ kind: "archive", account })}
-                        onRestore={() => setRowAction({ kind: "restore", account })}
-                        onDelete={() => setRowAction({ kind: "delete", account })}
-                        // Only a personal, live account of a caller who has a
-                        // group has anywhere to go (RF-60, RF-61).
-                        onHandOver={
-                          groupName !== null &&
-                          account.ownerUserId !== null &&
-                          !archived
-                            ? () => setRowAction({ kind: "handOver", account })
-                            : null
-                        }
-                      />
-                      </Box>
-                    ))}
+            <>
+              {totalsFor(accounts)}
+              <Flex direction="column" gap="5">
+                {sectionsOf(accounts).map((section) => (
+                  <Flex key={section.key} direction="column" gap="3">
+                    <Flex justify="between" align="start" gap="3">
+                      <Text size="2" weight="bold" color="gray">
+                        {section.label}
+                      </Text>
+                      <Figures figures={section.figures} owed={section.owed} />
+                    </Flex>
+                    <Flex direction="column" gap="2">
+                      {section.rows.map((account) => (
+                        // A pocket reads under its parent, set in from it (RF-173).
+                        <Box key={account.id} ml={account.parentAccountId ? "5" : "0"}>
+                          <AccountCard
+                            account={account}
+                            archived={archived}
+                            pending={pendingFor(account)}
+                            onConfirm={setBilledTarget}
+                            onEdit={() => setFormTarget(account)}
+                            onReconcile={() => setReconcileTarget(account)}
+                            onArchive={() => setRowAction({ kind: "archive", account })}
+                            onRestore={() => setRowAction({ kind: "restore", account })}
+                            onDelete={() => setRowAction({ kind: "delete", account })}
+                            // Only a personal, live account of a caller who has a
+                            // group has anywhere to go (RF-60, RF-61).
+                            onHandOver={
+                              groupName !== null &&
+                              account.ownerUserId !== null &&
+                              !archived
+                                ? () => setRowAction({ kind: "handOver", account })
+                                : null
+                            }
+                          />
+                        </Box>
+                      ))}
+                    </Flex>
                   </Flex>
-                </Flex>
-              ))}
-            </Flex>
+                ))}
+              </Flex>
+            </>
           )}
         </Flex>
       </Box>
@@ -556,9 +583,6 @@ function AccountCard({
           <Flex align="center" gap="2" wrap="wrap">
             <Text weight="medium">{account.name}</Text>
             {account.ownerUserId && <PersonalMark label={ownerLabel} />}
-            <Badge color={account.kind === "liability" ? "red" : "green"}>
-              {t(account.kind === "liability" ? "kindLiability" : "kindAsset")}
-            </Badge>
           </Flex>
           {account.foreignOwner && (
             <Text size="2" color="gray">
@@ -574,7 +598,7 @@ function AccountCard({
               other currency the account holds sits under it naming itself: no
               line here is the sum of two currencies (RF-124).
 
-              Signed: the badge above states the kind, but a balance below zero is
+              Signed: the section states the kind, but a balance below zero is
               an overdraft on an asset and what is owed on a liability (RF-114),
               and drawn as a magnitude it reads as money there is. */}
           <Flex direction="column" gap="1">
