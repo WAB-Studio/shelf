@@ -1,9 +1,9 @@
 import "server-only";
 
-import { sql } from "drizzle-orm";
+import { sql, type SQL } from "drizzle-orm";
 
 import { callerGroupId } from "@/db/queries/groups";
-import { requireUser, withUserDb } from "@/db/session";
+import { requireUser, withUserDb, type Transaction } from "@/db/session";
 import { pgConstraintName, pgErrorCode } from "@/lib/db-error";
 import { ActionError } from "@/lib/errors";
 import { memberDebtBalances, type MemberDebtBalance, type MemberDebtEntry } from "@/lib/member-debts";
@@ -58,6 +58,11 @@ function pendingSql(debtor: string, creditor: string, currency: string) {
     from member_debts d where d.group_id = g.id and d.currency = ${currency})`;
 }
 
+// Serialises the writes that read a pair's pending figure, per fund.
+function lockFund(tx: Transaction, group: SQL) {
+  return tx.execute(sql`select pg_advisory_xact_lock(hashtextextended('member_debts:' || g.id::text, 0)) from (select ${group} as id) g where g.id is not null`);
+}
+
 /**
  * Writes one entry in the caller's fund. A payment larger than what the debtor still owes that creditor in
  * that currency is refused, under a lock on the fund so two payments cannot both pass; a member outside the
@@ -69,7 +74,7 @@ export async function recordMemberDebt(input: RecordMemberDebtInput): Promise<{ 
   try {
     return await withUserDb(async (tx) => {
       if (input.kind === "payment") {
-        await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended('member_debts:' || g.id::text, 0)) from (select ${group} as id) g where g.id is not null`);
+        await lockFund(tx, group);
       }
       const [row] = await tx.execute<{ groupId: string | null; id: string | null }>(sql`
         with g as (select ${group} as id),
@@ -92,4 +97,30 @@ export async function recordMemberDebt(input: RecordMemberDebtInput): Promise<{ 
     }
     throw error;
   }
+}
+
+/**
+ * Removes one entry of the caller's fund. A payment always goes; a debt goes only while the debtor's other debts
+ * to that creditor in that currency still cover the payments the debtor made them, so no payment is left
+ * standing on a debt that is gone.
+ */
+export async function deleteMemberDebt(id: string): Promise<"deleted" | "notFound" | "paid"> {
+  const user = await requireUser();
+  return withUserDb(async (tx) => {
+    await lockFund(tx, callerGroupId(user.id));
+    const [row] = await tx.execute<{ found: string | null; deleted: string | null }>(sql`
+      with t as (select * from member_debts where id = ${id}),
+      gone as (
+        delete from member_debts d using t
+        where d.id = t.id
+          and (t.kind = 'payment' or (
+            select coalesce(sum(case p.kind when 'debt' then p.amount_cents else -p.amount_cents end), 0)
+            from member_debts p
+            where p.group_id = t.group_id and p.currency = t.currency and p.id <> t.id
+              and p.debtor_member_id = t.debtor_member_id and p.creditor_member_id = t.creditor_member_id) >= 0)
+        returning d.id)
+      select (select id from t) as found, (select id from gone) as deleted`);
+    if (row?.deleted) return "deleted";
+    return row?.found ? "paid" : "notFound";
+  });
 }

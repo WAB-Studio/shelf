@@ -28,7 +28,7 @@ import {
   listAccountReconciliations,
   reconcileAccount,
 } from "@/db/queries/account-reconciliations";
-import { getMemberDebts } from "@/db/queries/member-debts";
+import { deleteMemberDebt, getMemberDebts, recordMemberDebt } from "@/db/queries/member-debts";
 import { getMonthReview, getMonthReviewPending, markReviewed, unmarkReviewed, type ReviewItem } from "@/db/queries/month-review";
 import type { SpendingPatterns } from "@/db/queries/spending-patterns";
 import {
@@ -4148,6 +4148,7 @@ async function main(): Promise<void> {
   await mcpSpendingPatternsSuite();
   await madeBySuite();
   await memberDebtsSuite();
+  await memberDebtDeleteSuite();
 }
 
 // A member recorded without a login is someone in the fund: a leader whose fund holds one is not alone, so an
@@ -18315,5 +18316,37 @@ async function memberDebtsSuite(): Promise<void> {
     overpaid.isError && same.isError && foreign.isError && lonely.isError && lonelyWrite.isError && n === 2 && by === adrian.id &&
       String((overpaid.value as { error?: string }).error).includes("abono") && String((foreign.value as { error?: string }).error).includes("fondo"),
     `overpaid ${JSON.stringify(overpaid.value)}, same ${JSON.stringify(same.value)}, foreign ${JSON.stringify(foreign.value)}, loner ${JSON.stringify(lonely.value)} ${JSON.stringify(lonelyWrite.value)}, stored ${n}`,
+  );
+}
+
+// RF-183: removing an entry from the screen. A payment always goes; a debt with payments against it is refused
+// until they go, so the pair's figure never turns around; an entry of another fund reads as not found.
+async function memberDebtDeleteSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const [leader, stranger] = [await createMembershipFreeUser(), await createMembershipFreeUser()];
+  const ids = { group: randomUUID(), other: randomUUID(), leader: randomUUID(), papa: randomUUID() };
+  await fixtureSql.begin(async (tx) => {
+    await tx`insert into groups (id, name, cash_mode) values (${ids.group}, ${`Harness rf183 borrar ${tag}`}, 'per_member'), (${ids.other}, ${`Harness rf183 otro ${tag}`}, 'per_member')`;
+    await tx`insert into group_members (id, group_id, user_id, name, role) values
+      (${ids.leader}, ${ids.group}, ${leader.id}, ${`Harness rf183 lider ${tag}`}, 'leader'), (${ids.papa}, ${ids.group}, null, ${`Harness rf183 papá ${tag}`}, 'member')`;
+    await tx`insert into group_members (group_id, user_id, name, role) values (${ids.other}, ${stranger.id}, ${`Harness rf183 ajeno ${tag}`}, 'leader')`;
+  });
+  track("groups", ids.group);
+  track("groups", ids.other);
+  const write = (kind: "debt" | "payment", amountCents: number) =>
+    asUser(leader, () => recordMemberDebt({ kind, debtorMemberId: ids.papa, creditorMemberId: ids.leader, amountCents, currency: "COP", occurredOn: "2026-11-01", description: null }));
+  const debt = await write("debt", 200_000_00);
+  const payment = await write("payment", 50_000_00);
+  const foreign = await asUser(stranger, () => deleteMemberDebt(debt.id));
+  const paid = await asUser(leader, () => deleteMemberDebt(debt.id));
+  const pendingAfterRefusal = (await asUser(leader, () => getMemberDebts()))?.balances[0]?.pendingCents;
+  const paymentGone = await asUser(leader, () => deleteMemberDebt(payment.id));
+  const debtGone = await asUser(leader, () => deleteMemberDebt(debt.id));
+  const left = (await asUser(leader, () => getMemberDebts()))?.entries.length;
+  assert(
+    next("RF-183: another fund's member cannot remove an entry, a paid-against debt is refused and stays, a payment goes, then the debt goes"),
+    foreign === "notFound" && paid === "paid" && pendingAfterRefusal === 150_000_00 && paymentGone === "deleted" && debtGone === "deleted" && left === 0,
+    `stranger ${foreign}, paid debt ${paid}, pending ${pendingAfterRefusal}, payment ${paymentGone}, debt ${debtGone}, left ${left}`,
   );
 }

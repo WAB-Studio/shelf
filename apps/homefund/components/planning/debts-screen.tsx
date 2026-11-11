@@ -10,7 +10,7 @@ import {
 import type { LucideIcon } from "lucide-react";
 import { CalendarDays, CircleAlert, CreditCard, Plus } from "lucide-react";
 import { useFormatter, useLocale, useTranslations } from "next-intl";
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 
 import { OwnerMark } from "@/components/fund/owner-mark";
 import { DebtFormDialog } from "@/components/planning/debt-form-dialog";
@@ -44,7 +44,7 @@ import type { DebtOverviewRow, DebtPocket } from "@/db/queries/debt-overview";
 import { Link as LocaleLink, useRouter } from "@/i18n/navigation";
 import {
   BASE_CURRENCY,
-  OFFERED_CURRENCIES,
+  isOfferedCurrency,
   type CurrencyCode,
   type OfferedCurrency,
 } from "@/lib/currency";
@@ -91,9 +91,7 @@ type OverviewCard = DebtOverviewRow & {
 // settle in a code that reached the ledger before the list did; its terms are
 // then typed in the base currency's scale, which is the one the column keeps.
 function offeredCurrency(currency: CurrencyCode): OfferedCurrency {
-  return (OFFERED_CURRENCIES as readonly string[]).includes(currency)
-    ? (currency as OfferedCurrency)
-    : BASE_CURRENCY;
+  return isOfferedCurrency(currency) ? currency : BASE_CURRENCY;
 }
 
 // The pockets a debt holds beside the one it bills in, each drawn in its own
@@ -121,9 +119,12 @@ function OtherOwed({ pockets }: { pockets: DebtPocket[] }) {
 export function DebtsScreen({
   data,
   hasGroup,
+  children,
 }: {
   data: DebtsScreenData;
   hasGroup: boolean;
+  // What the fund's members owe each other (RF-183), under the debts at every width.
+  children?: ReactNode;
 }) {
   const moneyText = useMoneyText();
   const t = useTranslations("debts");
@@ -546,6 +547,8 @@ export function DebtsScreen({
           )}
         </Flex>
       </Box>
+
+      {children}
 
       <DebtFormDialog
         open={target?.mode === "create" || target?.mode === "complete"}

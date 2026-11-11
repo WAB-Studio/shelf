@@ -24,6 +24,11 @@ export const OFFERED_CURRENCIES = ["COP", "USD"] as const;
 // direction and has to be narrow, or a screen offers what the schema refuses.
 export type OfferedCurrency = (typeof OFFERED_CURRENCIES)[number];
 
+// Whether a stored code is one a person may pick, so a form can be prefilled with it.
+export function isOfferedCurrency(code: CurrencyCode): code is OfferedCurrency {
+  return (OFFERED_CURRENCIES as readonly string[]).includes(code);
+}
+
 // What a new account, group or person settles in until they say otherwise.
 export const BASE_CURRENCY = "COP";
 

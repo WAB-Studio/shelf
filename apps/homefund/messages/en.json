@@ -1856,6 +1856,31 @@
     "dismiss": "Hide notice"
   },
   "memberDebts": {
+    "title": "Between members",
+    "recordDebt": "Record debt",
+    "recordPayment": "Record payment",
+    "empty": "Nobody in the fund owes anybody anything.",
+    "alone": "Add another person to the fund to record what you owe each other.",
+    "owes": "{debtor} owes {creditor} {amount}",
+    "showEntries": "{count, plural, one {Show # entry} other {Show # entries}}",
+    "hideEntries": "Hide entries",
+    "debtLine": "Debt · {debtor} owes {creditor}",
+    "paymentLine": "Payment · {debtor} paid {creditor}",
+    "delete": "Delete entry",
+    "deleteTitle": "Delete this entry?",
+    "deleteDescription": "The balance between the two people is worked out again without it.",
+    "deleted": "Entry deleted",
+    "debtorLabel": "Who owes",
+    "creditorLabel": "Who is owed",
+    "amountLabel": "Amount",
+    "currencyLabel": "Currency",
+    "dateLabel": "Date",
+    "descriptionLabel": "Description",
+    "descriptionPlaceholder": "Loan for the motorbike",
+    "save": "Save",
+    "debtRecorded": "Debt recorded",
+    "paymentRecorded": "Payment recorded",
+    "settled": "{first} and {second} are settled",
     "errors": {
       "noFund": "You are not in a fund, so there are no debts between members.",
       "memberNotInFund": "That member is not in your fund.",
@@ -1866,7 +1891,8 @@
       "amountInvalid": "Enter an amount above zero, with up to two decimals.",
       "amountTooLarge": "The amount is too large.",
       "currencyInvalid": "Choose a currency from the list.",
-      "overpaid": "The payment is larger than what those two people still owe each other in that currency."
+      "overpaid": "The payment is larger than what those two people still owe each other in that currency.",
+      "debtPaid": "That debt already has payments: delete the payments against it first."
     }
   }
 }
