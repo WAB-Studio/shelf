@@ -28,6 +28,7 @@ import {
   listAccountReconciliations,
   reconcileAccount,
 } from "@/db/queries/account-reconciliations";
+import { getMemberDebts } from "@/db/queries/member-debts";
 import { getMonthReview, getMonthReviewPending, markReviewed, unmarkReviewed, type ReviewItem } from "@/db/queries/month-review";
 import type { SpendingPatterns } from "@/db/queries/spending-patterns";
 import {
@@ -4146,6 +4147,7 @@ async function main(): Promise<void> {
   await accountHolderSuite();
   await mcpSpendingPatternsSuite();
   await madeBySuite();
+  await memberDebtsSuite();
 }
 
 // A member recorded without a login is someone in the fund: a leader whose fund holds one is not alone, so an
@@ -15265,7 +15267,7 @@ async function mcpDoorSuite(): Promise<void> {
   assert(
     next("RF-144: /mcp answers 401 with no key, an unknown one or a webhook's, and lists its tools to a key for Claude"),
     anonymous.status === 401 && forged.status === 401 && webhookKey.status === 401 &&
-      JSON.stringify(names) === JSON.stringify(["accept_deliveries", "create_account", "create_category", "delete_movement", "import_statement", "list_accounts", "list_categories", "list_inbox", "list_members", "list_movements", "merge_movements", "move_account_to_fund", "move_category_movements", "preview_statement", "record_movement", "reject_deliveries", "review_month", "spending_patterns", "update_account", "update_category", "update_movement"]),
+      JSON.stringify(names) === JSON.stringify(["accept_deliveries", "create_account", "create_category", "delete_movement", "import_statement", "list_accounts", "list_categories", "list_inbox", "list_member_debts", "list_members", "list_movements", "merge_movements", "move_account_to_fund", "move_category_movements", "preview_statement", "record_member_debt", "record_movement", "reject_deliveries", "review_month", "spending_patterns", "update_account", "update_category", "update_movement"]),
     `no key ${anonymous.status}, unknown key ${forged.status}, webhook key ${webhookKey.status}, tools ${JSON.stringify(names)}`,
   );
 
@@ -18231,5 +18233,61 @@ async function madeBySuite(): Promise<void> {
     next("RF-182: a movement out of a held account that names no maker is its holder's, and its spending counts for them"),
     !fromHeld.isError && heldRow.find((row) => row.id === heldId)?.madeByMemberId === ids.guest && heldAfter - heldBefore === 40_00,
     `record ${JSON.stringify(fromHeld.value)}, maker ${heldRow.find((row) => row.id === heldId)?.madeByMemberId}, spent ${heldBefore} -> ${heldAfter}`,
+  );
+}
+
+// RF-183: Claude reads and writes what members of a fund owe each other through the MCP, by the same query and
+// schema as the screen: a payment takes from the debt, an overpayment, the same member twice and a member of
+// another fund are refused, and a person in no fund is told so.
+async function memberDebtsSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const { POST } = await import("@/app/mcp/route");
+  const [leader, adrian, stranger, loner] = [
+    await createMembershipFreeUser(), await createMembershipFreeUser(), await createMembershipFreeUser(), await createMembershipFreeUser(),
+  ];
+  const ids = { group: randomUUID(), other: randomUUID(), leader: randomUUID(), adrian: randomUUID(), papa: randomUUID(), stranger: randomUUID() };
+  const name = (what: string) => `Harness rf183 ${what} ${tag}`;
+  await fixtureSql.begin(async (tx) => {
+    await tx`insert into groups (id, name, cash_mode) values (${ids.group}, ${name("fondo")}, 'per_member'), (${ids.other}, ${name("otro")}, 'per_member')`;
+    await tx`insert into group_members (id, group_id, user_id, name, role) values
+      (${ids.leader}, ${ids.group}, ${leader.id}, ${name("lider")}, 'leader'), (${ids.adrian}, ${ids.group}, ${adrian.id}, ${name("Adrian")}, 'member'),
+      (${ids.papa}, ${ids.group}, null, ${name("Papá")}, 'member'), (${ids.stranger}, ${ids.other}, ${stranger.id}, ${name("ajeno")}, 'leader')`;
+  });
+  track("groups", ids.group);
+  track("groups", ids.other);
+  const clientOf = async (user: HarnessUser) => {
+    const { id, token } = await asUser(user, () => issueWebhookCredential({ name: name("clave"), purpose: "mcp", defaultAccountId: null, defaultCategoryId: null }));
+    keep("webhook_credentials", id);
+    return mcpClient(POST, token).tool;
+  };
+  const [tool, lonerTool] = [await clientOf(adrian), await clientOf(loner)];
+  const entry = (kind: string, amountCents: number, extra: Record<string, unknown> = {}) =>
+    tool("record_member_debt", { kind, debtorMemberId: ids.papa, creditorMemberId: ids.adrian, amountCents, currency: "COP", occurredOn: "2026-11-01", description: "préstamo para la moto", ...extra });
+
+  const debt = await entry("debt", 200_000_00);
+  const payment = await entry("payment", 50_000_00, { description: null });
+  const overpaid = await entry("payment", 150_000_01);
+  const listed = (await tool("list_member_debts")).value as { balances: Record<string, unknown>[]; entries: { kind: string; amountCents: number; createdBy?: string }[] };
+  const screen = await asUser(leader, () => getMemberDebts());
+  assert(
+    next("RF-183: record_member_debt writes a debt and a payment, list_member_debts derives what Papá still owes Adrian, and the screen's query reads the same"),
+    !debt.isError && !payment.isError && listed.entries.length === 2 &&
+      JSON.stringify(listed.balances) === JSON.stringify([{ debtorMemberId: ids.papa, debtorName: name("Papá"), creditorMemberId: ids.adrian, creditorName: name("Adrian"), currency: "COP", pendingCents: 150_000_00 }]) &&
+      JSON.stringify(screen?.balances) === JSON.stringify(listed.balances) && screen?.members.length === 3,
+    `debt ${JSON.stringify(debt.value)}, payment ${JSON.stringify(payment.value)}, listed ${JSON.stringify(listed)}, screen ${JSON.stringify(screen?.balances)}`,
+  );
+
+  const same = await entry("debt", 1_00, { creditorMemberId: ids.papa });
+  const foreign = await entry("debt", 1_00, { creditorMemberId: ids.stranger });
+  const lonely = await lonerTool("list_member_debts");
+  const lonelyWrite = await lonerTool("record_member_debt", { kind: "debt", debtorMemberId: ids.papa, creditorMemberId: ids.adrian, amountCents: 1_00, occurredOn: "2026-11-01" });
+  const [{ n }] = await fixtureSql<{ n: number }[]>`select count(*)::int as n from member_debts where group_id = ${ids.group}`;
+  const [{ by }] = await fixtureSql<{ by: string }[]>`select created_by as by from member_debts where group_id = ${ids.group} and kind = 'debt'`;
+  assert(
+    next("RF-183: an overpayment, the same member twice, a member of another fund and a person in no fund are each refused in Spanish and write nothing; an entry is stamped with its writer"),
+    overpaid.isError && same.isError && foreign.isError && lonely.isError && lonelyWrite.isError && n === 2 && by === adrian.id &&
+      String((overpaid.value as { error?: string }).error).includes("abono") && String((foreign.value as { error?: string }).error).includes("fondo"),
+    `overpaid ${JSON.stringify(overpaid.value)}, same ${JSON.stringify(same.value)}, foreign ${JSON.stringify(foreign.value)}, loner ${JSON.stringify(lonely.value)} ${JSON.stringify(lonelyWrite.value)}, stored ${n}`,
   );
 }

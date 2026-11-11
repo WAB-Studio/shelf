@@ -1714,7 +1714,9 @@
       "moveCategoryMovements": "Mueve todas las líneas de movimientos de EXACTAMENTE la categoría fromCategoryId (no las de sus subcategorías, aunque list_movements por categoría sí las incluye) a toCategoryId, en una sola sentencia, opcionalmente solo las fechadas de from a to; ambas deben ser del mismo tipo. Llámala PRIMERO con dryRun true: no escribe nada y devuelve cuántas líneas se moverían. Muestra ese número a la persona, pide un solo sí y llámala entonces sin dryRun. Cada movimiento movido recibe un updatedAt nuevo: vuelve a leerlo con list_movements antes de editarlo.",
       "listInbox": "La bandeja de entrada: las entregas (SMS, correos del banco, webhook) que esperan que la persona las apruebe. Cada una trae id, receivedAt, rawText (el mensaje tal cual llegó) y proposal (amountCents, currency, kind expense o income, accountId y accountName, categoryId y categoryPath, date, description). notDetected nombra los campos que el mensaje no dio. status (por defecto pending) filtra; limit y offset paginan. Úsala PRIMERO. Luego muestra a la persona UNA lista compacta (fecha, monto, cuenta, categoría, descripción), con cada campo que falte ya completado por tu propuesta y marcado como tal, y pide UN solo sí para toda la lista, o sus correcciones. Después llama accept_deliveries; lo que la persona descarte se rechaza con reject_deliveries, confirmado en esa misma lista.",
       "acceptDeliveries": "Aprueba una o más entregas de la bandeja: cada una se vuelve un movimiento, por el mismo camino y las mismas reglas que el botón «Aceptar» de HomeFund (tipo derivado de las cuentas, auditoría, la referencia de la entrega evita duplicados). Cada ítem lleva el id de list_inbox y, solo si cambia o falta, accountId (la cuenta del gasto o ingreso), categoryId o splits (líneas con categoryId, amountCents y description del producto, que suman el monto), amountCents, description, date (AAAA-MM-DD), kind (expense, income o transfer) y, en una transferencia, fromAccountId y toAccountId (sin kind transfer, un solo lado se rechaza; con transfer, el lado que falta es la cuenta de la propuesta). Si es un ingreso a una cuenta del fondo (notDetected trae contributor), pasa contributedByMemberId («De quién»). Todo o nada: si una entrega falla (por ejemplo, sin cuenta, monto o categoría, ya resuelta o ajena) no se acepta ninguna y el error trae deliveryId y el campo que falta. NUNCA la llames sin antes haber llamado list_inbox, mostrado a la persona la lista compacta (fecha, monto, cuenta, categoría, descripción) y recibido UN solo sí para toda la lista. En un movimiento a una cuenta del fondo, un ítem puede llevar madeByMemberId (de list_members) para decir quién lo hizo.",
-      "rejectDeliveries": "Rechaza una o más entregas de la bandeja por id, por el mismo camino que «Rechazar» en HomeFund; no escribe movimientos. Todo o nada: si un id no es una entrega pendiente de la persona, no rechaza ninguna. Muestra primero la lista (fecha, monto, descripción) de lo que rechazarás, junto con la de accept_deliveries, y pide UN solo sí para todo."
+      "rejectDeliveries": "Rechaza una o más entregas de la bandeja por id, por el mismo camino que «Rechazar» en HomeFund; no escribe movimientos. Todo o nada: si un id no es una entrega pendiente de la persona, no rechaza ninguna. Muestra primero la lista (fecha, monto, descripción) de lo que rechazarás, junto con la de accept_deliveries, y pide UN solo sí para todo.",
+      "listMemberDebts": "Lo que los miembros del fondo se deben entre sí: «balances» trae cada pareja con su saldo pendiente en centavos y su moneda (debtorName le debe pendingCents a creditorName), derivado de los asientos; «entries» trae cada asiento (kind debt es una deuda, payment un abono), del más nuevo al más viejo.",
+      "recordMemberDebt": "Registra un asiento entre dos miembros del fondo: kind debt (una deuda nueva: «Papá le debe a Adrian $200.000 por la moto») o payment (un abono parcial o total a esa deuda). Deudor y acreedor son ids de list_members, distintos. Un abono mayor a lo que el deudor aún le debe a ese acreedor en esa moneda se rechaza. Antes de escribir, CONFIRMA con la persona quién le debe a quién, el monto, la fecha y la descripción, y espera su sí."
     },
     "deferralProposal": "Diferir en {count} cuotas",
     "errors": {
@@ -1793,7 +1795,11 @@
       "dryRun": "true: no escribe nada y solo devuelve cuántas líneas se moverían.",
       "inboxStatus": "pending (por defecto), accepted o rejected.",
       "deliveries": "Las entregas a aceptar, de 1 a 50: cada una con su id y, opcional, los datos que corrigen o completan su propuesta.",
-      "deliveryIds": "Los ids (de list_inbox) de 1 a 50 entregas pendientes a rechazar."
+      "deliveryIds": "Los ids (de list_inbox) de 1 a 50 entregas pendientes a rechazar.",
+      "memberDebtKind": "debt para una deuda nueva, payment para un abono a una existente.",
+      "debtorMemberId": "El miembro que debe (id de list_members).",
+      "creditorMemberId": "El miembro a quien se le debe (id de list_members).",
+      "occurredOn": "La fecha del asiento, AAAA-MM-DD; hoy o antes."
     }
   },
   "oauth": {
@@ -1831,5 +1837,19 @@
     "title": "Agrégala a tu inicio",
     "steps": "En Safari toca Compartir y luego «Agregar a pantalla de inicio». Se abre como una app, a pantalla completa.",
     "dismiss": "Ocultar aviso"
+  },
+  "memberDebts": {
+    "errors": {
+      "noFund": "No perteneces a un fondo, así que no hay deudas entre miembros.",
+      "memberNotInFund": "Ese miembro no pertenece a tu fondo.",
+      "sameMember": "El deudor y el acreedor deben ser personas distintas.",
+      "debtorRequired": "Elige quién debe.",
+      "creditorRequired": "Elige a quién se le debe.",
+      "amountRequired": "Escribe el monto.",
+      "amountInvalid": "Escribe un monto mayor que cero, con hasta dos decimales.",
+      "amountTooLarge": "El monto es demasiado grande.",
+      "currencyInvalid": "Elige una moneda de la lista.",
+      "overpaid": "El abono es mayor que lo que aún se debe entre esas dos personas en esa moneda."
+    }
   }
 }
