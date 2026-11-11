@@ -3,7 +3,7 @@ import "server-only";
 import type { CallToolResult, McpServer, ServerContext } from "@modelcontextprotocol/server";
 import { z } from "zod";
 
-import { handAccountToGroup, listAccounts, moveRefusalKey, updateAccount } from "@/db/queries/accounts";
+import { handAccountToGroup, listAccounts, updateAccount } from "@/db/queries/accounts";
 import { freeCategoryColor, listScopedCategories, updateCategory } from "@/db/queries/categories";
 import {
   bookMovement,
@@ -337,13 +337,7 @@ export function registerLedgerTools(server: McpServer, run: Run, t: Say): void {
     (input: { accountId: string }, ctx) =>
       run(ctx, async () => {
         const id = idOf("errors.notFound", input.accountId);
-        try {
-          await handAccountToGroup({ accountId: id });
-        } catch (error) {
-          const key = moveRefusalKey(error);
-          if (key) throw new ActionError(key);
-          throw error;
-        }
+        await handAccountToGroup({ accountId: id });
         return { accountId: id };
       }),
   );

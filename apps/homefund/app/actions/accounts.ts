@@ -6,7 +6,6 @@ import {
   archiveAccount,
   deleteAccount,
   handAccountToGroup,
-  moveRefusalKey,
   restoreAccount,
   updateAccount,
 } from "@/db/queries/accounts";
@@ -97,18 +96,12 @@ export const restoreAccountAction = authActionClient
 
 /**
  * Moves a personal account into the caller's fund with its whole history (RF-61, RF-180), after
- * which any member may write it. Each refusal the database raises names why; see `moveRefusalKey`.
+ * which any member may write it. `handAccountToGroup` throws each refusal as an `ActionError`.
  */
 export const handAccountToGroupAction = authActionClient
   .inputSchema(handAccountToGroupSchema)
   .action(async ({ parsedInput: { accountId } }) => {
-    try {
-      await handAccountToGroup({ accountId });
-    } catch (error) {
-      const key = moveRefusalKey(error);
-      if (key) throw new ActionError(key);
-      throw error;
-    }
+    await handAccountToGroup({ accountId });
 
     refresh();
   });

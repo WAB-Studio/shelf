@@ -17466,12 +17466,13 @@ async function accountToFundSuite(): Promise<void> {
     track("transactions", transactionId);
     return transactionId;
   };
+  // The refusal comes back as the catalogue key the screen and Claude translate.
   const refusedWith = async (user: HarnessUser, accountId: string) => {
     try {
       await asUser(user, () => handAccountToGroup({ accountId }));
       return "none";
     } catch (error) {
-      return pgErrorCode(error) ?? "unknown";
+      return error instanceof Error ? error.message : "unknown";
     }
   };
   const placement = async (accountId: string) =>
@@ -17523,8 +17524,8 @@ async function accountToFundSuite(): Promise<void> {
   const outsiderAccount = await open(outsider, "sin fondo", 1_000_00);
   const refusals = [await refusedWith(stranger, other), await refusedWith(outsider, other), await refusedWith(outsider, outsiderAccount), await refusedWith(mover, main), await refusedWith(mover, randomUUID())];
   assert(
-    next("RF-180: another person's account, a person with no fund, an account already in the fund and an account that does not exist are each refused (23514), and nothing moves"),
-    refusals.every((code) => code === "23514") && (await placement(other)).owner_user_id === mover.id && (await placement(outsiderAccount)).owner_user_id === outsider.id,
+    next("RF-180: another person's account and an account that does not exist answer alike, and a person with no fund and an account already in the fund each have their own refusal; nothing moves"),
+    refusals.join() === "accounts.errors.moveNotYours,accounts.errors.moveNoFund,accounts.errors.moveNoFund,accounts.errors.moveAlready,accounts.errors.moveNotYours" && (await placement(other)).owner_user_id === mover.id && (await placement(outsiderAccount)).owner_user_id === outsider.id,
     `codes ${refusals}`,
   );
 
@@ -17541,8 +17542,8 @@ async function accountToFundSuite(): Promise<void> {
   const refused = await Promise.all(codes);
   const stayed = await Promise.all([needsCategory, needsLabel, goalled, loosePocket, archived].map(placement));
   assert(
-    next("RF-180: a personal category or label with no twin in the fund (MV001, MV002), a personal goal on the account (MV003), a pocket alone (MV004) and an archived account (23514) are each refused and stay personal"),
-    refused.join() === "MV001,MV002,MV003,MV004,23514" && stayed.every((row) => row.owner_user_id === mover.id && row.group_id === null),
+    next("RF-180: a personal category or label with no twin in the fund (MV001, MV002), a personal goal on the account (MV003), a pocket alone (MV004) and an archived account (MV008) are each refused and stay personal"),
+    refused.join() === "accounts.errors.moveCategories,accounts.errors.moveLabels,accounts.errors.moveBudgetsGoals,accounts.errors.movePocket,accounts.errors.moveArchived" && stayed.every((row) => row.owner_user_id === mover.id && row.group_id === null),
     `codes ${refused}`,
   );
 
@@ -17561,5 +17562,43 @@ async function accountToFundSuite(): Promise<void> {
     next("RF-180: move_account_to_fund moves the person's account like the screen, refuses another person's account, a lone pocket and a second move"),
     listed && !done.isError && mcpMoved.group_id === ids.group && strangerOne.isError && pocketOne.isError && again.isError,
     `done ${JSON.stringify(done.value)}, stranger ${JSON.stringify(strangerOne.value)}, pocket ${JSON.stringify(pocketOne.value)}, again ${JSON.stringify(again.value)}`,
+  );
+
+  // Two personal labels of one movement that share a twin collapse to one row; a delivery or a webhook default naming a
+  // personal category follows it to the fund's twin; a reference the fund already uses is refused by its own words.
+  const crowded = await open(mover, "etiquetas", 2_000_00);
+  const [personalTrip, personalTripLower, fundTrip] = [randomUUID(), randomUUID(), randomUUID()];
+  await fixtureSql`insert into labels (id, owner_user_id, name) values (${personalTrip}, ${mover.id}, ${name("Viaje")}), (${personalTripLower}, ${mover.id}, ${name("viaje")})`;
+  await fixtureSql`insert into labels (id, group_id, name) values (${fundTrip}, ${ids.group}, ${name("Viaje")})`;
+  const labelled = await book(crowded, 100_00, ids.market, false, [personalTrip, personalTripLower]);
+  const delivery = randomUUID();
+  await fixtureSql.begin(async (tx) => {
+    await tx`select set_config('request.jwt.claims', ${JSON.stringify({ sub: mover.id, role: "authenticated", aud: "authenticated" })}, true)`;
+    await tx`insert into ingest_deliveries (id, external_ref, raw_text, shape_hash, proposed_amount_cents, proposed_account_id, proposed_category_id, category_source, proposed_direction, proposed_occurred_at)
+      values (${delivery}, ${name("entrega")}, ${name("entrega")}, ${createHash("sha256").update(name("entrega")).digest("hex")}, 100, ${crowded}, ${ids.market}, 'merchant', 'expense', '2026-03-10')`;
+  });
+  const { id: defaultsKey } = await asUser(mover, () =>
+    issueWebhookCredential({ name: name("defecto"), purpose: "ingest", defaultAccountId: crowded, defaultCategoryId: ids.market }),
+  );
+  keep("webhook_credentials", defaultsKey);
+  const taken = await open(mover, "referencia", 1_000_00);
+  const ref = name("ref");
+  for (const [user, account] of [[mover, taken], [leader, main]] as const) {
+    const { transactionId } = await asUser(user, () =>
+      createTransaction({ fromAccountId: account, toAccountId: null, amountCents: 100_00, occurredAt: "2026-03-07", description: name("ref"), externalRef: ref, splits: [{ categoryId: account === main ? ids.fundMarket : ids.market, amountCents: 100_00 }], labelIds: [] }),
+    );
+    track("transactions", transactionId);
+  }
+  const clash = await refusedWith(mover, taken);
+  const crowdedMove = await refusedWith(mover, crowded);
+  const kept = await fixtureSql<{ label_id: string }[]>`select label_id from transaction_labels where transaction_id = ${labelled}`;
+  const [proposed] = await fixtureSql<{ proposed_category_id: string | null }[]>`select proposed_category_id from ingest_deliveries where id = ${delivery}`;
+  const [defaults] = await fixtureSql<{ default_category_id: string | null }[]>`select default_category_id from webhook_credentials where id = ${defaultsKey}`;
+  await fixtureSql`delete from ingest_deliveries where id = ${delivery}`;
+  assert(
+    next("RF-180: two personal labels with one twin leave one row, a delivery and a webhook default follow their category to the twin, and a movement reference the fund uses is refused with its own words"),
+    crowdedMove === "none" && kept.length === 1 && kept[0].label_id === fundTrip && proposed.proposed_category_id === ids.fundMarket &&
+      defaults.default_category_id === ids.fundMarket && clash === "accounts.errors.moveMovementRef" && (await placement(taken)).owner_user_id === mover.id,
+    `move ${crowdedMove}, labels ${JSON.stringify(kept)}, delivery ${proposed.proposed_category_id}, default ${defaults.default_category_id}, clash ${clash}`,
   );
 }

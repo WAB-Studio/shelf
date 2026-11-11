@@ -9019,7 +9019,7 @@ async function checkAccountHandOver() {
       const secondRefusal = await handOverRefusal(freeAccount.id);
       assert(
         labels[3],
-        secondRefusal.includes("23514") && secondRefusal.includes("already belongs to a group"),
+        secondRefusal.includes("MV007") && secondRefusal.includes("already belongs to a group"),
         secondRefusal,
       );
 
@@ -9030,7 +9030,7 @@ async function checkAccountHandOver() {
       const missingRefusal = maskIds(await handOverRefusal(missingAccount));
       assert(
         labels[4],
-        strangerRefusal.includes("23514") &&
+        strangerRefusal.includes("MV006") &&
           strangerRefusal === otherGroupRefusal &&
           otherGroupRefusal === missingRefusal,
         `another person's → ${strangerRefusal}; another group's → ${otherGroupRefusal}; no row → ${missingRefusal}`,
