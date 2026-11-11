@@ -575,6 +575,13 @@
       "when": 1794351000765,
       "tag": "0081_a_purchase_may_be_deferred",
       "breakpoints": true
+    },
+    {
+      "idx": 82,
+      "version": "7",
+      "when": 1794355410275,
+      "tag": "0082_a_renumbered_leg_keeps_its_birth",
+      "breakpoints": true
     }
   ]
 }

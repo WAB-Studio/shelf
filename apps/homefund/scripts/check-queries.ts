@@ -15349,7 +15349,12 @@ async function statementImportSuite(): Promise<void> {
     insert into ingest_counterparties (owner_user_id, pattern_key, pattern_label, side, state, trusted_account_id)
     values (${owner.id}, ${counterpartyPatternKey("TRANSF A BOLSILLO 7781")}, 'TRANSF A BOLSILLO', 'to', 'trusted', ${ids.card})`;
 
-  const { tool } = mcpClient(POST, token);
+  const { tool: callTool } = mcpClient(POST, token);
+  // A statement is named by its cut-off date; unless a call names one, it is the span of its lines.
+  const tool = (name: string, args: Record<string, unknown>) => {
+    const days = ((args.rows ?? []) as { date: string }[]).map((row) => row.date).sort();
+    return callTool(name, args.statement ? args : { ...args, statement: { periodStart: days[0], cutOffDate: days[days.length - 1] } });
+  };
   const count = async () => {
     const [row] = await fixtureSql<{ movements: number; sources: number }[]>`
       select (select count(*)::int from transactions where from_account_id = ${ids.bank} or to_account_id = ${ids.bank}) as movements,
@@ -15490,6 +15495,180 @@ async function statementImportSuite(): Promise<void> {
       dollarSide.value?.lines?.[0]?.status === "matches",
     `imported ${JSON.stringify(inboundImport.value)}, received ${JSON.stringify(received)}, dollar side ${JSON.stringify(dollarSide.value?.lines)}`,
   );
+
+  // RF-134: each leg names its statement; a re-import replaces exactly that statement's rows.
+  // A movement the person wrote by hand, which the card statement's line 5 names again.
+  const { transactionId: handCardId } = await asUser(owner, () =>
+    createTransaction({
+      fromAccountId: ids.card,
+      toAccountId: null,
+      amountCents: 120_000,
+      occurredAt: "2026-10-11",
+      description: "PROPINA A MANO",
+      externalRef: null,
+      splits: [{ categoryId: ids.food, amountCents: 120_000 }],
+      labelIds: [],
+    }),
+  );
+  const october = { periodStart: "2026-10-01", cutOffDate: "2026-10-31" };
+  const cardRows = [
+    { line: 1, date: "2026-10-03", description: "CAFE", amountCents: -500_000, categoryId: ids.food },
+    { line: 2, date: "2026-10-05", description: "LIBRERIA", amountCents: -700_000, categoryId: ids.food },
+    { line: 3, date: "2026-10-07", description: "ENVIO A BANCO", amountCents: -2_000_000, counterAccountId: ids.bank },
+    { line: 4, date: "2026-10-09", description: "TAXI", amountCents: -300_000, categoryId: ids.food },
+    { line: 5, date: "2026-10-11", description: "PROPINA", amountCents: -120_000, categoryId: ids.food },
+  ];
+  const cardFirst = await tool("preview_statement", { accountId: ids.card, rows: cardRows, statement: october });
+  const cardImport = await tool("import_statement", {
+    accountId: ids.card, rows: cardRows, statement: october, previewKey: cardFirst.value?.previewKey,
+  });
+  const sourcesOf = (accountId: string) => fixtureSql<{ statement_id: string | null; description: string; transaction_id: string }[]>`
+    select s.statement_id, t.description, t.id as transaction_id from transaction_sources s
+    join transactions t on t.id = s.transaction_id where s.account_id = ${accountId} order by t.occurred_at`;
+  const cardSources = await sourcesOf(ids.card);
+  const cardStatements = await fixtureSql<{ id: string; source: string; cut_off_date: string }[]>`
+    select id, source, cut_off_date::text from account_statements where account_id = ${ids.card}`;
+  assert(
+    next("RF-134: an import finds or cuts its statement's row and stamps every leg it writes with it"),
+    !cardImport.isError && cardImport.value?.created === 4 && cardImport.value?.linked === 1 &&
+      cardStatements.length === 1 && cardStatements[0]?.source === "imported" && cardStatements[0].cut_off_date === "2026-10-31" &&
+      cardSources.length === 5 && cardSources.every((one) => one.statement_id === cardStatements[0]?.id),
+    `import ${JSON.stringify(cardImport.value)}, statements ${JSON.stringify(cardStatements)}, sources ${JSON.stringify(cardSources)}`,
+  );
+
+  // The bank's own statement names the same transfer from the other side.
+  const bankRows = [{ line: 1, date: "2026-10-07", description: "RECIBO DE TARJETA", amountCents: 2_000_000 }];
+  const bankPreview = await tool("preview_statement", { accountId: ids.bank, rows: bankRows, statement: october });
+  const bankImport = await tool("import_statement", {
+    accountId: ids.bank, rows: bankRows, statement: october, previewKey: bankPreview.value?.previewKey,
+  });
+  const bankSources = await sourcesOf(ids.bank);
+  const bankSide = bankSources.find((one) => one.description === "ENVIO A BANCO");
+  const keptCafe = cardSources.find((one) => one.description === "CAFE");
+  await fixtureSql`update transactions set description = 'CAFE CON LECHE' where id = ${keptCafe?.transaction_id ?? null}`;
+
+  const edited = [
+    cardRows[0]!,
+    { ...cardRows[3]!, amountCents: -350_000 },
+  ];
+  const replacePreview = await tool("preview_statement", { accountId: ids.card, rows: edited, statement: october });
+  const removals = (replacePreview.value?.removals ?? []) as { description: string; effect: string }[];
+  const effectOf = (description: string) => removals.find((one) => one.description === description)?.effect;
+  const replaced = await tool("import_statement", {
+    accountId: ids.card, rows: edited, statement: october, previewKey: replacePreview.value?.previewKey,
+  });
+  const afterCard = await sourcesOf(ids.card);
+  const afterStatements = await fixtureSql<{ n: number }[]>`
+    select count(*)::int as n from account_statements where account_id = ${ids.card}`;
+  const [transfer] = await fixtureSql<{ n: number; amount: string }[]>`
+    select count(*)::int as n, coalesce(max(amount_cents), 0)::text as amount from transactions where id = ${bankSide?.transaction_id ?? null}`;
+  const goneRows = await fixtureSql<{ description: string; amount_cents: string }[]>`
+    select description, amount_cents::text from transactions
+    where from_account_id = ${ids.card} and description in ('LIBRERIA', 'TAXI')`;
+  const [handKept] = await fixtureSql<{ n: number; sources: number }[]>`
+    select count(*)::int as n,
+      (select count(*)::int from transaction_sources where transaction_id = ${handCardId}) as sources
+    from transactions where id = ${handCardId}`;
+  const [survivor] = await fixtureSql<{ id: string; description: string }[]>`
+    select id, description from transactions where id = ${keptCafe?.transaction_id ?? null}`;
+  assert(
+    next("RF-134: a re-import drops what its statement no longer names, keeps and updates the rest, and a transfer the other side's statement names stays"),
+    !bankImport.isError && bankImport.value?.linked === 1 && bankSide !== undefined &&
+      bankSide.statement_id !== null && bankSide.statement_id !== cardStatements[0]?.id &&
+      effectOf("LIBRERIA") === "deletes" && effectOf("TAXI") === "deletes" && effectOf("ENVIO A BANCO") === "unlinks" && effectOf("PROPINA A MANO") === "unlinks" &&
+      replacePreview.value?.counts?.already_imported === 1 && replacePreview.value?.counts?.new === 1 &&
+      !replaced.isError && replaced.value?.removed === 2 && replaced.value?.unlinked === 2 && handKept?.n === 1 && handKept.sources === 0 && replaced.value?.created === 1 &&
+      goneRows.length === 1 && goneRows[0]?.description === "TAXI" && goneRows[0].amount_cents === "350000" &&
+      survivor?.description === "CAFE CON LECHE" &&
+      afterCard.length === 2 && afterCard.every((one) => one.statement_id === cardStatements[0]?.id) &&
+      afterStatements[0]?.n === 1 && transfer?.n === 1 && transfer.amount === "2000000" &&
+      (await sourcesOf(ids.bank)).some((one) => one.transaction_id === bankSide.transaction_id),
+    `removals ${JSON.stringify(removals)}, replaced ${JSON.stringify(replaced.value)}, card sources ${JSON.stringify(afterCard)}, gone ${JSON.stringify(goneRows)}, transfer ${JSON.stringify(transfer)}`,
+  );
+
+  // A statement without its period is refused: the cut-off date is what a re-import is found by.
+  const unnamed = await callTool("preview_statement", { accountId: ids.card, rows: cardRows });
+  // A line outside the period it names is refused too.
+  const outside = await callTool("preview_statement", {
+    accountId: ids.card, rows: cardRows, statement: { periodStart: "2026-10-05", cutOffDate: "2026-10-31" },
+  });
+  assert(
+    next("RF-134: a statement names its period, and no line may fall outside it"),
+    unnamed.isError && outside.isError,
+    `unnamed ${JSON.stringify(unnamed.value)}, outside ${JSON.stringify(outside.value)}`,
+  );
+
+  // Re-import with lines added before, a reference given to a line that had none and a reconciled line:
+  // kept legs are renumbered, none is recreated, and the statement stays one.
+  const november = { periodStart: "2026-11-01", cutOffDate: "2026-11-08" };
+  const novRows = [
+    { line: 1, date: "2026-11-02", description: "UNO", amountCents: -100_000, categoryId: ids.food },
+    { line: 2, date: "2026-11-03", description: "DOS", amountCents: -200_000, categoryId: ids.food },
+    { line: 3, date: "2026-11-04", description: "TRES", amountCents: -300_000, categoryId: ids.food },
+  ];
+  const novFirst = await tool("preview_statement", { accountId: ids.card, rows: novRows, statement: november });
+  await tool("import_statement", { accountId: ids.card, rows: novRows, statement: november, previewKey: novFirst.value?.previewKey });
+  const novMovement = async (description: string) =>
+    (await fixtureSql<{ id: string }[]>`
+      select id from transactions where from_account_id = ${ids.card} and description = ${description}`)[0]?.id;
+  const [dosId, tresId, unoId] = [await novMovement("DOS"), await novMovement("TRES"), await novMovement("UNO")];
+  // A reconciliation's adjustment is the one reconciled movement: a single leg with no split. A line
+  // of this statement names it, so the statement holds it as a leg (as a leg matched earlier would).
+  const adjustmentId = await fixtureSql.begin(async (tx) => {
+    const claims = JSON.stringify({ sub: owner.id, role: "authenticated", aud: "authenticated" });
+    await tx`select set_config('request.jwt.claims', ${claims}, true)`;
+    const [reconciliation] = await tx<{ id: string }[]>`
+      insert into account_reconciliations (account_id, reconciled_on, counted_balance_cents)
+      values (${ids.card}, '2026-11-05', private.account_settlement_balance_on(${ids.card}, '2026-11-05') + 70000)
+      returning id`;
+    const [adjustment] = await tx<{ id: string }[]>`
+      select id from transactions where reconciliation_id = ${reconciliation!.id}`;
+    await tx`
+      insert into transaction_sources (transaction_id, account_id, statement_id, source_seq)
+      select ${adjustment!.id}, ${ids.card}, s.id, 9 from account_statements s
+      where s.account_id = ${ids.card} and s.cut_off_date = '2026-11-08'`;
+    return adjustment!.id;
+  });
+  const novNext = [
+    { line: 1, date: "2026-11-01", description: "CERO", amountCents: -50_000, categoryId: ids.food },
+    { ...novRows[0]!, line: 2 },
+    { ...novRows[1]!, line: 3 },
+    { line: 4, date: "2026-11-05", description: "AJUSTE", amountCents: 70_000, categoryId: ids.pay },
+    { ...novRows[2]!, line: 5, reference: `T-${tag}` },
+  ];
+  const novPreview = await tool("preview_statement", { accountId: ids.card, rows: novNext, statement: november });
+  const novImport = await tool("import_statement", {
+    accountId: ids.card, rows: novNext, statement: november, previewKey: novPreview.value?.previewKey,
+  });
+  const novSources = await fixtureSql<{ id: string; source_seq: number | null; source_ref: string | null }[]>`
+    select t.id, s.source_seq, s.source_ref from transaction_sources s join transactions t on t.id = s.transaction_id
+    where s.account_id = ${ids.card} and t.occurred_at >= '2026-11-01'`;
+  const seqOf = (id: string | undefined) => novSources.find((one) => one.id === id);
+  const novCount = await fixtureSql<{ n: number }[]>`
+    select count(*)::int as n from transactions
+    where from_account_id = ${ids.card} and description in ('CERO', 'UNO', 'DOS', 'TRES')`;
+  assert(
+    next("RF-134: a re-import renumbers the legs it keeps, matches a reconciled leg it holds, and gives a held leg the reference it lacked"),
+    !novImport.isError && novImport.value?.created === 1 && novImport.value?.skipped === 4 && novImport.value?.removed === 0 &&
+      novCount[0]?.n === 4 &&
+      seqOf(unoId)?.source_seq === 2 && seqOf(dosId)?.source_seq === 3 && seqOf(adjustmentId)?.source_seq === 4 &&
+      seqOf(tresId)?.source_ref === `T-${tag}` && seqOf(tresId)?.source_seq === null,
+    `preview ${JSON.stringify(novPreview.value?.counts)}, import ${JSON.stringify(novImport.value)}, sources ${JSON.stringify(novSources)}, movements ${novCount[0]?.n}`,
+  );
+
+  // Dropping the statement's last line names the same statement, so exactly that line goes.
+  const novLast = novNext.slice(0, 4);
+  const lastPreview = await tool("preview_statement", { accountId: ids.card, rows: novLast, statement: november });
+  const lastImport = await tool("import_statement", {
+    accountId: ids.card, rows: novLast, statement: november, previewKey: lastPreview.value?.previewKey,
+  });
+  const novStatements = await fixtureSql<{ n: number }[]>`
+    select count(*)::int as n from account_statements where account_id = ${ids.card} and cut_off_date = '2026-11-08'`;
+  assert(
+    next("RF-134: dropping a statement's last line replaces within the same statement: that movement goes, no second statement is cut"),
+    !lastImport.isError && lastImport.value?.removed === 1 && novStatements[0]?.n === 1 && (await novMovement("TRES")) === undefined,
+    `import ${JSON.stringify(lastImport.value)}, statements ${novStatements[0]?.n}`,
+  );
 }
 
 
@@ -15526,15 +15705,16 @@ async function deferralImportSuite(): Promise<void> {
     return row?.cents;
   };
 
+  const march = { periodStart: "2026-03-01", cutOffDate: "2026-03-31" };
   const rows = [
     { line: 1, date: "2026-03-15", description: "NEVERA 1/36", amountCents: -360_000_000, categoryId: ids.food, instalments: 36 },
     { line: 2, date: "2026-03-16", description: "CAFE", amountCents: -1_000_000, categoryId: ids.food },
   ];
   type Line = { line: number; status: string; reason?: string; deferral?: { instalments: number; proposal: string } };
-  const preview = await tool("preview_statement", { accountId: ids.card, rows });
+  const preview = await tool("preview_statement", { accountId: ids.card, rows, statement: march });
   const lines = (preview.value?.lines ?? []) as Line[];
   const [none] = await fixtureSql<{ n: number }[]>`select count(*)::int as n from deferrals where account_id = ${ids.card}`;
-  const wrongSide = await tool("preview_statement", { accountId: ids.bank, rows: [rows[0]] });
+  const wrongSide = await tool("preview_statement", { accountId: ids.bank, rows: [rows[0]], statement: march });
   assert(
     next("RF-136: the preview proposes the deferral and writes nothing; on an asset account the line is invalid"),
     !preview.isError && lines[0]?.status === "new" && lines[0].deferral?.instalments === 36 &&
@@ -15543,8 +15723,8 @@ async function deferralImportSuite(): Promise<void> {
     `preview ${JSON.stringify(lines)}, deferrals ${none?.n}, asset ${JSON.stringify(wrongSide.value?.lines)}`,
   );
 
-  const imported = await tool("import_statement", { accountId: ids.card, rows, previewKey: preview.value?.previewKey });
-  const again = await tool("import_statement", { accountId: ids.card, rows, previewKey: preview.value?.previewKey });
+  const imported = await tool("import_statement", { accountId: ids.card, rows, statement: march, previewKey: preview.value?.previewKey });
+  const again = await tool("import_statement", { accountId: ids.card, rows, statement: march, previewKey: preview.value?.previewKey });
   const stored = await fixtureSql<{ instalments: number; description: string; created_by: string }[]>`
     select d.instalments, t.description, d.created_by from deferrals d join transactions t on t.id = d.transaction_id
     where d.account_id = ${ids.card}`;
@@ -15573,7 +15753,7 @@ async function deferralImportSuite(): Promise<void> {
   const transferLine = {
     line: 1, date: "2026-03-20", description: "TRASLADO 1/6", amountCents: -700_000, categoryId: ids.food, instalments: 6,
   };
-  const matched = await tool("preview_statement", { accountId: ids.card, rows: [transferLine] });
+  const matched = await tool("preview_statement", { accountId: ids.card, rows: [transferLine], statement: march });
   const matchedLine = (matched.value?.lines as Line[] | undefined)?.[0];
   const transferState = await asUser(owner, () => getMovementDeferral(transferId));
   const [purchaseId] = await fixtureSql<{ id: string }[]>`
