@@ -7,9 +7,10 @@
   top: 0;
   align-self: flex-start;
   flex-shrink: 0;
-  width: 248px;
+  /* A phone on its side puts the notch on this edge; the column widens past it. */
+  width: calc(248px + env(safe-area-inset-left, 0px));
   height: 100dvh;
-  padding: 22px 14px 18px;
+  padding: 22px 14px 18px calc(14px + env(safe-area-inset-left, 0px));
   background-color: var(--color-panel-solid);
   border-right: 1px solid var(--gray-a4);
   overflow: hidden;
