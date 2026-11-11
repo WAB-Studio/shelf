@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { memberDebtBalances, pendingBetween, type MemberDebtEntry } from "./member-debts";
+import { memberDebtBalances, type MemberDebtEntry } from "./member-debts";
 import { recordMemberDebtSchema } from "./validation/member-debt";
 
 const papa = "22222222-2222-4222-8222-222222222222";
@@ -29,8 +29,6 @@ test("a payment takes from the debt it pays", () => {
   assert.deepEqual(balances, [
     { debtorMemberId: papa, debtorName: "Papá", creditorMemberId: adrian, creditorName: "Adrian", currency: "COP", pendingCents: 150_000_00 },
   ]);
-  assert.equal(pendingBetween(balances, papa, adrian, "COP"), 150_000_00);
-  assert.equal(pendingBetween(balances, adrian, papa, "COP"), 0);
 });
 
 test("debts both ways net into one figure, whichever id sorts first", () => {

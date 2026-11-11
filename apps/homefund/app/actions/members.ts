@@ -213,7 +213,8 @@ export const restoreMemberAction = authActionClient
 // RF-11: the engine refuses to drop a person whose user created a movement, owns
 // one or owns an account. The refusal is a 23514 the trigger raises, not a row
 // count, so it needs its own catch — the zero-row path still means the caller
-// does not lead this group.
+// does not lead this group. A person named in a debt between members (RF-183) is
+// history too: the reference refuses with a 23503.
 export const deleteMemberAction = authActionClient
   .inputSchema(deleteMemberSchema)
   .action(async ({ parsedInput: { memberId } }) => {
@@ -222,7 +223,8 @@ export const deleteMemberAction = authActionClient
     try {
       deleted = await deleteMember({ groupId, memberId });
     } catch (error) {
-      if (pgErrorCode(error) === "23514") throw new ActionError("errors.memberHasHistory");
+      const code = pgErrorCode(error);
+      if (code === "23514" || code === "23503") throw new ActionError("errors.memberHasHistory");
       throw error;
     }
     if (!deleted) notLeader();

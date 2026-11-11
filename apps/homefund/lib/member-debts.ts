@@ -56,17 +56,3 @@ export function memberDebtBalances(entries: MemberDebtEntry[]): MemberDebtBalanc
     })
     .sort((a, b) => b.pendingCents - a.pendingCents || a.debtorName.localeCompare(b.debtorName));
 }
-
-/** What `debtorMemberId` still owes `creditorMemberId` in `currency`; zero when nothing, or the other way round. */
-export function pendingBetween(
-  balances: MemberDebtBalance[],
-  debtorMemberId: string,
-  creditorMemberId: string,
-  currency: CurrencyCode,
-): number {
-  return (
-    balances.find(
-      (b) => b.debtorMemberId === debtorMemberId && b.creditorMemberId === creditorMemberId && b.currency === currency,
-    )?.pendingCents ?? 0
-  );
-}

@@ -5,6 +5,7 @@ import { z } from "zod";
 
 import { getMemberDebts, recordMemberDebt } from "@/db/queries/member-debts";
 import { ActionError } from "@/lib/errors";
+import { parseForm } from "@/lib/mcp/write-tools";
 import { centsToDecimal } from "@/lib/money";
 import { MEMBER_DEBT_KINDS, recordMemberDebtSchema } from "@/lib/validation/member-debt";
 
@@ -43,10 +44,8 @@ export function registerMemberDebtTools(server: McpServer, run: Run, t: Say): vo
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
     },
     (input, ctx) =>
-      run(ctx, async () => {
-        const verdict = recordMemberDebtSchema.safeParse({ ...input, amount: centsToDecimal(input.amountCents), description: input.description ?? null });
-        if (!verdict.success) throw new ActionError(verdict.error.issues[0].message);
-        return recordMemberDebt(verdict.data);
-      }),
+      run(ctx, () =>
+        recordMemberDebt(parseForm(recordMemberDebtSchema, { ...input, amount: centsToDecimal(input.amountCents), description: input.description ?? null })),
+      ),
   );
 }

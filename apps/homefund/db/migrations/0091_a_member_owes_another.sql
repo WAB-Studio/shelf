@@ -37,5 +37,5 @@ REVOKE ALL ON TABLE "finances"."member_debts" FROM public, anon, authenticated, 
 GRANT SELECT (id, group_id, kind, debtor_member_id, creditor_member_id, amount_cents, currency, occurred_on, description, created_by, created_at) ON TABLE "finances"."member_debts" TO authenticated;--> statement-breakpoint
 GRANT INSERT (group_id, kind, debtor_member_id, creditor_member_id, amount_cents, currency, occurred_on, description) ON TABLE "finances"."member_debts" TO authenticated;--> statement-breakpoint
 GRANT DELETE ON TABLE "finances"."member_debts" TO authenticated;--> statement-breakpoint
-CREATE TRIGGER capture_audit AFTER INSERT OR UPDATE OR DELETE ON "finances"."member_debts"
+CREATE TRIGGER capture_audit AFTER INSERT OR DELETE ON "finances"."member_debts"
   FOR EACH ROW EXECUTE FUNCTION private.capture_audit();
