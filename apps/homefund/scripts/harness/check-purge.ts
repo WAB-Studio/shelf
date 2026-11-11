@@ -1,5 +1,5 @@
 /**
- * M21: `purgeIdentity` removes a fund leader together with what the fund's own accounts
+ * `purgeIdentity` removes a fund leader together with what the fund's own accounts
  * and scope hold — debt terms, installment plans, statements, budgets, planned payments,
  * recurring rules, movements — without a RESTRICT stopping the group's cascade, and takes
  * nothing that belongs to anyone else.

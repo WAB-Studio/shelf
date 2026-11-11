@@ -10,8 +10,8 @@ import { DEFAULT_LOCALE } from "@/lib/locales";
  * "/" and the proxy negotiates the language on launch exactly as it does for any
  * other visit, which is what keeps the installed app on the person's own locale.
  *
- * The colours are the ones the interface already paints with: the warm off-white
- * `theme.css` writes over Radix's background, and the accent green of the mark.
+ * `theme_color` is the interface's violet accent; `background_color` is the splash
+ * screen behind the icon while the app launches.
  */
 export default async function manifest(): Promise<MetadataRoute.Manifest> {
   const [common, metadata] = await Promise.all([

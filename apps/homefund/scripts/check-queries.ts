@@ -3797,7 +3797,7 @@ async function cashSuite(): Promise<void> {
     `before ${before.targetCashAccountId}/${before.reason}, first ${first.createdCashAccount}, second ${second.createdCashAccount}, stored [${found_(createdRows)}]`,
   );
 
-  // M22. The lock is taken from outside the app on the exact key the contract names
+  // The lock is taken from outside the app on the exact key the contract names
   // (`cash:` + the scope id), so a withdrawal that takes the same lock must queue behind it
   // and one that takes none, or another key, runs straight through. Polling `pg_locks` says
   // when the app is waiting; nothing here sleeps for a fixed time.
@@ -6737,7 +6737,7 @@ async function e6Suite(): Promise<void> {
   );
 }
 
-// M26: the import's read side names each row's scope and the caller's own id and fund.
+// The import's read side names each row's scope and the caller's own id and fund.
 async function importScopeOwnerSuite(
   userId: string,
   scope: HarnessScope,
@@ -7563,7 +7563,7 @@ type MovementResult = {
   validationErrors?: unknown;
 };
 
-// M42: a create sent twice books once, an edit loaded before another person's save is refused.
+// A create sent twice books once, an edit loaded before another person's save is refused.
 async function idempotencySuite(): Promise<void> {
   console.log("");
   const tag = randomUUID().slice(0, 8);
@@ -7908,7 +7908,7 @@ async function recurringVersionSuite(): Promise<void> {
   );
 }
 
-// M44: two payments of one card each book their own movement, and a resent payment books once.
+// Two payments of one card each book their own movement, and a resent payment books once.
 async function debtPaymentSuite(): Promise<void> {
   console.log("");
   const tag = randomUUID().slice(0, 8);
@@ -7999,7 +7999,7 @@ async function debtPaymentSuite(): Promise<void> {
     `${both.length} movement(s), x = ${JSON.stringify(x)}, y = ${JSON.stringify(y)}`,
   );
 
-  // M53: a card in credit owes nothing; it never adds to what the screen says is owed.
+  // A card in credit owes nothing; it never adds to what the screen says is owed.
   const holder = await createMembershipFreeUser();
   const OWED = 50_000;
   const OVERPAID = 50_000;
@@ -8536,7 +8536,7 @@ async function accountPlannedVersionSuite(): Promise<void> {
   );
 }
 
-// M52: deleting the account or category a learned rule trusts keeps the rule and forgets the target (Q8 a).
+// Deleting the account or category a learned rule trusts keeps the rule and forgets the target.
 async function learnedRuleSuite(): Promise<void> {
   console.log("");
   const tag = randomUUID().slice(0, 8);
@@ -8870,7 +8870,7 @@ async function learnedRuleSuite(): Promise<void> {
   }
 }
 
-// M49: a rule the night's run pauses says why, and a pause made while the run is mid-flight stays.
+// A rule the night's run pauses says why, and a pause made while the run is mid-flight stays.
 // The run is always scoped to the fixture's own user, so no other tenant's due rule is booked.
 async function recurringPauseSuite(): Promise<void> {
   console.log("");
@@ -12094,7 +12094,7 @@ async function debtCreditSideSuite(): Promise<void> {
   );
 }
 
-// O5-M2: what a count that takes money out of an account, the first and last day of a range, and an English seed owe
+// What a count that takes money out of an account, the first and last day of a range, and an English seed owe
 // the person (RF-137, RF-138, RF-118, RF-50, RF-46). Each block is a survivor of an earlier mutation round.
 async function o5m2SurvivorsSuite(): Promise<void> {
   console.log("");
@@ -14464,7 +14464,7 @@ async function o7m3ReaderPendingSuite(userId: string, fellow: HarnessUser): Prom
   );
 }
 
-// O8-M5: what o7's mutation run left alive in «Revisar el mes»: a count's adjustment beside an
+// What a mutation run left alive in «Revisar el mes»: a count's adjustment beside an
 // equal movement is no twin, and a movement over the usual in two categories reports its largest split.
 async function o8m5ReviewSurvivorsSuite(): Promise<void> {
   console.log("");
