@@ -77,7 +77,7 @@ for (const width of [360, 1280]) {
     await page.goto(`/es/reports/review?month=${month}`);
     await expect(page.getByRole("heading", { level: 1, name: /^Revisar / })).toBeVisible();
     await expect(page.getByText("¿Es correcto este monto?")).toBeVisible();
-    await expect(page.getByText(/Lo usual en Mercado .*: \$ 100\.000 \(mediana de los últimos 6 meses\)/)).toBeVisible();
+    await expect(page.getByText(/Lo usual en Mercado .*:\s\$\s100\.000\s\(mediana de los últimos 6 meses\)/)).toBeVisible();
     await expect(page.getByText("¿Se registró dos veces?")).toHaveCount(1);
     await expect(page.getByText("2 movimientos iguales")).toBeVisible();
     await expect(page.getByText("¿Leímos bien este monto?")).toBeVisible();
