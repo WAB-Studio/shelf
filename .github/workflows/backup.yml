@@ -25,13 +25,18 @@ jobs:
           ssh-key: ${{ secrets.BACKUP_DEPLOY_KEY }}
           path: copias
           fetch-depth: 1
+      # Both come from outside the Ubuntu mirrors, which the runners fail to resolve for hours at a time.
       - name: Install age and the PostgreSQL 17 client
         run: |
+          curl -fsSL -o "$RUNNER_TEMP/age.tgz" https://github.com/FiloSottile/age/releases/download/v1.2.1/age-v1.2.1-linux-amd64.tar.gz
+          echo "7df45a6cc87d4da11cc03a539a7470c15b1041ab2b396af088fe9990f7c79d50  $RUNNER_TEMP/age.tgz" | sha256sum -c -
+          sudo tar -xzf "$RUNNER_TEMP/age.tgz" -C /usr/local/bin --strip-components=1 age/age
           sudo install -d /usr/share/postgresql-common/pgdg
           sudo curl -fsSL -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc
           echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq age postgresql-client-17
+          sudo apt-get update -qq -o Dir::Etc::sourcelist=/etc/apt/sources.list.d/pgdg.list -o Dir::Etc::sourceparts=- -o APT::Get::List-Cleanup=0
+          sudo apt-get install -y -qq --no-install-recommends postgresql-client-17
+          age --version
       - name: Back up
         env:
           MIGRATION_DATABASE_URL: ${{ secrets.MIGRATION_DATABASE_URL }}
