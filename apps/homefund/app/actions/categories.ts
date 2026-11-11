@@ -2,9 +2,8 @@
 
 import { refresh } from "next/cache";
 
-import { createCategory, deleteCategory, updateCategory } from "@/db/queries/categories";
-import type { CategoryScope } from "@/db/queries/categories";
-import { getUserGroup } from "@/db/queries/groups";
+import { deleteCategory, updateCategory } from "@/db/queries/categories";
+import { categoryConstraintErrorKey, openCategory } from "@/db/queries/ledger-write";
 import { pgErrorCode } from "@/lib/db-error";
 import { ActionError } from "@/lib/errors";
 import { authActionClient } from "@/lib/safe-action";
@@ -14,46 +13,16 @@ import {
   updateCategorySchema,
 } from "@/lib/validation/category";
 
-// The trigger raises one code, 23514, for four refusals; three are
-// nesting-shaped and the fourth, a kind mismatch, is the one the parent picker
-// already prevents. A null parent leaves the trigger before it can raise at
-// all, so that branch only guards against the trigger changing shape.
-function categoryConstraintErrorKey(parentId: string | null): string {
-  return parentId ? "errors.categoryNesting" : "errors.categoryKindMismatch";
-}
-
 /**
- * Creates a category (RF-63, RF-27). Depth, kind agreement and same-scope
- * parentage are the trigger's and the composite foreign key's to enforce;
- * this action only turns their shared refusal code into a sentence. The scope
- * is the caller's group when they belong to one, otherwise their personal set.
+ * Creates a category (RF-63, RF-27); the write is `openCategory`'s, shared with `/mcp`.
  */
 export const createCategoryAction = authActionClient
   .inputSchema(createCategoryInputSchema)
-  .action(async ({ parsedInput: { placement, ...input }, ctx }) => {
-    let scope: CategoryScope;
-    if (placement === "personal") {
-      scope = { ownerUserId: ctx.user.id };
-    } else {
-      const group = await getUserGroup();
-      if (placement === "group" && !group) throw new ActionError("errors.notFound");
-      scope = group ? { groupId: group.id } : { ownerUserId: ctx.user.id };
-    }
-    const parsedInput = input;
-
-    let categoryId: string;
-    try {
-      ({ categoryId } = await createCategory({ ...parsedInput, scope }));
-    } catch (error) {
-      if (pgErrorCode(error) === "42501") throw new ActionError("errors.notLeader");
-      if (pgErrorCode(error) === "23514") {
-        throw new ActionError(categoryConstraintErrorKey(parsedInput.parentId));
-      }
-      throw error;
-    }
+  .action(async ({ parsedInput, ctx }) => {
+    const created = await openCategory(parsedInput, ctx.user.id);
 
     refresh();
-    return { categoryId };
+    return created;
   });
 
 /**

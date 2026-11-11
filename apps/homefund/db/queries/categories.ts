@@ -8,6 +8,7 @@ import { categories } from "@/db/schema";
 import type { Category } from "@/db/schema";
 import type { Transaction } from "@/db/session";
 import { requireUser, withUserDb, withUserDbOrTx } from "@/db/session";
+import { nextCategoryColor } from "@/lib/fund/category-color";
 
 type CategoryKind = Category["kind"];
 
@@ -235,6 +236,18 @@ async function listUsedColorsByPlacement(
     rows.flatMap((row) => (row.color && (row.groupId !== null) === inGroup ? [row.color] : []));
 
   return { personal: colorsOf(false), group: colorsOf(true) };
+}
+
+/**
+ * The colour the categories form opens with for a placement: the first one the scope has not
+ * taken. A surface with no form to open reads it here, so no second rule can drift from the form's.
+ */
+export async function freeCategoryColor(userId: string, placement?: "personal" | "group"): Promise<string> {
+  return withUserDb(async (tx) => {
+    const group = await callerGroupInfo(tx, userId);
+    const used = await listUsedColorsByPlacement(userId, group?.id ?? null, tx);
+    return nextCategoryColor(placement === "personal" || !group ? used.personal : used.group);
+  });
 }
 
 export async function createCategory(
