@@ -2,8 +2,6 @@
 
 import { refresh } from "next/cache";
 
-import { z } from "zod";
-
 import {
   categoryFitsRuleAccount,
   createRecurringRule,
@@ -13,9 +11,9 @@ import {
   updateRecurringRule,
 } from "@/db/queries/recurring-rules";
 import { getSettlementCurrencies } from "@/db/queries/transactions";
+import { assertRefined, requireMinor } from "@/lib/action-amounts";
 import { pgErrorCode } from "@/lib/db-error";
 import { ActionError } from "@/lib/errors";
-import { parseAmount } from "@/lib/money";
 import { authActionClient } from "@/lib/safe-action";
 import {
   createRecurringRuleSchema,
@@ -39,16 +37,8 @@ async function toMinor(
   accounts: { fromAccountId: string | null; toAccountId: string | null },
 ): Promise<number> {
   const settlement = await getSettlementCurrencies(accounts);
-  const verdict = z
-    .custom<{ amount: string }>()
-    .superRefine(refineRuleAmount(settlement))
-    .safeParse({ amount });
-
-  if (!verdict.success) throw new ActionError(verdict.error.issues[0].message);
-
-  const minor = parseAmount(amount);
-  if (minor === null) throw new ActionError("errors.unexpected");
-  return minor;
+  assertRefined({ amount }, refineRuleAmount(settlement));
+  return requireMinor(amount);
 }
 
 // Weekly advances from `next_run_on` and carries no day anchor; the DB check

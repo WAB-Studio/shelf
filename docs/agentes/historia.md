@@ -240,3 +240,19 @@ Each entry names the rule and the file it lives in now.
 - Measured over 30 days of CI reds (`private/analisis-fallos-ci.md`): 8 builds failed to download Google Fonts, 9 `supabase start` runs failed on docker networking, 5 WordBook specs gave 18 red attempts and 0 bugs, all mobile-only timing. Decided by the user 2026-11-10: simplify the testing a lot.
 - Fonts moved to `next/font/local` (woff2 committed in each app's `app/fonts`, latin subset, OFL); `supabase-local.sh start` retries twice with `stop --no-backup` between tries.
 - Deleted: `sw-nuevo-con-shell` (10 reds; its route callback outlived the test and failed `sw-reglas:41` in the next one), `phrase:78`, `critica-despliegue:115`, `frase-notas:305` (each covered by a neighbour in its file).
+
+## E2E on the build (`docs/agentes/verificacion.md` § CI shape), 2026-11-11
+
+- Symptom: HomeFund `e2e-shard (4)` printed «○ Compiling /[locale]/planning/payments ...» once and never again; its 40 next
+  tests timed out at 35 s each. Runs 42965031182 (job 130340204247, and its retry 130350132889) and 42966314123
+  (job 130344527741, 1444 s in the shard step).
+- Cause: all three restored the same `.next/dev/cache` (`next-homefund-shard4-…-a06e9b6f`), saved by run 42960032183
+  after a stop that took 1 s: Turbopack's dev cache persisted from an interrupted server. The same commit's
+  shard 4 with no cache to restore (run 42966709608) passed in 105 s.
+- Before, shard 4's test step: 60 s with a good dev cache, 105 s cold, 1444 s on the bad cache.
+- Fix: the suite runs on `next start` over the build the job already makes (as GoalLog's and WordBook's do since
+  2026-10-10); only `.next/cache`, written whole by `next build`, is cached; the job's timeout drops from 30 to 15 min.
+- After (run of #861, warm build cache): the test step took 53, 45, 40 and 40 s for shards 1 to 4, against 136, 98, 136
+  and 105 s on cold dev (run 42966709608); the build 8 to 14 s. Shard 1 ran its 47 tests in 51.7 s, 2.2 min on dev.
+- The build caught what dev hid: accepting an invitation left the tab titled «HomeFund», because an action's
+  `refresh()` does not redraw the head there. The card now calls `router.refresh()` itself.
