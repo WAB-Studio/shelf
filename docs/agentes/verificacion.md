@@ -13,8 +13,10 @@ The why: `docs/agentes/historia.md` § Verification.
 - Run `next build` at a milestone, never per step. CI builds every app on every pull request that reaches it
   (`build-orbit`, `build-pulsar`, voyager inside `voyager-e2e`); preview deployments are off, so those jobs are the
   only place a broken build is caught before production.
-- Make the orbit suite run less, or shard it across harness lanes. Never micro-optimise its install: setup is 48 of
-  its 1099 seconds.
+- Make the orbit suite run less, or shard it across harness lanes. At 8 shards setup is 189 of a shard's 574 s
+  (run 42927479636), so cache it: `.github/actions/npm-install` restores `node_modules` by lockfile and Node,
+  `.github/actions/playwright-chromium` the browser, and each orbit shard its own Turbopack build and dev caches.
+- Install with those two actions in a new job, never a bare `npm ci` or `playwright install`.
 - Append an assertion at the end of its suite, in `apps/homefund/scripts/check-queries.ts` and
   `apps/homefund/scripts/check-http.ts` alike. `Q` and `H` count calls at runtime; inserting in the middle renumbers
   everything below.
