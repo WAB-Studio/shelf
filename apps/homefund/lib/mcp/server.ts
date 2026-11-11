@@ -11,7 +11,7 @@ import { getMonthReview } from "@/db/queries/month-review";
 import { getSpendingPatterns, GROWTH_PERCENT } from "@/db/queries/spending-patterns";
 import { importStatement, previewStatement, StatementError } from "@/db/queries/statement-import";
 import { actAsCredentialOwner } from "@/db/session";
-import { lastClosedMonth } from "@/lib/dates";
+import { MONTH_PATTERN, lastClosedMonth } from "@/lib/dates";
 import { ABOVE_USUAL_FACTOR, USUAL_WINDOW_MONTHS } from "@/lib/month-review-rules";
 import { ActionError } from "@/lib/errors";
 import { env } from "@/lib/env";
@@ -26,7 +26,6 @@ import pkg from "../../package.json";
 // The configured origin: issuer, resource and the 401's metadata link on the host a request does not name.
 export const ISSUER = env.NEXT_PUBLIC_SITE_URL.replace(/\/+$/, "");
 
-export const MCP_URL = `${ISSUER}/mcp`;
 
 export const RESOURCE_METADATA_PATH = "/.well-known/oauth-protected-resource/mcp";
 
@@ -70,7 +69,7 @@ async function run(ctx: ServerContext, load: (owner: string) => Promise<unknown>
   }
 }
 
-const MONTH = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/);
+const MONTH = z.string().regex(MONTH_PATTERN);
 
 function registerReadTools(server: McpServer): void {
   server.registerTool(
