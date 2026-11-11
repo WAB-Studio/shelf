@@ -66,6 +66,8 @@ export const groupMembers = finances.table(
     uniqueIndex("group_members_group_invite_email_unique")
       .on(table.groupId, sql`lower(${table.inviteEmail})`)
       .where(sql`${table.inviteEmail} is not null and ${table.archivedAt} is null`),
+    // The target of accounts_holder_member_fk (RF-181): a member is named together with their group.
+    uniqueIndex("group_members_id_group_unique").on(table.id, table.groupId),
     index("group_members_group_id_idx").on(table.groupId),
     index("group_members_user_id_idx").on(table.userId),
     // The self-disjunct mirrors the owner exception on accounts and categories:

@@ -16,7 +16,7 @@ import {
   reviseMovement,
 } from "@/db/queries/ledger-write";
 import { getTransactionById, listTransactions, type TransactionListRow, type TransactionSplitInput } from "@/db/queries/transactions";
-import { pgErrorCode } from "@/lib/db-error";
+import { pgConstraintName, pgErrorCode } from "@/lib/db-error";
 import { ActionError } from "@/lib/errors";
 import { CATEGORY_COLORS } from "@/lib/fund/category-color";
 import { centsToDecimal, parseAmount } from "@/lib/money";
@@ -256,6 +256,7 @@ export function registerLedgerTools(server: McpServer, run: Run, t: Say): void {
         institution: z.string().nullable().default(null).describe(d("institution")),
         lastFour: z.string().optional().describe(d("lastFour")),
         parentAccountId: z.string().nullable().default(null).describe(d("parentAccountId")),
+        holderMemberId: z.string().nullable().default(null).describe(d("holderMemberId")),
       }),
       annotations: write,
     },
@@ -282,6 +283,7 @@ export function registerLedgerTools(server: McpServer, run: Run, t: Say): void {
         institution: z.string().nullable().optional().describe(d("institution")),
         lastFour: z.string().nullable().optional().describe(d("lastFour")),
         parentAccountId: z.string().nullable().optional().describe(d("parentAccountId")),
+        holderMemberId: z.string().nullable().optional().describe(d("holderMemberId")),
       }),
       annotations: { ...write, idempotentHint: true },
     },
@@ -302,6 +304,7 @@ export function registerLedgerTools(server: McpServer, run: Run, t: Say): void {
           institution: pick("institution", current.institution) ?? "",
           lastFour: pick("lastFour", current.lastFour) ?? undefined,
           parentAccountId: pick("parentAccountId", current.parentAccountId ?? null),
+          holderMemberId: pick("holderMemberId", current.holderMemberId ?? null),
           settlementCurrency: pick("settlementCurrency", current.settlementCurrency),
           amount: centsToDecimal(input.openingBalanceCents === undefined ? storedCents : (input.openingBalanceCents as number)),
           balanceOn: pick("balanceOn", current.initialBalanceOn),
@@ -313,6 +316,9 @@ export function registerLedgerTools(server: McpServer, run: Run, t: Say): void {
         try {
           updated = await updateAccount({ ...form, expectedUpdatedAt: form.expectedUpdatedAt ?? input.expectedUpdatedAt, amountMinor });
         } catch (error) {
+          // RF-181: a holder that is no member of this fund, or on a personal account.
+          if (pgConstraintName(error) === "accounts_holder_member_fk" || pgConstraintName(error) === "accounts_holder_in_fund")
+            throw new ActionError("accounts.errors.holderInvalid");
           if (pgErrorCode(error) === "42501") throw new ActionError("errors.notLeader");
           if (pgErrorCode(error) === "23514") throw new ActionError("accounts.errors.currencyInvalid");
           if (pgErrorCode(error) === "AC001") throw new ActionError("accounts.errors.currencyLocked");

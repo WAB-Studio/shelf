@@ -121,7 +121,11 @@ export function AccountsTable({
           {/* One scope, never both: a personal account names its owner, a
               group account the group (RF-60). Another member's is theirs by name. */}
           <Text size="2" color="gray">
-            {row.ownerUserId ? ownerLabel(row) : t("ownerFund")}
+            {row.ownerUserId
+              ? ownerLabel(row)
+              : row.holderName
+                ? t("holderOf", { name: row.holderName })
+                : t("ownerFund")}
           </Text>
         </Flex>
         ),

@@ -120,6 +120,7 @@ export function AccountsScreen({
   pendingSettlements,
   archived,
   newSubtype,
+  members,
 }: {
   accounts: AccountRow[];
   groupName: string | null;
@@ -128,6 +129,8 @@ export function AccountsScreen({
   archived: boolean;
   // The class a caller arrived asking to open, already validated by the page.
   newSubtype?: (typeof ACCOUNT_SUBTYPES)[number] | null;
+  // The fund members a fund account can be held by (RF-181).
+  members: { id: string; name: string }[];
 }) {
   const t = useTranslations("accounts");
   const tKey = useTranslations();
@@ -140,6 +143,7 @@ export function AccountsScreen({
   // Postgres returns, these two only narrow the array already in hand.
   const ownerFilter = searchParams.get("owner") ?? ANY;
   const institutionFilter = searchParams.get("institution") ?? ANY;
+  const holderFilter = searchParams.get("holder") ?? ANY;
 
   // "new" and a row share one dialog instance; its own key resets the form. A
   // named class opens it on arrival, so the tile that asked for it lands on the
@@ -215,8 +219,19 @@ export function AccountsScreen({
     if (institutionFilter !== ANY && account.institution !== institutionFilter) {
       return false;
     }
+    if (holderFilter !== ANY && account.holderMemberId !== holderFilter) return false;
     return true;
   });
+
+  // The holders present in this tab's accounts (RF-181); the filter appears only when one exists.
+  const holderOptions = Array.from(
+    new Map(
+      accounts.flatMap((account) =>
+        account.holderMemberId && account.holderName ? [[account.holderMemberId, account.holderName] as const] : [],
+      ),
+    ),
+    ([value, label]) => ({ value, label }),
+  ).sort((a, b) => a.label.localeCompare(b.label));
 
   // The entities present in this tab's accounts, named once each, sorted.
   const institutionOptions = Array.from(
@@ -364,6 +379,15 @@ export function AccountsScreen({
               ]}
               width={190}
             />
+            {holderOptions.length > 0 && (
+              <FilterSelect
+                label={t("holderFilter")}
+                value={holderFilter}
+                onValueChange={(value) => patchQuery({ holder: value === ANY ? null : value })}
+                items={[{ value: ANY, label: t("holderAny") }, ...holderOptions]}
+                width={190}
+              />
+            )}
           </FilterBar>
 
           {!archived && deskSections.length > 0 && totalsOf(deskSections)}
@@ -514,6 +538,7 @@ export function AccountsScreen({
         account={formTarget === "new" ? undefined : (formTarget ?? undefined)}
         defaultSubtype={newSubtype ?? undefined}
         parentCandidates={accounts}
+        members={members}
       />
 
       {billedTarget !== null && (
@@ -647,6 +672,11 @@ function AccountCard({
           {account.foreignOwner && (
             <Text size="2" color="gray">
               {ownerLabel}
+            </Text>
+          )}
+          {account.holderName && (
+            <Text size="2" color="gray">
+              {t("holderOf", { name: account.holderName })}
             </Text>
           )}
           {account.institution && (

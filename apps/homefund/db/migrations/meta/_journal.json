@@ -610,6 +610,13 @@
       "when": 1794365583731,
       "tag": "0086_a_loan_is_a_liability",
       "breakpoints": true
+    },
+    {
+      "idx": 88,
+      "version": "7",
+      "when": 1794371686233,
+      "tag": "0088_a_fund_account_names_its_holder",
+      "breakpoints": true
     }
   ]
 }

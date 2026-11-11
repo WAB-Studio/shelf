@@ -25,6 +25,9 @@ export type AccountRow = {
   isShared: boolean;
   // The account this one is a pocket of (RF-173); null for an account of its own.
   parentAccountId?: string | null;
+  // The fund member who holds this account (RF-181), with their name; both null for an account of everyone.
+  holderMemberId?: string | null;
+  holderName?: string | null;
   settlementCurrency: CurrencyCode;
   initialBalanceCents: number;
   initialBalanceOn: string;
@@ -115,6 +118,8 @@ export async function listAccounts(
         groupId: accounts.groupId,
         isShared: accounts.isShared,
         parentAccountId: accounts.parentAccountId,
+        holderMemberId: accounts.holderMemberId,
+        holderName: sql<string | null>`(select gm.name from group_members gm where gm.id = accounts.holder_member_id)`,
         settlementCurrency: accounts.settlementCurrency,
         initialBalanceCents: accounts.initialBalanceCents,
         initialBalanceOn: accounts.initialBalanceOn,
@@ -187,6 +192,7 @@ export type CreateAccountArgs = {
   institution: string | null;
   lastFour?: string | null;
   parentAccountId?: string | null;
+  holderMemberId?: string | null;
   // The currency the account settles in, and the opening amount as an integer
   // in that currency's minor unit (RF-121, RNF-05).
   settlementCurrency: CurrencyCode;
@@ -214,6 +220,7 @@ async function insertAccount(
     institution,
     lastFour,
     parentAccountId,
+    holderMemberId,
     settlementCurrency,
     amountMinor,
     balanceOn,
@@ -234,6 +241,7 @@ async function insertAccount(
       institution: institution === "" ? null : institution,
       lastFour: lastFour ? lastFour : null,
       parentAccountId: parentAccountId ?? null,
+      holderMemberId: holderMemberId ?? null,
       settlementCurrency,
       // A liability opens negative so net worth stays a plain sum (RNF-05). The
       // amount arrives already in this currency's minor unit and is written as
@@ -258,6 +266,7 @@ export type UpdateAccountArgs = {
   institution: string | null;
   lastFour?: string | null;
   parentAccountId?: string | null;
+  holderMemberId?: string | null;
   settlementCurrency: CurrencyCode;
   amountMinor: number;
   balanceOn: string;
@@ -277,6 +286,7 @@ export async function updateAccount({
   institution,
   lastFour,
   parentAccountId,
+  holderMemberId,
   settlementCurrency,
   amountMinor,
   balanceOn,
@@ -294,6 +304,8 @@ export async function updateAccount({
         lastFour: lastFour ? lastFour : null,
         // Absent leaves the placement as it is; null takes the account out of its parent.
         ...(parentAccountId === undefined ? {} : { parentAccountId }),
+        // Absent leaves the holder; null returns the account to everyone (RF-181).
+        ...(holderMemberId === undefined ? {} : { holderMemberId }),
         // Granted for update since 0031, so the opening amount and the unit it
         // is counted in always change together.
         settlementCurrency,

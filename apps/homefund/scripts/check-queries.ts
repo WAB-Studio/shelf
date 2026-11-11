@@ -4133,6 +4133,7 @@ async function main(): Promise<void> {
   await mcpInboxSuite();
   await mcpInboxReviewSuite();
   await accountLoanSuite();
+  await accountHolderSuite();
 }
 
 // A member recorded without a login is someone in the fund: a leader whose fund holds one is not alone, so an
@@ -15238,7 +15239,7 @@ async function mcpDoorSuite(): Promise<void> {
   assert(
     next("RF-144: /mcp answers 401 with no key, an unknown one or a webhook's, and lists its tools to a key for Claude"),
     anonymous.status === 401 && forged.status === 401 && webhookKey.status === 401 &&
-      JSON.stringify(names) === JSON.stringify(["accept_deliveries", "create_account", "create_category", "delete_movement", "import_statement", "list_accounts", "list_categories", "list_inbox", "list_movements", "merge_movements", "move_category_movements", "preview_statement", "record_movement", "reject_deliveries", "review_month", "update_account", "update_category", "update_movement"]),
+      JSON.stringify(names) === JSON.stringify(["accept_deliveries", "create_account", "create_category", "delete_movement", "import_statement", "list_accounts", "list_categories", "list_inbox", "list_members", "list_movements", "merge_movements", "move_category_movements", "preview_statement", "record_movement", "reject_deliveries", "review_month", "update_account", "update_category", "update_movement"]),
     `no key ${anonymous.status}, unknown key ${forged.status}, webhook key ${webhookKey.status}, tools ${JSON.stringify(names)}`,
   );
 
@@ -17416,4 +17417,107 @@ async function accountLoanSuite(): Promise<void> {
     code = pgErrorCode(error) ?? "unknown";
   }
   assert(next("RF-178: the database refuses a loan on an asset"), code === "23514", `code ${code}`);
+}
+
+// RF-181: a fund account names its holder, a member of that fund; what moves between a held account and an
+// account of everyone is that member's contribution.
+async function accountHolderSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const range = currentMonthRange();
+  const leader = await createMembershipFreeUser();
+  const outsider = await createMembershipFreeUser();
+  const ids = { group: randomUUID(), other: randomUUID(), lead: randomUUID(), mama: randomUUID(), stranger: randomUUID() };
+  await fixtureSql.begin(async (tx) => {
+    await tx`insert into groups (id, name, cash_mode) values (${ids.group}, ${`Harness rf181 fondo ${tag}`}, 'shared'), (${ids.other}, ${`Harness rf181 otro ${tag}`}, 'shared')`;
+    await tx`
+      insert into group_members (id, group_id, user_id, name, role)
+      values (${ids.lead}, ${ids.group}, ${leader.id}, 'Harness rf181 Adrian', 'leader'),
+             (${ids.stranger}, ${ids.other}, ${outsider.id}, 'Harness rf181 Ajeno', 'leader')`;
+    await tx`insert into group_members (id, group_id, name, role) values (${ids.mama}, ${ids.group}, 'Harness rf181 Mama', 'member')`;
+  });
+  track("groups", ids.group);
+  track("groups", ids.other);
+  for (const member of [ids.lead, ids.mama, ids.stranger]) track("group_members", member);
+
+  const base = {
+    kind: "asset" as const, subtype: "bank" as const, ownerUserId: null, groupId: ids.group, isShared: true, institution: null,
+    settlementCurrency: BASE_CURRENCY, balanceOn: "2026-01-01",
+  };
+  const open = async (name: string, extra: Partial<Parameters<typeof createAccount>[0]> = {}) => {
+    const { accountId } = await asUser(leader, () => createAccount({ ...base, name: `Harness rf181 ${name} ${tag}`, amountMinor: 0, ...extra }));
+    track("accounts", accountId);
+    return accountId;
+  };
+  const refusedWith = async (attempt: () => Promise<unknown>) => {
+    try {
+      await attempt();
+      return "none";
+    } catch (error) {
+      return pgErrorCode(error) ?? "unknown";
+    }
+  };
+  const bbva = await open("bbva", { holderMemberId: ids.mama });
+  const pot = await open("caja");
+  const listed = async () => (await asUser(leader, () => listAccounts({ archived: false }))).find((row) => row.id === bbva);
+  const first = await listed();
+  assert(
+    next("RF-181: a fund account opens with a holder from its own fund, and the list answers the member and their name"),
+    first?.holderMemberId === ids.mama && first.holderName === "Harness rf181 Mama",
+    `row ${JSON.stringify(first && [first.holderMemberId, first.holderName])}`,
+  );
+
+  const patch = (holderMemberId: string | null) =>
+    asUser(leader, () =>
+      updateAccount({
+        accountId: bbva, name: `Harness rf181 bbva ${tag}`, subtype: "bank", isShared: true, institution: null,
+        settlementCurrency: BASE_CURRENCY, amountMinor: 0, balanceOn: "2026-01-01", holderMemberId,
+      }),
+    );
+  await patch(null);
+  const cleared = await listed();
+  await patch(ids.mama);
+  const reset = await listed();
+  assert(
+    next("RF-181: the holder is cleared with null and set again"),
+    cleared?.holderMemberId === null && cleared.holderName === null && reset?.holderMemberId === ids.mama,
+    `cleared ${JSON.stringify(cleared?.holderMemberId)}, reset ${JSON.stringify(reset?.holderMemberId)}`,
+  );
+
+  const otherFund = await refusedWith(() => patch(ids.stranger));
+  const onCreate = await refusedWith(() => open("ajeno", { holderMemberId: ids.stranger }));
+  const personal = await refusedWith(() =>
+    asUser(leader, () =>
+      createAccount({ ...base, ownerUserId: leader.id, groupId: null, isShared: false, name: `Harness rf181 personal ${tag}`, amountMinor: 0, holderMemberId: ids.lead }),
+    ),
+  );
+  assert(
+    next("RF-181: the database refuses a holder from another fund, on an edit and on a create, and a holder on a personal account"),
+    otherFund === "23503" && onCreate === "23503" && personal === "23514",
+    `edit ${otherFund}, create ${onCreate}, personal ${personal}; expected 23503, 23503 and 23514`,
+  );
+
+  const move = async (fromAccountId: string, toAccountId: string, amountCents: number) => {
+    const { transactionId } = await asUser(leader, () =>
+      createTransaction({
+        fromAccountId, toAccountId, amountCents, occurredAt: todayInBogota(), description: `Harness rf181 ${tag}`,
+        externalRef: null, splits: [], labelIds: [],
+      }),
+    );
+    track("transactions", transactionId);
+  };
+  const figure = async () =>
+    (await asUser(leader, () => getMemberContributions(range))).find((row) => row.memberId === ids.mama && row.currency === BASE_CURRENCY)?.contributionCents;
+  await move(bbva, pot, 800_000);
+  const put = await figure();
+  await move(pot, bbva, 300_000);
+  const net = await figure();
+  const nobody = await open("otra");
+  await move(nobody, pot, 100_000);
+  const unmoved = await figure();
+  assert(
+    next("RF-181: a transfer from a held account into one of everyone is the holder's contribution, one back reduces it, and two accounts without a holder move none"),
+    put === 800_000 && net === 500_000 && unmoved === 500_000,
+    `after paying in ${put}, after the return ${net}, after a transfer between two of everyone ${unmoved}; expected 800000, 500000, 500000`,
+  );
 }

@@ -107,6 +107,30 @@ export async function getMemberContributions(range: {
           and t.occurred_at >= ${range.start} and t.occurred_at < ${range.endExclusive}
           and exists (select 1 from group_members m where m.user_id = fa.owner_user_id)
         union all
+        -- RF-181: a fund account held by a member counts as that member's own. A transfer from it into an
+        -- account of everyone is their contribution, one back into it is returned to them; a transfer
+        -- between two held accounts, or two accounts of everyone, moves no contribution. Booked in the
+        -- currency the receiving fund settles, as the personal branch above.
+        select
+          null::uuid,
+          coalesce(fa.holder_member_id, ta.holder_member_id),
+          case when t.currency <> pot.settlement
+            and t.counter_amount_cents is not null and not t.counter_is_estimate
+          then pot.settlement else t.currency end,
+          case when fa.holder_member_id is not null then 1 else -1 end * case when t.currency <> pot.settlement
+            and t.counter_amount_cents is not null and not t.counter_is_estimate
+          then t.counter_amount_cents else t.amount_cents end
+        from transactions t
+        join accounts fa on fa.id = t.from_account_id
+        join accounts ta on ta.id = t.to_account_id
+        cross join lateral (values (
+          case when fa.holder_member_id is not null then ta.settlement_currency else fa.settlement_currency end
+        )) as pot(settlement)
+        where t.kind = 'transfer'
+          and fa.group_id is not null and ta.group_id is not null
+          and (fa.holder_member_id is null) <> (ta.holder_member_id is null)
+          and t.occurred_at >= ${range.start} and t.occurred_at < ${range.endExclusive}
+        union all
         -- RF-167: an income into a fund account credited to the member who put it in, booked as the
         -- account settled it. An income naming nobody (every one before the field) stays out.
         select

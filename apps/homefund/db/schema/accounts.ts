@@ -4,6 +4,7 @@ import {
   boolean,
   check,
   date,
+  foreignKey,
   index,
   type AnyPgColumn,
   pgPolicy,
@@ -16,6 +17,7 @@ import { authenticatedRole, authUid } from "drizzle-orm/supabase";
 
 import { finances } from "./_schema";
 import { appUsers } from "./app-users";
+import { groupMembers } from "./group-members";
 import { groups } from "./groups";
 
 // Where money sits: an asset or a liability, owned by a user XOR held by a group.
@@ -46,6 +48,9 @@ export const accounts = finances.table(
     // A pocket (RF-173) sits inside one asset account of the same scope and currency; one level only.
     // `private.assert_account_pocket` holds the rules a CHECK cannot read off another row.
     parentAccountId: uuid().references((): AnyPgColumn => accounts.id),
+    // The fund member who holds this fund account (RF-181): a relative's bank account the leader manages.
+    // Null is an account of everyone. The composite key below keeps the member in the account's own fund.
+    holderMemberId: uuid(),
     archivedAt: timestamp({ withTimezone: true }),
     // The stable per-scope import key (RF-51): a re-import matches on it to update instead of duplicate.
     // Auto-filled to `id::text` by a trigger when omitted; a webhook or upsert value survives untouched.
@@ -81,6 +86,14 @@ export const accounts = finances.table(
       sql`${table.parentAccountId} is null or (${table.kind} = 'asset' and ${table.parentAccountId} <> ${table.id})`,
     ),
     index("accounts_parent_account_id_idx").on(table.parentAccountId),
+    // Only a fund account has a holder; MATCH SIMPLE skips the key when either column is null.
+    check("accounts_holder_in_fund", sql`${table.holderMemberId} is null or ${table.groupId} is not null`),
+    foreignKey({
+      columns: [table.holderMemberId, table.groupId],
+      foreignColumns: [groupMembers.id, groupMembers.groupId],
+      name: "accounts_holder_member_fk",
+    }),
+    index("accounts_holder_member_id_idx").on(table.holderMemberId),
     index("accounts_group_id_idx").on(table.groupId),
     index("accounts_owner_user_id_idx").on(table.ownerUserId),
     // `external_ref` is unique within a scope, so re-importing the same row updates instead of duplicating (RF-51).
