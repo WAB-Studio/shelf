@@ -1609,8 +1609,8 @@
       "updateAccount": "Corrige una cuenta que la persona puede escribir: nombre, subtipo, moneda, entidad, últimos cuatro dígitos, parentAccountId (la cuenta en la que está como bolsillo, null para sacarla), saldo inicial en centavos y su fecha. Es un parche: envía solo lo que cambia. Pasa el updatedAt que leíste en list_accounts como expectedUpdatedAt: si alguien la editó mientras tanto, se rechaza. CONFIRMA con la persona el cambio antes de llamarla, sobre todo el saldo inicial.",
       "createCategory": "Crea una categoría (expense o income), opcionalmente bajo una madre del mismo tipo y alcance. placement «personal» o «group». CONFIRMA con la persona antes de llamarla y revisa con list_categories que no exista ya.",
       "updateCategory": "Renombra una categoría o la mueve bajo otra madre del mismo tipo (parentId) o al primer nivel (parentId null). Es un parche: envía solo lo que cambia. Una categoría con subcategorías no puede ir bajo otra, y una madre de otro tipo se rechaza. Revisa antes con list_categories. Muestra el cambio a la persona y pide un solo sí antes de llamarla.",
-      "mergeMovements": "Junta 2 o más gastos, o 2 o más ingresos, de UNA misma cuenta en un solo movimiento (una factura registrada como un movimiento por producto): sus líneas son las de los originales (la categoría y el monto de cada uno, su descripción como nombre de la línea; un original con líneas aporta cada una) y el total es la suma. Los originales se BORRAN, todo o nada. Descripción y occurredAt opcionales (por defecto, la fecha más antigua). Se rechaza: transferencias, cuentas o tipos mezclados, movimientos importados de un extracto o ligados a un pago planeado, meta, aplazamiento o cuota, y los ajenos. Búscalos con list_movements, muestra a la persona la lista (originales, líneas resultantes, total) y pide un solo sí antes de llamarla.",
-      "moveCategoryMovements": "Mueve todas las líneas de movimientos de la categoría fromCategoryId a toCategoryId (por ejemplo a una de sus subcategorías) en una sola sentencia, opcionalmente solo las fechadas de from a to. Solo se mueven las líneas de exactamente esa categoría, no las de sus subcategorías; ambas deben ser del mismo tipo. Devuelve cuántas líneas movió. Cuéntalas antes con list_movements por categoría, muéstralas a la persona y pide un solo sí antes de llamarla."
+      "mergeMovements": "Junta 2 o más gastos, o 2 o más ingresos, de UNA misma cuenta en un solo movimiento (una factura registrada como un movimiento por producto): sus líneas son las de los originales (la categoría y el monto de cada uno, su descripción como nombre de la línea; un original con líneas aporta cada una) y el total es la suma. Los originales se BORRAN, todo o nada. Descripción y occurredAt opcionales (por defecto, la fecha más antigua). El movimiento nuevo no hereda las marcas de revisión ni la regla recurrente de los originales. Se rechaza: transferencias, cuentas o tipos mezclados, movimientos importados de un extracto o ligados a un pago planeado, meta, aplazamiento o cuota, los que causaron o son un cargo de otro, los que tienen referencia externa o esperan contraparte, y los ajenos. Búscalos con list_movements, muestra a la persona la lista (originales, líneas resultantes, total) y pide un solo sí antes de llamarla.",
+      "moveCategoryMovements": "Mueve todas las líneas de movimientos de EXACTAMENTE la categoría fromCategoryId (no las de sus subcategorías, aunque list_movements por categoría sí las incluye) a toCategoryId, en una sola sentencia, opcionalmente solo las fechadas de from a to; ambas deben ser del mismo tipo. Llámala PRIMERO con dryRun true: no escribe nada y devuelve cuántas líneas se moverían. Muestra ese número a la persona, pide un solo sí y llámala entonces sin dryRun. Cada movimiento movido recibe un updatedAt nuevo: vuelve a leerlo con list_movements antes de editarlo."
     },
     "deferralProposal": "Diferir en {count} cuotas",
     "errors": {
@@ -1628,7 +1628,7 @@
         "count": "Indica dos o más movimientos distintos para juntar.",
         "transfer": "Una transferencia no se puede juntar.",
         "mixed": "Los movimientos deben ser de una misma cuenta, tipo, moneda y aportante, y cada uno necesita categoría.",
-        "linked": "Un movimiento ligado a un extracto, pago planeado, meta, aplazamiento o cuota no se puede juntar: perdería ese vínculo."
+        "linked": "Un movimiento ligado a un extracto, pago planeado, meta, aplazamiento, cuota o cargo, con referencia externa o que espera contraparte no se puede juntar: perdería ese vínculo."
       }
     },
     "params": {
@@ -1671,7 +1671,8 @@
       "transactionIds": "Los ids (de list_movements) de 2 a 50 movimientos de una misma cuenta y un mismo tipo, gasto o ingreso.",
       "fromCategoryId": "La categoría cuyas líneas se mueven (id de list_categories).",
       "toCategoryId": "La categoría que las recibe, del mismo tipo (id de list_categories).",
-      "categoryRef": "El id de la categoría (de list_categories)."
+      "categoryRef": "El id de la categoría (de list_categories).",
+      "dryRun": "true: no escribe nada y solo devuelve cuántas líneas se moverían."
     }
   },
   "oauth": {

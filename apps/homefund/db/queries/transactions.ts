@@ -88,6 +88,7 @@ export type UpdateTransactionArgs = {
 
 export type TransactionListFilters = {
   id?: string;
+  ids?: string[];
   from?: string;
   to?: string;
   memberUserId?: string;
@@ -489,6 +490,7 @@ export function transactionListConditions(filters: TransactionListFilters): SQL[
   const conditions: SQL[] = [];
 
   if (filters.id) conditions.push(eq(transactions.id, filters.id));
+  if (filters.ids) conditions.push(inArray(transactions.id, filters.ids));
   if (filters.from) conditions.push(gte(transactions.occurredAt, filters.from));
   if (filters.to) conditions.push(lte(transactions.occurredAt, filters.to));
   if (filters.memberUserId) {
@@ -703,7 +705,7 @@ export async function listTransactions(
         sql`to_account.id = ${transactions.toAccountId}`,
       )
       .where(conditions.length > 0 ? and(...conditions) : undefined)
-      .orderBy(desc(transactions.occurredAt), desc(transactions.createdAt));
+      .orderBy(desc(transactions.occurredAt), desc(transactions.createdAt), desc(transactions.id));
 
     if (options?.limit === undefined) return query;
     return options.offset ? query.limit(options.limit).offset(options.offset) : query.limit(options.limit);

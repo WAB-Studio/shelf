@@ -304,30 +304,43 @@ export async function updateCategory({
 }
 
 // One statement: every line in `fromCategoryId` goes to `toCategoryId`, of movements inside the dates
-// when given. The split trigger refuses a kind or scope that disagrees (23514), rolling all back.
+// when given. Each movement touched is rewritten as it was, which the row trigger stamps with a new
+// `updated_at` (the column itself is not grantable), so an edit opened before it reads stale.
+// `dryRun` only counts the lines. The split trigger refuses a kind or scope that disagrees (23514).
 export async function moveCategoryLines({
   fromCategoryId,
   toCategoryId,
   from,
   to,
+  dryRun = false,
 }: {
   fromCategoryId: string;
   toCategoryId: string;
   from?: string;
   to?: string;
+  dryRun?: boolean;
 }): Promise<number> {
+  const scope = sql`
+    from transaction_splits s join transactions t on t.id = s.transaction_id
+    where s.category_id = ${fromCategoryId}
+      and t.reconciliation_id is null
+      ${from ? sql`and t.occurred_at >= ${from}::date` : sql``}
+      ${to ? sql`and t.occurred_at <= ${to}::date` : sql``}`;
   return withUserDb(async (tx) => {
-    const rows = await tx.execute<{ id: string }>(sql`
-      update transaction_splits s set category_id = ${toCategoryId}
-      from transactions t
-      where t.id = s.transaction_id
-        and s.category_id = ${fromCategoryId}
-        and t.reconciliation_id is null
-        ${from ? sql`and t.occurred_at >= ${from}::date` : sql``}
-        ${to ? sql`and t.occurred_at <= ${to}::date` : sql``}
-      returning s.id
-    `);
-    return rows.length;
+    const [row] = await tx.execute<{ moved: number }>(
+      dryRun
+        ? sql`select count(*)::int as moved ${scope}`
+        : sql`
+            with moved as (
+              update transaction_splits set category_id = ${toCategoryId}
+              where id in (select s.id ${scope}) returning transaction_id
+            ), touched as (
+              update transactions set description = description
+              where id in (select transaction_id from moved) returning id
+            )
+            select count(*)::int as moved from moved`,
+    );
+    return row.moved;
   });
 }
 

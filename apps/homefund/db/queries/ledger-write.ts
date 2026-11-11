@@ -321,9 +321,10 @@ export async function openCategory(
 /**
  * Folds several expenses or incomes of one account into one movement whose lines are theirs (RF-176):
  * an original that already has lines gives each, one without gives its single category with its own
- * description as the line's. One transaction: the new movement is written and the originals deleted
- * together or not at all. A movement a statement, a payment, a goal, a deferral or an instalment
- * points to is refused: deleting it would drop that link (a statement's reference is what stops a
+ * description as the line's (also for a line of its own that has no name). One transaction: the new movement is written and the originals deleted
+ * together or not at all. A movement a statement, a payment, a goal, a deferral, an instalment or a
+ * charge it caused points to, one that caused or is a charge, one with an external reference or awaiting
+ * a counterparty is refused: deleting it would drop that link (a statement's reference is what stops a
  * re-import from booking it again).
  */
 export async function mergeMovements(input: {
@@ -337,7 +338,7 @@ export async function mergeMovements(input: {
 
   try {
     return await withUserDb(async (tx) => {
-      const found = (await Promise.all(ids.map((id) => listTransactions({ id }, { tx })))).flat();
+      const found = await listTransactions({ ids }, { tx });
       if (found.length !== ids.length) throw new ActionError("errors.notFound");
       const [first] = found;
       if (found.some((row) => row.kind === "transfer")) throw new ActionError("mcp.errors.merge.transfer");
@@ -361,6 +362,11 @@ export async function mergeMovements(input: {
         where t.id in (${idList})
           and (
             t.reconciliation_id is not null
+            -- external_ref is the id by default and «form:» for a form; any other is a source's key
+            or (t.external_ref <> t.id::text and t.external_ref not like 'form:%')
+            or t.awaiting_counterparty
+            or t.caused_by_transaction_id is not null
+            or exists (select 1 from transactions c where c.caused_by_transaction_id = t.id)
             or exists (select 1 from transaction_sources s where s.transaction_id = t.id)
             or exists (select 1 from planned_payments p where p.settled_transaction_id = t.id)
             or exists (select 1 from goal_contributions g where g.transaction_id = t.id)
@@ -371,11 +377,8 @@ export async function mergeMovements(input: {
       if (linked.length > 0) throw new ActionError("mcp.errors.merge.linked");
 
       const lines = found.flatMap((row) =>
-        row.splits.length > 0
-          ? row.splits.map((split) => ({ ...split, description: split.description ?? (row.splits.length === 1 ? row.description : null) }))
-          : [],
+        row.splits.map((split) => ({ ...split, description: split.description ?? row.description })),
       );
-      if (lines.length === 0) throw new ActionError("mcp.errors.merge.mixed");
       const deleted = await tx.execute<{ id: string }>(sql`
         delete from transactions where id in (${idList}) returning id
       `);
@@ -411,9 +414,10 @@ export async function moveCategoryMovements(input: {
   toCategoryId: string;
   from?: string;
   to?: string;
-}): Promise<{ moved: number }> {
+  dryRun?: boolean;
+}): Promise<{ moved: number; dryRun: boolean }> {
   try {
-    return { moved: await moveCategoryLines(input) };
+    return { moved: await moveCategoryLines(input), dryRun: input.dryRun ?? false };
   } catch (error) {
     return mapTransactionError(error);
   }

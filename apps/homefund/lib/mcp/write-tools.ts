@@ -22,7 +22,7 @@ import { CATEGORY_COLORS } from "@/lib/fund/category-color";
 import { centsToDecimal, parseAmount } from "@/lib/money";
 import { createAccountSchema, updateAccountSchema } from "@/lib/validation/account";
 import { createCategoryInputSchema, updateCategorySchema } from "@/lib/validation/category";
-import { createTransactionSchema, occurredAtSchema, updateTransactionSchema } from "@/lib/validation/transaction";
+import { createTransactionSchema, descriptionSchema, occurredAtSchema, updateTransactionSchema } from "@/lib/validation/transaction";
 
 type Run = (ctx: ServerContext, load: (owner: string) => Promise<unknown>) => Promise<CallToolResult>;
 type Say = (key: string) => string;
@@ -374,11 +374,12 @@ export function registerLedgerTools(server: McpServer, run: Run, t: Say): void {
           categoryId: id,
           name: input.name ?? current.name,
           parentId,
-          color: input.color ?? (current.color && (CATEGORY_COLORS as readonly string[]).includes(current.color) ? current.color : await freeCategoryColor(owner)),
+          // Validated as a palette colour only when Claude sends one; a stored one is written back untouched.
+          color: input.color ?? CATEGORY_COLORS[0],
         });
         let updated: boolean;
         try {
-          updated = await updateCategory(form);
+          updated = await updateCategory({ ...form, color: input.color ?? current.color });
         } catch (error) {
           if (pgErrorCode(error) === "42501") throw new ActionError("errors.notLeader");
           if (pgErrorCode(error) === "23514") throw new ActionError(categoryConstraintErrorKey(form.parentId));
@@ -404,7 +405,7 @@ export function registerLedgerTools(server: McpServer, run: Run, t: Say): void {
       run(ctx, async () =>
         mergeMovements({
           transactionIds: input.transactionIds.map((id) => idOf("errors.notFound", id)),
-          description: input.description?.trim() || null,
+          description: parseForm(descriptionSchema, input.description ?? null) || null,
           occurredAt: input.occurredAt === undefined ? undefined : parseForm(occurredAtSchema, input.occurredAt),
         }),
       ),
@@ -419,10 +420,11 @@ export function registerLedgerTools(server: McpServer, run: Run, t: Say): void {
         toCategoryId: z.string().describe(d("toCategoryId")),
         from: z.string().optional().describe(d("from")),
         to: z.string().optional().describe(d("to")),
+        dryRun: z.boolean().optional().describe(d("dryRun")),
       }),
       annotations: { ...write, idempotentHint: true },
     },
-    (input: { fromCategoryId: string; toCategoryId: string; from?: string; to?: string }, ctx) =>
+    (input: { fromCategoryId: string; toCategoryId: string; from?: string; to?: string; dryRun?: boolean }, ctx) =>
       run(ctx, async (owner) => {
         const fromCategoryId = idOf("errors.notFound", input.fromCategoryId);
         const toCategoryId = idOf("errors.notFound", input.toCategoryId);
@@ -436,6 +438,7 @@ export function registerLedgerTools(server: McpServer, run: Run, t: Say): void {
           toCategoryId,
           from: parseForm(day, input.from),
           to: parseForm(day, input.to),
+          dryRun: input.dryRun,
         });
       }),
   );

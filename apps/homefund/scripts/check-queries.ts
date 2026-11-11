@@ -17064,7 +17064,7 @@ async function mcpCleanupSuite(): Promise<void> {
   keep("webhook_credentials", keyId);
   const { tool } = mcpClient(POST, token);
   const rows = async () =>
-    (await tool("list_movements", { accountId: account.accountId, limit: 200 })).value as { id: string; amountCents: number; date: string; description: string | null; splits: { categoryId: string; amountCents: number; description: string | null }[] }[];
+    (await tool("list_movements", { accountId: account.accountId, limit: 200 })).value as { id: string; updatedAt: string; amountCents: number; date: string; description: string | null; splits: { categoryId: string; amountCents: number; description: string | null }[] }[];
 
   const refusals = await Promise.all([
     tool("merge_movements", { transactionIds: [m1, onOther] }),
@@ -17132,5 +17132,36 @@ async function mcpCleanupSuite(): Promise<void> {
     mixedKind.isError && (inRange.value as { moved: number }).moved === 1 && scoped && (rest.value as { moved: number }).moved === 2 &&
       byCategory.some((row) => row.id === mergedId) && paged.length === 1 && paged[0].id !== (await rows())[0].id,
     `mixed ${JSON.stringify(mixedKind.value)}, range ${JSON.stringify(inRange.value)}, rest ${JSON.stringify(rest.value)}, by ${byCategory.length}`,
+  );
+
+  // Review fixes: a dry run counts without writing, a move bumps the stamp, causes and external refs block a merge.
+  const probe = await book(owner, account.accountId, 600_00, "2026-04-01", "Cargo", [{ categoryId: flat, amountCents: 600_00 }]);
+  const stamp = async () => (await rows()).find((row) => row.id === probe)?.updatedAt;
+  const before = await stamp();
+  const dry = await tool("move_category_movements", { fromCategoryId: flat, toCategoryId: market, dryRun: true });
+  const untouchedLine = (await lineOf(probe))?.[0] === flat && (await stamp()) === before;
+  const wet = await tool("move_category_movements", { fromCategoryId: flat, toCategoryId: market });
+  const bumped = (await stamp()) !== before && (await lineOf(probe))?.[0] === market;
+  assert(
+    next("RF-176: move_category_movements with dryRun counts and writes nothing; a real move gives each movement a new updatedAt"),
+    (dry.value as { moved: number }).moved >= 1 && (dry.value as { dryRun: boolean }).dryRun && untouchedLine && (wet.value as { moved: number }).moved >= 1 && bumped,
+    `dry ${JSON.stringify(dry.value)}, wet ${JSON.stringify(wet.value)}`,
+  );
+  const charge = await book(owner, account.accountId, 50_00, "2026-04-01", "Comisión", [{ categoryId: home, amountCents: 50_00 }]);
+  await fixtureSql`update transactions set caused_by_transaction_id = ${probe} where id = ${charge}`;
+  const withRef = await book(owner, account.accountId, 70_00, "2026-04-01", "Con ref", [{ categoryId: home, amountCents: 70_00 }]);
+  await fixtureSql`update transactions set external_ref = ${`rf176-ref-${tag}`} where id = ${withRef}`;
+  const plain = await book(owner, account.accountId, 80_00, "2026-04-01", "Suelto", [{ categoryId: home, amountCents: 80_00 }]);
+  const blocked = await Promise.all([
+    tool("merge_movements", { transactionIds: [probe, plain] }),
+    tool("merge_movements", { transactionIds: [charge, plain] }),
+    tool("merge_movements", { transactionIds: [withRef, plain] }),
+    tool("merge_movements", { transactionIds: [plain, mergedId], description: "x".repeat(201) }),
+  ]);
+  const stillThere = (await rows()).filter((row) => [probe, charge, withRef, plain].includes(row.id)).length;
+  assert(
+    next("RF-176: merge_movements refuses an original that caused a charge, one that is a charge, one with an external reference, and a description over 200"),
+    blocked.every((r) => r.isError) && stillThere === 4,
+    `blocked ${JSON.stringify(blocked.map((r) => r.value))}, rows ${stillThere}`,
   );
 }
