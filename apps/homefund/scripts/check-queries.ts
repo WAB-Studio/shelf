@@ -18232,4 +18232,30 @@ async function madeBySuite(): Promise<void> {
     !fromHeld.isError && heldRow.find((row) => row.id === heldId)?.madeByMemberId === ids.guest && heldAfter - heldBefore === 40_00,
     `record ${JSON.stringify(fromHeld.value)}, maker ${heldRow.find((row) => row.id === heldId)?.madeByMemberId}, spent ${heldBefore} -> ${heldAfter}`,
   );
+
+  // The sheet carries «Lo hizo» by name: the export writes it, and a movement deleted in the app comes back with it.
+  const sheetLabels = {
+    sheetName: (entity: string) => `sheets.${entity}`,
+    columnHeader: (key: string) => `columns.${key}`,
+    choiceLabel: (_set: string, value: string) => value,
+  };
+  // Only the held account's movements: the rest of this fund carries merged multi-line movements no sheet row holds.
+  const sheet = await asUser(leader, () => readExport({ entityKeys: ["transactions"], accountNames: [`Harness rf182 de papa ${tag}`] }));
+  const heldCell = sheet.transactions?.find((row) => row.fromAccount === `Harness rf182 de papa ${tag}`)?.madeBy;
+  await fixtureSql`delete from transactions where id = ${heldId}`;
+  const bytes = new Uint8Array(await buildWorkbook({ data: sheet, labels: sheetLabels }).xlsx.writeBuffer());
+  const form = new FormData();
+  form.append("file", new File([bytes], `rf182-${tag}.xlsx`));
+  const imported = await asUser(leader, () => commitImportAction(form));
+  const preview = imported?.serverError === undefined ? null
+    : await asUser(leader, () => runImportPipeline({ buffer: bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer }));
+  const sheetProblems = (preview?.perEntity ?? []).flatMap((e) => e.rows.flatMap((r) => r.errors.map((x) => `${e.entity}#${r.sheetRow}:${x.key}@${x.column ?? ""}`)));
+  const back = await fixtureSql<{ id: string; made_by_member_id: string | null }[]>`
+    select id, made_by_member_id from transactions where from_account_id = ${held}`;
+  for (const row of back) track("transactions", row.id);
+  assert(
+    next("RF-182: the sheet writes «Lo hizo» by name and a re-import restores a deleted movement with its maker"),
+    heldCell === "Harness rf182 papa" && imported?.serverError === undefined && back.length === 1 && back[0].made_by_member_id === ids.guest,
+    `cell ${heldCell}, import ${imported?.serverError} ${sheetProblems.join(",")}, back ${JSON.stringify(back)}`,
+  );
 }

@@ -1393,6 +1393,7 @@
       "counterIsEstimate": "Monto estimado",
       "forHousehold": "Del hogar",
       "contributedBy": "De quién",
+      "madeBy": "Lo hizo",
       "labels": "Etiquetas",
       "account": "Cuenta",
       "label": "Etiqueta",
@@ -1490,7 +1491,8 @@
         "noFund": "La fila es del fondo y no tienes un fondo.",
         "repeatedRow": "Otra fila del archivo ya trae este dato para la misma cuenta. Deja una sola.",
         "lockedField": "Esta fila cambia la categoría o el ámbito, y eso no se puede cambiar. Créala como una fila nueva.",
-        "contributorUnknown": "El miembro de «De quién» no pertenece al fondo de la cuenta destino."
+        "contributorUnknown": "El miembro de «De quién» no pertenece al fondo de la cuenta destino.",
+        "makerUnknown": "El miembro de «Lo hizo» no pertenece al fondo del movimiento."
       }
     }
   },
