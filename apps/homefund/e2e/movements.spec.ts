@@ -16,6 +16,7 @@ import messages from "@/messages/es.json";
 import { TIME_ZONE } from "@/lib/locales";
 
 import { fixtureSql } from "../scripts/harness/fixtures";
+import { MIN_TITLE_PX, pageOverflow, rightOverhang } from "./fit";
 import { asHarnessUser, clearLedger, readScope, test } from "./global-setup";
 
 const transactions = messages.transactions;
@@ -548,13 +549,13 @@ test.describe("a wide amount on a narrow phone", () => {
   // After the outer `beforeEach`, which resets the ledger and seeds its two rows.
   test.beforeEach(async () => {
     await asHarnessUser(async (tx) => {
-      const [movement] = await tx<{ id: string }[]>`
-        insert into transactions (from_account_id, amount_cents, occurred_at, description)
-        values (${scope.accountId}, 123456789012, ${todayInBogota()}, ${LONG_DESCRIPTION})
-        returning id`;
       await tx`
+        with movement as (
+          insert into transactions (from_account_id, amount_cents, occurred_at, description)
+          values (${scope.accountId}, 123456789012, ${todayInBogota()}, ${LONG_DESCRIPTION})
+          returning id)
         insert into transaction_splits (transaction_id, category_id, amount_cents)
-        values (${movement.id}, ${scope.categoryId}, 123456789012)`;
+        select id, ${scope.categoryId}, 123456789012 from movement`;
     });
   });
 
@@ -568,10 +569,9 @@ test.describe("a wide amount on a narrow phone", () => {
     await expect(title).toBeVisible();
     await expect(amount).toBeVisible();
 
-    expect((await title.boundingBox())!.width).toBeGreaterThanOrEqual(112);
+    expect((await title.boundingBox())!.width).toBeGreaterThanOrEqual(MIN_TITLE_PX);
     const card = page.locator(".rt-Card").filter({ visible: true }).filter({ has: title }).last();
-    const [amountBox, cardBox] = await Promise.all([amount.boundingBox(), card.boundingBox()]);
-    expect(amountBox!.x + amountBox!.width).toBeLessThanOrEqual(cardBox!.x + cardBox!.width);
-    expect(cardBox!.x + cardBox!.width).toBeLessThanOrEqual(page.viewportSize()!.width);
+    expect(await rightOverhang(amount, card)).toBeLessThanOrEqual(0);
+    expect(await pageOverflow(page)).toBeLessThanOrEqual(0);
   });
 });

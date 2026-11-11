@@ -1,5 +1,7 @@
 import type { ReactNode } from "react";
-import { Badge, Box, Flex, Text } from "@radix-ui/themes";
+import { Badge, Flex, Text } from "@radix-ui/themes";
+
+import { FigureRow } from "./figure-row";
 
 import styles from "./movement-row.module.css";
 
@@ -33,44 +35,45 @@ export function MovementRow({
   wrap?: boolean;
 }) {
   return (
-    <Flex align="center" gapX="3" gapY="1" wrap="wrap" className={styles.row}>
-      {tile}
-      <Box className={styles.body}>
-        <Flex align="center" gap="2">
-          <Text
-            as="div"
-            size="3"
-            weight="medium"
-            className={styles.title}
-            data-wrap={wrap || undefined}
-          >
-            {title}
-          </Text>
-          {badge && (
-            <Badge color="jade" variant="soft" radius="full">
-              {badge}
-            </Badge>
-          )}
-          {caused && (
-            <Badge color="gray" variant="surface" radius="full">
-              {caused}
-            </Badge>
-          )}
-        </Flex>
-        {subtitle && (
-          <Text as="div" size="2" color="gray" truncate>
-            {subtitle}
-          </Text>
+    <FigureRow
+      lead={tile}
+      figure={
+        <Text
+          size="3"
+          weight="medium"
+          color={tone === "income" ? "jade" : undefined}
+          className={styles.amount}
+        >
+          {amount}
+        </Text>
+      }
+    >
+      <Flex align="center" gap="2">
+        <Text
+          as="div"
+          size="3"
+          weight="medium"
+          className={styles.title}
+          data-wrap={wrap || undefined}
+        >
+          {title}
+        </Text>
+        {badge && (
+          <Badge color="jade" variant="soft" radius="full">
+            {badge}
+          </Badge>
         )}
-      </Box>
-      <Text
-        size="3"
-        weight="medium"
-        color={tone === "income" ? "jade" : undefined}
-        className={styles.amount}
-      >
-        {amount}
-      </Text>
-    </Flex>
+        {caused && (
+          <Badge color="gray" variant="surface" radius="full">
+            {caused}
+          </Badge>
+        )}
+      </Flex>
+      {subtitle && (
+        <Text as="div" size="2" color="gray" truncate>
+          {subtitle}
+        </Text>
+      )}
+    </FigureRow>
   );
 }

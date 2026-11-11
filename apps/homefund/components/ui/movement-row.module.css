@@ -15,22 +15,7 @@
   line-clamp: unset;
 }
 
-/* The title never narrows below 7rem: past that, a wide amount such as
-   «−US$ 1.234.567,89» drops to its own line on the right instead of squeezing
-   the title to «Compra en…» or pushing the row out of its card. */
-.row {
-  flex: 1 1 auto;
-  min-width: 0;
-}
-
-.body {
-  flex: 1 1 7rem;
-  min-width: 0;
-}
-
 /* The amount keeps every digit and the room it needs; the title gives way. */
 .amount {
-  flex-shrink: 0;
-  margin-left: auto;
   white-space: nowrap;
 }

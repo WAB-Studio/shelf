@@ -17,6 +17,7 @@ import { todayInBogota } from "@/lib/dates";
 import messages from "@/messages/es.json";
 
 import { fixtureSql } from "../scripts/harness/fixtures";
+import { pageOverflow, rightOverhang } from "./fit";
 import { asHarnessUser, clearLedger, readScope, test } from "./global-setup";
 
 const transactions = messages.transactions;
@@ -159,11 +160,8 @@ test.describe("an overdue payment on a narrow phone", () => {
     const amount = card.getByText(/12\.345\.678/);
     await expect(amount).toBeVisible();
 
-    const cardBox = (await card.boundingBox())!;
-    for (const inside of [amount, menu]) {
-      const box = (await inside.boundingBox())!;
-      expect(box.x + box.width).toBeLessThanOrEqual(cardBox.x + cardBox.width);
-    }
-    expect(cardBox.x + cardBox.width).toBeLessThanOrEqual(page.viewportSize()!.width);
+    const overhangs = await Promise.all([amount, menu].map((inside) => rightOverhang(inside, card)));
+    expect(Math.max(...overhangs)).toBeLessThanOrEqual(0);
+    expect(await pageOverflow(page)).toBeLessThanOrEqual(0);
   });
 });
