@@ -1490,9 +1490,8 @@ test.describe("a long debt with a wide balance on a narrow phone", () => {
 
   test("keeps the name at least 7rem wide and the balance inside the card @mobile", async ({
     page,
-  }, testInfo) => {
-    // Kills: the balance holding the name's row, which stacked «Crédito / hipotecario / del / …» a word per line.
-    test.skip(testInfo.project.name !== "mobile", "the phone's cards");
+  }) => {
+    // Kills: a balance that holds the name's row, so the name stacks a word per line.
     await page.goto("/es/planning/debts");
 
     const name = page.getByText(longName, { exact: true }).filter({ visible: true });
@@ -1503,5 +1502,10 @@ test.describe("a long debt with a wide balance on a narrow phone", () => {
     expect((await name.boundingBox())!.width).toBeGreaterThanOrEqual(112);
     const [balanceBox, cardBox] = await Promise.all([balance.boundingBox(), card.boundingBox()]);
     expect(balanceBox!.x + balanceBox!.width).toBeLessThanOrEqual(cardBox!.x + cardBox!.width);
+    // Beside the name or under it, never over it.
+    const nameBox = (await name.boundingBox())!;
+    expect(
+      balanceBox!.y >= nameBox.y + nameBox.height || balanceBox!.x >= nameBox.x + nameBox.width,
+    ).toBe(true);
   });
 });

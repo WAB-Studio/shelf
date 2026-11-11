@@ -25,9 +25,9 @@ const stamp = randomUUID().slice(0, 8);
 const ids = { account: randomUUID(), category: randomUUID(), rule: randomUUID() };
 const RULE = `Regla pausada ${stamp}`;
 
-type Seed = { active: boolean; reason: "failed" | null; endsOn?: "past" };
+type Seed = { active: boolean; reason: "failed" | null; endsOn?: "past"; amountCents?: number };
 
-async function seed({ active, reason, endsOn }: Seed) {
+async function seed({ active, reason, endsOn, amountCents = 1500000 }: Seed) {
   await asHarnessUser(async (tx) => {
     await tx`
       insert into accounts (id, owner_user_id, name, kind, subtype, initial_balance_cents, initial_balance_on)
@@ -39,7 +39,7 @@ async function seed({ active, reason, endsOn }: Seed) {
       insert into recurring_rules (
         id, from_account_id, amount_cents, category_id, description, frequency, interval_n, day_of_month,
         next_run_on, is_active, ends_on)
-      values (${ids.rule}, ${ids.account}, 1500000, ${ids.category}, ${RULE}, 'weekly', 1, null,
+      values (${ids.rule}, ${ids.account}, ${amountCents}, ${ids.category}, ${RULE}, 'weekly', 1, null,
         (now() at time zone 'America/Bogota')::date + 20, ${active},
         ${endsOn === "past" ? fixtureSql`(now() at time zone 'America/Bogota')::date - 5` : null})`;
   });
@@ -102,11 +102,9 @@ test("resuming a rule the run paused takes the line away, and it stays gone afte
 test.describe("a wide amount on a narrow phone", () => {
   test("keeps the rule's title readable and the amount inside the card @mobile", async ({
     page,
-  }, testInfo) => {
-    // Kills: the amount refusing to give its line away, which cut the title to «Suscri…».
-    test.skip(testInfo.project.name !== "mobile", "the phone's cards");
-    await seed({ active: true, reason: null });
-    await fixtureSql`update recurring_rules set amount_cents = 2345678901 where id = ${ids.rule}`;
+  }) => {
+    // Kills: an amount that never gives its line away, so the title is cut to its first letters.
+    await seed({ active: true, reason: null, amountCents: 2345678901 });
     await page.goto("/es/planning/recurring");
 
     const title = page.getByText(RULE, { exact: true }).filter({ visible: true });
@@ -114,7 +112,8 @@ test.describe("a wide amount on a narrow phone", () => {
     const amount = card.getByText(/23\.456\.789/);
     await expect(amount).toBeVisible();
 
-    expect((await title.boundingBox())!.width).toBeGreaterThanOrEqual(80);
+    // The whole title is drawn: none of it hides behind the ellipsis.
+    expect(await title.evaluate((el) => el.scrollWidth - el.clientWidth)).toBeLessThanOrEqual(0);
     const [amountBox, cardBox] = await Promise.all([amount.boundingBox(), card.boundingBox()]);
     expect(amountBox!.x + amountBox!.width).toBeLessThanOrEqual(cardBox!.x + cardBox!.width);
   });
