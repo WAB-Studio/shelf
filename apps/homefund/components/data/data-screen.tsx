@@ -26,6 +26,7 @@ import {
   Text,
   DateInput,
 } from "@/components/ui";
+import { BACKGROUND_SHEETS } from "@/lib/spreadsheet/sheet-layout";
 import type { SheetEntity } from "@/lib/spreadsheet/schema";
 import { useActionErrorToast, type MessageKey } from "@/lib/use-action-toast";
 
@@ -152,6 +153,12 @@ export function DataScreen({
   // desktop table names the sheet a row belongs to instead of grouping by it.
   // The column and the raw value ride straight from the pipeline (RF-51); only
   // the column's own header and the message key still need translating here.
+  // A background sheet is hidden in the export, so its name carries how to show it.
+  const sheetLabel = (entity: SheetEntity) =>
+    BACKGROUND_SHEETS.has(entity)
+      ? t("screen.hiddenSheet", { sheet: t(`sheets.${entity}`) })
+      : t(`sheets.${entity}`);
+
   const errorRows = importPreview
     ? importPreview.perEntity.flatMap((entity) =>
         entity.rows
@@ -159,7 +166,7 @@ export function DataScreen({
           .flatMap((row) =>
             row.errors.map((error, position) => ({
               key: `${entity.entity}-${row.index}-${position}`,
-              sheet: t(`sheets.${entity.entity}`),
+              sheet: sheetLabel(entity.entity),
               sheetRow: row.sheetRow,
               column: error.column
                 ? tKey(`data.columns.${error.column}` as MessageKey)
@@ -336,7 +343,7 @@ export function DataScreen({
                         .map((entity) => (
                           <Flex key={entity.entity} direction="column" gap="1">
                             <Text size="2" weight="medium">
-                              {t(`sheets.${entity.entity}`)}
+                              {sheetLabel(entity.entity)}
                             </Text>
                             <Table.Root size="1" variant="surface">
                               <Table.Header>

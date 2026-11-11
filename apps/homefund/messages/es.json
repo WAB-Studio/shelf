@@ -1300,6 +1300,7 @@
       "totalsUpdate": "{count, plural, one {# actualizada} other {# actualizadas}}",
       "totalsError": "{count, plural, one {# con error} other {# con errores}}",
       "reportSheet": "Hoja",
+      "hiddenSheet": "{sheet} (hoja oculta: clic derecho en las pestañas → Mostrar)",
       "reportRow": "Fila",
       "reportColumn": "Columna",
       "reportValue": "Valor",

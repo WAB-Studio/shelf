@@ -88,7 +88,11 @@ export async function GET(
     columnHeader: (key) => t(`columns.${key}` as Parameters<typeof t>[0]),
   };
 
-  const workbook = buildWorkbook({ data, labels });
+  const workbook = buildWorkbook({
+    data,
+    labels,
+    hideBackground: entityKeys.length === SHEET_ENTITIES.length,
+  });
   const buffer = await workbook.xlsx.writeBuffer();
   const filename = `${t("filenames.export")}-${todayInBogota()}.xlsx`;
 
