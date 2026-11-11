@@ -51,9 +51,6 @@ export const updateAccountAction = authActionClient
     try {
       updated = await updateAccount({ ...account, amountMinor });
     } catch (error) {
-      // RF-181: a holder that is no member of this fund, or on a personal account.
-      if (pgConstraintName(error) === "accounts_holder_member_fk" || pgConstraintName(error) === "accounts_holder_in_fund")
-        throw new ActionError("accounts.errors.holderInvalid");
       // Only the leader flips `is_shared` on a group account; the trigger raises 42501.
       if (pgErrorCode(error) === "42501") throw new ActionError("errors.notLeader");
       if (pgErrorCode(error) === "23514")

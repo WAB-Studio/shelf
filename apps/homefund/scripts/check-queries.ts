@@ -17520,4 +17520,24 @@ async function accountHolderSuite(): Promise<void> {
     put === 800_000 && net === 500_000 && unmoved === 500_000,
     `after paying in ${put}, after the return ${net}, after a transfer between two of everyone ${unmoved}; expected 800000, 500000, 500000`,
   );
+
+  // 100 from the leader's own account through the held one into the pot is one contribution, the holder's.
+  const own = (await asUser(leader, () =>
+    createAccount({ ...base, ownerUserId: leader.id, groupId: null, isShared: false, name: `Harness rf181 propia ${tag}`, amountMinor: 1_000_000 }),
+  )).accountId;
+  track("accounts", own);
+  const ofLeader = async () =>
+    (await asUser(leader, () => getMemberContributions(range))).find((row) => row.memberId === ids.lead && row.currency === BASE_CURRENCY)?.contributionCents ?? 0;
+  const leaderBefore = await ofLeader();
+  await move(own, bbva, 100_000);
+  const intoHeld = { leader: await ofLeader(), mama: await figure() };
+  await move(bbva, pot, 100_000);
+  const through = { leader: await ofLeader(), mama: await figure() };
+  await open("efectivo", { subtype: "cash", holderMemberId: ids.mama, amountMinor: 5_000_00 });
+  const potCash = (await asUser(leader, () => getFundCashBalances(range))).find((row) => row.currency === BASE_CURRENCY)?.balanceCents;
+  assert(
+    next("RF-181: money from a personal account into a held one is no contribution, through to the pot it counts once for the holder, and a held account is off the fund's cash"),
+    intoHeld.leader === leaderBefore && intoHeld.mama === 500_000 && through.leader === leaderBefore && through.mama === 600_000 && potCash === undefined,
+    `into held ${JSON.stringify(intoHeld)}, through ${JSON.stringify(through)}, leader before ${leaderBefore}, fund cash ${potCash}; expected the leader unchanged, 500000 then 600000, no cash`,
+  );
 }

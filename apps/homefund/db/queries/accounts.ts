@@ -2,9 +2,12 @@ import "server-only";
 
 import { and, asc, desc, eq, isNotNull, isNull, sql } from "drizzle-orm";
 
+import { pgConstraintName } from "@/lib/db-error";
+import { ActionError } from "@/lib/errors";
+
 import { ownerColumns } from "@/db/queries/owner-columns";
 import { insertRow } from "@/db/insert-row";
-import { accounts } from "@/db/schema";
+import { accounts, groupMembers } from "@/db/schema";
 import type { Account } from "@/db/schema";
 import type { Transaction } from "@/db/session";
 import { withUserDb, withUserDbOrTx } from "@/db/session";
@@ -119,7 +122,7 @@ export async function listAccounts(
         isShared: accounts.isShared,
         parentAccountId: accounts.parentAccountId,
         holderMemberId: accounts.holderMemberId,
-        holderName: sql<string | null>`(select gm.name from group_members gm where gm.id = accounts.holder_member_id)`,
+        holderName: groupMembers.name,
         settlementCurrency: accounts.settlementCurrency,
         initialBalanceCents: accounts.initialBalanceCents,
         initialBalanceOn: accounts.initialBalanceOn,
@@ -137,6 +140,7 @@ export async function listAccounts(
         updatedAt: sql<string>`accounts.updated_at::text`,
       })
       .from(accounts)
+      .leftJoin(groupMembers, eq(groupMembers.id, accounts.holderMemberId))
       .where(
         options.archived ? isNotNull(accounts.archivedAt) : isNull(accounts.archivedAt),
       )
@@ -203,7 +207,20 @@ export type CreateAccountArgs = {
 export async function createAccount(
   args: CreateAccountArgs,
 ): Promise<{ accountId: string }> {
-  return withUserDb((tx) => insertAccount(tx, args));
+  return refuseForeignHolder(() => withUserDb((tx) => insertAccount(tx, args)));
+}
+
+// RF-181: a holder that is no member of the account's fund, or a holder on a personal account, is the one
+// refusal every caller (screen, import, MCP) names the same way.
+async function refuseForeignHolder<T>(write: () => Promise<T>): Promise<T> {
+  try {
+    return await write();
+  } catch (error) {
+    const constraint = pgConstraintName(error);
+    if (constraint === "accounts_holder_member_fk" || constraint === "accounts_holder_in_fund")
+      throw new ActionError("accounts.errors.holderInvalid");
+    throw error;
+  }
 }
 
 // The insert body of `createAccount`: the wrapper opens the session, this runs
@@ -292,7 +309,7 @@ export async function updateAccount({
   balanceOn,
   expectedUpdatedAt,
 }: UpdateAccountArgs): Promise<boolean | "stale"> {
-  return withUserDb(async (tx) => {
+  return refuseForeignHolder(() => withUserDb(async (tx) => {
     const rows = await tx
       .update(accounts)
       .set({
@@ -336,7 +353,7 @@ export async function updateAccount({
       .where(eq(accounts.id, accountId))
       .limit(1);
     return row ? "stale" : false;
-  });
+  }));
 }
 
 // RF-61: a personal account becomes the group's in one statement. No group id

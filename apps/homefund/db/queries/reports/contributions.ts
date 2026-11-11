@@ -87,6 +87,8 @@ export async function getMemberContributions(range: {
           end
         )) as booked(currency, amount_cents)
         where t.kind = 'transfer'
+          -- RF-181: a held account is its holder's own pocket, so money into or out of it is no one's contribution.
+          and fa.holder_member_id is null and ta.holder_member_id is null
           and t.occurred_at >= ${range.start} and t.occurred_at < ${range.endExclusive}
         union all
         -- RF-139: a household bill paid from a member's personal account and marked «del hogar»
@@ -147,6 +149,7 @@ export async function getMemberContributions(range: {
         join group_members cm on cm.id = t.contributed_by_member_id
         where t.from_account_id is null
           and ta.group_id is not null
+          and ta.holder_member_id is null
           and t.reconciliation_id is null
           and t.occurred_at >= ${range.start} and t.occurred_at < ${range.endExclusive}
       ) member
@@ -196,7 +199,7 @@ export async function getFundCashBalances(range: {
       from (
         select a.id, a.settlement_currency as currency, a.initial_balance_cents as amount_cents, true as is_settlement
         from accounts a
-        where a.group_id is not null and a.subtype = 'cash' and a.archived_at is null
+        where a.group_id is not null and a.holder_member_id is null and a.subtype = 'cash' and a.archived_at is null
           and a.initial_balance_on < ${range.endExclusive}
         union all
         select a.id, v.currency, v.amount_cents, v.currency = a.settlement_currency
@@ -206,7 +209,7 @@ export async function getFundCashBalances(range: {
           (t.currency, case when t.currency <> a.settlement_currency and t.counter_amount_cents is not null and not t.counter_is_estimate then 0::bigint else t.amount_cents end),
           (a.settlement_currency, case when t.currency <> a.settlement_currency and t.counter_amount_cents is not null and not t.counter_is_estimate then t.counter_amount_cents else 0::bigint end)
         ) as v(currency, amount_cents)
-        where a.group_id is not null and a.subtype = 'cash' and a.archived_at is null
+        where a.group_id is not null and a.holder_member_id is null and a.subtype = 'cash' and a.archived_at is null
           and t.occurred_at < ${range.endExclusive}
         union all
         select a.id, v.currency, -v.amount_cents, v.currency = a.settlement_currency
@@ -216,7 +219,7 @@ export async function getFundCashBalances(range: {
           (t.currency, case when t.currency <> a.settlement_currency and t.counter_amount_cents is not null and not t.counter_is_estimate then 0::bigint else t.amount_cents end),
           (a.settlement_currency, case when t.currency <> a.settlement_currency and t.counter_amount_cents is not null and not t.counter_is_estimate then t.counter_amount_cents else 0::bigint end)
         ) as v(currency, amount_cents)
-        where a.group_id is not null and a.subtype = 'cash' and a.archived_at is null
+        where a.group_id is not null and a.holder_member_id is null and a.subtype = 'cash' and a.archived_at is null
           and t.occurred_at < ${range.endExclusive}
       ) s
       group by s.currency
@@ -262,6 +265,7 @@ export async function getUnassignedIncome(range: {
         and ta.group_id is not null
         and t.reconciliation_id is null
         and t.contributed_by_member_id is null
+        and ta.holder_member_id is null
         and t.occurred_at >= ${range.start} and t.occurred_at < ${range.endExclusive}
       group by 1
       order by 1

@@ -375,7 +375,11 @@ function AccountForm({
                 <Select.Root
                   size="3"
                   value={field.value}
-                  onValueChange={field.onChange}
+                  onValueChange={(value) => {
+                    field.onChange(value);
+                    // A holder belongs to a fund account only.
+                    if (value === "personal") form.setValue("holderMemberId", null);
+                  }}
                   disabled={isPending}
                 >
                   <FieldControl>

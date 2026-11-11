@@ -20,7 +20,7 @@ import {
 import type { TransactionSplitInput } from "@/db/queries/transactions";
 import { BASE_CURRENCY, type CurrencyCode } from "@/lib/currency";
 import { withUserDb } from "@/db/session";
-import { pgConstraintName, pgErrorCode } from "@/lib/db-error";
+import { pgErrorCode } from "@/lib/db-error";
 import { ActionError } from "@/lib/errors";
 import { parseAmount } from "@/lib/money";
 import type { CreateAccountInput } from "@/lib/validation/account";
@@ -270,8 +270,6 @@ export async function openAccount(
   try {
     return await createAccount({ ...account, ...placementFields, amountMinor });
   } catch (error) {
-    // RF-181: a holder that is no member of this fund.
-    if (pgConstraintName(error) === "accounts_holder_member_fk") throw new ActionError("accounts.errors.holderInvalid");
     // `accounts_settlement_currency_iso`: a code the picker does not offer and
     // the shape check refuses. Every other 23514 on this table is a placement
     // the form cannot express.

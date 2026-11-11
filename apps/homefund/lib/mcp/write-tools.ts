@@ -16,7 +16,7 @@ import {
   reviseMovement,
 } from "@/db/queries/ledger-write";
 import { getTransactionById, listTransactions, type TransactionListRow, type TransactionSplitInput } from "@/db/queries/transactions";
-import { pgConstraintName, pgErrorCode } from "@/lib/db-error";
+import { pgErrorCode } from "@/lib/db-error";
 import { ActionError } from "@/lib/errors";
 import { CATEGORY_COLORS } from "@/lib/fund/category-color";
 import { centsToDecimal, parseAmount } from "@/lib/money";
@@ -316,9 +316,6 @@ export function registerLedgerTools(server: McpServer, run: Run, t: Say): void {
         try {
           updated = await updateAccount({ ...form, expectedUpdatedAt: form.expectedUpdatedAt ?? input.expectedUpdatedAt, amountMinor });
         } catch (error) {
-          // RF-181: a holder that is no member of this fund, or on a personal account.
-          if (pgConstraintName(error) === "accounts_holder_member_fk" || pgConstraintName(error) === "accounts_holder_in_fund")
-            throw new ActionError("accounts.errors.holderInvalid");
           if (pgErrorCode(error) === "42501") throw new ActionError("errors.notLeader");
           if (pgErrorCode(error) === "23514") throw new ActionError("accounts.errors.currencyInvalid");
           if (pgErrorCode(error) === "AC001") throw new ActionError("accounts.errors.currencyLocked");

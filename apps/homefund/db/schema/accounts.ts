@@ -92,7 +92,8 @@ export const accounts = finances.table(
       columns: [table.holderMemberId, table.groupId],
       foreignColumns: [groupMembers.id, groupMembers.groupId],
       name: "accounts_holder_member_fk",
-    }),
+      // The migration narrows this to `set null (holder_member_id)`: the group column stays.
+    }).onDelete("set null"),
     index("accounts_holder_member_id_idx").on(table.holderMemberId),
     index("accounts_group_id_idx").on(table.groupId),
     index("accounts_owner_user_id_idx").on(table.ownerUserId),
