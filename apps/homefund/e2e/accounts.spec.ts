@@ -319,14 +319,14 @@ test.describe("the laptop row", () => {
       from account_balances where id = ${account.id}`;
     expect(Number(derived.balance_cents)).toBe(openingCents - movementCents);
 
-    // The fifth of the six tracks, after the name, the entity, the last four
-    // digits and the class.
+    // The fourth of the five tracks, after the name, the entity and the last four
+    // digits.
     const cell = page
       .getByRole("table", { name: accounts.title })
       .getByRole("row")
       .filter({ hasText: account.name })
       .getByRole("cell")
-      .nth(4);
+      .nth(3);
     await expect(cell).toBeVisible();
 
     // The table states no opening figure, so what says the column is derived is
@@ -527,9 +527,9 @@ test("lists a pocket under its parent, the parent with the total of both and its
   await expect(rows.nth(0)).toContainText(parent.name);
   await expect(rows.nth(1)).toContainText(accounts.freePart);
   await expect(rows.nth(2)).toContainText(pocket.name);
-  expect(pesosOf(await rows.nth(0).getByRole("cell").nth(4).innerText())).toBe(5_502_154);
-  expect(pesosOf(await rows.nth(1).getByRole("cell").nth(4).innerText())).toBe(249_816);
-  expect(pesosOf(await rows.nth(2).getByRole("cell").nth(4).innerText())).toBe(5_252_338);
+  expect(pesosOf(await rows.nth(0).getByRole("cell").nth(3).innerText())).toBe(5_502_154);
+  expect(pesosOf(await rows.nth(1).getByRole("cell").nth(3).innerText())).toBe(249_816);
+  expect(pesosOf(await rows.nth(2).getByRole("cell").nth(3).innerText())).toBe(5_252_338);
 
   await dropAccount(pocket.id);
   await dropAccount(parent.id);

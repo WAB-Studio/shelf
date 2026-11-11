@@ -5,7 +5,7 @@
 -- the fund has no twin for (same kind, name and parent name): MV001 / MV002. A personal budget or goal pointing at the account
 -- or at one of its movements stays personal, so it is MV003. A pocket moves with its parent, never alone: MV004.
 -- The caller's own refusals: no fund MV005, not their account or no such account MV006 (one answer, so nothing is disclosed),
--- already the fund's MV007, archived MV008. A delivery or a webhook default naming a personal category swaps it for the twin or drops it.
+-- already the fund's MV007, archived MV008. A cash account into a fund whose shared cash (RF-56) already has one: MV009. A delivery or a webhook default naming a personal category swaps it for the twin or drops it.
 -- An income already in the account keeps no «De quién» (RF-167: nothing is presumed). Audit (RF-45) captures every update
 -- through the table triggers, under the caller.
 CREATE OR REPLACE FUNCTION private.fund_twin_category(p_category uuid, p_group uuid) RETURNS uuid
@@ -56,6 +56,13 @@ begin
   end if;
   if v_account.parent_account_id is not null then
     raise exception 'account % is a pocket and moves with its parent', p_account using errcode = 'MV004';
+  end if;
+  if v_account.subtype = 'cash' and exists (
+    select 1 from finances.groups g
+    join finances.accounts a on a.group_id = g.id and a.subtype = 'cash' and a.archived_at is null
+    where g.id = v_group and g.cash_mode = 'shared'
+  ) then
+    raise exception 'the fund already holds its shared cash; account % would be a second one', p_account using errcode = 'MV009';
   end if;
 
   perform 1 from finances.accounts a where a.parent_account_id = p_account for update;

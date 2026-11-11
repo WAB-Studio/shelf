@@ -391,6 +391,7 @@ function moveRefusalKey(error: unknown): string | null {
   if (code === "MV006") return "accounts.errors.moveNotYours";
   if (code === "MV007") return "accounts.errors.moveAlready";
   if (code === "MV008") return "accounts.errors.moveArchived";
+  if (code === "MV009") return "accounts.errors.moveSecondCash";
   if (code === "23505") {
     const constraint = pgConstraintName(error) ?? "";
     if (constraint.startsWith("accounts_")) return "errors.accountRefTaken";
