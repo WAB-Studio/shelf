@@ -28,6 +28,7 @@ import { withUserDb, withUserDbOrTx } from "@/db/session";
 import { stampIs } from "@/db/queries/stamp";
 import type { CurrencyCode } from "@/lib/currency";
 import { pgConstraintName, pgErrorCode } from "@/lib/db-error";
+import { parseAmount } from "@/lib/money";
 import { learnedPattern, proposalFor, type TrustedPattern } from "@/lib/ingest/counterparty-pattern";
 import type { SettlementCurrencies } from "@/lib/validation/transaction";
 
@@ -112,6 +113,8 @@ export type TransactionListFilters = {
   recurringRuleId?: string;
   // The movement charges of this one, RF-132.
   causedByTransactionId?: string;
+  // Text a person typed: matches the description, and the amount when it reads as a figure (RF-198).
+  search?: string;
 };
 
 export type TransactionListRow = {
@@ -600,6 +603,16 @@ export function transactionListConditions(filters: TransactionListFilters): SQL[
           eq(transactions.awaitingCounterparty, true),
         ),
       ) as SQL,
+    );
+  }
+  if (filters.search) {
+    // `\`, `%` and `_` are the pattern's own marks; the typed text never carries them.
+    const pattern = `%${filters.search.replace(/[\\%_]/g, "\\$&")}%`;
+    const cents = parseAmount(filters.search);
+    conditions.push(
+      cents === null
+        ? sql`${transactions.description} ilike ${pattern}`
+        : sql`(${transactions.description} ilike ${pattern} or ${transactions.amountCents} = ${cents})`,
     );
   }
   if (filters.recurringRuleId) {

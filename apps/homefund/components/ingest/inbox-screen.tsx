@@ -23,13 +23,13 @@ import {
   Box,
   Button,
   ConfirmDialog,
-  CopyField,
   Dialog,
   EmptyState,
   Flex,
   ScreenHeader,
   Spinner,
   Text,
+  TextLink,
   VisuallyHidden,
 } from "@/components/ui";
 import type {
@@ -143,18 +143,24 @@ function categoryInfo(
   return null;
 }
 
+// Where each thing that lands in Bandeja is set up, in Ajustes · Correos del banco and its neighbours.
+const INBOX_SOURCES = [
+  { key: "android", href: "/settings/webhooks#android" },
+  { key: "iphone", href: "/settings/webhooks#iphone" },
+  { key: "gmail", href: "/settings/webhooks#bank-emails" },
+  { key: "claude", href: "/settings/webhooks#claude" },
+] as const;
+
 export function InboxScreen({
   deliveries,
   awaiting,
   shapes,
   options,
-  ingestUrl,
 }: {
   deliveries: PendingDeliveryRow[];
   awaiting: AwaitingCounterpartyRow[];
   shapes: SilencedShapeRow[];
   options: TransactionFormOptions;
-  ingestUrl: string;
 }) {
   const t = useTranslations("ingest");
   const tKey = useTranslations();
@@ -250,20 +256,19 @@ export function InboxScreen({
       description={t("emptyDescription")}
       action={
         <Flex direction="column" gap="3" width="100%" maxWidth="480px">
-          <CopyField
-            id="inbox-ingest-url"
-            label={t("emptyAddressLabel")}
-            value={ingestUrl}
-            copyLabel={t("copy")}
-            copiedLabel={t("copied")}
-            failedLabel={t("copyFailed")}
-          />
-          <Flex direction="column" gap="1">
-            {[1, 2, 3].map((step) => (
-              <Text key={step} size="2" color="gray">
-                {step}. {t(`emptyStep${step}` as "emptyStep1")}
-              </Text>
-            ))}
+          <Flex direction="column" gap="1" asChild>
+            <ul>
+              {INBOX_SOURCES.map(({ key, href }) => (
+                <li key={key}>
+                  <Text size="2" color="gray">
+                    {t(`emptySource.${key}.label`)}{" "}
+                  </Text>
+                  <TextLink href={href} size="2">
+                    {t(`emptySource.${key}.link`)}
+                  </TextLink>
+                </li>
+              ))}
+            </ul>
           </Flex>
         </Flex>
       }

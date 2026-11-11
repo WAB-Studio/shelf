@@ -13,7 +13,6 @@ import { getTransactionFormOptions } from "@/db/queries/transaction-form";
 import { listAwaitingCounterparty } from "@/db/queries/transactions";
 import { requireUser } from "@/db/session";
 import { routing } from "@/i18n/routing";
-import { env } from "@/lib/env";
 
 export async function generateMetadata(
   props: PageProps<"/[locale]/inbox">,
@@ -48,10 +47,6 @@ export default async function InboxPage(
         awaiting={awaiting}
         shapes={shapes}
         options={options}
-        ingestUrl={new URL(
-          "/api/webhooks/ingest",
-          env.NEXT_PUBLIC_SITE_URL,
-        ).toString()}
       />
     </Page>
   );
