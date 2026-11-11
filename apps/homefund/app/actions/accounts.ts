@@ -6,6 +6,7 @@ import {
   archiveAccount,
   deleteAccount,
   handAccountToGroup,
+  moveRefusalKey,
   restoreAccount,
   updateAccount,
 } from "@/db/queries/accounts";
@@ -95,14 +96,8 @@ export const restoreAccountAction = authActionClient
   });
 
 /**
- * Hands a personal account to the group (RF-61), after which any member may
- * write it. The engine refuses an account carrying anything at all — that one is
- * archived instead — and every refusal it raises is a 23514.
- *
- * 23505 is a different refusal and reaches a different person: `external_ref` is
- * unique per scope, so an account whose reference a group import already used
- * lands on the group's twin the moment the placement changes. The row keeps its
- * owner either way.
+ * Moves a personal account into the caller's fund with its whole history (RF-61, RF-180), after
+ * which any member may write it. Each refusal the database raises names why; see `moveRefusalKey`.
  */
 export const handAccountToGroupAction = authActionClient
   .inputSchema(handAccountToGroupSchema)
@@ -110,9 +105,8 @@ export const handAccountToGroupAction = authActionClient
     try {
       await handAccountToGroup({ accountId });
     } catch (error) {
-      const code = pgErrorCode(error);
-      if (code === "23514") throw new ActionError("errors.accountHasHistory");
-      if (code === "23505") throw new ActionError("errors.accountRefTaken");
+      const key = moveRefusalKey(error);
+      if (key) throw new ActionError(key);
       throw error;
     }
 

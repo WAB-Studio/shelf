@@ -8843,7 +8843,7 @@ async function checkAccountHandOver() {
   const labels = [
     "265. a member hands a history-free account to the group and it lands as a shared group account",
     "266. the leader could not write that account before the hand-over and writes it after",
-    "267. an account carrying a movement is refused the hand-over and keeps its owner",
+    "267. an account a personal goal points at is refused the hand-over (MV003) and keeps its owner",
     "268. an account already in the group is refused a second hand-over",
     "269. another person's account, another group's, and no row at all answer the same refusal",
     "270. authenticated holds no UPDATE on accounts.owner_user_id or accounts.group_id",
@@ -8945,6 +8945,11 @@ async function checkAccountHandOver() {
           values (${usedAccount.id}, ${usedTarget.id}, 430000,
             (now() at time zone 'America/Bogota')::date) returning id`,
       );
+      // RF-180: history moves with the account; a personal goal on it is what a move cannot carry.
+      await tx.execute(
+        dsql`insert into savings_goals (owner_user_id, name, target_amount_cents, account_id)
+          values (${memberUser}, 'rls hand over goal', 100000, ${usedAccount.id})`,
+      );
 
       // Read the leader's reach before the hand-over: `can_write_account` sees a personal account of
       // someone else and filters the row out, so the update reports the row it never saw.
@@ -9001,8 +9006,8 @@ async function checkAccountHandOver() {
       );
       assert(
         labels[2],
-        usedRefusal.includes("23514") &&
-          usedRefusal.includes("carries history") &&
+        usedRefusal.includes("MV003") &&
+          usedRefusal.includes("personal budget or goal") &&
           usedStill.owner_user_id === memberUser &&
           usedStill.group_id === null,
         `${usedRefusal}; the account still names ${usedStill.owner_user_id === memberUser ? "its owner" : "someone else"} and group_id = ${usedStill.group_id ?? "null"}`,

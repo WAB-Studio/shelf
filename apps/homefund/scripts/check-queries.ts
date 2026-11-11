@@ -39,6 +39,7 @@ import {
   archiveAccount,
   createAccount,
   deleteAccount,
+  handAccountToGroup,
   listAccounts,
   restoreAccount,
   updateAccount,
@@ -4133,6 +4134,7 @@ async function main(): Promise<void> {
   await mcpInboxSuite();
   await mcpInboxReviewSuite();
   await accountLoanSuite();
+  await accountToFundSuite();
 }
 
 // A member recorded without a login is someone in the fund: a leader whose fund holds one is not alone, so an
@@ -15238,7 +15240,7 @@ async function mcpDoorSuite(): Promise<void> {
   assert(
     next("RF-144: /mcp answers 401 with no key, an unknown one or a webhook's, and lists its tools to a key for Claude"),
     anonymous.status === 401 && forged.status === 401 && webhookKey.status === 401 &&
-      JSON.stringify(names) === JSON.stringify(["accept_deliveries", "create_account", "create_category", "delete_movement", "import_statement", "list_accounts", "list_categories", "list_inbox", "list_movements", "merge_movements", "move_category_movements", "preview_statement", "record_movement", "reject_deliveries", "review_month", "update_account", "update_category", "update_movement"]),
+      JSON.stringify(names) === JSON.stringify(["accept_deliveries", "create_account", "create_category", "delete_movement", "import_statement", "list_accounts", "list_categories", "list_inbox", "list_movements", "merge_movements", "move_account_to_fund", "move_category_movements", "preview_statement", "record_movement", "reject_deliveries", "review_month", "update_account", "update_category", "update_movement"]),
     `no key ${anonymous.status}, unknown key ${forged.status}, webhook key ${webhookKey.status}, tools ${JSON.stringify(names)}`,
   );
 
@@ -17416,4 +17418,148 @@ async function accountLoanSuite(): Promise<void> {
     code = pgErrorCode(error) ?? "unknown";
   }
   assert(next("RF-178: the database refuses a loan on an asset"), code === "23514", `code ${code}`);
+}
+
+// RF-180: a personal account moves into its fund with its whole history; what cannot be carried is refused, and the MCP does the same write.
+async function accountToFundSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const { POST } = await import("@/app/mcp/route");
+  const [leader, mover, stranger, outsider] = [
+    await createMembershipFreeUser(), await createMembershipFreeUser(), await createMembershipFreeUser(), await createMembershipFreeUser(),
+  ];
+  const ids = { group: randomUUID(), other: randomUUID(), fundMarket: randomUUID(), fundSalary: randomUUID(), market: randomUUID(), salary: randomUUID(), leisure: randomUUID(), label: randomUUID() };
+  const name = (what: string) => `Harness rf180 ${what} ${tag}`;
+  await fixtureSql.begin(async (tx) => {
+    await tx`insert into groups (id, name, cash_mode) values (${ids.group}, ${name("fondo")}, 'per_member'), (${ids.other}, ${name("otro")}, 'per_member')`;
+    await tx`insert into group_members (group_id, user_id, name, role) values
+      (${ids.group}, ${leader.id}, ${name("lider")}, 'leader'), (${ids.group}, ${mover.id}, ${name("miembro")}, 'member'), (${ids.other}, ${stranger.id}, ${name("ajeno")}, 'leader')`;
+    for (const [id, owner, group, label, kind] of [
+      [ids.fundMarket, null, ids.group, "Mercado", "expense"], [ids.fundSalary, null, ids.group, "Sueldo", "income"],
+      [ids.market, mover.id, null, "mercado", "expense"], [ids.salary, mover.id, null, "Sueldo", "income"], [ids.leisure, mover.id, null, "Ocio", "expense"],
+    ] as const) {
+      await tx`insert into categories (id, owner_user_id, group_id, name, kind, color) values (${id}, ${owner}, ${group}, ${name(label)}, ${kind}, ${CATEGORY_COLORS[0]})`;
+    }
+    // The twin is found by name apart from case: personal «mercado» meets the fund's «Mercado».
+    await tx`insert into labels (id, owner_user_id, name) values (${ids.label}, ${mover.id}, ${name("etiqueta")})`;
+  });
+  track("groups", ids.group);
+  track("groups", ids.other);
+  for (const id of [ids.fundMarket, ids.fundSalary, ids.market, ids.salary, ids.leisure]) track("categories", id);
+  const open = async (user: HarnessUser, what: string, amountMinor: number, extra: Partial<Parameters<typeof createAccount>[0]> = {}) => {
+    const row = await asUser(user, () =>
+      createAccount({
+        kind: "asset", subtype: "bank", groupId: null, isShared: false, institution: null, settlementCurrency: BASE_CURRENCY,
+        balanceOn: "2026-01-01", ownerUserId: user.id, name: name(what), amountMinor, ...extra,
+      }),
+    );
+    track("accounts", row.accountId);
+    return row.accountId;
+  };
+  const book = async (accountId: string, amountCents: number, categoryId: string, income = false, labelIds: string[] = []) => {
+    const { transactionId } = await asUser(mover, () =>
+      createTransaction({
+        fromAccountId: income ? null : accountId, toAccountId: income ? accountId : null, amountCents, occurredAt: "2026-03-05",
+        description: name("movimiento"), externalRef: null, splits: [{ categoryId, amountCents }], labelIds,
+      }),
+    );
+    track("transactions", transactionId);
+    return transactionId;
+  };
+  const refusedWith = async (user: HarnessUser, accountId: string) => {
+    try {
+      await asUser(user, () => handAccountToGroup({ accountId }));
+      return "none";
+    } catch (error) {
+      return pgErrorCode(error) ?? "unknown";
+    }
+  };
+  const placement = async (accountId: string) =>
+    (await fixtureSql<{ owner_user_id: string | null; group_id: string | null; is_shared: boolean }[]>`select owner_user_id, group_id, is_shared from accounts where id = ${accountId}`)[0];
+
+  const main = await open(mover, "principal", 120_000_00);
+  const pocket = await open(mover, "bolsillo", 30_000_00, { parentAccountId: main });
+  const side = await open(mover, "lateral", 10_000_00);
+  const spent = await book(main, 40_000_00, ids.market);
+  const earned = await book(main, 90_000_00, ids.salary, true);
+  await book(pocket, 5_000_00, ids.market);
+  const { transactionId: moved } = await asUser(mover, () =>
+    createTransaction({ fromAccountId: main, toAccountId: side, amountCents: 1_000_00, occurredAt: "2026-03-06", description: name("traslado"), externalRef: null, splits: [], labelIds: [] }),
+  );
+  track("transactions", moved);
+  const read = async (user: HarnessUser) => (await asUser(user, () => listAccounts({ archived: false }))).filter((row) => row.name.endsWith(tag));
+  const before = (await read(mover)).find((row) => row.id === main);
+  const pocketBefore = (await read(mover)).find((row) => row.id === pocket);
+  const countBefore = (await fixtureSql`select id from transactions where from_account_id = any(${[main, pocket]}) or to_account_id = any(${[main, pocket]})`).length;
+
+  await asUser(mover, () => handAccountToGroup({ accountId: main }));
+  const after = (await read(leader)).find((row) => row.id === main);
+  const pocketAfter = (await read(leader)).find((row) => row.id === pocket);
+  const where = await placement(main);
+  const scopes = await fixtureSql<{ owner_user_id: string | null; group_id: string | null }[]>`select owner_user_id, group_id from transactions where id = any(${[spent, earned, moved]})`;
+  const lines = await fixtureSql<{ group_id: string | null }[]>`
+    select c.group_id from transaction_splits s join categories c on c.id = s.category_id where s.transaction_id = any(${[spent, earned]})`;
+  const countAfter = (await fixtureSql`select id from transactions where from_account_id = any(${[main, pocket]}) or to_account_id = any(${[main, pocket]})`).length;
+  assert(
+    next("RF-180: a moved account keeps its id, balance, movements and pocket, and the fund's leader reads and writes it"),
+    after !== undefined && JSON.stringify(after.balances) === JSON.stringify(before?.balances) && after.canWrite && after.groupId === ids.group && after.ownerUserId === null &&
+      where.is_shared && pocketAfter?.parentAccountId === main && JSON.stringify(pocketAfter.balances) === JSON.stringify(pocketBefore?.balances) &&
+      (await placement(pocket)).group_id === ids.group && countAfter === countBefore,
+    `before ${JSON.stringify(before?.balances)}, after ${JSON.stringify(after?.balances)}, pocket ${JSON.stringify(pocketAfter?.balances)}, ${countBefore} -> ${countAfter} movements`,
+  );
+  assert(
+    next("RF-180: its movements take the fund's scope, the personal categories on their lines become the fund's twins, and an income already in it keeps no «De quién»"),
+    scopes.length === 3 && scopes.every((row) => row.group_id === ids.group && row.owner_user_id === null) &&
+      lines.length === 2 && lines.every((row) => row.group_id === ids.group) &&
+      (await fixtureSql`select id from transactions where id = ${earned} and contributed_by_member_id is null`).length === 1,
+    `scopes ${JSON.stringify(scopes)}, lines ${JSON.stringify(lines)}`,
+  );
+  const [audited] = await fixtureSql<{ n: string }[]>`
+    select count(*)::text as n from audit_log where actor_user_id = ${mover.id} and action = 'UPDATE' and (
+      (entity = 'accounts' and record_id = ${main}) or (entity = 'transactions' and record_id = ${spent}))`;
+  assert(next("RF-180: the move is audited under the person, on the account and on its movements (RF-45)"), Number(audited.n) >= 2, `audit rows ${audited.n}`);
+
+  const other = await open(mover, "ajena", 1_000_00);
+  const outsiderAccount = await open(outsider, "sin fondo", 1_000_00);
+  const refusals = [await refusedWith(stranger, other), await refusedWith(outsider, other), await refusedWith(outsider, outsiderAccount), await refusedWith(mover, main), await refusedWith(mover, randomUUID())];
+  assert(
+    next("RF-180: another person's account, a person with no fund, an account already in the fund and an account that does not exist are each refused (23514), and nothing moves"),
+    refusals.every((code) => code === "23514") && (await placement(other)).owner_user_id === mover.id && (await placement(outsiderAccount)).owner_user_id === outsider.id,
+    `codes ${refusals}`,
+  );
+
+  const needsCategory = await open(mover, "sin par", 1_000_00);
+  await book(needsCategory, 100_00, ids.leisure);
+  const needsLabel = await open(mover, "etiquetada", 1_000_00);
+  await book(needsLabel, 100_00, ids.market, false, [ids.label]);
+  const goalled = await open(mover, "con meta", 1_000_00);
+  await fixtureSql`insert into savings_goals (owner_user_id, name, target_amount_cents, account_id) values (${mover.id}, ${name("meta")}, 100000, ${goalled})`;
+  const loosePocket = await open(mover, "bolsillo suelto", 100_00, { parentAccountId: other });
+  const archived = await open(mover, "archivada", 0);
+  await fixtureSql`update accounts set archived_at = now() where id = ${archived}`;
+  const codes = [needsCategory, needsLabel, goalled, loosePocket, archived].map((id) => refusedWith(mover, id));
+  const refused = await Promise.all(codes);
+  const stayed = await Promise.all([needsCategory, needsLabel, goalled, loosePocket, archived].map(placement));
+  assert(
+    next("RF-180: a personal category or label with no twin in the fund (MV001, MV002), a personal goal on the account (MV003), a pocket alone (MV004) and an archived account (23514) are each refused and stay personal"),
+    refused.join() === "MV001,MV002,MV003,MV004,23514" && stayed.every((row) => row.owner_user_id === mover.id && row.group_id === null),
+    `codes ${refused}`,
+  );
+
+  const { id: keyId, token } = await asUser(mover, () => issueWebhookCredential({ name: name("clave"), purpose: "mcp", defaultAccountId: null, defaultCategoryId: null }));
+  keep("webhook_credentials", keyId);
+  const { tool } = mcpClient(POST, token);
+  const viaMcp = await open(mover, "por claude", 7_000_00);
+  await book(viaMcp, 100_00, ids.market);
+  const strangerOne = await tool("move_account_to_fund", { accountId: outsiderAccount });
+  const pocketOne = await tool("move_account_to_fund", { accountId: loosePocket });
+  const listed = ((await tool("list_accounts")).value as { id: string }[]).some((row) => row.id === viaMcp);
+  const done = await tool("move_account_to_fund", { accountId: viaMcp });
+  const [mcpMoved] = await fixtureSql<{ group_id: string | null }[]>`select group_id from accounts where id = ${viaMcp}`;
+  const again = await tool("move_account_to_fund", { accountId: viaMcp });
+  assert(
+    next("RF-180: move_account_to_fund moves the person's account like the screen, refuses another person's account, a lone pocket and a second move"),
+    listed && !done.isError && mcpMoved.group_id === ids.group && strangerOne.isError && pocketOne.isError && again.isError,
+    `done ${JSON.stringify(done.value)}, stranger ${JSON.stringify(strangerOne.value)}, pocket ${JSON.stringify(pocketOne.value)}, again ${JSON.stringify(again.value)}`,
+  );
 }

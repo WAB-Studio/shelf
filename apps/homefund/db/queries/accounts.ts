@@ -9,6 +9,7 @@ import type { Account } from "@/db/schema";
 import type { Transaction } from "@/db/session";
 import { withUserDb, withUserDbOrTx } from "@/db/session";
 import type { CurrencyCode } from "@/lib/currency";
+import { pgErrorCode } from "@/lib/db-error";
 
 type AccountKind = Account["kind"];
 type AccountSubtype = Account["subtype"];
@@ -327,11 +328,10 @@ export async function updateAccount({
   });
 }
 
-// RF-61: a personal account becomes the group's in one statement. No group id
-// crosses the boundary — `private.hand_account_to_group` reads auth.uid(), takes
-// the caller's own group and refuses an account carrying any history, which is
-// archived instead. `AccountRow` is unchanged: the next `listAccounts` reads the
-// new placement. A refusal is a 23514 the action layer reads.
+// RF-61, RF-180: a personal account becomes the group's in one statement, with its movements,
+// pockets and balance. No group id crosses the boundary — `private.hand_account_to_group`
+// reads auth.uid() and takes the caller's own group. `AccountRow` is unchanged: the next
+// `listAccounts` reads the new placement. A refusal is read by `moveRefusalKey`.
 export async function handAccountToGroup({
   accountId,
 }: {
@@ -344,6 +344,19 @@ export async function handAccountToGroup({
 
     return rows[0]?.ok === true;
   });
+}
+
+// What each refusal of the move means to the person (RF-180); null for an error that is not one of them.
+// 23505 is a different attempt: an `external_ref` the fund already uses for another row.
+export function moveRefusalKey(error: unknown): string | null {
+  const code = pgErrorCode(error);
+  if (code === "23514") return "accounts.errors.moveRefused";
+  if (code === "23505") return "errors.accountRefTaken";
+  if (code === "MV001") return "accounts.errors.moveCategories";
+  if (code === "MV002") return "accounts.errors.moveLabels";
+  if (code === "MV003") return "accounts.errors.moveBudgetsGoals";
+  if (code === "MV004") return "accounts.errors.movePocket";
+  return null;
 }
 
 export async function archiveAccount({
