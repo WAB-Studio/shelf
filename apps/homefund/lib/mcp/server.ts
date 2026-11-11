@@ -7,6 +7,7 @@ import { z } from "zod";
 
 import { listAccounts } from "@/db/queries/accounts";
 import { getMonthReview } from "@/db/queries/month-review";
+import { getSpendingPatterns } from "@/db/queries/spending-patterns";
 import { importStatement, previewStatement, StatementError } from "@/db/queries/statement-import";
 import { actAsCredentialOwner } from "@/db/session";
 import { lastClosedMonth } from "@/lib/dates";
@@ -111,6 +112,17 @@ function registerReadTools(server: McpServer): void {
       if (month > lastClosedMonth()) return Promise.resolve(text({ error: t("errors.openMonth") }, true));
       return run(ctx, () => getMonthReview(month));
     },
+  );
+
+  // RF-184: the patterns by fixed rules; Claude finds what to act on in the conversation, the app calls no model.
+  server.registerTool(
+    "spending_patterns",
+    {
+      description: t("tools.spendingPatterns"),
+      inputSchema: z.object({ months: z.number().int().min(1).max(24).optional().describe(t("tools.monthsParam")) }),
+      annotations: { readOnlyHint: true },
+    },
+    (input: { months?: number }, ctx) => run(ctx, () => getSpendingPatterns(input.months ?? 12)),
   );
 }
 

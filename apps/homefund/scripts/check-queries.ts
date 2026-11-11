@@ -29,6 +29,7 @@ import {
   reconcileAccount,
 } from "@/db/queries/account-reconciliations";
 import { getMonthReview, getMonthReviewPending, markReviewed, unmarkReviewed, type ReviewItem } from "@/db/queries/month-review";
+import type { SpendingPatterns } from "@/db/queries/spending-patterns";
 import {
   getAccountStatementHistory,
   listAccountStatements,
@@ -4138,6 +4139,7 @@ async function main(): Promise<void> {
   await accountLoanSuite();
   await sheetRoundTripSuite();
   await monthReviewClearSuite();
+  await mcpSpendingPatternsSuite();
 }
 
 // A member recorded without a login is someone in the fund: a leader whose fund holds one is not alone, so an
@@ -15257,7 +15259,7 @@ async function mcpDoorSuite(): Promise<void> {
   assert(
     next("RF-144: /mcp answers 401 with no key, an unknown one or a webhook's, and lists its tools to a key for Claude"),
     anonymous.status === 401 && forged.status === 401 && webhookKey.status === 401 &&
-      JSON.stringify(names) === JSON.stringify(["accept_deliveries", "create_account", "create_category", "delete_movement", "import_statement", "list_accounts", "list_categories", "list_inbox", "list_movements", "merge_movements", "move_category_movements", "preview_statement", "record_movement", "reject_deliveries", "review_month", "update_account", "update_category", "update_movement"]),
+      JSON.stringify(names) === JSON.stringify(["accept_deliveries", "create_account", "create_category", "delete_movement", "import_statement", "list_accounts", "list_categories", "list_inbox", "list_movements", "merge_movements", "move_category_movements", "preview_statement", "record_movement", "reject_deliveries", "review_month", "spending_patterns", "update_account", "update_category", "update_movement"]),
     `no key ${anonymous.status}, unknown key ${forged.status}, webhook key ${webhookKey.status}, tools ${JSON.stringify(names)}`,
   );
 
@@ -17587,4 +17589,97 @@ async function sheetRoundTripSuite(): Promise<void> {
     `serverError ${second?.serverError} ${second?.problems.join(",")}; movements ${restored.movements}`,
   );
   for (const r of await fixtureSql<{ id: string }[]>`select id from transactions where owner_user_id = ${user.id}`) track("transactions", r.id);
+}
+
+// RF-184: spending_patterns finds a monthly charge, an amount above usual and a growing category
+// in the key owner's movements, and never reads another person's.
+async function mcpSpendingPatternsSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const today = todayInBogota();
+  const { POST } = await import("@/app/mcp/route");
+  const owner = await createMembershipFreeUser();
+  const stranger = await createMembershipFreeUser();
+  const open = async (user: HarnessUser, name: string) => {
+    const { accountId } = await asUser(user, () =>
+      createAccount({
+        kind: "asset", subtype: "bank", groupId: null, isShared: false, institution: null, lastFour: null,
+        settlementCurrency: BASE_CURRENCY, balanceOn: addCivilMonths(today, -13), ownerUserId: user.id,
+        name: `Harness rf184 ${name} ${tag}`, amountMinor: 10_000_000_00,
+      }),
+    );
+    track("accounts", accountId);
+    return accountId;
+  };
+  const category = async (user: HarnessUser, name: string) => {
+    const { categoryId } = await asUser(user, () =>
+      createCategory({ scope: { ownerUserId: user.id }, name: `Harness rf184 ${name} ${tag}`, kind: "expense", parentId: null, color: CATEGORY_COLORS[0] }),
+    );
+    track("categories", categoryId);
+    return categoryId;
+  };
+  const book = async (user: HarnessUser, account: string, categoryId: string, description: string, amountCents: number, occurredAt: string) => {
+    const { transactionId } = await asUser(user, () =>
+      createTransaction({
+        fromAccountId: account, toAccountId: null, amountCents, occurredAt, description, externalRef: null,
+        splits: [{ categoryId, amountCents }], labelIds: [],
+      } as never),
+    );
+    track("transactions", transactionId);
+    return transactionId;
+  };
+  const [account, strangerAccount] = [await open(owner, "banco"), await open(stranger, "ajena")];
+  const [streaming, market, strangerStreaming] = [
+    await category(owner, "Streaming"), await category(owner, "Mercado"), await category(stranger, "Streaming"),
+  ];
+  for (const back of [4, 3, 2, 1]) {
+    await book(owner, account, streaming, `NETFLIX.COM ${1000 + back} rf${tag}`, 44_900_00, addCivilMonths(today, -back));
+    await book(stranger, strangerAccount, strangerStreaming, `NETFLIX.COM ${1000 + back} rf${tag}`, 44_900_00, addCivilMonths(today, -back));
+  }
+  for (const [back, label] of [[5, "uno"], [4, "dos"], [3, "tres"]] as const) {
+    await book(owner, account, market, `Mercado ${label} ${tag}`, 10_000_00, addCivilMonths(today, -back));
+  }
+  const spike = await book(owner, account, market, `Mercado grande ${tag}`, 100_000_00, addCivilMonths(today, -1));
+
+  const { id: keyId, token } = await asUser(owner, () =>
+    issueWebhookCredential({ name: `Harness rf184 ${tag}`, purpose: "mcp", defaultAccountId: null, defaultCategoryId: null }),
+  );
+  keep("webhook_credentials", keyId);
+  const { rpc, tool } = mcpClient(POST, token);
+  const answer = await tool("spending_patterns");
+  const patterns = answer.value as SpendingPatterns;
+  const series = patterns?.recurring?.filter((row) => row.accountId === account) ?? [];
+  const foreign = patterns?.recurring?.some((row) => row.accountId === strangerAccount) ?? true;
+  assert(
+    next("RF-184: spending_patterns finds the owner's monthly charge with its typical amount and next date, and never another person's"),
+    !answer.isError && series.length === 1 && series[0].cadence === "monthly" && series[0].typicalCents === 44_900_00 &&
+      series[0].occurrences === 4 && series[0].nextExpected === today && series[0].active &&
+      series[0].category?.includes("Streaming") === true && !foreign,
+    `isError ${answer.isError}, series ${JSON.stringify(series)}, stranger's ${foreign}`,
+  );
+
+  const marketRow = patterns?.spending?.find((row) => row.categoryId === market);
+  const spikeRow = patterns?.outliers?.find((row) => row.transactionId === spike);
+  assert(
+    next("RF-184: spending_patterns sums a category per month in cents, flags an amount over three times its usual and names the category that grows"),
+    marketRow?.totalCents === 130_000_00 && marketRow.months[addCivilMonths(today, -1).slice(0, 7)] === 100_000_00 &&
+      spikeRow?.usualCents === 10_000_00 && spikeRow.amountCents === 100_000_00 &&
+      (patterns?.growing ?? []).some((row) => row.categoryId === market && row.currency === BASE_CURRENCY),
+    `market ${JSON.stringify(marketRow)}, spike ${JSON.stringify(spikeRow)}, growing ${JSON.stringify(patterns?.growing)}`,
+  );
+
+  const [one, zero, tooMany] = await Promise.all([
+    tool("spending_patterns", { months: 1 }),
+    rpc(token, "tools/call", { name: "spending_patterns", arguments: { months: 0 } }),
+    rpc(token, "tools/call", { name: "spending_patterns", arguments: { months: 25 } }),
+  ]);
+  const short = one.value as SpendingPatterns;
+  const refused = (call: { body: { result?: { isError?: boolean }; error?: unknown } | null }) =>
+    call.body?.result?.isError === true || call.body?.error !== undefined;
+  assert(
+    next("RF-184: spending_patterns reads 1 to 24 months; one month reads no growth and leaves the older spending out"),
+    !one.isError && short.fromMonth === addCivilMonths(today, -1).slice(0, 7) && short.growing.length === 0 &&
+      short.spending.find((row) => row.categoryId === market)?.totalCents === 100_000_00 && refused(zero) && refused(tooMany),
+    `one ${JSON.stringify(short)?.slice(0, 200)}, zero ${JSON.stringify(zero.body)?.slice(0, 120)}, 25 ${JSON.stringify(tooMany.body)?.slice(0, 120)}`,
+  );
 }
