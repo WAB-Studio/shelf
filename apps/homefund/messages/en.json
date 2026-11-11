@@ -1312,7 +1312,8 @@
       "importReady": "Every row is valid. Confirm to write them.",
       "confirmImport": "Confirm import",
       "importDone": "Import applied.",
-      "commitRowError": "Row {row} of {sheet}: {reason}"
+      "commitRowError": "Row {row} of {sheet}: {reason}",
+      "editedRowsHint": "If you changed a date, amount or description, the row is added as new."
     },
     "sheets": {
       "accounts": "Accounts",
@@ -1341,9 +1342,8 @@
       "email": "Email",
       "parent": "Parent category",
       "color": "Color",
-      "externalRef": "External reference",
-      "fromAccount": "From (source)",
-      "toAccount": "To (destination)",
+      "fromAccount": "From",
+      "toAccount": "To",
       "category": "Category",
       "description": "Description",
       "frequency": "Frequency",
@@ -1367,7 +1367,6 @@
       "targetDate": "Target date",
       "goal": "Goal",
       "contributedOn": "Contribution date",
-      "movement": "Movement (reference)",
       "debtKind": "Debt kind",
       "annualRate": "Effective annual rate (%)",
       "minimumPayment": "Minimum payment",
@@ -1385,7 +1384,49 @@
       "debits": "Debits",
       "interestCharged": "Interest",
       "feesCharged": "Fees",
-      "source": "Source"
+      "source": "Source",
+      "externalRef": "External reference"
+    },
+    "choices": {
+      "accountKind": {
+        "asset": "Asset",
+        "liability": "Debt"
+      },
+      "accountSubtype": {
+        "bank": "Bank",
+        "cash": "Cash",
+        "card": "Card"
+      },
+      "categoryKind": {
+        "expense": "Expense",
+        "income": "Income"
+      },
+      "placement": {
+        "personal": "Personal",
+        "group": "Household"
+      },
+      "frequency": {
+        "monthly": "Monthly",
+        "weekly": "Weekly",
+        "yearly": "Yearly"
+      },
+      "budgetPeriod": {
+        "monthly": "Monthly",
+        "weekly": "Weekly",
+        "yearly": "Yearly"
+      },
+      "debtKind": {
+        "revolving": "Revolving",
+        "installment": "Installment"
+      },
+      "statementSource": {
+        "recorded": "Recorded",
+        "imported": "Imported"
+      },
+      "flag": {
+        "yes": "Yes",
+        "no": "No"
+      }
     },
     "filenames": {
       "export": "finances-export",

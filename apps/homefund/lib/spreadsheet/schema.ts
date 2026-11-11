@@ -11,11 +11,11 @@ import { labels } from "@/db/schema/labels";
 import { recurringRules } from "@/db/schema/recurring-rules";
 import { savingsGoals } from "@/db/schema/savings-goals";
 import { transactions } from "@/db/schema/transactions";
-import { BASE_CURRENCY } from "@/lib/currency";
+import { BASE_CURRENCY, OFFERED_CURRENCIES } from "@/lib/currency";
 import { isCivilDate } from "@/lib/dates";
 import { centsToDecimal, pesosToCents } from "@/lib/money";
 import { CATEGORY_COLORS } from "@/lib/fund/category-color";
-import { ACCOUNT_PLACEMENTS, accountCurrencySchema, createAccountSchema } from "@/lib/validation/account";
+import { ACCOUNT_KINDS, ACCOUNT_PLACEMENTS, ACCOUNT_SUBTYPES, accountCurrencySchema, createAccountSchema } from "@/lib/validation/account";
 import { BUDGET_PERIODS } from "@/lib/validation/budget";
 import { DEBT_KINDS } from "@/lib/validation/debt-terms";
 import { CATEGORY_KINDS } from "@/lib/validation/category";
@@ -56,9 +56,7 @@ const moneyBoundary: MoneyBoundary = {
 
 // The entities a cell can point at by name. A dev→prod restore re-links across
 // databases, so a reference travels as a name, not a uuid that means nothing there.
-// A contribution names the movement it earmarks by that movement's own key (RF-87): a
-// movement has no name.
-export type RefEntity = "accounts" | "categories" | "labels" | "goals" | "transactions";
+export type RefEntity = "accounts" | "categories" | "labels" | "goals";
 
 // One flat column of a sheet. `key` is the English header, the next-intl key a
 // later UI module translates, and the field name on a parsed row; `field` is
@@ -77,6 +75,9 @@ type FieldColumn<Model> = {
   readonly percent?: true;
   // A civil day the export writes as a real date cell, not text.
   readonly date?: true;
+  // The cell holds one of a closed set: it shows the person's own wording, offers the
+  // set as a dropdown and reads back to the stored value.
+  readonly choice?: ChoiceSet;
 };
 
 // A cell with no backing `$inferSelect` column: the export derives it from a
@@ -126,6 +127,9 @@ const externalRefSchema = z.string().trim().max(200).nullish();
 // later import PR resolves a name to an id and raises a per-row error on a
 // duplicate — the sheet only guards the string shape here.
 const referenceNameSchema = z.string().trim().min(1).max(80);
+
+// A category cell may be a path, «Parent › Child», so it is bounded by two names and the mark.
+const categoryReferenceSchema = z.string().trim().min(1).max(163);
 
 // Nullable on the side an entity omits: income names only a destination, expense
 // only a source (RF-20), mirroring accountRefSchema's `.nullable()`.
@@ -202,7 +206,7 @@ export const categoryRowSchema = z.object({
   externalRef: externalRefSchema,
   name: referenceNameSchema,
   kind: z.enum(CATEGORY_KINDS),
-  parent: referenceNameSchema.nullish(),
+  parent: categoryReferenceSchema.nullish(),
   color: z.enum(CATEGORY_COLORS).nullable(),
 });
 export type CategoryRow = z.infer<typeof categoryRowSchema>;
@@ -243,7 +247,7 @@ export const recurringRuleRowSchema = z.object({
     invalid: "recurringRules.errors.amountInvalid",
     tooLarge: "recurringRules.errors.amountTooLarge",
   }),
-  category: referenceNameSchema,
+  category: categoryReferenceSchema,
   description: z
     .string()
     .trim()
@@ -272,7 +276,7 @@ export const transactionRowSchema = z.object({
     invalid: "transactions.errors.amountInvalid",
     tooLarge: "transactions.errors.amountTooLarge",
   }),
-  category: nullableReferenceNameSchema,
+  category: categoryReferenceSchema.nullable(),
   occurredAt: occurredAtSchema,
   description: z
     .string()
@@ -335,7 +339,7 @@ export const budgetRowSchema = z.object({
   externalRef: externalRefSchema,
   name: z.string().trim().max(80, { error: "budgets.errors.nameTooLong" }).nullish(),
   placement: placementSchema,
-  category: referenceNameSchema,
+  category: categoryReferenceSchema,
   account: referenceNameSchema.nullish(),
   label: referenceNameSchema.nullish(),
   period: z.enum(BUDGET_PERIODS),
@@ -361,7 +365,6 @@ export const goalContributionRowSchema = z.object({
   goal: referenceNameSchema,
   amount: moneyCellSchema("goals", "amount"),
   contributedOn: sheetCivilDateSchema,
-  movement: externalRefSchema,
 });
 export type GoalContributionRow = z.infer<typeof goalContributionRowSchema>;
 
@@ -395,6 +398,27 @@ export const signedFigureSchema = z.string().trim().regex(/^-?\d+(\.\d{1,2})?$/)
 
 export const STATEMENT_SOURCES = ["recorded", "imported"] as const;
 
+// The closed sets a column offers as a dropdown, by name. `flag` reads «sí» as TRUE and «no» as
+// blank; colour and currency keep their own codes. A set's wording lives in `data.choices.<set>`.
+export const CHOICE_SETS = {
+  accountKind: ACCOUNT_KINDS,
+  accountSubtype: ACCOUNT_SUBTYPES,
+  categoryKind: CATEGORY_KINDS,
+  placement: ACCOUNT_PLACEMENTS,
+  frequency: ["monthly", "weekly", "yearly"],
+  budgetPeriod: BUDGET_PERIODS,
+  debtKind: DEBT_KINDS,
+  statementSource: STATEMENT_SOURCES,
+  color: CATEGORY_COLORS,
+  currency: OFFERED_CURRENCIES,
+  flag: ["yes", "no"],
+} as const satisfies Record<string, readonly string[]>;
+
+export type ChoiceSet = keyof typeof CHOICE_SETS;
+
+// What a flag's wording stands for once read back.
+export const FLAG_VALUES = { yes: true, no: null } as const;
+
 // A statement's key: its account and its cut-off day (RF-129).
 export function statementKey(accountId: string, cutOffDate: string): string {
   return `${accountId}|${cutOffDate}`;
@@ -423,15 +447,14 @@ export const accountSheetDescriptor = {
   entity: "accounts",
   refField: "externalRef",
   columns: [
-    { key: "externalRef", field: "externalRef" },
     { key: "name", field: "name" },
-    { key: "kind", field: "kind" },
-    { key: "subtype", field: "subtype" },
-    { key: "placement", field: "ownerUserId" },
+    { key: "kind", field: "kind", choice: "accountKind" },
+    { key: "subtype", field: "subtype", choice: "accountSubtype" },
+    { key: "placement", field: "ownerUserId", choice: "placement" },
     { key: "institution", field: "institution" },
     { key: "amount", field: "initialBalanceCents", money: moneyBoundary },
     { key: "balanceOn", field: "initialBalanceOn", date: true },
-    { key: "settlementCurrency", field: "settlementCurrency" },
+    { key: "settlementCurrency", field: "settlementCurrency", choice: "currency" },
   ],
   rowSchema: accountRowSchema,
 } satisfies SheetDescriptor<AccountModel, typeof accountRowSchema>;
@@ -440,7 +463,6 @@ export const memberSheetDescriptor = {
   entity: "members",
   refField: "externalRef",
   columns: [
-    { key: "externalRef", field: "externalRef" },
     { key: "name", field: "name" },
     { key: "email", field: "inviteEmail" },
   ],
@@ -451,11 +473,10 @@ export const categorySheetDescriptor = {
   entity: "categories",
   refField: "externalRef",
   columns: [
-    { key: "externalRef", field: "externalRef" },
     { key: "name", field: "name" },
-    { key: "kind", field: "kind" },
+    { key: "kind", field: "kind", choice: "categoryKind" },
     { key: "parent", field: "parentId", ref: { entity: "categories" } },
-    { key: "color", field: "color" },
+    { key: "color", field: "color", choice: "color" },
   ],
   rowSchema: categoryRowSchema,
 } satisfies SheetDescriptor<CategoryModel, typeof categoryRowSchema>;
@@ -464,10 +485,9 @@ export const labelSheetDescriptor = {
   entity: "labels",
   refField: "externalRef",
   columns: [
-    { key: "externalRef", field: "externalRef" },
-    { key: "placement", field: "ownerUserId" },
     { key: "name", field: "name" },
-    { key: "color", field: "color" },
+    { key: "placement", field: "ownerUserId", choice: "placement" },
+    { key: "color", field: "color", choice: "color" },
   ],
   rowSchema: labelRowSchema,
 } satisfies SheetDescriptor<LabelModel, typeof labelRowSchema>;
@@ -476,16 +496,15 @@ export const recurringRuleSheetDescriptor = {
   entity: "recurringRules",
   refField: "externalRef",
   columns: [
-    { key: "externalRef", field: "externalRef" },
+    { key: "nextRunOn", field: "nextRunOn", date: true },
     { key: "fromAccount", field: "fromAccountId", ref: { entity: "accounts" } },
     { key: "toAccount", field: "toAccountId", ref: { entity: "accounts" } },
     { key: "amount", field: "amountCents", money: moneyBoundary },
-    { key: "category", field: "categoryId", ref: { entity: "categories" } },
     { key: "description", field: "description" },
-    { key: "frequency", field: "frequency" },
+    { key: "category", field: "categoryId", ref: { entity: "categories" } },
+    { key: "frequency", field: "frequency", choice: "frequency" },
     { key: "intervalN", field: "intervalN" },
     { key: "dayOfMonth", field: "dayOfMonth" },
-    { key: "nextRunOn", field: "nextRunOn", date: true },
     { key: "endsOn", field: "endsOn", date: true },
   ],
   rowSchema: recurringRuleRowSchema,
@@ -500,20 +519,19 @@ export const transactionSheetDescriptor = {
   entity: "transactions",
   refField: "externalRef",
   columns: [
-    { key: "externalRef", field: "externalRef" },
+    { key: "occurredAt", field: "occurredAt", date: true },
     { key: "fromAccount", field: "fromAccountId", ref: { entity: "accounts" } },
     { key: "toAccount", field: "toAccountId", ref: { entity: "accounts" } },
     { key: "amount", field: "amountCents", money: moneyBoundary },
-    { key: "currency", field: "currency" },
-    { key: "counterAmount", field: "counterAmountCents", money: moneyBoundary },
-    { key: "counterIsEstimate", field: "counterIsEstimate" },
-    { key: "forHousehold", field: "forHousehold" },
-    { key: "contributedBy", synthetic: true },
-    { key: "category", synthetic: true, ref: { entity: "categories" } },
-    { key: "occurredAt", field: "occurredAt", date: true },
+    { key: "currency", field: "currency", choice: "currency" },
     { key: "description", field: "description" },
-    { key: "adjustment", field: "reconciliationId", flag: true },
+    { key: "category", synthetic: true, ref: { entity: "categories" } },
     { key: "labels", synthetic: true, ref: { entity: "labels" } },
+    { key: "contributedBy", synthetic: true },
+    { key: "forHousehold", field: "forHousehold", choice: "flag" },
+    { key: "adjustment", field: "reconciliationId", flag: true, choice: "flag" },
+    { key: "counterAmount", field: "counterAmountCents", money: moneyBoundary },
+    { key: "counterIsEstimate", field: "counterIsEstimate", choice: "flag" },
   ],
   rowSchema: transactionRowSchema,
 } satisfies SheetDescriptor<TransactionModel, typeof transactionRowSchema>;
@@ -522,16 +540,15 @@ export const budgetSheetDescriptor = {
   entity: "budgets",
   refField: "externalRef",
   columns: [
-    { key: "externalRef", field: "externalRef" },
     { key: "name", field: "name" },
-    { key: "placement", field: "ownerUserId" },
+    { key: "placement", field: "ownerUserId", choice: "placement" },
     { key: "category", field: "categoryId", ref: { entity: "categories" } },
     { key: "account", field: "accountId", ref: { entity: "accounts" } },
     { key: "label", field: "labelId", ref: { entity: "labels" } },
-    { key: "period", field: "period" },
+    { key: "period", field: "period", choice: "budgetPeriod" },
     { key: "limit", field: "limitCents", money: moneyBoundary },
     { key: "thresholdPct", field: "thresholdPct" },
-    { key: "archived", field: "archivedAt", flag: true },
+    { key: "archived", field: "archivedAt", flag: true, choice: "flag" },
   ],
   rowSchema: budgetRowSchema,
 } satisfies SheetDescriptor<BudgetModel, typeof budgetRowSchema>;
@@ -540,13 +557,12 @@ export const goalSheetDescriptor = {
   entity: "goals",
   refField: "externalRef",
   columns: [
-    { key: "externalRef", field: "externalRef" },
     { key: "name", field: "name" },
-    { key: "placement", field: "ownerUserId" },
+    { key: "placement", field: "ownerUserId", choice: "placement" },
     { key: "targetAmount", field: "targetAmountCents", money: moneyBoundary },
     { key: "targetDate", field: "targetDate", date: true },
     { key: "account", field: "accountId", ref: { entity: "accounts" } },
-    { key: "archived", field: "archivedAt", flag: true },
+    { key: "archived", field: "archivedAt", flag: true, choice: "flag" },
   ],
   rowSchema: goalRowSchema,
 } satisfies SheetDescriptor<GoalModel, typeof goalRowSchema>;
@@ -556,11 +572,9 @@ export const goalContributionSheetDescriptor = {
   entity: "goalContributions",
   refField: "externalRef",
   columns: [
-    { key: "externalRef", field: "externalRef" },
+    { key: "contributedOn", field: "createdAt", date: true },
     { key: "goal", field: "goalId", ref: { entity: "goals" } },
     { key: "amount", field: "amountCents", money: moneyBoundary },
-    { key: "contributedOn", field: "createdAt", date: true },
-    { key: "movement", field: "transactionId", ref: { entity: "transactions" } },
   ],
   rowSchema: goalContributionRowSchema,
 } satisfies SheetDescriptor<ContributionModel, typeof goalContributionRowSchema>;
@@ -572,7 +586,7 @@ export const debtSheetDescriptor = {
   refField: "account",
   columns: [
     { key: "account", field: "accountId", ref: { entity: "accounts" } },
-    { key: "debtKind", field: "debtKind" },
+    { key: "debtKind", field: "debtKind", choice: "debtKind" },
     { key: "annualRate", field: "annualRate", percent: true },
     { key: "minimumPayment", field: "minimumPaymentCents", money: moneyBoundary },
     { key: "minimumPaymentPct", field: "minimumPaymentPct", percent: true },
@@ -601,7 +615,7 @@ export const statementSheetDescriptor = {
     { key: "minimumPayment", field: "minimumPaymentCents", money: moneyBoundary },
     { key: "interestCharged", field: "interestChargedCents", money: moneyBoundary },
     { key: "feesCharged", field: "feesChargedCents", money: moneyBoundary },
-    { key: "source", field: "source" },
+    { key: "source", field: "source", choice: "statementSource" },
   ],
   rowSchema: statementRowSchema,
 } satisfies SheetDescriptor<StatementModel, typeof statementRowSchema>;

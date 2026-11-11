@@ -5,8 +5,11 @@ import ExcelJS from "exceljs";
 import type { ExportResult } from "@/db/queries/export";
 import { BACKGROUND_SHEETS, READING_ORDER } from "@/lib/spreadsheet/sheet-layout";
 import {
+  CHOICE_SETS,
+  FLAG_VALUES,
   SHEET_ENTITIES,
   sheetDescriptors,
+  type ChoiceSet,
   type RefEntity,
   type SheetEntity,
 } from "@/lib/spreadsheet/schema";
@@ -25,6 +28,7 @@ type ColumnView = {
   readonly money?: { readonly toSheet: (cents: number) => number };
   readonly ref?: { readonly entity: RefEntity };
   readonly date?: true;
+  readonly choice?: ChoiceSet;
 };
 
 // The read side of the same column: the export writes a cell with `toSheet`, the
@@ -32,6 +36,7 @@ type ColumnView = {
 type ParseColumnView = {
   readonly key: string;
   readonly money?: { readonly fromSheet: (pesos: number) => number };
+  readonly choice?: ChoiceSet;
 };
 
 // The interface text a person reads on the sheet (RF-49): the localized tab name
@@ -40,16 +45,27 @@ type ParseColumnView = {
 export type SheetLabels = {
   readonly sheetName: (entity: SheetEntity) => string;
   readonly columnHeader: (key: string) => string;
+  // The wording a person reads for one member of a closed set (RF-179).
+  readonly choiceLabel: (set: ChoiceSet, value: string) => string;
 };
 
-// The hidden sheet the template's dropdowns read their options from. A fixed,
-// space-free name so a cross-sheet list formula references it without quoting.
+// The hidden sheet the dropdowns read their options from. A fixed, space-free name so
+// a cross-sheet list formula references it without quoting.
 const OPTIONS_SHEET = "options";
 
-// The template validates a generous span of rows so a person can paste many rows
-// under each header and still get the dropdown. The options source stays exactly
-// as long as its list, so the dropdown carries no trailing blank entries.
-const TEMPLATE_DATA_ROWS = 500;
+// Dropdowns and the type tint reach a generous span of rows so a person can add many
+// rows under the data and still get both.
+const MIN_RULE_ROWS = 500;
+const RULE_ROW_MARGIN = 100;
+
+// Light tints with a dark text of their own, so the row reads the same under a dark
+// Excel theme: expense, transfer, income.
+const TINT_TEXT = "FF1F2937";
+const MOVEMENT_TINTS = [
+  { name: "expense", fill: "FFFDE4E4", from: true, to: false },
+  { name: "transfer", fill: "FFDDEAF9", from: true, to: true },
+  { name: "income", fill: "FFDFF3E4", from: false, to: true },
+] as const;
 
 const DATE_FORMAT = "dd/mm/yyyy";
 // Thousands separator, 2 decimals, a negative in red with its minus sign.
@@ -132,11 +148,19 @@ function openOnFirstVisible(workbook: ExcelJS.Workbook): void {
 // One cell's written value: a money column crosses the cents→pesos boundary right
 // here (the only float in the pipeline), a null becomes an empty cell, the rest
 // pass through as the resolved name or scalar `readExport` already produced.
-function cellValue(column: ColumnView, value: CellValue): CellValue | Date {
+function cellValue(column: ColumnView, value: CellValue, labels: SheetLabels): CellValue | Date {
   if (value == null) return null;
+  if (column.choice) return choiceCell(column.choice, value, labels);
   if (column.money) return column.money.toSheet(value as number);
   if (column.date) return civilDayCell(value);
   return value;
+}
+
+// A closed-set cell in the person's wording. A flag is TRUE or FALSE in the model; a value
+// outside its set (a legacy word) is shown as it is.
+function choiceCell(set: ChoiceSet, value: CellValue, labels: SheetLabels): string {
+  const key = typeof value === "boolean" ? (value ? "yes" : "no") : String(value);
+  return (CHOICE_SETS[set] as readonly string[]).includes(key) ? labels.choiceLabel(set, key) : key;
 }
 
 // Spreadsheet column letter from a 1-based index (1→A, 27→AA), so a list formula
@@ -160,21 +184,95 @@ function optionRange(columnIndex: number, count: number): string | null {
   return `${OPTIONS_SHEET}!$${letter}$1:$${letter}$${count}`;
 }
 
+// The lists behind the dropdowns, one column of the hidden options sheet each: accounts,
+// categories (by path), then every closed set in its own wording.
+export type SheetOptions = { accountNames: string[]; categoryPaths: string[] };
+
+type OptionLists = { ranges: Map<string, string>; sheet: (workbook: ExcelJS.Workbook) => void };
+
+function optionLists(options: SheetOptions, labels: SheetLabels): OptionLists {
+  const lists: [string, string[]][] = [
+    ["accounts", options.accountNames],
+    ["categories", options.categoryPaths],
+    ...(Object.keys(CHOICE_SETS) as ChoiceSet[]).map((set): [string, string[]] => [
+      set,
+      (CHOICE_SETS[set] as readonly string[]).map((value) => labels.choiceLabel(set, value)),
+    ]),
+  ];
+  const ranges = new Map<string, string>();
+  lists.forEach(([name, values], index) => {
+    const range = optionRange(index + 1, values.length);
+    if (range !== null) ranges.set(name, range);
+  });
+  return {
+    ranges,
+    sheet: (workbook) => {
+      const sheet = workbook.addWorksheet(OPTIONS_SHEET, { state: "hidden" });
+      lists.forEach(([, values], index) => {
+        values.forEach((value, row) => {
+          sheet.getCell(row + 1, index + 1).value = value;
+        });
+      });
+    },
+  };
+}
+
+// A dropdown on every cell of a column the person can fill: an account, a category or a
+// closed set. A labels cell holds several names, so no single-pick list can offer them.
+function addDropdowns(sheet: ExcelJS.Worksheet, columns: readonly ColumnView[], ranges: Map<string, string>, lastRow: number) {
+  columns.forEach((column, index) => {
+    const list = column.choice ?? (column.ref?.entity === "accounts" || column.ref?.entity === "categories" ? column.ref.entity : null);
+    const range = list === null ? undefined : ranges.get(list);
+    if (range === undefined) return;
+    const letter = columnLetter(index + 1);
+    // One rule over the column's span, not one per cell.
+    (sheet as unknown as { dataValidations: { add: (range: string, rule: ExcelJS.DataValidation) => void } }).dataValidations.add(
+      `${letter}2:${letter}${lastRow}`,
+      { type: "list", allowBlank: true, formulae: [range] },
+    );
+  });
+}
+
+// The movement's type from the accounts it names, never stored (RF-20): a source alone is
+// an expense, both a transfer, a destination alone an income. A rule, so it follows an edit.
+function addMovementTints(sheet: ExcelJS.Worksheet, columns: readonly ColumnView[], lastRow: number): void {
+  const from = columns.findIndex((column) => column.ref?.entity === "accounts") + 1;
+  if (from === 0 || columns.length === 0) return;
+  const f = `$${columnLetter(from)}2<>""`;
+  const t = `$${columnLetter(from + 1)}2<>""`;
+  sheet.addConditionalFormatting({
+    ref: `A2:${columnLetter(columns.length)}${lastRow}`,
+    rules: MOVEMENT_TINTS.map((tint, index) => ({
+      type: "expression" as const,
+      priority: index + 1,
+      formulae: [`AND(${tint.from ? f : `NOT(${f})`},${tint.to ? t : `NOT(${t})`})`],
+      style: {
+        fill: { type: "pattern" as const, pattern: "solid" as const, bgColor: { argb: tint.fill } },
+        font: { color: { argb: TINT_TEXT } },
+      },
+    })),
+  });
+}
+
 /**
- * The export workbook (RF-50): one worksheet per entity present in `data`, walked
- * in the fixed reading order (transactions first, the active tab) so every download
- * shares the same layout; the background sheets come last and hidden. A
- * header row from the descriptor's column order leads, the caller's rows follow,
- * each cell crossing the money boundary only where the descriptor marks it.
+ * The workbook both downloads share (RF-50, RF-179): one worksheet per entity present in
+ * `data`, in the fixed reading order, background sheets last and hidden. A header row from
+ * the descriptor's column order leads and the caller's rows follow, each cell crossing the
+ * money boundary only where the descriptor marks it. With `options`, accounts, categories
+ * and every closed set become dropdowns, and the movements are tinted by type.
  */
 export function buildWorkbook(input: {
   data: ExportResult;
   labels: SheetLabels;
+  options?: SheetOptions;
   // Hide the background sheets. The full export does; a sheet the person picked
   // by name stays visible.
   hideBackground?: boolean;
 }): ExcelJS.Workbook {
   const workbook = new ExcelJS.Workbook();
+
+  const lists = input.options ? optionLists(input.options, input.labels) : null;
+  lists?.sheet(workbook);
 
   const present = orderedEntities().filter((entity) => input.data[entity] !== undefined);
   // Hiding every sheet leaves nothing to open, so a selection of only background
@@ -196,10 +294,14 @@ export function buildWorkbook(input: {
       columns.map((column) => input.labels.columnHeader(column.key)),
       rows.map((row) => {
         const record = row as Record<string, CellValue>;
-        return columns.map((column) => cellValue(column, record[column.key]));
+        return columns.map((column) => cellValue(column, record[column.key], input.labels));
       }),
       entity === "transactions",
     );
+
+    const lastRow = Math.max(MIN_RULE_ROWS, rows.length + 1 + RULE_ROW_MARGIN);
+    if (lists) addDropdowns(sheet, columns, lists.ranges, lastRow);
+    if (lists && entity === "transactions") addMovementTints(sheet, columns, lastRow);
   }
 
   openOnFirstVisible(workbook);
@@ -207,64 +309,12 @@ export function buildWorkbook(input: {
 }
 
 /**
- * The fill-in template (RF-49): every sheet, header row only, plus a hidden
- * options sheet holding the caller's existing account and category names. Every
- * account-referencing column (transactions/recurring `fromAccount`/`toAccount`)
- * gets a dropdown against the account list; every category-referencing column
- * (recurring `category`, categories `parent`) against the category list — the
- * reason a workbook, not a CSV, ships here.
+ * The fill-in template (RF-49): the export's own workbook with no rows, so it has the
+ * same sheets, columns, order, dropdowns and tints.
  */
-export function buildTemplate(input: {
-  labels: SheetLabels;
-  accountNames: string[];
-  categoryNames: string[];
-}): ExcelJS.Workbook {
-  const workbook = new ExcelJS.Workbook();
-
-  const options = workbook.addWorksheet(OPTIONS_SHEET, { state: "hidden" });
-  input.accountNames.forEach((name, index) => {
-    options.getCell(index + 1, 1).value = name;
-  });
-  input.categoryNames.forEach((name, index) => {
-    options.getCell(index + 1, 2).value = name;
-  });
-
-  // A labels cell holds several names, so no single-pick list can offer them.
-  const rangeByRef: Partial<Record<RefEntity, string | null>> = {
-    accounts: optionRange(1, input.accountNames.length),
-    categories: optionRange(2, input.categoryNames.length),
-  };
-
-  for (const entity of orderedEntities()) {
-    const sheet = workbook.addWorksheet(input.labels.sheetName(entity));
-    const columns = sheetDescriptors[entity].columns as readonly ColumnView[];
-
-    fillSheet(
-      sheet,
-      columns,
-      columns.map((column) => input.labels.columnHeader(column.key)),
-      [],
-      entity === "transactions",
-    );
-
-    columns.forEach((column, index) => {
-      if (!column.ref) return;
-      const range = rangeByRef[column.ref.entity];
-      if (range == null) return;
-
-      const columnIndex = index + 1;
-      for (let row = 2; row <= TEMPLATE_DATA_ROWS; row += 1) {
-        sheet.getCell(row, columnIndex).dataValidation = {
-          type: "list",
-          allowBlank: true,
-          formulae: [range],
-        };
-      }
-    });
-  }
-
-  openOnFirstVisible(workbook);
-  return workbook;
+export function buildTemplate(input: { labels: SheetLabels; options: SheetOptions }): ExcelJS.Workbook {
+  const data = Object.fromEntries(SHEET_ENTITIES.map((entity) => [entity, []])) as ExportResult;
+  return buildWorkbook({ data, labels: input.labels, options: input.options });
 }
 
 // The reverse of `SheetLabels`: the writer turned an entity into a tab name and a
@@ -275,7 +325,35 @@ export function buildTemplate(input: {
 export type ReverseSheetLabels = {
   readonly entityBySheetName: ReadonlyMap<string, SheetEntity>;
   readonly columnKeyByHeader: ReadonlyMap<SheetEntity, ReadonlyMap<string, string>>;
+  // A closed set's wording, lower-cased, back to the stored value; a flag's «sí» is TRUE.
+  readonly choiceByLabel: ReadonlyMap<ChoiceSet, ReadonlyMap<string, string | true | null>>;
 };
+
+// A set member's wording from a `data` translator: its message when it has one, else the code
+// itself (colours, currencies). One reading shared by the writer's labels and the reader's.
+export function choiceLabelFrom(t: ((key: never) => string) & { has: (key: never) => boolean }): SheetLabels["choiceLabel"] {
+  return (set, value) => {
+    const key = `choices.${set}.${value}` as never;
+    return t.has(key) ? t(key) : value;
+  };
+}
+
+// The reverse of `choiceCell`, built by the caller from the same wording the writer used.
+export function buildChoiceReader(
+  choiceLabel: SheetLabels["choiceLabel"],
+): ReverseSheetLabels["choiceByLabel"] {
+  return new Map(
+    (Object.keys(CHOICE_SETS) as ChoiceSet[]).map((set) => [
+      set,
+      new Map(
+        (CHOICE_SETS[set] as readonly string[]).map((value) => [
+          choiceLabel(set, value).toLowerCase(),
+          set === "flag" ? FLAG_VALUES[value as keyof typeof FLAG_VALUES] : value,
+        ]),
+      ),
+    ]),
+  );
+}
 
 // One parsed data row: the cells keyed by the descriptor's column `key`, and the
 // sheet's own row number — the one a person sees opening the file in Excel, header
@@ -305,6 +383,14 @@ function readCell(value: ExcelJS.CellValue): CellValue {
     if ("text" in value) return readCell(value.text);
   }
   return null;
+}
+
+// A closed-set cell written in the person's wording reads back to its stored value; a
+// word the set does not know passes through for the row's own schema to judge.
+function readChoice(cell: CellValue, set: ChoiceSet | undefined, labels: ReverseSheetLabels): CellValue {
+  if (set === undefined || typeof cell !== "string") return cell;
+  const read = labels.choiceByLabel.get(set)?.get(cell.toLowerCase());
+  return read === undefined ? cell : read;
 }
 
 // The header text of a cell, untrimmed-to-null unlike a data cell: an empty header
@@ -342,6 +428,7 @@ export async function parseWorkbook(input: {
 
     const columns = sheetDescriptors[entity].columns as readonly ParseColumnView[];
     const moneyByKey = new Map(columns.map((column) => [column.key, column.money] as const));
+    const choiceByKey = new Map(columns.map((column) => [column.key, column.choice] as const));
 
     // A header row maps a physical column index to its descriptor key; a header the
     // reverse map does not know stays unmapped, so its column drops out.
@@ -360,7 +447,7 @@ export async function parseWorkbook(input: {
       let hasValue = false;
 
       keyByColumn.forEach((key, columnNumber) => {
-        const cell = readCell(row.getCell(columnNumber).value);
+        const cell = readChoice(readCell(row.getCell(columnNumber).value), choiceByKey.get(key), input.labels);
         const money = moneyByKey.get(key);
         const value =
           money !== undefined && typeof cell === "number" ? money.fromSheet(cell) : cell;

@@ -139,12 +139,12 @@ async function chooseFile(page: Page, path: string) {
 
 async function importedRows() {
   return fixtureSql<
-    { id: string; external_ref: string; amount_cents: string; occurred_at: string; kind: string }[]
+    { id: string; description: string; amount_cents: string; occurred_at: string; kind: string }[]
   >`
-    select id, external_ref, amount_cents::text as amount_cents, occurred_at::text as occurred_at, kind
+    select id, description, amount_cents::text as amount_cents, occurred_at::text as occurred_at, kind
     from transactions
-    where owner_user_id = ${scope.userId} and external_ref like ${`e9-${stamp}-%`}
-    order by external_ref`;
+    where owner_user_id = ${scope.userId} and description in ('E9 grande', 'E9 chico')
+    order by description`;
 }
 
 test.describe("import", () => {
@@ -165,9 +165,9 @@ test.describe("import", () => {
     await expect(page.getByText(data.screen.importDone, { exact: true })).toBeVisible();
 
     const rows = await importedRows();
-    expect(rows.map((row) => [row.external_ref, row.amount_cents, row.occurred_at, row.kind])).toEqual([
-      [`e9-${stamp}-chico`, "7", "2026-03-31", "expense"],
-      [`e9-${stamp}-grande`, "123456", "2026-03-31", "expense"],
+    expect(rows.map((row) => [row.description, row.amount_cents, row.occurred_at, row.kind])).toEqual([
+      ["E9 chico", "7", "2026-03-31", "expense"],
+      ["E9 grande", "123456", "2026-03-31", "expense"],
     ]);
 
     // One split per movement, for the whole amount (RF-69).

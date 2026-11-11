@@ -1312,7 +1312,8 @@
       "importReady": "Todas las filas son válidas. Confirma para escribirlas.",
       "confirmImport": "Confirmar importación",
       "importDone": "Importación aplicada.",
-      "commitRowError": "Fila {row} de {sheet}: {reason}"
+      "commitRowError": "Fila {row} de {sheet}: {reason}",
+      "editedRowsHint": "Si cambiaste fecha, monto o descripción, se agrega como nuevo."
     },
     "sheets": {
       "accounts": "Cuentas",
@@ -1341,9 +1342,8 @@
       "email": "Correo",
       "parent": "Categoría principal",
       "color": "Color",
-      "externalRef": "Referencia externa",
-      "fromAccount": "De (origen)",
-      "toAccount": "Para (destino)",
+      "fromAccount": "De",
+      "toAccount": "Hacia",
       "category": "Categoría",
       "description": "Descripción",
       "frequency": "Frecuencia",
@@ -1367,7 +1367,6 @@
       "targetDate": "Fecha objetivo",
       "goal": "Meta",
       "contributedOn": "Fecha del aporte",
-      "movement": "Movimiento (referencia)",
       "debtKind": "Tipo de deuda",
       "annualRate": "Tasa efectiva anual (%)",
       "minimumPayment": "Pago mínimo",
@@ -1385,7 +1384,49 @@
       "debits": "Cargos",
       "interestCharged": "Intereses",
       "feesCharged": "Comisiones",
-      "source": "Origen"
+      "source": "Origen",
+      "externalRef": "Referencia externa"
+    },
+    "choices": {
+      "accountKind": {
+        "asset": "Activo",
+        "liability": "Deuda"
+      },
+      "accountSubtype": {
+        "bank": "Bancaria",
+        "cash": "Efectivo",
+        "card": "Tarjeta"
+      },
+      "categoryKind": {
+        "expense": "Gasto",
+        "income": "Ingreso"
+      },
+      "placement": {
+        "personal": "Personal",
+        "group": "Del hogar"
+      },
+      "frequency": {
+        "monthly": "Mensual",
+        "weekly": "Semanal",
+        "yearly": "Anual"
+      },
+      "budgetPeriod": {
+        "monthly": "Mensual",
+        "weekly": "Semanal",
+        "yearly": "Anual"
+      },
+      "debtKind": {
+        "revolving": "Rotativa",
+        "installment": "A cuotas"
+      },
+      "statementSource": {
+        "recorded": "Registrado",
+        "imported": "Importado"
+      },
+      "flag": {
+        "yes": "Sí",
+        "no": "No"
+      }
     },
     "filenames": {
       "export": "finanzas-datos",

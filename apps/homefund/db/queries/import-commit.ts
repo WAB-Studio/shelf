@@ -43,6 +43,7 @@ import type { CreateLabelInput } from "@/lib/validation/label";
 import type { CreateMemberInput } from "@/lib/validation/member";
 import type { CreateRecurringRuleInput } from "@/lib/validation/recurring-rule";
 import type { CreateTransactionInput } from "@/lib/validation/transaction";
+import { HELD_KEY_PREFIX } from "@/lib/spreadsheet/sheet-layout";
 
 // This module is written WITHOUT `import "server-only"` on purpose: the RLS proof
 // (`scripts/check-rls.ts`) calls `commitImport` directly under an injected user, and
@@ -187,8 +188,8 @@ export type CommitInput = {
 type Restored = { placement: "personal" | "group"; archived: boolean };
 export type RestoredBudget = CreateBudgetInput & Restored;
 export type RestoredGoal = Omit<CreateGoalInput, "initialContribution"> & Restored;
-// The day it was set aside, and the movement it earmarks by that movement's key (RF-87).
-export type RestoredContribution = { goalId: string; amount: string; contributedOn: string; movement: string | null };
+// The day it was set aside.
+export type RestoredContribution = { goalId: string; amount: string; contributedOn: string };
 // A closed statement as the ledger holds it: its figures signed decimals (RF-129).
 export type RestoredStatement = {
   accountId: string;
@@ -214,8 +215,6 @@ const FILE_HAS_ERRORS = "data.import.errors.hasErrors";
 // larger file chunks into several, all inside the one transaction so all-or-nothing holds.
 const CHUNK_SIZE = 500;
 
-// A contribution whose movement key the fund no longer holds when the commit runs.
-const UNKNOWN_MOVEMENT = "data.import.errors.unknownReference";
 // A budget's category, or a budget's or goal's place, never changes (RF-71, RF-60); a row
 // that names another one is refused rather than written in part.
 const LOCKED_FIELD = "data.import.errors.lockedField";
@@ -295,11 +294,24 @@ export async function commitImport(
   }
 
   try {
-    return await writeImport(tx, input, scope);
+    return await writeImport(tx, withoutHeldRows(input), scope);
   } catch (error) {
     if (isExternalRefClash(error)) throw new ImportAlreadyCommitting(error);
     throw error;
   }
+}
+
+// A row matched to one the fund holds without a key (RF-179) has nothing to update it by: it is
+// left as the fund has it, never written again as new.
+function withoutHeldRows(input: CommitInput): CommitInput {
+  return Object.fromEntries(
+    Object.entries(input).map(([bucket, rows]) => [
+      bucket,
+      Array.isArray(rows)
+        ? (rows as CommitRow<unknown>[]).filter((row) => !row.externalRef?.startsWith(HELD_KEY_PREFIX))
+        : rows,
+    ]),
+  ) as CommitInput;
 }
 
 function bucketsOf(input: CommitInput): CommitRow<unknown>[][] {
@@ -366,7 +378,7 @@ async function writeImport(
   for (const id of goalMap.keys()) placeholders.add(id);
   const goals = input.goals ?? [];
   await archiveRestored(tx, savingsGoals, goals.filter((row) => !row.object.archived), scope);
-  await commitContributions(tx, input.goalContributions ?? [], goalMap, placeholders, scope);
+  await commitContributions(tx, input.goalContributions ?? [], goalMap, placeholders);
   await archiveRestored(tx, savingsGoals, goals.filter((row) => row.object.archived), scope);
   await commitBudgets(tx, input.budgets ?? [], { accountMap, categoryMap, labelMap }, placeholders, scope);
   await archiveRestored(tx, budgets, input.budgets ?? [], scope);
@@ -1164,7 +1176,6 @@ async function commitContributions(
   rows: CommitRow<RestoredContribution>[],
   goalMap: Map<string, string>,
   placeholders: Set<string>,
-  scope: CommitScope,
 ): Promise<void> {
   for (const chunkRows of chunked(rows.filter((row) => row.status === "new"))) {
     const chunk = chunkRows.map((row) => {
@@ -1174,25 +1185,14 @@ async function commitContributions(
         goal_id: goalId,
         amount_cents: toCents(row.object.amount),
         day: row.object.contributedOn,
-        movement: row.object.movement,
         external_ref: row.externalRef,
       };
     });
-    // The earmark resolves to one movement or none; none drops the row, and the count names it.
-    const landed = await tx.execute<{ external_ref: string | null }>(sql`
-      insert into ${goalContributions} (goal_id, amount_cents, created_at, transaction_id, external_ref)
-      select r.goal_id, r.amount_cents, (r.day::date + time '12:00') at time zone ${TIME_ZONE}, m.id, r.external_ref
+    await tx.execute(sql`
+      insert into ${goalContributions} (goal_id, amount_cents, created_at, external_ref)
+      select r.goal_id, r.amount_cents, (r.day::date + time '12:00') at time zone ${TIME_ZONE}, r.external_ref
       from jsonb_to_recordset(${jsonbParam(chunk)}) as r(
-        goal_id uuid, amount_cents bigint, day text, movement text, external_ref text)
-      left join lateral (
-        select t.id from ${transactions} as t where t.external_ref = r.movement and ${inScope(scope)}
-      ) as m on true
-      where r.movement is null or m.id is not null
-      returning external_ref`);
-    if (landed.length > chunk.length) {
-      throw new Error("import-commit: a contribution's movement key names a movement in both scopes");
-    }
-    refuseUnwritten("goalContributions", chunkRows, landed, UNKNOWN_MOVEMENT);
+        goal_id uuid, amount_cents bigint, day text, external_ref text)`);
   }
 }
 

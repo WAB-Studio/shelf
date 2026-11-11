@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, asc, eq, exists, gte, lte, sql } from "drizzle-orm";
+import { and, asc, eq, exists, gte, inArray, lte, sql } from "drizzle-orm";
 import type { PgColumn } from "drizzle-orm/pg-core";
 import type { SQL } from "drizzle-orm";
 
@@ -24,6 +24,7 @@ import {
 import { withUserDb } from "@/db/session";
 import { TIME_ZONE } from "@/lib/locales";
 import { SHEET_ENTITIES, sheetDescriptors } from "@/lib/spreadsheet/schema";
+import { CATEGORY_PATH_SEPARATOR, HELD_KEY_PREFIX } from "@/lib/spreadsheet/sheet-layout";
 import { LABEL_SEPARATOR, type RefEntity, type SheetEntity } from "@/lib/spreadsheet/schema";
 import { fractionToPercent } from "@/lib/validation/debt-terms";
 import { ACCOUNT_PLACEMENTS } from "@/lib/validation/account";
@@ -70,7 +71,15 @@ export type ExportInput = {
   // Narrows the transactions sheet alone (RF-118); every other entity stays
   // the whole-fund dump RF-50 asks for.
   transactionFilters?: TransactionExportFilters;
+  // Carries each row's stable key beside its cells as `externalRef`, a field no sheet
+  // writes. The import reads the fund this way to recognise a row it already holds.
+  withKeys?: boolean;
+  // Narrows the movements to those touching one of these accounts, by name, in the same read.
+  accountNames?: string[];
 };
+
+// The lists a dropdown offers: every account and every category by path, in the caller's scope.
+export type ExportOptions = { accountNames: string[]; categoryPaths: string[] };
 
 // The date range bounds only the two dated entities, on the field the descriptor
 // treats as their calendar day. Both are `date` columns already interpreted in
@@ -125,6 +134,7 @@ async function readEntityRows<E extends SheetEntity>(
   from: Date | string | undefined,
   to: Date | string | undefined,
   extra: SQL[],
+  withKeys: boolean,
 ): Promise<Record<string, unknown>[]> {
   const descriptor = sheetDescriptors[entity];
   const table = exportTables[entity];
@@ -144,6 +154,11 @@ async function readEntityRows<E extends SheetEntity>(
   if (entity === "transactions") {
     projection["id"] = columns["id"];
     projection["contributedByMemberId"] = columns["contributedByMemberId"];
+  }
+
+  if (withKeys && "externalRef" in columns) {
+    projection["externalRef"] = columns["externalRef"];
+    projection["id"] = columns["id"];
   }
 
   const bound = dateColumn[entity];
@@ -177,14 +192,21 @@ async function readNameMap(
   });
 }
 
-// A movement goes by its own key (RF-52): the only one of its names a restore keeps.
-async function readMovementKeys(): Promise<Map<string, string>> {
+// Each category by its path, «Parent › Child» (RF-179): the one cell a person picks a
+// category by, since two parents may each hold a child of the same name.
+async function readCategoryPaths(): Promise<Map<string, string>> {
   return withUserDb(async (tx) => {
     const rows = await tx
-      .select({ id: transactions.id, ref: transactions.externalRef })
-      .from(transactions)
-      .where(exists(tx.select({ present: sql`1` }).from(goalContributions).where(eq(goalContributions.transactionId, transactions.id))));
-    return new Map(rows.flatMap((row) => (row.ref !== null ? [[row.id, row.ref] as const] : [])));
+      .select({ id: categories.id, name: categories.name, parentId: categories.parentId })
+      .from(categories);
+    const byId = new Map(rows.map((row) => [row.id, row]));
+    const pathOf = (id: string, depth = 0): string => {
+      const row = byId.get(id);
+      if (!row) return "";
+      const parent = row.parentId !== null && depth < 8 ? pathOf(row.parentId, depth + 1) : "";
+      return parent.length > 0 ? `${parent}${CATEGORY_PATH_SEPARATOR}${row.name}` : row.name;
+    };
+    return new Map(rows.map((row) => [row.id, pathOf(row.id)]));
   });
 }
 
@@ -231,6 +253,8 @@ const emptyLinkMap = new Map<string, string[]>();
 
 // Every id→name map a reference cell reads, keyed by the entity it names.
 type NameMaps = Record<RefEntity, Map<string, string>>;
+
+const sortedNames = (map: Map<string, string>) => [...new Set(map.values())].sort((a, b) => a.localeCompare(b));
 
 // A transaction's children, by transaction id.
 type Children = {
@@ -322,6 +346,10 @@ function toExportRows<E extends SheetEntity>(
       cell[column.key] = (value ?? null) as CellValue;
     }
 
+    // A row the fund holds without a key is named by its id, so an import can still recognise it.
+    if ("externalRef" in row) {
+      cell["externalRef"] = (row.externalRef ?? (row.id ? `${HELD_KEY_PREFIX}${row.id}` : null)) as CellValue;
+    }
     return cell as ExportRow<E>;
   });
 }
@@ -338,21 +366,50 @@ function toExportRows<E extends SheetEntity>(
  * whole; with none, every read is the one the unfiltered export already ran.
  */
 export async function readExport(input: ExportInput): Promise<ExportResult> {
+  return (await readExportCore(input, false)).data;
+}
+
+/**
+ * `readExport` and the dropdown lists from the same reads: the account names and category
+ * paths a sheet's cells resolve through are the ones its dropdowns offer, so they are read
+ * once. With no entities it is just the lists.
+ */
+export async function readExportWithOptions(
+  input: ExportInput,
+): Promise<{ data: ExportResult; options: ExportOptions }> {
+  return readExportCore(input, true);
+}
+
+export async function readExportOptions(): Promise<ExportOptions> {
+  return (await readExportCore({ entityKeys: [] }, true)).options;
+}
+
+async function readExportCore(
+  input: ExportInput,
+  withOptions: boolean,
+): Promise<{ data: ExportResult; options: ExportOptions }> {
   const requested = SHEET_ENTITIES.filter((entity) => input.entityKeys.includes(entity));
 
-  const needsAccounts = requested.some((entity) => referencesEntity(entity, "accounts"));
-  const needsCategories = requested.some((entity) => referencesEntity(entity, "categories"));
+  const needsAccounts = withOptions || requested.some((entity) => referencesEntity(entity, "accounts"));
+  const needsCategories = withOptions || requested.some((entity) => referencesEntity(entity, "categories"));
   const needsLabels = requested.some((entity) => referencesEntity(entity, "labels"));
   const needsGoals = requested.some((entity) => referencesEntity(entity, "goals"));
-  const needsMovementKeys = requested.some((entity) => referencesEntity(entity, "transactions"));
   const needsSplits = requested.includes("transactions");
 
   // Built once so the rows and their splits are narrowed by the very same set.
   const listed = input.transactionFilters
     ? transactionListConditions(input.transactionFilters)
     : [];
+  const named =
+    input.accountNames === undefined || input.accountNames.length === 0
+      ? []
+      : [
+          sql`(${transactions.fromAccountId} in (select id from ${accounts} where ${inArray(accounts.name, input.accountNames)})
+            or ${transactions.toAccountId} in (select id from ${accounts} where ${inArray(accounts.name, input.accountNames)}))`,
+        ];
+  const narrowed = [...listed, ...named];
 
-  const [sets, accountNames, categoryNames, labelNames, goalNames, movementKeys, splitCategoryIds, labelIds, memberNames] = await Promise.all([
+  const [sets, accountNames, categoryNames, labelNames, goalNames, splitCategoryIds, labelIds, memberNames] = await Promise.all([
     Promise.all(
       requested.map((entity) =>
         readEntityRows(
@@ -361,17 +418,17 @@ export async function readExport(input: ExportInput): Promise<ExportResult> {
           input.to,
           // An adjustment is a movement like any other here: the list shows it (RF-118) and a
           // re-import must reproduce each reconciled account's balance (RF-50).
-          entity === "transactions" ? listed : [],
+          entity === "transactions" ? narrowed : [],
+          input.withKeys === true,
         ),
       ),
     ),
     needsAccounts ? readNameMap(accounts) : Promise.resolve(emptyNameMap),
-    needsCategories ? readNameMap(categories) : Promise.resolve(emptyNameMap),
+    needsCategories ? readCategoryPaths() : Promise.resolve(emptyNameMap),
     needsLabels ? readNameMap(labels) : Promise.resolve(emptyNameMap),
     needsGoals ? readNameMap(savingsGoals) : Promise.resolve(emptyNameMap),
-    needsMovementKeys ? readMovementKeys() : Promise.resolve(emptyNameMap),
-    needsSplits ? readLinkedIds(transactionSplits, transactionSplits.categoryId, listed) : Promise.resolve(emptyLinkMap),
-    needsSplits ? readLinkedIds(transactionLabels, transactionLabels.labelId, listed) : Promise.resolve(emptyLinkMap),
+    needsSplits ? readLinkedIds(transactionSplits, transactionSplits.categoryId, narrowed) : Promise.resolve(emptyLinkMap),
+    needsSplits ? readLinkedIds(transactionLabels, transactionLabels.labelId, narrowed) : Promise.resolve(emptyLinkMap),
     requested.includes("transactions") ? readNameMap(groupMembers) : Promise.resolve(emptyNameMap),
   ]);
 
@@ -380,14 +437,18 @@ export async function readExport(input: ExportInput): Promise<ExportResult> {
     categories: categoryNames,
     labels: labelNames,
     goals: goalNames,
-    transactions: movementKeys,
   };
   const children: Children = { splitCategoryIds, labelIds, memberNames };
 
-  const result: ExportResult = {};
+  const data: ExportResult = {};
   requested.forEach((entity, index) => {
-    result[entity] = toExportRows(entity, sets[index], names, children) as never;
+    data[entity] = toExportRows(entity, sets[index], names, children) as never;
   });
 
-  return result;
+  return {
+    data,
+    options: withOptions
+      ? { accountNames: sortedNames(accountNames), categoryPaths: sortedNames(categoryNames) }
+      : { accountNames: [], categoryPaths: [] },
+  };
 }
