@@ -17772,4 +17772,20 @@ async function accountToFundSuite(): Promise<void> {
       defaults.default_category_id === ids.fundMarket && clash === "accounts.errors.moveMovementRef" && (await placement(taken)).owner_user_id === mover.id,
     `move ${crowdedMove}, labels ${JSON.stringify(kept)}, delivery ${proposed.proposed_category_id}, default ${defaults.default_category_id}, clash ${clash}`,
   );
+
+  // The fund keeps one shared cash: a second cash account is refused and stays personal; a bank account still moves.
+  await fixtureSql`update groups set cash_mode = 'shared' where id = ${ids.group}`;
+  const fundCash = randomUUID();
+  await fixtureSql`
+    insert into accounts (id, group_id, is_shared, name, kind, subtype, initial_balance_cents, initial_balance_on)
+    values (${fundCash}, ${ids.group}, true, ${name("caja")}, 'asset', 'cash', 0, '2026-01-01')`;
+  track("accounts", fundCash);
+  const wallet = await open(mover, "billetera", 50_000_00, { subtype: "cash" });
+  const secondCash = await refusedWith(mover, wallet);
+  const bankStill = await refusedWith(mover, await open(mover, "banco con caja", 0));
+  assert(
+    next("RF-180: a cash account is refused into a fund whose shared cash already exists, and a bank account still moves"),
+    secondCash === "accounts.errors.moveSecondCash" && (await placement(wallet)).owner_user_id === mover.id && bankStill === "none",
+    `cash ${secondCash}, owner ${(await placement(wallet)).owner_user_id}, bank ${bankStill}`,
+  );
 }
