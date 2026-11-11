@@ -51,7 +51,7 @@ test.beforeAll(async () => {
 });
 
 test.afterAll(async () => {
-  await fixtureSql`delete from transaction_splits where transaction_id in ${fixtureSql(ids)}`;
+  // A movement's splits go with it; deleting them first trips the one-split rule.
   await fixtureSql`delete from transactions where id in ${fixtureSql(ids)}`;
 });
 
