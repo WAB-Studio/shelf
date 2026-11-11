@@ -72,7 +72,7 @@ export { NavPanel } from "./nav-panel";
 
 export { BottomNav, BottomNavTrigger, type BottomNavTab } from "./bottom-nav";
 
-export { NavList, NavListTrigger, type NavListItem } from "./nav-list";
+export { NavList, type NavListItem } from "./nav-list";
 
 export {
   Sidebar,
@@ -135,7 +135,6 @@ export { Panel, PanelBlock, PanelRow, PanelButton, type PanelCell } from "./pane
 
 export { StatTiles } from "./stat-tiles";
 
-export { SubNav } from "./sub-nav";
 
 export { Figure } from "./figure";
 

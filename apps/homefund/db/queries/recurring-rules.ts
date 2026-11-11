@@ -290,25 +290,6 @@ export async function setRecurringRuleActive({
   });
 }
 
-// Setting or clearing the end date bounds when the rule stops generating (RF-32).
-export async function setRecurringRuleEndDate({
-  id,
-  endsOn,
-}: {
-  id: string;
-  endsOn: string | null;
-}): Promise<boolean> {
-  return withUserDb(async (tx) => {
-    const rows = await tx
-      .update(recurringRules)
-      .set({ endsOn })
-      .where(eq(recurringRules.id, id))
-      .returning({ id: recurringRules.id });
-
-    return rows.length > 0;
-  });
-}
-
 // How many generated movements still await review — the count the badge shows (RF-31);
 // scope is the policy's job.
 export async function countUnreviewedGenerated(): Promise<number> {

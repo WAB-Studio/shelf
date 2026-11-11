@@ -138,12 +138,6 @@ export function mintedThisRun(): boolean {
   return minted;
 }
 
-export async function harnessUserId(
-  email: string = HARNESS_EMAIL,
-): Promise<string> {
-  return (await harnessSession(email)).user.id;
-}
-
 // The `session_id` claim out of a JWT's middle segment, read by
 // base64url-decoding the payload — never verified, because this file trusts no
 // claim for a decision, only for naming the row a delete must spare.
