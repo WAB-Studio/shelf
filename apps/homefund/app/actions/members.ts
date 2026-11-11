@@ -257,8 +257,6 @@ export const acceptInvitationAction = authActionClient
     const result = await acceptInvitation({ memberId });
     if (result === "gone") throw new ActionError("errors.invitationGone");
     if (result === "otherFund") throw new ActionError("errors.alreadyInFund");
-
-    refresh();
   });
 
 export const declineInvitationAction = authActionClient
