@@ -23,7 +23,7 @@ export type MemberRow = {
 // Ordered for a roster, not a ledger: `name` is the only order a user compares by.
 export async function listMembers(
   groupId: string,
-  options: { archived: boolean },
+  options: { archived: boolean | "all" },
 ): Promise<MemberRow[]> {
   return withUserDb(async (tx) =>
     tx
@@ -39,9 +39,11 @@ export async function listMembers(
       .where(
         and(
           eq(groupMembers.groupId, groupId),
-          options.archived
-            ? isNotNull(groupMembers.archivedAt)
-            : isNull(groupMembers.archivedAt),
+          options.archived === "all"
+            ? undefined
+            : options.archived
+              ? isNotNull(groupMembers.archivedAt)
+              : isNull(groupMembers.archivedAt),
         ),
       )
       .orderBy(asc(groupMembers.name)),

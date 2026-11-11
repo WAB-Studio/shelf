@@ -4,7 +4,7 @@ import { and, asc, desc, eq, isNotNull, isNull, sql } from "drizzle-orm";
 
 import { ownerColumns } from "@/db/queries/owner-columns";
 import { insertRow } from "@/db/insert-row";
-import { accounts } from "@/db/schema";
+import { accounts, groupMembers } from "@/db/schema";
 import type { Account } from "@/db/schema";
 import type { Transaction } from "@/db/session";
 import { withUserDb, withUserDbOrTx } from "@/db/session";
@@ -27,6 +27,9 @@ export type AccountRow = {
   isShared: boolean;
   // The account this one is a pocket of (RF-173); null for an account of its own.
   parentAccountId?: string | null;
+  // The fund member who holds this account (RF-181), with their name; both null for an account of everyone.
+  holderMemberId?: string | null;
+  holderName?: string | null;
   settlementCurrency: CurrencyCode;
   initialBalanceCents: number;
   initialBalanceOn: string;
@@ -117,6 +120,8 @@ export async function listAccounts(
         groupId: accounts.groupId,
         isShared: accounts.isShared,
         parentAccountId: accounts.parentAccountId,
+        holderMemberId: accounts.holderMemberId,
+        holderName: groupMembers.name,
         settlementCurrency: accounts.settlementCurrency,
         initialBalanceCents: accounts.initialBalanceCents,
         initialBalanceOn: accounts.initialBalanceOn,
@@ -134,6 +139,7 @@ export async function listAccounts(
         updatedAt: sql<string>`accounts.updated_at::text`,
       })
       .from(accounts)
+      .leftJoin(groupMembers, eq(groupMembers.id, accounts.holderMemberId))
       .where(
         options.archived ? isNotNull(accounts.archivedAt) : isNull(accounts.archivedAt),
       )
@@ -189,6 +195,7 @@ export type CreateAccountArgs = {
   institution: string | null;
   lastFour?: string | null;
   parentAccountId?: string | null;
+  holderMemberId?: string | null;
   // The currency the account settles in, and the opening amount as an integer
   // in that currency's minor unit (RF-121, RNF-05).
   settlementCurrency: CurrencyCode;
@@ -199,7 +206,20 @@ export type CreateAccountArgs = {
 export async function createAccount(
   args: CreateAccountArgs,
 ): Promise<{ accountId: string }> {
-  return withUserDb((tx) => insertAccount(tx, args));
+  return refuseForeignHolder(() => withUserDb((tx) => insertAccount(tx, args)));
+}
+
+// RF-181: a holder that is no member of the account's fund, or a holder on a personal account, is the one
+// refusal every caller (screen, import, MCP) names the same way.
+async function refuseForeignHolder<T>(write: () => Promise<T>): Promise<T> {
+  try {
+    return await write();
+  } catch (error) {
+    const constraint = pgConstraintName(error);
+    if (constraint === "accounts_holder_member_fk" || constraint === "accounts_holder_in_fund")
+      throw new ActionError("accounts.errors.holderInvalid");
+    throw error;
+  }
 }
 
 // The insert body of `createAccount`: the wrapper opens the session, this runs
@@ -216,6 +236,7 @@ async function insertAccount(
     institution,
     lastFour,
     parentAccountId,
+    holderMemberId,
     settlementCurrency,
     amountMinor,
     balanceOn,
@@ -236,6 +257,7 @@ async function insertAccount(
       institution: institution === "" ? null : institution,
       lastFour: lastFour ? lastFour : null,
       parentAccountId: parentAccountId ?? null,
+      holderMemberId: holderMemberId ?? null,
       settlementCurrency,
       // A liability opens negative so net worth stays a plain sum (RNF-05). The
       // amount arrives already in this currency's minor unit and is written as
@@ -260,6 +282,7 @@ export type UpdateAccountArgs = {
   institution: string | null;
   lastFour?: string | null;
   parentAccountId?: string | null;
+  holderMemberId?: string | null;
   settlementCurrency: CurrencyCode;
   amountMinor: number;
   balanceOn: string;
@@ -279,12 +302,13 @@ export async function updateAccount({
   institution,
   lastFour,
   parentAccountId,
+  holderMemberId,
   settlementCurrency,
   amountMinor,
   balanceOn,
   expectedUpdatedAt,
 }: UpdateAccountArgs): Promise<boolean | "stale"> {
-  return withUserDb(async (tx) => {
+  return refuseForeignHolder(() => withUserDb(async (tx) => {
     const rows = await tx
       .update(accounts)
       .set({
@@ -296,6 +320,8 @@ export async function updateAccount({
         lastFour: lastFour ? lastFour : null,
         // Absent leaves the placement as it is; null takes the account out of its parent.
         ...(parentAccountId === undefined ? {} : { parentAccountId }),
+        // Absent leaves the holder; null returns the account to everyone (RF-181).
+        ...(holderMemberId === undefined ? {} : { holderMemberId }),
         // Granted for update since 0031, so the opening amount and the unit it
         // is counted in always change together.
         settlementCurrency,
@@ -326,7 +352,7 @@ export async function updateAccount({
       .where(eq(accounts.id, accountId))
       .limit(1);
     return row ? "stale" : false;
-  });
+  }));
 }
 
 // RF-61, RF-180: a personal account becomes the group's in one statement, with its movements,

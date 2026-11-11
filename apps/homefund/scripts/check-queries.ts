@@ -4140,6 +4140,7 @@ async function main(): Promise<void> {
   await sheetRoundTripSuite();
   await monthReviewClearSuite();
   await accountToFundSuite();
+  await accountHolderSuite();
 }
 
 // A member recorded without a login is someone in the fund: a leader whose fund holds one is not alone, so an
@@ -15259,7 +15260,7 @@ async function mcpDoorSuite(): Promise<void> {
   assert(
     next("RF-144: /mcp answers 401 with no key, an unknown one or a webhook's, and lists its tools to a key for Claude"),
     anonymous.status === 401 && forged.status === 401 && webhookKey.status === 401 &&
-      JSON.stringify(names) === JSON.stringify(["accept_deliveries", "create_account", "create_category", "delete_movement", "import_statement", "list_accounts", "list_categories", "list_inbox", "list_movements", "merge_movements", "move_account_to_fund", "move_category_movements", "preview_statement", "record_movement", "reject_deliveries", "review_month", "update_account", "update_category", "update_movement"]),
+      JSON.stringify(names) === JSON.stringify(["accept_deliveries", "create_account", "create_category", "delete_movement", "import_statement", "list_accounts", "list_categories", "list_inbox", "list_members", "list_movements", "merge_movements", "move_account_to_fund", "move_category_movements", "preview_statement", "record_movement", "reject_deliveries", "review_month", "update_account", "update_category", "update_movement"]),
     `no key ${anonymous.status}, unknown key ${forged.status}, webhook key ${webhookKey.status}, tools ${JSON.stringify(names)}`,
   );
 
@@ -17787,5 +17788,128 @@ async function accountToFundSuite(): Promise<void> {
     next("RF-180: a cash account is refused into a fund whose shared cash already exists, and a bank account still moves"),
     secondCash === "accounts.errors.moveSecondCash" && (await placement(wallet)).owner_user_id === mover.id && bankStill === "none",
     `cash ${secondCash}, owner ${(await placement(wallet)).owner_user_id}, bank ${bankStill}`,
+  );
+}
+
+// RF-181: a fund account names its holder, a member of that fund; what moves between a held account and an
+// account of everyone is that member's contribution.
+async function accountHolderSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const range = currentMonthRange();
+  const leader = await createMembershipFreeUser();
+  const outsider = await createMembershipFreeUser();
+  const ids = { group: randomUUID(), other: randomUUID(), lead: randomUUID(), mama: randomUUID(), stranger: randomUUID() };
+  await fixtureSql.begin(async (tx) => {
+    await tx`insert into groups (id, name, cash_mode) values (${ids.group}, ${`Harness rf181 fondo ${tag}`}, 'shared'), (${ids.other}, ${`Harness rf181 otro ${tag}`}, 'shared')`;
+    await tx`
+      insert into group_members (id, group_id, user_id, name, role)
+      values (${ids.lead}, ${ids.group}, ${leader.id}, 'Harness rf181 Adrian', 'leader'),
+             (${ids.stranger}, ${ids.other}, ${outsider.id}, 'Harness rf181 Ajeno', 'leader')`;
+    await tx`insert into group_members (id, group_id, name, role) values (${ids.mama}, ${ids.group}, 'Harness rf181 Mama', 'member')`;
+  });
+  track("groups", ids.group);
+  track("groups", ids.other);
+  for (const member of [ids.lead, ids.mama, ids.stranger]) track("group_members", member);
+
+  const base = {
+    kind: "asset" as const, subtype: "bank" as const, ownerUserId: null, groupId: ids.group, isShared: true, institution: null,
+    settlementCurrency: BASE_CURRENCY, balanceOn: "2026-01-01",
+  };
+  const open = async (name: string, extra: Partial<Parameters<typeof createAccount>[0]> = {}) => {
+    const { accountId } = await asUser(leader, () => createAccount({ ...base, name: `Harness rf181 ${name} ${tag}`, amountMinor: 0, ...extra }));
+    track("accounts", accountId);
+    return accountId;
+  };
+  const refusedWith = async (attempt: () => Promise<unknown>) => {
+    try {
+      await attempt();
+      return "none";
+    } catch (error) {
+      return error instanceof ActionError ? error.messageKey : (pgErrorCode(error) ?? "unknown");
+    }
+  };
+  const bbva = await open("bbva", { holderMemberId: ids.mama });
+  const pot = await open("caja");
+  const listed = async () => (await asUser(leader, () => listAccounts({ archived: false }))).find((row) => row.id === bbva);
+  const first = await listed();
+  assert(
+    next("RF-181: a fund account opens with a holder from its own fund, and the list answers the member and their name"),
+    first?.holderMemberId === ids.mama && first.holderName === "Harness rf181 Mama",
+    `row ${JSON.stringify(first && [first.holderMemberId, first.holderName])}`,
+  );
+
+  const patch = (holderMemberId: string | null) =>
+    asUser(leader, () =>
+      updateAccount({
+        accountId: bbva, name: `Harness rf181 bbva ${tag}`, subtype: "bank", isShared: true, institution: null,
+        settlementCurrency: BASE_CURRENCY, amountMinor: 0, balanceOn: "2026-01-01", holderMemberId,
+      }),
+    );
+  await patch(null);
+  const cleared = await listed();
+  await patch(ids.mama);
+  const reset = await listed();
+  assert(
+    next("RF-181: the holder is cleared with null and set again"),
+    cleared?.holderMemberId === null && cleared.holderName === null && reset?.holderMemberId === ids.mama,
+    `cleared ${JSON.stringify(cleared?.holderMemberId)}, reset ${JSON.stringify(reset?.holderMemberId)}`,
+  );
+
+  const otherFund = await refusedWith(() => patch(ids.stranger));
+  const onCreate = await refusedWith(() => open("ajeno", { holderMemberId: ids.stranger }));
+  const personal = await refusedWith(() =>
+    asUser(leader, () =>
+      createAccount({ ...base, ownerUserId: leader.id, groupId: null, isShared: false, name: `Harness rf181 personal ${tag}`, amountMinor: 0, holderMemberId: ids.lead }),
+    ),
+  );
+  assert(
+    next("RF-181: the write refuses (holderInvalid) a holder from another fund, on an edit and on a create, and a holder on a personal account"),
+    [otherFund, onCreate, personal].every((key) => key === "accounts.errors.holderInvalid"),
+    `edit ${otherFund}, create ${onCreate}, personal ${personal}; expected accounts.errors.holderInvalid three times`,
+  );
+
+  const move = async (fromAccountId: string, toAccountId: string, amountCents: number) => {
+    const { transactionId } = await asUser(leader, () =>
+      createTransaction({
+        fromAccountId, toAccountId, amountCents, occurredAt: todayInBogota(), description: `Harness rf181 ${tag}`,
+        externalRef: null, splits: [], labelIds: [],
+      }),
+    );
+    track("transactions", transactionId);
+  };
+  const figure = async () =>
+    (await asUser(leader, () => getMemberContributions(range))).find((row) => row.memberId === ids.mama && row.currency === BASE_CURRENCY)?.contributionCents;
+  await move(bbva, pot, 800_000);
+  const put = await figure();
+  await move(pot, bbva, 300_000);
+  const net = await figure();
+  const nobody = await open("otra");
+  await move(nobody, pot, 100_000);
+  const unmoved = await figure();
+  assert(
+    next("RF-181: a transfer from a held account into one of everyone is the holder's contribution, one back reduces it, and two accounts without a holder move none"),
+    put === 800_000 && net === 500_000 && unmoved === 500_000,
+    `after paying in ${put}, after the return ${net}, after a transfer between two of everyone ${unmoved}; expected 800000, 500000, 500000`,
+  );
+
+  // 100 from the leader's own account through the held one into the pot is one contribution, the holder's.
+  const own = (await asUser(leader, () =>
+    createAccount({ ...base, ownerUserId: leader.id, groupId: null, isShared: false, name: `Harness rf181 propia ${tag}`, amountMinor: 1_000_000 }),
+  )).accountId;
+  track("accounts", own);
+  const ofLeader = async () =>
+    (await asUser(leader, () => getMemberContributions(range))).find((row) => row.memberId === ids.lead && row.currency === BASE_CURRENCY)?.contributionCents ?? 0;
+  const leaderBefore = await ofLeader();
+  await move(own, bbva, 100_000);
+  const intoHeld = { leader: await ofLeader(), mama: await figure() };
+  await move(bbva, pot, 100_000);
+  const through = { leader: await ofLeader(), mama: await figure() };
+  await open("efectivo", { subtype: "cash", holderMemberId: ids.mama, amountMinor: 5_000_00 });
+  const potCash = (await asUser(leader, () => getFundCashBalances(range))).find((row) => row.currency === BASE_CURRENCY)?.balanceCents;
+  assert(
+    next("RF-181: money from a personal account into a held one is no contribution, through to the pot it counts once for the holder, and a held account is off the fund's cash"),
+    intoHeld.leader === leaderBefore && intoHeld.mama === 500_000 && through.leader === leaderBefore && through.mama === 600_000 && potCash === undefined,
+    `into held ${JSON.stringify(intoHeld)}, through ${JSON.stringify(through)}, leader before ${leaderBefore}, fund cash ${potCash}; expected the leader unchanged, 500000 then 600000, no cash`,
   );
 }
