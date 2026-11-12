@@ -180,6 +180,7 @@ import { getUserLocale, upsertUserLocale } from "@/db/queries/user-locale";
 import {
   getWebhookCredentialOptions,
   issueWebhookCredential,
+  resolveWebhookCredential,
   revokeWebhookCredential,
   listWebhookCredentials,
 } from "@/db/queries/webhook-credentials";
@@ -4161,6 +4162,7 @@ async function main(): Promise<void> {
   await mcpLabelsSuite();
   await connectionsSuite();
   await thirdPartyCreditSuite();
+  await widgetSuite();
 }
 
 // A member recorded without a login is someone in the fund: a leader whose fund holds one is not alone, so an
@@ -19026,5 +19028,166 @@ async function thirdPartyCreditSuite(): Promise<void> {
     next("RF-211: stopping the follow-up removes the link only; both accounts and every movement stay"),
     gone.length === 0 && accountsLeft === 2 && movementsLeft === 3 && (await refused(() => asUser(user, () => removeThirdPartyCredit(credit)))) === "errors.notFound",
     `links ${gone.length}, accounts ${accountsLeft}, movements ${movementsLeft}`,
+  );
+}
+
+// RF-215: the iPhone widget's key opens the summary and nothing else, and no other key opens the summary. The
+// summary is the key owner's figures alone, in one fan-out of three transactions.
+async function widgetSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const today = todayInBogota();
+  const { GET } = await import("@/app/api/widget/route");
+  const { POST } = await import("@/app/mcp/route");
+  const { recordIngestDelivery } = await import("@/db/queries/webhook-ingest");
+  const { getWidgetSummary } = await import("@/db/queries/widget-summary");
+  const owner = await createMembershipFreeUser();
+  const stranger = await createMembershipFreeUser();
+  const open = (user: typeof owner, name: string, amountMinor: number) =>
+    asUser(user, async () => {
+      const { accountId } = await createAccount({
+        name, kind: "asset", subtype: "bank", ownerUserId: user.id, groupId: null, isShared: false,
+        institution: null, lastFour: null, settlementCurrency: "COP", amountMinor, balanceOn: shiftDate(today, -40),
+      } as never);
+      track("accounts", accountId);
+      return accountId;
+    });
+  const bank = await open(owner, `Harness rf215 banco ${tag}`, 1_250_000);
+  await open(stranger, `Harness rf215 ajeno ${tag}`, 777_000);
+  // What is owed on a card is not money in hand, and a pocket holds money of its own beside its parent's.
+  const cardId = await asUser(owner, async () => {
+    const { accountId: cardId } = await createAccount({
+      name: `Harness rf215 tarjeta ${tag}`, kind: "liability", subtype: "card", ownerUserId: owner.id, groupId: null, isShared: false,
+      institution: null, lastFour: null, settlementCurrency: "COP", amountMinor: 400_000, balanceOn: shiftDate(today, -40),
+    } as never);
+    track("accounts", cardId);
+    const { accountId: pocketId } = await createAccount({
+      name: `Harness rf215 bolsillo ${tag}`, kind: "asset", subtype: "bank", ownerUserId: owner.id, groupId: null, isShared: false,
+      institution: null, lastFour: null, settlementCurrency: "COP", amountMinor: 100_000, balanceOn: shiftDate(today, -40),
+      parentAccountId: bank,
+    } as never);
+    track("accounts", pocketId);
+    return cardId;
+  });
+  // The card is paid by John, whose «Me debe» account is money owed to the person, not money in hand; his
+  // installment reached the lender's this month.
+  const linked = await asUser(owner, () =>
+    setUpThirdPartyCredit(
+      setUpThirdPartyCreditSchema.parse({
+        liabilityAccountId: cardId, personName: "John", receivableAccountId: "", amount: "2.000", openedOn: shiftDate(today, -40),
+        installmentAmount: "1.000", dueDay: String(Number(shiftDate(today, 6).slice(8))),
+      }),
+      `Me debe John ${tag}`,
+    ),
+  );
+  track("accounts", linked.receivableAccountId);
+  const { transactionId: johnPays } = await asUser(owner, () =>
+    createTransaction({
+      fromAccountId: linked.receivableAccountId, toAccountId: bank, amountCents: 100_000, occurredAt: today,
+      description: `Harness rf215 pago ${tag}`, externalRef: `rf215-john-${tag}`, splits: [], labelIds: [],
+    } as never),
+  );
+  track("transactions", johnPays);
+  const { categoryId } = await asUser(owner, () =>
+    createCategory({
+      scope: { ownerUserId: owner.id }, name: `Harness rf215 comida ${tag}`, kind: "expense", parentId: null, color: CATEGORY_COLORS[0],
+    }),
+  );
+  track("categories", categoryId);
+  const { transactionId } = await asUser(owner, () =>
+    createTransaction({
+      fromAccountId: bank, toAccountId: null, amountCents: 30_000, occurredAt: today, description: `Harness rf215 ${tag}`,
+      externalRef: `rf215-${tag}`, splits: [{ categoryId, amountCents: 30_000 }], labelIds: [],
+    } as never),
+  );
+  track("transactions", transactionId);
+  await fixtureSql`
+    insert into budgets (owner_user_id, category_id, period, limit_cents, threshold_pct)
+    values (${owner.id}, ${categoryId}, 'monthly', 500000, 80)`;
+  const mint = async (purpose: "widget" | "mcp" | "ingest") => {
+    const { id, token } = await asUser(owner, () =>
+      issueWebhookCredential({ name: `Harness rf215 ${purpose} ${tag}`, purpose, defaultAccountId: null, defaultCategoryId: null }),
+    );
+    keep("webhook_credentials", id);
+    return { id, token };
+  };
+  const widgetKey = await mint("widget");
+  const claudeKey = await mint("mcp");
+  const webhookKey = await mint("ingest");
+  await recordIngestDelivery({
+    ownerUserId: owner.id, credentialId: webhookKey.id, defaultAccountId: null, defaultCategoryId: null,
+    payload: { text: `Bancolombia: Compraste $10.000 en Tienda ${tag}` } as Parameters<typeof recordIngestDelivery>[0]["payload"],
+  });
+  const ask = (bearer: string | null) =>
+    GET(new Request("http://localhost/api/widget", { headers: bearer ? { authorization: `Bearer ${bearer}` } : {} }));
+
+  // Today included, counted apart from the app's own arithmetic.
+  const [year, monthNumber, day] = today.split("-").map(Number);
+  const daysLeft = new Date(Date.UTC(year, monthNumber, 0)).getUTCDate() - day + 1;
+
+  const response = await ask(widgetKey.token);
+  const summary = (await response.json()) as Partial<Awaited<ReturnType<typeof getWidgetSummary>>>;
+  assert(
+    next("RF-215: /api/widget answers the key owner's money in hand (bank and cash with pockets, no card, no «Me debe» of a credit), month (spent, budgeted, what is left and the day's share), Bandeja and the credits somebody else pays, in integer cents, private for five minutes"),
+    response.status === 200 &&
+      response.headers.get("cache-control") === "private, max-age=300" &&
+      summary.currency === "COP" &&
+      summary.disponible?.cents === 1_420_000 &&
+      summary.mes?.spentCents === 30_000 &&
+      summary.mes?.budgetedCents === 500_000 &&
+      summary.mes?.remainingCents === 470_000 &&
+      summary.mes?.daysLeft === daysLeft &&
+      summary.mes?.perDayCents === Math.floor(470_000 / daysLeft) &&
+      summary.bandeja?.pendingCount === 1 &&
+      JSON.stringify(summary.creditos) ===
+        JSON.stringify([{ person: "John", currency: "COP", paidThisMonth: "done", installmentCents: 100_000, daysUntilDue: 6 }]),
+    `${response.status} ${response.headers.get("cache-control")} ${JSON.stringify(summary)}`,
+  );
+
+  const [none, unknown, claude, webhook] = await Promise.all([
+    ask(null), ask(`whk_${randomUUID()}`), ask(claudeKey.token), ask(webhookKey.token),
+  ]);
+  const { rpc } = mcpClient(POST, widgetKey.token);
+  const [mcpWithWidget, mcpWithOwnKey] = await Promise.all([
+    rpc(widgetKey.token, "tools/list"),
+    rpc(claudeKey.token, "tools/list"),
+  ]);
+  assert(
+    next("RF-215: /api/widget refuses no key, an unknown one, Claude's and a webhook's with 401; /mcp refuses the widget's key and still serves Claude's"),
+    [none, unknown, claude, webhook].every((one) => one.status === 401) &&
+      mcpWithWidget.status === 401 && mcpWithOwnKey.status === 200,
+    `none ${none.status}, unknown ${unknown.status}, claude ${claude.status}, webhook ${webhook.status}, /mcp with widget ${mcpWithWidget.status}, with claude ${mcpWithOwnKey.status}`,
+  );
+
+  const [viaWidget, viaClaude, viaWebhook] = await Promise.all([
+    resolveWebhookCredential(widgetKey.token, "ingest"),
+    resolveWebhookCredential(claudeKey.token, "widget"),
+    resolveWebhookCredential(webhookKey.token, "widget"),
+  ]);
+  assert(
+    next("RF-215: the resolver gives a widget key to the widget door alone, never to the webhook"),
+    viaWidget === null && viaClaude === null && viaWebhook === null,
+    `widget key as ingest ${JSON.stringify(viaWidget)}, claude key as widget ${JSON.stringify(viaClaude)}, webhook key as widget ${JSON.stringify(viaWebhook)}`,
+  );
+
+  await asUser(owner, () => revokeWebhookCredential({ id: widgetKey.id }));
+  const revoked = await ask(widgetKey.token);
+  assert(
+    next("RF-215: a revoked widget key is a 401 at once"),
+    revoked.status === 401 && revoked.headers.get("cache-control") === "no-store",
+    `revoked key answered ${revoked.status}`,
+  );
+
+  await asUser(owner, () => getWidgetSummary());
+  const unitBefore = roundTrips();
+  await asUser(owner, () => getAccountBalances());
+  const unit = roundTrips() - unitBefore;
+  const before = roundTrips();
+  await asUser(owner, () => getWidgetSummary());
+  const trips = roundTrips() - before;
+  assert(
+    next("RF-215: the widget summary costs three transactions fanned out, the light reads sharing one"),
+    trips <= unit * 3 + 3,
+    `${trips} round trips for the summary, ${unit} for a single read`,
   );
 }

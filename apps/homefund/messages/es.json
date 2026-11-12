@@ -1575,6 +1575,22 @@
       "smsStep3": "En «Cuerpo de la solicitud» elige JSON y agrega un solo campo de texto: «text» con la variable «Entrada del atajo», propiedad «Contenido». HomeFund lee si es gasto o ingreso, y el mismo SMS dos veces entra una sola.",
       "result": "Lo que llega espera en la Bandeja hasta que lo aceptes; nada se anota solo."
     },
+    "widget": {
+      "heading": "Widget del iPhone",
+      "description": "Un widget de Scriptable (app gratis) muestra en tu pantalla de inicio o de bloqueo cuánto tienes disponible, lo gastado del mes frente a lo presupuestado y lo que espera en la Bandeja.",
+      "step1": "Instala Scriptable, una app gratis de la App Store.",
+      "step1Link": "Abrir Scriptable en la App Store",
+      "step2": "Copia el script de abajo. En Scriptable toca «+», pégalo y llámalo «HomeFund».",
+      "scriptLabel": "Script",
+      "scriptUrlLabel": "O ábrelo en Safari y cópialo de ahí",
+      "step3": "Crea aquí la clave del widget. Solo sirve para leer este resumen.",
+      "issue": "Crear clave para el widget",
+      "keyLabel": "Clave del widget",
+      "step4": "Abre «HomeFund» en Scriptable y toca ▶. Te pide la clave: pégala.",
+      "step5": "En la pantalla de inicio mantén pulsado, toca «+», elige Scriptable y agrega el widget pequeño o el mediano; tócalo y en «Script» elige «HomeFund». En la pantalla de bloqueo, agrégalo desde «Personalizar» (rectangular o en línea).",
+      "step6": "Para ocultar los montos, a un widget ponle el parámetro «privado» u «oculto» (mantén pulsado el widget › Editar widget › Parameter). Para todos los widgets sin parámetro, abre «HomeFund» en Scriptable y elige «Ocultar montos» (o «Mostrar montos»); desde ese mismo menú puedes «Cambiar llave». Un widget con el parámetro «visible» siempre muestra los montos. La Bandeja y los días de la cuota se ven igual.",
+      "result": "Tocar el widget abre la Bandeja. Si revocas su clave en la lista, deja de funcionar."
+    },
     "created": "Credencial creada.",
     "endpointHeading": "Cómo enviar un movimiento",
     "endpointUrlLabel": "URL",
@@ -1609,6 +1625,7 @@
       "iphone": "iPhone",
       "bank_emails": "Correos del banco",
       "claude": "Claude",
+      "widget": "Widget",
       "other": "Otro"
     },
     "kindLabel": "Para qué es",

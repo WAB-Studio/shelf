@@ -100,3 +100,17 @@ export const issueClaudeKeyAction = authActionClient
     refresh();
     return credential;
   });
+
+// RF-215: a key that opens the iPhone widget's summary alone, never the webhook nor /mcp. Shown once.
+export const issueWidgetKeyAction = authActionClient
+  .inputSchema(z.object({}))
+  .action(async () => {
+    const credential = await issueWebhookCredential({
+      name: "Widget del iPhone",
+      purpose: "widget",
+      defaultAccountId: null,
+      defaultCategoryId: null,
+    });
+    refresh();
+    return credential;
+  });

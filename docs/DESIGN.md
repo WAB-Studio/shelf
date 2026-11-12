@@ -521,6 +521,23 @@ Board C1h corrected the same day: a card in credit reads «Según HomeFund −$ 
   «Gasto escrito» (six numbered steps) and «SMS del banco» (three), pointing at the URL of «Cómo enviar un movimiento»,
   and a gray line saying a delivery waits in the Bandeja. Steps name the Shortcuts actions as iOS names them.
 
+## Decisions of 2026-11-11: HomeFund's widget on the iPhone, by the user
+
+- «Ajustes · Correos del banco» has a «Widget del iPhone» card under «Atajo de iPhone»: one line on what it shows, then
+  six numbered steps (install Scriptable, copy the script, create the key, paste the key on the script's first run, add
+  the widget and choose the script, hide the amounts), and a gray line saying a tap opens the Bandeja and revoking the key stops it.
+- Step 2 carries the script in a copy block and its address in another; step 3 carries «Crear clave para el widget» and
+  shows the key once under the same warning as a webhook token. A widget key opens the widget's summary and nothing else;
+  in the key list it wears the badge «Widget».
+- The widget reads «Disponible» large, the month as what is left (medium «Te quedan $X este mes · $Y por día»; small and lock screen «$Y/día» over «quedan $X»; red «Te pasaste $X» once the budget is passed; «Gastado $X» with no budget) and the Bandeja's count
+  («N por revisar», «Bandeja al día» at zero) in amber. The medium widget adds one line per credit somebody else pays,
+  up to three and then «y N más», like «John: pagó ✓ · cuota en 6 días» (amber while the payment is missing).
+- The widget has a private mode: its Parameter «privado» or «oculto» (any case or accent) draws every amount as «$ •••••»,
+  and «visible» always draws them; with no parameter the menu of the script in Scriptable («Ocultar montos» / «Mostrar
+  montos», and «Cambiar llave») decides. The Bandeja's count, the ✓ and the days to the installment still show. A sixth
+  step on the card says so. Pesos have no cents («$1.234.567»). Small and medium on the home
+  screen; rectangular and inline on the lock screen. Offline it shows the last figures with «Sin conexión».
+
 ## Decisions of 2026-11-11: Gmail's bank emails from the PC, by the user
 
 - «Ajustes · Correos del banco» has a «Correos del banco» card above «Cómo enviar un movimiento»: one line on what it does, six

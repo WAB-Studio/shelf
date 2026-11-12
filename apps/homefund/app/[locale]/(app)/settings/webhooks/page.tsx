@@ -11,6 +11,7 @@ import {
 } from "@/db/queries/webhook-credentials";
 import { routing } from "@/i18n/routing";
 import { env } from "@/lib/env";
+import { widgetScript } from "@/lib/widget/script";
 
 export async function generateMetadata(
   props: PageProps<"/[locale]/settings/webhooks">,
@@ -57,6 +58,8 @@ export default async function WebhooksPage(
         inboundDomain={env.INBOUND_EMAIL_DOMAIN ?? null}
         apkReady={Boolean(env.ANDROID_APK_GITHUB_TOKEN)}
         mcpUrl={new URL("/mcp", env.NEXT_PUBLIC_SITE_URL).toString()}
+        widgetScript={widgetScript(env.NEXT_PUBLIC_SITE_URL)}
+        widgetScriptUrl={new URL("/api/widget/script", env.NEXT_PUBLIC_SITE_URL).toString()}
       />
     </Page>
   );

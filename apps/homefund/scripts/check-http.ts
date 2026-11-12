@@ -967,6 +967,7 @@ void (async () => {
     await credentialDefaultCategorySuite();
     await failureNoStoreSuite();
     await emailIngestSuite();
+    await widgetKeySuite();
     await renderSuite(LATE_RENDER_CASES, httpCookie);
   } catch (error) {
     assert(
@@ -1730,5 +1731,75 @@ async function emailIngestSuite(): Promise<void> {
     next("an email with no key, or with a signature the secret did not make, is refused with 401"),
     anonymous.status === 401 && forged.status === 401,
     `they answered ${anonymous.status} and ${forged.status}`,
+  );
+}
+
+// RF-215: over the wire, the widget's key opens /api/widget alone, and no other key opens it.
+async function widgetKeySuite(): Promise<void> {
+  const userId = httpUserId;
+  if (!userId) throw new Error("widgetKeySuite ran before the session was read");
+  const claims = JSON.stringify({ sub: userId, role: "authenticated", aud: "authenticated" });
+  const mint = async (purpose: "widget" | "ingest") => {
+    const id = randomUUID();
+    const token = `whk_${randomBytes(32).toString("base64url")}`;
+    await fixtureSql.begin(async (tx) => {
+      await tx`select set_config('request.jwt.claims', ${claims}, true)`;
+      await tx`
+        insert into webhook_credentials (id, owner_user_id, name, token_hash, purpose)
+        values (${id}, ${userId}, ${`Harness HTTP ${purpose} key`}, ${createHash("sha256").update(token).digest("hex")}, ${purpose})`;
+    });
+    track("webhook_credentials", id);
+    return token;
+  };
+  const widgetToken = await mint("widget");
+  const webhookToken = await mint("ingest");
+  const summary = (bearer?: string) =>
+    fetch(`${HARNESS_BASE_URL}/api/widget`, { headers: bearer ? { authorization: `Bearer ${bearer}` } : {} });
+
+  const served = await summary(widgetToken);
+  const body = (await served.json()) as Record<string, unknown>;
+  assert(
+    next("the widget key opens /api/widget with the summary's keys, private for five minutes"),
+    served.status === 200 &&
+      served.headers.get("cache-control") === "private, max-age=300" &&
+      typeof body.currency === "string" &&
+      "disponible" in body && "mes" in body && "bandeja" in body,
+    `it answered ${served.status} ${served.headers.get("cache-control")} ${JSON.stringify(body)}`,
+  );
+
+  const [bare, webhookKey, ingest, mcp] = await Promise.all([
+    summary(),
+    summary(webhookToken),
+    fetch(`${HARNESS_BASE_URL}/api/webhooks/ingest`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${widgetToken}`, "content-type": "application/json" },
+      body: JSON.stringify({ text: "Bancolombia: Compraste COP1.000,00 en ZXQ WIDGET" }),
+    }),
+    fetch(`${HARNESS_BASE_URL}/mcp`, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${widgetToken}`,
+        "content-type": "application/json",
+        accept: "application/json, text/event-stream",
+      },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" }),
+    }),
+  ]);
+  assert(
+    next("/api/widget refuses no key and a webhook's with 401; the widget key is refused by the webhook and by /mcp"),
+    bare.status === 401 && webhookKey.status === 401 && ingest.status === 401 && mcp.status === 401,
+    `no key ${bare.status}, webhook key ${webhookKey.status}, widget key at ingest ${ingest.status}, at /mcp ${mcp.status}`,
+  );
+
+  const script = await fetch(`${HARNESS_BASE_URL}/api/widget/script`);
+  const source = await script.text();
+  assert(
+    next("the widget's script is served as text, names the app's own address and holds no key"),
+    script.status === 200 &&
+      (script.headers.get("content-type") ?? "").startsWith("text/javascript") &&
+      source.includes("/api/widget") &&
+      !source.includes("__SITE__") &&
+      !source.includes("whk_"),
+    `it answered ${script.status} ${script.headers.get("content-type")}`,
   );
 }
