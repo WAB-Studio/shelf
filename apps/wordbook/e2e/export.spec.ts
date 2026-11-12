@@ -28,6 +28,12 @@ async function deleteTranslator(page: Page): Promise<void> {
   });
 }
 
+// The device holds no dictionary: the asset never arrives, so the Anki file goes out with the line the record kept.
+// A spec that reads the file's lines asks for this to keep them the same whether or not an earlier visit installed one.
+async function blockDictionary(page: Page): Promise<void> {
+  await page.route("**/dictionary/**", (route) => route.abort());
+}
+
 // Exposes every `Worker` construction as `window.__workersBuilt`, so a test
 // can prove `/registro` mounts none (RNL-08) without importing the hook that
 // would create one.
@@ -385,6 +391,7 @@ async function seedStudy(page: Page, rows: SeedLookup[], sync: SyncState | null 
 
 async function openSeeded(page: Page): Promise<void> {
   await deleteTranslator(page);
+  await blockDictionary(page);
   await seedStudy(page, STUDY_ROWS);
   await page.goto("/registro");
   await expect(jsonControl(page)).toBeVisible();
@@ -417,7 +424,7 @@ test("RL-65: the Anki download is registro-lecturas-<date>-anki.csv, one card pe
   const file = await downloadAnki(page);
   expect(file.name).toMatch(/^registro-lecturas-\d{4}-\d{2}-\d{2}-anki\.csv$/);
   const lines = file.text.split("\n");
-  expect(lines.slice(0, 2)).toEqual(["#separator:Comma", "#html:false"]);
+  expect(lines.slice(0, 2)).toEqual(["#separator:Comma", "#html:true"]);
   expect(lines.slice(2).filter((line) => line !== "")).toEqual(EXPECTED_CARDS);
   expect(file.text.endsWith("\n")).toBe(true);
   await expect(page.getByText(t("log.study.ankiDone", { cards: EXPECTED_CARDS.length }))).toBeVisible();
@@ -652,15 +659,20 @@ test("RL-65: rows a sync round lands show both controls without a reload", async
   expect(file.text.split("\n").slice(2).filter((line) => line !== "")).toEqual(['"zebra","cebra"']);
 });
 
-test("RNL-08: building the Anki CSV mounts no dictionary Worker and fetches no dictionary asset", async ({ page }) => {
+test("RNL-08, RL-92: opening /registro mounts no dictionary Worker; the Anki download raises one for itself and fetches no asset", async ({ page }) => {
   await countWorkerConstructions(page);
   await openSeeded(page);
+  const built = () => page.evaluate(() => (window as unknown as { __workersBuilt: number }).__workersBuilt);
+  expect(await built()).toBe(0);
   const requests: string[] = [];
   page.on("request", (request) => requests.push(request.url()));
   await downloadAnki(page);
   await expect(page.getByText(t("log.study.ankiDone", { cards: EXPECTED_CARDS.length }))).toBeVisible();
-  expect(await page.evaluate(() => (window as unknown as { __workersBuilt: number }).__workersBuilt)).toBe(0);
+  // One Worker, for this download alone; it reads the copy on the device and never downloads one.
+  expect(await built()).toBe(1);
   expect(requests.some((url) => url.includes(manifest.asset.path))).toBe(false);
+  // No copy on the device: the file says it carries the logged line, not a sense.
+  await expect(page.getByText(study.ankiPlain, { exact: true })).toBeVisible();
 });
 
 // ---------------------------------------------------------------------------
@@ -674,6 +686,7 @@ function unlistedRow(word: string, definition: string | null, at: number): SeedL
 
 async function openRows(page: Page, rows: SeedLookup[]): Promise<void> {
   await deleteTranslator(page);
+  await blockDictionary(page);
   await seedStudy(page, rows);
   await page.goto("/registro");
   await expect(jsonControl(page)).toBeVisible();
@@ -926,4 +939,30 @@ test("RL-76: a legacy miss (schema 3) is left out as before, never counted as wa
   await downloadAnki(page);
   await expect(page.getByText(t("log.study.ankiSkipped", { count: 1 }), { exact: true })).toBeVisible();
   await expect(page.getByText(/espera(n)? respuesta/)).toHaveCount(0);
+});
+
+// ---------------------------------------------------------------------------
+// RL-92: the file draws the card the app draws, from the copy of the dictionary on the device.
+// ---------------------------------------------------------------------------
+
+test("RL-92: with the dictionary on the device the card is the app's: part of speech, up to three translations, the default sense", async ({
+  page,
+}) => {
+  await deleteTranslator(page);
+  // The box installs the dictionary on the device; the word is then seeded, as a lookup the record kept.
+  await page.goto("/");
+  const box = page.getByRole("textbox", { name: messages.search.label });
+  await box.fill("tree");
+  await expect(page.getByRole("heading", { name: "tree", exact: true })).toBeVisible({ timeout: 15000 });
+  await seedStudy(page, [studyRow("tree", "enarbolar, árbol, fuste", NOW + 1_000, { headword: "tree" })]);
+  await page.goto("/registro");
+  await expect(jsonControl(page)).toBeVisible();
+
+  const file = await downloadAnki(page);
+  const card = file.text.split("\n").find((line) => line.startsWith('"tree",'));
+  // `tree` carries no measured order: the app's default is the noun, not the verb «enarbolar» that heads its group.
+  expect(card).toContain('"tree","sustantivo<br>árbol, fuste');
+  expect(card).not.toContain("enarbolar");
+  expect(file.text.split("\n")[1]).toBe("#html:true");
+  await expect(page.getByText(study.ankiPlain, { exact: true })).toHaveCount(0);
 });
