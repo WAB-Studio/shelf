@@ -344,7 +344,6 @@ export function DebtDetailScreen({ data }: { data: DebtDetailData }) {
             if (!open) setDialog(null);
           }}
           credit={{ accountId: account.id, owedCents, currency }}
-          assets={payFrom}
         />
       )}
 

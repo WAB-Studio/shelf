@@ -53,12 +53,8 @@ export async function getWidgetSummary(): Promise<WidgetSummary> {
   ]);
 
   // The same account list and balance source as the dashboard's net worth, narrowed to what holds money.
-  const receivables = new Set(credits.map((credit) => credit.receivableAccountId));
   const holdingMoney = accounts.filter(
-    (account) =>
-      account.kind === "asset" &&
-      (account.subtype === "bank" || account.subtype === "cash") &&
-      !receivables.has(account.id),
+    (account) => account.kind === "asset" && (account.subtype === "bank" || account.subtype === "cash"),
   );
   const totals = new Map<CurrencyCode, number>();
   for (const bucket of netWorthByOwner(holdingMoney, balances)) {
