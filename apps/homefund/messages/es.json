@@ -614,6 +614,8 @@
     "filteredEmptyDescription": "Ningún movimiento coincide con estos filtros en el periodo elegido.",
     "clearFilters": "Quitar filtros",
     "filtersLabel": "Filtros",
+    "searchLabel": "Buscar",
+    "searchPlaceholder": "Descripción o monto",
     "rangeFrom": "Desde",
     "rangeTo": "Hasta",
     "allAccounts": "Todas las cuentas",
@@ -1605,11 +1607,13 @@
   "ingest": {
     "title": "Bandeja",
     "emptyTitle": "No hay nada por revisar",
-    "emptyDescription": "Aquí caen los mensajes del banco que reenvías. Para empezar, conecta tu banco a esta dirección.",
-    "emptyAddressLabel": "Dirección de recepción",
-    "emptyStep1": "Crea una credencial en Ajustes · Correos del banco.",
-    "emptyStep2": "Haz que el correo o la regla de tu banco envíe cada aviso a esta dirección con tu token.",
-    "emptyStep3": "Cuando llegue uno, aparece aquí para que lo revises.",
+    "emptyDescription": "Cuando llegue algo de estas fuentes, aparece aquí para que lo revises. Conecta la que uses.",
+    "emptySource": {
+      "android": { "label": "En Android, la app HomeFund Avisos reenvía los avisos de tu banco.", "link": "Instalar HomeFund Avisos" },
+      "iphone": { "label": "En iPhone, un Atajo manda el SMS del banco o un gasto que escribes.", "link": "Crear el Atajo" },
+      "gmail": { "label": "En Gmail, los correos de tu banco llegan solos.", "link": "Conectar Gmail" },
+      "claude": { "label": "Con Claude, le pides que anote o importe movimientos por ti.", "link": "Conectar Claude" }
+    },
     "copy": "Copiar",
     "copied": "Copiado",
     "copyFailed": "No se pudo copiar. Selecciona el texto y cópialo a mano.",

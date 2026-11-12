@@ -4,7 +4,7 @@ import { and, asc, eq, isNull, sql } from "drizzle-orm";
 
 import { getAccountBalances } from "@/db/queries/account-balances";
 import { listAccounts } from "@/db/queries/accounts";
-import { countPendingDeliveries } from "@/db/queries/ingest-review";
+import { countInboxPending } from "@/db/queries/ingest-review";
 import { getMonthlyFlow } from "@/db/queries/reports/monthly-flow";
 import type { MonthlyFlow } from "@/db/queries/reports/monthly-flow";
 import { netWorthByOwner } from "@/db/queries/reports/net-worth";
@@ -37,7 +37,8 @@ export type DashboardData = {
   monthFlow: MonthlyFlow[];
   // Generated movements still awaiting review — the "N sin revisar" badge (RF-31).
   unreviewedCount: number;
-  pendingDeliveryCount: number;
+  // Deliveries plus «Por completar» movements: Bandeja's own count.
+  inboxPendingCount: number;
 };
 
 // The caller's fund name and live roster in one statement: the group resolves in SQL
@@ -86,7 +87,7 @@ export async function getDashboardData(): Promise<DashboardData> {
     balances,
     monthFlow,
     sessionUser,
-    [accounts, roster, unreviewedCount, pendingDeliveryCount],
+    [accounts, roster, unreviewedCount, inboxPendingCount],
   ] = await Promise.all([
     getAccountBalances(),
     getMonthlyFlow(currentMonthRange()),
@@ -96,7 +97,7 @@ export async function getDashboardData(): Promise<DashboardData> {
         listAccounts({ archived: false }),
         readFundRoster(),
         countUnreviewedGenerated(),
-        countPendingDeliveries(),
+        countInboxPending(),
       ]),
     ),
   ]);
@@ -145,6 +146,6 @@ export async function getDashboardData(): Promise<DashboardData> {
     totalNetWorth,
     monthFlow,
     unreviewedCount,
-    pendingDeliveryCount,
+    inboxPendingCount,
   };
 }

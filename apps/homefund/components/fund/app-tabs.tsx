@@ -17,9 +17,11 @@ import { usePathname } from "@/i18n/navigation";
 export function AppTabs({
   hasGroup,
   inboxCount,
+  keepSignedIn,
 }: {
   hasGroup: boolean;
   inboxCount: number;
+  keepSignedIn: string;
 }) {
   const t = useTranslations("nav");
   const { openQuick } = useQuickEntry();
@@ -53,6 +55,7 @@ export function AppTabs({
     <SettingsPanel
       hasGroup={hasGroup}
       inboxCount={inboxCount}
+      keepSignedIn={keepSignedIn}
       trigger={
         <BottomNavTrigger
           icon={<SlidersHorizontal size={22} />}
