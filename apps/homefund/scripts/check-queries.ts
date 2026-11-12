@@ -19028,6 +19028,8 @@ async function thirdPartyCreditSuite(): Promise<void> {
     next("RF-211: stopping the follow-up removes the link only; both accounts and every movement stay"),
     gone.length === 0 && accountsLeft === 2 && movementsLeft === 3 && (await refused(() => asUser(user, () => removeThirdPartyCredit(credit)))) === "errors.notFound",
     `links ${gone.length}, accounts ${accountsLeft}, movements ${movementsLeft}`,
+  );
+}
 
 // RF-215: the iPhone widget's key opens the summary and nothing else, and no other key opens the summary. The
 // summary is the key owner's figures alone, in one fan-out of three transactions.
@@ -19053,7 +19055,7 @@ async function widgetSuite(): Promise<void> {
   const bank = await open(owner, `Harness rf215 banco ${tag}`, 1_250_000);
   await open(stranger, `Harness rf215 ajeno ${tag}`, 777_000);
   // What is owed on a card is not money in hand, and a pocket holds money of its own beside its parent's.
-  await asUser(owner, async () => {
+  const cardId = await asUser(owner, async () => {
     const { accountId: cardId } = await createAccount({
       name: `Harness rf215 tarjeta ${tag}`, kind: "liability", subtype: "card", ownerUserId: owner.id, groupId: null, isShared: false,
       institution: null, lastFour: null, settlementCurrency: "COP", amountMinor: 400_000, balanceOn: shiftDate(today, -40),
@@ -19065,7 +19067,27 @@ async function widgetSuite(): Promise<void> {
       parentAccountId: bank,
     } as never);
     track("accounts", pocketId);
+    return cardId;
   });
+  // The card is paid by John, whose «Me debe» account is money owed to the person, not money in hand; his
+  // installment reached the lender's this month.
+  const linked = await asUser(owner, () =>
+    setUpThirdPartyCredit(
+      setUpThirdPartyCreditSchema.parse({
+        liabilityAccountId: cardId, personName: "John", receivableAccountId: "", amount: "2.000", openedOn: shiftDate(today, -40),
+        installmentAmount: "1.000", dueDay: String(Number(shiftDate(today, 6).slice(8))),
+      }),
+      `Me debe John ${tag}`,
+    ),
+  );
+  track("accounts", linked.receivableAccountId);
+  const { transactionId: johnPays } = await asUser(owner, () =>
+    createTransaction({
+      fromAccountId: linked.receivableAccountId, toAccountId: bank, amountCents: 100_000, occurredAt: today,
+      description: `Harness rf215 pago ${tag}`, externalRef: `rf215-john-${tag}`, splits: [], labelIds: [],
+    } as never),
+  );
+  track("transactions", johnPays);
   const { categoryId } = await asUser(owner, () =>
     createCategory({
       scope: { ownerUserId: owner.id }, name: `Harness rf215 comida ${tag}`, kind: "expense", parentId: null, color: CATEGORY_COLORS[0],
@@ -19102,14 +19124,16 @@ async function widgetSuite(): Promise<void> {
   const response = await ask(widgetKey.token);
   const summary = (await response.json()) as Partial<Awaited<ReturnType<typeof getWidgetSummary>>>;
   assert(
-    next("RF-215: /api/widget answers the key owner's money in hand (bank and cash with pockets, no card), month and Bandeja in integer cents, private for five minutes"),
+    next("RF-215: /api/widget answers the key owner's money in hand (bank and cash with pockets, no card, no «Me debe» of a credit), month, Bandeja and the credits somebody else pays, in integer cents, private for five minutes"),
     response.status === 200 &&
       response.headers.get("cache-control") === "private, max-age=300" &&
       summary.currency === "COP" &&
-      summary.disponible?.cents === 1_320_000 &&
+      summary.disponible?.cents === 1_420_000 &&
       summary.mes?.spentCents === 30_000 &&
       summary.mes?.budgetedCents === 500_000 &&
-      summary.bandeja?.pendingCount === 1,
+      summary.bandeja?.pendingCount === 1 &&
+      JSON.stringify(summary.creditos) ===
+        JSON.stringify([{ person: "John", currency: "COP", paidThisMonth: "done", installmentCents: 100_000, daysUntilDue: 6 }]),
     `${response.status} ${response.headers.get("cache-control")} ${JSON.stringify(summary)}`,
   );
 
@@ -19156,7 +19180,7 @@ async function widgetSuite(): Promise<void> {
   const trips = roundTrips() - before;
   assert(
     next("RF-215: the widget summary costs three transactions fanned out, the light reads sharing one"),
-    trips <= unit * 3 + 2,
+    trips <= unit * 3 + 3,
     `${trips} round trips for the summary, ${unit} for a single read`,
   );
 }

@@ -9,6 +9,7 @@ type Summary = {
   disponible: { cents: number };
   mes: { spentCents: number; budgetedCents: number };
   bandeja: { pendingCount: number };
+  creditos: { person: string; currency: string; paidThisMonth: string; installmentCents: number | null; daysUntilDue: number | null }[];
 };
 
 const SUMMARY: Summary = {
@@ -16,6 +17,7 @@ const SUMMARY: Summary = {
   disponible: { cents: 123_456_789 },
   mes: { spentCents: 30_000, budgetedCents: 500_000 },
   bandeja: { pendingCount: 3 },
+  creditos: [],
 };
 
 type Scenario = {
@@ -180,4 +182,28 @@ test("a refused key is dropped and the message says to paste another", async () 
 test("a server failure says it will try again", async () => {
   const { texts } = await run({ keychain: KEYED, status: 500, body: { error: "unexpected" } });
   assert.ok(texts.some((line) => line.startsWith("HomeFund no respondió")));
+});
+
+test("the medium widget draws one line per credit somebody else pays, three at most", async () => {
+  const credit = (person: string, paidThisMonth: string, daysUntilDue: number | null) => ({
+    person, currency: "COP", paidThisMonth, installmentCents: 20_000_000, daysUntilDue,
+  });
+  const body = {
+    ...SUMMARY,
+    creditos: [credit("John", "done", 6), credit("Ana", "none", 0), credit("Luis", "partial", 1), credit("Eva", "done", null)],
+  };
+  const { texts } = await run({ keychain: KEYED, family: "medium", body });
+  assert.ok(texts.includes("John: pagó ✓ · cuota en 6 días"), texts.join(" | "));
+  assert.ok(texts.includes("Ana: sin pago · cuota hoy"));
+  assert.ok(texts.includes("Luis: pagó una parte · cuota en 1 día"));
+  assert.ok(!texts.some((line) => line.startsWith("Eva")) && texts.includes("y 1 más"));
+  const small = await run({ keychain: KEYED, family: "small", body });
+  assert.ok(!small.texts.some((line) => line.startsWith("John")), "the small widget has no room for them");
+});
+
+test("a summary with no credits, or cached before they existed, draws none", async () => {
+  const { creditos, ...old } = SUMMARY;
+  assert.deepEqual(creditos, []);
+  const { texts } = await run({ keychain: KEYED, family: "medium", body: old });
+  assert.ok(texts.includes("3 por revisar") && !texts.some((line) => line.includes("cuota")));
 });

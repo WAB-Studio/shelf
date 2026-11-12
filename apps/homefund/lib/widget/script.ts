@@ -61,6 +61,14 @@ function text(parent, value, size, color, bold) {
   return line;
 }
 
+// «John: pagó ✓ · cuota en 6 días»: whether the person who pays the credit sent their part this month.
+function creditLine(credit) {
+  var paid = credit.paidThisMonth === "done" ? "pagó ✓" : credit.paidThisMonth === "partial" ? "pagó una parte" : "sin pago";
+  var days = credit.daysUntilDue;
+  var due = days === null ? "" : days === 0 ? " · cuota hoy" : " · cuota en " + days + (days === 1 ? " día" : " días");
+  return credit.person + ": " + paid + due;
+}
+
 function render(data, family, stale) {
   var widget = new ListWidget();
   widget.url = INBOX;
@@ -116,6 +124,14 @@ function render(data, family, stale) {
   right.layoutVertically();
   text(right, "Gastado este mes", 12, GRAY, false);
   text(right, month, 15, over ? RED : INK, true);
+  var credits = data.creditos || [];
+  if (credits.length > 0) {
+    widget.addSpacer(6);
+    for (var i = 0; i < Math.min(credits.length, 3); i++) {
+      text(widget, creditLine(credits[i]), 12, credits[i].paidThisMonth === "done" ? INK : AMBER, false);
+    }
+    if (credits.length > 3) text(widget, "y " + (credits.length - 3) + " más", 11, GRAY, false);
+  }
   widget.addSpacer();
   text(widget, stale ? "Sin conexión · datos guardados" : inbox, 12, pending > 0 && !stale ? AMBER : GRAY, false);
   return widget;

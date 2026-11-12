@@ -530,7 +530,8 @@ Board C1h corrected the same day: a card in credit reads «Según HomeFund −$ 
   shows the key once under the same warning as a webhook token. A widget key opens the widget's summary and nothing else;
   in the key list it wears the badge «Widget».
 - The widget reads «Disponible» large, «Mes» as spent of budgeted (red once spent passes budgeted) and the Bandeja's count
-  («N por revisar», «Bandeja al día» at zero) in amber. Pesos have no cents («$1.234.567»). Small and medium on the home
+  («N por revisar», «Bandeja al día» at zero) in amber. The medium widget adds one line per credit somebody else pays,
+  up to three and then «y N más», like «John: pagó ✓ · cuota en 6 días» (amber while the payment is missing). Pesos have no cents («$1.234.567»). Small and medium on the home
   screen; rectangular and inline on the lock screen. Offline it shows the last figures with «Sin conexión».
 
 ## Decisions of 2026-11-11: Gmail's bank emails from the PC, by the user
