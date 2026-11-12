@@ -97,7 +97,7 @@ export function checkRealAmount(
 }
 
 /**
- * An adjustment row of a backup (RF-50, RF-137): the gap one account was booked, on the day
+ * An adjustment row of a backup (RF-142, RF-137): the gap one account was booked, on the day
  * it was counted. `direction` says which way the account moved; the amount is its magnitude.
  * The import books it as a reconciliation, so it stays out of income and expense (RF-138).
  */

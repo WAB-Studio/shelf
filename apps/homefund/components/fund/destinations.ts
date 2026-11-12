@@ -63,7 +63,7 @@ export type Destination = {
 // is reached from the settings panel, which carries its count.
 export const TAB_KEYS = ["home", "movements", "planning"] as const;
 
-// The sidebar's own list, in the order `private/design-desktop/SPEC-A3.md` fixes.
+// The sidebar's own list, in the order the desktop design fixes.
 // Planeación opens in place: a laptop has the height to offer its six screens
 // directly, so the hub behind the phone's tab is not a stop on the way here.
 export const PRIMARY_KEYS = [

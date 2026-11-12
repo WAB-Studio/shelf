@@ -255,7 +255,7 @@ function addMovementTints(sheet: ExcelJS.Worksheet, columns: readonly ColumnView
 }
 
 /**
- * The workbook both downloads share (RF-50, RF-179): one worksheet per entity present in
+ * The workbook both downloads share (RF-142, RF-179): one worksheet per entity present in
  * `data`, in the fixed reading order, background sheets last and hidden. A header row from
  * the descriptor's column order leads and the caller's rows follow, each cell crossing the
  * money boundary only where the descriptor marks it. With `options`, accounts, categories

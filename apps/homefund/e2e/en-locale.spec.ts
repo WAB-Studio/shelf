@@ -28,3 +28,20 @@ test("/en Movements reads its title and offers the quick entry in English", asyn
   await expect(page.getByRole("heading", { name: en.transactions.listTitle, exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: en.nav.quickEntry, exact: true })).toBeVisible();
 });
+
+test("a visitor whose browser asks for English lands on /es, and a saved choice still wins (RF-195)", async ({ browser, baseURL }) => {
+  // Kills: the proxy handing `accept-language` to next-intl, which sent this visitor to /en.
+  const english = { "accept-language": "en-US,en;q=0.9" };
+  const visitor = await browser.newContext({ baseURL, storageState: { cookies: [], origins: [] }, locale: "en-US", extraHTTPHeaders: english });
+  const bare = await visitor.newPage();
+  await bare.goto("/");
+  await expect(bare).toHaveURL(/\/es(\/|$|\?)/);
+  await visitor.close();
+
+  const chosen = await browser.newContext({ baseURL, storageState: { cookies: [], origins: [] }, locale: "en-US", extraHTTPHeaders: english });
+  await chosen.addCookies([{ name: "NEXT_LOCALE", value: "en", url: baseURL }]);
+  const kept = await chosen.newPage();
+  await kept.goto("/");
+  await expect(kept).toHaveURL(/\/en(\/|$|\?)/);
+  await chosen.close();
+});

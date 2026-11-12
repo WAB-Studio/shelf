@@ -32,6 +32,8 @@ export const env = createEnv({
     // RF-192's Google OAuth client, shown to signed-in members as the one line aw-timelog asks for.
     GMAIL_OAUTH_CLIENT_ID: z.string().min(1).optional(),
     GMAIL_OAUTH_CLIENT_SECRET: z.string().min(1).optional(),
+    // RF-194: a read-only token for the private homefund-android releases. Unset, Ajustes says the APK is not ready.
+    ANDROID_APK_GITHUB_TOKEN: z.string().min(1).optional(),
   },
   client: {
     NEXT_PUBLIC_SUPABASE_URL: z.url(),

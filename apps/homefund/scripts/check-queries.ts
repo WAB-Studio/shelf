@@ -539,7 +539,7 @@ type DebtFixture = {
 /**
  * The two debts the installment, credit and statement checks read, beside the card
  * the write suite creates: a liability that carries terms without a limit (RF-117)
- * and a plan on a liability that carries no terms at all (RF-81, RF-82). Written as
+ * and a plan on a liability that carries no terms at all (retired RF-81, RF-82). Written as
  * the owner under the caller's claims, the way `seedHarnessScope` writes: the
  * stamping triggers see `auth.uid()` while the owner's privileges do the insert.
  */
@@ -3374,7 +3374,7 @@ async function reconcileSuite(
 }
 
 // Export -> import into a fresh scope reproduces every balance and keeps adjustments out of income
-// and expense (RF-50, RF-138). The import is `commitImport` itself, fed the rows `readExport` wrote.
+// and expense (RF-142, RF-138). The import is `commitImport` itself, fed the rows `readExport` wrote.
 async function reimportSuite(userId: string, scope: HarnessScope): Promise<void> {
   const today = todayInBogota();
   const importer = await createMembershipFreeUser();
@@ -4423,7 +4423,7 @@ async function roundTripSuite(scope: HarnessScope, userId: string): Promise<void
 }
 
 // A weekly budget on /planning/budgets spans the same Monday-to-Sunday week /planning
-// shows (RF-72): today's in the current month, the month's last day's in a past one.
+// shows (RF-160): today's in the current month, the month's last day's in a past one.
 // Dates are fixed and the clock is passed in, so the proof holds on any run day.
 async function weeklyBudgetSuite(scope: HarnessScope, userId: string): Promise<void> {
   const book = async (day: string, amountCents: number): Promise<void> => {
@@ -4596,6 +4596,7 @@ async function ledgerGuardSuite(userId: string, scope: HarnessScope): Promise<vo
     name: `${prefix} usada`,
     kind: "asset",
     subtype: "bank",
+    placement: "personal",
     isShared: false,
     institution: "",
     lastFour: "",
@@ -8456,6 +8457,7 @@ async function accountPlannedVersionSuite(): Promise<void> {
         name: `Harness m46 ${tag}`,
         kind: "asset",
         subtype: "bank",
+        placement: "personal",
         isShared: false,
         institution: "",
         lastFour: "",
@@ -12105,7 +12107,7 @@ async function debtCreditSideSuite(): Promise<void> {
 }
 
 // What a count that takes money out of an account, the first and last day of a range, and an English seed owe
-// the person (RF-137, RF-138, RF-118, RF-50, RF-46). Each block is a survivor of an earlier mutation round.
+// the person (RF-137, RF-138, RF-118, RF-142, RF-46). Each block is a survivor of an earlier mutation round.
 async function o5m2SurvivorsSuite(): Promise<void> {
   console.log("");
   const tag = randomUUID().slice(0, 8);
@@ -12266,6 +12268,53 @@ async function o5m2SurvivorsSuite(): Promise<void> {
       parents.includes("Housing") && childrenOf("Housing").includes("Rent") &&
       rows.length === SEED_CATEGORIES.reduce((sum, category) => sum + 1 + (category.children?.length ?? 0), 0),
     `parents ${JSON.stringify(parents)}, parents with other children [${wrongChildren.join(", ")}], ${rows.length} rows`,
+  );
+
+  // RF-195: the migration runs inside a transaction that is rolled back, so the one shared database keeps
+  // every row it holds; only the rows this check made are read back.
+  const renamer = await createMembershipFreeUser();
+  const bystander = await createMembershipFreeUser();
+  const migration = readFileSync(resolve("db/migrations/0093_english_seed_categories_become_spanish.sql"), "utf8");
+  const rolledBack = new Error("rollback");
+  let renamed = new Map<string, string>();
+  try {
+    await fixtureSql.begin(async (tx) => {
+      const put = async (owner: string, name: string, kind: string, parentId: string | null = null) => {
+        const [row] = await tx<{ id: string }[]>`
+          insert into categories (owner_user_id, name, kind, parent_id) values (${owner}, ${name}, ${kind}, ${parentId}) returning id`;
+        return row.id;
+      };
+      const housing = await put(renamer.id, "Housing", "expense");
+      const custom = await put(renamer.id, "Car", "expense");
+      const ids = {
+        housing,
+        rent: await put(renamer.id, "Rent", "expense", housing),
+        groceries: await put(renamer.id, "Groceries", "expense"),
+        pets: await put(renamer.id, "Pets", "expense"),
+        taken: await put(renamer.id, "Mascotas", "expense"),
+        typed: await put(renamer.id, "Gym", "expense"),
+        lowercase: await put(renamer.id, "groceries", "income"),
+        wrongKind: await put(renamer.id, "Salary", "expense"),
+        orphanChild: await put(renamer.id, "Fuel", "expense", custom),
+        topLevelChild: await put(renamer.id, "Rent", "expense"),
+        otherScopePets: await put(bystander.id, "Pets", "expense"),
+      };
+      await tx.unsafe(migration);
+      const read = await tx<{ id: string; name: string }[]>`select id, name from categories where id in ${tx(Object.values(ids))}`;
+      const byId = new Map(read.map((row) => [row.id, row.name]));
+      renamed = new Map(Object.entries(ids).map(([key, id]) => [key, byId.get(id) ?? "(gone)"]));
+      throw rolledBack;
+    });
+  } catch (error) {
+    if (error !== rolledBack) throw error;
+  }
+  const got = Object.fromEntries(renamed);
+  assert(
+    next("RF-195: the migration renames an exact English seed name (a child under its seed parent) to the Spanish one, and leaves a name a person typed, a lookalike, a rename that would collide in the same scope, and the same name in another scope that does not collide"),
+    got.housing === "Vivienda" && got.rent === "Arriendo" && got.groceries === "Mercado" && got.otherScopePets === "Mascotas" &&
+      got.pets === "Pets" && got.taken === "Mascotas" && got.typed === "Gym" && got.lowercase === "groceries" &&
+      got.wrongKind === "Salary" && got.orphanChild === "Fuel" && got.topLevelChild === "Rent",
+    JSON.stringify(got),
   );
 }
 
@@ -13912,6 +13961,7 @@ async function o6m7OpeningRefusalsSuite(): Promise<void> {
         name: `Harness o6m7 con movimiento ${tag}`,
         kind: "asset",
         subtype: "bank",
+        placement: "personal",
         isShared: false,
         institution: "",
         lastFour: "",
@@ -18478,6 +18528,22 @@ async function memberDebtDeleteSuite(): Promise<void> {
     foreign === "notFound" && paid === "paid" && pendingAfterRefusal === 150_000_00 && paymentGone === "deleted" && debtGone === "deleted" && left === 0,
     `stranger ${foreign}, paid debt ${paid}, pending ${pendingAfterRefusal}, payment ${paymentGone}, debt ${debtGone}, left ${left}`,
   );
+
+  // The opposite direction nets too: a debt the creditor owes back counts against the payment standing on the first.
+  const mine = (kind: "debt" | "payment", amountCents: number) =>
+    asUser(leader, () => recordMemberDebt({ kind, debtorMemberId: ids.papa, creditorMemberId: ids.leader, amountCents, currency: "COP", occurredOn: "2026-11-01", description: null }));
+  const first = await mine("debt", 100_000_00);
+  await mine("debt", 50_000_00);
+  await mine("payment", 30_000_00);
+  const back = await asUser(leader, () => recordMemberDebt({ kind: "debt", debtorMemberId: ids.leader, creditorMemberId: ids.papa, amountCents: 40_000_00, currency: "COP", occurredOn: "2026-11-01", description: null }));
+  const refusedByBack = await asUser(leader, () => deleteMemberDebt(first.id));
+  const backGone = await asUser(leader, () => deleteMemberDebt(back.id));
+  const firstGone = await asUser(leader, () => deleteMemberDebt(first.id));
+  assert(
+    next("RF-183: a debt is refused its delete when the creditor's own debt back leaves the payment on nothing, while that debt back itself goes, then the first goes"),
+    refusedByBack === "paid" && backGone === "deleted" && firstGone === "deleted",
+    `with debt back ${refusedByBack}, back ${backGone}, first ${firstGone}`,
+  );
 }
 
 // RF-189: a saved number tells the inbox what a transfer was. The notice's number is read, matched on its last
@@ -18719,7 +18785,7 @@ async function mcpLabelsSuite(): Promise<void> {
   );
 }
 
-// RF-194: a key says what it is for, how many deliveries it brought in 30 days and when it was last used, in the list's
+// RF-197: a key says what it is for, how many deliveries it brought in 30 days and when it was last used, in the list's
 // own query; a delivery names the key it came through and keeps the name's kind until the key is gone.
 async function connectionsSuite(): Promise<void> {
   console.log("");
@@ -18753,7 +18819,7 @@ async function connectionsSuite(): Promise<void> {
   const listed = await asUser(user, () => listWebhookCredentials());
   const row = (id: string) => listed.find((one) => one.id === id);
   assert(
-    next("RF-194: listWebhookCredentials carries each key's kind, last use and its deliveries of the last 30 days in the same read"),
+    next("RF-197: listWebhookCredentials carries each key's kind, last use and its deliveries of the last 30 days in the same read"),
     listed.length === 3 && row(gmail)?.kind === "bank_emails" && row(gmail)?.deliveriesLast30Days === 2 &&
       row(gmail)?.lastUsedAt !== null && row(phone)?.kind === "android" && row(phone)?.deliveriesLast30Days === 0 &&
       row(claude)?.purpose === "mcp" && row(claude)?.deliveriesLast30Days === 0,
@@ -18765,7 +18831,7 @@ async function connectionsSuite(): Promise<void> {
   await fixtureSql`delete from webhook_credentials where id = ${gmail}`;
   const after = await asUser(user, () => listPendingDeliveries());
   assert(
-    next("RF-194: an inbox delivery names its key and its badge, and names none once the key is gone"),
+    next("RF-197: an inbox delivery names its key and its badge, and names none once the key is gone"),
     viaGmail.length === 2 && viaGmail.every((one) => one.credentialBadge === "bank_emails") &&
       after.filter((one) => one.credentialName === null && one.credentialBadge === null).length === 2,
     `via ${viaGmail.length}, after ${JSON.stringify(after.map((one) => one.credentialName))}`,

@@ -10,12 +10,12 @@ export type PanelCell = {
   key: string;
   content: ReactNode;
   align?: "start" | "end";
-  // Figures line up row over row: the cell reads in tabular numerals (SPEC-A3).
+  // Figures line up row over row: the cell reads in tabular numerals.
   numeric?: boolean;
 };
 
 /**
- * The card SPEC-A3 draws where the dense table does not fit. `stack` carries an
+ * The card the desktop design draws where the dense table does not fit. `stack` carries an
  * optional heading over `PanelRow`s; `inline` is one padded row of controls,
  * which is what the wide quick entry is; `notice` is the centred card a message
  * and its way out sit on.

@@ -1288,7 +1288,6 @@
     "stale": "This changed while you were editing it. Open it again.",
     "resendChanged": "We already saved this movement with another amount; open it to correct it.",
     "linkTimeout": "We could not check the link. Open it again from the email.",
-    "signOutFailed": "We could not sign you out. Please try again.",
     "signOutPartial": "You signed out here, but we couldn't sign you out on your other devices.",
     "notFoundTitle": "This page does not exist",
     "notFoundDescription": "The link may be misspelled, or the page may have moved.",
@@ -1542,7 +1541,8 @@
     "androidHeading": "Android app",
     "androidDescription": "Comes ready for Bancolombia and Banco de Bogotá",
     "androidDownload": "Download HomeFund Avisos",
-    "androidDownloadHint": "Download it with your WAB-Studio GitHub account",
+    "androidDownloadHint": "When you open the file, Android asks to allow installs from this browser",
+    "androidDownloadMissing": "The download is not ready yet. Ask whoever runs HomeFund to turn it on.",
     "bankEmails": {
       "heading": "Bank emails",
       "description": "Every 10 minutes your bank's emails (Bancolombia, Nequi, Nu, Lulo, Falabella, Banco de Bogotá, PSE…) reach the Inbox by themselves. It only reads mail; nothing else leaves your computer.",

@@ -2,9 +2,10 @@ import "server-only";
 
 import { sql, type SQL } from "drizzle-orm";
 
+import { hasUsualHistorySql, isAboveUsualSql, usualMedianSql } from "@/db/queries/above-usual";
 import { withUserDb } from "@/db/session";
 import { monthRange, shiftMonth, todayInBogota } from "@/lib/dates";
-import { ABOVE_USUAL_FACTOR, USUAL_MIN_LINES, USUAL_WINDOW_MONTHS } from "@/lib/month-review-rules";
+import { USUAL_WINDOW_MONTHS } from "@/lib/month-review-rules";
 import { CATEGORY_PATH_SEPARATOR } from "@/lib/spreadsheet/sheet-layout";
 
 export type Cadence = "monthly" | "weekly";
@@ -188,19 +189,19 @@ function patternsSql(w: Window): SQL {
     ),
     usual as (
       select c.category_id, c.currency, c.month,
-        percentile_disc(0.5) within group (order by h.amount_cents) as median_cents
+        ${usualMedianSql(sql`h.amount_cents`)} as median_cents
       from cells c
       join lines h using (category_id, currency)
       where h.month < c.month and h.month >= c.from_month
       group by 1, 2, 3
-      having count(*) >= ${USUAL_MIN_LINES}::int
+      having ${hasUsualHistorySql}
     ),
     outliers as (
       select distinct on (l.transaction_id) l.transaction_id, l.occurred_at, l.currency, l.category_id,
         l.amount_cents, u.median_cents
       from lines l
       join usual u using (category_id, currency, month)
-      where l.amount_cents > ${ABOVE_USUAL_FACTOR}::int * u.median_cents
+      where ${isAboveUsualSql(sql`l.amount_cents`, sql`u.median_cents`)}
       order by l.transaction_id, l.amount_cents desc
     ),
     -- Monthly averages: a month with no spending counts as zero.

@@ -20,6 +20,7 @@ import type { PlannedPaymentRow } from "@/db/queries/planned-payments";
 import type { GoalProgress } from "@/db/queries/savings-goals";
 import type { CurrencyCode } from "@/lib/currency";
 import { civilDateToDate } from "@/lib/dates";
+import { budgetPercent } from "@/lib/fund/glance";
 import type { Locale } from "@/lib/locales";
 import { formatMoney } from "@/lib/money";
 import { tagFigure } from "@/lib/privacy";
@@ -87,14 +88,14 @@ export async function PlanningHub({
             <Text size="2" color="gray"><Figures>{budgetsSummary}</Figures></Text>
             <Flex direction="column" gap="4" mt="2">
               {budgetsTop.map((budget) => {
-                const pct = (budget.spentCents / budget.limitCents) * 100;
+                const pct = budgetPercent(budget.spentCents, budget.limitCents);
                 const name = budget.name ?? budgetNames.get(budget.categoryId) ?? "";
                 return (
                   <Flex key={budget.id} direction="column" gap="1">
                     <Flex justify="between" align="baseline" gap="3">
                       <Text size="3" weight="medium" truncate>{name}</Text>
                       <Text size="2" color={budget.overspent ? "red" : "gray"}>
-                        {budget.overspent ? t("over") : `${Math.round(pct)}%`}
+                        {budget.overspent ? t("over") : `${pct}%`}
                       </Text>
                     </Flex>
                     <Progress

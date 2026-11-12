@@ -54,6 +54,7 @@ export default async function WebhooksPage(
         options={options}
         ingestUrl={ingestUrl}
         oauthLine={oauthLine}
+        apkReady={Boolean(env.ANDROID_APK_GITHUB_TOKEN)}
         mcpUrl={new URL("/mcp", env.NEXT_PUBLIC_SITE_URL).toString()}
       />
     </Page>

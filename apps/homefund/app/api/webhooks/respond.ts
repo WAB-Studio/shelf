@@ -5,6 +5,7 @@ import {
   resolveWebhookCredential,
   type ResolvedWebhookCredential,
 } from "@/db/queries/webhook-credentials";
+import type { NonMovementReason } from "@/lib/ingest/classify";
 import type { WebhookPayloadInput } from "@/lib/validation/webhook";
 
 // As `/mcp` reads it: any case, any spacing, a header typed by hand in an iOS Shortcut included.
@@ -29,9 +30,11 @@ export async function authorizeIngest(
 }
 
 // Stores the delivery as a pending proposal (RF-90) and answers its id and status.
+// A `notMovement` reason (RF-196) stores it rejected instead and answers the reason.
 export async function deliver(
   cred: ResolvedWebhookCredential,
   payload: WebhookPayloadInput,
+  notMovement?: NonMovementReason,
 ): Promise<Response> {
   try {
     const result = await recordIngestDelivery({
@@ -40,10 +43,16 @@ export async function deliver(
       defaultAccountId: cred.defaultAccountId,
       defaultCategoryId: cred.defaultCategoryId,
       payload,
+      notMovement: notMovement !== undefined,
     });
 
     return Response.json(
-      { deliveryId: result.deliveryId, status: result.status, duplicate: result.duplicate },
+      {
+        deliveryId: result.deliveryId,
+        status: result.status,
+        duplicate: result.duplicate,
+        ...(notMovement ? { reason: notMovement } : {}),
+      },
       { status: 200 },
     );
   } catch {

@@ -1,4 +1,4 @@
-/* A sidebar row, sized from SPEC-A3: the pill the current destination fills.
+/* A sidebar row, sized from the desktop design: the pill the current destination fills.
    The 44px floor is RNF-08's; border-box keeps the padding inside it, because
    Radix Themes resets the box only on its own elements. */
 .row {
@@ -36,7 +36,7 @@
 }
 
 /* The count sits at the row's end whatever the label measures, and reads in
-   tabular numerals like every other figure (SPEC-A3). */
+   tabular numerals like every other figure. */
 .badge {
   margin-left: auto;
   display: flex;

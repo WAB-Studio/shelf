@@ -1,5 +1,5 @@
 {
-  "id": "8c614f9c-f445-4cab-9327-2d5f97e4e51f",
+  "id": "6561f80e-e2c7-4b98-ae38-e225da032c3e",
   "prevId": "68392ccf-a9b4-40a8-a3a2-8b82fc9e2cf2",
   "version": "7",
   "dialect": "postgresql",
@@ -48,16 +48,16 @@
         "app_users_id_users_id_fk": {
           "name": "app_users_id_users_id_fk",
           "tableFrom": "app_users",
-          "tableTo": "users",
-          "schemaTo": "auth",
           "columnsFrom": [
             "id"
           ],
+          "tableTo": "users",
+          "schemaTo": "auth",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "cascade"
         }
       },
       "compositePrimaryKeys": {},
@@ -290,10 +290,10 @@
             }
           ],
           "isUnique": true,
-          "where": "\"finances\".\"group_members\".\"external_ref\" is not null",
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "where": "\"finances\".\"group_members\".\"external_ref\" is not null",
+          "concurrently": false
         },
         "group_members_user_unique": {
           "name": "group_members_user_unique",
@@ -306,10 +306,10 @@
             }
           ],
           "isUnique": true,
-          "where": "\"finances\".\"group_members\".\"user_id\" is not null and \"finances\".\"group_members\".\"archived_at\" is null",
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "where": "\"finances\".\"group_members\".\"user_id\" is not null and \"finances\".\"group_members\".\"archived_at\" is null",
+          "concurrently": false
         },
         "group_members_group_invite_email_unique": {
           "name": "group_members_group_invite_email_unique",
@@ -322,16 +322,16 @@
             },
             {
               "expression": "lower(\"invite_email\")",
-              "asc": true,
               "isExpression": true,
+              "asc": true,
               "nulls": "last"
             }
           ],
           "isUnique": true,
-          "where": "\"finances\".\"group_members\".\"invite_email\" is not null and \"finances\".\"group_members\".\"archived_at\" is null",
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "where": "\"finances\".\"group_members\".\"invite_email\" is not null and \"finances\".\"group_members\".\"archived_at\" is null",
+          "concurrently": false
         },
         "group_members_id_group_unique": {
           "name": "group_members_id_group_unique",
@@ -350,9 +350,9 @@
             }
           ],
           "isUnique": true,
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "concurrently": false
         },
         "group_members_group_id_idx": {
           "name": "group_members_group_id_idx",
@@ -365,9 +365,9 @@
             }
           ],
           "isUnique": false,
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "concurrently": false
         },
         "group_members_user_id_idx": {
           "name": "group_members_user_id_idx",
@@ -380,39 +380,39 @@
             }
           ],
           "isUnique": false,
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "concurrently": false
         }
       },
       "foreignKeys": {
         "group_members_group_id_groups_id_fk": {
           "name": "group_members_group_id_groups_id_fk",
           "tableFrom": "group_members",
-          "tableTo": "groups",
-          "schemaTo": "finances",
           "columnsFrom": [
             "group_id"
           ],
+          "tableTo": "groups",
+          "schemaTo": "finances",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "cascade"
         },
         "group_members_user_id_app_users_id_fk": {
           "name": "group_members_user_id_app_users_id_fk",
           "tableFrom": "group_members",
-          "tableTo": "app_users",
-          "schemaTo": "finances",
           "columnsFrom": [
             "user_id"
           ],
+          "tableTo": "app_users",
+          "schemaTo": "finances",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "set null"
         }
       },
       "compositePrimaryKeys": {},
@@ -637,9 +637,9 @@
             }
           ],
           "isUnique": false,
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "concurrently": false
         },
         "accounts_holder_member_id_idx": {
           "name": "accounts_holder_member_id_idx",
@@ -652,9 +652,9 @@
             }
           ],
           "isUnique": false,
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "concurrently": false
         },
         "accounts_group_id_idx": {
           "name": "accounts_group_id_idx",
@@ -667,9 +667,9 @@
             }
           ],
           "isUnique": false,
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "concurrently": false
         },
         "accounts_owner_user_id_idx": {
           "name": "accounts_owner_user_id_idx",
@@ -682,9 +682,9 @@
             }
           ],
           "isUnique": false,
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "concurrently": false
         },
         "accounts_owner_external_ref_unique": {
           "name": "accounts_owner_external_ref_unique",
@@ -703,10 +703,10 @@
             }
           ],
           "isUnique": true,
-          "where": "\"finances\".\"accounts\".\"external_ref\" is not null",
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "where": "\"finances\".\"accounts\".\"external_ref\" is not null",
+          "concurrently": false
         },
         "accounts_group_external_ref_unique": {
           "name": "accounts_group_external_ref_unique",
@@ -725,70 +725,70 @@
             }
           ],
           "isUnique": true,
-          "where": "\"finances\".\"accounts\".\"external_ref\" is not null",
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "where": "\"finances\".\"accounts\".\"external_ref\" is not null",
+          "concurrently": false
         }
       },
       "foreignKeys": {
         "accounts_owner_user_id_app_users_id_fk": {
           "name": "accounts_owner_user_id_app_users_id_fk",
           "tableFrom": "accounts",
-          "tableTo": "app_users",
-          "schemaTo": "finances",
           "columnsFrom": [
             "owner_user_id"
           ],
+          "tableTo": "app_users",
+          "schemaTo": "finances",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "restrict",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "restrict"
         },
         "accounts_group_id_groups_id_fk": {
           "name": "accounts_group_id_groups_id_fk",
           "tableFrom": "accounts",
-          "tableTo": "groups",
-          "schemaTo": "finances",
           "columnsFrom": [
             "group_id"
           ],
+          "tableTo": "groups",
+          "schemaTo": "finances",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "cascade"
         },
         "accounts_parent_account_id_accounts_id_fk": {
           "name": "accounts_parent_account_id_accounts_id_fk",
           "tableFrom": "accounts",
-          "tableTo": "accounts",
-          "schemaTo": "finances",
           "columnsFrom": [
             "parent_account_id"
           ],
+          "tableTo": "accounts",
+          "schemaTo": "finances",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "no action"
         },
         "accounts_holder_member_fk": {
           "name": "accounts_holder_member_fk",
           "tableFrom": "accounts",
-          "tableTo": "group_members",
-          "schemaTo": "finances",
           "columnsFrom": [
             "holder_member_id",
             "group_id"
           ],
+          "tableTo": "group_members",
+          "schemaTo": "finances",
           "columnsTo": [
             "id",
             "group_id"
           ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "set null"
         }
       },
       "compositePrimaryKeys": {},
@@ -980,9 +980,9 @@
             }
           ],
           "isUnique": false,
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "concurrently": false
         },
         "categories_owner_user_id_idx": {
           "name": "categories_owner_user_id_idx",
@@ -995,9 +995,9 @@
             }
           ],
           "isUnique": false,
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "concurrently": false
         },
         "categories_parent_id_idx": {
           "name": "categories_parent_id_idx",
@@ -1010,9 +1010,9 @@
             }
           ],
           "isUnique": false,
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "concurrently": false
         },
         "categories_owner_external_ref_unique": {
           "name": "categories_owner_external_ref_unique",
@@ -1031,10 +1031,10 @@
             }
           ],
           "isUnique": true,
-          "where": "\"finances\".\"categories\".\"external_ref\" is not null",
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "where": "\"finances\".\"categories\".\"external_ref\" is not null",
+          "concurrently": false
         },
         "categories_group_external_ref_unique": {
           "name": "categories_group_external_ref_unique",
@@ -1053,81 +1053,81 @@
             }
           ],
           "isUnique": true,
-          "where": "\"finances\".\"categories\".\"external_ref\" is not null",
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "where": "\"finances\".\"categories\".\"external_ref\" is not null",
+          "concurrently": false
         }
       },
       "foreignKeys": {
         "categories_owner_user_id_app_users_id_fk": {
           "name": "categories_owner_user_id_app_users_id_fk",
           "tableFrom": "categories",
-          "tableTo": "app_users",
-          "schemaTo": "finances",
           "columnsFrom": [
             "owner_user_id"
           ],
+          "tableTo": "app_users",
+          "schemaTo": "finances",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "cascade"
         },
         "categories_group_id_groups_id_fk": {
           "name": "categories_group_id_groups_id_fk",
           "tableFrom": "categories",
-          "tableTo": "groups",
-          "schemaTo": "finances",
           "columnsFrom": [
             "group_id"
           ],
+          "tableTo": "groups",
+          "schemaTo": "finances",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "cascade"
         },
         "categories_parent_id_group_id_categories_id_group_id_fk": {
           "name": "categories_parent_id_group_id_categories_id_group_id_fk",
           "tableFrom": "categories",
-          "tableTo": "categories",
-          "schemaTo": "finances",
           "columnsFrom": [
             "parent_id",
             "group_id"
           ],
+          "tableTo": "categories",
+          "schemaTo": "finances",
           "columnsTo": [
             "id",
             "group_id"
           ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "cascade"
         },
         "categories_parent_id_categories_id_fk": {
           "name": "categories_parent_id_categories_id_fk",
           "tableFrom": "categories",
-          "tableTo": "categories",
-          "schemaTo": "finances",
           "columnsFrom": [
             "parent_id"
           ],
+          "tableTo": "categories",
+          "schemaTo": "finances",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "cascade"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "categories_id_group_id_unique": {
           "name": "categories_id_group_id_unique",
-          "nullsNotDistinct": false,
           "columns": [
             "id",
             "group_id"
-          ]
+          ],
+          "nullsNotDistinct": false
         }
       },
       "policies": {
@@ -1313,8 +1313,8 @@
           "primaryKey": false,
           "notNull": false,
           "generated": {
-            "as": "case when from_account_id is null then 'income' when to_account_id is null then 'expense' else 'transfer' end",
-            "type": "stored"
+            "type": "stored",
+            "as": "case when from_account_id is null then 'income' when to_account_id is null then 'expense' else 'transfer' end"
           }
         },
         "occurred_at": {
@@ -1399,10 +1399,10 @@
             }
           ],
           "isUnique": true,
-          "where": "\"finances\".\"transactions\".\"reconciliation_id\" is not null",
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "where": "\"finances\".\"transactions\".\"reconciliation_id\" is not null",
+          "concurrently": false
         },
         "transactions_occurred_at_idx": {
           "name": "transactions_occurred_at_idx",
@@ -1415,9 +1415,9 @@
             }
           ],
           "isUnique": false,
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "concurrently": false
         },
         "transactions_from_account_id_idx": {
           "name": "transactions_from_account_id_idx",
@@ -1430,10 +1430,10 @@
             }
           ],
           "isUnique": false,
-          "where": "from_account_id is not null",
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "where": "from_account_id is not null",
+          "concurrently": false
         },
         "transactions_to_account_id_idx": {
           "name": "transactions_to_account_id_idx",
@@ -1446,10 +1446,10 @@
             }
           ],
           "isUnique": false,
-          "where": "to_account_id is not null",
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "where": "to_account_id is not null",
+          "concurrently": false
         },
         "transactions_created_by_idx": {
           "name": "transactions_created_by_idx",
@@ -1462,9 +1462,9 @@
             }
           ],
           "isUnique": false,
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "concurrently": false
         },
         "transactions_created_by_recent_idx": {
           "name": "transactions_created_by_recent_idx",
@@ -1489,9 +1489,9 @@
             }
           ],
           "isUnique": false,
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "concurrently": false
         },
         "transactions_recent_idx": {
           "name": "transactions_recent_idx",
@@ -1516,9 +1516,9 @@
             }
           ],
           "isUnique": false,
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "concurrently": false
         },
         "transactions_unreviewed_generated_idx": {
           "name": "transactions_unreviewed_generated_idx",
@@ -1531,10 +1531,10 @@
             }
           ],
           "isUnique": false,
-          "where": "\"finances\".\"transactions\".\"recurring_rule_id\" is not null and \"finances\".\"transactions\".\"reviewed_at\" is null",
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "where": "\"finances\".\"transactions\".\"recurring_rule_id\" is not null and \"finances\".\"transactions\".\"reviewed_at\" is null",
+          "concurrently": false
         },
         "transactions_recurring_rule_id_idx": {
           "name": "transactions_recurring_rule_id_idx",
@@ -1547,9 +1547,9 @@
             }
           ],
           "isUnique": false,
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "concurrently": false
         },
         "transactions_caused_by_idx": {
           "name": "transactions_caused_by_idx",
@@ -1562,10 +1562,10 @@
             }
           ],
           "isUnique": false,
-          "where": "\"finances\".\"transactions\".\"caused_by_transaction_id\" is not null",
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "where": "\"finances\".\"transactions\".\"caused_by_transaction_id\" is not null",
+          "concurrently": false
         },
         "transactions_owner_user_id_idx": {
           "name": "transactions_owner_user_id_idx",
@@ -1578,10 +1578,10 @@
             }
           ],
           "isUnique": false,
-          "where": "\"finances\".\"transactions\".\"owner_user_id\" is not null",
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "where": "\"finances\".\"transactions\".\"owner_user_id\" is not null",
+          "concurrently": false
         },
         "transactions_group_id_idx": {
           "name": "transactions_group_id_idx",
@@ -1594,10 +1594,10 @@
             }
           ],
           "isUnique": false,
-          "where": "\"finances\".\"transactions\".\"group_id\" is not null",
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "where": "\"finances\".\"transactions\".\"group_id\" is not null",
+          "concurrently": false
         },
         "transactions_awaiting_counterparty_idx": {
           "name": "transactions_awaiting_counterparty_idx",
@@ -1610,10 +1610,10 @@
             }
           ],
           "isUnique": false,
-          "where": "\"finances\".\"transactions\".\"awaiting_counterparty\" = true",
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "where": "\"finances\".\"transactions\".\"awaiting_counterparty\" = true",
+          "concurrently": false
         },
         "transactions_owner_external_ref_unique": {
           "name": "transactions_owner_external_ref_unique",
@@ -1632,10 +1632,10 @@
             }
           ],
           "isUnique": true,
-          "where": "\"finances\".\"transactions\".\"external_ref\" is not null",
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "where": "\"finances\".\"transactions\".\"external_ref\" is not null",
+          "concurrently": false
         },
         "transactions_group_external_ref_unique": {
           "name": "transactions_group_external_ref_unique",
@@ -1654,152 +1654,152 @@
             }
           ],
           "isUnique": true,
-          "where": "\"finances\".\"transactions\".\"external_ref\" is not null",
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "where": "\"finances\".\"transactions\".\"external_ref\" is not null",
+          "concurrently": false
         }
       },
       "foreignKeys": {
         "transactions_owner_user_id_app_users_id_fk": {
           "name": "transactions_owner_user_id_app_users_id_fk",
           "tableFrom": "transactions",
-          "tableTo": "app_users",
-          "schemaTo": "finances",
           "columnsFrom": [
             "owner_user_id"
           ],
+          "tableTo": "app_users",
+          "schemaTo": "finances",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "restrict",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "restrict"
         },
         "transactions_group_id_groups_id_fk": {
           "name": "transactions_group_id_groups_id_fk",
           "tableFrom": "transactions",
-          "tableTo": "groups",
-          "schemaTo": "finances",
           "columnsFrom": [
             "group_id"
           ],
+          "tableTo": "groups",
+          "schemaTo": "finances",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "cascade"
         },
         "transactions_from_account_id_accounts_id_fk": {
           "name": "transactions_from_account_id_accounts_id_fk",
           "tableFrom": "transactions",
-          "tableTo": "accounts",
-          "schemaTo": "finances",
           "columnsFrom": [
             "from_account_id"
           ],
+          "tableTo": "accounts",
+          "schemaTo": "finances",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "restrict",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "restrict"
         },
         "transactions_to_account_id_accounts_id_fk": {
           "name": "transactions_to_account_id_accounts_id_fk",
           "tableFrom": "transactions",
-          "tableTo": "accounts",
-          "schemaTo": "finances",
           "columnsFrom": [
             "to_account_id"
           ],
+          "tableTo": "accounts",
+          "schemaTo": "finances",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "restrict",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "restrict"
         },
         "transactions_contributed_by_member_id_group_members_id_fk": {
           "name": "transactions_contributed_by_member_id_group_members_id_fk",
           "tableFrom": "transactions",
-          "tableTo": "group_members",
-          "schemaTo": "finances",
           "columnsFrom": [
             "contributed_by_member_id"
           ],
+          "tableTo": "group_members",
+          "schemaTo": "finances",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "set null"
         },
         "transactions_made_by_member_id_group_members_id_fk": {
           "name": "transactions_made_by_member_id_group_members_id_fk",
           "tableFrom": "transactions",
-          "tableTo": "group_members",
-          "schemaTo": "finances",
           "columnsFrom": [
             "made_by_member_id"
           ],
+          "tableTo": "group_members",
+          "schemaTo": "finances",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "set null"
         },
         "transactions_recurring_rule_id_recurring_rules_id_fk": {
           "name": "transactions_recurring_rule_id_recurring_rules_id_fk",
           "tableFrom": "transactions",
-          "tableTo": "recurring_rules",
-          "schemaTo": "finances",
           "columnsFrom": [
             "recurring_rule_id"
           ],
+          "tableTo": "recurring_rules",
+          "schemaTo": "finances",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "set null"
         },
         "transactions_reconciliation_id_account_reconciliations_id_fk": {
           "name": "transactions_reconciliation_id_account_reconciliations_id_fk",
           "tableFrom": "transactions",
-          "tableTo": "account_reconciliations",
-          "schemaTo": "finances",
           "columnsFrom": [
             "reconciliation_id"
           ],
+          "tableTo": "account_reconciliations",
+          "schemaTo": "finances",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "cascade"
         },
         "transactions_created_by_app_users_id_fk": {
           "name": "transactions_created_by_app_users_id_fk",
           "tableFrom": "transactions",
-          "tableTo": "app_users",
-          "schemaTo": "finances",
           "columnsFrom": [
             "created_by"
           ],
+          "tableTo": "app_users",
+          "schemaTo": "finances",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "restrict",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "restrict"
         },
         "transactions_caused_by_transaction_id_transactions_id_fk": {
           "name": "transactions_caused_by_transaction_id_transactions_id_fk",
           "tableFrom": "transactions",
-          "tableTo": "transactions",
-          "schemaTo": "finances",
           "columnsFrom": [
             "caused_by_transaction_id"
           ],
+          "tableTo": "transactions",
+          "schemaTo": "finances",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "cascade"
         }
       },
       "compositePrimaryKeys": {},
@@ -1947,9 +1947,9 @@
             }
           ],
           "isUnique": false,
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "concurrently": false
         },
         "transaction_splits_category_id_idx": {
           "name": "transaction_splits_category_id_idx",
@@ -1962,39 +1962,39 @@
             }
           ],
           "isUnique": false,
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "concurrently": false
         }
       },
       "foreignKeys": {
         "transaction_splits_transaction_id_transactions_id_fk": {
           "name": "transaction_splits_transaction_id_transactions_id_fk",
           "tableFrom": "transaction_splits",
-          "tableTo": "transactions",
-          "schemaTo": "finances",
           "columnsFrom": [
             "transaction_id"
           ],
+          "tableTo": "transactions",
+          "schemaTo": "finances",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "cascade"
         },
         "transaction_splits_category_id_categories_id_fk": {
           "name": "transaction_splits_category_id_categories_id_fk",
           "tableFrom": "transaction_splits",
-          "tableTo": "categories",
-          "schemaTo": "finances",
           "columnsFrom": [
             "category_id"
           ],
+          "tableTo": "categories",
+          "schemaTo": "finances",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "restrict",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "restrict"
         }
       },
       "compositePrimaryKeys": {},
@@ -2086,10 +2086,10 @@
             }
           ],
           "isUnique": true,
-          "where": "\"finances\".\"labels\".\"external_ref\" is not null",
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "where": "\"finances\".\"labels\".\"external_ref\" is not null",
+          "concurrently": false
         },
         "labels_group_external_ref_unique": {
           "name": "labels_group_external_ref_unique",
@@ -2108,10 +2108,10 @@
             }
           ],
           "isUnique": true,
-          "where": "\"finances\".\"labels\".\"external_ref\" is not null",
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "where": "\"finances\".\"labels\".\"external_ref\" is not null",
+          "concurrently": false
         },
         "labels_group_id_idx": {
           "name": "labels_group_id_idx",
@@ -2124,9 +2124,9 @@
             }
           ],
           "isUnique": false,
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "concurrently": false
         },
         "labels_owner_user_id_idx": {
           "name": "labels_owner_user_id_idx",
@@ -2139,39 +2139,39 @@
             }
           ],
           "isUnique": false,
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "concurrently": false
         }
       },
       "foreignKeys": {
         "labels_owner_user_id_app_users_id_fk": {
           "name": "labels_owner_user_id_app_users_id_fk",
           "tableFrom": "labels",
-          "tableTo": "app_users",
-          "schemaTo": "finances",
           "columnsFrom": [
             "owner_user_id"
           ],
+          "tableTo": "app_users",
+          "schemaTo": "finances",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "cascade"
         },
         "labels_group_id_groups_id_fk": {
           "name": "labels_group_id_groups_id_fk",
           "tableFrom": "labels",
-          "tableTo": "groups",
-          "schemaTo": "finances",
           "columnsFrom": [
             "group_id"
           ],
+          "tableTo": "groups",
+          "schemaTo": "finances",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "cascade"
         }
       },
       "compositePrimaryKeys": {},
@@ -2288,39 +2288,39 @@
             }
           ],
           "isUnique": false,
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "concurrently": false
         }
       },
       "foreignKeys": {
         "transaction_labels_transaction_id_transactions_id_fk": {
           "name": "transaction_labels_transaction_id_transactions_id_fk",
           "tableFrom": "transaction_labels",
-          "tableTo": "transactions",
-          "schemaTo": "finances",
           "columnsFrom": [
             "transaction_id"
           ],
+          "tableTo": "transactions",
+          "schemaTo": "finances",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "cascade"
         },
         "transaction_labels_label_id_labels_id_fk": {
           "name": "transaction_labels_label_id_labels_id_fk",
           "tableFrom": "transaction_labels",
-          "tableTo": "labels",
-          "schemaTo": "finances",
           "columnsFrom": [
             "label_id"
           ],
+          "tableTo": "labels",
+          "schemaTo": "finances",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "cascade"
         }
       },
       "compositePrimaryKeys": {
@@ -2386,50 +2386,50 @@
             }
           ],
           "isUnique": false,
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "concurrently": false
         }
       },
       "foreignKeys": {
         "transaction_reviews_transaction_id_transactions_id_fk": {
           "name": "transaction_reviews_transaction_id_transactions_id_fk",
           "tableFrom": "transaction_reviews",
-          "tableTo": "transactions",
-          "schemaTo": "finances",
           "columnsFrom": [
             "transaction_id"
           ],
+          "tableTo": "transactions",
+          "schemaTo": "finances",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "cascade"
         },
         "transaction_reviews_marked_by_app_users_id_fk": {
           "name": "transaction_reviews_marked_by_app_users_id_fk",
           "tableFrom": "transaction_reviews",
-          "tableTo": "app_users",
-          "schemaTo": "finances",
           "columnsFrom": [
             "marked_by"
           ],
+          "tableTo": "app_users",
+          "schemaTo": "finances",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "restrict",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "restrict"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "transaction_reviews_transaction_rule_unique": {
           "name": "transaction_reviews_transaction_rule_unique",
-          "nullsNotDistinct": false,
           "columns": [
             "transaction_id",
             "rule"
-          ]
+          ],
+          "nullsNotDistinct": false
         }
       },
       "policies": {
@@ -2579,10 +2579,10 @@
             }
           ],
           "isUnique": true,
-          "where": "\"finances\".\"budgets\".\"external_ref\" is not null",
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "where": "\"finances\".\"budgets\".\"external_ref\" is not null",
+          "concurrently": false
         },
         "budgets_group_external_ref_unique": {
           "name": "budgets_group_external_ref_unique",
@@ -2601,10 +2601,10 @@
             }
           ],
           "isUnique": true,
-          "where": "\"finances\".\"budgets\".\"external_ref\" is not null",
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "where": "\"finances\".\"budgets\".\"external_ref\" is not null",
+          "concurrently": false
         },
         "budgets_owner_user_id_idx": {
           "name": "budgets_owner_user_id_idx",
@@ -2617,10 +2617,10 @@
             }
           ],
           "isUnique": false,
-          "where": "\"finances\".\"budgets\".\"owner_user_id\" is not null",
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "where": "\"finances\".\"budgets\".\"owner_user_id\" is not null",
+          "concurrently": false
         },
         "budgets_group_id_idx": {
           "name": "budgets_group_id_idx",
@@ -2633,10 +2633,10 @@
             }
           ],
           "isUnique": false,
-          "where": "\"finances\".\"budgets\".\"group_id\" is not null",
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "where": "\"finances\".\"budgets\".\"group_id\" is not null",
+          "concurrently": false
         },
         "budgets_category_id_idx": {
           "name": "budgets_category_id_idx",
@@ -2649,9 +2649,9 @@
             }
           ],
           "isUnique": false,
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "concurrently": false
         },
         "budgets_account_id_idx": {
           "name": "budgets_account_id_idx",
@@ -2664,10 +2664,10 @@
             }
           ],
           "isUnique": false,
-          "where": "\"finances\".\"budgets\".\"account_id\" is not null",
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "where": "\"finances\".\"budgets\".\"account_id\" is not null",
+          "concurrently": false
         },
         "budgets_label_id_idx": {
           "name": "budgets_label_id_idx",
@@ -2680,82 +2680,82 @@
             }
           ],
           "isUnique": false,
-          "where": "\"finances\".\"budgets\".\"label_id\" is not null",
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "where": "\"finances\".\"budgets\".\"label_id\" is not null",
+          "concurrently": false
         }
       },
       "foreignKeys": {
         "budgets_owner_user_id_app_users_id_fk": {
           "name": "budgets_owner_user_id_app_users_id_fk",
           "tableFrom": "budgets",
-          "tableTo": "app_users",
-          "schemaTo": "finances",
           "columnsFrom": [
             "owner_user_id"
           ],
+          "tableTo": "app_users",
+          "schemaTo": "finances",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "cascade"
         },
         "budgets_group_id_groups_id_fk": {
           "name": "budgets_group_id_groups_id_fk",
           "tableFrom": "budgets",
-          "tableTo": "groups",
-          "schemaTo": "finances",
           "columnsFrom": [
             "group_id"
           ],
+          "tableTo": "groups",
+          "schemaTo": "finances",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "cascade"
         },
         "budgets_category_id_categories_id_fk": {
           "name": "budgets_category_id_categories_id_fk",
           "tableFrom": "budgets",
-          "tableTo": "categories",
-          "schemaTo": "finances",
           "columnsFrom": [
             "category_id"
           ],
+          "tableTo": "categories",
+          "schemaTo": "finances",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "restrict",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "restrict"
         },
         "budgets_account_id_accounts_id_fk": {
           "name": "budgets_account_id_accounts_id_fk",
           "tableFrom": "budgets",
-          "tableTo": "accounts",
-          "schemaTo": "finances",
           "columnsFrom": [
             "account_id"
           ],
+          "tableTo": "accounts",
+          "schemaTo": "finances",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "restrict",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "restrict"
         },
         "budgets_label_id_labels_id_fk": {
           "name": "budgets_label_id_labels_id_fk",
           "tableFrom": "budgets",
-          "tableTo": "labels",
-          "schemaTo": "finances",
           "columnsFrom": [
             "label_id"
           ],
+          "tableTo": "labels",
+          "schemaTo": "finances",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "restrict",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "restrict"
         }
       },
       "compositePrimaryKeys": {},
@@ -2966,10 +2966,10 @@
             }
           ],
           "isUnique": false,
-          "where": "\"finances\".\"planned_payments\".\"owner_user_id\" is not null",
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "where": "\"finances\".\"planned_payments\".\"owner_user_id\" is not null",
+          "concurrently": false
         },
         "planned_payments_group_id_idx": {
           "name": "planned_payments_group_id_idx",
@@ -2982,10 +2982,10 @@
             }
           ],
           "isUnique": false,
-          "where": "\"finances\".\"planned_payments\".\"group_id\" is not null",
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "where": "\"finances\".\"planned_payments\".\"group_id\" is not null",
+          "concurrently": false
         },
         "planned_payments_due_date_idx": {
           "name": "planned_payments_due_date_idx",
@@ -2998,9 +2998,9 @@
             }
           ],
           "isUnique": false,
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "concurrently": false
         },
         "planned_payments_settled_transaction_id_unique": {
           "name": "planned_payments_settled_transaction_id_unique",
@@ -3013,9 +3013,9 @@
             }
           ],
           "isUnique": true,
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "concurrently": false
         },
         "planned_payments_from_account_id_idx": {
           "name": "planned_payments_from_account_id_idx",
@@ -3028,10 +3028,10 @@
             }
           ],
           "isUnique": false,
-          "where": "\"finances\".\"planned_payments\".\"from_account_id\" is not null",
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "where": "\"finances\".\"planned_payments\".\"from_account_id\" is not null",
+          "concurrently": false
         },
         "planned_payments_to_account_id_idx": {
           "name": "planned_payments_to_account_id_idx",
@@ -3044,10 +3044,10 @@
             }
           ],
           "isUnique": false,
-          "where": "\"finances\".\"planned_payments\".\"to_account_id\" is not null",
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "where": "\"finances\".\"planned_payments\".\"to_account_id\" is not null",
+          "concurrently": false
         },
         "planned_payments_category_id_idx": {
           "name": "planned_payments_category_id_idx",
@@ -3060,10 +3060,10 @@
             }
           ],
           "isUnique": false,
-          "where": "\"finances\".\"planned_payments\".\"category_id\" is not null",
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "where": "\"finances\".\"planned_payments\".\"category_id\" is not null",
+          "concurrently": false
         },
         "planned_payments_created_by_idx": {
           "name": "planned_payments_created_by_idx",
@@ -3076,110 +3076,110 @@
             }
           ],
           "isUnique": false,
-          "where": "\"finances\".\"planned_payments\".\"created_by\" is not null",
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "where": "\"finances\".\"planned_payments\".\"created_by\" is not null",
+          "concurrently": false
         }
       },
       "foreignKeys": {
         "planned_payments_owner_user_id_app_users_id_fk": {
           "name": "planned_payments_owner_user_id_app_users_id_fk",
           "tableFrom": "planned_payments",
-          "tableTo": "app_users",
-          "schemaTo": "finances",
           "columnsFrom": [
             "owner_user_id"
           ],
+          "tableTo": "app_users",
+          "schemaTo": "finances",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "restrict",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "restrict"
         },
         "planned_payments_group_id_groups_id_fk": {
           "name": "planned_payments_group_id_groups_id_fk",
           "tableFrom": "planned_payments",
-          "tableTo": "groups",
-          "schemaTo": "finances",
           "columnsFrom": [
             "group_id"
           ],
+          "tableTo": "groups",
+          "schemaTo": "finances",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "cascade"
         },
         "planned_payments_from_account_id_accounts_id_fk": {
           "name": "planned_payments_from_account_id_accounts_id_fk",
           "tableFrom": "planned_payments",
-          "tableTo": "accounts",
-          "schemaTo": "finances",
           "columnsFrom": [
             "from_account_id"
           ],
+          "tableTo": "accounts",
+          "schemaTo": "finances",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "restrict",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "restrict"
         },
         "planned_payments_to_account_id_accounts_id_fk": {
           "name": "planned_payments_to_account_id_accounts_id_fk",
           "tableFrom": "planned_payments",
-          "tableTo": "accounts",
-          "schemaTo": "finances",
           "columnsFrom": [
             "to_account_id"
           ],
+          "tableTo": "accounts",
+          "schemaTo": "finances",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "restrict",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "restrict"
         },
         "planned_payments_category_id_categories_id_fk": {
           "name": "planned_payments_category_id_categories_id_fk",
           "tableFrom": "planned_payments",
-          "tableTo": "categories",
-          "schemaTo": "finances",
           "columnsFrom": [
             "category_id"
           ],
+          "tableTo": "categories",
+          "schemaTo": "finances",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "restrict",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "restrict"
         },
         "planned_payments_settled_transaction_id_transactions_id_fk": {
           "name": "planned_payments_settled_transaction_id_transactions_id_fk",
           "tableFrom": "planned_payments",
-          "tableTo": "transactions",
-          "schemaTo": "finances",
           "columnsFrom": [
             "settled_transaction_id"
           ],
+          "tableTo": "transactions",
+          "schemaTo": "finances",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "set null"
         },
         "planned_payments_created_by_app_users_id_fk": {
           "name": "planned_payments_created_by_app_users_id_fk",
           "tableFrom": "planned_payments",
-          "tableTo": "app_users",
-          "schemaTo": "finances",
           "columnsFrom": [
             "created_by"
           ],
+          "tableTo": "app_users",
+          "schemaTo": "finances",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "restrict",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "restrict"
         }
       },
       "compositePrimaryKeys": {},
@@ -3390,10 +3390,10 @@
             }
           ],
           "isUnique": false,
-          "where": "\"finances\".\"recurring_rules\".\"owner_user_id\" is not null",
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "where": "\"finances\".\"recurring_rules\".\"owner_user_id\" is not null",
+          "concurrently": false
         },
         "recurring_rules_group_id_idx": {
           "name": "recurring_rules_group_id_idx",
@@ -3406,10 +3406,10 @@
             }
           ],
           "isUnique": false,
-          "where": "\"finances\".\"recurring_rules\".\"group_id\" is not null",
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "where": "\"finances\".\"recurring_rules\".\"group_id\" is not null",
+          "concurrently": false
         },
         "recurring_rules_next_run_on_idx": {
           "name": "recurring_rules_next_run_on_idx",
@@ -3422,9 +3422,9 @@
             }
           ],
           "isUnique": false,
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "concurrently": false
         },
         "recurring_rules_category_id_idx": {
           "name": "recurring_rules_category_id_idx",
@@ -3437,9 +3437,9 @@
             }
           ],
           "isUnique": false,
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "concurrently": false
         },
         "recurring_rules_owner_external_ref_unique": {
           "name": "recurring_rules_owner_external_ref_unique",
@@ -3458,10 +3458,10 @@
             }
           ],
           "isUnique": true,
-          "where": "\"finances\".\"recurring_rules\".\"external_ref\" is not null",
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "where": "\"finances\".\"recurring_rules\".\"external_ref\" is not null",
+          "concurrently": false
         },
         "recurring_rules_group_external_ref_unique": {
           "name": "recurring_rules_group_external_ref_unique",
@@ -3480,10 +3480,10 @@
             }
           ],
           "isUnique": true,
-          "where": "\"finances\".\"recurring_rules\".\"external_ref\" is not null",
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "where": "\"finances\".\"recurring_rules\".\"external_ref\" is not null",
+          "concurrently": false
         },
         "recurring_rules_from_account_id_idx": {
           "name": "recurring_rules_from_account_id_idx",
@@ -3496,10 +3496,10 @@
             }
           ],
           "isUnique": false,
-          "where": "\"finances\".\"recurring_rules\".\"from_account_id\" is not null",
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "where": "\"finances\".\"recurring_rules\".\"from_account_id\" is not null",
+          "concurrently": false
         },
         "recurring_rules_to_account_id_idx": {
           "name": "recurring_rules_to_account_id_idx",
@@ -3512,10 +3512,10 @@
             }
           ],
           "isUnique": false,
-          "where": "\"finances\".\"recurring_rules\".\"to_account_id\" is not null",
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "where": "\"finances\".\"recurring_rules\".\"to_account_id\" is not null",
+          "concurrently": false
         },
         "recurring_rules_created_by_idx": {
           "name": "recurring_rules_created_by_idx",
@@ -3528,96 +3528,96 @@
             }
           ],
           "isUnique": false,
-          "where": "\"finances\".\"recurring_rules\".\"created_by\" is not null",
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "where": "\"finances\".\"recurring_rules\".\"created_by\" is not null",
+          "concurrently": false
         }
       },
       "foreignKeys": {
         "recurring_rules_owner_user_id_app_users_id_fk": {
           "name": "recurring_rules_owner_user_id_app_users_id_fk",
           "tableFrom": "recurring_rules",
-          "tableTo": "app_users",
-          "schemaTo": "finances",
           "columnsFrom": [
             "owner_user_id"
           ],
+          "tableTo": "app_users",
+          "schemaTo": "finances",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "restrict",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "restrict"
         },
         "recurring_rules_group_id_groups_id_fk": {
           "name": "recurring_rules_group_id_groups_id_fk",
           "tableFrom": "recurring_rules",
-          "tableTo": "groups",
-          "schemaTo": "finances",
           "columnsFrom": [
             "group_id"
           ],
+          "tableTo": "groups",
+          "schemaTo": "finances",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "cascade"
         },
         "recurring_rules_from_account_id_accounts_id_fk": {
           "name": "recurring_rules_from_account_id_accounts_id_fk",
           "tableFrom": "recurring_rules",
-          "tableTo": "accounts",
-          "schemaTo": "finances",
           "columnsFrom": [
             "from_account_id"
           ],
+          "tableTo": "accounts",
+          "schemaTo": "finances",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "restrict",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "restrict"
         },
         "recurring_rules_to_account_id_accounts_id_fk": {
           "name": "recurring_rules_to_account_id_accounts_id_fk",
           "tableFrom": "recurring_rules",
-          "tableTo": "accounts",
-          "schemaTo": "finances",
           "columnsFrom": [
             "to_account_id"
           ],
+          "tableTo": "accounts",
+          "schemaTo": "finances",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "restrict",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "restrict"
         },
         "recurring_rules_category_id_categories_id_fk": {
           "name": "recurring_rules_category_id_categories_id_fk",
           "tableFrom": "recurring_rules",
-          "tableTo": "categories",
-          "schemaTo": "finances",
           "columnsFrom": [
             "category_id"
           ],
+          "tableTo": "categories",
+          "schemaTo": "finances",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "restrict",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "restrict"
         },
         "recurring_rules_created_by_app_users_id_fk": {
           "name": "recurring_rules_created_by_app_users_id_fk",
           "tableFrom": "recurring_rules",
-          "tableTo": "app_users",
-          "schemaTo": "finances",
           "columnsFrom": [
             "created_by"
           ],
+          "tableTo": "app_users",
+          "schemaTo": "finances",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "restrict",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "restrict"
         }
       },
       "compositePrimaryKeys": {},
@@ -3801,10 +3801,10 @@
             }
           ],
           "isUnique": true,
-          "where": "\"finances\".\"savings_goals\".\"external_ref\" is not null",
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "where": "\"finances\".\"savings_goals\".\"external_ref\" is not null",
+          "concurrently": false
         },
         "savings_goals_group_external_ref_unique": {
           "name": "savings_goals_group_external_ref_unique",
@@ -3823,10 +3823,10 @@
             }
           ],
           "isUnique": true,
-          "where": "\"finances\".\"savings_goals\".\"external_ref\" is not null",
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "where": "\"finances\".\"savings_goals\".\"external_ref\" is not null",
+          "concurrently": false
         },
         "savings_goals_owner_user_id_idx": {
           "name": "savings_goals_owner_user_id_idx",
@@ -3839,10 +3839,10 @@
             }
           ],
           "isUnique": false,
-          "where": "\"finances\".\"savings_goals\".\"owner_user_id\" is not null",
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "where": "\"finances\".\"savings_goals\".\"owner_user_id\" is not null",
+          "concurrently": false
         },
         "savings_goals_group_id_idx": {
           "name": "savings_goals_group_id_idx",
@@ -3855,10 +3855,10 @@
             }
           ],
           "isUnique": false,
-          "where": "\"finances\".\"savings_goals\".\"group_id\" is not null",
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "where": "\"finances\".\"savings_goals\".\"group_id\" is not null",
+          "concurrently": false
         },
         "savings_goals_account_id_idx": {
           "name": "savings_goals_account_id_idx",
@@ -3871,54 +3871,54 @@
             }
           ],
           "isUnique": false,
-          "where": "\"finances\".\"savings_goals\".\"account_id\" is not null",
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "where": "\"finances\".\"savings_goals\".\"account_id\" is not null",
+          "concurrently": false
         }
       },
       "foreignKeys": {
         "savings_goals_owner_user_id_app_users_id_fk": {
           "name": "savings_goals_owner_user_id_app_users_id_fk",
           "tableFrom": "savings_goals",
-          "tableTo": "app_users",
-          "schemaTo": "finances",
           "columnsFrom": [
             "owner_user_id"
           ],
+          "tableTo": "app_users",
+          "schemaTo": "finances",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "cascade"
         },
         "savings_goals_group_id_groups_id_fk": {
           "name": "savings_goals_group_id_groups_id_fk",
           "tableFrom": "savings_goals",
-          "tableTo": "groups",
-          "schemaTo": "finances",
           "columnsFrom": [
             "group_id"
           ],
+          "tableTo": "groups",
+          "schemaTo": "finances",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "cascade"
         },
         "savings_goals_account_id_accounts_id_fk": {
           "name": "savings_goals_account_id_accounts_id_fk",
           "tableFrom": "savings_goals",
-          "tableTo": "accounts",
-          "schemaTo": "finances",
           "columnsFrom": [
             "account_id"
           ],
+          "tableTo": "accounts",
+          "schemaTo": "finances",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "set null"
         }
       },
       "compositePrimaryKeys": {},
@@ -4071,10 +4071,10 @@
             }
           ],
           "isUnique": true,
-          "where": "\"finances\".\"goal_contributions\".\"external_ref\" is not null",
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "where": "\"finances\".\"goal_contributions\".\"external_ref\" is not null",
+          "concurrently": false
         },
         "goal_contributions_goal_id_idx": {
           "name": "goal_contributions_goal_id_idx",
@@ -4087,9 +4087,9 @@
             }
           ],
           "isUnique": false,
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "concurrently": false
         },
         "goal_contributions_transaction_id_idx": {
           "name": "goal_contributions_transaction_id_idx",
@@ -4102,50 +4102,50 @@
             }
           ],
           "isUnique": false,
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "concurrently": false
         }
       },
       "foreignKeys": {
         "goal_contributions_goal_id_savings_goals_id_fk": {
           "name": "goal_contributions_goal_id_savings_goals_id_fk",
           "tableFrom": "goal_contributions",
-          "tableTo": "savings_goals",
-          "schemaTo": "finances",
           "columnsFrom": [
             "goal_id"
           ],
+          "tableTo": "savings_goals",
+          "schemaTo": "finances",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "cascade"
         },
         "goal_contributions_transaction_id_transactions_id_fk": {
           "name": "goal_contributions_transaction_id_transactions_id_fk",
           "tableFrom": "goal_contributions",
-          "tableTo": "transactions",
-          "schemaTo": "finances",
           "columnsFrom": [
             "transaction_id"
           ],
+          "tableTo": "transactions",
+          "schemaTo": "finances",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "cascade"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "goal_contributions_goal_transaction_unique": {
           "name": "goal_contributions_goal_transaction_unique",
-          "nullsNotDistinct": false,
           "columns": [
             "goal_id",
             "transaction_id"
-          ]
+          ],
+          "nullsNotDistinct": false
         }
       },
       "policies": {
@@ -4267,16 +4267,16 @@
         "debt_terms_account_id_accounts_id_fk": {
           "name": "debt_terms_account_id_accounts_id_fk",
           "tableFrom": "debt_terms",
-          "tableTo": "accounts",
-          "schemaTo": "finances",
           "columnsFrom": [
             "account_id"
           ],
+          "tableTo": "accounts",
+          "schemaTo": "finances",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "cascade"
         }
       },
       "compositePrimaryKeys": {},
@@ -4416,9 +4416,9 @@
             }
           ],
           "isUnique": false,
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "concurrently": false
         },
         "deferrals_created_by_idx": {
           "name": "deferrals_created_by_idx",
@@ -4431,63 +4431,63 @@
             }
           ],
           "isUnique": false,
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "concurrently": false
         }
       },
       "foreignKeys": {
         "deferrals_transaction_id_transactions_id_fk": {
           "name": "deferrals_transaction_id_transactions_id_fk",
           "tableFrom": "deferrals",
-          "tableTo": "transactions",
-          "schemaTo": "finances",
           "columnsFrom": [
             "transaction_id"
           ],
+          "tableTo": "transactions",
+          "schemaTo": "finances",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "cascade"
         },
         "deferrals_account_id_accounts_id_fk": {
           "name": "deferrals_account_id_accounts_id_fk",
           "tableFrom": "deferrals",
-          "tableTo": "accounts",
-          "schemaTo": "finances",
           "columnsFrom": [
             "account_id"
           ],
+          "tableTo": "accounts",
+          "schemaTo": "finances",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "restrict",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "restrict"
         },
         "deferrals_created_by_app_users_id_fk": {
           "name": "deferrals_created_by_app_users_id_fk",
           "tableFrom": "deferrals",
-          "tableTo": "app_users",
-          "schemaTo": "finances",
           "columnsFrom": [
             "created_by"
           ],
+          "tableTo": "app_users",
+          "schemaTo": "finances",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "restrict",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "restrict"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "deferrals_transaction_unique": {
           "name": "deferrals_transaction_unique",
-          "nullsNotDistinct": false,
           "columns": [
             "transaction_id"
-          ]
+          ],
+          "nullsNotDistinct": false
         }
       },
       "policies": {
@@ -4625,25 +4625,25 @@
             }
           ],
           "isUnique": false,
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "concurrently": false
         }
       },
       "foreignKeys": {
         "installment_plans_account_id_accounts_id_fk": {
           "name": "installment_plans_account_id_accounts_id_fk",
           "tableFrom": "installment_plans",
-          "tableTo": "accounts",
-          "schemaTo": "finances",
           "columnsFrom": [
             "account_id"
           ],
+          "tableTo": "accounts",
+          "schemaTo": "finances",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "cascade"
         }
       },
       "compositePrimaryKeys": {},
@@ -4784,9 +4784,9 @@
             }
           ],
           "isUnique": false,
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "concurrently": false
         },
         "installment_lines_paid_transaction_id_idx": {
           "name": "installment_lines_paid_transaction_id_idx",
@@ -4799,9 +4799,9 @@
             }
           ],
           "isUnique": false,
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "concurrently": false
         },
         "installment_lines_plan_due_seq_idx": {
           "name": "installment_lines_plan_due_seq_idx",
@@ -4826,50 +4826,50 @@
             }
           ],
           "isUnique": false,
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "concurrently": false
         }
       },
       "foreignKeys": {
         "installment_lines_plan_id_installment_plans_id_fk": {
           "name": "installment_lines_plan_id_installment_plans_id_fk",
           "tableFrom": "installment_lines",
-          "tableTo": "installment_plans",
-          "schemaTo": "finances",
           "columnsFrom": [
             "plan_id"
           ],
+          "tableTo": "installment_plans",
+          "schemaTo": "finances",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "cascade"
         },
         "installment_lines_paid_transaction_id_transactions_id_fk": {
           "name": "installment_lines_paid_transaction_id_transactions_id_fk",
           "tableFrom": "installment_lines",
-          "tableTo": "transactions",
-          "schemaTo": "finances",
           "columnsFrom": [
             "paid_transaction_id"
           ],
+          "tableTo": "transactions",
+          "schemaTo": "finances",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "set null"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "installment_lines_plan_seq_unique": {
           "name": "installment_lines_plan_seq_unique",
-          "nullsNotDistinct": false,
           "columns": [
             "plan_id",
             "seq"
-          ]
+          ],
+          "nullsNotDistinct": false
         }
       },
       "policies": {
@@ -5020,27 +5020,27 @@
         "account_statements_account_id_accounts_id_fk": {
           "name": "account_statements_account_id_accounts_id_fk",
           "tableFrom": "account_statements",
-          "tableTo": "accounts",
-          "schemaTo": "finances",
           "columnsFrom": [
             "account_id"
           ],
+          "tableTo": "accounts",
+          "schemaTo": "finances",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "cascade"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "account_statements_account_cut_off_unique": {
           "name": "account_statements_account_cut_off_unique",
-          "nullsNotDistinct": false,
           "columns": [
             "account_id",
             "cut_off_date"
-          ]
+          ],
+          "nullsNotDistinct": false
         }
       },
       "policies": {
@@ -5156,9 +5156,9 @@
             }
           ],
           "isUnique": false,
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "concurrently": false
         },
         "account_reconciliations_created_by_idx": {
           "name": "account_reconciliations_created_by_idx",
@@ -5171,39 +5171,39 @@
             }
           ],
           "isUnique": false,
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "concurrently": false
         }
       },
       "foreignKeys": {
         "account_reconciliations_account_id_accounts_id_fk": {
           "name": "account_reconciliations_account_id_accounts_id_fk",
           "tableFrom": "account_reconciliations",
-          "tableTo": "accounts",
-          "schemaTo": "finances",
           "columnsFrom": [
             "account_id"
           ],
+          "tableTo": "accounts",
+          "schemaTo": "finances",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "cascade"
         },
         "account_reconciliations_created_by_app_users_id_fk": {
           "name": "account_reconciliations_created_by_app_users_id_fk",
           "tableFrom": "account_reconciliations",
-          "tableTo": "app_users",
-          "schemaTo": "finances",
           "columnsFrom": [
             "created_by"
           ],
+          "tableTo": "app_users",
+          "schemaTo": "finances",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "restrict",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "restrict"
         }
       },
       "compositePrimaryKeys": {},
@@ -5303,10 +5303,10 @@
             }
           ],
           "isUnique": true,
-          "where": "\"finances\".\"transaction_sources\".\"source_ref\" is not null",
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "where": "\"finances\".\"transaction_sources\".\"source_ref\" is not null",
+          "concurrently": false
         },
         "transaction_sources_statement_seq_unique": {
           "name": "transaction_sources_statement_seq_unique",
@@ -5325,10 +5325,10 @@
             }
           ],
           "isUnique": true,
-          "where": "\"finances\".\"transaction_sources\".\"source_seq\" is not null",
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "where": "\"finances\".\"transaction_sources\".\"source_seq\" is not null",
+          "concurrently": false
         },
         "transaction_sources_statement_id_idx": {
           "name": "transaction_sources_statement_id_idx",
@@ -5341,65 +5341,65 @@
             }
           ],
           "isUnique": false,
-          "where": "\"finances\".\"transaction_sources\".\"statement_id\" is not null",
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "where": "\"finances\".\"transaction_sources\".\"statement_id\" is not null",
+          "concurrently": false
         }
       },
       "foreignKeys": {
         "transaction_sources_transaction_id_transactions_id_fk": {
           "name": "transaction_sources_transaction_id_transactions_id_fk",
           "tableFrom": "transaction_sources",
-          "tableTo": "transactions",
-          "schemaTo": "finances",
           "columnsFrom": [
             "transaction_id"
           ],
+          "tableTo": "transactions",
+          "schemaTo": "finances",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "cascade"
         },
         "transaction_sources_account_id_accounts_id_fk": {
           "name": "transaction_sources_account_id_accounts_id_fk",
           "tableFrom": "transaction_sources",
-          "tableTo": "accounts",
-          "schemaTo": "finances",
           "columnsFrom": [
             "account_id"
           ],
+          "tableTo": "accounts",
+          "schemaTo": "finances",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "restrict",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "restrict"
         },
         "transaction_sources_statement_id_account_statements_id_fk": {
           "name": "transaction_sources_statement_id_account_statements_id_fk",
           "tableFrom": "transaction_sources",
-          "tableTo": "account_statements",
-          "schemaTo": "finances",
           "columnsFrom": [
             "statement_id"
           ],
+          "tableTo": "account_statements",
+          "schemaTo": "finances",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "set null"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "transaction_sources_transaction_account_unique": {
           "name": "transaction_sources_transaction_account_unique",
-          "nullsNotDistinct": false,
           "columns": [
             "transaction_id",
             "account_id"
-          ]
+          ],
+          "nullsNotDistinct": false
         }
       },
       "policies": {
@@ -5517,13 +5517,6 @@
           "notNull": true,
           "default": "'ingest'"
         },
-        "kind": {
-          "name": "kind",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'other'"
-        },
         "revoked_at": {
           "name": "revoked_at",
           "type": "timestamp with time zone",
@@ -5557,9 +5550,9 @@
             }
           ],
           "isUnique": true,
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "concurrently": false
         },
         "webhook_credentials_owner_user_id_idx": {
           "name": "webhook_credentials_owner_user_id_idx",
@@ -5572,9 +5565,9 @@
             }
           ],
           "isUnique": false,
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "concurrently": false
         },
         "webhook_credentials_default_account_id_idx": {
           "name": "webhook_credentials_default_account_id_idx",
@@ -5587,10 +5580,10 @@
             }
           ],
           "isUnique": false,
-          "where": "\"finances\".\"webhook_credentials\".\"default_account_id\" is not null",
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "where": "\"finances\".\"webhook_credentials\".\"default_account_id\" is not null",
+          "concurrently": false
         },
         "webhook_credentials_default_category_id_idx": {
           "name": "webhook_credentials_default_category_id_idx",
@@ -5603,54 +5596,54 @@
             }
           ],
           "isUnique": false,
-          "where": "\"finances\".\"webhook_credentials\".\"default_category_id\" is not null",
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "where": "\"finances\".\"webhook_credentials\".\"default_category_id\" is not null",
+          "concurrently": false
         }
       },
       "foreignKeys": {
         "webhook_credentials_owner_user_id_app_users_id_fk": {
           "name": "webhook_credentials_owner_user_id_app_users_id_fk",
           "tableFrom": "webhook_credentials",
-          "tableTo": "app_users",
-          "schemaTo": "finances",
           "columnsFrom": [
             "owner_user_id"
           ],
+          "tableTo": "app_users",
+          "schemaTo": "finances",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "cascade"
         },
         "webhook_credentials_default_account_id_accounts_id_fk": {
           "name": "webhook_credentials_default_account_id_accounts_id_fk",
           "tableFrom": "webhook_credentials",
-          "tableTo": "accounts",
-          "schemaTo": "finances",
           "columnsFrom": [
             "default_account_id"
           ],
+          "tableTo": "accounts",
+          "schemaTo": "finances",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "set null"
         },
         "webhook_credentials_default_category_id_categories_id_fk": {
           "name": "webhook_credentials_default_category_id_categories_id_fk",
           "tableFrom": "webhook_credentials",
-          "tableTo": "categories",
-          "schemaTo": "finances",
           "columnsFrom": [
             "default_category_id"
           ],
+          "tableTo": "categories",
+          "schemaTo": "finances",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "set null"
         }
       },
       "compositePrimaryKeys": {},
@@ -5714,10 +5707,6 @@
         "webhook_credentials_purpose": {
           "name": "webhook_credentials_purpose",
           "value": "\"finances\".\"webhook_credentials\".\"purpose\" in ('ingest', 'mcp')"
-        },
-        "webhook_credentials_kind_valid": {
-          "name": "webhook_credentials_kind_valid",
-          "value": "\"finances\".\"webhook_credentials\".\"kind\" in ('android', 'iphone', 'bank_emails', 'other')"
         }
       },
       "isRLSEnabled": false
@@ -5732,15 +5721,15 @@
           "primaryKey": true,
           "notNull": true,
           "identity": {
-            "type": "always",
             "name": "audit_log_id_seq",
-            "schema": "finances",
             "increment": "1",
-            "startWith": "1",
             "minValue": "1",
             "maxValue": "9223372036854775807",
+            "startWith": "1",
             "cache": "1",
-            "cycle": false
+            "cycle": false,
+            "schema": "finances",
+            "type": "always"
           }
         },
         "entity": {
@@ -5817,9 +5806,9 @@
             }
           ],
           "isUnique": false,
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "concurrently": false
         },
         "audit_log_occurred_at_idx": {
           "name": "audit_log_occurred_at_idx",
@@ -5832,9 +5821,9 @@
             }
           ],
           "isUnique": false,
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "concurrently": false
         },
         "audit_log_owner_user_id_idx": {
           "name": "audit_log_owner_user_id_idx",
@@ -5847,10 +5836,10 @@
             }
           ],
           "isUnique": false,
-          "where": "\"finances\".\"audit_log\".\"owner_user_id\" is not null",
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "where": "\"finances\".\"audit_log\".\"owner_user_id\" is not null",
+          "concurrently": false
         },
         "audit_log_group_id_idx": {
           "name": "audit_log_group_id_idx",
@@ -5863,10 +5852,10 @@
             }
           ],
           "isUnique": false,
-          "where": "\"finances\".\"audit_log\".\"group_id\" is not null",
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "where": "\"finances\".\"audit_log\".\"group_id\" is not null",
+          "concurrently": false
         },
         "audit_log_actor_user_id_idx": {
           "name": "audit_log_actor_user_id_idx",
@@ -5879,10 +5868,10 @@
             }
           ],
           "isUnique": false,
-          "where": "\"finances\".\"audit_log\".\"actor_user_id\" is not null",
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "where": "\"finances\".\"audit_log\".\"actor_user_id\" is not null",
+          "concurrently": false
         }
       },
       "foreignKeys": {},
@@ -6079,9 +6068,9 @@
             }
           ],
           "isUnique": true,
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "concurrently": false
         },
         "ingest_deliveries_owner_status_idx": {
           "name": "ingest_deliveries_owner_status_idx",
@@ -6100,9 +6089,9 @@
             }
           ],
           "isUnique": false,
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "concurrently": false
         },
         "ingest_deliveries_owner_shape_hash_idx": {
           "name": "ingest_deliveries_owner_shape_hash_idx",
@@ -6121,9 +6110,9 @@
             }
           ],
           "isUnique": false,
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "concurrently": false
         },
         "ingest_deliveries_owner_merchant_key_idx": {
           "name": "ingest_deliveries_owner_merchant_key_idx",
@@ -6142,10 +6131,10 @@
             }
           ],
           "isUnique": false,
-          "where": "\"finances\".\"ingest_deliveries\".\"merchant_key\" is not null",
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "where": "\"finances\".\"ingest_deliveries\".\"merchant_key\" is not null",
+          "concurrently": false
         },
         "ingest_deliveries_transaction_id_idx": {
           "name": "ingest_deliveries_transaction_id_idx",
@@ -6158,10 +6147,10 @@
             }
           ],
           "isUnique": false,
-          "where": "\"finances\".\"ingest_deliveries\".\"transaction_id\" is not null",
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "where": "\"finances\".\"ingest_deliveries\".\"transaction_id\" is not null",
+          "concurrently": false
         },
         "ingest_deliveries_credential_id_idx": {
           "name": "ingest_deliveries_credential_id_idx",
@@ -6174,10 +6163,10 @@
             }
           ],
           "isUnique": false,
-          "where": "\"finances\".\"ingest_deliveries\".\"credential_id\" is not null",
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "where": "\"finances\".\"ingest_deliveries\".\"credential_id\" is not null",
+          "concurrently": false
         },
         "ingest_deliveries_proposed_account_id_idx": {
           "name": "ingest_deliveries_proposed_account_id_idx",
@@ -6190,10 +6179,10 @@
             }
           ],
           "isUnique": false,
-          "where": "\"finances\".\"ingest_deliveries\".\"proposed_account_id\" is not null",
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "where": "\"finances\".\"ingest_deliveries\".\"proposed_account_id\" is not null",
+          "concurrently": false
         },
         "ingest_deliveries_proposed_to_account_id_idx": {
           "name": "ingest_deliveries_proposed_to_account_id_idx",
@@ -6206,10 +6195,10 @@
             }
           ],
           "isUnique": false,
-          "where": "\"finances\".\"ingest_deliveries\".\"proposed_to_account_id\" is not null",
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "where": "\"finances\".\"ingest_deliveries\".\"proposed_to_account_id\" is not null",
+          "concurrently": false
         },
         "ingest_deliveries_recipient_id_idx": {
           "name": "ingest_deliveries_recipient_id_idx",
@@ -6222,10 +6211,10 @@
             }
           ],
           "isUnique": false,
-          "where": "\"finances\".\"ingest_deliveries\".\"recipient_id\" is not null",
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "where": "\"finances\".\"ingest_deliveries\".\"recipient_id\" is not null",
+          "concurrently": false
         },
         "ingest_deliveries_proposed_category_id_idx": {
           "name": "ingest_deliveries_proposed_category_id_idx",
@@ -6238,110 +6227,110 @@
             }
           ],
           "isUnique": false,
-          "where": "\"finances\".\"ingest_deliveries\".\"proposed_category_id\" is not null",
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "where": "\"finances\".\"ingest_deliveries\".\"proposed_category_id\" is not null",
+          "concurrently": false
         }
       },
       "foreignKeys": {
         "ingest_deliveries_owner_user_id_app_users_id_fk": {
           "name": "ingest_deliveries_owner_user_id_app_users_id_fk",
           "tableFrom": "ingest_deliveries",
-          "tableTo": "app_users",
-          "schemaTo": "finances",
           "columnsFrom": [
             "owner_user_id"
           ],
+          "tableTo": "app_users",
+          "schemaTo": "finances",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "cascade"
         },
         "ingest_deliveries_credential_id_webhook_credentials_id_fk": {
           "name": "ingest_deliveries_credential_id_webhook_credentials_id_fk",
           "tableFrom": "ingest_deliveries",
-          "tableTo": "webhook_credentials",
-          "schemaTo": "finances",
           "columnsFrom": [
             "credential_id"
           ],
+          "tableTo": "webhook_credentials",
+          "schemaTo": "finances",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "set null"
         },
         "ingest_deliveries_transaction_id_transactions_id_fk": {
           "name": "ingest_deliveries_transaction_id_transactions_id_fk",
           "tableFrom": "ingest_deliveries",
-          "tableTo": "transactions",
-          "schemaTo": "finances",
           "columnsFrom": [
             "transaction_id"
           ],
+          "tableTo": "transactions",
+          "schemaTo": "finances",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "set null"
         },
         "ingest_deliveries_proposed_account_id_accounts_id_fk": {
           "name": "ingest_deliveries_proposed_account_id_accounts_id_fk",
           "tableFrom": "ingest_deliveries",
-          "tableTo": "accounts",
-          "schemaTo": "finances",
           "columnsFrom": [
             "proposed_account_id"
           ],
+          "tableTo": "accounts",
+          "schemaTo": "finances",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "set null"
         },
         "ingest_deliveries_proposed_category_id_categories_id_fk": {
           "name": "ingest_deliveries_proposed_category_id_categories_id_fk",
           "tableFrom": "ingest_deliveries",
-          "tableTo": "categories",
-          "schemaTo": "finances",
           "columnsFrom": [
             "proposed_category_id"
           ],
+          "tableTo": "categories",
+          "schemaTo": "finances",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "set null"
         },
         "ingest_deliveries_proposed_to_account_id_accounts_id_fk": {
           "name": "ingest_deliveries_proposed_to_account_id_accounts_id_fk",
           "tableFrom": "ingest_deliveries",
-          "tableTo": "accounts",
-          "schemaTo": "finances",
           "columnsFrom": [
             "proposed_to_account_id"
           ],
+          "tableTo": "accounts",
+          "schemaTo": "finances",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "set null"
         },
         "ingest_deliveries_recipient_id_recipients_id_fk": {
           "name": "ingest_deliveries_recipient_id_recipients_id_fk",
           "tableFrom": "ingest_deliveries",
-          "tableTo": "recipients",
-          "schemaTo": "finances",
           "columnsFrom": [
             "recipient_id"
           ],
+          "tableTo": "recipients",
+          "schemaTo": "finances",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "set null"
         }
       },
       "compositePrimaryKeys": {},
@@ -6508,25 +6497,25 @@
             }
           ],
           "isUnique": true,
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "concurrently": false
         }
       },
       "foreignKeys": {
         "ingest_shapes_owner_user_id_app_users_id_fk": {
           "name": "ingest_shapes_owner_user_id_app_users_id_fk",
           "tableFrom": "ingest_shapes",
-          "tableTo": "app_users",
-          "schemaTo": "finances",
           "columnsFrom": [
             "owner_user_id"
           ],
+          "tableTo": "app_users",
+          "schemaTo": "finances",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "cascade"
         }
       },
       "compositePrimaryKeys": {},
@@ -6674,9 +6663,9 @@
             }
           ],
           "isUnique": true,
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "concurrently": false
         },
         "ingest_merchants_candidate_category_id_idx": {
           "name": "ingest_merchants_candidate_category_id_idx",
@@ -6689,10 +6678,10 @@
             }
           ],
           "isUnique": false,
-          "where": "\"finances\".\"ingest_merchants\".\"candidate_category_id\" is not null",
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "where": "\"finances\".\"ingest_merchants\".\"candidate_category_id\" is not null",
+          "concurrently": false
         },
         "ingest_merchants_trusted_category_id_idx": {
           "name": "ingest_merchants_trusted_category_id_idx",
@@ -6705,54 +6694,54 @@
             }
           ],
           "isUnique": false,
-          "where": "\"finances\".\"ingest_merchants\".\"trusted_category_id\" is not null",
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "where": "\"finances\".\"ingest_merchants\".\"trusted_category_id\" is not null",
+          "concurrently": false
         }
       },
       "foreignKeys": {
         "ingest_merchants_owner_user_id_app_users_id_fk": {
           "name": "ingest_merchants_owner_user_id_app_users_id_fk",
           "tableFrom": "ingest_merchants",
-          "tableTo": "app_users",
-          "schemaTo": "finances",
           "columnsFrom": [
             "owner_user_id"
           ],
+          "tableTo": "app_users",
+          "schemaTo": "finances",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "cascade"
         },
         "ingest_merchants_candidate_category_id_categories_id_fk": {
           "name": "ingest_merchants_candidate_category_id_categories_id_fk",
           "tableFrom": "ingest_merchants",
-          "tableTo": "categories",
-          "schemaTo": "finances",
           "columnsFrom": [
             "candidate_category_id"
           ],
+          "tableTo": "categories",
+          "schemaTo": "finances",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "set null"
         },
         "ingest_merchants_trusted_category_id_categories_id_fk": {
           "name": "ingest_merchants_trusted_category_id_categories_id_fk",
           "tableFrom": "ingest_merchants",
-          "tableTo": "categories",
-          "schemaTo": "finances",
           "columnsFrom": [
             "trusted_category_id"
           ],
+          "tableTo": "categories",
+          "schemaTo": "finances",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "set null"
         }
       },
       "compositePrimaryKeys": {},
@@ -6901,9 +6890,9 @@
             }
           ],
           "isUnique": true,
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "concurrently": false
         },
         "ingest_counterparties_candidate_account_id_idx": {
           "name": "ingest_counterparties_candidate_account_id_idx",
@@ -6916,10 +6905,10 @@
             }
           ],
           "isUnique": false,
-          "where": "\"finances\".\"ingest_counterparties\".\"candidate_account_id\" is not null",
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "where": "\"finances\".\"ingest_counterparties\".\"candidate_account_id\" is not null",
+          "concurrently": false
         },
         "ingest_counterparties_trusted_account_id_idx": {
           "name": "ingest_counterparties_trusted_account_id_idx",
@@ -6932,54 +6921,54 @@
             }
           ],
           "isUnique": false,
-          "where": "\"finances\".\"ingest_counterparties\".\"trusted_account_id\" is not null",
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "where": "\"finances\".\"ingest_counterparties\".\"trusted_account_id\" is not null",
+          "concurrently": false
         }
       },
       "foreignKeys": {
         "ingest_counterparties_owner_user_id_app_users_id_fk": {
           "name": "ingest_counterparties_owner_user_id_app_users_id_fk",
           "tableFrom": "ingest_counterparties",
-          "tableTo": "app_users",
-          "schemaTo": "finances",
           "columnsFrom": [
             "owner_user_id"
           ],
+          "tableTo": "app_users",
+          "schemaTo": "finances",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "cascade"
         },
         "ingest_counterparties_candidate_account_id_accounts_id_fk": {
           "name": "ingest_counterparties_candidate_account_id_accounts_id_fk",
           "tableFrom": "ingest_counterparties",
-          "tableTo": "accounts",
-          "schemaTo": "finances",
           "columnsFrom": [
             "candidate_account_id"
           ],
+          "tableTo": "accounts",
+          "schemaTo": "finances",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "set null"
         },
         "ingest_counterparties_trusted_account_id_accounts_id_fk": {
           "name": "ingest_counterparties_trusted_account_id_accounts_id_fk",
           "tableFrom": "ingest_counterparties",
-          "tableTo": "accounts",
-          "schemaTo": "finances",
           "columnsFrom": [
             "trusted_account_id"
           ],
+          "tableTo": "accounts",
+          "schemaTo": "finances",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "set null"
         }
       },
       "compositePrimaryKeys": {},
@@ -7112,25 +7101,25 @@
             }
           ],
           "isUnique": true,
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "concurrently": false
         }
       },
       "foreignKeys": {
         "reminder_mails_planned_payment_id_planned_payments_id_fk": {
           "name": "reminder_mails_planned_payment_id_planned_payments_id_fk",
           "tableFrom": "reminder_mails",
-          "tableTo": "planned_payments",
-          "schemaTo": "finances",
           "columnsFrom": [
             "planned_payment_id"
           ],
+          "tableTo": "planned_payments",
+          "schemaTo": "finances",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "cascade"
         }
       },
       "compositePrimaryKeys": {},
@@ -7318,9 +7307,9 @@
             }
           ],
           "isUnique": false,
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "concurrently": false
         },
         "oauth_codes_client_id_idx": {
           "name": "oauth_codes_client_id_idx",
@@ -7333,9 +7322,9 @@
             }
           ],
           "isUnique": false,
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "concurrently": false
         },
         "oauth_codes_credential_id_idx": {
           "name": "oauth_codes_credential_id_idx",
@@ -7348,63 +7337,63 @@
             }
           ],
           "isUnique": false,
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "concurrently": false
         }
       },
       "foreignKeys": {
         "oauth_codes_owner_user_id_app_users_id_fk": {
           "name": "oauth_codes_owner_user_id_app_users_id_fk",
           "tableFrom": "oauth_codes",
-          "tableTo": "app_users",
-          "schemaTo": "finances",
           "columnsFrom": [
             "owner_user_id"
           ],
+          "tableTo": "app_users",
+          "schemaTo": "finances",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "cascade"
         },
         "oauth_codes_client_id_oauth_clients_id_fk": {
           "name": "oauth_codes_client_id_oauth_clients_id_fk",
           "tableFrom": "oauth_codes",
-          "tableTo": "oauth_clients",
-          "schemaTo": "finances",
           "columnsFrom": [
             "client_id"
           ],
+          "tableTo": "oauth_clients",
+          "schemaTo": "finances",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "cascade"
         },
         "oauth_codes_credential_id_webhook_credentials_id_fk": {
           "name": "oauth_codes_credential_id_webhook_credentials_id_fk",
           "tableFrom": "oauth_codes",
-          "tableTo": "webhook_credentials",
-          "schemaTo": "finances",
           "columnsFrom": [
             "credential_id"
           ],
+          "tableTo": "webhook_credentials",
+          "schemaTo": "finances",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "set null"
         }
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "oauth_codes_code_hash_unique": {
           "name": "oauth_codes_code_hash_unique",
-          "nullsNotDistinct": false,
           "columns": [
             "code_hash"
-          ]
+          ],
+          "nullsNotDistinct": false
         }
       },
       "policies": {
@@ -7559,9 +7548,9 @@
             }
           ],
           "isUnique": false,
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "concurrently": false
         },
         "member_debts_debtor_member_id_idx": {
           "name": "member_debts_debtor_member_id_idx",
@@ -7574,9 +7563,9 @@
             }
           ],
           "isUnique": false,
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "concurrently": false
         },
         "member_debts_creditor_member_id_idx": {
           "name": "member_debts_creditor_member_id_idx",
@@ -7589,9 +7578,9 @@
             }
           ],
           "isUnique": false,
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "concurrently": false
         },
         "member_debts_created_by_idx": {
           "name": "member_debts_created_by_idx",
@@ -7604,71 +7593,71 @@
             }
           ],
           "isUnique": false,
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "concurrently": false
         }
       },
       "foreignKeys": {
         "member_debts_group_id_groups_id_fk": {
           "name": "member_debts_group_id_groups_id_fk",
           "tableFrom": "member_debts",
-          "tableTo": "groups",
-          "schemaTo": "finances",
           "columnsFrom": [
             "group_id"
           ],
+          "tableTo": "groups",
+          "schemaTo": "finances",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "cascade"
         },
         "member_debts_created_by_app_users_id_fk": {
           "name": "member_debts_created_by_app_users_id_fk",
           "tableFrom": "member_debts",
-          "tableTo": "app_users",
-          "schemaTo": "finances",
           "columnsFrom": [
             "created_by"
           ],
+          "tableTo": "app_users",
+          "schemaTo": "finances",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "restrict",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "restrict"
         },
         "member_debts_debtor_in_fund_fk": {
           "name": "member_debts_debtor_in_fund_fk",
           "tableFrom": "member_debts",
-          "tableTo": "group_members",
-          "schemaTo": "finances",
           "columnsFrom": [
             "debtor_member_id",
             "group_id"
           ],
+          "tableTo": "group_members",
+          "schemaTo": "finances",
           "columnsTo": [
             "id",
             "group_id"
           ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "no action"
         },
         "member_debts_creditor_in_fund_fk": {
           "name": "member_debts_creditor_in_fund_fk",
           "tableFrom": "member_debts",
-          "tableTo": "group_members",
-          "schemaTo": "finances",
           "columnsFrom": [
             "creditor_member_id",
             "group_id"
           ],
+          "tableTo": "group_members",
+          "schemaTo": "finances",
           "columnsTo": [
             "id",
             "group_id"
           ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -7806,9 +7795,9 @@
             }
           ],
           "isUnique": true,
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "concurrently": false
         },
         "recipients_account_id_idx": {
           "name": "recipients_account_id_idx",
@@ -7821,10 +7810,10 @@
             }
           ],
           "isUnique": false,
-          "where": "\"finances\".\"recipients\".\"account_id\" is not null",
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "where": "\"finances\".\"recipients\".\"account_id\" is not null",
+          "concurrently": false
         },
         "recipients_category_id_idx": {
           "name": "recipients_category_id_idx",
@@ -7837,54 +7826,54 @@
             }
           ],
           "isUnique": false,
-          "where": "\"finances\".\"recipients\".\"category_id\" is not null",
-          "concurrently": false,
+          "with": {},
           "method": "btree",
-          "with": {}
+          "where": "\"finances\".\"recipients\".\"category_id\" is not null",
+          "concurrently": false
         }
       },
       "foreignKeys": {
         "recipients_owner_user_id_app_users_id_fk": {
           "name": "recipients_owner_user_id_app_users_id_fk",
           "tableFrom": "recipients",
-          "tableTo": "app_users",
-          "schemaTo": "finances",
           "columnsFrom": [
             "owner_user_id"
           ],
+          "tableTo": "app_users",
+          "schemaTo": "finances",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "cascade"
         },
         "recipients_account_id_accounts_id_fk": {
           "name": "recipients_account_id_accounts_id_fk",
           "tableFrom": "recipients",
-          "tableTo": "accounts",
-          "schemaTo": "finances",
           "columnsFrom": [
             "account_id"
           ],
+          "tableTo": "accounts",
+          "schemaTo": "finances",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "set null"
         },
         "recipients_category_id_categories_id_fk": {
           "name": "recipients_category_id_categories_id_fk",
           "tableFrom": "recipients",
-          "tableTo": "categories",
-          "schemaTo": "finances",
           "columnsFrom": [
             "category_id"
           ],
+          "tableTo": "categories",
+          "schemaTo": "finances",
           "columnsTo": [
             "id"
           ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
+          "onUpdate": "no action",
+          "onDelete": "set null"
         }
       },
       "compositePrimaryKeys": {},
@@ -7955,10 +7944,10 @@
   },
   "enums": {},
   "schemas": {},
+  "views": {},
   "sequences": {},
   "roles": {},
   "policies": {},
-  "views": {},
   "_meta": {
     "columns": {},
     "schemas": {},

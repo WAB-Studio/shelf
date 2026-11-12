@@ -68,7 +68,7 @@ type RowAction =
 
 /**
  * The savings-goals area: each goal reads as a virtual-envelope card on a phone
- * and as a row of the dense table of SPEC-A3 on a laptop, both drawn from the same
+ * and as a row of the dense table of the desktop design on a laptop, both drawn from the same
  * server-derived apartado, avance and ritmo — money earmarked, never moved and
  * never stored (RF-76, RF-87, RNF-07). A goal is created, edited, contributed to,
  * archived, restored or deleted through the dialogs and the confirms below

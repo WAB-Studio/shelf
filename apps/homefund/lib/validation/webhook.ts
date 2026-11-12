@@ -39,7 +39,7 @@ export const webhookPayloadSchema = z.object({
 // feeds `ingestWebhookMovement` unchanged; the route (C7) exercises that pass.
 export type WebhookPayloadInput = z.infer<typeof webhookPayloadSchema>;
 
-// What a key is for, picked when it is made (RF-194); never read off its name.
+// What a key is for, picked when it is made (RF-197); never read off its name.
 export const credentialKindSchema = z.enum(["android", "iphone", "bank_emails", "other"], {
   error: "webhooks.errors.kindInvalid",
 });

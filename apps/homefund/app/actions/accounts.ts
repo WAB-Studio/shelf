@@ -36,8 +36,8 @@ export const createAccountAction = authActionClient
   });
 
 /**
- * Updates an account's editable fields. `kind` and the placement are immutable,
- * so neither is part of this input (RF-09, RF-60).
+ * Updates an account's editable fields. `kind` and the placement are immutable: both ride
+ * in the input only so the schema's rules judge the edit, and neither is written (RF-09, RF-60).
  */
 export const updateAccountAction = authActionClient
   .inputSchema(updateAccountSchema)

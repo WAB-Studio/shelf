@@ -121,7 +121,7 @@ export const deletePlannedPaymentAction = authActionClient
   });
 
 /**
- * Records the real movement the payment stood for and flips it to done (RF-75).
+ * Records the real movement the payment stood for and flips it to done (RF-161).
  * The payment's own accounts, amount and category become the transaction, so
  * the form supplies only the date it actually happened; a payment no longer
  * pending — already settled or cancelled — surfaces as such, never a second

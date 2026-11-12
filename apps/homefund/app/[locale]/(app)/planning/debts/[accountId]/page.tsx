@@ -47,7 +47,7 @@ export default async function DebtDetailPage(
   if (data === null) notFound();
 
   return (
-    // Every band of the detail carries the gutter itself from `md` up (SPEC-A3).
+    // Every band of the detail carries the gutter itself from `md` up.
     <Page gutter="flush-md">
       <DebtDetailScreen data={data} />
     </Page>

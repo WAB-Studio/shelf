@@ -20,7 +20,7 @@ import { groups } from "./groups";
 import { labels } from "./labels";
 
 // A spending limit on a category for a repeating period (RF-71); scoped to a user or a group,
-// optionally narrowed to one account and/or one label. Spent and remaining derive from splits (RF-72).
+// optionally narrowed to one account and/or one label. Spent and remaining derive from splits (RF-160).
 export const budgets = finances.table(
   "budgets",
   {

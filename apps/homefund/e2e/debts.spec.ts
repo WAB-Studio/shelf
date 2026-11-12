@@ -43,7 +43,7 @@ const common = messages.common;
 // credit limit shows instead of a cupo of zero (RF-117).
 const NO_VALUE = "\u2014";
 
-// The minus `Money` prints on a signed figure below zero (SPEC-A3), read back
+// The minus `Money` prints on a signed figure below zero, read back
 // here to tell a negative gap from a positive one without importing the
 // component that draws it.
 const MINUS = "\u2212";
@@ -503,7 +503,7 @@ const SECOND_INTEREST_CENTS = Math.round(
 test.describe("the laptop band", () => {
   // The dense table and its tiles render from `lg` up, and both projects drive
   // this describe at the width the artboard states rather than skipping one of
-  // them (SPEC-A3, RNF-08).
+  // them (RNF-08).
   test.use({ viewport: { width: 1280, height: 900 } });
 
   const secondId = randomUUID();
@@ -1219,7 +1219,7 @@ for (const [bandLabel, width] of [
 // ---------------------------------------------------------------------------
 // A card in credit with a dollar purchase still to bill, and the next payment
 // of a fund with nothing to pay (RF-80, RF-83, RF-123, RF-124; `docs/DESIGN.md`
-// § Debts, Q9 a; boards DeudasAFavorPorFacturar, DeudasProximoPagoSinDeudaMovil).
+// § Debts; boards DeudasAFavorPorFacturar, DeudasProximoPagoSinDeudaMovil).
 //
 // Both read a whole fund, so they run as the second identity, whose personal
 // fund no other spec of this file seeds: every figure below is that fund's alone

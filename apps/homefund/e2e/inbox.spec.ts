@@ -121,7 +121,7 @@ test.describe("the inbox queue", () => {
       }
     });
 
-    test("says which key a delivery came through, in the row and in the card (RF-194)", async ({
+    test("says which key a delivery came through, in the row and in the card (RF-197)", async ({
       page,
     }) => {
       const [deliveryId] = await seedQueue([complete]);

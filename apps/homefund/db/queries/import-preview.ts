@@ -43,7 +43,7 @@ export type ScopedEntity = {
 };
 
 // An account additionally carries what it settles in (RF-121): the pipeline checks a
-// resolved reference against it before a row that names one ever reaches `parsePesos`.
+// resolved reference against it before a row that names one ever reaches `parseAmount`.
 // Its opening day too (RF-162): a movement row dated before it is refused in the preview.
 export type ScopedAccount = ScopedEntity & { settlementCurrency: string; initialBalanceOn: string };
 

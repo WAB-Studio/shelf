@@ -54,7 +54,7 @@ import type { Locale } from "@/lib/locales";
 
 const PAGE_SIZE = 10;
 
-// The em dash a tile with nothing to name reads as (SPEC-A3), not a word a
+// The em dash a tile with nothing to name reads as in the desktop design, not a word a
 // translator would ever change.
 const NO_VALUE = "—";
 
@@ -109,7 +109,7 @@ function OtherOwed({ pockets }: { pockets: DebtPocket[] }) {
 
 /**
  * The consolidated debts area (RF-83, RF-117): the fund's four figures over the
- * dense table of SPEC-A3 on a laptop, and the same liabilities as cards read by
+ * dense table of the desktop design on a laptop, and the same liabilities as cards read by
  * their `debtKind` on a phone. Every figure arrives already derived from the
  * backend and stays integer cents; the peso and percent readings are display
  * only. One `DebtFormDialog` serves the header's "new debt" and each bare

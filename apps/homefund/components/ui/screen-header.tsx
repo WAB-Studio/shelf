@@ -10,7 +10,7 @@ import styles from "./screen-header.module.css";
  * baseline, the caller's actions at the end and, when the screen has one, its
  * headline figure under the title. Below `md` it is a bare
  * `Heading size="5"` inside the page's own gutter, so a screen that adopts it
- * does not shift on a phone; from `md` up it takes the 24/32/16 of SPEC-A3.
+ * does not shift on a phone; from `md` up it takes the 24/32/16 of the desktop design.
  */
 export function ScreenHeader({
   title,

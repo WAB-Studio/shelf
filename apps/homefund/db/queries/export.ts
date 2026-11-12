@@ -69,7 +69,7 @@ export type ExportInput = {
   from?: Date | string;
   to?: Date | string;
   // Narrows the transactions sheet alone (RF-118); every other entity stays
-  // the whole-fund dump RF-50 asks for.
+  // the whole-fund dump RF-142 asks for.
   transactionFilters?: TransactionExportFilters;
   // Carries each row's stable key beside its cells as `externalRef`, a field no sheet
   // writes. The import reads the fund this way to recognise a row it already holds.
@@ -357,7 +357,7 @@ function toExportRows<E extends SheetEntity>(
 
 /**
  * Every requested entity in export shape, each in its own round trip so the reads
- * fan out (RF-50), the two name maps alongside them — never chained. RLS bounds
+ * fan out (RF-142), the two name maps alongside them — never chained. RLS bounds
  * each set to the caller's scope: a caller with no group reads their personal rows
  * and no members, since the members policy shows only a group's roster. References
  * resolve to names (RF-49); money stays integer cents, the sheet's cents→pesos
@@ -418,7 +418,7 @@ async function readExportCore(
           input.from,
           input.to,
           // An adjustment is a movement like any other here: the list shows it (RF-118) and a
-          // re-import must reproduce each reconciled account's balance (RF-50).
+          // re-import must reproduce each reconciled account's balance (RF-142).
           entity === "transactions" ? narrowed : [],
           input.withKeys === true,
         ),

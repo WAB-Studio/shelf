@@ -21,7 +21,7 @@ import type { PlannedPaymentRow } from "@/db/queries/planned-payments";
 import { civilDateToDate, todayInBogota } from "@/lib/dates";
 import { isOverdue } from "@/lib/fund/glance";
 
-// The em dash a cell with nothing to name reads as (SPEC-A3), not a word a
+// The em dash a cell with nothing to name reads as in the desktop design, not a word a
 // translator would ever change.
 const NO_VALUE = "—";
 
@@ -38,8 +38,8 @@ const WIDTHS = {
 } as const;
 
 /**
- * The dense Pagos planificados of `private/design-desktop/SPEC-A3.md`
- * (RF-74, RF-75): one section per due month, each pending row carrying its own
+ * The dense Pagos planificados of the desktop design
+ * (RF-74, RF-161): one section per due month, each pending row carrying its own
  * "Registrar pago" and a settled row carrying only its mark. `categoryNames`,
  * `categoryColors` and `accountNames` are the caller's already-flattened maps —
  * a payment names an id, never a joined row, so the table reads them once
