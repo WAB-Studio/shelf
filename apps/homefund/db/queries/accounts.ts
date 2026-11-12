@@ -36,6 +36,12 @@ export type AccountRow = {
   // One balance per currency the account holds, its settlement currency first
   // (RF-121, RF-124). No caller adds two of them together.
   balances: { currency: CurrencyCode; balanceCents: number }[];
+  // The «Me debe» of a credit somebody else pays (RF-216): an asset the ledger keeps and no list offers. Absent on
+  // the rows `cash.ts` builds, which never read one.
+  internal?: boolean;
+  // Set on a credit somebody else pays: who pays it and what they still owe, the hidden receivable's balance in
+  // the credit's currency, so a total counts it without listing the account.
+  thirdParty?: { personName: string; personOwesCents: number } | null;
   // Only on an account with live pockets: its own balances plus theirs, summed at read time per
   // currency. `balances` stays its own free part (RF-173); no total adds this twice.
   totalBalances?: { currency: CurrencyCode; balanceCents: number }[];
@@ -85,8 +91,16 @@ export async function listAccountNames(outerTx?: Transaction): Promise<AccountNa
   );
 }
 
+// What makes an account internal (RF-216): it is the receivable of a credit somebody else pays, which the link
+// derives, so a link made before this and a link made now hide the same way. Written with the column's own name,
+// never a Drizzle column reference, for the reason `listAccounts` gives.
+export const internalAccountSql = sql<boolean>`exists (
+  select 1 from third_party_credits c where c.receivable_account_id = accounts.id)`;
+
+// `withInternal` keeps the hidden receivables in, for a sum that must count what a payer still owes (net worth) or a
+// name a movement still carries; every list a person picks from or reads leaves them out.
 export async function listAccounts(
-  options: { archived: boolean },
+  options: { archived: boolean; withInternal?: boolean },
   outerTx?: Transaction,
 ): Promise<AccountRow[]> {
   // The outer references are written qualified, once each: drizzle renders an
@@ -137,11 +151,21 @@ export async function listAccounts(
         ownerName: ownerNameSql,
         archivedAt: accounts.archivedAt,
         updatedAt: sql<string>`accounts.updated_at::text`,
+        internal: internalAccountSql,
+        // One credit, one payer: the receivable's settlement-currency balance, derived like every other.
+        thirdParty: sql<{ personName: string; personOwesCents: string } | null>`(
+          select jsonb_build_object('personName', c.person_name, 'personOwesCents', coalesce(rb.balance_cents, 0)::text)
+          from third_party_credits c
+          left join account_balances rb on rb.id = c.receivable_account_id and rb.currency = accounts.settlement_currency
+          where c.liability_account_id = accounts.id)`,
       })
       .from(accounts)
       .leftJoin(groupMembers, eq(groupMembers.id, accounts.holderMemberId))
       .where(
-        options.archived ? isNotNull(accounts.archivedAt) : isNull(accounts.archivedAt),
+        and(
+          options.archived ? isNotNull(accounts.archivedAt) : isNull(accounts.archivedAt),
+          options.withInternal ? undefined : sql`not ${internalAccountSql}`,
+        ),
       )
       .orderBy(desc(sql`${accounts.ownerUserId} is not null`), asc(accounts.name));
 
@@ -149,6 +173,9 @@ export async function listAccounts(
     // number, in the minor unit of the currency beside it.
     const listed: AccountRow[] = rows.map((row) => ({
       ...row,
+      thirdParty: row.thirdParty
+        ? { personName: row.thirdParty.personName, personOwesCents: Number(row.thirdParty.personOwesCents) }
+        : null,
       balances: row.balances.map((balance) => ({
         currency: balance.currency,
         balanceCents: Number(balance.balanceCents),

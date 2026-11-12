@@ -21,7 +21,7 @@ import {
   type BilledTarget,
 } from "@/components/accounts/foreign-estimates";
 import { ReconcileDialog } from "@/components/accounts/reconcile-dialog";
-import { AccountsTable } from "@/components/accounts/accounts-table";
+import { AccountsTable, PaidByLine } from "@/components/accounts/accounts-table";
 import {
   Box,
   Button,
@@ -270,8 +270,16 @@ export function AccountsScreen({
     ];
   }
 
-  function totalsOf(list: Section[]) {
-    const have = list.filter((x) => !x.owes).map((x) => ({ figures: x.figures, sign: 1 as const }));
+  // What a person who pays a credit still owes is money the person has coming: the «Me debe» is hidden, so its
+  // balance rides on the credit and counts here, and the net still reads assets minus credit plus that (RF-216).
+  function totalsOf(list: Section[], rows: AccountRow[]) {
+    const owedByPayers = rows.flatMap((row) =>
+      row.thirdParty ? [{ currency: row.settlementCurrency, cents: row.thirdParty.personOwesCents }] : [],
+    );
+    const have = [
+      ...list.filter((x) => !x.owes).map((x) => ({ figures: x.figures, sign: 1 as const })),
+      { figures: owedByPayers, sign: 1 as const },
+    ];
     const owe = list.filter((x) => x.owes).map((x) => ({ figures: x.figures, sign: 1 as const }));
     return (
       <StatTiles
@@ -390,7 +398,7 @@ export function AccountsScreen({
             )}
           </FilterBar>
 
-          {!archived && deskSections.length > 0 && totalsOf(deskSections)}
+          {!archived && deskSections.length > 0 && totalsOf(deskSections, filteredAccounts)}
 
           <AccountsTable
             sections={deskSections.flatMap((section) => {
@@ -477,7 +485,7 @@ export function AccountsScreen({
             emptyState
           ) : (
             <>
-              {!archived && totalsOf(phoneSections)}
+              {!archived && totalsOf(phoneSections, accounts)}
               <Flex direction="column" gap="5">
                 {phoneSections.map((section) => (
                   <Flex key={section.key} direction="column" gap="3">
@@ -667,9 +675,12 @@ function AccountCard({
       <Flex justify="between" align="start" gap="3">
         <Flex direction="column" gap="1" flexGrow="1" minWidth="0">
           <Flex align="center" gap="2" wrap="wrap">
-            <Text weight="medium">{account.name}</Text>
+            <Text weight="medium">
+              {account.thirdParty ? t("creditOf", { name: account.name, person: account.thirdParty.personName }) : account.name}
+            </Text>
             {account.ownerUserId && <PersonalMark label={ownerLabel} />}
           </Flex>
+          <PaidByLine account={account} />
           {account.foreignOwner && (
             <Text size="2" color="gray">
               {ownerLabel}

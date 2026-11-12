@@ -19029,6 +19029,38 @@ async function thirdPartyCreditSuite(): Promise<void> {
     gone.length === 0 && accountsLeft === 2 && movementsLeft === 3 && (await refused(() => asUser(user, () => removeThirdPartyCredit(credit)))) === "errors.notFound",
     `links ${gone.length}, accounts ${accountsLeft}, movements ${movementsLeft}`,
   );
+
+  // RF-216: the «Me debe» of a credit somebody else pays is derived hidden from its link: no list offers it, the credit's
+  // row carries what the payer owes, a sum that asks for every account still counts it, and unlinking archives it.
+  const hiding = await mk(user, "credito oculto", "liability", 200_000_00);
+  const hiddenLink = await asUser(user, () =>
+    setUpThirdPartyCredit(setUpThirdPartyCreditSchema.parse(form({ liabilityAccountId: hiding, amount: "200.000", openedOn: shiftDate(today, -1) })), "Me debe Persona Cinco"),
+  );
+  track("accounts", hiddenLink.receivableAccountId);
+  const shown = await asUser(user, () => listAccounts({ archived: false }));
+  const everyone = await asUser(user, () => listAccounts({ archived: false, withInternal: true }));
+  const creditRow = shown.find((one) => one.id === hiding);
+  const internalRow = everyone.find((one) => one.id === hiddenLink.receivableAccountId);
+  const viaList = (await tool("list_accounts")).value as { id: string }[];
+  const detail = await asUser(user, () => getDebtDetail(hiding));
+  assert(
+    next("RF-216: the receivable is in no account list, the credit's row names the payer and what they owe, and a sum that asks for it still counts it"),
+    !shown.some((one) => one.id === hiddenLink.receivableAccountId) && internalRow?.internal === true &&
+      creditRow?.thirdParty?.personName === "Persona Uno" && creditRow.thirdParty.personOwesCents === 200_000_00 &&
+      !viaList.some((one) => one.id === hiddenLink.receivableAccountId) && viaList.some((one) => one.id === hiding) &&
+      detail !== null && !detail.payFrom.some((one) => one.id === hiddenLink.receivableAccountId),
+    `shown ${shown.length}, with internal ${everyone.length}, credit ${JSON.stringify(creditRow?.thirdParty)}, tool ${viaList.length}`,
+  );
+
+  await asUser(user, () => removeThirdPartyCredit(hiding));
+  const afterUnlink = await asUser(user, () => listAccounts({ archived: true }));
+  const archivedReceivable = afterUnlink.find((one) => one.id === hiddenLink.receivableAccountId);
+  assert(
+    next("RF-216: unlinking archives the receivable, so it reads in Archivadas and never among the active accounts"),
+    archivedReceivable?.archivedAt != null && archivedReceivable.internal === false &&
+      !(await asUser(user, () => listAccounts({ archived: false }))).some((one) => one.id === hiddenLink.receivableAccountId),
+    JSON.stringify(archivedReceivable?.archivedAt),
+  );
 }
 
 // RF-215: the iPhone widget's key opens the summary and nothing else, and no other key opens the summary. The

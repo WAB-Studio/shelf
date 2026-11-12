@@ -144,8 +144,9 @@ function mapLinkError(error: unknown): never {
 
 /**
  * «Lo paga otra persona» (RF-211): links the credit to a «Me debe» asset, in ONE transaction. With no
- * `receivableAccountId` it opens that asset in the credit's own scope and currency at `openingCents` as of
- * `openedOn`, and a refusal of the link takes the account back with it.
+ * `receivableAccountId` (the screen never sends one, RF-217) it opens that asset in the credit's own scope and
+ * currency at `openingCents` as of `openedOn`, and a refusal of the link takes the account back with it. The
+ * link is what hides the asset from every list (RF-216).
  */
 export async function setUpThirdPartyCredit(
   input: SetUpThirdPartyCreditInput,
@@ -200,11 +201,21 @@ export async function updateThirdPartyCredit(input: UpdateThirdPartyCreditInput)
   if (rows.length === 0) throw new ActionError("errors.notFound");
 }
 
-/** Stops following the credit as paid by somebody else. Both accounts and every movement stay (RF-211). */
+/**
+ * Stops following the credit as paid by somebody else. Both accounts and every movement stay (RF-211), and the
+ * «Me debe» is archived in the same transaction: once unlinked it would otherwise read as an account of its own
+ * among the person's lists, which it never was (RF-216). Restoring it is the person's choice.
+ */
 export async function removeThirdPartyCredit(liabilityAccountId: string): Promise<void> {
-  const rows = await withUserDb((tx) =>
-    tx.execute<{ id: string }>(sql`delete from third_party_credits where liability_account_id = ${liabilityAccountId}::uuid returning id`),
-  );
+  const rows = await withUserDb(async (tx) => {
+    const gone = await tx.execute<{ receivableAccountId: string }>(sql`
+      delete from third_party_credits where liability_account_id = ${liabilityAccountId}::uuid
+      returning receivable_account_id as "receivableAccountId"`);
+    if (gone.length > 0) {
+      await tx.execute(sql`update accounts set archived_at = now() where id = ${gone[0].receivableAccountId}::uuid`);
+    }
+    return gone;
+  });
   if (rows.length === 0) throw new ActionError("errors.notFound");
 }
 

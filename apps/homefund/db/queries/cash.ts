@@ -4,7 +4,7 @@ import { and, asc, desc, eq, isNull, ne, or, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
 import { insertRow } from "@/db/insert-row";
-import { foreignOwnerSql, ownerNameSql, type AccountRow } from "@/db/queries/accounts";
+import { foreignOwnerSql, internalAccountSql, ownerNameSql, type AccountRow } from "@/db/queries/accounts";
 import { callerCashMode, callerGroupId } from "@/db/queries/groups";
 import { insertTransaction, ResendChangedError } from "@/db/queries/transactions";
 import { accounts } from "@/db/schema";
@@ -252,6 +252,8 @@ async function listWithdrawalSources(userId: string): Promise<AccountRow[]> {
           eq(accounts.kind, "asset"),
           ne(accounts.subtype, "cash"),
           isNull(accounts.archivedAt),
+          // A «Me debe» holds no money a person can take out (RF-216).
+          sql`not ${internalAccountSql}`,
           or(eq(accounts.ownerUserId, userId), eq(accounts.isShared, true)),
         ),
       )

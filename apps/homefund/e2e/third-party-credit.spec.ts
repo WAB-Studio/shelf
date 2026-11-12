@@ -1,8 +1,9 @@
 /**
- * A credit somebody else pays (RF-211 to RF-213), from the credit's own screen: «Lo paga otra persona» links it to a
- * «Me debe» account, the section reads what is still owed and this month's two transfers, and «Registrar pago de
- * <persona>» books the payer's money as a transfer into the chosen account. Runs on both projects; on the phone
- * (360 px) the page never scrolls sideways.
+ * A credit somebody else pays (RF-211 to RF-213, RF-216, RF-217), from the credit's own screen: «Lo paga otra persona»
+ * asks for the person alone and links the credit to a hidden «Me debe», the section reads what is still owed and this
+ * month's two transfers, and «Registrar pago de <persona>» books the payer's money as a transfer into the chosen
+ * account. The Accounts list shows the credit with its payer and no account of the payer's. Runs on both projects; on
+ * the phone (360 px) the page never scrolls sideways.
  */
 import { randomUUID } from "node:crypto";
 
@@ -46,7 +47,7 @@ test.afterAll(async () => {
   });
 });
 
-test("a credit somebody else pays is set up, read and recorded from its screen", async ({ page }) => {
+test("a credit somebody else pays is set up, read and recorded from its screen", async ({ page }, testInfo) => {
   await page.goto(`/es/planning/debts/${creditId}`);
   const main = page.getByRole("main");
   await expect(main.getByRole("heading", { name: t.title.replace("{person}", PERSON) })).toBeHidden();
@@ -55,7 +56,8 @@ test("a credit somebody else pays is set up, read and recorded from its screen",
   await main.getByRole("button", { name: t.setUp }).click();
   const dialog = page.getByRole("dialog");
   await dialog.getByLabel(t.personLabel, { exact: true }).fill(PERSON);
-  await expect(dialog.getByLabel(t.openingLabel)).toHaveValue(/300\.000|300,000/);
+  // The dialog asks for the person and the lender's terms; no account to choose, nothing to open.
+  await expect(dialog.getByRole("combobox")).toHaveCount(0);
   await dialog.getByLabel(t.installmentLabel).fill("150000");
   await dialog.getByLabel(t.dueDayLabel).fill("15");
   await dialog.getByRole("button", { name: t.save }).click();
@@ -86,4 +88,24 @@ test("a credit somebody else pays is set up, read and recorded from its screen",
   expect(moved).toEqual({ kind: "transfer", to: bankId, amount: "15000000" });
 
   expect(await pageOverflow(page)).toBeLessThanOrEqual(0);
+
+  // The Accounts list reads the credit with its payer and what they still owe, and holds no «Me debe» of its own.
+  const receivableName = t.receivableName.replace("{person}", PERSON);
+  await page.goto("/es/settings/accounts");
+  await expect(page.getByText(`${creditName} (${PERSON})`).filter({ visible: true }).first()).toBeVisible();
+  await expect(page.getByText(/Lo paga Persona Uno · le falta/).filter({ visible: true }).first()).toBeVisible();
+  await expect(page.getByText(receivableName)).toHaveCount(0);
+
+  // Nor does the full movement form offer it as a side of a movement.
+  await page.goto("/es");
+  if (testInfo.project.name === "desktop") {
+    await page.getByRole("button", { name: messages.transactions.quickTypeLink, exact: true }).click();
+  } else {
+    await page.getByRole("button", { name: messages.transactions.quickPlaceholder, exact: true }).click();
+    await page.getByRole("link", { name: messages.transactions.quickTypeLink, exact: true }).click();
+  }
+  const form = page.getByRole("dialog");
+  await form.getByRole("combobox", { name: messages.transactions.fromLabel }).click();
+  await expect(page.getByRole("option", { name: bankName, exact: true })).toBeVisible();
+  await expect(page.getByRole("option", { name: receivableName, exact: true })).toHaveCount(0);
 });
