@@ -5438,6 +5438,7 @@ const UPDATE_GRANT_GAPS: Record<string, string[]> = {
     "credential_id",
     "extracted_identifier",
     "external_ref",
+    "from_email",
     "id",
     "owner_user_id",
     "proposed_account_id",

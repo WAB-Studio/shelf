@@ -63,7 +63,7 @@ export function resolveOccurredAt(
 
 type Merchant = ReturnType<typeof merchantOf>;
 
-// A receipt that repeats an alert still waiting gives it the business the alert did not name, so the
+// A delivery that repeats an alert still waiting gives it the business the alert did not name, so the
 // person reads «CENS» where the bank said «a la cuenta *1234» (RF-208).
 async function fillOriginal(
   tx: Parameters<Parameters<typeof withImpersonatedDb>[1]>[0],
@@ -166,12 +166,16 @@ export async function recordIngestDelivery({
         : Promise.resolve([]),
       // What already reports this payment: the same figure (or, with no figure, the same business) within
       // two days, still waiting or already recorded (RF-208). Oldest first.
-      email?.movement && (readAmountCents !== null || merchant)
+      (email === undefined || email.movement) && (readAmountCents !== null || merchant)
         ? tx
             .select({
               id: ingestDeliveries.id,
               status: ingestDeliveries.status,
               receipt: ingestDeliveries.receipt,
+              fromEmail: ingestDeliveries.fromEmail,
+              rawText: ingestDeliveries.rawText,
+              occurredOn: ingestDeliveries.proposedOccurredAt,
+              receivedAt: ingestDeliveries.createdAt,
               shapeHash: ingestDeliveries.shapeHash,
               direction: ingestDeliveries.proposedDirection,
               merchantKey: ingestDeliveries.merchantKey,
@@ -193,8 +197,22 @@ export async function recordIngestDelivery({
     ]);
 
     const original = judgeDuplicate(
-      { receipt, shapeHash: fingerprint.shapeHash, direction: payload.direction ?? read.direction },
-      originalRows.map((row): DuplicateCandidate => ({ ...row, status: row.status === "accepted" ? "accepted" : "pending" })),
+      {
+        fromEmail: email !== undefined,
+        text: payload.text,
+        occurredOn: proposedOccurredAt,
+        receivedAt: Date.now(),
+        receipt,
+        shapeHash: fingerprint.shapeHash,
+        direction: payload.direction ?? read.direction,
+      },
+      originalRows.map(
+        (row): DuplicateCandidate => ({
+          ...row,
+          receivedAt: row.receivedAt.getTime(),
+          status: row.status === "accepted" ? "accepted" : "pending",
+        }),
+      ),
     );
     const rejectReason = verdictReason ?? (original.kind === "repeats" ? "duplicate" : null);
     const duplicateOfId = original.kind === "repeats" ? original.of.id : null;
@@ -291,6 +309,7 @@ export async function recordIngestDelivery({
             recipient_id,
             reject_reason,
             receipt,
+            from_email,
             duplicate_of_id
           ) values (
             ${credentialId},
@@ -311,6 +330,7 @@ export async function recordIngestDelivery({
             ${recipient?.id ?? null},
             ${rejectReason},
             ${receipt},
+            ${email !== undefined},
             ${duplicateOfId}
           )
           returning id, status
@@ -327,7 +347,7 @@ export async function recordIngestDelivery({
           where id = ${row.id} and status = 'pending'
         `);
         if (original.kind === "repeats" && rejectReason === "duplicate") {
-          await fillOriginal(tx, original.of, receipt ? merchant : null);
+          await fillOriginal(tx, original.of, merchant);
         }
         return {
           deliveryId: row.id,

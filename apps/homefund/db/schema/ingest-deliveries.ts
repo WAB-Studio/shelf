@@ -75,6 +75,9 @@ export const ingestDeliveries = finances.table(
     }),
     // A PSE, gateway or merchant notice of a payment a bank or wallet alert reports first (RF-208).
     receipt: boolean().notNull().default(false),
+    // Arrived as a bank's email rather than through the phone (SMS, notification, shortcut): the same alert
+    // through both channels is one movement (RF-208).
+    fromEmail: boolean().notNull().default(false),
     // The delivery this one repeats (RF-208); set only with the reason `duplicate`, cleared if that one goes.
     duplicateOfId: uuid().references((): AnyPgColumn => ingestDeliveries.id, { onDelete: "set null" }),
     // Stamped when the delivery leaves the queue, in either direction.

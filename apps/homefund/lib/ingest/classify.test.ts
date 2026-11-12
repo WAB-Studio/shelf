@@ -157,6 +157,7 @@ test("PSE, gateway and merchant notices are receipts; a bank or wallet alert is 
     ["¡Muchas gracias por tu compra en Farmatodo!", "Adjunto encontrarás tu factura."],
     ["Comprobante de pago Referencia Claro No.1163", "Estado: APPROVED Valor: $97.110"],
     ["Tu recibo de Airbnb", "Total (USD) $150,77"],
+    ["¡Ya entró tu pago!", "Tu pago fue de $397.167,42 Producto origen BANCOLOMBIA"],
   ];
   for (const [subject, body] of receipts) assert.equal(isReceipt(subject, body), true, subject);
 
@@ -167,7 +168,6 @@ test("PSE, gateway and merchant notices are receipts; a bank or wallet alert is 
     ["Pago hecho", "¡Listo! pagaste tu crédito por $325.374,57."],
     ["¡Envío con Bre-B exitoso!", "Realizaste una transferencia a PERSONA EJEMPLO por $24.000"],
     ["¡Recibiste plata por Bre-B!", "Recibiste $76.000 de PERSONA EJEMPLO"],
-    ["¡Ya entró tu pago!", "Tu pago fue de $397.167,42"],
   ];
   for (const [subject, body] of alerts) assert.equal(isReceipt(subject, body), false, subject);
 });

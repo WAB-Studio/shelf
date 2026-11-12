@@ -701,6 +701,13 @@
       "when": 1794776082928,
       "tag": "0103_a_payment_is_one_movement",
       "breakpoints": true
+    },
+    {
+      "idx": 104,
+      "version": "7",
+      "when": 1794776100415,
+      "tag": "0104_an_alert_by_email_and_by_sms_is_one",
+      "breakpoints": true
     }
   ]
 }

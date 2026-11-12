@@ -1878,4 +1878,32 @@ async function emailDuplicateSuite(): Promise<void> {
     alone.body.status === "pending" && otherAlert.body.status === "pending",
     `they answered ${JSON.stringify(alone.body)} and ${JSON.stringify(otherAlert.body)}`,
   );
+
+  // The same alert by SMS and by email is one movement; the same channel twice stays two.
+  const postSms = async (text: string) => {
+    const response = await fetch(`${HARNESS_BASE_URL}/api/webhooks/ingest`, {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+      body: JSON.stringify({ text }),
+    });
+    const body = (await response.json()) as Record<string, unknown>;
+    if (typeof body.deliveryId === "string") landedDeliveries.push(body.deliveryId);
+    return { body, id: String(body.deliveryId) };
+  };
+  const amountC = figure();
+  const phone = await postSms(`Bancolombia: Compraste ${amountC} en COMERCIO ${tagA} con tu T.Cred *4872.`);
+  const mail = await post("Alertas y Notificaciones", `Bancolombia: Compraste COP${amountC.slice(1)},00 en COMERCIO ${tagA} con tu T.Cred *4872.`);
+  const phoneRow = await row(phone.id);
+  const mailRow = await row(mail.id);
+  const amountD = figure();
+  await postSms(`Bancolombia: Compraste ${amountD} en CAFE ${tagA} con tu T.Cred *4872.`);
+  const second = await postSms(`Bancolombia: Compraste ${amountD} en CAFE ${tagA} con tu T.Cred *4872 otra vez.`);
+  assert(
+    next("the email of an alert the phone already sent lands as a duplicate of it, and the same channel twice stays pending"),
+    phoneRow?.status === "pending" &&
+      mail.body.reason === "duplicate" &&
+      mailRow?.of === phone.id &&
+      second.body.status === "pending",
+    `phone ${JSON.stringify(phoneRow)}, email ${JSON.stringify(mailRow)} ${JSON.stringify(mail.body)}, second ${JSON.stringify(second.body)}`,
+  );
 }

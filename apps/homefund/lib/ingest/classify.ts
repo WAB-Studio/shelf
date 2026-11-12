@@ -47,7 +47,7 @@ const MOVEMENT_SUBJECT =
   /\b(envio con bre-?b exitoso|transaccion\s+#?\d*\s*(?:aprobada|aceptada)|compra por \$|comprobante de pago|tu recibo|se le acaba de pagar)\b/;
 // The notices a payment leaves after the bank's own alert: PSE's, a payment gateway's, a merchant's receipt.
 const RECEIPT_SUBJECT =
-  /^(?:pse\b|ecollect:|transaccion aprobada\b|compraste\b)|\b(?:transaccion\s+#?\d*\s*(?:aprobada|aceptada)\s+en|compra por \$|pagos a terceros|se le acaba de pagar|gracias por tu compra|tu recibo)\b/;
+  /^(?:pse\b|ecollect:|transaccion aprobada\b|compraste\b)|\b(?:transaccion\s+#?\d*\s*(?:aprobada|aceptada)\s+en|compra por \$|pagos a terceros|se le acaba de pagar|gracias por tu compra|tu recibo|ya entro tu pago)\b/;
 // Nequi's own alert is also titled «Comprobante de pago», and says who paid with what.
 const COMPROBANTE_SUBJECT = /\bcomprobante de pago\b/;
 const PAID_WITH_NEQUI = /\bpagaste con nequi\b/;

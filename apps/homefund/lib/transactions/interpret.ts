@@ -244,7 +244,7 @@ function readDirection(text: string): "income" | "expense" | null {
 
 // The last four digits the message gives for the person's own account. The side a wallet labels
 // «origen» is the person's only when the money went out, «destino» only when it came in.
-function readAccountTails(text: string, direction: "income" | "expense" | null): Set<string> {
+export function readAccountTails(text: string, direction: "income" | "expense" | null): Set<string> {
   const own = OWN_TAIL_PATTERNS.flatMap((pattern) =>
     [...text.matchAll(pattern)]
       .filter((match) => !OTHER_PARTY_BEFORE.test(text.slice(0, match.index)))
