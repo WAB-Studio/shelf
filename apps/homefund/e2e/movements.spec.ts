@@ -592,8 +592,11 @@ test("searches by description or amount and clears with the filters", async ({ p
   await page.goto("/es/movements");
   await expect(rowFor(scope.categoryName)).toBeVisible();
 
-  await field.fill("harness gasto");
-  await expect(page).toHaveURL(/\/es\/movements\?q=harness(\+|%20)gasto$/);
+  // A fill made before the page hydrates is wiped by it, so the first one is retried until it lands.
+  await expect(async () => {
+    await field.fill("harness gasto");
+    await expect(page).toHaveURL(/\/es\/movements\?q=harness(\+|%20)gasto$/, { timeout: 2000 });
+  }).toPass();
   await expect(rowFor(scope.categoryName)).toBeVisible();
   await expect(rowFor(incomeCategoryName)).toHaveCount(0);
 
