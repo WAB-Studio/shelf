@@ -57,3 +57,60 @@ export function memberDebtBalances(entries: MemberDebtEntry[]): MemberDebtBalanc
     })
     .sort((a, b) => b.pendingCents - a.pendingCents || a.debtorName.localeCompare(b.debtorName));
 }
+
+export type MemberDebtStatus = "pending" | "partial" | "settled";
+
+export type MemberDebtState = {
+  status: MemberDebtStatus;
+  paidCents: number;
+  remainingCents: number;
+  // The day the payment that brought the debt to zero was made; null until it is settled.
+  settledOn: string | null;
+};
+
+/**
+ * Where each debt stands (RF-204), derived from the entries and never stored. A payment is not tied to one debt:
+ * the payments of a debtor to a creditor in a currency pay that direction's debts oldest first. A debt the other
+ * direction owes plays no part. `entries` come newest first, as `getMemberDebts` reads them.
+ */
+export function memberDebtStates(entries: MemberDebtEntry[]): Map<string, MemberDebtState> {
+  const groups = new Map<string, { debts: MemberDebtEntry[]; payments: MemberDebtEntry[] }>();
+  for (const entry of [...entries].reverse()) {
+    const key = `${entry.debtorMemberId}:${entry.creditorMemberId}:${entry.currency}`;
+    const group = groups.get(key) ?? { debts: [], payments: [] };
+    group[entry.kind === "debt" ? "debts" : "payments"].push(entry);
+    groups.set(key, group);
+  }
+
+  const states = new Map<string, MemberDebtState>();
+  for (const { debts, payments } of groups.values()) {
+    const totalPaid = payments.reduce((sum, payment) => sum + payment.amountCents, 0);
+    let before = 0;
+    for (const debt of debts) {
+      const paidCents = Math.min(Math.max(totalPaid - before, 0), debt.amountCents);
+      const settled = paidCents === debt.amountCents;
+      let settledOn: string | null = null;
+      if (settled) {
+        const target = before + debt.amountCents;
+        let running = 0;
+        const closing = payments.find((payment) => (running += payment.amountCents) >= target);
+        settledOn = closing && closing.occurredOn > debt.occurredOn ? closing.occurredOn : debt.occurredOn;
+      }
+      states.set(debt.id, {
+        status: settled ? "settled" : paidCents > 0 ? "partial" : "pending",
+        paidCents,
+        remainingCents: debt.amountCents - paidCents,
+        settledOn,
+      });
+      before += debt.amountCents;
+    }
+  }
+  return states;
+}
+
+/** The debts a payment settled: those settled with it among the entries and not without it. */
+export function debtsSettledBy(entries: MemberDebtEntry[], paymentId: string): MemberDebtEntry[] {
+  const before = memberDebtStates(entries.filter((entry) => entry.id !== paymentId));
+  const after = memberDebtStates(entries);
+  return entries.filter((entry) => after.get(entry.id)?.status === "settled" && before.get(entry.id)?.status !== "settled");
+}

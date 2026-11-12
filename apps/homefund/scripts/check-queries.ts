@@ -18529,21 +18529,27 @@ async function memberDebtDeleteSuite(): Promise<void> {
     `stranger ${foreign}, paid debt ${paid}, pending ${pendingAfterRefusal}, payment ${paymentGone}, debt ${debtGone}, left ${left}`,
   );
 
-  // The opposite direction nets too: a debt the creditor owes back counts against the payment standing on the first.
+  // A debt the other direction owes plays no part: payments standing on the first debts decide alone.
   const mine = (kind: "debt" | "payment", amountCents: number) =>
     asUser(leader, () => recordMemberDebt({ kind, debtorMemberId: ids.papa, creditorMemberId: ids.leader, amountCents, currency: "COP", occurredOn: "2026-11-01", description: null }));
   const first = await mine("debt", 100_000_00);
-  await mine("debt", 50_000_00);
   await mine("payment", 30_000_00);
   const back = await asUser(leader, () => recordMemberDebt({ kind: "debt", debtorMemberId: ids.leader, creditorMemberId: ids.papa, amountCents: 40_000_00, currency: "COP", occurredOn: "2026-11-01", description: null }));
-  const refusedByBack = await asUser(leader, () => deleteMemberDebt(first.id));
+  const refusedWithPayment = await asUser(leader, () => deleteMemberDebt(first.id));
+  const second = await mine("debt", 50_000_00);
+  const coveredByOther = await asUser(leader, () => deleteMemberDebt(first.id));
   const backGone = await asUser(leader, () => deleteMemberDebt(back.id));
-  const firstGone = await asUser(leader, () => deleteMemberDebt(first.id));
+  const secondRefused = await asUser(leader, () => deleteMemberDebt(second.id));
   assert(
-    next("RF-183: a debt is refused its delete when the creditor's own debt back leaves the payment on nothing, while that debt back itself goes, then the first goes"),
-    refusedByBack === "paid" && backGone === "deleted" && firstGone === "deleted",
-    `with debt back ${refusedByBack}, back ${backGone}, first ${firstGone}`,
+    next("RF-183: a debt with payments standing on it is refused its delete, one the other debts still cover goes, the debt back plays no part"),
+    refusedWithPayment === "paid" && coveredByOther === "deleted" && backGone === "deleted" && secondRefused === "paid",
+    `with payment ${refusedWithPayment}, covered ${coveredByOther}, back ${backGone}, second ${secondRefused}`,
   );
+
+  // A debt without payments goes whatever else is owed.
+  const solo = await asUser(leader, () => recordMemberDebt({ kind: "debt", debtorMemberId: ids.leader, creditorMemberId: ids.papa, amountCents: 10_000_00, currency: "COP", occurredOn: "2026-11-01", description: null }));
+  const soloGone = await asUser(leader, () => deleteMemberDebt(solo.id));
+  assert(next("RF-183: a debt no payment was made against is deleted"), soloGone === "deleted", `solo ${soloGone}`);
 }
 
 // RF-189: a saved number tells the inbox what a transfer was. The notice's number is read, matched on its last

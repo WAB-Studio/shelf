@@ -13,7 +13,7 @@ import type { MemberDebtsData } from "@/db/queries/member-debts";
 import { isOfferedCurrency } from "@/lib/currency";
 import { civilDateToDate } from "@/lib/dates";
 import type { Locale } from "@/lib/locales";
-import type { MemberDebtBalance, MemberDebtEntry } from "@/lib/member-debts";
+import { memberDebtStates, type MemberDebtBalance, type MemberDebtEntry, type MemberDebtState } from "@/lib/member-debts";
 import { useActionErrorToast } from "@/lib/use-action-toast";
 import { useMoneyText } from "@/lib/use-privacy";
 
@@ -52,6 +52,9 @@ export function MemberDebtsSection({ data }: { data: MemberDebtsData }) {
   const [openPair, setOpenPair] = useState<string | null>(null);
   const canRecordDebt = data.members.length > 1;
   const pairs = pairsOf(data);
+  const states = memberDebtStates(data.entries);
+  const settledDebts = data.entries.filter((entry) => states.get(entry.id)?.status === "settled");
+  const [showSettled, setShowSettled] = useState(false);
 
   return (
     <Flex direction="column" gap="3">
@@ -75,11 +78,17 @@ export function MemberDebtsSection({ data }: { data: MemberDebtsData }) {
         </Flex>
       </Flex>
 
-      {data.balances.length === 0 && <EmptyState variant="filtered" title={canRecordDebt ? t("empty") : t("alone")} />}
+      {data.entries.length === 0 && <EmptyState variant="filtered" title={canRecordDebt ? t("empty") : t("alone")} />}
+      {data.entries.length > 0 && data.balances.length === 0 && (
+        <Text size="3" weight="medium">
+          {t("allSquare")}
+        </Text>
+      )}
       {pairs.map((pair) => (
         <PairCard
           key={pair.key}
           pair={pair}
+          states={states}
           open={openPair === pair.key}
           onToggle={() => setOpenPair(openPair === pair.key ? null : pair.key)}
           onPay={(balance) =>
@@ -92,6 +101,25 @@ export function MemberDebtsSection({ data }: { data: MemberDebtsData }) {
           }
         />
       ))}
+
+      {settledDebts.length > 0 && (
+        <Flex direction="column" gap="2">
+          <Flex>
+            <Button type="button" variant="ghost" color="gray" onClick={() => setShowSettled(!showSettled)} aria-expanded={showSettled}>
+              {showSettled ? t("hideSettled") : t("showSettled", { count: settledDebts.length })}
+            </Button>
+          </Flex>
+          {showSettled && (
+            <Card>
+              <Flex direction="column" gap="2">
+                {settledDebts.map((entry) => (
+                  <EntryRow key={entry.id} entry={entry} state={states.get(entry.id)} />
+                ))}
+              </Flex>
+            </Card>
+          )}
+        </Flex>
+      )}
 
       <MemberDebtDialog
         draft={draft}
@@ -106,11 +134,13 @@ export function MemberDebtsSection({ data }: { data: MemberDebtsData }) {
 
 function PairCard({
   pair,
+  states,
   open,
   onToggle,
   onPay,
 }: {
   pair: Pair;
+  states: Map<string, MemberDebtState>;
   open: boolean;
   onToggle: () => void;
   onPay: (balance: MemberDebtBalance) => void;
@@ -119,6 +149,8 @@ function PairCard({
   const moneyText = useMoneyText();
   const locale = useLocale() as Locale;
   const { balance } = pair;
+  // Settled debts wait in «Saldadas»; what is left here is what still moves the pair.
+  const shown = pair.entries.filter((entry) => states.get(entry.id)?.status !== "settled");
 
   return (
     <Card>
@@ -133,9 +165,11 @@ function PairCard({
             : t("settled", { first: pair.names[0], second: pair.names[1] })}
         </Text>
         <Flex gap="2" justify="end" wrap="wrap">
-          <Button type="button" variant="ghost" color="gray" onClick={onToggle} aria-expanded={open}>
-            {open ? t("hideEntries") : t("showEntries", { count: pair.entries.length })}
-          </Button>
+          {shown.length > 0 && (
+            <Button type="button" variant="ghost" color="gray" onClick={onToggle} aria-expanded={open}>
+              {open ? t("hideEntries") : t("showEntries", { count: shown.length })}
+            </Button>
+          )}
           {balance && (
             <Button type="button" variant="soft" onClick={() => onPay(balance)}>
               {t("recordPayment")}
@@ -144,8 +178,8 @@ function PairCard({
         </Flex>
         {open && (
           <Flex direction="column" gap="2">
-            {pair.entries.map((entry) => (
-              <EntryRow key={entry.id} entry={entry} />
+            {shown.map((entry) => (
+              <EntryRow key={entry.id} entry={entry} state={states.get(entry.id)} />
             ))}
           </Flex>
         )}
@@ -154,8 +188,23 @@ function PairCard({
   );
 }
 
-function EntryRow({ entry }: { entry: MemberDebtEntry }) {
+function statusText(
+  state: MemberDebtState,
+  entry: MemberDebtEntry,
+  t: ReturnType<typeof useTranslations<"memberDebts">>,
+  money: (minor: number) => string,
+  day: (date: string) => string,
+): string {
+  const amount = money(entry.amountCents);
+  if (state.status === "settled") return t("settledOn", { date: day(state.settledOn ?? entry.occurredOn) });
+  if (state.status === "partial") return t("partial", { remaining: money(state.remainingCents), amount });
+  return t("pending", { amount });
+}
+
+function EntryRow({ entry, state }: { entry: MemberDebtEntry; state?: MemberDebtState }) {
   const t = useTranslations("memberDebts");
+  const moneyText = useMoneyText();
+  const locale = useLocale() as Locale;
   const tKey = useTranslations();
   const format = useFormatter();
   const onActionError = useActionErrorToast();
@@ -168,6 +217,9 @@ function EntryRow({ entry }: { entry: MemberDebtEntry }) {
     onError: onActionError,
   });
   const date = format.dateTime(civilDateToDate(entry.occurredOn), { day: "numeric", month: "short", year: "numeric" });
+  const day = (value: string) => format.dateTime(civilDateToDate(value), { day: "numeric", month: "short", year: "numeric" });
+  const status =
+    entry.kind === "debt" && state ? statusText(state, entry, t, (minor) => moneyText(minor, entry.currency, locale), day) : null;
   const who =
     entry.kind === "debt"
       ? t("debtLine", { debtor: entry.debtorName, creditor: entry.creditorName })
@@ -182,6 +234,11 @@ function EntryRow({ entry }: { entry: MemberDebtEntry }) {
         <Text size="1" color="gray" wrap="pretty">
           {entry.description ? `${date} · ${entry.description}` : date}
         </Text>
+        {status && (
+          <Text size="1" color={state?.status === "settled" ? "green" : "gray"} wrap="pretty">
+            {status}
+          </Text>
+        )}
       </Flex>
       <Flex align="center" gap="2" flexShrink="0">
         <Money minor={entry.amountCents} currency={entry.currency} signed={false} tone={entry.kind === "payment" ? "credit" : "plain"} />

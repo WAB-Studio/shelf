@@ -53,3 +53,29 @@ test("a debt between members and a payment of it leave what is still owed, with 
   await expect(section.getByText(/préstamo para la moto/)).toBeVisible();
   expect(await pageOverflow(page)).toBeLessThanOrEqual(0);
 });
+
+test("a debt paid in full reads «Saldada» and waits in the collapsed «Saldadas» section", async ({ page }) => {
+  await page.goto("/es/planning/debts");
+  const section = page.getByRole("main");
+  const dialog = page.getByRole("dialog");
+
+  await section.getByRole("button", { name: t.recordDebt }).click();
+  await pick(page, t.debtorLabel, PLAIN_MEMBER_NAME);
+  await pick(page, t.creditorLabel, LEADER_MEMBER_NAME);
+  await dialog.getByLabel(t.amountLabel).fill("80000");
+  await dialog.getByRole("button", { name: t.save }).click();
+  await expect(dialog).toBeHidden();
+
+  await section.getByRole("button", { name: /Ver 1 asiento/ }).click();
+  await expect(section.getByText(/Pendiente · .*80\.000/)).toBeVisible();
+
+  await section.getByRole("button", { name: t.recordPayment }).last().click();
+  await dialog.getByLabel(t.amountLabel).fill("80000");
+  await dialog.getByRole("button", { name: t.save }).click();
+  await expect(page.getByText(new RegExp(`Quedó saldada la deuda de ${PLAIN_MEMBER_NAME} por .*80\\.000`))).toBeVisible();
+
+  await expect(section.getByText(t.allSquare)).toBeVisible();
+  await section.getByRole("button", { name: /Ver saldadas \(1\)/ }).click();
+  await expect(section.getByText(/Saldada el /)).toBeVisible();
+  expect(await pageOverflow(page)).toBeLessThanOrEqual(0);
+});
