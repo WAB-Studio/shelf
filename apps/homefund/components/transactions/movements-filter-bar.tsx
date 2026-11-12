@@ -36,7 +36,7 @@ export type MovementsFilters = {
   // The recurring rule that generated a row, entered by link from that rule's
   // own menu (RF-127).
   rule: string | null;
-  // Text matched against the description, and the amount when it is a figure (RF-198).
+  // Text matched against the description, and the amount when it is a figure (RF-199).
   q: string | null;
 };
 

@@ -576,7 +576,7 @@ test.describe("a wide amount on a narrow phone", () => {
   });
 });
 
-// RF-198: the search runs in Postgres over the description and, for a figure, the amount; the
+// RF-199: the search runs in Postgres over the description and, for a figure, the amount; the
 // field sits in both shapes, so the visible one is the one typed into.
 test("searches by description or amount and clears with the filters", async ({ page }, testInfo) => {
   const desktop = testInfo.project.name === "desktop";

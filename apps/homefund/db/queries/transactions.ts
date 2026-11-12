@@ -113,7 +113,7 @@ export type TransactionListFilters = {
   recurringRuleId?: string;
   // The movement charges of this one, RF-132.
   causedByTransactionId?: string;
-  // Text a person typed: matches the description, and the amount when it reads as a figure (RF-198).
+  // Text a person typed: matches the description, and the amount when it reads as a figure (RF-199).
   search?: string;
 };
 

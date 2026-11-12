@@ -108,7 +108,7 @@ test.describe("the phone's navigation", () => {
     ).toBeVisible();
   });
 
-  // RF-197: the phone has no Ajustes screen of its own, so the sheet carries the sign-in limit.
+  // RF-198: the phone has no Ajustes screen of its own, so the sheet carries the sign-in limit.
   test("offers «Mantener la sesión abierta» in the settings sheet @mobile", async ({ page }) => {
     await page.goto("/es");
     await page.getByRole("button", { name: new RegExp(`^${nav.settings}(,|$)`) }).click();
@@ -150,7 +150,7 @@ test.describe("the dashboard's pending badge", () => {
   });
 });
 
-// RF-200: the empty Bandeja names the four places things arrive from, each a link to its card.
+// RF-201: the empty Bandeja names the four places things arrive from, each a link to its card.
 test("the empty inbox links each source to its place in Ajustes", async ({ page }) => {
   await clearQueue();
   await page.goto("/es/inbox");
@@ -168,7 +168,7 @@ test("the empty inbox links each source to its place in Ajustes", async ({ page 
   }
 });
 
-// RF-199: Inicio's badge, the sidebar and the phone's bar count one sum.
+// RF-200: Inicio's badge, the sidebar and the phone's bar count one sum.
 test("a movement waiting for its counterparty counts in Inicio's badge", async ({ page }) => {
   await clearQueue();
   await asHarnessUser(async (tx) => {
