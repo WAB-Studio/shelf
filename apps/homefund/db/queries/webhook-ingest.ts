@@ -10,6 +10,7 @@ import {
   ingestMerchants,
   recipients,
 } from "@/db/schema";
+import { learnedCategoryId } from "@/db/queries/learned-category";
 import { withImpersonatedDb } from "@/db/session";
 import { BASE_CURRENCY } from "@/lib/currency";
 import { pgErrorCode } from "@/lib/db-error";
@@ -136,6 +137,7 @@ export async function recordIngestDelivery({
           id: accounts.id,
           name: accounts.name,
           lastFour: accounts.lastFour,
+          groupId: accounts.groupId,
           settlementCurrency: accounts.settlementCurrency,
         })
         .from(accounts)
@@ -283,6 +285,31 @@ export async function recordIngestDelivery({
         : undefined;
     if (donor?.merchantLabel) description = donor.merchantLabel;
     const proposedDescription = description === "" ? null : description;
+
+    // What the proposal would otherwise fall back on (the key's default, or nothing) gives way to what the
+    // person's own movements of this counterparty agree on (RF-210). A category the message named, a trusted
+    // merchant or a saved recipient already speak for the person and are left alone. It rides the delivery's
+    // own transaction, once, and only for a proposal that has no category of its own yet.
+    if (
+      rejectReason === null &&
+      proposedDirection !== "transfer" &&
+      (categorySource === null || categorySource === "credential_default")
+    ) {
+      // A saved recipient's name, or the merchant the message carried, names the counterparty; the
+      // description of a message that carried one is the message itself, and names no one.
+      const merchantLabel = recipient === null ? (fingerprint.merchant?.label ?? null) : null;
+      const learned = await learnedCategoryId(tx, {
+        merchantLabel,
+        description: merchantLabel === null ? proposedDescription : null,
+        kind: proposedDirection === "income" ? "income" : "expense",
+        groupId: proposedAccount ? proposedAccount.groupId : undefined,
+        today,
+      });
+      if (learned !== null) {
+        proposedCategoryId = learned;
+        categorySource = "merchant";
+      }
+    }
     const merchantKey = merchant?.key ?? donor?.merchantKey ?? null;
     const merchantLabel = merchant?.label ?? donor?.merchantLabel ?? null;
 

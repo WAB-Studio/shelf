@@ -1683,6 +1683,7 @@
     "categoryFromText": "Category from the message",
     "categoryFromDefault": "Default category",
     "categoryFromRecipient": "Recipient's category",
+    "categoryFromHistory": "Category from history",
     "rawTextLabel": "Bank message",
     "showRawText": "Show the message",
     "hideRawText": "Hide the message",
