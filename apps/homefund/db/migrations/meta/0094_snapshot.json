@@ -1,5 +1,5 @@
 {
-  "id": "0ff06a88-002b-4bf7-97db-8b4935da6d60",
+  "id": "be0c355d-7ec9-4cf1-806c-68e12f405b26",
   "prevId": "6561f80e-e2c7-4b98-ae38-e225da032c3e",
   "version": "7",
   "dialect": "postgresql",
@@ -5517,13 +5517,6 @@
           "notNull": true,
           "default": "'ingest'"
         },
-        "kind": {
-          "name": "kind",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'other'"
-        },
         "revoked_at": {
           "name": "revoked_at",
           "type": "timestamp with time zone",
@@ -5714,10 +5707,6 @@
         "webhook_credentials_purpose": {
           "name": "webhook_credentials_purpose",
           "value": "\"finances\".\"webhook_credentials\".\"purpose\" in ('ingest', 'mcp')"
-        },
-        "webhook_credentials_kind_valid": {
-          "name": "webhook_credentials_kind_valid",
-          "value": "\"finances\".\"webhook_credentials\".\"kind\" in ('android', 'iphone', 'bank_emails', 'other')"
         }
       },
       "isRLSEnabled": false
@@ -6036,6 +6025,12 @@
         },
         "proposed_description": {
           "name": "proposed_description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "reject_reason": {
+          "name": "reject_reason",
           "type": "text",
           "primaryKey": false,
           "notNull": false
@@ -6432,6 +6427,10 @@
         "ingest_deliveries_category_source_present": {
           "name": "ingest_deliveries_category_source_present",
           "value": "\"finances\".\"ingest_deliveries\".\"proposed_category_id\" is null or \"finances\".\"ingest_deliveries\".\"category_source\" is not null"
+        },
+        "ingest_deliveries_reject_reason_valid": {
+          "name": "ingest_deliveries_reject_reason_valid",
+          "value": "\"finances\".\"ingest_deliveries\".\"reject_reason\" is null or \"finances\".\"ingest_deliveries\".\"reject_reason\" in ('failed', 'statement', 'support', 'reminder', 'promotion', 'no_movement_signal')"
         },
         "ingest_deliveries_extracted_identifier_digits": {
           "name": "ingest_deliveries_extracted_identifier_digits",

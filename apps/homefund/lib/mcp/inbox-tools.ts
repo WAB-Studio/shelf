@@ -237,7 +237,9 @@ export function registerInboxTools(server: McpServer, run: Run, t: Say): void {
                 description: row.proposedDescription,
               },
             };
-            if (status !== "pending") return { ...base, resolvedAt: row.resolvedAt, transactionId: row.transactionId };
+            if (status !== "pending") {
+              return { ...base, resolvedAt: row.resolvedAt, transactionId: row.transactionId, rejectReason: row.rejectReason };
+            }
             // What the message did not give: Claude fills these in the list it shows, never silently.
             return { ...base, notDetected: notDetectedOf(row, lookup), beforeAccountOpening: row.beforeOpening };
           });

@@ -14,6 +14,7 @@ import { AwaitingCounterparty } from "@/components/ingest/awaiting-counterparty"
 import { arrivedVia, DeliveryCard } from "@/components/ingest/delivery-card";
 import { InboxTable, type InboxTableRow } from "@/components/ingest/inbox-table";
 import { RecipientFormDialog, type RecipientDraft } from "@/components/recipients/recipient-form-dialog";
+import { RefusedDeliveries } from "@/components/ingest/refused-deliveries";
 import { SilencedShapes } from "@/components/ingest/silenced-shapes";
 import {
   MovementForm,
@@ -34,6 +35,7 @@ import {
 } from "@/components/ui";
 import type {
   PendingDeliveryRow,
+  RefusedDeliveryRow,
   SilencedShapeRow,
 } from "@/db/queries/ingest-review";
 import type { TransactionFormOptions } from "@/db/queries/transaction-form";
@@ -147,12 +149,14 @@ export function InboxScreen({
   deliveries,
   awaiting,
   shapes,
+  refused,
   options,
   ingestUrl,
 }: {
   deliveries: PendingDeliveryRow[];
   awaiting: AwaitingCounterpartyRow[];
   shapes: SilencedShapeRow[];
+  refused: RefusedDeliveryRow[];
   options: TransactionFormOptions;
   ingestUrl: string;
 }) {
@@ -319,6 +323,8 @@ export function InboxScreen({
       </Box>
 
       <AwaitingCounterparty rows={awaiting} accounts={options.accounts} />
+
+      <RefusedDeliveries rows={refused} />
 
       <SilencedShapes shapes={shapes} />
 

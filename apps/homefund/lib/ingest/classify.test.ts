@@ -48,6 +48,37 @@ test("promotions and awareness mail are refused", () => {
   assert.equal(rejected("Cuídate del fraude", "No compartas tu clave. Llama al 5943."), "promotion");
 });
 
-test("an email that says nothing either way is kept", () => {
-  assert.equal(rejected("Hola", "Algo de $5.000"), null);
+test("payment reminders from a bank newsletter are refused as reminders", () => {
+  for (const subject of [
+    "Wilson, anticípate y mantén todo al día",
+    "Organizarte hoy te da calma",
+    "Realiza tus pagos a tiempo y evita reportes",
+    "Haz tu pago de forma fácil y segura",
+  ]) {
+    assert.equal(rejected(subject, "Paga desde la app. Valor $120.000."), "reminder", subject);
+  }
+});
+
+test("store card offers are refused as promotions", () => {
+  assert.equal(rejected("CMR SIN cuota de manejo + $150mil", "Pídela hoy."), "promotion");
+  assert.equal(rejected("Tenemos una CMR para ti", "Conoce tus beneficios."), "promotion");
+});
+
+test("newsletters and awareness mail carry no movement signal", () => {
+  assert.equal(rejected("Hoy es un gran día, ¡Lo sabemos!", "Te contamos las novedades del mes."), "no_movement_signal");
+  assert.equal(rejected("¿Te llamaron de la Servilínea para confirmar…?", "Nadie del banco te pide tu clave."), "no_movement_signal");
+  assert.equal(rejected("Ya puedes consignar efectivo en Oxxo", "Desde $10.000 en cualquier tienda."), "no_movement_signal");
+});
+
+test("a support reply is refused as support", () => {
+  assert.equal(rejected("Sobre tu mensaje: Reporte de movimiento M123", "Gracias por escribirnos 2026."), "support");
+});
+
+test("an email with an amount but no movement signal is refused", () => {
+  assert.equal(rejected("Hola", "Algo de $5.000"), "no_movement_signal");
+});
+
+test("an alerts title needs its body to name the operation", () => {
+  assert.equal(rejected("Alertas y Notificaciones", "Tu clave cambió. Saldo $5.000"), "no_movement_signal");
+  assert.equal(rejected("Alertas y Notificaciones", "Retiro por $200.000 en cajero."), null);
 });

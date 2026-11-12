@@ -56,8 +56,7 @@ function finish(
   });
   if (!parsed.success) return Response.json({ error: "invalid_payload" }, { status: 422 });
   // Judged on the whole email, before the message is cut to the schema's ceiling (RF-196).
-  const verdict = classifyBankEmail(emailWords(email));
-  return deliver(cred, parsed.data, verdict.movement ? undefined : verdict.reason);
+  return deliver(cred, parsed.data, classifyBankEmail(emailWords(email)));
 }
 
 export async function POST(request: Request): Promise<Response> {

@@ -1708,14 +1708,15 @@ async function emailIngestSuite(): Promise<void> {
       text: "Aprovecha esta oferta de tu banco.",
     },
   );
-  const [promoRow] = await fixtureSql<{ status: string; amount: string | null }[]>`
-    select status, proposed_amount_cents as amount from ingest_deliveries where id = ${String(promo.body.deliveryId)}`;
+  const [promoRow] = await fixtureSql<{ status: string; amount: string | null; reason: string | null }[]>`
+    select status, proposed_amount_cents as amount, reject_reason as reason from ingest_deliveries where id = ${String(promo.body.deliveryId)}`;
   assert(
     next("a promotional bank email lands rejected with its reason, no figure, never pending"),
     promo.status === 200 &&
       promo.body.status === "rejected" &&
       promo.body.reason === "promotion" &&
       promoRow?.status === "rejected" &&
+      promoRow.reason === "promotion" &&
       promoRow.amount === null,
     `it answered ${promo.status} ${JSON.stringify(promo.body)}, stored ${JSON.stringify(promoRow)}`,
   );

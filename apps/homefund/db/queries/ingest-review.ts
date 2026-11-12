@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNotNull, sql } from "drizzle-orm";
 
 import { defaultMadeBy, insertTransaction } from "@/db/queries/transactions";
 import type { CreateTransactionArgs } from "@/db/queries/transactions";
@@ -34,11 +34,12 @@ export type PendingDeliveryRow = {
   extractedIdentifier: string | null;
   recipientId: string | null;
   recipientName: string | null;
-  // The key the delivery came through (RF-197); null once the key is gone.
+  // The key the delivery came through (RF-198); null once the key is gone.
   credentialName: string | null;
   credentialBadge: CredentialBadge | null;
   proposedOccurredAt: string | null;
   proposedDescription: string | null;
+  rejectReason: RejectReason | null;
   isComplete: boolean;
   // The proposal is dated before its account opened, so the database would refuse it (MO001).
   beforeOpening: boolean;
@@ -46,6 +47,16 @@ export type PendingDeliveryRow = {
   // Set once the delivery left the queue: when, and the movement an acceptance wrote.
   resolvedAt: Date | null;
   transactionId: string | null;
+};
+
+export type RejectReason = NonNullable<typeof ingestDeliveries.$inferSelect.rejectReason>;
+
+// A message the channel refused before any person saw it (RF-196).
+export type RefusedDeliveryRow = {
+  id: string;
+  rawText: string;
+  rejectReason: RejectReason;
+  createdAt: Date;
 };
 
 export type SilencedShapeRow = {
@@ -167,6 +178,7 @@ export async function listDeliveries({
         credentialKind: sql<CredentialKind | null>`${webhookCredentials.kind}`,
         proposedOccurredAt: ingestDeliveries.proposedOccurredAt,
         proposedDescription: ingestDeliveries.proposedDescription,
+        rejectReason: ingestDeliveries.rejectReason,
         createdAt: ingestDeliveries.createdAt,
         resolvedAt: ingestDeliveries.resolvedAt,
         transactionId: ingestDeliveries.transactionId,
@@ -353,6 +365,29 @@ export async function rejectDelivery({
  * correlated subquery, never an N+1 follow-up. No owner predicate — the two
  * select policies are the scope, inside the subquery as well as outside it.
  */
+const REFUSED_LIMIT = 20;
+
+// The latest messages refused on arrival with a reason, newest first.
+export async function listRefusedDeliveries(): Promise<RefusedDeliveryRow[]> {
+  return withUserDb(async (tx) => {
+    const rows = await tx
+      .select({
+        id: ingestDeliveries.id,
+        rawText: ingestDeliveries.rawText,
+        rejectReason: ingestDeliveries.rejectReason,
+        createdAt: ingestDeliveries.createdAt,
+      })
+      .from(ingestDeliveries)
+      .where(and(eq(ingestDeliveries.status, "rejected"), isNotNull(ingestDeliveries.rejectReason)))
+      .orderBy(desc(ingestDeliveries.createdAt))
+      .limit(REFUSED_LIMIT);
+
+    return rows.flatMap((row) =>
+      row.rejectReason === null ? [] : [{ ...row, rejectReason: row.rejectReason }],
+    );
+  });
+}
+
 export async function listSilencedShapes(): Promise<SilencedShapeRow[]> {
   // The outer reference is written qualified: drizzle renders an embedded column
   // bare inside a projection, and a bare `shape_hash` binds to the subquery's own

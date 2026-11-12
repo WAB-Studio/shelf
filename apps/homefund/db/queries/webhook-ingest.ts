@@ -13,6 +13,7 @@ import { withImpersonatedDb } from "@/db/session";
 import { BASE_CURRENCY } from "@/lib/currency";
 import { pgErrorCode } from "@/lib/db-error";
 import { todayInBogota } from "@/lib/dates";
+import type { EmailVerdict } from "@/lib/ingest/classify";
 import { fingerprintMessage } from "@/lib/ingest/fingerprint";
 import { applyRecipient, extractNumber, matchRecipient } from "@/lib/ingest/recipient-number";
 import { parseAmount } from "@/lib/money";
@@ -31,8 +32,9 @@ export type RecordIngestDeliveryArgs = {
   defaultAccountId: string | null;
   defaultCategoryId: string | null;
   payload: WebhookPayloadInput;
-  // The channel already knows the message reports no movement (RF-196): it lands rejected, with no figure.
-  notMovement?: boolean;
+  // A bank email (RF-187) is judged before it lands: one that reports no movement is stored rejected, with
+  // its reason and no figure (RF-196); the amount reading also drops a lone year.
+  email?: EmailVerdict;
 };
 
 const MAX_DESCRIPTION_LENGTH = 200;
@@ -58,12 +60,13 @@ export async function recordIngestDelivery({
   defaultAccountId,
   defaultCategoryId,
   payload,
-  notMovement = false,
+  email,
 }: RecordIngestDeliveryArgs): Promise<IngestDeliveryResult> {
   const fingerprint = fingerprintMessage(payload.text);
   const today = todayInBogota();
   const externalRef = payload.external_ref ?? fingerprint.contentHash;
   const extractedIdentifier = extractNumber(payload.text);
+  const rejectReason = email && !email.movement ? email.reason : null;
 
   return withImpersonatedDb(ownerUserId, async (tx) => {
     // Do not read ingest_shapes here; the insert trigger owns that decision.
@@ -109,7 +112,7 @@ export async function recordIngestDelivery({
       categories: categoryRows,
       accounts: accountRows,
       defaultAccountId,
-      skipYearLike: true,
+      yearGuard: email ? "any" : "dated",
     });
 
     // Reads the same way the importer does (RF-128): thousands separators in
@@ -120,7 +123,7 @@ export async function recordIngestDelivery({
     const rawPesos = payload.amount ?? proposal.amountPesos;
     const parsedAmountCents = rawPesos === null ? null : parseAmount(rawPesos);
     const proposedAmountCents =
-      !notMovement && parsedAmountCents !== null && parsedAmountCents > 0 ? parsedAmountCents : null;
+      rejectReason === null && parsedAmountCents !== null && parsedAmountCents > 0 ? parsedAmountCents : null;
 
     const merchant = merchantRows?.[0] ?? null;
     const trustedCategoryId =
@@ -199,7 +202,8 @@ export async function recordIngestDelivery({
             proposed_description,
             proposed_to_account_id,
             extracted_identifier,
-            recipient_id
+            recipient_id,
+            reject_reason
           ) values (
             ${credentialId},
             ${externalRef},
@@ -216,7 +220,8 @@ export async function recordIngestDelivery({
             ${proposedDescription},
             ${proposedToAccountId},
             ${extractedIdentifier},
-            ${recipient?.id ?? null}
+            ${recipient?.id ?? null},
+            ${rejectReason}
           )
           returning id, status
         `),
@@ -225,7 +230,7 @@ export async function recordIngestDelivery({
       // The insert trigger only reads the shape memory (RF-92); a currency
       // mismatch is this module's own reason to reject, applied after — never
       // silently, and never turned into a movement either way (RF-90).
-      if ((foreignCurrencyAccount || notMovement) && row.status === "pending") {
+      if ((foreignCurrencyAccount || rejectReason !== null) && row.status === "pending") {
         await tx.execute(sql`
           update ingest_deliveries
           set status = 'rejected', resolved_at = now()
