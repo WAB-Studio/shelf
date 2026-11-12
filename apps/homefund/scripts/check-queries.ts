@@ -19052,6 +19052,20 @@ async function widgetSuite(): Promise<void> {
     });
   const bank = await open(owner, `Harness rf215 banco ${tag}`, 1_250_000);
   await open(stranger, `Harness rf215 ajeno ${tag}`, 777_000);
+  // What is owed on a card is not money in hand, and a pocket holds money of its own beside its parent's.
+  await asUser(owner, async () => {
+    const { accountId: cardId } = await createAccount({
+      name: `Harness rf215 tarjeta ${tag}`, kind: "liability", subtype: "card", ownerUserId: owner.id, groupId: null, isShared: false,
+      institution: null, lastFour: null, settlementCurrency: "COP", amountMinor: 400_000, balanceOn: shiftDate(today, -40),
+    } as never);
+    track("accounts", cardId);
+    const { accountId: pocketId } = await createAccount({
+      name: `Harness rf215 bolsillo ${tag}`, kind: "asset", subtype: "bank", ownerUserId: owner.id, groupId: null, isShared: false,
+      institution: null, lastFour: null, settlementCurrency: "COP", amountMinor: 100_000, balanceOn: shiftDate(today, -40),
+      parentAccountId: bank,
+    } as never);
+    track("accounts", pocketId);
+  });
   const { categoryId } = await asUser(owner, () =>
     createCategory({
       scope: { ownerUserId: owner.id }, name: `Harness rf215 comida ${tag}`, kind: "expense", parentId: null, color: CATEGORY_COLORS[0],
@@ -19088,11 +19102,11 @@ async function widgetSuite(): Promise<void> {
   const response = await ask(widgetKey.token);
   const summary = (await response.json()) as Partial<Awaited<ReturnType<typeof getWidgetSummary>>>;
   assert(
-    next("RF-215: /api/widget answers the key owner's available balance, month and Bandeja in integer cents, private for five minutes"),
+    next("RF-215: /api/widget answers the key owner's money in hand (bank and cash with pockets, no card), month and Bandeja in integer cents, private for five minutes"),
     response.status === 200 &&
       response.headers.get("cache-control") === "private, max-age=300" &&
       summary.currency === "COP" &&
-      summary.disponible?.cents === 1_220_000 &&
+      summary.disponible?.cents === 1_320_000 &&
       summary.mes?.spentCents === 30_000 &&
       summary.mes?.budgetedCents === 500_000 &&
       summary.bandeja?.pendingCount === 1,

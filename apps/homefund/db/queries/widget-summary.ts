@@ -14,7 +14,9 @@ import { currentMonthRange } from "@/lib/dates";
 // small, so the fund's other currencies stay on the dashboard.
 export type WidgetSummary = {
   currency: CurrencyCode;
-  // The dashboard's net worth in that currency: every readable account's derived balance, signed.
+  // The money the person has: the derived balances of the readable bank and cash accounts, pockets included,
+  // in that currency. Cards and loans stay out (that is net worth, which the dashboard shows). A «Me debe»
+  // account is an ordinary asset account by name, so it counts.
   disponible: { cents: number };
   // This month's expense (the dashboard's month flow) against the sum of the monthly budgets' limits
   // (the Presupuestos screen's), both in that currency.
@@ -37,8 +39,12 @@ export async function getWidgetSummary(): Promise<WidgetSummary> {
     ),
   ]);
 
+  // The same account list and balance source as the dashboard's net worth, narrowed to what holds money.
+  const holdingMoney = accounts.filter(
+    (account) => account.kind === "asset" && (account.subtype === "bank" || account.subtype === "cash"),
+  );
   const totals = new Map<CurrencyCode, number>();
-  for (const bucket of netWorthByOwner(accounts, balances)) {
+  for (const bucket of netWorthByOwner(holdingMoney, balances)) {
     totals.set(bucket.currency, (totals.get(bucket.currency) ?? 0) + bucket.netWorthCents);
   }
 
