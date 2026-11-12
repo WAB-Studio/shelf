@@ -522,6 +522,9 @@ test("Filtered: deleting while filtering keeps the filter and updates «N de M»
 test("RNL-11, copy on: a delete starts exactly one round of its own, with no hide, carrying the group's marks once", async ({
   page,
 }) => {
+  page.on("request", (r) => console.log("DBG req", Date.now(), r.method(), r.url()));
+  page.on("requestfinished", (r) => console.log("DBG fin", Date.now(), r.url()));
+  page.on("requestfailed", (r) => console.log("DBG fail", Date.now(), r.url(), r.failure()?.errorText));
   const sync = copyOn();
   await answerRoundsEmpty(page);
   const rounds = trackRounds(page);
@@ -556,6 +559,9 @@ test("RNL-11, copy on: a delete starts exactly one round of its own, with no hid
 test("RNL-11, one round per delete: two deletes add at most three rounds, every mark leaves once, and the next round carries none", async ({
   page,
 }) => {
+  page.on("request", (r) => console.log("DBG req", Date.now(), r.method(), r.url()));
+  page.on("requestfinished", (r) => console.log("DBG fin", Date.now(), r.url()));
+  page.on("requestfailed", (r) => console.log("DBG fail", Date.now(), r.url(), r.failure()?.errorText));
   await answerRoundsEmpty(page);
   const rounds = trackRounds(page);
   await openRecord(page, { sync: copyOn(), lookups: leaveRows() });

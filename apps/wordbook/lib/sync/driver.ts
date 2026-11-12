@@ -98,6 +98,7 @@ async function runSyncLocked(): Promise<SyncOutcome> {
   let pushed = 0;
   let pulled = 0;
   let removed = 0;
+  let reviewPulled = 0;
 
   try {
     for (let batch = 0; batch < MAX_BATCHES; batch++) {
@@ -130,20 +131,27 @@ async function runSyncLocked(): Promise<SyncOutcome> {
       if (scannedThrough !== null) pushedThroughLocalId = scannedThrough;
       pushed += rows.length;
       pulledThroughCursor = response.cursor;
-      await writeSyncState({ pushedThroughLocalId, pulledThroughCursor, lastSyncedAt: Date.now() });
-      await yieldToLoop();
 
       // Stop only once neither side has a next page waiting: a short scanned
       // page alone no longer ends the call, or a large foreign backlog would
       // never finish downloading behind a thin local log.
       const marksWaiting = response.tombstones.length >= SYNC_BATCH || queue.pending.length > marks.length;
-      if (scanned < SYNC_BATCH && response.rows.length < SYNC_BATCH && !marksWaiting) break;
+      const finished = scanned < SYNC_BATCH && response.rows.length < SYNC_BATCH && !marksWaiting;
+
+      // The review's cards and senses ride the round that finishes the record's (RL-93). The record's write
+      // follows them: `lastSyncedAt` is the last thing a round writes, so a call made once it moves starts a
+      // round of its own instead of joining the one still running.
+      const review = finished ? await syncReview(state.readerId, SYNC_FETCH_TIMEOUT_MS) : null;
+      if (review !== null && review.kind !== "done") {
+        await writeSyncState({ pushedThroughLocalId, pulledThroughCursor });
+        return review.kind === "reader" ? dropIdentity() : { kind: "failed", cause: review.cause };
+      }
+      reviewPulled = review?.pulled ?? 0;
+      await writeSyncState({ pushedThroughLocalId, pulledThroughCursor, lastSyncedAt: Date.now() });
+      await yieldToLoop();
+      if (finished) break;
     }
-    // The review's cards and senses ride the same round (RL-93), once the record's own landed.
-    const review = await syncReview(state.readerId, SYNC_FETCH_TIMEOUT_MS);
-    if (review.kind === "reader") return dropIdentity();
-    if (review.kind === "failed") return { kind: "failed", cause: review.cause };
-    if (pulled > 0 || removed > 0 || review.pulled > 0) window.dispatchEvent(new Event(SYNC_LANDED_EVENT));
+    if (pulled > 0 || removed > 0 || reviewPulled > 0) window.dispatchEvent(new Event(SYNC_LANDED_EVENT));
     return { kind: "done", pushed, pulled };
   } catch (error) {
     const cause =
