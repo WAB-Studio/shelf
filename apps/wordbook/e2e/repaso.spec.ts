@@ -206,7 +206,7 @@ test("RL-91: the waiting entry shows by itself when its step comes, with no relo
 
   await page.clock.fastForward(11 * 60_000);
   await expect(page.getByRole("heading", { name: "frisk" })).toBeVisible();
-  await expect(page.getByText(messages.review.repeat, { exact: true })).toBeVisible();
+  await expect(page.locator("section").getByText(messages.review.repeat, { exact: true })).toBeVisible();
 });
 
 test("RL-91: with no tap, «tree» is asked as the noun «árbol», not as the verb «enarbolar»", async ({ page }) => {
