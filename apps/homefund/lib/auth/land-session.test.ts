@@ -76,13 +76,14 @@ beforeEach(() => {
 });
 
 test("signing in with a pending invitation joins nobody: no membership function runs and the person lands on the home page", async () => {
-  for (const landed of ["es", "en"]) {
-    locale = landed;
+  // Whatever language the row holds, the person lands in the one of the screen they came from (RF-218).
+  for (const saved of ["es", "en"]) {
+    locale = saved;
     membershipCalls.length = 0;
     const result = await land();
     assert.deepEqual(membershipCalls, [], "a membership function ran at sign-in");
-    assert.equal(result.target, `/${landed}`);
-    assert.equal(result.locale, landed);
+    assert.equal(result.target, "/es");
+    assert.equal(result.locale, "es");
   }
 });
 

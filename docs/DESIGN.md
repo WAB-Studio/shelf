@@ -656,3 +656,24 @@ construido.
 - En el celular, una columna: las fichas se apilan y los botones pasan bajo el título.
 - Estados: sin cuota ni día, las notas desaparecen; guardando, los controles se bloquean con un indicador; un rechazo sale
   junto al campo o en el aviso con sus palabras; quien no escribe la cuenta lee el bloque sin ningún botón.
+
+## Decisión del 2026-11-11 (segunda): el crédito lleva «Lo paga <persona>» y no se ve ninguna cuenta de más, por el usuario
+
+«Pensé que ponías un boolean en el crédito y ya con eso se le destinaba a un nombre, no literalmente que me crea una
+account de mentira.» Lo que debe la persona sigue guardándose como una cuenta de activo (los saldos se derivan de
+movimientos y su pago es una transferencia, nunca un ingreso), pero nadie la ve: es interna.
+
+- **Ninguna lista la ofrece.** No sale en Cuentas ni en sus conteos, ni en los selectores de cuenta (formulario de
+  movimiento, Bandeja, traspasos, retiro de efectivo, abono a una deuda), ni en los widgets, ni en `list_accounts` del
+  MCP. Los totales no cambian: el neto es lo que tengo, menos el crédito, más lo que la persona todavía debe.
+- **La fila del crédito en Cuentas** se lee «Crédito Trabajo Lulo (John)» y, como línea secundaria bajo el dueño, «Lo
+  paga John · le falta $2.680.980» (lo que la persona todavía debe); si ya no debe nada, «Lo paga John · no debe nada».
+  En el celular, la misma línea en la tarjeta. Ninguna otra fila aparece. Las tres cifras de arriba cuentan lo que la
+  persona debe dentro de «Lo que tengo» y del neto.
+- **El diálogo «Lo paga otra persona»** pide solo «Persona» y, opcionales, «Cuota del banco» y «Día de pago»; sin elegir
+  cuenta, sin «Lo que debe hoy» ni «Desde». La cuenta interna nace sola con lo que falta del crédito hoy. El botón dice
+  «Guardar».
+- En la pantalla del crédito, la ficha «<Persona> todavía debe» ya no lleva el nombre de la cuenta como nota.
+- **«Dejar de seguir»** quita el vínculo y archiva la cuenta interna, que pasa a Archivadas con sus movimientos; la
+  confirmación lo dice.
+

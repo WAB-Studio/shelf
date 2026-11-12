@@ -3,14 +3,13 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useLocale, useTranslations } from "next-intl";
 import { useAction } from "next-safe-action/hooks";
-import { Controller, FormProvider, useForm, useFormContext, useWatch } from "react-hook-form";
+import { Controller, FormProvider, useForm, useFormContext } from "react-hook-form";
 import { toast } from "sonner";
 
 import { setUpThirdPartyCreditAction, updateThirdPartyCreditAction } from "@/app/actions/third-party-credits";
 import {
   AmountField,
   Button,
-  DateInput,
   Dialog,
   Field,
   FieldControl,
@@ -18,7 +17,6 @@ import {
   FieldLabel,
   FieldMessage,
   Flex,
-  Select,
   Spinner,
   TextField,
 } from "@/components/ui";
@@ -35,11 +33,6 @@ import {
   type UpdateThirdPartyCreditFields,
   type UpdateThirdPartyCreditInput,
 } from "@/lib/validation/third-party-credit";
-
-// The select has no empty value, so «a new one» travels under this word and leaves the form as "".
-const NEW_RECEIVABLE = "new";
-
-type Asset = { id: string; name: string };
 
 // The fields both forms share; each form provides its own, a superset of these, through `FormProvider`.
 type SharedFields = { personName: string; installmentAmount: string; dueDay: string };
@@ -143,18 +136,15 @@ function Footer({ pending }: { pending: boolean }) {
   );
 }
 
-/** «Lo paga otra persona» (RF-211): who pays the credit, where their debt sits and what the lender asks. */
+/** «Lo paga otra persona» (RF-217): who pays the credit and, optionally, what the lender asks. */
 export function SetUpThirdPartyDialog({
   open,
   onOpenChange,
   credit,
-  assets,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   credit: { accountId: string; owedCents: number; currency: CurrencyCode };
-  // The person's own asset accounts a «Me debe» may already be.
-  assets: Asset[];
 }) {
   const t = useTranslations("thirdPartyCredit");
 
@@ -162,7 +152,7 @@ export function SetUpThirdPartyDialog({
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Content>
         <Dialog.Title>{t("setUpTitle")}</Dialog.Title>
-        <SetUpForm credit={credit} assets={assets} onOpenChange={onOpenChange} />
+        <SetUpForm credit={credit} onOpenChange={onOpenChange} />
       </Dialog.Content>
     </Dialog.Root>
   );
@@ -170,11 +160,9 @@ export function SetUpThirdPartyDialog({
 
 function SetUpForm({
   credit,
-  assets,
   onOpenChange,
 }: {
   credit: { accountId: string; owedCents: number; currency: CurrencyCode };
-  assets: Asset[];
   onOpenChange: (open: boolean) => void;
 }) {
   const t = useTranslations("thirdPartyCredit");
@@ -186,15 +174,15 @@ function SetUpForm({
     defaultValues: {
       liabilityAccountId: credit.accountId,
       personName: "",
+      // Nothing to choose: the «Me debe» opens by itself, and stays out of every list (RF-216).
       receivableAccountId: "",
-      // What the credit still owes: the person owes the whole of it until their payments say otherwise.
+      // What the credit still owes, as of today: the person owes the whole of it until their payments say otherwise.
       amount: amountToInput(credit.owedCents, credit.currency, locale),
       openedOn: todayInBogota(),
       installmentAmount: "",
       dueDay: "",
     },
   });
-  const receivable = useWatch({ control: form.control, name: "receivableAccountId" });
 
   const setUp = useAction(setUpThirdPartyCreditAction, {
     onSuccess() {
@@ -210,74 +198,6 @@ function SetUpForm({
       <form onSubmit={form.handleSubmit(() => setUp.execute(form.getValues()))} noValidate>
         <FieldGroup>
           <PersonField disabled={isPending} />
-
-          <Controller
-            name="receivableAccountId"
-            control={form.control}
-            render={({ field, fieldState }) => (
-              <Field invalid={fieldState.invalid}>
-                <FieldLabel htmlFor="third-party-receivable">{t("receivableLabel")}</FieldLabel>
-                <Select.Root
-                  size="3"
-                  value={field.value || NEW_RECEIVABLE}
-                  onValueChange={(value) => field.onChange(value === NEW_RECEIVABLE ? "" : value)}
-                  disabled={isPending}
-                >
-                  <FieldControl>
-                    <Select.Trigger id="third-party-receivable" />
-                  </FieldControl>
-                  <Select.Content position="popper">
-                    <Select.Item value={NEW_RECEIVABLE}>{t("receivableNew")}</Select.Item>
-                    {assets.map((asset) => (
-                      <Select.Item key={asset.id} value={asset.id}>
-                        {asset.name}
-                      </Select.Item>
-                    ))}
-                  </Select.Content>
-                </Select.Root>
-                <FieldMessage error={fieldState.error} />
-              </Field>
-            )}
-          />
-
-          {/* A new «Me debe» opens at a figure and a day; an account the person already has keeps its own. */}
-          {!receivable && (
-            <Flex gap="3">
-              <Controller
-                name="amount"
-                control={form.control}
-                render={({ field, fieldState }) => (
-                  <Field invalid={fieldState.invalid}>
-                    <FieldLabel htmlFor="third-party-opening">{t("openingLabel")}</FieldLabel>
-                    <FieldControl>
-                      <AmountField
-                        {...field}
-                        id="third-party-opening"
-                        size="3"
-                        inputMode={minorUnitExponent(credit.currency) > 0 ? "decimal" : "numeric"}
-                        disabled={isPending}
-                      />
-                    </FieldControl>
-                    <FieldMessage error={fieldState.error} />
-                  </Field>
-                )}
-              />
-              <Controller
-                name="openedOn"
-                control={form.control}
-                render={({ field, fieldState }) => (
-                  <Field invalid={fieldState.invalid}>
-                    <FieldLabel htmlFor="third-party-opened-on">{t("openedOnLabel")}</FieldLabel>
-                    <FieldControl>
-                      <DateInput {...field} id="third-party-opened-on" size="3" disabled={isPending} />
-                    </FieldControl>
-                    <FieldMessage error={fieldState.error} />
-                  </Field>
-                )}
-              />
-            </Flex>
-          )}
-
           <LenderTermsFields currency={credit.currency} disabled={isPending} />
           <Footer pending={isPending} />
         </FieldGroup>

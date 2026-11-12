@@ -132,6 +132,8 @@ async function readAccount(accountId: string): Promise<AccountRead> {
             on xb.id = x.id and xb.currency = x.settlement_currency
           where x.kind = 'asset' and x.archived_at is null
             and private.can_write_account(x.id)
+            -- A «Me debe» is no account a payment comes from (RF-216).
+            and not exists (select 1 from third_party_credits c where c.receivable_account_id = x.id)
         ), '[]'::jsonb)`,
         terms: debtTerms,
       })
@@ -214,7 +216,7 @@ export async function getDebtDetail(
     currentStatement,
     pendingSettlements,
     canWrite: read.canWrite,
-    payFrom: read.payFrom.filter((source) => source.id !== thirdParty?.receivableAccountId),
+    payFrom: read.payFrom,
     hasGroup: group !== null,
     thirdParty,
   };

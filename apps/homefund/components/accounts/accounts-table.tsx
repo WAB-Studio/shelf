@@ -34,6 +34,35 @@ const WIDTHS = {
 type Line = { row: AccountRow; free: boolean };
 
 /**
+ * «Lo paga <persona> · le falta $X» under a credit somebody else pays (RF-216): the one place its hidden «Me debe»
+ * shows, as a figure on the credit and never as an account. Nothing for any other account.
+ */
+export function PaidByLine({ account }: { account: AccountRow }) {
+  const t = useTranslations("accounts");
+  const credit = account.thirdParty;
+  if (!credit) return null;
+
+  return (
+    <Text size="2" color="gray">
+      {credit.personOwesCents > 0
+        ? t.rich("paidBy", {
+            person: credit.personName,
+            amount: () => (
+              <Money
+                minor={credit.personOwesCents}
+                currency={account.settlementCurrency}
+                tone="plain"
+                size="inherit"
+                signed={false}
+              />
+            ),
+          })
+        : t("paidByNothingOwed", { person: credit.personName })}
+    </Text>
+  );
+}
+
+/**
  * The dense Cuentas of the desktop design (RF-114): every
  * account's balance arrives already derived from `account_balances` and only
  * reads through `Money` here — no figure is computed on the client, and a
@@ -112,7 +141,7 @@ export function AccountsTable({
         <Flex direction="column" gap="1" minWidth="0" pl={row.parentAccountId ? "5" : "0"}>
           <Flex align="center" gap="2" minWidth="0">
             <Text size="2" weight="medium" truncate>
-              {row.name}
+              {row.thirdParty ? t("creditOf", { name: row.name, person: row.thirdParty.personName }) : row.name}
             </Text>
             {row.ownerUserId && (
               <PersonalMark label={ownerLabel(row)} />
@@ -127,6 +156,7 @@ export function AccountsTable({
                 ? t("holderOf", { name: row.holderName })
                 : t("ownerFund")}
           </Text>
+          <PaidByLine account={row} />
         </Flex>
         ),
     },

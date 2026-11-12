@@ -109,16 +109,12 @@ test("an accepted code asks Auth once and lands without a second verification", 
   assert.deepEqual(redirects, ["/en/bienvenida"]);
 });
 
-test("a landed code sets NEXT_LOCALE to the locale the person landed in, as the link does", async () => {
+test("a landed code writes no language cookie: the URL decides the language (RF-218)", async () => {
   const verifyCodeAction = await action();
   landLocale = "es";
   answer = () => ({ data: { user: USER }, error: null });
   await verifyCodeAction({ email: USER.email, code: "123456" });
-  const cookie = cookiesSet.find((c) => c.name === "NEXT_LOCALE");
-  assert.ok(cookie, "NEXT_LOCALE is set");
-  assert.equal(cookie.value, "es");
-  assert.equal(cookie.options.path, "/");
-  assert.equal(cookie.options.maxAge, 60 * 60 * 24 * 365);
+  assert.equal(cookiesSet.find((c) => c.name === "NEXT_LOCALE"), undefined);
 });
 
 test("a refused code sets no cookie and lands nobody", async () => {

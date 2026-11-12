@@ -23,7 +23,6 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { signInCodeSchema, signInSchema } from "@/lib/validation/auth";
 
 const POST_LOGIN_REDIRECT_MAX_AGE = 60 * 15;
-const LOCALE_COOKIE_MAX_AGE = 60 * 60 * 24 * 365;
 
 /**
  * Sends the sign-in link (RF-01). The bind argument carries the destination the
@@ -102,14 +101,7 @@ export const verifyCodeAction = actionClient
 
     const requestLocale = await getLocale();
     const fallbackLocale: Locale = hasLocale(routing.locales, requestLocale) ? requestLocale : DEFAULT_LOCALE;
-    const { target, locale } = await landSession({ user: result.user, fallbackLocale });
-
-    const cookieStore = await cookies();
-    cookieStore.set("NEXT_LOCALE", locale, {
-      path: "/",
-      maxAge: LOCALE_COOKIE_MAX_AGE,
-      sameSite: "lax",
-    });
+    const { target } = await landSession({ user: result.user, fallbackLocale });
 
     // `target` already carries its locale prefix, so the plain redirect, not the localized one.
     nextRedirect(target);

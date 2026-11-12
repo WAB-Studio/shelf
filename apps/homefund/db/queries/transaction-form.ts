@@ -95,8 +95,8 @@ export const getTransactionFormOptions = cache(
       frequentCategoryIds,
     ] = await withUserDb((tx) =>
       Promise.all([
-        listAccounts({ archived: false }, tx),
-        listAccounts({ archived: true }, tx),
+        listAccounts({ archived: false, withInternal: true }, tx),
+        listAccounts({ archived: true, withInternal: true }, tx),
         listScopedCategories(user.id, tx),
         listScopedLabels(user.id, tx),
         listCallerMembers(user.id, { archived: "all" }, tx),
@@ -110,7 +110,8 @@ export const getTransactionFormOptions = cache(
     const activeMembers = members.filter((member) => member.archivedAt === null);
 
     return {
-      accounts: accountRows,
+      // A «Me debe» is no account a person picks (RF-216); it stays in the directory, which only names a movement's sides.
+      accounts: accountRows.filter((account) => !account.internal),
       accountDirectory: [...accountRows, ...archivedAccountRows].map((account) => ({
         id: account.id,
         name: account.name,

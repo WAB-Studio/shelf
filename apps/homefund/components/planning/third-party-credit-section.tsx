@@ -91,7 +91,6 @@ export function ThirdPartyCreditSection({
       key: "owes",
       label: t("personOwes", { person }),
       value: <Money minor={credit.personOwesCents} currency={currency} signed={false} size="inherit" />,
-      note: credit.receivableName,
     },
   ];
 

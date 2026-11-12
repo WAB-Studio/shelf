@@ -94,7 +94,8 @@ export async function getDashboardData(): Promise<DashboardData> {
     getSessionUser(),
     withSharedTransaction(() =>
       Promise.all([
-        listAccounts({ archived: false }),
+        // Net worth counts what a payer still owes; the tiles below ask whether there is an account a person sees.
+        listAccounts({ archived: false, withInternal: true }),
         readFundRoster(),
         countUnreviewedGenerated(),
         countInboxPending(),
@@ -141,7 +142,7 @@ export async function getDashboardData(): Promise<DashboardData> {
     .sort((a, b) => a.currency.localeCompare(b.currency));
 
   return {
-    hasAccounts: accounts.length > 0,
+    hasAccounts: accounts.some((account) => !account.internal),
     netWorth,
     totalNetWorth,
     monthFlow,

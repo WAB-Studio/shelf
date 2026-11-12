@@ -2,6 +2,7 @@ import "server-only";
 
 import { and, eq, isNull, sql } from "drizzle-orm";
 
+import { internalAccountSql } from "@/db/queries/accounts";
 import {
   accounts,
   categories,
@@ -82,7 +83,8 @@ export async function recordIngestDelivery({
           settlementCurrency: accounts.settlementCurrency,
         })
         .from(accounts)
-        .where(isNull(accounts.archivedAt)),
+        // A bank message never names a «Me debe» (RF-216).
+        .where(and(isNull(accounts.archivedAt), sql`not ${internalAccountSql}`)),
       fingerprint.merchant
         ? tx
             .select({
