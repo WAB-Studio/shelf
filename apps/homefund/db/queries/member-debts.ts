@@ -91,7 +91,7 @@ export async function recordMemberDebt(input: RecordMemberDebtInput): Promise<{ 
       if (!row?.groupId) throw new ActionError("memberDebts.errors.noFund");
       if (!row.id) throw new ActionError("memberDebts.errors.overpaid");
       if (input.kind === "debt") return { id: row.id, settled: [] };
-      // RF-204: the debts this payment brought to zero, read in the same transaction.
+      // RF-205: the debts this payment brought to zero, read in the same transaction.
       const rows = await tx.execute<RawEntry>(sql`
         select d.id, d.kind, d.debtor_member_id as "debtorMemberId", dm.name as "debtorName",
           d.creditor_member_id as "creditorMemberId", cm.name as "creditorName", d.amount_cents::text as "amountCents",

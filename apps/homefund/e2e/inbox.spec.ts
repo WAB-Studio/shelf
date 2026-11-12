@@ -145,6 +145,28 @@ test.describe("the inbox queue", () => {
       await expect(page.getByText(via).locator("visible=true")).toHaveCount(1);
     });
 
+    test("shows a refused message in full, so a confirmation code is readable (RF-204)", async ({
+      page,
+    }) => {
+      await seedQueue([]);
+      const code = "483920";
+      const text = `Confirmación de reenvío de Gmail: ${"texto largo ".repeat(12)}Código de confirmación: ${code}`;
+      await asHarnessUser(async (tx) => {
+        const [row] = await tx<{ id: string }[]>`
+          insert into ingest_deliveries (external_ref, raw_text, shape_hash)
+          values (${`refused-${code}`}, ${text}, ${"f".repeat(64)})
+          returning id`;
+        await tx`
+          update ingest_deliveries
+          set status = 'rejected', reject_reason = 'no_movement_signal', resolved_at = now()
+          where id = ${row.id}`;
+      });
+
+      await page.goto("/es/inbox");
+      await expect(page.getByText(text, { exact: true })).toBeVisible();
+      await expect(page.getByText(`Código de confirmación: ${code}`)).toBeVisible();
+    });
+
     test("records the movement from the row menu and drops the row, but only opens the form for an incomplete one", async ({
       page,
     }) => {

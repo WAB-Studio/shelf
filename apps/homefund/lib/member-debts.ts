@@ -69,7 +69,7 @@ export type MemberDebtState = {
 };
 
 /**
- * Where each debt stands (RF-204), derived from the entries and never stored. A payment is not tied to one debt:
+ * Where each debt stands (RF-205), derived from the entries and never stored. A payment is not tied to one debt:
  * the payments of a debtor to a creditor in a currency pay that direction's debts oldest first. A debt the other
  * direction owes plays no part. `entries` come newest first, as `getMemberDebts` reads them.
  */

@@ -1615,7 +1615,17 @@
     "deliveries30": "{count, plural, =0 {No deliveries} one {# delivery} other {# deliveries}} in 30 days",
     "columnDeliveries": "Deliveries (30 days)",
     "showRevoked": "Show revoked ({count})",
-    "hideRevoked": "Hide revoked ({count})"
+    "hideRevoked": "Hide revoked ({count})",
+    "forwarding": {
+      "heading": "No PC: forward from Gmail",
+      "description": "Gmail forwards the bank emails to a HomeFund address and they reach the inbox with no computer on.",
+      "step1": "In Gmail open Settings → Forwarding and POP/IMAP → Add a forwarding address, and paste the address below.",
+      "step2": "Google sends a confirmation code to that address. It arrives in the HomeFund inbox, under \"Messages that did not get in\": open it, copy the code and paste it in Gmail.",
+      "step3": "In Gmail create a filter: from Bancolombia, Nequi, Nu, Lulo, Falabella, Banco de Bogotá or PSE → Forward to that address.",
+      "create": "Create a key for forwarding",
+      "addressLabel": "Forwarding address",
+      "addressNote": "The address carries your key: do not share it. It is shown once; if you lose it, revoke the key and make another."
+    }
   },
   "ingest": {
     "title": "Inbox",
