@@ -14,6 +14,8 @@ import {
 } from "@/components/planning/debts-table";
 import { SettlementRow } from "@/components/planning/settlement-row";
 import { StatementsSection } from "@/components/planning/statements-section";
+import { SetUpThirdPartyDialog } from "@/components/planning/third-party-credit-dialog";
+import { ThirdPartyCreditSection } from "@/components/planning/third-party-credit-section";
 import {
   Button,
   EmptyState,
@@ -49,6 +51,7 @@ export function DebtDetailScreen({ data }: { data: DebtDetailData }) {
   const moneyText = useMoneyText();
   const t = useTranslations("installments");
   const tDebts = useTranslations("debts");
+  const tThirdParty = useTranslations("thirdPartyCredit");
   const format = useFormatter();
   const locale = useLocale();
 
@@ -61,13 +64,14 @@ export function DebtDetailScreen({ data }: { data: DebtDetailData }) {
     pendingSettlements,
     canWrite,
     payFrom,
+    thirdParty,
   } = data;
 
   // The currency the card bills in: the cupo, the minimum and the interest are
   // all read in it, and it is the one a statement is cut in (RF-121).
   const currency = account.settlementCurrency;
 
-  const [dialog, setDialog] = useState<"pay" | null>(null);
+  const [dialog, setDialog] = useState<"pay" | "thirdParty" | null>(null);
   // The pocket it bills in, read by its sign off the balance the view derives
   // from movements: below zero it owes, above zero it holds a credit that owes
   // nothing and reads «A favor» (RF-80).
@@ -217,19 +221,34 @@ export function DebtDetailScreen({ data }: { data: DebtDetailData }) {
           // Exactly what the policies would admit: a reader is offered no abono,
           // and no row menu below offers the delete.
           canWrite && (
-            <Button
-              type="button"
-              variant="surface"
-              color="gray"
-              onClick={() => setDialog("pay")}
-            >
-              {tDebts("rowPay")}
-            </Button>
+            <Flex gap="2" wrap="wrap">
+              <Button
+                type="button"
+                variant="surface"
+                color="gray"
+                onClick={() => setDialog("pay")}
+              >
+                {tDebts("rowPay")}
+              </Button>
+              {/* A credit somebody else pays (RF-211) is set up once; its section carries the rest. */}
+              {thirdParty === null && (
+                <Button
+                  type="button"
+                  variant="surface"
+                  color="gray"
+                  onClick={() => setDialog("thirdParty")}
+                >
+                  {tThirdParty("setUp")}
+                </Button>
+              )}
+            </Flex>
           )
         }
       />
 
       <StatTiles tiles={tiles} />
+
+      {thirdParty !== null && <ThirdPartyCreditSection credit={thirdParty} banks={payFrom} />}
 
       {/* Purchases a person confirmed as deferred: the balance holds them whole (RF-136). */}
       {deferrals.length > 0 && (
@@ -317,6 +336,17 @@ export function DebtDetailScreen({ data }: { data: DebtDetailData }) {
         statements={statements}
         canWrite={canWrite}
       />
+
+      {dialog === "thirdParty" && (
+        <SetUpThirdPartyDialog
+          open
+          onOpenChange={(open) => {
+            if (!open) setDialog(null);
+          }}
+          credit={{ accountId: account.id, owedCents, currency }}
+          assets={payFrom}
+        />
+      )}
 
       {dialog === "pay" && (
         <DebtPaymentDialog

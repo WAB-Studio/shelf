@@ -239,6 +239,10 @@ accounting exports, native apps. None of this gets built or left
 - [x] **RF-203** — A person sees what is connected: «Ajustes · Correos del banco» lists each key with a badge of its kind («Android», «iPhone», «Correos del banco», «Claude», «Otro»), when it was last used and how many deliveries it brought in the last 30 days; the kind is chosen when the key is created (a Claude key is always «Claude») and never guessed from its name, and a key made before this reads «Otro». Revoked keys hide behind «Ver revocadas (n)». Each Bandeja delivery says «Llegó por <kind> · <key name>», in the list and in its card, and says nothing once the key is gone. Decided by the user 2026-11-11.
 - [x] **RF-204** — Bank emails reach HomeFund from Gmail with no PC on: with the optional `INBOUND_EMAIL_DOMAIN` set, «Ajustes · Correos del banco» adds, after the PC way, «Sin PC: reenvío desde Gmail» with its Gmail steps (Configuración → Reenvío → Agregar dirección de reenvío; the confirmation code Google sends arrives in the Bandeja's «Mensajes que no entraron», shown in full so the code is readable; a filter from Bancolombia, Nequi, Nu, Lulo, Falabella, Banco de Bogotá and PSE) and a button that creates a «Correos del banco» key. Creating a key of that kind shows its address `whk_…@<INBOUND_EMAIL_DOMAIN>` with a copy button in the result, the one moment the full key exists (RF-86); an existing key has no address to show. With the variable unset none of this shows. Decided by the user 2026-11-11.
 - [x] **RF-205** — Each debt between members (RF-183) shows where it stands, derived from the entries and never stored: «Pendiente · $X», «Abonada · faltan $Y de $X» or «Saldada el <fecha>», the day the payment that brought it to zero was made; a direction's payments pay its debts oldest first. Settled debts wait in a collapsed «Saldadas (N)» section and are never dropped; a payment that settles a debt says «Quedó saldada la deuda de <persona> por $X»; when every pair nets to zero the section reads «Están a paz y salvo». `list_member_debts` returns each debt's `status` (`pending`, `partial`, `settled`), `paidCents`, `remainingCents` and `settledOn`. A debt with payments standing on it cannot be deleted (the other debts of its direction must still cover them) and one without can; the debt the other way plays no part. Decided by the user 2026-11-11.
+- [x] **RF-211** — A person follows a credit in their own name that somebody else pays: from the credit's screen, «Lo paga otra persona» links the liability to a «Me debe» asset (a new one, opened in the credit's own scope and currency at what the credit still owes as of a day they can edit, or one of their own assets of that scope and currency), names who pays it, and optionally records what the lender asks each month and the day it is due. One payer per credit and one credit per receivable; the database refuses an asset that is not of the credit's scope and currency. «Editar» changes the name and the lender's terms; «Dejar de seguir» removes the link and keeps both accounts and every movement. The credit stays a liability and what the person owes is an ordinary asset: a saved recipient of kind «person» (RF-189) may name that same receivable. Decided by the user 2026-11-11.
+- [x] **RF-212** — The credit's screen carries a section «Lo paga <persona>», every figure derived from movements and never stored: what is left of the credit, what the person has paid (the transfers out of the receivable) and what they still owe (the receivable's balance); this month, whether the person's payment came in and whether the installment went out to the lender (a transfer into the credit), each with its date and «una parte» when below the installment; and a month-by-month history, newest first, from the first trace, a quiet month as zeros. Read in the credit's settlement currency. The section offers no button to someone who cannot write the credit.
+- [x] **RF-213** — «Registrar pago de <persona>», from the section, records the payer's money as one TRANSFER from the receivable to the person's chosen account, never an income: the amount opens at the installment when there is one, the date at today. It is written by the transfer form's own write and schema, so a movement dated before an account's opening is refused as anywhere; the same account on both sides is refused. The installment to the lender is the credit's «Abonar», a transfer from a bank account into the credit.
+- [x] **RF-214** — Claude reads and records this through the MCP: `list_third_party_credits` answers each credit with its payer, the two accounts, the lender's terms, what the credit owes, what the payer owes and paid, and the months, all in integer cents; `record_third_party_payment` books the payer's money as that transfer (`liabilityAccountId`, `toAccountId`, `amountCents`, `occurredOn`, a `requestRef` against duplicates) by the same schema and write as the screen, and its description asks Claude to look for a duplicate and confirm with the person first. `link_third_party_credit` does what «Lo paga otra persona» does (the same schema and write: an existing «Me debe» or a new one opened at an amount that defaults to what is left of the credit, an optional installment and due day) and `update_third_party_credit` changes the name and the lender's terms, keeping what a call omits.
 - [x] **RF-135** — A counterparty is remembered per user: a description pattern earns an account and a side after two consecutive agreeing completions, and a completion naming a different account marks the pattern ambiguous, which no later agreement undoes. A remembered pattern prefills the missing side and never fills it on its own.
 
 The webhook (RF-90) reuses RF-22 (quick entry), RF-25 (created_by) and RF-45 (no write bypasses audit) unchanged: the same interpreter reads the payload text and the same insert path records the movement, so the created-by stamp and the audit hold as on any manual write. RF-52's idempotency shape is mirrored, not reused — RF-52 stays a spreadsheet-import requirement; the webhook applies the same stable-external-reference rule to its own deliveries. The review queue keeps that reuse: it runs RF-22's interpreter to propose rather than to decide, and RF-25 and RF-45 hold unchanged because an accepted proposal is still written through the same insert path.
@@ -390,6 +394,8 @@ erDiagram
     accounts ||--o{ deferrals : "its liability leg"
     groups ||--o{ member_debts : "holds"
     group_members ||--o{ member_debts : "owes or is owed"
+    accounts ||--o| third_party_credits : "is paid by someone else (liability)"
+    accounts ||--o| third_party_credits : "holds what they owe (receivable)"
     app_users ||--o{ recipients : "saves"
     recipients ||--o{ ingest_deliveries : "names the number of"
     transactions ||--o{ transaction_reviews : "reviewed once per rule"
@@ -574,6 +580,17 @@ erDiagram
         text description "optional, 1 to 200"
         uuid created_by FK "auth.uid() by default"
         timestamptz created_at
+    }
+
+    third_party_credits {
+        uuid id PK
+        uuid liability_account_id FK "unique; the credit in the person's name"
+        uuid receivable_account_id FK "unique; the asset the payer's debt sits in, same scope and currency"
+        text person_name "1 to 80; who pays it"
+        bigint installment_cents "nullable; what the lender asks each month"
+        smallint due_day "nullable; 1 to 31"
+        timestamptz created_at
+        timestamptz updated_at
     }
 
     recipients {
@@ -945,6 +962,11 @@ Rules the model must always guarantee, regardless of how they are implemented:
   explicit forget clears it.
 - A movement recorded with only the side an ingest could read is marked
   awaiting its counterparty; naming the other account clears the mark.
+- A credit that somebody else pays is a liability linked to a receivable asset
+  of its own scope and currency; the link stores only who pays and the lender's
+  terms. What the credit owes, what the payer owes and paid and each month's two
+  transfers derive from movements and are never stored. The payer's money is a
+  transfer out of the receivable, never an income.
 
 ---
 
