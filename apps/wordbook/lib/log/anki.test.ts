@@ -376,7 +376,7 @@ test("RL-92: with no tap the file draws the default sense, with the reader's sen
   const lines = parse(csv).slice(2);
   assert.deepEqual(
     lines.find(([front]) => front === "tree"),
-    ["tree", "sustantivo<br>árbol, fuste<br><br>i climbed the <b>tree</b>"],
+    ["tree", "sustantivo<br>árbol, fuste, madero<br>A tall plant.<br><br>i climbed the <b>tree</b>"],
   );
   assert.deepEqual(
     lines.find(([front]) => front !== "tree"),
