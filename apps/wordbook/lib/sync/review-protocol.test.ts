@@ -4,10 +4,11 @@ import { test } from "node:test";
 import {
   decodeReviewCursor,
   encodeReviewCursor,
+  reviewAnswerSchema,
   reviewEntrySchema,
-  reviewSyncRequestSchema,
-  reviewSyncResponseSchema,
+  reviewRequestSchema,
 } from "./review-protocol";
+import { syncRequestSchema, syncResponseSchema } from "./protocol";
 
 const card = {
   due: 1_700_000_060_000,
@@ -22,7 +23,7 @@ const card = {
   introducedOn: "2026-11-12",
 };
 const entry = (key: string, patch: Record<string, unknown> = {}) => ({ key, at: 1_700_000_000_000, gone: false, card, sense: null, ...patch });
-const request = (entries: unknown[]) => ({ readerId: "reader-1", entries, since: null });
+const request = (entries: unknown[]) => ({ entries, since: null });
 
 test("an entry with a card, a sense or neither passes", () => {
   assert.equal(reviewEntrySchema.safeParse(entry("word")).success, true);
@@ -49,16 +50,38 @@ test("a card whose numbers cannot be one is refused", () => {
 });
 
 test("two versions of one key in a batch are refused, and a batch holds at most 500", () => {
-  assert.equal(reviewSyncRequestSchema.safeParse(request([entry("a"), entry("a", { at: 5 })])).success, false);
-  assert.equal(reviewSyncRequestSchema.safeParse(request([entry("a"), entry("b")])).success, true);
+  assert.equal(reviewRequestSchema.safeParse(request([entry("a"), entry("a", { at: 5 })])).success, false);
+  assert.equal(reviewRequestSchema.safeParse(request([entry("a"), entry("b")])).success, true);
   const many = Array.from({ length: 501 }, (_, i) => entry(`k${i}`));
-  assert.equal(reviewSyncRequestSchema.safeParse(request(many)).success, false);
-  assert.equal(reviewSyncRequestSchema.safeParse(request(many.slice(0, 500))).success, true);
+  assert.equal(reviewRequestSchema.safeParse(request(many)).success, false);
+  assert.equal(reviewRequestSchema.safeParse(request(many.slice(0, 500))).success, true);
 });
 
 test("the answer parses back what the route builds", () => {
-  const answer = { accepted: 1, entries: [entry("a"), entry("b", { gone: true, card: null })], cursor: "2026-11-12T10:00:00.123456Z|a" };
-  assert.equal(reviewSyncResponseSchema.safeParse(answer).success, true);
+  const answer = { accepted: 1, full: false, entries: [entry("a"), entry("b", { gone: true, card: null })], cursor: "2026-11-12T10:00:00.123456Z|a" };
+  assert.equal(reviewAnswerSchema.safeParse(answer).success, true);
+});
+
+test("a sync round with no review, from a client or a server that predates it, still parses", () => {
+  const sent = syncRequestSchema.parse({ deviceId: "11111111-1111-4111-8111-111111111111", readerId: "reader-1", rows: [], since: null });
+  assert.equal(sent.review, null);
+  const answered = syncResponseSchema.parse({ accepted: 0, rows: [], cursor: null });
+  assert.equal(answered.review, null);
+});
+
+test("a sync round carries the review's page both ways", () => {
+  const sent = syncRequestSchema.safeParse({
+    deviceId: "11111111-1111-4111-8111-111111111111", readerId: "reader-1", rows: [], since: null, review: request([entry("a")]),
+  });
+  assert.equal(sent.success, true);
+  const bad = syncRequestSchema.safeParse({
+    deviceId: "11111111-1111-4111-8111-111111111111", readerId: "reader-1", rows: [], since: null, review: request([entry("a"), entry("a")]),
+  });
+  assert.equal(bad.success, false);
+  const answered = syncResponseSchema.safeParse({
+    accepted: 0, rows: [], cursor: null, review: { accepted: 1, full: false, entries: [entry("a")], cursor: "2026-11-12T10:00:00Z|a" },
+  });
+  assert.equal(answered.success, true);
 });
 
 test("a cursor round-trips, a key holding a bar included", () => {

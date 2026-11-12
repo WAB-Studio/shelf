@@ -776,7 +776,7 @@ Principles, not recipes:
   exactly what RL-09 already does for the sentence path, and it is what keeps a third party from
   learning which word a reader is looking up. The request reaches the network only as the answer
   draws and only with a connection, and never blocks or delays the text.
-- **The server surface is nine route handlers, five pages and one file of server actions, and nothing else** (`/repaso` added 2026-10-30, RL-68; `/api/review/sync` added 2026-11-12, RL-93). Counted
+- **The server surface is eight route handlers, five pages and one file of server actions, and nothing else** (`/repaso` added 2026-10-30, RL-68). Counted
   2026-09-14 against the files `apps/wordbook/app` serves, correcting a figure stale since before this
   slice: the text here read «five route handlers and one page … becoming seven» and had fallen three
   handlers and three pages behind what had already shipped.
@@ -784,13 +784,9 @@ Principles, not recipes:
     cannot do: keep the provider's identity and key off the client, and make swapping the provider a
     one-file change.
   - `app/api/log/sync/route.ts`, `app/api/log/clear/route.ts` and `app/api/devices/route.ts` — the
-    copy of the reader's record, its wipe, and the devices that hold it (RL-22, RL-25). The sync route also carries deletion marks (RL-70). They answer
+    copy of the reader's record, its wipe, and the devices that hold it (RL-22, RL-25). The sync route also carries deletion marks (RL-70) and, since 2026-11-12, the review's cards, senses and deletions (RL-93), in the same request and the same answer: the review is the reader's too, and a round stays one request. They answer
     **only** a request that carries a session the reader opened on purpose; with no account they
     answer 401 without opening a connection.
-  - `app/api/review/sync/route.ts` — the copy of the review's cards, senses and deletions (RL-93). It answers like the sync route: only
-    a request that carries a session the reader opened on purpose, 401 without opening a connection otherwise. It carries the keys
-    the reader already recorded and their scheduling, never a word's answer text. A ninth, and not a field of the sync route: the
-    record's rounds page by device and row number, the review's by word, and the two stop independently.
   - `app/auth/confirm/route.ts` — landing the sign-in link (RL-22).
   - `app/actions/account.ts` — the server actions of `/cuenta`: the sign-in link request (RL-22, RL-69, RL-75, RL-89), the
     code check (RL-73) and sign out. Added to this list 2026-11-08; it was already serving.

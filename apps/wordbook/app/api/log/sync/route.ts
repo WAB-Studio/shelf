@@ -4,6 +4,8 @@ import { json } from "@/lib/http/responses";
 import { getReader, withReaderDb } from "@/lib/session";
 import { deviceLabel } from "@/lib/sync/device-label";
 import { syncRequestSchema, decodeCursor, encodeCursor, type SyncResponse } from "@/lib/sync/protocol";
+import { decodeReviewCursor, encodeReviewCursor, type ReviewAnswer } from "@/lib/sync/review-protocol";
+import { syncReviewEntries, type ReviewRound } from "@/lib/sync/review-upload";
 import { downloadRows, writeUpload, type DownloadedRow } from "@/lib/sync/upload";
 import { refuseCrossSiteRequest } from "@/lib/word/same-origin";
 
@@ -30,6 +32,16 @@ function toWireRow(row: DownloadedRow): SyncResponse["rows"][number] {
   };
 }
 
+// The review's page of this round (RL-93). The cursor is echoed from what was asked when nothing came down, and
+// only when it was legible: a garbled one would otherwise come back and be stored again.
+function toReviewAnswer(round: ReviewRound, asked: string | null): ReviewAnswer {
+  const entries = round.entries.map(({ updated_at: updatedAt, ...entry }) => ({ entry, updatedAt }));
+  const last = entries.at(-1);
+  const since = asked ? decodeReviewCursor(asked) : null;
+  const cursor = last ? encodeReviewCursor({ updatedAt: `${last.updatedAt}Z`, key: last.entry.key }) : since && encodeReviewCursor(since);
+  return { accepted: round.accepted, full: round.full, entries: entries.map(({ entry }) => entry), cursor };
+}
+
 export async function POST(request: Request): Promise<Response> {
   // Without a session there is no query at all: `getReader` never touches
   // Postgres, so the 401 never opens a connection.
@@ -49,7 +61,7 @@ export async function POST(request: Request): Promise<Response> {
   const parsed = syncRequestSchema.safeParse(raw);
   if (!parsed.success) return json({ error: "invalid" }, 400);
 
-  const { rows, since, tombstones, tombstonesSince } = parsed.data;
+  const { rows, since, tombstones, tombstonesSince, review } = parsed.data;
 
   // A stale tab can hold one reader's sync row while the cookie now speaks for
   // another: nothing is written, and the client drops its identity.
@@ -67,6 +79,7 @@ export async function POST(request: Request): Promise<Response> {
 
   const sinceCursor = since ? decodeCursor(since) : null;
   const marksCursor = tombstonesSince ? decodeCursor(tombstonesSince) : null;
+  const reviewSince = review?.since ? decodeReviewCursor(review.since) : null;
 
   const outcome = await withReaderDb(async (tx) => {
     // Same statement order the contract names: upload, then download.
@@ -77,6 +90,8 @@ export async function POST(request: Request): Promise<Response> {
       accepted: upload.accepted,
       marks: upload.tombstones,
       downloaded: await downloadRows(tx, sinceCursor, deviceId),
+      // One more statement, only when the device sent the review's half; a retired or capped round never reaches it.
+      review: review ? await syncReviewEntries(tx, reader.id, review.entries, reviewSince) : null,
     } as const;
   });
 
@@ -103,6 +118,7 @@ export async function POST(request: Request): Promise<Response> {
     cursor,
     tombstones: outcome.marks.map((mark) => ({ deviceId: mark.device_id, localId: mark.local_id })),
     tombstoneCursor,
+    review: outcome.review && toReviewAnswer(outcome.review, review?.since ?? null),
   };
   return json(response, 200);
 }

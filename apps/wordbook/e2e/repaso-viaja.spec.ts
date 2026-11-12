@@ -25,7 +25,7 @@ try {
 
 type Reader = { id: string; email: string };
 type Wire = { key: string; at: number; gone: boolean; card: Record<string, unknown> | null; sense: unknown };
-type ReviewPost = { readerId: string; entries: Wire[]; since: string | null };
+type ReviewPost = { readerId: string; review: { entries: Wire[]; since: string | null } | null };
 type SeedLookup = Omit<LookupRecord, "id">;
 
 const NOTHING_DUE = "Hoy no tienes palabras por repasar.";
@@ -137,6 +137,8 @@ function answerJson(route: Route, body: unknown): Promise<void> {
 }
 
 const emptyLogRound = { accepted: 0, rows: [], cursor: null };
+// The record's empty round with the review's page in it: the review rides the same request (RL-93).
+const roundWith = (entries: Wire[], cursor: string | null) => ({ ...emptyLogRound, review: { accepted: 0, full: false, entries, cursor } });
 
 async function reviewFrisk(page: Page, grade: "good" | "easy" = "easy"): Promise<void> {
   await page.goto("/repaso");
@@ -164,14 +166,12 @@ function learntCard(at: number) {
 test("RL-93: a card the account holds makes the word one already learning here, not new", async ({ page }) => {
   await deleteTranslator(page);
   await seed(page, { sync: copyOn(), lookups: [wordRow("snuff"), wordRow("frisk")] });
-  await page.route("**/api/log/sync", (route) => answerJson(route, emptyLogRound));
   const at = Date.now() - 4 * 86_400_000;
-  await page.route("**/api/review/sync", (route) =>
-    answerJson(route, {
-      accepted: 0,
-      entries: [{ key: "frisk", at, gone: false, card: { ...learntCard(at), due: Date.now() - 1_000 }, sense: null }],
-      cursor: "account-1",
-    }),
+  await page.route("**/api/log/sync", (route) =>
+    answerJson(
+      route,
+      roundWith([{ key: "frisk", at, gone: false, card: { ...learntCard(at), due: Date.now() - 1_000 }, sense: null }], "account-1"),
+    ),
   );
 
   await page.goto("/registro");
@@ -186,18 +186,17 @@ test("RL-93: a card the account holds makes the word one already learning here, 
 test("RL-93: a review here goes up with the copy on, and a later deletion in the account takes the card out", async ({ page }) => {
   await deleteTranslator(page);
   await seed(page, { sync: copyOn(), lookups: [wordRow("frisk")] });
-  await page.route("**/api/log/sync", (route) => answerJson(route, emptyLogRound));
   const posts: ReviewPost[] = [];
   let deletion: Wire | null = null;
-  await page.route("**/api/review/sync", (route) => {
+  await page.route("**/api/log/sync", (route) => {
     posts.push(route.request().postDataJSON() as ReviewPost);
-    return answerJson(route, { accepted: 0, entries: deletion ? [deletion] : [], cursor: deletion ? "account-2" : null });
+    return answerJson(route, roundWith(deletion ? [deletion] : [], deletion ? "account-2" : null));
   });
 
   await reviewFrisk(page);
   await page.goto("/registro");
-  await expect.poll(() => posts.flatMap((post) => post.entries).some((sent) => sent.key === "frisk")).toBe(true);
-  const sent = posts.flatMap((post) => post.entries).find((entry) => entry.key === "frisk")!;
+  await expect.poll(() => posts.flatMap((post) => post.review?.entries ?? []).some((sent) => sent.key === "frisk")).toBe(true);
+  const sent = posts.flatMap((post) => post.review?.entries ?? []).find((entry) => entry.key === "frisk")!;
   expect(sent.gone).toBe(false);
   expect(sent.card).toMatchObject({ reps: 1 });
   expect(await reviewKeys(page, "cards")).toEqual(["frisk"]);
@@ -211,7 +210,7 @@ test("RL-93: with no account the review works as before and asks the network for
   await deleteTranslator(page);
   const asked: string[] = [];
   page.on("request", (request) => {
-    if (request.url().includes("/api/review/")) asked.push(request.url());
+    if (request.url().includes("/api/log/")) asked.push(request.url());
   });
   await seed(page, { lookups: [wordRow("frisk")] });
 

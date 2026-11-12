@@ -1,62 +1,35 @@
 import { applyEntries, readEntries, readReviewSync, writeReviewSync, type ReviewSyncState } from "../review/store";
-import { failureCause, type SyncFailure } from "./failure";
-import { SYNC_BATCH } from "./protocol";
-import { reviewSyncRequestSchema, reviewSyncResponseSchema } from "./review-protocol";
+import { REVIEW_BATCH, type ReviewAnswer, type ReviewRequest, type ReviewWireEntry } from "./review-protocol";
 
-// RL-93: the review's half of a copy round. It runs after the record's own, under the same lock, and
-// answers in the same terms.
-const REVIEW_ENDPOINT = "/api/review/sync";
+// RL-93: the review's half of a copy round. It rides the record's own request and answer, so a round is still
+// one request: `readReviewTrip` says what goes up with it, and `landReviewAnswer` merges what comes back.
+export type ReviewTrip = { readerId: string; request: ReviewRequest; sent: ReviewWireEntry[]; state: ReviewSyncState };
 
-// A hostile review can never tie a hidden tab up forever: this many round trips per call.
-const MAX_BATCHES = 40;
-
-export type ReviewOutcome =
-  | { kind: "done"; pulled: number }
-  | { kind: "reader" } // the session belongs to another reader
-  | { kind: "failed"; cause: SyncFailure };
-
-// Sends up the versions made since the last round and merges down the ones the account holds that the
-// cursor has not passed, until both sides come back short. Never throws: a failed round trip leaves the
-// cursors where they were, so the next call resumes it.
-export async function syncReview(readerId: string, timeoutMs: number): Promise<ReviewOutcome> {
-  // A browser with no IndexedDB has no review to copy; the record's own round already said what it could.
-  if (typeof indexedDB === "undefined") return { kind: "done", pulled: 0 };
+// The versions made since the last round and the cursor of what is already merged. A review the copy has not
+// met for this reader starts over: everything goes up, nothing is known down. Null when there is nothing to
+// ask of: no IndexedDB, or one that does not answer; the record's copy never waits on the review's own database.
+export async function readReviewTrip(readerId: string): Promise<ReviewTrip | null> {
+  if (typeof indexedDB === "undefined") return null;
   try {
     const stored = await readReviewSync();
-    // A review the copy has not met for this reader starts over: everything goes up, nothing is known down.
-    let state: ReviewSyncState = stored.readerId === readerId ? stored : { readerId, pushedThrough: -1, cursor: null };
-    let pulled = 0;
-    for (let batch = 0; batch < MAX_BATCHES; batch++) {
-      const entries = (await readEntries())
-        .filter((entry) => entry.at > state.pushedThrough)
-        .sort((a, b) => a.at - b.at || (a.key < b.key ? -1 : 1))
-        .slice(0, SYNC_BATCH);
-      const response = await fetch(REVIEW_ENDPOINT, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        signal: AbortSignal.timeout(timeoutMs),
-        body: JSON.stringify(reviewSyncRequestSchema.parse({ readerId, entries, since: state.cursor })),
-      });
-      // No session: nothing to copy to, and the record's round, which needs one, has already answered.
-      if (response.status === 401) return { kind: "done", pulled };
-      if (!response.ok) {
-        const body = (await response.json().catch(() => null)) as { error?: string } | null;
-        if (response.status === 409 && body?.error === "reader") return { kind: "reader" };
-        return { kind: "failed", cause: failureCause({ status: response.status, body }) };
-      }
-      const answer = reviewSyncResponseSchema.parse(await response.json());
-      // Merged in full before either cursor moves: a round that half lands is read again, not skipped.
-      pulled += await applyEntries(answer.entries);
-      state = {
-        readerId,
-        pushedThrough: entries.length > 0 ? entries[entries.length - 1].at : state.pushedThrough,
-        cursor: answer.cursor ?? state.cursor,
-      };
-      await writeReviewSync(state);
-      if (entries.length < SYNC_BATCH && answer.entries.length < SYNC_BATCH) break;
-    }
-    return { kind: "done", pulled };
-  } catch (error) {
-    return { kind: "failed", cause: failureCause({ error, online: typeof navigator === "undefined" || navigator.onLine }) };
+    const state: ReviewSyncState = stored.readerId === readerId ? stored : { readerId, pushedThrough: -1, cursor: null };
+    const sent = (await readEntries())
+      .filter((entry) => entry.at > state.pushedThrough)
+      .sort((a, b) => a.at - b.at || (a.key < b.key ? -1 : 1))
+      .slice(0, REVIEW_BATCH);
+    return { readerId, request: { entries: sent, since: state.cursor }, sent, state };
+  } catch {
+    return null;
   }
+}
+
+// Merges the account's page in full before either cursor moves: a round that half lands is read again, not
+// skipped. `more` asks the driver for another round while either side filled a page. A full account kept nothing
+// of what was sent, so `pushedThrough` stays and the same versions go up next time.
+export async function landReviewAnswer(trip: ReviewTrip, answer: ReviewAnswer | null): Promise<{ pulled: number; more: boolean }> {
+  if (answer === null) return { pulled: 0, more: false };
+  const pulled = await applyEntries(answer.entries);
+  const kept = answer.full ? trip.state.pushedThrough : (trip.sent.at(-1)?.at ?? trip.state.pushedThrough);
+  await writeReviewSync({ readerId: trip.readerId, pushedThrough: kept, cursor: answer.cursor ?? trip.state.cursor });
+  return { pulled, more: (trip.sent.length === REVIEW_BATCH && !answer.full) || answer.entries.length === REVIEW_BATCH };
 }

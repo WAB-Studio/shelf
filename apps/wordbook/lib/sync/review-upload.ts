@@ -3,8 +3,7 @@ import "server-only";
 import { sql } from "drizzle-orm";
 
 import type { Transaction } from "@/lib/session";
-import { SYNC_BATCH } from "@/lib/sync/protocol";
-import { REVIEW_ENTRY_CAP, type ReviewCursor, type ReviewWireEntry } from "@/lib/sync/review-protocol";
+import { REVIEW_BATCH, REVIEW_ENTRY_CAP, type ReviewCursor, type ReviewWireEntry } from "@/lib/sync/review-protocol";
 
 // One jsonb parameter, read back through typed columns, for the reason `./upload` gives. A null half is left out
 // of the object: `jsonb_to_recordset` reads a JSON null into a `jsonb` column as the value `null`, not as NULL.
@@ -29,11 +28,11 @@ export type DownloadedEntry = {
   updated_at: string;
 };
 
-export type ReviewRound = { status: "ok"; accepted: number; entries: DownloadedEntry[] } | { status: "full" };
+export type ReviewRound = { accepted: number; full: boolean; entries: DownloadedEntry[] };
 
 // Copies the device's entries up and reads the ones changed since `since`, in one statement (RL-93). The row with
 // the later `at` replaces the other; the half a newer row lacks is kept from the older, and a deletion keeps
-// neither. The reader's rows are bounded by `cap`: past it nothing is written. The download is read from the
+// neither. The reader's rows are bounded by `cap`: past it nothing is written, and the answer says `full`. The download is read from the
 // snapshot before the write, so an entry this round wrote comes back once in the next one, a merge that changes
 // nothing. `updated_at` travels as UTC wall-clock text with no zone marker, for the reason `downloadRows` gives.
 export async function syncReviewEntries(
@@ -89,10 +88,10 @@ export async function syncReviewEntries(
           from reading.review_entries e
           where e.user_id = auth.uid() ${boundary}
           order by e.updated_at, e.key
-          limit ${SYNC_BATCH}
+          limit ${REVIEW_BATCH}
         ) page
       ) as entries
   `);
 
-  return state.allowed ? { status: "ok", accepted: state.accepted, entries: state.entries } : { status: "full" };
+  return { accepted: state.accepted, full: !state.allowed, entries: state.entries };
 }

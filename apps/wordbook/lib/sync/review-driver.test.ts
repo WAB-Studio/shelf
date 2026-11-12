@@ -1,42 +1,35 @@
-// RL-93: the review's half of a copy round, driven with the device's store and `fetch` replaced by stand-ins:
-// what is under test is what the round sends, what it merges and when it moves its cursors.
+// RL-93: the review's half of a copy round, with the device's store replaced by a stand-in: what is under test
+// is what a round asks of the account and when the review's cursors move.
 //
 // Requires --experimental-test-module-mocks (see package.json's check:unit).
 import assert from "node:assert/strict";
 import { beforeEach, mock, test } from "node:test";
 
-import { SYNC_BATCH } from "./protocol";
+import { REVIEW_BATCH } from "./review-protocol";
 
 const READER = "reader-1";
-type Entry = { key: string; at: number; gone: boolean; card: unknown; sense: unknown };
+type Entry = { key: string; at: number; gone: boolean; card: null; sense: null };
 const entry = (key: string, at: number, gone = false): Entry => ({ key, at, gone, card: null, sense: null });
 
 let local: Entry[] = [];
 let stored: { readerId: string | null; pushedThrough: number; cursor: string | null } = { readerId: null, pushedThrough: -1, cursor: null };
 let written: (typeof stored)[] = [];
 let applied: Entry[][] = [];
-let requests: { readerId: string; entries: Entry[]; since: string | null }[] = [];
-let answers: (Response | Error)[] = [];
 let applyFails = false;
-
-const fetchStub = async (_url: unknown, init: { body: string }) => {
-  requests.push(JSON.parse(init.body));
-  const next = answers.shift();
-  assert.ok(next, "fetch called more times than the test queued answers");
-  if (next instanceof Error) throw next;
-  return next;
-};
-const ok = (entries: Entry[], cursor: string | null = null) => Response.json({ accepted: 0, entries, cursor });
+let readFails = false;
 
 type Driver = typeof import("./review-driver");
 let driver: Driver | null = null;
 
 async function getDriver(): Promise<Driver> {
   if (driver) return driver;
-  Object.assign(globalThis, { fetch: fetchStub, indexedDB: {} });
+  Object.assign(globalThis, { indexedDB: {} });
   mock.module("../review/store", {
     namedExports: {
-      readEntries: async () => local,
+      readEntries: async () => {
+        if (readFails) throw new Error("indexeddb");
+        return local;
+      },
       readReviewSync: async () => stored,
       writeReviewSync: async (state: typeof stored) => {
         written.push(state);
@@ -53,101 +46,99 @@ async function getDriver(): Promise<Driver> {
   return driver;
 }
 
+const answer = (entries: Entry[], cursor: string | null = null, patch: { full?: boolean } = {}) => ({ accepted: 0, full: false, entries, cursor, ...patch });
+
 beforeEach(() => {
   local = [];
   stored = { readerId: null, pushedThrough: -1, cursor: null };
   written = [];
   applied = [];
-  requests = [];
-  answers = [];
   applyFails = false;
+  readFails = false;
 });
 
-test("a first round sends everything, merges what comes down and keeps both cursors", async () => {
-  const { syncReview } = await getDriver();
+test("a first round sends everything oldest first, and merges and remembers what comes down", async () => {
+  const { readReviewTrip, landReviewAnswer } = await getDriver();
   local = [entry("b", 200), entry("a", 100)];
-  answers = [ok([entry("c", 300)], "cursor-1")];
-  const outcome = await syncReview(READER, 1000);
-  assert.deepEqual(outcome, { kind: "done", pulled: 1 });
-  assert.deepEqual(requests[0].entries.map((sent) => sent.key), ["a", "b"]);
-  assert.equal(requests[0].since, null);
+  const trip = await readReviewTrip(READER);
+  assert.deepEqual(trip?.request.entries.map((sent) => sent.key), ["a", "b"]);
+  assert.equal(trip?.request.since, null);
+
+  const landed = await landReviewAnswer(trip!, answer([entry("c", 300)], "cursor-1"));
+  assert.deepEqual(landed, { pulled: 1, more: false });
   assert.deepEqual(applied, [[entry("c", 300)]]);
   assert.deepEqual(written, [{ readerId: READER, pushedThrough: 200, cursor: "cursor-1" }]);
 });
 
 test("a later round sends only what is newer than the last one and echoes the cursor", async () => {
-  const { syncReview } = await getDriver();
+  const { readReviewTrip, landReviewAnswer } = await getDriver();
   stored = { readerId: READER, pushedThrough: 200, cursor: "cursor-1" };
   local = [entry("a", 100), entry("b", 200), entry("d", 400)];
-  answers = [ok([], null)];
-  await syncReview(READER, 1000);
-  assert.deepEqual(requests[0].entries.map((sent) => sent.key), ["d"]);
-  assert.equal(requests[0].since, "cursor-1");
+  const trip = await readReviewTrip(READER);
+  assert.deepEqual(trip?.request.entries.map((sent) => sent.key), ["d"]);
+  assert.equal(trip?.request.since, "cursor-1");
+  await landReviewAnswer(trip!, answer([], null));
   assert.deepEqual(written, [{ readerId: READER, pushedThrough: 400, cursor: "cursor-1" }]);
 });
 
 test("a review the copy last met for another reader starts over for this one", async () => {
-  const { syncReview } = await getDriver();
+  const { readReviewTrip } = await getDriver();
   stored = { readerId: "someone-else", pushedThrough: 900, cursor: "theirs" };
   local = [entry("a", 100)];
-  answers = [ok([])];
-  await syncReview(READER, 1000);
-  assert.deepEqual(requests[0].entries.map((sent) => sent.key), ["a"]);
-  assert.equal(requests[0].since, null);
+  const trip = await readReviewTrip(READER);
+  assert.deepEqual(trip?.request.entries.map((sent) => sent.key), ["a"]);
+  assert.equal(trip?.request.since, null);
 });
 
-test("a full page on either side asks for the next, and a short one ends the round", async () => {
-  const { syncReview } = await getDriver();
-  local = Array.from({ length: SYNC_BATCH + 1 }, (_, i) => entry(`k${String(i).padStart(4, "0")}`, i + 1));
-  const down = Array.from({ length: SYNC_BATCH }, (_, i) => entry(`d${i}`, 5_000 + i));
-  answers = [ok(down, "page-1"), ok([entry("z", 9_000)], "page-2")];
-  const outcome = await syncReview(READER, 1000);
-  assert.deepEqual(outcome, { kind: "done", pulled: SYNC_BATCH + 1 });
-  assert.equal(requests.length, 2);
-  assert.equal(requests[0].entries.length, SYNC_BATCH);
-  assert.deepEqual(requests[1].entries.map((sent) => sent.key), ["k0500"]);
-  assert.equal(requests[1].since, "page-1");
+test("a full page on either side asks for another round, and a short one does not", async () => {
+  const { readReviewTrip, landReviewAnswer } = await getDriver();
+  local = Array.from({ length: REVIEW_BATCH + 1 }, (_, i) => entry(`k${String(i).padStart(4, "0")}`, i + 1));
+  const trip = await readReviewTrip(READER);
+  assert.equal(trip?.request.entries.length, REVIEW_BATCH);
+  assert.equal((await landReviewAnswer(trip!, answer([]))).more, true);
+  const down = Array.from({ length: REVIEW_BATCH }, (_, i) => entry(`d${i}`, 5_000 + i));
+  assert.equal((await landReviewAnswer(trip!, answer(down))).more, true);
+  assert.equal((await landReviewAnswer(trip!, answer([entry("z", 9_000)]))).more, true);
+  local = [entry("a", 1)];
+  assert.equal((await landReviewAnswer((await readReviewTrip(READER))!, answer([entry("z", 9_000)]))).more, false);
 });
 
-test("no session is not a failure, and nothing moves", async () => {
-  const { syncReview } = await getDriver();
+test("an account at its bound kept nothing: what was sent stays to be sent, and the round does not repeat itself", async () => {
+  const { readReviewTrip, landReviewAnswer } = await getDriver();
+  local = Array.from({ length: REVIEW_BATCH }, (_, i) => entry(`k${String(i).padStart(4, "0")}`, i + 1));
+  const trip = await readReviewTrip(READER);
+  const landed = await landReviewAnswer(trip!, answer([], "cursor-1", { full: true }));
+  assert.equal(landed.more, false);
+  assert.deepEqual(written, [{ readerId: READER, pushedThrough: -1, cursor: "cursor-1" }]);
+});
+
+test("a server that answers no review leaves everything where it was", async () => {
+  const { readReviewTrip, landReviewAnswer } = await getDriver();
   local = [entry("a", 100)];
-  answers = [Response.json({ error: "unauthorized" }, { status: 401 })];
-  assert.deepEqual(await syncReview(READER, 1000), { kind: "done", pulled: 0 });
-  assert.deepEqual(written, []);
-});
-
-test("another reader's session, a full account, a server error and a cut line each answer in the record's terms", async () => {
-  const { syncReview } = await getDriver();
-  answers = [Response.json({ error: "reader" }, { status: 409 })];
-  assert.deepEqual(await syncReview(READER, 1000), { kind: "reader" });
-  answers = [Response.json({ error: "quota" }, { status: 429 })];
-  assert.deepEqual(await syncReview(READER, 1000), { kind: "failed", cause: "quota" });
-  answers = [new Response("{}", { status: 500 })];
-  assert.deepEqual(await syncReview(READER, 1000), { kind: "failed", cause: "server" });
-  answers = [new TypeError("network")];
-  assert.deepEqual(await syncReview(READER, 1000), { kind: "failed", cause: "offline" });
+  const trip = await readReviewTrip(READER);
+  assert.deepEqual(await landReviewAnswer(trip!, null), { pulled: 0, more: false });
   assert.deepEqual(written, []);
 });
 
 test("a merge that fails leaves the cursors where they were", async () => {
-  const { syncReview } = await getDriver();
+  const { readReviewTrip, landReviewAnswer } = await getDriver();
   local = [entry("a", 100)];
-  answers = [ok([entry("c", 300)], "cursor-1")];
+  const trip = await readReviewTrip(READER);
   applyFails = true;
-  const outcome = await syncReview(READER, 1000);
-  assert.equal(outcome.kind, "failed");
+  await assert.rejects(landReviewAnswer(trip!, answer([entry("c", 300)], "cursor-1")));
   assert.deepEqual(written, []);
 });
 
-test("a browser with no IndexedDB sends nothing", async () => {
-  const { syncReview } = await getDriver();
+test("a store that does not answer, or a browser with no IndexedDB, asks nothing of the account", async () => {
+  const { readReviewTrip } = await getDriver();
+  readFails = true;
+  assert.equal(await readReviewTrip(READER), null);
+  readFails = false;
   const globals = globalThis as { indexedDB?: unknown };
   const held = globals.indexedDB;
   delete globals.indexedDB;
   try {
-    assert.deepEqual(await syncReview(READER, 1000), { kind: "done", pulled: 0 });
-    assert.equal(requests.length, 0);
+    assert.equal(await readReviewTrip(READER), null);
   } finally {
     globals.indexedDB = held;
   }
