@@ -28,6 +28,9 @@ type Scenario = {
   body?: unknown;
   offline?: boolean;
   typedKey?: string;
+  // What each Alert answers, in the order they open: the index of the action pressed, -1 for cancel.
+  answers?: number[];
+  parameter?: string | null;
 };
 
 // Runs the script against a stand-in for Scriptable's API and reports what the widget would have drawn.
@@ -37,6 +40,7 @@ async function run(scenario: Scenario) {
   const requests: { url: string; headers: Record<string, string> }[] = [];
   let widgetUrl: string | undefined;
   let alerts = 0;
+  const answers = [...(scenario.answers ?? [])];
 
   class Stack {
     layoutVertically() {}
@@ -70,7 +74,7 @@ async function run(scenario: Scenario) {
     addCancelAction() {}
     async presentAlert() {
       alerts += 1;
-      return scenario.typedKey === undefined ? -1 : 0;
+      return answers.shift() ?? -1;
     }
     textFieldValue() {
       return ` ${scenario.typedKey} `;
@@ -102,6 +106,7 @@ async function run(scenario: Scenario) {
       set: (key: string, value: string) => void store.set(key, value),
       remove: (key: string) => void store.delete(key),
     },
+    args: { widgetParameter: scenario.parameter ?? null },
     config: {
       runsInApp: scenario.inApp ?? false,
       runsInWidget: !(scenario.inApp ?? false),
@@ -153,8 +158,8 @@ test("the lock screen families draw the same figures in their own shape", async 
 });
 
 test("the first run in the app asks for the key and keeps it in the Keychain", async () => {
-  const { alerts, store, requests } = await run({ inApp: true, family: null, typedKey: "whk_typed" });
-  assert.equal(alerts, 1);
+  const { alerts, store, requests } = await run({ inApp: true, family: null, typedKey: "whk_typed", answers: [0, 0] });
+  assert.equal(alerts, 2, "the key, then the menu");
   assert.equal(store.get("homefund-widget-key"), "whk_typed");
   assert.equal(requests[0].headers.Authorization, "Bearer whk_typed");
 });
@@ -206,4 +211,47 @@ test("a summary with no credits, or cached before they existed, draws none", asy
   assert.deepEqual(creditos, []);
   const { texts } = await run({ keychain: KEYED, family: "medium", body: old });
   assert.ok(texts.includes("3 por revisar") && !texts.some((line) => line.includes("cuota")));
+});
+
+const MONEY = /\$[\d.]+/;
+
+test("the parameter «privado» or «oculto», in any case and accent, hides every amount and keeps the Bandeja and the credit lines", async () => {
+  const credit = { person: "John", currency: "COP", paidThisMonth: "done", installmentCents: 100_000, daysUntilDue: 6 };
+  for (const parameter of ["privado", "Privado", " OCULTO ", "Prívado"]) {
+    const { texts } = await run({ keychain: KEYED, family: "medium", parameter, body: { ...SUMMARY, creditos: [credit] } });
+    assert.ok(!texts.some((line) => MONEY.test(line)), `${parameter}: ${texts.join(" | ")}`);
+    assert.ok(texts.includes("$ •••••") && texts.includes("$ ••••• de $ •••••"), `${parameter}: ${texts.join(" | ")}`);
+    assert.ok(texts.includes("3 por revisar") && texts.includes("John: pagó ✓ · cuota en 6 días"));
+  }
+  const lock = await run({ keychain: KEYED, family: "accessoryRectangular", parameter: "privado" });
+  assert.deepEqual(lock.texts, ["Disponible $ •••••", "Mes $ ••••• de $ •••••", "3 por revisar"]);
+});
+
+test("the stored flag hides the widgets that have no parameter, and a parameter always wins", async () => {
+  const stored = { ...KEYED, "homefund-widget-private": "1" };
+  assert.ok(!(await run({ keychain: stored, family: "small" })).texts.some((line) => MONEY.test(line)));
+  const shown = await run({ keychain: stored, family: "small", parameter: "Visible" });
+  assert.ok(shown.texts.includes("$1.234.568"), shown.texts.join(" | "));
+  const other = await run({ keychain: stored, family: "small", parameter: "algo" });
+  assert.ok(!other.texts.some((line) => MONEY.test(line)), "an unknown parameter leaves the stored flag in charge");
+  assert.ok((await run({ keychain: KEYED, family: "small", parameter: "privado" })).texts.includes("$ •••••"));
+});
+
+test("the menu in the app hides or shows the amounts, and keeps the choice in the Keychain", async () => {
+  const hide = await run({ inApp: true, family: null, keychain: KEYED, answers: [1] });
+  assert.equal(hide.store.get("homefund-widget-private"), "1");
+  assert.ok(hide.texts.includes("$ •••••"), "the preview that follows already hides them");
+  const show = await run({ inApp: true, family: null, keychain: { ...KEYED, "homefund-widget-private": "1" }, answers: [1] });
+  assert.equal(show.store.get("homefund-widget-private"), "0");
+  assert.ok(show.texts.includes("$1.234.568"));
+  const preview = await run({ inApp: true, family: null, keychain: { ...KEYED, "homefund-widget-private": "1" }, answers: [0] });
+  assert.ok(preview.texts.includes("$ •••••"), "the preview follows the stored flag");
+});
+
+test("the menu changes the key, and closing it draws nothing", async () => {
+  const changed = await run({ inApp: true, family: null, keychain: KEYED, typedKey: "whk_new", answers: [2, 0] });
+  assert.equal(changed.store.get("homefund-widget-key"), "whk_new");
+  const closed = await run({ inApp: true, family: null, keychain: KEYED, answers: [] });
+  assert.equal(closed.requests.length, 0);
+  assert.equal(closed.texts.length, 0);
 });

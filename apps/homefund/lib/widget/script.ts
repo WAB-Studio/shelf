@@ -7,14 +7,29 @@ var API = BASE + "/api/widget";
 var INBOX = BASE + "/es/inbox";
 var KEY = "homefund-widget-key";
 var CACHE = "homefund-widget-cache";
+var PRIVATE = "homefund-widget-private";
 
 var INK = Color.dynamic(new Color("#1f1d2b"), new Color("#f4f2ff"));
 var GRAY = new Color("#8e8ea0");
 var RED = new Color("#e5484d");
 var AMBER = new Color("#f5a524");
 
+// Sin mayúsculas ni tildes: «Privado» y «privádo» se leen igual.
+function fold(value) {
+  return String(value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+}
+
+// El parámetro del widget manda: «privado» u «oculto» esconde los montos, «visible» los muestra; sin parámetro vale lo guardado.
+function isHidden() {
+  var parameter = fold(args.widgetParameter);
+  if (parameter === "privado" || parameter === "oculto") return true;
+  if (parameter === "visible") return false;
+  return Keychain.contains(PRIVATE) && Keychain.get(PRIVATE) === "1";
+}
+
 // Pesos sin centavos: 123456789 centavos son «$1.234.567».
-function pesos(cents, currency) {
+function pesos(cents, currency, hidden) {
+  if (hidden) return (currency === "COP" ? "$" : currency) + " •••••";
   var whole = Math.floor((Math.abs(cents) + 50) / 100);
   var grouped = String(whole).replace(/\B(?=(\d{3})+(?!\d))/g, ".");
   var prefix = currency === "COP" ? "$" : currency + " ";
@@ -69,17 +84,17 @@ function creditLine(credit) {
   return credit.person + ": " + paid + due;
 }
 
-function render(data, family, stale) {
+function render(data, family, stale, hidden) {
   var widget = new ListWidget();
   widget.url = INBOX;
   widget.refreshAfterDate = new Date(Date.now() + 15 * 60 * 1000);
 
   var currency = data.currency;
-  var available = pesos(data.disponible.cents, currency);
+  var available = pesos(data.disponible.cents, currency, hidden);
   var spent = data.mes.spentCents;
   var budgeted = data.mes.budgetedCents;
   var pending = data.bandeja.pendingCount;
-  var month = budgeted > 0 ? pesos(spent, currency) + " de " + pesos(budgeted, currency) : pesos(spent, currency);
+  var month = budgeted > 0 ? pesos(spent, currency, hidden) + " de " + pesos(budgeted, currency, hidden) : pesos(spent, currency, hidden);
   var inbox = pending === 0 ? "Bandeja al día" : pending + " por revisar";
 
   if (family === "accessoryInline") {
@@ -147,12 +162,36 @@ function message(value) {
   return widget;
 }
 
+// El menú al correr el script dentro de Scriptable; false cuando se cierra sin elegir.
+async function menu() {
+  var hidden = isHidden();
+  var alert = new Alert();
+  alert.title = "HomeFund";
+  alert.message = "Ocultar montos vale para los widgets sin parámetro. Con el parámetro «privado» u «oculto» un widget siempre los oculta, y con «visible» siempre los muestra.";
+  alert.addAction("Ver widget");
+  alert.addAction(hidden ? "Mostrar montos" : "Ocultar montos");
+  alert.addAction("Cambiar llave");
+  alert.addCancelAction("Cerrar");
+  var choice = await alert.presentAlert();
+  if (choice === 1) Keychain.set(PRIVATE, hidden ? "0" : "1");
+  if (choice === 2) await askKey("Pega la llave nueva. La anterior deja de usarse en este teléfono.");
+  return choice >= 0;
+}
+
 async function main() {
   var family = config.widgetFamily || "medium";
   var key = Keychain.contains(KEY) ? Keychain.get(KEY) : null;
   if (key === null && config.runsInApp) {
     key = await askKey("Pega la clave que creaste en HomeFund, en Ajustes › Widget del iPhone.");
   }
+  if (key !== null && config.runsInApp) {
+    if (!(await menu())) {
+      Script.complete();
+      return;
+    }
+    key = Keychain.contains(KEY) ? Keychain.get(KEY) : null;
+  }
+  var hidden = isHidden();
 
   var widget;
   if (key === null) {
@@ -161,13 +200,13 @@ async function main() {
     try {
       var data = await load(key);
       Keychain.set(CACHE, JSON.stringify(data));
-      widget = render(data, family, false);
+      widget = render(data, family, false, hidden);
     } catch (error) {
       if (error.message === "key") {
         Keychain.remove(KEY);
         widget = message("La clave ya no sirve. Abre este script en Scriptable y pega otra.");
       } else if (error.message === "offline" && Keychain.contains(CACHE)) {
-        widget = render(JSON.parse(Keychain.get(CACHE)), family, true);
+        widget = render(JSON.parse(Keychain.get(CACHE)), family, true, hidden);
       } else if (error.message === "offline") {
         widget = message("Sin conexión. Se actualiza solo cuando vuelva.");
       } else {

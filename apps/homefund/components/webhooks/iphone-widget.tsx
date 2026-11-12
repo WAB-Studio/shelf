@@ -82,6 +82,7 @@ export function IphoneWidget({ script, scriptUrl }: { script: string; scriptUrl:
 
       <Text size="2">4. {tw("step4")}</Text>
       <Text size="2">5. {tw("step5")}</Text>
+      <Text size="2">6. {tw("step6")}</Text>
       <Text size="2" color="gray">{tw("result")}</Text>
     </Flex>
   );
