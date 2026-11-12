@@ -365,7 +365,7 @@ async function checkRolledBackRounds(only?: string): Promise<void> {
   // each once; the second round's own answer carries a cursor that moves past them.
   if (!only || only === "S55") await rolledBackOn("review/sync", "S55", async ({ reader, tx, post }) => {
     await tx`insert into reading.review_entries (user_id, key, "at", gone, card)
-      select ${reader}, case when i = 250 then 'k|250' else 'k' || lpad(i::text, 4, '0') end, i, false, ${JSON.stringify(reviewCard(1, 1))}::jsonb
+      select ${reader}, case when i = 250 then 'k|250' else 'k' || lpad(i::text, 4, '0') end, i, false, ${JSON.stringify(reviewCard(1, 1))}::text::jsonb
       from generate_series(1, 501) as i`;
     const owed = (await tx<{ key: string }[]>`select key from reading.review_entries where user_id = ${reader} order by updated_at, key`).map((row) => row.key);
     const first = await sendReview(post, []);
