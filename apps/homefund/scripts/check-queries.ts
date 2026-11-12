@@ -29,6 +29,14 @@ import {
   reconcileAccount,
 } from "@/db/queries/account-reconciliations";
 import { deleteMemberDebt, getMemberDebts, recordMemberDebt } from "@/db/queries/member-debts";
+import {
+  listThirdPartyCredits,
+  recordThirdPartyPayment,
+  removeThirdPartyCredit,
+  setUpThirdPartyCredit,
+  updateThirdPartyCredit,
+} from "@/db/queries/third-party-credits";
+import { recordThirdPartyPaymentSchema, setUpThirdPartyCreditSchema, updateThirdPartyCreditSchema } from "@/lib/validation/third-party-credit";
 import { getMonthReview, getMonthReviewPending, markReviewed, unmarkReviewed, type ReviewItem } from "@/db/queries/month-review";
 import type { SpendingPatterns } from "@/db/queries/spending-patterns";
 import {
@@ -4152,6 +4160,7 @@ async function main(): Promise<void> {
   await recipientsSuite();
   await mcpLabelsSuite();
   await connectionsSuite();
+  await thirdPartyCreditSuite();
 }
 
 // A member recorded without a login is someone in the fund: a leader whose fund holds one is not alone, so an
@@ -15321,7 +15330,7 @@ async function mcpDoorSuite(): Promise<void> {
   assert(
     next("RF-144: /mcp answers 401 with no key, an unknown one or a webhook's, and lists its tools to a key for Claude"),
     anonymous.status === 401 && forged.status === 401 && webhookKey.status === 401 &&
-      JSON.stringify(names) === JSON.stringify(["accept_deliveries", "create_account", "create_category", "create_label", "delete_movement", "delete_recipient", "import_statement", "list_accounts", "list_categories", "list_inbox", "list_labels", "list_member_debts", "list_members", "list_movements", "list_recipients", "merge_movements", "move_account_to_fund", "move_category_movements", "preview_statement", "record_member_debt", "record_movement", "reject_deliveries", "review_month", "save_recipient", "spending_patterns", "update_account", "update_category", "update_label", "update_movement"]),
+      JSON.stringify(names) === JSON.stringify(["accept_deliveries", "create_account", "create_category", "create_label", "delete_movement", "delete_recipient", "import_statement", "list_accounts", "list_categories", "list_inbox", "list_labels", "list_member_debts", "list_members", "list_movements", "list_recipients", "list_third_party_credits", "merge_movements", "move_account_to_fund", "move_category_movements", "preview_statement", "record_member_debt", "record_movement", "record_third_party_payment", "reject_deliveries", "review_month", "save_recipient", "spending_patterns", "update_account", "update_category", "update_label", "update_movement"]),
     `no key ${anonymous.status}, unknown key ${forged.status}, webhook key ${webhookKey.status}, tools ${JSON.stringify(names)}`,
   );
 
@@ -18837,5 +18846,165 @@ async function connectionsSuite(): Promise<void> {
     viaGmail.length === 2 && viaGmail.every((one) => one.credentialBadge === "bank_emails") &&
       after.filter((one) => one.credentialName === null && one.credentialBadge === null).length === 2,
     `via ${viaGmail.length}, after ${JSON.stringify(after.map((one) => one.credentialName))}`,
+  );
+}
+
+// RF-211, RF-212, RF-213, RF-214: a credit in the person's name that somebody else pays. The link opens a «Me debe»
+// asset at the credit's balance in the credit's scope and currency; the payer's money is a transfer out of it, never
+// an income; what the credit still owes, what the payer owes and paid and each month's two transfers are derived.
+async function thirdPartyCreditSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const today = todayInBogota();
+  const month = today.slice(0, 7);
+  const { POST } = await import("@/app/mcp/route");
+  const [user, stranger] = [await createMembershipFreeUser(), await createMembershipFreeUser()];
+  const mk = async (owner: HarnessUser, name: string, kind: "asset" | "liability", amountMinor: number, currency = "COP") => {
+    const { accountId } = await asUser(owner, () =>
+      createAccount({
+        name: `Harness rf211 ${name} ${tag}`, kind, subtype: kind === "asset" ? "bank" : "loan", ownerUserId: owner.id, groupId: null,
+        isShared: false, institution: null, settlementCurrency: currency, amountMinor, balanceOn: shiftDate(today, -50),
+      }),
+    );
+    track("accounts", accountId);
+    return accountId;
+  };
+  const credit = await mk(user, "credito", "liability", 900_000_00);
+  const bank = await mk(user, "banco", "asset", 1_000_000_00);
+  const dollars = await mk(user, "dolares", "asset", 0, "USD");
+  const refused = async (run: () => Promise<unknown>): Promise<string | null> => {
+    try {
+      await run();
+      return null;
+    } catch (error) {
+      return error instanceof ActionError ? error.messageKey : String(error);
+    }
+  };
+  const form = (extra: Record<string, unknown> = {}) => ({
+    liabilityAccountId: credit, personName: " Persona Uno ", receivableAccountId: "", amount: "900.000", openedOn: shiftDate(today, -45),
+    installmentAmount: "150.000", dueDay: "15", ...extra,
+  });
+
+  const linked = await asUser(user, () => setUpThirdPartyCredit(setUpThirdPartyCreditSchema.parse(form()), "Me debe Persona Uno"));
+  track("accounts", linked.receivableAccountId);
+  const [receivable] = await fixtureSql<{ kind: string; subtype: string; owner: string; initial: string; currency: string }[]>`
+    select kind, subtype, owner_user_id as owner, initial_balance_cents::text as initial, settlement_currency as currency
+    from accounts where id = ${linked.receivableAccountId}`;
+  assert(
+    next("RF-211: setting a credit up opens a «Me debe» asset in the credit's own scope and currency at the opening figure, and links the two"),
+    receivable?.kind === "asset" && receivable.owner === user.id && receivable.initial === "90000000" && receivable.currency === "COP",
+    JSON.stringify(receivable),
+  );
+
+  const again = await refused(() => asUser(user, () => setUpThirdPartyCredit(setUpThirdPartyCreditSchema.parse(form()), "Otra")));
+  const taken = await mk(user, "otro-credito", "liability", 10_000_00);
+  const reuse = await refused(() =>
+    asUser(user, () => setUpThirdPartyCredit(setUpThirdPartyCreditSchema.parse(form({ liabilityAccountId: taken, receivableAccountId: linked.receivableAccountId })), "Otra")),
+  );
+  const wrongCurrency = await refused(() =>
+    asUser(user, () => setUpThirdPartyCredit(setUpThirdPartyCreditSchema.parse(form({ liabilityAccountId: taken, receivableAccountId: dollars })), "Otra")),
+  );
+  const asLiability = await refused(() =>
+    asUser(user, () => setUpThirdPartyCredit(setUpThirdPartyCreditSchema.parse(form({ liabilityAccountId: taken, receivableAccountId: credit })), "Otra")),
+  );
+  const [{ accountsNamed }] = await fixtureSql<{ accountsNamed: number }[]>`
+    select count(*)::int as "accountsNamed" from accounts where name = 'Otra' and owner_user_id = ${user.id}`;
+  assert(
+    next("RF-211: a second payer for one credit, a receivable another credit follows, one in another currency and a liability are each refused, and a refused link leaves no account behind"),
+    again === "thirdPartyCredit.errors.alreadyLinked" && reuse === "thirdPartyCredit.errors.receivableTaken" &&
+      wrongCurrency === "thirdPartyCredit.errors.receivableInvalid" && asLiability === "thirdPartyCredit.errors.receivableInvalid" && accountsNamed === 0,
+    `again ${again}, reuse ${reuse}, currency ${wrongCurrency}, liability ${asLiability}, stray accounts ${accountsNamed}`,
+  );
+
+  const outsider = await refused(() => asUser(stranger, () => setUpThirdPartyCredit(setUpThirdPartyCreditSchema.parse(form({ liabilityAccountId: taken })), "Ajena")));
+  const strangerSees = await asUser(stranger, () => listThirdPartyCredits());
+  assert(
+    next("RF-211: another person cannot link a credit that is not theirs and reads none of what is linked"),
+    outsider === "errors.notFound" && strangerSees.length === 0,
+    `outsider ${outsider}, stranger sees ${strangerSees.length}`,
+  );
+
+  const pay = (cents: string, on: string, to = bank) =>
+    asUser(user, () => recordThirdPartyPayment(recordThirdPartyPaymentSchema.parse({ liabilityAccountId: credit, toAccountId: to, amount: cents, occurredAt: on }), (person) => `Pago de ${person}`));
+  const lastMonthDay = shiftDate(`${month}-01`, -10);
+  const first = await pay("150.000", lastMonthDay);
+  const second = await pay("50.000", today);
+  track("transactions", first.transactionId);
+  track("transactions", second.transactionId);
+  // The installment to the lender, written as the debt's own payment is: a transfer from the bank to the credit.
+  const { bookMovement } = await import("@/db/queries/ledger-write");
+  const lender = await asUser(user, () =>
+    bookMovement(createTransactionSchema.parse({ fromAccountId: bank, toAccountId: credit, amount: "150.000", occurredAt: lastMonthDay, description: null, splits: [], labelIds: [] })),
+  );
+  track("transactions", lender.transactionId);
+  const [row] = await fixtureSql<{ kind: string; from: string; to: string; description: string }[]>`
+    select kind, from_account_id as "from", to_account_id as "to", description from transactions where id = ${first.transactionId}`;
+  const [one] = await asUser(user, () => listThirdPartyCredits(credit));
+  const current = one?.months[0];
+  const previous = one?.months[1];
+  assert(
+    next("RF-213: the payer's money is a transfer out of the receivable into the chosen account, never an income, named after the person"),
+    row?.kind === "transfer" && row.from === linked.receivableAccountId && row.to === bank && row.description === "Pago de Persona Uno",
+    JSON.stringify(row),
+  );
+  assert(
+    next("RF-212: the credit reads what it still owes, what the payer paid and still owes, and the month's two transfers, every figure derived from movements"),
+    one?.personName === "Persona Uno" && one.owedCents === 750_000_00 && one.personPaidCents === 200_000_00 && one.personOwesCents === 700_000_00 &&
+      one.installmentCents === 150_000_00 && one.dueDay === 15 && one.canWrite && current?.month === month && current.paidCents === 50_000_00 &&
+      current.paidOn === today && current.lenderCents === 0 && current.lenderOn === null,
+    JSON.stringify(one),
+  );
+  assert(
+    next("RF-212: the history lists every month since the first trace, newest first, a month with nothing as zeros"),
+    previous !== undefined && one.months.every((m, i, all) => i === 0 || m.month < all[i - 1].month) &&
+      one.months.some((m) => m.paidCents === 150_000_00 && m.lenderCents === 150_000_00 && m.lenderOn === lastMonthDay),
+    JSON.stringify(one?.months),
+  );
+
+  const sameAccount = await refused(() => pay("10.000", today, linked.receivableAccountId));
+  const zero = recordThirdPartyPaymentSchema.safeParse({ liabilityAccountId: credit, toAccountId: bank, amount: "0", occurredAt: today });
+  const beforeOpening = await refused(() => pay("10.000", shiftDate(today, -47)));
+  const strangerPays = await refused(() => asUser(stranger, () => recordThirdPartyPayment(recordThirdPartyPaymentSchema.parse({ liabilityAccountId: credit, toAccountId: bank, amount: "10.000", occurredAt: today }), () => "x")));
+  assert(
+    next("RF-213: the payer's money cannot arrive in the receivable itself, be zero, predate the receivable's opening, or be recorded by someone who cannot write the credit"),
+    sameAccount === "thirdPartyCredit.errors.sameAccount" && !zero.success && beforeOpening !== null && strangerPays === "errors.notFound",
+    `same ${sameAccount}, zero ${zero.success}, before opening ${beforeOpening}, stranger ${strangerPays}`,
+  );
+
+  await asUser(user, () => updateThirdPartyCredit(updateThirdPartyCreditSchema.parse({ liabilityAccountId: credit, personName: "Persona Dos", installmentAmount: "", dueDay: "" })));
+  const [edited] = await asUser(user, () => listThirdPartyCredits(credit));
+  assert(
+    next("RF-211: editing renames the payer and clears the lender's terms, both optional"),
+    edited?.personName === "Persona Dos" && edited.installmentCents === null && edited.dueDay === null,
+    JSON.stringify(edited),
+  );
+
+  const { tool } = await (async () => {
+    const { id, token } = await asUser(user, () => issueWebhookCredential({ name: `Harness rf214 ${tag}`, purpose: "mcp", defaultAccountId: null, defaultCategoryId: null }));
+    keep("webhook_credentials", id);
+    return mcpClient(POST, token);
+  })();
+  const listed = (await tool("list_third_party_credits")).value as { personName: string; owedCents: number; personOwesCents: number; months: { month: string }[] }[];
+  const viaTool = await tool("record_third_party_payment", { liabilityAccountId: credit, toAccountId: bank, amountCents: 25_000_00, occurredOn: today, requestRef: randomUUID() });
+  const bad = await tool("record_third_party_payment", { liabilityAccountId: credit, toAccountId: bank, amountCents: 0, occurredOn: today });
+  const toolTransfer = await fixtureSql<{ kind: string; from: string }[]>`
+    select kind, from_account_id as "from" from transactions where id = ${(viaTool.value as { transactionId?: string }).transactionId ?? null}`;
+  if (!viaTool.isError) track("transactions", (viaTool.value as { transactionId: string }).transactionId);
+  assert(
+    next("RF-214: list_third_party_credits answers the status in integer cents and record_third_party_payment books the transfer, refusing a zero amount in Spanish"),
+    listed.length === 1 && listed[0].personName === "Persona Dos" && listed[0].owedCents === 750_000_00 && listed[0].months[0].month === month &&
+      !viaTool.isError && toolTransfer[0]?.kind === "transfer" && toolTransfer[0].from === linked.receivableAccountId && bad.isError,
+    `listed ${JSON.stringify(listed)}, recorded ${JSON.stringify(viaTool.value)}, zero ${JSON.stringify(bad.value)}`,
+  );
+
+  await asUser(user, () => removeThirdPartyCredit(credit));
+  const [{ accountsLeft, movementsLeft }] = await fixtureSql<{ accountsLeft: number; movementsLeft: number }[]>`
+    select (select count(*) from accounts where id in (${credit}, ${linked.receivableAccountId}))::int as "accountsLeft",
+           (select count(*) from transactions where id in (${first.transactionId}, ${second.transactionId}, ${lender.transactionId}))::int as "movementsLeft"`;
+  const gone = await asUser(user, () => listThirdPartyCredits());
+  assert(
+    next("RF-211: stopping the follow-up removes the link only; both accounts and every movement stay"),
+    gone.length === 0 && accountsLeft === 2 && movementsLeft === 3 && (await refused(() => asUser(user, () => removeThirdPartyCredit(credit)))) === "errors.notFound",
+    `links ${gone.length}, accounts ${accountsLeft}, movements ${movementsLeft}`,
   );
 }
