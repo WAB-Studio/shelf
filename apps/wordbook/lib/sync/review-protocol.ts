@@ -1,9 +1,11 @@
 import { z } from "zod";
 
-import { SYNC_BATCH } from "./protocol";
+// The wire format of the review's copy (RL-93), carried inside the record's own sync round (`./protocol`). The
+// client driver and the route handler both import this file, so the shape a `fetch` sends is the shape the
+// handler parses.
 
-// The wire format of the review's copy (RL-93). The client driver and the route handler both import this
-// file, so the shape a `fetch` sends is the shape the handler parses (the pattern of `./protocol`).
+// Entries a round carries each way. The record's own bound is `SYNC_BATCH` (`./protocol`, which imports this file).
+export const REVIEW_BATCH = 500;
 
 // Entries one reader may hold in the account, one per word or phrase. A bound on what a signed-in caller can
 // write into the shared database, like the record's daily cap.
@@ -49,24 +51,27 @@ export const reviewEntrySchema = z
   })
   .refine((entry) => !entry.gone || (entry.card === null && entry.sense === null), { message: "a deletion is bare" });
 
-export const reviewSyncRequestSchema = z.object({
-  // The reader this device believes it syncs for; the route refuses a round whose session belongs to anyone else.
-  readerId: z.string().min(1),
+// The review's half of a sync round (RL-93), carried in the record's own request and answer. `since` is the
+// server's cursor for what this device already merged.
+export const reviewRequestSchema = z.object({
   entries: z
     .array(reviewEntrySchema)
-    .max(SYNC_BATCH)
+    .max(REVIEW_BATCH)
     .refine((entries) => new Set(entries.map((entry) => entry.key)).size === entries.length, { message: "one version per key" }),
   since: z.string().min(1).nullable(),
 });
 
-export const reviewSyncResponseSchema = z.object({
+// `full` is a reader at the bound `REVIEW_ENTRY_CAP`: nothing sent was kept, and the device sends it again.
+export const reviewAnswerSchema = z.object({
   accepted: z.int(),
+  full: z.boolean(),
   entries: z.array(reviewEntrySchema),
   cursor: z.string().min(1).nullable(),
 });
 
 export type ReviewWireEntry = z.infer<typeof reviewEntrySchema>;
-export type ReviewSyncResponse = z.infer<typeof reviewSyncResponseSchema>;
+export type ReviewRequest = z.infer<typeof reviewRequestSchema>;
+export type ReviewAnswer = z.infer<typeof reviewAnswerSchema>;
 
 // The tuple a cursor names: the last entry's server clock and its key, which ties break on. `updatedAt` is the
 // UTC text the server printed, never a `Date`: a round trip through one would drop the microseconds (docs/TRAPS.md).

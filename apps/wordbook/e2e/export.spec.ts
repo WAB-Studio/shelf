@@ -170,9 +170,10 @@ test("10,003 rows export whole, and the file round-trips through JSON exactly", 
   expect(rawRows).toHaveLength(10_003);
 
   const exported = await downloadExport(page);
-  // The envelope stays at 1 and the row schema moves with the store: a reader
-  // that only knows version 1 still parses the file (plan, decision 10).
-  expect(exported.exportSchema).toBe(1);
+  // The envelope is at 2 since RL-95 added `review` beside the rows, which stand where they stood: a reader
+  // that only knows version 1 still parses the file (plan, decision 10). The review is empty here.
+  expect(exported.exportSchema).toBe(2);
+  expect(exported.review).toEqual({ cards: [], senses: [] });
   expect(exported.recordSchema).toBe(4);
   expect(typeof exported.exportedAt).toBe("number");
   expect(exported.rows).toHaveLength(10_003);
@@ -207,7 +208,7 @@ test("the nav reaches /registro, which counts what was searched and exports it",
   await expect(studyHeader(page, 1, 1)).toBeVisible();
 
   const exported = await downloadExport(page);
-  expect(exported.exportSchema).toBe(1);
+  expect(exported.exportSchema).toBe(2);
   expect(exported.rows).toHaveLength(1);
   expect(exported.rows[0].kind).toBe("word");
   expect(exported.rows[0].text).toBe("apple");

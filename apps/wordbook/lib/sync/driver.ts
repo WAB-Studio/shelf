@@ -6,6 +6,7 @@ import { SYNC_BATCH, syncRequestSchema, syncResponseSchema, type SyncResponse, t
 import { failureCause, type SyncFailure } from "./failure";
 import { shareInFlight } from "./in-flight";
 import { planUploadRound } from "./upload-page";
+import { landReviewAnswer, readReviewTrip, type ReviewTrip } from "./review-driver";
 
 const SYNC_ENDPOINT = "/api/log/sync";
 export const SYNC_LOCK = "voyager-sync";
@@ -55,12 +56,15 @@ async function postBatch(
   since: string | null,
   tombstones: Tombstone[],
   tombstonesSince: string | null,
+  review: ReviewTrip | null,
 ): Promise<SyncResponse | "retired" | "reader"> {
   const response = await fetch(SYNC_ENDPOINT, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     signal: AbortSignal.timeout(SYNC_FETCH_TIMEOUT_MS),
-    body: JSON.stringify(syncRequestSchema.parse({ deviceId, readerId, rows, since, tombstones, tombstonesSince })),
+    body: JSON.stringify(
+      syncRequestSchema.parse({ deviceId, readerId, rows, since, tombstones, tombstonesSince, review: review?.request ?? null }),
+    ),
   });
   if (!response.ok) {
     const body = (await response.json().catch(() => null)) as { error?: string } | null;
@@ -97,6 +101,7 @@ async function runSyncLocked(): Promise<SyncOutcome> {
   let pushed = 0;
   let pulled = 0;
   let removed = 0;
+  let reviewPulled = 0;
 
   try {
     for (let batch = 0; batch < MAX_BATCHES; batch++) {
@@ -106,7 +111,8 @@ async function runSyncLocked(): Promise<SyncOutcome> {
       // shorter, and a delete made meanwhile joins it.
       const queue = await readTombstoneQueue(state.readerId);
       const marks = queue.pending.slice(0, SYNC_BATCH);
-      const response = await postBatch(state.deviceId, state.readerId, rows, pulledThroughCursor, marks, queue.since);
+      const review = await readReviewTrip(state.readerId);
+      const response = await postBatch(state.deviceId, state.readerId, rows, pulledThroughCursor, marks, queue.since, review);
       if (response === "retired") {
         await markRetired();
         return { kind: "retired" };
@@ -132,13 +138,18 @@ async function runSyncLocked(): Promise<SyncOutcome> {
       await writeSyncState({ pushedThroughLocalId, pulledThroughCursor, lastSyncedAt: Date.now() });
       await yieldToLoop();
 
+      // The review's page of the same answer (RL-93), once the record's own landed. A stub or an older server
+      // answers none, and the review's cursors stay where they were.
+      const landed = review ? await landReviewAnswer(review, response.review) : { pulled: 0, more: false };
+      reviewPulled += landed.pulled;
+
       // Stop only once neither side has a next page waiting: a short scanned
       // page alone no longer ends the call, or a large foreign backlog would
       // never finish downloading behind a thin local log.
       const marksWaiting = response.tombstones.length >= SYNC_BATCH || queue.pending.length > marks.length;
-      if (scanned < SYNC_BATCH && response.rows.length < SYNC_BATCH && !marksWaiting) break;
+      if (scanned < SYNC_BATCH && response.rows.length < SYNC_BATCH && !marksWaiting && !landed.more) break;
     }
-    if (pulled > 0 || removed > 0) window.dispatchEvent(new Event(SYNC_LANDED_EVENT));
+    if (pulled > 0 || removed > 0 || reviewPulled > 0) window.dispatchEvent(new Event(SYNC_LANDED_EVENT));
     return { kind: "done", pushed, pulled };
   } catch (error) {
     const cause =

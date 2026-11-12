@@ -2000,3 +2000,12 @@ Taken by the user, delegated to the build.
   three translations and the definition, then a blank line and the reader's own sentence with the word in bold; a phrase carries its
   translation alone. Lines are separated by `<br>` and the file declares `#html:true`. A device with no copy of the dictionary
   downloads the logged line instead, and a muted 14 px line under «N tarjetas para Anki descargadas» says so (`log.study.ankiPlain`).
+
+Taken by the user: the review travels with the account (RL-93), replacing «no viaja» of 2026-11-08.
+
+- **`/cuenta` says where the review lives, in one line under the copy state** (RL-94). With no account: «Tu repaso también vive solo en este dispositivo.», under the
+  invitation. Signed in and not yet confirmed: «Al empezar, tu repaso también viaja con la cuenta…». Confirmed: «Tu repaso viaja con la cuenta…». A retired device:
+  «Tu repaso se queda en este dispositivo.» No new control, no new state: it is a line of the same «Copia» section, in the muted ink of its neighbours.
+- **The confirmation before «Vaciar el registro» carries one more line under its body** (RL-94): with an account, that the account keeps the review if the
+  reader empties only this device and loses it if the account is emptied too; with none, that the review lives only here and goes with the record.
+- **No board was drawn.** Both are lines of copy in screens already approved.

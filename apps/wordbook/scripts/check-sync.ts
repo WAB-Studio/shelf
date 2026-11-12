@@ -166,9 +166,9 @@ async function checkRolledBackRounds(only?: string): Promise<void> {
     tx: postgres.TransactionSql;
     post: (body: Record<string, unknown>) => Promise<RoundAnswer>;
   }) => Promise<void>;
-  const rolledBackOn = async (route: "log/sync" | "review/sync", label: string, work: RolledBackWork): Promise<void> => {
+  const rolledBack = async (label: string, work: RolledBackWork): Promise<void> => {
     const forcedRollback = Symbol("forced rollback");
-    const { POST } = await import(`../app/api/${route}/route`);
+    const { POST } = await import("../app/api/log/sync/route");
     const reader = randomUUID();
     await sql
       .begin(async (tx) => {
@@ -180,7 +180,7 @@ async function checkRolledBackRounds(only?: string): Promise<void> {
             return fn(readerTx(tx));
           };
           const response = await POST(
-            new Request(`http://localhost/api/${route}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ readerId: reader, ...body }) }),
+            new Request("http://localhost/api/log/sync", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ readerId: reader, ...body }) }),
           );
           return { status: response.status, json: (await response.json()) as RoundAnswer["json"] };
         };
@@ -192,7 +192,6 @@ async function checkRolledBackRounds(only?: string): Promise<void> {
         assert(`${label} aborted`, false, `${pgCode(error) ?? "no sqlstate"} ${error instanceof Error ? error.message : String(error)}`);
       });
   };
-  const rolledBack = (label: string, work: RolledBackWork) => rolledBackOn("log/sync", label, work);
 
   // S43: 501 marks one second apart, the newest on the smallest identity, so neither the identity nor a
   // descending clock can stand in for the tuple order; two pages hand down all of them once, oldest first.
@@ -258,17 +257,18 @@ async function checkRolledBackRounds(only?: string): Promise<void> {
     );
   });
 
-  // S52-S58 (RL-93): the copy of the review, `reading.review_entries`, driven through `/api/review/sync`.
+  // S52-S58 (RL-93): the copy of the review, `reading.review_entries`, driven through the sync route that carries it.
   type ReviewAnswer = {
     status: number;
-    json: { accepted: number; error?: string; cursor: string | null; entries: { key: string; at: number; gone: boolean; card: { reps: number } | null; sense: { index: number } | null }[] };
+    json: { accepted: number; error?: string; review: { accepted: number; full: boolean; cursor: string | null; entries: { key: string; at: number; gone: boolean; card: { reps: number } | null; sense: { index: number } | null }[] } | null };
   };
   const reviewCard = (reps: number, at: number) => ({
     due: at + 60_000, stability: 1.5, difficulty: 5, scheduledDays: 1, learningSteps: 0, reps, lapses: 0, state: 2, lastReview: at, introducedOn: "2026-11-12",
   });
   const reviewEntry = (key: string, at: number, reps = 1) => ({ key, at, gone: false, card: reviewCard(reps, at), sense: null });
+  // A round with nothing of the record in it and the review's page: what a device with only the review to say sends.
   const sendReview = (post: (body: Record<string, unknown>) => Promise<RoundAnswer>, entries: unknown[], since: string | null = null) =>
-    post({ entries, since }) as unknown as Promise<ReviewAnswer>;
+    post({ deviceId: randomUUID(), rows: [], since: null, review: { entries, since } }) as unknown as Promise<ReviewAnswer>;
   const stored = async (tx: postgres.TransactionSql, reader: string, key: string) =>
     (
       await tx<{ at: string; gone: boolean; reps: number | null; sense_index: number | null }[]>`
@@ -278,7 +278,7 @@ async function checkRolledBackRounds(only?: string): Promise<void> {
 
   // S52: the grants and the stamp, read as the migration's owner: RLS forced, no `anon` or `service_role` grant,
   // `updated_at` insertable and updatable by no one, and a stamp that overrides what a row was inserted with.
-  if (!only || only === "S52") await rolledBackOn("review/sync", "S52", async ({ reader, tx }) => {
+  if (!only || only === "S52") await rolledBack("S52", async ({ reader, tx }) => {
     const [rel] = await tx<{ rowsecurity: boolean; forced: boolean }[]>`
       select relrowsecurity as rowsecurity, relforcerowsecurity as forced from pg_class where oid = 'reading.review_entries'::regclass`;
     const stray = await tx<{ grantee: string }[]>`
@@ -304,7 +304,7 @@ async function checkRolledBackRounds(only?: string): Promise<void> {
 
   // S53: the policies, driven. A reader sees, forges, rewrites and deletes only their own rows; no grant lets a
   // session move `updated_at`.
-  if (!only || only === "S53") await rolledBackOn("review/sync", "S53", async ({ reader, tx }) => {
+  if (!only || only === "S53") await rolledBack("S53", async ({ reader, tx }) => {
     const intruder = randomUUID();
     await tx`insert into auth.users (id) values (${intruder})`;
     await enterUserContext(tx, reader);
@@ -332,7 +332,7 @@ async function checkRolledBackRounds(only?: string): Promise<void> {
 
   // S54: the later `at` replaces the earlier and the earlier never replaces the later. The half a newer row lacks
   // is kept, a deletion keeps neither, and a card newer than the deletion revives the key.
-  if (!only || only === "S54") await rolledBackOn("review/sync", "S54", async ({ reader, tx, post }) => {
+  if (!only || only === "S54") await rolledBack("S54", async ({ reader, tx, post }) => {
     const sense = { index: 1, signature: "sig", chosenAt: 2000 };
     const steps: Awaited<ReturnType<typeof stored>>[] = [];
     const accepted: number[] = [];
@@ -344,7 +344,7 @@ async function checkRolledBackRounds(only?: string): Promise<void> {
       reviewEntry("a", 2500, 7),
       reviewEntry("a", 4000, 2),
     ]) {
-      accepted.push((await sendReview(post, [entry])).json.accepted);
+      accepted.push((await sendReview(post, [entry])).json.review!.accepted);
       steps.push(await stored(tx, reader, "a"));
     }
     const [first, older, tapped, deleted, resurrected, revived] = steps;
@@ -363,24 +363,24 @@ async function checkRolledBackRounds(only?: string): Promise<void> {
 
   // S55: 501 entries stamped at one instant, one key holding a "|", come down in two pages of the tuple order,
   // each once; the second round's own answer carries a cursor that moves past them.
-  if (!only || only === "S55") await rolledBackOn("review/sync", "S55", async ({ reader, tx, post }) => {
+  if (!only || only === "S55") await rolledBack("S55", async ({ reader, tx, post }) => {
     await tx`insert into reading.review_entries (user_id, key, "at", gone, card)
       select ${reader}, case when i = 250 then 'k|250' else 'k' || lpad(i::text, 4, '0') end, i, false, ${JSON.stringify(reviewCard(1, 1))}::text::jsonb
       from generate_series(1, 501) as i`;
     const owed = (await tx<{ key: string }[]>`select key from reading.review_entries where user_id = ${reader} order by updated_at, key`).map((row) => row.key);
-    const first = await sendReview(post, []);
-    const second = await sendReview(post, [], first.json.cursor);
-    const third = await sendReview(post, [], second.json.cursor);
-    const keys = [...first.json.entries, ...second.json.entries].map((entry) => entry.key);
+    const first = (await sendReview(post, [])).json.review!;
+    const second = (await sendReview(post, [], first.cursor)).json.review!;
+    const third = (await sendReview(post, [], second.cursor)).json.review!;
+    const keys = [...first.entries, ...second.entries].map((entry) => entry.key);
     assert(
       "S55",
-      first.json.entries.length === 500 && second.json.entries.length === 1 && third.json.entries.length === 0 && keys.join() === owed.join() && third.json.cursor === second.json.cursor,
-      `pages = ${first.json.entries.length}/${second.json.entries.length}/${third.json.entries.length}, in order = ${keys.join() === owed.join()}, cursor kept = ${third.json.cursor === second.json.cursor}`,
+      first.entries.length === 500 && second.entries.length === 1 && third.entries.length === 0 && keys.join() === owed.join() && third.cursor === second.cursor,
+      `pages = ${first.entries.length}/${second.entries.length}/${third.entries.length}, in order = ${keys.join() === owed.join()}, cursor kept = ${third.cursor === second.cursor}`,
     );
   });
 
-  // S56: a reader holds at most `cap` entries; a batch past it writes nothing, and one within it lands.
-  if (!only || only === "S56") await rolledBackOn("review/sync", "S56", async ({ reader, tx }) => {
+  // S56: a reader holds at most `cap` entries; a batch past it writes nothing and says `full`, and one within it lands.
+  if (!only || only === "S56") await rolledBack("S56", async ({ reader, tx }) => {
     const { syncReviewEntries } = await import("../lib/sync/review-upload");
     await enterUserContext(tx, reader);
     const wire = (key: string) => ({ ...reviewEntry(key, 10), sense: null });
@@ -389,26 +389,29 @@ async function checkRolledBackRounds(only?: string): Promise<void> {
     const allowed = await syncReviewEntries(readerTx(tx), reader, [wire("a"), wire("b")], null, 2);
     assert(
       "S56",
-      refused.status === "full" && heldAfterRefusal === "0" && allowed.status === "ok" && allowed.accepted === 2,
-      `over the cap = ${refused.status}, held after = ${heldAfterRefusal}, within = ${allowed.status}/${allowed.status === "ok" ? allowed.accepted : "-"}`,
+      refused.full && heldAfterRefusal === "0" && !allowed.full && allowed.accepted === 2,
+      `over the cap: full = ${refused.full}, held after = ${heldAfterRefusal}, within: full = ${allowed.full}, accepted = ${allowed.accepted}`,
     );
   });
 
-  // S57: another reader's identity on the request is refused and writes nothing; an empty body is a bad request.
-  if (!only || only === "S57") await rolledBackOn("review/sync", "S57", async ({ reader, tx, post }) => {
-    const other = randomUUID();
-    const mismatched = await post({ readerId: other, entries: [reviewEntry("x", 1)], since: null });
-    const malformed = await post({ entries: [{ ...reviewEntry("y", 1), gone: true }], since: null });
+  // S57: a round that sends no review answers none and touches none; two versions of one key, or a deletion that
+  // still carries a card, are a bad request and write nothing, the record's half of the round included.
+  if (!only || only === "S57") await rolledBack("S57", async ({ reader, tx, post }) => {
+    const device = randomUUID();
+    const plain = await post({ deviceId: device, rows: rowsOf(device, [1]), since: null });
+    const twice = await sendReview(post, [reviewEntry("y", 1), reviewEntry("y", 2)]);
+    const malformed = await sendReview(post, [{ ...reviewEntry("y", 1), gone: true }]);
     const held = (await tx<{ n: string }[]>`select count(*)::text as n from reading.review_entries where user_id = ${reader}`)[0].n;
+    const lookups = (await tx<{ n: string }[]>`select count(*)::text as n from reading.lookups where user_id = ${reader} and device_id = ${device}`)[0].n;
     assert(
       "S57",
-      mismatched.status === 409 && malformed.status === 400 && held === "0",
-      `other reader = ${mismatched.status}, a deletion with a card = ${malformed.status}, rows = ${held}`,
+      plain.status === 200 && !("review" in plain.json) && twice.status === 400 && malformed.status === 400 && held === "0" && lookups === "1",
+      `no review sent: ${plain.status}, review key in the answer = ${"review" in plain.json}, two versions = ${twice.status}, a deletion with a card = ${malformed.status}, review rows = ${held}, record rows = ${lookups}`,
     );
   });
 
   // S58: «Vaciar aquí y en mi cuenta» empties the review's copy with the record's, and only the caller's.
-  if (!only || only === "S58") await rolledBackOn("review/sync", "S58", async ({ reader, tx, post }) => {
+  if (!only || only === "S58") await rolledBack("S58", async ({ reader, tx, post }) => {
     const { DELETE: clearAccount } = await import("../app/api/log/clear/route");
     const other = randomUUID();
     await tx`insert into auth.users (id) values (${other})`;
@@ -431,8 +434,6 @@ async function checkRolledBackRounds(only?: string): Promise<void> {
 type FakeRecord = Record<string, unknown>;
 function installDeviceStorage(): () => FakeRecord[] {
   type Store = { keyPath: string; autoIncrement: boolean; next: number; rows: Map<IDBValidKey, FakeRecord>; indexes: Map<string, string | string[]> };
-  const stores = new Map<string, Store>();
-  let version = 0;
   const valueAt = (row: FakeRecord, path: string | string[]): unknown =>
     Array.isArray(path) ? path.map((part) => row[part]) : row[path];
   class Range {
@@ -446,87 +447,97 @@ function installDeviceStorage(): () => FakeRecord[] {
   }
   const matches = (key: unknown, query: unknown) =>
     query === undefined || query === null ? true : query instanceof Range ? query.includes(key) : JSON.stringify(key) === JSON.stringify(query);
-  const transaction = () => {
-    const tx: Record<string, unknown> & { oncomplete?: () => void; onerror?: () => void; onabort?: () => void } = {};
-    let open = 0;
-    const settle = () => setImmediate(() => open === 0 && tx.oncomplete?.());
-    const request = (run: () => unknown) => {
-      const req: { result?: unknown; error: null; onsuccess?: () => void; onerror?: () => void } = { error: null };
-      open += 1;
-      setImmediate(() => {
-        req.result = run();
-        req.onsuccess?.();
-        open -= 1;
-        if (open === 0) settle();
-      });
-      return req;
-    };
-    const storeApi = (name: string) => {
-      const store = stores.get(name)!;
-      const sorted = () => [...store.rows.entries()].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
-      const write = (value: FakeRecord) => {
-        const row = structuredClone(value);
-        if (row[store.keyPath] === undefined && store.autoIncrement) row[store.keyPath] = store.next;
-        const key = row[store.keyPath] as IDBValidKey;
-        if (typeof key === "number" && key >= store.next) store.next = key + 1;
-        store.rows.set(key, row);
-        return key;
+  // One database per name, as the browser keeps them: the record's `reading-log` and the review's `reading-review`.
+  const createDatabase = () => {
+    const stores = new Map<string, Store>();
+    let version = 0;
+    const transaction = () => {
+      const tx: Record<string, unknown> & { oncomplete?: () => void; onerror?: () => void; onabort?: () => void } = {};
+      let open = 0;
+      const settle = () => setImmediate(() => open === 0 && tx.oncomplete?.());
+      const request = (run: () => unknown) => {
+        const req: { result?: unknown; error: null; onsuccess?: () => void; onerror?: () => void } = { error: null };
+        open += 1;
+        setImmediate(() => {
+          req.result = run();
+          req.onsuccess?.();
+          open -= 1;
+          if (open === 0) settle();
+        });
+        return req;
       };
-      return {
-        add: (value: FakeRecord) => request(() => write(value)),
-        put: (value: FakeRecord) => request(() => write(value)),
-        get: (key: IDBValidKey) => request(() => structuredClone(store.rows.get(key))),
-        delete: (key: IDBValidKey) => request(() => void store.rows.delete(key)),
-        clear: () => request(() => store.rows.clear()),
-        count: () => request(() => store.rows.size),
-        getAll: (query?: unknown, count?: number) =>
-          request(() => sorted().filter(([key]) => matches(key, query)).slice(0, count || undefined).map(([, row]) => structuredClone(row))),
-        openCursor: (_query: unknown, direction?: string) =>
-          request(() => {
-            const keys = sorted().map(([key]) => key);
-            const key = direction === "prev" ? keys.at(-1) : keys[0];
-            return key === undefined ? null : { key, value: structuredClone(store.rows.get(key)) };
+      const storeApi = (name: string) => {
+        const store = stores.get(name)!;
+        const sorted = () => [...store.rows.entries()].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+        const write = (value: FakeRecord) => {
+          const row = structuredClone(value);
+          if (row[store.keyPath] === undefined && store.autoIncrement) row[store.keyPath] = store.next;
+          const key = row[store.keyPath] as IDBValidKey;
+          if (typeof key === "number" && key >= store.next) store.next = key + 1;
+          store.rows.set(key, row);
+          return key;
+        };
+        return {
+          add: (value: FakeRecord) => request(() => write(value)),
+          put: (value: FakeRecord) => request(() => write(value)),
+          get: (key: IDBValidKey) => request(() => structuredClone(store.rows.get(key))),
+          delete: (key: IDBValidKey) => request(() => void store.rows.delete(key)),
+          clear: () => request(() => store.rows.clear()),
+          count: () => request(() => store.rows.size),
+          getAll: (query?: unknown, count?: number) =>
+            request(() => sorted().filter(([key]) => matches(key, query)).slice(0, count || undefined).map(([, row]) => structuredClone(row))),
+          openCursor: (_query: unknown, direction?: string) =>
+            request(() => {
+              const keys = sorted().map(([key]) => key);
+              const key = direction === "prev" ? keys.at(-1) : keys[0];
+              return key === undefined ? null : { key, value: structuredClone(store.rows.get(key)) };
+            }),
+          createIndex: (index: string, path: string | string[]) => void store.indexes.set(index, path),
+          index: (index: string) => ({
+            getAll: (query?: unknown) =>
+              request(() => sorted().filter(([, row]) => matches(valueAt(row, store.indexes.get(index)!), query)).map(([, row]) => structuredClone(row))),
+            getKey: (query: unknown) => request(() => sorted().find(([, row]) => matches(valueAt(row, store.indexes.get(index)!), query))?.[0]),
           }),
-        createIndex: (index: string, path: string | string[]) => void store.indexes.set(index, path),
-        index: (index: string) => ({
-          getAll: (query?: unknown) =>
-            request(() => sorted().filter(([, row]) => matches(valueAt(row, store.indexes.get(index)!), query)).map(([, row]) => structuredClone(row))),
-          getKey: (query: unknown) => request(() => sorted().find(([, row]) => matches(valueAt(row, store.indexes.get(index)!), query))?.[0]),
-        }),
+        };
       };
+      tx.objectStore = storeApi;
+      settle();
+      return tx;
     };
-    tx.objectStore = storeApi;
-    settle();
-    return tx;
+    const database = {
+      onclose: null,
+      onversionchange: null,
+      objectStoreNames: { contains: (name: string) => stores.has(name) },
+      close() {},
+      createObjectStore(name: string, options: { keyPath: string; autoIncrement?: boolean }) {
+        stores.set(name, { keyPath: options.keyPath, autoIncrement: !!options.autoIncrement, next: 1, rows: new Map(), indexes: new Map() });
+        return (transaction().objectStore as (store: string) => unknown)(name);
+      },
+      transaction,
+    };
+    return { stores, database, transaction, upgrade: (wanted: number) => { const old = version; if (old < wanted) version = wanted; return old; } };
   };
-  const database = {
-    onclose: null,
-    onversionchange: null,
-    close() {},
-    createObjectStore(name: string, options: { keyPath: string; autoIncrement?: boolean }) {
-      stores.set(name, { keyPath: options.keyPath, autoIncrement: !!options.autoIncrement, next: 1, rows: new Map(), indexes: new Map() });
-      return (transaction().objectStore as (store: string) => unknown)(name);
-    },
-    transaction,
-  };
+  const databases = new Map<string, ReturnType<typeof createDatabase>>();
   const globals = globalThis as unknown as Record<string, unknown>;
   globals.IDBKeyRange = Range;
   globals.window ??= new EventTarget();
   globals.indexedDB = {
-    open(_name: string, wanted: number) {
+    open(name: string, wanted: number) {
+      if (!databases.has(name)) databases.set(name, createDatabase());
+      const { database, transaction, upgrade } = databases.get(name)!;
       const req: Record<string, unknown> & { onupgradeneeded?: (event: unknown) => void; onsuccess?: () => void } = { result: database };
       setImmediate(() => {
-        if (version < wanted) {
+        const oldVersion = upgrade(wanted);
+        if (oldVersion < wanted) {
           req.transaction = transaction();
-          req.onupgradeneeded?.({ oldVersion: version });
-          version = wanted;
+          req.onupgradeneeded?.({ oldVersion });
         }
         req.onsuccess?.();
       });
       return req;
     },
   };
-  return () => [...(stores.get("lookups")?.rows.values() ?? [])].map((row) => structuredClone(row));
+  return () => [...(databases.get("reading-log")?.stores.get("lookups")?.rows.values() ?? [])].map((row) => structuredClone(row));
 }
 
 async function main() {
