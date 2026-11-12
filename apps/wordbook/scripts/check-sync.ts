@@ -431,8 +431,6 @@ async function checkRolledBackRounds(only?: string): Promise<void> {
 type FakeRecord = Record<string, unknown>;
 function installDeviceStorage(): () => FakeRecord[] {
   type Store = { keyPath: string; autoIncrement: boolean; next: number; rows: Map<IDBValidKey, FakeRecord>; indexes: Map<string, string | string[]> };
-  const stores = new Map<string, Store>();
-  let version = 0;
   const valueAt = (row: FakeRecord, path: string | string[]): unknown =>
     Array.isArray(path) ? path.map((part) => row[part]) : row[path];
   class Range {
@@ -446,87 +444,97 @@ function installDeviceStorage(): () => FakeRecord[] {
   }
   const matches = (key: unknown, query: unknown) =>
     query === undefined || query === null ? true : query instanceof Range ? query.includes(key) : JSON.stringify(key) === JSON.stringify(query);
-  const transaction = () => {
-    const tx: Record<string, unknown> & { oncomplete?: () => void; onerror?: () => void; onabort?: () => void } = {};
-    let open = 0;
-    const settle = () => setImmediate(() => open === 0 && tx.oncomplete?.());
-    const request = (run: () => unknown) => {
-      const req: { result?: unknown; error: null; onsuccess?: () => void; onerror?: () => void } = { error: null };
-      open += 1;
-      setImmediate(() => {
-        req.result = run();
-        req.onsuccess?.();
-        open -= 1;
-        if (open === 0) settle();
-      });
-      return req;
-    };
-    const storeApi = (name: string) => {
-      const store = stores.get(name)!;
-      const sorted = () => [...store.rows.entries()].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
-      const write = (value: FakeRecord) => {
-        const row = structuredClone(value);
-        if (row[store.keyPath] === undefined && store.autoIncrement) row[store.keyPath] = store.next;
-        const key = row[store.keyPath] as IDBValidKey;
-        if (typeof key === "number" && key >= store.next) store.next = key + 1;
-        store.rows.set(key, row);
-        return key;
+  // One database per name, as the browser keeps them: the record's `reading-log` and the review's `reading-review`.
+  const createDatabase = () => {
+    const stores = new Map<string, Store>();
+    let version = 0;
+    const transaction = () => {
+      const tx: Record<string, unknown> & { oncomplete?: () => void; onerror?: () => void; onabort?: () => void } = {};
+      let open = 0;
+      const settle = () => setImmediate(() => open === 0 && tx.oncomplete?.());
+      const request = (run: () => unknown) => {
+        const req: { result?: unknown; error: null; onsuccess?: () => void; onerror?: () => void } = { error: null };
+        open += 1;
+        setImmediate(() => {
+          req.result = run();
+          req.onsuccess?.();
+          open -= 1;
+          if (open === 0) settle();
+        });
+        return req;
       };
-      return {
-        add: (value: FakeRecord) => request(() => write(value)),
-        put: (value: FakeRecord) => request(() => write(value)),
-        get: (key: IDBValidKey) => request(() => structuredClone(store.rows.get(key))),
-        delete: (key: IDBValidKey) => request(() => void store.rows.delete(key)),
-        clear: () => request(() => store.rows.clear()),
-        count: () => request(() => store.rows.size),
-        getAll: (query?: unknown, count?: number) =>
-          request(() => sorted().filter(([key]) => matches(key, query)).slice(0, count || undefined).map(([, row]) => structuredClone(row))),
-        openCursor: (_query: unknown, direction?: string) =>
-          request(() => {
-            const keys = sorted().map(([key]) => key);
-            const key = direction === "prev" ? keys.at(-1) : keys[0];
-            return key === undefined ? null : { key, value: structuredClone(store.rows.get(key)) };
+      const storeApi = (name: string) => {
+        const store = stores.get(name)!;
+        const sorted = () => [...store.rows.entries()].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+        const write = (value: FakeRecord) => {
+          const row = structuredClone(value);
+          if (row[store.keyPath] === undefined && store.autoIncrement) row[store.keyPath] = store.next;
+          const key = row[store.keyPath] as IDBValidKey;
+          if (typeof key === "number" && key >= store.next) store.next = key + 1;
+          store.rows.set(key, row);
+          return key;
+        };
+        return {
+          add: (value: FakeRecord) => request(() => write(value)),
+          put: (value: FakeRecord) => request(() => write(value)),
+          get: (key: IDBValidKey) => request(() => structuredClone(store.rows.get(key))),
+          delete: (key: IDBValidKey) => request(() => void store.rows.delete(key)),
+          clear: () => request(() => store.rows.clear()),
+          count: () => request(() => store.rows.size),
+          getAll: (query?: unknown, count?: number) =>
+            request(() => sorted().filter(([key]) => matches(key, query)).slice(0, count || undefined).map(([, row]) => structuredClone(row))),
+          openCursor: (_query: unknown, direction?: string) =>
+            request(() => {
+              const keys = sorted().map(([key]) => key);
+              const key = direction === "prev" ? keys.at(-1) : keys[0];
+              return key === undefined ? null : { key, value: structuredClone(store.rows.get(key)) };
+            }),
+          createIndex: (index: string, path: string | string[]) => void store.indexes.set(index, path),
+          index: (index: string) => ({
+            getAll: (query?: unknown) =>
+              request(() => sorted().filter(([, row]) => matches(valueAt(row, store.indexes.get(index)!), query)).map(([, row]) => structuredClone(row))),
+            getKey: (query: unknown) => request(() => sorted().find(([, row]) => matches(valueAt(row, store.indexes.get(index)!), query))?.[0]),
           }),
-        createIndex: (index: string, path: string | string[]) => void store.indexes.set(index, path),
-        index: (index: string) => ({
-          getAll: (query?: unknown) =>
-            request(() => sorted().filter(([, row]) => matches(valueAt(row, store.indexes.get(index)!), query)).map(([, row]) => structuredClone(row))),
-          getKey: (query: unknown) => request(() => sorted().find(([, row]) => matches(valueAt(row, store.indexes.get(index)!), query))?.[0]),
-        }),
+        };
       };
+      tx.objectStore = storeApi;
+      settle();
+      return tx;
     };
-    tx.objectStore = storeApi;
-    settle();
-    return tx;
+    const database = {
+      onclose: null,
+      onversionchange: null,
+      objectStoreNames: { contains: (name: string) => stores.has(name) },
+      close() {},
+      createObjectStore(name: string, options: { keyPath: string; autoIncrement?: boolean }) {
+        stores.set(name, { keyPath: options.keyPath, autoIncrement: !!options.autoIncrement, next: 1, rows: new Map(), indexes: new Map() });
+        return (transaction().objectStore as (store: string) => unknown)(name);
+      },
+      transaction,
+    };
+    return { stores, database, transaction, upgrade: (wanted: number) => { const old = version; if (old < wanted) version = wanted; return old; } };
   };
-  const database = {
-    onclose: null,
-    onversionchange: null,
-    close() {},
-    createObjectStore(name: string, options: { keyPath: string; autoIncrement?: boolean }) {
-      stores.set(name, { keyPath: options.keyPath, autoIncrement: !!options.autoIncrement, next: 1, rows: new Map(), indexes: new Map() });
-      return (transaction().objectStore as (store: string) => unknown)(name);
-    },
-    transaction,
-  };
+  const databases = new Map<string, ReturnType<typeof createDatabase>>();
   const globals = globalThis as unknown as Record<string, unknown>;
   globals.IDBKeyRange = Range;
   globals.window ??= new EventTarget();
   globals.indexedDB = {
-    open(_name: string, wanted: number) {
+    open(name: string, wanted: number) {
+      if (!databases.has(name)) databases.set(name, createDatabase());
+      const { database, transaction, upgrade } = databases.get(name)!;
       const req: Record<string, unknown> & { onupgradeneeded?: (event: unknown) => void; onsuccess?: () => void } = { result: database };
       setImmediate(() => {
-        if (version < wanted) {
+        const oldVersion = upgrade(wanted);
+        if (oldVersion < wanted) {
           req.transaction = transaction();
-          req.onupgradeneeded?.({ oldVersion: version });
-          version = wanted;
+          req.onupgradeneeded?.({ oldVersion });
         }
         req.onsuccess?.();
       });
       return req;
     },
   };
-  return () => [...(stores.get("lookups")?.rows.values() ?? [])].map((row) => structuredClone(row));
+  return () => [...(databases.get("reading-log")?.stores.get("lookups")?.rows.values() ?? [])].map((row) => structuredClone(row));
 }
 
 async function main() {
@@ -1502,6 +1510,8 @@ async function main() {
         const answer = await post(reader, JSON.parse(init?.body ?? "{}"));
         return Response.json(answer.json, { status: answer.status });
       }
+      // The review's round (RL-93): this device holds no card, and the account none for it.
+      if (input === "/api/review/sync") return Response.json({ accepted: 0, entries: [], cursor: null });
       paid.push(input);
       if (input === "/api/word/unlisted") {
         return Response.json({ translations: ["zorpo"], definition: "a word no dictionary carries", example: { en: "A zorp.", es: "Un zorpo." }, lemma: null, rule: null });

@@ -171,6 +171,9 @@ export function ClearPanel({ hasReader }: { hasReader: boolean }) {
         <Text variant="breakBody" muted>
           {t("confirmBody", { kind: count.entries, words: count.words, lookups: count.lookups })}
         </Text>
+        <Text variant="breakBody" muted>
+          {hasReader ? t("reviewAccount") : t("reviewLocal")}
+        </Text>
       </Flex>
 
       <Flex>

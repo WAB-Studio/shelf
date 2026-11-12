@@ -6,6 +6,7 @@ import { SYNC_BATCH, syncRequestSchema, syncResponseSchema, type SyncResponse, t
 import { failureCause, type SyncFailure } from "./failure";
 import { shareInFlight } from "./in-flight";
 import { planUploadRound } from "./upload-page";
+import { syncReview } from "./review-driver";
 
 const SYNC_ENDPOINT = "/api/log/sync";
 export const SYNC_LOCK = "voyager-sync";
@@ -138,7 +139,11 @@ async function runSyncLocked(): Promise<SyncOutcome> {
       const marksWaiting = response.tombstones.length >= SYNC_BATCH || queue.pending.length > marks.length;
       if (scanned < SYNC_BATCH && response.rows.length < SYNC_BATCH && !marksWaiting) break;
     }
-    if (pulled > 0 || removed > 0) window.dispatchEvent(new Event(SYNC_LANDED_EVENT));
+    // The review's cards and senses ride the same round (RL-93), once the record's own landed.
+    const review = await syncReview(state.readerId, SYNC_FETCH_TIMEOUT_MS);
+    if (review.kind === "reader") return dropIdentity();
+    if (review.kind === "failed") return { kind: "failed", cause: review.cause };
+    if (pulled > 0 || removed > 0 || review.pulled > 0) window.dispatchEvent(new Event(SYNC_LANDED_EVENT));
     return { kind: "done", pushed, pulled };
   } catch (error) {
     const cause =

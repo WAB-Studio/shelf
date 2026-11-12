@@ -1,9 +1,9 @@
 import { isPendingLookup, isRecordedLookup } from "./outcome";
 import { countPending } from "./pending";
 import { pendingRowFrom } from "./record-text";
-import { normaliseSyncState, signOutSyncState, syncStateForReader } from "./sync-state";
+import { isOtherReader, normaliseSyncState, signOutSyncState, syncStateForReader } from "./sync-state";
 import type { LookupRecord, SyncState } from "./types";
-import { clearCards } from "../review/store";
+import { clearCards, startReviewCopyFor } from "../review/store";
 
 // A separate database from `reading-dictionary`: an IndexedDB transaction is
 // scoped to one database, so a write here never queues behind a read of the
@@ -543,7 +543,14 @@ export async function countPendingUpload(): Promise<number> {
 /** Starts the copy for this reader: keeps the cursors only for the same reader on a live device; another reader leaves stored rows behind. */
 export async function startCopyFor(readerId: string): Promise<SyncState> {
   const highest = await highestLocalId();
-  return transformSyncState((current) => syncStateForReader(current, readerId, () => crypto.randomUUID(), highest));
+  let other = false;
+  const next = await transformSyncState((current) => {
+    other = isOtherReader(current, readerId);
+    return syncStateForReader(current, readerId, () => crypto.randomUUID(), highest);
+  });
+  // The review leaves the same ones behind (RL-93). An IndexedDB that fails here fails the review's own round too.
+  if (other) await startReviewCopyFor(readerId).catch(() => undefined);
+  return next;
 }
 
 /** Turns the copy off for a sign-out; a retired device also forgets its identity. */
