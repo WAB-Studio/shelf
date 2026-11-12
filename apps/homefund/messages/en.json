@@ -1575,6 +1575,21 @@
       "smsStep3": "Under «Request Body» pick JSON and add a single text field: «text» with the «Shortcut Input» variable, property «Content». HomeFund reads whether it is an expense or an income, and the same message sent twice arrives once.",
       "result": "What arrives waits in the Inbox until you accept it; nothing is recorded on its own."
     },
+    "widget": {
+      "heading": "iPhone widget",
+      "description": "A Scriptable widget (a free app) shows on your home or lock screen how much you have available, this month's spending against its budget and what waits in the Inbox.",
+      "step1": "Install Scriptable, a free app from the App Store.",
+      "step1Link": "Open Scriptable in the App Store",
+      "step2": "Copy the script below. In Scriptable tap «+», paste it and name it «HomeFund».",
+      "scriptLabel": "Script",
+      "scriptUrlLabel": "Or open it in Safari and copy it from there",
+      "step3": "Create the widget key here. It can only read this summary.",
+      "issue": "Create a key for the widget",
+      "keyLabel": "Widget key",
+      "step4": "Open «HomeFund» in Scriptable and tap ▶. It asks for the key: paste it.",
+      "step5": "On the home screen press and hold, tap «+», choose Scriptable and add the small or the medium widget; tap it and under «Script» choose «HomeFund». On the lock screen, add it from «Customize» (rectangular or inline).",
+      "result": "Tapping the widget opens the Inbox. If you revoke its key in the list, it stops working."
+    },
     "created": "Credential created.",
     "endpointHeading": "How to send a movement",
     "endpointUrlLabel": "URL",
@@ -1609,6 +1624,7 @@
       "iphone": "iPhone",
       "bank_emails": "Bank emails",
       "claude": "Claude",
+      "widget": "Widget",
       "other": "Other"
     },
     "kindLabel": "What it is for",

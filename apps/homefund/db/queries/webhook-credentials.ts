@@ -24,7 +24,7 @@ function tokenHashOf(token: string): string {
 // A conversation spends several requests per answer, so a Claude key gets a window wider than a webhook's (RF-144).
 export const CLAUDE_KEY_RATE_LIMIT_PER_MIN = 600;
 
-export type CredentialPurpose = "ingest" | "mcp";
+export type CredentialPurpose = "ingest" | "mcp" | "widget";
 
 export type IssueWebhookCredentialArgs = {
   name: string;

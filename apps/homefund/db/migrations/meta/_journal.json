@@ -680,6 +680,13 @@
       "when": 1794453117748,
       "tag": "0100_a_credit_somebody_else_pays",
       "breakpoints": true
+    },
+    {
+      "idx": 101,
+      "version": "7",
+      "when": 1794457474406,
+      "tag": "0101_a_widget_has_its_own_key",
+      "breakpoints": true
     }
   ]
 }

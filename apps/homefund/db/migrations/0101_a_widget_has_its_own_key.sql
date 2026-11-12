@@ -1,0 +1,2 @@
+ALTER TABLE "finances"."webhook_credentials" DROP CONSTRAINT "webhook_credentials_purpose";--> statement-breakpoint
+ALTER TABLE "finances"."webhook_credentials" ADD CONSTRAINT "webhook_credentials_purpose" CHECK ("finances"."webhook_credentials"."purpose" in ('ingest', 'mcp', 'widget'));

@@ -521,6 +521,18 @@ Board C1h corrected the same day: a card in credit reads «Según HomeFund −$ 
   «Gasto escrito» (six numbered steps) and «SMS del banco» (three), pointing at the URL of «Cómo enviar un movimiento»,
   and a gray line saying a delivery waits in the Bandeja. Steps name the Shortcuts actions as iOS names them.
 
+## Decisions of 2026-11-11: HomeFund's widget on the iPhone, by the user
+
+- «Ajustes · Correos del banco» has a «Widget del iPhone» card under «Atajo de iPhone»: one line on what it shows, then
+  five numbered steps (install Scriptable, copy the script, create the key, paste the key on the script's first run, add
+  the widget and choose the script), and a gray line saying a tap opens the Bandeja and revoking the key stops it.
+- Step 2 carries the script in a copy block and its address in another; step 3 carries «Crear clave para el widget» and
+  shows the key once under the same warning as a webhook token. A widget key opens the widget's summary and nothing else;
+  in the key list it wears the badge «Widget».
+- The widget reads «Disponible» large, «Mes» as spent of budgeted (red once spent passes budgeted) and the Bandeja's count
+  («N por revisar», «Bandeja al día» at zero) in amber. Pesos have no cents («$1.234.567»). Small and medium on the home
+  screen; rectangular and inline on the lock screen. Offline it shows the last figures with «Sin conexión».
+
 ## Decisions of 2026-11-11: Gmail's bank emails from the PC, by the user
 
 - «Ajustes · Correos del banco» has a «Correos del banco» card above «Cómo enviar un movimiento»: one line on what it does, six

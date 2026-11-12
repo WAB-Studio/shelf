@@ -45,11 +45,12 @@ export const credentialKindSchema = z.enum(["android", "iphone", "bank_emails", 
 });
 export type CredentialKind = z.infer<typeof credentialKindSchema>;
 
-// The badge a key wears: a Claude key (`mcp`) is Claude whatever its kind column holds.
-export type CredentialBadge = CredentialKind | "claude";
+// The badge a key wears: a Claude key (`mcp`) is Claude and a `widget` key the widget, whatever their kind column holds.
+export type CredentialBadge = CredentialKind | "claude" | "widget";
 
-export function credentialBadge(purpose: "ingest" | "mcp", kind: CredentialKind): CredentialBadge {
-  return purpose === "mcp" ? "claude" : kind;
+export function credentialBadge(purpose: "ingest" | "mcp" | "widget", kind: CredentialKind): CredentialBadge {
+  if (purpose === "mcp") return "claude";
+  return purpose === "widget" ? "widget" : kind;
 }
 
 // A credential names no scope: the owner is trigger-stamped, so the payload
