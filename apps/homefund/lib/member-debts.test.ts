@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { memberDebtBalances, type MemberDebtEntry } from "./member-debts";
+import { debtsSettledBy, memberDebtBalances, memberDebtStates, type MemberDebtEntry } from "./member-debts";
 import { recordMemberDebtSchema } from "./validation/member-debt";
 
 const papa = "22222222-2222-4222-8222-222222222222";
@@ -74,4 +74,32 @@ test("an entry names two different members and a positive amount, read in cents"
     assert.equal(verdict.success, false, message);
     if (!verdict.success) assert.equal(verdict.error.issues[0].message, message);
   }
+});
+
+test("payments pay a direction's debts oldest first and the closing payment dates the settlement", () => {
+  const at = (e: MemberDebtEntry, occurredOn: string, id: string): MemberDebtEntry => ({ ...e, occurredOn, id });
+  // Newest first, as the query reads them.
+  const entries = [
+    at(entry("payment", papa, adrian, 60_00), "2026-11-09", "p2"),
+    at(entry("debt", papa, adrian, 100_00), "2026-11-05", "d2"),
+    at(entry("payment", papa, adrian, 90_00), "2026-11-03", "p1"),
+    at(entry("debt", papa, adrian, 50_00), "2026-11-01", "d1"),
+    at(entry("debt", adrian, papa, 70_00), "2026-11-01", "back"),
+  ];
+  const states = memberDebtStates(entries);
+  assert.deepEqual(states.get("d1"), { status: "settled", paidCents: 50_00, remainingCents: 0, settledOn: "2026-11-03" });
+  assert.deepEqual(states.get("d2"), { status: "settled", paidCents: 100_00, remainingCents: 0, settledOn: "2026-11-09" });
+  assert.equal(states.has("p1"), false);
+  assert.equal(states.get("back")?.status, "pending");
+  assert.deepEqual(
+    debtsSettledBy(entries, "p2").map((e) => e.id),
+    ["d2"],
+  );
+});
+
+test("a part-paid debt is partial and an unpaid one pending", () => {
+  const entries = [entry("payment", papa, adrian, 30_00), entry("debt", papa, adrian, 100_00)];
+  const state = memberDebtStates(entries).get(entries[1].id);
+  assert.deepEqual(state, { status: "partial", paidCents: 30_00, remainingCents: 70_00, settledOn: null });
+  assert.equal(memberDebtStates([entries[1]]).get(entries[1].id)?.status, "pending");
 });

@@ -6,7 +6,7 @@ import { callerGroupId } from "@/db/queries/groups";
 import { requireUser, withUserDb, type Transaction } from "@/db/session";
 import { pgConstraintName, pgErrorCode } from "@/lib/db-error";
 import { ActionError } from "@/lib/errors";
-import { memberDebtBalances, type MemberDebtBalance, type MemberDebtEntry } from "@/lib/member-debts";
+import { debtsSettledBy, memberDebtBalances, type MemberDebtBalance, type MemberDebtEntry } from "@/lib/member-debts";
 import type { RecordMemberDebtInput } from "@/lib/validation/member-debt";
 
 export type MemberDebtsData = {
@@ -50,14 +50,13 @@ export async function getMemberDebts(): Promise<MemberDebtsData | null> {
 
 // What `debtor` still owes `creditor` in `currency` within fund `group`: debts from debtor to creditor and
 // payments back count for it, the reverse ones against it, as `memberDebtBalances` nets them. The recording
-// guard and the delete guard both read it, so the netting is written here once for the database;
-// `excluding` leaves one entry out, for the figure a delete would leave.
-function pendingSql(group: SQL, debtor: SQL, creditor: SQL, currency: SQL, excluding?: SQL) {
+// guard reads it, so the netting is written here for the database.
+function pendingSql(group: SQL, debtor: SQL, creditor: SQL, currency: SQL) {
   return sql`(select coalesce(sum(case
       when d.debtor_member_id = ${debtor} and d.creditor_member_id = ${creditor} then 1
       when d.debtor_member_id = ${creditor} and d.creditor_member_id = ${debtor} then -1
       else 0 end * case d.kind when 'debt' then d.amount_cents else -d.amount_cents end), 0)
-    from member_debts d where d.group_id = ${group} and d.currency = ${currency}${excluding ? sql` and d.id <> ${excluding}` : sql``})`;
+    from member_debts d where d.group_id = ${group} and d.currency = ${currency})`;
 }
 
 // Serialises the writes that read a pair's pending figure, per fund.
@@ -70,7 +69,7 @@ function lockFund(tx: Transaction, group: SQL) {
  * that currency is refused, under a lock on the fund so two payments cannot both pass; a member outside the
  * fund is refused by the references themselves.
  */
-export async function recordMemberDebt(input: RecordMemberDebtInput): Promise<{ id: string }> {
+export async function recordMemberDebt(input: RecordMemberDebtInput): Promise<{ id: string; settled: MemberDebtEntry[] }> {
   const user = await requireUser();
   const group = callerGroupId(user.id);
   try {
@@ -91,7 +90,20 @@ export async function recordMemberDebt(input: RecordMemberDebtInput): Promise<{ 
         select (select id from g) as "groupId", (select id from written) as id`);
       if (!row?.groupId) throw new ActionError("memberDebts.errors.noFund");
       if (!row.id) throw new ActionError("memberDebts.errors.overpaid");
-      return { id: row.id };
+      if (input.kind === "debt") return { id: row.id, settled: [] };
+      // RF-205: the debts this payment brought to zero, read in the same transaction.
+      const rows = await tx.execute<RawEntry>(sql`
+        select d.id, d.kind, d.debtor_member_id as "debtorMemberId", dm.name as "debtorName",
+          d.creditor_member_id as "creditorMemberId", cm.name as "creditorName", d.amount_cents::text as "amountCents",
+          d.currency, d.occurred_on::text as "occurredOn", d.description
+        from member_debts d
+        join group_members dm on dm.id = d.debtor_member_id
+        join group_members cm on cm.id = d.creditor_member_id
+        where d.debtor_member_id = ${input.debtorMemberId} and d.creditor_member_id = ${input.creditorMemberId}
+          and d.currency = ${input.currency}
+        order by d.occurred_on desc, d.created_at desc`);
+      const entries = rows.map((entry) => ({ ...entry, amountCents: Number(entry.amountCents) }));
+      return { id: row.id, settled: debtsSettledBy(entries, row.id) };
     });
   } catch (error) {
     if (pgErrorCode(error) === "23503" && MEMBER_DEBT_REFERENCES.has(pgConstraintName(error) ?? "")) {
@@ -102,9 +114,9 @@ export async function recordMemberDebt(input: RecordMemberDebtInput): Promise<{ 
 }
 
 /**
- * Removes one entry of the caller's fund. A payment always goes; a debt goes only while the pair's other entries
- * net, as `pendingSql` nets them in both directions, to what the debtor owes (not below zero), so no payment is left
- * standing on a debt that is gone; a debt no payment was made against has none to protect.
+ * Removes one entry of the caller's fund. A payment always goes; a debt goes only while the debtor's other debts
+ * to that creditor in that currency still cover the payments the debtor made them, so no payment is left
+ * standing on a debt that is gone. A debt the other direction owes plays no part.
  */
 export async function deleteMemberDebt(id: string): Promise<"deleted" | "notFound" | "paid"> {
   const user = await requireUser();
@@ -115,12 +127,11 @@ export async function deleteMemberDebt(id: string): Promise<"deleted" | "notFoun
       gone as (
         delete from member_debts d using t
         where d.id = t.id
-          and (t.kind = 'payment'
-            or ${pendingSql(sql`t.group_id`, sql`t.debtor_member_id`, sql`t.creditor_member_id`, sql`t.currency`, sql`t.id`)} >= 0
-            or not exists (
-              select 1 from member_debts p
-              where p.group_id = t.group_id and p.currency = t.currency and p.kind = 'payment' and p.id <> t.id
-                and p.debtor_member_id = t.debtor_member_id and p.creditor_member_id = t.creditor_member_id))
+          and (t.kind = 'payment' or (
+            select coalesce(sum(case p.kind when 'debt' then p.amount_cents else -p.amount_cents end), 0)
+            from member_debts p
+            where p.group_id = t.group_id and p.currency = t.currency and p.id <> t.id
+              and p.debtor_member_id = t.debtor_member_id and p.creditor_member_id = t.creditor_member_id) >= 0)
         returning d.id)
       select (select id from t) as found, (select id from gone) as deleted`);
     if (row?.deleted) return "deleted";

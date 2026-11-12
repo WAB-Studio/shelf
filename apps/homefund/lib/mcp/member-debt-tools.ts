@@ -5,6 +5,7 @@ import { z } from "zod";
 
 import { getMemberDebts, recordMemberDebt } from "@/db/queries/member-debts";
 import { ActionError } from "@/lib/errors";
+import { memberDebtStates } from "@/lib/member-debts";
 import { parseForm } from "@/lib/mcp/parse-form";
 import { centsToDecimal } from "@/lib/money";
 import { MEMBER_DEBT_KINDS, recordMemberDebtSchema } from "@/lib/validation/member-debt";
@@ -24,7 +25,12 @@ export function registerMemberDebtTools(server: McpServer, run: Run, t: Say): vo
       run(ctx, async () => {
         const data = await getMemberDebts();
         if (data === null) throw new ActionError("memberDebts.errors.noFund");
-        return { balances: data.balances, entries: data.entries };
+        // Each debt carries its derived state: pending, partial or settled, and the day it was settled.
+        const states = memberDebtStates(data.entries);
+        return {
+          balances: data.balances,
+          entries: data.entries.map((entry) => ({ ...entry, ...(states.get(entry.id) ?? {}) })),
+        };
       }),
   );
 

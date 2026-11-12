@@ -1,7 +1,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { useAction } from "next-safe-action/hooks";
 import { useState } from "react";
 import { Controller, useForm, useWatch } from "react-hook-form";
@@ -25,6 +25,8 @@ import {
 } from "@/components/ui";
 import { BASE_CURRENCY, minorUnitExponent, OFFERED_CURRENCIES, type OfferedCurrency } from "@/lib/currency";
 import { todayInBogota } from "@/lib/dates";
+import type { Locale } from "@/lib/locales";
+import { useMoneyText } from "@/lib/use-privacy";
 import { useActionErrorToast } from "@/lib/use-action-toast";
 import {
   recordMemberDebtSchema,
@@ -79,6 +81,8 @@ function MemberDebtForm({
   const t = useTranslations("memberDebts");
   const tKey = useTranslations();
   const onActionError = useActionErrorToast();
+  const moneyText = useMoneyText();
+  const locale = useLocale() as Locale;
 
   const form = useForm<RecordMemberDebtFields, unknown, RecordMemberDebtInput>({
     resolver: zodResolver(recordMemberDebtSchema),
@@ -94,8 +98,13 @@ function MemberDebtForm({
   });
 
   const record = useAction(recordMemberDebtAction, {
-    onSuccess() {
+    onSuccess({ data }) {
       toast.success(draft.kind === "payment" ? t("paymentRecorded") : t("debtRecorded"));
+      for (const debt of data?.settled ?? []) {
+        toast.success(
+          t("justSettled", { debtor: debt.debtorName, amount: moneyText(debt.amountCents, debt.currency, locale) }),
+        );
+      }
       onOpenChange(false);
     },
     onError: onActionError,
