@@ -12,7 +12,8 @@ export type DictionaryStatus =
   | { state: "failed"; reason: InstallFailure };
 
 export type WorkerRequest = { id: number } & (
-  | { kind: "boot" }
+  // `installedOnly`: answer from the copy already on the device and never download one (RL-92's export).
+  | { kind: "boot"; installedOnly?: boolean }
   | { kind: "retry" }
   | { kind: "lookup"; text: string }
   | { kind: "suggest"; prefix: string; limit: number }

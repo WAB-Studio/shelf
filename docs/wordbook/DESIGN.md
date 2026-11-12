@@ -1996,3 +1996,7 @@ Taken by the user, delegated to the build.
   the first common noun, because the fallback order puts a verb before a noun (`tree` is «árbol»). The word's page leads with it too.
 - **An empty record sends the reader to the search.** The review's closing screen reads «Buscar una palabra», a link to `/`, in place
   of «Ir al registro», which would open another empty screen.
+- **The CSV for Anki is the card of the app** (RL-92). The back carries the sense the app draws, its part of speech in Spanish, up to
+  three translations and the definition, then a blank line and the reader's own sentence with the word in bold; a phrase carries its
+  translation alone. Lines are separated by `<br>` and the file declares `#html:true`. A device with no copy of the dictionary
+  downloads the logged line instead, and a muted 14 px line under «N tarjetas para Anki descargadas» says so (`log.study.ankiPlain`).
