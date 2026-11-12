@@ -75,13 +75,13 @@ test("RL-68, RL-78: /registro opens the review, which asks each word and each tr
 
   await page.getByRole("button", { name: messages.review.show }).click();
   await expect(page.getByText("rapé", { exact: true }).last()).toBeVisible();
-  await page.getByRole("button", { name: new RegExp(`^${messages.review.grade.good}`) }).click();
+  await page.getByRole("button", { name: new RegExp(`^${messages.review.grade.easy}`) }).click();
 
   await expect(page.getByText("2 de 3")).toBeVisible();
   await expect(page.getByRole("heading", { name: "give it up" })).toBeVisible();
   await page.getByRole("button", { name: messages.review.show }).click();
   await expect(page.getByText("ríndete", { exact: true }).last()).toBeVisible();
-  await page.getByRole("button", { name: new RegExp(`^${messages.review.grade.good}`) }).click();
+  await page.getByRole("button", { name: new RegExp(`^${messages.review.grade.easy}`) }).click();
 
   await expect(page.getByText("3 de 3")).toBeVisible();
   await expect(page.getByRole("heading", { name: "frisk" })).toBeVisible();
@@ -148,9 +148,63 @@ test("RL-68: each answer names how long it puts the word away before it is press
   await expect(page.getByRole("button", { name: new RegExp(`^${messages.review.grade.easy}.*día`) })).toBeVisible();
 });
 
-test("RL-68: with an empty record the review says where its words come from", async ({ page }) => {
+test("RL-68, RL-91: with an empty record the review says where its words come from and points at searching", async ({ page }) => {
   await page.goto("/repaso");
   await expect(page.getByText("Hoy no tienes palabras por repasar.")).toBeVisible();
   await expect(page.getByText(messages.review.empty)).toBeVisible();
+  // The record is empty too: the way forward is the search, not another empty screen.
+  await expect(page.getByRole("link", { name: messages.review.searchWord })).toHaveAttribute("href", "/");
+  await expect(page.getByRole("link", { name: messages.review.backToRecord })).toHaveCount(0);
+});
+
+test("RL-91: a record that holds entries, none to ask today, still leads to the record", async ({ page }) => {
+  await page.goto("/registro");
+  await seedRecord(page, RECORD.slice(2, 3));
+  await page.goto("/repaso");
+  await page.getByRole("button", { name: messages.review.show }).click();
+  await page.getByRole("button", { name: new RegExp(`^${messages.review.grade.easy}`) }).click();
   await expect(page.getByRole("link", { name: messages.review.backToRecord })).toHaveAttribute("href", "/registro");
+  await expect(page.getByRole("link", { name: messages.review.searchWord })).toHaveCount(0);
+});
+
+test("RL-91: a learning step within 20 minutes keeps the session open, naming when one comes back", async ({ page }) => {
+  await page.goto("/registro");
+  await seedRecord(page, RECORD.slice(2, 3));
+  await page.goto("/repaso");
+  await page.getByRole("button", { name: messages.review.show }).click();
+  // «Bien» on a new word is the 10 minute step.
+  await page.getByRole("button", { name: new RegExp(`^${messages.review.grade.good}`) }).click();
+
+  await expect(page.getByText("Queda 1 palabra para repetir en un momento.")).toBeVisible();
+  await expect(page.getByText("Vuelve una en 10 min")).toBeVisible();
+  await expect(page.getByText(/Terminaste por hoy/)).toHaveCount(0);
+});
+
+test("RL-91: after a reload the entry due a minute later is still asked, not lost", async ({ page }) => {
+  await page.goto("/registro");
+  await seedRecord(page, RECORD.slice(2, 3));
+  await page.goto("/repaso");
+  await page.getByRole("button", { name: messages.review.show }).click();
+  await page.getByRole("button", { name: new RegExp(`^${messages.review.grade.again}`) }).click();
+  await expect(page.getByText("Queda 1 palabra para repetir en un momento.")).toBeVisible();
+
+  await page.reload();
+  await expect(page.getByText("Queda 1 palabra para repetir en un momento.")).toBeVisible();
+  await expect(page.getByText(/Vuelve una en 1 min/)).toBeVisible();
+  await expect(page.getByText(/Hoy no tienes/)).toHaveCount(0);
+  await expect(page.getByText(/Terminaste por hoy/)).toHaveCount(0);
+});
+
+test("RL-91: the waiting entry shows by itself when its step comes, with no reload", async ({ page }) => {
+  await page.goto("/registro");
+  await seedRecord(page, RECORD.slice(2, 3));
+  await page.clock.install();
+  await page.goto("/repaso");
+  await page.getByRole("button", { name: messages.review.show }).click();
+  await page.getByRole("button", { name: new RegExp(`^${messages.review.grade.good}`) }).click();
+  await expect(page.getByText("Vuelve una en 10 min")).toBeVisible();
+
+  await page.clock.fastForward(11 * 60_000);
+  await expect(page.getByRole("heading", { name: "frisk" })).toBeVisible();
+  await expect(page.getByText(messages.review.repeat, { exact: true })).toBeVisible();
 });

@@ -35,8 +35,18 @@ const LearnableContext = createContext<{
 } | null>(null);
 
 // The sense the reader taps to learn, kept on the device beside the review's cards. Until a tap the
-// first sense stands, which is what the review draws with no choice.
-function LearnableSenses({ word, senses, children }: { word: string; senses: readonly Sense[]; children: ReactNode }) {
+// default sense stands, which is what the review draws with no choice.
+function LearnableSenses({
+  word,
+  senses,
+  ranked,
+  children,
+}: {
+  word: string;
+  senses: readonly Sense[];
+  ranked: boolean;
+  children: ReactNode;
+}) {
   const [choice, setChoice] = useState<SenseChoice | null>(null);
 
   useEffect(() => {
@@ -58,7 +68,7 @@ function LearnableSenses({ word, senses, children }: { word: string; senses: rea
   };
 
   return (
-    <LearnableContext.Provider value={{ senses, chosen: pickSense(senses, choice), choose }}>
+    <LearnableContext.Provider value={{ senses, chosen: pickSense(senses, choice, ranked), choose }}>
       {children}
     </LearnableContext.Provider>
   );
@@ -794,7 +804,7 @@ export function SenseList({
           ) : (
             <>
               <EntryMeta senses={answer.exact.senses} headword={answer.exact.headword} speaker={showSpeaker} t={t} />
-              <LearnableSenses word={answer.exact.headword} senses={answer.exact.senses}>
+              <LearnableSenses word={answer.exact.headword} senses={answer.exact.senses} ranked={answer.exact.ranked ?? true}>
                 <SenseGroup
                   senses={answer.exact.senses}
                   compact={false}
@@ -850,7 +860,7 @@ export function SenseList({
                       </Flex>
                     </Flex>
                     {index === 0 && !compact ? (
-                      <LearnableSenses word={hit.lemma} senses={hit.group.senses}>
+                      <LearnableSenses word={hit.lemma} senses={hit.group.senses} ranked={hit.group.ranked ?? true}>
                         <SenseGroup senses={hit.group.senses} compact={compact} t={t} />
                       </LearnableSenses>
                     ) : (
