@@ -52,7 +52,7 @@ de los handoffs del 2026-11-01 y 2026-11-02 y las de `docs/auditoria-2026-11-02/
 - Formas flexionadas y erratas: llaman a `/api/word/unlisted` solo cuando el diccionario no resuelve un lema ni sugiere
   una palabra a distancia 1. Construir.
 - Ejemplos: solo de las frases de la persona. Retira RL-42 sin sucesor. Construir (quitar la llamada).
-- El repaso no viaja con la cuenta: se quita «al teléfono y al portátil» de `/cuenta`. Construir.
+- El repaso no viaja con la cuenta: se quita «al teléfono y al portátil» de `/cuenta`. Construir. (Revertida el 2026-11-12, por el usuario: el repaso viaja con la cuenta, RL-93 a RL-95.)
 - Tope de 20 palabras nuevas al día: fijo, y la pantalla dice cuántas esperan. Construir.
 - RL-68 se retira; su sucesor es RL-78 (las frases entran al repaso). Construir (docs).
 - `app/actions/account.ts` entra en la lista de §3. Construir (docs).
