@@ -208,3 +208,14 @@ test("RL-91: the waiting entry shows by itself when its step comes, with no relo
   await expect(page.getByRole("heading", { name: "frisk" })).toBeVisible();
   await expect(page.getByText(messages.review.repeat, { exact: true })).toBeVisible();
 });
+
+test("RL-91: with no tap, «tree» is asked as the noun «árbol», not as the verb «enarbolar»", async ({ page }) => {
+  await page.goto("/registro");
+  await seedRecord(page, [{ at: now, text: "tree", translation: "enarbolar, árbol, fuste" }]);
+  await page.goto("/repaso");
+  await expect(page.getByRole("heading", { name: "tree", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: messages.review.show }).click();
+  await expect(page.getByText(messages.word.pos.n, { exact: true })).toBeVisible({ timeout: 15000 });
+  await expect(page.getByText(/árbol/).first()).toBeVisible();
+  await expect(page.getByText(/enarbolar/)).toHaveCount(0);
+});
