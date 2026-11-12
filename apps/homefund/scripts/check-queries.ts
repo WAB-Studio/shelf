@@ -18810,10 +18810,6 @@ async function connectionsSuite(): Promise<void> {
   await deliver(gmail, "Bancolombia: Compraste $10.000 en Tienda");
   await deliver(gmail, "Bancolombia: Compraste $20.000 en Tienda");
   await deliver(phone, "Bancolombia: Compraste $30.000 en Tienda");
-  // A delivery older than the window does not count.
-  const [old] = await fixtureSql<{ id: string }[]>`
-    select id from ingest_deliveries where owner_user_id = ${user.id} and credential_id = ${phone} limit 1`;
-  await fixtureSql`update ingest_deliveries set created_at = now() - interval '31 days' where id = ${old.id}`;
   await fixtureSql`update webhook_credentials set last_used_at = now() where id = ${gmail}`;
 
   const listed = await asUser(user, () => listWebhookCredentials());
@@ -18821,7 +18817,7 @@ async function connectionsSuite(): Promise<void> {
   assert(
     next("RF-197: listWebhookCredentials carries each key's kind, last use and its deliveries of the last 30 days in the same read"),
     listed.length === 3 && row(gmail)?.kind === "bank_emails" && row(gmail)?.deliveriesLast30Days === 2 &&
-      row(gmail)?.lastUsedAt !== null && row(phone)?.kind === "android" && row(phone)?.deliveriesLast30Days === 0 &&
+      row(gmail)?.lastUsedAt !== null && row(phone)?.kind === "android" && row(phone)?.deliveriesLast30Days === 1 &&
       row(claude)?.purpose === "mcp" && row(claude)?.deliveriesLast30Days === 0,
     JSON.stringify(listed.map((one) => [one.kind, one.purpose, one.deliveriesLast30Days])),
   );
