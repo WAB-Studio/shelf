@@ -298,6 +298,16 @@ this gets built, and no schema, table or column is "prepared for" it.
 - [ ] **RL-95** *(refines RL-72)* — The complete copy the reader exports (RL-72) includes the review: a `review` object with the `cards` and the `senses` the device holds, under `exportSchema` 2. Version 2 is version 1 plus that object: `exportedAt`, `recordSchema` and `rows` stand where they stood, so a reader of version 1 (RL-27's MCP server among them) finds what it read before, and a file of version 1 has no `review` and reads as a record with no review. Decided by the user 2026-11-12.
 - [x] **RL-88** *(refines RL-78)* — The review brings in at most 20 new entries a day, fixed: no setting moves it. When the cap held
   entries back, the finished screen says how many wait for tomorrow. Decided by the user 2026-11-08.
+- [x] **RL-91** *(refines RL-78 and RL-85)* — The review's session behaves like Anki's. (1) A learning step (1, 6, 10 minutes…) due within the
+  next 20 minutes, Anki's learn-ahead, is asked again in the same session: the session never says «Terminaste por hoy» while one is due in that
+  span; it waits, says «Vuelve una en N min» and presents the entry when it is due, with no reload. With nothing due within 20 minutes it
+  finishes. (2) The queue is built again on every reload and when the tab regains focus: an entry due right after a reload is asked, and the
+  card on screen never changes under the reader. (3) With no tap on a sense, the card draws the sense most plausibly meant: the headword's first
+  when the dictionary ranked its senses by real use (RL-43) or the typed suffix did (RL-58); otherwise its first common noun, because the
+  fallback order puts a verb before a noun (`tree` is «árbol», not «enarbolar»). The word's page leads with the same sense. (4) With an empty
+  record the finished screen offers «Buscar una palabra», which opens the search, not the empty `/registro`. A word asked for alone with
+  `?palabra=` keeps the short return: only a minute's «Otra vez» comes back to it. Decided by the user 2026-11-12.
+  - Driven by `apps/wordbook/lib/review/{schedule,deck,sense}.test.ts` and `apps/wordbook/e2e/repaso.spec.ts`, `repaso-sentido.spec.ts`.
 - [x] **RL-89** *(refines RL-75)* — In production, with no `CLIENT_KEY_SALT`, the sign-in mail is refused (`sendFailed`) as the paid
   routes answer 204: without the salt no cap counts a caller. Outside production the action stays open. Decided by the user 2026-11-08.
 - [x] **RL-78** *(successor of RL-68)* — The review also asks a phrase the reader translated, scheduled by the same FSRS logic as a word; a phrase still waiting for its answer or never translated stays out. A card shows one sense of a word, the one the reader saw, with its part of speech and its definition when it has one; a phrase shows its translation. An entry answered «Otra vez» comes back in the same session once it is due: the session is not finished while one waits, and says so. Where the review mixes words and phrases it counts «entradas», not «palabras». Decided by the user 2026-10-30.
