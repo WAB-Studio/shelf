@@ -320,7 +320,6 @@ export const transactionRowSchema = z.object({
     .nullish()
     .refine((cell) => labelNames(cell).every((name) => name.length <= 80)),
 });
-export type TransactionRow = z.infer<typeof transactionRowSchema>;
 
 // A budget or a goal names its place, as an account does: the same category or account name
 // may be held personally and in the fund, and the place says which one the row means (RF-140).
@@ -349,7 +348,6 @@ export const budgetRowSchema = z.object({
   thresholdPct: z.number().int().min(1).max(100),
   archived: archivedSchema,
 });
-export type BudgetRow = z.infer<typeof budgetRowSchema>;
 
 export const goalRowSchema = z.object({
   externalRef: externalRefSchema,
@@ -360,7 +358,6 @@ export const goalRowSchema = z.object({
   account: referenceNameSchema.nullish(),
   archived: archivedSchema,
 });
-export type GoalRow = z.infer<typeof goalRowSchema>;
 
 export const goalContributionRowSchema = z.object({
   externalRef: externalRefSchema,
@@ -392,7 +389,6 @@ export const debtRowSchema = z.object({
   dueDay: monthDaySchema.nullish(),
   aval: blankAsNone(z.string()),
 });
-export type DebtRow = z.infer<typeof debtRowSchema>;
 
 // A statement's figures are what the ledger holds, signed by the account's kind: a card's
 // balance owed is negative. A cell is a plain signed decimal, never read as a form's magnitude.

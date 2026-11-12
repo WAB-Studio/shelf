@@ -43,7 +43,7 @@ export type MovementTableRow = {
   foreign: boolean;
 };
 
-// The em dash a cell with nothing to name reads as (SPEC-A3), not a word a
+// The em dash a cell with nothing to name reads as in the desktop design, not a word a
 // translator would ever change.
 const NO_VALUE = "—";
 
@@ -59,7 +59,7 @@ const WIDTHS = {
 } as const;
 
 /**
- * The dense ledger of `private/design-desktop/SPEC-A3.md` (RF-23, RF-125): six
+ * The dense ledger of the desktop design (RF-23, RF-125): six
  * columns, the newest day first, and each row's own menu at the end of it
  * (RF-24). Nothing is stored here — the caller owns the page and hands over the
  * rows it wants drawn, so the ledger renders whatever the URL's filters selected.
@@ -80,7 +80,7 @@ export function MovementsTable({
   page: number;
   pageSize: number;
   // Every row the filters selected, not this page's: the caption names the range
-  // out of the whole (SPEC-A3).
+  // out of the whole.
   total: number;
   empty?: ReactNode;
   onPrev: () => void;

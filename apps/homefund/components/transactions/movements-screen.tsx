@@ -48,6 +48,7 @@ import {
   Dialog,
   EmptyState,
   FilterField,
+  FilterSearch,
   Flex,
   Heading,
   IconButton,
@@ -69,7 +70,7 @@ import { accountNamesById, touchesForeignAccount } from "@/lib/fund/account-name
 import { categoryNamesById } from "@/lib/fund/category-names";
 import { dayNet } from "@/lib/fund/glance";
 import { useActionErrorToast } from "@/lib/use-action-toast";
-import { HOUSEHOLD_MAKER } from "@/lib/validation/transaction";
+import { HOUSEHOLD_MAKER, MOVEMENT_SEARCH_MAX } from "@/lib/validation/transaction";
 
 // A Radix Select item may not carry an empty value, so the "any" option rides
 // this sentinel and maps back to null the moment it is picked.
@@ -92,7 +93,7 @@ type DayGroup = { key: string; label: string; rows: TransactionListRow[] };
  * The filterable ledger: the filter row and the type chips rewrite the URL query
  * so a year of data is narrowed in Postgres and the view stays shareable (RNF-09,
  * RF-23, RF-89). The returned rows page through TanStack Table on the client,
- * then render as the dense table of SPEC-A3 on a laptop and as day-grouped cards
+ * then render as the dense table of the desktop design on a laptop and as day-grouped cards
  * on a phone. A filter combination with no match offers to clear them; a ledger
  * with nothing in it at all invites recording the first movement instead.
  * Money stays integer cents; the sign and the format are display only.
@@ -255,7 +256,8 @@ export function MovementsScreen({
       filters.account ||
       filters.category ||
       filters.label ||
-      filters.rule,
+      filters.rule ||
+      filters.q,
     );
 
   // Only the well-formed values ride the query; a cleared field drops its key so
@@ -272,11 +274,15 @@ export function MovementsScreen({
     if (next.label) query.label = next.label;
     if (next.unreviewed) query.unreviewed = "1";
     if (next.rule) query.rule = next.rule;
+    if (next.q) query.q = next.q;
     return query;
   }
 
   function updateFilters(next: MovementsFilters) {
-    router.push({ pathname, query: toQuery(next) }, { scroll: false });
+    // Search text rewrites the entry it came from, so a typed word never fills the back button.
+    const href = { pathname, query: toQuery(next) };
+    if (next.q !== filters.q) router.replace(href, { scroll: false });
+    else router.push(href, { scroll: false });
   }
 
   function patchFilters(patch: Partial<MovementsFilters>) {
@@ -288,7 +294,7 @@ export function MovementsScreen({
   }
 
   // The download route parses the same schema this screen writes to the URL, so
-  // the sheet holds exactly the rows the table is showing (RF-118, RF-50).
+  // the sheet holds exactly the rows the table is showing (RF-118, RF-142).
   const exportQuery = new URLSearchParams(toQuery(filters));
   exportQuery.set("entities", "transactions");
   const exportHref = `/${locale}/settings/data/export?${exportQuery.toString()}`;
@@ -426,6 +432,14 @@ export function MovementsScreen({
               <SlidersHorizontal size={18} />
             </IconButton>
           </Flex>
+
+          <FilterSearch
+            label={t("searchLabel")}
+            placeholder={t("searchPlaceholder")}
+            value={filters.q ?? ""}
+            onValueChange={(value) => patchFilters({ q: value || null })}
+            maxLength={MOVEMENT_SEARCH_MAX}
+          />
 
           {/* Five kinds do not fit one line on a phone, and Radix's own root
               refuses to shrink under them: stacked, each kind is a row of its
@@ -633,7 +647,7 @@ export function MovementsScreen({
 
       {/* Both shapes stay mounted and one is displayed: the laptop keeps the
           ledger's frame and headers with the empty state inside them, the phone
-          drops straight to the state (SPEC-A3). */}
+          drops straight to the state. */}
       <Box display={{ initial: "none", lg: "block" }}>
         <MovementsTable
           rows={tableRows}

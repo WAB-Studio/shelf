@@ -11,7 +11,7 @@ import { expect, type Locator, type Page } from "@playwright/test";
 import messages from "@/messages/es.json";
 
 import { fixtureSql } from "../scripts/harness/fixtures";
-import { clearLedger, readScope, seedQueue, test } from "./global-setup";
+import { asHarnessUser, clearLedger, readScope, seedQueue, test } from "./global-setup";
 
 const ingest = messages.ingest;
 const transactions = messages.transactions;
@@ -119,6 +119,52 @@ test.describe("the inbox queue", () => {
         await expect(field).toBeVisible();
         await expect(field).toHaveAttribute("data-accent-color", "amber");
       }
+    });
+
+    test("says which key a delivery came through, in the row and in the card (RF-203)", async ({
+      page,
+    }) => {
+      const [deliveryId] = await seedQueue([complete]);
+      await asHarnessUser(async (tx) => {
+        const [key] = await tx<{ id: string }[]>`
+          insert into webhook_credentials (name, token_hash, kind)
+          values ('Mi celular e2e', ${"e".repeat(64)}, 'android')
+          returning id`;
+        await tx`update ingest_deliveries set credential_id = ${key.id} where id = ${deliveryId}`;
+      });
+      const via = messages.ingest.arrivedVia
+        .replace("{kind}", messages.webhooks.kind.android)
+        .replace("{name}", "Mi celular e2e");
+
+      await page.goto("/es/inbox");
+      await expect(
+        page.getByRole("table", { name: ingest.title }).getByText(via),
+      ).toBeVisible();
+
+      await page.setViewportSize({ width: 390, height: 800 });
+      await expect(page.getByText(via).locator("visible=true")).toHaveCount(1);
+    });
+
+    test("shows a refused message in full, so a confirmation code is readable (RF-204)", async ({
+      page,
+    }) => {
+      await seedQueue([]);
+      const code = "483920";
+      const text = `Confirmación de reenvío de Gmail: ${"texto largo ".repeat(12)}Código de confirmación: ${code}`;
+      await asHarnessUser(async (tx) => {
+        const [row] = await tx<{ id: string }[]>`
+          insert into ingest_deliveries (external_ref, raw_text, shape_hash)
+          values (${`refused-${code}`}, ${text}, ${"f".repeat(64)})
+          returning id`;
+        await tx`
+          update ingest_deliveries
+          set status = 'rejected', reject_reason = 'no_movement_signal', resolved_at = now()
+          where id = ${row.id}`;
+      });
+
+      await page.goto("/es/inbox");
+      await expect(page.getByText(text, { exact: true })).toBeVisible();
+      await expect(page.getByText(`Código de confirmación: ${code}`)).toBeVisible();
     });
 
     test("records the movement from the row menu and drops the row, but only opens the form for an incomplete one", async ({

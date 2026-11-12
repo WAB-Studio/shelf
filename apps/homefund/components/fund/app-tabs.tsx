@@ -17,9 +17,11 @@ import { usePathname } from "@/i18n/navigation";
 export function AppTabs({
   hasGroup,
   inboxCount,
+  keepSignedIn,
 }: {
   hasGroup: boolean;
   inboxCount: number;
+  keepSignedIn: string;
 }) {
   const t = useTranslations("nav");
   const { openQuick } = useQuickEntry();
@@ -32,6 +34,11 @@ export function AppTabs({
       active: isCurrent(pathname, href),
       icon: <Icon size={22} />,
       label: t(key),
+      // Bandeja's waiting count, hidden at zero; the name speaks it too.
+      badge:
+        key === "inbox" && inboxCount > 0
+          ? { count: inboxCount, label: `${t(key)}, ${t("pending", { count: inboxCount })}` }
+          : undefined,
     }),
   );
 
@@ -52,19 +59,11 @@ export function AppTabs({
   const moreTrigger = (
     <SettingsPanel
       hasGroup={hasGroup}
-      inboxCount={inboxCount}
+      keepSignedIn={keepSignedIn}
       trigger={
         <BottomNavTrigger
           icon={<SlidersHorizontal size={22} />}
           label={t("settings")}
-          badge={
-            inboxCount > 0
-              ? {
-                  count: inboxCount,
-                  label: `${t("settings")}, ${t("pending", { count: inboxCount })}`,
-                }
-              : undefined
-          }
         />
       }
     />

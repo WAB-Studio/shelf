@@ -62,7 +62,7 @@ test("the categories screen renders the categories it read", async ({ page }) =>
   await expect(shown.getByText(scope.categoryName, { exact: true })).toBeVisible();
 
   // The phone states the count as a phrase inside the category's own card; the
-  // laptop states it as a bare figure in the row's own column (SPEC-A3). Either
+  // laptop states it as a bare figure in the row's own column. Either
   // way this is the one node naming this category's own count, not whichever
   // other childless category the run left standing.
   const subcategoryCount = shown
@@ -217,6 +217,51 @@ test("the webhooks screen walks an iPhone Shortcut step by step (RF-186)", async
   await expect(
     page.getByText(`5. ${messages.webhooks.iphone.expenseStep5}`, { exact: true }),
   ).toBeVisible();
+});
+
+test("the webhooks screen shows the Gmail line or says there is none (RF-192)", async ({
+  page,
+}) => {
+  await page.goto("/es/settings/webhooks");
+
+  await expect(
+    page.getByRole("heading", { name: messages.webhooks.bankEmails.heading, exact: true, level: 2 }),
+  ).toBeVisible();
+  await expect(
+    page.getByText(`6. ${messages.webhooks.bankEmails.step6}`, { exact: true }),
+  ).toBeVisible();
+
+  const id = process.env.GMAIL_OAUTH_CLIENT_ID;
+  const secret = process.env.GMAIL_OAUTH_CLIENT_SECRET;
+  if (id && secret) {
+    await expect(page.locator("#gmail-oauth-line")).toHaveValue(`${id} ${secret}`);
+  } else {
+    await expect(page.getByText(messages.webhooks.bankEmails.lineMissing)).toBeVisible();
+  }
+});
+
+test("the Gmail forwarding way shows only when the inbound domain is set (RF-204)", async ({
+  page,
+}) => {
+  await page.goto("/es/settings/webhooks");
+
+  const heading = page.getByRole("heading", {
+    name: messages.webhooks.forwarding.heading,
+    exact: true,
+  });
+  // The PC way stays first either way.
+  await expect(
+    page.getByRole("heading", { name: messages.webhooks.bankEmails.heading, exact: true, level: 2 }),
+  ).toBeVisible();
+
+  if (process.env.INBOUND_EMAIL_DOMAIN) {
+    await expect(heading).toBeVisible();
+    await expect(
+      page.getByText(`3. ${messages.webhooks.forwarding.step3}`, { exact: true }),
+    ).toBeVisible();
+  } else {
+    await expect(heading).toHaveCount(0);
+  }
 });
 
 test.describe("the members screen", () => {

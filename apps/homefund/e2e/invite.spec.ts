@@ -212,8 +212,8 @@ test.describe("«Agregar sin correo» asks for a name alone", () => {
  * code and lands on /es/bienvenida as the member; an address Auth already holds gets no mail and
  * the leader a notice; no key reaches a client chunk.
  *
- * These rows need the stack to run M1's `invite.html` (subject, no code) and a server holding
- * `SUPABASE_SECRET_KEY` (M3's `print_env`); until both are there they go red for that reason too.
+ * These rows need the stack to run the `invite.html` (subject, no code) and a server holding
+ * `SUPABASE_SECRET_KEY` (its `print_env`); until both are there they go red for that reason too.
  * The «no key» row lives in `lib/auth/invite-email.test.ts`: a dev server cannot drop its key per test.
  */
 const INVITE_SUBJECT = "Te invitaron a HomeFund";

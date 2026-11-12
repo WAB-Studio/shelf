@@ -13,7 +13,7 @@ import {
 import styles from "./sidebar.module.css";
 
 /**
- * The desktop shell's left column (`private/design-desktop/SPEC-A3.md`): 248px of
+ * The desktop shell's left column: 248px of
  * surface against the page, sticky so its foot stays reachable however long the
  * screen beside it runs. The head and the foot stay in
  * place and the `SidebarBody` between them scrolls, which is what keeps Registrar
@@ -51,7 +51,7 @@ export function SidebarSeparator() {
   return <Separator size="4" className={styles.separator} />;
 }
 
-// The head of SPEC-A3: the active fund named, and beside it whatever reaches the
+// The head of the desktop design: the active fund named, and beside it whatever reaches the
 // fund itself.
 export function SidebarHead({
   title,
@@ -83,7 +83,7 @@ export function SidebarFoot({ children }: { children?: ReactNode }) {
   );
 }
 
-// Registrar (SPEC-A3): the sidebar's one primary action, sized from the foot it
+// Registrar: the sidebar's one primary action, sized from the foot it
 // fills rather than from Radix's control scale.
 export function SidebarAction({
   icon,

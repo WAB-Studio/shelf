@@ -614,6 +614,8 @@
     "filteredEmptyDescription": "Ningún movimiento coincide con estos filtros en el periodo elegido.",
     "clearFilters": "Quitar filtros",
     "filtersLabel": "Filtros",
+    "searchLabel": "Buscar",
+    "searchPlaceholder": "Descripción o monto",
     "rangeFrom": "Desde",
     "rangeTo": "Hasta",
     "allAccounts": "Todas las cuentas",
@@ -1288,7 +1290,6 @@
     "stale": "Esto cambió mientras lo editabas. Vuelve a abrirlo.",
     "resendChanged": "Ya guardamos este movimiento con otro monto; ábrelo para corregirlo.",
     "linkTimeout": "No pudimos comprobar el enlace. Ábrelo otra vez desde el correo.",
-    "signOutFailed": "No pudimos cerrar tu sesión. Inténtalo otra vez.",
     "signOutPartial": "Cerraste sesión aquí, pero no pudimos cerrarla en tus otros dispositivos.",
     "notFoundTitle": "Esta página no existe",
     "notFoundDescription": "Puede que el enlace esté mal escrito o que la página se haya movido.",
@@ -1542,7 +1543,22 @@
     "androidHeading": "App para Android",
     "androidDescription": "Viene lista para Bancolombia y Banco de Bogotá",
     "androidDownload": "Descargar HomeFund Avisos",
-    "androidDownloadHint": "Se descarga con tu cuenta de GitHub de WAB-Studio",
+    "androidDownloadHint": "Al abrir el archivo, Android pide permitir instalar desde este navegador",
+    "androidDownloadMissing": "La descarga aún no está lista. Pídele a quien administra HomeFund que la active.",
+    "bankEmails": {
+      "heading": "Correos del banco",
+      "description": "Cada 10 minutos los correos de tu banco (Bancolombia, Nequi, Nu, Lulo, Falabella, Banco de Bogotá, PSE…) llegan solos a la Bandeja. Solo lee correo; nada más sale de tu computador.",
+      "step1": "Instala ActivityWatch + TimeLog en tu computador con Windows.",
+      "step1Link": "Descargar ActivityWatch + TimeLog",
+      "step2": "Haz clic derecho en el ícono de ActivityWatch, junto al reloj, y elige «Gmail: conectar cuenta…». La primera vez te pide la línea de abajo: pégala.",
+      "step3": "Elige tu cuenta de Gmail. Google avisa «Google no verificó esta app»: haz clic en «Configuración avanzada», luego en «Ir a Asistente (no seguro)» y por último en «Continuar».",
+      "step4": "Crea una llave aquí y pégala en ese mismo menú con «HomeFund: pegar llave…».",
+      "step4Action": "Crear credencial",
+      "step5": "Repite el paso 2 con cada otra cuenta de Gmail.",
+      "step6": "En ese menú puedes prender o apagar TimeLog con «TimeLog: subir mi tiempo»: los correos funcionan sin TimeLog.",
+      "lineLabel": "Línea para pegar en el paso 2",
+      "lineMissing": "Esta instalación no tiene todavía los datos de Google. Pídeselos a quien administra HomeFund."
+    },
     "iphone": {
       "heading": "Atajo de iPhone",
       "description": "Un Atajo de iOS manda a la Bandeja un gasto que escribes o el SMS que te mandó el banco. Primero toca «Crear credencial» arriba (no la clave para Claude) y copia su token, que empieza por «whk_».",
@@ -1582,20 +1598,45 @@
       "amountInvalid": "Escribe un monto válido.",
       "amountTooLarge": "El monto es demasiado alto.",
       "directionInvalid": "El campo «direction» solo acepta «expense» o «income».",
-      "scopeViolation": "Esa categoría es de otro ámbito que la cuenta. Elige una del fondo para una cuenta del fondo, o una tuya para una cuenta tuya."
+      "scopeViolation": "Esa categoría es de otro ámbito que la cuenta. Elige una del fondo para una cuenta del fondo, o una tuya para una cuenta tuya.",
+      "kindInvalid": "Elige para qué es la credencial."
     },
     "mcpHeading": "Conectar con Claude",
-    "mcpDescription": "En claude.ai (web, escritorio o móvil), agrega un conector personalizado con la URL de arriba: te pedirá entrar con HomeFund y listo. Claude lee tus cuentas, movimientos y «Revisar el mes», y registra movimientos o crea y edita cuentas y categorías cuando se lo confirmas, siempre con tus mismos permisos; revocar su clave en la lista lo desconecta. Una clave que crees aquí sigue sirviendo: en Claude Code va en «Authorization: Bearer», y en un conector sin inicio de sesión en el encabezado «X-API-Key». Una clave de webhook no abre esta puerta. Para hablar con HomeFund y GoalLog en un mismo chat, el repositorio github.com/WAB-Studio/asistente (privado de WAB-Studio) trae todo listo: sigue su README.",
-    "mcpIssue": "Crear clave para Claude"
+    "mcpDescription": "En claude.ai (web, escritorio o móvil), agrega un conector personalizado con la URL de arriba: te pedirá entrar con HomeFund y listo. Claude lee tus cuentas, movimientos y «Revisar el mes», y registra movimientos o crea y edita cuentas, categorías y etiquetas, y etiqueta movimientos, cuando se lo confirmas, siempre con tus mismos permisos; revocar su clave en la lista lo desconecta. Una clave que crees aquí sigue sirviendo: en Claude Code va en «Authorization: Bearer», y en un conector sin inicio de sesión en el encabezado «X-API-Key». Una clave de webhook no abre esta puerta. Para hablar con HomeFund y GoalLog en un mismo chat, el repositorio github.com/WAB-Studio/asistente (privado de WAB-Studio) trae todo listo: sigue su README.",
+    "mcpIssue": "Crear clave para Claude",
+    "kind": {
+      "android": "Android",
+      "iphone": "iPhone",
+      "bank_emails": "Correos del banco",
+      "claude": "Claude",
+      "other": "Otro"
+    },
+    "kindLabel": "Para qué es",
+    "deliveries30": "{count, plural, =0 {Sin entregas} one {# entrega} other {# entregas}} en 30 días",
+    "columnDeliveries": "Entregas (30 días)",
+    "showRevoked": "Ver revocadas ({count})",
+    "hideRevoked": "Ocultar revocadas ({count})",
+    "forwarding": {
+      "heading": "Sin PC: reenvío desde Gmail",
+      "description": "Gmail reenvía los correos del banco a una dirección de HomeFund y llegan a la Bandeja sin tener el computador prendido.",
+      "step1": "En Gmail abre Configuración → Reenvío y correo POP/IMAP → Agregar una dirección de reenvío, y pega la dirección de abajo.",
+      "step2": "Google manda un código de confirmación a esa dirección. Llega a la Bandeja de HomeFund, en «Mensajes que no entraron»: ábrelo, copia el código y pégalo en Gmail.",
+      "step3": "En Gmail crea un filtro: de Bancolombia, Nequi, Nu, Lulo, Falabella, Banco de Bogotá o PSE → Reenviar a esa dirección.",
+      "create": "Crear llave para reenvío",
+      "addressLabel": "Dirección de reenvío",
+      "addressNote": "La dirección lleva tu llave: no la compartas. Se muestra una sola vez; si la pierdes, revoca la llave y crea otra."
+    }
   },
   "ingest": {
     "title": "Bandeja",
     "emptyTitle": "No hay nada por revisar",
-    "emptyDescription": "Aquí caen los mensajes del banco que reenvías. Para empezar, conecta tu banco a esta dirección.",
-    "emptyAddressLabel": "Dirección de recepción",
-    "emptyStep1": "Crea una credencial en Ajustes · Correos del banco.",
-    "emptyStep2": "Haz que el correo o la regla de tu banco envíe cada aviso a esta dirección con tu token.",
-    "emptyStep3": "Cuando llegue uno, aparece aquí para que lo revises.",
+    "emptyDescription": "Cuando llegue algo de estas fuentes, aparece aquí para que lo revises. Conecta la que uses.",
+    "emptySource": {
+      "android": { "label": "En Android, la app HomeFund Avisos reenvía los avisos de tu banco.", "link": "Instalar HomeFund Avisos" },
+      "iphone": { "label": "En iPhone, un Atajo manda el SMS del banco o un gasto que escribes.", "link": "Crear el Atajo" },
+      "gmail": { "label": "En Gmail, los correos de tu banco llegan solos.", "link": "Conectar Gmail" },
+      "claude": { "label": "Con Claude, le pides que anote o importe movimientos por ti.", "link": "Conectar Claude" }
+    },
     "copy": "Copiar",
     "copied": "Copiado",
     "copyFailed": "No se pudo copiar. Selecciona el texto y cópialo a mano.",
@@ -1669,7 +1710,20 @@
       "completed": "Movimiento completado"
     },
     "saveNumber": "Guardar este número",
-    "recipientIs": "Destinatario: {name}"
+    "recipientIs": "Destinatario: {name}",
+    "arrivedVia": "Llegó por {kind} · {name}",
+    "connectionLabel": "Conexión",
+    "refusedTitle": "Mensajes que no entraron",
+    "refusedCount": "{count, plural, one {# mensaje descartado por no ser un movimiento} other {# mensajes descartados por no ser un movimiento}}",
+    "refusedMeta": "{reason} · {date}",
+    "rejectReason": {
+      "failed": "Transacción rechazada",
+      "statement": "Extracto",
+      "support": "Soporte",
+      "reminder": "Recordatorio de pago",
+      "promotion": "Publicidad",
+      "no_movement_signal": "Sin movimiento"
+    }
   },
   "review": {
     "entry": "Revisar el mes",
@@ -1728,9 +1782,9 @@
       "previewStatement": "Paso 1 de importar un extracto bancario: dice qué haría cada línea sin escribir nada. Cada línea: «new» (se creará), «matches» (ya está registrada a mano o como el otro lado de una transferencia; solo se enlaza), «already_imported» (se omite) o «invalid» (con su motivo). «proposal» es la cuenta que la persona usó antes para esa descripción: pregúntale antes de pasarla como counterAccountId. Una transferencia con una cuenta en otra moneda trae «counter»: pregúntale a la persona cuánto le llegó (o salió) en esa cuenta, pásalo como counterAmountCents y confírmale la TRM que resulta. Si el extracto imprime «1/36» en una compra de una tarjeta o deuda, pásalo como instalments (36): la línea sale con «deferral» (se propone diferir en 36 cuotas; el saldo no cambia) y el paso 2 lo escribe, porque la persona lo confirma al aceptar la vista previa. Nunca lo supongas: sin la cuota impresa, no lo pases. Pasa siempre «statement» (periodStart y cutOffDate como los imprime el extracto, y su saldo de cierre si lo imprime): la fecha de corte es como una reimportación encuentra el mismo extracto, y toda línea debe caer dentro del periodo. «removals» lista lo que una reimportación de ese extracto quitaría porque sus líneas ya no lo nombran («deletes» borra el movimiento, «unlinks» solo su vínculo con este extracto): muéstralo a la persona. Muestra el resumen a la persona antes del paso 2.",
       "importStatement": "Paso 2: importa exactamente lo que mostró preview_statement, con su previewKey. Todo o nada: si una línea cambió, o lo que la vista previa dijo de ella, o queda una inválida, no escribe nada y pide previsualizar de nuevo. Repetirlo nunca duplica movimientos: lo ya importado sale como «already_imported». Reimportar un extracto reemplaza sus filas: las líneas que ya no nombra se quitan (como dijo «removals» en la vista previa), las nuevas se agregan y las iguales conservan su categoría, etiquetas y notas.",
       "listCategories": "Las categorías que la persona puede usar, personales y del fondo, con su id, nombre, tipo (expense o income), categoría madre y alcance (personal o fund). Elige siempre una de aquí para un movimiento; si ninguna sirve, propón crear una con create_category.",
-      "listMovements": "Los movimientos recientes, del más nuevo al más viejo, de una cuenta o de todas, con filtro por fechas (AAAA-MM-DD) y por categoría (una categoría incluye sus subcategorías): id, fecha, descripción, monto en centavos, moneda, cuentas de origen y destino y sus líneas (splits: categoría, monto y descripción del producto). limit y offset paginan una cuenta de más de 200. Úsala ANTES de record_movement para ver si ya está registrado y no duplicarlo. Cada movimiento devuelve madeByMemberId y madeByName (quién lo hizo; null es el hogar); madeByMemberId filtra por ese miembro.",
-      "recordMovement": "Registra un gasto (solo fromAccountId), un ingreso (solo toAccountId) o una transferencia (las dos); el tipo sale de las cuentas. Monto en centavos enteros, fecha AAAA-MM-DD sin futuro. Un gasto o ingreso lleva categoría (categoryId, o splits que sumen el monto); una transferencia, ninguna. Pagar una tarjeta o un préstamo, prestar o recibir un préstamo y mover dinero entre cuentas de la persona es una TRANSFERENCIA (fromAccountId y toAccountId), nunca un gasto ni un ingreso; si falta la cuenta (la tarjeta, el préstamo, un activo «Me debe <persona>»), propón crearla con create_account en la misma lista de confirmación. La descripción dice qué y dónde («Ara — Champiñón 250 g»), nunca el medio de pago ni la cuenta, que el movimiento ya lleva. Una factura con varios productos es UN solo movimiento: cada producto es un split con su descripción (el nombre), su monto en centavos y su categoría de list_categories, y los splits suman exactamente el total de la factura. Elige para cada producto la categoría más específica (la subcategoría cuando alguna le calce); si falta una subcategoría, propón crearla con create_category dentro de la misma lista de confirmación. Varios productos pueden compartir categoría. Un descuento no es una línea: réstalo del monto de las líneas a las que aplica (un descuento global, del producto más grande o repartido) para que la suma siga siendo el total pagado. Antes de escribir, muestra la lista (producto, monto, categoría, descuentos, total) y pide un solo sí. Un ingreso a una cuenta del fondo pide contributedByMemberId («De quién»). ANTES de llamarla, busca un duplicado con list_movements y CONFIRMA con la persona lo que vas a escribir (cuenta, monto, fecha, categoría). Genera un requestRef (UUID) por movimiento y reutilízalo si reintentas: así nunca se duplica. Devuelve el id del movimiento. En un movimiento del fondo (cuenta del fondo, o forHousehold) madeByMemberId dice QUIÉN lo hizo, de list_members; vacío es el hogar, y un movimiento puramente personal lo rechaza. Nunca reemplaza a quien lo escribió.",
-      "updateMovement": "Corrige un movimiento que la persona puede escribir. Es un parche: envía solo lo que cambia y lo demás queda como está. Pasa el updatedAt que leíste en list_movements como expectedUpdatedAt: si alguien lo editó mientras tanto, se rechaza. CONFIRMA con la persona el cambio antes de llamarla. Rigen las reglas de record_movement: pagos de tarjeta o préstamo y movimientos entre cuentas propias son transferencias, y la descripción dice qué y dónde, no el medio de pago. madeByMemberId fija quién hizo un movimiento del fondo (null lo borra; ausente lo conserva). Migrar descripciones viejas: cuando una descripción empieza con el nombre de una persona («Papá · Mercado Ara»), puedes fijar madeByMemberId a ese miembro y quitar el prefijo de la descripción, pero SOLO tras mostrar la lista de cambios y recibir el único sí de la persona.",
+      "listMovements": "Los movimientos recientes, del más nuevo al más viejo, de una cuenta o de todas, con filtro por fechas (AAAA-MM-DD) y por categoría (una categoría incluye sus subcategorías): id, fecha, descripción, monto en centavos, moneda, cuentas de origen y destino y sus líneas (splits: categoría, monto y descripción del producto). limit y offset paginan una cuenta de más de 200. Úsala ANTES de record_movement para ver si ya está registrado y no duplicarlo. Cada movimiento devuelve madeByMemberId y madeByName (quién lo hizo; null es el hogar); madeByMemberId filtra por ese miembro. Cada movimiento devuelve labelIds; label (id o nombre de list_labels) filtra por etiqueta.",
+      "recordMovement": "Registra un gasto (solo fromAccountId), un ingreso (solo toAccountId) o una transferencia (las dos); el tipo sale de las cuentas. Monto en centavos enteros, fecha AAAA-MM-DD sin futuro. Un gasto o ingreso lleva categoría (categoryId, o splits que sumen el monto); una transferencia, ninguna. Pagar una tarjeta o un préstamo, prestar o recibir un préstamo y mover dinero entre cuentas de la persona es una TRANSFERENCIA (fromAccountId y toAccountId), nunca un gasto ni un ingreso; si falta la cuenta (la tarjeta, el préstamo, un activo «Me debe <persona>»), propón crearla con create_account en la misma lista de confirmación. La descripción dice qué y dónde («Ara — Champiñón 250 g»), nunca el medio de pago ni la cuenta, que el movimiento ya lleva. Una factura con varios productos es UN solo movimiento: cada producto es un split con su descripción (el nombre), su monto en centavos y su categoría de list_categories, y los splits suman exactamente el total de la factura. Elige para cada producto la categoría más específica (la subcategoría cuando alguna le calce); si falta una subcategoría, propón crearla con create_category dentro de la misma lista de confirmación. Varios productos pueden compartir categoría. Un descuento no es una línea: réstalo del monto de las líneas a las que aplica (un descuento global, del producto más grande o repartido) para que la suma siga siendo el total pagado. Antes de escribir, muestra la lista (producto, monto, categoría, descuentos, total) y pide un solo sí. Un ingreso a una cuenta del fondo pide contributedByMemberId («De quién»). ANTES de llamarla, busca un duplicado con list_movements y CONFIRMA con la persona lo que vas a escribir (cuenta, monto, fecha, categoría). Genera un requestRef (UUID) por movimiento y reutilízalo si reintentas: así nunca se duplica. Devuelve el id del movimiento. En un movimiento del fondo (cuenta del fondo, o forHousehold) madeByMemberId dice QUIÉN lo hizo, de list_members; vacío es el hogar, y un movimiento puramente personal lo rechaza. Nunca reemplaza a quien lo escribió. labels pone etiquetas al movimiento (ids de list_labels o sus nombres, del mismo ámbito que el movimiento).",
+      "updateMovement": "Corrige un movimiento que la persona puede escribir. Es un parche: envía solo lo que cambia y lo demás queda como está. Pasa el updatedAt que leíste en list_movements como expectedUpdatedAt: si alguien lo editó mientras tanto, se rechaza. CONFIRMA con la persona el cambio antes de llamarla. Rigen las reglas de record_movement: pagos de tarjeta o préstamo y movimientos entre cuentas propias son transferencias, y la descripción dice qué y dónde, no el medio de pago. madeByMemberId fija quién hizo un movimiento del fondo (null lo borra; ausente lo conserva). Migrar descripciones viejas: cuando una descripción empieza con el nombre de una persona («Papá · Mercado Ara»), puedes fijar madeByMemberId a ese miembro y quitar el prefijo de la descripción, pero SOLO tras mostrar la lista de cambios y recibir el único sí de la persona. labels reemplaza las etiquetas del movimiento (ausente las conserva; [] las quita).",
       "deleteMovement": "Borra un movimiento que la persona puede escribir. No se deshace: CONFIRMA con la persona cuál es antes de llamarla.",
       "createAccount": "Crea una cuenta con saldo inicial en centavos a una fecha: asset (bank o cash) o liability (card, lo que se debe va en positivo). placement «personal» o «group» (la del fondo). parentAccountId la vuelve bolsillo de una cuenta de activo abierta del mismo dueño y la misma moneda, un solo nivel. holderMemberId, solo en placement «group», nombra al miembro del fondo titular de la cuenta (de list_members). CONFIRMA con la persona nombre, tipo, moneda y saldo antes de llamarla, y revisa con list_accounts que no exista ya.",
       "updateAccount": "Corrige una cuenta que la persona puede escribir: nombre, subtipo, moneda, entidad, últimos cuatro dígitos, parentAccountId (la cuenta en la que está como bolsillo, null para sacarla), holderMemberId (el miembro titular, de list_members; null para que sea de todos), saldo inicial en centavos y su fecha. Es un parche: envía solo lo que cambia. Pasa el updatedAt que leíste en list_accounts como expectedUpdatedAt: si alguien la editó mientras tanto, se rechaza. CONFIRMA con la persona el cambio antes de llamarla, sobre todo el saldo inicial.",
@@ -1742,11 +1796,14 @@
       "listInbox": "La bandeja de entrada: las entregas (SMS, correos del banco, webhook) que esperan que la persona las apruebe. Cada una trae id, receivedAt, rawText (el mensaje tal cual llegó) y proposal (amountCents, currency, kind expense o income, accountId y accountName, categoryId y categoryPath, date, description). notDetected nombra los campos que el mensaje no dio. status (por defecto pending) filtra; limit y offset paginan. Úsala PRIMERO. Luego muestra a la persona UNA lista compacta (fecha, monto, cuenta, categoría, descripción), con cada campo que falte ya completado por tu propuesta y marcado como tal, y pide UN solo sí para toda la lista, o sus correcciones. Después llama accept_deliveries; lo que la persona descarte se rechaza con reject_deliveries, confirmado en esa misma lista. Cada entrega trae también extractedNumber (el número que nombra el mensaje, p. ej. la cuenta o el celular de destino), recipientId y recipientName (el destinatario guardado que coincide, o null). Si extractedNumber existe y recipientName es null, el número es desconocido: PREGUNTA UNA VEZ a la persona qué es (una cuenta suya, una persona o un comercio o gasto fijo), y tras su sí guárdalo con save_recipient; las siguientes entregas de ese número ya llegan con su nombre y propuesta. Una entrega con kind transfer trae también toAccountId y toAccountName.",
       "acceptDeliveries": "Aprueba una o más entregas de la bandeja: cada una se vuelve un movimiento, por el mismo camino y las mismas reglas que el botón «Aceptar» de HomeFund (tipo derivado de las cuentas, auditoría, la referencia de la entrega evita duplicados). Cada ítem lleva el id de list_inbox y, solo si cambia o falta, accountId (la cuenta del gasto o ingreso), categoryId o splits (líneas con categoryId, amountCents y description del producto, que suman el monto), amountCents, description, date (AAAA-MM-DD), kind (expense, income o transfer) y, en una transferencia, fromAccountId y toAccountId (sin kind transfer, un solo lado se rechaza; con transfer, el lado que falta es la cuenta de la propuesta). Si es un ingreso a una cuenta del fondo (notDetected trae contributor), pasa contributedByMemberId («De quién»). Todo o nada: si una entrega falla (por ejemplo, sin cuenta, monto o categoría, ya resuelta o ajena) no se acepta ninguna y el error trae deliveryId y el campo que falta. NUNCA la llames sin antes haber llamado list_inbox, mostrado a la persona la lista compacta (fecha, monto, cuenta, categoría, descripción) y recibido UN solo sí para toda la lista. En un movimiento a una cuenta del fondo, un ítem puede llevar madeByMemberId (de list_members) para decir quién lo hizo.",
       "rejectDeliveries": "Rechaza una o más entregas de la bandeja por id, por el mismo camino que «Rechazar» en HomeFund; no escribe movimientos. Todo o nada: si un id no es una entrega pendiente de la persona, no rechaza ninguna. Muestra primero la lista (fecha, monto, descripción) de lo que rechazarás, junto con la de accept_deliveries, y pide UN solo sí para todo.",
-      "listMemberDebts": "Lo que los miembros del fondo se deben entre sí: «balances» trae cada pareja con su saldo pendiente en centavos y su moneda (debtorName le debe pendingCents a creditorName), derivado de los asientos; «entries» trae cada asiento (kind debt es una deuda, payment un abono), del más nuevo al más viejo.",
+      "listMemberDebts": "Lo que los miembros del fondo se deben entre sí: «balances» trae cada pareja con su saldo pendiente en centavos y su moneda (debtorName le debe pendingCents a creditorName), derivado de los asientos; «entries» trae cada asiento (kind debt es una deuda, payment un abono), del más nuevo al más viejo. Cada deuda trae además «status» (pending, partial o settled), «paidCents», «remainingCents» y «settledOn», el día en que quedó saldada (null si no).",
       "recordMemberDebt": "Registra un asiento entre dos miembros del fondo: kind debt (una deuda nueva: «Papá le debe a Adrian $200.000 por la moto») o payment (un abono parcial o total a esa deuda). Deudor y acreedor son ids de list_members, distintos. Un abono mayor a lo que el deudor aún le debe a ese acreedor en esa moneda se rechaza. Antes de escribir, CONFIRMA con la persona quién le debe a quién, el monto, la fecha y la descripción, y espera su sí.",
       "listRecipients": "Los destinatarios guardados de la persona: números (cuenta bancaria, celular, llave) que los avisos del banco nombran, cada uno con id, identifier (solo dígitos), name, kind (own_account: una cuenta de la persona, con accountId; person: una persona, con su cuenta de deuda en accountId si la tiene; payee: un comercio o gasto fijo, con su categoryId), accountId, accountName, categoryId y categoryName.",
       "saveRecipient": "Guarda un destinatario, o lo actualiza si pasas su id. Úsala cuando list_inbox traiga un extractedNumber sin recipientName: pregunta UNA vez a la persona qué es ese número y guárdalo solo después de su sí. identifier es el número tal cual lo muestra el aviso (con o sin *; se guardan solo los dígitos); name, un nombre claro como «Nequi de mamá» o «Arriendo Don José»; kind own_account exige accountId (id de list_accounts), person admite accountId opcional (su cuenta «Me debe») y payee admite categoryId (id de list_categories) para sus gastos. Un número ya guardado se rechaza: actualízalo con su id.",
-      "deleteRecipient": "Borra un destinatario guardado (id de list_recipients). Las entregas ya recibidas conservan su texto. Pide confirmación a la persona antes."
+      "deleteRecipient": "Borra un destinatario guardado (id de list_recipients). Las entregas ya recibidas conservan su texto. Pide confirmación a la persona antes.",
+      "listLabels": "Las etiquetas que la persona puede usar, como las muestra «Etiquetas»: las suyas (scope personal) y las del fondo (scope fund), cada una con id, nombre, color, movementCount (movimientos que la llevan), budgetCount (presupuestos que la usan) y canManage (si la persona puede cambiarla: las del fondo solo su líder). Una etiqueta es independiente de la categoría y un movimiento solo lleva etiquetas de su mismo ámbito (personal o del fondo).",
+      "createLabel": "Crea una etiqueta con las mismas reglas de «Etiquetas»: name (hasta 80 caracteres) y placement personal (por defecto) o group; una etiqueta del fondo solo la crea su líder. Sin color toma uno libre. CONFIRMA con la persona antes. Devuelve su labelId. Nunca borra etiquetas.",
+      "updateLabel": "Cambia el nombre o el color de una etiqueta (labelId de list_labels); lo que no envías queda igual. Una etiqueta del fondo solo la cambia su líder; el ámbito no cambia. CONFIRMA con la persona antes. Nunca borra etiquetas."
     },
     "deferralProposal": "Diferir en {count} cuotas",
     "errors": {
@@ -1835,7 +1892,13 @@
       "recipientName": "Cómo lo llama la persona, hasta 80 caracteres.",
       "recipientKind": "own_account, person o payee.",
       "recipientAccountId": "Solo own_account y person: el id de la cuenta (de list_accounts).",
-      "recipientCategoryId": "Solo payee: la categoría por defecto de sus gastos (id de list_categories)."
+      "recipientCategoryId": "Solo payee: la categoría por defecto de sus gastos (id de list_categories).",
+      "labelId": "El id de la etiqueta (de list_labels).",
+      "labelName": "El nombre de la etiqueta, hasta 80 caracteres.",
+      "labelPlacement": "personal: una etiqueta de la persona; group: del fondo (solo su líder).",
+      "labelColor": "Un color de la paleta de categorías, como #06B6D4. Si falta, se elige uno libre.",
+      "labels": "Las etiquetas del movimiento: ids de list_labels o sus nombres. Deben ser del mismo ámbito que el movimiento (personales si es personal, del fondo si es del fondo). En update_movement reemplaza las que tenía; ausente las conserva y [] las quita.",
+      "filterLabel": "Solo movimientos con esta etiqueta (id de list_labels o su nombre)."
     }
   },
   "oauth": {
@@ -1900,6 +1963,14 @@
     "debtRecorded": "Deuda registrada",
     "paymentRecorded": "Pago registrado",
     "settled": "{first} y {second} están a paz y salvo",
+    "pending": "Pendiente · {amount}",
+    "partial": "Abonada · faltan {remaining} de {amount}",
+    "settledOn": "Saldada el {date}",
+    "settledSection": "Saldadas ({count})",
+    "hideSettled": "Ocultar saldadas",
+    "showSettled": "Ver saldadas ({count})",
+    "justSettled": "Quedó saldada la deuda de {debtor} por {amount}",
+    "allSquare": "Están a paz y salvo",
     "errors": {
       "noFund": "No perteneces a un fondo, así que no hay deudas entre miembros.",
       "memberNotInFund": "Ese miembro no pertenece a tu fondo.",

@@ -32,7 +32,11 @@ import type { WebhookCredentialOptions } from "@/db/queries/webhook-credentials"
 import { androidSetupLink } from "@/lib/android-app";
 import { categoriesInScope } from "@/lib/fund/category-scope";
 import { useActionErrorToast } from "@/lib/use-action-toast";
-import { issueWebhookCredentialSchema } from "@/lib/validation/webhook";
+import {
+  credentialKindSchema,
+  issueWebhookCredentialSchema,
+  type CredentialKind,
+} from "@/lib/validation/webhook";
 
 // A Radix Select item may not carry an empty value, so "no default" rides this
 // sentinel and maps back to null the moment it is picked.
@@ -40,6 +44,7 @@ const ANY = "none";
 
 type IssueFormValues = {
   name: string;
+  kind: CredentialKind;
   defaultAccountId: string | null;
   defaultCategoryId: string | null;
   rateLimitPerMin: number;
@@ -53,14 +58,20 @@ type IssueFormValues = {
  */
 export function WebhookCredentialDialog({
   open,
+  initialKind,
   onOpenChange,
   options,
   ingestUrl,
+  inboundDomain,
 }: {
   open: boolean;
+  // What the key is for when the dialog opens; the person may change it.
+  initialKind: CredentialKind;
   onOpenChange: (open: boolean) => void;
   options: WebhookCredentialOptions;
   ingestUrl: string;
+  // RF-187: a bank-emails key also shows its forwarding address when this is set.
+  inboundDomain: string | null;
 }) {
   // Mirrors the step the body is on. The token itself never leaves the body.
   const [showingToken, setShowingToken] = useState(false);
@@ -91,8 +102,10 @@ export function WebhookCredentialDialog({
         {/* Closing unmounts the content, so the body — and the token it alone
             holds — is born fresh on the next open. No key flips it mid-exit. */}
         <WebhookCredentialBody
+          initialKind={initialKind}
           options={options}
           ingestUrl={ingestUrl}
+          inboundDomain={inboundDomain}
           onTokenIssued={() => setShowingToken(true)}
           onClose={close}
         />
@@ -102,13 +115,17 @@ export function WebhookCredentialDialog({
 }
 
 function WebhookCredentialBody({
+  initialKind,
   options,
   ingestUrl,
+  inboundDomain,
   onTokenIssued,
   onClose,
 }: {
+  initialKind: CredentialKind;
   options: WebhookCredentialOptions;
   ingestUrl: string;
+  inboundDomain: string | null;
   onTokenIssued: () => void;
   onClose: () => void;
 }) {
@@ -128,6 +145,7 @@ function WebhookCredentialBody({
     ) as unknown as Resolver<IssueFormValues>,
     defaultValues: {
       name: "",
+      kind: initialKind,
       defaultAccountId: null,
       defaultCategoryId: null,
       rateLimitPerMin: 60,
@@ -218,6 +236,23 @@ function WebhookCredentialBody({
           failedLabel={t("copyFailed")}
           tone="secret"
         />
+        {/* The token is the address's local part, so this is the one moment it can be copied (RF-187). */}
+        {inboundDomain !== null && form.getValues("kind") === "bank_emails" && (
+          <Flex direction="column" gap="2">
+            <CopyField
+              id="webhook-forwarding-address"
+              label={t("forwarding.addressLabel")}
+              value={`${token}@${inboundDomain}`}
+              copyLabel={t("copy")}
+              copiedLabel={t("copied")}
+              failedLabel={t("copyFailed")}
+              tone="secret"
+            />
+            <Text size="2" color="gray">
+              {t("forwarding.addressNote")}
+            </Text>
+          </Flex>
+        )}
         {/* The only moment the token can reach the phone; the link is built
             from it on render and held nowhere. */}
         <Flex direction="column" gap="2">
@@ -263,6 +298,32 @@ function WebhookCredentialBody({
                     disabled={issue.isPending}
                   />
                 </FieldControl>
+                <FieldMessage error={fieldState.error} />
+              </Field>
+            )}
+          />
+          <Controller
+            name="kind"
+            control={form.control}
+            render={({ field, fieldState }) => (
+              <Field invalid={fieldState.invalid}>
+                <FieldLabel htmlFor="webhook-kind">{t("kindLabel")}</FieldLabel>
+                <Select.Root
+                  value={field.value}
+                  onValueChange={field.onChange}
+                  disabled={issue.isPending}
+                >
+                  <FieldControl>
+                    <Select.Trigger id="webhook-kind" />
+                  </FieldControl>
+                  <Select.Content position="popper">
+                    {credentialKindSchema.options.map((kind) => (
+                      <Select.Item key={kind} value={kind}>
+                        {t(`kind.${kind}`)}
+                      </Select.Item>
+                    ))}
+                  </Select.Content>
+                </Select.Root>
                 <FieldMessage error={fieldState.error} />
               </Field>
             )}

@@ -39,7 +39,7 @@ function requestedEntities(params: URLSearchParams): SheetEntity[] {
 }
 
 /**
- * The export download (RF-50, RF-118). Streams an `.xlsx` of the caller's rows —
+ * The export download (RF-142, RF-118). Streams an `.xlsx` of the caller's rows —
  * one sheet per requested entity, headers and tab names localized, references
  * shown as names, money as decimal in each row's own currency (RF-121). RLS in `readExport` bounds every row to
  * the caller's scope. The query carries the movement list's own filters, parsed
@@ -69,6 +69,7 @@ export async function GET(
     labelId: filters.label,
     unreviewed: filters.unreviewed,
     recurringRuleId: filters.rule,
+    search: filters.q,
   };
 
   const [, { data, options }, t] = await Promise.all([

@@ -11,9 +11,10 @@ import {
 } from "@/app/actions/ingest";
 import { deleteTransactionAction } from "@/app/actions/transactions";
 import { AwaitingCounterparty } from "@/components/ingest/awaiting-counterparty";
-import { DeliveryCard } from "@/components/ingest/delivery-card";
+import { arrivedVia, DeliveryCard } from "@/components/ingest/delivery-card";
 import { InboxTable, type InboxTableRow } from "@/components/ingest/inbox-table";
 import { RecipientFormDialog, type RecipientDraft } from "@/components/recipients/recipient-form-dialog";
+import { RefusedDeliveries } from "@/components/ingest/refused-deliveries";
 import { SilencedShapes } from "@/components/ingest/silenced-shapes";
 import {
   MovementForm,
@@ -23,17 +24,18 @@ import {
   Box,
   Button,
   ConfirmDialog,
-  CopyField,
   Dialog,
   EmptyState,
   Flex,
   ScreenHeader,
   Spinner,
   Text,
+  TextLink,
   VisuallyHidden,
 } from "@/components/ui";
 import type {
   PendingDeliveryRow,
+  RefusedDeliveryRow,
   SilencedShapeRow,
 } from "@/db/queries/ingest-review";
 import type { TransactionFormOptions } from "@/db/queries/transaction-form";
@@ -143,18 +145,26 @@ function categoryInfo(
   return null;
 }
 
+// Where each thing that lands in Bandeja is set up, in Ajustes · Correos del banco and its neighbours.
+const INBOX_SOURCES = [
+  { key: "android", href: "/settings/webhooks#android" },
+  { key: "iphone", href: "/settings/webhooks#iphone" },
+  { key: "gmail", href: "/settings/webhooks#bank-emails" },
+  { key: "claude", href: "/settings/webhooks#claude" },
+] as const;
+
 export function InboxScreen({
   deliveries,
   awaiting,
   shapes,
+  refused,
   options,
-  ingestUrl,
 }: {
   deliveries: PendingDeliveryRow[];
   awaiting: AwaitingCounterpartyRow[];
   shapes: SilencedShapeRow[];
+  refused: RefusedDeliveryRow[];
   options: TransactionFormOptions;
-  ingestUrl: string;
 }) {
   const t = useTranslations("ingest");
   const tKey = useTranslations();
@@ -217,6 +227,9 @@ export function InboxScreen({
     id: delivery.id,
     createdAt: delivery.createdAt,
     merchantLabel: delivery.merchantLabel,
+    via: arrivedVia(delivery, (badge, name) =>
+      t("arrivedVia", { kind: tKey(`webhooks.kind.${badge}`), name }),
+    ),
     rawText: delivery.rawText,
     category: categoryInfo(
       options,
@@ -250,20 +263,19 @@ export function InboxScreen({
       description={t("emptyDescription")}
       action={
         <Flex direction="column" gap="3" width="100%" maxWidth="480px">
-          <CopyField
-            id="inbox-ingest-url"
-            label={t("emptyAddressLabel")}
-            value={ingestUrl}
-            copyLabel={t("copy")}
-            copiedLabel={t("copied")}
-            failedLabel={t("copyFailed")}
-          />
-          <Flex direction="column" gap="1">
-            {[1, 2, 3].map((step) => (
-              <Text key={step} size="2" color="gray">
-                {step}. {t(`emptyStep${step}` as "emptyStep1")}
-              </Text>
-            ))}
+          <Flex direction="column" gap="1" asChild>
+            <ul>
+              {INBOX_SOURCES.map(({ key, href }) => (
+                <li key={key}>
+                  <Text size="2" color="gray">
+                    {t(`emptySource.${key}.label`)}{" "}
+                  </Text>
+                  <TextLink href={href} size="2">
+                    {t(`emptySource.${key}.link`)}
+                  </TextLink>
+                </li>
+              ))}
+            </ul>
           </Flex>
         </Flex>
       }
@@ -316,6 +328,8 @@ export function InboxScreen({
       </Box>
 
       <AwaitingCounterparty rows={awaiting} accounts={options.accounts} />
+
+      <RefusedDeliveries rows={refused} />
 
       <SilencedShapes shapes={shapes} />
 

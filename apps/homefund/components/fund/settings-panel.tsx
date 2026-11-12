@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { useTranslations } from "next-intl";
 import { useState } from "react";
 
+import { KeepSignedInSelect } from "@/components/auth/keep-signed-in-select";
 import { SignOutButton } from "@/components/auth/sign-out-button";
 import { FUND_SETTINGS, SETTINGS_KEYS, destinations } from "@/components/fund/destinations";
 import { LanguageSwitcher } from "@/components/language-switcher";
@@ -18,12 +19,12 @@ import { usePathname } from "@/i18n/navigation";
  */
 export function SettingsPanel({
   hasGroup,
-  inboxCount = 0,
+  keepSignedIn,
   trigger,
 }: {
   hasGroup: boolean;
-  // Bandeja's waiting count, spoken in its row when the phone's bar hides it.
-  inboxCount?: number;
+  // The stored «Mantener la sesión abierta» choice (RF-190), for the phone, which has no Ajustes screen; the sidebar omits it.
+  keepSignedIn?: string;
   trigger: ReactNode;
 }) {
   const t = useTranslations("nav");
@@ -42,10 +43,7 @@ export function SettingsPanel({
       key,
       href,
       icon: <Icon size={18} />,
-      label:
-        key === "inbox" && inboxCount > 0
-          ? `${t(key)}, ${t("pending", { count: inboxCount })}`
-          : t(key),
+      label: t(key),
       current: pathname === href,
     }),
   );
@@ -80,6 +78,7 @@ export function SettingsPanel({
       <Flex direction="column" gap="2">
         <LanguageSwitcher width="100%" showText />
         <ThemeSwitcher width="100%" showText />
+        {keepSignedIn !== undefined && <KeepSignedInSelect saved={keepSignedIn} width="100%" />}
         <SignOutButton />
       </Flex>
     </NavPanel>

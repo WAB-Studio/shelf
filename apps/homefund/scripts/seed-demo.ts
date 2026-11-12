@@ -1172,7 +1172,7 @@ async function seedRecurring(scaffold: Scaffold): Promise<void> {
 }
 
 // The five planned payments and their three ends: two still ahead, one already
-// past its date, one settled into a real movement and one cancelled (RF-74, RF-75).
+// past its date, one settled into a real movement and one cancelled (RF-74, RF-161).
 async function seedPayments(scaffold: Scaffold): Promise<void> {
   const today = todayInBogota();
   const existing = new Set(

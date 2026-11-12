@@ -29,6 +29,13 @@ export const env = createEnv({
     // email's body. Without the secret a signed delivery is refused; a bearer caller needs neither.
     INBOUND_EMAIL_WEBHOOK_SECRET: z.string().startsWith("whsec_").optional(),
     RESEND_API_KEY: z.string().startsWith("re_").optional(),
+    // The domain Resend Inbound receives on; a forwarding address is `<key>@<this>` (RF-187).
+    INBOUND_EMAIL_DOMAIN: z.string().min(1).optional(),
+    // RF-192's Google OAuth client, shown to signed-in members as the one line aw-timelog asks for.
+    GMAIL_OAUTH_CLIENT_ID: z.string().min(1).optional(),
+    GMAIL_OAUTH_CLIENT_SECRET: z.string().min(1).optional(),
+    // RF-194: a read-only token for the private homefund-android releases. Unset, Ajustes says the APK is not ready.
+    ANDROID_APK_GITHUB_TOKEN: z.string().min(1).optional(),
   },
   client: {
     NEXT_PUBLIC_SUPABASE_URL: z.url(),

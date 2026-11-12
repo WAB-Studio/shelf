@@ -40,7 +40,7 @@ import { usePathname, useRouter } from "@/i18n/navigation";
 import { categoryNamesById, scopedCategoryParts } from "@/lib/fund/category-names";
 import type { CurrencyCode } from "@/lib/currency";
 import type { Locale } from "@/lib/locales";
-import { budgetTotals } from "@/lib/fund/glance";
+import { budgetPercent, budgetTotals } from "@/lib/fund/glance";
 import { useMoneyText } from "@/lib/use-privacy";
 import { useActionErrorToast } from "@/lib/use-action-toast";
 
@@ -54,7 +54,7 @@ type RowAction =
 /**
  * The budgets area: each active budget reads as a card whose bar and status are
  * derived server-side from the split spend over the selected month's window
- * (RF-72, RF-73). The month selector rewrites `?month=` so the page re-derives
+ * (RF-160, RF-73). The month selector rewrites `?month=` so the page re-derives
  * the whole list; a budget is created, edited, archived, restored or deleted
  * through the dialog and the confirms below (RF-120). Money stays integer cents
  * and every figure is drawn in the budget's own currency, which is what says
@@ -376,13 +376,8 @@ function BudgetCard({
   const locale = useLocale();
 
   // The bar and the percentage read the derived spend against the limit, clamped
-  // so an overspend never runs the bar past its track (RF-72).
-  const pct =
-    budget.limitCents > 0
-      ? Math.min(100, Math.round((budget.spentCents / budget.limitCents) * 100))
-      : budget.spentCents > 0
-        ? 100
-        : 0;
+  // so an overspend never runs the bar past its track (RF-160).
+  const pct = Math.min(100, budgetPercent(budget.spentCents, budget.limitCents));
 
   const tone = budget.overspent
     ? "red"

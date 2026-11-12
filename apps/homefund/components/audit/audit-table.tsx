@@ -54,7 +54,7 @@ const WIDTHS = {
 
 // The table draws from `lg` up. Its floor keeps the flexible column from
 // collapsing to zero between `lg` and the width the fixed columns need, so it
-// scrolls with the rest instead (D16).
+// scrolls with the rest instead.
 const MIN_WIDTH = `calc(${WIDTHS.occurredAt} + ${WIDTHS.entity} + ${WIDTHS.action} + ${WIDTHS.actor} + ${RECORD_ID_FLOOR})`;
 
 /**

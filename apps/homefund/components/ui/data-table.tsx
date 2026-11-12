@@ -14,7 +14,7 @@ export type DataColumn<Row> = {
   // One CSS grid track: "96px" or "1fr". Header and rows share the template.
   width: string;
   align?: "start" | "end";
-  // Figures line up column-wise: the cell reads in tabular numerals (SPEC-A3).
+  // Figures line up column-wise: the cell reads in tabular numerals.
   numeric?: boolean;
   sort?: "asc" | "desc";
   onSort?: () => void;
@@ -25,7 +25,7 @@ export type DataColumn<Row> = {
 export type DataSection<Row> = { key: string; label: string; aside?: ReactNode; rows: Row[] };
 
 /**
- * The dense list of SPEC-A3 (RF-125, RNF-08). Grid tracks lay it out and explicit
+ * The dense list of the desktop design (RF-125, RNF-08). Grid tracks lay it out and explicit
  * ARIA roles carry the semantics, because a `<table>` switched to `display: grid`
  * loses them in the accessibility tree — this way every cell is still announced
  * with its column's header.
@@ -56,10 +56,10 @@ export function DataTable<Row>({
   rowKey: (row: Row) => string;
   total?: ReactNode[];
   // Drawn in place of the rows, under the column headers and inside the same
-  // frame, when every section came back empty (SPEC-A3, RF-125).
+  // frame, when every section came back empty (RF-125).
   empty?: ReactNode;
   // Drawn under the container, inside the same gutter: the pagination of
-  // SPEC-A3 lines up with the table's edges without a screen padding it.
+  // the desktop design lines up with the table's edges without a screen padding it.
   footer?: ReactNode;
   // Floors the row grid at this width so a flexible track scrolls instead of
   // collapsing when the fixed columns alone already outrun the viewport. Unset

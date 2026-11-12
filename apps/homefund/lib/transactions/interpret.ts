@@ -1,12 +1,12 @@
 import { isCivilDate } from "@/lib/dates";
-import { normalizeAmountInput, parseAmount } from "@/lib/money";
+import { normalizeGroupMarks, parseAmount } from "@/lib/money";
 
 // Quick entry reads one text field and proposes an editable movement (RF-22).
 // Everything it returns is a proposal the form may overwrite; a field is null
 // when nothing matched. It is pure: no DB, no async, no side effect.
 
 // The first run of digits, optionally carrying the thousands separators a
-// person types by hand; `normalizeAmountInput` strips those to a peso string.
+// person types by hand; `normalizeGroupMarks` strips those to a peso string.
 const AMOUNT_PATTERN = /\d[\d.,]*\d|\d/g;
 // A spoken multiplier right after the amount (RF-22): «mil» and «k» are a
 // thousand, «M», «millón» and «millones» a million. A letter or digit after the
@@ -47,6 +47,10 @@ interface InterpretContext {
   categories: { id: string; name: string; kind: string }[];
   accounts: { id: string; name: string; lastFour?: string | null }[];
   defaultAccountId: string | null;
+  // A bank's message dates itself («15 Octubre 2026»). «dated»: a year-like run beside a month or «de»
+  // is no amount. «any»: a year-like run with no currency mark is none either (a bank email's
+  // «caso 2026»). Typed quick entry leaves it off, so «2000 de bus» keeps its amount.
+  yearGuard?: "dated" | "any";
 }
 
 // A spaced «M» with words after it («3 M arriendo») is not guessed: the person
@@ -100,9 +104,9 @@ function multiplyPesos(mantissa: string, zeros: number): string | null {
 function lowerMChoices(amount: string): AmountAsk["choices"] {
   const mantissa = MANTISSA_PATTERN.test(amount)
     ? amount
-    : normalizeAmountInput(amount);
+    : normalizeGroupMarks(amount);
   const pesos = [
-    normalizeAmountInput(amount),
+    normalizeGroupMarks(amount),
     multiplyPesos(mantissa, THOUSAND_ZEROS) ?? `${mantissa}000`,
     multiplyPesos(mantissa, MILLION_ZEROS) ?? `${mantissa}000000`,
   ];
@@ -136,7 +140,23 @@ function phoneLike(run: string): boolean {
 // reference, an account or a phone is set aside, and of the rest the one beside
 // an amount word («valor», «total», «por»), else the first that is no bare
 // quantity («Mercado 2 87500» reads 87500).
-function findAmountToken(text: string): RegExpExecArray | null {
+const MONTH_WORD =
+  "(?:enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|setiembre|octubre|noviembre|diciembre|ene|feb|mar|abr|may|jun|jul|ago|sep|sept|oct|nov|dic)";
+const MONTH_OR_DE_BEFORE = new RegExp(`(?:\\b${MONTH_WORD}\\.?|\\bde)\\s+$`, "iu");
+const MONTH_OR_DE_AFTER = new RegExp(`^\\s+(?:${MONTH_WORD}\\b|de\\b)`, "iu");
+
+// A year (19xx, 20xx): beside a month name or «de», or under the «any» guard wherever it stands.
+function yearLike(text: string, match: RegExpMatchArray, guard: "dated" | "any"): boolean {
+  const at = match.index ?? 0;
+  if (!/^(?:19|20)\d{2}$/.test(match[0])) return false;
+  return (
+    guard === "any" ||
+    MONTH_OR_DE_BEFORE.test(text.slice(0, at)) ||
+    MONTH_OR_DE_AFTER.test(text.slice(at + match[0].length))
+  );
+}
+
+function findAmountToken(text: string, yearGuard?: "dated" | "any"): RegExpExecArray | null {
   // A currency mark right before the run («$», «COP122.000,50») says it is money
   // whatever else the text holds; the letters glue it to a word only otherwise.
   const markedBefore = (match: RegExpMatchArray): boolean => {
@@ -148,7 +168,8 @@ function findAmountToken(text: string): RegExpExecArray | null {
     const after = text[match.index + match[0].length] ?? "";
     return (
       (!/[\p{L}_/:*]/u.test(before) || markedBefore(match)) &&
-      !/[/:]/u.test(after)
+      !/[/:]/u.test(after) &&
+      !(yearGuard && !markedBefore(match) && yearLike(text, match, yearGuard))
     );
   });
   const marked = candidates.find(markedBefore);
@@ -208,7 +229,7 @@ export function interpretQuickEntry(
   // The earliest of a digit run, a bare «mil» and a bare «millón» is the amount.
   const amountMatch =
     [
-      findAmountToken(text),
+      findAmountToken(text, ctx.yearGuard),
       BARE_THOUSAND_PATTERN.exec(text),
       BARE_MILLION_PATTERN.exec(text),
     ]
@@ -264,7 +285,7 @@ export function interpretQuickEntry(
             amountMatch[0],
             MULTIPLIER_ZEROS[multiplierMatch[1].toLowerCase()] ?? MILLION_ZEROS,
           )
-        : normalizeAmountInput(amountMatch[0]);
+        : normalizeGroupMarks(amountMatch[0]);
   const mentionedTails = new Set(
     ACCOUNT_TAIL_PATTERNS.flatMap((pattern) =>
       [...text.matchAll(pattern)].map((match) => match[1]),

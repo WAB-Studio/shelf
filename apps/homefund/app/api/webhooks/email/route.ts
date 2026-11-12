@@ -1,8 +1,10 @@
 import { authorizeIngest, bearerOf, deliver } from "@/app/api/webhooks/respond";
 import { env } from "@/lib/env";
 import type { ResolvedWebhookCredential } from "@/db/queries/webhook-credentials";
+import { classifyBankEmail } from "@/lib/ingest/classify";
 import {
   emailToMessage,
+  emailWords,
   hasBody,
   keyInPayloads,
   readInboundEmail,
@@ -41,7 +43,8 @@ async function fetchReceivedEmail(emailId: string): Promise<unknown> {
   }
 }
 
-// The message the email carries, as one more delivery of the credential the key opened.
+// The message the email carries, as one more delivery of the credential the key opened; one that
+// reports no movement lands rejected (RF-196).
 function finish(
   cred: ResolvedWebhookCredential,
   email: InboundEmail,
@@ -52,7 +55,8 @@ function finish(
     external_ref: externalRef,
   });
   if (!parsed.success) return Response.json({ error: "invalid_payload" }, { status: 422 });
-  return deliver(cred, parsed.data);
+  // Judged on the whole email, before the message is cut to the schema's ceiling (RF-196).
+  return deliver(cred, parsed.data, classifyBankEmail(emailWords(email)));
 }
 
 export async function POST(request: Request): Promise<Response> {

@@ -7,5 +7,3 @@ export const markReviewedSchema = z.object({
   transactionIds: z.array(z.uuid({ error: "errors.unexpected" })).min(1).max(500),
   rule: z.enum(REVIEW_RULES),
 });
-
-export type MarkReviewedInput = z.infer<typeof markReviewedSchema>;

@@ -1,8 +1,8 @@
 /**
  * A foreign purchase on an asset account is confirmed on «Cuentas» (RF-123,
- * RF-137; Q18 a, boards C4a–C4d). The card of an asset account lists each
+ * RF-137; boards C4a–C4d). The card of an asset account lists each
  * pending estimate under «Compras en otra moneda» with «Confirmar monto»; the
- * dialog is the debts screen's row body, and M54's refusal shows under the field.
+ * dialog is the debts screen's row body, and the refusal shows under the field.
  * Every figure that matters is read back from Postgres, not from the screen.
  */
 import { randomUUID } from "node:crypto";

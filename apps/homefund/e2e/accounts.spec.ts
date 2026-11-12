@@ -264,7 +264,7 @@ test.describe("the phone's card", () => {
   // The two figures below are two labelled lines of the card, and both projects
   // drive them at the width that draws it: the laptop's table gives the balance a
   // column of its own and states no opening figure anywhere, so the pair is only
-  // ever readable off the card (SPEC-A3, RNF-08).
+  // ever readable off the card (RNF-08).
   test.use({ viewport: { width: 360, height: 740 } });
 
   test("draws the balance its movements derive and not the figure it opened with @mobile", async ({
@@ -299,7 +299,7 @@ test.describe("the phone's card", () => {
 
 test.describe("the laptop row", () => {
   // The dense table renders from `lg` up, and both projects drive it at the
-  // width the artboard states rather than skipping one of them (SPEC-A3,
+  // width the artboard states rather than skipping one of them (the desktop design,
   // RNF-08).
   test.use({ viewport: { width: 1280, height: 900 } });
 

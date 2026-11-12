@@ -42,6 +42,7 @@ import { proposedCategoryId } from "@/lib/fund/category-scope";
 import { centsToDecimal } from "@/lib/money";
 import { useActionErrorToast } from "@/lib/use-action-toast";
 import type { AcceptDeliveryInput } from "@/lib/validation/ingest";
+import type { CredentialBadge } from "@/lib/validation/webhook";
 
 type ReviewDefaults = {
   fromAccountId: string | null;
@@ -95,6 +96,15 @@ function completeInput(
     ...movementDefaults(delivery, options),
     labelIds: [],
   };
+}
+
+// «Llegó por <kind> · <key name>»; null once the key is gone, so nothing is claimed about it.
+export function arrivedVia(
+  delivery: Pick<PendingDeliveryRow, "credentialBadge" | "credentialName">,
+  say: (badge: CredentialBadge, name: string) => string,
+): string | null {
+  if (delivery.credentialBadge === null || delivery.credentialName === null) return null;
+  return say(delivery.credentialBadge, delivery.credentialName);
 }
 
 export function DeliveryCard({
@@ -177,6 +187,10 @@ export function DeliveryCard({
     timeStyle: "short",
   });
 
+  const via = arrivedVia(delivery, (badge, name) =>
+    t("arrivedVia", { kind: tKey(`webhooks.kind.${badge}`), name }),
+  );
+
   function runReject(nextSilenceShape: boolean) {
     silenceShape.current = nextSilenceShape;
     reject.execute({
@@ -196,6 +210,11 @@ export function DeliveryCard({
             <Text size="2" color="gray">
               {t("receivedOn", { date: receivedOn })}
             </Text>
+            {via && (
+              <Text size="2" color="gray">
+                {via}
+              </Text>
+            )}
           </Flex>
 
           <Box flexShrink="0">

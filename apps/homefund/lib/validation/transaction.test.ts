@@ -3,6 +3,7 @@ import { test } from "node:test";
 
 import { maxAmountMinor } from "@/lib/money";
 import {
+  MOVEMENT_SEARCH_MAX,
   movementFiltersSchema,
   movementTypeFilter,
   transactionFields,
@@ -96,4 +97,13 @@ test("«De quién» is required on an income into a fund account and nowhere els
   assert.deepEqual(issues({ fromAccountId: null, toAccountId: account }, false), []);
   assert.deepEqual(issues({ fromAccountId: account, toAccountId: null }, true), []);
   assert.deepEqual(issues({ fromAccountId: member, toAccountId: account }, true), []);
+});
+
+// Mutation: drop the trim, or let an empty `q` through as a filter.
+test("the movement search trims its text and drops an empty or oversized one", () => {
+  assert.equal(movementFiltersSchema.parse({ q: "  café  " }).q, "café");
+  assert.equal(movementFiltersSchema.parse({ q: "   " }).q, undefined);
+  assert.equal(movementFiltersSchema.parse({}).q, undefined);
+  assert.equal(movementFiltersSchema.parse({ q: "x".repeat(MOVEMENT_SEARCH_MAX + 1) }).q, undefined);
+  assert.equal(movementFiltersSchema.parse({ q: "x".repeat(MOVEMENT_SEARCH_MAX) }).q?.length, MOVEMENT_SEARCH_MAX);
 });

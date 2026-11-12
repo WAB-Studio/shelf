@@ -614,6 +614,8 @@
     "filteredEmptyDescription": "No movement matches these filters in the chosen period.",
     "clearFilters": "Clear filters",
     "filtersLabel": "Filters",
+    "searchLabel": "Search",
+    "searchPlaceholder": "Description or amount",
     "rangeFrom": "From",
     "rangeTo": "To",
     "allAccounts": "All accounts",
@@ -1288,7 +1290,6 @@
     "stale": "This changed while you were editing it. Open it again.",
     "resendChanged": "We already saved this movement with another amount; open it to correct it.",
     "linkTimeout": "We could not check the link. Open it again from the email.",
-    "signOutFailed": "We could not sign you out. Please try again.",
     "signOutPartial": "You signed out here, but we couldn't sign you out on your other devices.",
     "notFoundTitle": "This page does not exist",
     "notFoundDescription": "The link may be misspelled, or the page may have moved.",
@@ -1542,7 +1543,22 @@
     "androidHeading": "Android app",
     "androidDescription": "Comes ready for Bancolombia and Banco de Bogotá",
     "androidDownload": "Download HomeFund Avisos",
-    "androidDownloadHint": "Download it with your WAB-Studio GitHub account",
+    "androidDownloadHint": "When you open the file, Android asks to allow installs from this browser",
+    "androidDownloadMissing": "The download is not ready yet. Ask whoever runs HomeFund to turn it on.",
+    "bankEmails": {
+      "heading": "Bank emails",
+      "description": "Every 10 minutes your bank's emails (Bancolombia, Nequi, Nu, Lulo, Falabella, Banco de Bogotá, PSE…) reach the Inbox by themselves. It only reads mail; nothing else leaves your computer.",
+      "step1": "Install ActivityWatch + TimeLog on your Windows computer.",
+      "step1Link": "Download ActivityWatch + TimeLog",
+      "step2": "Right-click the ActivityWatch icon next to the clock and choose «Gmail: conectar cuenta…». The first time it asks for the line below: paste it.",
+      "step3": "Choose your Gmail account. Google warns «Google no verificó esta app»: click «Configuración avanzada», then «Ir a Asistente (no seguro)», then «Continuar».",
+      "step4": "Create a key here and paste it in that same menu with «HomeFund: pegar llave…».",
+      "step4Action": "Create credential",
+      "step5": "Repeat step 2 for every other Gmail account.",
+      "step6": "In that menu you can turn TimeLog on or off with «TimeLog: subir mi tiempo»: emails work without TimeLog.",
+      "lineLabel": "Line to paste in step 2",
+      "lineMissing": "This installation has no Google data yet. Ask whoever runs HomeFund for it."
+    },
     "iphone": {
       "heading": "iPhone Shortcut",
       "description": "An iOS Shortcut sends the Inbox an expense you type or the text your bank sent you. First tap «Create credential» above (not the key for Claude) and copy its token, which starts with «whk_».",
@@ -1582,20 +1598,45 @@
       "amountInvalid": "Enter a valid amount.",
       "amountTooLarge": "The amount is too large.",
       "directionInvalid": "The «direction» field only accepts «expense» or «income».",
-      "scopeViolation": "That category belongs to another scope than the account. Pick a fund category for a fund account, or one of yours for your own account."
+      "scopeViolation": "That category belongs to another scope than the account. Pick a fund category for a fund account, or one of yours for your own account.",
+      "kindInvalid": "Pick what the credential is for."
     },
     "mcpHeading": "Connect Claude",
-    "mcpDescription": "On claude.ai (web, desktop or mobile), add a custom connector with the URL above: it asks you to sign in with HomeFund and that is all. Claude reads your accounts, movements and «Review the month», and records movements or creates and edits accounts and categories once you confirm, always with your own permissions; revoking its key in the list disconnects it. A key you create here still works: in Claude Code it goes in «Authorization: Bearer», and in a connector with no sign-in in the «X-API-Key» header. A webhook key does not open this door. To talk to HomeFund and GoalLog in one chat, the repository github.com/WAB-Studio/asistente (private to WAB-Studio) has it all set up: follow its README.",
-    "mcpIssue": "Create a key for Claude"
+    "mcpDescription": "On claude.ai (web, desktop or mobile), add a custom connector with the URL above: it asks you to sign in with HomeFund and that is all. Claude reads your accounts, movements and «Review the month», and records movements or creates and edits accounts, categories and labels, and labels movements, once you confirm, always with your own permissions; revoking its key in the list disconnects it. A key you create here still works: in Claude Code it goes in «Authorization: Bearer», and in a connector with no sign-in in the «X-API-Key» header. A webhook key does not open this door. To talk to HomeFund and GoalLog in one chat, the repository github.com/WAB-Studio/asistente (private to WAB-Studio) has it all set up: follow its README.",
+    "mcpIssue": "Create a key for Claude",
+    "kind": {
+      "android": "Android",
+      "iphone": "iPhone",
+      "bank_emails": "Bank emails",
+      "claude": "Claude",
+      "other": "Other"
+    },
+    "kindLabel": "What it is for",
+    "deliveries30": "{count, plural, =0 {No deliveries} one {# delivery} other {# deliveries}} in 30 days",
+    "columnDeliveries": "Deliveries (30 days)",
+    "showRevoked": "Show revoked ({count})",
+    "hideRevoked": "Hide revoked ({count})",
+    "forwarding": {
+      "heading": "No PC: forward from Gmail",
+      "description": "Gmail forwards the bank emails to a HomeFund address and they reach the inbox with no computer on.",
+      "step1": "In Gmail open Settings → Forwarding and POP/IMAP → Add a forwarding address, and paste the address below.",
+      "step2": "Google sends a confirmation code to that address. It arrives in the HomeFund inbox, under \"Messages that did not get in\": open it, copy the code and paste it in Gmail.",
+      "step3": "In Gmail create a filter: from Bancolombia, Nequi, Nu, Lulo, Falabella, Banco de Bogotá or PSE → Forward to that address.",
+      "create": "Create a key for forwarding",
+      "addressLabel": "Forwarding address",
+      "addressNote": "The address carries your key: do not share it. It is shown once; if you lose it, revoke the key and make another."
+    }
   },
   "ingest": {
     "title": "Inbox",
     "emptyTitle": "Nothing to review",
-    "emptyDescription": "Bank messages you forward land here. To start, point your bank at this address.",
-    "emptyAddressLabel": "Receiving address",
-    "emptyStep1": "Create a credential in Settings · Bank emails.",
-    "emptyStep2": "Set your bank's email or rule to send each notice to this address with your token.",
-    "emptyStep3": "When one arrives it shows up here for you to review.",
+    "emptyDescription": "When something arrives from one of these sources, it shows up here for you to review. Connect the one you use.",
+    "emptySource": {
+      "android": { "label": "On Android, the HomeFund Avisos app forwards your bank's notices.", "link": "Install HomeFund Avisos" },
+      "iphone": { "label": "On iPhone, a Shortcut sends the bank's text message or an expense you type.", "link": "Create the Shortcut" },
+      "gmail": { "label": "With Gmail, your bank's emails arrive on their own.", "link": "Connect Gmail" },
+      "claude": { "label": "With Claude, you ask it to record or import movements for you.", "link": "Connect Claude" }
+    },
     "copy": "Copy",
     "copied": "Copied",
     "copyFailed": "Could not copy. Select the text and copy it by hand.",
@@ -1669,7 +1710,20 @@
       "completed": "Movement completed"
     },
     "saveNumber": "Save this number",
-    "recipientIs": "Recipient: {name}"
+    "recipientIs": "Recipient: {name}",
+    "arrivedVia": "Arrived via {kind} · {name}",
+    "connectionLabel": "Connection",
+    "refusedTitle": "Messages that did not come in",
+    "refusedCount": "{count, plural, one {# message discarded as not a movement} other {# messages discarded as not a movement}}",
+    "refusedMeta": "{reason} · {date}",
+    "rejectReason": {
+      "failed": "Rejected transaction",
+      "statement": "Statement",
+      "support": "Support",
+      "reminder": "Payment reminder",
+      "promotion": "Advertising",
+      "no_movement_signal": "No movement"
+    }
   },
   "review": {
     "entry": "Review the month",
@@ -1728,9 +1782,9 @@
       "previewStatement": "Step 1 of importing a bank statement: says what each line would do, writing nothing. Each line: «new» (will be created), «matches» (already recorded by hand or as a transfer's other side; only linked), «already_imported» (skipped) or «invalid» (with its reason). «proposal» is the account the person used before for that description: ask them before passing it as counterAccountId. A transfer with an account in another currency carries «counter»: ask the person how much arrived (or left) in that account, pass it as counterAmountCents and confirm the resulting rate with them. Always pass «statement» (periodStart and cutOffDate as the statement prints them, and its closing balance when printed): the cut-off date is how a re-import finds the same statement, and every line must fall inside the period. «removals» lists what a re-import of that statement would drop because its lines no longer name it («deletes» removes the movement, «unlinks» only this statement's link to it): show it to the person. Show the summary to the person before step 2.",
       "importStatement": "Step 2: imports exactly what preview_statement showed, with its previewKey. All or nothing: if a line changed, or what the preview said about it, or one is invalid, nothing is written and it asks for a new preview. Repeating it never duplicates movements: what was imported shows as «already_imported». Re-importing a statement replaces its rows: lines it no longer names are removed (as the preview's «removals» said), new ones are added and unchanged ones keep their category, labels and notes.",
       "listCategories": "The categories the person can use, personal and the fund's, with id, name, kind (expense or income), parent and scope (personal or fund). Always pick one from here for a movement; if none fits, propose creating one with create_category.",
-      "listMovements": "Recent movements, newest first, of one account or all, filtered by dates (YYYY-MM-DD) and by category (a category includes its subcategories): id, date, description, amount in cents, currency, source and destination accounts and its lines (splits: category, amount and product description). limit and offset page through an account that holds more than 200. Call it BEFORE record_movement to see whether it is already recorded and not duplicate it. Each movement returns madeByMemberId and madeByName (who made it; null is the household); madeByMemberId filters by that member.",
-      "recordMovement": "Records an expense (fromAccountId only), an income (toAccountId only) or a transfer (both); the kind comes from the accounts. Amount in whole cents, date YYYY-MM-DD, never in the future. An expense or income carries a category (categoryId, or splits summing to the amount); a transfer none. Paying a card or a loan, lending or receiving a loan, and moving money between the person's own accounts is a TRANSFER (fromAccountId and toAccountId both set), never an expense or income; if the account is missing (the card, the loan, an «Owes me <person>» asset), propose creating it with create_account in the same confirmation list. The description says what and where («Ara — Champiñón 250 g»), never the payment method or account, which the movement already carries. A receipt with several products is ONE movement: each product is a split with its description (the name), its amount in cents and its category from list_categories, and the splits sum exactly to the receipt total. For each product pick the most specific category (the subcategory when one fits); if a subcategory is missing, propose creating it with create_category inside the same confirmation list. Several products may share a category. A discount is not a line: subtract it from the amounts of the lines it applies to (a global discount, from the largest product or spread) so the sum stays the total paid. Before writing, show the list (product, amount, category, discounts, total) and ask one single yes. An income into a fund account needs contributedByMemberId («Whose»). BEFORE calling it, look for a duplicate with list_movements and CONFIRM with the person what you are about to write (account, amount, date, category). Generate a requestRef (UUID) per movement and reuse it on a retry: it never duplicates. Returns the movement id. In a fund movement (a fund account, or forHousehold) madeByMemberId says WHO made it, from list_members; empty is the household, and a purely personal movement refuses it. It never replaces who typed it.",
-      "updateMovement": "Fixes a movement the person can write. It is a patch: send only what changes and the rest stays as it is. Pass the updatedAt you read in list_movements as expectedUpdatedAt: if someone edited it meanwhile, it is refused. CONFIRM the change with the person before calling it. The rules of record_movement apply: card or loan payments and moves between own accounts are transfers, and the description says what and where, never the payment method. madeByMemberId sets who made a fund movement (null clears it; absent keeps it). Migrating old descriptions: when a description starts with a person's name («Dad · Ara market»), you may set madeByMemberId to that member and strip the prefix from the description, but ONLY after showing the list of changes and receiving the person's one yes.",
+      "listMovements": "Recent movements, newest first, of one account or all, filtered by dates (YYYY-MM-DD) and by category (a category includes its subcategories): id, date, description, amount in cents, currency, source and destination accounts and its lines (splits: category, amount and product description). limit and offset page through an account that holds more than 200. Call it BEFORE record_movement to see whether it is already recorded and not duplicate it. Each movement returns madeByMemberId and madeByName (who made it; null is the household); madeByMemberId filters by that member. Each movement returns labelIds; label (an id or name from list_labels) filters by label.",
+      "recordMovement": "Records an expense (fromAccountId only), an income (toAccountId only) or a transfer (both); the kind comes from the accounts. Amount in whole cents, date YYYY-MM-DD, never in the future. An expense or income carries a category (categoryId, or splits summing to the amount); a transfer none. Paying a card or a loan, lending or receiving a loan, and moving money between the person's own accounts is a TRANSFER (fromAccountId and toAccountId both set), never an expense or income; if the account is missing (the card, the loan, an «Owes me <person>» asset), propose creating it with create_account in the same confirmation list. The description says what and where («Ara — Champiñón 250 g»), never the payment method or account, which the movement already carries. A receipt with several products is ONE movement: each product is a split with its description (the name), its amount in cents and its category from list_categories, and the splits sum exactly to the receipt total. For each product pick the most specific category (the subcategory when one fits); if a subcategory is missing, propose creating it with create_category inside the same confirmation list. Several products may share a category. A discount is not a line: subtract it from the amounts of the lines it applies to (a global discount, from the largest product or spread) so the sum stays the total paid. Before writing, show the list (product, amount, category, discounts, total) and ask one single yes. An income into a fund account needs contributedByMemberId («Whose»). BEFORE calling it, look for a duplicate with list_movements and CONFIRM with the person what you are about to write (account, amount, date, category). Generate a requestRef (UUID) per movement and reuse it on a retry: it never duplicates. Returns the movement id. In a fund movement (a fund account, or forHousehold) madeByMemberId says WHO made it, from list_members; empty is the household, and a purely personal movement refuses it. It never replaces who typed it. labels puts labels on the movement (ids from list_labels or their names, sharing the movement's scope).",
+      "updateMovement": "Fixes a movement the person can write. It is a patch: send only what changes and the rest stays as it is. Pass the updatedAt you read in list_movements as expectedUpdatedAt: if someone edited it meanwhile, it is refused. CONFIRM the change with the person before calling it. The rules of record_movement apply: card or loan payments and moves between own accounts are transfers, and the description says what and where, never the payment method. madeByMemberId sets who made a fund movement (null clears it; absent keeps it). Migrating old descriptions: when a description starts with a person's name («Dad · Ara market»), you may set madeByMemberId to that member and strip the prefix from the description, but ONLY after showing the list of changes and receiving the person's one yes. labels replaces the movement's labels (absent keeps them; [] removes them).",
       "deleteMovement": "Deletes a movement the person can write. It cannot be undone: CONFIRM with the person which one before calling it.",
       "createAccount": "Creates an account with an opening balance in cents on a date: asset (bank or cash) or liability (card, what is owed goes positive). placement «personal» or «group» (the fund's). parentAccountId makes it a pocket of an open asset account of the same owner and currency, one level only. holderMemberId, only with placement «group», names the fund member who holds the account (from list_members). CONFIRM name, kind, currency and balance with the person before calling it, and check with list_accounts that it does not exist yet.",
       "updateAccount": "Fixes an account the person can write: name, subtype, currency, institution, last four digits, parentAccountId (the account it sits inside as a pocket, null to take it out), holderMemberId (the holding member, from list_members; null for everyone's), opening balance in cents and its date. It is a patch: send only what changes. Pass the updatedAt you read in list_accounts as expectedUpdatedAt: if someone edited it meanwhile, it is refused. CONFIRM the change with the person before calling it, above all the opening balance.",
@@ -1742,11 +1796,14 @@
       "listInbox": "The inbox: the deliveries (bank SMS, emails, webhook) waiting for the person's approval. Each carries id, receivedAt, rawText (the message as it arrived) and proposal (amountCents, currency, kind expense or income, accountId and accountName, categoryId and categoryPath, date, description). notDetected names the fields the message did not give. status (default pending) filters; limit and offset page. Call it FIRST. Then show the person ONE compact list (date, amount, account, category, description), with every missing field filled in from your proposal and marked as such, and ask for ONE yes for the whole list, or their corrections. Then call accept_deliveries; whatever the person drops is rejected with reject_deliveries, confirmed in that same list. Each delivery also carries extractedNumber (the number the message names, e.g. the destination account or phone), recipientId and recipientName (the saved recipient it matches, or null). When extractedNumber is present and recipientName is null the number is unknown: ASK the person ONCE what it is (one of their own accounts, a person, or a merchant or fixed expense) and, after their yes, save it with save_recipient; later deliveries of that number then arrive with its name and proposal. A delivery with kind transfer also carries toAccountId and toAccountName.",
       "acceptDeliveries": "Approves one or more inbox deliveries: each becomes a movement, by the same path and rules as HomeFund's «Accept» button (kind derived from the accounts, audit, the delivery's reference prevents duplicates). Each item carries the id from list_inbox and, only when it changes or is missing, accountId (the expense or income account), categoryId or splits (lines with categoryId, amountCents and the product's description, summing to the amount), amountCents, description, date (YYYY-MM-DD), kind (expense, income or transfer) and, for a transfer, fromAccountId and toAccountId (without kind transfer a lone side is refused; with transfer, the missing side is the proposal's account). For an income into a fund account (notDetected carries contributor), pass contributedByMemberId («De quién»). All or nothing: if one delivery fails (for example no account, amount or category, already resolved, or someone else's) none is accepted and the error carries deliveryId and the missing field. NEVER call it without first calling list_inbox, showing the person the compact list (date, amount, account, category, description) and receiving ONE yes for the whole list. For a movement in a fund account, an item may carry madeByMemberId (from list_members) to say who made it.",
       "rejectDeliveries": "Rejects one or more inbox deliveries by id, by the same path as «Reject» in HomeFund; it writes no movement. All or nothing: if an id is not one of the person's pending deliveries, none is rejected. First show the list (date, amount, description) of what you will reject, together with the accept_deliveries one, and ask for ONE yes for all of it.",
-      "listMemberDebts": "What fund members owe each other: «balances» has each pair with its pending amount in cents and its currency (debtorName owes pendingCents to creditorName), derived from the entries; «entries» has each entry (kind debt is a debt, payment a repayment), newest first.",
+      "listMemberDebts": "What fund members owe each other: «balances» has each pair with its pending amount in cents and its currency (debtorName owes pendingCents to creditorName), derived from the entries; «entries» has each entry (kind debt is a debt, payment a repayment), newest first. Each debt also has «status» (pending, partial or settled), «paidCents», «remainingCents» and «settledOn», the day it was settled (null if not).",
       "recordMemberDebt": "Records an entry between two fund members: kind debt (a new debt: «Dad owes Adrian $200,000 for the motorbike») or payment (a partial or full repayment of it). Debtor and creditor are ids from list_members, and differ. A payment larger than what the debtor still owes that creditor in that currency is refused. Before writing, CONFIRM with the person who owes whom, the amount, the date and the description, and wait for their yes.",
       "listRecipients": "The person's saved recipients: numbers (bank account, phone, key) that bank messages name, each with id, identifier (digits only), name, kind (own_account: one of the person's accounts, with accountId; person: a person, with their debt account in accountId if any; payee: a merchant or fixed expense, with its categoryId), accountId, accountName, categoryId and categoryName.",
       "saveRecipient": "Saves a recipient, or updates it when you pass its id. Use it when list_inbox returns an extractedNumber with no recipientName: ask the person ONCE what that number is and save it only after their yes. identifier is the number as the message shows it (with or without *; only the digits are kept); name, a clear name such as «Mom's Nequi» or «Landlord rent»; kind own_account requires accountId (an id from list_accounts), person takes an optional accountId (their «owes me» account) and payee takes a categoryId (from list_categories) for its expenses. A number already saved is refused: update it with its id.",
-      "deleteRecipient": "Deletes a saved recipient (an id from list_recipients). Deliveries already received keep their text. Ask the person to confirm first."
+      "deleteRecipient": "Deletes a saved recipient (an id from list_recipients). Deliveries already received keep their text. Ask the person to confirm first.",
+      "listLabels": "The labels the person can use, as «Labels» shows them: their own (scope personal) and the fund's (scope fund), each with id, name, color, movementCount (movements that wear it), budgetCount (budgets that use it) and canManage (whether the person can change it: the fund's only its leader). A label is independent of the category and a movement only wears labels of its own scope (personal or the fund's).",
+      "createLabel": "Creates a label by the rules of «Labels»: name (up to 80 characters) and placement personal (the default) or group; a fund label is created only by its leader. With no color it takes a free one. CONFIRM with the person first. Returns its labelId. It never deletes labels.",
+      "updateLabel": "Changes a label's name or color (labelId from list_labels); what you do not send stays. A fund label is changed only by its leader; the scope never changes. CONFIRM with the person first. It never deletes labels."
     },
     "deferralProposal": "Defer in {count} instalments",
     "errors": {
@@ -1835,7 +1892,13 @@
       "recipientName": "What the person calls it, up to 80 characters.",
       "recipientKind": "own_account, person or payee.",
       "recipientAccountId": "own_account and person only: the account id (from list_accounts).",
-      "recipientCategoryId": "payee only: the default category of its expenses (an id from list_categories)."
+      "recipientCategoryId": "payee only: the default category of its expenses (an id from list_categories).",
+      "labelId": "The label's id (from list_labels).",
+      "labelName": "The label's name, up to 80 characters.",
+      "labelPlacement": "personal: one of the person's labels; group: the fund's (its leader only).",
+      "labelColor": "A color from the category palette, such as #06B6D4. When absent, a free one is chosen.",
+      "labels": "The movement's labels: ids from list_labels or their names. They must share the movement's scope (personal if it is personal, the fund's if it is the fund's). In update_movement it replaces the ones it had; absent keeps them and [] removes them.",
+      "filterLabel": "Only movements with this label (an id from list_labels or its name)."
     }
   },
   "oauth": {
@@ -1900,6 +1963,14 @@
     "debtRecorded": "Debt recorded",
     "paymentRecorded": "Payment recorded",
     "settled": "{first} and {second} are settled",
+    "pending": "Pending · {amount}",
+    "partial": "Part-paid · {remaining} left of {amount}",
+    "settledOn": "Settled on {date}",
+    "settledSection": "Settled ({count})",
+    "hideSettled": "Hide settled",
+    "showSettled": "Show settled ({count})",
+    "justSettled": "{debtor}'s debt of {amount} is settled",
+    "allSquare": "You are all square",
     "errors": {
       "noFund": "You are not in a fund, so there are no debts between members.",
       "memberNotInFund": "That member is not in your fund.",

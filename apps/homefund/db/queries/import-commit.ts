@@ -177,7 +177,7 @@ export type CommitInput = {
   accounts: CommitRow<CreateAccountInput>[];
   recurringRules: CommitRow<CreateRecurringRuleInput>[];
   transactions: CommitRow<ImportedTransactionInput>[];
-  // A backup's reconciliation adjustments (RF-50): booked as reconciliations, never as movements.
+  // A backup's reconciliation adjustments (RF-142): booked as reconciliations, never as movements.
   adjustments?: CommitRow<ImportedAdjustment>[];
   budgets?: CommitRow<RestoredBudget>[];
   goals?: CommitRow<RestoredGoal>[];
@@ -1467,7 +1467,7 @@ const ADJUSTMENT_REFUSALS = new Set(["RC001", "RC002", "RC003", "RC004"]);
 /**
  * Books each backup adjustment as the reconciliation that produces it (RF-137, RF-138), after
  * every ordinary movement has landed. The count is the account's balance that day plus the
- * exported gap, so the database books exactly that gap and the balance re-derives equal (RF-50).
+ * exported gap, so the database books exactly that gap and the balance re-derives equal (RF-142).
  * In day order, since a reconciliation may not predate the account's latest. A row that already
  * exists in scope (`update`) is left alone: a reconciliation is final.
  */

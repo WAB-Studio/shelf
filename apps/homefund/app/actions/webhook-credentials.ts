@@ -52,7 +52,7 @@ export const issueWebhookCredentialAction = authActionClient
   .inputSchema(issueWebhookCredentialSchema)
   .action(
     async ({
-      parsedInput: { name, defaultAccountId, defaultCategoryId, rateLimitPerMin },
+      parsedInput: { name, kind, defaultAccountId, defaultCategoryId, rateLimitPerMin },
     }) => {
       await assertDefaultsShareScope(defaultAccountId, defaultCategoryId);
 
@@ -60,6 +60,7 @@ export const issueWebhookCredentialAction = authActionClient
       try {
         credential = await issueWebhookCredential({
           name,
+          kind,
           defaultAccountId: defaultAccountId ?? null,
           defaultCategoryId: defaultCategoryId ?? null,
           rateLimitPerMin,

@@ -120,7 +120,7 @@ test("RF-122: a second amount that is not an amount is refused at its own column
   assert.ok(result.error?.issues.some((i) => i.path[0] === "counterAmount"));
 });
 
-// ---- M3: an account's opening amount read off a backup (RF-142, RF-51) -------------------------
+// ---- An account's opening amount read off a backup (RF-142, RF-51) -------------------------
 
 const card = { kind: "liability", subtype: "card" };
 

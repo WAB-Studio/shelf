@@ -1,5 +1,5 @@
 /* Radix's switch tops out at 42x24 on `size="3"`, so no size prop reaches the
-   44px floor SPEC-A3 holds every control to. The box a finger lands on is
+   44px floor the desktop design holds every control to. The box a finger lands on is
    stretched past the track instead of the track being fattened: nothing on
    screen moves, and the target clears the floor.
 

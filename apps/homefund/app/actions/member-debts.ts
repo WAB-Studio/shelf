@@ -11,8 +11,9 @@ import { deleteMemberDebtSchema, recordMemberDebtSchema } from "@/lib/validation
 export const recordMemberDebtAction = authActionClient
   .inputSchema(recordMemberDebtSchema)
   .action(async ({ parsedInput }) => {
-    await recordMemberDebt(parsedInput);
+    const { settled } = await recordMemberDebt(parsedInput);
     refresh();
+    return { settled: settled.map(({ debtorName, amountCents, currency }) => ({ debtorName, amountCents, currency })) };
   });
 
 export const deleteMemberDebtAction = authActionClient

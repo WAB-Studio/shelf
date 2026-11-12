@@ -51,7 +51,7 @@ export function DashboardSummary({ data }: { data: DashboardData }) {
     totalNetWorth,
     monthFlow,
     unreviewedCount,
-    pendingDeliveryCount,
+    inboxPendingCount,
   } = data;
 
   // The group reads before the members it holds; `sort` is stable, so the rest
@@ -90,7 +90,7 @@ export function DashboardSummary({ data }: { data: DashboardData }) {
               </Flex>
             ))}
 
-            {(unreviewedCount > 0 || pendingDeliveryCount > 0) && (
+            {(unreviewedCount > 0 || inboxPendingCount > 0) && (
               <Flex gap="2" wrap="wrap">
                 {/* Deep-links to the ledger filtered to generated-unreviewed rows; hidden
                     once nothing awaits review (RF-31). */}
@@ -103,12 +103,12 @@ export function DashboardSummary({ data }: { data: DashboardData }) {
                     </TapTarget>
                   </PlainLink>
                 )}
-                {pendingDeliveryCount > 0 && (
+                {inboxPendingCount > 0 && (
                   <PlainLink href="/inbox" alignSelf="flex-start">
                     <TapTarget align="center">
                       <Badge color="amber" variant="soft" radius="full">
                         {t("pendingDeliveriesBadge", {
-                          count: pendingDeliveryCount,
+                          count: inboxPendingCount,
                         })}
                       </Badge>
                     </TapTarget>
@@ -211,7 +211,7 @@ export function DashboardSummary({ data }: { data: DashboardData }) {
         <Button asChild tap variant="ghost">
           <LocaleLink href="/reports">{t("viewReports")}</LocaleLink>
         </Button>
-        {/* The phone's bar gave Planeación's tab to Bandeja; this is its way in. */}
+        {/* The phone's bar holds no Planeación tab; this and Ajustes are its way in. */}
         <Button asChild tap variant="ghost">
           <LocaleLink href="/planning">{tn("planning")}</LocaleLink>
         </Button>

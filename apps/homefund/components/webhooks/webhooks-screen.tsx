@@ -1,12 +1,13 @@
 "use client";
 
 import { EllipsisVertical, Plus, Webhook } from "lucide-react";
-import { useFormatter, useTranslations } from "next-intl";
+import { useFormatter, useLocale, useTranslations } from "next-intl";
 import { useAction } from "next-safe-action/hooks";
 import { useState } from "react";
 import { toast } from "sonner";
 
 import { revokeWebhookCredentialAction } from "@/app/actions/webhook-credentials";
+import { BankEmails } from "@/components/webhooks/bank-emails";
 import { ClaudeKey } from "@/components/webhooks/claude-key";
 import { IphoneShortcut } from "@/components/webhooks/iphone-shortcut";
 import { WebhookCredentialDialog } from "@/components/webhooks/webhook-credential-dialog";
@@ -31,7 +32,8 @@ import type {
   WebhookCredentialOptions,
   WebhookCredentialRow,
 } from "@/db/queries/webhook-credentials";
-import { ANDROID_APP_RELEASES_URL } from "@/lib/android-app";
+import { ANDROID_APK_PATH } from "@/lib/android-app";
+import { credentialBadge, type CredentialKind } from "@/lib/validation/webhook";
 import { scopedCategoryName } from "@/lib/fund/category-names";
 import { TIME_ZONE } from "@/lib/locales";
 import { useActionErrorToast } from "@/lib/use-action-toast";
@@ -66,18 +68,28 @@ export function WebhooksScreen({
   options,
   ingestUrl,
   mcpUrl,
+  oauthLine,
+  inboundDomain,
+  apkReady,
 }: {
   credentials: WebhookCredentialRow[];
   options: WebhookCredentialOptions;
   ingestUrl: string;
   mcpUrl: string;
+  oauthLine: string | null;
+  // RF-187: where Resend Inbound receives; null hides the forwarding way.
+  inboundDomain: string | null;
+  apkReady: boolean;
 }) {
   const t = useTranslations("webhooks");
   // Root-scoped: `common`'s labels are full catalogue paths.
   const tKey = useTranslations();
   const format = useFormatter();
+  const locale = useLocale();
 
-  const [issuing, setIssuing] = useState(false);
+  // The kind the dialog opens on; null keeps it closed.
+  const [issuing, setIssuing] = useState<CredentialKind | null>(null);
+  const [showRevoked, setShowRevoked] = useState(false);
   const [revokeTarget, setRevokeTarget] = useState<string | null>(null);
 
   const onActionError = useActionErrorToast();
@@ -121,8 +133,28 @@ export function WebhooksScreen({
     return lines;
   }
 
+  // Revoked keys stay out of the way until asked for; the count says what is behind the toggle.
+  const revokedCount = credentials.filter((row) => row.revokedAt !== null).length;
+  const visible = showRevoked
+    ? credentials
+    : credentials.filter((row) => row.revokedAt === null);
+  const activeCount = credentials.length - revokedCount;
+
+  const revokedToggle = revokedCount > 0 && (
+    <Flex>
+      <Button
+        type="button"
+        variant="ghost"
+        color="gray"
+        onClick={() => setShowRevoked((shown) => !shown)}
+      >
+        {t(showRevoked ? "hideRevoked" : "showRevoked", { count: revokedCount })}
+      </Button>
+    </Flex>
+  );
+
   const issueButton = (
-    <Button type="button" onClick={() => setIssuing(true)}>
+    <Button type="button" onClick={() => setIssuing("other")}>
       <Plus size={16} />
       {t("add")}
     </Button>
@@ -136,14 +168,14 @@ export function WebhooksScreen({
         <Flex direction="column" gap="4">
           <ScreenHeader
             title={t("title")}
-            meta={t("listMeta", { count: credentials.length })}
+            meta={t("listMeta", { count: activeCount })}
             actions={credentials.length > 0 && issueButton}
           />
 
           <WebhooksTable
-            rows={credentials}
+            rows={visible}
             empty={
-              credentials.length === 0 ? (
+              visible.length === 0 ? (
                 <EmptyState
                   icon={<Webhook size={40} />}
                   title={t("emptyTitle")}
@@ -154,6 +186,7 @@ export function WebhooksScreen({
             }
             onRevoke={(row) => setRevokeTarget(row.id)}
           />
+          {revokedToggle}
         </Flex>
       </Box>
 
@@ -164,7 +197,7 @@ export function WebhooksScreen({
             actions={credentials.length > 0 ? issueButton : undefined}
           />
 
-          {credentials.length === 0 ? (
+          {visible.length === 0 ? (
             <EmptyState
               icon={<Webhook size={40} />}
               title={t("emptyTitle")}
@@ -173,7 +206,7 @@ export function WebhooksScreen({
             />
           ) : (
             <Flex direction="column" gap="2">
-              {credentials.map((row) => {
+              {visible.map((row) => {
                 const lines = defaultLines(row);
                 return (
                   <Card key={row.id}>
@@ -183,10 +216,16 @@ export function WebhooksScreen({
                           <Text weight="medium" truncate>
                             {row.name}
                           </Text>
+                          <Badge color="blue" variant="soft">
+                            {t(`kind.${credentialBadge(row.purpose, row.kind)}`)}
+                          </Badge>
                           {row.revokedAt !== null && (
                             <Badge color="gray">{t("revokedBadge")}</Badge>
                           )}
                         </Flex>
+                        <Text size="2" color="gray">
+                          {t("deliveries30", { count: row.deliveriesLast30Days })}
+                        </Text>
                         <Text size="2" color="gray">
                           {t("rateLimit", { count: row.rateLimitPerMin })}
                         </Text>
@@ -242,8 +281,17 @@ export function WebhooksScreen({
               })}
             </Flex>
           )}
+          {revokedToggle}
         </Flex>
       </Box>
+
+      <Card id="bank-emails">
+        <BankEmails
+          oauthLine={oauthLine}
+          inboundDomain={inboundDomain}
+          onIssue={() => setIssuing("bank_emails")}
+        />
+      </Card>
 
       {/* Shown even with no credential: a person reads what a delivery looks
           like before deciding to issue one. */}
@@ -274,7 +322,7 @@ export function WebhooksScreen({
       </Card>
 
       {/* RF-144: the same key opens HomeFund to Claude, which reads and imports through `/mcp`. */}
-      <Card>
+      <Card id="claude">
         <Flex direction="column" gap="4">
           <Heading as="h2" size="3">{t("mcpHeading")}</Heading>
           <CopyField
@@ -292,34 +340,36 @@ export function WebhooksScreen({
         </Flex>
       </Card>
 
-      <Card>
+      <Card id="android">
         <Flex direction="column" gap="2">
           <Heading as="h2" size="3">{t("androidHeading")}</Heading>
           <Text size="2" color="gray">
             {t("androidDescription")}
           </Text>
-          <Link
-            href={ANDROID_APP_RELEASES_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            {t("androidDownload")}
-          </Link>
+          {apkReady ? (
+            <Link href={`/${locale}${ANDROID_APK_PATH}`} download>
+              {t("androidDownload")}
+            </Link>
+          ) : null}
           <Text size="2" color="gray">
-            {t("androidDownloadHint")}
+            {apkReady ? t("androidDownloadHint") : t("androidDownloadMissing")}
           </Text>
         </Flex>
       </Card>
 
-      <Card>
+      <Card id="iphone">
         <IphoneShortcut />
       </Card>
 
       <WebhookCredentialDialog
-        open={issuing}
-        onOpenChange={setIssuing}
+        open={issuing !== null}
+        initialKind={issuing ?? "other"}
+        onOpenChange={(open) => {
+          if (!open) setIssuing(null);
+        }}
         options={options}
         ingestUrl={ingestUrl}
+        inboundDomain={inboundDomain}
       />
 
       {revokeTarget !== null && (

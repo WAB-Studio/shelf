@@ -100,7 +100,7 @@ test("a bank message keeps reading its own amount", () => {
   assert.equal(stored("Compraste $25.000 en KFC"), 2_500_000);
 });
 
-// The widened multiplier (Q12, 2026-10-18; critic C2, same day): an uppercase
+// The widened multiplier (RF-22): an uppercase
 // «M», «millón» and «millones» are a million; a lowercase «m» never is. 2 000 000 pesos is 200 000 000 cents.
 
 test("«M», «millón» and «millones» multiply by a million", () => {
@@ -165,7 +165,7 @@ test("«M» spaced as the last word is a million", () => {
   assert.equal(stored("gasté 2 M  "), 200_000_000);
 });
 
-// M75 (Q27 b, RF-22): a lowercase «m» right after a number is not read as a
+// (RF-22): a lowercase «m» right after a number is not read as a
 // figure. The parser proposes no amount and asks with three choices in cents.
 
 test("a lowercase «m» after a number asks with three choices and proposes no amount", () => {
@@ -239,7 +239,7 @@ test("«mil» alone never reads as a million, nor inside a word", () => {
   assert.equal(interpretQuickEntry("almuerzo", ctx).amountPesos, null);
 });
 
-// M71 (Q12-e, Q12-f): a spaced «m» with words after it is not guessed. The
+// A spaced «m» with words after it is not guessed. The
 // parser proposes no amount and asks, offering the bare number and the number
 // times a million, both in integer cents.
 
@@ -472,4 +472,29 @@ test("an account word leaves the description only when it named the account chos
   } as never);
   assert.equal(result.accountId, "a2");
   assert.match(result.description, /nequi/i);
+});
+
+test("a year beside a month or «de» is no amount in a bank message, and typed text is unchanged", () => {
+  const bank = { ...ctx, yearGuard: "dated" as const };
+  const read = (text: string, c: typeof ctx & { yearGuard?: "dated" | "any" }) => {
+    const { amountPesos } = interpretQuickEntry(text, c);
+    return amountPesos === null ? null : parseAmount(amountPesos);
+  };
+  assert.equal(read("Vigente hasta Octubre 2026", bank), null);
+  assert.equal(read("Extracto de 2026 de tu tarjeta", bank), null);
+  assert.equal(read("Pagaste $52.300 el 3 de Octubre 2026", bank), 5_230_000);
+  assert.equal(read("Compra 2000 en tienda", bank), 200_000);
+  assert.equal(read("Pagué 2000 de bus", ctx), 200_000);
+  assert.equal(read("Vigente hasta Octubre 2026", ctx), 202_600);
+});
+
+test("the «any» guard drops a lone year, never a marked amount", () => {
+  const email = { ...ctx, yearGuard: "any" as const };
+  const read = (text: string) => {
+    const { amountPesos } = interpretQuickEntry(text, email);
+    return amountPesos === null ? null : parseAmount(amountPesos);
+  };
+  assert.equal(read("Sobre tu mensaje: Reporte de movimiento M123 2026"), null);
+  assert.equal(read("Compraste $2.000 en tienda 2026"), 200_000);
+  assert.equal(read("Compraste $2000 en tienda"), 200_000);
 });

@@ -575,3 +575,38 @@ test.describe("a wide amount on a narrow phone", () => {
     expect(await pageOverflow(page)).toBeLessThanOrEqual(0);
   });
 });
+
+// RF-199: the search runs in Postgres over the description and, for a figure, the amount; the
+// field sits in both shapes, so the visible one is the one typed into.
+test("searches by description or amount and clears with the filters", async ({ page }, testInfo) => {
+  const desktop = testInfo.project.name === "desktop";
+  const ledger = page.getByRole("table", { name: transactions.listTitle });
+  const rowFor = (category: string) =>
+    desktop
+      ? ledger.getByText(category, { exact: true })
+      : page.getByRole("link", { name: category });
+  const field = page
+    .getByRole("searchbox", { name: transactions.searchLabel, exact: true })
+    .filter({ visible: true });
+
+  await page.goto("/es/movements");
+  await expect(rowFor(scope.categoryName)).toBeVisible();
+
+  // A fill made before the page hydrates is wiped by it, so the first one is retried until it lands.
+  await expect(async () => {
+    await field.fill("harness gasto");
+    await expect(page).toHaveURL(/\/es\/movements\?q=harness(\+|%20)gasto$/, { timeout: 2000 });
+  }).toPass();
+  await expect(rowFor(scope.categoryName)).toBeVisible();
+  await expect(rowFor(incomeCategoryName)).toHaveCount(0);
+
+  await field.fill(String(INCOME_CENTS / 100));
+  await expect(page).toHaveURL(/q=71000/);
+  await expect(rowFor(incomeCategoryName)).toBeVisible();
+  await expect(rowFor(scope.categoryName)).toHaveCount(0);
+
+  await field.fill("");
+  await expect(page).toHaveURL("/es/movements");
+  await expect(rowFor(scope.categoryName)).toBeVisible();
+  await expect(rowFor(incomeCategoryName)).toBeVisible();
+});

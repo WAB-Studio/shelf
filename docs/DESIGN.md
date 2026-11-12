@@ -521,6 +521,13 @@ Board C1h corrected the same day: a card in credit reads «Según HomeFund −$ 
   «Gasto escrito» (six numbered steps) and «SMS del banco» (three), pointing at the URL of «Cómo enviar un movimiento»,
   and a gray line saying a delivery waits in the Bandeja. Steps name the Shortcuts actions as iOS names them.
 
+## Decisions of 2026-11-11: Gmail's bank emails from the PC, by the user
+
+- «Ajustes · Correos del banco» has a «Correos del banco» card above «Cómo enviar un movimiento»: one line on what it does, six
+  numbered steps for a member who is not technical (step 4 carries «Crear credencial», which opens the same dialog as the
+  table's), and «Datos de Google» with the `<id> <secreto>` line in a copy block, or one gray note when the server has no
+  such data.
+
 ## Decisions of 2026-11-11: HomeFund installed on an iPhone, by the user
 
 - The launch image is the app's mark, a third of the screen's width, centred on `#ffffff` or `#110c20`: what the page
@@ -558,10 +565,10 @@ Board C1h corrected the same day: a card in credit reads «Según HomeFund −$ 
   (the user, 2026-11-08, over 2026-10-30). A personal account (and a personal category where a component, not a string,
   draws it) wears a small `User` glyph with an aria-label. Another member's personal row wears the owner's name beside
   the glyph («De Andrea») and offers no action (the user, 2026-11-08).
-- The phone's bottom bar reads Inicio · Movimientos · [+] · Planeación · Ajustes: Planeación is back on the bar and
-  Bandeja is the first row of the Ajustes panel, with the count of pending deliveries plus «Por completar» on the
-  Ajustes tab and on its row, hidden at zero (the user, 2026-11-08, over the usability critic's 2026-10-30).
-  The desktop sidebar is unchanged.
+- The phone's bottom bar reads Inicio · Movimientos · [+] · Bandeja · Ajustes (the user, 2026-11-11, over 2026-11-08): the
+  Bandeja is used daily, so it holds a tab again, carrying the count of pending deliveries plus «Por completar» (hidden at
+  zero), and the Ajustes tab carries none. Planeación is reached from Inicio's «Planeación» button and from the first row of
+  the Ajustes list (screen and sheet), where Bandeja no longer appears. The desktop sidebar is unchanged.
 
 
 ## Decisión del 2026-10-31: ronda 3 de la crítica

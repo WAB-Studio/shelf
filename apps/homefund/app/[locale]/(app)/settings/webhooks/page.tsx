@@ -41,12 +41,21 @@ export default async function WebhooksPage(
     env.NEXT_PUBLIC_SITE_URL,
   ).toString();
 
+  // RF-192: both halves or none; a half-set pair would paste a line the uploader rejects.
+  const oauthLine =
+    env.GMAIL_OAUTH_CLIENT_ID && env.GMAIL_OAUTH_CLIENT_SECRET
+      ? `${env.GMAIL_OAUTH_CLIENT_ID} ${env.GMAIL_OAUTH_CLIENT_SECRET}`
+      : null;
+
   return (
     <Page>
       <WebhooksScreen
         credentials={credentials}
         options={options}
         ingestUrl={ingestUrl}
+        oauthLine={oauthLine}
+        inboundDomain={env.INBOUND_EMAIL_DOMAIN ?? null}
+        apkReady={Boolean(env.ANDROID_APK_GITHUB_TOKEN)}
         mcpUrl={new URL("/mcp", env.NEXT_PUBLIC_SITE_URL).toString()}
       />
     </Page>

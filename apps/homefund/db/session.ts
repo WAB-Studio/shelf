@@ -69,7 +69,7 @@ export async function withUserDb<T>(
   fn: (tx: Transaction) => Promise<T>,
 ): Promise<T> {
   // Inside `withSharedTransaction` the read joins the screen's transaction, already settled under this
-  // request's verified session: no second claims read, which would queue behind the first (Q168).
+  // request's verified session: no second claims read, which would queue behind the first.
   const shared = sharedTransaction.getStore();
   if (shared) return fn(shared.tx);
 

@@ -59,11 +59,12 @@ export type Destination = {
   icon: LucideIcon;
 };
 
-// The phone's bottom bar: the frequent three, around the raised action. Bandeja
-// is reached from the settings panel, which carries its count.
-export const TAB_KEYS = ["home", "movements", "planning"] as const;
+// The phone's bottom bar: the frequent three, around the raised action. Bandeja is
+// daily, so it holds a tab and its count; Planeación is reached from Inicio and
+// from the settings list.
+export const TAB_KEYS = ["home", "movements", "inbox"] as const;
 
-// The sidebar's own list, in the order `private/design-desktop/SPEC-A3.md` fixes.
+// The sidebar's own list, in the order the desktop design fixes.
 // Planeación opens in place: a laptop has the height to offer its six screens
 // directly, so the hub behind the phone's tab is not a stop on the way here.
 export const PRIMARY_KEYS = [
@@ -103,7 +104,7 @@ export const SIDEBAR_SECONDARY_KEYS = [
 
 // The settings panel, the only surface that reaches the rest of the app.
 export const SETTINGS_KEYS = [
-  "inbox",
+  "planning",
   "members",
   "accounts",
   "categories",

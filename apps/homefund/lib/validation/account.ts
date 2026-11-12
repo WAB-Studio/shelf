@@ -180,7 +180,8 @@ export const createAccountSchema = z
 export type CreateAccountInput = z.infer<typeof createAccountSchema>;
 
 // `kind` and the placement are immutable after creation; only `is_shared` toggles
-// whether the group may write a group account.
+// whether the group may write a group account. The placement rides along only so the
+// holder rule judges an edit as it judges a create.
 export const updateAccountSchema = z
   .object({
     accountId: z.uuid({ error: "errors.notFound" }),
@@ -189,6 +190,7 @@ export const updateAccountSchema = z
     // refinement can reject a subtype that leaves its kind server-side too.
     kind: z.enum(ACCOUNT_KINDS, { error: "accounts.errors.kindInvalid" }),
     subtype: z.enum(ACCOUNT_SUBTYPES, { error: "accounts.errors.subtypeInvalid" }),
+    placement: z.enum(ACCOUNT_PLACEMENTS, { error: "accounts.errors.placementInvalid" }),
     isShared: z.boolean(),
     institution: accountInstitutionSchema,
     lastFour: accountLastFourSchema.optional(),
@@ -205,6 +207,7 @@ export const updateAccountSchema = z
   })
   .superRefine(requireSubtypeUnderKind)
   .superRefine(requirePocketIsAsset)
+  .superRefine(requireHolderInFund)
   .superRefine(requireAmountInCurrency);
 
 export type UpdateAccountInput = z.infer<typeof updateAccountSchema>;

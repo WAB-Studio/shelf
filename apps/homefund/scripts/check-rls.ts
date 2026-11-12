@@ -1290,7 +1290,7 @@ async function checkBudgetPolicies() {
   const tailLabel = "51. the rolled-back budget transaction leaves no trace";
 
   // Spent derives from the splits on the budget's category, over the window's expenses, optionally
-  // narrowed to the movements touching one account (RF-72).
+  // narrowed to the movements touching one account (RF-160).
   const spentSum = (
     q: postgres.TransactionSql,
     categoryId: string,
@@ -1589,7 +1589,7 @@ async function checkPlannedPaymentPolicies() {
         `first settle rows = ${firstSettle.count}, linked = ${firstSettle[0]?.settled_transaction_id === settleTxn}, second settle rows = ${secondSettle.count}`,
       );
 
-      // 55: the settled link is permanent, and a done payment never returns to pending (RF-75).
+      // 55: the settled link is permanent, and a done payment never returns to pending (RF-161).
       let rewriteCode: string | undefined;
       let revertCode: string | undefined;
       await tx
@@ -2022,7 +2022,7 @@ async function checkInstallmentPolicies() {
       await tx`insert into app_users (id) values (${leaderUser})`;
       await enterUserContext(tx, leaderUser);
 
-      // The oldest-first FIFO allocator (RF-82), replicated inline against this transaction's own
+      // The oldest-first FIFO allocator (retired with RF-81, no successor), replicated inline against this transaction's own
       // connection: it links each fully-covered line to the payment in due order, subtracting its amount
       // from a running remainder, and stops at the first line the remainder cannot cover in full. A line
       // is never partially paid; the leftover remainder stays unassigned.
@@ -5446,6 +5446,7 @@ const UPDATE_GRANT_GAPS: Record<string, string[]> = {
     "proposed_to_account_id",
     "raw_text",
     "recipient_id",
+    "reject_reason",
     "shape_hash",
     "updated_at",
   ],
@@ -5530,6 +5531,8 @@ const UPDATE_GRANT_GAPS: Record<string, string[]> = {
   webhook_credentials: [
     "created_at",
     "id",
+    // Fixed at minting, as purpose is: a key never changes what it is for.
+    "kind",
     "last_used_at",
     "owner_user_id",
     // Fixed at minting: a key never changes what it opens.
@@ -7278,7 +7281,7 @@ async function checkGroupCommitsWithLeader() {
   );
 }
 
-// Assertions 218-221: RF-82 in the engine. "Paid in full or not at all, oldest first" lived only in a
+// Assertions 218-221: the retired RF-82 in the engine. "Paid in full or not at all, oldest first" lived only in a
 // TypeScript loop; `assert_installment_line_payment` checked nothing but that the movement touches the
 // plan's account, and `paid_transaction_id` is the one column `authenticated` may UPDATE on
 // `installment_lines`. One 100-cent movement marked all three 100000-cent lines paid on the live
@@ -7926,7 +7929,7 @@ async function checkReportFunctionsExcludeTransfers() {
       `${flow.length} months, ${thisMonth?.monthStart} reads income = ${thisMonth?.incomeCents}, expense = ${thisMonth?.expenseCents} (expected ${INCOME_CENTS} and ${EXPENSE_CENTS}, the ${TRANSFER_CENTS} transfer in neither)`,
     );
 
-    // 234 (RF-19, RF-72): spent is the one expense split. The transfer leaves the budget's account
+    // 234 (RF-19, RF-160): spent is the one expense split. The transfer leaves the budget's account
     // inside its window and carries no split of its own — assertion 32 is why it can carry none.
     const budgets = await listBudgetsWithStatus();
     const budget = budgets.find((row) => row.id === budgetId);

@@ -17,7 +17,7 @@ export type NavListItem = {
 
 /**
  * The one list every navigation surface renders. `panel` is the sheet's plain
- * stack of links; `sidebar` is the pill row of `private/design-desktop/SPEC-A3.md`,
+ * stack of links; `sidebar` is the pill row of the desktop design,
  * whose active state fills. State never lives here — a caller decides which row
  * is current and what a click does.
  */

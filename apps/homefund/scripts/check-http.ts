@@ -633,10 +633,9 @@ async function webhookSuite(userId: string): Promise<WebhookSecrets> {
 
   // RF-128: a bank amount past the thousands group carrying real centavos,
   // read the way the importer reads one — `parseAmount` on `rawPesos`
-  // (`db/queries/webhook-ingest.ts`). Revert that call to the old
-  // `parsePesos` + `pesosToCents` pair and this fifty-centavo figure comes
-  // back null instead of kept: `parsePesos` refuses any amount that is not a
-  // whole peso. Landed, not asserted, here — see `WebhookSecrets`.
+  // (`db/queries/webhook-ingest.ts`). A reader that refuses any amount that is not a whole
+  // peso would hand back null here instead of the kept fifty centavos. Landed, not asserted,
+  // here — see `WebhookSecrets`.
   const centavosFragment = randomUUID().slice(0, 8);
   const centavosText = `Bancolombia: Compraste COP122.000,50 en BOLD CO ONLINE ${centavosFragment} con tu T.Cred *4872, el 26/08/2026 a las 09:15. Si tienes dudas, encuentranos aqui: 6045109095 o 018000931987. Estamos cerca.`;
   const centavos = await post(token, centavosText);
@@ -848,7 +847,7 @@ async function main(): Promise<void> {
   assert(
     next("the delivery keeps the fifty centavos the message named"),
     secrets.centavosDelivery.amountCents === 12200050,
-    // `null` here is a real answer (`parsePesos` refusing the fraction), not a
+    // `null` here is a real answer (a whole-peso reader refusing the fraction), not a
     // missing row — H64 already proved the row landed — so it prints as-is.
     `it landed proposed_amount_cents ${String(secrets.centavosDelivery.amountCents)}`,
   );
@@ -1698,6 +1697,28 @@ async function emailIngestSuite(): Promise<void> {
     landed.status === 200 &&
       row?.text === `Alertas y Notificaciones Bancolombia: Compraste COP9.100,00 en ZXQ MAIL ${tag} con tu T.Cred *4872.`,
     `it answered ${landed.status} ${JSON.stringify(landed.body)}, landed ${JSON.stringify(row)}`,
+  );
+
+  const promo = await post(
+    { authorization: `Bearer ${token}` },
+    {
+      from: "yo@example.com",
+      to: [`${token}@in.example.com`],
+      subject: `Gánate $150 mil pidiendo tu tarjeta ${tag}`,
+      text: "Aprovecha esta oferta de tu banco.",
+    },
+  );
+  const [promoRow] = await fixtureSql<{ status: string; amount: string | null; reason: string | null }[]>`
+    select status, proposed_amount_cents as amount, reject_reason as reason from ingest_deliveries where id = ${String(promo.body.deliveryId)}`;
+  assert(
+    next("a promotional bank email lands rejected with its reason, no figure, never pending"),
+    promo.status === 200 &&
+      promo.body.status === "rejected" &&
+      promo.body.reason === "promotion" &&
+      promoRow?.status === "rejected" &&
+      promoRow.reason === "promotion" &&
+      promoRow.amount === null,
+    `it answered ${promo.status} ${JSON.stringify(promo.body)}, stored ${JSON.stringify(promoRow)}`,
   );
 
   const anonymous = await post({}, email);
