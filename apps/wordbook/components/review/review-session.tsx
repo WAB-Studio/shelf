@@ -7,7 +7,7 @@ import { useFormatter, useTranslations } from "next-intl";
 import { deviceZone, yearWhenDifferent } from "@/lib/format/zone";
 import { useDictionary } from "@/lib/dictionary/use-dictionary";
 import type { Sense } from "@/lib/dictionary/index-build";
-import { cardBack, cardFront } from "@/lib/log/anki";
+import { cardBack, cardFront } from "@/lib/log/card";
 import { contentUnit, isPhraseRow } from "@/lib/log/outcome";
 import { readWordStudy } from "@/lib/log/summary";
 import { readWordStory, type WordStory } from "@/lib/log/story";

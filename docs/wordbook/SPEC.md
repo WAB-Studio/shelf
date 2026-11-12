@@ -308,6 +308,15 @@ this gets built, and no schema, table or column is "prepared for" it.
   record the finished screen offers «Buscar una palabra», which opens the search, not the empty `/registro`. A word asked for alone with
   `?palabra=` keeps the short return: only a minute's «Otra vez» comes back to it. Decided by the user 2026-11-12.
   - Driven by `apps/wordbook/lib/review/{schedule,deck,sense}.test.ts` and `apps/wordbook/e2e/repaso.spec.ts`, `repaso-sentido.spec.ts`.
+- [x] **RL-92** *(successor of RL-72's CSV for Anki)* — The CSV for Anki is the same card the app draws. Front: the word, or the phrase. Back: the sense
+  the app draws for the word (the one the reader tapped, else RL-91's default), its part of speech, up to three of its translations and its definition
+  when it has one; for a phrase, its translation; and under it the reader's own sentence, with the word set apart, when the app shows one. A word the
+  device cannot draw a sense for, because it holds no copy of the dictionary, goes out with the translation line the record kept, cut to three, and
+  the export says so. The file stays Basic front/back importable: UTF-8, every field quoted, a line break inside a card is `<br>` (`#html:true`,
+  what a person typed is escaped). After a download the export still says how many words stayed out and why, and with no card to give it offers no
+  file. The dictionary's Worker is raised for the download alone, over the copy already on the device, and never downloads one; opening `/registro`
+  mounts none. Decided by the user 2026-11-12.
+  - Driven by `apps/wordbook/lib/log/anki.test.ts` and `apps/wordbook/e2e/export.spec.ts`.
 - [x] **RL-89** *(refines RL-75)* — In production, with no `CLIENT_KEY_SALT`, the sign-in mail is refused (`sendFailed`) as the paid
   routes answer 204: without the salt no cap counts a caller. Outside production the action stays open. Decided by the user 2026-11-08.
 - [x] **RL-78** *(successor of RL-68)* — The review also asks a phrase the reader translated, scheduled by the same FSRS logic as a word; a phrase still waiting for its answer or never translated stays out. A card shows one sense of a word, the one the reader saw, with its part of speech and its definition when it has one; a phrase shows its translation. An entry answered «Otra vez» comes back in the same session once it is due: the session is not finished while one waits, and says so. Where the review mixes words and phrases it counts «entradas», not «palabras». Decided by the user 2026-10-30.
