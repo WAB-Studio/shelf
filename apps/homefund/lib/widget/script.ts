@@ -84,6 +84,27 @@ function creditLine(credit) {
   return credit.person + ": " + paid + due;
 }
 
+// What the month leaves, in the words of each shape: «Te quedan $X este mes · $Y por día», «Te pasaste $X» once the
+// budget is spent, and «Gastado $X» when the month has no budget (or the saved figures predate the remainder).
+function monthLines(mes, currency, hidden) {
+  var spent = "Gastado " + pesos(mes.spentCents, currency, hidden);
+  if (!(mes.budgetedCents > 0) || typeof mes.remainingCents !== "number") {
+    return { medium: spent, smallTop: spent, smallBottom: null, lock: spent };
+  }
+  if (mes.remainingCents < 0) {
+    var over = "Te pasaste " + pesos(-mes.remainingCents, currency, hidden);
+    return { medium: over, smallTop: over, smallBottom: null, lock: over };
+  }
+  var left = pesos(mes.remainingCents, currency, hidden);
+  var perDay = pesos(mes.perDayCents, currency, hidden);
+  return {
+    medium: "Te quedan " + left + " este mes · " + perDay + " por día",
+    smallTop: perDay + "/día",
+    smallBottom: "quedan " + left,
+    lock: perDay + "/día · quedan " + left,
+  };
+}
+
 function render(data, family, stale, hidden) {
   var widget = new ListWidget();
   widget.url = INBOX;
@@ -91,10 +112,10 @@ function render(data, family, stale, hidden) {
 
   var currency = data.currency;
   var available = pesos(data.disponible.cents, currency, hidden);
-  var spent = data.mes.spentCents;
   var budgeted = data.mes.budgetedCents;
   var pending = data.bandeja.pendingCount;
-  var month = budgeted > 0 ? pesos(spent, currency, hidden) + " de " + pesos(budgeted, currency, hidden) : pesos(spent, currency, hidden);
+  var over = budgeted > 0 && data.mes.remainingCents < 0;
+  var month = monthLines(data.mes, currency, hidden);
   var inbox = pending === 0 ? "Bandeja al día" : pending + " por revisar";
 
   if (family === "accessoryInline") {
@@ -107,13 +128,12 @@ function render(data, family, stale, hidden) {
   }
   if (family === "accessoryRectangular") {
     widget.addText("Disponible " + available);
-    widget.addText("Mes " + month);
+    widget.addText(month.lock);
     widget.addText(inbox);
     return widget;
   }
 
   widget.backgroundColor = Color.dynamic(new Color("#ffffff"), new Color("#110c20"));
-  var over = budgeted > 0 && spent > budgeted;
   if (family === "small") {
     widget.setPadding(14, 14, 14, 14);
     text(widget, "HomeFund", 11, GRAY, true);
@@ -121,7 +141,8 @@ function render(data, family, stale, hidden) {
     text(widget, "Disponible", 12, GRAY, false);
     text(widget, available, 22, INK, true);
     widget.addSpacer();
-    text(widget, "Mes " + month, 11, over ? RED : INK, false);
+    text(widget, month.smallTop, 13, over ? RED : INK, true);
+    if (month.smallBottom !== null) text(widget, month.smallBottom, 11, GRAY, false);
     text(widget, stale ? "Sin conexión" : inbox, 11, pending > 0 && !stale ? AMBER : GRAY, false);
     return widget;
   }
@@ -135,10 +156,8 @@ function render(data, family, stale, hidden) {
   text(left, "Disponible", 12, GRAY, false);
   text(left, available, 26, INK, true);
   row.addSpacer();
-  var right = row.addStack();
-  right.layoutVertically();
-  text(right, "Gastado este mes", 12, GRAY, false);
-  text(right, month, 15, over ? RED : INK, true);
+  widget.addSpacer(6);
+  text(widget, month.medium, 15, over ? RED : INK, true);
   var credits = data.creditos || [];
   if (credits.length > 0) {
     widget.addSpacer(6);

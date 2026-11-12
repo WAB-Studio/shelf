@@ -11,6 +11,7 @@ import { withSharedTransaction } from "@/db/session";
 import { BASE_CURRENCY, type CurrencyCode } from "@/lib/currency";
 import { currentMonthRange, todayInBogota } from "@/lib/dates";
 import { widgetCredit, type WidgetCredit } from "@/lib/widget/credit-item";
+import { monthLeft, type MonthLeft } from "@/lib/widget/month-left";
 
 // What the iPhone widget draws (RF-215): one currency, three figures, all integer cents. The widget is
 // small, so the fund's other currencies stay on the dashboard.
@@ -22,7 +23,9 @@ export type WidgetSummary = {
   disponible: { cents: number };
   // This month's expense (the dashboard's month flow) against the sum of the monthly budgets' limits
   // (the Presupuestos screen's), both in that currency.
-  mes: { spentCents: number; budgetedCents: number };
+  // `remainingCents` is budgeted minus spent and goes negative; `daysLeft` counts today; `perDayCents` is the
+  // remainder over those days, floored, never below zero.
+  mes: { spentCents: number; budgetedCents: number } & MonthLeft;
   // Bandeja's own count (RF-200).
   bandeja: { pendingCount: number };
   // One item per credit somebody else pays that the caller may read (RF-211), by the payer's name.
@@ -66,15 +69,15 @@ export async function getWidgetSummary(): Promise<WidgetSummary> {
   const held = [...totals.keys()].sort();
   const currency = held.includes(BASE_CURRENCY) ? BASE_CURRENCY : (held[0] ?? BASE_CURRENCY);
 
+  const spentCents = monthFlow.find((flow) => flow.currency === currency)?.expenseCents ?? 0;
+  const budgetedCents = budgets
+    .filter((budget) => budget.period === "monthly" && budget.currency === currency)
+    .reduce((sum, budget) => sum + budget.limitCents, 0);
+
   return {
     currency,
     disponible: { cents: totals.get(currency) ?? 0 },
-    mes: {
-      spentCents: monthFlow.find((flow) => flow.currency === currency)?.expenseCents ?? 0,
-      budgetedCents: budgets
-        .filter((budget) => budget.period === "monthly" && budget.currency === currency)
-        .reduce((sum, budget) => sum + budget.limitCents, 0),
-    },
+    mes: { spentCents, budgetedCents, ...monthLeft(spentCents, budgetedCents, today) },
     bandeja: { pendingCount },
     creditos: credits.map((credit) => widgetCredit(credit, today)),
   };

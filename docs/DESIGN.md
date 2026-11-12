@@ -529,7 +529,7 @@ Board C1h corrected the same day: a card in credit reads «Según HomeFund −$ 
 - Step 2 carries the script in a copy block and its address in another; step 3 carries «Crear clave para el widget» and
   shows the key once under the same warning as a webhook token. A widget key opens the widget's summary and nothing else;
   in the key list it wears the badge «Widget».
-- The widget reads «Disponible» large, «Mes» as spent of budgeted (red once spent passes budgeted) and the Bandeja's count
+- The widget reads «Disponible» large, the month as what is left (medium «Te quedan $X este mes · $Y por día»; small and lock screen «$Y/día» over «quedan $X»; red «Te pasaste $X» once the budget is passed; «Gastado $X» with no budget) and the Bandeja's count
   («N por revisar», «Bandeja al día» at zero) in amber. The medium widget adds one line per credit somebody else pays,
   up to three and then «y N más», like «John: pagó ✓ · cuota en 6 días» (amber while the payment is missing).
 - The widget has a private mode: its Parameter «privado» or «oculto» (any case or accent) draws every amount as «$ •••••»,

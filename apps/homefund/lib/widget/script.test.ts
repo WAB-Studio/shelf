@@ -7,7 +7,7 @@ import { widgetScript } from "./script";
 type Summary = {
   currency: string;
   disponible: { cents: number };
-  mes: { spentCents: number; budgetedCents: number };
+  mes: { spentCents: number; budgetedCents: number; remainingCents?: number; daysLeft?: number; perDayCents?: number };
   bandeja: { pendingCount: number };
   creditos: { person: string; currency: string; paidThisMonth: string; installmentCents: number | null; daysUntilDue: number | null }[];
 };
@@ -15,7 +15,7 @@ type Summary = {
 const SUMMARY: Summary = {
   currency: "COP",
   disponible: { cents: 123_456_789 },
-  mes: { spentCents: 30_000, budgetedCents: 500_000 },
+  mes: { spentCents: 30_000, budgetedCents: 500_000, remainingCents: 470_000, daysLeft: 21, perDayCents: 22_380 },
   bandeja: { pendingCount: 3 },
   creditos: [],
 };
@@ -136,17 +136,17 @@ test("the script carries the app's origin and opens the Bandeja on a tap", async
 test("pesos read with dots and no cents, and the request carries the key from the Keychain", async () => {
   const { texts, requests } = await run({ keychain: KEYED, family: "small" });
   assert.ok(texts.includes("$1.234.568"), texts.join(" | "));
-  assert.ok(texts.includes("Mes $300 de $5.000"), texts.join(" | "));
+  assert.ok(texts.includes("$224/día") && texts.includes("quedan $4.700"), texts.join(" | "));
   assert.ok(texts.includes("3 por revisar"));
   assert.equal(requests[0].url, "https://homefund.test/api/widget");
   assert.equal(requests[0].headers.Authorization, "Bearer whk_abc");
 });
 
 test("a negative balance keeps its sign, and a quiet Bandeja says so", async () => {
-  const body = { ...SUMMARY, disponible: { cents: -50_000 }, bandeja: { pendingCount: 0 }, mes: { spentCents: 0, budgetedCents: 0 } };
+  const body = { ...SUMMARY, disponible: { cents: -50_000 }, bandeja: { pendingCount: 0 }, mes: { spentCents: 0, budgetedCents: 0, remainingCents: 0, daysLeft: 21, perDayCents: 0 } };
   const { texts } = await run({ keychain: KEYED, family: "medium", body });
   assert.ok(texts.includes("-$500"), texts.join(" | "));
-  assert.ok(texts.includes("$0"), "no budget reads the spend alone");
+  assert.ok(texts.includes("Gastado $0"), "no budget reads the spend alone");
   assert.ok(texts.includes("Bandeja al día"));
 });
 
@@ -154,7 +154,7 @@ test("the lock screen families draw the same figures in their own shape", async 
   const inline = await run({ keychain: KEYED, family: "accessoryInline" });
   assert.deepEqual(inline.texts, ["Disponible $1.234.568 · 3"]);
   const rectangular = await run({ keychain: KEYED, family: "accessoryRectangular" });
-  assert.deepEqual(rectangular.texts, ["Disponible $1.234.568", "Mes $300 de $5.000", "3 por revisar"]);
+  assert.deepEqual(rectangular.texts, ["Disponible $1.234.568", "$224/día · quedan $4.700", "3 por revisar"]);
 });
 
 test("the first run in the app asks for the key and keeps it in the Keychain", async () => {
@@ -220,11 +220,11 @@ test("the parameter «privado» or «oculto», in any case and accent, hides eve
   for (const parameter of ["privado", "Privado", " OCULTO ", "Prívado"]) {
     const { texts } = await run({ keychain: KEYED, family: "medium", parameter, body: { ...SUMMARY, creditos: [credit] } });
     assert.ok(!texts.some((line) => MONEY.test(line)), `${parameter}: ${texts.join(" | ")}`);
-    assert.ok(texts.includes("$ •••••") && texts.includes("$ ••••• de $ •••••"), `${parameter}: ${texts.join(" | ")}`);
+    assert.ok(texts.includes("$ •••••") && texts.includes("Te quedan $ ••••• este mes · $ ••••• por día"), `${parameter}: ${texts.join(" | ")}`);
     assert.ok(texts.includes("3 por revisar") && texts.includes("John: pagó ✓ · cuota en 6 días"));
   }
   const lock = await run({ keychain: KEYED, family: "accessoryRectangular", parameter: "privado" });
-  assert.deepEqual(lock.texts, ["Disponible $ •••••", "Mes $ ••••• de $ •••••", "3 por revisar"]);
+  assert.deepEqual(lock.texts, ["Disponible $ •••••", "$ •••••/día · quedan $ •••••", "3 por revisar"]);
 });
 
 test("the stored flag hides the widgets that have no parameter, and a parameter always wins", async () => {
@@ -254,4 +254,41 @@ test("the menu changes the key, and closing it draws nothing", async () => {
   const closed = await run({ inApp: true, family: null, keychain: KEYED, answers: [] });
   assert.equal(closed.requests.length, 0);
   assert.equal(closed.texts.length, 0);
+});
+
+const month = (mes: Summary["mes"]) => ({ ...SUMMARY, mes });
+
+test("the month reads what is left: the remainder and the day's share, small and medium and lock screen alike", async () => {
+  const medium = await run({ keychain: KEYED, family: "medium" });
+  assert.ok(medium.texts.includes("Te quedan $4.700 este mes · $224 por día"), medium.texts.join(" | "));
+  assert.ok(!medium.texts.some((line) => line.includes("Gastado")));
+  const small = await run({ keychain: KEYED, family: "small" });
+  assert.deepEqual(small.texts.filter((line) => line.includes("día")), ["$224/día"]);
+});
+
+test("on the last day of the month the whole remainder is the day's share", async () => {
+  const last = month({ spentCents: 100_000, budgetedCents: 500_000, remainingCents: 400_000, daysLeft: 1, perDayCents: 400_000 });
+  const { texts } = await run({ keychain: KEYED, family: "medium", body: last });
+  assert.ok(texts.includes("Te quedan $4.000 este mes · $4.000 por día"), texts.join(" | "));
+});
+
+test("past the budget it says how much, in the small, the medium and the lock screen, and never a share", async () => {
+  const over = month({ spentCents: 650_000, budgetedCents: 500_000, remainingCents: -150_000, daysLeft: 21, perDayCents: 0 });
+  for (const family of ["small", "medium", "accessoryRectangular"]) {
+    const { texts } = await run({ keychain: KEYED, family, body: over });
+    assert.ok(texts.includes("Te pasaste $1.500"), `${family}: ${texts.join(" | ")}`);
+    assert.ok(!texts.some((line) => line.includes("/día") || line.includes("por día")), family);
+  }
+  const hidden = await run({ keychain: KEYED, family: "medium", body: over, parameter: "privado" });
+  assert.ok(hidden.texts.includes("Te pasaste $ •••••"), hidden.texts.join(" | "));
+});
+
+test("with no budget, or figures saved before the remainder existed, it falls back to what was spent", async () => {
+  const none = month({ spentCents: 30_000, budgetedCents: 0, remainingCents: -30_000, daysLeft: 21, perDayCents: 0 });
+  for (const family of ["small", "medium", "accessoryRectangular"]) {
+    const { texts } = await run({ keychain: KEYED, family, body: none });
+    assert.ok(texts.includes("Gastado $300"), `${family}: ${texts.join(" | ")}`);
+  }
+  const saved = month({ spentCents: 30_000, budgetedCents: 500_000 });
+  assert.ok((await run({ keychain: KEYED, family: "medium", body: saved })).texts.includes("Gastado $300"));
 });

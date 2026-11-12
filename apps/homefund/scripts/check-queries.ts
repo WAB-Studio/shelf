@@ -19121,16 +19121,23 @@ async function widgetSuite(): Promise<void> {
   const ask = (bearer: string | null) =>
     GET(new Request("http://localhost/api/widget", { headers: bearer ? { authorization: `Bearer ${bearer}` } : {} }));
 
+  // Today included, counted apart from the app's own arithmetic.
+  const [year, monthNumber, day] = today.split("-").map(Number);
+  const daysLeft = new Date(Date.UTC(year, monthNumber, 0)).getUTCDate() - day + 1;
+
   const response = await ask(widgetKey.token);
   const summary = (await response.json()) as Partial<Awaited<ReturnType<typeof getWidgetSummary>>>;
   assert(
-    next("RF-215: /api/widget answers the key owner's money in hand (bank and cash with pockets, no card, no «Me debe» of a credit), month, Bandeja and the credits somebody else pays, in integer cents, private for five minutes"),
+    next("RF-215: /api/widget answers the key owner's money in hand (bank and cash with pockets, no card, no «Me debe» of a credit), month (spent, budgeted, what is left and the day's share), Bandeja and the credits somebody else pays, in integer cents, private for five minutes"),
     response.status === 200 &&
       response.headers.get("cache-control") === "private, max-age=300" &&
       summary.currency === "COP" &&
       summary.disponible?.cents === 1_420_000 &&
       summary.mes?.spentCents === 30_000 &&
       summary.mes?.budgetedCents === 500_000 &&
+      summary.mes?.remainingCents === 470_000 &&
+      summary.mes?.daysLeft === daysLeft &&
+      summary.mes?.perDayCents === Math.floor(470_000 / daysLeft) &&
       summary.bandeja?.pendingCount === 1 &&
       JSON.stringify(summary.creditos) ===
         JSON.stringify([{ person: "John", currency: "COP", paidThisMonth: "done", installmentCents: 100_000, daysUntilDue: 6 }]),
