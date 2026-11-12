@@ -77,35 +77,34 @@ test.describe("the phone's navigation", () => {
     "the bottom bar and its sheet render below md",
   );
 
-  test("reaches the inbox from the settings sheet, which closes behind it @mobile", async ({
+  test("reaches the inbox from its tab and Planeación from the settings sheet @mobile", async ({
     page,
   }) => {
     await page.goto("/es");
-    // Ajustes carries the Bandeja count in its name once something waits.
-    await page.getByRole("button", { name: new RegExp(`^${nav.settings}(,|$)`) }).click();
+    await page
+      .getByRole("navigation")
+      .getByRole("link", { name: new RegExp(`^${nav.inbox}(,|$)`) })
+      .click();
+    await expect(page).toHaveURL("/es/inbox");
 
+    await page.getByRole("button", { name: nav.settings, exact: true }).click();
     const sheet = page.getByRole("dialog");
     await expect(sheet).toBeVisible();
-
-    await sheet.getByRole("link", { name: new RegExp(`^${nav.inbox}(,|$)`) }).click();
-    await expect(page).toHaveURL("/es/inbox");
+    await sheet.getByRole("link", { name: nav.planning, exact: true }).click();
+    await expect(page).toHaveURL("/es/planning");
     await expect(sheet).toBeHidden();
   });
 
-  test("carries the inbox count on Ajustes and in the sheet's Bandeja row @mobile", async ({
+  // RF-202: the count rides the Bandeja tab, hidden at zero, and Ajustes carries none.
+  test("carries the inbox count on the Bandeja tab and not on Ajustes @mobile", async ({
     page,
   }) => {
     await seedQueue([pending]);
     await page.goto("/es");
-
-    const trigger = page.getByRole("button", {
-      name: new RegExp(`^${nav.settings},`),
-    });
-    await expect(trigger).toBeVisible();
-    await trigger.click();
     await expect(
-      page.getByRole("dialog").getByRole("link", { name: new RegExp(`^${nav.inbox},`) }),
+      page.getByRole("navigation").getByRole("link", { name: new RegExp(`^${nav.inbox},`) }),
     ).toBeVisible();
+    await expect(page.getByRole("button", { name: nav.settings, exact: true })).toBeVisible();
   });
 
   // RF-198: the phone has no Ajustes screen of its own, so the sheet carries the sign-in limit.
@@ -123,8 +122,7 @@ test.describe("the phone's navigation", () => {
   }) => {
     await page.goto("/es");
 
-    // Planeación is the third tab; Bandeja moved to the settings sheet.
-    for (const label of [nav.home, nav.movements, nav.planning]) {
+    for (const label of [nav.home, nav.movements, nav.inbox]) {
       const tab = page
         .getByRole("navigation")
         .getByRole("link", { name: new RegExp(`^${label}(,|$)`) });

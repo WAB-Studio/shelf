@@ -19,13 +19,10 @@ import { usePathname } from "@/i18n/navigation";
  */
 export function SettingsPanel({
   hasGroup,
-  inboxCount = 0,
   keepSignedIn,
   trigger,
 }: {
   hasGroup: boolean;
-  // Bandeja's waiting count, spoken in its row when the phone's bar hides it.
-  inboxCount?: number;
   // The stored «Mantener la sesión abierta» choice (RF-190), for the phone, which has no Ajustes screen; the sidebar omits it.
   keepSignedIn?: string;
   trigger: ReactNode;
@@ -46,10 +43,7 @@ export function SettingsPanel({
       key,
       href,
       icon: <Icon size={18} />,
-      label:
-        key === "inbox" && inboxCount > 0
-          ? `${t(key)}, ${t("pending", { count: inboxCount })}`
-          : t(key),
+      label: t(key),
       current: pathname === href,
     }),
   );

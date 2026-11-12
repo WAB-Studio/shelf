@@ -27,7 +27,7 @@ export type InboxTableRow = {
   id: string;
   createdAt: Date;
   merchantLabel: string | null;
-  // «Llegó por <kind> · <key name>», or null once the key is gone (RF-202).
+  // «Llegó por <kind> · <key name>», or null once the key is gone (RF-203).
   via: string | null;
   rawText: string;
   category: { name: string; color: string | null } | null;

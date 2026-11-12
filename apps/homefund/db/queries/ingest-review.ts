@@ -35,7 +35,7 @@ export type PendingDeliveryRow = {
   extractedIdentifier: string | null;
   recipientId: string | null;
   recipientName: string | null;
-  // The key the delivery came through (RF-202); null once the key is gone.
+  // The key the delivery came through (RF-203); null once the key is gone.
   credentialName: string | null;
   credentialBadge: CredentialBadge | null;
   proposedOccurredAt: string | null;

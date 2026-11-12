@@ -17,7 +17,7 @@ de los handoffs del 2026-11-01 y 2026-11-02 y las de `docs/auditoria-2026-11-02/
 - Lo personal del otro miembro: se ve todo, siempre con el nombre del dueño y sin acciones sobre lo ajeno; lo planificado
   personal del otro sale de Inicio («Por pagar», «Cerca del límite», «Meta»). Construir.
 - «Estar a mano»: Aportes sigue como lista y suma el gasto del fondo y el saldo de la caja. Sin reparto 50/50. Construir.
-- Bandeja: Planeación vuelve a la barra del teléfono; la Bandeja pasa a Ajustes. Construir.
+- Bandeja: Planeación vuelve a la barra del teléfono; la Bandeja pasa a Ajustes. Construir. (Revertida el 2026-11-11: la Bandeja vuelve a la barra, en lugar de Planeación, porque se usa a diario; Planeación queda en Inicio y en Ajustes.)
 - «De quién»: sin valor inicial y obligatorio en todo ingreso al fondo hecho en el formulario. Retira RF-166 → RF-167. Un
   ingreso que llega sin persona (entrada rápida, Bandeja, recurrentes, importación) sale en Aportes como «Sin asignar».
   Construir.
