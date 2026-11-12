@@ -24,8 +24,9 @@ const MOVEMENT =
 // «Alertas y Notificaciones» is the sender's title; its body must still name the operation.
 const ALERT_TITLE = /\balertas y notificaciones\b/;
 const ALERT_OPERATION = /\b(compra|pago|transferencia|retiro)\b/;
-// A money figure: «$52.300», «COP 9.100,00», or a number with a thousands group.
-const AMOUNT = /(?:\$|\bcop)\s?\d|\d{1,3}(?:[.,]\d{3})+/;
+// A money figure: «$52.300», «COP 9.100,00», a number with a thousands group, or a bare
+// figure of four or more digits such as Nequi's «2467834.2», as long as it is not a year.
+const AMOUNT = /(?:\$|\bcop)\s?\d|\d{1,3}(?:[.,]\d{3})+|\b(?!(?:19|20)\d{2}\b)\d{4,}(?:[.,]\d{1,2})?\b/;
 
 // Only weighed when no movement phrase is present: bills to pay, offers and awareness mail.
 const REMINDER =
