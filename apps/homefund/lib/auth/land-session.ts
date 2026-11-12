@@ -1,6 +1,5 @@
 import "server-only";
 
-import { eq } from "drizzle-orm";
 import { cookies } from "next/headers";
 
 import { insertRow } from "@/db/insert-row";
@@ -23,7 +22,8 @@ export async function landSession({
 }): Promise<{ target: string; locale: Locale }> {
   const userId = user.id;
 
-  const locale = await withUserDb(async (tx) => {
+  // The row's saved language steers nothing: the person lands in the language of the screen they came from (RF-218).
+  await withUserDb(async (tx) => {
     // One statement, not check-then-insert: a second click or a mail client
     // prefetching the link would race a duplicate key. The id is the one
     // Auth just verified, which is what the insert policy checks.
@@ -41,14 +41,6 @@ export async function landSession({
     if (created.length > 0) {
       await seedPersonalCategories(tx, { userId, locale: fallbackLocale });
     }
-
-    const [row] = await tx
-      .select({ locale: appUsers.locale })
-      .from(appUsers)
-      .where(eq(appUsers.id, userId))
-      .limit(1);
-
-    return row?.locale ?? fallbackLocale;
   });
 
   const cookieStore = await cookies();
@@ -56,7 +48,7 @@ export async function landSession({
   cookieStore.delete("post_login_redirect");
 
   // RF-154: signing in joins nobody; an invitation waits for the person's own tap.
-  const target = postLogin && isInternalPath(postLogin) ? postLogin : `/${locale}`;
+  const target = postLogin && isInternalPath(postLogin) ? postLogin : `/${fallbackLocale}`;
 
-  return { target, locale };
+  return { target, locale: fallbackLocale };
 }

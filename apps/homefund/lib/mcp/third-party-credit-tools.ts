@@ -74,7 +74,7 @@ export function registerThirdPartyCreditTools(server: McpServer, run: Run, t: Sa
   };
   const text = (value: number | null | undefined) => (value == null ? "" : centsToDecimal(value));
 
-  // The dialog's own schema and write: a new «Me debe» opens at what is left of the credit unless an amount is sent.
+  // The dialog's own schema and write: the internal «Me debe» opens at what is left of the credit unless an amount is sent (RF-216).
   server.registerTool(
     "link_third_party_credit",
     {
@@ -82,7 +82,6 @@ export function registerThirdPartyCreditTools(server: McpServer, run: Run, t: Sa
       inputSchema: z.object({
         liabilityAccountId: z.string().describe(d("creditLiabilityAccountId")),
         personName: z.string().describe(d("creditPersonName")),
-        receivableAccountId: z.string().nullish().describe(d("creditReceivableAccountId")),
         openingCents: z.number().int().nullish().describe(d("creditOpeningCents")),
         openedOn: z.string().optional().describe(d("creditOpenedOn")),
         ...lenderTerms,
@@ -92,13 +91,13 @@ export function registerThirdPartyCreditTools(server: McpServer, run: Run, t: Sa
     (input, ctx) =>
       run(ctx, async () => {
         const credit = parseForm(z.uuid({ error: "errors.notFound" }), input.liabilityAccountId);
-        const owed = input.receivableAccountId ? 0 : (input.openingCents ?? (await readCreditOwedCents(credit)));
+        const owed = input.openingCents ?? (await readCreditOwedCents(credit));
         if (owed === null) throw new ActionError("errors.notFound");
         const linked = await setUpThirdPartyCredit(
           parseForm(setUpThirdPartyCreditSchema, {
             liabilityAccountId: input.liabilityAccountId,
             personName: input.personName,
-            receivableAccountId: input.receivableAccountId ?? "",
+            receivableAccountId: "",
             amount: centsToDecimal(owed),
             openedOn: input.openedOn ?? todayInBogota(),
             installmentAmount: text(input.installmentCents),

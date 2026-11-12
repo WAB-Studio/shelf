@@ -1,15 +1,11 @@
-import { hasLocale } from "next-intl";
 import { NextResponse, type NextRequest } from "next/server";
 import { isAuthRetryableFetchError } from "@supabase/supabase-js";
 import { z } from "zod";
 
-import { routing } from "@/i18n/routing";
 import { landSession } from "@/lib/auth/land-session";
 import { SIGNED_IN_MARKER, SIGNED_IN_MARKER_MAX_AGE } from "@/lib/auth/signed-in-marker";
 import { DEFAULT_LOCALE, type Locale } from "@/lib/locales";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-
-const LOCALE_COOKIE_MAX_AGE = 60 * 60 * 24 * 365;
 
 // `code` is the PKCE link every sign-in mail carries (RF-145). `token_hash` is for
 // the invitation mail and the links the server mints itself, never a sign-in mail. `magiclink` and `signup` are
@@ -57,15 +53,11 @@ function invalidLink(
 }
 
 /**
- * Lands the magic link (RF-01). Outside the proxy matcher, so the locale comes
- * from the user's own row rather than the URL — `next/root-params` is not
- * available here.
+ * Lands the magic link (RF-01). Outside the proxy matcher, so there is no URL
+ * locale to read and the person lands in Spanish (RF-218).
  */
 export async function GET(request: NextRequest) {
-  const cookieValue = request.cookies.get("NEXT_LOCALE")?.value;
-  const fallbackLocale = hasLocale(routing.locales, cookieValue)
-    ? cookieValue
-    : DEFAULT_LOCALE;
+  const fallbackLocale = DEFAULT_LOCALE;
 
   // The no-store directives `setAll` hands back have to ride on the redirect.
   const authHeaders = new Headers();
@@ -106,19 +98,12 @@ export async function GET(request: NextRequest) {
     await supabase.auth.signOut({ scope: "local" }).catch(() => undefined);
     return invalidLink(request, fallbackLocale, authHeaders, "linkTimeout");
   }
-  const { target, locale } = landed;
+  const { target } = landed;
 
   const response = applyHeaders(
     NextResponse.redirect(new URL(target, request.url)),
     authHeaders,
   );
-  // Keeps the proxy on the same language for the very next request.
-  response.cookies.set("NEXT_LOCALE", locale, {
-    path: "/",
-    maxAge: LOCALE_COOKIE_MAX_AGE,
-    sameSite: "lax",
-  });
-
   response.cookies.set(SIGNED_IN_MARKER, String(Date.now()), {
     path: "/",
     maxAge: SIGNED_IN_MARKER_MAX_AGE,
