@@ -37,7 +37,7 @@ function isPhone(viewport: { width: number } | null | undefined): boolean {
 async function openScreen(page: Page): Promise<Locator> {
   await page.goto("/es/settings");
   const screen = page.getByRole("main");
-  await expect(screen.getByRole("link", { name: nav.inbox, exact: true })).toBeVisible();
+  await expect(screen.getByRole("link", { name: nav.planning, exact: true })).toBeVisible();
   return screen;
 }
 
@@ -46,7 +46,7 @@ async function openSheet(page: Page): Promise<Locator> {
   await page.getByRole("button", { name: nav.settings, exact: true }).click();
   const sheet = page.getByRole("dialog");
   await expect(sheet).toBeVisible();
-  await expect(sheet.getByRole("link", { name: nav.inbox, exact: true })).toBeVisible();
+  await expect(sheet.getByRole("link", { name: nav.planning, exact: true })).toBeVisible();
   return sheet;
 }
 
@@ -61,7 +61,7 @@ async function rows(surface: Locator): Promise<{ href: string | null; name: stri
   );
 }
 
-// The row that follows it differs by surface: the Ajustes screen leads on Bandeja, the sheet on Planeación.
+// The row that follows it is Planeación, on the screen and in the sheet alike.
 async function expectFirstRow(surface: Locator, second: string) {
   const row = surface.getByRole("link", { name: nav.fundSettings, exact: true });
   await expect(row).toHaveCount(1);
@@ -90,7 +90,7 @@ test.describe("at 360, a member of a fund", () => {
     page,
   }) => {
     const screen = await openScreen(page);
-    await expectFirstRow(screen, nav.inbox);
+    await expectFirstRow(screen, nav.planning);
 
     await screen.getByRole("link", { name: nav.fundSettings, exact: true }).click();
     await expect(page).toHaveURL(GROUP_HREF);
@@ -103,7 +103,7 @@ test.describe("at 360, a member of a fund", () => {
     page,
   }) => {
     const sheet = await openSheet(page);
-    await expectFirstRow(sheet, nav.inbox);
+    await expectFirstRow(sheet, nav.planning);
 
     await sheet.getByRole("link", { name: nav.fundSettings, exact: true }).click();
     await expect(page).toHaveURL(GROUP_HREF);
@@ -121,7 +121,7 @@ test.describe("at 360, a person with no fund", () => {
     page,
   }) => {
     // The screen's list leads on Bandeja, the sheet's on Planeación.
-    for (const [open, first] of [[openScreen, nav.inbox], [openSheet, nav.inbox]] as const) {
+    for (const [open, first] of [[openScreen, nav.planning], [openSheet, nav.planning]] as const) {
       const surface = await open(page);
       await expectNoRow(surface);
       await expect(surface.getByRole("link", { name: nav.members, exact: true })).toHaveCount(0);
