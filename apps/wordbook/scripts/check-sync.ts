@@ -161,16 +161,14 @@ async function checkRolledBackRounds(only?: string): Promise<void> {
   const keyOf = (tombstone: { deviceId: string; localId: number }) => `${tombstone.deviceId}:${tombstone.localId}`;
   // S43-S44: the route driven inside one transaction that always rolls back. The reader's `auth.users` row is
   // inserted in it, and every round of the block runs on that same settled transaction.
-  const rolledBack = async (
-    label: string,
-    work: (ctx: {
-      reader: string;
-      tx: postgres.TransactionSql;
-      post: (body: Record<string, unknown>) => Promise<RoundAnswer>;
-    }) => Promise<void>,
-  ): Promise<void> => {
+  type RolledBackWork = (ctx: {
+    reader: string;
+    tx: postgres.TransactionSql;
+    post: (body: Record<string, unknown>) => Promise<RoundAnswer>;
+  }) => Promise<void>;
+  const rolledBackOn = async (route: "log/sync" | "review/sync", label: string, work: RolledBackWork): Promise<void> => {
     const forcedRollback = Symbol("forced rollback");
-    const { POST } = await import("../app/api/log/sync/route");
+    const { POST } = await import(`../app/api/${route}/route`);
     const reader = randomUUID();
     await sql
       .begin(async (tx) => {
@@ -182,7 +180,7 @@ async function checkRolledBackRounds(only?: string): Promise<void> {
             return fn(readerTx(tx));
           };
           const response = await POST(
-            new Request("http://localhost/api/log/sync", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ readerId: reader, ...body }) }),
+            new Request(`http://localhost/api/${route}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ readerId: reader, ...body }) }),
           );
           return { status: response.status, json: (await response.json()) as RoundAnswer["json"] };
         };
@@ -194,6 +192,7 @@ async function checkRolledBackRounds(only?: string): Promise<void> {
         assert(`${label} aborted`, false, `${pgCode(error) ?? "no sqlstate"} ${error instanceof Error ? error.message : String(error)}`);
       });
   };
+  const rolledBack = (label: string, work: RolledBackWork) => rolledBackOn("log/sync", label, work);
 
   // S43: 501 marks one second apart, the newest on the smallest identity, so neither the identity nor a
   // descending clock can stand in for the tuple order; two pages hand down all of them once, oldest first.
@@ -257,6 +256,171 @@ async function checkRolledBackRounds(only?: string): Promise<void> {
         accepted.json.accepted === 3,
       `status = ${refused.status}, error = ${(refused.json as { error?: string }).error}, lookups = ${lookups}, devices = ${devices}, seal year = ${seal?.year}, control = ${accepted.status}/${accepted.json.accepted}`,
     );
+  });
+
+  // S52-S58 (RL-93): the copy of the review, `reading.review_entries`, driven through `/api/review/sync`.
+  type ReviewAnswer = {
+    status: number;
+    json: { accepted: number; error?: string; cursor: string | null; entries: { key: string; at: number; gone: boolean; card: { reps: number } | null; sense: { index: number } | null }[] };
+  };
+  const reviewCard = (reps: number, at: number) => ({
+    due: at + 60_000, stability: 1.5, difficulty: 5, scheduledDays: 1, learningSteps: 0, reps, lapses: 0, state: 2, lastReview: at, introducedOn: "2026-11-12",
+  });
+  const reviewEntry = (key: string, at: number, reps = 1) => ({ key, at, gone: false, card: reviewCard(reps, at), sense: null });
+  const sendReview = (post: (body: Record<string, unknown>) => Promise<RoundAnswer>, entries: unknown[], since: string | null = null) =>
+    post({ entries, since }) as unknown as Promise<ReviewAnswer>;
+  const stored = async (tx: postgres.TransactionSql, reader: string, key: string) =>
+    (
+      await tx<{ at: string; gone: boolean; reps: number | null; sense_index: number | null }[]>`
+        select "at"::text as at, gone, (card ->> 'reps')::int as reps, (sense ->> 'index')::int as sense_index
+        from reading.review_entries where user_id = ${reader} and key = ${key}`
+    )[0];
+
+  // S52: the grants and the stamp, read as the migration's owner: RLS forced, no `anon` or `service_role` grant,
+  // `updated_at` insertable and updatable by no one, and a stamp that overrides what a row was inserted with.
+  if (!only || only === "S52") await rolledBackOn("review/sync", "S52", async ({ reader, tx }) => {
+    const [rel] = await tx<{ rowsecurity: boolean; forced: boolean }[]>`
+      select relrowsecurity as rowsecurity, relforcerowsecurity as forced from pg_class where oid = 'reading.review_entries'::regclass`;
+    const stray = await tx<{ grantee: string }[]>`
+      select grantee from information_schema.role_table_grants
+      where table_schema = 'reading' and table_name = 'review_entries' and grantee in ('anon', 'service_role')`;
+    const columns = async (privilege: "INSERT" | "UPDATE") =>
+      (
+        await tx<{ column_name: string }[]>`
+          select column_name from information_schema.column_privileges
+          where table_schema = 'reading' and table_name = 'review_entries' and grantee = 'authenticated' and privilege_type = ${privilege}
+          order by column_name`
+      ).map((row) => row.column_name).join();
+    const insertable = await columns("INSERT");
+    const updatable = await columns("UPDATE");
+    await tx`insert into reading.review_entries (user_id, key, "at", gone, updated_at) values (${reader}, 'stamped', 1, false, '2000-01-01T00:00:00Z')`;
+    const [{ year }] = await tx<{ year: number }[]>`select extract(year from updated_at)::int as year from reading.review_entries where user_id = ${reader}`;
+    assert(
+      "S52",
+      rel.rowsecurity && rel.forced && stray.length === 0 && insertable === "at,card,gone,key,sense,user_id" && updatable === "at,card,gone,sense" && year >= 2026,
+      `rls = ${rel.rowsecurity}/${rel.forced}, anon/service_role grants = ${stray.length}, insert = ${insertable}, update = ${updatable}, stamped year = ${year}`,
+    );
+  });
+
+  // S53: the policies, driven. A reader sees, forges, rewrites and deletes only their own rows; no grant lets a
+  // session move `updated_at`.
+  if (!only || only === "S53") await rolledBackOn("review/sync", "S53", async ({ reader, tx }) => {
+    const intruder = randomUUID();
+    await tx`insert into auth.users (id) values (${intruder})`;
+    await enterUserContext(tx, reader);
+    await tx`insert into reading.review_entries (user_id, key, "at", gone) values (${reader}, 'mine', 5, false)`;
+    await enterUserContext(tx, intruder);
+    const seen = await tx<{ n: string }[]>`select count(*)::text as n from reading.review_entries where user_id = ${reader}`;
+    let forged: string | undefined;
+    await tx.savepoint((sp) => sp`insert into reading.review_entries (user_id, key, "at", gone) values (${reader}, 'forged', 5, false)`).catch((error: unknown) => {
+      forged = pgCode(error);
+    });
+    const rewritten = await tx`update reading.review_entries set "at" = 9 where user_id = ${reader}`;
+    const deleted = await tx`delete from reading.review_entries where user_id = ${reader}`;
+    await enterUserContext(tx, reader);
+    let stamped: string | undefined;
+    await tx.savepoint((sp) => sp`update reading.review_entries set updated_at = '2000-01-01T00:00:00Z' where user_id = ${reader}`).catch((error: unknown) => {
+      stamped = pgCode(error);
+    });
+    const kept = await stored(tx, reader, "mine");
+    assert(
+      "S53",
+      seen[0].n === "0" && forged === "42501" && rewritten.count === 0 && deleted.count === 0 && stamped === "42501" && kept?.at === "5",
+      `intruder sees ${seen[0].n}, forged insert = ${forged}, rewrote ${rewritten.count}, deleted ${deleted.count}, updated_at write = ${stamped}, row kept at = ${kept?.at}`,
+    );
+  });
+
+  // S54: the later `at` replaces the earlier and the earlier never replaces the later. The half a newer row lacks
+  // is kept, a deletion keeps neither, and a card newer than the deletion revives the key.
+  if (!only || only === "S54") await rolledBackOn("review/sync", "S54", async ({ reader, tx, post }) => {
+    const sense = { index: 1, signature: "sig", chosenAt: 2000 };
+    const steps: Awaited<ReturnType<typeof stored>>[] = [];
+    const accepted: number[] = [];
+    for (const entry of [
+      reviewEntry("a", 1000),
+      reviewEntry("a", 500, 9),
+      { key: "a", at: 2000, gone: false, card: null, sense },
+      { key: "a", at: 3000, gone: true, card: null, sense: null },
+      reviewEntry("a", 2500, 7),
+      reviewEntry("a", 4000, 2),
+    ]) {
+      accepted.push((await sendReview(post, [entry])).json.accepted);
+      steps.push(await stored(tx, reader, "a"));
+    }
+    const [first, older, tapped, deleted, resurrected, revived] = steps;
+    assert(
+      "S54",
+      accepted.join() === "1,0,1,1,0,1" &&
+        first?.reps === 1 &&
+        older?.reps === 1 &&
+        tapped?.at === "2000" && tapped.reps === 1 && tapped.sense_index === 1 &&
+        deleted?.gone === true && deleted.reps === null && deleted.sense_index === null &&
+        resurrected?.gone === true &&
+        revived?.gone === false && revived.reps === 2 && revived.sense_index === null,
+      `accepted = ${accepted.join()}, reps = ${steps.map((step) => step?.reps ?? "-").join()}, gone = ${steps.map((step) => step?.gone).join()}, sense = ${steps.map((step) => step?.sense_index ?? "-").join()}`,
+    );
+  });
+
+  // S55: 501 entries stamped at one instant, one key holding a "|", come down in two pages of the tuple order,
+  // each once; the second round's own answer carries a cursor that moves past them.
+  if (!only || only === "S55") await rolledBackOn("review/sync", "S55", async ({ reader, tx, post }) => {
+    await tx`insert into reading.review_entries (user_id, key, "at", gone, card)
+      select ${reader}, case when i = 250 then 'k|250' else 'k' || lpad(i::text, 4, '0') end, i, false, ${JSON.stringify(reviewCard(1, 1))}::text::jsonb
+      from generate_series(1, 501) as i`;
+    const owed = (await tx<{ key: string }[]>`select key from reading.review_entries where user_id = ${reader} order by updated_at, key`).map((row) => row.key);
+    const first = await sendReview(post, []);
+    const second = await sendReview(post, [], first.json.cursor);
+    const third = await sendReview(post, [], second.json.cursor);
+    const keys = [...first.json.entries, ...second.json.entries].map((entry) => entry.key);
+    assert(
+      "S55",
+      first.json.entries.length === 500 && second.json.entries.length === 1 && third.json.entries.length === 0 && keys.join() === owed.join() && third.json.cursor === second.json.cursor,
+      `pages = ${first.json.entries.length}/${second.json.entries.length}/${third.json.entries.length}, in order = ${keys.join() === owed.join()}, cursor kept = ${third.json.cursor === second.json.cursor}`,
+    );
+  });
+
+  // S56: a reader holds at most `cap` entries; a batch past it writes nothing, and one within it lands.
+  if (!only || only === "S56") await rolledBackOn("review/sync", "S56", async ({ reader, tx }) => {
+    const { syncReviewEntries } = await import("../lib/sync/review-upload");
+    await enterUserContext(tx, reader);
+    const wire = (key: string) => ({ ...reviewEntry(key, 10), sense: null });
+    const refused = await syncReviewEntries(readerTx(tx), reader, [wire("a"), wire("b"), wire("c")], null, 2);
+    const heldAfterRefusal = (await tx<{ n: string }[]>`select count(*)::text as n from reading.review_entries where user_id = ${reader}`)[0].n;
+    const allowed = await syncReviewEntries(readerTx(tx), reader, [wire("a"), wire("b")], null, 2);
+    assert(
+      "S56",
+      refused.status === "full" && heldAfterRefusal === "0" && allowed.status === "ok" && allowed.accepted === 2,
+      `over the cap = ${refused.status}, held after = ${heldAfterRefusal}, within = ${allowed.status}/${allowed.status === "ok" ? allowed.accepted : "-"}`,
+    );
+  });
+
+  // S57: another reader's identity on the request is refused and writes nothing; an empty body is a bad request.
+  if (!only || only === "S57") await rolledBackOn("review/sync", "S57", async ({ reader, tx, post }) => {
+    const other = randomUUID();
+    const mismatched = await post({ readerId: other, entries: [reviewEntry("x", 1)], since: null });
+    const malformed = await post({ entries: [{ ...reviewEntry("y", 1), gone: true }], since: null });
+    const held = (await tx<{ n: string }[]>`select count(*)::text as n from reading.review_entries where user_id = ${reader}`)[0].n;
+    assert(
+      "S57",
+      mismatched.status === 409 && malformed.status === 400 && held === "0",
+      `other reader = ${mismatched.status}, a deletion with a card = ${malformed.status}, rows = ${held}`,
+    );
+  });
+
+  // S58: «Vaciar aquí y en mi cuenta» empties the review's copy with the record's, and only the caller's.
+  if (!only || only === "S58") await rolledBackOn("review/sync", "S58", async ({ reader, tx, post }) => {
+    const { DELETE: clearAccount } = await import("../app/api/log/clear/route");
+    const other = randomUUID();
+    await tx`insert into auth.users (id) values (${other})`;
+    await tx`insert into reading.review_entries (user_id, key, "at", gone) values (${other}, 'theirs', 1, false)`;
+    await sendReview(post, [reviewEntry("mine", 1)]);
+    const response = await clearAccount(
+      new Request("http://localhost/api/log/clear", { method: "DELETE", headers: { "content-type": "application/json" } }),
+    );
+    const mine = (await tx<{ n: string }[]>`select count(*)::text as n from reading.review_entries where user_id = ${reader}`)[0].n;
+    await tx`reset role`;
+    const theirs = (await tx<{ n: string }[]>`select count(*)::text as n from reading.review_entries where user_id = ${other}`)[0].n;
+    assert("S58", response.status === 200 && mine === "0" && theirs === "1", `status = ${response.status}, caller's rows = ${mine}, another reader's = ${theirs}`);
   });
 }
 

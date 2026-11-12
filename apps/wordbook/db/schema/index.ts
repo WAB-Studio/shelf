@@ -8,3 +8,4 @@ export * from "./word-answers";
 export * from "./phrase-notes";
 export * from "./client-spend";
 export * from "./allowed-emails";
+export * from "./review-entries";

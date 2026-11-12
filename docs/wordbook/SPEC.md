@@ -293,6 +293,9 @@ this gets built, and no schema, table or column is "prepared for" it.
 - [x] **RL-85** — A card of the review draws one sense of the word, the one the reader tapped in the answer («Aprender este sentido»);
   with no tap, the first sense of the first group. The tap is kept on the device beside the cards and leaves with the word. A word with
   a single sense offers no tap. Decided by the user 2026-11-08 (audit 2026-11-02, question 1).
+- [ ] **RL-93** *(refines RL-85 and RL-22)* — The review travels with the account. The cards of the review (their FSRS state) and the sense the reader tapped for each word (RL-85) join the copy of RL-22: with the copy confirmed (RL-73), this device sends up its cards and senses and brings down the ones its other devices hold, so a new device, or a browser whose data was cleared, finds each word where it was left instead of new. One version is kept per word or phrase, by its key (the lemma reached, or the form as normalised): the one with the later moment of its last review, its tap or its deletion wins, whole; the half a newer version lacks (a tap with no review yet, a review with no tap) is kept from the older. A word deleted from `/registro` (RL-66) deletes its card and its sense on this device and in the copy, on every device that holds them, and a review of the same word after the deletion starts it again. Emptying the record on this device alone (RL-70) empties its cards on this device alone; the account keeps them and a device that signs in afterwards sees them again. Emptying the copy too empties the account's cards. The review rides the record's own confirmation (RL-73) and triggers (RNL-11): a device that last copied for another reader sends up only what it reviews after the new confirmation. A reader holds at most 20,000 words in the copy. With no account, nothing of the review leaves the device and it works exactly as RL-85 and RL-88 say. Decided by the user 2026-11-12, replacing the decision of 2026-11-08 that the review does not travel with the account.
+- [ ] **RL-94** *(refines RL-22)* — The app says where the review lives. `/cuenta`, in its copy section, says that the review travels with the account when the copy is on or about to be confirmed, and that it lives only on this device when no account is open. The confirmation before «Vaciar el registro» says the same for the choice it offers: with an account, that the review goes with the record on this device alone, or also from the account; with none, that it goes with the record and lived only here. Decided by the user 2026-11-12.
+- [ ] **RL-95** *(refines RL-72)* — The complete copy the reader exports (RL-72) includes the review: a `review` object with the `cards` and the `senses` the device holds, under `exportSchema` 2. Version 2 is version 1 plus that object: `exportedAt`, `recordSchema` and `rows` stand where they stood, so a reader of version 1 (RL-27's MCP server among them) finds what it read before, and a file of version 1 has no `review` and reads as a record with no review. Decided by the user 2026-11-12.
 - [x] **RL-88** *(refines RL-78)* — The review brings in at most 20 new entries a day, fixed: no setting moves it. When the cap held
   entries back, the finished screen says how many wait for tomorrow. Decided by the user 2026-11-08.
 - [x] **RL-89** *(refines RL-75)* — In production, with no `CLIENT_KEY_SALT`, the sign-in mail is refused (`sendFailed`) as the paid
@@ -742,7 +745,7 @@ Principles, not recipes:
 - **The read path has no backend for its text.** The dictionary ships as a static asset and is read
   locally; a word's answer touches the network on no keystroke (RL-35). The app has three server
   surfaces and none of them is on that path: the sentence translation (RL-09); the copy of the
-  reader's record — its sync, its wipe and the devices that hold it (RL-22, RL-25) — which runs on the
+  reader's record — its sync, its wipe, the devices that hold it and, since 2026-11-12, the review's cards (RL-22, RL-25, RL-93) — which runs on the
   same Supabase as `apps/homefund`, in a schema of its own, and only once the reader opened an account on
   purpose; and the word's decoration (RL-41, RL-45), which reaches the network only after the text is
   already drawn and never changes or delays it. With no account, nothing of the reader's record leaves
@@ -754,7 +757,7 @@ Principles, not recipes:
   exactly what RL-09 already does for the sentence path, and it is what keeps a third party from
   learning which word a reader is looking up. The request reaches the network only as the answer
   draws and only with a connection, and never blocks or delays the text.
-- **The server surface is eight route handlers, five pages and one file of server actions, and nothing else** (`/repaso` added 2026-10-30, RL-68). Counted
+- **The server surface is nine route handlers, five pages and one file of server actions, and nothing else** (`/repaso` added 2026-10-30, RL-68; `/api/review/sync` added 2026-11-12, RL-93). Counted
   2026-09-14 against the files `apps/wordbook/app` serves, correcting a figure stale since before this
   slice: the text here read «five route handlers and one page … becoming seven» and had fallen three
   handlers and three pages behind what had already shipped.
@@ -765,6 +768,10 @@ Principles, not recipes:
     copy of the reader's record, its wipe, and the devices that hold it (RL-22, RL-25). The sync route also carries deletion marks (RL-70). They answer
     **only** a request that carries a session the reader opened on purpose; with no account they
     answer 401 without opening a connection.
+  - `app/api/review/sync/route.ts` — the copy of the review's cards, senses and deletions (RL-93). It answers like the sync route: only
+    a request that carries a session the reader opened on purpose, 401 without opening a connection otherwise. It carries the keys
+    the reader already recorded and their scheduling, never a word's answer text. A ninth, and not a field of the sync route: the
+    record's rounds page by device and row number, the review's by word, and the two stop independently.
   - `app/auth/confirm/route.ts` — landing the sign-in link (RL-22).
   - `app/actions/account.ts` — the server actions of `/cuenta`: the sign-in link request (RL-22, RL-69, RL-75, RL-89), the
     code check (RL-73) and sign out. Added to this list 2026-11-08; it was already serving.
