@@ -119,6 +119,17 @@ export async function listThirdPartyCredits(liabilityAccountId?: string): Promis
   });
 }
 
+/** What a credit the caller may read still owes, in its settlement currency; null when it is not a visible liability. */
+export async function readCreditOwedCents(liabilityAccountId: string): Promise<number | null> {
+  const [row] = await withUserDb((tx) =>
+    tx.execute<{ balance: string }>(sql`
+      select coalesce(b.balance_cents, 0)::text as balance
+      from accounts a left join account_balances b on b.id = a.id and b.currency = a.settlement_currency
+      where a.id = ${liabilityAccountId}::uuid and a.kind = 'liability'`),
+  );
+  return row ? Math.max(0, -Number(row.balance)) : null;
+}
+
 // The refusals the link's own constraints raise, said once for every door.
 function mapLinkError(error: unknown): never {
   const constraint = pgConstraintName(error);

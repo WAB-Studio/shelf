@@ -15330,7 +15330,7 @@ async function mcpDoorSuite(): Promise<void> {
   assert(
     next("RF-144: /mcp answers 401 with no key, an unknown one or a webhook's, and lists its tools to a key for Claude"),
     anonymous.status === 401 && forged.status === 401 && webhookKey.status === 401 &&
-      JSON.stringify(names) === JSON.stringify(["accept_deliveries", "create_account", "create_category", "create_label", "delete_movement", "delete_recipient", "import_statement", "list_accounts", "list_categories", "list_inbox", "list_labels", "list_member_debts", "list_members", "list_movements", "list_recipients", "list_third_party_credits", "merge_movements", "move_account_to_fund", "move_category_movements", "preview_statement", "record_member_debt", "record_movement", "record_third_party_payment", "reject_deliveries", "review_month", "save_recipient", "spending_patterns", "update_account", "update_category", "update_label", "update_movement"]),
+      JSON.stringify(names) === JSON.stringify(["accept_deliveries", "create_account", "create_category", "create_label", "delete_movement", "delete_recipient", "import_statement", "list_accounts", "list_categories", "list_inbox", "list_labels", "list_member_debts", "list_members", "list_movements", "list_recipients", "link_third_party_credit", "list_third_party_credits", "merge_movements", "move_account_to_fund", "move_category_movements", "preview_statement", "record_member_debt", "record_movement", "record_third_party_payment", "reject_deliveries", "review_month", "save_recipient", "spending_patterns", "update_account", "update_category", "update_label", "update_movement", "update_third_party_credit"]),
     `no key ${anonymous.status}, unknown key ${forged.status}, webhook key ${webhookKey.status}, tools ${JSON.stringify(names)}`,
   );
 
@@ -18996,6 +18996,26 @@ async function thirdPartyCreditSuite(): Promise<void> {
       !viaTool.isError && toolTransfer[0]?.kind === "transfer" && toolTransfer[0].from === linked.receivableAccountId && bad.isError,
     `listed ${JSON.stringify(listed)}, recorded ${JSON.stringify(viaTool.value)}, zero ${JSON.stringify(bad.value)}`,
   );
+
+  // RF-214: Claude links a credit the way the dialog does: a new «Me debe» opens at what is left of the credit unless an
+  // amount is sent, the same refusals answer in Spanish, and an edit keeps what the call omits.
+  const linkedByTool = await tool("link_third_party_credit", { liabilityAccountId: taken, personName: "Persona Tres", installmentCents: 5_000_00, dueDay: 10 });
+  const linkedValue = linkedByTool.value as { receivableAccountId?: string };
+  if (linkedValue.receivableAccountId) track("accounts", linkedValue.receivableAccountId);
+  const [opened] = await fixtureSql<{ initial: string; name: string; owner: string }[]>`
+    select initial_balance_cents::text as initial, name, owner_user_id as owner from accounts where id = ${linkedValue.receivableAccountId ?? null}`;
+  const twice = await tool("link_third_party_credit", { liabilityAccountId: taken, personName: "Otra" });
+  const kept = await tool("update_third_party_credit", { liabilityAccountId: taken, personName: "Persona Cuatro" });
+  const cleared = await tool("update_third_party_credit", { liabilityAccountId: taken, dueDay: null });
+  const [after] = await asUser(user, () => listThirdPartyCredits(taken));
+  assert(
+    next("RF-214: link_third_party_credit opens a «Me debe» at what is left of the credit, refuses a second payer in Spanish, and update_third_party_credit keeps what it omits and clears with null"),
+    !linkedByTool.isError && opened?.initial === "1000000" && opened.name === "Me debe Persona Tres" && opened.owner === user.id &&
+      twice.isError && String((twice.value as { error?: string }).error).length > 0 && !kept.isError && !cleared.isError &&
+      after?.personName === "Persona Cuatro" && after.installmentCents === 5_000_00 && after.dueDay === null,
+    `linked ${JSON.stringify(linkedByTool.value)}, opened ${JSON.stringify(opened)}, twice ${JSON.stringify(twice.value)}, after ${JSON.stringify(after)}`,
+  );
+  await asUser(user, () => removeThirdPartyCredit(taken));
 
   await asUser(user, () => removeThirdPartyCredit(credit));
   const [{ accountsLeft, movementsLeft }] = await fixtureSql<{ accountsLeft: number; movementsLeft: number }[]>`
