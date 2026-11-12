@@ -1696,7 +1696,7 @@ async function emailIngestSuite(): Promise<void> {
   assert(
     next("a forwarded bank email with a bearer key lands as a delivery of the bank's words alone"),
     landed.status === 200 &&
-      row?.text === `Alertas y Notificaciones Bancolombia: Compraste COP9.100,00 en ZXQ MAIL ${tag} con tu T.Cred *4872.`,
+      row?.text === `Bancolombia: Compraste COP9.100,00 en ZXQ MAIL ${tag} con tu T.Cred *4872.`,
     `it answered ${landed.status} ${JSON.stringify(landed.body)}, landed ${JSON.stringify(row)}`,
   );
 

@@ -15,6 +15,7 @@ import { BASE_CURRENCY } from "@/lib/currency";
 import { pgErrorCode } from "@/lib/db-error";
 import { todayInBogota } from "@/lib/dates";
 import type { EmailVerdict } from "@/lib/ingest/classify";
+import { emailDescription } from "@/lib/ingest/email";
 import { fingerprintMessage } from "@/lib/ingest/fingerprint";
 import { applyRecipient, extractNumber, matchRecipient } from "@/lib/ingest/recipient-number";
 import { parseAmount } from "@/lib/money";
@@ -143,7 +144,10 @@ export async function recordIngestDelivery({
             ? "credential_default"
             : null;
 
-    let description = proposal.description.trim().slice(0, MAX_DESCRIPTION_LENGTH);
+    // A bank email's remainder carries its date, identifiers and help line; its sentence is the description (RF-206).
+    let description = (email ? emailDescription(proposal.description) : proposal.description)
+      .trim()
+      .slice(0, MAX_DESCRIPTION_LENGTH);
 
     let proposedAccountId = payload.account_id ?? proposal.accountId;
     let proposedToAccountId: string | null = null;
