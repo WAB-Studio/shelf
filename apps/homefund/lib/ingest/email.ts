@@ -239,6 +239,11 @@ const SENTENCE_END = /(?<!\b\p{Lu}(?:\.\p{Lu})*)[.!?]\s+(?=\p{Lu}|¿|¡)/u;
 const LABELED_MERCHANT =
   /\b(?:(?:Empresa|Comercio)\s*:?|realizada en)\s+(.+?)(?=\s*,|\s+(?:Descripci[oó]n|Fecha|Valor|Referencia|CUS|NIT|M[eé]todo|Medio|Estado|Hora|ID|Pagador)\b|$)/u;
 
+/** The business a receipt names in a field («Empresa:», «Comercio», «realizada en»); null when it names none. */
+export function emailMerchant(text: string): string | null {
+  return LABELED_MERCHANT.exec(text)?.[1]?.trim() || null;
+}
+
 function oneSentence(segment: string): string {
   let text = segment.replace(STATUS_PHRASE, "").replace(SENDER_PREFIX, "").replace(NAME_BEFORE_VERB, "");
   const cut = SENTENCE_END.exec(text);
@@ -271,7 +276,7 @@ export function emailDescription(description: string): string {
     .find((sentence) => sentence !== "");
   if (first === undefined) return description.trim();
 
-  const merchant = LABELED_MERCHANT.exec(text)?.[1]?.trim();
+  const merchant = emailMerchant(text);
   return merchant && !first.toLowerCase().includes(merchant.toLowerCase())
     ? `${first}${LEAD_SEPARATOR}${merchant}`
     : first;

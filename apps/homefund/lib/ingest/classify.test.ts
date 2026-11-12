@@ -104,6 +104,12 @@ test("the movements of wallets, gateways and merchants are accepted", () => {
 
 test("a merchant's thanks for a purchase is a movement although it names no figure", () => {
   assert.equal(rejected("¡Muchas gracias por tu compra en Farmatodo!", "Adjunto encontrarás tu factura."), null);
+  const priced = (body: string) => {
+    const verdict = judge("¡Muchas gracias por tu compra en Farmatodo!", body);
+    return verdict.movement && verdict.priced;
+  };
+  assert.equal(priced("Llámanos al 317 648 0137. Adjunto tu factura."), false);
+  assert.equal(priced("Total $45.000. Adjunto tu factura."), true);
   assert.equal(rejected("¡Muchas gracias por tu compra!", "Tu pago fue rechazado."), "failed");
 });
 
@@ -129,4 +135,39 @@ test("a store's order and question notices report no payment, and a due date is 
   assert.equal(rejected("Tienes un mensaje nuevo en Producto Ejemplo", "Recibiste este e-mail. Ref 377373737"), "no_movement_signal");
   assert.equal(rejected("Transacción #3841 PENDIENTE en ePayco", "Transacción Pendiente $65,000.00 COP"), "no_movement_signal");
   assert.equal(rejected("Tu fecha de pago ya está cerca Lulo Bank", "Si ya pagaste omite este mensaje. Valor de la cuota: $325.374,57"), "reminder");
+});
+
+// RF-208: the notices a payment leaves after the bank's own alert.
+const isReceipt = (subject: string, body: string) => {
+  const verdict = judge(subject, body);
+  return verdict.movement ? verdict.receipt : null;
+};
+
+test("PSE, gateway and merchant notices are receipts; a bank or wallet alert is not", () => {
+  const receipts: [string, string][] = [
+    ["PSE - Transacción Aprobada ✅ CUS 510567233", "Valor: $ 123.429,00 Empresa: EMPRESA EJEMPLO"],
+    ["Transacción aprobada en COMERCIO EJEMPLO [1091900964]", "La transacción por un valor de $447.932,00 fue Aprobada"],
+    ["Transacción APROBADA en COMERCIO EJEMPLO", "¡Pago exitoso! COP $93,560"],
+    ["Transacción #3841 ACEPTADA en ePayco", "Transacción Aceptada $65.000,00 COP"],
+    ["Transacción Aprobada:", "Tu transacción ha sido aprobada. Valor 119400"],
+    ["Compra por $122.000 COP en COMERCIO EJEMPLO", "Transacción aprobada"],
+    ["ecollect: Credito Hipotecario Confirmación #5337 BANCOLOMBIA", "Total Pagado $ 500,000.00"],
+    ["Recibiste un pago a través de Pagos a terceros de Wompi", "Monto recibido: $23.379"],
+    ["Compraste Producto Ejemplo", "TOTAL: $144609"],
+    ["¡Muchas gracias por tu compra en Farmatodo!", "Adjunto encontrarás tu factura."],
+    ["Comprobante de pago Referencia Claro No.1163", "Estado: APPROVED Valor: $97.110"],
+    ["Tu recibo de Airbnb", "Total (USD) $150,77"],
+  ];
+  for (const [subject, body] of receipts) assert.equal(isReceipt(subject, body), true, subject);
+
+  const alerts: [string, string][] = [
+    ["Alertas y Notificaciones", "Bancolombia: Compraste COP9.100,00 en TIENDA XYZ con tu T.Cred *1234."],
+    ["¡Pago exitoso!", "Hiciste un pago en COMERCIO EJEMPLO por $79.000"],
+    ["Comprobante de Pago Claro", "Listo tu pago en Claro. Pagaste con Nequi tu factura por $5.500"],
+    ["Pago hecho", "¡Listo! pagaste tu crédito por $325.374,57."],
+    ["¡Envío con Bre-B exitoso!", "Realizaste una transferencia a PERSONA EJEMPLO por $24.000"],
+    ["¡Recibiste plata por Bre-B!", "Recibiste $76.000 de PERSONA EJEMPLO"],
+    ["¡Ya entró tu pago!", "Tu pago fue de $397.167,42"],
+  ];
+  for (const [subject, body] of alerts) assert.equal(isReceipt(subject, body), false, subject);
 });

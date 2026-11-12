@@ -969,6 +969,7 @@ void (async () => {
     await emailIngestSuite();
     await widgetKeySuite();
     await renderSuite(LATE_RENDER_CASES, httpCookie);
+    await emailDuplicateSuite();
   } catch (error) {
     assert(
       next("the run completed"),
@@ -1801,5 +1802,80 @@ async function widgetKeySuite(): Promise<void> {
       !source.includes("__SITE__") &&
       !source.includes("whk_"),
     `it answered ${script.status} ${script.headers.get("content-type")}`,
+  );
+}
+
+// RF-208: the receipt of a payment a bank alert already reported never becomes a second proposal, in either order.
+async function emailDuplicateSuite(): Promise<void> {
+  const userId = httpUserId;
+  if (!userId) throw new Error("emailDuplicateSuite ran before the session was read");
+  const token = await edgeCredential(userId);
+  const post = async (subject: string, text: string) => {
+    const response = await fetch(`${HARNESS_BASE_URL}/api/webhooks/email`, {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+      body: JSON.stringify({ from: "yo@example.com", subject, text }),
+    });
+    const body = (await response.json()) as Record<string, unknown>;
+    if (typeof body.deliveryId === "string") landedDeliveries.push(body.deliveryId);
+    return { status: response.status, body, id: String(body.deliveryId) };
+  };
+  const row = async (id: string) => {
+    const [found] = await fixtureSql<
+      { status: string; reason: string | null; of: string | null; description: string | null }[]
+    >`select status, reject_reason as reason, duplicate_of_id as of, proposed_description as description
+      from ingest_deliveries where id = ${id}`;
+    return found;
+  };
+  const figure = () => {
+    const pesos = 3_000_000 + Math.floor(Math.random() * 900_000);
+    return `$${pesos.toLocaleString("es-CO")}`;
+  };
+  const business = (tag: string) => `EMPRESA ${tag}`;
+  const alertText = (amount: string) => `Bancolombia: Transferiste ${amount} desde tu cuenta *4872 a la cuenta *1234.`;
+  const receiptText = (amount: string, tag: string) =>
+    `La transacción en ${business(tag)} por un valor de ${amount},00 fue Aprobada Referencia: ${tag}`;
+  const receiptSubject = (tag: string) => `Transacción aprobada en ${business(tag)} [${tag}]`;
+
+  const tagA = randomUUID().slice(0, 8).toUpperCase();
+  const amountA = figure();
+  const alert = await post("Alertas y Notificaciones", alertText(amountA));
+  const receipt = await post(receiptSubject(tagA), receiptText(amountA, tagA));
+  const alertRow = await row(alert.id);
+  const receiptRow = await row(receipt.id);
+  assert(
+    next("a receipt after the bank alert of the same payment lands rejected as a duplicate, linked to it, and names the business"),
+    receipt.body.status === "rejected" &&
+      receipt.body.reason === "duplicate" &&
+      receiptRow?.reason === "duplicate" &&
+      receiptRow.of === alert.id &&
+      alertRow?.status === "pending" &&
+      alertRow.description === business(tagA),
+    `alert ${JSON.stringify(alertRow)}, receipt ${JSON.stringify(receiptRow)} ${JSON.stringify(receipt.body)}`,
+  );
+
+  const tagB = randomUUID().slice(0, 8).toUpperCase();
+  const amountB = figure();
+  const early = await post(receiptSubject(tagB), receiptText(amountB, tagB));
+  const earlyBefore = await row(early.id);
+  const late = await post("Alertas y Notificaciones", alertText(amountB));
+  const earlyAfter = await row(early.id);
+  const lateRow = await row(late.id);
+  assert(
+    next("a receipt that waited alone becomes a duplicate of the bank alert that arrives after it"),
+    earlyBefore?.status === "pending" &&
+      earlyAfter?.status === "rejected" &&
+      earlyAfter.reason === "duplicate" &&
+      earlyAfter.of === late.id &&
+      lateRow?.status === "pending",
+    `receipt ${JSON.stringify(earlyBefore)} then ${JSON.stringify(earlyAfter)}, alert ${JSON.stringify(lateRow)}`,
+  );
+
+  const otherAlert = await post("Alertas y Notificaciones", alertText(figure()));
+  const alone = await post(receiptSubject(tagA), receiptText(figure(), tagA));
+  assert(
+    next("a receipt with no alert of its figure stays pending, and an alert never repeats an alert"),
+    alone.body.status === "pending" && otherAlert.body.status === "pending",
+    `they answered ${JSON.stringify(alone.body)} and ${JSON.stringify(otherAlert.body)}`,
   );
 }

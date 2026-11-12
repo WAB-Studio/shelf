@@ -694,6 +694,13 @@
       "when": 1794776057428,
       "tag": "0102_a_bill_is_not_a_payment",
       "breakpoints": true
+    },
+    {
+      "idx": 103,
+      "version": "7",
+      "when": 1794776082928,
+      "tag": "0103_a_payment_is_one_movement",
+      "breakpoints": true
     }
   ]
 }

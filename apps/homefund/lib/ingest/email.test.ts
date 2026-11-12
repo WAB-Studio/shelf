@@ -4,6 +4,7 @@ import { test } from "node:test";
 
 import {
   emailDescription,
+  emailMerchant,
   emailToMessage,
   emailWords,
   keyInPayloads,
@@ -159,4 +160,10 @@ test("a receipt that names its business in a field adds it to a subject that doe
     emailDescription("PSE - Transacción Aprobada CUS 510567233 — ¡Hola, Juan Ejemplo! Valor: $ Empresa: EMPRESA EJEMPLO SA Descripción: Pago factura Fecha: 25/07/2026"),
     "PSE - Transacción Aprobada — EMPRESA EJEMPLO SA",
   );
+});
+
+test("a receipt's business is read from its field, or from the gateway's «realizada en»", () => {
+  assert.equal(emailMerchant("Valor: $5 Empresa: EMPRESA EJEMPLO SA Descripción: Pago Fecha: 25/07/2026"), "EMPRESA EJEMPLO SA");
+  assert.equal(emailMerchant("La transacción 1153 realizada en GRUPO EJEMPLO , fue aprobada"), "GRUPO EJEMPLO");
+  assert.equal(emailMerchant("Compraste en COMERCIO EJEMPLO"), null);
 });

@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import {
+  type AnyPgColumn,
   bigint,
   boolean,
   check,
@@ -70,8 +71,12 @@ export const ingestDeliveries = finances.table(
     proposedDescription: text(),
     // Why the channel refused the message before any person saw it (RF-196); null on every other row.
     rejectReason: text({
-      enum: ["failed", "statement", "support", "reminder", "promotion", "bill", "no_movement_signal"],
+      enum: ["failed", "statement", "support", "reminder", "promotion", "bill", "duplicate", "no_movement_signal"],
     }),
+    // A PSE, gateway or merchant notice of a payment a bank or wallet alert reports first (RF-208).
+    receipt: boolean().notNull().default(false),
+    // The delivery this one repeats (RF-208); set only with the reason `duplicate`, cleared if that one goes.
+    duplicateOfId: uuid().references((): AnyPgColumn => ingestDeliveries.id, { onDelete: "set null" }),
     // Stamped when the delivery leaves the queue, in either direction.
     resolvedAt: timestamp({ withTimezone: true }),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
@@ -130,7 +135,11 @@ export const ingestDeliveries = finances.table(
     ),
     check(
       "ingest_deliveries_reject_reason_valid",
-      sql`${table.rejectReason} is null or ${table.rejectReason} in ('failed', 'statement', 'support', 'reminder', 'promotion', 'bill', 'no_movement_signal')`,
+      sql`${table.rejectReason} is null or ${table.rejectReason} in ('failed', 'statement', 'support', 'reminder', 'promotion', 'bill', 'duplicate', 'no_movement_signal')`,
+    ),
+    check(
+      "ingest_deliveries_duplicate_of_only_when_duplicate",
+      sql`${table.duplicateOfId} is null or ${table.rejectReason} = 'duplicate'`,
     ),
     // The idempotency key (RF-90): a re-delivery of the same reference is refused, not duplicated.
     uniqueIndex("ingest_deliveries_owner_external_ref_unique").on(
@@ -156,6 +165,13 @@ export const ingestDeliveries = finances.table(
       "ingest_deliveries_extracted_identifier_digits",
       sql`${table.extractedIdentifier} is null or ${table.extractedIdentifier} ~ '^[0-9]{4,20}$'`,
     ),
+    // Parent deletes check the self-reference, and a repeat looks for its original by figure and day (RF-208).
+    index("ingest_deliveries_duplicate_of_id_idx")
+      .on(table.duplicateOfId)
+      .where(sql`${table.duplicateOfId} is not null`),
+    index("ingest_deliveries_owner_amount_idx")
+      .on(table.ownerUserId, table.proposedAmountCents)
+      .where(sql`${table.proposedAmountCents} is not null`),
     index("ingest_deliveries_proposed_to_account_id_idx")
       .on(table.proposedToAccountId)
       .where(sql`${table.proposedToAccountId} is not null`),

@@ -1743,6 +1743,7 @@
       "reminder": "Payment reminder",
       "promotion": "Advertising",
       "bill": "Bill to pay",
+      "duplicate": "Already there (receipt)",
       "no_movement_signal": "No movement"
     }
   },

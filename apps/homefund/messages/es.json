@@ -1743,6 +1743,7 @@
       "reminder": "Recordatorio de pago",
       "promotion": "Publicidad",
       "bill": "Factura por pagar",
+      "duplicate": "Ya estaba (comprobante)",
       "no_movement_signal": "Sin movimiento"
     }
   },
