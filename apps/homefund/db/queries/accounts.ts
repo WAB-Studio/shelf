@@ -224,7 +224,7 @@ async function refuseForeignHolder<T>(write: () => Promise<T>): Promise<T> {
 
 // The insert body of `createAccount`: the wrapper opens the session, this runs
 // the statement inside whatever transaction it is handed.
-async function insertAccount(
+export async function insertAccount(
   tx: Transaction,
   {
     name,

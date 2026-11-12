@@ -20,6 +20,7 @@ import { BatchRefusal, registerInboxTools } from "@/lib/mcp/inbox-tools";
 import { registerLabelTools } from "@/lib/mcp/label-tools";
 import { registerMemberDebtTools } from "@/lib/mcp/member-debt-tools";
 import { registerRecipientTools } from "@/lib/mcp/recipient-tools";
+import { registerThirdPartyCreditTools } from "@/lib/mcp/third-party-credit-tools";
 import { registerLedgerTools } from "@/lib/mcp/write-tools";
 import { statementImportSchema, statementSchema } from "@/lib/validation/statement-import";
 
@@ -184,6 +185,7 @@ export function buildHandler(): (request: Request) => Promise<Response> {
     registerInboxTools(server, run, (key) => t(key as never));
     registerMemberDebtTools(server, run, (key) => t(key as never));
     registerRecipientTools(server, run, (key) => t(key as never));
+    registerThirdPartyCreditTools(server, run, (key) => t(key as never));
     registerLabelTools(server, run, (key) => t(key as never));
   }, {
     serverInfo: { name: "homefund", version: pkg.version },

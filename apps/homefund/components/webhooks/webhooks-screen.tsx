@@ -10,6 +10,7 @@ import { revokeWebhookCredentialAction } from "@/app/actions/webhook-credentials
 import { BankEmails } from "@/components/webhooks/bank-emails";
 import { ClaudeKey } from "@/components/webhooks/claude-key";
 import { IphoneShortcut } from "@/components/webhooks/iphone-shortcut";
+import { IphoneWidget } from "@/components/webhooks/iphone-widget";
 import { WebhookCredentialDialog } from "@/components/webhooks/webhook-credential-dialog";
 import { WebhooksTable } from "@/components/webhooks/webhooks-table";
 import {
@@ -68,6 +69,8 @@ export function WebhooksScreen({
   options,
   ingestUrl,
   mcpUrl,
+  widgetScript,
+  widgetScriptUrl,
   oauthLine,
   inboundDomain,
   apkReady,
@@ -76,6 +79,9 @@ export function WebhooksScreen({
   options: WebhookCredentialOptions;
   ingestUrl: string;
   mcpUrl: string;
+  // RF-215: the widget's Scriptable script and the address that serves it.
+  widgetScript: string;
+  widgetScriptUrl: string;
   oauthLine: string | null;
   // RF-187: where Resend Inbound receives; null hides the forwarding way.
   inboundDomain: string | null;
@@ -359,6 +365,10 @@ export function WebhooksScreen({
 
       <Card id="iphone">
         <IphoneShortcut />
+      </Card>
+
+      <Card id="widget">
+        <IphoneWidget script={widgetScript} scriptUrl={widgetScriptUrl} />
       </Card>
 
       <WebhookCredentialDialog

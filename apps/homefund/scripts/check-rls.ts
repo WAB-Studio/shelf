@@ -323,6 +323,7 @@ async function main() {
   await checkOauthExchange();
   await checkMemberDebts();
   await checkRecipients();
+  await checkThirdPartyCredits();
 }
 
 // RF-136: a deferral is read and written exactly when its purchase's liability account is, carries 2 to 72
@@ -5321,6 +5322,8 @@ const INSERT_GRANT_GAPS: Record<string, string[]> = {
   savings_goals: ["archived_at", "created_at", "id", "updated_at"],
   reminder_mails: ["id", "mailed_at", "planned_payment_id", "remind_on"],
   sign_in_claims: ["client_key", "count", "day"],
+  // The two accounts are named once, on insert; `id` and the stamps are the table's (RF-211).
+  third_party_credits: ["created_at", "id", "updated_at"],
   transaction_labels: [],
   // `marked_by` is stamped by the trigger from auth.uid(); the movement and the rule are the input.
   transaction_reviews: ["id", "marked_at", "marked_by"],
@@ -5501,6 +5504,8 @@ const UPDATE_GRANT_GAPS: Record<string, string[]> = {
   savings_goals: ["created_at", "external_ref", "group_id", "id", "owner_user_id", "updated_at"],
   reminder_mails: ["id", "mailed_at", "planned_payment_id", "remind_on"],
   sign_in_claims: ["client_key", "count", "day"],
+  // An edit moves who pays and what the lender asks; the two accounts are fixed once linked (RF-211).
+  third_party_credits: ["created_at", "id", "liability_account_id", "receivable_account_id", "updated_at"],
   transaction_labels: ["label_id", "transaction_id"],
   // A mark is final: no column is writable.
   transaction_reviews: ["id", "marked_at", "marked_by", "rule", "transaction_id"],
@@ -5566,6 +5571,7 @@ const DELETE_GRANTS: string[] = [
   "recipients",
   "recurring_rules",
   "savings_goals",
+  "third_party_credits",
   "transaction_labels",
   "transaction_reviews",
   "transaction_sources",
@@ -14288,6 +14294,115 @@ async function checkRecipients() {
       select count(*)::int as held from unnest(array['anon', 'service_role']) r
       where has_any_column_privilege(r, 'finances.recipients'::regclass, 'SELECT, INSERT, UPDATE, REFERENCES')
          or has_table_privilege(r, 'finances.recipients'::regclass, 'DELETE, TRUNCATE')`;
+    return [{ ok: held === 0, detail: `anon/service_role with a privilege ${held}` }];
+  });
+}
+
+// RF-211: a credit somebody else pays is read and written by whoever reads and writes its liability, alone; the two
+// accounts are one liability and one asset of a scope and a currency, one payer per credit; an edit moves the
+// payer's name and the lender's terms only; every write leaves its audit row; anon and service_role hold nothing.
+async function checkThirdPartyCredits() {
+  console.log("");
+  const labels = {
+    owner: "rf211-1. the owner of a credit links it, reads it, edits who pays and what the lender asks, and removes it; a stranger reads none, updates none and removes none",
+    forged: "rf211-2. a stranger linking the owner's accounts is 42501, and the owner naming another person's asset as the receivable is TP001 before the policy is asked",
+    shape: "rf211-3. an asset as the liability, a liability as the receivable, another currency and another owner's asset are TP001; a second payer or a shared receivable is 23505; a blank name, a zero installment and a day past the 31st are 23514",
+    columns: "rf211-4. the accounts of a link cannot be changed by an update (42501)",
+    audit: "rf211-5. linking, editing and removing each leave an audit row naming the person",
+    grants: "rf211-6. anon and service_role hold no privilege on third_party_credits",
+  };
+  const fixture = async (tx: M1Tx) => {
+    const [owner, stranger] = [randomUUID(), randomUUID()];
+    await tx`insert into auth.users (id) values (${owner}), (${stranger})`;
+    await tx`insert into app_users (id) values (${owner}), (${stranger})`;
+    const account = async (user: string, name: string, kind: "asset" | "liability", currency = "COP") => {
+      const [{ id }] = await tx<{ id: string }[]>`
+        insert into accounts (owner_user_id, name, kind, subtype, settlement_currency, initial_balance_on)
+        values (${user}, ${name}, ${kind}, ${kind === "asset" ? "bank" : "loan"}, ${currency}, ${todayInBogota()}) returning id`;
+      return id;
+    };
+    return {
+      owner,
+      stranger,
+      credit: await account(owner, "rls rf211 credit", "liability"),
+      other: await account(owner, "rls rf211 other credit", "liability"),
+      owes: await account(owner, "rls rf211 owes me", "asset"),
+      bank: await account(owner, "rls rf211 bank", "asset"),
+      dollars: await account(owner, "rls rf211 usd", "asset", "USD"),
+      theirs: await account(stranger, "rls rf211 theirs", "asset"),
+    };
+  };
+  const link = (liability: string, receivable: string, name = "rls rf211", installment: number | null = null, day: number | null = null) => (sp: M1Tx) =>
+    sp`insert into third_party_credits (liability_account_id, receivable_account_id, person_name, installment_cents, due_day)
+      values (${liability}, ${receivable}, ${name}, ${installment}, ${day})`;
+
+  await rf136Rows([labels.owner, labels.forged, labels.audit], async (tx) => {
+    const f = await fixture(tx);
+    await enterUserContext(tx, f.owner);
+    const linked = await m1Refusal(tx, link(f.credit, f.owes, "Persona Uno", 150_000_00, 15));
+    const mine = (await tx`select id from third_party_credits`).length;
+    const edited = (await tx`update third_party_credits set person_name = 'Persona Dos', installment_cents = null, due_day = 20 returning id`).length;
+    const foreignReceivable = await m1Refusal(tx, link(f.other, f.theirs));
+    await enterUserContext(tx, f.stranger);
+    const strangerSees = (await tx`select id from third_party_credits`).length;
+    const strangerUpdates = (await tx`update third_party_credits set person_name = 'robado' returning id`).length;
+    const strangerRemoves = (await tx`delete from third_party_credits returning id`).length;
+    const strangerLinks = await m1Refusal(tx, link(f.other, f.bank));
+    await enterUserContext(tx, f.owner);
+    const removed = (await tx`delete from third_party_credits returning id`).length;
+    await tx`reset role`;
+    const trail = await tx<{ action: string; actor_user_id: string | null }[]>`
+      select action, actor_user_id from audit_log
+      where entity = 'third_party_credits' and actor_user_id = ${f.owner} order by id`;
+    return [
+      {
+        ok: linked === null && mine === 1 && edited === 1 && strangerSees === 0 && strangerUpdates === 0 && strangerRemoves === 0 && removed === 1,
+        detail: `link ${linked ?? "accepted"}, owner sees ${mine}, edits ${edited}, removes ${removed}; stranger sees ${strangerSees}, updates ${strangerUpdates}, removes ${strangerRemoves}`,
+      },
+      { ok: strangerLinks === "42501" && foreignReceivable === "TP001", detail: `stranger links ${strangerLinks}, owner with another's receivable ${foreignReceivable}` },
+      {
+        ok: JSON.stringify(trail.map((row) => row.action)) === JSON.stringify(["INSERT", "UPDATE", "DELETE"]),
+        detail: `audit ${JSON.stringify(trail)}`,
+      },
+    ];
+  });
+
+  await rf136Rows([labels.shape], async (tx) => {
+    const f = await fixture(tx);
+    await enterUserContext(tx, f.owner);
+    await link(f.credit, f.owes)(tx);
+    const assetAsLiability = await m1Refusal(tx, link(f.bank, f.owes));
+    const liabilityAsReceivable = await m1Refusal(tx, link(f.other, f.credit));
+    const currency = await m1Refusal(tx, link(f.other, f.dollars));
+    const secondPayer = await m1Refusal(tx, link(f.credit, f.bank));
+    const sharedReceivable = await m1Refusal(tx, link(f.other, f.owes));
+    const blank = await m1Refusal(tx, link(f.other, f.bank, "  "));
+    const zero = await m1Refusal(tx, link(f.other, f.bank, "x", 0));
+    const day = await m1Refusal(tx, link(f.other, f.bank, "x", null, 32));
+    await tx`reset role`;
+    const owner = await m1Refusal(tx, link(f.other, f.theirs));
+    return [{
+      ok: assetAsLiability === "TP001" && liabilityAsReceivable === "TP001" && currency === "TP001" && owner === "TP001" &&
+        secondPayer === "23505" && sharedReceivable === "23505" && blank === "23514" && zero === "23514" && day === "23514",
+      detail: `asset as liability ${assetAsLiability}, liability as receivable ${liabilityAsReceivable}, currency ${currency}, another owner ${owner}, second payer ${secondPayer}, shared receivable ${sharedReceivable}, blank ${blank}, zero ${zero}, day ${day}`,
+    }];
+  });
+
+  await rf136Rows([labels.columns], async (tx) => {
+    const f = await fixture(tx);
+    await enterUserContext(tx, f.owner);
+    await link(f.credit, f.owes)(tx);
+    const moveReceivable = await m1Refusal(tx, (sp) => sp`update third_party_credits set receivable_account_id = ${f.bank}`);
+    const moveLiability = await m1Refusal(tx, (sp) => sp`update third_party_credits set liability_account_id = ${f.other}`);
+    await tx`reset role`;
+    return [{ ok: moveReceivable === "42501" && moveLiability === "42501", detail: `receivable ${moveReceivable}, liability ${moveLiability}` }];
+  });
+
+  await rf136Rows([labels.grants], async (tx) => {
+    const [{ held }] = await tx<{ held: number }[]>`
+      select count(*)::int as held from unnest(array['anon', 'service_role']) r
+      where has_any_column_privilege(r, 'finances.third_party_credits'::regclass, 'SELECT, INSERT, UPDATE, REFERENCES')
+         or has_table_privilege(r, 'finances.third_party_credits'::regclass, 'DELETE, TRUNCATE')`;
     return [{ ok: held === 0, detail: `anon/service_role with a privilege ${held}` }];
   });
 }

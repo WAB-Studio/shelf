@@ -39,9 +39,10 @@ export const webhookCredentials = finances.table(
     rateCount: integer().notNull().default(0),
     lastUsedAt: timestamp({ withTimezone: true }),
     // What the key opens, fixed when it is minted: `ingest` the webhook (RF-90), `mcp` Claude's
-    // door (RF-144). A key never opens the other, so a forwarder's key reads nothing.
+    // door (RF-144), `widget` the iPhone widget's summary (RF-215). A key never opens another door,
+    // so a forwarder's key reads nothing.
     purpose: text().notNull().default("ingest"),
-    // What the key is for, chosen when it is minted (RF-203); a `mcp` key is Claude whatever this says.
+    // What the key is for, chosen when it is minted (RF-203); a `mcp` or `widget` key is Claude or the widget whatever this says.
     kind: text().notNull().default("other"),
     revokedAt: timestamp({ withTimezone: true }),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
@@ -52,7 +53,7 @@ export const webhookCredentials = finances.table(
     check("webhook_credentials_token_hash_length", sql`length(${table.tokenHash}) = 64`),
     check("webhook_credentials_rate_limit_positive", sql`${table.rateLimitPerMin} > 0`),
     check("webhook_credentials_rate_count_non_negative", sql`${table.rateCount} >= 0`),
-    check("webhook_credentials_purpose", sql`${table.purpose} in ('ingest', 'mcp')`),
+    check("webhook_credentials_purpose", sql`${table.purpose} in ('ingest', 'mcp', 'widget')`),
     check(
       "webhook_credentials_kind_valid",
       sql`${table.kind} in ('android', 'iphone', 'bank_emails', 'other')`,

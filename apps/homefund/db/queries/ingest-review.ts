@@ -175,7 +175,7 @@ export async function listDeliveries({
         recipientId: ingestDeliveries.recipientId,
         recipientName: recipients.name,
         credentialName: webhookCredentials.name,
-        credentialPurpose: sql<"ingest" | "mcp" | null>`${webhookCredentials.purpose}`,
+        credentialPurpose: sql<"ingest" | "mcp" | "widget" | null>`${webhookCredentials.purpose}`,
         credentialKind: sql<CredentialKind | null>`${webhookCredentials.kind}`,
         proposedOccurredAt: ingestDeliveries.proposedOccurredAt,
         proposedDescription: ingestDeliveries.proposedDescription,
