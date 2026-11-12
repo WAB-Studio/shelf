@@ -211,7 +211,7 @@ export function DashboardSummary({ data }: { data: DashboardData }) {
         <Button asChild tap variant="ghost">
           <LocaleLink href="/reports">{t("viewReports")}</LocaleLink>
         </Button>
-        {/* The phone's bar gave Planeación's tab to Bandeja; this is its way in. */}
+        {/* The phone's bar holds no Planeación tab; this and Ajustes are its way in. */}
         <Button asChild tap variant="ghost">
           <LocaleLink href="/planning">{tn("planning")}</LocaleLink>
         </Button>
