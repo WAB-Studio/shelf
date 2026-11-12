@@ -41,7 +41,7 @@ export const webhookCredentials = finances.table(
     // What the key opens, fixed when it is minted: `ingest` the webhook (RF-90), `mcp` Claude's
     // door (RF-144). A key never opens the other, so a forwarder's key reads nothing.
     purpose: text().notNull().default("ingest"),
-    // What the key is for, chosen when it is minted (RF-198); a `mcp` key is Claude whatever this says.
+    // What the key is for, chosen when it is minted (RF-202); a `mcp` key is Claude whatever this says.
     kind: text().notNull().default("other"),
     revokedAt: timestamp({ withTimezone: true }),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),

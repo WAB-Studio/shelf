@@ -13,6 +13,7 @@ import { getShellSummary } from "@/db/queries/app-shell";
 import { getTransactionFormOptions } from "@/db/queries/transaction-form";
 import { requireUser, withSharedTransaction } from "@/db/session";
 import { routing } from "@/i18n/routing";
+import { readKeepSignedIn } from "@/lib/auth/keep-signed-in";
 
 // Written by `proxy.ts` under this name, on every request it matches.
 const PATHNAME_HEADER = "x-pathname";
@@ -52,12 +53,14 @@ export default async function AppLayout(props: LayoutProps<"/[locale]">) {
   // The proxy already redirected an anonymous visitor; this is what enforces it.
   // Quick-entry options are fetched here so every route opens the sheet or form
   // without a second round trip (RF-22).
-  const [user, [options, summary], t, requestHeaders] = await Promise.all([
+  const [user, [options, summary], t, requestHeaders, keepSignedIn] = await Promise.all([
     requireUser(),
     // One transaction for both reads: the pool holds eight connections.
     withSharedTransaction(() => Promise.all([getTransactionFormOptions(), getShellSummary()])),
     getTranslations("common"),
     headers(),
+    // The phone's Ajustes panel holds the select (RF-190); the laptop's screen reads its own.
+    readKeepSignedIn(),
   ]);
 
   const group = summary.group;
@@ -82,7 +85,7 @@ export default async function AppLayout(props: LayoutProps<"/[locale]">) {
           hasGroup={group !== null}
           personName={summary.memberName ?? user.email}
           role={summary.role}
-          pendingCount={summary.pendingDeliveries}
+          pendingCount={summary.inboxPending}
         />
         <Flex direction="column" flexGrow="1" minWidth="0">
           {/* The sidebar names the fund from `sm` up, so the bar is the phone's alone. */}
@@ -106,7 +109,8 @@ export default async function AppLayout(props: LayoutProps<"/[locale]">) {
       <Box display={{ initial: "block", sm: "none" }}>
         <AppTabs
           hasGroup={group !== null}
-          inboxCount={summary.pendingDeliveries + summary.awaitingCounterparty}
+          inboxCount={summary.inboxPending}
+          keepSignedIn={keepSignedIn}
         />
       </Box>
     </QuickEntryProvider>

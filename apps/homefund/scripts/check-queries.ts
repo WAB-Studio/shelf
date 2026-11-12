@@ -18785,7 +18785,7 @@ async function mcpLabelsSuite(): Promise<void> {
   );
 }
 
-// RF-198: a key says what it is for, how many deliveries it brought in 30 days and when it was last used, in the list's
+// RF-202: a key says what it is for, how many deliveries it brought in 30 days and when it was last used, in the list's
 // own query; a delivery names the key it came through and keeps the name's kind until the key is gone.
 async function connectionsSuite(): Promise<void> {
   console.log("");
@@ -18815,7 +18815,7 @@ async function connectionsSuite(): Promise<void> {
   const listed = await asUser(user, () => listWebhookCredentials());
   const row = (id: string) => listed.find((one) => one.id === id);
   assert(
-    next("RF-198: listWebhookCredentials carries each key's kind, last use and its deliveries of the last 30 days in the same read"),
+    next("RF-202: listWebhookCredentials carries each key's kind, last use and its deliveries of the last 30 days in the same read"),
     listed.length === 3 && row(gmail)?.kind === "bank_emails" && row(gmail)?.deliveriesLast30Days === 2 &&
       row(gmail)?.lastUsedAt !== null && row(phone)?.kind === "android" && row(phone)?.deliveriesLast30Days === 1 &&
       row(claude)?.purpose === "mcp" && row(claude)?.deliveriesLast30Days === 0,
@@ -18827,7 +18827,7 @@ async function connectionsSuite(): Promise<void> {
   await fixtureSql`delete from webhook_credentials where id = ${gmail}`;
   const after = await asUser(user, () => listPendingDeliveries());
   assert(
-    next("RF-198: an inbox delivery names its key and its badge, and names none once the key is gone"),
+    next("RF-202: an inbox delivery names its key and its badge, and names none once the key is gone"),
     viaGmail.length === 2 && viaGmail.every((one) => one.credentialBadge === "bank_emails") &&
       after.filter((one) => one.credentialName === null && one.credentialBadge === null).length === 2,
     `via ${viaGmail.length}, after ${JSON.stringify(after.map((one) => one.credentialName))}`,

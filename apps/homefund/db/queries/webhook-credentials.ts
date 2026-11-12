@@ -30,7 +30,7 @@ export type IssueWebhookCredentialArgs = {
   name: string;
   // What the key opens (RF-144); a webhook key unless named.
   purpose?: CredentialPurpose;
-  // What the key is for (RF-198); `other` unless named.
+  // What the key is for (RF-202); `other` unless named.
   kind?: CredentialKind;
   defaultAccountId: string | null;
   defaultCategoryId: string | null;
@@ -76,7 +76,7 @@ export type WebhookCredentialRow = {
   rateLimitPerMin: number;
   purpose: CredentialPurpose;
   kind: CredentialKind;
-  // Inbox deliveries that came in through this key in the last 30 days (RF-198).
+  // Inbox deliveries that came in through this key in the last 30 days (RF-202).
   deliveriesLast30Days: number;
   lastUsedAt: Date | null;
   revokedAt: Date | null;

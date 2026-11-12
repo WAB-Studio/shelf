@@ -8,12 +8,13 @@ import {
   FilterBar,
   FilterChip,
   FilterDate,
+  FilterSearch,
   FilterSelect,
 } from "@/components/ui";
 import type { TransactionFormOptions } from "@/db/queries/transaction-form";
 import { civilDateToDate } from "@/lib/dates";
 import { categoryNamesById } from "@/lib/fund/category-names";
-import { HOUSEHOLD_MAKER, type MovementTypeValue } from "@/lib/validation/transaction";
+import { HOUSEHOLD_MAKER, MOVEMENT_SEARCH_MAX, type MovementTypeValue } from "@/lib/validation/transaction";
 
 // The type filter's value, mirrored one-to-one onto the `?type=` query and, on
 // the server, onto the movement's generated kind (RF-19, RF-23).
@@ -35,6 +36,8 @@ export type MovementsFilters = {
   // The recurring rule that generated a row, entered by link from that rule's
   // own menu (RF-127).
   rule: string | null;
+  // Text matched against the description, and the amount when it is a figure (RF-199).
+  q: string | null;
 };
 
 // A Radix Select item may not carry an empty value, so the "any" option rides
@@ -202,6 +205,15 @@ export function MovementsFilterBar({
 
   return (
     <FilterBar>
+      <FilterSearch
+        label={t("searchLabel")}
+        placeholder={t("searchPlaceholder")}
+        value={filters.q ?? ""}
+        onValueChange={(value) => set({ q: value || null })}
+        maxLength={MOVEMENT_SEARCH_MAX}
+        width={240}
+      />
+
       <FilterSelect
         label={t("typeLabel")}
         value={filters.type}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, type ReactNode } from "react";
+import { useEffect, useId, useState, type ReactNode } from "react";
 import { Plus, X } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Select } from "@radix-ui/themes";
@@ -117,6 +117,77 @@ export function FilterDate({
         value={value}
         onChange={(event) => onValueChange(event.target.value)}
         style={width ? { width } : undefined}
+      />
+    </div>
+  );
+}
+
+// A pause in typing this long sends the text; each key restarts it, so a phone asks the server once per word.
+const SEARCH_PAUSE_MS = 300;
+
+/**
+ * A text search in the filter row's own field chrome. It holds what is being typed and hands the
+ * text on after a pause, so the caller's URL moves once per pause and not once per key. `value`
+ * is read back when it moves from outside.
+ */
+export function FilterSearch({
+  label,
+  placeholder,
+  value,
+  onValueChange,
+  maxLength,
+  width,
+}: {
+  label: string;
+  placeholder: string;
+  value: string;
+  onValueChange: (v: string) => void;
+  maxLength: number;
+  // Fixed pixels on a laptop; omitted, the field takes the row it sits in.
+  width?: number;
+}) {
+  const controlId = useId();
+  const [draft, setDraft] = useState(value);
+  const [seen, setSeen] = useState(value);
+  // True from a key press until the pause hands the text on: only typed text is ever sent.
+  const [typed, setTyped] = useState(false);
+
+  // A value that moved from outside (a clear, the back button, the twin of this field in the other
+  // shape) is shown, unless it is the text being typed here.
+  if (value !== seen) {
+    setSeen(value);
+    if (!typed && value !== draft.trim()) setDraft(value);
+  }
+
+  useEffect(() => {
+    if (!typed) return;
+    const timer = setTimeout(() => {
+      setTyped(false);
+      onValueChange(draft.trim());
+    }, SEARCH_PAUSE_MS);
+    return () => clearTimeout(timer);
+  }, [typed, draft, onValueChange]);
+
+  return (
+    <div className={styles.field} style={width ? undefined : { flexGrow: 1 }}>
+      <label htmlFor={controlId} className={styles.label}>
+        {label}
+      </label>
+      <input
+        id={controlId}
+        type="search"
+        inputMode="search"
+        enterKeyHint="search"
+        autoComplete="off"
+        className={styles.search}
+        style={width ? { width } : undefined}
+        placeholder={placeholder}
+        maxLength={maxLength}
+        value={draft}
+        onChange={(event) => {
+          setDraft(event.target.value);
+          setTyped(true);
+        }}
       />
     </div>
   );

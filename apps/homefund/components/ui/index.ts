@@ -130,7 +130,7 @@ export {
 
 export { TablePagination } from "./table-pagination";
 
-export { FilterBar, FilterSelect, FilterDate, FilterChip } from "./filter-bar";
+export { FilterBar, FilterSelect, FilterDate, FilterSearch, FilterChip } from "./filter-bar";
 
 export { Panel, PanelBlock, PanelRow, PanelButton, type PanelCell } from "./panel";
 

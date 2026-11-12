@@ -14,6 +14,7 @@ import {
 } from "@/db/schema";
 import { credentialBadge, type CredentialBadge, type CredentialKind } from "@/lib/validation/webhook";
 import { withUserDb, withUserDbOrTx, type Transaction } from "@/db/session";
+import { inboxPendingCount } from "@/lib/ingest/inbox-pending";
 
 export type PendingDeliveryRow = {
   id: string;
@@ -34,7 +35,7 @@ export type PendingDeliveryRow = {
   extractedIdentifier: string | null;
   recipientId: string | null;
   recipientName: string | null;
-  // The key the delivery came through (RF-198); null once the key is gone.
+  // The key the delivery came through (RF-202); null once the key is gone.
   credentialName: string | null;
   credentialBadge: CredentialBadge | null;
   proposedOccurredAt: string | null;
@@ -222,6 +223,18 @@ export async function countPendingDeliveries(): Promise<number> {
       .where(eq(ingestDeliveries.status, "pending"));
 
     return row.count;
+  });
+}
+
+/** What Bandeja waits on, in one statement: the same sum the shell shows (`inboxPendingCount`). */
+export async function countInboxPending(): Promise<number> {
+  return withUserDb(async (tx) => {
+    const [row] = await tx.execute<{ deliveries: number; awaiting: number }>(sql`select
+      (select count(*)::int from ingest_deliveries where status = 'pending') as deliveries,
+      (select count(*)::int from transactions
+        where awaiting_counterparty and reviewed_at is null) as awaiting`);
+
+    return inboxPendingCount({ deliveries: row.deliveries, awaitingCounterparty: row.awaiting });
   });
 }
 

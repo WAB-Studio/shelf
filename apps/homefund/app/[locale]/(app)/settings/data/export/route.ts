@@ -69,6 +69,7 @@ export async function GET(
     labelId: filters.label,
     unreviewed: filters.unreviewed,
     recurringRuleId: filters.rule,
+    search: filters.q,
   };
 
   const [, { data, options }, t] = await Promise.all([
