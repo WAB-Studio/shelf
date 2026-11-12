@@ -1641,7 +1641,8 @@
       "description": "Gmail reenvía los correos del banco a una dirección de HomeFund y llegan a la Bandeja sin tener el computador prendido.",
       "step1": "En Gmail abre Configuración → Reenvío y correo POP/IMAP → Agregar una dirección de reenvío, y pega la dirección de abajo.",
       "step2": "Google manda un código de confirmación a esa dirección. Llega a la Bandeja de HomeFund, en «Mensajes que no entraron»: ábrelo, copia el código y pégalo en Gmail.",
-      "step3": "En Gmail crea un filtro: de Bancolombia, Nequi, Nu, Lulo, Falabella, Banco de Bogotá o PSE → Reenviar a esa dirección.",
+      "step3": "En Gmail crea un filtro con la búsqueda de abajo: pégala en el cuadro de búsqueda, abre las opciones de búsqueda (el ícono a la derecha), toca «Crear filtro» y marca «Reenviarlo a» con esa dirección. Trae los correos de Bancolombia, Nequi, Nu, Lulo, Falabella, Banco de Bogotá y PSE, y también los comprobantes que dejan tus pagos (Placetopay, Wompi, ePayco, PayU, Bold, ecollect, Mercado Libre, Farmatodo, Claro, Airbnb): un pago con su comprobante entra una sola vez a la Bandeja.",
+      "queryLabel": "Búsqueda de Gmail para el filtro",
       "create": "Crear llave para reenvío",
       "addressLabel": "Dirección de reenvío",
       "addressNote": "La dirección lleva tu llave: no la compartas. Se muestra una sola vez; si la pierdes, revoca la llave y crea otra."

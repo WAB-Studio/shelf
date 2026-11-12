@@ -1641,7 +1641,8 @@
       "description": "Gmail forwards the bank emails to a HomeFund address and they reach the inbox with no computer on.",
       "step1": "In Gmail open Settings → Forwarding and POP/IMAP → Add a forwarding address, and paste the address below.",
       "step2": "Google sends a confirmation code to that address. It arrives in the HomeFund inbox, under \"Messages that did not get in\": open it, copy the code and paste it in Gmail.",
-      "step3": "In Gmail create a filter: from Bancolombia, Nequi, Nu, Lulo, Falabella, Banco de Bogotá or PSE → Forward to that address.",
+      "step3": "In Gmail create a filter with the search below: paste it in the search box, open the search options (the icon on the right), click «Create filter» and tick «Forward it to» with that address. It brings the emails of Bancolombia, Nequi, Nu, Lulo, Falabella, Banco de Bogotá and PSE, and also the receipts your payments leave (Placetopay, Wompi, ePayco, PayU, Bold, ecollect, Mercado Libre, Farmatodo, Claro, Airbnb): a payment and its receipt reach the Bandeja once.",
+      "queryLabel": "Gmail search for the filter",
       "create": "Create a key for forwarding",
       "addressLabel": "Forwarding address",
       "addressNote": "The address carries your key: do not share it. It is shown once; if you lose it, revoke the key and make another."
