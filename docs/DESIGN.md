@@ -611,3 +611,31 @@ diciembre · 4 cobros vistos». Una columna en el celular, dos desde `md` y tres
 cómo se encuentran y que son estimados, e invita a revisarlas con Claude. Sin cobros, un estado vacío dice cuándo aparecerán.
 En el mosaico de Planeación, una ficha pequeña: «N activas · $ X al mes».
 
+
+## Decisión del 2026-11-11: «Lo paga <persona>» en el crédito, por el usuario
+
+Un crédito a nombre de la persona que otro paga: ese otro le manda el dinero y ella paga la cuota al banco. Se sigue en
+la pantalla del crédito (Planeación → Deudas → el crédito), sin pantalla aparte y sin tablero previo; se refina con lo
+construido.
+
+- **Sin vínculo.** El encabezado del crédito ofrece, junto a «Abonar», el botón «Lo paga otra persona» (solo quien puede
+  escribir la cuenta). Abre un diálogo: «Persona», «Cuenta "Me debe"» (por defecto «Crear una nueva»; o una cuenta de
+  ahorro o efectivo que ya tenga), y, si es nueva, «Lo que debe hoy» (lo que falta del crédito, editable) y «Desde» (hoy);
+  luego, opcionales, «Cuota del banco» y «Día de pago». El botón dice «Guardar». La cuenta nueva se llama «Me debe <persona>».
+- **Con vínculo**, bajo las cifras del crédito, un bloque con el título «Lo paga <persona>» y, a su derecha, «Registrar pago
+  de <persona>» y un menú «Editar» · «Dejar de seguir» (confirma, y dice que las cuentas y los movimientos se quedan).
+  - Tres fichas: «Falta del crédito» (con la nota «Cuota $150.000 · vence el día 15» si la hay), «<Persona> ya pagó» y
+    «<Persona> todavía debe» (con el nombre de la cuenta «Me debe» como nota). Cada una, por moneda del crédito.
+  - «Este mes · noviembre de 2026», una tarjeta con dos filas, cada una con su estado en palabras y nunca solo en color:
+    «<Persona> te pagó» → «Llegó $150.000 · 5 nov» (jade), «Llegó una parte: $50.000 de $150.000» o «Aún no llega» (gris);
+    «Pagaste al banco» → «Pagado $150.000 · 6 nov», «Pagaste una parte: …» o «Aún no pagas». Sin cuota declarada, cualquier
+    pago cuenta como hecho.
+  - «Mes a mes», una tarjeta con una fila por mes, el más reciente primero, hasta 24: el mes y, debajo, las dos cifras
+    («Llegó $150.000» · «Pagaste $150.000»); un mes sin movimientos dice «No llegó nada» y «No pagaste». Un mes sin nada
+    sigue siendo una fila: es la cifra que se vino a leer.
+- **Registrar pago de <persona>** abre un diálogo con «Llegó a» (las cuentas de la persona, sin la «Me debe»), «Monto»
+  (la cuota, si hay) y «Fecha» (hoy); guarda una transferencia de «Me debe <persona>» a esa cuenta, nunca un ingreso. El
+  pago al banco es el «Abonar» de siempre.
+- En el celular, una columna: las fichas se apilan y los botones pasan bajo el título.
+- Estados: sin cuota ni día, las notas desaparecen; guardando, los controles se bloquean con un indicador; un rechazo sale
+  junto al campo o en el aviso con sus palabras; quien no escribe la cuenta lee el bloque sin ningún botón.
