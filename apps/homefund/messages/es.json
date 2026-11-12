@@ -1683,7 +1683,18 @@
       "completed": "Movimiento completado"
     },
     "saveNumber": "Guardar este número",
-    "recipientIs": "Destinatario: {name}"
+    "recipientIs": "Destinatario: {name}",
+    "refusedTitle": "Mensajes que no entraron",
+    "refusedCount": "{count, plural, one {# mensaje descartado por no ser un movimiento} other {# mensajes descartados por no ser un movimiento}}",
+    "refusedMeta": "{reason} · {date}",
+    "rejectReason": {
+      "failed": "Transacción rechazada",
+      "statement": "Extracto",
+      "support": "Soporte",
+      "reminder": "Recordatorio de pago",
+      "promotion": "Publicidad",
+      "no_movement_signal": "Sin movimiento"
+    }
   },
   "review": {
     "entry": "Revisar el mes",

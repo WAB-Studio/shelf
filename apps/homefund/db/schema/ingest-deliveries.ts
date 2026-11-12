@@ -68,6 +68,10 @@ export const ingestDeliveries = finances.table(
     // Date-only, interpreted in America/Bogota (RNF-06): a YYYY-MM-DD string end to end, never a JS Date.
     proposedOccurredAt: date({ mode: "string" }),
     proposedDescription: text(),
+    // Why the channel refused the message before any person saw it (RF-196); null on every other row.
+    rejectReason: text({
+      enum: ["failed", "statement", "support", "reminder", "promotion", "no_movement_signal"],
+    }),
     // Stamped when the delivery leaves the queue, in either direction.
     resolvedAt: timestamp({ withTimezone: true }),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
@@ -123,6 +127,10 @@ export const ingestDeliveries = finances.table(
     check(
       "ingest_deliveries_category_source_present",
       sql`${table.proposedCategoryId} is null or ${table.categorySource} is not null`,
+    ),
+    check(
+      "ingest_deliveries_reject_reason_valid",
+      sql`${table.rejectReason} is null or ${table.rejectReason} in ('failed', 'statement', 'support', 'reminder', 'promotion', 'no_movement_signal')`,
     ),
     // The idempotency key (RF-90): a re-delivery of the same reference is refused, not duplicated.
     uniqueIndex("ingest_deliveries_owner_external_ref_unique").on(
