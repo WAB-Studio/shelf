@@ -62,6 +62,7 @@ export function WebhookCredentialDialog({
   onOpenChange,
   options,
   ingestUrl,
+  inboundDomain,
 }: {
   open: boolean;
   // What the key is for when the dialog opens; the person may change it.
@@ -69,6 +70,8 @@ export function WebhookCredentialDialog({
   onOpenChange: (open: boolean) => void;
   options: WebhookCredentialOptions;
   ingestUrl: string;
+  // RF-187: a bank-emails key also shows its forwarding address when this is set.
+  inboundDomain: string | null;
 }) {
   // Mirrors the step the body is on. The token itself never leaves the body.
   const [showingToken, setShowingToken] = useState(false);
@@ -102,6 +105,7 @@ export function WebhookCredentialDialog({
           initialKind={initialKind}
           options={options}
           ingestUrl={ingestUrl}
+          inboundDomain={inboundDomain}
           onTokenIssued={() => setShowingToken(true)}
           onClose={close}
         />
@@ -114,12 +118,14 @@ function WebhookCredentialBody({
   initialKind,
   options,
   ingestUrl,
+  inboundDomain,
   onTokenIssued,
   onClose,
 }: {
   initialKind: CredentialKind;
   options: WebhookCredentialOptions;
   ingestUrl: string;
+  inboundDomain: string | null;
   onTokenIssued: () => void;
   onClose: () => void;
 }) {
@@ -230,6 +236,23 @@ function WebhookCredentialBody({
           failedLabel={t("copyFailed")}
           tone="secret"
         />
+        {/* The token is the address's local part, so this is the one moment it can be copied (RF-187). */}
+        {inboundDomain !== null && form.getValues("kind") === "bank_emails" && (
+          <Flex direction="column" gap="2">
+            <CopyField
+              id="webhook-forwarding-address"
+              label={t("forwarding.addressLabel")}
+              value={`${token}@${inboundDomain}`}
+              copyLabel={t("copy")}
+              copiedLabel={t("copied")}
+              failedLabel={t("copyFailed")}
+              tone="secret"
+            />
+            <Text size="2" color="gray">
+              {t("forwarding.addressNote")}
+            </Text>
+          </Flex>
+        )}
         {/* The only moment the token can reach the phone; the link is built
             from it on render and held nowhere. */}
         <Flex direction="column" gap="2">
