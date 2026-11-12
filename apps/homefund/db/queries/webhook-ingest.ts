@@ -40,6 +40,8 @@ export type RecordIngestDeliveryArgs = {
 };
 
 const MAX_DESCRIPTION_LENGTH = 200;
+// A figure in dollars or euros is no peso figure (RF-207); the proposal waits for a person to state it.
+const FOREIGN_CURRENCY = /\b(?:USD|EUR)\b|US\$/;
 
 // The one place the date's precedence lives: the caller's override, then the
 // day the message names, then the day it was delivered. A read date later than
@@ -125,8 +127,11 @@ export async function recordIngestDelivery({
     // rather than one nobody wrote.
     const rawPesos = payload.amount ?? proposal.amountPesos;
     const parsedAmountCents = rawPesos === null ? null : parseAmount(rawPesos);
+    const foreignFigure = email !== undefined && FOREIGN_CURRENCY.test(payload.text);
     const proposedAmountCents =
-      rejectReason === null && parsedAmountCents !== null && parsedAmountCents > 0 ? parsedAmountCents : null;
+      rejectReason === null && !foreignFigure && parsedAmountCents !== null && parsedAmountCents > 0
+        ? parsedAmountCents
+        : null;
 
     const merchant = merchantRows?.[0] ?? null;
     const trustedCategoryId =

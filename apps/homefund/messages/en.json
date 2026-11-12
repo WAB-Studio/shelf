@@ -1742,6 +1742,7 @@
       "support": "Support",
       "reminder": "Payment reminder",
       "promotion": "Advertising",
+      "bill": "Bill to pay",
       "no_movement_signal": "No movement"
     }
   },

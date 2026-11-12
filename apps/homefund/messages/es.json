@@ -1742,6 +1742,7 @@
       "support": "Soporte",
       "reminder": "Recordatorio de pago",
       "promotion": "Publicidad",
+      "bill": "Factura por pagar",
       "no_movement_signal": "Sin movimiento"
     }
   },
