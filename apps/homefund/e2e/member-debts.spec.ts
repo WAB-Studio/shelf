@@ -74,7 +74,7 @@ test("a debt paid in full reads «Saldada» and waits in the collapsed «Saldada
   await dialog.getByRole("button", { name: t.save }).click();
   await expect(page.getByText(new RegExp(`Quedó saldada la deuda de ${PLAIN_MEMBER_NAME} por .*80\\.000`))).toBeVisible();
 
-  await expect(section.getByText(t.allSquare)).toBeVisible();
+  await expect(section.getByText(t.allSquare, { exact: true })).toBeVisible();
   await section.getByRole("button", { name: /Ver saldadas \(1\)/ }).click();
   await expect(section.getByText(/Saldada el /)).toBeVisible();
   expect(await pageOverflow(page)).toBeLessThanOrEqual(0);
