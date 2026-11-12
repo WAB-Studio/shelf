@@ -5,7 +5,7 @@ import {
   resolveWebhookCredential,
   type ResolvedWebhookCredential,
 } from "@/db/queries/webhook-credentials";
-import type { NonMovementReason } from "@/lib/ingest/classify";
+import type { EmailVerdict } from "@/lib/ingest/classify";
 import type { WebhookPayloadInput } from "@/lib/validation/webhook";
 
 // As `/mcp` reads it: any case, any spacing, a header typed by hand in an iOS Shortcut included.
@@ -34,7 +34,7 @@ export async function authorizeIngest(
 export async function deliver(
   cred: ResolvedWebhookCredential,
   payload: WebhookPayloadInput,
-  notMovement?: NonMovementReason,
+  email?: EmailVerdict,
 ): Promise<Response> {
   try {
     const result = await recordIngestDelivery({
@@ -43,7 +43,7 @@ export async function deliver(
       defaultAccountId: cred.defaultAccountId,
       defaultCategoryId: cred.defaultCategoryId,
       payload,
-      notMovement: notMovement !== undefined,
+      email,
     });
 
     return Response.json(
@@ -51,7 +51,7 @@ export async function deliver(
         deliveryId: result.deliveryId,
         status: result.status,
         duplicate: result.duplicate,
-        ...(notMovement ? { reason: notMovement } : {}),
+        ...(email && !email.movement ? { reason: email.reason } : {}),
       },
       { status: 200 },
     );

@@ -47,9 +47,10 @@ interface InterpretContext {
   categories: { id: string; name: string; kind: string }[];
   accounts: { id: string; name: string; lastFour?: string | null }[];
   defaultAccountId: string | null;
-  // A bank's message dates itself («15 Octubre 2026»): a year-like run beside a month or «de» is no
-  // amount. Typed quick entry leaves it off, so «2000 de bus» keeps its amount.
-  skipYearLike?: boolean;
+  // A bank's message dates itself («15 Octubre 2026»). «dated»: a year-like run beside a month or «de»
+  // is no amount. «any»: a year-like run with no currency mark is none either (a bank email's
+  // «caso 2026»). Typed quick entry leaves it off, so «2000 de bus» keeps its amount.
+  yearGuard?: "dated" | "any";
 }
 
 // A spaced «M» with words after it («3 M arriendo») is not guessed: the person
@@ -144,17 +145,18 @@ const MONTH_WORD =
 const MONTH_OR_DE_BEFORE = new RegExp(`(?:\\b${MONTH_WORD}\\.?|\\bde)\\s+$`, "iu");
 const MONTH_OR_DE_AFTER = new RegExp(`^\\s+(?:${MONTH_WORD}\\b|de\\b)`, "iu");
 
-// A year (19xx, 20xx) written beside a month name or «de».
-function yearLike(text: string, match: RegExpMatchArray): boolean {
+// A year (19xx, 20xx): beside a month name or «de», or under the «any» guard wherever it stands.
+function yearLike(text: string, match: RegExpMatchArray, guard: "dated" | "any"): boolean {
   const at = match.index ?? 0;
   if (!/^(?:19|20)\d{2}$/.test(match[0])) return false;
   return (
+    guard === "any" ||
     MONTH_OR_DE_BEFORE.test(text.slice(0, at)) ||
     MONTH_OR_DE_AFTER.test(text.slice(at + match[0].length))
   );
 }
 
-function findAmountToken(text: string, skipYearLike = false): RegExpExecArray | null {
+function findAmountToken(text: string, yearGuard?: "dated" | "any"): RegExpExecArray | null {
   // A currency mark right before the run («$», «COP122.000,50») says it is money
   // whatever else the text holds; the letters glue it to a word only otherwise.
   const markedBefore = (match: RegExpMatchArray): boolean => {
@@ -167,7 +169,7 @@ function findAmountToken(text: string, skipYearLike = false): RegExpExecArray | 
     return (
       (!/[\p{L}_/:*]/u.test(before) || markedBefore(match)) &&
       !/[/:]/u.test(after) &&
-      !(skipYearLike && !markedBefore(match) && yearLike(text, match))
+      !(yearGuard && !markedBefore(match) && yearLike(text, match, yearGuard))
     );
   });
   const marked = candidates.find(markedBefore);
@@ -227,7 +229,7 @@ export function interpretQuickEntry(
   // The earliest of a digit run, a bare «mil» and a bare «millón» is the amount.
   const amountMatch =
     [
-      findAmountToken(text, ctx.skipYearLike),
+      findAmountToken(text, ctx.yearGuard),
       BARE_THOUSAND_PATTERN.exec(text),
       BARE_MILLION_PATTERN.exec(text),
     ]

@@ -475,8 +475,8 @@ test("an account word leaves the description only when it named the account chos
 });
 
 test("a year beside a month or «de» is no amount in a bank message, and typed text is unchanged", () => {
-  const bank = { ...ctx, skipYearLike: true };
-  const read = (text: string, c: typeof ctx & { skipYearLike?: boolean }) => {
+  const bank = { ...ctx, yearGuard: "dated" as const };
+  const read = (text: string, c: typeof ctx & { yearGuard?: "dated" | "any" }) => {
     const { amountPesos } = interpretQuickEntry(text, c);
     return amountPesos === null ? null : parseAmount(amountPesos);
   };
@@ -486,4 +486,15 @@ test("a year beside a month or «de» is no amount in a bank message, and typed 
   assert.equal(read("Compra 2000 en tienda", bank), 200_000);
   assert.equal(read("Pagué 2000 de bus", ctx), 200_000);
   assert.equal(read("Vigente hasta Octubre 2026", ctx), 202_600);
+});
+
+test("the «any» guard drops a lone year, never a marked amount", () => {
+  const email = { ...ctx, yearGuard: "any" as const };
+  const read = (text: string) => {
+    const { amountPesos } = interpretQuickEntry(text, email);
+    return amountPesos === null ? null : parseAmount(amountPesos);
+  };
+  assert.equal(read("Sobre tu mensaje: Reporte de movimiento M123 2026"), null);
+  assert.equal(read("Compraste $2.000 en tienda 2026"), 200_000);
+  assert.equal(read("Compraste $2000 en tienda"), 200_000);
 });

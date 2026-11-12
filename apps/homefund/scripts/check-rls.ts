@@ -5446,6 +5446,7 @@ const UPDATE_GRANT_GAPS: Record<string, string[]> = {
     "proposed_to_account_id",
     "raw_text",
     "recipient_id",
+    "reject_reason",
     "shape_hash",
     "updated_at",
   ],

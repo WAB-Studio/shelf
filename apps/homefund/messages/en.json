@@ -1683,7 +1683,18 @@
       "completed": "Movement completed"
     },
     "saveNumber": "Save this number",
-    "recipientIs": "Recipient: {name}"
+    "recipientIs": "Recipient: {name}",
+    "refusedTitle": "Messages that did not come in",
+    "refusedCount": "{count, plural, one {# message discarded as not a movement} other {# messages discarded as not a movement}}",
+    "refusedMeta": "{reason} · {date}",
+    "rejectReason": {
+      "failed": "Rejected transaction",
+      "statement": "Statement",
+      "support": "Support",
+      "reminder": "Payment reminder",
+      "promotion": "Advertising",
+      "no_movement_signal": "No movement"
+    }
   },
   "review": {
     "entry": "Review the month",

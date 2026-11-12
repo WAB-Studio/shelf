@@ -7,6 +7,7 @@ import { InboxScreen } from "@/components/ingest/inbox-screen";
 import { Page } from "@/components/ui";
 import {
   listPendingDeliveries,
+  listRefusedDeliveries,
   listSilencedShapes,
 } from "@/db/queries/ingest-review";
 import { getTransactionFormOptions } from "@/db/queries/transaction-form";
@@ -33,11 +34,12 @@ export default async function InboxPage(
   if (!hasLocale(routing.locales, locale)) notFound();
 
 
-  const [, deliveries, awaiting, shapes, options] = await Promise.all([
+  const [, deliveries, awaiting, shapes, refused, options] = await Promise.all([
     requireUser(),
     listPendingDeliveries(),
     listAwaitingCounterparty(),
     listSilencedShapes(),
+    listRefusedDeliveries(),
     getTransactionFormOptions(),
   ]);
 
@@ -47,6 +49,7 @@ export default async function InboxPage(
         deliveries={deliveries}
         awaiting={awaiting}
         shapes={shapes}
+        refused={refused}
         options={options}
         ingestUrl={new URL(
           "/api/webhooks/ingest",
