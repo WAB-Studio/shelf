@@ -128,7 +128,7 @@ const SEARCH_PAUSE_MS = 300;
 /**
  * A text search in the filter row's own field chrome. It holds what is being typed and hands the
  * text on after a pause, so the caller's URL moves once per pause and not once per key. `value`
- * is only read back when it is cleared from outside.
+ * is read back when it moves from outside.
  */
 export function FilterSearch({
   label,
@@ -149,17 +149,24 @@ export function FilterSearch({
   const controlId = useId();
   const [draft, setDraft] = useState(value);
   const [seen, setSeen] = useState(value);
+  // True from a key press until the pause hands the text on: only typed text is ever sent.
+  const [typed, setTyped] = useState(false);
 
+  // A value that moved from outside (a clear, the back button, the twin of this field in the other
+  // shape) is shown, unless it is the text being typed here.
   if (value !== seen) {
     setSeen(value);
-    if (value === "") setDraft("");
+    if (!typed && value !== draft.trim()) setDraft(value);
   }
 
   useEffect(() => {
-    if (draft.trim() === value) return;
-    const timer = setTimeout(() => onValueChange(draft.trim()), SEARCH_PAUSE_MS);
+    if (!typed) return;
+    const timer = setTimeout(() => {
+      setTyped(false);
+      onValueChange(draft.trim());
+    }, SEARCH_PAUSE_MS);
     return () => clearTimeout(timer);
-  }, [draft, value, onValueChange]);
+  }, [typed, draft, onValueChange]);
 
   return (
     <div className={styles.field} style={width ? undefined : { flexGrow: 1 }}>
@@ -177,7 +184,10 @@ export function FilterSearch({
         placeholder={placeholder}
         maxLength={maxLength}
         value={draft}
-        onChange={(event) => setDraft(event.target.value)}
+        onChange={(event) => {
+          setDraft(event.target.value);
+          setTyped(true);
+        }}
       />
     </div>
   );
