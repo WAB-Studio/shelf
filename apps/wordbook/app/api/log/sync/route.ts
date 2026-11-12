@@ -112,13 +112,13 @@ export async function POST(request: Request): Promise<Response> {
     ? encodeCursor({ receivedAt: `${lastMark.deleted_at}Z`, deviceId: lastMark.device_id, localId: lastMark.local_id })
     : marksCursor && encodeCursor(marksCursor);
 
-  const response: SyncResponse = {
+  // A round that sent no review gets the answer it always got, with no `review` key at all.
+  const response: Omit<SyncResponse, "review"> = {
     accepted: outcome.accepted,
     rows: wireRows,
     cursor,
     tombstones: outcome.marks.map((mark) => ({ deviceId: mark.device_id, localId: mark.local_id })),
     tombstoneCursor,
-    review: outcome.review && toReviewAnswer(outcome.review, review?.since ?? null),
   };
-  return json(response, 200);
+  return json(outcome.review ? { ...response, review: toReviewAnswer(outcome.review, review?.since ?? null) } : response, 200);
 }

@@ -405,8 +405,8 @@ async function checkRolledBackRounds(only?: string): Promise<void> {
     const lookups = (await tx<{ n: string }[]>`select count(*)::text as n from reading.lookups where user_id = ${reader} and device_id = ${device}`)[0].n;
     assert(
       "S57",
-      plain.status === 200 && (plain.json as unknown as ReviewAnswer["json"]).review === null && twice.status === 400 && malformed.status === 400 && held === "0" && lookups === "1",
-      `no review sent: ${plain.status}/${JSON.stringify((plain.json as unknown as ReviewAnswer["json"]).review)}, two versions = ${twice.status}, a deletion with a card = ${malformed.status}, review rows = ${held}, record rows = ${lookups}`,
+      plain.status === 200 && !("review" in plain.json) && twice.status === 400 && malformed.status === 400 && held === "0" && lookups === "1",
+      `no review sent: ${plain.status}, review key in the answer = ${"review" in plain.json}, two versions = ${twice.status}, a deletion with a card = ${malformed.status}, review rows = ${held}, record rows = ${lookups}`,
     );
   });
 
