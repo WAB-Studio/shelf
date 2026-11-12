@@ -15,6 +15,7 @@ import {
 import { SettlementRow } from "@/components/planning/settlement-row";
 import { StatementsSection } from "@/components/planning/statements-section";
 import { SetUpThirdPartyDialog } from "@/components/planning/third-party-credit-dialog";
+import { ThirdPartyCreditSection } from "@/components/planning/third-party-credit-section";
 import {
   Button,
   EmptyState,
@@ -246,6 +247,8 @@ export function DebtDetailScreen({ data }: { data: DebtDetailData }) {
       />
 
       <StatTiles tiles={tiles} />
+
+      {thirdParty !== null && <ThirdPartyCreditSection credit={thirdParty} banks={payFrom} />}
 
       {/* Purchases a person confirmed as deferred: the balance holds them whole (RF-136). */}
       {deferrals.length > 0 && (
