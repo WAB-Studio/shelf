@@ -240,6 +240,30 @@ test("the webhooks screen shows the Gmail line or says there is none (RF-192)", 
   }
 });
 
+test("the Gmail forwarding way shows only when the inbound domain is set (RF-204)", async ({
+  page,
+}) => {
+  await page.goto("/es/settings/webhooks");
+
+  const heading = page.getByRole("heading", {
+    name: messages.webhooks.forwarding.heading,
+    exact: true,
+  });
+  // The PC way stays first either way.
+  await expect(
+    page.getByRole("heading", { name: messages.webhooks.bankEmails.heading, exact: true, level: 2 }),
+  ).toBeVisible();
+
+  if (process.env.INBOUND_EMAIL_DOMAIN) {
+    await expect(heading).toBeVisible();
+    await expect(
+      page.getByText(`3. ${messages.webhooks.forwarding.step3}`, { exact: true }),
+    ).toBeVisible();
+  } else {
+    await expect(heading).toHaveCount(0);
+  }
+});
+
 test.describe("the members screen", () => {
   const groupId = randomUUID();
   const leaderId = randomUUID();

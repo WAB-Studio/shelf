@@ -54,6 +54,7 @@ export default async function WebhooksPage(
         options={options}
         ingestUrl={ingestUrl}
         oauthLine={oauthLine}
+        inboundDomain={env.INBOUND_EMAIL_DOMAIN ?? null}
         apkReady={Boolean(env.ANDROID_APK_GITHUB_TOKEN)}
         mcpUrl={new URL("/mcp", env.NEXT_PUBLIC_SITE_URL).toString()}
       />

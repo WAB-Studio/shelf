@@ -2,7 +2,7 @@
 
 import { useFormatter, useTranslations } from "next-intl";
 
-import { Card, Flex, Heading, Separator, Text } from "@/components/ui";
+import { Card, Flex, Heading, RawText, Separator, Text } from "@/components/ui";
 import type { RefusedDeliveryRow } from "@/db/queries/ingest-review";
 import { TIME_ZONE } from "@/lib/locales";
 
@@ -29,7 +29,8 @@ export function RefusedDeliveries({ rows }: { rows: RefusedDeliveryRow[] }) {
         {rows.map((row, index) => (
           <Flex key={row.id} direction="column" gap="1">
             {index > 0 && <Separator size="4" />}
-            <Text truncate>{row.rawText}</Text>
+            {/* In full: a confirmation code from Google sits in this text and has to be readable. */}
+            <RawText>{row.rawText}</RawText>
             <Text size="2" color="gray">
               {t("refusedMeta", {
                 reason: t(`rejectReason.${row.rejectReason}`),

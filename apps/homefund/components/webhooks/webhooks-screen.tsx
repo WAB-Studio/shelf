@@ -69,6 +69,7 @@ export function WebhooksScreen({
   ingestUrl,
   mcpUrl,
   oauthLine,
+  inboundDomain,
   apkReady,
 }: {
   credentials: WebhookCredentialRow[];
@@ -76,6 +77,8 @@ export function WebhooksScreen({
   ingestUrl: string;
   mcpUrl: string;
   oauthLine: string | null;
+  // RF-187: where Resend Inbound receives; null hides the forwarding way.
+  inboundDomain: string | null;
   apkReady: boolean;
 }) {
   const t = useTranslations("webhooks");
@@ -283,7 +286,11 @@ export function WebhooksScreen({
       </Box>
 
       <Card id="bank-emails">
-        <BankEmails oauthLine={oauthLine} onIssue={() => setIssuing("bank_emails")} />
+        <BankEmails
+          oauthLine={oauthLine}
+          inboundDomain={inboundDomain}
+          onIssue={() => setIssuing("bank_emails")}
+        />
       </Card>
 
       {/* Shown even with no credential: a person reads what a delivery looks
@@ -362,6 +369,7 @@ export function WebhooksScreen({
         }}
         options={options}
         ingestUrl={ingestUrl}
+        inboundDomain={inboundDomain}
       />
 
       {revokeTarget !== null && (

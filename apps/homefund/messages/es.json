@@ -1615,7 +1615,17 @@
     "deliveries30": "{count, plural, =0 {Sin entregas} one {# entrega} other {# entregas}} en 30 días",
     "columnDeliveries": "Entregas (30 días)",
     "showRevoked": "Ver revocadas ({count})",
-    "hideRevoked": "Ocultar revocadas ({count})"
+    "hideRevoked": "Ocultar revocadas ({count})",
+    "forwarding": {
+      "heading": "Sin PC: reenvío desde Gmail",
+      "description": "Gmail reenvía los correos del banco a una dirección de HomeFund y llegan a la Bandeja sin tener el computador prendido.",
+      "step1": "En Gmail abre Configuración → Reenvío y correo POP/IMAP → Agregar una dirección de reenvío, y pega la dirección de abajo.",
+      "step2": "Google manda un código de confirmación a esa dirección. Llega a la Bandeja de HomeFund, en «Mensajes que no entraron»: ábrelo, copia el código y pégalo en Gmail.",
+      "step3": "En Gmail crea un filtro: de Bancolombia, Nequi, Nu, Lulo, Falabella, Banco de Bogotá o PSE → Reenviar a esa dirección.",
+      "create": "Crear llave para reenvío",
+      "addressLabel": "Dirección de reenvío",
+      "addressNote": "La dirección lleva tu llave: no la compartas. Se muestra una sola vez; si la pierdes, revoca la llave y crea otra."
+    }
   },
   "ingest": {
     "title": "Bandeja",
