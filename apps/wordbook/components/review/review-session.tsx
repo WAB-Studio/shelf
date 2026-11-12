@@ -11,9 +11,18 @@ import { cardBack, cardFront } from "@/lib/log/anki";
 import { contentUnit, isPhraseRow } from "@/lib/log/outcome";
 import { readWordStudy } from "@/lib/log/summary";
 import { readWordStory, type WordStory } from "@/lib/log/story";
-import { buildQueue, buildQueueFor, isReviewable, NEW_PER_DAY, type ReviewQueue } from "@/lib/review/deck";
-import { dueWhen, GRADES, intervals, intervalUnit, rate, staysInSession, type ReviewGrade } from "@/lib/review/schedule";
-import { answerSenses, pickSense } from "@/lib/review/sense";
+import { buildQueue, buildQueueFor, isReviewable, NEW_PER_DAY, orderSession, resumeQueue, type ReviewQueue } from "@/lib/review/deck";
+import {
+  dueWhen,
+  GRADES,
+  intervals,
+  intervalUnit,
+  ON_DEMAND_REQUEUE_MS,
+  rate,
+  staysInSession,
+  type ReviewGrade,
+} from "@/lib/review/schedule";
+import { answerRanked, answerSenses, pickSense } from "@/lib/review/sense";
 import { readCards, readSenseChoice, saveCard } from "@/lib/review/store";
 import { gapOutWord } from "@/lib/word/mark-word";
 import { TranslationList } from "@/components/translations/translation-list";
@@ -39,20 +48,25 @@ import {
 
 type Item = ReviewQueue["items"][number];
 
-// The day's regular queue, kept aside while one entry is reviewed on demand.
-type Regular = { queue: ReviewQueue; unit: "entries" | "words" | "phrases" };
+// How often the minutes a waiting screen names are counted down.
+const WAITING_TICK_MS = 30_000;
+
+// The day's regular queue, kept aside while one entry is reviewed on demand. `recorded` is false for a
+// record with no entry at all, where the way forward is a search, not the record.
+type Regular = { queue: ReviewQueue; unit: "entries" | "words" | "phrases"; recorded: boolean };
 
 type SessionState =
   | { kind: "loading" }
   | { kind: "failed" }
   | {
       kind: "ready";
-      // The queue as the screen opened, then every «Otra vez» answer appended behind it.
+      // The queue as the screen opened, then every answer put away for less than the learn-ahead (RL-91)
+      // appended behind it; the entries not yet asked stay in the order `orderSession` gives them.
       items: Item[];
       later: number;
       // New entries held back by the day's cap, still unseen.
       newWaiting: number;
-      // The distinct entries the session opened with: a requeued answer never grows it.
+      // The distinct entries the session has asked or still has to: a requeued answer never grows it.
       total: number;
       // When the earliest entry put away comes due, or null with none put away.
       nextDue: number | null;
@@ -66,6 +80,8 @@ type SessionState =
       revealedAt: number | null;
       // The moment the screen last checked whether a requeued entry came due.
       clock: number;
+      // False for a record with no entry at all.
+      recorded: boolean;
       // The word asked for alone with `?palabra=`, and the day's queue held back until it is answered.
       focus: { key: string; word: string; regular: Regular } | null;
       // A word asked for that has nothing to review yet: the day's queue stands in its place.
@@ -73,7 +89,7 @@ type SessionState =
     };
 
 function readyState(
-  { queue, unit }: Regular,
+  { queue, unit, recorded }: Regular,
   now: number,
   focus: { key: string; word: string; regular: Regular } | null,
   missing: string | null,
@@ -91,14 +107,15 @@ function readyState(
     answered: [],
     revealedAt: null,
     clock: now,
+    recorded,
     focus,
     missing,
   };
 }
 
-// RL-68 and RL-78: one entry at a time — the word or phrase, then its answer on demand, then how well it
-// was recalled. An entry answered «Otra vez» is due again in a minute, so it joins the end of this
-// session and the session is not over while one waits.
+// RL-68, RL-78 and RL-91: one entry at a time — the word or phrase, then its answer on demand, then how well it
+// was recalled. An entry put away for less than 20 minutes (a learning step) joins this session and the
+// session is not over while one waits; the queue is built again when the tab regains focus.
 export function ReviewSession() {
   const t = useTranslations("review");
   const format = useFormatter();
@@ -113,6 +130,8 @@ export function ReviewSession() {
   const [story, setStory] = useState<{ key: string; story: WordStory } | null>(null);
   const showRef = useRef<HTMLButtonElement>(null);
   const goodRef = useRef<HTMLButtonElement>(null);
+  // Counts the answers given, so a rebuild that read the cards before one was kept never lands over it.
+  const answersGiven = useRef(0);
 
   useEffect(() => {
     let live = true;
@@ -122,14 +141,18 @@ export function ReviewSession() {
         // `/repaso?palabra=<key>` asks that entry alone, read here because the page itself stays static.
         const only = new URLSearchParams(window.location.search).get("palabra");
         const now = Date.now();
-        const regular: Regular = { queue: buildQueue(rows, cards, now), unit: contentUnit(rows.filter(isReviewable)) };
+        const regular: Regular = {
+          queue: buildQueue(rows, cards, now),
+          unit: contentUnit(rows.filter(isReviewable)),
+          recorded: rows.length > 0,
+        };
         const single = only === null ? null : buildQueueFor(rows, cards, only, now);
         if (single === null || single.items.length === 0) {
           setState(readyState(regular, now, null, only));
           return;
         }
         const { key, display: word } = single.items[0].row;
-        setState(readyState({ queue: single, unit: contentUnit([single.items[0].row]) }, now, { key, word, regular }, null));
+        setState(readyState({ queue: single, unit: contentUnit([single.items[0].row]), recorded: true }, now, { key, word, regular }, null));
       })
       .catch(() => {
         if (live) setState({ kind: "failed" });
@@ -150,7 +173,7 @@ export function ReviewSession() {
     let live = true;
     Promise.all([lookup(currentKey), readSenseChoice(currentKey).catch(() => null)])
       .then(([answer, choice]) => {
-        const picked = pickSense(answerSenses(answer), choice);
+        const picked = pickSense(answerSenses(answer), choice, answerRanked(answer));
         if (live && picked !== null) setSense({ key: currentKey, sense: picked });
       })
       .catch(() => {});
@@ -172,16 +195,58 @@ export function ReviewSession() {
     };
   }, [currentKey, currentIsPhrase]);
 
-  // An entry put back for a minute shows again once it is due.
+  // An entry put back for a few minutes shows again once it is due, and the minutes the screen names
+  // count down meanwhile.
+  const checkedAt = state.kind === "ready" ? state.clock : 0;
   const dueAt = current?.card != null && state.kind === "ready" && current.card.due > state.clock ? current.card.due : null;
   useEffect(() => {
     if (dueAt === null) return;
     const timer = setTimeout(
       () => setState((prev) => (prev.kind === "ready" ? { ...prev, clock: Date.now() } : prev)),
-      Math.max(0, dueAt - Date.now()),
+      Math.min(WAITING_TICK_MS, Math.max(0, dueAt - Date.now())),
     );
     return () => clearTimeout(timer);
-  }, [dueAt]);
+  }, [dueAt, checkedAt]);
+
+  // RL-91: the queue is built again when the tab regains focus, so an entry that came due while the reader
+  // was away is asked without a reload. The card on screen stays where it is; only what follows changes.
+  const rebuild = useEffectEvent(() => {
+    if (document.visibilityState === "hidden" || state.kind !== "ready" || state.saving || state.focus !== null) return;
+    const given = answersGiven.current;
+    Promise.all([readWordStudy(), readCards()])
+      .then(([{ rows }, cards]) => {
+        const now = Date.now();
+        setState((prev) => {
+          if (prev.kind !== "ready" || prev.saving || prev.focus !== null || answersGiven.current !== given) return prev;
+          const { queue, total } = resumeQueue(rows, cards, now, prev.answered);
+          const shown = prev.items[prev.index];
+          const onScreen = shown !== undefined && (shown.card === null || shown.card.due <= prev.clock);
+          return {
+            ...prev,
+            items: onScreen ? [shown, ...queue.items.filter((entry) => entry.row.key !== shown.row.key)] : queue.items,
+            index: 0,
+            later: queue.later,
+            newWaiting: queue.newWaiting,
+            total,
+            nextDue: queue.nextDue,
+            unit: contentUnit(rows.filter(isReviewable)),
+            recorded: rows.length > 0,
+            revealedAt: onScreen ? prev.revealedAt : null,
+            clock: now,
+          };
+        });
+      })
+      .catch(() => {});
+  });
+  useEffect(() => {
+    const listener = () => rebuild();
+    window.addEventListener("focus", listener);
+    document.addEventListener("visibilitychange", listener);
+    return () => {
+      window.removeEventListener("focus", listener);
+      document.removeEventListener("visibilitychange", listener);
+    };
+  }, []);
 
   // A keyboard never loses its place: the answer's grades take focus when shown, the next entry's
   // «Mostrar respuesta» when a grade is pressed.
@@ -211,26 +276,31 @@ export function ReviewSession() {
   async function answer(grade: ReviewGrade, now: number) {
     if (state.kind !== "ready" || state.saving || state.revealedAt === null) return;
     const item = state.items[state.index];
+    answersGiven.current += 1;
     setFailedSave(false);
     setState((prev) => (prev.kind === "ready" ? { ...prev, saving: true } : prev));
     try {
       // A word asked for alone is not one of the day's new entries: it takes no slot of the daily cap.
       const next = rate(item.row.key, item.card, grade, now, state.focus === null ? undefined : "");
       await saveCard(next);
-      setState((prev) =>
-        prev.kind === "ready"
-          ? {
-              ...prev,
-              items: staysInSession(next, now) ? [...prev.items, { row: item.row, card: next }] : prev.items,
-              index: prev.index + 1,
-              saving: false,
-              nextDue: staysInSession(next, now) ? prev.nextDue : Math.min(prev.nextDue ?? next.due, next.due),
-              answered: prev.answered.includes(item.row.key) ? prev.answered : [...prev.answered, item.row.key],
-              revealedAt: null,
-              clock: Date.now(),
-            }
-          : prev,
-      );
+      // A word asked for alone has no queue to wait for: only a minute's «Otra vez» comes back to it.
+      const stays = staysInSession(next, now, state.focus === null ? undefined : ON_DEMAND_REQUEUE_MS);
+      setState((prev) => {
+        if (prev.kind !== "ready") return prev;
+        const clock = Date.now();
+        const asked = prev.items.slice(0, prev.index + 1);
+        const ahead = stays ? [...prev.items.slice(prev.index + 1), { row: item.row, card: next }] : prev.items.slice(prev.index + 1);
+        return {
+          ...prev,
+          items: [...asked, ...orderSession(ahead, clock)],
+          index: prev.index + 1,
+          saving: false,
+          nextDue: stays ? prev.nextDue : Math.min(prev.nextDue ?? next.due, next.due),
+          answered: prev.answered.includes(item.row.key) ? prev.answered : [...prev.answered, item.row.key],
+          revealedAt: null,
+          clock,
+        };
+      });
     } catch {
       setState((prev) => (prev.kind === "ready" ? { ...prev, saving: false } : prev));
       setFailedSave(true);
@@ -293,8 +363,9 @@ export function ReviewSession() {
           )}
           {state.newWaiting > 0 && <Text muted>{t("newWaiting", { count: state.newWaiting, kind, cap: NEW_PER_DAY })}</Text>}
           {later === 0 && state.newWaiting === 0 && <Text muted>{t("empty")}</Text>}
+          {/* An empty record has nothing to open: the way forward is to search. */}
           <Link asChild>
-            <NextLink href="/registro">{t("backToRecord")}</NextLink>
+            {state.recorded ? <NextLink href="/registro">{t("backToRecord")}</NextLink> : <NextLink href="/">{t("searchWord")}</NextLink>}
           </Link>
         </Flex>
       </Card>
@@ -322,8 +393,8 @@ export function ReviewSession() {
   }
 
   const { row, card } = item;
-  // Entries past the session's opening count are «Otra vez» answers coming round again.
-  const repeat = state.index >= total;
+  // An entry already answered in this session is coming round again.
+  const repeat = answered.includes(row.key);
   const back = cardBack(row);
   const drawn = sense !== null && sense.key === row.key && !isPhraseRow(row) ? sense.sense : null;
   const formsLine =
@@ -331,13 +402,13 @@ export function ReviewSession() {
 
   const phrase = story !== null && story.key === row.key ? (story.story.phrases[0] ?? null) : null;
   const forms = story !== null && story.key === row.key ? story.story.forms : [row.key];
-  const done = repeat ? Math.min(answered.length, total) : state.index;
+  const done = Math.min(answered.length, total);
 
   return (
     <Flex direction="column" gap="4">
       {state.missing !== null && <Text muted>{t("wordMissing", { word: state.missing })}</Text>}
       <Flex direction="column" gap="2">
-        <MetaLabel>{t("progress", { current: repeat ? Math.min(answered.length, total) : state.index + 1, total })}</MetaLabel>
+        <MetaLabel>{t("progress", { current: repeat ? done : Math.min(done + 1, total), total })}</MetaLabel>
         <Progress aria-label={t("progressLabel")} value={Math.round((done / total) * 100)} />
       </Flex>
       <FlashCard face={revealedAt === null ? "front" : "back"}>

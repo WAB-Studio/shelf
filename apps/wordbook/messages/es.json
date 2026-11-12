@@ -379,6 +379,7 @@
     "nextDue": "{when, select, today {La próxima vuelve hoy a las {time}.} tomorrow {La próxima vuelve mañana.} other {La próxima vuelve el {date}.}}",
     "empty": "Lo que busques aparece aquí para repasarlo.",
     "backToRecord": "Ir al registro",
+    "searchWord": "Buscar una palabra",
     "reviewedWord": "Repasaste «{word}».",
     "dueAfterWord": "{kind, select, words {{count, plural, one {Hoy te toca # palabra más.} other {Hoy te tocan # palabras más.}}} phrases {{count, plural, one {Hoy te toca # frase más.} other {Hoy te tocan # frases más.}}} other {{count, plural, one {Hoy te toca # entrada más.} other {Hoy te tocan # entradas más.}}}}",
     "reviewToday": "Repasar lo de hoy",
@@ -405,7 +406,7 @@
     },
     "waiting": "{kind, select, words {{count, plural, one {Queda # palabra para repetir en un momento.} other {Quedan # palabras para repetir en un momento.}}} phrases {{count, plural, one {Queda # frase para repetir en un momento.} other {Quedan # frases para repetir en un momento.}}} other {{count, plural, one {Queda # entrada para repetir en un momento.} other {Quedan # entradas para repetir en un momento.}}}}",
     "newWaiting": "{kind, select, entries {{count, plural, one {Espera # entrada nueva: entra mañana, con el tope de {cap} al día.} other {Esperan # entradas nuevas: entran mañana, con el tope de {cap} al día.}}} phrases {{count, plural, one {Espera # frase nueva: entra mañana, con el tope de {cap} al día.} other {Esperan # frases nuevas: entran mañana, con el tope de {cap} al día.}}} other {{count, plural, one {Espera # palabra nueva: entra mañana, con el tope de {cap} al día.} other {Esperan # palabras nuevas: entran mañana, con el tope de {cap} al día.}}}}",
-    "waitingIn": "Vuelve en {minutes} min",
+    "waitingIn": "Vuelve una en {minutes} min",
     "reviewNow": "Repasar ya"
   }
 }

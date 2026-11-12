@@ -1984,3 +1984,15 @@ Taken by the user, delegated to the build.
 - **A card draws the sense the reader tapped** (RL-85). Each sense of a word with several carries «Aprender este sentido»;
   the one in force reads «Es el que aprendes», and with no tap it is the first.
 - **The finished review says how many new entries wait** behind the cap of 20 a day (RL-88).
+
+### Decisions of 2026-11-12
+
+Taken by the user, delegated to the build.
+
+- **The review behaves like Anki's** (RL-91). A learning step due within 20 minutes comes back in the same session: the session never
+  says «Terminaste por hoy» while one waits, it says «Vuelve una en N min» under the waiting count, counts the minutes down and shows the
+  entry itself when it is due. The queue is built again on a reload and when the tab regains focus; the card on screen stays.
+- **A card with no tap draws the sense most plausibly meant.** The first sense when the dictionary ranked the word by real use; otherwise
+  the first common noun, because the fallback order puts a verb before a noun (`tree` is «árbol»). The word's page leads with it too.
+- **An empty record sends the reader to the search.** The review's closing screen reads «Buscar una palabra», a link to `/`, in place
+  of «Ir al registro», which would open another empty screen.

@@ -10,7 +10,9 @@ export type Sense = {
   definition: string | null;
 };
 
-export type SenseGroup = { headword: string; senses: readonly Sense[] };
+// `ranked` is true when the senses' order rests on a measurement (RL-43) or on the suffix the reader typed
+// (RL-58), false when only the fixed fallback ranked them. Absent on a group built by hand: read as ranked.
+export type SenseGroup = { headword: string; senses: readonly Sense[]; ranked?: boolean };
 
 // RL-51: one pronunciation's senses, gathered out of a group carrying more
 // than one. `ipa` is what heads the block on screen, and null on the block
@@ -151,7 +153,8 @@ export function groupFor(
   const senses = offsets
     .map((offset) => senseFromEntry(index.entries[offset]))
     .sort((a, b) => compareSenses(order, pinnedPos, a, b));
-  return { headword: normalisedHeadword, senses };
+  const pinned = pinnedPos !== null && senses.some((sense) => sense.pos === pinnedPos);
+  return { headword: normalisedHeadword, senses, ranked: order !== undefined || pinned };
 }
 
 // Syllable dots, tie bars, parentheses, spacing and the secondary stress
