@@ -44,7 +44,7 @@ async function fetchReceivedEmail(emailId: string): Promise<unknown> {
 }
 
 // The message the email carries, as one more delivery of the credential the key opened; one that
-// reports no movement lands rejected (RF-195).
+// reports no movement lands rejected (RF-196).
 function finish(
   cred: ResolvedWebhookCredential,
   email: InboundEmail,
@@ -55,7 +55,7 @@ function finish(
     external_ref: externalRef,
   });
   if (!parsed.success) return Response.json({ error: "invalid_payload" }, { status: 422 });
-  // Judged on the whole email, before the message is cut to the schema's ceiling (RF-195).
+  // Judged on the whole email, before the message is cut to the schema's ceiling (RF-196).
   const verdict = classifyBankEmail(emailWords(email));
   return deliver(cred, parsed.data, verdict.movement ? undefined : verdict.reason);
 }

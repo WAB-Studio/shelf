@@ -1,4 +1,4 @@
-// RF-195: whether a bank email reports a movement that happened. Pure: subject and body in, verdict out.
+// RF-196: whether a bank email reports a movement that happened. Pure: subject and body in, verdict out.
 
 export type NonMovementReason = "failed" | "statement" | "support" | "reminder" | "promotion";
 

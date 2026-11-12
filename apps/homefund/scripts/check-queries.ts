@@ -12268,6 +12268,53 @@ async function o5m2SurvivorsSuite(): Promise<void> {
       rows.length === SEED_CATEGORIES.reduce((sum, category) => sum + 1 + (category.children?.length ?? 0), 0),
     `parents ${JSON.stringify(parents)}, parents with other children [${wrongChildren.join(", ")}], ${rows.length} rows`,
   );
+
+  // RF-195: the migration runs inside a transaction that is rolled back, so the one shared database keeps
+  // every row it holds; only the rows this check made are read back.
+  const renamer = await createMembershipFreeUser();
+  const bystander = await createMembershipFreeUser();
+  const migration = readFileSync(resolve("db/migrations/0093_english_seed_categories_become_spanish.sql"), "utf8");
+  const rolledBack = new Error("rollback");
+  let renamed = new Map<string, string>();
+  try {
+    await fixtureSql.begin(async (tx) => {
+      const put = async (owner: string, name: string, kind: string, parentId: string | null = null) => {
+        const [row] = await tx<{ id: string }[]>`
+          insert into categories (owner_user_id, name, kind, parent_id) values (${owner}, ${name}, ${kind}, ${parentId}) returning id`;
+        return row.id;
+      };
+      const housing = await put(renamer.id, "Housing", "expense");
+      const custom = await put(renamer.id, "Car", "expense");
+      const ids = {
+        housing,
+        rent: await put(renamer.id, "Rent", "expense", housing),
+        groceries: await put(renamer.id, "Groceries", "expense"),
+        pets: await put(renamer.id, "Pets", "expense"),
+        taken: await put(renamer.id, "Mascotas", "expense"),
+        typed: await put(renamer.id, "Gym", "expense"),
+        lowercase: await put(renamer.id, "groceries", "income"),
+        wrongKind: await put(renamer.id, "Salary", "expense"),
+        orphanChild: await put(renamer.id, "Fuel", "expense", custom),
+        topLevelChild: await put(renamer.id, "Rent", "expense"),
+        otherScopePets: await put(bystander.id, "Pets", "expense"),
+      };
+      await tx.unsafe(migration);
+      const read = await tx<{ id: string; name: string }[]>`select id, name from categories where id in ${tx(Object.values(ids))}`;
+      const byId = new Map(read.map((row) => [row.id, row.name]));
+      renamed = new Map(Object.entries(ids).map(([key, id]) => [key, byId.get(id) ?? "(gone)"]));
+      throw rolledBack;
+    });
+  } catch (error) {
+    if (error !== rolledBack) throw error;
+  }
+  const got = Object.fromEntries(renamed);
+  assert(
+    next("RF-195: the migration renames an exact English seed name (a child under its seed parent) to the Spanish one, and leaves a name a person typed, a lookalike, a rename that would collide in the same scope, and the same name in another scope that does not collide"),
+    got.housing === "Vivienda" && got.rent === "Arriendo" && got.groceries === "Mercado" && got.otherScopePets === "Mascotas" &&
+      got.pets === "Pets" && got.taken === "Mascotas" && got.typed === "Gym" && got.lowercase === "groceries" &&
+      got.wrongKind === "Salary" && got.orphanChild === "Fuel" && got.topLevelChild === "Rent",
+    JSON.stringify(got),
+  );
 }
 
 // o5-m15 (RF-142, RF-52, RF-124): a backup of a fund holding a dollar purchase on a peso card comes back in

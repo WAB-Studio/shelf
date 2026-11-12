@@ -62,9 +62,12 @@ export async function proxy(request: NextRequest) {
   // handed, so the layout reads this value and the incoming request stays as sent.
   const forwardedHeaders = new Headers(request.headers);
   forwardedHeaders.set(PATHNAME_HEADER, request.nextUrl.pathname);
+  // The browser's language never picks one (RF-195): next-intl reads this header only as its last
+  // resort before the default, so without it the saved cookie still wins and Spanish is the fallback.
+  forwardedHeaders.delete("accept-language");
   const forwarded = new NextRequest(request, { headers: forwardedHeaders });
 
-  // URL first, then the `NEXT_LOCALE` cookie, then `accept-language`, then Spanish.
+  // URL first, then the `NEXT_LOCALE` cookie, then Spanish.
   const response = handleLocaleRouting(forwarded);
 
   // Carried onto whichever response finally leaves this function.

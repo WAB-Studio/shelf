@@ -31,7 +31,7 @@ export type RecordIngestDeliveryArgs = {
   defaultAccountId: string | null;
   defaultCategoryId: string | null;
   payload: WebhookPayloadInput;
-  // The channel already knows the message reports no movement (RF-195): it lands rejected, with no figure.
+  // The channel already knows the message reports no movement (RF-196): it lands rejected, with no figure.
   notMovement?: boolean;
 };
 

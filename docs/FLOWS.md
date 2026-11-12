@@ -226,8 +226,8 @@ with `update_movement` or `delete_movement`. Every refusal comes back as the for
 ## 8. Language
 
 The language is visible in the URL (RF-46) and resolved, in order, by what the
-URL says, the user's saved preference, the browser's language, and finally
-Spanish.
+URL says, the user's saved preference, and finally Spanish. The browser's
+language never chooses it (RF-195).
 
 The preference belongs to the user, so it holds wherever they sign in (RF-47).
 Switching rewrites the URL and persists the choice.

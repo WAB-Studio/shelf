@@ -30,7 +30,7 @@ export async function authorizeIngest(
 }
 
 // Stores the delivery as a pending proposal (RF-90) and answers its id and status.
-// A `notMovement` reason (RF-195) stores it rejected instead and answers the reason.
+// A `notMovement` reason (RF-196) stores it rejected instead and answers the reason.
 export async function deliver(
   cred: ResolvedWebhookCredential,
   payload: WebhookPayloadInput,
