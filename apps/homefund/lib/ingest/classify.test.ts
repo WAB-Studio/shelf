@@ -82,3 +82,8 @@ test("an alerts title needs its body to name the operation", () => {
   assert.equal(rejected("Alertas y Notificaciones", "Tu clave cambió. Saldo $5.000"), "no_movement_signal");
   assert.equal(rejected("Alertas y Notificaciones", "Retiro por $200.000 en cajero."), null);
 });
+
+test("a bare figure with no currency mark still counts as the amount, a lone year does not", () => {
+  assert.equal(rejected("Tu plata de PayPal ya está en Nequi", "Recibiste en tu Nequi 1234567.8 que enviaste desde PayPal."), null);
+  assert.equal(rejected("Recibiste un mensaje", "Recibiste esto en 2026."), "no_movement_signal");
+});
