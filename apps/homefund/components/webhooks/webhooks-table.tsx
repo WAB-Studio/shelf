@@ -13,12 +13,14 @@ import {
 } from "@/components/ui";
 import type { WebhookCredentialRow } from "@/db/queries/webhook-credentials";
 import { TIME_ZONE } from "@/lib/locales";
+import { credentialBadge } from "@/lib/validation/webhook";
 
-// The tracks of the Webhooks artboard, in order (credencial, límite, último
-// uso, creada, menú).
+// The tracks of the Webhooks artboard, in order (credencial, límite, entregas,
+// último uso, creada, menú).
 const WIDTHS = {
   credential: "minmax(0, 1fr)",
   limit: "170px",
+  deliveries: "130px",
   lastUsed: "150px",
   created: "140px",
   menu: "110px",
@@ -67,6 +69,9 @@ export function WebhooksTable({
           >
             {row.name}
           </Text>
+          <Badge color="blue" variant="soft">
+            {t(`kind.${credentialBadge(row.purpose, row.kind)}`)}
+          </Badge>
           {row.revokedAt !== null && (
             <Badge color="gray">{t("revokedBadge")}</Badge>
           )}
@@ -82,6 +87,18 @@ export function WebhooksTable({
       cell: (row) => (
         <Text size="2" color="gray">
           {t("rateLimit", { count: row.rateLimitPerMin })}
+        </Text>
+      ),
+    },
+    {
+      key: "deliveries",
+      header: t("columnDeliveries"),
+      width: WIDTHS.deliveries,
+      align: "end",
+      numeric: true,
+      cell: (row) => (
+        <Text size="2" color="gray">
+          {row.deliveriesLast30Days}
         </Text>
       ),
     },

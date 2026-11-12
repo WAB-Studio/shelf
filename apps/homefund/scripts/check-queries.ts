@@ -4151,6 +4151,7 @@ async function main(): Promise<void> {
   await memberDebtDeleteSuite();
   await recipientsSuite();
   await mcpLabelsSuite();
+  await connectionsSuite();
 }
 
 // A member recorded without a login is someone in the fund: a leader whose fund holds one is not alone, so an
@@ -18781,5 +18782,54 @@ async function mcpLabelsSuite(): Promise<void> {
     counted?.movementCount === 2 && !keeps.isError && keptRow?.labelIds.length === 1 && !swaps.isError &&
       JSON.stringify(swappedRow?.labelIds) === JSON.stringify([otherId]) && !clears.isError && clearedRow?.labelIds.length === 0,
     `count ${counted?.movementCount}, keeps ${JSON.stringify(keeps.value)}, kept ${JSON.stringify(keptRow?.labelIds)}, swaps ${JSON.stringify(swaps.value)}, swapped ${JSON.stringify(swappedRow?.labelIds)}, cleared ${JSON.stringify(clearedRow?.labelIds)}`,
+  );
+}
+
+// RF-203: a key says what it is for, how many deliveries it brought in 30 days and when it was last used, in the list's
+// own query; a delivery names the key it came through and keeps the name's kind until the key is gone.
+async function connectionsSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const { recordIngestDelivery } = await import("@/db/queries/webhook-ingest");
+  const user = await createMembershipFreeUser();
+  const make = async (what: string, kind: "android" | "iphone" | "bank_emails" | "other", purpose?: "mcp") => {
+    const { id } = await asUser(user, () =>
+      issueWebhookCredential({ name: `Harness rf194 ${what} ${tag}`, kind, purpose, defaultAccountId: null, defaultCategoryId: null }),
+    );
+    keep("webhook_credentials", id);
+    return id;
+  };
+  const gmail = await make("gmail", "bank_emails");
+  const phone = await make("phone", "android");
+  const claude = await make("claude", "other", "mcp");
+  const deliver = (credentialId: string, text: string) =>
+    recordIngestDelivery({
+      ownerUserId: user.id, credentialId, defaultAccountId: null, defaultCategoryId: null,
+      payload: { text: `${text} ${tag} ${randomUUID().slice(0, 6)}` } as Parameters<typeof recordIngestDelivery>[0]["payload"],
+    });
+  await deliver(gmail, "Bancolombia: Compraste $10.000 en Tienda");
+  await deliver(gmail, "Bancolombia: Compraste $20.000 en Tienda");
+  await deliver(phone, "Bancolombia: Compraste $30.000 en Tienda");
+  await fixtureSql`update webhook_credentials set last_used_at = now() where id = ${gmail}`;
+
+  const listed = await asUser(user, () => listWebhookCredentials());
+  const row = (id: string) => listed.find((one) => one.id === id);
+  assert(
+    next("RF-203: listWebhookCredentials carries each key's kind, last use and its deliveries of the last 30 days in the same read"),
+    listed.length === 3 && row(gmail)?.kind === "bank_emails" && row(gmail)?.deliveriesLast30Days === 2 &&
+      row(gmail)?.lastUsedAt !== null && row(phone)?.kind === "android" && row(phone)?.deliveriesLast30Days === 1 &&
+      row(claude)?.purpose === "mcp" && row(claude)?.deliveriesLast30Days === 0,
+    JSON.stringify(listed.map((one) => [one.kind, one.purpose, one.deliveriesLast30Days])),
+  );
+
+  const inbox = await asUser(user, () => listPendingDeliveries());
+  const viaGmail = inbox.filter((one) => one.credentialName === `Harness rf194 gmail ${tag}`);
+  await fixtureSql`delete from webhook_credentials where id = ${gmail}`;
+  const after = await asUser(user, () => listPendingDeliveries());
+  assert(
+    next("RF-203: an inbox delivery names its key and its badge, and names none once the key is gone"),
+    viaGmail.length === 2 && viaGmail.every((one) => one.credentialBadge === "bank_emails") &&
+      after.filter((one) => one.credentialName === null && one.credentialBadge === null).length === 2,
+    `via ${viaGmail.length}, after ${JSON.stringify(after.map((one) => one.credentialName))}`,
   );
 }

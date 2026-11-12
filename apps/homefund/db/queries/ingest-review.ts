@@ -10,7 +10,9 @@ import {
   ingestMerchants,
   ingestShapes,
   recipients,
+  webhookCredentials,
 } from "@/db/schema";
+import { credentialBadge, type CredentialBadge, type CredentialKind } from "@/lib/validation/webhook";
 import { withUserDb, withUserDbOrTx, type Transaction } from "@/db/session";
 import { inboxPendingCount } from "@/lib/ingest/inbox-pending";
 
@@ -33,6 +35,9 @@ export type PendingDeliveryRow = {
   extractedIdentifier: string | null;
   recipientId: string | null;
   recipientName: string | null;
+  // The key the delivery came through (RF-203); null once the key is gone.
+  credentialName: string | null;
+  credentialBadge: CredentialBadge | null;
   proposedOccurredAt: string | null;
   proposedDescription: string | null;
   rejectReason: RejectReason | null;
@@ -169,6 +174,9 @@ export async function listDeliveries({
         extractedIdentifier: ingestDeliveries.extractedIdentifier,
         recipientId: ingestDeliveries.recipientId,
         recipientName: recipients.name,
+        credentialName: webhookCredentials.name,
+        credentialPurpose: sql<"ingest" | "mcp" | null>`${webhookCredentials.purpose}`,
+        credentialKind: sql<CredentialKind | null>`${webhookCredentials.kind}`,
         proposedOccurredAt: ingestDeliveries.proposedOccurredAt,
         proposedDescription: ingestDeliveries.proposedDescription,
         rejectReason: ingestDeliveries.rejectReason,
@@ -180,6 +188,7 @@ export async function listDeliveries({
       .from(ingestDeliveries)
       .leftJoin(accounts, eq(accounts.id, ingestDeliveries.proposedAccountId))
       .leftJoin(recipients, eq(recipients.id, ingestDeliveries.recipientId))
+      .leftJoin(webhookCredentials, eq(webhookCredentials.id, ingestDeliveries.credentialId))
       .leftJoin(
         ingestMerchants,
         and(
@@ -196,8 +205,10 @@ export async function listDeliveries({
       .$dynamic();
     const rows = await (limit === undefined ? query : query.limit(limit).offset(offset ?? 0));
 
-    return rows.map(({ accountOpeningOn, ...row }) => ({
+    return rows.map(({ accountOpeningOn, credentialPurpose, credentialKind, ...row }) => ({
       ...row,
+      credentialBadge:
+        credentialPurpose && credentialKind ? credentialBadge(credentialPurpose, credentialKind) : null,
       isComplete: isComplete({ ...row, accountOpeningOn }),
       beforeOpening: isBeforeOpening({ ...row, accountOpeningOn }),
     }));
