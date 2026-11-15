@@ -4175,6 +4175,7 @@ async function main(): Promise<void> {
   await mcpAccountLifecycleSuite();
   await mcpStatementsSuite();
   await mcpReportsSuite();
+  await mcpReviewSuite();
 }
 
 // A member recorded without a login is someone in the fund: a leader whose fund holds one is not alone, so an
@@ -15333,6 +15334,7 @@ const TOOL_CLASSES = [
   ["forget_merchant", ...DESTROY_CLASS],
   ["get_dashboard", ...READ_CLASS],
   ["get_debt", ...READ_CLASS],
+  ["get_movement", ...READ_CLASS],
   ["get_reconcile_sheet", ...READ_CLASS],
   ["get_report", ...READ_CLASS],
   ["import_statement", ...DESTROY_CLASS],
@@ -15357,6 +15359,7 @@ const TOOL_CLASSES = [
   ["list_recurring_rules", ...READ_CLASS],
   ["list_silenced_shapes", ...READ_CLASS],
   ["list_third_party_credits", ...READ_CLASS],
+  ["mark_month_review", ...OVERWRITE_CLASS],
   ["mark_movement_reviewed", ...OVERWRITE_CLASS],
   ["merge_movements", ...DESTROY_CLASS],
   ["move_account_to_fund", ...DESTROY_CLASS],
@@ -15385,6 +15388,7 @@ const TOOL_CLASSES = [
   ["settle_planned_payment", ...ADD_ONCE_CLASS],
   ["spending_patterns", ...READ_CLASS],
   ["undefer_purchase", ...DESTROY_CLASS],
+  ["unmark_month_review", ...OVERWRITE_CLASS],
   ["update_account", ...OVERWRITE_CLASS],
   ["update_budget", ...OVERWRITE_CLASS],
   ["update_category", ...OVERWRITE_CLASS],
@@ -20426,5 +20430,91 @@ async function mcpReportsSuite(): Promise<void> {
     next("RF-235: propose_rate answers a rate and, when the public source is unreachable, null rather than an error"),
     !same.isError && (same.value as { rate: number }).rate === 1 && !offline.isError && offline.value === null,
     `same ${JSON.stringify(same.value)}, offline ${JSON.stringify(offline.value)}`,
+  );
+}
+
+// RF-236: Claude marks «Está bien» and takes it back, reads one movement whole and filters the listing as Movimientos does,
+// through the screens' own queries and schemas.
+async function mcpReviewSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const today = todayInBogota();
+  const { POST } = await import("@/app/mcp/route");
+  const [owner, stranger] = [await createMembershipFreeUser(), await createMembershipFreeUser()];
+  const mkBank = (user: HarnessUser, name: string) =>
+    asUser(user, () =>
+      createAccount({
+        kind: "asset", subtype: "bank", groupId: null, isShared: false, institution: null, settlementCurrency: BASE_CURRENCY,
+        balanceOn: "2026-01-01", ownerUserId: user.id, name: `Harness rf236 ${name} ${tag}`, amountMinor: 2_000_000_00,
+      }),
+    );
+  const [bank, savings, strangerBank] = [await mkBank(owner, "banco"), await mkBank(owner, "ahorro"), await mkBank(stranger, "ajeno")];
+  for (const row of [bank, savings, strangerBank]) track("accounts", row.accountId);
+  const [category, strangerCategory] = [randomUUID(), randomUUID()];
+  for (const [id, user] of [[category, owner], [strangerCategory, stranger]] as const) {
+    await fixtureSql`insert into categories (id, owner_user_id, name, kind, color) values (${id}, ${user.id}, ${`Harness rf236 Comida ${tag}`}, 'expense', ${CATEGORY_COLORS[0]})`;
+    track("categories", id);
+  }
+  const clientOf = async (user: HarnessUser) => {
+    const { id, token } = await asUser(user, () => issueWebhookCredential({ name: `Harness rf236 ${tag}`, purpose: "mcp", defaultAccountId: null, defaultCategoryId: null }));
+    keep("webhook_credentials", id);
+    return mcpClient(POST, token).tool;
+  };
+  const [tool, strangerTool] = [await clientOf(owner), await clientOf(stranger)];
+  const book = async (run: typeof tool, from: string, description: string, amountCents: number, categoryId: string) =>
+    ((await run("record_movement", { fromAccountId: from, toAccountId: null, amountCents, occurredAt: today, description, categoryId })).value as { transactionId: string }).transactionId;
+  const [mine, twin, theirs] = [
+    await book(tool, bank.accountId, `Harness rf236 almuerzo ${tag}`, 12_500_00, category),
+    await book(tool, bank.accountId, `Harness rf236 cena ${tag}`, 33_333_00, category),
+    await book(strangerTool, strangerBank.accountId, `Harness rf236 ajeno ${tag}`, 5_000_00, strangerCategory),
+  ];
+  const marks = async (id: string) => (await fixtureSql`select rule from transaction_reviews where transaction_id = ${id}`).map((row) => row.rule as string);
+
+  const marked = await tool("mark_month_review", { transactionIds: [mine, twin], rule: "twin" });
+  const stored = [await marks(mine), await marks(twin)];
+  const repeated = await tool("mark_month_review", { transactionIds: [mine], rule: "twin" });
+  const unmarked = await tool("unmark_month_review", { transactionIds: [mine], rule: "twin" });
+  const afterUnmark = [await marks(mine), await marks(twin)];
+  assert(
+    next("RF-236: mark_month_review stamps each movement once under its rule and unmark_month_review takes only the named ones back"),
+    !marked.isError && (marked.value as { count: number }).count === 2 && JSON.stringify(stored) === JSON.stringify([["twin"], ["twin"]]) &&
+      !repeated.isError && !unmarked.isError && afterUnmark[0].length === 0 && afterUnmark[1].length === 1,
+    `marked ${JSON.stringify(marked.value)}, stored ${JSON.stringify(stored)}, after ${JSON.stringify(afterUnmark)}`,
+  );
+
+  const notMine = await tool("mark_month_review", { transactionIds: [theirs], rule: "twin" });
+  const tooMany = await tool("mark_month_review", { transactionIds: Array.from({ length: 51 }, () => randomUUID()), rule: "twin" });
+  const noMark = await tool("unmark_month_review", { transactionIds: [mine], rule: "above_usual" });
+  assert(
+    next("RF-236: a movement the person cannot write cannot be marked, 51 ids are refused before any write, and undoing a mark that is not there is refused"),
+    notMine.isError && (notMine.value as { error: string }).error === es.review.errors.cannotMark && (await marks(theirs)).length === 0 &&
+      !(tooMany.value as { count?: number } | null)?.count && noMark.isError && (noMark.value as { error: string }).error === es.review.errors.cannotUndo,
+    `notMine ${JSON.stringify(notMine.value)}, many ${JSON.stringify(tooMany.value)}, noMark ${JSON.stringify(noMark.value)}`,
+  );
+
+  await tool("record_movement", { fromAccountId: bank.accountId, toAccountId: savings.accountId, amountCents: 20_000_00, occurredAt: today, description: `Harness rf236 traslado ${tag}` });
+  const kinds = (await tool("list_movements", { accountId: bank.accountId, kind: "transfer" })).value as { kind: string }[];
+  const byText = (await tool("list_movements", { accountId: bank.accountId, q: `almuerzo ${tag}` })).value as { id: string }[];
+  const byFigure = (await tool("list_movements", { accountId: bank.accountId, q: "33.333" })).value as { id: string }[];
+  assert(
+    next("RF-236: list_movements filters by kind and by text, which also matches an exact amount"),
+    kinds.length === 1 && kinds.every((row) => row.kind === "transfer") && byText.length === 1 && byText[0].id === mine &&
+      byFigure.some((row) => row.id === twin),
+    `kinds ${JSON.stringify(kinds)}, text ${JSON.stringify(byText)}, figure ${JSON.stringify(byFigure)}`,
+  );
+
+  const card = await tool("create_account", { name: `Harness rf236 tarjeta ${tag}`, kind: "liability", subtype: "card", openingBalanceCents: 0, balanceOn: "2026-01-01" });
+  const cardId = (card.value as { accountId: string }).accountId;
+  track("accounts", cardId);
+  const purchase = await book(tool, cardId, `Harness rf236 compra ${tag}`, 600_000_00, category);
+  await tool("defer_purchase", { transactionId: purchase, instalments: 12 });
+  const whole = (await tool("get_movement", { transactionId: purchase })).value as { id: string; deferral: { instalments: number } | null; createdByUserId: string };
+  const plain = (await tool("get_movement", { transactionId: mine })).value as { deferral: unknown };
+  const foreign = await tool("get_movement", { transactionId: theirs });
+  assert(
+    next("RF-236: get_movement answers a deferred purchase with its deferral, a plain movement with none, and another person's as not found"),
+    whole.id === purchase && whole.deferral?.instalments === 12 && whole.createdByUserId === owner.id && plain.deferral === null &&
+      foreign.isError && (foreign.value as { error: string }).error === es.errors.notFound,
+    `whole ${JSON.stringify(whole)}, foreign ${JSON.stringify(foreign.value)}`,
   );
 }

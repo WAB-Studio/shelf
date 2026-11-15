@@ -32,7 +32,15 @@ import { parseForm } from "@/lib/mcp/parse-form";
 import { centsToDecimal } from "@/lib/money";
 import { createAccountSchema, updateAccountSchema } from "@/lib/validation/account";
 import { createCategoryInputSchema, updateCategorySchema } from "@/lib/validation/category";
-import { createTransactionSchema, descriptionSchema, HOUSEHOLD_MAKER, occurredAtSchema, updateTransactionSchema } from "@/lib/validation/transaction";
+import {
+  createTransactionSchema,
+  descriptionSchema,
+  HOUSEHOLD_MAKER,
+  MOVEMENT_SEARCH_MAX,
+  movementTypeFilter,
+  occurredAtSchema,
+  updateTransactionSchema,
+} from "@/lib/validation/transaction";
 
 type Run = (ctx: ServerContext, load: (owner: string) => Promise<unknown>) => Promise<CallToolResult>;
 type Say = (key: string) => string;
@@ -131,7 +139,13 @@ export type MovementFilterInput = {
   label?: string;
   from?: string;
   to?: string;
+  kind?: (typeof MOVEMENT_KINDS)[number];
+  createdByUserId?: string;
+  recurringRuleId?: string;
+  q?: string;
 };
+
+const MOVEMENT_KINDS = ["expense", "income", "transfer", "adjustment"] as const;
 
 // The filters a listing and its totals take, the one set the Movimientos screen offers.
 export function movementFilterShape(t: Say) {
@@ -143,6 +157,10 @@ export function movementFilterShape(t: Say) {
     categoryId: z.string().optional().describe(d("filterCategoryId")),
     madeByMemberId: z.string().optional().describe(d("filterMadeByMemberId")),
     label: z.string().optional().describe(d("filterLabel")),
+    kind: z.enum(MOVEMENT_KINDS).optional().describe(d("filterKind")),
+    createdByUserId: z.string().optional().describe(d("filterCreatedBy")),
+    recurringRuleId: z.string().optional().describe(d("filterRecurringRule")),
+    q: z.string().trim().min(1).max(MOVEMENT_SEARCH_MAX).optional().describe(d("filterQ")),
   };
 }
 
@@ -157,12 +175,23 @@ export async function movementFilters(owner: string, input: MovementFilterInput)
         ? null
         : idOf("transactions.errors.madeByInvalid", input.madeByMemberId);
   const [labelId] = input.label === undefined ? [] : await resolveLabelIds(owner, [input.label]);
-  return { accountId, categoryId, madeByMemberId, labelId, from: input.from, to: input.to };
+  return {
+    accountId,
+    categoryId,
+    madeByMemberId,
+    labelId,
+    from: input.from,
+    to: input.to,
+    ...(input.kind === undefined ? {} : movementTypeFilter(input.kind)),
+    memberUserId: input.createdByUserId === undefined ? undefined : idOf("errors.notFound", input.createdByUserId),
+    recurringRuleId: input.recurringRuleId === undefined ? undefined : idOf("errors.notFound", input.recurringRuleId),
+    search: input.q,
+  };
 }
 
 // Everything update_movement can resend or patch, and the stamp it must quote back. A tool that removes
 // a movement answers it in this shape, so record_movement can book it again.
-function movementRow(row: TransactionListRow) {
+export function movementRow(row: TransactionListRow) {
   return {
     id: row.id,
     kind: row.kind,
