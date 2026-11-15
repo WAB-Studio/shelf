@@ -1853,7 +1853,13 @@
       "createPlannedPayment": "Programa un pago futuro: fromAccountId (de dónde saldrá; null en un ingreso esperado) y toAccountId (a dónde llegará; null en un gasto), amountCents en centavos enteros en la moneda de la cuenta, dueDate AAAA-MM-DD (puede ser futura) y, opcionales, categoryId, remindOn (el día del recordatorio, nunca después del vencimiento) y description. Las cuentas y la categoría deben ser del mismo ámbito. No mueve dinero: solo lo anota hasta que se pague con settle_planned_payment. Devuelve plannedPaymentId. CONFIRMA con la persona cuenta, monto y fecha antes de llamarla.",
       "updatePlannedPayment": "Corrige un pago programado pendiente: cuentas, monto, categoría, fecha, recordatorio y descripción; es un parche, lo que no envías queda igual, y null quita la categoría, el recordatorio o la descripción. Pasa el updatedAt que leíste en list_planned_payments como expectedUpdatedAt: si alguien lo editó mientras tanto, se rechaza. Devuelve before: lo que había en cada campo que cambiaste. CONFIRMA con la persona el cambio antes de llamarla.",
       "settlePlannedPayment": "Paga un pago programado pendiente: registra el movimiento real con sus mismas cuentas, monto y categoría, en la fecha occurredOn (AAAA-MM-DD, sin futuro), y lo marca hecho. Devuelve transactionId. Un pago ya pagado o cancelado se rechaza, nunca se paga dos veces. Si se borra ese movimiento (delete_movement), el pago vuelve a «Por pagar». CONFIRMA con la persona cuál pago y qué día antes de llamarla.",
-      "cancelPlannedPayment": "Cancela un pago programado pendiente (plannedPaymentId de list_planned_payments): deja de esperarse y no se puede pagar después. Devuelve before: el pago como lo muestra list_planned_payments. No se deshace: CONFIRMA con la persona cuál cancelas, nombrándolo (fecha, monto, descripción), antes de llamarla."
+      "cancelPlannedPayment": "Cancela un pago programado pendiente (plannedPaymentId de list_planned_payments): deja de esperarse y no se puede pagar después. Devuelve before: el pago como lo muestra list_planned_payments. No se deshace: CONFIRMA con la persona cuál cancelas, nombrándolo (fecha, monto, descripción), antes de llamarla.",
+      "listRecurringRules": "Los movimientos recurrentes de la persona (suyos y del fondo), el más próximo primero: id, fromAccountId o toAccountId (una regla es un gasto de una cuenta o un ingreso a una), amountCents, currency, categoryId, description, frequency (monthly, weekly o yearly), intervalN, dayOfMonth, nextRunOn, endsOn, isActive, pausedReason y updatedAt. Cada noche se genera el movimiento de la regla que toca. Una regla personal de otro miembro sale con foreignOwner y no se puede escribir. Solo lee.",
+      "createRecurringRule": "Crea un movimiento recurrente: UNA sola cuenta, fromAccountId para un gasto o toAccountId para un ingreso (la otra, null), amountCents en centavos enteros, categoryId (de list_categories, del ámbito de la cuenta), frequency monthly, weekly o yearly, intervalN (cada cuántos periodos, 1 por defecto), dayOfMonth (1 a 31; obligatorio en monthly y yearly), nextRunOn (AAAA-MM-DD, el día en que se genera el próximo) y, opcionales, description y endsOn (no antes de nextRunOn). Devuelve recurringRuleId. CONFIRMA con la persona cuenta, monto, frecuencia y fecha antes de llamarla, y revisa con list_recurring_rules que no exista ya.",
+      "updateRecurringRule": "Corrige un movimiento recurrente: cuenta, monto, categoría, frecuencia, intervalo, día del mes, próxima fecha, fecha final y descripción; es un parche, lo que no envías queda igual, y null en description o endsOn los quita. Pasa el updatedAt que leíste en list_recurring_rules como expectedUpdatedAt: si alguien la editó mientras tanto, se rechaza. Una próxima fecha sobre un periodo ya generado se rechaza. Devuelve before: lo que había en cada campo que cambiaste. CONFIRMA con la persona el cambio antes de llamarla.",
+      "pauseRecurringRule": "Pausa un movimiento recurrente (id de list_recurring_rules): deja de generar movimientos pero conserva su historia. Se reanuda con resume_recurring_rule. Devuelve id. CONFIRMA con la persona cuál antes de llamarla.",
+      "resumeRecurringRule": "Reanuda un movimiento recurrente pausado (id de list_recurring_rules). Una regla cuya fecha final ya pasó no se reanuda: corrige primero su endsOn. Devuelve id. CONFIRMA con la persona cuál antes de llamarla.",
+      "markMovementReviewed": "Marca «Revisado» un movimiento que generó una regla recurrente, sin cambiar su monto (transactionId de list_movements). Un movimiento hecho a mano, o ya revisado, se rechaza como no encontrado. Para corregir el monto de uno generado usa update_movement. Devuelve transactionId. CONFIRMA con la persona cuál antes de llamarla."
     },
     "deferralProposal": "Diferir en {count} cuotas",
     "errors": {
@@ -1992,7 +1998,14 @@
       "plannedStatus": "pending, done o cancelled; si falta, todos.",
       "plannedCategoryId": "Id de la categoría del pago (de list_categories); null si ninguna.",
       "plannedDueDate": "Día del vencimiento, AAAA-MM-DD; puede ser futuro.",
-      "plannedRemindOn": "Día del recordatorio, AAAA-MM-DD, nunca después del vencimiento; null si ninguno."
+      "plannedRemindOn": "Día del recordatorio, AAAA-MM-DD, nunca después del vencimiento; null si ninguno.",
+      "recurringRuleId": "Id del movimiento recurrente (de list_recurring_rules).",
+      "recurringCategoryId": "Id de la categoría de los movimientos que genera (de list_categories).",
+      "recurringFrequency": "monthly, weekly o yearly.",
+      "recurringIntervalN": "Cada cuántos periodos de la frecuencia, al menos 1; por defecto 1.",
+      "recurringDayOfMonth": "Día del mes de 1 a 31; obligatorio en monthly y yearly, ignorado en weekly.",
+      "recurringNextRunOn": "Día en que se genera el próximo movimiento, AAAA-MM-DD.",
+      "recurringEndsOn": "Último día en que puede generarse, AAAA-MM-DD, no antes de nextRunOn; null si no termina."
     },
     "titles": {
       "listAccounts": "Ver cuentas",
@@ -2049,7 +2062,13 @@
       "createPlannedPayment": "Programar un pago",
       "updatePlannedPayment": "Corregir un pago por pagar",
       "settlePlannedPayment": "Pagar un pago programado",
-      "cancelPlannedPayment": "Cancelar un pago programado"
+      "cancelPlannedPayment": "Cancelar un pago programado",
+      "listRecurringRules": "Ver movimientos recurrentes",
+      "createRecurringRule": "Crear un movimiento recurrente",
+      "updateRecurringRule": "Corregir un movimiento recurrente",
+      "pauseRecurringRule": "Pausar un movimiento recurrente",
+      "resumeRecurringRule": "Reanudar un movimiento recurrente",
+      "markMovementReviewed": "Marcar un movimiento generado como revisado"
     }
   },
   "oauth": {

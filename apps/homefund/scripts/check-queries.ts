@@ -4170,6 +4170,7 @@ async function main(): Promise<void> {
   await mcpBudgetsSuite();
   await mcpGoalsSuite();
   await mcpPlannedPaymentsSuite();
+  await mcpRecurringSuite();
 }
 
 // A member recorded without a login is someone in the fund: a leader whose fund holds one is not alone, so an
@@ -15319,6 +15320,7 @@ const TOOL_CLASSES = [
   ["create_goal", ...ADD_CLASS],
   ["create_label", ...ADD_CLASS],
   ["create_planned_payment", ...ADD_CLASS],
+  ["create_recurring_rule", ...ADD_CLASS],
   ["delete_movement", ...DESTROY_CLASS],
   ["delete_recipient", ...DESTROY_CLASS],
   ["get_debt", ...READ_CLASS],
@@ -15337,10 +15339,13 @@ const TOOL_CLASSES = [
   ["list_movements", ...READ_CLASS],
   ["list_planned_payments", ...READ_CLASS],
   ["list_recipients", ...READ_CLASS],
+  ["list_recurring_rules", ...READ_CLASS],
   ["list_third_party_credits", ...READ_CLASS],
+  ["mark_movement_reviewed", ...OVERWRITE_CLASS],
   ["merge_movements", ...DESTROY_CLASS],
   ["move_account_to_fund", ...DESTROY_CLASS],
   ["move_category_movements", ...OVERWRITE_CLASS],
+  ["pause_recurring_rule", ...OVERWRITE_CLASS],
   ["preview_statement", ...READ_CLASS],
   ["record_debt_payment", ...ADD_ONCE_CLASS],
   ["record_member_debt", ...ADD_CLASS],
@@ -15350,6 +15355,7 @@ const TOOL_CLASSES = [
   ["remove_goal_contribution", ...DESTROY_CLASS],
   ["restore_budget", ...OVERWRITE_CLASS],
   ["restore_goal", ...OVERWRITE_CLASS],
+  ["resume_recurring_rule", ...OVERWRITE_CLASS],
   ["review_month", ...READ_CLASS],
   ["save_recipient", ...OVERWRITE_CLASS],
   ["set_debt_terms", ...ADD_ONCE_CLASS],
@@ -15362,6 +15368,7 @@ const TOOL_CLASSES = [
   ["update_label", ...OVERWRITE_CLASS],
   ["update_movement", ...OVERWRITE_CLASS],
   ["update_planned_payment", ...OVERWRITE_CLASS],
+  ["update_recurring_rule", ...OVERWRITE_CLASS],
   ["update_third_party_credit", ...OVERWRITE_CLASS],
 ];
 
@@ -19965,5 +19972,90 @@ async function mcpPlannedPaymentsSuite(): Promise<void> {
     !cancelled.isError && (cancelled.value as { before: { amountCents: number } }).before.amountCents === 90_000_00 &&
       settleCancelled.isError && (await planned("cancelled")).some((one) => one.id === plannedId),
     `cancelled ${JSON.stringify(cancelled.value)}, settle ${JSON.stringify(settleCancelled.value)}`,
+  );
+}
+
+// RF-231: Claude reads, creates, edits, pauses and resumes recurring movements and confirms a generated one, through the
+// Recurrentes screen's own query, schemas and write functions.
+async function mcpRecurringSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const today = todayInBogota();
+  const { POST } = await import("@/app/mcp/route");
+  const leader = await createMembershipFreeUser();
+  const ids = { group: randomUUID(), leaderRow: randomUUID(), mine: randomUUID(), personalCategory: randomUUID(), fundCategory: randomUUID() };
+  const name = (what: string) => `Harness rf231 ${what} ${tag}`;
+  await fixtureSql.begin(async (tx) => {
+    await tx`insert into groups (id, name, cash_mode) values (${ids.group}, ${name("fondo")}, 'shared')`;
+    await tx`insert into group_members (id, group_id, user_id, name, role) values (${ids.leaderRow}, ${ids.group}, ${leader.id}, ${name("lider")}, 'leader')`;
+    await tx`insert into accounts (id, owner_user_id, name, kind, subtype, initial_balance_cents, initial_balance_on)
+      values (${ids.mine}, ${leader.id}, ${name("banco")}, 'asset', 'bank', 0, '2026-01-01')`;
+    await tx`insert into categories (id, owner_user_id, name, kind, color) values (${ids.personalCategory}, ${leader.id}, ${name("propia")}, 'expense', '#8C4A4A')`;
+    await tx`insert into categories (id, group_id, name, kind, color) values (${ids.fundCategory}, ${ids.group}, ${name("fondo")}, 'expense', '#8C4A4A')`;
+  });
+  track("groups", ids.group);
+  track("group_members", ids.leaderRow);
+  track("accounts", ids.mine);
+  for (const id of [ids.personalCategory, ids.fundCategory]) track("categories", id);
+  const { id: keyId, token } = await asUser(leader, () => issueWebhookCredential({ name: name("clave"), purpose: "mcp", defaultAccountId: null, defaultCategoryId: null }));
+  keep("webhook_credentials", keyId);
+  const { tool } = mcpClient(POST, token);
+  type Rule = { id: string; isActive: boolean; nextRunOn: string; dayOfMonth: number | null; amountCents: number; updatedAt: string };
+  const rules = async () => (await tool("list_recurring_rules")).value as Rule[];
+  const nextRunOn = shiftDate(today, 30);
+  const draft = { fromAccountId: ids.mine, toAccountId: null, amountCents: 70_000_00, categoryId: ids.personalCategory, description: name("arriendo"), frequency: "monthly", dayOfMonth: 5, nextRunOn };
+
+  const created = await tool("create_recurring_rule", draft);
+  const ruleId = (created.value as { recurringRuleId: string }).recurringRuleId;
+  const row = (await rules()).find((one) => one.id === ruleId);
+  assert(
+    next("RF-231: create_recurring_rule makes a monthly rule that list_recurring_rules reads active with its day and next run"),
+    !created.isError && row?.isActive === true && row.dayOfMonth === 5 && row.nextRunOn === nextRunOn && row.amountCents === 70_000_00,
+    `created ${JSON.stringify(created.value)}, row ${JSON.stringify(row)}`,
+  );
+
+  const wrongScope = await tool("create_recurring_rule", { ...draft, categoryId: ids.fundCategory });
+  const noDay = await tool("create_recurring_rule", { ...draft, dayOfMonth: null });
+  assert(
+    next("RF-231: a category of the fund on a personal account, and a monthly rule with no day, are refused in the form's words"),
+    wrongScope.isError && (wrongScope.value as { error: string }).error === es.recurringRules.errors.scopeViolation &&
+      noDay.isError && (noDay.value as { error: string }).error === es.recurringRules.errors.dayOfMonthRequired,
+    `scope ${JSON.stringify(wrongScope.value)}, day ${JSON.stringify(noDay.value)}`,
+  );
+
+  const edited = await tool("update_recurring_rule", { id: ruleId, expectedUpdatedAt: row?.updatedAt, amountCents: 75_000_00 });
+  const outOfDate = await tool("update_recurring_rule", { id: ruleId, expectedUpdatedAt: row?.updatedAt, amountCents: 80_000_00 });
+  assert(
+    next("RF-231: update_recurring_rule changes only what is sent and answers the old value, and a call quoting an old stamp is refused as out of date"),
+    !edited.isError && JSON.stringify((edited.value as { before: unknown }).before) === JSON.stringify({ amountCents: 70_000_00 }) &&
+      outOfDate.isError && (outOfDate.value as { error: string }).error === es.errors.stale &&
+      (await rules()).find((one) => one.id === ruleId)?.amountCents === 75_000_00,
+    `edited ${JSON.stringify(edited.value)}, old ${JSON.stringify(outOfDate.value)}`,
+  );
+
+  const paused = await tool("pause_recurring_rule", { id: ruleId });
+  const whilePaused = (await rules()).find((one) => one.id === ruleId)?.isActive;
+  const resumed = await tool("resume_recurring_rule", { id: ruleId });
+  assert(
+    next("RF-231: pause_recurring_rule stops the rule and resume_recurring_rule starts it again"),
+    !paused.isError && whilePaused === false && !resumed.isError && (await rules()).find((one) => one.id === ruleId)?.isActive === true,
+    `paused ${JSON.stringify(paused.value)}, resumed ${JSON.stringify(resumed.value)}`,
+  );
+
+  const book = async (description: string) => {
+    const booked = await tool("record_movement", { fromAccountId: ids.mine, toAccountId: null, amountCents: 1_000_00, occurredAt: today, description, categoryId: ids.personalCategory });
+    return (booked.value as { transactionId: string }).transactionId;
+  };
+  const [generated, manual] = [await book(name("generado")), await book(name("manual"))];
+  await fixtureSql`update transactions set recurring_rule_id = ${ruleId} where id = ${generated}`;
+  const marked = await tool("mark_movement_reviewed", { transactionId: generated });
+  const markedAgain = await tool("mark_movement_reviewed", { transactionId: generated });
+  const onManual = await tool("mark_movement_reviewed", { transactionId: manual });
+  const [stamped] = await fixtureSql<{ reviewed_at: string | null }[]>`select reviewed_at from transactions where id = ${generated}`;
+  assert(
+    next("RF-231: mark_movement_reviewed stamps a generated movement once and reads a hand-made one as not found"),
+    !marked.isError && stamped.reviewed_at !== null && markedAgain.isError && onManual.isError &&
+      (onManual.value as { error: string }).error === es.errors.notFound,
+    `marked ${JSON.stringify(marked.value)}, again ${JSON.stringify(markedAgain.value)}, manual ${JSON.stringify(onManual.value)}`,
   );
 }
