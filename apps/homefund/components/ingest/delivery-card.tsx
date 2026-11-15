@@ -39,6 +39,7 @@ import { civilDateToDate, todayInBogota } from "@/lib/dates";
 import { categoryNamesById } from "@/lib/fund/category-names";
 import { deliveryCurrency } from "@/lib/fund/glance";
 import { proposedCategoryId } from "@/lib/fund/category-scope";
+import { categoryFromHistory } from "@/lib/ingest/learned-category";
 import { centsToDecimal } from "@/lib/money";
 import { useActionErrorToast } from "@/lib/use-action-toast";
 import type { AcceptDeliveryInput } from "@/lib/validation/ingest";
@@ -52,6 +53,13 @@ type ReviewDefaults = {
   description: string | null;
   splits: { categoryId: string; amount: string }[];
 };
+
+const SOURCE_MESSAGE = {
+  merchant: "categoryFromMerchant",
+  interpreter: "categoryFromText",
+  recipient: "categoryFromRecipient",
+  credential_default: "categoryFromDefault",
+} as const satisfies Record<NonNullable<PendingDeliveryRow["categorySource"]>, string>;
 
 function movementDefaults(
   delivery: PendingDeliveryRow,
@@ -182,6 +190,7 @@ export function DeliveryCard({
       : (categoryNamesById(options.categories, (name) =>
           tKey("categories.scopedName", { name }),
         ).get(categoryId) ?? null);
+  const learnedFromHistory = category !== null && categoryFromHistory(delivery);
   const receivedOn = format.dateTime(delivery.createdAt, {
     dateStyle: "medium",
     timeStyle: "short",
@@ -293,15 +302,14 @@ export function DeliveryCard({
           )}
           <Flex gap="2" wrap="wrap">
             {delivery.categorySource && (
-              <Badge color="gray">
+              <Badge
+                color={learnedFromHistory ? "blue" : "gray"}
+                variant={learnedFromHistory ? "soft" : undefined}
+              >
                 {t(
-                  delivery.categorySource === "merchant"
-                    ? "categoryFromMerchant"
-                    : delivery.categorySource === "interpreter"
-                      ? "categoryFromText"
-                      : delivery.categorySource === "recipient"
-                        ? "categoryFromRecipient"
-                        : "categoryFromDefault",
+                  learnedFromHistory
+                    ? "categoryFromHistory"
+                    : SOURCE_MESSAGE[delivery.categorySource],
                 )}
               </Badge>
             )}

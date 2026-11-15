@@ -4163,6 +4163,7 @@ async function main(): Promise<void> {
   await connectionsSuite();
   await thirdPartyCreditSuite();
   await widgetSuite();
+  await learnedCategorySuite();
 }
 
 // A member recorded without a login is someone in the fund: a leader whose fund holds one is not alone, so an
@@ -19221,5 +19222,144 @@ async function widgetSuite(): Promise<void> {
     next("RF-215: the widget summary costs three transactions fanned out, the light reads sharing one"),
     trips <= unit * 3 + 3,
     `${trips} round trips for the summary, ${unit} for a single read`,
+  );
+}
+
+// RF-210: a proposal arrives with the category the person's own movements of that counterparty agree on, taught by
+// recording or editing a movement or by accepting a delivery under another category; the key's default gives way to it,
+// a disagreeing pair or another person's history teaches nothing.
+async function learnedCategorySuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const today = todayInBogota();
+  const { recordIngestDelivery } = await import("@/db/queries/webhook-ingest");
+  const { acceptDelivery } = await import("@/db/queries/ingest-review");
+  const user = await createMembershipFreeUser();
+  const stranger = await createMembershipFreeUser();
+  const { accountId: bank } = await asUser(user, () =>
+    createAccount({
+      name: `Harness rf210 banco ${tag}`, kind: "asset", subtype: "bank", ownerUserId: user.id, groupId: null, isShared: false,
+      institution: null, lastFour: "3397", settlementCurrency: "COP", amountMinor: 900_000_00, balanceOn: shiftDate(today, -60),
+    }),
+  );
+  track("accounts", bank);
+  const mkCategory = async (name: string): Promise<string> => {
+    const { categoryId } = await asUser(user, () =>
+      createCategory({ scope: { ownerUserId: user.id }, name: `Harness rf210 ${name} ${tag}`, kind: "expense", parentId: null, color: "#0E7490" }),
+    );
+    track("categories", categoryId);
+    return categoryId;
+  };
+  const rent = await mkCategory("arriendo");
+  const food = await mkCategory("comida");
+  const snacks = await mkCategory("antojos");
+  const other = await mkCategory("otros");
+  const { id: credentialId } = await asUser(user, () =>
+    issueWebhookCredential({ name: `Harness rf210 ${tag}`, purpose: "ingest", defaultAccountId: bank, defaultCategoryId: other }),
+  );
+  keep("webhook_credentials", credentialId);
+
+  const record = async (description: string, categoryId: string, daysAgo: number): Promise<string> => {
+    const { transactionId } = await asUser(user, () =>
+      createTransaction({
+        fromAccountId: bank, toAccountId: null, amountCents: 50_000_00, occurredAt: shiftDate(today, -daysAgo), description,
+        externalRef: null, splits: [{ categoryId, amountCents: 50_000_00 }], labelIds: [],
+      }),
+    );
+    keep("transactions", transactionId);
+    return transactionId;
+  };
+  type Delivered = { id: string; category: string | null; source: string | null };
+  const deliver = async (owner: { id: string }, text: string): Promise<Delivered> => {
+    const result = await recordIngestDelivery({
+      ownerUserId: owner.id, credentialId, defaultAccountId: bank, defaultCategoryId: other,
+      payload: { text } as Parameters<typeof recordIngestDelivery>[0]["payload"],
+    });
+    const [row] = await fixtureSql<{ category: string | null; source: string | null }[]>`
+      select proposed_category_id as category, category_source as source from ingest_deliveries where id = ${result.deliveryId}`;
+    return { id: result.deliveryId, ...row };
+  };
+
+  const none = await deliver(user, `Rentabien${tag.replace(/\d/g, "")} 1200000 ${tag}`);
+  assert(
+    next("RF-210: a counterparty with no history keeps the key's default category"),
+    none.category === other && none.source === "credential_default",
+    JSON.stringify(none),
+  );
+
+  // Neither «Harness» (the first word of every account and category name here) nor a letter after the figure may
+  // reach the description, or its key stops reading as the movements' key.
+  const place = `Rentabien Tienda ${tag.replace(/\d/g, "x")}`;
+  await record(place, rent, 30);
+  const single = await deliver(user, `${place.toUpperCase()} 1200000 1`);
+  assert(
+    next("RF-210: a single movement is the whole history, matched without case, accents or digits, and wins over the key's default"),
+    single.category === rent && single.source === "merchant",
+    JSON.stringify(single),
+  );
+
+  await record(place, food, 5);
+  const split = await deliver(user, `${place} 1200000 2`);
+  assert(
+    next("RF-210: the two latest movements disagreeing teach nothing, so the default stays"),
+    split.category === other && split.source === "credential_default",
+    JSON.stringify(split),
+  );
+
+  const latest = await record(place, food, 1);
+  const agreed = await deliver(user, `${place} 1200000 3`);
+  assert(
+    next("RF-210: the two latest movements agreeing set the category, which recovers from the earlier disagreement"),
+    agreed.category === food && agreed.source === "merchant",
+    JSON.stringify(agreed),
+  );
+
+  await asUser(user, () =>
+    updateTransaction({
+      transactionId: latest, fromAccountId: bank, toAccountId: null, amountCents: 50_000_00, occurredAt: shiftDate(today, -1),
+      description: place, splits: [{ categoryId: snacks, amountCents: 50_000_00 }], labelIds: [],
+    }),
+  );
+  await record(place, snacks, 0);
+  const edited = await deliver(user, `${place} 1200000 4`);
+  assert(
+    next("RF-210: editing a movement's category teaches the new one once it and the next movement agree"),
+    edited.category === snacks && edited.source === "merchant",
+    JSON.stringify(edited),
+  );
+
+  const theirs = await deliver(stranger, `${place} 1200000 5`);
+  assert(
+    next("RF-210: another person's history teaches nothing to someone with none, who keeps the key's default"),
+    theirs.category === other && theirs.source === "credential_default",
+    JSON.stringify(theirs),
+  );
+
+  const sms = (extra: string) =>
+    `Bancolombia: Compraste $45.000 en HARNESS RF210 ${tag.toUpperCase().replace(/\d/g, "X")} con tu T.Deb *3397, el 11/11/2026 18:31. ${extra}`;
+  const firstSms = await deliver(user, sms("uno"));
+  await asUser(user, () =>
+    acceptDelivery({
+      deliveryId: firstSms.id, fromAccountId: bank, toAccountId: null, amountCents: 45_000_00, occurredAt: today,
+      description: `Harness rf210 compra ${tag}`, splits: [{ categoryId: food, amountCents: 45_000_00 }], labelIds: [],
+      contributedByMemberId: null, madeByMemberId: null,
+    }),
+  );
+  const secondSms = await deliver(user, sms("dos"));
+  const [{ state }] = await fixtureSql<{ state: string | null }[]>`
+    select (select state from ingest_merchants m where m.owner_user_id = d.owner_user_id and m.merchant_key = d.merchant_key) as state
+    from ingest_deliveries d where d.id = ${secondSms.id}`;
+  assert(
+    next("RF-210: accepting a delivery under another category than its default teaches its merchant, though one approval leaves the merchant only learning"),
+    firstSms.category === other && secondSms.category === food && secondSms.source === "merchant" && state === "learning",
+    `first ${JSON.stringify(firstSms)}, second ${JSON.stringify(secondSms)}, merchant ${state}`,
+  );
+
+  const pending = await asUser(user, () => listPendingDeliveries());
+  const learned = pending.find((one) => one.id === secondSms.id);
+  assert(
+    next("RF-210: the inbox reads a history-learned proposal as one tap, from its source and an untrusted merchant, with no further query"),
+    learned?.isComplete === true && learned.categorySource === "merchant" && learned.merchantState === "learning",
+    JSON.stringify(learned),
   );
 }
