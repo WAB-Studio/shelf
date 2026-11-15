@@ -1840,7 +1840,15 @@
       "createBudget": "Creates a budget on an expense category (categoryId from list_categories, kind expense): period monthly, weekly or yearly; limitCents, the limit in whole cents in the budget's currency; thresholdPct, the percentage of the limit (1 to 100) at which it warns. Optional: accountId (counts only that account's expenses), labelId (an id or the name of a label from list_labels: counts only movements wearing it) and name. The category, the account and the label must share one scope (personal or fund). Returns budgetId. CONFIRM category, period and limit with the person before calling it, and check with list_budgets that it does not exist yet.",
       "updateBudget": "Corrects a budget the person can write: period, limitCents, thresholdPct, accountId, labelId and name; it is a patch, what you omit stays, and null on accountId, labelId or name removes it. The category does not change. Pass the updatedAt you read in list_budgets as expectedUpdatedAt: if somebody edited it meanwhile, it is refused. Returns before: what each field you changed held. CONFIRM the change with the person before calling it.",
       "archiveBudget": "Archives a budget (budgetId from list_budgets): it leaves the list and can be restored with restore_budget. Returns budgetId. CONFIRM with the person which one before calling it.",
-      "restoreBudget": "Restores an archived budget (budgetId from list_budgets with archived true). Returns budgetId. CONFIRM with the person which one before calling it."
+      "restoreBudget": "Restores an archived budget (budgetId from list_budgets with archived true). Returns budgetId. CONFIRM with the person which one before calling it.",
+      "listGoals": "The person's savings goals (their own and their fund's) with their progress, as «Goals» shows them: id, name, targetAmountCents, targetDate, accountId, currency, savedCents, remainingCents, reachedTarget, progressPct, requiredMonthlyCents (what is left to set aside each month to reach the date), behindPace and updatedAt. What is saved is the sum of its contributions, derived on every read. archived true lists the archived ones. Another member's personal goal comes with foreignOwner and cannot be written. Read only.",
+      "createGoal": "Creates a savings goal: name, targetAmountCents (the target in whole cents, in the goal's currency) and optionally targetDate (YYYY-MM-DD), accountId (the account whose currency and scope it takes; from list_accounts) and initialContributionCents (a first contribution). If the person has a fund, the goal is the fund's. Returns goalId. CONFIRM name, target and date with the person before calling it, and check with list_goals that it does not exist yet.",
+      "updateGoal": "Corrects a goal the person can write: name, targetAmountCents, targetDate (null removes it) and accountId (null removes it); it is a patch, what you omit stays. Pass the updatedAt you read in list_goals as expectedUpdatedAt: if somebody edited it meanwhile, it is refused. Returns before: what each field you changed held. CONFIRM the change with the person before calling it.",
+      "archiveGoal": "Archives a goal (goalId from list_goals): it leaves the list and can be restored with restore_goal. Returns goalId. CONFIRM with the person which one before calling it.",
+      "restoreGoal": "Restores an archived goal (goalId from list_goals with archived true). Returns goalId. CONFIRM with the person which one before calling it.",
+      "contributeGoal": "Adds a contribution to a goal: amountCents in whole cents, positive, in the goal's currency. It is a virtual set-aside: it moves no money between accounts and records no movement. Returns contributionId. CONFIRM with the person which goal and how much before calling it.",
+      "listGoalContributions": "A goal's contributions (goalId from list_goals), newest first: id, amountCents, currency, transactionId (if they earmark a movement) and occurredAt. Its id is remove_goal_contribution's contributionId. Read only.",
+      "removeGoalContribution": "Removes ONE contribution from a goal (goalId and contributionId from list_goal_contributions). Returns before: the removed contribution, to add it back with contribute_goal. CONFIRM with the person which contribution you remove, naming it (date and amount), before calling it."
     },
     "deferralProposal": "Defer in {count} instalments",
     "errors": {
@@ -1965,7 +1973,16 @@
       "budgetThresholdPct": "Percentage of the limit, 1 to 100, at which the budget warns.",
       "budgetAccountId": "The id of the account whose expenses it counts (from list_accounts); null for the whole category.",
       "budgetLabel": "A label, by id or by name (from list_labels), narrowing the movements it counts; null for none.",
-      "budgetName": "Optional name; the category's when absent. null removes it."
+      "budgetName": "Optional name; the category's when absent. null removes it.",
+      "goalId": "The goal's id (from list_goals).",
+      "goalArchived": "true to list the archived goals; by default, the active ones.",
+      "goalName": "The goal's name, up to 80 characters.",
+      "goalTargetAmountCents": "The target, in whole cents, in the goal's currency.",
+      "goalTargetDate": "The date it aims to be met, YYYY-MM-DD; null or absent when it has none.",
+      "goalAccountId": "The id of the account whose currency and scope the goal takes (from list_accounts); null for none.",
+      "goalInitialContributionCents": "A first contribution, in whole cents; optional.",
+      "goalContributionCents": "The contribution, in whole cents, positive.",
+      "goalContributionId": "The contribution's id (from list_goal_contributions)."
     },
     "titles": {
       "listAccounts": "View accounts",
@@ -2009,7 +2026,15 @@
       "createBudget": "Create a budget",
       "updateBudget": "Correct a budget",
       "archiveBudget": "Archive a budget",
-      "restoreBudget": "Restore a budget"
+      "restoreBudget": "Restore a budget",
+      "listGoals": "View goals",
+      "createGoal": "Create a goal",
+      "updateGoal": "Correct a goal",
+      "archiveGoal": "Archive a goal",
+      "restoreGoal": "Restore a goal",
+      "contributeGoal": "Contribute to a goal",
+      "listGoalContributions": "View a goal's contributions",
+      "removeGoalContribution": "Remove a goal's contribution"
     }
   },
   "oauth": {

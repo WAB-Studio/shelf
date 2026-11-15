@@ -19,6 +19,7 @@ import { pgErrorCode } from "@/lib/db-error";
 import { DESTROY, READ, titled } from "@/lib/mcp/annotations";
 import { registerDebtTools } from "@/lib/mcp/debt-tools";
 import { registerBudgetTools } from "@/lib/mcp/budget-tools";
+import { registerGoalTools } from "@/lib/mcp/goal-tools";
 import { BatchRefusal, registerInboxTools } from "@/lib/mcp/inbox-tools";
 import { registerLabelTools } from "@/lib/mcp/label-tools";
 import { registerMemberDebtTools } from "@/lib/mcp/member-debt-tools";
@@ -198,6 +199,7 @@ export function buildHandler(): (request: Request) => Promise<Response> {
     registerLabelTools(server, run, say);
     registerDebtTools(server, run, say);
     registerBudgetTools(server, run, say);
+    registerGoalTools(server, run, say);
   }, {
     serverInfo: { name: "homefund", version: pkg.version },
     instructions: t("instructions"),
