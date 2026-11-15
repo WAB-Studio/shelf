@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 
-import { cardFront } from "@/lib/log/anki";
+import { cardFront } from "@/lib/log/card";
 import { isPhraseRow } from "@/lib/log/outcome";
 import { readWordStory } from "@/lib/log/story";
 import { readWordStudy } from "@/lib/log/summary";

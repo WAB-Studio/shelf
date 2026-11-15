@@ -1984,3 +1984,28 @@ Taken by the user, delegated to the build.
 - **A card draws the sense the reader tapped** (RL-85). Each sense of a word with several carries «Aprender este sentido»;
   the one in force reads «Es el que aprendes», and with no tap it is the first.
 - **The finished review says how many new entries wait** behind the cap of 20 a day (RL-88).
+
+### Decisions of 2026-11-12
+
+Taken by the user, delegated to the build.
+
+- **The review behaves like Anki's** (RL-91). A learning step due within 20 minutes comes back in the same session: the session never
+  says «Terminaste por hoy» while one waits, it says «Vuelve una en N min» under the waiting count, counts the minutes down and shows the
+  entry itself when it is due. The queue is built again on a reload and when the tab regains focus; the card on screen stays.
+- **A card with no tap draws the sense most plausibly meant.** The first sense when the dictionary ranked the word by real use; otherwise
+  the first common noun, because the fallback order puts a verb before a noun (`tree` is «árbol»). The word's page leads with it too.
+- **An empty record sends the reader to the search.** The review's closing screen reads «Buscar una palabra», a link to `/`, in place
+  of «Ir al registro», which would open another empty screen.
+- **The CSV for Anki is the card of the app** (RL-92). The back carries the sense the app draws, its part of speech in Spanish, up to
+  three translations and the definition, then a blank line and the reader's own sentence with the word in bold; a phrase carries its
+  translation alone. Lines are separated by `<br>` and the file declares `#html:true`. A device with no copy of the dictionary
+  downloads the logged line instead, and a muted 14 px line under «N tarjetas para Anki descargadas» says so (`log.study.ankiPlain`).
+
+Taken by the user: the review travels with the account (RL-93), replacing «no viaja» of 2026-11-08.
+
+- **`/cuenta` says where the review lives, in one line under the copy state** (RL-94). With no account: «Tu repaso también vive solo en este dispositivo.», under the
+  invitation. Signed in and not yet confirmed: «Al empezar, tu repaso también viaja con la cuenta…». Confirmed: «Tu repaso viaja con la cuenta…». A retired device:
+  «Tu repaso se queda en este dispositivo.» No new control, no new state: it is a line of the same «Copia» section, in the muted ink of its neighbours.
+- **The confirmation before «Vaciar el registro» carries one more line under its body** (RL-94): with an account, that the account keeps the review if the
+  reader empties only this device and loses it if the account is emptied too; with none, that the review lives only here and goes with the record.
+- **No board was drawn.** Both are lines of copy in screens already approved.

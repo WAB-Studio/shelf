@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 
 import { civilDay } from "@/lib/format/zone";
+import { lookupInstalled } from "@/lib/dictionary/lookup-many";
 import { buildAnkiExport, readAnkiCounts } from "@/lib/log/anki";
 import { LOG_DELETED_EVENT } from "@/lib/log/delete";
 import { buildExport } from "@/lib/log/export";
@@ -16,7 +17,7 @@ type ExportState = { kind: "idle" } | { kind: "building" } | { kind: "done" } | 
 type AnkiState =
   | { kind: "idle" }
   | { kind: "building" }
-  | { kind: "done"; cards: number; skipped: number; pending: number }
+  | { kind: "done"; cards: number; skipped: number; pending: number; plain: boolean }
   | { kind: "failed" };
 type AnkiCounts = { kind: "loading" } | { kind: "ready"; cards: number; words: number; pending: number; skipped: number } | { kind: "failed" };
 
@@ -41,6 +42,7 @@ function downloadBlob(blob: Blob, fileName: string): void {
 
 export function ExportPanel() {
   const t = useTranslations("log");
+  const tWord = useTranslations("word");
   const [countState, setCountState] = useState<CountState>({ kind: "loading" });
   const [exportState, setExportState] = useState<ExportState>({ kind: "idle" });
   const [ankiCounts, setAnkiCounts] = useState<AnkiCounts>({ kind: "loading" });
@@ -107,9 +109,13 @@ export function ExportPanel() {
   async function handleAnki(): Promise<void> {
     setAnkiState({ kind: "building" });
     try {
-      const { csv, cards, skipped, pending } = await buildAnkiExport();
+      // The dictionary's Worker is raised here, for this download alone: opening `/registro` mounts none (RNL-08).
+      const { csv, cards, skipped, pending, plain } = await buildAnkiExport(
+        { pos: (pos) => tWord(`pos.${pos}`) },
+        lookupInstalled,
+      );
       downloadBlob(new Blob([csv], { type: "text/csv;charset=utf-8" }), exportFileName(new Date(), "-anki.csv"));
-      setAnkiState({ kind: "done", cards, skipped, pending });
+      setAnkiState({ kind: "done", cards, skipped, pending, plain });
     } catch {
       setAnkiState({ kind: "failed" });
     }
@@ -204,6 +210,11 @@ export function ExportPanel() {
                   <Text size="2" muted>
                     {t("study.ankiDone", { cards: ankiState.cards })}
                   </Text>
+                  {ankiState.plain && (
+                    <Text size="2" muted>
+                      {t("study.ankiPlain")}
+                    </Text>
+                  )}
                   {ankiState.pending > 0 && (
                     <Text size="2" muted>
                       {t("study.ankiPending", { count: ankiState.pending })}

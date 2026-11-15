@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { reviewAnswerSchema, reviewRequestSchema } from "./review-protocol";
+
 // The wire format of the account copy (RL-22). The client driver and the
 // route handler both import this file, so the shape a `fetch` sends is
 // exactly the shape the handler parses — one schema, not two hand-kept in
@@ -91,6 +93,9 @@ export const syncRequestSchema = z.object({
   // own string beside `since`: marks and rows are ordered by different clocks.
   tombstones: z.array(tombstoneSchema).max(SYNC_BATCH).default([]),
   tombstonesSince: z.string().min(1).nullable().default(null),
+  // The review's cards, senses and deletions ride the same round (RL-93). Defaulted: a client installed before
+  // the review travelled sends none, and a round with none answers none.
+  review: reviewRequestSchema.nullable().default(null),
 });
 
 // What the server answers: how many of the uploaded rows it accepted, the
@@ -115,6 +120,8 @@ export const syncResponseSchema = z.object({
   // answer still parses it.
   tombstones: z.array(tombstoneSchema).default([]),
   tombstoneCursor: z.string().min(1).nullable().default(null),
+  // The review's own page of this round (RL-93); null from a server that does not carry it.
+  review: reviewAnswerSchema.nullable().default(null),
 });
 
 // ---- the cursor ----

@@ -1,97 +1,22 @@
 "use server";
 
 import { refresh } from "next/cache";
-import { z } from "zod";
 
-import { upsertDebtTerms } from "@/db/queries/debt-terms";
-import { getSettlementCurrencies } from "@/db/queries/transactions";
-import { BASE_CURRENCY } from "@/lib/currency";
-import { requireMinor } from "@/lib/action-amounts";
-import { pgErrorCode } from "@/lib/db-error";
-import { ActionError } from "@/lib/errors";
+import { saveDebtTerms } from "@/db/queries/debt-write";
 import { authActionClient } from "@/lib/safe-action";
-import {
-  debtTermsSchema,
-  percentToFraction,
-  refineDebtTermsAmounts,
-} from "@/lib/validation/debt-terms";
-
-// The `assert_debt_terms_liability` trigger raises 23514 when the account is not
-// a liability; a denied write reads the same as terms that were never there, and
-// so does an account deleted under the open dialog — the policy is the account's.
-// 23503 is the net under that: a reference gone after it was picked.
-function mapDebtTermsError(error: unknown): never {
-  const code = pgErrorCode(error);
-  if (code === "42501") throw new ActionError("errors.notFound");
-  if (code === "23514") throw new ActionError("debts.errors.notLiability");
-  if (code === "23503") throw new ActionError("errors.referenceGone");
-  throw error;
-}
+import { debtTermsSchema } from "@/lib/validation/debt-terms";
 
 /**
- * Writes or rewrites the debt profile of a liability account (RF-78, RF-80). The
- * scope comes from the account through RLS, so no owner or group travels here;
- * the rate and the minimum percentage convert to their DB fractions.
- *
- * Every amount is read in the currency the account settles in, read off the
- * account and never off the payload (RF-121): a limit and a minimum are
- * denominated in what the card bills in. The rule that bounds them is the very
- * refinement the form runs, against the currency read back here (RNF-10). An
- * account the policies do not show answers no currency, and the upsert below is
- * refused by the same policy.
+ * Writes or rewrites the debt profile of a liability account (RF-78, RF-80); the write is
+ * `saveDebtTerms`'s, shared with `/mcp`. Refused or not, the screen reloads: a stale save leaves
+ * it showing the terms that landed first.
  */
 export const saveDebtTermsAction = authActionClient
   .inputSchema(debtTermsSchema)
-  .action(
-    async ({
-      parsedInput: {
-        accountId,
-        debtKind,
-        annualRate,
-        minimumPayment,
-        minimumPaymentPct,
-        creditLimit,
-        statementCutOffDay,
-        paymentDueDay,
-        aval,
-      },
-    }) => {
-      const settlement = await getSettlementCurrencies({
-        fromAccountId: accountId,
-        toAccountId: null,
-      });
-      const currency = settlement.from ?? BASE_CURRENCY;
-
-      const amounts = { minimumPayment, creditLimit, aval };
-      const verdict = z
-        .custom<typeof amounts>()
-        .superRefine(refineDebtTermsAmounts(currency))
-        .safeParse(amounts);
-      if (!verdict.success) throw new ActionError(verdict.error.issues[0].message);
-
-      let saved: Awaited<ReturnType<typeof upsertDebtTerms>>;
-      try {
-        saved = await upsertDebtTerms({
-          accountId,
-          debtKind,
-          annualRate: percentToFraction(annualRate),
-          minimumPaymentCents:
-            minimumPayment != null ? requireMinor(minimumPayment) : null,
-          minimumPaymentPct: minimumPaymentPct != null ? percentToFraction(minimumPaymentPct) : null,
-          creditLimitCents: creditLimit != null ? requireMinor(creditLimit) : null,
-          statementCutOffDay: statementCutOffDay ?? null,
-          paymentDueDay: paymentDueDay ?? null,
-          avalCents: aval != null ? requireMinor(aval) : null,
-          // The form writes terms onto a debt that had none (RF-156): any found are someone else's.
-          keepOthers: true,
-        });
-      } catch (error) {
-        mapDebtTermsError(error);
-      }
-
-      // Refused or not, the screen reloads: a stale save leaves it showing the terms that landed first.
+  .action(async ({ parsedInput }) => {
+    try {
+      return await saveDebtTerms(parsedInput);
+    } finally {
       refresh();
-      if (saved === "stale") throw new ActionError("errors.stale");
-      return { accountId: saved.accountId };
-    },
-  );
+    }
+  });

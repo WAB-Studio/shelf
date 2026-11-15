@@ -151,6 +151,7 @@
       "ankiPreparing": "Preparando las tarjetas…",
       "ankiDone": "{cards, plural, one {# tarjeta para Anki descargada} other {# tarjetas para Anki descargadas}}",
       "ankiFailed": "No se pudo preparar el archivo para Anki",
+      "ankiPlain": "Este dispositivo aún no tiene el diccionario: las palabras llevan la traducción guardada, sin categoría ni definición. Búscalas o abre una palabra para instalarlo y vuelve a descargar.",
       "ankiSkipped": "{count, plural, one {# palabra no va: no tiene traducción guardada. Si la buscaste hace tiempo, búscala otra vez y tendrá tarjeta.} other {# palabras no van: no tienen traducción guardada. Si las buscaste hace tiempo, búscalas otra vez y tendrán tarjeta.}}",
       "ankiPending": "{count, plural, one {# palabra espera respuesta: entra en Anki cuando la tenga.} other {# palabras esperan respuesta: entran en Anki cuando la tengan.}}",
       "ankiNone": "Para Anki: {words, plural, one {tu palabra no tiene traducción guardada. Si la buscaste hace tiempo, búscala otra vez y tendrá tarjeta.} other {ninguna de tus # palabras tiene traducción guardada. Si las buscaste hace tiempo, búscalas otra vez y tendrán tarjeta.}}",
@@ -196,6 +197,8 @@
       "localBody": "Tu cuenta conserva su copia, y un dispositivo nuevo que entre a ella volverá a verla.",
       "accountAction": "Vaciar aquí y en mi cuenta",
       "accountBody": "Se lleva también lo que registraron tus otros dispositivos.",
+      "reviewAccount": "Tu repaso viaja con la cuenta: si vacías solo en este dispositivo, tu cuenta lo conserva; si vacías también la cuenta, se va con ella.",
+      "reviewLocal": "Tu repaso vive solo en este dispositivo: se va con el registro.",
       "wiping": "Vaciando…",
       "failed": "No se pudo vaciar el registro",
       "retry": "Reintentar"
@@ -242,6 +245,10 @@
       "failedAction": "Reintentar",
       "noSessionTitle": "Tu registro vive solo en este dispositivo",
       "noSessionBody": "Con una cuenta guardas una copia de tu registro. Sin ella, nada sale de aquí.",
+      "noSessionReview": "Tu repaso también vive solo en este dispositivo.",
+      "reviewConfirm": "Al empezar, tu repaso también viaja con la cuenta: cada palabra sigue donde la dejaste en tus otros dispositivos.",
+      "reviewTravels": "Tu repaso viaja con la cuenta: cada palabra sigue donde la dejaste en tus otros dispositivos.",
+      "reviewRetired": "Tu repaso se queda en este dispositivo.",
       "noSessionAction": "Entrar con mi correo",
       "confirmTitle": "Copiar tu registro a {email}",
       "confirmBody": "Hasta que lo confirmes, nada sale de este dispositivo.",
@@ -379,6 +386,7 @@
     "nextDue": "{when, select, today {La próxima vuelve hoy a las {time}.} tomorrow {La próxima vuelve mañana.} other {La próxima vuelve el {date}.}}",
     "empty": "Lo que busques aparece aquí para repasarlo.",
     "backToRecord": "Ir al registro",
+    "searchWord": "Buscar una palabra",
     "reviewedWord": "Repasaste «{word}».",
     "dueAfterWord": "{kind, select, words {{count, plural, one {Hoy te toca # palabra más.} other {Hoy te tocan # palabras más.}}} phrases {{count, plural, one {Hoy te toca # frase más.} other {Hoy te tocan # frases más.}}} other {{count, plural, one {Hoy te toca # entrada más.} other {Hoy te tocan # entradas más.}}}}",
     "reviewToday": "Repasar lo de hoy",
@@ -405,7 +413,7 @@
     },
     "waiting": "{kind, select, words {{count, plural, one {Queda # palabra para repetir en un momento.} other {Quedan # palabras para repetir en un momento.}}} phrases {{count, plural, one {Queda # frase para repetir en un momento.} other {Quedan # frases para repetir en un momento.}}} other {{count, plural, one {Queda # entrada para repetir en un momento.} other {Quedan # entradas para repetir en un momento.}}}}",
     "newWaiting": "{kind, select, entries {{count, plural, one {Espera # entrada nueva: entra mañana, con el tope de {cap} al día.} other {Esperan # entradas nuevas: entran mañana, con el tope de {cap} al día.}}} phrases {{count, plural, one {Espera # frase nueva: entra mañana, con el tope de {cap} al día.} other {Esperan # frases nuevas: entran mañana, con el tope de {cap} al día.}}} other {{count, plural, one {Espera # palabra nueva: entra mañana, con el tope de {cap} al día.} other {Esperan # palabras nuevas: entran mañana, con el tope de {cap} al día.}}}}",
-    "waitingIn": "Vuelve en {minutes} min",
+    "waitingIn": "Vuelve una en {minutes} min",
     "reviewNow": "Repasar ya"
   }
 }

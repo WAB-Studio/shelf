@@ -13,9 +13,21 @@ import { importStatement, previewStatement, StatementError } from "@/db/queries/
 import { actAsCredentialOwner } from "@/db/session";
 import { MONTH_PATTERN, lastClosedMonth } from "@/lib/dates";
 import { ABOVE_USUAL_FACTOR, USUAL_WINDOW_MONTHS } from "@/lib/month-review-rules";
-import { ActionError } from "@/lib/errors";
+import { ActionError, DATABASE_REFUSALS } from "@/lib/errors";
 import { env } from "@/lib/env";
 import { pgErrorCode } from "@/lib/db-error";
+import { DESTROY, READ, titled } from "@/lib/mcp/annotations";
+import { registerDebtTools } from "@/lib/mcp/debt-tools";
+import { registerBudgetTools } from "@/lib/mcp/budget-tools";
+import { registerGoalTools } from "@/lib/mcp/goal-tools";
+import { registerPlannedPaymentTools } from "@/lib/mcp/planned-payment-tools";
+import { registerRecurringTools } from "@/lib/mcp/recurring-tools";
+import { accountRow, registerAccountTools } from "@/lib/mcp/account-tools";
+import { registerDebtStatementTools } from "@/lib/mcp/statement-tools";
+import { registerReportTools } from "@/lib/mcp/report-tools";
+import { registerReviewTools } from "@/lib/mcp/review-tools";
+import { registerMemberTools } from "@/lib/mcp/member-tools";
+import { registerDeleteTools } from "@/lib/mcp/delete-tools";
 import { BatchRefusal, registerInboxTools } from "@/lib/mcp/inbox-tools";
 import { registerLabelTools } from "@/lib/mcp/label-tools";
 import { registerMemberDebtTools } from "@/lib/mcp/member-debt-tools";
@@ -35,12 +47,13 @@ export const RESOURCE_METADATA_PATH = "/.well-known/oauth-protected-resource/mcp
 
 // A tool answers outside a request, where next-intl's request config does not run.
 const t = createTranslator({ locale: "es", messages: { mcp: es.mcp }, namespace: "mcp" });
+const say = (key: string) => t(key as never);
 
 // A write refuses in the key a form would show; the whole catalogue is read, since those keys live in
 // every namespace. A key the catalogue lacks answers the generic sentence, never the key itself.
 const tForm = createTranslator({ locale: "es", messages: es });
-function refusal(key: string): string {
-  return tForm.has(key as never) ? tForm(key as never) : t("errors.unknown");
+function refusal(key: string, values?: Record<string, string>): string {
+  return tForm.has(key as never) ? tForm(key as never, values as never) : t("errors.unknown");
 }
 
 // The owner `withMcpAuth` carries, put there by the route's `verify` alone.
@@ -67,8 +80,10 @@ async function run(ctx: ServerContext, load: (owner: string) => Promise<unknown>
     if (error instanceof BatchRefusal) {
       return text({ error: refusal(error.messageKey), deliveryId: error.deliveryId, ...(error.field ? { field: error.field } : {}) }, true);
     }
-    if (error instanceof ActionError) return text({ error: refusal(error.messageKey) }, true);
-    console.error("mcp tool failed:", error instanceof Error ? error.name : "unknown", pgErrorCode(error) ?? "");
+    if (error instanceof ActionError) return text({ error: refusal(error.messageKey, error.values) }, true);
+    const code = pgErrorCode(error);
+    if (code !== undefined && Object.hasOwn(DATABASE_REFUSALS, code)) return text({ error: refusal(DATABASE_REFUSALS[code]) }, true);
+    console.error("mcp tool failed:", error instanceof Error ? error.name : "unknown", code ?? "");
     return text({ error: t("errors.unknown") }, true);
   }
 }
@@ -78,43 +93,35 @@ const MONTH = z.string().regex(MONTH_PATTERN);
 function registerReadTools(server: McpServer): void {
   server.registerTool(
     "list_accounts",
-    { description: t("tools.listAccounts"), inputSchema: z.object({}), annotations: { readOnlyHint: true } },
-    (_input, ctx) =>
+    {
+      ...titled(say, "listAccounts"),
+      description: t("tools.listAccounts"),
+      inputSchema: z.object({ archived: z.boolean().optional().describe(t("params.accountsArchived")) }),
+      annotations: READ,
+    },
+    (input: { archived?: boolean }, ctx) =>
       run(ctx, async () =>
-        (await listAccounts({ archived: false })).map((account) => ({
-          id: account.id,
-          name: account.name,
-          kind: account.kind,
-          subtype: account.subtype,
-          scope: account.groupId === null ? "personal" : "fund",
-          institution: account.institution,
-          lastFour: account.lastFour ?? null,
-          // The account this one is a pocket of, null for an account of its own (RF-173); a parent's balances are its free part.
-          parentAccountId: account.parentAccountId ?? null,
-          // The fund member this account is in the name of (RF-181), null for an account of everyone.
-          holderMemberId: account.holderMemberId ?? null,
-          holderName: account.holderName ?? null,
-          settlementCurrency: account.settlementCurrency,
-          // What update_account takes back: the opening as the form shows it (a liability's debt positive), its date and the stamp.
-          openingBalanceCents: account.kind === "liability" ? -account.initialBalanceCents : account.initialBalanceCents,
-          balanceOn: account.initialBalanceOn,
-          updatedAt: account.updatedAt,
-          balances: account.balances,
-          canWrite: account.canWrite,
-        })),
+        (await listAccounts({ archived: input.archived ?? false })).map(accountRow),
       ),
   );
 
   // RF-181, RF-182: the ids holderMemberId, contributedByMemberId and madeByMemberId take.
   server.registerTool(
     "list_members",
-    { description: t("tools.listMembers"), inputSchema: z.object({}), annotations: { readOnlyHint: true } },
-    (_input, ctx) =>
+    {
+      ...titled(say, "listMembers"),
+      description: t("tools.listMembers"),
+      inputSchema: z.object({ archived: z.boolean().optional().describe(t("params.membersArchived")) }),
+      annotations: READ,
+    },
+    (input: { archived?: boolean }, ctx) =>
       run(ctx, async (owner) =>
-        (await listCallerMembers(owner, { archived: false })).map((member) => ({
+        (await listCallerMembers(owner, { archived: input.archived ?? false })).map((member) => ({
           id: member.id,
           name: member.name,
+          role: member.role,
           hasLogin: member.userId !== null,
+          archived: member.archivedAt !== null,
         })),
       ),
   );
@@ -124,9 +131,10 @@ function registerReadTools(server: McpServer): void {
   server.registerTool(
     "review_month",
     {
+      ...titled(say, "reviewMonth"),
       description: t("tools.reviewMonth"),
       inputSchema: z.object({ month: MONTH.optional().describe(t("tools.monthParam")) }),
-      annotations: { readOnlyHint: true },
+      annotations: READ,
     },
     (input: { month?: string }, ctx) => {
       const month = input.month ?? lastClosedMonth();
@@ -140,9 +148,10 @@ function registerReadTools(server: McpServer): void {
   server.registerTool(
     "spending_patterns",
     {
+      ...titled(say, "spendingPatterns"),
       description: t("tools.spendingPatterns", { factor: ABOVE_USUAL_FACTOR, window: USUAL_WINDOW_MONTHS, growth: GROWTH_PERCENT }),
       inputSchema: z.object({ months: z.number().int().min(1).max(24).optional().describe(t("tools.monthsParam")) }),
-      annotations: { readOnlyHint: true },
+      annotations: READ,
     },
     (input: { months?: number }, ctx) => run(ctx, () => getSpendingPatterns(input.months ?? 12)),
   );
@@ -153,7 +162,7 @@ function registerReadTools(server: McpServer): void {
 function registerStatementTools(server: McpServer): void {
   server.registerTool(
     "preview_statement",
-    { description: t("tools.previewStatement"), inputSchema: statementSchema, annotations: { readOnlyHint: true } },
+    { ...titled(say, "previewStatement"), description: t("tools.previewStatement"), inputSchema: statementSchema, annotations: READ },
     (input, ctx) =>
       run(ctx, async () => {
         const preview = await previewStatement(input);
@@ -169,9 +178,10 @@ function registerStatementTools(server: McpServer): void {
   server.registerTool(
     "import_statement",
     {
+      ...titled(say, "importStatement"),
       description: t("tools.importStatement"),
       inputSchema: statementImportSchema,
-      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
+      annotations: DESTROY,
     },
     (input, ctx) => run(ctx, () => importStatement(input)),
   );
@@ -181,12 +191,23 @@ export function buildHandler(): (request: Request) => Promise<Response> {
   return createMcpHandler((server) => {
     registerReadTools(server);
     registerStatementTools(server);
-    registerLedgerTools(server, run, (key) => t(key as never));
-    registerInboxTools(server, run, (key) => t(key as never));
-    registerMemberDebtTools(server, run, (key) => t(key as never));
-    registerRecipientTools(server, run, (key) => t(key as never));
-    registerThirdPartyCreditTools(server, run, (key) => t(key as never));
-    registerLabelTools(server, run, (key) => t(key as never));
+    registerLedgerTools(server, run, say);
+    registerInboxTools(server, run, say);
+    registerMemberDebtTools(server, run, say);
+    registerRecipientTools(server, run, say);
+    registerThirdPartyCreditTools(server, run, say);
+    registerLabelTools(server, run, say);
+    registerDebtTools(server, run, say);
+    registerBudgetTools(server, run, say);
+    registerGoalTools(server, run, say);
+    registerPlannedPaymentTools(server, run, say);
+    registerRecurringTools(server, run, say);
+    registerAccountTools(server, run, say);
+    registerDebtStatementTools(server, run, say);
+    registerReportTools(server, run, say);
+    registerReviewTools(server, run, say);
+    registerMemberTools(server, run, say);
+    registerDeleteTools(server, run, say);
   }, {
     serverInfo: { name: "homefund", version: pkg.version },
     instructions: t("instructions"),

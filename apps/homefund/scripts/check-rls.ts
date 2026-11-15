@@ -5357,7 +5357,9 @@ const INSERT_GRANT_GAPS: Record<string, string[]> = {
 // The columns `authenticated` holds NO UPDATE on, in the same shape as the INSERT map.
 // `ingest_deliveries.silenced_on_arrival` is deliberately absent: it carries an UPDATE
 // grant, so it is no gap here — the trigger alone writes it on the way in, which is why
-// the INSERT map above lists it.
+// the INSERT map above lists it. `duplicate_of_id`, `reject_reason`, `proposed_description`,
+// `merchant_key` and `merchant_label` are absent for the same reason (RF-208): an original still
+// waiting is marked as repeated or given the business a receipt names.
 const UPDATE_GRANT_GAPS: Record<string, string[]> = {
   // A reconciliation is final: no column is writable.
   account_reconciliations: [
@@ -5436,20 +5438,18 @@ const UPDATE_GRANT_GAPS: Record<string, string[]> = {
     "credential_id",
     "extracted_identifier",
     "external_ref",
+    "from_email",
     "id",
-    "merchant_key",
-    "merchant_label",
     "owner_user_id",
     "proposed_account_id",
     "proposed_amount_cents",
     "proposed_category_id",
-    "proposed_description",
     "proposed_direction",
     "proposed_occurred_at",
     "proposed_to_account_id",
     "raw_text",
+    "receipt",
     "recipient_id",
-    "reject_reason",
     "shape_hash",
     "updated_at",
   ],

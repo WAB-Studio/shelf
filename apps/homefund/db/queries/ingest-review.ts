@@ -259,6 +259,23 @@ export async function listOwnMerchants(): Promise<OwnMerchantRow[]> {
   );
 }
 
+/** Deletes one learned merchant and answers the row it held; null when it is not the caller's. */
+export async function forgetMerchant(merchantId: string): Promise<OwnMerchantRow | null> {
+  const [deleted] = await withUserDb((tx) =>
+    tx
+      .delete(ingestMerchants)
+      .where(eq(ingestMerchants.id, merchantId))
+      .returning({
+        id: ingestMerchants.id,
+        merchantKey: ingestMerchants.merchantKey,
+        merchantLabel: ingestMerchants.merchantLabel,
+        state: ingestMerchants.state,
+      }),
+  );
+
+  return deleted ?? null;
+}
+
 export async function acceptDelivery({
   deliveryId,
   fromAccountId,

@@ -3,7 +3,7 @@ import type { Page } from "@playwright/test";
 
 import messages from "../messages/es.json";
 
-// RL-85: the sense a card draws is the one the reader taps in the answer; with no tap, the first.
+// RL-85, RL-91: the sense a card draws is the one the reader taps in the answer; with no tap, the one most plausibly meant.
 
 async function deleteTranslator(page: Page): Promise<void> {
   await page.addInitScript(() => {

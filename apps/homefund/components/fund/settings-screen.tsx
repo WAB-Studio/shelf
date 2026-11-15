@@ -3,7 +3,6 @@ import { getTranslations } from "next-intl/server";
 import { KeepSignedInSelect } from "@/components/auth/keep-signed-in-select";
 import { SignOutButton } from "@/components/auth/sign-out-button";
 import { FUND_SETTINGS, SETTINGS_KEYS, destinations } from "@/components/fund/destinations";
-import { LanguageSwitcher } from "@/components/language-switcher";
 import { ThemeSwitcher } from "@/components/theme-switcher";
 import {
   Box,
@@ -20,7 +19,7 @@ import {
  * bar's sheet is a phone surface and the sidebar has no room for these eight.
  * It reads the same catalogue the sheet reads, so a destination entered there
  * arrives here without an edit, and it holds the sheet's own language, theme and
- * sign-out controls (RF-46, RF-47, RF-54).
+ * sign-out controls (RF-47, RF-54).
  *
  * The fund's settings lead the phone's list alone: from `sm` up the chevron beside
  * the fund name reaches them, and no surface offers a destination twice.
@@ -77,7 +76,6 @@ export async function SettingsScreen({ hasGroup, keepSignedIn }: { hasGroup: boo
             align={{ initial: "stretch", md: "center" }}
             gap="3"
           >
-            <LanguageSwitcher width={{ initial: "100%", md: "11rem" }} showText />
             <ThemeSwitcher width={{ initial: "100%", md: "11rem" }} showText />
             <KeepSignedInSelect saved={keepSignedIn} width={{ initial: "100%", md: "16rem" }} />
             <SignOutButton />

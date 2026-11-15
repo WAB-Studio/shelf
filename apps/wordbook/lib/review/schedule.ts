@@ -1,4 +1,4 @@
-import { createEmptyCard, fsrs, Rating, type Card, type Grade } from "ts-fsrs";
+import { createEmptyCard, fsrs, Rating, State, type Card, type Grade } from "ts-fsrs";
 import { civilDay } from "@/lib/format/zone";
 
 // RL-68: a word's place in the review, as the device keeps it. Plain numbers, so a row reads back from
@@ -100,11 +100,20 @@ export function intervalUnit(ms: number): { unit: "minutes" | "hours" | "days"; 
   return { unit: "days", count: Math.round(hours / 24) };
 }
 
-// RL-78: an answer that puts the entry away for less than this brings it back in the same session.
-const SESSION_REQUEUE_MS = 5 * 60_000;
+// RL-91: Anki's learn-ahead. A learning step (1, 6, 10 minutes) due within this span is asked in the same
+// session, and the session is not finished while one waits.
+export const LEARN_AHEAD_MS = 20 * 60_000;
 
-export function staysInSession(card: ReviewCard, now: number): boolean {
-  return card.due - now <= SESSION_REQUEUE_MS;
+// A word asked for alone has no queue to wait for: only a minute's «Otra vez» comes straight back.
+export const ON_DEMAND_REQUEUE_MS = 5 * 60_000;
+
+export function staysInSession(card: ReviewCard, now: number, span: number = LEARN_AHEAD_MS): boolean {
+  return card.due - now <= span;
+}
+
+// An entry on a learning or relearning step: the ones the learn-ahead brings in before their time.
+export function isLearning(card: ReviewCard): boolean {
+  return card.state === State.Learning || card.state === State.Relearning;
 }
 
 // Where a due moment falls from the reader's own calendar: later today, tomorrow or past that.

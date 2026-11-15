@@ -3444,3 +3444,10 @@ Measured 2026-11-10: `sw-nuevo-con-shell` ran `route.fetch` on the service worke
 
 - Never `context.route` the worker's script; end such a test with `page.unrouteAll({ behavior: "ignoreErrors" })`.
 - Read a red in a test that touches no route as the previous test's leftover.
+
+## A second request in WordBook's copy round breaks the specs that read the round's end
+
+Measured 2026-11-12, PR #915: the review's cards first went up in a `/api/review/sync` of their own, after the record's `/api/log/sync`. Three specs went red: `registro-borrar.spec.ts:522` and `:556` (`networkidle` after a reload never came: the stubbed record round answered, the unstubbed second POST hung to its 20 s timeout), `registro.spec.ts:743` (the hide's `syncNow()` joined the round still in flight) and `sync.spec.ts:606` (reading `lastSyncedAt` right after the record's answer).
+
+- Carry anything new a round needs inside `/api/log/sync`'s request and answer. A stub of that route answers none of it, and the driver leaves that part's cursors where they were.
+- Keep `lastSyncedAt` the last write of a round and nothing slower than IndexedDB after it: the specs above read the round's end from it.

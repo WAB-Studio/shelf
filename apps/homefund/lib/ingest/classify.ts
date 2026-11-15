@@ -1,8 +1,19 @@
 // RF-196: whether a bank email reports a movement that happened. Pure: subject and body in, verdict out.
 
-export type NonMovementReason = "failed" | "statement" | "support" | "reminder" | "promotion" | "no_movement_signal";
+export type NonMovementReason =
+  | "failed"
+  | "statement"
+  | "support"
+  | "reminder"
+  | "promotion"
+  | "bill"
+  | "no_movement_signal";
 
-export type EmailVerdict = { movement: true } | { movement: false; reason: NonMovementReason };
+// `receipt`: a PSE, gateway or merchant notice of a payment that a bank or wallet alert reports first (RF-208).
+// `priced`: the email names a figure; a merchant's thanks may carry none, and a phone number is not one.
+export type EmailVerdict =
+  | { movement: true; receipt: boolean; priced: boolean }
+  | { movement: false; reason: NonMovementReason };
 
 function fold(value: string): string {
   return value
@@ -18,15 +29,39 @@ const STATEMENT_SUBJECT = /\bextracto\b/;
 const SUPPORT_SUBJECT =
   /\b(caso|casos|pqr|radicado|reclamo|ticket|sobre tu mensaje|reporte de movimiento)\b/;
 
+// A bill the person still has to pay (RF-207): an invoice, a payment slip or the bank's «ya puedes pagarla».
+// Judged on the subject first, since a bill's footer often says «si ya pagaste, omite este mensaje».
+const BILL_SUBJECT = /^(?:factura\b|\d{5,};[^;]+;|ticket de pago\b)/;
+const BILL_BODY =
+  /\b(esta lista para que la pagues|factura que inscribiste|ticket de banco para pago|valor a pagar|tu factura claro esta disponible)\b/;
+// A reminder that a due date is near, whatever its footer says about payments already made.
+const REMINDER_SUBJECT = /\b(paga tu|pague su|recuerda pagar|tu fecha de pago|desde cualquier dispositivo)\b/;
+// A store's notices about an order or a question: the payment itself came in another email.
+const NOT_A_MOVEMENT_SUBJECT =
+  /\b(llego tu compra|la factura de la compra|las facturas de la compra|tienes un mensaje nuevo|te respondieron|esta en camino|opinando|tu opinion|transaccion\s+#?\d*\s*pendiente)\b/;
 // What says money moved: a verb or phrase of the alerts the banks send.
 const MOVEMENT =
-  /\b(compraste|pagaste|transferiste|recibiste|retiraste|te enviaron|te transfirieron|te consignaron|pago exitoso|pago hecho|entro tu pago|aprobada|tu plata de \w+ ya esta)\b/;
+  /\b(compraste|pagaste|transferiste|recibiste|retiraste|te enviaron|te transfirieron|te consignaron|pago exitoso|pago hecho|entro tu pago|aprobada|tu plata de \w+ ya esta|hiciste un pago|realizaste (?:una transferencia|un pago|un envio|un retiro)|total pagado|monto recibido)\b/;
+// A wording that only counts as the subject: in a body it turns up in footers and newsletters.
+const MOVEMENT_SUBJECT =
+  /\b(envio con bre-?b exitoso|transaccion\s+#?\d*\s*(?:aprobada|aceptada)|compra por \$|comprobante de pago|tu recibo|se le acaba de pagar)\b/;
+// The notices a payment leaves after the bank's own alert: PSE's, a payment gateway's, a merchant's receipt.
+const RECEIPT_SUBJECT =
+  /^(?:pse\b|ecollect:|transaccion aprobada\b|compraste\b)|\b(?:transaccion\s+#?\d*\s*(?:aprobada|aceptada)\s+en|compra por \$|pagos a terceros|se le acaba de pagar|gracias por tu compra|tu recibo|ya entro tu pago)\b/;
+// Nequi's own alert is also titled «Comprobante de pago», and says who paid with what.
+const COMPROBANTE_SUBJECT = /\bcomprobante de pago\b/;
+const PAID_WITH_NEQUI = /\bpagaste con nequi\b/;
+// A merchant's thanks for a purchase carries its invoice as an attachment and names no figure.
+const AMOUNTLESS_RECEIPT_SUBJECT = /\bgracias por tu compra\b/;
 // «Alertas y Notificaciones» is the sender's title; its body must still name the operation.
 const ALERT_TITLE = /\balertas y notificaciones\b/;
 const ALERT_OPERATION = /\b(compra|pago|transferencia|retiro)\b/;
 // A money figure: «$52.300», «COP 9.100,00», a number with a thousands group, or a bare
 // figure of four or more digits such as Nequi's «2467834.2», as long as it is not a year.
 const AMOUNT = /(?:\$|\bcop)\s?\d|\d{1,3}(?:[.,]\d{3})+|\b(?!(?:19|20)\d{2}\b)\d{4,}(?:[.,]\d{1,2})?\b/;
+
+// A figure with its currency mark, the only kind a thank-you email can be trusted to mean as a price.
+const MARKED_AMOUNT = /(?:\$|\bcop)\s?\d/;
 
 // Only weighed when no movement phrase is present: bills to pay, offers and awareness mail.
 const REMINDER =
@@ -44,9 +79,17 @@ export function classifyBankEmail({ subject, body }: { subject: string; body: st
 
   if (FAILED.test(text)) return { movement: false, reason: "failed" };
   if (STATEMENT_SUBJECT.test(subjectText)) return { movement: false, reason: "statement" };
+  if (BILL_SUBJECT.test(subjectText)) return { movement: false, reason: "bill" };
+  if (REMINDER_SUBJECT.test(subjectText)) return { movement: false, reason: "reminder" };
+  if (NOT_A_MOVEMENT_SUBJECT.test(subjectText)) return { movement: false, reason: "no_movement_signal" };
   if (SUPPORT_SUBJECT.test(subjectText)) return { movement: false, reason: "support" };
-  const signal = MOVEMENT.test(text) || (ALERT_TITLE.test(text) && ALERT_OPERATION.test(text));
-  if (signal && AMOUNT.test(text)) return { movement: true };
+  if (BILL_BODY.test(text)) return { movement: false, reason: "bill" };
+  const receipt =
+    RECEIPT_SUBJECT.test(subjectText) || (COMPROBANTE_SUBJECT.test(subjectText) && !PAID_WITH_NEQUI.test(text));
+  if (AMOUNTLESS_RECEIPT_SUBJECT.test(subjectText)) return { movement: true, receipt, priced: MARKED_AMOUNT.test(text) };
+  const signal =
+    MOVEMENT.test(text) || MOVEMENT_SUBJECT.test(subjectText) || (ALERT_TITLE.test(text) && ALERT_OPERATION.test(text));
+  if (signal && AMOUNT.test(text)) return { movement: true, receipt, priced: true };
   if (REMINDER.test(text)) return { movement: false, reason: "reminder" };
   if (PROMOTION.test(text)) return { movement: false, reason: "promotion" };
   return { movement: false, reason: "no_movement_signal" };

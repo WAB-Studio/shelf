@@ -307,18 +307,22 @@ export async function updateCategory({
 // when given. Each movement touched is rewritten as it was, which the row trigger stamps with a new
 // `updated_at` (the column itself is not grantable), so an edit opened before it reads stale.
 // `dryRun` only counts the lines. The split trigger refuses a kind or scope that disagrees (23514).
+// `expectedCount` moves nothing unless exactly that many lines are in scope when the statement runs, so
+// what a person saw counted is what moves; a mismatch answers 0.
 export async function moveCategoryLines({
   fromCategoryId,
   toCategoryId,
   from,
   to,
   dryRun = false,
+  expectedCount,
 }: {
   fromCategoryId: string;
   toCategoryId: string;
   from?: string;
   to?: string;
   dryRun?: boolean;
+  expectedCount?: number;
 }): Promise<number> {
   const scope = sql`
     from transaction_splits s join transactions t on t.id = s.transaction_id
@@ -331,9 +335,11 @@ export async function moveCategoryLines({
       dryRun
         ? sql`select count(*)::int as moved ${scope}`
         : sql`
-            with moved as (
+            with picked as (select s.id ${scope}), moved as (
               update transaction_splits set category_id = ${toCategoryId}
-              where id in (select s.id ${scope}) returning transaction_id
+              where id in (select id from picked)
+                ${expectedCount === undefined ? sql`` : sql`and (select count(*) from picked) = ${expectedCount}`}
+              returning transaction_id
             ), touched as (
               update transactions set description = description
               where id in (select transaction_id from moved) returning id

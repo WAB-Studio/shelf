@@ -28,7 +28,7 @@ ctx.onmessage = (event: MessageEvent<WorkerRequest>) => {
     case "boot":
       if (!bootStarted) {
         bootStarted = true;
-        void runInstallFlow();
+        void runInstallFlow(request.installedOnly === true);
       }
       break;
     case "retry":
@@ -71,11 +71,12 @@ function toFailure(error: unknown): InstallFailure {
   return "storage";
 }
 
-async function runInstallFlow(): Promise<void> {
+async function runInstallFlow(installedOnly = false): Promise<void> {
   try {
     await resolveDictionary({
       read: readInstalled,
       install: async (quiet) => {
+        if (installedOnly) throw new Error("No copy on the device.", { cause: "storage" });
         if (quiet) return install({ onProgress: () => {} });
         const onProgress = throttled(100, (progress) => postStatus({ state: "installing", progress }));
         onProgress({ received: 0, total: null });

@@ -343,6 +343,9 @@ function SignedOutForm() {
         <Text size="2" muted>
           {t("copy.noSessionBody")}
         </Text>
+        <Text size="2" muted>
+          {t("copy.noSessionReview")}
+        </Text>
         <KeepLog />
       </Flex>
 
@@ -646,6 +649,9 @@ function SyncedSection({
       <Flex direction="column" gap="1">
         <MetaLabel>{t("copy.label")}</MetaLabel>
         {renderCopyState()}
+        <Text size="2" muted>
+          {syncState.retired ? t("copy.reviewRetired") : confirmed || confirmedHere ? t("copy.reviewTravels") : t("copy.reviewConfirm")}
+        </Text>
         <KeepLog />
       </Flex>
 

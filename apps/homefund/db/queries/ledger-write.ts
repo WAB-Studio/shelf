@@ -4,7 +4,7 @@ import { sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { createAccount } from "@/db/queries/accounts";
-import { createCategory, moveCategoryLines } from "@/db/queries/categories";
+import { createCategory, deleteCategory, moveCategoryLines } from "@/db/queries/categories";
 import type { CategoryScope } from "@/db/queries/categories";
 import { getUserGroup } from "@/db/queries/groups";
 import {
@@ -445,10 +445,23 @@ export async function moveCategoryMovements(input: {
   from?: string;
   to?: string;
   dryRun?: boolean;
+  expectedCount?: number;
 }): Promise<{ moved: number; dryRun: boolean }> {
   try {
     return { moved: await moveCategoryLines(input), dryRun: input.dryRun ?? false };
   } catch (error) {
     return mapTransactionError(error);
   }
+}
+
+/** Deletes a category (RF-63); one that movements or budgets still use stays. */
+export async function dropCategory({ categoryId }: { categoryId: string }): Promise<void> {
+  let deleted: boolean;
+  try {
+    deleted = await deleteCategory({ categoryId });
+  } catch (error) {
+    if (pgErrorCode(error) === "23503") throw new ActionError("errors.categoryInUse");
+    throw error;
+  }
+  if (!deleted) throw new ActionError("errors.notFound");
 }

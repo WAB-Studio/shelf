@@ -969,6 +969,8 @@ void (async () => {
     await emailIngestSuite();
     await widgetKeySuite();
     await renderSuite(LATE_RENDER_CASES, httpCookie);
+    await emailDuplicateSuite();
+    await mcpClassesSuite();
   } catch (error) {
     assert(
       next("the run completed"),
@@ -1696,7 +1698,7 @@ async function emailIngestSuite(): Promise<void> {
   assert(
     next("a forwarded bank email with a bearer key lands as a delivery of the bank's words alone"),
     landed.status === 200 &&
-      row?.text === `Alertas y Notificaciones Bancolombia: Compraste COP9.100,00 en ZXQ MAIL ${tag} con tu T.Cred *4872.`,
+      row?.text === `Bancolombia: Compraste COP9.100,00 en ZXQ MAIL ${tag} con tu T.Cred *4872.`,
     `it answered ${landed.status} ${JSON.stringify(landed.body)}, landed ${JSON.stringify(row)}`,
   );
 
@@ -1801,5 +1803,142 @@ async function widgetKeySuite(): Promise<void> {
       !source.includes("__SITE__") &&
       !source.includes("whk_"),
     `it answered ${script.status} ${script.headers.get("content-type")}`,
+  );
+}
+
+// RF-208: the receipt of a payment a bank alert already reported never becomes a second proposal, in either order.
+async function emailDuplicateSuite(): Promise<void> {
+  const userId = httpUserId;
+  if (!userId) throw new Error("emailDuplicateSuite ran before the session was read");
+  const token = await edgeCredential(userId);
+  const post = async (subject: string, text: string) => {
+    const response = await fetch(`${HARNESS_BASE_URL}/api/webhooks/email`, {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+      body: JSON.stringify({ from: "yo@example.com", subject, text }),
+    });
+    const body = (await response.json()) as Record<string, unknown>;
+    if (typeof body.deliveryId === "string") landedDeliveries.push(body.deliveryId);
+    return { status: response.status, body, id: String(body.deliveryId) };
+  };
+  const row = async (id: string) => {
+    const [found] = await fixtureSql<
+      { status: string; reason: string | null; of: string | null; description: string | null }[]
+    >`select status, reject_reason as reason, duplicate_of_id as of, proposed_description as description
+      from ingest_deliveries where id = ${id}`;
+    return found;
+  };
+  const figure = () => {
+    const pesos = 3_000_000 + Math.floor(Math.random() * 900_000);
+    return `$${pesos.toLocaleString("es-CO")}`;
+  };
+  const business = (tag: string) => `EMPRESA ${tag}`;
+  const alertText = (amount: string) => `Bancolombia: Transferiste ${amount} desde tu cuenta *4872 a la cuenta *1234.`;
+  const receiptText = (amount: string, tag: string) =>
+    `La transacción en ${business(tag)} por un valor de ${amount},00 fue Aprobada Referencia: ${tag}`;
+  const receiptSubject = (tag: string) => `Transacción aprobada en ${business(tag)} [${tag}]`;
+
+  const tagA = randomUUID().slice(0, 8).toUpperCase();
+  const amountA = figure();
+  const alert = await post("Alertas y Notificaciones", alertText(amountA));
+  const receipt = await post(receiptSubject(tagA), receiptText(amountA, tagA));
+  const alertRow = await row(alert.id);
+  const receiptRow = await row(receipt.id);
+  assert(
+    next("a receipt after the bank alert of the same payment lands rejected as a duplicate, linked to it, and names the business"),
+    receipt.body.status === "rejected" &&
+      receipt.body.reason === "duplicate" &&
+      receiptRow?.reason === "duplicate" &&
+      receiptRow.of === alert.id &&
+      alertRow?.status === "pending" &&
+      alertRow.description === business(tagA),
+    `alert ${JSON.stringify(alertRow)}, receipt ${JSON.stringify(receiptRow)} ${JSON.stringify(receipt.body)}`,
+  );
+
+  const tagB = randomUUID().slice(0, 8).toUpperCase();
+  const amountB = figure();
+  const early = await post(receiptSubject(tagB), receiptText(amountB, tagB));
+  const earlyBefore = await row(early.id);
+  const late = await post("Alertas y Notificaciones", alertText(amountB));
+  const earlyAfter = await row(early.id);
+  const lateRow = await row(late.id);
+  assert(
+    next("a receipt that waited alone becomes a duplicate of the bank alert that arrives after it"),
+    earlyBefore?.status === "pending" &&
+      earlyAfter?.status === "rejected" &&
+      earlyAfter.reason === "duplicate" &&
+      earlyAfter.of === late.id &&
+      lateRow?.status === "pending",
+    `receipt ${JSON.stringify(earlyBefore)} then ${JSON.stringify(earlyAfter)}, alert ${JSON.stringify(lateRow)}`,
+  );
+
+  const otherAlert = await post("Alertas y Notificaciones", alertText(figure()));
+  const alone = await post(receiptSubject(tagA), receiptText(figure(), tagA));
+  assert(
+    next("a receipt with no alert of its figure stays pending, and an alert never repeats an alert"),
+    alone.body.status === "pending" && otherAlert.body.status === "pending",
+    `they answered ${JSON.stringify(alone.body)} and ${JSON.stringify(otherAlert.body)}`,
+  );
+
+  // The same alert by SMS and by email is one movement; the same channel twice stays two.
+  const postSms = async (text: string) => {
+    const response = await fetch(`${HARNESS_BASE_URL}/api/webhooks/ingest`, {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+      body: JSON.stringify({ text }),
+    });
+    const body = (await response.json()) as Record<string, unknown>;
+    if (typeof body.deliveryId === "string") landedDeliveries.push(body.deliveryId);
+    return { body, id: String(body.deliveryId) };
+  };
+  const amountC = figure();
+  const phone = await postSms(`Bancolombia: Compraste ${amountC} en COMERCIO ${tagA} con tu T.Cred *4872.`);
+  const mail = await post("Alertas y Notificaciones", `Bancolombia: Compraste COP${amountC.slice(1)},00 en COMERCIO ${tagA} con tu T.Cred *4872.`);
+  const phoneRow = await row(phone.id);
+  const mailRow = await row(mail.id);
+  const amountD = figure();
+  await postSms(`Bancolombia: Compraste ${amountD} en CAFE ${tagA} con tu T.Cred *4872.`);
+  const second = await postSms(`Bancolombia: Compraste ${amountD} en CAFE ${tagA} con tu T.Cred *4872 otra vez.`);
+  assert(
+    next("the email of an alert the phone already sent lands as a duplicate of it, and the same channel twice stays pending"),
+    phoneRow?.status === "pending" &&
+      mail.body.reason === "duplicate" &&
+      mailRow?.of === phone.id &&
+      second.body.status === "pending",
+    `phone ${JSON.stringify(phoneRow)}, email ${JSON.stringify(mailRow)} ${JSON.stringify(mail.body)}, second ${JSON.stringify(second.body)}`,
+  );
+}
+
+// RF-225: the live server declares the classes a client's permission prompt reads. Its own suite, called last, so its H numbers
+// land after every other one.
+async function mcpClassesSuite(): Promise<void> {
+  const userId = httpUserId;
+  if (!userId) throw new Error("mcpClassesSuite ran before the session was read");
+  const claims = JSON.stringify({ sub: userId, role: "authenticated", aud: "authenticated" });
+  const id = randomUUID();
+  const mcpToken = `whk_${randomBytes(32).toString("base64url")}`;
+  await fixtureSql.begin(async (tx) => {
+    await tx`select set_config('request.jwt.claims', ${claims}, true)`;
+    await tx`
+      insert into webhook_credentials (id, owner_user_id, name, token_hash, purpose)
+      values (${id}, ${userId}, ${"Harness HTTP mcp key"}, ${createHash("sha256").update(mcpToken).digest("hex")}, 'mcp')`;
+  });
+  track("webhook_credentials", id);
+  const listed = await fetch(`${HARNESS_BASE_URL}/mcp`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${mcpToken}`, "content-type": "application/json", accept: "application/json, text/event-stream" },
+    body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" }),
+  });
+  const raw = await listed.text();
+  const frame = raw.startsWith("{") ? raw : (raw.split("\n").find((line) => line.startsWith("data:")) ?? "").slice(5);
+  const exposed: { name: string; title?: string; annotations?: { readOnlyHint?: boolean; destructiveHint?: boolean } }[] =
+    frame ? (JSON.parse(frame).result?.tools ?? []) : [];
+  const destructive = (name: string) => exposed.find((one) => one.name === name)?.annotations?.destructiveHint === true;
+  assert(
+    next("/mcp lists every tool with a title and an honest class: reads are read-only, an import and a move to the fund are destructive"),
+    listed.status === 200 && exposed.length > 0 && exposed.every((one) => typeof one.title === "string" && one.title.length > 0) &&
+      exposed.filter((one) => one.annotations?.readOnlyHint === true).every((one) => /^(list_|get_|review_|spending_|preview_|movement_|propose_)/.test(one.name)) &&
+      destructive("import_statement") && destructive("move_account_to_fund"),
+    `it answered ${listed.status} with ${exposed.length} tools`,
   );
 }

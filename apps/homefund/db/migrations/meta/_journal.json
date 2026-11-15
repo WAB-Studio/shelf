@@ -687,6 +687,27 @@
       "when": 1794457474406,
       "tag": "0101_a_widget_has_its_own_key",
       "breakpoints": true
+    },
+    {
+      "idx": 102,
+      "version": "7",
+      "when": 1794776057428,
+      "tag": "0102_a_bill_is_not_a_payment",
+      "breakpoints": true
+    },
+    {
+      "idx": 103,
+      "version": "7",
+      "when": 1794776082928,
+      "tag": "0103_a_payment_is_one_movement",
+      "breakpoints": true
+    },
+    {
+      "idx": 104,
+      "version": "7",
+      "when": 1794776100415,
+      "tag": "0104_an_alert_by_email_and_by_sms_is_one",
+      "breakpoints": true
     }
   ]
 }

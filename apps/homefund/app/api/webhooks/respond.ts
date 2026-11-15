@@ -51,7 +51,7 @@ export async function deliver(
         deliveryId: result.deliveryId,
         status: result.status,
         duplicate: result.duplicate,
-        ...(email && !email.movement ? { reason: email.reason } : {}),
+        ...(email && !email.movement ? { reason: email.reason } : result.reason ? { reason: result.reason } : {}),
       },
       { status: 200 },
     );

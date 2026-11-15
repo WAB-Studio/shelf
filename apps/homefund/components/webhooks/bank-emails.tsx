@@ -2,6 +2,7 @@ import { useTranslations } from "next-intl";
 
 import { Button, CopyField, Flex, Heading, Link, Text } from "@/components/ui";
 import { ACTIVITYWATCH_RELEASES_URL } from "@/lib/android-app";
+import { BANK_EMAILS_GMAIL_QUERY } from "@/lib/gmail-filter";
 
 // RF-192: `oauthLine` is `<client_id> <client_secret>` as aw-timelog takes it, or null when the server has no Google client.
 export function BankEmails({
@@ -57,6 +58,15 @@ export function BankEmails({
           <Text size="2">1. {tf("step1")}</Text>
           <Text size="2">2. {tf("step2")}</Text>
           <Text size="2">3. {tf("step3")}</Text>
+          <CopyField
+            id="gmail-filter-query"
+            label={tf("queryLabel")}
+            value={BANK_EMAILS_GMAIL_QUERY}
+            copyLabel={tc("copy")}
+            copiedLabel={tc("copied")}
+            failedLabel={tc("copyFailed")}
+            multiline
+          />
           <Flex>
             <Button type="button" variant="soft" onClick={onIssue}>
               {tf("create")}

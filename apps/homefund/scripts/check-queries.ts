@@ -4163,6 +4163,21 @@ async function main(): Promise<void> {
   await connectionsSuite();
   await thirdPartyCreditSuite();
   await widgetSuite();
+  await learnedCategorySuite();
+  await mcpPermissionsSuite();
+  await mcpDebtsSuite();
+  await mcpMoveCountSuite();
+  await mcpBudgetsSuite();
+  await mcpGoalsSuite();
+  await mcpPlannedPaymentsSuite();
+  await mcpRecurringSuite();
+  await mcpInboxWholeSuite();
+  await mcpAccountLifecycleSuite();
+  await mcpStatementsSuite();
+  await mcpReportsSuite();
+  await mcpReviewSuite();
+  await mcpMembersSuite();
+  await mcpDeletesSuite();
 }
 
 // A member recorded without a login is someone in the fund: a leader whose fund holds one is not alone, so an
@@ -15290,6 +15305,117 @@ function mcpClient(POST: (request: Request) => Promise<Response>, token: string)
   return { rpc, tool };
 }
 
+// RF-225: every tool, sorted by name, with its annotation class as [readOnly, destructive, idempotent]; a tool's row is the
+// claim a client's permission prompt rests on. READ writes nothing; ADD only creates; ADD_ONCE creates under a key; OVERWRITE
+// replaces what is stored; DESTROY removes what a repeat cannot put back.
+const [READ_CLASS, ADD_CLASS, ADD_ONCE_CLASS, OVERWRITE_CLASS, DESTROY_CLASS] = [
+  [true, null, null],
+  [false, false, false],
+  [false, false, true],
+  [false, true, true],
+  [false, true, false],
+] as const;
+const TOOL_CLASSES = [
+  ["accept_deliveries", ...ADD_CLASS],
+  ["archive_account", ...OVERWRITE_CLASS],
+  ["archive_budget", ...OVERWRITE_CLASS],
+  ["archive_goal", ...OVERWRITE_CLASS],
+  ["archive_member", ...OVERWRITE_CLASS],
+  ["cancel_planned_payment", ...DESTROY_CLASS],
+  ["complete_counterparty", ...OVERWRITE_CLASS],
+  ["contribute_goal", ...ADD_CLASS],
+  ["create_account", ...ADD_CLASS],
+  ["create_budget", ...ADD_CLASS],
+  ["create_category", ...ADD_CLASS],
+  ["create_goal", ...ADD_CLASS],
+  ["create_label", ...ADD_CLASS],
+  ["create_member", ...ADD_CLASS],
+  ["create_planned_payment", ...ADD_CLASS],
+  ["create_recurring_rule", ...ADD_CLASS],
+  ["defer_purchase", ...OVERWRITE_CLASS],
+  ["delete_account", ...DESTROY_CLASS],
+  ["delete_budget", ...DESTROY_CLASS],
+  ["delete_category", ...DESTROY_CLASS],
+  ["delete_goal", ...DESTROY_CLASS],
+  ["delete_member_debt", ...DESTROY_CLASS],
+  ["delete_movement", ...DESTROY_CLASS],
+  ["delete_planned_payment", ...DESTROY_CLASS],
+  ["delete_recipient", ...DESTROY_CLASS],
+  ["delete_recurring_rule", ...DESTROY_CLASS],
+  ["forget_merchant", ...DESTROY_CLASS],
+  ["get_dashboard", ...READ_CLASS],
+  ["get_debt", ...READ_CLASS],
+  ["get_movement", ...READ_CLASS],
+  ["get_reconcile_sheet", ...READ_CLASS],
+  ["get_report", ...READ_CLASS],
+  ["import_statement", ...DESTROY_CLASS],
+  ["link_third_party_credit", ...ADD_CLASS],
+  ["list_accounts", ...READ_CLASS],
+  ["list_audit_log", ...READ_CLASS],
+  ["list_awaiting_counterparty", ...READ_CLASS],
+  ["list_budgets", ...READ_CLASS],
+  ["list_categories", ...READ_CLASS],
+  ["list_debts", ...READ_CLASS],
+  ["list_goal_contributions", ...READ_CLASS],
+  ["list_goals", ...READ_CLASS],
+  ["list_inbox", ...READ_CLASS],
+  ["list_labels", ...READ_CLASS],
+  ["list_member_debts", ...READ_CLASS],
+  ["list_members", ...READ_CLASS],
+  ["list_merchants", ...READ_CLASS],
+  ["list_movements", ...READ_CLASS],
+  ["list_planned_payments", ...READ_CLASS],
+  ["list_recipients", ...READ_CLASS],
+  ["list_reconciliations", ...READ_CLASS],
+  ["list_recurring_rules", ...READ_CLASS],
+  ["list_silenced_shapes", ...READ_CLASS],
+  ["list_third_party_credits", ...READ_CLASS],
+  ["mark_month_review", ...OVERWRITE_CLASS],
+  ["mark_movement_reviewed", ...OVERWRITE_CLASS],
+  ["merge_movements", ...DESTROY_CLASS],
+  ["move_account_to_fund", ...DESTROY_CLASS],
+  ["move_category_movements", ...OVERWRITE_CLASS],
+  ["movement_totals", ...READ_CLASS],
+  ["pause_recurring_rule", ...OVERWRITE_CLASS],
+  ["preview_statement", ...READ_CLASS],
+  ["propose_rate", ...READ_CLASS],
+  ["reconcile_account", ...OVERWRITE_CLASS],
+  ["record_account_statement", ...ADD_CLASS],
+  ["record_billed_amount", ...OVERWRITE_CLASS],
+  ["record_debt_payment", ...ADD_ONCE_CLASS],
+  ["record_member_debt", ...ADD_CLASS],
+  ["record_movement", ...ADD_ONCE_CLASS],
+  ["record_third_party_payment", ...ADD_ONCE_CLASS],
+  ["reject_deliveries", ...DESTROY_CLASS],
+  ["remove_goal_contribution", ...DESTROY_CLASS],
+  ["rename_member", ...OVERWRITE_CLASS],
+  ["restore_account", ...OVERWRITE_CLASS],
+  ["restore_budget", ...OVERWRITE_CLASS],
+  ["restore_goal", ...OVERWRITE_CLASS],
+  ["restore_member", ...OVERWRITE_CLASS],
+  ["restore_shape", ...OVERWRITE_CLASS],
+  ["resume_recurring_rule", ...OVERWRITE_CLASS],
+  ["review_month", ...READ_CLASS],
+  ["save_recipient", ...OVERWRITE_CLASS],
+  ["set_debt_terms", ...ADD_ONCE_CLASS],
+  ["settle_planned_payment", ...ADD_ONCE_CLASS],
+  ["spending_patterns", ...READ_CLASS],
+  ["undefer_purchase", ...DESTROY_CLASS],
+  ["unlink_third_party_credit", ...DESTROY_CLASS],
+  ["unmark_month_review", ...OVERWRITE_CLASS],
+  ["update_account", ...OVERWRITE_CLASS],
+  ["update_budget", ...OVERWRITE_CLASS],
+  ["update_category", ...OVERWRITE_CLASS],
+  ["update_fund", ...OVERWRITE_CLASS],
+  ["update_goal", ...OVERWRITE_CLASS],
+  ["update_label", ...OVERWRITE_CLASS],
+  ["update_movement", ...OVERWRITE_CLASS],
+  ["update_planned_payment", ...OVERWRITE_CLASS],
+  ["update_recurring_rule", ...OVERWRITE_CLASS],
+  ["update_third_party_credit", ...OVERWRITE_CLASS],
+  ["withdraw_cash", ...ADD_ONCE_CLASS],
+];
+
 async function mcpDoorSuite(): Promise<void> {
   console.log("");
   const tag = randomUUID().slice(0, 8);
@@ -15328,11 +15454,16 @@ async function mcpDoorSuite(): Promise<void> {
     rpc(ingestToken, "tools/list"),
     rpc(token, "tools/list"),
   ]);
-  const names = (listed.body?.result?.tools ?? []).map((one: { name: string }) => one.name).sort();
+  const listedTools: { name: string; title?: string; annotations?: { readOnlyHint?: boolean; destructiveHint?: boolean; idempotentHint?: boolean } }[] =
+    listed.body?.result?.tools ?? [];
+  const classes = listedTools
+    .map((one) => [one.name, one.annotations?.readOnlyHint ?? null, one.annotations?.destructiveHint ?? null, one.annotations?.idempotentHint ?? null])
+    .sort((a, b) => (String(a[0]) < String(b[0]) ? -1 : 1));
+  const names = classes.map((one) => one[0]);
   assert(
     next("RF-144: /mcp answers 401 with no key, an unknown one or a webhook's, and lists its tools to a key for Claude"),
     anonymous.status === 401 && forged.status === 401 && webhookKey.status === 401 &&
-      JSON.stringify(names) === JSON.stringify(["accept_deliveries", "create_account", "create_category", "create_label", "delete_movement", "delete_recipient", "import_statement", "link_third_party_credit", "list_accounts", "list_categories", "list_inbox", "list_labels", "list_member_debts", "list_members", "list_movements", "list_recipients", "list_third_party_credits", "merge_movements", "move_account_to_fund", "move_category_movements", "preview_statement", "record_member_debt", "record_movement", "record_third_party_payment", "reject_deliveries", "review_month", "save_recipient", "spending_patterns", "update_account", "update_category", "update_label", "update_movement", "update_third_party_credit"]),
+      JSON.stringify(classes) === JSON.stringify(TOOL_CLASSES),
     `no key ${anonymous.status}, unknown key ${forged.status}, webhook key ${webhookKey.status}, tools ${JSON.stringify(names)}`,
   );
 
@@ -17217,11 +17348,11 @@ async function mcpCleanupSuite(): Promise<void> {
   );
 
   // Move lines: only category A, only the range, only the same kind.
-  const mixedKind = await tool("move_category_movements", { fromCategoryId: home, toCategoryId: salary });
-  const inRange = await tool("move_category_movements", { fromCategoryId: home, toCategoryId: dairy, from: "2026-03-07", to: "2026-03-07" });
+  const mixedKind = await tool("move_category_movements", { fromCategoryId: home, toCategoryId: salary, expectedCount: 1 });
+  const inRange = await tool("move_category_movements", { fromCategoryId: home, toCategoryId: dairy, from: "2026-03-07", to: "2026-03-07", expectedCount: 1 });
   const lineOf = async (id: string) => (await rows()).find((row) => row.id === id)?.splits.map((line) => line.categoryId);
   const scoped = (await lineOf(sourceId))?.[0] === dairy && (await lineOf(mergedId))?.filter((c) => c === home).length === 2;
-  const rest = await tool("move_category_movements", { fromCategoryId: home, toCategoryId: dairy });
+  const rest = await tool("move_category_movements", { fromCategoryId: home, toCategoryId: dairy, expectedCount: 2 });
   const byCategory = (await tool("list_movements", { accountId: account.accountId, categoryId: market })).value as { id: string }[];
   const paged = (await tool("list_movements", { accountId: account.accountId, limit: 1, offset: 1 })).value as { id: string }[];
   assert(
@@ -17237,7 +17368,7 @@ async function mcpCleanupSuite(): Promise<void> {
   const before = await stamp();
   const dry = await tool("move_category_movements", { fromCategoryId: flat, toCategoryId: market, dryRun: true });
   const untouchedLine = (await lineOf(probe))?.[0] === flat && (await stamp()) === before;
-  const wet = await tool("move_category_movements", { fromCategoryId: flat, toCategoryId: market });
+  const wet = await tool("move_category_movements", { fromCategoryId: flat, toCategoryId: market, expectedCount: (dry.value as { moved: number }).moved });
   const bumped = (await stamp()) !== before && (await lineOf(probe))?.[0] === market;
   assert(
     next("RF-176: move_category_movements with dryRun counts and writes nothing; a real move gives each movement a new updatedAt"),
@@ -19221,5 +19352,1378 @@ async function widgetSuite(): Promise<void> {
     next("RF-215: the widget summary costs three transactions fanned out, the light reads sharing one"),
     trips <= unit * 3 + 3,
     `${trips} round trips for the summary, ${unit} for a single read`,
+  );
+}
+
+// RF-210: a proposal arrives with the category the person's own movements of that counterparty agree on, taught by
+// recording or editing a movement or by accepting a delivery under another category; the key's default gives way to it,
+// a disagreeing pair or another person's history teaches nothing.
+async function learnedCategorySuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const today = todayInBogota();
+  const { recordIngestDelivery } = await import("@/db/queries/webhook-ingest");
+  const { acceptDelivery } = await import("@/db/queries/ingest-review");
+  const user = await createMembershipFreeUser();
+  const stranger = await createMembershipFreeUser();
+  const { accountId: bank } = await asUser(user, () =>
+    createAccount({
+      name: `Harness rf210 banco ${tag}`, kind: "asset", subtype: "bank", ownerUserId: user.id, groupId: null, isShared: false,
+      institution: null, lastFour: "3397", settlementCurrency: "COP", amountMinor: 900_000_00, balanceOn: shiftDate(today, -60),
+    }),
+  );
+  track("accounts", bank);
+  const mkCategory = async (name: string): Promise<string> => {
+    const { categoryId } = await asUser(user, () =>
+      createCategory({ scope: { ownerUserId: user.id }, name: `Harness rf210 ${name} ${tag}`, kind: "expense", parentId: null, color: "#0E7490" }),
+    );
+    track("categories", categoryId);
+    return categoryId;
+  };
+  const rent = await mkCategory("arriendo");
+  const food = await mkCategory("comida");
+  const snacks = await mkCategory("antojos");
+  const other = await mkCategory("otros");
+  const { id: credentialId } = await asUser(user, () =>
+    issueWebhookCredential({ name: `Harness rf210 ${tag}`, purpose: "ingest", defaultAccountId: bank, defaultCategoryId: other }),
+  );
+  keep("webhook_credentials", credentialId);
+
+  const record = async (description: string, categoryId: string, daysAgo: number): Promise<string> => {
+    const { transactionId } = await asUser(user, () =>
+      createTransaction({
+        fromAccountId: bank, toAccountId: null, amountCents: 50_000_00, occurredAt: shiftDate(today, -daysAgo), description,
+        externalRef: null, splits: [{ categoryId, amountCents: 50_000_00 }], labelIds: [],
+      }),
+    );
+    keep("transactions", transactionId);
+    return transactionId;
+  };
+  type Delivered = { id: string; category: string | null; source: string | null };
+  const deliver = async (owner: { id: string }, text: string): Promise<Delivered> => {
+    const result = await recordIngestDelivery({
+      ownerUserId: owner.id, credentialId, defaultAccountId: bank, defaultCategoryId: other,
+      payload: { text } as Parameters<typeof recordIngestDelivery>[0]["payload"],
+    });
+    const [row] = await fixtureSql<{ category: string | null; source: string | null }[]>`
+      select proposed_category_id as category, category_source as source from ingest_deliveries where id = ${result.deliveryId}`;
+    return { id: result.deliveryId, ...row };
+  };
+
+  const none = await deliver(user, `Rentabien${tag.replace(/\d/g, "")} 1200000 ${tag}`);
+  assert(
+    next("RF-210: a counterparty with no history keeps the key's default category"),
+    none.category === other && none.source === "credential_default",
+    JSON.stringify(none),
+  );
+
+  // Neither «Harness» (the first word of every account and category name here) nor a letter after the figure may
+  // reach the description, or its key stops reading as the movements' key.
+  const place = `Rentabien Tienda ${tag.replace(/\d/g, "x")}`;
+  await record(place, rent, 30);
+  const single = await deliver(user, `${place.toUpperCase()} 1200000 1`);
+  assert(
+    next("RF-210: a single movement is the whole history, matched without case, accents or digits, and wins over the key's default"),
+    single.category === rent && single.source === "merchant",
+    JSON.stringify(single),
+  );
+
+  await record(place, food, 5);
+  const split = await deliver(user, `${place} 1200000 2`);
+  assert(
+    next("RF-210: the two latest movements disagreeing teach nothing, so the default stays"),
+    split.category === other && split.source === "credential_default",
+    JSON.stringify(split),
+  );
+
+  const latest = await record(place, food, 1);
+  const agreed = await deliver(user, `${place} 1200000 3`);
+  assert(
+    next("RF-210: the two latest movements agreeing set the category, which recovers from the earlier disagreement"),
+    agreed.category === food && agreed.source === "merchant",
+    JSON.stringify(agreed),
+  );
+
+  await asUser(user, () =>
+    updateTransaction({
+      transactionId: latest, fromAccountId: bank, toAccountId: null, amountCents: 50_000_00, occurredAt: shiftDate(today, -1),
+      description: place, splits: [{ categoryId: snacks, amountCents: 50_000_00 }], labelIds: [],
+    }),
+  );
+  await record(place, snacks, 0);
+  const edited = await deliver(user, `${place} 1200000 4`);
+  assert(
+    next("RF-210: editing a movement's category teaches the new one once it and the next movement agree"),
+    edited.category === snacks && edited.source === "merchant",
+    JSON.stringify(edited),
+  );
+
+  const theirs = await deliver(stranger, `${place} 1200000 5`);
+  assert(
+    next("RF-210: another person's history teaches nothing to someone with none, who keeps the key's default"),
+    theirs.category === other && theirs.source === "credential_default",
+    JSON.stringify(theirs),
+  );
+
+  const sms = (extra: string) =>
+    `Bancolombia: Compraste $45.000 en HARNESS RF210 ${tag.toUpperCase().replace(/\d/g, "X")} con tu T.Deb *3397, el 11/11/2026 18:31. ${extra}`;
+  const firstSms = await deliver(user, sms("uno"));
+  await asUser(user, () =>
+    acceptDelivery({
+      deliveryId: firstSms.id, fromAccountId: bank, toAccountId: null, amountCents: 45_000_00, occurredAt: today,
+      description: `Harness rf210 compra ${tag}`, splits: [{ categoryId: food, amountCents: 45_000_00 }], labelIds: [],
+      contributedByMemberId: null, madeByMemberId: null,
+    }),
+  );
+  const secondSms = await deliver(user, sms("dos"));
+  const [{ state }] = await fixtureSql<{ state: string | null }[]>`
+    select (select state from ingest_merchants m where m.owner_user_id = d.owner_user_id and m.merchant_key = d.merchant_key) as state
+    from ingest_deliveries d where d.id = ${secondSms.id}`;
+  assert(
+    next("RF-210: accepting a delivery under another category than its default teaches its merchant, though one approval leaves the merchant only learning"),
+    firstSms.category === other && secondSms.category === food && secondSms.source === "merchant" && state === "learning",
+    `first ${JSON.stringify(firstSms)}, second ${JSON.stringify(secondSms)}, merchant ${state}`,
+  );
+
+  const pending = await asUser(user, () => listPendingDeliveries());
+  const learned = pending.find((one) => one.id === secondSms.id);
+  assert(
+    next("RF-210: the inbox reads a history-learned proposal as one tap, from its source and an untrusted merchant, with no further query"),
+    learned?.isComplete === true && learned.categorySource === "merchant" && learned.merchantState === "learning",
+    JSON.stringify(learned),
+  );
+}
+
+// RF-225: every tool declares a title and the class its weight deserves, a tool that removes or overwrites answers what it
+// changed, a bulk tool answers its count, and a database refusal reads as the form's sentence. Claude never handles a key.
+async function mcpPermissionsSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const { POST } = await import("@/app/mcp/route");
+  const owner = await createMembershipFreeUser();
+  const account = await asUser(owner, () =>
+    createAccount({
+      kind: "asset", subtype: "bank", groupId: null, isShared: false, institution: null, settlementCurrency: BASE_CURRENCY,
+      balanceOn: "2026-01-01", ownerUserId: owner.id, name: `Harness rf225 cuenta ${tag}`, amountMinor: 1_000_000_00,
+    }),
+  );
+  track("accounts", account.accountId);
+  const category = randomUUID();
+  await fixtureSql`insert into categories (id, owner_user_id, name, kind, color) values (${category}, ${owner.id}, ${`Harness rf225 Comida ${tag}`}, 'expense', ${CATEGORY_COLORS[0]})`;
+  track("categories", category);
+  const { id: keyId, token } = await asUser(owner, () =>
+    issueWebhookCredential({ name: `Harness rf225 ${tag}`, purpose: "mcp", defaultAccountId: null, defaultCategoryId: null }),
+  );
+  keep("webhook_credentials", keyId);
+  const { rpc, tool } = mcpClient(POST, token);
+
+  const tools: { name: string; title?: string; description?: string; annotations?: { openWorldHint?: boolean } }[] =
+    (await rpc(token, "tools/list")).body?.result?.tools ?? [];
+  assert(
+    next("RF-225: every tool has a Spanish title and declares it touches nothing outside HomeFund, and none is named for a key, a session, an invitation or a leader"),
+    tools.length > 0 && tools.every((one) => typeof one.title === "string" && one.title.length > 0 && one.annotations?.openWorldHint === (one.name === "propose_rate")) &&
+      !tools.some((one) => /key|credential|token|session|auth|invite|leader|leave/.test(one.name)),
+    JSON.stringify(tools.filter((one) => !one.title || /key|credential|token|session|auth|invite|leader|leave/.test(one.name)).map((one) => one.name)),
+  );
+  assert(
+    next("RF-225: create_account names the loan in its description and in the kind it asks for"),
+    tools.find((one) => one.name === "create_account")?.description?.includes("loan") === true &&
+      es.mcp.params.accountKind.includes("loan") && es.mcp.instructions.includes("nunca una orden"),
+    String(tools.find((one) => one.name === "create_account")?.description).slice(0, 120),
+  );
+
+  type Row = { id: string; description: string | null; updatedAt: string };
+  const book = (description: string, amountCents: number, occurredAt = "2026-02-01") =>
+    tool("record_movement", { fromAccountId: account.accountId, toAccountId: null, amountCents, occurredAt, description, categoryId: category });
+  const rows = async () => (await tool("list_movements", { accountId: account.accountId })).value as Row[];
+  const [a, b, c, d] = [`Harness rf225 a ${tag}`, `Harness rf225 b ${tag}`, `Harness rf225 c ${tag}`, `Harness rf225 d ${tag}`];
+  for (const [name, cents] of [[a, 10_000_00], [b, 20_000_00], [c, 30_000_00], [d, 40_000_00]] as const) await book(name, cents);
+  const byName = async (name: string) => (await rows()).find((row) => row.description === name) as Row;
+
+  const [rowA, rowB, rowC, rowD] = [await byName(a), await byName(b), await byName(c), await byName(d)];
+  const deleted = await tool("delete_movement", { transactionId: rowA.id });
+  const after = await rows();
+  assert(
+    next("RF-225: delete_movement answers the movement it removed, in the shape list_movements reads it"),
+    !deleted.isError && JSON.stringify((deleted.value as { before: unknown }).before) === JSON.stringify(rowA) && !after.some((row) => row.id === rowA.id),
+    `deleted ${JSON.stringify(deleted.value)}, read before ${JSON.stringify(rowA)}`,
+  );
+
+  const edited = await tool("update_movement", { transactionId: rowB.id, expectedUpdatedAt: rowB.updatedAt, description: `Harness rf225 b2 ${tag}` });
+  const before = (edited.value as { before: Record<string, unknown> }).before;
+  assert(
+    next("RF-225: update_movement answers the old value of each field it changed and nothing else"),
+    !edited.isError && JSON.stringify(Object.keys(before)) === JSON.stringify(["description"]) && before.description === b,
+    `edited ${JSON.stringify(edited.value)}`,
+  );
+
+  const merged = await tool("merge_movements", { transactionIds: [rowC.id, rowD.id] });
+  const originals = (merged.value as { originals: Row[] }).originals ?? [];
+  assert(
+    next("RF-225: merge_movements answers the originals it deleted"),
+    !merged.isError && originals.length === 2 && JSON.stringify(originals.map((row) => row.id).sort()) === JSON.stringify([rowC.id, rowD.id].sort()) &&
+      originals.every((row) => JSON.stringify(row) === JSON.stringify(row.id === rowC.id ? rowC : rowD)),
+    `merged ${JSON.stringify(merged.value)}`,
+  );
+
+  const label = await tool("create_label", { name: `Harness rf225 etiqueta ${tag}` });
+  const labelId = (label.value as { labelId: string }).labelId;
+  const recolored = await tool("update_label", { labelId, name: `Harness rf225 etiqueta 2 ${tag}` });
+  const saved = await tool("save_recipient", { identifier: `300${tag.replace(/\D/g, "1")}999`, name: `Harness rf225 dest ${tag}`, kind: "payee" });
+  const recipientId = (saved.value as { id: string }).id;
+  const gone = await tool("delete_recipient", { id: recipientId });
+  assert(
+    next("RF-225: update_label and delete_recipient answer what they overwrote or removed"),
+    (recolored.value as { before?: { name?: string } }).before?.name === `Harness rf225 etiqueta ${tag}` &&
+      (gone.value as { before?: { id?: string; name?: string } }).before?.id === recipientId &&
+      (gone.value as { before?: { name?: string } }).before?.name === `Harness rf225 dest ${tag}`,
+    `label ${JSON.stringify(recolored.value)}, recipient ${JSON.stringify(gone.value)}`,
+  );
+
+  const mine = ((await tool("list_accounts")).value as { id: string; updatedAt: string }[]).find((row) => row.id === account.accountId);
+  const late = await tool("update_account", { accountId: account.accountId, expectedUpdatedAt: mine?.updatedAt, balanceOn: "2026-03-01" });
+  assert(
+    next("RF-225: a database refusal a form already maps (an opening after a movement) reads as its sentence, not as an unknown error"),
+    late.isError && (late.value as { error: string }).error === es.accounts.errors.openingAfterMovement,
+    `late ${JSON.stringify(late.value)}`,
+  );
+
+  const deliver = (name: string) =>
+    fixtureSql.begin(async (tx) => {
+      await tx`select set_config('request.jwt.claims', ${JSON.stringify({ sub: owner.id, role: "authenticated", aud: "authenticated" })}, true)`;
+      const [row] = await tx<{ id: string }[]>`
+        insert into ingest_deliveries (external_ref, raw_text, shape_hash, proposed_amount_cents, proposed_account_id, proposed_category_id,
+          category_source, proposed_direction, proposed_occurred_at, proposed_description)
+        values (${`harness-rf225-${name}-${tag}`}, ${`Harness rf225 mensaje ${name}`}, ${createHash("sha256").update(`rf225-${name}-${tag}`).digest("hex")},
+          ${5_000_00}, ${account.accountId}, ${category}, 'interpreter', 'expense', '2026-03-10', ${`Harness rf225 ${name}`})
+        returning id`;
+      return row.id;
+    });
+  const [one, two, three] = [await deliver("uno"), await deliver("dos"), await deliver("tres")];
+  const accepted = await tool("accept_deliveries", { deliveries: [{ id: one }, { id: two }] });
+  const rejected = await tool("reject_deliveries", { ids: [three] });
+  assert(
+    next("RF-225: accept_deliveries and reject_deliveries answer how many they touched"),
+    (accepted.value as { count?: number }).count === 2 && (rejected.value as { count?: number }).count === 1,
+    `accepted ${JSON.stringify(accepted.value)}, rejected ${JSON.stringify(rejected.value)}`,
+  );
+
+  const may = leafKeys(es.oauth.may, "may");
+  const never = leafKeys(es.oauth.never, "never");
+  assert(
+    next("RF-225: the consent screen promises, in both languages, what Claude may do after a yes and never keys, who is in the fund or acting unasked"),
+    JSON.stringify(may) === JSON.stringify(leafKeys(en.oauth.may, "may")) && JSON.stringify(never) === JSON.stringify(leafKeys(en.oauth.never, "never")) &&
+      never.includes("never.keys") && never.includes("never.unconfirmed") && !never.includes("never.delete") && may.includes("may.write"),
+    `${JSON.stringify(may)} / ${JSON.stringify(never)}`,
+  );
+}
+
+// RF-227: Claude opens a credit with its terms, reads the Deudas screen and one debt, and pays it down as «Abonar» does,
+// through the screen's own queries, schemas and write functions.
+async function mcpDebtsSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const { POST } = await import("@/app/mcp/route");
+  const [owner, stranger] = [await createMembershipFreeUser(), await createMembershipFreeUser()];
+  const mkBank = (user: HarnessUser, name: string) =>
+    asUser(user, () =>
+      createAccount({
+        kind: "asset", subtype: "bank", groupId: null, isShared: false, institution: null, settlementCurrency: BASE_CURRENCY,
+        balanceOn: "2026-01-01", ownerUserId: user.id, name: `Harness rf227 ${name} ${tag}`, amountMinor: 50_000_000_00,
+      }),
+    );
+  const [bank, strangerBank] = [await mkBank(owner, "banco"), await mkBank(stranger, "ajena")];
+  track("accounts", bank.accountId);
+  track("accounts", strangerBank.accountId);
+  const clientOf = async (user: HarnessUser) => {
+    const { id, token } = await asUser(user, () =>
+      issueWebhookCredential({ name: `Harness rf227 ${tag}`, purpose: "mcp", defaultAccountId: null, defaultCategoryId: null }),
+    );
+    keep("webhook_credentials", id);
+    return mcpClient(POST, token).tool;
+  };
+  const [tool, strangerTool] = [await clientOf(owner), await clientOf(stranger)];
+
+  const opened = await tool("create_account", {
+    name: `Harness rf227 crédito ${tag}`, kind: "liability", subtype: "loan", openingBalanceCents: 10_000_000_00, balanceOn: "2026-01-01",
+  });
+  const loanId = (opened.value as { accountId: string }).accountId;
+  track("accounts", loanId);
+  const terms = { accountId: loanId, debtKind: "installment", annualRatePct: "24", paymentDueDay: 5, minimumPaymentCents: 400_000_00 };
+  const set = await tool("set_debt_terms", terms);
+  type Detail = { terms: { annualRate: string; paymentDueDay: number; minimumPaymentCents: number } | null; account: { id: string } };
+  const detail = (await tool("get_debt", { accountId: loanId })).value as Detail;
+  assert(
+    next("RF-227: a credit made with create_account takes its terms with set_debt_terms, and get_debt reads them back as the screen does"),
+    !opened.isError && !set.isError && Number(detail.terms?.annualRate) === 0.24 && detail.terms?.paymentDueDay === 5 &&
+      detail.terms.minimumPaymentCents === 400_000_00 && detail.account.id === loanId,
+    `opened ${JSON.stringify(opened.value)}, set ${JSON.stringify(set.value)}, detail ${JSON.stringify(detail.terms)}`,
+  );
+
+  const onAsset = await tool("set_debt_terms", { ...terms, accountId: bank.accountId });
+  const same = await tool("set_debt_terms", terms);
+  const other = await tool("set_debt_terms", { ...terms, annualRatePct: "30" });
+  assert(
+    next("RF-227: set_debt_terms refuses an asset account, answers the same values again as done and refuses other values on a debt that has terms"),
+    onAsset.isError && (onAsset.value as { error: string }).error === es.debts.errors.notLiability && !same.isError &&
+      other.isError && (other.value as { error: string }).error === es.errors.stale,
+    `asset ${JSON.stringify(onAsset.value)}, same ${JSON.stringify(same.value)}, other ${JSON.stringify(other.value)}`,
+  );
+
+  const second = await tool("create_account", {
+    name: `Harness rf227 tarjeta ${tag}`, kind: "liability", subtype: "card", openingBalanceCents: 0, balanceOn: "2026-01-01",
+  });
+  const cardId = (second.value as { accountId: string }).accountId;
+  track("accounts", cardId);
+  const tooLarge = await tool("set_debt_terms", { accountId: cardId, debtKind: "revolving", annualRatePct: "28", minimumPaymentCents: 10_000_000_000_000 });
+  const both = await tool("set_debt_terms", { accountId: cardId, debtKind: "revolving", annualRatePct: "28", minimumPaymentCents: 1_000_00, minimumPaymentPct: "5" });
+  assert(
+    next("RF-227: set_debt_terms reads each amount in the account's currency (a minimum over its ceiling is refused) and refuses a minimum given as an amount and a percentage"),
+    tooLarge.isError && (tooLarge.value as { error: string }).error === es.debts.errors.minimumTooLarge &&
+      both.isError && (both.value as { error: string }).error === es.debts.errors.minimumBothSet,
+    `large ${JSON.stringify(tooLarge.value)}, both ${JSON.stringify(both.value)}`,
+  );
+
+  const listed = (await tool("list_debts")).value as { totals: { owedCents: number }; withTerms: { accountId: string }[]; withoutTerms: { accountId: string }[] };
+  const direct = await asUser(owner, () => getDebtsScreenData());
+  assert(
+    next("RF-227: list_debts answers the figures the Deudas screen's own query answers, the credit with terms and the card without"),
+    listed.totals.owedCents === direct.totals.owedCents && listed.withTerms.some((row) => row.accountId === loanId) &&
+      listed.withoutTerms.some((row) => row.accountId === cardId) && listed.totals.owedCents >= 10_000_000_00,
+    `listed ${JSON.stringify(listed.totals)}, direct ${JSON.stringify(direct.totals.owedCents)}`,
+  );
+
+  const strangerRead = await strangerTool("get_debt", { accountId: loanId });
+  const strangerTerms = await strangerTool("set_debt_terms", terms);
+  assert(
+    next("RF-227: another person's debt reads as not found and takes no terms"),
+    strangerRead.isError && (strangerRead.value as { error: string }).error === es.errors.notFound && strangerTerms.isError,
+    `read ${JSON.stringify(strangerRead.value)}, terms ${JSON.stringify(strangerTerms.value)}`,
+  );
+
+  const balanceOf = async (id: string) =>
+    ((await tool("list_accounts")).value as { id: string; balances: { balanceCents: number }[] }[]).find((row) => row.id === id)?.balances[0]?.balanceCents ?? 0;
+  const owedBefore = await balanceOf(loanId);
+  const requestRef = randomUUID();
+  const pay = { fromAccountId: bank.accountId, toAccountId: loanId, amountCents: 1_000_000_00, occurredOn: "2026-03-01", requestRef };
+  const paid = await tool("record_debt_payment", pay);
+  const again = await tool("record_debt_payment", pay);
+  const owedAfter = await balanceOf(loanId);
+  const movements = (await tool("list_movements", { accountId: loanId })).value as { kind: string; amountCents: number }[];
+  assert(
+    next("RF-227: record_debt_payment writes one transfer from the asset into the debt, the debt's balance moves by the payment, and the same requestRef books it once"),
+    !paid.isError && !again.isError && (paid.value as { transactionId: string }).transactionId === (again.value as { transactionId: string }).transactionId &&
+      Math.abs(owedAfter - owedBefore) === 1_000_000_00 && movements.length === 1 && movements[0].kind === "transfer",
+    `paid ${JSON.stringify(paid.value)}, again ${JSON.stringify(again.value)}, balance ${owedBefore} -> ${owedAfter}, movements ${JSON.stringify(movements)}`,
+  );
+
+  const fromCard = await tool("record_debt_payment", { fromAccountId: cardId, toAccountId: loanId, amountCents: 1_000_00, occurredOn: "2026-03-02" });
+  assert(
+    next("RF-227: a payment from a liability account is refused as not from an asset"),
+    fromCard.isError && (fromCard.value as { error: string }).error === es.installments.errors.notFromAsset,
+    `fromCard ${JSON.stringify(fromCard.value)}`,
+  );
+}
+
+// RF-226: a move of a category's lines runs in two steps: the count a dry run gave, which the person confirmed, is the count
+// that moves. A call without it, or with a count the lines no longer match, moves nothing.
+async function mcpMoveCountSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const { POST } = await import("@/app/mcp/route");
+  const owner = await createMembershipFreeUser();
+  const account = await asUser(owner, () =>
+    createAccount({
+      kind: "asset", subtype: "bank", groupId: null, isShared: false, institution: null, settlementCurrency: BASE_CURRENCY,
+      balanceOn: "2026-01-01", ownerUserId: owner.id, name: `Harness rf226 cuenta ${tag}`, amountMinor: 1_000_000_00,
+    }),
+  );
+  track("accounts", account.accountId);
+  const [source, target] = [randomUUID(), randomUUID()];
+  for (const [id, name] of [[source, "origen"], [target, "destino"]] as const) {
+    await fixtureSql`insert into categories (id, owner_user_id, name, kind, color) values (${id}, ${owner.id}, ${`Harness rf226 ${name} ${tag}`}, 'expense', ${CATEGORY_COLORS[0]})`;
+    track("categories", id);
+  }
+  const { id: keyId, token } = await asUser(owner, () =>
+    issueWebhookCredential({ name: `Harness rf226 ${tag}`, purpose: "mcp", defaultAccountId: null, defaultCategoryId: null }),
+  );
+  keep("webhook_credentials", keyId);
+  const { tool } = mcpClient(POST, token);
+  for (const day of ["2026-02-01", "2026-02-02", "2026-02-03"]) {
+    await tool("record_movement", { fromAccountId: account.accountId, toAccountId: null, amountCents: 10_000_00, occurredAt: day, description: `Harness rf226 ${day} ${tag}`, categoryId: source });
+  }
+  const inTarget = async () => ((await tool("list_movements", { accountId: account.accountId, categoryId: target })).value as unknown[]).length;
+  const base = { fromCategoryId: source, toCategoryId: target };
+
+  const dry = await tool("move_category_movements", { ...base, dryRun: true });
+  const bare = await tool("move_category_movements", base);
+  const wrong = await tool("move_category_movements", { ...base, expectedCount: 2 });
+  const untouched = await inTarget();
+  assert(
+    next("RF-226: move_category_movements without the count its dry run gave, or with a count the lines no longer match, moves nothing and says why"),
+    (dry.value as { moved: number }).moved === 3 && bare.isError && wrong.isError && untouched === 0 &&
+      String((bare.value as { error: string }).error).includes("expectedCount") && String((wrong.value as { error: string }).error).includes("dryRun"),
+    `dry ${JSON.stringify(dry.value)}, bare ${JSON.stringify(bare.value)}, wrong ${JSON.stringify(wrong.value)}, in target ${untouched}`,
+  );
+
+  const done = await tool("move_category_movements", { ...base, expectedCount: 3 });
+  assert(
+    next("RF-226: move_category_movements with the confirmed count moves exactly those lines and answers the categories it moved between"),
+    !done.isError && (done.value as { moved: number }).moved === 3 && (done.value as { fromCategoryId: string }).fromCategoryId === source &&
+      (await inTarget()) === 3,
+    `done ${JSON.stringify(done.value)}`,
+  );
+}
+
+// RF-228: Claude reads the budgets with their spending and creates, edits, archives and restores them, through the
+// Presupuestos screen's own query, schemas and write functions.
+async function mcpBudgetsSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const today = todayInBogota();
+  const { POST } = await import("@/app/mcp/route");
+  const [leader, member] = [await createMembershipFreeUser(), await createMembershipFreeUser()];
+  const ids = { group: randomUUID(), leaderRow: randomUUID(), memberRow: randomUUID(), mine: randomUUID(), cash: randomUUID(), parent: randomUUID(), child: randomUUID() };
+  const name = (what: string) => `Harness rf228 ${what} ${tag}`;
+  await fixtureSql.begin(async (tx) => {
+    await tx`insert into groups (id, name, cash_mode) values (${ids.group}, ${name("fondo")}, 'shared')`;
+    await tx`insert into group_members (id, group_id, user_id, name, role) values
+      (${ids.leaderRow}, ${ids.group}, ${leader.id}, ${name("lider")}, 'leader'), (${ids.memberRow}, ${ids.group}, ${member.id}, ${name("miembro")}, 'member')`;
+    await tx`insert into accounts (id, owner_user_id, name, kind, subtype, initial_balance_cents, initial_balance_on)
+      values (${ids.mine}, ${leader.id}, ${name("banco")}, 'asset', 'bank', 0, '2026-01-01')`;
+    await tx`insert into accounts (id, group_id, is_shared, name, kind, subtype, initial_balance_cents, initial_balance_on)
+      values (${ids.cash}, ${ids.group}, true, ${name("caja")}, 'asset', 'cash', 0, '2026-01-01')`;
+    await tx`insert into categories (id, owner_user_id, name, kind, color) values (${ids.parent}, ${leader.id}, ${name("mercado")}, 'expense', '#8C4A4A')`;
+    await tx`insert into categories (id, owner_user_id, parent_id, name, kind, color) values (${ids.child}, ${leader.id}, ${ids.parent}, ${name("frutas")}, 'expense', '#8C4A4A')`;
+  });
+  track("groups", ids.group);
+  for (const id of [ids.leaderRow, ids.memberRow]) track("group_members", id);
+  for (const id of [ids.mine, ids.cash]) track("accounts", id);
+  for (const id of [ids.parent, ids.child]) track("categories", id);
+  const clientOf = async (user: HarnessUser) => {
+    const { id, token } = await asUser(user, () => issueWebhookCredential({ name: name("clave"), purpose: "mcp", defaultAccountId: null, defaultCategoryId: null }));
+    keep("webhook_credentials", id);
+    return mcpClient(POST, token).tool;
+  };
+  const [tool, memberTool] = [await clientOf(leader), await clientOf(member)];
+  type Listed = { id: string; categoryId: string; limitCents: number; spentCents: number; remainingCents: number; thresholdPct: number; updatedAt: string };
+  const listed = async (args: Record<string, unknown> = {}) => (await tool("list_budgets", args)).value as Listed[];
+  const spend = (categoryId: string, amountCents: number) =>
+    tool("record_movement", { fromAccountId: ids.mine, toAccountId: null, amountCents, occurredAt: today, description: name("gasto"), categoryId });
+
+  const created = await tool("create_budget", { categoryId: ids.parent, period: "monthly", limitCents: 500_000_00, thresholdPct: 80 });
+  const budgetId = (created.value as { budgetId: string }).budgetId;
+  await spend(ids.parent, 120_000_00);
+  const first = (await listed()).find((row) => row.id === budgetId);
+  assert(
+    next("RF-228: create_budget makes a budget on a category and list_budgets derives what was spent and what is left from the movements"),
+    !created.isError && first?.limitCents === 500_000_00 && first.spentCents === 120_000_00 && first.remainingCents === 380_000_00,
+    `created ${JSON.stringify(created.value)}, row ${JSON.stringify(first)}`,
+  );
+
+  await spend(ids.child, 30_000_00);
+  const withChild = (await listed()).find((row) => row.id === budgetId);
+  assert(
+    next("RF-228: an expense on a subcategory counts in its parent's budget"),
+    withChild?.spentCents === 150_000_00,
+    `row ${JSON.stringify(withChild)}`,
+  );
+
+  const wrongScope = await tool("create_budget", { categoryId: ids.parent, accountId: ids.cash, period: "monthly", limitCents: 1_000_00, thresholdPct: 80 });
+  const tooLarge = await tool("create_budget", { categoryId: ids.parent, period: "weekly", limitCents: 10_000_000_000_000, thresholdPct: 80 });
+  assert(
+    next("RF-228: a budget whose category and account are of different scopes, or whose limit the currency cannot hold, is refused in the form's words"),
+    wrongScope.isError && (wrongScope.value as { error: string }).error === es.budgets.errors.scopeViolation &&
+      tooLarge.isError && (tooLarge.value as { error: string }).error === es.budgets.errors.limitTooLarge,
+    `scope ${JSON.stringify(wrongScope.value)}, large ${JSON.stringify(tooLarge.value)}`,
+  );
+
+  const stampOne = withChild?.updatedAt as string;
+  const edited = await tool("update_budget", { budgetId, expectedUpdatedAt: stampOne, thresholdPct: 90 });
+  const outOfDate = await tool("update_budget", { budgetId, expectedUpdatedAt: stampOne, thresholdPct: 70 });
+  const after = (await listed()).find((row) => row.id === budgetId);
+  assert(
+    next("RF-228: update_budget changes only what is sent, answers the old value, and a call quoting an old stamp is refused as out of date"),
+    !edited.isError && JSON.stringify((edited.value as { before: unknown }).before) === JSON.stringify({ thresholdPct: 80 }) &&
+      outOfDate.isError && (outOfDate.value as { error: string }).error === es.errors.stale &&
+      after?.thresholdPct === 90 && after.limitCents === 500_000_00,
+    `edited ${JSON.stringify(edited.value)}, old ${JSON.stringify(outOfDate.value)}, row ${JSON.stringify(after)}`,
+  );
+
+  const strangerArchive = await memberTool("archive_budget", { budgetId });
+  const archived = await tool("archive_budget", { budgetId });
+  const [active, inArchive] = [await listed(), await listed({ archived: true })];
+  const restored = await tool("restore_budget", { budgetId });
+  const back = await listed();
+  assert(
+    next("RF-228: archive_budget takes a budget out of the list and into the archived one, restore_budget brings it back, and another member cannot archive the leader's personal budget"),
+    strangerArchive.isError && (strangerArchive.value as { error: string }).error === es.errors.notFound && !archived.isError &&
+      !active.some((row) => row.id === budgetId) && inArchive.some((row) => row.id === budgetId) && !restored.isError && back.some((row) => row.id === budgetId),
+    `member ${JSON.stringify(strangerArchive.value)}, active ${active.length}, archived ${inArchive.length}, back ${back.length}`,
+  );
+}
+
+// RF-229: Claude reads the savings goals with their progress and creates, edits, archives, restores and contributes to them,
+// through the Metas screen's own query, schemas and write functions.
+async function mcpGoalsSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const { POST } = await import("@/app/mcp/route");
+  const [leader, member, stranger] = [await createMembershipFreeUser(), await createMembershipFreeUser(), await createMembershipFreeUser()];
+  const ids = { group: randomUUID(), leaderRow: randomUUID(), memberRow: randomUUID() };
+  const name = (what: string) => `Harness rf229 ${what} ${tag}`;
+  await fixtureSql.begin(async (tx) => {
+    await tx`insert into groups (id, name, cash_mode) values (${ids.group}, ${name("fondo")}, 'shared')`;
+    await tx`insert into group_members (id, group_id, user_id, name, role) values
+      (${ids.leaderRow}, ${ids.group}, ${leader.id}, ${name("lider")}, 'leader'), (${ids.memberRow}, ${ids.group}, ${member.id}, ${name("miembro")}, 'member')`;
+  });
+  track("groups", ids.group);
+  for (const id of [ids.leaderRow, ids.memberRow]) track("group_members", id);
+  const clientOf = async (user: HarnessUser) => {
+    const { id, token } = await asUser(user, () => issueWebhookCredential({ name: name("clave"), purpose: "mcp", defaultAccountId: null, defaultCategoryId: null }));
+    keep("webhook_credentials", id);
+    return mcpClient(POST, token).tool;
+  };
+  const [tool, memberTool, strangerTool] = [await clientOf(leader), await clientOf(member), await clientOf(stranger)];
+  type Goal = { id: string; name: string; savedCents: number; remainingCents: number; targetAmountCents: number; foreignOwner: boolean; updatedAt: string };
+  const goals = async (run = tool, args: Record<string, unknown> = {}) => (await run("list_goals", args)).value as Goal[];
+
+  const created = await tool("create_goal", { name: name("viaje"), targetAmountCents: 2_000_000_00, initialContributionCents: 300_000_00 });
+  const goalId = (created.value as { goalId: string }).goalId;
+  const row = (await goals()).find((goal) => goal.id === goalId);
+  const seenByMember = (await goals(memberTool)).find((goal) => goal.id === goalId);
+  assert(
+    next("RF-229: create_goal with an opening contribution reads back its progress, and a goal made by a fund member belongs to the fund"),
+    !created.isError && row?.savedCents === 300_000_00 && row.remainingCents === 1_700_000_00 && seenByMember?.foreignOwner === false,
+    `created ${JSON.stringify(created.value)}, row ${JSON.stringify(row)}, member ${JSON.stringify(seenByMember)}`,
+  );
+
+  const tooLarge = await tool("create_goal", { name: name("enorme"), targetAmountCents: 10_000_000_000_000 });
+  assert(
+    next("RF-229: a target over the currency's ceiling is refused in the form's words"),
+    tooLarge.isError && (tooLarge.value as { error: string }).error === es.goals.errors.targetTooLarge,
+    `large ${JSON.stringify(tooLarge.value)}`,
+  );
+
+  const added = await tool("contribute_goal", { goalId, amountCents: 100_000_00 });
+  const contributionId = (added.value as { contributionId: string }).contributionId;
+  const mid = (await goals()).find((goal) => goal.id === goalId);
+  const listedContributions = (await tool("list_goal_contributions", { goalId })).value as { id: string; amountCents: number }[];
+  const notMine = await strangerTool("remove_goal_contribution", { goalId, contributionId });
+  const removed = await tool("remove_goal_contribution", { goalId, contributionId });
+  const end = (await goals()).find((goal) => goal.id === goalId);
+  assert(
+    next("RF-229: contribute_goal moves savedCents by what was contributed, remove_goal_contribution moves it back and answers the contribution it removed, and a stranger removes nothing"),
+    !added.isError && mid?.savedCents === 400_000_00 && listedContributions.length === 2 && notMine.isError &&
+      (notMine.value as { error: string }).error === es.errors.notFound && !removed.isError &&
+      (removed.value as { before: { amountCents: number; goalId: string } }).before.amountCents === 100_000_00 &&
+      (removed.value as { before: { goalId: string } }).before.goalId === goalId && end?.savedCents === 300_000_00,
+    `added ${JSON.stringify(added.value)}, mid ${mid?.savedCents}, stranger ${JSON.stringify(notMine.value)}, removed ${JSON.stringify(removed.value)}, end ${end?.savedCents}`,
+  );
+
+  const stamp = (await goals()).find((goal) => goal.id === goalId)?.updatedAt;
+  const edited = await tool("update_goal", { goalId, expectedUpdatedAt: stamp, targetAmountCents: 2_500_000_00 });
+  const outOfDate = await tool("update_goal", { goalId, expectedUpdatedAt: stamp, name: name("otro") });
+  const after = (await goals()).find((goal) => goal.id === goalId);
+  assert(
+    next("RF-229: update_goal changes only what is sent and answers the old value, and a call quoting an old stamp is refused as out of date"),
+    !edited.isError && JSON.stringify((edited.value as { before: unknown }).before) === JSON.stringify({ targetAmountCents: 2_000_000_00 }) &&
+      outOfDate.isError && (outOfDate.value as { error: string }).error === es.errors.stale &&
+      after?.targetAmountCents === 2_500_000_00 && after.name === name("viaje"),
+    `edited ${JSON.stringify(edited.value)}, old ${JSON.stringify(outOfDate.value)}, row ${JSON.stringify(after)}`,
+  );
+
+  const archived = await tool("archive_goal", { goalId });
+  const [active, inArchive] = [await goals(), await goals(tool, { archived: true })];
+  const restored = await tool("restore_goal", { goalId });
+  const back = await goals();
+  assert(
+    next("RF-229: archive_goal takes a goal out of the list and into the archived one, and restore_goal brings it back"),
+    !archived.isError && !active.some((goal) => goal.id === goalId) && inArchive.some((goal) => goal.id === goalId) &&
+      !restored.isError && back.some((goal) => goal.id === goalId),
+    `active ${active.length}, archived ${inArchive.length}, back ${back.length}`,
+  );
+}
+
+// RF-230: Claude reads, schedules, edits, pays and cancels planned payments, through the Por pagar screen's own query,
+// schemas and write functions; deleting the movement a payment made puts it back to pending (RF-161).
+async function mcpPlannedPaymentsSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const today = todayInBogota();
+  const { POST } = await import("@/app/mcp/route");
+  const owner = await createMembershipFreeUser();
+  const account = await asUser(owner, () =>
+    createAccount({
+      kind: "asset", subtype: "bank", groupId: null, isShared: false, institution: null, settlementCurrency: BASE_CURRENCY,
+      balanceOn: "2026-01-01", ownerUserId: owner.id, name: `Harness rf230 cuenta ${tag}`, amountMinor: 5_000_000_00,
+    }),
+  );
+  track("accounts", account.accountId);
+  const category = randomUUID();
+  await fixtureSql`insert into categories (id, owner_user_id, name, kind, color) values (${category}, ${owner.id}, ${`Harness rf230 Servicios ${tag}`}, 'expense', ${CATEGORY_COLORS[0]})`;
+  track("categories", category);
+  const { id: keyId, token } = await asUser(owner, () =>
+    issueWebhookCredential({ name: `Harness rf230 ${tag}`, purpose: "mcp", defaultAccountId: null, defaultCategoryId: null }),
+  );
+  keep("webhook_credentials", keyId);
+  const { tool } = mcpClient(POST, token);
+  type Planned = { id: string; status: string; amountCents: number; dueDate: string; settledTransactionId: string | null; updatedAt: string };
+  const planned = async (status?: string) => (await tool("list_planned_payments", status ? { status } : {})).value as Planned[];
+  const draft = { fromAccountId: account.accountId, toAccountId: null, amountCents: 85_000_00, categoryId: category, dueDate: shiftDate(today, 10), description: `Harness rf230 luz ${tag}` };
+
+  const created = await tool("create_planned_payment", draft);
+  const plannedId = (created.value as { plannedPaymentId: string }).plannedPaymentId;
+  const row = (await planned("pending")).find((one) => one.id === plannedId);
+  assert(
+    next("RF-230: create_planned_payment schedules a payment that list_planned_payments reads pending with its due date and amount"),
+    !created.isError && row?.status === "pending" && row.amountCents === 85_000_00 && row.dueDate === draft.dueDate,
+    `created ${JSON.stringify(created.value)}, row ${JSON.stringify(row)}`,
+  );
+
+  const edited = await tool("update_planned_payment", { plannedPaymentId: plannedId, expectedUpdatedAt: row?.updatedAt, amountCents: 90_000_00 });
+  const outOfDate = await tool("update_planned_payment", { plannedPaymentId: plannedId, expectedUpdatedAt: row?.updatedAt, amountCents: 95_000_00 });
+  const after = (await planned("pending")).find((one) => one.id === plannedId);
+  assert(
+    next("RF-230: update_planned_payment changes only what is sent and answers the old value, and a call quoting an old stamp is refused as out of date"),
+    !edited.isError && JSON.stringify((edited.value as { before: unknown }).before) === JSON.stringify({ amountCents: 85_000_00 }) &&
+      outOfDate.isError && (outOfDate.value as { error: string }).error === es.errors.stale && after?.amountCents === 90_000_00,
+    `edited ${JSON.stringify(edited.value)}, old ${JSON.stringify(outOfDate.value)}`,
+  );
+
+  const settled = await tool("settle_planned_payment", { plannedPaymentId: plannedId, occurredOn: today });
+  const transactionId = (settled.value as { transactionId: string }).transactionId;
+  const again = await tool("settle_planned_payment", { plannedPaymentId: plannedId, occurredOn: today });
+  const done = (await planned("done")).find((one) => one.id === plannedId);
+  assert(
+    next("RF-230: settle_planned_payment books the movement once and the payment reads done with it; a second settle is refused"),
+    !settled.isError && done?.settledTransactionId === transactionId && again.isError,
+    `settled ${JSON.stringify(settled.value)}, again ${JSON.stringify(again.value)}, done ${JSON.stringify(done)}`,
+  );
+
+  const deleted = await tool("delete_movement", { transactionId });
+  const back = (await planned("pending")).find((one) => one.id === plannedId);
+  assert(
+    next("RF-230: deleting the movement a settled payment made puts the payment back to pending"),
+    !deleted.isError && back?.status === "pending" && back.settledTransactionId === null,
+    `deleted ${JSON.stringify(deleted.value)}, back ${JSON.stringify(back)}`,
+  );
+
+  const cancelled = await tool("cancel_planned_payment", { plannedPaymentId: plannedId });
+  const settleCancelled = await tool("settle_planned_payment", { plannedPaymentId: plannedId, occurredOn: today });
+  assert(
+    next("RF-230: cancel_planned_payment answers the payment it cancelled and a cancelled payment can never be settled"),
+    !cancelled.isError && (cancelled.value as { before: { amountCents: number } }).before.amountCents === 90_000_00 &&
+      settleCancelled.isError && (await planned("cancelled")).some((one) => one.id === plannedId),
+    `cancelled ${JSON.stringify(cancelled.value)}, settle ${JSON.stringify(settleCancelled.value)}`,
+  );
+}
+
+// RF-231: Claude reads, creates, edits, pauses and resumes recurring movements and confirms a generated one, through the
+// Recurrentes screen's own query, schemas and write functions.
+async function mcpRecurringSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const today = todayInBogota();
+  const { POST } = await import("@/app/mcp/route");
+  const leader = await createMembershipFreeUser();
+  const ids = { group: randomUUID(), leaderRow: randomUUID(), mine: randomUUID(), personalCategory: randomUUID(), fundCategory: randomUUID() };
+  const name = (what: string) => `Harness rf231 ${what} ${tag}`;
+  await fixtureSql.begin(async (tx) => {
+    await tx`insert into groups (id, name, cash_mode) values (${ids.group}, ${name("fondo")}, 'shared')`;
+    await tx`insert into group_members (id, group_id, user_id, name, role) values (${ids.leaderRow}, ${ids.group}, ${leader.id}, ${name("lider")}, 'leader')`;
+    await tx`insert into accounts (id, owner_user_id, name, kind, subtype, initial_balance_cents, initial_balance_on)
+      values (${ids.mine}, ${leader.id}, ${name("banco")}, 'asset', 'bank', 0, '2026-01-01')`;
+    await tx`insert into categories (id, owner_user_id, name, kind, color) values (${ids.personalCategory}, ${leader.id}, ${name("propia")}, 'expense', '#8C4A4A')`;
+    await tx`insert into categories (id, group_id, name, kind, color) values (${ids.fundCategory}, ${ids.group}, ${name("fondo")}, 'expense', '#8C4A4A')`;
+  });
+  track("groups", ids.group);
+  track("group_members", ids.leaderRow);
+  track("accounts", ids.mine);
+  for (const id of [ids.personalCategory, ids.fundCategory]) track("categories", id);
+  const { id: keyId, token } = await asUser(leader, () => issueWebhookCredential({ name: name("clave"), purpose: "mcp", defaultAccountId: null, defaultCategoryId: null }));
+  keep("webhook_credentials", keyId);
+  const { tool } = mcpClient(POST, token);
+  type Rule = { id: string; isActive: boolean; nextRunOn: string; dayOfMonth: number | null; amountCents: number; updatedAt: string };
+  const rules = async () => (await tool("list_recurring_rules")).value as Rule[];
+  const nextRunOn = shiftDate(today, 30);
+  const draft = { fromAccountId: ids.mine, toAccountId: null, amountCents: 70_000_00, categoryId: ids.personalCategory, description: name("arriendo"), frequency: "monthly", dayOfMonth: 5, nextRunOn };
+
+  const created = await tool("create_recurring_rule", draft);
+  const ruleId = (created.value as { recurringRuleId: string }).recurringRuleId;
+  const row = (await rules()).find((one) => one.id === ruleId);
+  assert(
+    next("RF-231: create_recurring_rule makes a monthly rule that list_recurring_rules reads active with its day and next run"),
+    !created.isError && row?.isActive === true && row.dayOfMonth === 5 && row.nextRunOn === nextRunOn && row.amountCents === 70_000_00,
+    `created ${JSON.stringify(created.value)}, row ${JSON.stringify(row)}`,
+  );
+
+  const wrongScope = await tool("create_recurring_rule", { ...draft, categoryId: ids.fundCategory });
+  const noDay = await tool("create_recurring_rule", { ...draft, dayOfMonth: null });
+  assert(
+    next("RF-231: a category of the fund on a personal account, and a monthly rule with no day, are refused in the form's words"),
+    wrongScope.isError && (wrongScope.value as { error: string }).error === es.recurringRules.errors.scopeViolation &&
+      noDay.isError && (noDay.value as { error: string }).error === es.recurringRules.errors.dayOfMonthRequired,
+    `scope ${JSON.stringify(wrongScope.value)}, day ${JSON.stringify(noDay.value)}`,
+  );
+
+  const edited = await tool("update_recurring_rule", { id: ruleId, expectedUpdatedAt: row?.updatedAt, amountCents: 75_000_00 });
+  const outOfDate = await tool("update_recurring_rule", { id: ruleId, expectedUpdatedAt: row?.updatedAt, amountCents: 80_000_00 });
+  assert(
+    next("RF-231: update_recurring_rule changes only what is sent and answers the old value, and a call quoting an old stamp is refused as out of date"),
+    !edited.isError && JSON.stringify((edited.value as { before: unknown }).before) === JSON.stringify({ amountCents: 70_000_00 }) &&
+      outOfDate.isError && (outOfDate.value as { error: string }).error === es.errors.stale &&
+      (await rules()).find((one) => one.id === ruleId)?.amountCents === 75_000_00,
+    `edited ${JSON.stringify(edited.value)}, old ${JSON.stringify(outOfDate.value)}`,
+  );
+
+  const paused = await tool("pause_recurring_rule", { id: ruleId });
+  const whilePaused = (await rules()).find((one) => one.id === ruleId)?.isActive;
+  const resumed = await tool("resume_recurring_rule", { id: ruleId });
+  assert(
+    next("RF-231: pause_recurring_rule stops the rule and resume_recurring_rule starts it again"),
+    !paused.isError && whilePaused === false && !resumed.isError && (await rules()).find((one) => one.id === ruleId)?.isActive === true,
+    `paused ${JSON.stringify(paused.value)}, resumed ${JSON.stringify(resumed.value)}`,
+  );
+
+  const book = async (description: string) => {
+    const booked = await tool("record_movement", { fromAccountId: ids.mine, toAccountId: null, amountCents: 1_000_00, occurredAt: today, description, categoryId: ids.personalCategory });
+    return (booked.value as { transactionId: string }).transactionId;
+  };
+  const [generated, manual] = [await book(name("generado")), await book(name("manual"))];
+  await fixtureSql`update transactions set recurring_rule_id = ${ruleId} where id = ${generated}`;
+  const marked = await tool("mark_movement_reviewed", { transactionId: generated });
+  const markedAgain = await tool("mark_movement_reviewed", { transactionId: generated });
+  const onManual = await tool("mark_movement_reviewed", { transactionId: manual });
+  const [stamped] = await fixtureSql<{ reviewed_at: string | null }[]>`select reviewed_at from transactions where id = ${generated}`;
+  assert(
+    next("RF-231: mark_movement_reviewed stamps a generated movement once and reads a hand-made one as not found"),
+    !marked.isError && stamped.reviewed_at !== null && markedAgain.isError && onManual.isError &&
+      (onManual.value as { error: string }).error === es.errors.notFound,
+    `marked ${JSON.stringify(marked.value)}, again ${JSON.stringify(markedAgain.value)}, manual ${JSON.stringify(onManual.value)}`,
+  );
+}
+
+// RF-232: Claude does everything the Bandeja does, through the same queries as its buttons: labels on accept, reject and silence,
+// the silenced shapes, the merchants it learned and the movements waiting for their other account.
+async function mcpInboxWholeSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const today = todayInBogota();
+  const { POST } = await import("@/app/mcp/route");
+  const [owner, stranger] = [await createMembershipFreeUser(), await createMembershipFreeUser()];
+  const mkBank = (user: HarnessUser, name: string) =>
+    asUser(user, () =>
+      createAccount({
+        kind: "asset", subtype: "bank", groupId: null, isShared: false, institution: null, settlementCurrency: BASE_CURRENCY,
+        balanceOn: "2026-01-01", ownerUserId: user.id, name: `Harness rf232 ${name} ${tag}`, amountMinor: 1_000_000_00,
+      }),
+    );
+  const [bank, other, strangerBank] = [await mkBank(owner, "banco"), await mkBank(owner, "otro"), await mkBank(stranger, "ajeno")];
+  for (const row of [bank, other, strangerBank]) track("accounts", row.accountId);
+  const category = randomUUID();
+  await fixtureSql`insert into categories (id, owner_user_id, name, kind, color) values (${category}, ${owner.id}, ${`Harness rf232 Comida ${tag}`}, 'expense', ${CATEGORY_COLORS[0]})`;
+  track("categories", category);
+  const clientOf = async (user: HarnessUser) => {
+    const { id, token } = await asUser(user, () => issueWebhookCredential({ name: `Harness rf232 ${tag}`, purpose: "mcp", defaultAccountId: null, defaultCategoryId: null }));
+    keep("webhook_credentials", id);
+    return mcpClient(POST, token).tool;
+  };
+  const [tool, strangerTool] = [await clientOf(owner), await clientOf(stranger)];
+
+  const deliver = (name: string, shape = `rf232-${name}-${tag}`, extra: { status?: string; silenced?: boolean } = {}) =>
+    fixtureSql.begin(async (tx) => {
+      await tx`select set_config('request.jwt.claims', ${JSON.stringify({ sub: owner.id, role: "authenticated", aud: "authenticated" })}, true)`;
+      const [row] = await tx<{ id: string }[]>`
+        insert into ingest_deliveries (external_ref, raw_text, shape_hash, proposed_amount_cents, proposed_account_id, proposed_category_id,
+          category_source, proposed_direction, proposed_occurred_at, proposed_description, status, silenced_on_arrival, resolved_at)
+        values (${`harness-rf232-${name}-${tag}`}, ${`Harness rf232 mensaje ${name}`}, ${createHash("sha256").update(shape).digest("hex")},
+          ${9_000_00}, ${bank.accountId}, ${category}, 'interpreter', 'expense', '2026-03-10', ${`Harness rf232 ${name}`},
+          ${extra.status ?? "pending"}, ${extra.silenced ?? false}, ${extra.status === "rejected" ? new Date() : null})
+        returning id`;
+      return row.id;
+    });
+  const status = async (id: string) => (await fixtureSql`select status from ingest_deliveries where id = ${id}`)[0]?.status as string;
+
+  const labelName = `Harness rf232 etiqueta ${tag}`;
+  const label = await tool("create_label", { name: labelName });
+  const labelId = (label.value as { labelId: string }).labelId;
+  const [tagged, plain] = [await deliver("con etiqueta"), await deliver("sin etiqueta")];
+  const unknown = await tool("accept_deliveries", { deliveries: [{ id: plain }, { id: tagged, labels: [`no existe ${tag}`] }] });
+  const plainAfterRefusal = await status(plain);
+  const accepted = await tool("accept_deliveries", { deliveries: [{ id: tagged, labels: [labelName] }, { id: plain }] });
+  const movements = (await tool("list_movements", { accountId: bank.accountId })).value as { labelIds: string[] }[];
+  assert(
+    next("RF-232: accept_deliveries takes labels by name or id: an unknown one refuses the whole batch naming its delivery, and an accepted one lands on the movement"),
+    unknown.isError && (unknown.value as { deliveryId: string }).deliveryId === tagged && plainAfterRefusal === "pending" &&
+      !accepted.isError && (accepted.value as { count: number }).count === 2 && movements.filter((row) => row.labelIds.includes(labelId)).length === 1,
+    `unknown ${JSON.stringify(unknown.value)}, accepted ${JSON.stringify(accepted.value)}, with the label ${movements.filter((row) => row.labelIds.includes(labelId)).length}`,
+  );
+
+  const [silenced, kept] = [await deliver("silenciar"), await deliver("sin silencio")];
+  const rejectedWith = await tool("reject_deliveries", { ids: [silenced], silenceShape: true });
+  const rejectedPlain = await tool("reject_deliveries", { ids: [kept] });
+  const shapes = (await tool("list_silenced_shapes")).value as { id: string; sampleText: string }[];
+  const mine = shapes.find((row) => row.sampleText === `Harness rf232 mensaje silenciar`);
+  assert(
+    next("RF-232: reject_deliveries with silenceShape lists the shape as silenced and says so; without it the shape is not silenced"),
+    !rejectedWith.isError && (rejectedWith.value as { silenced: boolean }).silenced === true && mine !== undefined &&
+      !rejectedPlain.isError && (rejectedPlain.value as { silenced: boolean }).silenced === false &&
+      !shapes.some((row) => row.sampleText === `Harness rf232 mensaje sin silencio`),
+    `with ${JSON.stringify(rejectedWith.value)}, shapes ${JSON.stringify(shapes)}`,
+  );
+
+  const arrived = await deliver("llegó silenciada", `rf232-silenciar-${tag}`, { status: "rejected", silenced: true });
+  const restored = await tool("restore_shape", { shapeId: mine?.id });
+  const unrestorable = await tool("restore_shape", { shapeId: mine?.id });
+  assert(
+    next("RF-232: restore_shape returns a silenced shape, counts the deliveries that come back pending, and a shape that is not silenced reads as not found"),
+    !restored.isError && (restored.value as { deliveriesRestored: number }).deliveriesRestored >= 1 && (await status(arrived)) === "pending" &&
+      unrestorable.isError && (unrestorable.value as { error: string }).error === es.errors.notFound &&
+      !((await tool("list_silenced_shapes")).value as { id: string }[]).some((row) => row.id === mine?.id),
+    `restored ${JSON.stringify(restored.value)}, again ${JSON.stringify(unrestorable.value)}`,
+  );
+
+  const [merchant] = await fixtureSql<{ id: string }[]>`
+    insert into ingest_merchants (owner_user_id, merchant_key, merchant_label) values (${owner.id}, ${`rf232 ${tag}`}, ${`Harness rf232 ${tag}`}) returning id`;
+  const listedMerchants = (await tool("list_merchants")).value as { id: string }[];
+  const strangerForget = await strangerTool("forget_merchant", { merchantId: merchant.id });
+  const forgot = await tool("forget_merchant", { merchantId: merchant.id });
+  assert(
+    next("RF-232: list_merchants lists what the Bandeja learned, forget_merchant answers the row it forgot, and another person's merchant reads as not found"),
+    listedMerchants.some((row) => row.id === merchant.id) && strangerForget.isError && !forgot.isError &&
+      (forgot.value as { before: { merchantLabel: string } }).before.merchantLabel === `Harness rf232 ${tag}` &&
+      !((await tool("list_merchants")).value as { id: string }[]).some((row) => row.id === merchant.id),
+    `strangerForget ${JSON.stringify(strangerForget.value)}, forgot ${JSON.stringify(forgot.value)}`,
+  );
+
+  const booked = await tool("record_movement", { fromAccountId: bank.accountId, toAccountId: null, amountCents: 40_000_00, occurredAt: today, description: `Harness rf232 espera ${tag}`, categoryId: category });
+  const waitingId = (booked.value as { transactionId: string }).transactionId;
+  await fixtureSql`update transactions set awaiting_counterparty = true where id = ${waitingId}`;
+  const waiting = (await tool("list_awaiting_counterparty")).value as { id: string; missingSide: string }[];
+  const completed = await tool("complete_counterparty", { transactionId: waitingId, accountId: other.accountId });
+  const again = await tool("complete_counterparty", { transactionId: waitingId, accountId: other.accountId });
+  const row = ((await tool("list_movements", { accountId: other.accountId })).value as { id: string; kind: string; splits: unknown[] }[]).find((one) => one.id === waitingId);
+  assert(
+    next("RF-232: list_awaiting_counterparty lists a one-sided movement, complete_counterparty makes it a transfer with no lines and drops it from the list, and a second call is refused"),
+    waiting.some((one) => one.id === waitingId && one.missingSide === "to") && !completed.isError && row?.kind === "transfer" && row.splits.length === 0 &&
+      !((await tool("list_awaiting_counterparty")).value as { id: string }[]).some((one) => one.id === waitingId) &&
+      again.isError && (again.value as { error: string }).error === es.transactions.errors.counterpartyComplete,
+    `waiting ${JSON.stringify(waiting.map((one) => one.id))}, completed ${JSON.stringify(completed.value)}, row ${JSON.stringify(row)}, again ${JSON.stringify(again.value)}`,
+  );
+}
+
+// RF-233: Claude reads archived accounts, archives and restores one and counts an account on a day, through the Cuentas
+// screen's own queries, schemas and write functions.
+async function mcpAccountLifecycleSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const today = todayInBogota();
+  const { POST } = await import("@/app/mcp/route");
+  const owner = await createMembershipFreeUser();
+  const mkBank = (name: string) =>
+    asUser(owner, () =>
+      createAccount({
+        kind: "asset", subtype: "bank", groupId: null, isShared: false, institution: null, settlementCurrency: BASE_CURRENCY,
+        balanceOn: "2026-01-01", ownerUserId: owner.id, name: `Harness rf233 ${name} ${tag}`, amountMinor: 1_000_000_00,
+      }),
+    );
+  const [spare, counted] = [await mkBank("archivable"), await mkBank("cuadrar")];
+  for (const row of [spare, counted]) track("accounts", row.accountId);
+  const category = randomUUID();
+  await fixtureSql`insert into categories (id, owner_user_id, name, kind, color) values (${category}, ${owner.id}, ${`Harness rf233 Comida ${tag}`}, 'expense', ${CATEGORY_COLORS[0]})`;
+  track("categories", category);
+  const { id: keyId, token } = await asUser(owner, () => issueWebhookCredential({ name: `Harness rf233 ${tag}`, purpose: "mcp", defaultAccountId: null, defaultCategoryId: null }));
+  keep("webhook_credentials", keyId);
+  const { tool } = mcpClient(POST, token);
+  type Listed = { id: string; balances: { balanceCents: number }[] };
+  const accounts = async (archived = false) => (await tool("list_accounts", archived ? { archived: true } : {})).value as Listed[];
+
+  const archived = await tool("archive_account", { accountId: spare.accountId });
+  const [open, closed] = [await accounts(), await accounts(true)];
+  const restored = await tool("restore_account", { accountId: spare.accountId });
+  assert(
+    next("RF-233: archive_account takes an account out of list_accounts and into its archived side, and restore_account brings it back"),
+    !archived.isError && !open.some((row) => row.id === spare.accountId) && closed.some((row) => row.id === spare.accountId) &&
+      !restored.isError && (await accounts()).some((row) => row.id === spare.accountId),
+    `archived ${JSON.stringify(archived.value)}, restored ${JSON.stringify(restored.value)}`,
+  );
+
+  const pocket = await tool("create_account", {
+    name: `Harness rf233 bolsillo ${tag}`, kind: "asset", subtype: "bank", openingBalanceCents: 0, balanceOn: "2026-01-01", parentAccountId: spare.accountId,
+  });
+  track("accounts", (pocket.value as { accountId: string }).accountId);
+  const blocked = await tool("archive_account", { accountId: spare.accountId });
+  assert(
+    next("RF-233: an account with a live pocket is not archived, in the form's words"),
+    blocked.isError && (blocked.value as { error: string }).error === es.accounts.errors.hasPockets,
+    `blocked ${JSON.stringify(blocked.value)}`,
+  );
+
+  const sheetOf = async (on: string) =>
+    (await tool("get_reconcile_sheet", { accountId: counted.accountId, on })).value as { account: { derivedCents: number }; history: unknown[] };
+  const before = await sheetOf(today);
+  await tool("record_movement", { fromAccountId: counted.accountId, toAccountId: null, amountCents: 10_000_00, occurredAt: today, description: `Harness rf233 gasto ${tag}`, categoryId: category });
+  const stale = await tool("reconcile_account", { accountId: counted.accountId, reconciledOn: today, realAmountCents: before.account.derivedCents, expectedDerivedCents: before.account.derivedCents });
+  const earlySheet = await sheetOf("2025-12-01");
+  const early = await tool("reconcile_account", {
+    accountId: counted.accountId, reconciledOn: "2025-12-01", realAmountCents: 0, expectedDerivedCents: earlySheet.account.derivedCents,
+  });
+  assert(
+    next("RF-233: reconcile_account refuses a figure the ledger has moved from, and a day before the account opened with that day in the sentence"),
+    stale.isError && (stale.value as { error: string }).error === es.errors.reconcileStale &&
+      early.isError && (early.value as { error: string }).error.includes("2026-01-01") && !(early.value as { error: string }).error.includes("{date}"),
+    `stale ${JSON.stringify(stale.value)}, early ${JSON.stringify(early.value)}`,
+  );
+
+  const sheet = await sheetOf(today);
+  const real = sheet.account.derivedCents + 5_000_00;
+  const done = await tool("reconcile_account", { accountId: counted.accountId, reconciledOn: today, realAmountCents: real, expectedDerivedCents: sheet.account.derivedCents });
+  const balance = (await accounts()).find((row) => row.id === counted.accountId)?.balances[0]?.balanceCents;
+  const history = (await tool("list_reconciliations", { accountId: counted.accountId })).value as unknown[];
+  assert(
+    next("RF-233: reconcile_account leaves the balance the person counted through one adjustment of the gap, and list_reconciliations holds it"),
+    !done.isError && Math.abs((done.value as { gapCents: number }).gapCents) === 5_000_00 && balance === real && history.length === 1,
+    `done ${JSON.stringify(done.value)}, balance ${balance} of ${real}, history ${history.length}`,
+  );
+}
+
+// RF-234: Claude records a statement, defers and undefers a purchase and withdraws cash, through the debt screen's own
+// schemas and write functions.
+async function mcpStatementsSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const today = todayInBogota();
+  const { POST } = await import("@/app/mcp/route");
+  const owner = await createMembershipFreeUser();
+  const bank = await asUser(owner, () =>
+    createAccount({
+      kind: "asset", subtype: "bank", groupId: null, isShared: false, institution: null, settlementCurrency: BASE_CURRENCY,
+      balanceOn: "2026-01-01", ownerUserId: owner.id, name: `Harness rf234 banco ${tag}`, amountMinor: 5_000_000_00,
+    }),
+  );
+  track("accounts", bank.accountId);
+  const category = randomUUID();
+  await fixtureSql`insert into categories (id, owner_user_id, name, kind, color) values (${category}, ${owner.id}, ${`Harness rf234 Compras ${tag}`}, 'expense', ${CATEGORY_COLORS[0]})`;
+  track("categories", category);
+  const { id: keyId, token } = await asUser(owner, () => issueWebhookCredential({ name: `Harness rf234 ${tag}`, purpose: "mcp", defaultAccountId: null, defaultCategoryId: null }));
+  keep("webhook_credentials", keyId);
+  const { tool } = mcpClient(POST, token);
+  const card = await tool("create_account", { name: `Harness rf234 tarjeta ${tag}`, kind: "liability", subtype: "card", openingBalanceCents: 0, balanceOn: "2026-01-01" });
+  const cardId = (card.value as { accountId: string }).accountId;
+  track("accounts", cardId);
+  type Detail = { statements: { cutOffDate: string }[]; deferrals: { transactionId: string; instalments: number }[] };
+  const detail = async () => (await tool("get_debt", { accountId: cardId })).value as Detail;
+
+  const statement = { accountId: cardId, periodStart: "2026-02-01", cutOffDate: "2026-02-28", closingBalanceCents: 1_200_000_00, minimumPaymentCents: 60_000_00 };
+  const recorded = await tool("record_account_statement", statement);
+  const again = await tool("record_account_statement", statement);
+  const read = await detail();
+  assert(
+    next("RF-234: record_account_statement records a statement that get_debt reads back, and the same cut-off again is refused"),
+    !recorded.isError && read.statements.some((one) => one.cutOffDate === "2026-02-28") && again.isError &&
+      (again.value as { error: string }).error === es.installments.errors.duplicateCutOff,
+    `recorded ${JSON.stringify(recorded.value)}, again ${JSON.stringify(again.value)}`,
+  );
+
+  const spend = async (from: string, description: string) => {
+    const booked = await tool("record_movement", { fromAccountId: from, toAccountId: null, amountCents: 600_000_00, occurredAt: today, description, categoryId: category });
+    return (booked.value as { transactionId: string }).transactionId;
+  };
+  const [purchase, fromBank] = [await spend(cardId, `Harness rf234 compra ${tag}`), await spend(bank.accountId, `Harness rf234 banco ${tag}`)];
+  const deferred = await tool("defer_purchase", { transactionId: purchase, instalments: 12 });
+  const twice = await tool("defer_purchase", { transactionId: purchase, instalments: 6 });
+  const notPurchase = await tool("defer_purchase", { transactionId: fromBank, instalments: 12 });
+  const listed = (await detail()).deferrals.find((one) => one.transactionId === purchase);
+  assert(
+    next("RF-234: defer_purchase defers a card purchase that get_debt lists, and refuses a second deferral and an expense of a bank account"),
+    !deferred.isError && listed?.instalments === 12 && twice.isError &&
+      (twice.value as { error: string }).error === es.deferrals.errors.alreadyDeferred && notPurchase.isError &&
+      (notPurchase.value as { error: string }).error === es.deferrals.errors.notPurchase,
+    `deferred ${JSON.stringify(deferred.value)}, twice ${JSON.stringify(twice.value)}, bank ${JSON.stringify(notPurchase.value)}`,
+  );
+
+  const removed = await tool("undefer_purchase", { transactionId: purchase });
+  assert(
+    next("RF-234: undefer_purchase removes the deferral and answers the number of instalments it had"),
+    !removed.isError && (removed.value as { before: { instalments: number } }).before.instalments === 12 &&
+      !(await detail()).deferrals.some((one) => one.transactionId === purchase),
+    `removed ${JSON.stringify(removed.value)}`,
+  );
+
+  const requestRef = randomUUID();
+  const withdraw = { sourceAccountId: bank.accountId, amountCents: 200_000_00, requestRef };
+  const [first, second] = [await tool("withdraw_cash", withdraw), await tool("withdraw_cash", withdraw)];
+  const cash = ((await tool("list_accounts")).value as { name: string; subtype: string }[]).filter((one) => one.subtype === "cash");
+  assert(
+    next("RF-234: withdraw_cash moves the money into the person's cash, created on demand and named in Spanish, and a resend books it once"),
+    !first.isError && !second.isError && (first.value as { transactionId: string }).transactionId === (second.value as { transactionId: string }).transactionId &&
+      cash.length === 1 && cash[0].name === "Mi efectivo",
+    `first ${JSON.stringify(first.value)}, second ${JSON.stringify(second.value)}, cash ${JSON.stringify(cash)}`,
+  );
+}
+
+// RF-235: Claude reads what Inicio, Informes and the audit log show, the listing's totals and a proposed exchange rate, each by
+// the screen's own query.
+async function mcpReportsSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const today = todayInBogota();
+  const { POST } = await import("@/app/mcp/route");
+  const [owner, stranger] = [await createMembershipFreeUser(), await createMembershipFreeUser()];
+  const mkBank = (user: HarnessUser, name: string) =>
+    asUser(user, () =>
+      createAccount({
+        kind: "asset", subtype: "bank", groupId: null, isShared: false, institution: null, settlementCurrency: BASE_CURRENCY,
+        balanceOn: "2026-01-01", ownerUserId: user.id, name: `Harness rf235 ${name} ${tag}`, amountMinor: 2_000_000_00,
+      }),
+    );
+  const [bank, savings, strangerBank] = [await mkBank(owner, "banco"), await mkBank(owner, "ahorro"), await mkBank(stranger, "ajeno")];
+  for (const row of [bank, savings, strangerBank]) track("accounts", row.accountId);
+  const [category, strangerCategory] = [randomUUID(), randomUUID()];
+  for (const [id, user] of [[category, owner], [strangerCategory, stranger]] as const) {
+    await fixtureSql`insert into categories (id, owner_user_id, name, kind, color) values (${id}, ${user.id}, ${`Harness rf235 Comida ${tag}`}, 'expense', ${CATEGORY_COLORS[0]})`;
+    track("categories", id);
+  }
+  const clientOf = async (user: HarnessUser) => {
+    const { id, token } = await asUser(user, () => issueWebhookCredential({ name: `Harness rf235 ${tag}`, purpose: "mcp", defaultAccountId: null, defaultCategoryId: null }));
+    keep("webhook_credentials", id);
+    return mcpClient(POST, token).tool;
+  };
+  const [tool, strangerTool] = [await clientOf(owner), await clientOf(stranger)];
+  const spent = await tool("record_movement", { fromAccountId: bank.accountId, toAccountId: null, amountCents: 50_000_00, occurredAt: today, description: `Harness rf235 gasto ${tag}`, categoryId: category });
+  const moved = await tool("record_movement", { fromAccountId: bank.accountId, toAccountId: savings.accountId, amountCents: 10_000_00, occurredAt: today, description: `Harness rf235 ahorro ${tag}` });
+  const strangerSpent = await strangerTool("record_movement", { fromAccountId: strangerBank.accountId, toAccountId: null, amountCents: 7_000_00, occurredAt: today, description: `Harness rf235 ajeno ${tag}`, categoryId: strangerCategory });
+  const spentId = (spent.value as { transactionId: string }).transactionId;
+  const strangerSpentId = (strangerSpent.value as { transactionId: string }).transactionId;
+  const plain = (value: unknown) => JSON.parse(JSON.stringify(value));
+
+  const dashboard = (await tool("get_dashboard")).value;
+  const directDashboard = await asUser(owner, () => getDashboardData());
+  assert(
+    next("RF-235: get_dashboard answers what Inicio's own query answers for the same person"),
+    JSON.stringify(dashboard) === JSON.stringify(plain(directDashboard)) && (directDashboard.totalNetWorth.length ?? 0) > 0,
+    JSON.stringify({ dashboard, directDashboard }).slice(0, 400),
+  );
+
+  const month = today.slice(0, 7);
+  const report = (await tool("get_report", { month })).value as { expensesByCategory: { categoryId: string; totalCents: number }[] };
+  const directReport = await asUser(owner, () => getReportsData(`${month}-01`));
+  const reported = report.expensesByCategory.reduce((sum, row) => sum + row.totalCents, 0);
+  assert(
+    next("RF-235: get_report answers the month's figures the Informes query answers, and a transfer is no spending"),
+    JSON.stringify(report) === JSON.stringify(plain(directReport)) && reported >= 50_000_00 &&
+      !(moved.isError) && !report.expensesByCategory.some((row) => row.totalCents === 10_000_00),
+    JSON.stringify(report).slice(0, 400),
+  );
+
+  const totals = (await tool("movement_totals", { accountId: bank.accountId })).value as { count: number; nets: { currency: string; netCents: number }[] };
+  assert(
+    next("RF-235: movement_totals counts the listing's movements and nets spending per currency, a transfer adding nothing"),
+    totals.count === 2 && totals.nets.length === 1 && totals.nets[0].netCents === -50_000_00,
+    JSON.stringify(totals),
+  );
+
+  const audit = (await tool("list_audit_log", { limit: 200 })).value as { rows: { recordId: string; actorUserId: string | null }[]; total: number };
+  assert(
+    next("RF-235: list_audit_log shows the person's own write with its actor and none of another person's, without the records' content"),
+    audit.rows.some((row) => row.recordId === spentId && row.actorUserId === owner.id) && !audit.rows.some((row) => row.recordId === strangerSpentId) &&
+      audit.rows.every((row) => !("beforeData" in row) && !("afterData" in row)) && audit.total >= 1,
+    JSON.stringify(audit).slice(0, 300),
+  );
+
+  const same = await tool("propose_rate", { from: "COP", to: "COP" });
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = (() => Promise.reject(new Error("offline"))) as typeof fetch;
+  let offline: Awaited<ReturnType<typeof tool>>;
+  try {
+    offline = await tool("propose_rate", { from: "USD", to: "COP" });
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+  assert(
+    next("RF-235: propose_rate answers a rate and, when the public source is unreachable, null rather than an error"),
+    !same.isError && (same.value as { rate: number }).rate === 1 && !offline.isError && offline.value === null,
+    `same ${JSON.stringify(same.value)}, offline ${JSON.stringify(offline.value)}`,
+  );
+}
+
+// RF-236: Claude marks «Está bien» and takes it back, reads one movement whole and filters the listing as Movimientos does,
+// through the screens' own queries and schemas.
+async function mcpReviewSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const today = todayInBogota();
+  const { POST } = await import("@/app/mcp/route");
+  const [owner, stranger] = [await createMembershipFreeUser(), await createMembershipFreeUser()];
+  const mkBank = (user: HarnessUser, name: string) =>
+    asUser(user, () =>
+      createAccount({
+        kind: "asset", subtype: "bank", groupId: null, isShared: false, institution: null, settlementCurrency: BASE_CURRENCY,
+        balanceOn: "2026-01-01", ownerUserId: user.id, name: `Harness rf236 ${name} ${tag}`, amountMinor: 2_000_000_00,
+      }),
+    );
+  const [bank, savings, strangerBank] = [await mkBank(owner, "banco"), await mkBank(owner, "ahorro"), await mkBank(stranger, "ajeno")];
+  for (const row of [bank, savings, strangerBank]) track("accounts", row.accountId);
+  const [category, strangerCategory] = [randomUUID(), randomUUID()];
+  for (const [id, user] of [[category, owner], [strangerCategory, stranger]] as const) {
+    await fixtureSql`insert into categories (id, owner_user_id, name, kind, color) values (${id}, ${user.id}, ${`Harness rf236 Comida ${tag}`}, 'expense', ${CATEGORY_COLORS[0]})`;
+    track("categories", id);
+  }
+  const clientOf = async (user: HarnessUser) => {
+    const { id, token } = await asUser(user, () => issueWebhookCredential({ name: `Harness rf236 ${tag}`, purpose: "mcp", defaultAccountId: null, defaultCategoryId: null }));
+    keep("webhook_credentials", id);
+    return mcpClient(POST, token).tool;
+  };
+  const [tool, strangerTool] = [await clientOf(owner), await clientOf(stranger)];
+  const book = async (run: typeof tool, from: string, description: string, amountCents: number, categoryId: string) =>
+    ((await run("record_movement", { fromAccountId: from, toAccountId: null, amountCents, occurredAt: today, description, categoryId })).value as { transactionId: string }).transactionId;
+  const [mine, twin, theirs] = [
+    await book(tool, bank.accountId, `Harness rf236 almuerzo ${tag}`, 12_500_00, category),
+    await book(tool, bank.accountId, `Harness rf236 cena ${tag}`, 33_333_00, category),
+    await book(strangerTool, strangerBank.accountId, `Harness rf236 ajeno ${tag}`, 5_000_00, strangerCategory),
+  ];
+  const marks = async (id: string) => (await fixtureSql`select rule from transaction_reviews where transaction_id = ${id}`).map((row) => row.rule as string);
+
+  const marked = await tool("mark_month_review", { transactionIds: [mine, twin], rule: "twin" });
+  const stored = [await marks(mine), await marks(twin)];
+  const repeated = await tool("mark_month_review", { transactionIds: [mine], rule: "twin" });
+  const unmarked = await tool("unmark_month_review", { transactionIds: [mine], rule: "twin" });
+  const afterUnmark = [await marks(mine), await marks(twin)];
+  assert(
+    next("RF-236: mark_month_review stamps each movement once under its rule and unmark_month_review takes only the named ones back"),
+    !marked.isError && (marked.value as { count: number }).count === 2 && JSON.stringify(stored) === JSON.stringify([["twin"], ["twin"]]) &&
+      !repeated.isError && !unmarked.isError && afterUnmark[0].length === 0 && afterUnmark[1].length === 1,
+    `marked ${JSON.stringify(marked.value)}, stored ${JSON.stringify(stored)}, after ${JSON.stringify(afterUnmark)}`,
+  );
+
+  const notMine = await tool("mark_month_review", { transactionIds: [theirs], rule: "twin" });
+  const tooMany = await tool("mark_month_review", { transactionIds: Array.from({ length: 51 }, () => randomUUID()), rule: "twin" });
+  const noMark = await tool("unmark_month_review", { transactionIds: [mine], rule: "above_usual" });
+  assert(
+    next("RF-236: a movement the person cannot write cannot be marked, 51 ids are refused before any write, and undoing a mark that is not there is refused"),
+    notMine.isError && (notMine.value as { error: string }).error === es.review.errors.cannotMark && (await marks(theirs)).length === 0 &&
+      !(tooMany.value as { count?: number } | null)?.count && noMark.isError && (noMark.value as { error: string }).error === es.review.errors.cannotUndo,
+    `notMine ${JSON.stringify(notMine.value)}, many ${JSON.stringify(tooMany.value)}, noMark ${JSON.stringify(noMark.value)}`,
+  );
+
+  await tool("record_movement", { fromAccountId: bank.accountId, toAccountId: savings.accountId, amountCents: 20_000_00, occurredAt: today, description: `Harness rf236 traslado ${tag}` });
+  const kinds = (await tool("list_movements", { accountId: bank.accountId, kind: "transfer" })).value as { kind: string }[];
+  const byText = (await tool("list_movements", { accountId: bank.accountId, q: `almuerzo ${tag}` })).value as { id: string }[];
+  const byFigure = (await tool("list_movements", { accountId: bank.accountId, q: "33.333" })).value as { id: string }[];
+  assert(
+    next("RF-236: list_movements filters by kind and by text, which also matches an exact amount"),
+    kinds.length === 1 && kinds.every((row) => row.kind === "transfer") && byText.length === 1 && byText[0].id === mine &&
+      byFigure.some((row) => row.id === twin),
+    `kinds ${JSON.stringify(kinds)}, text ${JSON.stringify(byText)}, figure ${JSON.stringify(byFigure)}`,
+  );
+
+  const card = await tool("create_account", { name: `Harness rf236 tarjeta ${tag}`, kind: "liability", subtype: "card", openingBalanceCents: 0, balanceOn: "2026-01-01" });
+  const cardId = (card.value as { accountId: string }).accountId;
+  track("accounts", cardId);
+  const purchase = await book(tool, cardId, `Harness rf236 compra ${tag}`, 600_000_00, category);
+  await tool("defer_purchase", { transactionId: purchase, instalments: 12 });
+  const whole = (await tool("get_movement", { transactionId: purchase })).value as { id: string; deferral: { instalments: number } | null; createdByUserId: string };
+  const plain = (await tool("get_movement", { transactionId: mine })).value as { deferral: unknown };
+  const foreign = await tool("get_movement", { transactionId: theirs });
+  assert(
+    next("RF-236: get_movement answers a deferred purchase with its deferral, a plain movement with none, and another person's as not found"),
+    whole.id === purchase && whole.deferral?.instalments === 12 && whole.createdByUserId === owner.id && plain.deferral === null &&
+      foreign.isError && (foreign.value as { error: string }).error === es.errors.notFound,
+    `whole ${JSON.stringify(whole)}, foreign ${JSON.stringify(foreign.value)}`,
+  );
+}
+
+// RF-237: Claude reads the members with their role, adds one with no email, renames, archives and restores one and changes
+// the fund's settings, as the leader may; a member who is not the leader is refused in the form's words.
+async function mcpMembersSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const { POST } = await import("@/app/mcp/route");
+  const [leader, member] = [await createMembershipFreeUser(), await createMembershipFreeUser()];
+  const ids = { group: randomUUID(), leaderRow: randomUUID(), memberRow: randomUUID(), bank: randomUUID() };
+  const name = (what: string) => `Harness rf237 ${what} ${tag}`;
+  await fixtureSql.begin(async (tx) => {
+    await tx`insert into groups (id, name, cash_mode) values (${ids.group}, ${name("fondo")}, 'shared')`;
+    await tx`insert into group_members (id, group_id, user_id, name, role) values
+      (${ids.leaderRow}, ${ids.group}, ${leader.id}, ${name("lider")}, 'leader'), (${ids.memberRow}, ${ids.group}, ${member.id}, ${name("miembro")}, 'member')`;
+    await tx`insert into accounts (id, owner_user_id, name, kind, subtype, initial_balance_cents, initial_balance_on)
+      values (${ids.bank}, ${leader.id}, ${name("banco")}, 'asset', 'bank', 0, '2026-01-01')`;
+  });
+  track("groups", ids.group);
+  for (const id of [ids.leaderRow, ids.memberRow]) track("group_members", id);
+  track("accounts", ids.bank);
+  const clientOf = async (user: HarnessUser) => {
+    const { id, token } = await asUser(user, () => issueWebhookCredential({ name: name("clave"), purpose: "mcp", defaultAccountId: null, defaultCategoryId: null }));
+    keep("webhook_credentials", id);
+    return { ...mcpClient(POST, token), token };
+  };
+  const [{ tool, rpc, token }, { tool: memberTool }] = [await clientOf(leader), await clientOf(member)];
+  type Listed = { id: string; name: string; role: string; hasLogin: boolean; archived: boolean };
+  const members = async (archived = false) => (await tool("list_members", archived ? { archived: true } : {})).value as Listed[];
+
+  const asMember = await memberTool("create_member", { name: name("intruso") });
+  const created = await tool("create_member", { name: name("abuela") });
+  const guestId = (created.value as { memberId: string }).memberId;
+  track("group_members", guestId);
+  const guest = (await members()).find((row) => row.id === guestId);
+  const [stored] = await fixtureSql<{ invite_email: string | null; user_id: string | null }[]>`select invite_email, user_id from group_members where id = ${guestId}`;
+  const listedTools = ((await rpc(token, "tools/list")).body?.result?.tools ?? []) as { name: string; inputSchema: { properties: Record<string, unknown> } }[];
+  const createInput = listedTools.find((one) => one.name === "create_member")?.inputSchema.properties ?? { email: true };
+  assert(
+    next("RF-237: only the leader adds a member, who has no login and no email, and create_member asks for no email at all"),
+    asMember.isError && (asMember.value as { error: string }).error === es.errors.notLeader && !created.isError &&
+      guest?.hasLogin === false && guest.role === "member" && stored.invite_email === null && stored.user_id === null && !("email" in createInput),
+    `member ${JSON.stringify(asMember.value)}, created ${JSON.stringify(created.value)}, stored ${JSON.stringify(stored)}, input ${Object.keys(createInput)}`,
+  );
+
+  const renamed = await tool("rename_member", { memberId: guestId, name: name("abuela Rosa") });
+  const refusedRename = await memberTool("rename_member", { memberId: ids.leaderRow, name: name("robado") });
+  assert(
+    next("RF-237: rename_member answers the previous name, and a plain member renaming another is refused"),
+    !renamed.isError && (renamed.value as { before: { name: string } }).before.name === name("abuela") &&
+      (await members()).find((row) => row.id === guestId)?.name === name("abuela Rosa") && refusedRename.isError,
+    `renamed ${JSON.stringify(renamed.value)}, other ${JSON.stringify(refusedRename.value)}`,
+  );
+
+  const accountsBefore = ((await tool("list_accounts")).value as unknown[]).length;
+  const archived = await tool("archive_member", { memberId: guestId });
+  const [active, inArchive] = [await members(), await members(true)];
+  const accountsAfter = ((await tool("list_accounts")).value as unknown[]).length;
+  const restored = await tool("restore_member", { memberId: guestId });
+  assert(
+    next("RF-237: archive_member takes a member out of the list into the archived one without touching accounts, and restore_member brings them back"),
+    !archived.isError && !active.some((row) => row.id === guestId) && inArchive.some((row) => row.id === guestId && row.archived) &&
+      accountsAfter === accountsBefore && !restored.isError && (await members()).some((row) => row.id === guestId),
+    `archived ${JSON.stringify(archived.value)}, accounts ${accountsBefore}/${accountsAfter}`,
+  );
+
+  const asPlain = await memberTool("update_fund", { cashMode: "per_member" });
+  const changed = await tool("update_fund", { cashMode: "per_member" });
+  const [fund] = await fixtureSql<{ cash_mode: string }[]>`select cash_mode from groups where id = ${ids.group}`;
+  assert(
+    next("RF-237: update_fund by the leader changes the cash mode and answers the old one; by a plain member it is refused"),
+    asPlain.isError && (asPlain.value as { error: string }).error === es.errors.notLeader && !changed.isError &&
+      JSON.stringify((changed.value as { before: unknown }).before) === JSON.stringify({ cashMode: "shared" }) && fund.cash_mode === "per_member",
+    `member ${JSON.stringify(asPlain.value)}, leader ${JSON.stringify(changed.value)}, now ${fund.cash_mode}`,
+  );
+}
+
+// RF-238: Claude deletes what the web deletes, one row per call, and each answer is the row as its list tool reads it.
+async function mcpDeletesSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const today = todayInBogota();
+  const { POST } = await import("@/app/mcp/route");
+  const [leader, member, stranger] = [await createMembershipFreeUser(), await createMembershipFreeUser(), await createMembershipFreeUser()];
+  const ids = { group: randomUUID(), leaderRow: randomUUID(), memberRow: randomUUID(), bank: randomUUID(), category: randomUUID() };
+  const name = (what: string) => `Harness rf238 ${what} ${tag}`;
+  await fixtureSql.begin(async (tx) => {
+    await tx`insert into groups (id, name, cash_mode) values (${ids.group}, ${name("fondo")}, 'shared')`;
+    await tx`insert into group_members (id, group_id, user_id, name, role) values
+      (${ids.leaderRow}, ${ids.group}, ${leader.id}, ${name("lider")}, 'leader'), (${ids.memberRow}, ${ids.group}, ${member.id}, ${name("miembro")}, 'member')`;
+    await tx`insert into accounts (id, owner_user_id, name, kind, subtype, initial_balance_cents, initial_balance_on)
+      values (${ids.bank}, ${leader.id}, ${name("banco")}, 'asset', 'bank', 0, '2026-01-01')`;
+    await tx`insert into categories (id, owner_user_id, name, kind, color) values (${ids.category}, ${leader.id}, ${name("base")}, 'expense', '#8C4A4A')`;
+  });
+  track("groups", ids.group);
+  for (const id of [ids.leaderRow, ids.memberRow]) track("group_members", id);
+  track("accounts", ids.bank);
+  track("categories", ids.category);
+  const clientOf = async (user: HarnessUser) => {
+    const { id, token } = await asUser(user, () => issueWebhookCredential({ name: name("clave"), purpose: "mcp", defaultAccountId: null, defaultCategoryId: null }));
+    keep("webhook_credentials", id);
+    return mcpClient(POST, token).tool;
+  };
+  const [tool, strangerTool] = [await clientOf(leader), await clientOf(stranger)];
+  const listed = async (list: string, args: Record<string, unknown> = {}) => (await tool(list, args)).value as { id?: string }[];
+  const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+
+  // An account with no movement goes and answers its row; one with a movement stays.
+  const spare = (await tool("create_account", { name: name("sobrante"), kind: "asset", subtype: "bank", openingBalanceCents: 0, balanceOn: "2026-01-01" })).value as { accountId: string };
+  track("accounts", spare.accountId);
+  const spareRow = (await listed("list_accounts")).find((row) => row.id === spare.accountId);
+  const accountGone = await tool("delete_account", { accountId: spare.accountId });
+  await tool("record_movement", { fromAccountId: ids.bank, toAccountId: null, amountCents: 1_000_00, occurredAt: today, description: name("gasto"), categoryId: ids.category });
+  const withMovements = await tool("delete_account", { accountId: ids.bank });
+  const foreignAccount = await strangerTool("delete_account", { accountId: ids.bank });
+  assert(
+    next("RF-238: delete_account removes an account with no movements and answers its row; one with movements, or another person's, stays"),
+    !accountGone.isError && same((accountGone.value as { before: unknown }).before, spareRow) &&
+      !(await listed("list_accounts")).some((row) => row.id === spare.accountId) &&
+      withMovements.isError && (withMovements.value as { error: string }).error === es.errors.accountHasMovements &&
+      foreignAccount.isError && (foreignAccount.value as { error: string }).error === es.errors.notFound,
+    `gone ${JSON.stringify(accountGone.value)}, with movements ${JSON.stringify(withMovements.value)}, stranger ${JSON.stringify(foreignAccount.value)}`,
+  );
+
+  const category = (await tool("create_category", { name: name("temporal"), kind: "expense", placement: "personal" })).value as { categoryId: string };
+  const categoryRow = ((await tool("list_categories")).value as { id: string }[]).find((row) => row.id === category.categoryId);
+  const budget = (await tool("create_budget", { categoryId: category.categoryId, period: "monthly", limitCents: 500_000_00, thresholdPct: 80 })).value as { budgetId: string };
+  const inUse = await tool("delete_category", { categoryId: ids.category });
+  const budgetRow = (await listed("list_budgets")).find((row) => row.id === budget.budgetId);
+  const budgetGone = await tool("delete_budget", { budgetId: budget.budgetId });
+  const recreated = await tool("create_budget", {
+    categoryId: (budgetRow as unknown as { categoryId: string }).categoryId, period: "monthly", limitCents: 500_000_00, thresholdPct: 80,
+  });
+  // The budget made again holds the category; with it gone too, the category goes.
+  await tool("delete_budget", { budgetId: (recreated.value as { budgetId: string }).budgetId });
+  const categoryGone = await tool("delete_category", { categoryId: category.categoryId });
+  assert(
+    next("RF-238: delete_budget answers its row, a category a movement uses is refused, and a deleted budget's answer makes it again"),
+    !budgetGone.isError && same((budgetGone.value as { before: unknown }).before, budgetRow) && !recreated.isError && inUse.isError &&
+      (inUse.value as { error: string }).error === es.errors.categoryInUse && !categoryGone.isError &&
+      same((categoryGone.value as { before: unknown }).before, categoryRow),
+    `budget ${JSON.stringify(budgetGone.value)}, inUse ${JSON.stringify(inUse.value)}, recreated ${JSON.stringify(recreated.value)}, category ${JSON.stringify(categoryGone.value)} ${JSON.stringify(categoryRow)}`,
+  );
+
+  const goal = (await tool("create_goal", { name: name("meta"), targetAmountCents: 100_000_00 })).value as { goalId: string };
+  const goalRow = (await listed("list_goals")).find((row) => row.id === goal.goalId);
+  const goalGone = await tool("delete_goal", { goalId: goal.goalId });
+  const planned = (await tool("create_planned_payment", { fromAccountId: ids.bank, toAccountId: null, amountCents: 9_000_00, dueDate: shiftDate(today, 5), categoryId: ids.category })).value as { plannedPaymentId: string };
+  const plannedRow = (await listed("list_planned_payments")).find((row) => row.id === planned.plannedPaymentId);
+  const plannedGone = await tool("delete_planned_payment", { plannedPaymentId: planned.plannedPaymentId });
+  const rule = (await tool("create_recurring_rule", { fromAccountId: ids.bank, toAccountId: null, amountCents: 8_000_00, categoryId: ids.category, frequency: "monthly", dayOfMonth: 5, nextRunOn: shiftDate(today, 30) })).value as { recurringRuleId: string };
+  const ruleRow = (await listed("list_recurring_rules")).find((row) => row.id === rule.recurringRuleId);
+  const ruleGone = await tool("delete_recurring_rule", { id: rule.recurringRuleId });
+  assert(
+    next("RF-238: delete_goal, delete_planned_payment and delete_recurring_rule each answer the row their list reads and take it out of it"),
+    same((goalGone.value as { before: unknown }).before, goalRow) && same((plannedGone.value as { before: unknown }).before, plannedRow) &&
+      same((ruleGone.value as { before: unknown }).before, ruleRow),
+    `goal ${JSON.stringify(goalGone.value)}, planned ${JSON.stringify(plannedGone.value)}, rule ${JSON.stringify(ruleGone.value)}`,
+  );
+  const stillThere = [
+    (await listed("list_goals")).some((row) => row.id === goal.goalId),
+    (await listed("list_planned_payments")).some((row) => row.id === planned.plannedPaymentId),
+    (await listed("list_recurring_rules")).some((row) => row.id === rule.recurringRuleId),
+  ];
+  const strangerGoal = await strangerTool("delete_goal", { goalId: goal.goalId });
+  assert(
+    next("RF-238: a deleted goal, payment and rule are gone from their lists, and another person's id reads as not found"),
+    stillThere.every((there) => !there) && strangerGoal.isError && (strangerGoal.value as { error: string }).error === es.errors.notFound,
+    `still ${JSON.stringify(stillThere)}, stranger ${JSON.stringify(strangerGoal.value)}`,
+  );
+
+  const owed = (await tool("record_member_debt", { kind: "debt", debtorMemberId: ids.memberRow, creditorMemberId: ids.leaderRow, amountCents: 100_000_00, occurredOn: today })).value as { id: string };
+  const paid = (await tool("record_member_debt", { kind: "payment", debtorMemberId: ids.memberRow, creditorMemberId: ids.leaderRow, amountCents: 40_000_00, occurredOn: today })).value as { id: string };
+  const covered = await tool("delete_member_debt", { id: owed.id });
+  const paymentGone = await tool("delete_member_debt", { id: paid.id });
+  const debtGone = await tool("delete_member_debt", { id: owed.id });
+  assert(
+    next("RF-238: delete_member_debt refuses a debt whose payments would be left standing, then deletes the payment and the debt, each answering its entry"),
+    covered.isError && (covered.value as { error: string }).error === es.memberDebts.errors.debtPaid && !paymentGone.isError && !debtGone.isError &&
+      (paymentGone.value as { before: { kind: string } }).before.kind === "payment" && (debtGone.value as { before: { kind: string } }).before.kind === "debt",
+    `covered ${JSON.stringify(covered.value)}, payment ${JSON.stringify(paymentGone.value)}, debt ${JSON.stringify(debtGone.value)}`,
+  );
+
+  const loan = (await tool("create_account", { name: name("credito"), kind: "liability", subtype: "loan", openingBalanceCents: 1_000_000_00, balanceOn: "2026-01-01" })).value as { accountId: string };
+  track("accounts", loan.accountId);
+  const linked = await tool("link_third_party_credit", { liabilityAccountId: loan.accountId, personName: name("papa") });
+  const linkRow = ((await tool("list_third_party_credits")).value as { liabilityAccountId: string }[]).find((row) => row.liabilityAccountId === loan.accountId);
+  const unlinked = await tool("unlink_third_party_credit", { liabilityAccountId: loan.accountId });
+  assert(
+    next("RF-238: unlink_third_party_credit answers the credit's link as list_third_party_credits reads it, and the credit stops being followed"),
+    !linked.isError && !unlinked.isError && same((unlinked.value as { before: unknown }).before, linkRow) &&
+      !((await tool("list_third_party_credits")).value as { liabilityAccountId: string }[]).some((row) => row.liabilityAccountId === loan.accountId),
+    `linked ${JSON.stringify(linked.value)}, unlinked ${JSON.stringify(unlinked.value)}`,
   );
 }

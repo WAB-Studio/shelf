@@ -78,6 +78,13 @@
       "when": 1793718171628,
       "tag": "0010_drop_sync_rows_today",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1794464313200,
+      "tag": "0011_review_entries",
+      "breakpoints": true
     }
   ]
 }

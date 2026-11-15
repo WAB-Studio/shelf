@@ -37,7 +37,11 @@ export async function DELETE(request: Request): Promise<Response> {
 
   await withReaderDb(async (tx) => {
     await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${reader.id}::text || ':sync-quota', 0))`);
-    await tx.execute(sql`delete from reading.lookups where user_id = ${reader.id}`);
+    // The review travels with the account (RL-93): emptying the copy empties its cards, senses and deletions too,
+    // in the same statement.
+    await tx.execute(sql`
+      with record as (delete from reading.lookups where user_id = ${reader.id} returning 1)
+      delete from reading.review_entries where user_id = ${reader.id}`);
   });
 
   return json({}, 200);

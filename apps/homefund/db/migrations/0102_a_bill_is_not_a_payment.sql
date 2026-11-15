@@ -1,0 +1,2 @@
+ALTER TABLE "finances"."ingest_deliveries" DROP CONSTRAINT "ingest_deliveries_reject_reason_valid";--> statement-breakpoint
+ALTER TABLE "finances"."ingest_deliveries" ADD CONSTRAINT "ingest_deliveries_reject_reason_valid" CHECK ("finances"."ingest_deliveries"."reject_reason" is null or "finances"."ingest_deliveries"."reject_reason" in ('failed', 'statement', 'support', 'reminder', 'promotion', 'bill', 'no_movement_signal'));

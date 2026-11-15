@@ -3,6 +3,7 @@ import "server-only";
 import { sql, type SQL } from "drizzle-orm";
 
 import { hasUsualHistorySql, isAboveUsualSql, usualMedianSql } from "@/db/queries/above-usual";
+import { patternKeySql } from "@/db/queries/learned-category";
 import { withUserDb } from "@/db/session";
 import { monthRange, shiftMonth, todayInBogota } from "@/lib/dates";
 import { USUAL_WINDOW_MONTHS } from "@/lib/month-review-rules";
@@ -133,9 +134,7 @@ function patternsSql(w: Window): SQL {
     -- One row per series and day. A series is a description without case, accents, digits or
     -- punctuation on one account and currency: «NETFLIX.COM 4412» and «Netflix.com 9921» are one.
     keyed as (
-      select t.*, nullif(btrim(regexp_replace(
-          translate(lower(coalesce(t.description, '')), 'áàâäãéèêëíìîïóòôöõúùûüñç', 'aaaaaeeeeiiiiooooouuuunc'),
-          '[^a-z]+', ' ', 'g')), '') as pattern_key
+      select t.*, ${patternKeySql(sql`t.description`)} as pattern_key
       from tx t
       where t.occurred_at >= ${start}::date
     ),

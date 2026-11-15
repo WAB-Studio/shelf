@@ -5,14 +5,21 @@ import { z } from "zod";
 
 import { listAccountNames, type AccountNameRow } from "@/db/queries/accounts";
 import { listScopedCategories, type ScopedCategoryNode } from "@/db/queries/categories";
+import { completeCounterparty } from "@/db/queries/counterparty-write";
 import {
   acceptDelivery,
   DeliveryNotPending,
+  forgetMerchant,
   listDeliveries,
+  listOwnMerchants,
+  listSilencedShapes,
   rejectDelivery,
+  restoreShape,
+  ShapeNotSilenced,
   type PendingDeliveryRow,
 } from "@/db/queries/ingest-review";
 import { assertContributorGiven, mapTransactionError } from "@/db/queries/ledger-write";
+import { listAwaitingCounterparty } from "@/db/queries/transactions";
 import { withSharedTransaction, withUserDb } from "@/db/session";
 import { todayInBogota } from "@/lib/dates";
 import { ActionError } from "@/lib/errors";
@@ -20,7 +27,11 @@ import { categoryNamesById, categoryPathsById } from "@/lib/fund/category-names"
 import { proposedCategoryId } from "@/lib/fund/category-scope";
 import { centsToDecimal, toCents } from "@/lib/money";
 import { pgErrorCode } from "@/lib/db-error";
-import { acceptDeliverySchema } from "@/lib/validation/ingest";
+import { ADD, DESTROY, OVERWRITE, READ, titled } from "@/lib/mcp/annotations";
+import { resolveLabelIds } from "@/lib/mcp/label-tools";
+import { parseForm } from "@/lib/mcp/parse-form";
+import { acceptDeliverySchema, forgetMerchantSchema, restoreShapeSchema } from "@/lib/validation/ingest";
+import { completeCounterpartySchema } from "@/lib/validation/transaction";
 
 type Say = (key: string) => string;
 type Run = (ctx: ServerContext, load: (owner: string) => Promise<unknown>) => Promise<CallToolResult>;
@@ -54,6 +65,7 @@ const acceptItem = z.object({
   date: z.string().optional(),
   contributedByMemberId: z.string().nullish(),
   madeByMemberId: z.string().nullish(),
+  labels: z.array(z.string()).optional(),
 });
 
 type AcceptItem = z.infer<typeof acceptItem>;
@@ -102,7 +114,7 @@ function notDetectedOf(delivery: PendingDeliveryRow, lookup: Lookup): string[] {
 
 // The form a person would have submitted from the card: the proposal, with each override laid over it.
 // A field neither side gives is refused by name, before anything is written.
-function acceptForm(delivery: PendingDeliveryRow, item: AcceptItem, lookup: Lookup) {
+function acceptForm(delivery: PendingDeliveryRow, item: AcceptItem, lookup: Lookup, labelIds: string[]) {
   const missing = (field: string): never => {
     throw new BatchRefusal(`mcp.errors.inbox.missing.${field}`, delivery.id, field);
   };
@@ -149,7 +161,7 @@ function acceptForm(delivery: PendingDeliveryRow, item: AcceptItem, lookup: Look
           amount: centsToDecimal(line.amountCents),
           description: "description" in line ? line.description : undefined,
         })),
-    labelIds: [],
+    labelIds,
   };
 }
 
@@ -192,13 +204,14 @@ export function registerInboxTools(server: McpServer, run: Run, t: Say): void {
   server.registerTool(
     "list_inbox",
     {
+      ...titled(t, "listInbox"),
       description: t("tools.listInbox"),
       inputSchema: z.object({
         status: z.enum(["pending", "accepted", "rejected"]).optional().describe(d("inboxStatus")),
         limit: z.number().int().min(1).max(200).optional().describe(d("limit")),
         offset: z.number().int().min(0).optional().describe(d("offset")),
       }),
-      annotations: { readOnlyHint: true },
+      annotations: READ,
     },
     (input: { status?: "pending" | "accepted" | "rejected"; limit?: number; offset?: number }, ctx) =>
       run(ctx, (owner) =>
@@ -250,9 +263,10 @@ export function registerInboxTools(server: McpServer, run: Run, t: Say): void {
   server.registerTool(
     "accept_deliveries",
     {
+      ...titled(t, "acceptDeliveries"),
       description: t("tools.acceptDeliveries"),
       inputSchema: z.object({ deliveries: z.array(acceptItem).min(1).max(50).describe(d("deliveries")) }),
-      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
+      annotations: ADD,
     },
     (input: { deliveries: AcceptItem[] }, ctx) =>
       run(ctx, async (owner) => {
@@ -264,7 +278,7 @@ export function registerInboxTools(server: McpServer, run: Run, t: Say): void {
         const forms = await Promise.all(
           input.deliveries.map(async (item) => {
             try {
-              const form = acceptForm(pending.get(item.id)!, item, lookup);
+              const form = acceptForm(pending.get(item.id)!, item, lookup, await resolveLabelIds(owner, item.labels ?? []));
               const verdict = acceptDeliverySchema.safeParse(form);
               if (!verdict.success) throw new BatchRefusal(verdict.error.issues[0].message, item.id);
               await assertContributorGiven(verdict.data);
@@ -302,7 +316,7 @@ export function registerInboxTools(server: McpServer, run: Run, t: Say): void {
               refuse(form.deliveryId, error);
             }
           }
-          return { accepted };
+          return { count: accepted.length, accepted };
         });
       }),
   );
@@ -310,23 +324,112 @@ export function registerInboxTools(server: McpServer, run: Run, t: Say): void {
   server.registerTool(
     "reject_deliveries",
     {
+      ...titled(t, "rejectDeliveries"),
       description: t("tools.rejectDeliveries"),
-      inputSchema: z.object({ ids: z.array(z.string()).min(1).max(50).describe(d("deliveryIds")) }),
-      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false },
+      inputSchema: z.object({
+        ids: z.array(z.string()).min(1).max(50).describe(d("deliveryIds")),
+        silenceShape: z.boolean().optional().describe(d("silenceShape")),
+      }),
+      annotations: DESTROY,
     },
-    (input: { ids: string[] }, ctx) =>
+    (input: { ids: string[]; silenceShape?: boolean }, ctx) =>
       run(ctx, async () => {
         await loadPending(input.ids);
         return withUserDb(async (tx) => {
           for (const id of input.ids) {
             try {
-              await rejectDelivery({ deliveryId: id, silenceShape: false }, tx);
+              await rejectDelivery({ deliveryId: id, silenceShape: input.silenceShape ?? false }, tx);
             } catch (error) {
               refuse(id, error);
             }
           }
-          return { rejected: input.ids };
+          return { count: input.ids.length, rejected: input.ids, silenced: input.silenceShape ?? false };
         });
       }),
+  );
+
+  // RF-99: the shapes a rejection silenced; returning one makes its next messages wait for review again.
+  server.registerTool(
+    "list_silenced_shapes",
+    { ...titled(t, "listSilencedShapes"), description: t("tools.listSilencedShapes"), inputSchema: z.object({}), annotations: READ },
+    (_input, ctx) => run(ctx, () => listSilencedShapes()),
+  );
+
+  server.registerTool(
+    "restore_shape",
+    {
+      ...titled(t, "restoreShape"),
+      description: t("tools.restoreShape"),
+      inputSchema: z.object({ shapeId: z.string().describe(d("shapeId")) }),
+      annotations: OVERWRITE,
+    },
+    (input: { shapeId: string }, ctx) =>
+      run(ctx, async () => {
+        const { shapeId } = parseForm(restoreShapeSchema, input);
+        try {
+          return { shapeId, ...(await restoreShape({ shapeId })) };
+        } catch (error) {
+          if (error instanceof ShapeNotSilenced) throw new ActionError("errors.notFound");
+          throw error;
+        }
+      }),
+  );
+
+  server.registerTool(
+    "list_merchants",
+    { ...titled(t, "listMerchants"), description: t("tools.listMerchants"), inputSchema: z.object({}), annotations: READ },
+    (_input, ctx) => run(ctx, () => listOwnMerchants()),
+  );
+
+  server.registerTool(
+    "forget_merchant",
+    {
+      ...titled(t, "forgetMerchant"),
+      description: t("tools.forgetMerchant"),
+      inputSchema: z.object({ merchantId: z.string().describe(d("merchantId")) }),
+      annotations: DESTROY,
+    },
+    (input: { merchantId: string }, ctx) =>
+      run(ctx, async () => {
+        const { merchantId } = parseForm(forgetMerchantSchema, input);
+        const before = await forgetMerchant(merchantId);
+        if (before === null) throw new ActionError("errors.notFound");
+        return { merchantId, before };
+      }),
+  );
+
+  // RF-133: the movements the Bandeja shows waiting for their other account.
+  server.registerTool(
+    "list_awaiting_counterparty",
+    {
+      ...titled(t, "listAwaitingCounterparty"),
+      description: t("tools.listAwaitingCounterparty"),
+      inputSchema: z.object({
+        limit: z.number().int().min(1).max(200).optional().describe(d("limit")),
+        offset: z.number().int().min(0).optional().describe(d("offset")),
+      }),
+      annotations: READ,
+    },
+    (input: { limit?: number; offset?: number }, ctx) =>
+      run(ctx, async () => {
+        const rows = await listAwaitingCounterparty();
+        const from = input.offset ?? 0;
+        return rows.slice(from, from + (input.limit ?? 50));
+      }),
+  );
+
+  server.registerTool(
+    "complete_counterparty",
+    {
+      ...titled(t, "completeCounterparty"),
+      description: t("tools.completeCounterparty"),
+      inputSchema: z.object({
+        transactionId: z.string().describe(d("transactionId")),
+        accountId: z.string().describe(d("counterpartyAccountId")),
+      }),
+      annotations: OVERWRITE,
+    },
+    (input: { transactionId: string; accountId: string }, ctx) =>
+      run(ctx, () => completeCounterparty(parseForm(completeCounterpartySchema, input))),
   );
 }

@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
 
 import { internalAccountSql } from "@/db/queries/accounts";
 import {
@@ -10,12 +10,15 @@ import {
   ingestMerchants,
   recipients,
 } from "@/db/schema";
+import { learnedCategoryId } from "@/db/queries/learned-category";
 import { withImpersonatedDb } from "@/db/session";
 import { BASE_CURRENCY } from "@/lib/currency";
 import { pgErrorCode } from "@/lib/db-error";
 import { todayInBogota } from "@/lib/dates";
 import type { EmailVerdict } from "@/lib/ingest/classify";
-import { fingerprintMessage } from "@/lib/ingest/fingerprint";
+import { DUPLICATE_WINDOW_DAYS, judgeDuplicate, type DuplicateCandidate } from "@/lib/ingest/duplicates";
+import { emailDescription, emailMerchant } from "@/lib/ingest/email";
+import { fingerprintMessage, merchantOf } from "@/lib/ingest/fingerprint";
 import { applyRecipient, extractNumber, matchRecipient } from "@/lib/ingest/recipient-number";
 import { parseAmount } from "@/lib/money";
 import { interpretQuickEntry } from "@/lib/transactions/interpret";
@@ -25,6 +28,8 @@ export type IngestDeliveryResult = {
   deliveryId: string;
   status: "pending" | "rejected";
   duplicate: boolean;
+  // Set when the delivery landed rejected because the payment it reports was already in the inbox (RF-208).
+  reason?: "duplicate";
 };
 
 export type RecordIngestDeliveryArgs = {
@@ -39,6 +44,8 @@ export type RecordIngestDeliveryArgs = {
 };
 
 const MAX_DESCRIPTION_LENGTH = 200;
+// A figure in dollars or euros is no peso figure (RF-207); the proposal waits for a person to state it.
+const FOREIGN_CURRENCY = /\b(?:USD|EUR)\b|US\$/;
 
 // The one place the date's precedence lives: the caller's override, then the
 // day the message names, then the day it was delivered. A read date later than
@@ -55,6 +62,29 @@ export function resolveOccurredAt(
   return read !== null && read <= today ? read : today;
 }
 
+type Merchant = ReturnType<typeof merchantOf>;
+
+// A delivery that repeats an alert still waiting gives it the business the alert did not name, so the
+// person reads «CENS» where the bank said «a la cuenta *1234» (RF-208).
+async function fillOriginal(
+  tx: Parameters<Parameters<typeof withImpersonatedDb>[1]>[0],
+  original: DuplicateCandidate,
+  merchant: Merchant,
+): Promise<void> {
+  if (!merchant || original.receipt || original.status !== "pending" || original.merchantKey) return;
+
+  await tx
+    .update(ingestDeliveries)
+    .set({ proposedDescription: merchant.label, merchantKey: merchant.key, merchantLabel: merchant.label })
+    .where(
+      and(
+        eq(ingestDeliveries.id, original.id),
+        eq(ingestDeliveries.status, "pending"),
+        isNull(ingestDeliveries.merchantKey),
+      ),
+    );
+}
+
 export async function recordIngestDelivery({
   ownerUserId,
   credentialId,
@@ -67,11 +97,38 @@ export async function recordIngestDelivery({
   const today = todayInBogota();
   const externalRef = payload.external_ref ?? fingerprint.contentHash;
   const extractedIdentifier = extractNumber(payload.text);
-  const rejectReason = email && !email.movement ? email.reason : null;
+  const verdictReason = email && !email.movement ? email.reason : null;
+  const receipt = email?.movement === true && email.receipt;
+
+  // A receipt names its business in a field when no «en <comercio>» does (RF-208).
+  const merchant = fingerprint.merchant ?? (receipt ? merchantOf(emailMerchant(payload.text) ?? "") : null);
+
+  // The figure, the day and the direction a message reports do not depend on the person's accounts, so
+  // the payment's original is looked up in the same round trip as the rest (RF-208).
+  const read = interpretQuickEntry(payload.text, {
+    categories: [],
+    accounts: [],
+    defaultAccountId: null,
+    yearGuard: email ? "any" : "dated",
+  });
+  const proposedOccurredAt = resolveOccurredAt(payload.occurred_at, read.occurredAt, today);
+  // Reads the same way the importer does (RF-128): thousands separators in either convention, an optional
+  // zero-decimal suffix, up to the two decimals the column stores. A finer amount or a non-positive one is
+  // dropped here, not rounded: the proposal is left without a figure rather than one nobody wrote. A figure in
+  // dollars or euros is no peso figure either (RF-207).
+  const rawPesos = payload.amount ?? read.amountPesos;
+  const parsedAmountCents = rawPesos === null ? null : parseAmount(rawPesos);
+  const readAmountCents =
+    !(email && FOREIGN_CURRENCY.test(payload.text)) &&
+    !(email?.movement && !email.priced) &&
+    parsedAmountCents !== null &&
+    parsedAmountCents > 0
+      ? parsedAmountCents
+      : null;
 
   return withImpersonatedDb(ownerUserId, async (tx) => {
     // Do not read ingest_shapes here; the insert trigger owns that decision.
-    const [categoryRows, accountRows, merchantRows, recipientRows] = await Promise.all([
+    const [categoryRows, accountRows, merchantRows, recipientRows, originalRows] = await Promise.all([
       tx
         .select({ id: categories.id, name: categories.name, kind: categories.kind })
         .from(categories),
@@ -80,19 +137,20 @@ export async function recordIngestDelivery({
           id: accounts.id,
           name: accounts.name,
           lastFour: accounts.lastFour,
+          groupId: accounts.groupId,
           settlementCurrency: accounts.settlementCurrency,
         })
         .from(accounts)
         // A bank message never names a «Me debe» (RF-216).
         .where(and(isNull(accounts.archivedAt), sql`not ${internalAccountSql}`)),
-      fingerprint.merchant
+      merchant
         ? tx
             .select({
               state: ingestMerchants.state,
               trustedCategoryId: ingestMerchants.trustedCategoryId,
             })
             .from(ingestMerchants)
-            .where(eq(ingestMerchants.merchantKey, fingerprint.merchant.key))
+            .where(eq(ingestMerchants.merchantKey, merchant.key))
             .limit(1)
         : Promise.resolve(null),
       extractedIdentifier
@@ -108,7 +166,58 @@ export async function recordIngestDelivery({
             .from(recipients)
             .where(sql`${recipients.identifier} like ${"%" + extractedIdentifier}`)
         : Promise.resolve([]),
+      // What already reports this payment: the same figure (or, with no figure, the same business) within
+      // two days, still waiting or already recorded (RF-208). Oldest first.
+      (email === undefined || email.movement) && (readAmountCents !== null || merchant)
+        ? tx
+            .select({
+              id: ingestDeliveries.id,
+              status: ingestDeliveries.status,
+              receipt: ingestDeliveries.receipt,
+              fromEmail: ingestDeliveries.fromEmail,
+              rawText: ingestDeliveries.rawText,
+              occurredOn: ingestDeliveries.proposedOccurredAt,
+              receivedAt: ingestDeliveries.createdAt,
+              shapeHash: ingestDeliveries.shapeHash,
+              direction: ingestDeliveries.proposedDirection,
+              merchantKey: ingestDeliveries.merchantKey,
+              merchantLabel: ingestDeliveries.merchantLabel,
+            })
+            .from(ingestDeliveries)
+            .where(
+              and(
+                inArray(ingestDeliveries.status, ["pending", "accepted"]),
+                isNull(ingestDeliveries.rejectReason),
+                sql`${ingestDeliveries.proposedOccurredAt} between ${proposedOccurredAt}::date - ${DUPLICATE_WINDOW_DAYS}::int and ${proposedOccurredAt}::date + ${DUPLICATE_WINDOW_DAYS}::int`,
+                readAmountCents !== null
+                  ? eq(ingestDeliveries.proposedAmountCents, readAmountCents)
+                  : eq(ingestDeliveries.merchantKey, merchant?.key ?? ""),
+              ),
+            )
+            .orderBy(asc(ingestDeliveries.createdAt))
+        : Promise.resolve([]),
     ]);
+
+    const original = judgeDuplicate(
+      {
+        fromEmail: email !== undefined,
+        text: payload.text,
+        occurredOn: proposedOccurredAt,
+        receivedAt: Date.now(),
+        receipt,
+        shapeHash: fingerprint.shapeHash,
+        direction: payload.direction ?? read.direction,
+      },
+      originalRows.map(
+        (row): DuplicateCandidate => ({
+          ...row,
+          receivedAt: row.receivedAt.getTime(),
+          status: row.status === "accepted" ? "accepted" : "pending",
+        }),
+      ),
+    );
+    const rejectReason = verdictReason ?? (original.kind === "repeats" ? "duplicate" : null);
+    const duplicateOfId = original.kind === "repeats" ? original.of.id : null;
 
     const proposal = interpretQuickEntry(payload.text, {
       categories: categoryRows,
@@ -117,19 +226,10 @@ export async function recordIngestDelivery({
       yearGuard: email ? "any" : "dated",
     });
 
-    // Reads the same way the importer does (RF-128): thousands separators in
-    // either convention, an optional zero-decimal suffix, up to the two
-    // decimals the column stores. A finer amount or a non-positive one is
-    // dropped here, not rounded — the proposal is left without a figure
-    // rather than one nobody wrote.
-    const rawPesos = payload.amount ?? proposal.amountPesos;
-    const parsedAmountCents = rawPesos === null ? null : parseAmount(rawPesos);
-    const proposedAmountCents =
-      rejectReason === null && parsedAmountCents !== null && parsedAmountCents > 0 ? parsedAmountCents : null;
+    const proposedAmountCents = rejectReason === null ? readAmountCents : null;
 
-    const merchant = merchantRows?.[0] ?? null;
-    const trustedCategoryId =
-      merchant?.state === "trusted" ? merchant.trustedCategoryId : null;
+    const memory = merchantRows?.[0] ?? null;
+    const trustedCategoryId = memory?.state === "trusted" ? memory.trustedCategoryId : null;
     const recipient = matchRecipient(extractedIdentifier, recipientRows);
 
     let proposedCategoryId =
@@ -143,7 +243,10 @@ export async function recordIngestDelivery({
             ? "credential_default"
             : null;
 
-    let description = proposal.description.trim().slice(0, MAX_DESCRIPTION_LENGTH);
+    // A bank email's remainder carries its date, identifiers and help line; its sentence is the description (RF-206).
+    let description = (email ? emailDescription(proposal.description) : proposal.description)
+      .trim()
+      .slice(0, MAX_DESCRIPTION_LENGTH);
 
     let proposedAccountId = payload.account_id ?? proposal.accountId;
     let proposedToAccountId: string | null = null;
@@ -175,14 +278,40 @@ export async function recordIngestDelivery({
     const proposedAccount = accountRows.find((row) => row.id === proposedAccountId);
     const foreignCurrencyAccount =
       proposedAccount !== undefined && proposedAccount.settlementCurrency !== BASE_CURRENCY;
-    const proposedOccurredAt = resolveOccurredAt(
-      payload.occurred_at,
-      proposal.occurredAt,
-      today,
-    );
+    // An alert that names no business takes it from a receipt it replaces (RF-208).
+    const donor =
+      original.kind === "supersedes" && !merchant
+        ? original.pending.find((row) => row.merchantKey && row.merchantLabel)
+        : undefined;
+    if (donor?.merchantLabel) description = donor.merchantLabel;
     const proposedDescription = description === "" ? null : description;
-    const merchantKey = fingerprint.merchant?.key ?? null;
-    const merchantLabel = fingerprint.merchant?.label ?? null;
+
+    // What the proposal would otherwise fall back on (the key's default, or nothing) gives way to what the
+    // person's own movements of this counterparty agree on (RF-210). A category the message named, a trusted
+    // merchant or a saved recipient already speak for the person and are left alone. It rides the delivery's
+    // own transaction, once, and only for a proposal that has no category of its own yet.
+    if (
+      rejectReason === null &&
+      proposedDirection !== "transfer" &&
+      (categorySource === null || categorySource === "credential_default")
+    ) {
+      // A saved recipient's name, or the merchant the message carried, names the counterparty; the
+      // description of a message that carried one is the message itself, and names no one.
+      const merchantLabel = recipient === null ? (fingerprint.merchant?.label ?? null) : null;
+      const learned = await learnedCategoryId(tx, {
+        merchantLabel,
+        description: merchantLabel === null ? proposedDescription : null,
+        kind: proposedDirection === "income" ? "income" : "expense",
+        groupId: proposedAccount ? proposedAccount.groupId : undefined,
+        today,
+      });
+      if (learned !== null) {
+        proposedCategoryId = learned;
+        categorySource = "merchant";
+      }
+    }
+    const merchantKey = merchant?.key ?? donor?.merchantKey ?? null;
+    const merchantLabel = merchant?.label ?? donor?.merchantLabel ?? null;
 
     try {
       // Keep a duplicate from aborting the transaction before its read-back.
@@ -205,7 +334,10 @@ export async function recordIngestDelivery({
             proposed_to_account_id,
             extracted_identifier,
             recipient_id,
-            reject_reason
+            reject_reason,
+            receipt,
+            from_email,
+            duplicate_of_id
           ) values (
             ${credentialId},
             ${externalRef},
@@ -223,7 +355,10 @@ export async function recordIngestDelivery({
             ${proposedToAccountId},
             ${extractedIdentifier},
             ${recipient?.id ?? null},
-            ${rejectReason}
+            ${rejectReason},
+            ${receipt},
+            ${email !== undefined},
+            ${duplicateOfId}
           )
           returning id, status
         `),
@@ -238,7 +373,31 @@ export async function recordIngestDelivery({
           set status = 'rejected', resolved_at = now()
           where id = ${row.id} and status = 'pending'
         `);
-        return { deliveryId: row.id, status: "rejected", duplicate: false };
+        if (original.kind === "repeats" && rejectReason === "duplicate") {
+          await fillOriginal(tx, original.of, merchant);
+        }
+        return {
+          deliveryId: row.id,
+          status: "rejected",
+          duplicate: false,
+          ...(rejectReason === "duplicate" ? { reason: "duplicate" as const } : {}),
+        };
+      }
+
+      // The receipts that were waiting for their alert become its repeats (RF-208).
+      if (original.kind === "supersedes" && row.status === "pending") {
+        await tx
+          .update(ingestDeliveries)
+          .set({ status: "rejected", resolvedAt: sql`now()`, rejectReason: "duplicate", duplicateOfId: row.id })
+          .where(
+            and(
+              inArray(
+                ingestDeliveries.id,
+                original.pending.map((pending) => pending.id),
+              ),
+              eq(ingestDeliveries.status, "pending"),
+            ),
+          );
       }
 
       return {
