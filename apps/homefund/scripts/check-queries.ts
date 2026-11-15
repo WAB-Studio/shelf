@@ -4169,6 +4169,7 @@ async function main(): Promise<void> {
   await mcpMoveCountSuite();
   await mcpBudgetsSuite();
   await mcpGoalsSuite();
+  await mcpPlannedPaymentsSuite();
 }
 
 // A member recorded without a login is someone in the fund: a leader whose fund holds one is not alone, so an
@@ -15310,12 +15311,14 @@ const TOOL_CLASSES = [
   ["accept_deliveries", ...ADD_CLASS],
   ["archive_budget", ...OVERWRITE_CLASS],
   ["archive_goal", ...OVERWRITE_CLASS],
+  ["cancel_planned_payment", ...DESTROY_CLASS],
   ["contribute_goal", ...ADD_CLASS],
   ["create_account", ...ADD_CLASS],
   ["create_budget", ...ADD_CLASS],
   ["create_category", ...ADD_CLASS],
   ["create_goal", ...ADD_CLASS],
   ["create_label", ...ADD_CLASS],
+  ["create_planned_payment", ...ADD_CLASS],
   ["delete_movement", ...DESTROY_CLASS],
   ["delete_recipient", ...DESTROY_CLASS],
   ["get_debt", ...READ_CLASS],
@@ -15332,6 +15335,7 @@ const TOOL_CLASSES = [
   ["list_member_debts", ...READ_CLASS],
   ["list_members", ...READ_CLASS],
   ["list_movements", ...READ_CLASS],
+  ["list_planned_payments", ...READ_CLASS],
   ["list_recipients", ...READ_CLASS],
   ["list_third_party_credits", ...READ_CLASS],
   ["merge_movements", ...DESTROY_CLASS],
@@ -15349,6 +15353,7 @@ const TOOL_CLASSES = [
   ["review_month", ...READ_CLASS],
   ["save_recipient", ...OVERWRITE_CLASS],
   ["set_debt_terms", ...ADD_ONCE_CLASS],
+  ["settle_planned_payment", ...ADD_ONCE_CLASS],
   ["spending_patterns", ...READ_CLASS],
   ["update_account", ...OVERWRITE_CLASS],
   ["update_budget", ...OVERWRITE_CLASS],
@@ -15356,6 +15361,7 @@ const TOOL_CLASSES = [
   ["update_goal", ...OVERWRITE_CLASS],
   ["update_label", ...OVERWRITE_CLASS],
   ["update_movement", ...OVERWRITE_CLASS],
+  ["update_planned_payment", ...OVERWRITE_CLASS],
   ["update_third_party_credit", ...OVERWRITE_CLASS],
 ];
 
@@ -19885,5 +19891,79 @@ async function mcpGoalsSuite(): Promise<void> {
     !archived.isError && !active.some((goal) => goal.id === goalId) && inArchive.some((goal) => goal.id === goalId) &&
       !restored.isError && back.some((goal) => goal.id === goalId),
     `active ${active.length}, archived ${inArchive.length}, back ${back.length}`,
+  );
+}
+
+// RF-230: Claude reads, schedules, edits, pays and cancels planned payments, through the Por pagar screen's own query,
+// schemas and write functions; deleting the movement a payment made puts it back to pending (RF-161).
+async function mcpPlannedPaymentsSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const today = todayInBogota();
+  const { POST } = await import("@/app/mcp/route");
+  const owner = await createMembershipFreeUser();
+  const account = await asUser(owner, () =>
+    createAccount({
+      kind: "asset", subtype: "bank", groupId: null, isShared: false, institution: null, settlementCurrency: BASE_CURRENCY,
+      balanceOn: "2026-01-01", ownerUserId: owner.id, name: `Harness rf230 cuenta ${tag}`, amountMinor: 5_000_000_00,
+    }),
+  );
+  track("accounts", account.accountId);
+  const category = randomUUID();
+  await fixtureSql`insert into categories (id, owner_user_id, name, kind, color) values (${category}, ${owner.id}, ${`Harness rf230 Servicios ${tag}`}, 'expense', ${CATEGORY_COLORS[0]})`;
+  track("categories", category);
+  const { id: keyId, token } = await asUser(owner, () =>
+    issueWebhookCredential({ name: `Harness rf230 ${tag}`, purpose: "mcp", defaultAccountId: null, defaultCategoryId: null }),
+  );
+  keep("webhook_credentials", keyId);
+  const { tool } = mcpClient(POST, token);
+  type Planned = { id: string; status: string; amountCents: number; dueDate: string; settledTransactionId: string | null; updatedAt: string };
+  const planned = async (status?: string) => (await tool("list_planned_payments", status ? { status } : {})).value as Planned[];
+  const draft = { fromAccountId: account.accountId, toAccountId: null, amountCents: 85_000_00, categoryId: category, dueDate: shiftDate(today, 10), description: `Harness rf230 luz ${tag}` };
+
+  const created = await tool("create_planned_payment", draft);
+  const plannedId = (created.value as { plannedPaymentId: string }).plannedPaymentId;
+  const row = (await planned("pending")).find((one) => one.id === plannedId);
+  assert(
+    next("RF-230: create_planned_payment schedules a payment that list_planned_payments reads pending with its due date and amount"),
+    !created.isError && row?.status === "pending" && row.amountCents === 85_000_00 && row.dueDate === draft.dueDate,
+    `created ${JSON.stringify(created.value)}, row ${JSON.stringify(row)}`,
+  );
+
+  const edited = await tool("update_planned_payment", { plannedPaymentId: plannedId, expectedUpdatedAt: row?.updatedAt, amountCents: 90_000_00 });
+  const outOfDate = await tool("update_planned_payment", { plannedPaymentId: plannedId, expectedUpdatedAt: row?.updatedAt, amountCents: 95_000_00 });
+  const after = (await planned("pending")).find((one) => one.id === plannedId);
+  assert(
+    next("RF-230: update_planned_payment changes only what is sent and answers the old value, and a call quoting an old stamp is refused as out of date"),
+    !edited.isError && JSON.stringify((edited.value as { before: unknown }).before) === JSON.stringify({ amountCents: 85_000_00 }) &&
+      outOfDate.isError && (outOfDate.value as { error: string }).error === es.errors.stale && after?.amountCents === 90_000_00,
+    `edited ${JSON.stringify(edited.value)}, old ${JSON.stringify(outOfDate.value)}`,
+  );
+
+  const settled = await tool("settle_planned_payment", { plannedPaymentId: plannedId, occurredOn: today });
+  const transactionId = (settled.value as { transactionId: string }).transactionId;
+  const again = await tool("settle_planned_payment", { plannedPaymentId: plannedId, occurredOn: today });
+  const done = (await planned("done")).find((one) => one.id === plannedId);
+  assert(
+    next("RF-230: settle_planned_payment books the movement once and the payment reads done with it; a second settle is refused"),
+    !settled.isError && done?.settledTransactionId === transactionId && again.isError,
+    `settled ${JSON.stringify(settled.value)}, again ${JSON.stringify(again.value)}, done ${JSON.stringify(done)}`,
+  );
+
+  const deleted = await tool("delete_movement", { transactionId });
+  const back = (await planned("pending")).find((one) => one.id === plannedId);
+  assert(
+    next("RF-230: deleting the movement a settled payment made puts the payment back to pending"),
+    !deleted.isError && back?.status === "pending" && back.settledTransactionId === null,
+    `deleted ${JSON.stringify(deleted.value)}, back ${JSON.stringify(back)}`,
+  );
+
+  const cancelled = await tool("cancel_planned_payment", { plannedPaymentId: plannedId });
+  const settleCancelled = await tool("settle_planned_payment", { plannedPaymentId: plannedId, occurredOn: today });
+  assert(
+    next("RF-230: cancel_planned_payment answers the payment it cancelled and a cancelled payment can never be settled"),
+    !cancelled.isError && (cancelled.value as { before: { amountCents: number } }).before.amountCents === 90_000_00 &&
+      settleCancelled.isError && (await planned("cancelled")).some((one) => one.id === plannedId),
+    `cancelled ${JSON.stringify(cancelled.value)}, settle ${JSON.stringify(settleCancelled.value)}`,
   );
 }
