@@ -20665,6 +20665,8 @@ async function mcpDeletesSuite(): Promise<void> {
   const recreated = await tool("create_budget", {
     categoryId: (budgetRow as unknown as { categoryId: string }).categoryId, period: "monthly", limitCents: 500_000_00, thresholdPct: 80,
   });
+  // The budget made again holds the category; with it gone too, the category goes.
+  await tool("delete_budget", { budgetId: (recreated.value as { budgetId: string }).budgetId });
   const categoryGone = await tool("delete_category", { categoryId: category.categoryId });
   assert(
     next("RF-238: delete_budget answers its row, a category a movement uses is refused, and a deleted budget's answer makes it again"),
