@@ -1835,7 +1835,12 @@
       "listDebts": "The whole «Debts» screen, in cents and always per currency (currencies are never added): totals (what is owed, monthly interest, available credit and nextPayment, the next payment), withTerms (each debt with its terms, what it owes and what is left to bill), withoutTerms (debts with no rate, installment or limit yet: set_debt_terms serves them) and payFrom (the asset accounts a payment can come from, with their balance). Read only.",
       "getDebt": "The detail of ONE debt (accountId from list_debts or list_accounts): the account, its terms (annual rate as a fraction, minimum payment, limit, cut-off and due day, aval), its statements, the deferred purchases (deferrals), what is left to bill (pendingSettlements), the accounts a payment can come from (payFrom) and, if somebody else pays it, thirdParty. A debt that does not exist, is not the person's or cannot be seen answers «not found». Read only.",
       "setDebtTerms": "Saves the terms of a credit or a card (a liability account; an asset one is refused). debtKind: revolving (card or revolving limit) or installment (a credit paid in instalments). annualRatePct: the effective annual rate as the person says it, as text («24» is 24 % E.A.; «28.5»). Optional: minimumPaymentCents (a fixed minimum) OR minimumPaymentPct (a percentage of the balance, «5»), never both; creditLimitCents (limit); statementCutOffDay and paymentDueDay (day of the month, 1 to 31); avalCents. Amounts are whole cents in the account's currency. It serves a debt with no terms yet: repeating the same values changes nothing, and different ones are refused as out of date. To open a credit: create_account (kind liability, subtype loan) and then this. CONFIRM the terms with the person before calling it.",
-      "recordDebtPayment": "«Abonar»: pays a debt from an asset account (bank or cash) with ONE transfer: fromAccountId is the asset (from list_accounts), toAccountId the debt (liability); amountCents in whole cents, in the asset's currency, and occurredOn YYYY-MM-DD with no future. From a card or a loan it is refused, and so is it when the two accounts' currencies differ. The debt's balance drops by what is paid. Generate a requestRef (UUID) per payment and reuse it if you retry: it never duplicates. Returns transactionId. BEFORE calling it, CONFIRM with the person from which account, to which debt, how much and which day, and check with list_movements that it is not there already."
+      "recordDebtPayment": "«Abonar»: pays a debt from an asset account (bank or cash) with ONE transfer: fromAccountId is the asset (from list_accounts), toAccountId the debt (liability); amountCents in whole cents, in the asset's currency, and occurredOn YYYY-MM-DD with no future. From a card or a loan it is refused, and so is it when the two accounts' currencies differ. The debt's balance drops by what is paid. Generate a requestRef (UUID) per payment and reuse it if you retry: it never duplicates. Returns transactionId. BEFORE calling it, CONFIRM with the person from which account, to which debt, how much and which day, and check with list_movements that it is not there already.",
+      "listBudgets": "The person's budgets (their own and their fund's) with what was spent and what is left, as «Budgets» shows them: id, name, categoryId, accountId, labelId, period (monthly, weekly or yearly), thresholdPct, currency, limitCents, spentCents, remainingCents, overThreshold, overspent and updatedAt. The spend is derived on every read: it counts the expenses of the category and its subcategories in the period's window, only those in the budget's currency. archived true lists the archived ones; anchorDate (YYYY-MM-DD) moves the window to a past period. Another member's personal budget comes with foreignOwner and cannot be written. Read only.",
+      "createBudget": "Creates a budget on an expense category (categoryId from list_categories, kind expense): period monthly, weekly or yearly; limitCents, the limit in whole cents in the budget's currency; thresholdPct, the percentage of the limit (1 to 100) at which it warns. Optional: accountId (counts only that account's expenses), labelId (an id or the name of a label from list_labels: counts only movements wearing it) and name. The category, the account and the label must share one scope (personal or fund). Returns budgetId. CONFIRM category, period and limit with the person before calling it, and check with list_budgets that it does not exist yet.",
+      "updateBudget": "Corrects a budget the person can write: period, limitCents, thresholdPct, accountId, labelId and name; it is a patch, what you omit stays, and null on accountId, labelId or name removes it. The category does not change. Pass the updatedAt you read in list_budgets as expectedUpdatedAt: if somebody edited it meanwhile, it is refused. Returns before: what each field you changed held. CONFIRM the change with the person before calling it.",
+      "archiveBudget": "Archives a budget (budgetId from list_budgets): it leaves the list and can be restored with restore_budget. Returns budgetId. CONFIRM with the person which one before calling it.",
+      "restoreBudget": "Restores an archived budget (budgetId from list_budgets with archived true). Returns budgetId. CONFIRM with the person which one before calling it."
     },
     "deferralProposal": "Defer in {count} instalments",
     "errors": {
@@ -1950,7 +1955,17 @@
       "statementCutOffDay": "Day of the month of the statement cut-off, 1 to 31.",
       "paymentDueDay": "Day of the month the payment is due, 1 to 31.",
       "avalCents": "Aval, in cents.",
-      "expectedCount": "How many lines the person confirmed, the moved of the dryRun true call; required unless dryRun is true."
+      "expectedCount": "How many lines the person confirmed, the moved of the dryRun true call; required unless dryRun is true.",
+      "budgetId": "The budget's id (from list_budgets).",
+      "budgetArchived": "true to list the archived budgets; by default, the active ones.",
+      "budgetAnchorDate": "A day YYYY-MM-DD whose period is measured; today by default. Never a future one.",
+      "budgetCategoryId": "The id of the budget's expense category (from list_categories).",
+      "budgetPeriod": "monthly, weekly or yearly.",
+      "budgetLimitCents": "Limit in whole cents, in the budget's currency.",
+      "budgetThresholdPct": "Percentage of the limit, 1 to 100, at which the budget warns.",
+      "budgetAccountId": "The id of the account whose expenses it counts (from list_accounts); null for the whole category.",
+      "budgetLabel": "A label, by id or by name (from list_labels), narrowing the movements it counts; null for none.",
+      "budgetName": "Optional name; the category's when absent. null removes it."
     },
     "titles": {
       "listAccounts": "View accounts",
@@ -1989,7 +2004,12 @@
       "listDebts": "View debts",
       "getDebt": "View a debt",
       "setDebtTerms": "Save a debt's terms",
-      "recordDebtPayment": "Pay down a debt"
+      "recordDebtPayment": "Pay down a debt",
+      "listBudgets": "View budgets",
+      "createBudget": "Create a budget",
+      "updateBudget": "Correct a budget",
+      "archiveBudget": "Archive a budget",
+      "restoreBudget": "Restore a budget"
     }
   },
   "oauth": {
