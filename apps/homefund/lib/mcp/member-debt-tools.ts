@@ -5,6 +5,7 @@ import { z } from "zod";
 
 import { getMemberDebts, recordMemberDebt } from "@/db/queries/member-debts";
 import { ActionError } from "@/lib/errors";
+import { ADD, READ, titled } from "@/lib/mcp/annotations";
 import { memberDebtStates } from "@/lib/member-debts";
 import { parseForm } from "@/lib/mcp/parse-form";
 import { centsToDecimal } from "@/lib/money";
@@ -20,7 +21,7 @@ export function registerMemberDebtTools(server: McpServer, run: Run, t: Say): vo
 
   server.registerTool(
     "list_member_debts",
-    { description: t("tools.listMemberDebts"), inputSchema: z.object({}), annotations: { readOnlyHint: true } },
+    { ...titled(t, "listMemberDebts"), description: t("tools.listMemberDebts"), inputSchema: z.object({}), annotations: READ },
     (_input, ctx) =>
       run(ctx, async () => {
         const data = await getMemberDebts();
@@ -37,6 +38,7 @@ export function registerMemberDebtTools(server: McpServer, run: Run, t: Say): vo
   server.registerTool(
     "record_member_debt",
     {
+      ...titled(t, "recordMemberDebt"),
       description: t("tools.recordMemberDebt"),
       inputSchema: z.object({
         kind: z.enum(MEMBER_DEBT_KINDS).describe(d("memberDebtKind")),
@@ -47,7 +49,7 @@ export function registerMemberDebtTools(server: McpServer, run: Run, t: Say): vo
         occurredOn: z.string().describe(d("occurredOn")),
         description: z.string().nullable().default(null).describe(d("description")),
       }),
-      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
+      annotations: ADD,
     },
     (input, ctx) =>
       run(ctx, () =>
