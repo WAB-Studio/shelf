@@ -4167,6 +4167,7 @@ async function main(): Promise<void> {
   await mcpPermissionsSuite();
   await mcpDebtsSuite();
   await mcpMoveCountSuite();
+  await mcpBudgetsSuite();
 }
 
 // A member recorded without a login is someone in the fund: a leader whose fund holds one is not alone, so an
@@ -15306,7 +15307,9 @@ const [READ_CLASS, ADD_CLASS, ADD_ONCE_CLASS, OVERWRITE_CLASS, DESTROY_CLASS] = 
 ] as const;
 const TOOL_CLASSES = [
   ["accept_deliveries", ...ADD_CLASS],
+  ["archive_budget", ...OVERWRITE_CLASS],
   ["create_account", ...ADD_CLASS],
+  ["create_budget", ...ADD_CLASS],
   ["create_category", ...ADD_CLASS],
   ["create_label", ...ADD_CLASS],
   ["delete_movement", ...DESTROY_CLASS],
@@ -15315,6 +15318,7 @@ const TOOL_CLASSES = [
   ["import_statement", ...DESTROY_CLASS],
   ["link_third_party_credit", ...ADD_CLASS],
   ["list_accounts", ...READ_CLASS],
+  ["list_budgets", ...READ_CLASS],
   ["list_categories", ...READ_CLASS],
   ["list_debts", ...READ_CLASS],
   ["list_inbox", ...READ_CLASS],
@@ -15333,11 +15337,13 @@ const TOOL_CLASSES = [
   ["record_movement", ...ADD_ONCE_CLASS],
   ["record_third_party_payment", ...ADD_ONCE_CLASS],
   ["reject_deliveries", ...DESTROY_CLASS],
+  ["restore_budget", ...OVERWRITE_CLASS],
   ["review_month", ...READ_CLASS],
   ["save_recipient", ...OVERWRITE_CLASS],
   ["set_debt_terms", ...ADD_ONCE_CLASS],
   ["spending_patterns", ...READ_CLASS],
   ["update_account", ...OVERWRITE_CLASS],
+  ["update_budget", ...OVERWRITE_CLASS],
   ["update_category", ...OVERWRITE_CLASS],
   ["update_label", ...OVERWRITE_CLASS],
   ["update_movement", ...OVERWRITE_CLASS],
@@ -19700,5 +19706,93 @@ async function mcpMoveCountSuite(): Promise<void> {
     !done.isError && (done.value as { moved: number }).moved === 3 && (done.value as { fromCategoryId: string }).fromCategoryId === source &&
       (await inTarget()) === 3,
     `done ${JSON.stringify(done.value)}`,
+  );
+}
+
+// RF-228: Claude reads the budgets with their spending and creates, edits, archives and restores them, through the
+// Presupuestos screen's own query, schemas and write functions.
+async function mcpBudgetsSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const today = todayInBogota();
+  const { POST } = await import("@/app/mcp/route");
+  const [leader, member] = [await createMembershipFreeUser(), await createMembershipFreeUser()];
+  const ids = { group: randomUUID(), leaderRow: randomUUID(), memberRow: randomUUID(), mine: randomUUID(), cash: randomUUID(), parent: randomUUID(), child: randomUUID() };
+  const name = (what: string) => `Harness rf228 ${what} ${tag}`;
+  await fixtureSql.begin(async (tx) => {
+    await tx`insert into groups (id, name, cash_mode) values (${ids.group}, ${name("fondo")}, 'shared')`;
+    await tx`insert into group_members (id, group_id, user_id, name, role) values
+      (${ids.leaderRow}, ${ids.group}, ${leader.id}, ${name("lider")}, 'leader'), (${ids.memberRow}, ${ids.group}, ${member.id}, ${name("miembro")}, 'member')`;
+    await tx`insert into accounts (id, owner_user_id, name, kind, subtype, initial_balance_cents, initial_balance_on)
+      values (${ids.mine}, ${leader.id}, ${name("banco")}, 'asset', 'bank', 0, '2026-01-01')`;
+    await tx`insert into accounts (id, group_id, is_shared, name, kind, subtype, initial_balance_cents, initial_balance_on)
+      values (${ids.cash}, ${ids.group}, true, ${name("caja")}, 'asset', 'cash', 0, '2026-01-01')`;
+    await tx`insert into categories (id, owner_user_id, name, kind, color) values (${ids.parent}, ${leader.id}, ${name("mercado")}, 'expense', '#8C4A4A')`;
+    await tx`insert into categories (id, owner_user_id, parent_id, name, kind, color) values (${ids.child}, ${leader.id}, ${ids.parent}, ${name("frutas")}, 'expense', '#8C4A4A')`;
+  });
+  track("groups", ids.group);
+  for (const id of [ids.leaderRow, ids.memberRow]) track("group_members", id);
+  for (const id of [ids.mine, ids.cash]) track("accounts", id);
+  for (const id of [ids.parent, ids.child]) track("categories", id);
+  const clientOf = async (user: HarnessUser) => {
+    const { id, token } = await asUser(user, () => issueWebhookCredential({ name: name("clave"), purpose: "mcp", defaultAccountId: null, defaultCategoryId: null }));
+    keep("webhook_credentials", id);
+    return mcpClient(POST, token).tool;
+  };
+  const [tool, memberTool] = [await clientOf(leader), await clientOf(member)];
+  type Listed = { id: string; categoryId: string; limitCents: number; spentCents: number; remainingCents: number; thresholdPct: number; updatedAt: string };
+  const listed = async (args: Record<string, unknown> = {}) => (await tool("list_budgets", args)).value as Listed[];
+  const spend = (categoryId: string, amountCents: number) =>
+    tool("record_movement", { fromAccountId: ids.mine, toAccountId: null, amountCents, occurredAt: today, description: name("gasto"), categoryId });
+
+  const created = await tool("create_budget", { categoryId: ids.parent, period: "monthly", limitCents: 500_000_00, thresholdPct: 80 });
+  const budgetId = (created.value as { budgetId: string }).budgetId;
+  await spend(ids.parent, 120_000_00);
+  const first = (await listed()).find((row) => row.id === budgetId);
+  assert(
+    next("RF-228: create_budget makes a budget on a category and list_budgets derives what was spent and what is left from the movements"),
+    !created.isError && first?.limitCents === 500_000_00 && first.spentCents === 120_000_00 && first.remainingCents === 380_000_00,
+    `created ${JSON.stringify(created.value)}, row ${JSON.stringify(first)}`,
+  );
+
+  await spend(ids.child, 30_000_00);
+  const withChild = (await listed()).find((row) => row.id === budgetId);
+  assert(
+    next("RF-228: an expense on a subcategory counts in its parent's budget"),
+    withChild?.spentCents === 150_000_00,
+    `row ${JSON.stringify(withChild)}`,
+  );
+
+  const wrongScope = await tool("create_budget", { categoryId: ids.parent, accountId: ids.cash, period: "monthly", limitCents: 1_000_00, thresholdPct: 80 });
+  const tooLarge = await tool("create_budget", { categoryId: ids.parent, period: "weekly", limitCents: 10_000_000_000_000, thresholdPct: 80 });
+  assert(
+    next("RF-228: a budget whose category and account are of different scopes, or whose limit the currency cannot hold, is refused in the form's words"),
+    wrongScope.isError && (wrongScope.value as { error: string }).error === es.budgets.errors.scopeViolation &&
+      tooLarge.isError && (tooLarge.value as { error: string }).error === es.budgets.errors.limitTooLarge,
+    `scope ${JSON.stringify(wrongScope.value)}, large ${JSON.stringify(tooLarge.value)}`,
+  );
+
+  const stampOne = withChild?.updatedAt as string;
+  const edited = await tool("update_budget", { budgetId, expectedUpdatedAt: stampOne, thresholdPct: 90 });
+  const outOfDate = await tool("update_budget", { budgetId, expectedUpdatedAt: stampOne, thresholdPct: 70 });
+  const after = (await listed()).find((row) => row.id === budgetId);
+  assert(
+    next("RF-228: update_budget changes only what is sent, answers the old value, and a call quoting an old stamp is refused as out of date"),
+    !edited.isError && JSON.stringify((edited.value as { before: unknown }).before) === JSON.stringify({ thresholdPct: 80 }) &&
+      outOfDate.isError && (outOfDate.value as { error: string }).error === es.errors.stale &&
+      after?.thresholdPct === 90 && after.limitCents === 500_000_00,
+    `edited ${JSON.stringify(edited.value)}, old ${JSON.stringify(outOfDate.value)}, row ${JSON.stringify(after)}`,
+  );
+
+  const strangerArchive = await memberTool("archive_budget", { budgetId });
+  const archived = await tool("archive_budget", { budgetId });
+  const [active, inArchive] = [await listed(), await listed({ archived: true })];
+  const restored = await tool("restore_budget", { budgetId });
+  const back = await listed();
+  assert(
+    next("RF-228: archive_budget takes a budget out of the list and into the archived one, restore_budget brings it back, and another member cannot archive the leader's personal budget"),
+    strangerArchive.isError && (strangerArchive.value as { error: string }).error === es.errors.notFound && !archived.isError &&
+      !active.some((row) => row.id === budgetId) && inArchive.some((row) => row.id === budgetId) && !restored.isError && back.some((row) => row.id === budgetId),
+    `member ${JSON.stringify(strangerArchive.value)}, active ${active.length}, archived ${inArchive.length}, back ${back.length}`,
   );
 }

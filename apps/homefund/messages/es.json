@@ -1835,7 +1835,12 @@
       "listDebts": "La pantalla «Deudas» entera, en centavos y siempre por moneda (las monedas nunca se suman): totals (lo que se debe, el interés mensual, el cupo disponible y nextPayment, el próximo pago), withTerms (cada deuda con sus condiciones, lo que debe y lo que falta por facturar), withoutTerms (deudas que aún no tienen tasa, cuota ni cupo: para ellas sirve set_debt_terms) y payFrom (las cuentas de activo desde las que se puede abonar, con su saldo). Solo lee.",
       "getDebt": "El detalle de UNA deuda (accountId de list_debts o de list_accounts): la cuenta, sus condiciones (terms: tasa anual como fracción, cuota mínima, cupo, día de corte y de vencimiento, aval), sus extractos (statements), las compras diferidas (deferrals), lo que falta por facturar (pendingSettlements), las cuentas desde las que se puede abonar (payFrom) y, si la paga otra persona, thirdParty. Una deuda que no existe, no es de la persona o no puede ver responde «no encontrado». Solo lee.",
       "setDebtTerms": "Guarda las condiciones de un crédito o una tarjeta (una cuenta liability; una de activo se rechaza). debtKind: revolving (tarjeta o cupo rotativo) o installment (crédito a cuotas). annualRatePct: la tasa efectiva anual como la dice la persona, en texto («24» es 24 % E.A.; «28.5»). Opcionales: minimumPaymentCents (cuota mínima fija) O minimumPaymentPct (porcentaje del saldo, «5»), nunca las dos; creditLimitCents (cupo); statementCutOffDay y paymentDueDay (día del mes, 1 a 31); avalCents. Los montos son centavos enteros en la moneda de la cuenta. Sirve para una deuda que aún no tiene condiciones: repetir los mismos valores no cambia nada, y otros distintos se rechazan como desactualizados. Para abrir un crédito: create_account (kind liability, subtype loan) y luego esta. CONFIRMA con la persona las condiciones antes de llamarla.",
-      "recordDebtPayment": "«Abonar»: paga una deuda desde una cuenta de activo (banco o efectivo) con UNA transferencia: fromAccountId es el activo (de list_accounts), toAccountId la deuda (liability); amountCents en centavos enteros, en la moneda del activo, y occurredOn AAAA-MM-DD sin futuro. Desde una tarjeta o un préstamo se rechaza, y también si las monedas de las dos cuentas difieren. El saldo de la deuda baja lo abonado. Genera un requestRef (UUID) por pago y reutilízalo si reintentas: así nunca se duplica. Devuelve transactionId. ANTES de llamarla, CONFIRMA con la persona desde qué cuenta, a qué deuda, cuánto y qué día, y busca con list_movements que no esté ya."
+      "recordDebtPayment": "«Abonar»: paga una deuda desde una cuenta de activo (banco o efectivo) con UNA transferencia: fromAccountId es el activo (de list_accounts), toAccountId la deuda (liability); amountCents en centavos enteros, en la moneda del activo, y occurredOn AAAA-MM-DD sin futuro. Desde una tarjeta o un préstamo se rechaza, y también si las monedas de las dos cuentas difieren. El saldo de la deuda baja lo abonado. Genera un requestRef (UUID) por pago y reutilízalo si reintentas: así nunca se duplica. Devuelve transactionId. ANTES de llamarla, CONFIRMA con la persona desde qué cuenta, a qué deuda, cuánto y qué día, y busca con list_movements que no esté ya.",
+      "listBudgets": "Los presupuestos de la persona (suyos y del fondo) con lo gastado y lo que queda, como los muestra «Presupuestos»: id, name, categoryId, accountId, labelId, period (monthly, weekly o yearly), thresholdPct, currency, limitCents, spentCents, remainingCents, overThreshold, overspent y updatedAt. El gasto se deriva en cada lectura: cuenta los gastos de la categoría y de sus subcategorías en la ventana del periodo, solo los de la moneda del presupuesto. archived true lista los archivados; anchorDate (AAAA-MM-DD) mueve la ventana a un periodo pasado. Un presupuesto personal de otro miembro sale con foreignOwner y no se puede escribir. Solo lee.",
+      "createBudget": "Crea un presupuesto sobre una categoría de gasto (categoryId de list_categories, kind expense): period monthly, weekly o yearly; limitCents, el límite en centavos enteros en la moneda del presupuesto; thresholdPct, el porcentaje del límite (1 a 100) en que avisa. Opcional: accountId (solo cuenta los gastos de esa cuenta), labelId (un id o el nombre de una etiqueta de list_labels: solo cuenta los movimientos con ella) y name. La categoría, la cuenta y la etiqueta deben ser del mismo ámbito (personal o fondo). Devuelve budgetId. CONFIRMA con la persona categoría, periodo y límite antes de llamarla, y revisa con list_budgets que no exista ya.",
+      "updateBudget": "Corrige un presupuesto que la persona puede escribir: period, limitCents, thresholdPct, accountId, labelId y name; es un parche, lo que no envías queda igual, y null en accountId, labelId o name lo quita. La categoría no cambia. Pasa el updatedAt que leíste en list_budgets como expectedUpdatedAt: si alguien lo editó mientras tanto, se rechaza. Devuelve before: lo que había en cada campo que cambiaste. CONFIRMA con la persona el cambio antes de llamarla.",
+      "archiveBudget": "Archiva un presupuesto (budgetId de list_budgets): deja de salir en la lista y se puede restaurar con restore_budget. Devuelve budgetId. CONFIRMA con la persona cuál antes de llamarla.",
+      "restoreBudget": "Restaura un presupuesto archivado (budgetId de list_budgets con archived true). Devuelve budgetId. CONFIRMA con la persona cuál antes de llamarla."
     },
     "deferralProposal": "Diferir en {count} cuotas",
     "errors": {
@@ -1950,7 +1955,17 @@
       "statementCutOffDay": "Día del mes del corte del extracto, de 1 a 31.",
       "paymentDueDay": "Día del mes del vencimiento del pago, de 1 a 31.",
       "avalCents": "Aval, en centavos.",
-      "expectedCount": "Cuántas líneas confirmó la persona, el moved de la llamada con dryRun true; obligatorio si dryRun no es true."
+      "expectedCount": "Cuántas líneas confirmó la persona, el moved de la llamada con dryRun true; obligatorio si dryRun no es true.",
+      "budgetId": "Id del presupuesto (de list_budgets).",
+      "budgetArchived": "true para listar los presupuestos archivados; por defecto, los activos.",
+      "budgetAnchorDate": "Un día AAAA-MM-DD cuyo periodo se mide; por defecto, hoy. Nunca uno futuro.",
+      "budgetCategoryId": "Id de la categoría de gasto del presupuesto (de list_categories).",
+      "budgetPeriod": "monthly, weekly o yearly.",
+      "budgetLimitCents": "Límite en centavos enteros, en la moneda del presupuesto.",
+      "budgetThresholdPct": "Porcentaje del límite, de 1 a 100, en que el presupuesto avisa.",
+      "budgetAccountId": "Id de la cuenta cuyos gastos cuenta (de list_accounts); null para toda la categoría.",
+      "budgetLabel": "Una etiqueta, por id o por nombre (de list_labels), que acota los movimientos que cuenta; null para ninguna.",
+      "budgetName": "Nombre opcional; si falta, el de la categoría. null lo quita."
     },
     "titles": {
       "listAccounts": "Ver cuentas",
@@ -1989,7 +2004,12 @@
       "listDebts": "Ver las deudas",
       "getDebt": "Ver una deuda",
       "setDebtTerms": "Guardar las condiciones de una deuda",
-      "recordDebtPayment": "Abonar a una deuda"
+      "recordDebtPayment": "Abonar a una deuda",
+      "listBudgets": "Ver presupuestos",
+      "createBudget": "Crear un presupuesto",
+      "updateBudget": "Corregir un presupuesto",
+      "archiveBudget": "Archivar un presupuesto",
+      "restoreBudget": "Restaurar un presupuesto"
     }
   },
   "oauth": {
