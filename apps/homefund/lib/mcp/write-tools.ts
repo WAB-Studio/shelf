@@ -516,10 +516,11 @@ export function registerLedgerTools(server: McpServer, run: Run, t: Say): void {
         from: z.string().optional().describe(d("from")),
         to: z.string().optional().describe(d("to")),
         dryRun: z.boolean().optional().describe(d("dryRun")),
+        expectedCount: z.number().int().min(1).optional().describe(d("expectedCount")),
       }),
       annotations: OVERWRITE,
     },
-    (input: { fromCategoryId: string; toCategoryId: string; from?: string; to?: string; dryRun?: boolean }, ctx) =>
+    (input: { fromCategoryId: string; toCategoryId: string; from?: string; to?: string; dryRun?: boolean; expectedCount?: number }, ctx) =>
       run(ctx, async (owner) => {
         const fromCategoryId = idOf("errors.notFound", input.fromCategoryId);
         const toCategoryId = idOf("errors.notFound", input.toCategoryId);
@@ -528,13 +529,18 @@ export function registerLedgerTools(server: McpServer, run: Run, t: Say): void {
         if (!source || !target || fromCategoryId === toCategoryId) throw new ActionError("errors.notFound");
         if (source.kind !== target.kind) throw new ActionError("errors.categoryKindMismatch");
         const day = z.iso.date({ error: "errors.unexpected" }).optional();
-        return moveCategoryMovements({
+        // Q3 of the parity plan: a write moves only the count a dry run gave, so the person's yes covers what moves.
+        if (!input.dryRun && input.expectedCount === undefined) throw new ActionError("mcp.errors.moveNeedsCount");
+        const moved = await moveCategoryMovements({
           fromCategoryId,
           toCategoryId,
           from: parseForm(day, input.from),
           to: parseForm(day, input.to),
           dryRun: input.dryRun,
+          expectedCount: input.dryRun ? undefined : input.expectedCount,
         });
+        if (!input.dryRun && moved.moved === 0) throw new ActionError("mcp.errors.moveCountChanged");
+        return { ...moved, fromCategoryId, toCategoryId };
       }),
   );
 }

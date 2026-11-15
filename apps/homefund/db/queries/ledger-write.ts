@@ -445,6 +445,7 @@ export async function moveCategoryMovements(input: {
   from?: string;
   to?: string;
   dryRun?: boolean;
+  expectedCount?: number;
 }): Promise<{ moved: number; dryRun: boolean }> {
   try {
     return { moved: await moveCategoryLines(input), dryRun: input.dryRun ?? false };

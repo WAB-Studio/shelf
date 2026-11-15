@@ -4166,6 +4166,7 @@ async function main(): Promise<void> {
   await learnedCategorySuite();
   await mcpPermissionsSuite();
   await mcpDebtsSuite();
+  await mcpMoveCountSuite();
 }
 
 // A member recorded without a login is someone in the fund: a leader whose fund holds one is not alone, so an
@@ -17275,11 +17276,11 @@ async function mcpCleanupSuite(): Promise<void> {
   );
 
   // Move lines: only category A, only the range, only the same kind.
-  const mixedKind = await tool("move_category_movements", { fromCategoryId: home, toCategoryId: salary });
-  const inRange = await tool("move_category_movements", { fromCategoryId: home, toCategoryId: dairy, from: "2026-03-07", to: "2026-03-07" });
+  const mixedKind = await tool("move_category_movements", { fromCategoryId: home, toCategoryId: salary, expectedCount: 1 });
+  const inRange = await tool("move_category_movements", { fromCategoryId: home, toCategoryId: dairy, from: "2026-03-07", to: "2026-03-07", expectedCount: 1 });
   const lineOf = async (id: string) => (await rows()).find((row) => row.id === id)?.splits.map((line) => line.categoryId);
   const scoped = (await lineOf(sourceId))?.[0] === dairy && (await lineOf(mergedId))?.filter((c) => c === home).length === 2;
-  const rest = await tool("move_category_movements", { fromCategoryId: home, toCategoryId: dairy });
+  const rest = await tool("move_category_movements", { fromCategoryId: home, toCategoryId: dairy, expectedCount: 2 });
   const byCategory = (await tool("list_movements", { accountId: account.accountId, categoryId: market })).value as { id: string }[];
   const paged = (await tool("list_movements", { accountId: account.accountId, limit: 1, offset: 1 })).value as { id: string }[];
   assert(
@@ -17295,7 +17296,7 @@ async function mcpCleanupSuite(): Promise<void> {
   const before = await stamp();
   const dry = await tool("move_category_movements", { fromCategoryId: flat, toCategoryId: market, dryRun: true });
   const untouchedLine = (await lineOf(probe))?.[0] === flat && (await stamp()) === before;
-  const wet = await tool("move_category_movements", { fromCategoryId: flat, toCategoryId: market });
+  const wet = await tool("move_category_movements", { fromCategoryId: flat, toCategoryId: market, expectedCount: (dry.value as { moved: number }).moved });
   const bumped = (await stamp()) !== before && (await lineOf(probe))?.[0] === market;
   assert(
     next("RF-176: move_category_movements with dryRun counts and writes nothing; a real move gives each movement a new updatedAt"),
@@ -19649,5 +19650,55 @@ async function mcpDebtsSuite(): Promise<void> {
     next("RF-227: a payment from a liability account is refused as not from an asset"),
     fromCard.isError && (fromCard.value as { error: string }).error === es.installments.errors.notFromAsset,
     `fromCard ${JSON.stringify(fromCard.value)}`,
+  );
+}
+
+// RF-226: a move of a category's lines runs in two steps: the count a dry run gave, which the person confirmed, is the count
+// that moves. A call without it, or with a count the lines no longer match, moves nothing.
+async function mcpMoveCountSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const { POST } = await import("@/app/mcp/route");
+  const owner = await createMembershipFreeUser();
+  const account = await asUser(owner, () =>
+    createAccount({
+      kind: "asset", subtype: "bank", groupId: null, isShared: false, institution: null, settlementCurrency: BASE_CURRENCY,
+      balanceOn: "2026-01-01", ownerUserId: owner.id, name: `Harness rf226 cuenta ${tag}`, amountMinor: 1_000_000_00,
+    }),
+  );
+  track("accounts", account.accountId);
+  const [source, target] = [randomUUID(), randomUUID()];
+  for (const [id, name] of [[source, "origen"], [target, "destino"]] as const) {
+    await fixtureSql`insert into categories (id, owner_user_id, name, kind, color) values (${id}, ${owner.id}, ${`Harness rf226 ${name} ${tag}`}, 'expense', ${CATEGORY_COLORS[0]})`;
+    track("categories", id);
+  }
+  const { id: keyId, token } = await asUser(owner, () =>
+    issueWebhookCredential({ name: `Harness rf226 ${tag}`, purpose: "mcp", defaultAccountId: null, defaultCategoryId: null }),
+  );
+  keep("webhook_credentials", keyId);
+  const { tool } = mcpClient(POST, token);
+  for (const day of ["2026-02-01", "2026-02-02", "2026-02-03"]) {
+    await tool("record_movement", { fromAccountId: account.accountId, toAccountId: null, amountCents: 10_000_00, occurredAt: day, description: `Harness rf226 ${day} ${tag}`, categoryId: source });
+  }
+  const inTarget = async () => ((await tool("list_movements", { accountId: account.accountId, categoryId: target })).value as unknown[]).length;
+  const base = { fromCategoryId: source, toCategoryId: target };
+
+  const dry = await tool("move_category_movements", { ...base, dryRun: true });
+  const bare = await tool("move_category_movements", base);
+  const wrong = await tool("move_category_movements", { ...base, expectedCount: 2 });
+  const untouched = await inTarget();
+  assert(
+    next("RF-226: move_category_movements without the count its dry run gave, or with a count the lines no longer match, moves nothing and says why"),
+    (dry.value as { moved: number }).moved === 3 && bare.isError && wrong.isError && untouched === 0 &&
+      String((bare.value as { error: string }).error).includes("expectedCount") && String((wrong.value as { error: string }).error).includes("dryRun"),
+    `dry ${JSON.stringify(dry.value)}, bare ${JSON.stringify(bare.value)}, wrong ${JSON.stringify(wrong.value)}, in target ${untouched}`,
+  );
+
+  const done = await tool("move_category_movements", { ...base, expectedCount: 3 });
+  assert(
+    next("RF-226: move_category_movements with the confirmed count moves exactly those lines and answers the categories it moved between"),
+    !done.isError && (done.value as { moved: number }).moved === 3 && (done.value as { fromCategoryId: string }).fromCategoryId === source &&
+      (await inTarget()) === 3,
+    `done ${JSON.stringify(done.value)}`,
   );
 }
