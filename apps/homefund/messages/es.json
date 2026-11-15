@@ -1870,7 +1870,12 @@
       "restoreAccount": "Restaura una cuenta archivada (accountId de list_accounts con archived true). Devuelve accountId. CONFIRMA con la persona cuál antes de llamarla.",
       "getReconcileSheet": "La hoja de «Cuadrar» de una cuenta para un día (on, AAAA-MM-DD): la cuenta (kind, moneda, openedOn, latestReconciledOn, canWrite) y derivedCents, lo que HomeFund calcula que debería haber ese día, en centavos y en la moneda de la cuenta (en una deuda, lo que se debe), más su historial de cuadres. Pasa derivedCents como expectedDerivedCents a reconcile_account. Solo lee.",
       "reconcileAccount": "Cuadra una cuenta en un día: la persona cuenta cuánto hay de verdad (realAmountCents, en centavos y en la moneda de la cuenta; en una deuda, lo que se debe; negativo si quedó por debajo de cero) y HomeFund registra UN movimiento de ajuste por la diferencia, de modo que el saldo queda igual a lo contado. Pasa en expectedDerivedCents el derivedCents que leíste en get_reconcile_sheet para ese día: si entre tanto cambió un movimiento, se rechaza y hay que volver a leer la hoja. El día no puede ser futuro, ni antes de la apertura, ni antes del último cuadre. Devuelve id y gapCents (lo contado menos lo derivado). CONFIRMA con la persona la cuenta, el día, lo contado y el ajuste que resulta antes de llamarla.",
-      "listReconciliations": "Los cuadres de una cuenta (accountId de list_accounts), el más reciente primero, cada uno con su diferencia. Solo lee."
+      "listReconciliations": "Los cuadres de una cuenta (accountId de list_accounts), el más reciente primero, cada uno con su diferencia. Solo lee.",
+      "recordAccountStatement": "Registra un extracto cerrado de una tarjeta o crédito (accountId de list_debts), a mano, como el botón «Registrar extracto»: periodStart y cutOffDate (AAAA-MM-DD, como los imprime el extracto), closingBalanceCents (el saldo de cierre, lo que se debe) y, opcionales, paymentDueDate, openingBalanceCents, creditsCents, debitsCents, minimumPaymentCents, interestChargedCents y feesChargedCents; todo en centavos enteros y en la moneda de la deuda. Un extracto con la misma fecha de corte se rechaza: ya está registrado. Se lee después en get_debt (statements). Devuelve accountId y cutOffDate. CONFIRMA con la persona las cifras del extracto antes de llamarla.",
+      "recordBilledAmount": "Registra lo que el emisor cobró de verdad por una compra hecha en otra moneda (RF-123), reemplazando el estimado: transactionId de la compra (de get_debt, pendingSettlements), accountId de la deuda, currency (la moneda en que la deuda cobra) y billedCents (lo cobrado, en centavos). No se puede antes de una conciliación de la cuenta. Devuelve transactionId. CONFIRMA con la persona la compra y la cifra del extracto antes de llamarla.",
+      "deferPurchase": "Difiere una compra de una tarjeta o crédito en cuotas (transactionId de list_movements; instalments, el número de cuotas): el saldo no cambia, la deuda reparte lo que falta por facturar (se lee en get_debt, deferrals). Solo una compra (un gasto de una deuda) se difiere, y una sola vez: para cambiar el número, quita el diferido con undefer_purchase y difiere de nuevo. Devuelve transactionId e instalments. CONFIRMA con la persona la compra y el número de cuotas que dice el extracto antes de llamarla.",
+      "undeferPurchase": "Quita el diferido de una compra (transactionId): la compra vuelve a contar entera. Devuelve before con el número de cuotas que tenía, para diferirla de nuevo con defer_purchase. CONFIRMA con la persona cuál compra antes de llamarla.",
+      "withdrawCash": "Saca efectivo: UNA transferencia desde una cuenta de activo (sourceAccountId de list_accounts) a la cuenta de efectivo de la persona, según el modo de efectivo del fondo; si la persona no tiene efectivo, se crea uno llamado «Mi efectivo». amountCents en centavos enteros, en la moneda de la cuenta. Genera un requestRef (UUID) por retiro y reutilízalo si reintentas: así nunca se duplica. Devuelve el movimiento (transactionId) y la cuenta de efectivo. CONFIRMA con la persona de qué cuenta y cuánto antes de llamarla."
     },
     "deferralProposal": "Diferir en {count} cuotas",
     "errors": {
@@ -2025,7 +2030,21 @@
       "accountsArchived": "true para listar las cuentas archivadas; por defecto, las abiertas.",
       "reconcileOn": "El día, AAAA-MM-DD, sin futuro.",
       "reconcileRealAmountCents": "Lo que la persona contó, en centavos enteros y en la moneda de la cuenta (en una deuda, lo que se debe); negativo si quedó bajo cero.",
-      "reconcileExpectedDerivedCents": "El derivedCents que devolvió get_reconcile_sheet para ese mismo día."
+      "reconcileExpectedDerivedCents": "El derivedCents que devolvió get_reconcile_sheet para ese mismo día.",
+      "statementPeriodStart": "Primer día del periodo del extracto, AAAA-MM-DD.",
+      "statementCutOffDate": "Fecha de corte del extracto, AAAA-MM-DD; no se repite en una misma deuda.",
+      "statementPaymentDueDate": "Fecha límite de pago, AAAA-MM-DD; null si no la trae.",
+      "statementClosingBalanceCents": "Saldo de cierre, lo que se debe, en centavos enteros.",
+      "statementOpeningBalanceCents": "Saldo de apertura, en centavos; opcional.",
+      "statementCreditsCents": "Abonos y créditos del periodo, en centavos; opcional.",
+      "statementDebitsCents": "Compras y cargos del periodo, en centavos; opcional.",
+      "statementMinimumPaymentCents": "Pago mínimo del extracto, en centavos; opcional.",
+      "statementInterestChargedCents": "Intereses cobrados, en centavos; opcional.",
+      "statementFeesChargedCents": "Comisiones cobradas, en centavos; opcional.",
+      "billedCurrency": "La moneda en que la deuda cobra (COP o USD).",
+      "billedCents": "Lo que el emisor cobró, en centavos enteros, positivo.",
+      "deferInstalments": "Número de cuotas en que se difiere la compra, el que imprime el extracto.",
+      "withdrawSourceAccountId": "Cuenta de activo de la que sale el efectivo (id de list_accounts)."
     },
     "titles": {
       "listAccounts": "Ver cuentas",
@@ -2099,7 +2118,12 @@
       "restoreAccount": "Restaurar una cuenta",
       "getReconcileSheet": "Ver la hoja para cuadrar una cuenta",
       "reconcileAccount": "Cuadrar una cuenta",
-      "listReconciliations": "Ver los cuadres de una cuenta"
+      "listReconciliations": "Ver los cuadres de una cuenta",
+      "recordAccountStatement": "Registrar un extracto de una deuda",
+      "recordBilledAmount": "Registrar lo que cobró el emisor",
+      "deferPurchase": "Diferir una compra en cuotas",
+      "undeferPurchase": "Quitar el diferido de una compra",
+      "withdrawCash": "Sacar efectivo"
     }
   },
   "oauth": {
