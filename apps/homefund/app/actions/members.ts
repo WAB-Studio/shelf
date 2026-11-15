@@ -4,19 +4,23 @@ import { refresh } from "next/cache";
 
 import {
   acceptInvitation,
-  archiveMember,
-  createMember,
   declineInvitation,
   deleteMember,
   inviteEmailIsMember,
   leaveFund,
-  restoreMember,
   transferLeadership,
   updateMember,
   type UpdateMemberStatus,
 } from "@/db/queries/group-members";
-import { getUserGroup } from "@/db/queries/groups";
 import { MEMBER_DEBT_REFERENCES } from "@/db/queries/member-debts";
+import {
+  addMember,
+  archiveMemberChecked,
+  notLeader,
+  renameMember,
+  requireGroupId,
+  restoreMemberChecked,
+} from "@/db/queries/member-write";
 import { deliverabilityExempt, isDomainDeliverable } from "@/lib/auth/deliverability";
 import { pgConstraintName, pgErrorCode } from "@/lib/db-error";
 import { env } from "@/lib/env";
@@ -36,13 +40,6 @@ import {
   updateMemberSchema,
 } from "@/lib/validation/member";
 
-// Members live inside a group; a caller who runs personal-only has none (RF-55).
-async function requireGroupId(): Promise<string> {
-  const group = await getUserGroup();
-  if (!group) throw new ActionError("errors.notFound");
-  return group.id;
-}
-
 // RF-150 / RF-151: the group, the membership and the domain are asked together, and a
 // refusal lands before any row is written or any mail asked. The caller who does not
 // lead the fund learns false from the membership read and meets the leader guard later.
@@ -60,13 +57,6 @@ async function requireInvitableGroupId(email: string | undefined): Promise<strin
   if (isMember) throw new ActionError("members.errors.alreadyMember");
   if (!deliverable) throw new ActionError("errors.domainUndeliverable");
   return groupId;
-}
-
-// RF-100 gave every member write to the leader alone, and the policies filter rather
-// than raise: an UPDATE or a DELETE the caller does not lead returns no row, while an
-// INSERT and the own-row WITH CHECK raise 42501. Both read as the same refusal.
-function notLeader(): never {
-  throw new ActionError("errors.notLeader");
 }
 
 // RF-06 / RF-148: Auth's own invitation, sent from the server with the secret key,
@@ -93,15 +83,7 @@ export const createMemberAction = authActionClient
   .inputSchema(createMemberSchema)
   .action(async ({ parsedInput: { name, email } }) => {
     const groupId = await requireInvitableGroupId(email);
-    let memberId: string;
-    try {
-      ({ memberId } = await createMember({ groupId, name, inviteEmail: email }));
-    } catch (error) {
-      const code = pgErrorCode(error);
-      if (code === "42501") notLeader();
-      if (code === "23505") throw new ActionError("members.errors.emailTaken");
-      throw error;
-    }
+    const { memberId } = await addMember({ groupId, name, inviteEmail: email });
 
     // A failed send leaves the member pending rather than aborting the create;
     // the caller surfaces it as a notice, not an error.
@@ -117,19 +99,11 @@ export const inviteMemberByEmailAction = authActionClient
   .inputSchema(inviteByEmailSchema)
   .action(async ({ parsedInput: { email } }) => {
     const groupId = await requireInvitableGroupId(email);
-    let memberId: string;
-    try {
-      ({ memberId } = await createMember({
-        groupId,
-        name: provisionalMemberName(email),
-        inviteEmail: email,
-      }));
-    } catch (error) {
-      const code = pgErrorCode(error);
-      if (code === "42501") notLeader();
-      if (code === "23505") throw new ActionError("members.errors.emailTaken");
-      throw error;
-    }
+    const { memberId } = await addMember({
+      groupId,
+      name: provisionalMemberName(email),
+      inviteEmail: email,
+    });
 
     const inviteEmailFailed = !(await sendInviteEmail(email));
 
@@ -145,8 +119,7 @@ export const updateMemberAction = authActionClient
     const groupId = await requireInvitableGroupId(email);
 
     if (email === undefined) {
-      const renamed = await updateMember({ groupId, memberId, name });
-      if (!renamed) notLeader();
+      await renameMember({ groupId, memberId, name });
 
       refresh();
       return { inviteEmailFailed: false };
@@ -170,21 +143,10 @@ export const updateMemberAction = authActionClient
     return { inviteEmailFailed };
   });
 
-// RF-61: archiving a member leaves their accounts untouched — the flag is the
-// only write. The caller's own row is the one an archive raises on: it passes the
-// policy's USING and trips its WITH CHECK.
 export const archiveMemberAction = authActionClient
   .inputSchema(archiveMemberSchema)
   .action(async ({ parsedInput: { memberId } }) => {
-    const groupId = await requireGroupId();
-    let archived: boolean;
-    try {
-      archived = await archiveMember({ groupId, memberId });
-    } catch (error) {
-      if (pgErrorCode(error) === "42501") throw new ActionError("errors.selfArchive");
-      throw error;
-    }
-    if (!archived) notLeader();
+    await archiveMemberChecked({ groupId: await requireGroupId(), memberId });
 
     refresh();
   });
@@ -192,21 +154,7 @@ export const archiveMemberAction = authActionClient
 export const restoreMemberAction = authActionClient
   .inputSchema(restoreMemberSchema)
   .action(async ({ parsedInput: { memberId } }) => {
-    const groupId = await requireGroupId();
-    let restored: boolean;
-    try {
-      restored = await restoreMember({ groupId, memberId });
-    } catch (error) {
-      // RF-149: a newer invitation holds the address this one would take back.
-      if (
-        pgErrorCode(error) === "23505" &&
-        pgConstraintName(error) === "group_members_group_invite_email_unique"
-      ) {
-        throw new ActionError("members.errors.emailTaken");
-      }
-      throw error;
-    }
-    if (!restored) notLeader();
+    await restoreMemberChecked({ groupId: await requireGroupId(), memberId });
 
     refresh();
   });
