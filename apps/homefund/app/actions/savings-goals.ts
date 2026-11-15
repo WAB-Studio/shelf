@@ -2,22 +2,15 @@
 
 import { refresh } from "next/cache";
 
-import { getUserGroup } from "@/db/queries/groups";
+import { contributeToGoal, openGoal, reviseGoal } from "@/db/queries/goal-write";
 import {
-  addGoalContribution,
   archiveGoal,
-  createGoal,
   deleteGoal,
   listGoalContributions,
   removeGoalContribution,
-  resolveGoalCurrency,
   restoreGoal,
-  updateGoal,
   type GoalContributionRow,
 } from "@/db/queries/savings-goals";
-import type { CurrencyCode } from "@/lib/currency";
-import { assertRefined, requireMinor } from "@/lib/action-amounts";
-import { pgErrorCode } from "@/lib/db-error";
 import { ActionError } from "@/lib/errors";
 import { authActionClient } from "@/lib/safe-action";
 import {
@@ -26,122 +19,37 @@ import {
   createGoalSchema,
   deleteGoalSchema,
   goalContributionsSchema,
-  refineContributionAmount,
-  refineGoalAmounts,
   removeGoalContributionSchema,
   restoreGoalSchema,
   updateGoalSchema,
 } from "@/lib/validation/savings-goal";
 
 /**
- * The meta and the opening aporte read in the currency the goal derives, never
- * in the one the payload implies (RF-121). The refinement is the very one the
- * form runs (RNF-10); past it, a null parse can only be a schema that let
- * something through, so it is `errors.unexpected` and not a field message.
- */
-function toGoalMinor(
-  amounts: { targetAmount: string; initialContribution?: string | null },
-  currency: CurrencyCode,
-): { targetAmountCents: number; initialContributionCents: number | null } {
-  assertRefined(amounts, refineGoalAmounts(currency));
-
-  return {
-    targetAmountCents: requireMinor(amounts.targetAmount),
-    initialContributionCents:
-      amounts.initialContribution != null
-        ? requireMinor(amounts.initialContribution)
-        : null,
-  };
-}
-
-// A scope mismatch on the goal's account, or on a contributed movement, raises
-// 23514; a missing account or movement trips a foreign key; a denied write
-// reads the same as a goal that was never there.
-function mapGoalError(error: unknown): never {
-  const code = pgErrorCode(error);
-  if (code === "42501") throw new ActionError("errors.notFound");
-  if (code === "23514") throw new ActionError("goals.errors.scopeViolation");
-  if (code === "23503") throw new ActionError("errors.notFound");
-  throw error;
-}
-
-/**
- * Creates a savings goal (RF-76). The scope follows the named account when the
- * caller belongs to a group, otherwise their personal set; the account, when
- * given, must share it.
+ * Creates a savings goal (RF-76); `openGoal` holds the body, and the owner it
+ * files a personal goal under is the session's.
  */
 export const createGoalAction = authActionClient
   .inputSchema(createGoalSchema)
-  .action(
-    async ({
-      parsedInput: { targetAmount, targetDate, accountId, initialContribution, ...goal },
-      ctx,
-    }) => {
-      // The currency and the scope ride one fan-out: neither read waits on the other.
-      const [currency, group] = await Promise.all([
-        resolveGoalCurrency({ accountId: accountId ?? null }),
-        getUserGroup(),
-      ]);
-      const { targetAmountCents, initialContributionCents } = toGoalMinor(
-        { targetAmount, initialContribution },
-        currency,
-      );
+  .action(async ({ parsedInput, ctx }) => {
+    const { goalId } = await openGoal(parsedInput, ctx.user.id);
 
-      const scope = group
-        ? { ownerUserId: null, groupId: group.id }
-        : { ownerUserId: ctx.user.id, groupId: null };
-
-      let goalId: string;
-      try {
-        ({ goalId } = await createGoal({
-          ...goal,
-          ...scope,
-          targetAmountCents,
-          targetDate: targetDate ?? null,
-          accountId: accountId ?? null,
-          initialContributionCents,
-        }));
-      } catch (error) {
-        mapGoalError(error);
-      }
-
-      refresh();
-      return { goalId };
-    },
-  );
+    refresh();
+    return { goalId };
+  });
 
 /**
- * Rewrites a goal's editable fields (RF-76). The scope is immutable and never
- * travels in the payload, so a denied edit reports as no row.
+ * Rewrites a goal's editable fields (RF-76); `reviseGoal` holds the body.
+ * Refused or not, the screen reloads: a form reopened as the refusal asks
+ * carries the new stamp.
  */
 export const updateGoalAction = authActionClient
   .inputSchema(updateGoalSchema)
-  .action(async ({ parsedInput: { targetAmount, targetDate, accountId, ...goal } }) => {
-    const currency = await resolveGoalCurrency({
-      goalId: goal.goalId,
-      accountId: accountId ?? null,
-    });
-    const { targetAmountCents } = toGoalMinor({ targetAmount }, currency);
-
-    // RF-156: an edit sent without the stamp its form loaded is stale, refused before any write.
-    if (!goal.expectedUpdatedAt) throw new ActionError("errors.stale");
-
-    let updated: Awaited<ReturnType<typeof updateGoal>>;
+  .action(async ({ parsedInput }) => {
     try {
-      updated = await updateGoal({
-        ...goal,
-        targetAmountCents,
-        targetDate: targetDate ?? null,
-        accountId: accountId ?? null,
-      });
-    } catch (error) {
-      mapGoalError(error);
+      await reviseGoal(parsedInput);
+    } finally {
+      refresh();
     }
-
-    // Refused or not, the screen reloads: a form reopened as the refusal asks carries the new stamp.
-    refresh();
-    if (updated === "stale") throw new ActionError("errors.stale");
-    if (!updated) throw new ActionError("errors.notFound");
   });
 
 /**
@@ -177,25 +85,11 @@ export const deleteGoalAction = authActionClient
     refresh();
   });
 
-/**
- * Adds a typed virtual aporte toward a goal (RF-87). The entry earmarks no
- * movement, so only the amount crosses, as a string read in the goal's currency.
- */
+/** Adds a typed virtual aporte toward a goal (RF-87); `contributeToGoal` holds the body. */
 export const contributeGoalAction = authActionClient
   .inputSchema(contributeGoalSchema)
-  .action(async ({ parsedInput: { goalId, amount } }) => {
-    // An aporte is set aside in the goal's own currency, whatever it earmarks.
-    const currency = await resolveGoalCurrency({ goalId });
-    assertRefined({ amount }, refineContributionAmount(currency));
-
-    const amountCents = requireMinor(amount);
-
-    let contributionId: string;
-    try {
-      ({ contributionId } = await addGoalContribution({ goalId, amountCents }));
-    } catch (error) {
-      mapGoalError(error);
-    }
+  .action(async ({ parsedInput }) => {
+    const { contributionId } = await contributeToGoal(parsedInput);
 
     refresh();
     return { contributionId };
