@@ -26,6 +26,7 @@ import { registerAccountTools } from "@/lib/mcp/account-tools";
 import { registerDebtStatementTools } from "@/lib/mcp/statement-tools";
 import { registerReportTools } from "@/lib/mcp/report-tools";
 import { registerReviewTools } from "@/lib/mcp/review-tools";
+import { registerMemberTools } from "@/lib/mcp/member-tools";
 import { BatchRefusal, registerInboxTools } from "@/lib/mcp/inbox-tools";
 import { registerLabelTools } from "@/lib/mcp/label-tools";
 import { registerMemberDebtTools } from "@/lib/mcp/member-debt-tools";
@@ -126,13 +127,20 @@ function registerReadTools(server: McpServer): void {
   // RF-181, RF-182: the ids holderMemberId, contributedByMemberId and madeByMemberId take.
   server.registerTool(
     "list_members",
-    { ...titled(say, "listMembers"), description: t("tools.listMembers"), inputSchema: z.object({}), annotations: READ },
-    (_input, ctx) =>
+    {
+      ...titled(say, "listMembers"),
+      description: t("tools.listMembers"),
+      inputSchema: z.object({ archived: z.boolean().optional().describe(t("params.membersArchived")) }),
+      annotations: READ,
+    },
+    (input: { archived?: boolean }, ctx) =>
       run(ctx, async (owner) =>
-        (await listCallerMembers(owner, { archived: false })).map((member) => ({
+        (await listCallerMembers(owner, { archived: input.archived ?? false })).map((member) => ({
           id: member.id,
           name: member.name,
+          role: member.role,
           hasLogin: member.userId !== null,
+          archived: member.archivedAt !== null,
         })),
       ),
   );
@@ -217,6 +225,7 @@ export function buildHandler(): (request: Request) => Promise<Response> {
     registerDebtStatementTools(server, run, say);
     registerReportTools(server, run, say);
     registerReviewTools(server, run, say);
+    registerMemberTools(server, run, say);
   }, {
     serverInfo: { name: "homefund", version: pkg.version },
     instructions: t("instructions"),

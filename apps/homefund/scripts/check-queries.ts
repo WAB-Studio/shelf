@@ -4176,6 +4176,7 @@ async function main(): Promise<void> {
   await mcpStatementsSuite();
   await mcpReportsSuite();
   await mcpReviewSuite();
+  await mcpMembersSuite();
 }
 
 // A member recorded without a login is someone in the fund: a leader whose fund holds one is not alone, so an
@@ -15318,6 +15319,7 @@ const TOOL_CLASSES = [
   ["archive_account", ...OVERWRITE_CLASS],
   ["archive_budget", ...OVERWRITE_CLASS],
   ["archive_goal", ...OVERWRITE_CLASS],
+  ["archive_member", ...OVERWRITE_CLASS],
   ["cancel_planned_payment", ...DESTROY_CLASS],
   ["complete_counterparty", ...OVERWRITE_CLASS],
   ["contribute_goal", ...ADD_CLASS],
@@ -15326,6 +15328,7 @@ const TOOL_CLASSES = [
   ["create_category", ...ADD_CLASS],
   ["create_goal", ...ADD_CLASS],
   ["create_label", ...ADD_CLASS],
+  ["create_member", ...ADD_CLASS],
   ["create_planned_payment", ...ADD_CLASS],
   ["create_recurring_rule", ...ADD_CLASS],
   ["defer_purchase", ...OVERWRITE_CLASS],
@@ -15377,9 +15380,11 @@ const TOOL_CLASSES = [
   ["record_third_party_payment", ...ADD_ONCE_CLASS],
   ["reject_deliveries", ...DESTROY_CLASS],
   ["remove_goal_contribution", ...DESTROY_CLASS],
+  ["rename_member", ...OVERWRITE_CLASS],
   ["restore_account", ...OVERWRITE_CLASS],
   ["restore_budget", ...OVERWRITE_CLASS],
   ["restore_goal", ...OVERWRITE_CLASS],
+  ["restore_member", ...OVERWRITE_CLASS],
   ["restore_shape", ...OVERWRITE_CLASS],
   ["resume_recurring_rule", ...OVERWRITE_CLASS],
   ["review_month", ...READ_CLASS],
@@ -15392,6 +15397,7 @@ const TOOL_CLASSES = [
   ["update_account", ...OVERWRITE_CLASS],
   ["update_budget", ...OVERWRITE_CLASS],
   ["update_category", ...OVERWRITE_CLASS],
+  ["update_fund", ...OVERWRITE_CLASS],
   ["update_goal", ...OVERWRITE_CLASS],
   ["update_label", ...OVERWRITE_CLASS],
   ["update_movement", ...OVERWRITE_CLASS],
@@ -20516,5 +20522,80 @@ async function mcpReviewSuite(): Promise<void> {
     whole.id === purchase && whole.deferral?.instalments === 12 && whole.createdByUserId === owner.id && plain.deferral === null &&
       foreign.isError && (foreign.value as { error: string }).error === es.errors.notFound,
     `whole ${JSON.stringify(whole)}, foreign ${JSON.stringify(foreign.value)}`,
+  );
+}
+
+// RF-237: Claude reads the members with their role, adds one with no email, renames, archives and restores one and changes
+// the fund's settings, as the leader may; a member who is not the leader is refused in the form's words.
+async function mcpMembersSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const { POST } = await import("@/app/mcp/route");
+  const [leader, member] = [await createMembershipFreeUser(), await createMembershipFreeUser()];
+  const ids = { group: randomUUID(), leaderRow: randomUUID(), memberRow: randomUUID(), bank: randomUUID() };
+  const name = (what: string) => `Harness rf237 ${what} ${tag}`;
+  await fixtureSql.begin(async (tx) => {
+    await tx`insert into groups (id, name, cash_mode) values (${ids.group}, ${name("fondo")}, 'shared')`;
+    await tx`insert into group_members (id, group_id, user_id, name, role) values
+      (${ids.leaderRow}, ${ids.group}, ${leader.id}, ${name("lider")}, 'leader'), (${ids.memberRow}, ${ids.group}, ${member.id}, ${name("miembro")}, 'member')`;
+    await tx`insert into accounts (id, owner_user_id, name, kind, subtype, initial_balance_cents, initial_balance_on)
+      values (${ids.bank}, ${leader.id}, ${name("banco")}, 'asset', 'bank', 0, '2026-01-01')`;
+  });
+  track("groups", ids.group);
+  for (const id of [ids.leaderRow, ids.memberRow]) track("group_members", id);
+  track("accounts", ids.bank);
+  const clientOf = async (user: HarnessUser) => {
+    const { id, token } = await asUser(user, () => issueWebhookCredential({ name: name("clave"), purpose: "mcp", defaultAccountId: null, defaultCategoryId: null }));
+    keep("webhook_credentials", id);
+    return { ...mcpClient(POST, token), token };
+  };
+  const [{ tool, rpc, token }, { tool: memberTool }] = [await clientOf(leader), await clientOf(member)];
+  type Listed = { id: string; name: string; role: string; hasLogin: boolean; archived: boolean };
+  const members = async (archived = false) => (await tool("list_members", archived ? { archived: true } : {})).value as Listed[];
+
+  const asMember = await memberTool("create_member", { name: name("intruso") });
+  const created = await tool("create_member", { name: name("abuela") });
+  const guestId = (created.value as { memberId: string }).memberId;
+  track("group_members", guestId);
+  const guest = (await members()).find((row) => row.id === guestId);
+  const [stored] = await fixtureSql<{ invite_email: string | null; user_id: string | null }[]>`select invite_email, user_id from group_members where id = ${guestId}`;
+  const listedTools = ((await rpc(token, "tools/list")).body?.result?.tools ?? []) as { name: string; inputSchema: { properties: Record<string, unknown> } }[];
+  const createInput = listedTools.find((one) => one.name === "create_member")?.inputSchema.properties ?? { email: true };
+  assert(
+    next("RF-237: only the leader adds a member, who has no login and no email, and create_member asks for no email at all"),
+    asMember.isError && (asMember.value as { error: string }).error === es.errors.notLeader && !created.isError &&
+      guest?.hasLogin === false && guest.role === "member" && stored.invite_email === null && stored.user_id === null && !("email" in createInput),
+    `member ${JSON.stringify(asMember.value)}, created ${JSON.stringify(created.value)}, stored ${JSON.stringify(stored)}, input ${Object.keys(createInput)}`,
+  );
+
+  const renamed = await tool("rename_member", { memberId: guestId, name: name("abuela Rosa") });
+  const refusedRename = await memberTool("rename_member", { memberId: ids.leaderRow, name: name("robado") });
+  assert(
+    next("RF-237: rename_member answers the previous name, and a plain member renaming another is refused"),
+    !renamed.isError && (renamed.value as { before: { name: string } }).before.name === name("abuela") &&
+      (await members()).find((row) => row.id === guestId)?.name === name("abuela Rosa") && refusedRename.isError,
+    `renamed ${JSON.stringify(renamed.value)}, other ${JSON.stringify(refusedRename.value)}`,
+  );
+
+  const accountsBefore = ((await tool("list_accounts")).value as unknown[]).length;
+  const archived = await tool("archive_member", { memberId: guestId });
+  const [active, inArchive] = [await members(), await members(true)];
+  const accountsAfter = ((await tool("list_accounts")).value as unknown[]).length;
+  const restored = await tool("restore_member", { memberId: guestId });
+  assert(
+    next("RF-237: archive_member takes a member out of the list into the archived one without touching accounts, and restore_member brings them back"),
+    !archived.isError && !active.some((row) => row.id === guestId) && inArchive.some((row) => row.id === guestId && row.archived) &&
+      accountsAfter === accountsBefore && !restored.isError && (await members()).some((row) => row.id === guestId),
+    `archived ${JSON.stringify(archived.value)}, accounts ${accountsBefore}/${accountsAfter}`,
+  );
+
+  const asPlain = await memberTool("update_fund", { cashMode: "per_member" });
+  const changed = await tool("update_fund", { cashMode: "per_member" });
+  const [fund] = await fixtureSql<{ cash_mode: string }[]>`select cash_mode from groups where id = ${ids.group}`;
+  assert(
+    next("RF-237: update_fund by the leader changes the cash mode and answers the old one; by a plain member it is refused"),
+    asPlain.isError && (asPlain.value as { error: string }).error === es.errors.notLeader && !changed.isError &&
+      JSON.stringify((changed.value as { before: unknown }).before) === JSON.stringify({ cashMode: "shared" }) && fund.cash_mode === "per_member",
+    `member ${JSON.stringify(asPlain.value)}, leader ${JSON.stringify(changed.value)}, now ${fund.cash_mode}`,
   );
 }
