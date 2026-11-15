@@ -19,6 +19,7 @@ import { getTransactionById, listTransactions, type TransactionListRow, type Tra
 import { pgErrorCode } from "@/lib/db-error";
 import { ActionError } from "@/lib/errors";
 import { CATEGORY_COLORS } from "@/lib/fund/category-color";
+import { ADD, ADD_ONCE, DESTROY, OVERWRITE, READ, previousFields, titled } from "@/lib/mcp/annotations";
 import { resolveLabelIds } from "@/lib/mcp/label-tools";
 import { parseForm } from "@/lib/mcp/parse-form";
 import { centsToDecimal, parseAmount } from "@/lib/money";
@@ -114,15 +115,57 @@ function patched(current: TransactionListRow, patch: Partial<MovementInput>): Mo
   };
 }
 
+// Everything update_movement can resend or patch, and the stamp it must quote back. A tool that removes
+// a movement answers it in this shape, so record_movement can book it again.
+function movementRow(row: TransactionListRow) {
+  return {
+    id: row.id,
+    kind: row.kind,
+    date: row.occurredAt,
+    description: row.description,
+    amountCents: row.amountCents,
+    currency: row.currency,
+    counterAmountCents: row.counterAmountCents,
+    counterIsEstimate: row.counterIsEstimate,
+    fromAccountId: row.fromAccountId,
+    toAccountId: row.toAccountId,
+    contributedByMemberId: row.contributedByMemberId,
+    forHousehold: row.forHousehold,
+    madeByMemberId: row.madeByMemberId,
+    madeByName: row.madeByName,
+    labelIds: row.labels.map((label) => label.id),
+    splits: row.splits,
+    updatedAt: row.updatedAt,
+  };
+}
+
+// A movement's stored fields under the names update_movement patches them by.
+function storedMovement(row: TransactionListRow): Record<string, unknown> {
+  return {
+    fromAccountId: row.fromAccountId,
+    toAccountId: row.toAccountId,
+    amountCents: row.amountCents,
+    currency: row.currency,
+    counterAmountCents: row.counterAmountCents,
+    counterIsEstimate: row.counterIsEstimate,
+    occurredAt: row.occurredAt,
+    description: row.description,
+    splits: row.splits,
+    contributedByMemberId: row.contributedByMemberId,
+    forHousehold: row.forHousehold,
+    madeByMemberId: row.madeByMemberId,
+    labels: row.labels.map((label) => label.id),
+  };
+}
+
 export function registerLedgerTools(server: McpServer, run: Run, t: Say): void {
   const d = (key: string) => t(`params.${key}`);
-  const write = { readOnlyHint: false, destructiveHint: false, idempotentHint: false };
   const shape = movementShape(t);
   const idOf = (key: string, value: string) => parseForm(z.uuid({ error: key }), value);
 
   server.registerTool(
     "list_categories",
-    { description: t("tools.listCategories"), inputSchema: z.object({}), annotations: { readOnlyHint: true } },
+    { ...titled(t, "listCategories"), description: t("tools.listCategories"), inputSchema: z.object({}), annotations: READ },
     (_input, ctx) =>
       run(ctx, async (owner) =>
         (await listScopedCategories(owner)).flatMap((parent) => [
@@ -141,6 +184,7 @@ export function registerLedgerTools(server: McpServer, run: Run, t: Say): void {
   server.registerTool(
     "list_movements",
     {
+      ...titled(t, "listMovements"),
       description: t("tools.listMovements"),
       inputSchema: z.object({
         accountId: z.string().optional().describe(d("accountId")),
@@ -152,7 +196,7 @@ export function registerLedgerTools(server: McpServer, run: Run, t: Say): void {
         limit: z.number().int().min(1).max(200).optional().describe(d("limit")),
         offset: z.number().int().min(0).optional().describe(d("offset")),
       }),
-      annotations: { readOnlyHint: true },
+      annotations: READ,
     },
     (input: { accountId?: string; categoryId?: string; madeByMemberId?: string; label?: string; from?: string; to?: string; limit?: number; offset?: number }, ctx) =>
       run(ctx, async (owner) => {
@@ -169,35 +213,17 @@ export function registerLedgerTools(server: McpServer, run: Run, t: Say): void {
           { accountId, categoryId, madeByMemberId, labelId, from: input.from, to: input.to },
           { limit: input.limit ?? 50, offset: input.offset },
         );
-        // Everything update_movement can resend or patch, and the stamp it must quote back.
-        return rows.map((row) => ({
-          id: row.id,
-          kind: row.kind,
-          date: row.occurredAt,
-          description: row.description,
-          amountCents: row.amountCents,
-          currency: row.currency,
-          counterAmountCents: row.counterAmountCents,
-          counterIsEstimate: row.counterIsEstimate,
-          fromAccountId: row.fromAccountId,
-          toAccountId: row.toAccountId,
-          contributedByMemberId: row.contributedByMemberId,
-          forHousehold: row.forHousehold,
-          madeByMemberId: row.madeByMemberId,
-          madeByName: row.madeByName,
-          labelIds: row.labels.map((label) => label.id),
-          splits: row.splits,
-          updatedAt: row.updatedAt,
-        }));
+        return rows.map(movementRow);
       }),
   );
 
   server.registerTool(
     "record_movement",
     {
+      ...titled(t, "recordMovement"),
       description: t("tools.recordMovement"),
       inputSchema: z.object({ ...shape, requestRef: z.string().optional().describe(d("requestRef")) }),
-      annotations: { ...write, idempotentHint: true },
+      annotations: ADD_ONCE,
     },
     (input: MovementInput & { requestRef?: string }, ctx) =>
       run(ctx, async (owner) =>
@@ -215,13 +241,14 @@ export function registerLedgerTools(server: McpServer, run: Run, t: Say): void {
   server.registerTool(
     "update_movement",
     {
+      ...titled(t, "updateMovement"),
       description: t("tools.updateMovement"),
       inputSchema: z.object({
         transactionId: z.string().describe(d("transactionId")),
         expectedUpdatedAt: z.string().describe(d("expectedUpdatedAt")),
         ...z.object(shape).partial().shape,
       }),
-      annotations: { ...write, idempotentHint: true },
+      annotations: OVERWRITE,
     },
     (input: Partial<MovementInput> & { transactionId: string; expectedUpdatedAt: string }, ctx) =>
       run(ctx, async (owner) => {
@@ -239,28 +266,33 @@ export function registerLedgerTools(server: McpServer, run: Run, t: Say): void {
             expectedUpdatedAt,
           }),
         );
-        return { transactionId: id };
+        // A categoryId patch replaces the lines, so what it overwrote is the lines.
+        const sent = { ...patch, splits: patch.splits ?? (patch.categoryId === undefined ? undefined : []) };
+        return { transactionId: id, before: previousFields(storedMovement(current), sent) };
       }),
   );
 
   server.registerTool(
     "delete_movement",
     {
+      ...titled(t, "deleteMovement"),
       description: t("tools.deleteMovement"),
       inputSchema: z.object({ transactionId: z.string().describe(d("transactionId")) }),
-      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
+      annotations: DESTROY,
     },
     (input: { transactionId: string }, ctx) =>
       run(ctx, async () => {
         const id = idOf("errors.notFound", input.transactionId);
+        const before = await getTransactionById(id);
         await dropMovement(id);
-        return { transactionId: id };
+        return { transactionId: id, before: before === null ? null : movementRow(before) };
       }),
   );
 
   server.registerTool(
     "create_account",
     {
+      ...titled(t, "createAccount"),
       description: t("tools.createAccount"),
       inputSchema: z.object({
         name: z.string().describe(d("accountName")),
@@ -275,7 +307,7 @@ export function registerLedgerTools(server: McpServer, run: Run, t: Say): void {
         parentAccountId: z.string().nullable().default(null).describe(d("parentAccountId")),
         holderMemberId: z.string().nullable().default(null).describe(d("holderMemberId")),
       }),
-      annotations: write,
+      annotations: ADD,
     },
     (input: Record<string, string | number | null | undefined>, ctx) =>
       run(ctx, async (owner) => {
@@ -288,6 +320,7 @@ export function registerLedgerTools(server: McpServer, run: Run, t: Say): void {
   server.registerTool(
     "update_account",
     {
+      ...titled(t, "updateAccount"),
       description: t("tools.updateAccount"),
       inputSchema: z.object({
         accountId: z.string().describe(d("accountId")),
@@ -302,7 +335,7 @@ export function registerLedgerTools(server: McpServer, run: Run, t: Say): void {
         parentAccountId: z.string().nullable().optional().describe(d("parentAccountId")),
         holderMemberId: z.string().nullable().optional().describe(d("holderMemberId")),
       }),
-      annotations: { ...write, idempotentHint: true },
+      annotations: OVERWRITE,
     },
     (input: Record<string, string | number | null | undefined> & { accountId: string; expectedUpdatedAt: string }, ctx) =>
       run(ctx, async () => {
@@ -343,7 +376,23 @@ export function registerLedgerTools(server: McpServer, run: Run, t: Say): void {
         }
         if (updated === "stale") throw new ActionError("errors.stale");
         if (!updated) throw new ActionError("errors.notFound");
-        return { accountId: id };
+        return {
+          accountId: id,
+          before: previousFields(
+            {
+              name: current.name,
+              subtype: current.subtype,
+              settlementCurrency: current.settlementCurrency,
+              openingBalanceCents: storedCents,
+              balanceOn: current.initialBalanceOn,
+              institution: current.institution,
+              lastFour: current.lastFour,
+              parentAccountId: current.parentAccountId,
+              holderMemberId: current.holderMemberId,
+            },
+            input,
+          ),
+        };
       }),
   );
 
@@ -351,9 +400,10 @@ export function registerLedgerTools(server: McpServer, run: Run, t: Say): void {
   server.registerTool(
     "move_account_to_fund",
     {
+      ...titled(t, "moveAccountToFund"),
       description: t("tools.moveAccountToFund"),
       inputSchema: z.object({ accountId: z.string().describe(d("accountId")) }),
-      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
+      annotations: DESTROY,
     },
     (input: { accountId: string }, ctx) =>
       run(ctx, async () => {
@@ -366,6 +416,7 @@ export function registerLedgerTools(server: McpServer, run: Run, t: Say): void {
   server.registerTool(
     "create_category",
     {
+      ...titled(t, "createCategory"),
       description: t("tools.createCategory"),
       inputSchema: z.object({
         name: z.string().describe(d("categoryName")),
@@ -374,7 +425,7 @@ export function registerLedgerTools(server: McpServer, run: Run, t: Say): void {
         placement: z.string().optional().describe(d("categoryPlacement")),
         color: z.string().optional().describe(d("color")),
       }),
-      annotations: write,
+      annotations: ADD,
     },
     (input: { color?: string; placement?: string }, ctx) =>
       run(ctx, async (owner) => {
@@ -388,6 +439,7 @@ export function registerLedgerTools(server: McpServer, run: Run, t: Say): void {
   server.registerTool(
     "update_category",
     {
+      ...titled(t, "updateCategory"),
       description: t("tools.updateCategory"),
       inputSchema: z.object({
         categoryId: z.string().describe(d("categoryRef")),
@@ -395,7 +447,7 @@ export function registerLedgerTools(server: McpServer, run: Run, t: Say): void {
         parentId: z.string().nullable().optional().describe(d("parentId")),
         color: z.string().optional().describe(d("color")),
       }),
-      annotations: { ...write, idempotentHint: true },
+      annotations: OVERWRITE,
     },
     (input: { categoryId: string; name?: string; parentId?: string | null; color?: string }, ctx) =>
       run(ctx, async (owner) => {
@@ -423,34 +475,40 @@ export function registerLedgerTools(server: McpServer, run: Run, t: Say): void {
           throw error;
         }
         if (!updated) throw new ActionError("errors.notFound");
-        return { categoryId: id };
+        return { categoryId: id, before: previousFields({ name: current.name, parentId: current.parentId, color: current.color }, input) };
       }),
   );
 
   server.registerTool(
     "merge_movements",
     {
+      ...titled(t, "mergeMovements"),
       description: t("tools.mergeMovements"),
       inputSchema: z.object({
         transactionIds: z.array(z.string()).min(2).max(50).describe(d("transactionIds")),
         description: z.string().nullable().optional().describe(d("description")),
         occurredAt: z.string().optional().describe(d("occurredAt")),
       }),
-      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false },
+      annotations: DESTROY,
     },
     (input: { transactionIds: string[]; description?: string | null; occurredAt?: string }, ctx) =>
-      run(ctx, async () =>
-        mergeMovements({
-          transactionIds: input.transactionIds.map((id) => idOf("errors.notFound", id)),
+      run(ctx, async () => {
+        const transactionIds = input.transactionIds.map((id) => idOf("errors.notFound", id));
+        // The originals as list_movements shows them, read before they are deleted.
+        const originals = await listTransactions({ ids: transactionIds }, { limit: transactionIds.length });
+        const merged = await mergeMovements({
+          transactionIds,
           description: parseForm(descriptionSchema, input.description ?? null) || null,
           occurredAt: input.occurredAt === undefined ? undefined : parseForm(occurredAtSchema, input.occurredAt),
-        }),
-      ),
+        });
+        return { ...merged, originals: originals.map(movementRow) };
+      }),
   );
 
   server.registerTool(
     "move_category_movements",
     {
+      ...titled(t, "moveCategoryMovements"),
       description: t("tools.moveCategoryMovements"),
       inputSchema: z.object({
         fromCategoryId: z.string().describe(d("fromCategoryId")),
@@ -459,7 +517,7 @@ export function registerLedgerTools(server: McpServer, run: Run, t: Say): void {
         to: z.string().optional().describe(d("to")),
         dryRun: z.boolean().optional().describe(d("dryRun")),
       }),
-      annotations: { ...write, idempotentHint: true },
+      annotations: OVERWRITE,
     },
     (input: { fromCategoryId: string; toCategoryId: string; from?: string; to?: string; dryRun?: boolean }, ctx) =>
       run(ctx, async (owner) => {

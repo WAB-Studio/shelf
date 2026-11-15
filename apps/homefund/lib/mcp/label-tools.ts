@@ -8,6 +8,7 @@ import { createLabel, getLabelsScreenData, listScopedLabels, listUsedLabelColors
 import type { LabelScope } from "@/db/queries/labels";
 import { pgErrorCode } from "@/lib/db-error";
 import { ActionError } from "@/lib/errors";
+import { ADD, OVERWRITE, READ, previousFields, titled } from "@/lib/mcp/annotations";
 import { nextCategoryColor } from "@/lib/fund/category-color";
 import { parseForm } from "@/lib/mcp/parse-form";
 import { createLabelSchema, LABEL_PLACEMENTS, updateLabelSchema } from "@/lib/validation/label";
@@ -43,7 +44,7 @@ export function registerLabelTools(server: McpServer, run: Run, t: Say): void {
 
   server.registerTool(
     "list_labels",
-    { description: t("tools.listLabels"), inputSchema: z.object({}), annotations: { readOnlyHint: true } },
+    { ...titled(t, "listLabels"), description: t("tools.listLabels"), inputSchema: z.object({}), annotations: READ },
     (_input, ctx) =>
       run(ctx, async () => {
         const data = await getLabelsScreenData();
@@ -63,13 +64,14 @@ export function registerLabelTools(server: McpServer, run: Run, t: Say): void {
   server.registerTool(
     "create_label",
     {
+      ...titled(t, "createLabel"),
       description: t("tools.createLabel"),
       inputSchema: z.object({
         name: z.string().describe(d("labelName")),
         placement: z.enum(LABEL_PLACEMENTS).default("personal").describe(d("labelPlacement")),
         color: z.string().optional().describe(d("labelColor")),
       }),
-      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
+      annotations: ADD,
     },
     (input, ctx) =>
       run(ctx, async (owner) => {
@@ -92,13 +94,14 @@ export function registerLabelTools(server: McpServer, run: Run, t: Say): void {
   server.registerTool(
     "update_label",
     {
+      ...titled(t, "updateLabel"),
       description: t("tools.updateLabel"),
       inputSchema: z.object({
         labelId: z.string().describe(d("labelId")),
         name: z.string().optional().describe(d("labelName")),
         color: z.string().optional().describe(d("labelColor")),
       }),
-      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
+      annotations: OVERWRITE,
     },
     (input, ctx) =>
       run(ctx, async (owner) => {
@@ -116,7 +119,7 @@ export function registerLabelTools(server: McpServer, run: Run, t: Say): void {
           return rethrowLabelError(error);
         }
         if (!updated) throw new ActionError("errors.notFound");
-        return { labelId: args.labelId };
+        return { labelId: args.labelId, before: previousFields({ name: current.name, color: current.color }, input) };
       }),
   );
 }

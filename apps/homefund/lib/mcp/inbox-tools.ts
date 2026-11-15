@@ -20,6 +20,7 @@ import { categoryNamesById, categoryPathsById } from "@/lib/fund/category-names"
 import { proposedCategoryId } from "@/lib/fund/category-scope";
 import { centsToDecimal, toCents } from "@/lib/money";
 import { pgErrorCode } from "@/lib/db-error";
+import { ADD, DESTROY, READ, titled } from "@/lib/mcp/annotations";
 import { acceptDeliverySchema } from "@/lib/validation/ingest";
 
 type Say = (key: string) => string;
@@ -192,13 +193,14 @@ export function registerInboxTools(server: McpServer, run: Run, t: Say): void {
   server.registerTool(
     "list_inbox",
     {
+      ...titled(t, "listInbox"),
       description: t("tools.listInbox"),
       inputSchema: z.object({
         status: z.enum(["pending", "accepted", "rejected"]).optional().describe(d("inboxStatus")),
         limit: z.number().int().min(1).max(200).optional().describe(d("limit")),
         offset: z.number().int().min(0).optional().describe(d("offset")),
       }),
-      annotations: { readOnlyHint: true },
+      annotations: READ,
     },
     (input: { status?: "pending" | "accepted" | "rejected"; limit?: number; offset?: number }, ctx) =>
       run(ctx, (owner) =>
@@ -250,9 +252,10 @@ export function registerInboxTools(server: McpServer, run: Run, t: Say): void {
   server.registerTool(
     "accept_deliveries",
     {
+      ...titled(t, "acceptDeliveries"),
       description: t("tools.acceptDeliveries"),
       inputSchema: z.object({ deliveries: z.array(acceptItem).min(1).max(50).describe(d("deliveries")) }),
-      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
+      annotations: ADD,
     },
     (input: { deliveries: AcceptItem[] }, ctx) =>
       run(ctx, async (owner) => {
@@ -302,7 +305,7 @@ export function registerInboxTools(server: McpServer, run: Run, t: Say): void {
               refuse(form.deliveryId, error);
             }
           }
-          return { accepted };
+          return { count: accepted.length, accepted };
         });
       }),
   );
@@ -310,9 +313,10 @@ export function registerInboxTools(server: McpServer, run: Run, t: Say): void {
   server.registerTool(
     "reject_deliveries",
     {
+      ...titled(t, "rejectDeliveries"),
       description: t("tools.rejectDeliveries"),
       inputSchema: z.object({ ids: z.array(z.string()).min(1).max(50).describe(d("deliveryIds")) }),
-      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false },
+      annotations: DESTROY,
     },
     (input: { ids: string[] }, ctx) =>
       run(ctx, async () => {
@@ -325,7 +329,7 @@ export function registerInboxTools(server: McpServer, run: Run, t: Say): void {
               refuse(id, error);
             }
           }
-          return { rejected: input.ids };
+          return { count: input.ids.length, rejected: input.ids };
         });
       }),
   );

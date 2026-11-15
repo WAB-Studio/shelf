@@ -10,7 +10,8 @@ import { returnHost } from "@/lib/oauth/return-host";
 import { useActionErrorToast } from "@/lib/use-action-toast";
 import type { AuthorizationRequest } from "@/lib/validation/oauth";
 
-const MAY = ["accounts", "review", "import"] as const;
+const MAY = ["accounts", "review", "import", "write", "delete"] as const;
+const NEVER = ["keys", "people", "unconfirmed"] as const;
 
 export function Consent({ client, email, request }: { client: string; email: string; request: AuthorizationRequest }) {
   const t = useTranslations("oauth");
@@ -45,12 +46,14 @@ export function Consent({ client, email, request }: { client: string; email: str
                 </Flex>
               ))}
               <Text weight="medium">{t("neverLabel")}</Text>
-              <Flex gap="2" align="center">
-                <X size={16} aria-hidden />
-                <Text size="2" color="gray">
-                  {t("never.delete")}
-                </Text>
-              </Flex>
+              {NEVER.map((key) => (
+                <Flex key={key} gap="2" align="center">
+                  <X size={16} aria-hidden />
+                  <Text size="2" color="gray">
+                    {t(`never.${key}`)}
+                  </Text>
+                </Flex>
+              ))}
             </Flex>
           </Card>
           <Button size="3" disabled={working} loading={approve.isPending} onClick={() => approve.execute(request)}>

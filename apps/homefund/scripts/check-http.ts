@@ -1740,7 +1740,7 @@ async function widgetKeySuite(): Promise<void> {
   const userId = httpUserId;
   if (!userId) throw new Error("widgetKeySuite ran before the session was read");
   const claims = JSON.stringify({ sub: userId, role: "authenticated", aud: "authenticated" });
-  const mint = async (purpose: "widget" | "ingest") => {
+  const mint = async (purpose: "widget" | "ingest" | "mcp") => {
     const id = randomUUID();
     const token = `whk_${randomBytes(32).toString("base64url")}`;
     await fixtureSql.begin(async (tx) => {
@@ -1802,6 +1802,26 @@ async function widgetKeySuite(): Promise<void> {
       !source.includes("__SITE__") &&
       !source.includes("whk_"),
     `it answered ${script.status} ${script.headers.get("content-type")}`,
+  );
+
+  // RF-225: the live server declares the classes a client's permission prompt reads.
+  const mcpToken = await mint("mcp");
+  const listed = await fetch(`${HARNESS_BASE_URL}/mcp`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${mcpToken}`, "content-type": "application/json", accept: "application/json, text/event-stream" },
+    body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" }),
+  });
+  const raw = await listed.text();
+  const frame = raw.startsWith("{") ? raw : (raw.split("\n").find((line) => line.startsWith("data:")) ?? "").slice(5);
+  const exposed: { name: string; title?: string; annotations?: { readOnlyHint?: boolean; destructiveHint?: boolean } }[] =
+    frame ? (JSON.parse(frame).result?.tools ?? []) : [];
+  const destructive = (name: string) => exposed.find((one) => one.name === name)?.annotations?.destructiveHint === true;
+  assert(
+    next("/mcp lists every tool with a title and an honest class: reads are read-only, an import and a move to the fund are destructive"),
+    listed.status === 200 && exposed.length > 0 && exposed.every((one) => typeof one.title === "string" && one.title.length > 0) &&
+      exposed.filter((one) => one.annotations?.readOnlyHint === true).every((one) => /^(list_|get_|review_|spending_|preview_)/.test(one.name)) &&
+      destructive("import_statement") && destructive("move_account_to_fund"),
+    `it answered ${listed.status} with ${exposed.length} tools`,
   );
 }
 
