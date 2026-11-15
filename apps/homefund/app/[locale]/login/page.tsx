@@ -5,7 +5,6 @@ import { CircleAlertIcon } from "lucide-react";
 import { notFound } from "next/navigation";
 
 import { LoginForm } from "@/components/auth/login-form";
-import { LanguageSwitcher } from "@/components/language-switcher";
 import { ThemeSwitcher } from "@/components/theme-switcher";
 import { AppMark, Box, Callout, Card, Flex, Heading, Highlight, Text } from "@/components/ui";
 import { routing } from "@/i18n/routing";
@@ -52,9 +51,8 @@ export default async function LoginPage(props: PageProps<"/[locale]/login">) {
   return (
     <Flex asChild direction="column" flexGrow="1" p="4">
       <main>
-        {/* Language and theme both work signed out (FLOWS §8, §10). */}
+        {/* The theme works signed out (FLOWS §10). */}
         <Flex justify="end" align="center" gap="2" py="2">
-          <LanguageSwitcher width="9.5rem" showText />
           <ThemeSwitcher width="9.5rem" showText />
         </Flex>
         <Flex direction="column" flexGrow="1" align="center" justify="center">

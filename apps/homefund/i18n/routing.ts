@@ -8,7 +8,8 @@ export const routing = defineRouting({
   // The language is part of the URL for every route, including the default one.
   localePrefix: "always",
   // The URL decides, then Spanish (RF-218): no browser language and no saved cookie, so a stale `NEXT_LOCALE=en`
-  // left by the old detection decides nothing. English is still a page away at `/en`.
+  // left by the old detection decides nothing.
+  // `/en` is redirected to `/es` by the proxy (RF-221).
   localeDetection: false,
   localeCookie: false,
 });
