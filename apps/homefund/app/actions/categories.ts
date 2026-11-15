@@ -2,8 +2,8 @@
 
 import { refresh } from "next/cache";
 
-import { deleteCategory, updateCategory } from "@/db/queries/categories";
-import { categoryConstraintErrorKey, openCategory } from "@/db/queries/ledger-write";
+import { updateCategory } from "@/db/queries/categories";
+import { categoryConstraintErrorKey, dropCategory, openCategory } from "@/db/queries/ledger-write";
 import { pgErrorCode } from "@/lib/db-error";
 import { ActionError } from "@/lib/errors";
 import { authActionClient } from "@/lib/safe-action";
@@ -54,15 +54,7 @@ export const updateCategoryAction = authActionClient
 export const deleteCategoryAction = authActionClient
   .inputSchema(deleteCategorySchema)
   .action(async ({ parsedInput }) => {
-    let deleted: boolean;
-    try {
-      deleted = await deleteCategory(parsedInput);
-    } catch (error) {
-      if (pgErrorCode(error) === "23503") throw new ActionError("errors.categoryInUse");
-      throw error;
-    }
-
-    if (!deleted) throw new ActionError("errors.notFound");
+    await dropCategory(parsedInput);
 
     refresh();
   });

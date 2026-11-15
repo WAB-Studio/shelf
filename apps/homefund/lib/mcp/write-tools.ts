@@ -132,6 +132,20 @@ function patched(current: TransactionListRow, patch: Partial<MovementInput>): Mo
 
 const idOf = (key: string, value: string) => parseForm(z.uuid({ error: key }), value);
 
+// The categories as list_categories answers them: parents and children in one flat list.
+export async function categoryRows(owner: string) {
+  return (await listScopedCategories(owner)).flatMap((parent) => [
+    { id: parent.id, name: parent.name, kind: parent.kind, parentId: null, scope: parent.scope === "group" ? "fund" : "personal" },
+    ...parent.children.map((child) => ({
+      id: child.id,
+      name: child.name,
+      kind: parent.kind,
+      parentId: parent.id,
+      scope: parent.scope === "group" ? "fund" : "personal",
+    })),
+  ]);
+}
+
 export type MovementFilterInput = {
   accountId?: string;
   categoryId?: string;
@@ -240,18 +254,7 @@ export function registerLedgerTools(server: McpServer, run: Run, t: Say): void {
     "list_categories",
     { ...titled(t, "listCategories"), description: t("tools.listCategories"), inputSchema: z.object({}), annotations: READ },
     (_input, ctx) =>
-      run(ctx, async (owner) =>
-        (await listScopedCategories(owner)).flatMap((parent) => [
-          { id: parent.id, name: parent.name, kind: parent.kind, parentId: null, scope: parent.scope === "group" ? "fund" : "personal" },
-          ...parent.children.map((child) => ({
-            id: child.id,
-            name: child.name,
-            kind: parent.kind,
-            parentId: parent.id,
-            scope: parent.scope === "group" ? "fund" : "personal",
-          })),
-        ]),
-      ),
+      run(ctx, (owner) => categoryRows(owner)),
   );
 
   server.registerTool(

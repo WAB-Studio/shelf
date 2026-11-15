@@ -1888,7 +1888,15 @@
       "renameMember": "Cambia el nombre de un miembro (memberId de list_members); su correo, si lo tiene, no se toca. Solo el líder del fondo lo hace. Devuelve before con el nombre anterior. CONFIRMA con la persona el cambio antes de llamarla.",
       "archiveMember": "Archiva a un miembro (memberId de list_members): deja de salir en la lista y en los selectores, y sus cuentas y movimientos quedan como están (RF-61). No archiva a quien llama. Solo el líder del fondo lo hace. Se restaura con restore_member. Devuelve memberId. CONFIRMA con la persona cuál miembro antes de llamarla.",
       "restoreMember": "Restaura a un miembro archivado (memberId de list_members con archived true). Solo el líder del fondo lo hace. Devuelve memberId. CONFIRMA con la persona cuál antes de llamarla.",
-      "updateFund": "Cambia los ajustes del fondo: name, cashMode (shared, una sola caja compartida, o per_member, una caja por miembro) y currency (COP o USD, en la que informa). Es un parche: lo que no envías queda igual. Pasar a un modo de caja compartida abre su cuenta de efectivo en la moneda del fondo. Solo el líder lo hace. Devuelve before con lo que había en cada campo que cambiaste. CONFIRMA con la persona el cambio antes de llamarla."
+      "updateFund": "Cambia los ajustes del fondo: name, cashMode (shared, una sola caja compartida, o per_member, una caja por miembro) y currency (COP o USD, en la que informa). Es un parche: lo que no envías queda igual. Pasar a un modo de caja compartida abre su cuenta de efectivo en la moneda del fondo. Solo el líder lo hace. Devuelve before con lo que había en cada campo que cambiaste. CONFIRMA con la persona el cambio antes de llamarla.",
+      "deleteAccount": "Borra una cuenta sin movimientos (de list_accounts, abiertas o archivadas), UNA fila por llamada, como el botón «Borrar» de la pantalla. Una cuenta que ya tiene movimientos, o bolsillos, se rechaza: archívala con archive_account. Devuelve before: la fila tal como la lee su list_*, para volver a crearla con create_account. No se deshace solo: CONFIRMA con la persona cuál borras, nombrándola, antes de llamarla; nunca borres varias a la vez ni sin su sí por cada una.",
+      "deleteCategory": "Borra una categoría (de list_categories), UNA fila por llamada, como el botón «Borrar» de la pantalla. Una categoría que movimientos, presupuestos o reglas aún usan se rechaza: mueve sus movimientos con move_category_movements primero; sus subcategorías se borran con ella. Devuelve before: la fila tal como la lee su list_*, para volver a crearla con create_category. No se deshace solo: CONFIRMA con la persona cuál borras, nombrándola, antes de llamarla; nunca borres varias a la vez ni sin su sí por cada una.",
+      "deleteBudget": "Borra un presupuesto (de list_budgets, activos o archivados), UNA fila por llamada, como el botón «Borrar» de la pantalla. Devuelve before: la fila tal como la lee su list_*, para volver a crearlo con create_budget. No se deshace solo: CONFIRMA con la persona cuál borras, nombrándola, antes de llamarla; nunca borres varias a la vez ni sin su sí por cada una.",
+      "deleteGoal": "Borra una meta de ahorro con sus aportes (de list_goals, activas o archivadas), UNA fila por llamada, como el botón «Borrar» de la pantalla. Devuelve before: la fila tal como la lee su list_*, para volver a crearla con create_goal y sus aportes con contribute_goal. No se deshace solo: CONFIRMA con la persona cuál borras, nombrándola, antes de llamarla; nunca borres varias a la vez ni sin su sí por cada una.",
+      "deletePlannedPayment": "Borra un pago programado (de list_planned_payments), UNA fila por llamada, como el botón «Borrar» de la pantalla. El movimiento que un pago ya pagado hizo no se borra: queda como cualquier otro. Devuelve before: la fila tal como la lee su list_*, para volver a programarlo con create_planned_payment. No se deshace solo: CONFIRMA con la persona cuál borras, nombrándola, antes de llamarla; nunca borres varias a la vez ni sin su sí por cada una.",
+      "deleteRecurringRule": "Borra un movimiento recurrente (de list_recurring_rules), UNA fila por llamada, como el botón «Borrar» de la pantalla. Los movimientos que ya generó no se borran. Devuelve before: la fila tal como la lee su list_*, para volver a crearlo con create_recurring_rule. No se deshace solo: CONFIRMA con la persona cuál borras, nombrándola, antes de llamarla; nunca borres varias a la vez ni sin su sí por cada una.",
+      "deleteMemberDebt": "Borra un asiento de deuda entre miembros (id de list_member_debts) (de list_member_debts), UNA fila por llamada, como el botón «Borrar» de la pantalla. Un abono siempre se borra; una deuda solo mientras las otras deudas del mismo deudor al mismo acreedor en esa moneda sigan cubriendo sus abonos, y si no se rechaza. Devuelve before: la fila tal como la lee su list_*, para volver a registrarlo con record_member_debt. No se deshace solo: CONFIRMA con la persona cuál borras, nombrándola, antes de llamarla; nunca borres varias a la vez ni sin su sí por cada una.",
+      "unlinkThirdPartyCredit": "Borra el vínculo de un crédito que paga otra persona, «Dejar de seguir» (liabilityAccountId de list_third_party_credits) (de list_third_party_credits), UNA fila por llamada, como el botón «Borrar» de la pantalla. Las dos cuentas y todos los movimientos se quedan; la cuenta interna «Me debe» se archiva. Devuelve before: la fila tal como la lee su list_*, para volver a vincularlo con link_third_party_credit. No se deshace solo: CONFIRMA con la persona cuál borras, nombrándola, antes de llamarla; nunca borres varias a la vez ni sin su sí por cada una."
     },
     "deferralProposal": "Diferir en {count} cuotas",
     "errors": {
@@ -2072,7 +2080,9 @@
       "membersArchived": "true para listar los miembros archivados; por defecto, los activos.",
       "fundName": "Nombre del fondo, hasta 80 caracteres.",
       "fundCashMode": "shared (una caja compartida) o per_member (una caja por miembro).",
-      "fundCurrency": "Moneda en que informa el fondo: COP o USD."
+      "fundCurrency": "Moneda en que informa el fondo: COP o USD.",
+      "deleteCategoryId": "Id de la categoría a borrar (de list_categories).",
+      "memberDebtId": "Id del asiento a borrar (de list_member_debts)."
     },
     "titles": {
       "listAccounts": "Ver cuentas",
@@ -2164,7 +2174,15 @@
       "renameMember": "Renombrar un miembro",
       "archiveMember": "Archivar un miembro",
       "restoreMember": "Restaurar un miembro",
-      "updateFund": "Cambiar los ajustes del fondo"
+      "updateFund": "Cambiar los ajustes del fondo",
+      "deleteAccount": "Borrar una cuenta",
+      "deleteCategory": "Borrar una categoría",
+      "deleteBudget": "Borrar un presupuesto",
+      "deleteGoal": "Borrar una meta",
+      "deletePlannedPayment": "Borrar un pago programado",
+      "deleteRecurringRule": "Borrar un movimiento recurrente",
+      "deleteMemberDebt": "Borrar un asiento de deuda entre miembros",
+      "unlinkThirdPartyCredit": "Dejar de seguir un crédito que paga otra persona"
     }
   },
   "oauth": {
