@@ -225,12 +225,10 @@ with `update_movement` or `delete_movement`. Every refusal comes back as the for
 
 ## 8. Language
 
-The language is visible in the URL (RF-46) and resolved, in order, by what the
-URL says, the user's saved preference, and finally Spanish. The browser's
-language never chooses it (RF-195).
-
-The preference belongs to the user, so it holds wherever they sign in (RF-47).
-Switching rewrites the URL and persists the choice.
+HomeFund is Spanish alone (RF-218): the language is visible in the URL, a bare
+address goes to `/es`, and every `/en/...` address redirects to the same path
+under `/es` (RF-221). Neither the browser's language, a cookie nor the user's
+saved preference chooses it.
 
 Amounts are always shown in COP; what changes is the date format and the
 thousands separator, not the currency.
