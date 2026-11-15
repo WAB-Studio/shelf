@@ -4171,6 +4171,7 @@ async function main(): Promise<void> {
   await mcpGoalsSuite();
   await mcpPlannedPaymentsSuite();
   await mcpRecurringSuite();
+  await mcpInboxWholeSuite();
 }
 
 // A member recorded without a login is someone in the fund: a leader whose fund holds one is not alone, so an
@@ -15313,6 +15314,7 @@ const TOOL_CLASSES = [
   ["archive_budget", ...OVERWRITE_CLASS],
   ["archive_goal", ...OVERWRITE_CLASS],
   ["cancel_planned_payment", ...DESTROY_CLASS],
+  ["complete_counterparty", ...OVERWRITE_CLASS],
   ["contribute_goal", ...ADD_CLASS],
   ["create_account", ...ADD_CLASS],
   ["create_budget", ...ADD_CLASS],
@@ -15323,10 +15325,12 @@ const TOOL_CLASSES = [
   ["create_recurring_rule", ...ADD_CLASS],
   ["delete_movement", ...DESTROY_CLASS],
   ["delete_recipient", ...DESTROY_CLASS],
+  ["forget_merchant", ...DESTROY_CLASS],
   ["get_debt", ...READ_CLASS],
   ["import_statement", ...DESTROY_CLASS],
   ["link_third_party_credit", ...ADD_CLASS],
   ["list_accounts", ...READ_CLASS],
+  ["list_awaiting_counterparty", ...READ_CLASS],
   ["list_budgets", ...READ_CLASS],
   ["list_categories", ...READ_CLASS],
   ["list_debts", ...READ_CLASS],
@@ -15336,10 +15340,12 @@ const TOOL_CLASSES = [
   ["list_labels", ...READ_CLASS],
   ["list_member_debts", ...READ_CLASS],
   ["list_members", ...READ_CLASS],
+  ["list_merchants", ...READ_CLASS],
   ["list_movements", ...READ_CLASS],
   ["list_planned_payments", ...READ_CLASS],
   ["list_recipients", ...READ_CLASS],
   ["list_recurring_rules", ...READ_CLASS],
+  ["list_silenced_shapes", ...READ_CLASS],
   ["list_third_party_credits", ...READ_CLASS],
   ["mark_movement_reviewed", ...OVERWRITE_CLASS],
   ["merge_movements", ...DESTROY_CLASS],
@@ -15355,6 +15361,7 @@ const TOOL_CLASSES = [
   ["remove_goal_contribution", ...DESTROY_CLASS],
   ["restore_budget", ...OVERWRITE_CLASS],
   ["restore_goal", ...OVERWRITE_CLASS],
+  ["restore_shape", ...OVERWRITE_CLASS],
   ["resume_recurring_rule", ...OVERWRITE_CLASS],
   ["review_month", ...READ_CLASS],
   ["save_recipient", ...OVERWRITE_CLASS],
@@ -20057,5 +20064,114 @@ async function mcpRecurringSuite(): Promise<void> {
     !marked.isError && stamped.reviewed_at !== null && markedAgain.isError && onManual.isError &&
       (onManual.value as { error: string }).error === es.errors.notFound,
     `marked ${JSON.stringify(marked.value)}, again ${JSON.stringify(markedAgain.value)}, manual ${JSON.stringify(onManual.value)}`,
+  );
+}
+
+// RF-232: Claude does everything the Bandeja does, through the same queries as its buttons: labels on accept, reject and silence,
+// the silenced shapes, the merchants it learned and the movements waiting for their other account.
+async function mcpInboxWholeSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const today = todayInBogota();
+  const { POST } = await import("@/app/mcp/route");
+  const [owner, stranger] = [await createMembershipFreeUser(), await createMembershipFreeUser()];
+  const mkBank = (user: HarnessUser, name: string) =>
+    asUser(user, () =>
+      createAccount({
+        kind: "asset", subtype: "bank", groupId: null, isShared: false, institution: null, settlementCurrency: BASE_CURRENCY,
+        balanceOn: "2026-01-01", ownerUserId: user.id, name: `Harness rf232 ${name} ${tag}`, amountMinor: 1_000_000_00,
+      }),
+    );
+  const [bank, other, strangerBank] = [await mkBank(owner, "banco"), await mkBank(owner, "otro"), await mkBank(stranger, "ajeno")];
+  for (const row of [bank, other, strangerBank]) track("accounts", row.accountId);
+  const category = randomUUID();
+  await fixtureSql`insert into categories (id, owner_user_id, name, kind, color) values (${category}, ${owner.id}, ${`Harness rf232 Comida ${tag}`}, 'expense', ${CATEGORY_COLORS[0]})`;
+  track("categories", category);
+  const clientOf = async (user: HarnessUser) => {
+    const { id, token } = await asUser(user, () => issueWebhookCredential({ name: `Harness rf232 ${tag}`, purpose: "mcp", defaultAccountId: null, defaultCategoryId: null }));
+    keep("webhook_credentials", id);
+    return mcpClient(POST, token).tool;
+  };
+  const [tool, strangerTool] = [await clientOf(owner), await clientOf(stranger)];
+
+  const deliver = (name: string, shape = `rf232-${name}-${tag}`, extra: { status?: string; silenced?: boolean } = {}) =>
+    fixtureSql.begin(async (tx) => {
+      await tx`select set_config('request.jwt.claims', ${JSON.stringify({ sub: owner.id, role: "authenticated", aud: "authenticated" })}, true)`;
+      const [row] = await tx<{ id: string }[]>`
+        insert into ingest_deliveries (external_ref, raw_text, shape_hash, proposed_amount_cents, proposed_account_id, proposed_category_id,
+          category_source, proposed_direction, proposed_occurred_at, proposed_description, status, silenced_on_arrival, resolved_at)
+        values (${`harness-rf232-${name}-${tag}`}, ${`Harness rf232 mensaje ${name}`}, ${createHash("sha256").update(shape).digest("hex")},
+          ${9_000_00}, ${bank.accountId}, ${category}, 'interpreter', 'expense', '2026-03-10', ${`Harness rf232 ${name}`},
+          ${extra.status ?? "pending"}, ${extra.silenced ?? false}, ${extra.status === "rejected" ? new Date() : null})
+        returning id`;
+      return row.id;
+    });
+  const status = async (id: string) => (await fixtureSql`select status from ingest_deliveries where id = ${id}`)[0]?.status as string;
+
+  const labelName = `Harness rf232 etiqueta ${tag}`;
+  const label = await tool("create_label", { name: labelName });
+  const labelId = (label.value as { labelId: string }).labelId;
+  const [tagged, plain] = [await deliver("con etiqueta"), await deliver("sin etiqueta")];
+  const unknown = await tool("accept_deliveries", { deliveries: [{ id: plain }, { id: tagged, labels: [`no existe ${tag}`] }] });
+  const plainAfterRefusal = await status(plain);
+  const accepted = await tool("accept_deliveries", { deliveries: [{ id: tagged, labels: [labelName] }, { id: plain }] });
+  const movements = (await tool("list_movements", { accountId: bank.accountId })).value as { labelIds: string[] }[];
+  assert(
+    next("RF-232: accept_deliveries takes labels by name or id: an unknown one refuses the whole batch naming its delivery, and an accepted one lands on the movement"),
+    unknown.isError && (unknown.value as { deliveryId: string }).deliveryId === tagged && plainAfterRefusal === "pending" &&
+      !accepted.isError && (accepted.value as { count: number }).count === 2 && movements.filter((row) => row.labelIds.includes(labelId)).length === 1,
+    `unknown ${JSON.stringify(unknown.value)}, accepted ${JSON.stringify(accepted.value)}, with the label ${movements.filter((row) => row.labelIds.includes(labelId)).length}`,
+  );
+
+  const [silenced, kept] = [await deliver("silenciar"), await deliver("sin silencio")];
+  const rejectedWith = await tool("reject_deliveries", { ids: [silenced], silenceShape: true });
+  const rejectedPlain = await tool("reject_deliveries", { ids: [kept] });
+  const shapes = (await tool("list_silenced_shapes")).value as { id: string; sampleText: string }[];
+  const mine = shapes.find((row) => row.sampleText === `Harness rf232 mensaje silenciar`);
+  assert(
+    next("RF-232: reject_deliveries with silenceShape lists the shape as silenced and says so; without it the shape is not silenced"),
+    !rejectedWith.isError && (rejectedWith.value as { silenced: boolean }).silenced === true && mine !== undefined &&
+      !rejectedPlain.isError && (rejectedPlain.value as { silenced: boolean }).silenced === false &&
+      !shapes.some((row) => row.sampleText === `Harness rf232 mensaje sin silencio`),
+    `with ${JSON.stringify(rejectedWith.value)}, shapes ${JSON.stringify(shapes)}`,
+  );
+
+  const arrived = await deliver("llegó silenciada", `rf232-silenciar-${tag}`, { status: "rejected", silenced: true });
+  const restored = await tool("restore_shape", { shapeId: mine?.id });
+  const unrestorable = await tool("restore_shape", { shapeId: mine?.id });
+  assert(
+    next("RF-232: restore_shape returns a silenced shape, counts the deliveries that come back pending, and a shape that is not silenced reads as not found"),
+    !restored.isError && (restored.value as { deliveriesRestored: number }).deliveriesRestored >= 1 && (await status(arrived)) === "pending" &&
+      unrestorable.isError && (unrestorable.value as { error: string }).error === es.errors.notFound &&
+      !((await tool("list_silenced_shapes")).value as { id: string }[]).some((row) => row.id === mine?.id),
+    `restored ${JSON.stringify(restored.value)}, again ${JSON.stringify(unrestorable.value)}`,
+  );
+
+  const [merchant] = await fixtureSql<{ id: string }[]>`
+    insert into ingest_merchants (owner_user_id, merchant_key, merchant_label) values (${owner.id}, ${`rf232 ${tag}`}, ${`Harness rf232 ${tag}`}) returning id`;
+  const listedMerchants = (await tool("list_merchants")).value as { id: string }[];
+  const strangerForget = await strangerTool("forget_merchant", { merchantId: merchant.id });
+  const forgot = await tool("forget_merchant", { merchantId: merchant.id });
+  assert(
+    next("RF-232: list_merchants lists what the Bandeja learned, forget_merchant answers the row it forgot, and another person's merchant reads as not found"),
+    listedMerchants.some((row) => row.id === merchant.id) && strangerForget.isError && !forgot.isError &&
+      (forgot.value as { before: { merchantLabel: string } }).before.merchantLabel === `Harness rf232 ${tag}` &&
+      !((await tool("list_merchants")).value as { id: string }[]).some((row) => row.id === merchant.id),
+    `strangerForget ${JSON.stringify(strangerForget.value)}, forgot ${JSON.stringify(forgot.value)}`,
+  );
+
+  const booked = await tool("record_movement", { fromAccountId: bank.accountId, toAccountId: null, amountCents: 40_000_00, occurredAt: today, description: `Harness rf232 espera ${tag}`, categoryId: category });
+  const waitingId = (booked.value as { transactionId: string }).transactionId;
+  await fixtureSql`update transactions set awaiting_counterparty = true where id = ${waitingId}`;
+  const waiting = (await tool("list_awaiting_counterparty")).value as { id: string; missingSide: string }[];
+  const completed = await tool("complete_counterparty", { transactionId: waitingId, accountId: other.accountId });
+  const again = await tool("complete_counterparty", { transactionId: waitingId, accountId: other.accountId });
+  const row = ((await tool("list_movements", { accountId: other.accountId })).value as { id: string; kind: string; splits: unknown[] }[]).find((one) => one.id === waitingId);
+  assert(
+    next("RF-232: list_awaiting_counterparty lists a one-sided movement, complete_counterparty makes it a transfer with no lines and drops it from the list, and a second call is refused"),
+    waiting.some((one) => one.id === waitingId && one.missingSide === "to") && !completed.isError && row?.kind === "transfer" && row.splits.length === 0 &&
+      !((await tool("list_awaiting_counterparty")).value as { id: string }[]).some((one) => one.id === waitingId) &&
+      again.isError && (again.value as { error: string }).error === es.transactions.errors.counterpartyComplete,
+    `waiting ${JSON.stringify(waiting.map((one) => one.id))}, completed ${JSON.stringify(completed.value)}, row ${JSON.stringify(row)}, again ${JSON.stringify(again.value)}`,
   );
 }
