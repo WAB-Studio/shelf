@@ -1853,7 +1853,13 @@
       "createPlannedPayment": "Schedules a future payment: fromAccountId (where it will leave; null for an expected income) and toAccountId (where it will land; null for an expense), amountCents in whole cents in the account's currency, dueDate YYYY-MM-DD (may be future) and, optional, categoryId, remindOn (the reminder day, never after the due date) and description. The accounts and the category must share one scope. It moves no money: it only notes it until it is paid with settle_planned_payment. Returns plannedPaymentId. CONFIRM account, amount and date with the person before calling it.",
       "updatePlannedPayment": "Corrects a pending planned payment: accounts, amount, category, date, reminder and description; it is a patch, what you omit stays, and null removes the category, the reminder or the description. Pass the updatedAt you read in list_planned_payments as expectedUpdatedAt: if somebody edited it meanwhile, it is refused. Returns before: what each field you changed held. CONFIRM the change with the person before calling it.",
       "settlePlannedPayment": "Pays a pending planned payment: records the real movement with its same accounts, amount and category, on occurredOn (YYYY-MM-DD, no future), and marks it done. Returns transactionId. A payment already paid or cancelled is refused, it is never paid twice. If that movement is deleted (delete_movement), the payment goes back to «To pay». CONFIRM with the person which payment and which day before calling it.",
-      "cancelPlannedPayment": "Cancels a pending planned payment (plannedPaymentId from list_planned_payments): it is no longer expected and cannot be paid later. Returns before: the payment as list_planned_payments shows it. It cannot be undone: CONFIRM with the person which one you cancel, naming it (date, amount, description), before calling it."
+      "cancelPlannedPayment": "Cancels a pending planned payment (plannedPaymentId from list_planned_payments): it is no longer expected and cannot be paid later. Returns before: the payment as list_planned_payments shows it. It cannot be undone: CONFIRM with the person which one you cancel, naming it (date, amount, description), before calling it.",
+      "listRecurringRules": "The person's recurring movements (their own and their fund's), soonest first: id, fromAccountId or toAccountId (a rule is an expense out of one account or an income into one), amountCents, currency, categoryId, description, frequency (monthly, weekly or yearly), intervalN, dayOfMonth, nextRunOn, endsOn, isActive, pausedReason and updatedAt. Each night the movement of the rule that is due is generated. Another member's personal rule comes with foreignOwner and cannot be written. Read only.",
+      "createRecurringRule": "Creates a recurring movement: exactly ONE account, fromAccountId for an expense or toAccountId for an income (the other null), amountCents in whole cents, categoryId (from list_categories, of the account's scope), frequency monthly, weekly or yearly, intervalN (every how many periods, 1 by default), dayOfMonth (1 to 31; required for monthly and yearly), nextRunOn (YYYY-MM-DD, the day the next one is generated) and, optional, description and endsOn (not before nextRunOn). Returns recurringRuleId. CONFIRM account, amount, frequency and date with the person before calling it, and check with list_recurring_rules that it does not exist yet.",
+      "updateRecurringRule": "Corrects a recurring movement: account, amount, category, frequency, interval, day of the month, next date, end date and description; it is a patch, what you omit stays, and null on description or endsOn removes them. Pass the updatedAt you read in list_recurring_rules as expectedUpdatedAt: if somebody edited it meanwhile, it is refused. A next date on a period already generated is refused. Returns before: what each field you changed held. CONFIRM the change with the person before calling it.",
+      "pauseRecurringRule": "Pauses a recurring movement (id from list_recurring_rules): it stops generating movements but keeps its history. It resumes with resume_recurring_rule. Returns id. CONFIRM with the person which one before calling it.",
+      "resumeRecurringRule": "Resumes a paused recurring movement (id from list_recurring_rules). A rule whose end date has passed does not resume: correct its endsOn first. Returns id. CONFIRM with the person which one before calling it.",
+      "markMovementReviewed": "Marks «Reviewed» a movement a recurring rule generated, without changing its amount (transactionId from list_movements). A hand-made movement, or one already reviewed, is refused as not found. To correct the amount of a generated one use update_movement. Returns transactionId. CONFIRM with the person which one before calling it."
     },
     "deferralProposal": "Defer in {count} instalments",
     "errors": {
@@ -1992,7 +1998,14 @@
       "plannedStatus": "pending, done or cancelled; all when absent.",
       "plannedCategoryId": "The id of the payment's category (from list_categories); null for none.",
       "plannedDueDate": "The due day, YYYY-MM-DD; may be future.",
-      "plannedRemindOn": "The reminder day, YYYY-MM-DD, never after the due date; null for none."
+      "plannedRemindOn": "The reminder day, YYYY-MM-DD, never after the due date; null for none.",
+      "recurringRuleId": "The recurring movement's id (from list_recurring_rules).",
+      "recurringCategoryId": "The id of the category of the movements it generates (from list_categories).",
+      "recurringFrequency": "monthly, weekly or yearly.",
+      "recurringIntervalN": "Every how many periods of the frequency, at least 1; 1 by default.",
+      "recurringDayOfMonth": "Day of the month 1 to 31; required for monthly and yearly, ignored for weekly.",
+      "recurringNextRunOn": "The day the next movement is generated, YYYY-MM-DD.",
+      "recurringEndsOn": "The last day it may be generated, YYYY-MM-DD, not before nextRunOn; null if it does not end."
     },
     "titles": {
       "listAccounts": "View accounts",
@@ -2049,7 +2062,13 @@
       "createPlannedPayment": "Schedule a payment",
       "updatePlannedPayment": "Correct a scheduled payment",
       "settlePlannedPayment": "Pay a scheduled payment",
-      "cancelPlannedPayment": "Cancel a scheduled payment"
+      "cancelPlannedPayment": "Cancel a scheduled payment",
+      "listRecurringRules": "View recurring movements",
+      "createRecurringRule": "Create a recurring movement",
+      "updateRecurringRule": "Correct a recurring movement",
+      "pauseRecurringRule": "Pause a recurring movement",
+      "resumeRecurringRule": "Resume a recurring movement",
+      "markMovementReviewed": "Mark a generated movement as reviewed"
     }
   },
   "oauth": {
