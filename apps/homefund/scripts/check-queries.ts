@@ -19287,9 +19287,11 @@ async function learnedCategorySuite(): Promise<void> {
     JSON.stringify(none),
   );
 
-  const place = `Rentabien Harness ${tag.replace(/\d/g, "x")}`;
+  // Neither «Harness» (the first word of every account and category name here) nor a letter after the figure may
+  // reach the description, or its key stops reading as the movements' key.
+  const place = `Rentabien Tienda ${tag.replace(/\d/g, "x")}`;
   await record(place, rent, 30);
-  const single = await deliver(user, `${place.toUpperCase()} 1200000 ${tag}`);
+  const single = await deliver(user, `${place.toUpperCase()} 1200000 1`);
   assert(
     next("RF-210: a single movement is the whole history, matched without case, accents or digits, and wins over the key's default"),
     single.category === rent && single.source === "merchant",
@@ -19297,7 +19299,7 @@ async function learnedCategorySuite(): Promise<void> {
   );
 
   await record(place, food, 5);
-  const split = await deliver(user, `${place} 1200000 ${tag} b`);
+  const split = await deliver(user, `${place} 1200000 2`);
   assert(
     next("RF-210: the two latest movements disagreeing teach nothing, so the default stays"),
     split.category === other && split.source === "credential_default",
@@ -19305,7 +19307,7 @@ async function learnedCategorySuite(): Promise<void> {
   );
 
   const latest = await record(place, food, 1);
-  const agreed = await deliver(user, `${place} 1200000 ${tag} c`);
+  const agreed = await deliver(user, `${place} 1200000 3`);
   assert(
     next("RF-210: the two latest movements agreeing set the category, which recovers from the earlier disagreement"),
     agreed.category === food && agreed.source === "merchant",
@@ -19319,17 +19321,17 @@ async function learnedCategorySuite(): Promise<void> {
     }),
   );
   await record(place, snacks, 0);
-  const edited = await deliver(user, `${place} 1200000 ${tag} d`);
+  const edited = await deliver(user, `${place} 1200000 4`);
   assert(
     next("RF-210: editing a movement's category teaches the new one once it and the next movement agree"),
     edited.category === snacks && edited.source === "merchant",
     JSON.stringify(edited),
   );
 
-  const theirs = await deliver(stranger, `${place} 1200000 ${tag} e`);
+  const theirs = await deliver(stranger, `${place} 1200000 5`);
   assert(
-    next("RF-210: another person's history teaches nothing to someone with none"),
-    theirs.category === null,
+    next("RF-210: another person's history teaches nothing to someone with none, who keeps the key's default"),
+    theirs.category === other && theirs.source === "credential_default",
     JSON.stringify(theirs),
   );
 
