@@ -4174,6 +4174,7 @@ async function main(): Promise<void> {
   await mcpInboxWholeSuite();
   await mcpAccountLifecycleSuite();
   await mcpStatementsSuite();
+  await mcpReportsSuite();
 }
 
 // A member recorded without a login is someone in the fund: a leader whose fund holds one is not alone, so an
@@ -15330,11 +15331,14 @@ const TOOL_CLASSES = [
   ["delete_movement", ...DESTROY_CLASS],
   ["delete_recipient", ...DESTROY_CLASS],
   ["forget_merchant", ...DESTROY_CLASS],
+  ["get_dashboard", ...READ_CLASS],
   ["get_debt", ...READ_CLASS],
   ["get_reconcile_sheet", ...READ_CLASS],
+  ["get_report", ...READ_CLASS],
   ["import_statement", ...DESTROY_CLASS],
   ["link_third_party_credit", ...ADD_CLASS],
   ["list_accounts", ...READ_CLASS],
+  ["list_audit_log", ...READ_CLASS],
   ["list_awaiting_counterparty", ...READ_CLASS],
   ["list_budgets", ...READ_CLASS],
   ["list_categories", ...READ_CLASS],
@@ -15357,8 +15361,10 @@ const TOOL_CLASSES = [
   ["merge_movements", ...DESTROY_CLASS],
   ["move_account_to_fund", ...DESTROY_CLASS],
   ["move_category_movements", ...OVERWRITE_CLASS],
+  ["movement_totals", ...READ_CLASS],
   ["pause_recurring_rule", ...OVERWRITE_CLASS],
   ["preview_statement", ...READ_CLASS],
+  ["propose_rate", ...READ_CLASS],
   ["reconcile_account", ...OVERWRITE_CLASS],
   ["record_account_statement", ...ADD_CLASS],
   ["record_billed_amount", ...OVERWRITE_CLASS],
@@ -19496,7 +19502,7 @@ async function mcpPermissionsSuite(): Promise<void> {
     (await rpc(token, "tools/list")).body?.result?.tools ?? [];
   assert(
     next("RF-225: every tool has a Spanish title and declares it touches nothing outside HomeFund, and none is named for a key, a session, an invitation or a leader"),
-    tools.length > 0 && tools.every((one) => typeof one.title === "string" && one.title.length > 0 && one.annotations?.openWorldHint === false) &&
+    tools.length > 0 && tools.every((one) => typeof one.title === "string" && one.title.length > 0 && one.annotations?.openWorldHint === (one.name === "propose_rate")) &&
       !tools.some((one) => /key|credential|token|session|auth|invite|leader|leave/.test(one.name)),
     JSON.stringify(tools.filter((one) => !one.title || /key|credential|token|session|auth|invite|leader|leave/.test(one.name)).map((one) => one.name)),
   );
@@ -20335,5 +20341,90 @@ async function mcpStatementsSuite(): Promise<void> {
     !first.isError && !second.isError && (first.value as { transactionId: string }).transactionId === (second.value as { transactionId: string }).transactionId &&
       cash.length === 1 && cash[0].name === "Mi efectivo",
     `first ${JSON.stringify(first.value)}, second ${JSON.stringify(second.value)}, cash ${JSON.stringify(cash)}`,
+  );
+}
+
+// RF-235: Claude reads what Inicio, Informes and the audit log show, the listing's totals and a proposed exchange rate, each by
+// the screen's own query.
+async function mcpReportsSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const today = todayInBogota();
+  const { POST } = await import("@/app/mcp/route");
+  const [owner, stranger] = [await createMembershipFreeUser(), await createMembershipFreeUser()];
+  const mkBank = (user: HarnessUser, name: string) =>
+    asUser(user, () =>
+      createAccount({
+        kind: "asset", subtype: "bank", groupId: null, isShared: false, institution: null, settlementCurrency: BASE_CURRENCY,
+        balanceOn: "2026-01-01", ownerUserId: user.id, name: `Harness rf235 ${name} ${tag}`, amountMinor: 2_000_000_00,
+      }),
+    );
+  const [bank, savings, strangerBank] = [await mkBank(owner, "banco"), await mkBank(owner, "ahorro"), await mkBank(stranger, "ajeno")];
+  for (const row of [bank, savings, strangerBank]) track("accounts", row.accountId);
+  const [category, strangerCategory] = [randomUUID(), randomUUID()];
+  for (const [id, user] of [[category, owner], [strangerCategory, stranger]] as const) {
+    await fixtureSql`insert into categories (id, owner_user_id, name, kind, color) values (${id}, ${user.id}, ${`Harness rf235 Comida ${tag}`}, 'expense', ${CATEGORY_COLORS[0]})`;
+    track("categories", id);
+  }
+  const clientOf = async (user: HarnessUser) => {
+    const { id, token } = await asUser(user, () => issueWebhookCredential({ name: `Harness rf235 ${tag}`, purpose: "mcp", defaultAccountId: null, defaultCategoryId: null }));
+    keep("webhook_credentials", id);
+    return mcpClient(POST, token).tool;
+  };
+  const [tool, strangerTool] = [await clientOf(owner), await clientOf(stranger)];
+  const spent = await tool("record_movement", { fromAccountId: bank.accountId, toAccountId: null, amountCents: 50_000_00, occurredAt: today, description: `Harness rf235 gasto ${tag}`, categoryId: category });
+  const moved = await tool("record_movement", { fromAccountId: bank.accountId, toAccountId: savings.accountId, amountCents: 10_000_00, occurredAt: today, description: `Harness rf235 ahorro ${tag}` });
+  const strangerSpent = await strangerTool("record_movement", { fromAccountId: strangerBank.accountId, toAccountId: null, amountCents: 7_000_00, occurredAt: today, description: `Harness rf235 ajeno ${tag}`, categoryId: strangerCategory });
+  const spentId = (spent.value as { transactionId: string }).transactionId;
+  const strangerSpentId = (strangerSpent.value as { transactionId: string }).transactionId;
+  const plain = (value: unknown) => JSON.parse(JSON.stringify(value));
+
+  const dashboard = (await tool("get_dashboard")).value;
+  const directDashboard = await asUser(owner, () => getDashboardData());
+  assert(
+    next("RF-235: get_dashboard answers what Inicio's own query answers for the same person"),
+    JSON.stringify(dashboard) === JSON.stringify(plain(directDashboard)) && (directDashboard.totalNetWorth.length ?? 0) > 0,
+    JSON.stringify({ dashboard, directDashboard }).slice(0, 400),
+  );
+
+  const month = today.slice(0, 7);
+  const report = (await tool("get_report", { month })).value as { expensesByCategory: { categoryId: string; totalCents: number }[] };
+  const directReport = await asUser(owner, () => getReportsData(`${month}-01`));
+  const reported = report.expensesByCategory.reduce((sum, row) => sum + row.totalCents, 0);
+  assert(
+    next("RF-235: get_report answers the month's figures the Informes query answers, and a transfer is no spending"),
+    JSON.stringify(report) === JSON.stringify(plain(directReport)) && reported >= 50_000_00 &&
+      !(moved.isError) && !report.expensesByCategory.some((row) => row.totalCents === 10_000_00),
+    JSON.stringify(report).slice(0, 400),
+  );
+
+  const totals = (await tool("movement_totals", { accountId: bank.accountId })).value as { count: number; nets: { currency: string; netCents: number }[] };
+  assert(
+    next("RF-235: movement_totals counts the listing's movements and nets spending per currency, a transfer adding nothing"),
+    totals.count === 2 && totals.nets.length === 1 && totals.nets[0].netCents === -50_000_00,
+    JSON.stringify(totals),
+  );
+
+  const audit = (await tool("list_audit_log", { limit: 200 })).value as { rows: { recordId: string; actorUserId: string | null }[]; total: number };
+  assert(
+    next("RF-235: list_audit_log shows the person's own write with its actor and none of another person's, without the records' content"),
+    audit.rows.some((row) => row.recordId === spentId && row.actorUserId === owner.id) && !audit.rows.some((row) => row.recordId === strangerSpentId) &&
+      audit.rows.every((row) => !("beforeData" in row) && !("afterData" in row)) && audit.total >= 1,
+    JSON.stringify(audit).slice(0, 300),
+  );
+
+  const same = await tool("propose_rate", { from: "COP", to: "COP" });
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = (() => Promise.reject(new Error("offline"))) as typeof fetch;
+  let offline: Awaited<ReturnType<typeof tool>>;
+  try {
+    offline = await tool("propose_rate", { from: "USD", to: "COP" });
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+  assert(
+    next("RF-235: propose_rate answers a rate and, when the public source is unreachable, null rather than an error"),
+    !same.isError && (same.value as { rate: number }).rate === 1 && !offline.isError && offline.value === null,
+    `same ${JSON.stringify(same.value)}, offline ${JSON.stringify(offline.value)}`,
   );
 }
