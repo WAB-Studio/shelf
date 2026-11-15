@@ -4165,6 +4165,7 @@ async function main(): Promise<void> {
   await widgetSuite();
   await learnedCategorySuite();
   await mcpPermissionsSuite();
+  await mcpDebtsSuite();
 }
 
 // A member recorded without a login is someone in the fund: a leader whose fund holds one is not alone, so an
@@ -15309,10 +15310,12 @@ const TOOL_CLASSES = [
   ["create_label", ...ADD_CLASS],
   ["delete_movement", ...DESTROY_CLASS],
   ["delete_recipient", ...DESTROY_CLASS],
+  ["get_debt", ...READ_CLASS],
   ["import_statement", ...DESTROY_CLASS],
   ["link_third_party_credit", ...ADD_CLASS],
   ["list_accounts", ...READ_CLASS],
   ["list_categories", ...READ_CLASS],
+  ["list_debts", ...READ_CLASS],
   ["list_inbox", ...READ_CLASS],
   ["list_labels", ...READ_CLASS],
   ["list_member_debts", ...READ_CLASS],
@@ -15324,12 +15327,14 @@ const TOOL_CLASSES = [
   ["move_account_to_fund", ...DESTROY_CLASS],
   ["move_category_movements", ...OVERWRITE_CLASS],
   ["preview_statement", ...READ_CLASS],
+  ["record_debt_payment", ...ADD_ONCE_CLASS],
   ["record_member_debt", ...ADD_CLASS],
   ["record_movement", ...ADD_ONCE_CLASS],
   ["record_third_party_payment", ...ADD_ONCE_CLASS],
   ["reject_deliveries", ...DESTROY_CLASS],
   ["review_month", ...READ_CLASS],
   ["save_recipient", ...OVERWRITE_CLASS],
+  ["set_debt_terms", ...ADD_ONCE_CLASS],
   ["spending_patterns", ...READ_CLASS],
   ["update_account", ...OVERWRITE_CLASS],
   ["update_category", ...OVERWRITE_CLASS],
@@ -19537,5 +19542,112 @@ async function mcpPermissionsSuite(): Promise<void> {
     JSON.stringify(may) === JSON.stringify(leafKeys(en.oauth.may, "may")) && JSON.stringify(never) === JSON.stringify(leafKeys(en.oauth.never, "never")) &&
       never.includes("never.keys") && never.includes("never.unconfirmed") && !never.includes("never.delete") && may.includes("may.write"),
     `${JSON.stringify(may)} / ${JSON.stringify(never)}`,
+  );
+}
+
+// RF-227: Claude opens a credit with its terms, reads the Deudas screen and one debt, and pays it down as «Abonar» does,
+// through the screen's own queries, schemas and write functions.
+async function mcpDebtsSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const { POST } = await import("@/app/mcp/route");
+  const [owner, stranger] = [await createMembershipFreeUser(), await createMembershipFreeUser()];
+  const mkBank = (user: HarnessUser, name: string) =>
+    asUser(user, () =>
+      createAccount({
+        kind: "asset", subtype: "bank", groupId: null, isShared: false, institution: null, settlementCurrency: BASE_CURRENCY,
+        balanceOn: "2026-01-01", ownerUserId: user.id, name: `Harness rf227 ${name} ${tag}`, amountMinor: 50_000_000_00,
+      }),
+    );
+  const [bank, strangerBank] = [await mkBank(owner, "banco"), await mkBank(stranger, "ajena")];
+  track("accounts", bank.accountId);
+  track("accounts", strangerBank.accountId);
+  const clientOf = async (user: HarnessUser) => {
+    const { id, token } = await asUser(user, () =>
+      issueWebhookCredential({ name: `Harness rf227 ${tag}`, purpose: "mcp", defaultAccountId: null, defaultCategoryId: null }),
+    );
+    keep("webhook_credentials", id);
+    return mcpClient(POST, token).tool;
+  };
+  const [tool, strangerTool] = [await clientOf(owner), await clientOf(stranger)];
+
+  const opened = await tool("create_account", {
+    name: `Harness rf227 crédito ${tag}`, kind: "liability", subtype: "loan", openingBalanceCents: 10_000_000_00, balanceOn: "2026-01-01",
+  });
+  const loanId = (opened.value as { accountId: string }).accountId;
+  track("accounts", loanId);
+  const terms = { accountId: loanId, debtKind: "installment", annualRatePct: "24", paymentDueDay: 5, minimumPaymentCents: 400_000_00 };
+  const set = await tool("set_debt_terms", terms);
+  type Detail = { terms: { annualRate: string; paymentDueDay: number; minimumPaymentCents: number } | null; account: { id: string } };
+  const detail = (await tool("get_debt", { accountId: loanId })).value as Detail;
+  assert(
+    next("RF-227: a credit made with create_account takes its terms with set_debt_terms, and get_debt reads them back as the screen does"),
+    !opened.isError && !set.isError && Number(detail.terms?.annualRate) === 0.24 && detail.terms?.paymentDueDay === 5 &&
+      detail.terms.minimumPaymentCents === 400_000_00 && detail.account.id === loanId,
+    `opened ${JSON.stringify(opened.value)}, set ${JSON.stringify(set.value)}, detail ${JSON.stringify(detail.terms)}`,
+  );
+
+  const onAsset = await tool("set_debt_terms", { ...terms, accountId: bank.accountId });
+  const same = await tool("set_debt_terms", terms);
+  const other = await tool("set_debt_terms", { ...terms, annualRatePct: "30" });
+  assert(
+    next("RF-227: set_debt_terms refuses an asset account, answers the same values again as done and refuses other values on a debt that has terms"),
+    onAsset.isError && (onAsset.value as { error: string }).error === es.debts.errors.notLiability && !same.isError &&
+      other.isError && (other.value as { error: string }).error === es.errors.stale,
+    `asset ${JSON.stringify(onAsset.value)}, same ${JSON.stringify(same.value)}, other ${JSON.stringify(other.value)}`,
+  );
+
+  const second = await tool("create_account", {
+    name: `Harness rf227 tarjeta ${tag}`, kind: "liability", subtype: "card", openingBalanceCents: 0, balanceOn: "2026-01-01",
+  });
+  const cardId = (second.value as { accountId: string }).accountId;
+  track("accounts", cardId);
+  const tooLarge = await tool("set_debt_terms", { accountId: cardId, debtKind: "revolving", annualRatePct: "28", minimumPaymentCents: 10_000_000_000_000 });
+  const both = await tool("set_debt_terms", { accountId: cardId, debtKind: "revolving", annualRatePct: "28", minimumPaymentCents: 1_000_00, minimumPaymentPct: "5" });
+  assert(
+    next("RF-227: set_debt_terms reads each amount in the account's currency (a minimum over its ceiling is refused) and refuses a minimum given as an amount and a percentage"),
+    tooLarge.isError && (tooLarge.value as { error: string }).error === es.debts.errors.minimumTooLarge &&
+      both.isError && (both.value as { error: string }).error === es.debts.errors.minimumBothSet,
+    `large ${JSON.stringify(tooLarge.value)}, both ${JSON.stringify(both.value)}`,
+  );
+
+  const listed = (await tool("list_debts")).value as { totals: { owedCents: number }; withTerms: { accountId: string }[]; withoutTerms: { accountId: string }[] };
+  const direct = await asUser(owner, () => getDebtsScreenData());
+  assert(
+    next("RF-227: list_debts answers the figures the Deudas screen's own query answers, the credit with terms and the card without"),
+    listed.totals.owedCents === direct.totals.owedCents && listed.withTerms.some((row) => row.accountId === loanId) &&
+      listed.withoutTerms.some((row) => row.accountId === cardId) && listed.totals.owedCents >= 10_000_000_00,
+    `listed ${JSON.stringify(listed.totals)}, direct ${JSON.stringify(direct.totals.owedCents)}`,
+  );
+
+  const strangerRead = await strangerTool("get_debt", { accountId: loanId });
+  const strangerTerms = await strangerTool("set_debt_terms", terms);
+  assert(
+    next("RF-227: another person's debt reads as not found and takes no terms"),
+    strangerRead.isError && (strangerRead.value as { error: string }).error === es.errors.notFound && strangerTerms.isError,
+    `read ${JSON.stringify(strangerRead.value)}, terms ${JSON.stringify(strangerTerms.value)}`,
+  );
+
+  const balanceOf = async (id: string) =>
+    ((await tool("list_accounts")).value as { id: string; balances: { balanceCents: number }[] }[]).find((row) => row.id === id)?.balances[0]?.balanceCents ?? 0;
+  const owedBefore = await balanceOf(loanId);
+  const requestRef = randomUUID();
+  const pay = { fromAccountId: bank.accountId, toAccountId: loanId, amountCents: 1_000_000_00, occurredOn: "2026-03-01", requestRef };
+  const paid = await tool("record_debt_payment", pay);
+  const again = await tool("record_debt_payment", pay);
+  const owedAfter = await balanceOf(loanId);
+  const movements = (await tool("list_movements", { accountId: loanId })).value as { kind: string; amountCents: number }[];
+  assert(
+    next("RF-227: record_debt_payment writes one transfer from the asset into the debt, the debt's balance moves by the payment, and the same requestRef books it once"),
+    !paid.isError && !again.isError && (paid.value as { transactionId: string }).transactionId === (again.value as { transactionId: string }).transactionId &&
+      Math.abs(owedAfter - owedBefore) === 1_000_000_00 && movements.length === 1 && movements[0].kind === "transfer",
+    `paid ${JSON.stringify(paid.value)}, again ${JSON.stringify(again.value)}, balance ${owedBefore} -> ${owedAfter}, movements ${JSON.stringify(movements)}`,
+  );
+
+  const fromCard = await tool("record_debt_payment", { fromAccountId: cardId, toAccountId: loanId, amountCents: 1_000_00, occurredOn: "2026-03-02" });
+  assert(
+    next("RF-227: a payment from a liability account is refused as not from an asset"),
+    fromCard.isError && (fromCard.value as { error: string }).error === es.installments.errors.notFromAsset,
+    `fromCard ${JSON.stringify(fromCard.value)}`,
   );
 }

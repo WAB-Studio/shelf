@@ -17,6 +17,7 @@ import { ActionError, DATABASE_REFUSALS } from "@/lib/errors";
 import { env } from "@/lib/env";
 import { pgErrorCode } from "@/lib/db-error";
 import { DESTROY, READ, titled } from "@/lib/mcp/annotations";
+import { registerDebtTools } from "@/lib/mcp/debt-tools";
 import { BatchRefusal, registerInboxTools } from "@/lib/mcp/inbox-tools";
 import { registerLabelTools } from "@/lib/mcp/label-tools";
 import { registerMemberDebtTools } from "@/lib/mcp/member-debt-tools";
@@ -194,6 +195,7 @@ export function buildHandler(): (request: Request) => Promise<Response> {
     registerRecipientTools(server, run, say);
     registerThirdPartyCreditTools(server, run, say);
     registerLabelTools(server, run, say);
+    registerDebtTools(server, run, say);
   }, {
     serverInfo: { name: "homefund", version: pkg.version },
     instructions: t("instructions"),
