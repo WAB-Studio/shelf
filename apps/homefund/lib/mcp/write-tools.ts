@@ -16,7 +16,13 @@ import {
   openCategory,
   reviseMovement,
 } from "@/db/queries/ledger-write";
-import { getTransactionById, listTransactions, type TransactionListRow, type TransactionSplitInput } from "@/db/queries/transactions";
+import {
+  getTransactionById,
+  listTransactions,
+  type TransactionListFilters,
+  type TransactionListRow,
+  type TransactionSplitInput,
+} from "@/db/queries/transactions";
 import { pgErrorCode } from "@/lib/db-error";
 import { ActionError } from "@/lib/errors";
 import { CATEGORY_COLORS } from "@/lib/fund/category-color";
@@ -116,6 +122,44 @@ function patched(current: TransactionListRow, patch: Partial<MovementInput>): Mo
   };
 }
 
+const idOf = (key: string, value: string) => parseForm(z.uuid({ error: key }), value);
+
+export type MovementFilterInput = {
+  accountId?: string;
+  categoryId?: string;
+  madeByMemberId?: string;
+  label?: string;
+  from?: string;
+  to?: string;
+};
+
+// The filters a listing and its totals take, the one set the Movimientos screen offers.
+export function movementFilterShape(t: Say) {
+  const d = (key: string) => t(`params.${key}`);
+  return {
+    accountId: z.string().optional().describe(d("accountId")),
+    from: z.string().optional().describe(d("from")),
+    to: z.string().optional().describe(d("to")),
+    categoryId: z.string().optional().describe(d("filterCategoryId")),
+    madeByMemberId: z.string().optional().describe(d("filterMadeByMemberId")),
+    label: z.string().optional().describe(d("filterLabel")),
+  };
+}
+
+// Each id is checked before it reaches a query, and a label named in words is read as the picker reads it.
+export async function movementFilters(owner: string, input: MovementFilterInput): Promise<TransactionListFilters> {
+  const accountId = input.accountId === undefined ? undefined : idOf("transactions.errors.accountInvalid", input.accountId);
+  const categoryId = input.categoryId === undefined ? undefined : idOf("errors.notFound", input.categoryId);
+  const madeByMemberId =
+    input.madeByMemberId === undefined
+      ? undefined
+      : input.madeByMemberId === HOUSEHOLD_MAKER
+        ? null
+        : idOf("transactions.errors.madeByInvalid", input.madeByMemberId);
+  const [labelId] = input.label === undefined ? [] : await resolveLabelIds(owner, [input.label]);
+  return { accountId, categoryId, madeByMemberId, labelId, from: input.from, to: input.to };
+}
+
 // Everything update_movement can resend or patch, and the stamp it must quote back. A tool that removes
 // a movement answers it in this shape, so record_movement can book it again.
 function movementRow(row: TransactionListRow) {
@@ -162,7 +206,6 @@ function storedMovement(row: TransactionListRow): Record<string, unknown> {
 export function registerLedgerTools(server: McpServer, run: Run, t: Say): void {
   const d = (key: string) => t(`params.${key}`);
   const shape = movementShape(t);
-  const idOf = (key: string, value: string) => parseForm(z.uuid({ error: key }), value);
 
   server.registerTool(
     "list_categories",
@@ -188,32 +231,15 @@ export function registerLedgerTools(server: McpServer, run: Run, t: Say): void {
       ...titled(t, "listMovements"),
       description: t("tools.listMovements"),
       inputSchema: z.object({
-        accountId: z.string().optional().describe(d("accountId")),
-        from: z.string().optional().describe(d("from")),
-        to: z.string().optional().describe(d("to")),
-        categoryId: z.string().optional().describe(d("filterCategoryId")),
-        madeByMemberId: z.string().optional().describe(d("filterMadeByMemberId")),
-        label: z.string().optional().describe(d("filterLabel")),
+        ...movementFilterShape(t),
         limit: z.number().int().min(1).max(200).optional().describe(d("limit")),
         offset: z.number().int().min(0).optional().describe(d("offset")),
       }),
       annotations: READ,
     },
-    (input: { accountId?: string; categoryId?: string; madeByMemberId?: string; label?: string; from?: string; to?: string; limit?: number; offset?: number }, ctx) =>
+    (input: MovementFilterInput & { limit?: number; offset?: number }, ctx) =>
       run(ctx, async (owner) => {
-        const accountId = input.accountId === undefined ? undefined : idOf("transactions.errors.accountInvalid", input.accountId);
-        const categoryId = input.categoryId === undefined ? undefined : idOf("errors.notFound", input.categoryId);
-        const madeByMemberId =
-          input.madeByMemberId === undefined
-            ? undefined
-            : input.madeByMemberId === HOUSEHOLD_MAKER
-              ? null
-              : idOf("transactions.errors.madeByInvalid", input.madeByMemberId);
-        const [labelId] = input.label === undefined ? [] : await resolveLabelIds(owner, [input.label]);
-        const rows = await listTransactions(
-          { accountId, categoryId, madeByMemberId, labelId, from: input.from, to: input.to },
-          { limit: input.limit ?? 50, offset: input.offset },
-        );
+        const rows = await listTransactions(await movementFilters(owner, input), { limit: input.limit ?? 50, offset: input.offset });
         return rows.map(movementRow);
       }),
   );

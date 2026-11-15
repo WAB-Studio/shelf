@@ -6,6 +6,8 @@ import type { ToolAnnotations } from "@modelcontextprotocol/server";
 
 /** Reads, writes nothing. */
 export const READ: ToolAnnotations = { readOnlyHint: true, openWorldHint: false };
+/** Reads, writes nothing, and asks a public source outside HomeFund. */
+export const READ_WEB: ToolAnnotations = { readOnlyHint: true, openWorldHint: true };
 /** Creates, never overwrites; a repeat makes a second row. */
 export const ADD: ToolAnnotations = { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false };
 /** Creates under a `requestRef` or a natural key: a repeat answers the first row. */

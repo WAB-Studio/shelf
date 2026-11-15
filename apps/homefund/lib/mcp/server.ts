@@ -24,6 +24,7 @@ import { registerPlannedPaymentTools } from "@/lib/mcp/planned-payment-tools";
 import { registerRecurringTools } from "@/lib/mcp/recurring-tools";
 import { registerAccountTools } from "@/lib/mcp/account-tools";
 import { registerDebtStatementTools } from "@/lib/mcp/statement-tools";
+import { registerReportTools } from "@/lib/mcp/report-tools";
 import { BatchRefusal, registerInboxTools } from "@/lib/mcp/inbox-tools";
 import { registerLabelTools } from "@/lib/mcp/label-tools";
 import { registerMemberDebtTools } from "@/lib/mcp/member-debt-tools";
@@ -213,6 +214,7 @@ export function buildHandler(): (request: Request) => Promise<Response> {
     registerRecurringTools(server, run, say);
     registerAccountTools(server, run, say);
     registerDebtStatementTools(server, run, say);
+    registerReportTools(server, run, say);
   }, {
     serverInfo: { name: "homefund", version: pkg.version },
     instructions: t("instructions"),
