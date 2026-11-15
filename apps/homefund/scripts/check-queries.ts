@@ -20113,11 +20113,12 @@ async function mcpInboxWholeSuite(): Promise<void> {
   const labelId = (label.value as { labelId: string }).labelId;
   const [tagged, plain] = [await deliver("con etiqueta"), await deliver("sin etiqueta")];
   const unknown = await tool("accept_deliveries", { deliveries: [{ id: plain }, { id: tagged, labels: [`no existe ${tag}`] }] });
+  const plainAfterRefusal = await status(plain);
   const accepted = await tool("accept_deliveries", { deliveries: [{ id: tagged, labels: [labelName] }, { id: plain }] });
   const movements = (await tool("list_movements", { accountId: bank.accountId })).value as { labelIds: string[] }[];
   assert(
     next("RF-232: accept_deliveries takes labels by name or id: an unknown one refuses the whole batch naming its delivery, and an accepted one lands on the movement"),
-    unknown.isError && (unknown.value as { deliveryId: string }).deliveryId === tagged && (await status(plain)) === "pending" &&
+    unknown.isError && (unknown.value as { deliveryId: string }).deliveryId === tagged && plainAfterRefusal === "pending" &&
       !accepted.isError && (accepted.value as { count: number }).count === 2 && movements.filter((row) => row.labelIds.includes(labelId)).length === 1,
     `unknown ${JSON.stringify(unknown.value)}, accepted ${JSON.stringify(accepted.value)}, with the label ${movements.filter((row) => row.labelIds.includes(labelId)).length}`,
   );
