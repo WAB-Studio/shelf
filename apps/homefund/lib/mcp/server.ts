@@ -22,11 +22,12 @@ import { registerBudgetTools } from "@/lib/mcp/budget-tools";
 import { registerGoalTools } from "@/lib/mcp/goal-tools";
 import { registerPlannedPaymentTools } from "@/lib/mcp/planned-payment-tools";
 import { registerRecurringTools } from "@/lib/mcp/recurring-tools";
-import { registerAccountTools } from "@/lib/mcp/account-tools";
+import { accountRow, registerAccountTools } from "@/lib/mcp/account-tools";
 import { registerDebtStatementTools } from "@/lib/mcp/statement-tools";
 import { registerReportTools } from "@/lib/mcp/report-tools";
 import { registerReviewTools } from "@/lib/mcp/review-tools";
 import { registerMemberTools } from "@/lib/mcp/member-tools";
+import { registerDeleteTools } from "@/lib/mcp/delete-tools";
 import { BatchRefusal, registerInboxTools } from "@/lib/mcp/inbox-tools";
 import { registerLabelTools } from "@/lib/mcp/label-tools";
 import { registerMemberDebtTools } from "@/lib/mcp/member-debt-tools";
@@ -100,27 +101,7 @@ function registerReadTools(server: McpServer): void {
     },
     (input: { archived?: boolean }, ctx) =>
       run(ctx, async () =>
-        (await listAccounts({ archived: input.archived ?? false })).map((account) => ({
-          id: account.id,
-          name: account.name,
-          kind: account.kind,
-          subtype: account.subtype,
-          scope: account.groupId === null ? "personal" : "fund",
-          institution: account.institution,
-          lastFour: account.lastFour ?? null,
-          // The account this one is a pocket of, null for an account of its own (RF-173); a parent's balances are its free part.
-          parentAccountId: account.parentAccountId ?? null,
-          // The fund member this account is in the name of (RF-181), null for an account of everyone.
-          holderMemberId: account.holderMemberId ?? null,
-          holderName: account.holderName ?? null,
-          settlementCurrency: account.settlementCurrency,
-          // What update_account takes back: the opening as the form shows it (a liability's debt positive), its date and the stamp.
-          openingBalanceCents: account.kind === "liability" ? -account.initialBalanceCents : account.initialBalanceCents,
-          balanceOn: account.initialBalanceOn,
-          updatedAt: account.updatedAt,
-          balances: account.balances,
-          canWrite: account.canWrite,
-        })),
+        (await listAccounts({ archived: input.archived ?? false })).map(accountRow),
       ),
   );
 
@@ -226,6 +207,7 @@ export function buildHandler(): (request: Request) => Promise<Response> {
     registerReportTools(server, run, say);
     registerReviewTools(server, run, say);
     registerMemberTools(server, run, say);
+    registerDeleteTools(server, run, say);
   }, {
     serverInfo: { name: "homefund", version: pkg.version },
     instructions: t("instructions"),

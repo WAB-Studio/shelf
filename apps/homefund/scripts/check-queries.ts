@@ -4177,6 +4177,7 @@ async function main(): Promise<void> {
   await mcpReportsSuite();
   await mcpReviewSuite();
   await mcpMembersSuite();
+  await mcpDeletesSuite();
 }
 
 // A member recorded without a login is someone in the fund: a leader whose fund holds one is not alone, so an
@@ -15332,8 +15333,15 @@ const TOOL_CLASSES = [
   ["create_planned_payment", ...ADD_CLASS],
   ["create_recurring_rule", ...ADD_CLASS],
   ["defer_purchase", ...OVERWRITE_CLASS],
+  ["delete_account", ...DESTROY_CLASS],
+  ["delete_budget", ...DESTROY_CLASS],
+  ["delete_category", ...DESTROY_CLASS],
+  ["delete_goal", ...DESTROY_CLASS],
+  ["delete_member_debt", ...DESTROY_CLASS],
   ["delete_movement", ...DESTROY_CLASS],
+  ["delete_planned_payment", ...DESTROY_CLASS],
   ["delete_recipient", ...DESTROY_CLASS],
+  ["delete_recurring_rule", ...DESTROY_CLASS],
   ["forget_merchant", ...DESTROY_CLASS],
   ["get_dashboard", ...READ_CLASS],
   ["get_debt", ...READ_CLASS],
@@ -15393,6 +15401,7 @@ const TOOL_CLASSES = [
   ["settle_planned_payment", ...ADD_ONCE_CLASS],
   ["spending_patterns", ...READ_CLASS],
   ["undefer_purchase", ...DESTROY_CLASS],
+  ["unlink_third_party_credit", ...DESTROY_CLASS],
   ["unmark_month_review", ...OVERWRITE_CLASS],
   ["update_account", ...OVERWRITE_CLASS],
   ["update_budget", ...OVERWRITE_CLASS],
@@ -20597,5 +20606,124 @@ async function mcpMembersSuite(): Promise<void> {
     asPlain.isError && (asPlain.value as { error: string }).error === es.errors.notLeader && !changed.isError &&
       JSON.stringify((changed.value as { before: unknown }).before) === JSON.stringify({ cashMode: "shared" }) && fund.cash_mode === "per_member",
     `member ${JSON.stringify(asPlain.value)}, leader ${JSON.stringify(changed.value)}, now ${fund.cash_mode}`,
+  );
+}
+
+// RF-238: Claude deletes what the web deletes, one row per call, and each answer is the row as its list tool reads it.
+async function mcpDeletesSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const today = todayInBogota();
+  const { POST } = await import("@/app/mcp/route");
+  const [leader, member, stranger] = [await createMembershipFreeUser(), await createMembershipFreeUser(), await createMembershipFreeUser()];
+  const ids = { group: randomUUID(), leaderRow: randomUUID(), memberRow: randomUUID(), bank: randomUUID(), category: randomUUID() };
+  const name = (what: string) => `Harness rf238 ${what} ${tag}`;
+  await fixtureSql.begin(async (tx) => {
+    await tx`insert into groups (id, name, cash_mode) values (${ids.group}, ${name("fondo")}, 'shared')`;
+    await tx`insert into group_members (id, group_id, user_id, name, role) values
+      (${ids.leaderRow}, ${ids.group}, ${leader.id}, ${name("lider")}, 'leader'), (${ids.memberRow}, ${ids.group}, ${member.id}, ${name("miembro")}, 'member')`;
+    await tx`insert into accounts (id, owner_user_id, name, kind, subtype, initial_balance_cents, initial_balance_on)
+      values (${ids.bank}, ${leader.id}, ${name("banco")}, 'asset', 'bank', 0, '2026-01-01')`;
+    await tx`insert into categories (id, owner_user_id, name, kind, color) values (${ids.category}, ${leader.id}, ${name("base")}, 'expense', '#8C4A4A')`;
+  });
+  track("groups", ids.group);
+  for (const id of [ids.leaderRow, ids.memberRow]) track("group_members", id);
+  track("accounts", ids.bank);
+  track("categories", ids.category);
+  const clientOf = async (user: HarnessUser) => {
+    const { id, token } = await asUser(user, () => issueWebhookCredential({ name: name("clave"), purpose: "mcp", defaultAccountId: null, defaultCategoryId: null }));
+    keep("webhook_credentials", id);
+    return mcpClient(POST, token).tool;
+  };
+  const [tool, strangerTool] = [await clientOf(leader), await clientOf(stranger)];
+  const listed = async (list: string, args: Record<string, unknown> = {}) => (await tool(list, args)).value as { id?: string }[];
+  const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+
+  // An account with no movement goes and answers its row; one with a movement stays.
+  const spare = (await tool("create_account", { name: name("sobrante"), kind: "asset", subtype: "bank", openingBalanceCents: 0, balanceOn: "2026-01-01" })).value as { accountId: string };
+  track("accounts", spare.accountId);
+  const spareRow = (await listed("list_accounts")).find((row) => row.id === spare.accountId);
+  const accountGone = await tool("delete_account", { accountId: spare.accountId });
+  await tool("record_movement", { fromAccountId: ids.bank, toAccountId: null, amountCents: 1_000_00, occurredAt: today, description: name("gasto"), categoryId: ids.category });
+  const withMovements = await tool("delete_account", { accountId: ids.bank });
+  const foreignAccount = await strangerTool("delete_account", { accountId: ids.bank });
+  assert(
+    next("RF-238: delete_account removes an account with no movements and answers its row; one with movements, or another person's, stays"),
+    !accountGone.isError && same((accountGone.value as { before: unknown }).before, spareRow) &&
+      !(await listed("list_accounts")).some((row) => row.id === spare.accountId) &&
+      withMovements.isError && (withMovements.value as { error: string }).error === es.errors.accountHasMovements &&
+      foreignAccount.isError && (foreignAccount.value as { error: string }).error === es.errors.notFound,
+    `gone ${JSON.stringify(accountGone.value)}, with movements ${JSON.stringify(withMovements.value)}, stranger ${JSON.stringify(foreignAccount.value)}`,
+  );
+
+  const category = (await tool("create_category", { name: name("temporal"), kind: "expense", placement: "personal" })).value as { categoryId: string };
+  const categoryRow = ((await tool("list_categories")).value as { id: string }[]).find((row) => row.id === category.categoryId);
+  const budget = (await tool("create_budget", { categoryId: category.categoryId, period: "monthly", limitCents: 500_000_00, thresholdPct: 80 })).value as { budgetId: string };
+  const inUse = await tool("delete_category", { categoryId: ids.category });
+  const budgetRow = (await listed("list_budgets")).find((row) => row.id === budget.budgetId);
+  const budgetGone = await tool("delete_budget", { budgetId: budget.budgetId });
+  const recreated = await tool("create_budget", {
+    categoryId: (budgetRow as unknown as { categoryId: string }).categoryId, period: "monthly", limitCents: 500_000_00, thresholdPct: 80,
+  });
+  // The budget made again holds the category; with it gone too, the category goes.
+  await tool("delete_budget", { budgetId: (recreated.value as { budgetId: string }).budgetId });
+  const categoryGone = await tool("delete_category", { categoryId: category.categoryId });
+  assert(
+    next("RF-238: delete_budget answers its row, a category a movement uses is refused, and a deleted budget's answer makes it again"),
+    !budgetGone.isError && same((budgetGone.value as { before: unknown }).before, budgetRow) && !recreated.isError && inUse.isError &&
+      (inUse.value as { error: string }).error === es.errors.categoryInUse && !categoryGone.isError &&
+      same((categoryGone.value as { before: unknown }).before, categoryRow),
+    `budget ${JSON.stringify(budgetGone.value)}, inUse ${JSON.stringify(inUse.value)}, recreated ${JSON.stringify(recreated.value)}, category ${JSON.stringify(categoryGone.value)} ${JSON.stringify(categoryRow)}`,
+  );
+
+  const goal = (await tool("create_goal", { name: name("meta"), targetAmountCents: 100_000_00 })).value as { goalId: string };
+  const goalRow = (await listed("list_goals")).find((row) => row.id === goal.goalId);
+  const goalGone = await tool("delete_goal", { goalId: goal.goalId });
+  const planned = (await tool("create_planned_payment", { fromAccountId: ids.bank, toAccountId: null, amountCents: 9_000_00, dueDate: shiftDate(today, 5), categoryId: ids.category })).value as { plannedPaymentId: string };
+  const plannedRow = (await listed("list_planned_payments")).find((row) => row.id === planned.plannedPaymentId);
+  const plannedGone = await tool("delete_planned_payment", { plannedPaymentId: planned.plannedPaymentId });
+  const rule = (await tool("create_recurring_rule", { fromAccountId: ids.bank, toAccountId: null, amountCents: 8_000_00, categoryId: ids.category, frequency: "monthly", dayOfMonth: 5, nextRunOn: shiftDate(today, 30) })).value as { recurringRuleId: string };
+  const ruleRow = (await listed("list_recurring_rules")).find((row) => row.id === rule.recurringRuleId);
+  const ruleGone = await tool("delete_recurring_rule", { id: rule.recurringRuleId });
+  assert(
+    next("RF-238: delete_goal, delete_planned_payment and delete_recurring_rule each answer the row their list reads and take it out of it"),
+    same((goalGone.value as { before: unknown }).before, goalRow) && same((plannedGone.value as { before: unknown }).before, plannedRow) &&
+      same((ruleGone.value as { before: unknown }).before, ruleRow),
+    `goal ${JSON.stringify(goalGone.value)}, planned ${JSON.stringify(plannedGone.value)}, rule ${JSON.stringify(ruleGone.value)}`,
+  );
+  const stillThere = [
+    (await listed("list_goals")).some((row) => row.id === goal.goalId),
+    (await listed("list_planned_payments")).some((row) => row.id === planned.plannedPaymentId),
+    (await listed("list_recurring_rules")).some((row) => row.id === rule.recurringRuleId),
+  ];
+  const strangerGoal = await strangerTool("delete_goal", { goalId: goal.goalId });
+  assert(
+    next("RF-238: a deleted goal, payment and rule are gone from their lists, and another person's id reads as not found"),
+    stillThere.every((there) => !there) && strangerGoal.isError && (strangerGoal.value as { error: string }).error === es.errors.notFound,
+    `still ${JSON.stringify(stillThere)}, stranger ${JSON.stringify(strangerGoal.value)}`,
+  );
+
+  const owed = (await tool("record_member_debt", { kind: "debt", debtorMemberId: ids.memberRow, creditorMemberId: ids.leaderRow, amountCents: 100_000_00, occurredOn: today })).value as { id: string };
+  const paid = (await tool("record_member_debt", { kind: "payment", debtorMemberId: ids.memberRow, creditorMemberId: ids.leaderRow, amountCents: 40_000_00, occurredOn: today })).value as { id: string };
+  const covered = await tool("delete_member_debt", { id: owed.id });
+  const paymentGone = await tool("delete_member_debt", { id: paid.id });
+  const debtGone = await tool("delete_member_debt", { id: owed.id });
+  assert(
+    next("RF-238: delete_member_debt refuses a debt whose payments would be left standing, then deletes the payment and the debt, each answering its entry"),
+    covered.isError && (covered.value as { error: string }).error === es.memberDebts.errors.debtPaid && !paymentGone.isError && !debtGone.isError &&
+      (paymentGone.value as { before: { kind: string } }).before.kind === "payment" && (debtGone.value as { before: { kind: string } }).before.kind === "debt",
+    `covered ${JSON.stringify(covered.value)}, payment ${JSON.stringify(paymentGone.value)}, debt ${JSON.stringify(debtGone.value)}`,
+  );
+
+  const loan = (await tool("create_account", { name: name("credito"), kind: "liability", subtype: "loan", openingBalanceCents: 1_000_000_00, balanceOn: "2026-01-01" })).value as { accountId: string };
+  track("accounts", loan.accountId);
+  const linked = await tool("link_third_party_credit", { liabilityAccountId: loan.accountId, personName: name("papa") });
+  const linkRow = ((await tool("list_third_party_credits")).value as { liabilityAccountId: string }[]).find((row) => row.liabilityAccountId === loan.accountId);
+  const unlinked = await tool("unlink_third_party_credit", { liabilityAccountId: loan.accountId });
+  assert(
+    next("RF-238: unlink_third_party_credit answers the credit's link as list_third_party_credits reads it, and the credit stops being followed"),
+    !linked.isError && !unlinked.isError && same((unlinked.value as { before: unknown }).before, linkRow) &&
+      !((await tool("list_third_party_credits")).value as { liabilityAccountId: string }[]).some((row) => row.liabilityAccountId === loan.accountId),
+    `linked ${JSON.stringify(linked.value)}, unlinked ${JSON.stringify(unlinked.value)}`,
   );
 }

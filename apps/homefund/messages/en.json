@@ -1888,7 +1888,15 @@
       "renameMember": "Changes a member's name (memberId from list_members); their email, if any, is not touched. Only the fund's leader does it. Returns before with the previous name. CONFIRM the change with the person before calling it.",
       "archiveMember": "Archives a member (memberId from list_members): they leave the list and the selectors, and their accounts and movements stay as they are (RF-61). It does not archive the caller. Only the fund's leader does it. It is restored with restore_member. Returns memberId. CONFIRM with the person which member before calling it.",
       "restoreMember": "Restores an archived member (memberId from list_members with archived true). Only the fund's leader does it. Returns memberId. CONFIRM with the person which one before calling it.",
-      "updateFund": "Changes the fund's settings: name, cashMode (shared, one shared cash box, or per_member, one cash box per member) and currency (COP or USD, the one it reports in). It is a patch: what you omit stays. Switching to a shared cash mode opens its cash account in the fund's currency. Only the leader does it. Returns before with what each field you changed held. CONFIRM the change with the person before calling it."
+      "updateFund": "Changes the fund's settings: name, cashMode (shared, one shared cash box, or per_member, one cash box per member) and currency (COP or USD, the one it reports in). It is a patch: what you omit stays. Switching to a shared cash mode opens its cash account in the fund's currency. Only the leader does it. Returns before with what each field you changed held. CONFIRM the change with the person before calling it.",
+      "deleteAccount": "Deletes an account with no movements (from list_accounts, open or archived), ONE row per call, like the screen's «Delete» button. An account that already has movements, or pockets, is refused: archive it with archive_account. Returns before: the row as its list_* reads it, to create it again with create_account. It does not undo itself: CONFIRM with the person which one you delete, naming it, before calling it; never delete several at once or without their yes for each.",
+      "deleteCategory": "Deletes a category (from list_categories), ONE row per call, like the screen's «Delete» button. A category that movements, budgets or rules still use is refused: move its movements with move_category_movements first; its subcategories are deleted with it. Returns before: the row as its list_* reads it, to create it again with create_category. It does not undo itself: CONFIRM with the person which one you delete, naming it, before calling it; never delete several at once or without their yes for each.",
+      "deleteBudget": "Deletes a budget (from list_budgets, active or archived), ONE row per call, like the screen's «Delete» button. Returns before: the row as its list_* reads it, to create it again with create_budget. It does not undo itself: CONFIRM with the person which one you delete, naming it, before calling it; never delete several at once or without their yes for each.",
+      "deleteGoal": "Deletes a savings goal with its contributions (from list_goals, active or archived), ONE row per call, like the screen's «Delete» button. Returns before: the row as its list_* reads it, to create it again with create_goal and its contributions with contribute_goal. It does not undo itself: CONFIRM with the person which one you delete, naming it, before calling it; never delete several at once or without their yes for each.",
+      "deletePlannedPayment": "Deletes a planned payment (from list_planned_payments), ONE row per call, like the screen's «Delete» button. The movement a paid payment made is not deleted: it stays like any other. Returns before: the row as its list_* reads it, to schedule it again with create_planned_payment. It does not undo itself: CONFIRM with the person which one you delete, naming it, before calling it; never delete several at once or without their yes for each.",
+      "deleteRecurringRule": "Deletes a recurring movement (from list_recurring_rules), ONE row per call, like the screen's «Delete» button. The movements it already generated are not deleted. Returns before: the row as its list_* reads it, to create it again with create_recurring_rule. It does not undo itself: CONFIRM with the person which one you delete, naming it, before calling it; never delete several at once or without their yes for each.",
+      "deleteMemberDebt": "Deletes a debt entry between members (id from list_member_debts) (from list_member_debts), ONE row per call, like the screen's «Delete» button. A payment always goes; a debt only while the debtor's other debts to the same creditor in that currency still cover their payments, and it is refused otherwise. Returns before: the row as its list_* reads it, to record it again with record_member_debt. It does not undo itself: CONFIRM with the person which one you delete, naming it, before calling it; never delete several at once or without their yes for each.",
+      "unlinkThirdPartyCredit": "Deletes the link of a credit somebody else pays, «Stop following» (liabilityAccountId from list_third_party_credits) (from list_third_party_credits), ONE row per call, like the screen's «Delete» button. Both accounts and every movement stay; the internal «Me debe» account is archived. Returns before: the row as its list_* reads it, to link it again with link_third_party_credit. It does not undo itself: CONFIRM with the person which one you delete, naming it, before calling it; never delete several at once or without their yes for each."
     },
     "deferralProposal": "Defer in {count} instalments",
     "errors": {
@@ -2072,7 +2080,9 @@
       "membersArchived": "true to list the archived members; by default, the active ones.",
       "fundName": "The fund's name, up to 80 characters.",
       "fundCashMode": "shared (one shared cash box) or per_member (one cash box per member).",
-      "fundCurrency": "The currency the fund reports in: COP or USD."
+      "fundCurrency": "The currency the fund reports in: COP or USD.",
+      "deleteCategoryId": "The id of the category to delete (from list_categories).",
+      "memberDebtId": "The id of the entry to delete (from list_member_debts)."
     },
     "titles": {
       "listAccounts": "View accounts",
@@ -2164,7 +2174,15 @@
       "renameMember": "Rename a member",
       "archiveMember": "Archive a member",
       "restoreMember": "Restore a member",
-      "updateFund": "Change the fund's settings"
+      "updateFund": "Change the fund's settings",
+      "deleteAccount": "Delete an account",
+      "deleteCategory": "Delete a category",
+      "deleteBudget": "Delete a budget",
+      "deleteGoal": "Delete a goal",
+      "deletePlannedPayment": "Delete a planned payment",
+      "deleteRecurringRule": "Delete a recurring movement",
+      "deleteMemberDebt": "Delete a debt entry between members",
+      "unlinkThirdPartyCredit": "Stop following a credit someone else pays"
     }
   },
   "oauth": {

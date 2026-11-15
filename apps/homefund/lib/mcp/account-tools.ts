@@ -5,7 +5,7 @@ import { z } from "zod";
 
 import { getReconcileSheet, listAccountReconciliations } from "@/db/queries/account-reconciliations";
 import { retireAccount } from "@/db/queries/account-write";
-import { restoreAccount } from "@/db/queries/accounts";
+import { listAccounts, restoreAccount } from "@/db/queries/accounts";
 import { confirmReconciliation } from "@/db/queries/reconcile-write";
 import { ActionError } from "@/lib/errors";
 import { OVERWRITE, READ, titled } from "@/lib/mcp/annotations";
@@ -13,6 +13,31 @@ import { parseForm } from "@/lib/mcp/parse-form";
 import { centsToDecimal } from "@/lib/money";
 import { reconcileAccountSchema } from "@/lib/validation/account-reconciliation";
 import { archiveAccountSchema, restoreAccountSchema } from "@/lib/validation/account";
+
+// An account as list_accounts answers it, and as a tool that removes one answers what it removed.
+export function accountRow(account: Awaited<ReturnType<typeof listAccounts>>[number]) {
+  return {
+    id: account.id,
+    name: account.name,
+    kind: account.kind,
+    subtype: account.subtype,
+    scope: account.groupId === null ? "personal" : "fund",
+    institution: account.institution,
+    lastFour: account.lastFour ?? null,
+    // The account this one is a pocket of, null for an account of its own (RF-173); a parent's balances are its free part.
+    parentAccountId: account.parentAccountId ?? null,
+    // The fund member this account is in the name of (RF-181), null for an account of everyone.
+    holderMemberId: account.holderMemberId ?? null,
+    holderName: account.holderName ?? null,
+    settlementCurrency: account.settlementCurrency,
+    // What update_account takes back: the opening as the form shows it (a liability's debt positive), its date and the stamp.
+    openingBalanceCents: account.kind === "liability" ? -account.initialBalanceCents : account.initialBalanceCents,
+    balanceOn: account.initialBalanceOn,
+    updatedAt: account.updatedAt,
+    balances: account.balances,
+    canWrite: account.canWrite,
+  };
+}
 
 type Run = (ctx: ServerContext, load: (owner: string) => Promise<unknown>) => Promise<CallToolResult>;
 type Say = (key: string) => string;
