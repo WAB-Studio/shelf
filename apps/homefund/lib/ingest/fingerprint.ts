@@ -37,6 +37,8 @@ const ANCHORS = new Set(["en", "de", "a"]);
 const OPENS_CLAUSE = /^¿/;
 const CLOSES_HEADER = /:$/;
 const CLOSES_NAME = /[,.?]$/;
+// The dash an email puts between its subject and its body ends the name too.
+const IS_DASH = /^[—–]$/;
 
 const HAS_LETTER = /\p{L}/u;
 
@@ -94,7 +96,7 @@ function readRun(tokens: Token[], start: number): Token[] {
   const run: Token[] = [];
   for (let index = start; index < tokens.length && !tokens[index].kept; index += 1) {
     const token = tokens[index];
-    if (OPENS_CLAUSE.test(token.original) || CLOSES_HEADER.test(token.original)) {
+    if (OPENS_CLAUSE.test(token.original) || CLOSES_HEADER.test(token.original) || IS_DASH.test(token.original)) {
       break;
     }
     run.push(token);
@@ -114,6 +116,13 @@ function merchantKey(label: string): string {
     .replace(/\p{M}+/gu, "")
     .replace(/[^A-Z0-9]+/g, " ")
     .trim();
+}
+
+/** The memory key and the label a person reads for a merchant named in a field of an email. */
+export function merchantOf(label: string): Merchant | null {
+  const trimmed = label.trim().slice(0, MAX_LABEL_LENGTH);
+  const key = merchantKey(trimmed);
+  return HAS_LETTER.test(trimmed) && key !== "" ? { key, label: trimmed } : null;
 }
 
 function findMerchant(tokens: Token[]): Merchant | null {

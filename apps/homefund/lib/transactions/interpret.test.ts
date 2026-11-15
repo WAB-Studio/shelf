@@ -498,3 +498,66 @@ test("the «any» guard drops a lone year, never a marked amount", () => {
   assert.equal(read("Compraste $2.000 en tienda 2026"), 200_000);
   assert.equal(read("Compraste $2000 en tienda"), 200_000);
 });
+
+test("a bank email's wording says the direction", () => {
+  const direction = (text: string) => interpretQuickEntry(text, ctx).direction;
+  const income = [
+    "Recibiste una transferencia por $147.000 de EMPRESA EJEMPLO",
+    "Recibiste un pago de Nomina de EMPRESA EJEMPLO por $7.200.000",
+    "Tu plata de PayPal ya está en Nequi. Recibiste en tu Nequi 6154200.0",
+    "Te enviaron $80.000 por Bre-B",
+    "Pago viagogo 1234567 - Se le acaba de pagar",
+    "Recibiste un pago a través de Pagos a terceros. Monto recibido: $23.379",
+  ];
+  const expense = [
+    "Compraste COP32.850,00 en COMERCIO EJEMPLO con tu T.Cred *1234",
+    "Pagaste $15.000 a EMPRESA EJEMPLO",
+    "Transferiste $9.000 desde tu cuenta *1234",
+    "¡Envío con Bre-B exitoso! — Realizaste una transferencia a PERSONA EJEMPLO por $24.000",
+    "¡Pago exitoso! — Hiciste un pago en COMERCIO EJEMPLO por $79.000",
+    "Pago hecho — pagaste tu crédito por $325.374,57",
+    "PSE - Transacción Aprobada — Valor: $123.429,00",
+    "Transacción APROBADA en COMERCIO EJEMPLO — COP $93,560",
+    "Transacción 123456 Aceptada en ePayco $65.000",
+    "Compra por $122.000 COP en COMERCIO EJEMPLO",
+    "Compraste Producto Ejemplo — TOTAL: $144609",
+    "¡Muchas gracias por tu compra en Farmatodo!",
+    "Comprobante de pago Referencia 1234567 Valor: $97.110",
+  ];
+  for (const text of income) assert.equal(direction(text), "income", text);
+  for (const text of expense) assert.equal(direction(text), "expense", text);
+  assert.equal(direction("¿Recibiste un correo sospechoso? Envíanoslo."), null);
+});
+
+test("the first verb of a message decides its direction", () => {
+  assert.equal(
+    interpretQuickEntry("Recibiste $50.000 de PERSONA EJEMPLO. Si pagaste otra cosa, avísanos.", ctx).direction,
+    "income",
+  );
+});
+
+test("an account tail is found in a bank email's wording, never as the other party's", () => {
+  const accounts = [
+    { id: "own", name: "Ahorros", lastFour: "1234" },
+    { id: "other", name: "Otra", lastFour: "5678" },
+  ];
+  const accountOf = (text: string) => interpretQuickEntry(text, { categories: [], accounts, defaultAccountId: null }).accountId;
+
+  assert.equal(accountOf("Compraste $9.000 en COMERCIO con tu T.Deb *1234"), "own");
+  assert.equal(accountOf("Pagaste $9.000 a EMPRESA desde tu producto 1234"), "own");
+  assert.equal(accountOf("Recibiste $9.000 en tu cuenta **1234"), "own");
+  assert.equal(accountOf("Compra $9.000 asociada a T.Cred *1234"), "own");
+  assert.equal(accountOf("Transferiste $9.000 desde tu cuenta *1234 a la cuenta *5678"), "own");
+  assert.equal(accountOf("Recibiste $9.000 de la cuenta *5678 en tu cuenta *1234"), "own");
+});
+
+test("a wallet receipt's origin is the person's account when the money left, its destination when it came in", () => {
+  const accounts = [
+    { id: "own", name: "Ahorros", lastFour: "1234" },
+    { id: "other", name: "Otra", lastFour: "5678" },
+  ];
+  const accountOf = (text: string) => interpretQuickEntry(text, { categories: [], accounts, defaultAccountId: null }).accountId;
+
+  assert.equal(accountOf("Realizaste una transferencia a PERSONA por $24.000 Origen cuenta • 1234 Llave • 3001234567"), "own");
+  assert.equal(accountOf("Recibiste $76.000 de PERSONA Origen cuenta • 5678 Destino ahorro • 1234"), "own");
+});

@@ -87,3 +87,87 @@ test("a bare figure with no currency mark still counts as the amount, a lone yea
   assert.equal(rejected("Tu plata de PayPal ya está en Nequi", "Recibiste en tu Nequi 1234567.8 que enviaste desde PayPal."), null);
   assert.equal(rejected("Recibiste un mensaje", "Recibiste esto en 2026."), "no_movement_signal");
 });
+
+test("the movements of wallets, gateways and merchants are accepted", () => {
+  const emails: [string, string][] = [
+    ["¡Envío con Bre-B exitoso!", "Conoce los detalles. Realizaste una transferencia a PERSONA EJEMPLO por $24.000 Origen cuenta • 1234."],
+    ["ecollect: Credito Hipotecario Confirmación #5337 BANCOLOMBIA", "Total Pagado $ 500,000.00 Detalle: CREDITO HIPOTECARIO NRO. 6039"],
+    ["Transacción #3841 ACEPTADA en ePayco", "Ha realizado una transacción en COMERCIO EJEMPLO. Transacción Aceptada $65,000.00 COP"],
+    ["-- Transacción Aprobada: [1153eea7] --", "Tu transacción ha sido aprobada. Valor 119400"],
+    ["Recibiste un pago a través de Pagos a terceros de Wompi", "Monto recibido: $23.379 Destinatario: PERSONA EJEMPLO"],
+    ["Pago viagogo 6799- Se le acaba de pagar", "Pago: $ 2.802,75 Si ves un cargo incorrecto, envía una reclamación."],
+    ["Comprobante de pago Referencia Claro No.1163", "Estado de su solicitud: APPROVED Referencia de pago Claro: 1163 Valor: $97.110"],
+    ["Tu recibo de Airbnb", "DESGLOSE DEL PRECIO Total (USD) $150,77 PAGO AMEX •••• 1234 $63,06"],
+  ];
+  for (const [subject, body] of emails) assert.equal(rejected(subject, body), null, subject);
+});
+
+test("a merchant's thanks for a purchase is a movement although it names no figure", () => {
+  assert.equal(rejected("¡Muchas gracias por tu compra en Farmatodo!", "Adjunto encontrarás tu factura."), null);
+  const priced = (body: string) => {
+    const verdict = judge("¡Muchas gracias por tu compra en Farmatodo!", body);
+    return verdict.movement && verdict.priced;
+  };
+  assert.equal(priced("Llámanos al 317 648 0137. Adjunto tu factura."), false);
+  assert.equal(priced("Total $45.000. Adjunto tu factura."), true);
+  assert.equal(rejected("¡Muchas gracias por tu compra!", "Tu pago fue rechazado."), "failed");
+});
+
+test("an invoice, a payment slip or a bank's bill notice is a bill, not a payment", () => {
+  assert.equal(rejected("Factura EMPRESA 517262 de julio de 2026", ""), "bill");
+  assert.equal(rejected("800153993;COMCEL S.A.;E6090430280;01;CLARO;MOVIL", "Tu factura Claro está disponible. VALOR A PAGAR $ 44.743,71"), "bill");
+  assert.equal(
+    rejected("Ticket de pago 9000112240 - Inmobiliaria Ejemplo", "Adjunto ticket de banco para pago. Valor $1.300.000"),
+    "bill",
+  );
+  assert.equal(
+    rejected(
+      "Alertas y Notificaciones",
+      "¡Te interesa! Buenas noticias: La factura que inscribiste EMPRESA con referencia 576327 está lista para que la pagues. Vence el 04/11/2026. ¿Recibiste un correo sospechoso?",
+    ),
+    "bill",
+  );
+});
+
+test("a store's order and question notices report no payment, and a due date is a reminder", () => {
+  assert.equal(rejected("Llegó tu compra, ¡que la disfrutes!", "Compraste 2 productos. Entregado en 540005."), "no_movement_signal");
+  assert.equal(rejected("La factura de la compra #2000015 ya está disponible", "Compraste Linterna 15000 Lm."), "no_movement_signal");
+  assert.equal(rejected("Tienes un mensaje nuevo en Producto Ejemplo", "Recibiste este e-mail. Ref 377373737"), "no_movement_signal");
+  assert.equal(rejected("Transacción #3841 PENDIENTE en ePayco", "Transacción Pendiente $65,000.00 COP"), "no_movement_signal");
+  assert.equal(rejected("Tu fecha de pago ya está cerca Lulo Bank", "Si ya pagaste omite este mensaje. Valor de la cuota: $325.374,57"), "reminder");
+});
+
+// RF-208: the notices a payment leaves after the bank's own alert.
+const isReceipt = (subject: string, body: string) => {
+  const verdict = judge(subject, body);
+  return verdict.movement ? verdict.receipt : null;
+};
+
+test("PSE, gateway and merchant notices are receipts; a bank or wallet alert is not", () => {
+  const receipts: [string, string][] = [
+    ["PSE - Transacción Aprobada ✅ CUS 510567233", "Valor: $ 123.429,00 Empresa: EMPRESA EJEMPLO"],
+    ["Transacción aprobada en COMERCIO EJEMPLO [1091900964]", "La transacción por un valor de $447.932,00 fue Aprobada"],
+    ["Transacción APROBADA en COMERCIO EJEMPLO", "¡Pago exitoso! COP $93,560"],
+    ["Transacción #3841 ACEPTADA en ePayco", "Transacción Aceptada $65.000,00 COP"],
+    ["Transacción Aprobada:", "Tu transacción ha sido aprobada. Valor 119400"],
+    ["Compra por $122.000 COP en COMERCIO EJEMPLO", "Transacción aprobada"],
+    ["ecollect: Credito Hipotecario Confirmación #5337 BANCOLOMBIA", "Total Pagado $ 500,000.00"],
+    ["Recibiste un pago a través de Pagos a terceros de Wompi", "Monto recibido: $23.379"],
+    ["Compraste Producto Ejemplo", "TOTAL: $144609"],
+    ["¡Muchas gracias por tu compra en Farmatodo!", "Adjunto encontrarás tu factura."],
+    ["Comprobante de pago Referencia Claro No.1163", "Estado: APPROVED Valor: $97.110"],
+    ["Tu recibo de Airbnb", "Total (USD) $150,77"],
+    ["¡Ya entró tu pago!", "Tu pago fue de $397.167,42 Producto origen BANCOLOMBIA"],
+  ];
+  for (const [subject, body] of receipts) assert.equal(isReceipt(subject, body), true, subject);
+
+  const alerts: [string, string][] = [
+    ["Alertas y Notificaciones", "Bancolombia: Compraste COP9.100,00 en TIENDA XYZ con tu T.Cred *1234."],
+    ["¡Pago exitoso!", "Hiciste un pago en COMERCIO EJEMPLO por $79.000"],
+    ["Comprobante de Pago Claro", "Listo tu pago en Claro. Pagaste con Nequi tu factura por $5.500"],
+    ["Pago hecho", "¡Listo! pagaste tu crédito por $325.374,57."],
+    ["¡Envío con Bre-B exitoso!", "Realizaste una transferencia a PERSONA EJEMPLO por $24.000"],
+    ["¡Recibiste plata por Bre-B!", "Recibiste $76.000 de PERSONA EJEMPLO"],
+  ];
+  for (const [subject, body] of alerts) assert.equal(isReceipt(subject, body), false, subject);
+});

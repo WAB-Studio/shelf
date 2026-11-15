@@ -32,13 +32,26 @@ const MILLION_ZEROS = 6;
 // What may stand before a multiplier: whole digits, or up to two decimals.
 // «1.500 mil» could be 1 500 000 or 1 500; neither is guessed.
 const MANTISSA_PATTERN = /^(\d+)(?:[.,](\d{1,2}))?$/;
-const INCOME_PATTERN = /\brecibiste\s+una\s+transferencia\b/iu;
+// What says the money came in: a bank's «recibiste», a payroll, «te enviaron», a wallet's «tu plata de X ya está en…».
+// A question («¿Recibiste un correo sospechoso?») says nothing.
+const INCOME_PATTERN =
+  /(?<!¿)\brecibiste\b(?!\s+un\s+(?:correo|mensaje|llamada))|\bn[oó]mina\b|\bte\s+(?:enviaron|transfirieron|consignaron)\b|\btu\s+plata\s+de\s+\p{L}+\s+ya\s+est|\bse\s+le\s+acaba\s+de\s+pagar\b|\bmonto\s+recibido\b/iu;
+// What says the money went out, in a bank's alert, a wallet's receipt or a gateway's approval.
 const EXPENSE_PATTERN =
-  /\b(?:transferiste|compraste|pagaste)\b|\btu\s+compra\b[\s\S]*\bfue\s+aprobada\b/iu;
-const ACCOUNT_TAIL_PATTERNS = [
+  /\b(?:transferiste|compraste|pagaste|retiraste|hiciste\s+un\s+pago|realizaste\s+(?:una\s+transferencia|un\s+pago|un\s+env[ií]o|un\s+retiro)|env[ií]o\s+con\s+bre-?b\s+exitoso|pago\s+(?:exitoso|hecho)|transacci[oó]n\s+#?\d*\s*(?:aprobada|aceptada)|compra\s+por\s+\$|gracias\s+por\s+tu\s+compra|tu\s+recibo|comprobante\s+de\s+pago|total\s+pagado)\b|\btu\s+compra\b[\s\S]*\bfue\s+aprobada\b/iu;
+// The person's own account or card in a bank's words: «*1234», «**1234», «producto 1234»,
+// «T.Cred *1234», «tarjeta crédito 1234», «AMEX •••• 1234».
+const OWN_TAIL_PATTERNS = [
   /\*+\s*(\d{4})\b/gu,
   /\btarjeta\s+cr[eé]dito\s+(\d{4})\b/giu,
+  /\b(?:producto|cuenta|tarjeta|t\.?\s?(?:deb|cred))\s+(\d{4})\b/giu,
+  /[•·]{2,}\s*(\d{4})\b/gu,
 ];
+// Where the money left from and where it landed, as a wallet's receipt labels them: «Origen cuenta • 1234».
+const ORIGIN_TAIL = /\borigen\s+(?:cuenta|ahorro|producto|tarjeta)?\s*[•·*:\s]*(\d{4})\b/giu;
+const DESTINATION_TAIL = /\bdestino\s+(?:cuenta|ahorro|producto|tarjeta)?\s*[•·*:\s]*(\d{4})\b/giu;
+// «a la cuenta *1234» and «de la cuenta *1234» name somebody else's account.
+const OTHER_PARTY_BEFORE = /\b(?:a|de)\s+(?:la\s+)?(?:cuenta|llave|tarjeta)\s*$/iu;
 // Colombian banks write the day first: `el 24/08/26 a las 18:31` and
 // `el 25/08/2026 a las 20:07` both name a day in August.
 const DATE_PATTERN = /\b(\d{1,2})\/(\d{1,2})\/(\d{4}|\d{2})\b/u;
@@ -220,6 +233,31 @@ function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+// The first verb says which way the money went: «recibiste» before «pagaste» is an income.
+function readDirection(text: string): "income" | "expense" | null {
+  const income = INCOME_PATTERN.exec(text)?.index ?? Infinity;
+  const expense = EXPENSE_PATTERN.exec(text)?.index ?? Infinity;
+  if (income === Infinity && expense === Infinity) return null;
+
+  return income < expense ? "income" : "expense";
+}
+
+// The last four digits the message gives for the person's own account. The side a wallet labels
+// «origen» is the person's only when the money went out, «destino» only when it came in.
+export function readAccountTails(text: string, direction: "income" | "expense" | null): Set<string> {
+  const own = OWN_TAIL_PATTERNS.flatMap((pattern) =>
+    [...text.matchAll(pattern)]
+      .filter((match) => !OTHER_PARTY_BEFORE.test(text.slice(0, match.index)))
+      .map((match) => match[1]),
+  );
+  const labeled =
+    direction === null
+      ? []
+      : [...text.matchAll(direction === "expense" ? ORIGIN_TAIL : DESTINATION_TAIL)].map((match) => match[1]);
+
+  return new Set([...own, ...labeled]);
+}
+
 export function interpretQuickEntry(
   text: string,
   ctx: InterpretContext,
@@ -286,11 +324,8 @@ export function interpretQuickEntry(
             MULTIPLIER_ZEROS[multiplierMatch[1].toLowerCase()] ?? MILLION_ZEROS,
           )
         : normalizeGroupMarks(amountMatch[0]);
-  const mentionedTails = new Set(
-    ACCOUNT_TAIL_PATTERNS.flatMap((pattern) =>
-      [...text.matchAll(pattern)].map((match) => match[1]),
-    ),
-  );
+  const direction = readDirection(text);
+  const mentionedTails = readAccountTails(text, direction);
   const matchedAccounts = ctx.accounts.filter(
     (account) => account.lastFour && mentionedTails.has(account.lastFour),
   );
@@ -360,11 +395,7 @@ export function interpretQuickEntry(
     description,
     // A uniquely named bank tail outranks the last-used fallback (RF-97, RF-22).
     accountId: matchedAccountId ?? ctx.defaultAccountId,
-    direction: INCOME_PATTERN.test(text)
-      ? "income"
-      : EXPENSE_PATTERN.test(text)
-        ? "expense"
-        : null,
+    direction,
     occurredAt: readOccurredAt(text),
   };
 }
