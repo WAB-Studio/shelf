@@ -13,6 +13,7 @@ import {
 } from "@/db/queries/third-party-credits";
 import { todayInBogota } from "@/lib/dates";
 import { ActionError } from "@/lib/errors";
+import { ADD, ADD_ONCE, OVERWRITE, READ, previousFields, titled } from "@/lib/mcp/annotations";
 import { parseForm } from "@/lib/mcp/parse-form";
 import { centsToDecimal } from "@/lib/money";
 import {
@@ -36,13 +37,14 @@ export function registerThirdPartyCreditTools(server: McpServer, run: Run, t: Sa
 
   server.registerTool(
     "list_third_party_credits",
-    { description: t("tools.listThirdPartyCredits"), inputSchema: z.object({}), annotations: { readOnlyHint: true } },
+    { ...titled(t, "listThirdPartyCredits"), description: t("tools.listThirdPartyCredits"), inputSchema: z.object({}), annotations: READ },
     (_input, ctx) => run(ctx, () => listThirdPartyCredits()),
   );
 
   server.registerTool(
     "record_third_party_payment",
     {
+      ...titled(t, "recordThirdPartyPayment"),
       description: t("tools.recordThirdPartyPayment"),
       inputSchema: z.object({
         liabilityAccountId: z.string().describe(d("creditLiabilityAccountId")),
@@ -51,7 +53,7 @@ export function registerThirdPartyCreditTools(server: McpServer, run: Run, t: Sa
         occurredOn: z.string().describe(d("occurredOn")),
         requestRef: z.string().optional().describe(d("requestRef")),
       }),
-      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
+      annotations: ADD_ONCE,
     },
     (input, ctx) =>
       run(ctx, () =>
@@ -78,6 +80,7 @@ export function registerThirdPartyCreditTools(server: McpServer, run: Run, t: Sa
   server.registerTool(
     "link_third_party_credit",
     {
+      ...titled(t, "linkThirdPartyCredit"),
       description: t("tools.linkThirdPartyCredit"),
       inputSchema: z.object({
         liabilityAccountId: z.string().describe(d("creditLiabilityAccountId")),
@@ -86,7 +89,7 @@ export function registerThirdPartyCreditTools(server: McpServer, run: Run, t: Sa
         openedOn: z.string().optional().describe(d("creditOpenedOn")),
         ...lenderTerms,
       }),
-      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
+      annotations: ADD,
     },
     (input, ctx) =>
       run(ctx, async () => {
@@ -113,13 +116,14 @@ export function registerThirdPartyCreditTools(server: McpServer, run: Run, t: Sa
   server.registerTool(
     "update_third_party_credit",
     {
+      ...titled(t, "updateThirdPartyCredit"),
       description: t("tools.updateThirdPartyCredit"),
       inputSchema: z.object({
         liabilityAccountId: z.string().describe(d("creditLiabilityAccountId")),
         personName: z.string().optional().describe(d("creditPersonName")),
         ...lenderTerms,
       }),
-      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
+      annotations: OVERWRITE,
     },
     (input, ctx) =>
       run(ctx, async () => {
@@ -135,7 +139,13 @@ export function registerThirdPartyCreditTools(server: McpServer, run: Run, t: Sa
             dueDay: dueDay == null ? "" : String(dueDay),
           }),
         );
-        return { liabilityAccountId: input.liabilityAccountId };
+        return {
+          liabilityAccountId: input.liabilityAccountId,
+          before: previousFields(
+            { personName: current.personName, installmentCents: current.installmentCents, dueDay: current.dueDay },
+            input,
+          ),
+        };
       }),
   );
 }

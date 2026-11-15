@@ -4,14 +4,7 @@ import { createSafeActionClient } from "next-safe-action";
 
 import { getSessionUser } from "@/db/session";
 import { pgErrorCode } from "@/lib/db-error";
-import { ActionError } from "@/lib/errors";
-
-// The refusals a trigger raises with its own sqlstate (RF-162, migration 0071). Each code is
-// raised by one trigger alone, so it reads the same through every action that reaches it.
-const DATABASE_REFUSALS: Record<string, string> = {
-  MO001: "errors.movementBeforeOpening",
-  MO002: "accounts.errors.openingAfterMovement",
-};
+import { ActionError, DATABASE_REFUSALS } from "@/lib/errors";
 
 /**
  * Every action starts here. `serverError` is always a message key, so the form

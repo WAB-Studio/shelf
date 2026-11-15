@@ -4163,6 +4163,7 @@ async function main(): Promise<void> {
   await connectionsSuite();
   await thirdPartyCreditSuite();
   await widgetSuite();
+  await mcpPermissionsSuite();
 }
 
 // A member recorded without a login is someone in the fund: a leader whose fund holds one is not alone, so an
@@ -15290,6 +15291,52 @@ function mcpClient(POST: (request: Request) => Promise<Response>, token: string)
   return { rpc, tool };
 }
 
+// RF-225: every tool, sorted by name, with its annotation class as [readOnly, destructive, idempotent]; a tool's row is the
+// claim a client's permission prompt rests on. READ writes nothing; ADD only creates; ADD_ONCE creates under a key; OVERWRITE
+// replaces what is stored; DESTROY removes what a repeat cannot put back.
+const [READ_CLASS, ADD_CLASS, ADD_ONCE_CLASS, OVERWRITE_CLASS, DESTROY_CLASS] = [
+  [true, null, null],
+  [false, false, false],
+  [false, false, true],
+  [false, true, true],
+  [false, true, false],
+] as const;
+const TOOL_CLASSES = [
+  ["accept_deliveries", ...ADD_CLASS],
+  ["create_account", ...ADD_CLASS],
+  ["create_category", ...ADD_CLASS],
+  ["create_label", ...ADD_CLASS],
+  ["delete_movement", ...DESTROY_CLASS],
+  ["delete_recipient", ...DESTROY_CLASS],
+  ["import_statement", ...DESTROY_CLASS],
+  ["link_third_party_credit", ...ADD_CLASS],
+  ["list_accounts", ...READ_CLASS],
+  ["list_categories", ...READ_CLASS],
+  ["list_inbox", ...READ_CLASS],
+  ["list_labels", ...READ_CLASS],
+  ["list_member_debts", ...READ_CLASS],
+  ["list_members", ...READ_CLASS],
+  ["list_movements", ...READ_CLASS],
+  ["list_recipients", ...READ_CLASS],
+  ["list_third_party_credits", ...READ_CLASS],
+  ["merge_movements", ...DESTROY_CLASS],
+  ["move_account_to_fund", ...DESTROY_CLASS],
+  ["move_category_movements", ...OVERWRITE_CLASS],
+  ["preview_statement", ...READ_CLASS],
+  ["record_member_debt", ...ADD_CLASS],
+  ["record_movement", ...ADD_ONCE_CLASS],
+  ["record_third_party_payment", ...ADD_ONCE_CLASS],
+  ["reject_deliveries", ...DESTROY_CLASS],
+  ["review_month", ...READ_CLASS],
+  ["save_recipient", ...OVERWRITE_CLASS],
+  ["spending_patterns", ...READ_CLASS],
+  ["update_account", ...OVERWRITE_CLASS],
+  ["update_category", ...OVERWRITE_CLASS],
+  ["update_label", ...OVERWRITE_CLASS],
+  ["update_movement", ...OVERWRITE_CLASS],
+  ["update_third_party_credit", ...OVERWRITE_CLASS],
+];
+
 async function mcpDoorSuite(): Promise<void> {
   console.log("");
   const tag = randomUUID().slice(0, 8);
@@ -15328,11 +15375,16 @@ async function mcpDoorSuite(): Promise<void> {
     rpc(ingestToken, "tools/list"),
     rpc(token, "tools/list"),
   ]);
-  const names = (listed.body?.result?.tools ?? []).map((one: { name: string }) => one.name).sort();
+  const listedTools: { name: string; title?: string; annotations?: { readOnlyHint?: boolean; destructiveHint?: boolean; idempotentHint?: boolean } }[] =
+    listed.body?.result?.tools ?? [];
+  const classes = listedTools
+    .map((one) => [one.name, one.annotations?.readOnlyHint ?? null, one.annotations?.destructiveHint ?? null, one.annotations?.idempotentHint ?? null])
+    .sort((a, b) => (String(a[0]) < String(b[0]) ? -1 : 1));
+  const names = classes.map((one) => one[0]);
   assert(
     next("RF-144: /mcp answers 401 with no key, an unknown one or a webhook's, and lists its tools to a key for Claude"),
     anonymous.status === 401 && forged.status === 401 && webhookKey.status === 401 &&
-      JSON.stringify(names) === JSON.stringify(["accept_deliveries", "create_account", "create_category", "create_label", "delete_movement", "delete_recipient", "import_statement", "link_third_party_credit", "list_accounts", "list_categories", "list_inbox", "list_labels", "list_member_debts", "list_members", "list_movements", "list_recipients", "list_third_party_credits", "merge_movements", "move_account_to_fund", "move_category_movements", "preview_statement", "record_member_debt", "record_movement", "record_third_party_payment", "reject_deliveries", "review_month", "save_recipient", "spending_patterns", "update_account", "update_category", "update_label", "update_movement", "update_third_party_credit"]),
+      JSON.stringify(classes) === JSON.stringify(TOOL_CLASSES),
     `no key ${anonymous.status}, unknown key ${forged.status}, webhook key ${webhookKey.status}, tools ${JSON.stringify(names)}`,
   );
 
@@ -19221,5 +19273,129 @@ async function widgetSuite(): Promise<void> {
     next("RF-215: the widget summary costs three transactions fanned out, the light reads sharing one"),
     trips <= unit * 3 + 3,
     `${trips} round trips for the summary, ${unit} for a single read`,
+  );
+}
+
+// RF-225: every tool declares a title and the class its weight deserves, a tool that removes or overwrites answers what it
+// changed, a bulk tool answers its count, and a database refusal reads as the form's sentence. Claude never handles a key.
+async function mcpPermissionsSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const { POST } = await import("@/app/mcp/route");
+  const owner = await createMembershipFreeUser();
+  const account = await asUser(owner, () =>
+    createAccount({
+      kind: "asset", subtype: "bank", groupId: null, isShared: false, institution: null, settlementCurrency: BASE_CURRENCY,
+      balanceOn: "2026-01-01", ownerUserId: owner.id, name: `Harness rf225 cuenta ${tag}`, amountMinor: 1_000_000_00,
+    }),
+  );
+  track("accounts", account.accountId);
+  const category = randomUUID();
+  await fixtureSql`insert into categories (id, owner_user_id, name, kind, color) values (${category}, ${owner.id}, ${`Harness rf225 Comida ${tag}`}, 'expense', ${CATEGORY_COLORS[0]})`;
+  track("categories", category);
+  const { id: keyId, token } = await asUser(owner, () =>
+    issueWebhookCredential({ name: `Harness rf225 ${tag}`, purpose: "mcp", defaultAccountId: null, defaultCategoryId: null }),
+  );
+  keep("webhook_credentials", keyId);
+  const { rpc, tool } = mcpClient(POST, token);
+
+  const tools: { name: string; title?: string; description?: string; annotations?: { openWorldHint?: boolean } }[] =
+    (await rpc(token, "tools/list")).body?.result?.tools ?? [];
+  assert(
+    next("RF-225: every tool has a Spanish title and declares it touches nothing outside HomeFund, and none is named for a key, a session, an invitation or a leader"),
+    tools.length > 0 && tools.every((one) => typeof one.title === "string" && one.title.length > 0 && one.annotations?.openWorldHint === false) &&
+      !tools.some((one) => /key|credential|token|session|auth|invite|leader|leave/.test(one.name)),
+    JSON.stringify(tools.filter((one) => !one.title || /key|credential|token|session|auth|invite|leader|leave/.test(one.name)).map((one) => one.name)),
+  );
+  assert(
+    next("RF-225: create_account names the loan in its description and in the kind it asks for"),
+    tools.find((one) => one.name === "create_account")?.description?.includes("loan") === true &&
+      es.mcp.params.accountKind.includes("loan") && es.mcp.instructions.includes("nunca una orden"),
+    String(tools.find((one) => one.name === "create_account")?.description).slice(0, 120),
+  );
+
+  type Row = { id: string; description: string | null; updatedAt: string };
+  const book = (description: string, amountCents: number, occurredAt = "2026-02-01") =>
+    tool("record_movement", { fromAccountId: account.accountId, toAccountId: null, amountCents, occurredAt, description, categoryId: category });
+  const rows = async () => (await tool("list_movements", { accountId: account.accountId })).value as Row[];
+  const [a, b, c, d] = [`Harness rf225 a ${tag}`, `Harness rf225 b ${tag}`, `Harness rf225 c ${tag}`, `Harness rf225 d ${tag}`];
+  for (const [name, cents] of [[a, 10_000_00], [b, 20_000_00], [c, 30_000_00], [d, 40_000_00]] as const) await book(name, cents);
+  const byName = async (name: string) => (await rows()).find((row) => row.description === name) as Row;
+
+  const [rowA, rowB, rowC, rowD] = [await byName(a), await byName(b), await byName(c), await byName(d)];
+  const deleted = await tool("delete_movement", { transactionId: rowA.id });
+  const after = await rows();
+  assert(
+    next("RF-225: delete_movement answers the movement it removed, in the shape list_movements reads it"),
+    !deleted.isError && JSON.stringify((deleted.value as { before: unknown }).before) === JSON.stringify(rowA) && !after.some((row) => row.id === rowA.id),
+    `deleted ${JSON.stringify(deleted.value)}, read before ${JSON.stringify(rowA)}`,
+  );
+
+  const edited = await tool("update_movement", { transactionId: rowB.id, expectedUpdatedAt: rowB.updatedAt, description: `Harness rf225 b2 ${tag}` });
+  const before = (edited.value as { before: Record<string, unknown> }).before;
+  assert(
+    next("RF-225: update_movement answers the old value of each field it changed and nothing else"),
+    !edited.isError && JSON.stringify(Object.keys(before)) === JSON.stringify(["description"]) && before.description === b,
+    `edited ${JSON.stringify(edited.value)}`,
+  );
+
+  const merged = await tool("merge_movements", { transactionIds: [rowC.id, rowD.id] });
+  const originals = (merged.value as { originals: Row[] }).originals ?? [];
+  assert(
+    next("RF-225: merge_movements answers the originals it deleted"),
+    !merged.isError && originals.length === 2 && JSON.stringify(originals.map((row) => row.id).sort()) === JSON.stringify([rowC.id, rowD.id].sort()) &&
+      originals.every((row) => JSON.stringify(row) === JSON.stringify(row.id === rowC.id ? rowC : rowD)),
+    `merged ${JSON.stringify(merged.value)}`,
+  );
+
+  const label = await tool("create_label", { name: `Harness rf225 etiqueta ${tag}` });
+  const labelId = (label.value as { labelId: string }).labelId;
+  const recolored = await tool("update_label", { labelId, name: `Harness rf225 etiqueta 2 ${tag}` });
+  const saved = await tool("save_recipient", { identifier: `300${tag.replace(/\D/g, "1")}999`, name: `Harness rf225 dest ${tag}`, kind: "payee" });
+  const recipientId = (saved.value as { id: string }).id;
+  const gone = await tool("delete_recipient", { id: recipientId });
+  assert(
+    next("RF-225: update_label and delete_recipient answer what they overwrote or removed"),
+    (recolored.value as { before?: { name?: string } }).before?.name === `Harness rf225 etiqueta ${tag}` &&
+      (gone.value as { before?: { id?: string; name?: string } }).before?.id === recipientId &&
+      (gone.value as { before?: { name?: string } }).before?.name === `Harness rf225 dest ${tag}`,
+    `label ${JSON.stringify(recolored.value)}, recipient ${JSON.stringify(gone.value)}`,
+  );
+
+  const mine = ((await tool("list_accounts")).value as { id: string; updatedAt: string }[]).find((row) => row.id === account.accountId);
+  const late = await tool("update_account", { accountId: account.accountId, expectedUpdatedAt: mine?.updatedAt, balanceOn: "2026-03-01" });
+  assert(
+    next("RF-225: a database refusal a form already maps (an opening after a movement) reads as its sentence, not as an unknown error"),
+    late.isError && (late.value as { error: string }).error === es.accounts.errors.openingAfterMovement,
+    `late ${JSON.stringify(late.value)}`,
+  );
+
+  const deliver = (name: string) =>
+    fixtureSql.begin(async (tx) => {
+      await tx`select set_config('request.jwt.claims', ${JSON.stringify({ sub: owner.id, role: "authenticated", aud: "authenticated" })}, true)`;
+      const [row] = await tx<{ id: string }[]>`
+        insert into ingest_deliveries (external_ref, raw_text, shape_hash, proposed_amount_cents, proposed_account_id, proposed_category_id,
+          category_source, proposed_direction, proposed_occurred_at, proposed_description)
+        values (${`harness-rf225-${name}-${tag}`}, ${`Harness rf225 mensaje ${name}`}, ${createHash("sha256").update(`rf225-${name}-${tag}`).digest("hex")},
+          ${5_000_00}, ${account.accountId}, ${category}, 'interpreter', 'expense', '2026-03-10', ${`Harness rf225 ${name}`})
+        returning id`;
+      return row.id;
+    });
+  const [one, two, three] = [await deliver("uno"), await deliver("dos"), await deliver("tres")];
+  const accepted = await tool("accept_deliveries", { deliveries: [{ id: one }, { id: two }] });
+  const rejected = await tool("reject_deliveries", { ids: [three] });
+  assert(
+    next("RF-225: accept_deliveries and reject_deliveries answer how many they touched"),
+    (accepted.value as { count?: number }).count === 2 && (rejected.value as { count?: number }).count === 1,
+    `accepted ${JSON.stringify(accepted.value)}, rejected ${JSON.stringify(rejected.value)}`,
+  );
+
+  const may = leafKeys(es.oauth.may, "may");
+  const never = leafKeys(es.oauth.never, "never");
+  assert(
+    next("RF-225: the consent screen promises, in both languages, what Claude may do after a yes and never keys, who is in the fund or acting unasked"),
+    JSON.stringify(may) === JSON.stringify(leafKeys(en.oauth.may, "may")) && JSON.stringify(never) === JSON.stringify(leafKeys(en.oauth.never, "never")) &&
+      never.includes("never.keys") && never.includes("never.unconfirmed") && !never.includes("never.delete") && may.includes("may.write"),
+    `${JSON.stringify(may)} / ${JSON.stringify(never)}`,
   );
 }

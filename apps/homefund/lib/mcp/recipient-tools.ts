@@ -5,6 +5,7 @@ import { z } from "zod";
 
 import { deleteRecipient, listRecipients, saveRecipient } from "@/db/queries/recipients";
 import { ActionError } from "@/lib/errors";
+import { DESTROY, OVERWRITE, READ, titled } from "@/lib/mcp/annotations";
 import { parseForm } from "@/lib/mcp/parse-form";
 import { RECIPIENT_KINDS, deleteRecipientSchema, saveRecipientSchema } from "@/lib/validation/recipient";
 
@@ -18,13 +19,14 @@ export function registerRecipientTools(server: McpServer, run: Run, t: Say): voi
 
   server.registerTool(
     "list_recipients",
-    { description: t("tools.listRecipients"), inputSchema: z.object({}), annotations: { readOnlyHint: true } },
+    { ...titled(t, "listRecipients"), description: t("tools.listRecipients"), inputSchema: z.object({}), annotations: READ },
     (_input, ctx) => run(ctx, () => listRecipients()),
   );
 
   server.registerTool(
     "save_recipient",
     {
+      ...titled(t, "saveRecipient"),
       description: t("tools.saveRecipient"),
       inputSchema: z.object({
         id: z.string().optional().describe(d("recipientId")),
@@ -34,23 +36,31 @@ export function registerRecipientTools(server: McpServer, run: Run, t: Say): voi
         accountId: z.string().nullish().describe(d("recipientAccountId")),
         categoryId: z.string().nullish().describe(d("recipientCategoryId")),
       }),
-      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
+      annotations: OVERWRITE,
     },
-    (input, ctx) => run(ctx, () => saveRecipient(parseForm(saveRecipientSchema, input))),
+    (input, ctx) =>
+      run(ctx, async () => {
+        const form = parseForm(saveRecipientSchema, input);
+        // With an id this overwrites: the row as list_recipients showed it comes back, to put it back.
+        const before = form.id === null ? undefined : (await listRecipients()).find((row) => row.id === form.id);
+        return { ...(await saveRecipient(form)), ...(before ? { before } : {}) };
+      }),
   );
 
   server.registerTool(
     "delete_recipient",
     {
+      ...titled(t, "deleteRecipient"),
       description: t("tools.deleteRecipient"),
       inputSchema: z.object({ id: z.string().describe(d("recipientId")) }),
-      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
+      annotations: DESTROY,
     },
     (input, ctx) =>
       run(ctx, async () => {
         const { id } = parseForm(deleteRecipientSchema, input);
+        const before = (await listRecipients()).find((row) => row.id === id);
         if (!(await deleteRecipient(id))) throw new ActionError("errors.notFound");
-        return { deleted: id };
+        return { deleted: id, before: before ?? null };
       }),
   );
 }
