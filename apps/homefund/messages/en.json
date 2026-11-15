@@ -1870,7 +1870,12 @@
       "restoreAccount": "Restores an archived account (accountId from list_accounts with archived true). Returns accountId. CONFIRM with the person which one before calling it.",
       "getReconcileSheet": "An account's «Reconcile» sheet for a day (on, YYYY-MM-DD): the account (kind, currency, openedOn, latestReconciledOn, canWrite) and derivedCents, what HomeFund computes should be there that day, in cents and in the account's currency (for a debt, what is owed), plus its reconciliation history. Pass derivedCents as expectedDerivedCents to reconcile_account. Read only.",
       "reconcileAccount": "Reconciles an account on a day: the person counts what is really there (realAmountCents, in cents and in the account's currency; for a debt, what is owed; negative if it fell below zero) and HomeFund records ONE adjustment movement for the difference, so the balance equals what was counted. Pass in expectedDerivedCents the derivedCents you read in get_reconcile_sheet for that day: if a movement changed meanwhile, it is refused and the sheet must be read again. The day cannot be future, nor before the opening, nor before the last reconciliation. Returns id and gapCents (counted minus derived). CONFIRM with the person the account, the day, what was counted and the resulting adjustment before calling it.",
-      "listReconciliations": "An account's reconciliations (accountId from list_accounts), newest first, each with its gap. Read only."
+      "listReconciliations": "An account's reconciliations (accountId from list_accounts), newest first, each with its gap. Read only.",
+      "recordAccountStatement": "Records a closed statement of a card or credit (accountId from list_debts), by hand, like the «Record statement» button: periodStart and cutOffDate (YYYY-MM-DD, as the statement prints them), closingBalanceCents (the closing balance, what is owed) and, optional, paymentDueDate, openingBalanceCents, creditsCents, debitsCents, minimumPaymentCents, interestChargedCents and feesChargedCents; all in whole cents in the debt's currency. A statement with the same cut-off date is refused: it is already recorded. It reads back in get_debt (statements). Returns accountId and cutOffDate. CONFIRM the statement's figures with the person before calling it.",
+      "recordBilledAmount": "Records what the issuer really billed for a purchase made in another currency (RF-123), replacing the estimate: transactionId of the purchase (from get_debt, pendingSettlements), accountId of the debt, currency (the currency the debt bills in) and billedCents (what was billed, in cents). Not possible before an account reconciliation. Returns transactionId. CONFIRM the purchase and the statement's figure with the person before calling it.",
+      "deferPurchase": "Defers a card or credit purchase into instalments (transactionId from list_movements; instalments, the number of instalments): the balance does not change, the debt spreads what is left to bill (read in get_debt, deferrals). Only a purchase (an expense of a debt) is deferred, and only once: to change the number, remove the deferral with undefer_purchase and defer again. Returns transactionId and instalments. CONFIRM the purchase and the number of instalments the statement says with the person before calling it.",
+      "undeferPurchase": "Removes a purchase's deferral (transactionId): the purchase counts whole again. Returns before with the number of instalments it had, to defer it again with defer_purchase. CONFIRM with the person which purchase before calling it.",
+      "withdrawCash": "Withdraws cash: ONE transfer from an asset account (sourceAccountId from list_accounts) into the person's cash account, as the fund's cash mode says; if the person has no cash, one named «My cash» is created. amountCents in whole cents, in the account's currency. Generate a requestRef (UUID) per withdrawal and reuse it if you retry: it never duplicates. Returns the movement (transactionId) and the cash account. CONFIRM with the person from which account and how much before calling it."
     },
     "deferralProposal": "Defer in {count} instalments",
     "errors": {
@@ -2025,7 +2030,21 @@
       "accountsArchived": "true to list the archived accounts; by default, the open ones.",
       "reconcileOn": "The day, YYYY-MM-DD, no future.",
       "reconcileRealAmountCents": "What the person counted, in whole cents and in the account's currency (for a debt, what is owed); negative if it fell below zero.",
-      "reconcileExpectedDerivedCents": "The derivedCents get_reconcile_sheet returned for that same day."
+      "reconcileExpectedDerivedCents": "The derivedCents get_reconcile_sheet returned for that same day.",
+      "statementPeriodStart": "First day of the statement's period, YYYY-MM-DD.",
+      "statementCutOffDate": "The statement's cut-off date, YYYY-MM-DD; it does not repeat on one debt.",
+      "statementPaymentDueDate": "Payment due date, YYYY-MM-DD; null if it has none.",
+      "statementClosingBalanceCents": "Closing balance, what is owed, in whole cents.",
+      "statementOpeningBalanceCents": "Opening balance, in cents; optional.",
+      "statementCreditsCents": "Payments and credits of the period, in cents; optional.",
+      "statementDebitsCents": "Purchases and charges of the period, in cents; optional.",
+      "statementMinimumPaymentCents": "The statement's minimum payment, in cents; optional.",
+      "statementInterestChargedCents": "Interest charged, in cents; optional.",
+      "statementFeesChargedCents": "Fees charged, in cents; optional.",
+      "billedCurrency": "The currency the debt bills in (COP or USD).",
+      "billedCents": "What the issuer billed, in whole cents, positive.",
+      "deferInstalments": "The number of instalments the purchase is deferred into, the one the statement prints.",
+      "withdrawSourceAccountId": "The asset account the cash comes out of (id from list_accounts)."
     },
     "titles": {
       "listAccounts": "View accounts",
@@ -2099,7 +2118,12 @@
       "restoreAccount": "Restore an account",
       "getReconcileSheet": "View an account's reconcile sheet",
       "reconcileAccount": "Reconcile an account",
-      "listReconciliations": "View an account's reconciliations"
+      "listReconciliations": "View an account's reconciliations",
+      "recordAccountStatement": "Record a debt's statement",
+      "recordBilledAmount": "Record what the issuer billed",
+      "deferPurchase": "Defer a purchase into instalments",
+      "undeferPurchase": "Remove a purchase's deferral",
+      "withdrawCash": "Withdraw cash"
     }
   },
   "oauth": {

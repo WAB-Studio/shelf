@@ -4173,6 +4173,7 @@ async function main(): Promise<void> {
   await mcpRecurringSuite();
   await mcpInboxWholeSuite();
   await mcpAccountLifecycleSuite();
+  await mcpStatementsSuite();
 }
 
 // A member recorded without a login is someone in the fund: a leader whose fund holds one is not alone, so an
@@ -15325,6 +15326,7 @@ const TOOL_CLASSES = [
   ["create_label", ...ADD_CLASS],
   ["create_planned_payment", ...ADD_CLASS],
   ["create_recurring_rule", ...ADD_CLASS],
+  ["defer_purchase", ...OVERWRITE_CLASS],
   ["delete_movement", ...DESTROY_CLASS],
   ["delete_recipient", ...DESTROY_CLASS],
   ["forget_merchant", ...DESTROY_CLASS],
@@ -15358,6 +15360,8 @@ const TOOL_CLASSES = [
   ["pause_recurring_rule", ...OVERWRITE_CLASS],
   ["preview_statement", ...READ_CLASS],
   ["reconcile_account", ...OVERWRITE_CLASS],
+  ["record_account_statement", ...ADD_CLASS],
+  ["record_billed_amount", ...OVERWRITE_CLASS],
   ["record_debt_payment", ...ADD_ONCE_CLASS],
   ["record_member_debt", ...ADD_CLASS],
   ["record_movement", ...ADD_ONCE_CLASS],
@@ -15374,6 +15378,7 @@ const TOOL_CLASSES = [
   ["set_debt_terms", ...ADD_ONCE_CLASS],
   ["settle_planned_payment", ...ADD_ONCE_CLASS],
   ["spending_patterns", ...READ_CLASS],
+  ["undefer_purchase", ...DESTROY_CLASS],
   ["update_account", ...OVERWRITE_CLASS],
   ["update_budget", ...OVERWRITE_CLASS],
   ["update_category", ...OVERWRITE_CLASS],
@@ -15383,6 +15388,7 @@ const TOOL_CLASSES = [
   ["update_planned_payment", ...OVERWRITE_CLASS],
   ["update_recurring_rule", ...OVERWRITE_CLASS],
   ["update_third_party_credit", ...OVERWRITE_CLASS],
+  ["withdraw_cash", ...ADD_ONCE_CLASS],
 ];
 
 async function mcpDoorSuite(): Promise<void> {
@@ -20254,5 +20260,80 @@ async function mcpAccountLifecycleSuite(): Promise<void> {
     next("RF-233: reconcile_account leaves the balance the person counted through one adjustment of the gap, and list_reconciliations holds it"),
     !done.isError && Math.abs((done.value as { gapCents: number }).gapCents) === 5_000_00 && balance === real && history.length === 1,
     `done ${JSON.stringify(done.value)}, balance ${balance} of ${real}, history ${history.length}`,
+  );
+}
+
+// RF-234: Claude records a statement, defers and undefers a purchase and withdraws cash, through the debt screen's own
+// schemas and write functions.
+async function mcpStatementsSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const today = todayInBogota();
+  const { POST } = await import("@/app/mcp/route");
+  const owner = await createMembershipFreeUser();
+  const bank = await asUser(owner, () =>
+    createAccount({
+      kind: "asset", subtype: "bank", groupId: null, isShared: false, institution: null, settlementCurrency: BASE_CURRENCY,
+      balanceOn: "2026-01-01", ownerUserId: owner.id, name: `Harness rf234 banco ${tag}`, amountMinor: 5_000_000_00,
+    }),
+  );
+  track("accounts", bank.accountId);
+  const category = randomUUID();
+  await fixtureSql`insert into categories (id, owner_user_id, name, kind, color) values (${category}, ${owner.id}, ${`Harness rf234 Compras ${tag}`}, 'expense', ${CATEGORY_COLORS[0]})`;
+  track("categories", category);
+  const { id: keyId, token } = await asUser(owner, () => issueWebhookCredential({ name: `Harness rf234 ${tag}`, purpose: "mcp", defaultAccountId: null, defaultCategoryId: null }));
+  keep("webhook_credentials", keyId);
+  const { tool } = mcpClient(POST, token);
+  const card = await tool("create_account", { name: `Harness rf234 tarjeta ${tag}`, kind: "liability", subtype: "card", openingBalanceCents: 0, balanceOn: "2026-01-01" });
+  const cardId = (card.value as { accountId: string }).accountId;
+  track("accounts", cardId);
+  type Detail = { statements: { cutOffDate: string }[]; deferrals: { transactionId: string; instalments: number }[] };
+  const detail = async () => (await tool("get_debt", { accountId: cardId })).value as Detail;
+
+  const statement = { accountId: cardId, periodStart: "2026-02-01", cutOffDate: "2026-02-28", closingBalanceCents: 1_200_000_00, minimumPaymentCents: 60_000_00 };
+  const recorded = await tool("record_account_statement", statement);
+  const again = await tool("record_account_statement", statement);
+  const read = await detail();
+  assert(
+    next("RF-234: record_account_statement records a statement that get_debt reads back, and the same cut-off again is refused"),
+    !recorded.isError && read.statements.some((one) => one.cutOffDate === "2026-02-28") && again.isError &&
+      (again.value as { error: string }).error === es.installments.errors.duplicateCutOff,
+    `recorded ${JSON.stringify(recorded.value)}, again ${JSON.stringify(again.value)}`,
+  );
+
+  const spend = async (from: string, description: string) => {
+    const booked = await tool("record_movement", { fromAccountId: from, toAccountId: null, amountCents: 600_000_00, occurredAt: today, description, categoryId: category });
+    return (booked.value as { transactionId: string }).transactionId;
+  };
+  const [purchase, fromBank] = [await spend(cardId, `Harness rf234 compra ${tag}`), await spend(bank.accountId, `Harness rf234 banco ${tag}`)];
+  const deferred = await tool("defer_purchase", { transactionId: purchase, instalments: 12 });
+  const twice = await tool("defer_purchase", { transactionId: purchase, instalments: 6 });
+  const notPurchase = await tool("defer_purchase", { transactionId: fromBank, instalments: 12 });
+  const listed = (await detail()).deferrals.find((one) => one.transactionId === purchase);
+  assert(
+    next("RF-234: defer_purchase defers a card purchase that get_debt lists, and refuses a second deferral and an expense of a bank account"),
+    !deferred.isError && listed?.instalments === 12 && twice.isError &&
+      (twice.value as { error: string }).error === es.deferrals.errors.alreadyDeferred && notPurchase.isError &&
+      (notPurchase.value as { error: string }).error === es.deferrals.errors.notPurchase,
+    `deferred ${JSON.stringify(deferred.value)}, twice ${JSON.stringify(twice.value)}, bank ${JSON.stringify(notPurchase.value)}`,
+  );
+
+  const removed = await tool("undefer_purchase", { transactionId: purchase });
+  assert(
+    next("RF-234: undefer_purchase removes the deferral and answers the number of instalments it had"),
+    !removed.isError && (removed.value as { before: { instalments: number } }).before.instalments === 12 &&
+      !(await detail()).deferrals.some((one) => one.transactionId === purchase),
+    `removed ${JSON.stringify(removed.value)}`,
+  );
+
+  const requestRef = randomUUID();
+  const withdraw = { sourceAccountId: bank.accountId, amountCents: 200_000_00, requestRef };
+  const [first, second] = [await tool("withdraw_cash", withdraw), await tool("withdraw_cash", withdraw)];
+  const cash = ((await tool("list_accounts")).value as { name: string; subtype: string }[]).filter((one) => one.subtype === "cash");
+  assert(
+    next("RF-234: withdraw_cash moves the money into the person's cash, created on demand and named in Spanish, and a resend books it once"),
+    !first.isError && !second.isError && (first.value as { transactionId: string }).transactionId === (second.value as { transactionId: string }).transactionId &&
+      cash.length === 1 && cash[0].name === "Mi efectivo",
+    `first ${JSON.stringify(first.value)}, second ${JSON.stringify(second.value)}, cash ${JSON.stringify(cash)}`,
   );
 }
