@@ -4172,6 +4172,7 @@ async function main(): Promise<void> {
   await mcpPlannedPaymentsSuite();
   await mcpRecurringSuite();
   await mcpInboxWholeSuite();
+  await mcpAccountLifecycleSuite();
 }
 
 // A member recorded without a login is someone in the fund: a leader whose fund holds one is not alone, so an
@@ -15311,6 +15312,7 @@ const [READ_CLASS, ADD_CLASS, ADD_ONCE_CLASS, OVERWRITE_CLASS, DESTROY_CLASS] = 
 ] as const;
 const TOOL_CLASSES = [
   ["accept_deliveries", ...ADD_CLASS],
+  ["archive_account", ...OVERWRITE_CLASS],
   ["archive_budget", ...OVERWRITE_CLASS],
   ["archive_goal", ...OVERWRITE_CLASS],
   ["cancel_planned_payment", ...DESTROY_CLASS],
@@ -15327,6 +15329,7 @@ const TOOL_CLASSES = [
   ["delete_recipient", ...DESTROY_CLASS],
   ["forget_merchant", ...DESTROY_CLASS],
   ["get_debt", ...READ_CLASS],
+  ["get_reconcile_sheet", ...READ_CLASS],
   ["import_statement", ...DESTROY_CLASS],
   ["link_third_party_credit", ...ADD_CLASS],
   ["list_accounts", ...READ_CLASS],
@@ -15344,6 +15347,7 @@ const TOOL_CLASSES = [
   ["list_movements", ...READ_CLASS],
   ["list_planned_payments", ...READ_CLASS],
   ["list_recipients", ...READ_CLASS],
+  ["list_reconciliations", ...READ_CLASS],
   ["list_recurring_rules", ...READ_CLASS],
   ["list_silenced_shapes", ...READ_CLASS],
   ["list_third_party_credits", ...READ_CLASS],
@@ -15353,12 +15357,14 @@ const TOOL_CLASSES = [
   ["move_category_movements", ...OVERWRITE_CLASS],
   ["pause_recurring_rule", ...OVERWRITE_CLASS],
   ["preview_statement", ...READ_CLASS],
+  ["reconcile_account", ...OVERWRITE_CLASS],
   ["record_debt_payment", ...ADD_ONCE_CLASS],
   ["record_member_debt", ...ADD_CLASS],
   ["record_movement", ...ADD_ONCE_CLASS],
   ["record_third_party_payment", ...ADD_ONCE_CLASS],
   ["reject_deliveries", ...DESTROY_CLASS],
   ["remove_goal_contribution", ...DESTROY_CLASS],
+  ["restore_account", ...OVERWRITE_CLASS],
   ["restore_budget", ...OVERWRITE_CLASS],
   ["restore_goal", ...OVERWRITE_CLASS],
   ["restore_shape", ...OVERWRITE_CLASS],
@@ -20173,5 +20179,80 @@ async function mcpInboxWholeSuite(): Promise<void> {
       !((await tool("list_awaiting_counterparty")).value as { id: string }[]).some((one) => one.id === waitingId) &&
       again.isError && (again.value as { error: string }).error === es.transactions.errors.counterpartyComplete,
     `waiting ${JSON.stringify(waiting.map((one) => one.id))}, completed ${JSON.stringify(completed.value)}, row ${JSON.stringify(row)}, again ${JSON.stringify(again.value)}`,
+  );
+}
+
+// RF-233: Claude reads archived accounts, archives and restores one and counts an account on a day, through the Cuentas
+// screen's own queries, schemas and write functions.
+async function mcpAccountLifecycleSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const today = todayInBogota();
+  const { POST } = await import("@/app/mcp/route");
+  const owner = await createMembershipFreeUser();
+  const mkBank = (name: string) =>
+    asUser(owner, () =>
+      createAccount({
+        kind: "asset", subtype: "bank", groupId: null, isShared: false, institution: null, settlementCurrency: BASE_CURRENCY,
+        balanceOn: "2026-01-01", ownerUserId: owner.id, name: `Harness rf233 ${name} ${tag}`, amountMinor: 1_000_000_00,
+      }),
+    );
+  const [spare, counted] = [await mkBank("archivable"), await mkBank("cuadrar")];
+  for (const row of [spare, counted]) track("accounts", row.accountId);
+  const category = randomUUID();
+  await fixtureSql`insert into categories (id, owner_user_id, name, kind, color) values (${category}, ${owner.id}, ${`Harness rf233 Comida ${tag}`}, 'expense', ${CATEGORY_COLORS[0]})`;
+  track("categories", category);
+  const { id: keyId, token } = await asUser(owner, () => issueWebhookCredential({ name: `Harness rf233 ${tag}`, purpose: "mcp", defaultAccountId: null, defaultCategoryId: null }));
+  keep("webhook_credentials", keyId);
+  const { tool } = mcpClient(POST, token);
+  type Listed = { id: string; balances: { balanceCents: number }[] };
+  const accounts = async (archived = false) => (await tool("list_accounts", archived ? { archived: true } : {})).value as Listed[];
+
+  const archived = await tool("archive_account", { accountId: spare.accountId });
+  const [open, closed] = [await accounts(), await accounts(true)];
+  const restored = await tool("restore_account", { accountId: spare.accountId });
+  assert(
+    next("RF-233: archive_account takes an account out of list_accounts and into its archived side, and restore_account brings it back"),
+    !archived.isError && !open.some((row) => row.id === spare.accountId) && closed.some((row) => row.id === spare.accountId) &&
+      !restored.isError && (await accounts()).some((row) => row.id === spare.accountId),
+    `archived ${JSON.stringify(archived.value)}, restored ${JSON.stringify(restored.value)}`,
+  );
+
+  const pocket = await tool("create_account", {
+    name: `Harness rf233 bolsillo ${tag}`, kind: "asset", subtype: "bank", openingBalanceCents: 0, balanceOn: "2026-01-01", parentAccountId: spare.accountId,
+  });
+  track("accounts", (pocket.value as { accountId: string }).accountId);
+  const blocked = await tool("archive_account", { accountId: spare.accountId });
+  assert(
+    next("RF-233: an account with a live pocket is not archived, in the form's words"),
+    blocked.isError && (blocked.value as { error: string }).error === es.accounts.errors.hasPockets,
+    `blocked ${JSON.stringify(blocked.value)}`,
+  );
+
+  const sheetOf = async (on: string) =>
+    (await tool("get_reconcile_sheet", { accountId: counted.accountId, on })).value as { account: { derivedCents: number }; history: unknown[] };
+  const before = await sheetOf(today);
+  await tool("record_movement", { fromAccountId: counted.accountId, toAccountId: null, amountCents: 10_000_00, occurredAt: today, description: `Harness rf233 gasto ${tag}`, categoryId: category });
+  const stale = await tool("reconcile_account", { accountId: counted.accountId, reconciledOn: today, realAmountCents: before.account.derivedCents, expectedDerivedCents: before.account.derivedCents });
+  const earlySheet = await sheetOf("2025-12-01");
+  const early = await tool("reconcile_account", {
+    accountId: counted.accountId, reconciledOn: "2025-12-01", realAmountCents: 0, expectedDerivedCents: earlySheet.account.derivedCents,
+  });
+  assert(
+    next("RF-233: reconcile_account refuses a figure the ledger has moved from, and a day before the account opened with that day in the sentence"),
+    stale.isError && (stale.value as { error: string }).error === es.errors.reconcileStale &&
+      early.isError && (early.value as { error: string }).error.includes("2026-01-01") && !(early.value as { error: string }).error.includes("{date}"),
+    `stale ${JSON.stringify(stale.value)}, early ${JSON.stringify(early.value)}`,
+  );
+
+  const sheet = await sheetOf(today);
+  const real = sheet.account.derivedCents + 5_000_00;
+  const done = await tool("reconcile_account", { accountId: counted.accountId, reconciledOn: today, realAmountCents: real, expectedDerivedCents: sheet.account.derivedCents });
+  const balance = (await accounts()).find((row) => row.id === counted.accountId)?.balances[0]?.balanceCents;
+  const history = (await tool("list_reconciliations", { accountId: counted.accountId })).value as unknown[];
+  assert(
+    next("RF-233: reconcile_account leaves the balance the person counted through one adjustment of the gap, and list_reconciliations holds it"),
+    !done.isError && Math.abs((done.value as { gapCents: number }).gapCents) === 5_000_00 && balance === real && history.length === 1,
+    `done ${JSON.stringify(done.value)}, balance ${balance} of ${real}, history ${history.length}`,
   );
 }

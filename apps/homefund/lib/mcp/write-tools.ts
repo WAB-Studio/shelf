@@ -3,7 +3,8 @@ import "server-only";
 import type { CallToolResult, McpServer, ServerContext } from "@modelcontextprotocol/server";
 import { z } from "zod";
 
-import { handAccountToGroup, listAccounts, updateAccount } from "@/db/queries/accounts";
+import { reviseAccount } from "@/db/queries/account-write";
+import { handAccountToGroup, listAccounts } from "@/db/queries/accounts";
 import { freeCategoryColor, listScopedCategories, updateCategory } from "@/db/queries/categories";
 import {
   bookMovement,
@@ -22,7 +23,7 @@ import { CATEGORY_COLORS } from "@/lib/fund/category-color";
 import { ADD, ADD_ONCE, DESTROY, OVERWRITE, READ, previousFields, titled } from "@/lib/mcp/annotations";
 import { resolveLabelIds } from "@/lib/mcp/label-tools";
 import { parseForm } from "@/lib/mcp/parse-form";
-import { centsToDecimal, parseAmount } from "@/lib/money";
+import { centsToDecimal } from "@/lib/money";
 import { createAccountSchema, updateAccountSchema } from "@/lib/validation/account";
 import { createCategoryInputSchema, updateCategorySchema } from "@/lib/validation/category";
 import { createTransactionSchema, descriptionSchema, HOUSEHOLD_MAKER, occurredAtSchema, updateTransactionSchema } from "@/lib/validation/transaction";
@@ -345,7 +346,7 @@ export function registerLedgerTools(server: McpServer, run: Run, t: Say): void {
         const pick = (key: string, stored: unknown) => (input[key] === undefined ? stored : input[key]);
         // The stored opening of a liability is negative; the form, and so Claude, speak what is owed, positive.
         const storedCents = current.kind === "liability" ? -current.initialBalanceCents : current.initialBalanceCents;
-        const { amount, ...form } = parseForm(updateAccountSchema, {
+        await reviseAccount(parseForm(updateAccountSchema, {
           accountId: id,
           name: pick("name", current.name),
           kind: current.kind,
@@ -360,22 +361,7 @@ export function registerLedgerTools(server: McpServer, run: Run, t: Say): void {
           amount: centsToDecimal(input.openingBalanceCents === undefined ? storedCents : (input.openingBalanceCents as number)),
           balanceOn: pick("balanceOn", current.initialBalanceOn),
           expectedUpdatedAt: input.expectedUpdatedAt,
-        });
-        const amountMinor = parseAmount(amount);
-        if (amountMinor === null) throw new ActionError("errors.unexpected");
-        let updated: Awaited<ReturnType<typeof updateAccount>>;
-        try {
-          updated = await updateAccount({ ...form, expectedUpdatedAt: form.expectedUpdatedAt ?? input.expectedUpdatedAt, amountMinor });
-        } catch (error) {
-          if (pgErrorCode(error) === "42501") throw new ActionError("errors.notLeader");
-          if (pgErrorCode(error) === "23514") throw new ActionError("accounts.errors.currencyInvalid");
-          if (pgErrorCode(error) === "AC001") throw new ActionError("accounts.errors.currencyLocked");
-          if (pgErrorCode(error) === "PK001") throw new ActionError("accounts.errors.parentInvalid");
-          if (pgErrorCode(error) === "PK002") throw new ActionError("accounts.errors.hasPockets");
-          throw error;
-        }
-        if (updated === "stale") throw new ActionError("errors.stale");
-        if (!updated) throw new ActionError("errors.notFound");
+        }));
         return {
           accountId: id,
           before: previousFields(
