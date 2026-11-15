@@ -4168,6 +4168,7 @@ async function main(): Promise<void> {
   await mcpDebtsSuite();
   await mcpMoveCountSuite();
   await mcpBudgetsSuite();
+  await mcpGoalsSuite();
 }
 
 // A member recorded without a login is someone in the fund: a leader whose fund holds one is not alone, so an
@@ -15308,9 +15309,12 @@ const [READ_CLASS, ADD_CLASS, ADD_ONCE_CLASS, OVERWRITE_CLASS, DESTROY_CLASS] = 
 const TOOL_CLASSES = [
   ["accept_deliveries", ...ADD_CLASS],
   ["archive_budget", ...OVERWRITE_CLASS],
+  ["archive_goal", ...OVERWRITE_CLASS],
+  ["contribute_goal", ...ADD_CLASS],
   ["create_account", ...ADD_CLASS],
   ["create_budget", ...ADD_CLASS],
   ["create_category", ...ADD_CLASS],
+  ["create_goal", ...ADD_CLASS],
   ["create_label", ...ADD_CLASS],
   ["delete_movement", ...DESTROY_CLASS],
   ["delete_recipient", ...DESTROY_CLASS],
@@ -15321,6 +15325,8 @@ const TOOL_CLASSES = [
   ["list_budgets", ...READ_CLASS],
   ["list_categories", ...READ_CLASS],
   ["list_debts", ...READ_CLASS],
+  ["list_goal_contributions", ...READ_CLASS],
+  ["list_goals", ...READ_CLASS],
   ["list_inbox", ...READ_CLASS],
   ["list_labels", ...READ_CLASS],
   ["list_member_debts", ...READ_CLASS],
@@ -15337,7 +15343,9 @@ const TOOL_CLASSES = [
   ["record_movement", ...ADD_ONCE_CLASS],
   ["record_third_party_payment", ...ADD_ONCE_CLASS],
   ["reject_deliveries", ...DESTROY_CLASS],
+  ["remove_goal_contribution", ...DESTROY_CLASS],
   ["restore_budget", ...OVERWRITE_CLASS],
+  ["restore_goal", ...OVERWRITE_CLASS],
   ["review_month", ...READ_CLASS],
   ["save_recipient", ...OVERWRITE_CLASS],
   ["set_debt_terms", ...ADD_ONCE_CLASS],
@@ -15345,6 +15353,7 @@ const TOOL_CLASSES = [
   ["update_account", ...OVERWRITE_CLASS],
   ["update_budget", ...OVERWRITE_CLASS],
   ["update_category", ...OVERWRITE_CLASS],
+  ["update_goal", ...OVERWRITE_CLASS],
   ["update_label", ...OVERWRITE_CLASS],
   ["update_movement", ...OVERWRITE_CLASS],
   ["update_third_party_credit", ...OVERWRITE_CLASS],
@@ -19794,5 +19803,87 @@ async function mcpBudgetsSuite(): Promise<void> {
     strangerArchive.isError && (strangerArchive.value as { error: string }).error === es.errors.notFound && !archived.isError &&
       !active.some((row) => row.id === budgetId) && inArchive.some((row) => row.id === budgetId) && !restored.isError && back.some((row) => row.id === budgetId),
     `member ${JSON.stringify(strangerArchive.value)}, active ${active.length}, archived ${inArchive.length}, back ${back.length}`,
+  );
+}
+
+// RF-229: Claude reads the savings goals with their progress and creates, edits, archives, restores and contributes to them,
+// through the Metas screen's own query, schemas and write functions.
+async function mcpGoalsSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const { POST } = await import("@/app/mcp/route");
+  const [leader, member, stranger] = [await createMembershipFreeUser(), await createMembershipFreeUser(), await createMembershipFreeUser()];
+  const ids = { group: randomUUID(), leaderRow: randomUUID(), memberRow: randomUUID() };
+  const name = (what: string) => `Harness rf229 ${what} ${tag}`;
+  await fixtureSql.begin(async (tx) => {
+    await tx`insert into groups (id, name, cash_mode) values (${ids.group}, ${name("fondo")}, 'shared')`;
+    await tx`insert into group_members (id, group_id, user_id, name, role) values
+      (${ids.leaderRow}, ${ids.group}, ${leader.id}, ${name("lider")}, 'leader'), (${ids.memberRow}, ${ids.group}, ${member.id}, ${name("miembro")}, 'member')`;
+  });
+  track("groups", ids.group);
+  for (const id of [ids.leaderRow, ids.memberRow]) track("group_members", id);
+  const clientOf = async (user: HarnessUser) => {
+    const { id, token } = await asUser(user, () => issueWebhookCredential({ name: name("clave"), purpose: "mcp", defaultAccountId: null, defaultCategoryId: null }));
+    keep("webhook_credentials", id);
+    return mcpClient(POST, token).tool;
+  };
+  const [tool, memberTool, strangerTool] = [await clientOf(leader), await clientOf(member), await clientOf(stranger)];
+  type Goal = { id: string; name: string; savedCents: number; remainingCents: number; targetAmountCents: number; foreignOwner: boolean; updatedAt: string };
+  const goals = async (run = tool, args: Record<string, unknown> = {}) => (await run("list_goals", args)).value as Goal[];
+
+  const created = await tool("create_goal", { name: name("viaje"), targetAmountCents: 2_000_000_00, initialContributionCents: 300_000_00 });
+  const goalId = (created.value as { goalId: string }).goalId;
+  const row = (await goals()).find((goal) => goal.id === goalId);
+  const seenByMember = (await goals(memberTool)).find((goal) => goal.id === goalId);
+  assert(
+    next("RF-229: create_goal with an opening contribution reads back its progress, and a goal made by a fund member belongs to the fund"),
+    !created.isError && row?.savedCents === 300_000_00 && row.remainingCents === 1_700_000_00 && seenByMember?.foreignOwner === false,
+    `created ${JSON.stringify(created.value)}, row ${JSON.stringify(row)}, member ${JSON.stringify(seenByMember)}`,
+  );
+
+  const tooLarge = await tool("create_goal", { name: name("enorme"), targetAmountCents: 10_000_000_000_000 });
+  assert(
+    next("RF-229: a target over the currency's ceiling is refused in the form's words"),
+    tooLarge.isError && (tooLarge.value as { error: string }).error === es.goals.errors.targetTooLarge,
+    `large ${JSON.stringify(tooLarge.value)}`,
+  );
+
+  const added = await tool("contribute_goal", { goalId, amountCents: 100_000_00 });
+  const contributionId = (added.value as { contributionId: string }).contributionId;
+  const mid = (await goals()).find((goal) => goal.id === goalId);
+  const listedContributions = (await tool("list_goal_contributions", { goalId })).value as { id: string; amountCents: number }[];
+  const notMine = await strangerTool("remove_goal_contribution", { goalId, contributionId });
+  const removed = await tool("remove_goal_contribution", { goalId, contributionId });
+  const end = (await goals()).find((goal) => goal.id === goalId);
+  assert(
+    next("RF-229: contribute_goal moves savedCents by what was contributed, remove_goal_contribution moves it back and answers the contribution it removed, and a stranger removes nothing"),
+    !added.isError && mid?.savedCents === 400_000_00 && listedContributions.length === 2 && notMine.isError &&
+      (notMine.value as { error: string }).error === es.errors.notFound && !removed.isError &&
+      (removed.value as { before: { amountCents: number; goalId: string } }).before.amountCents === 100_000_00 &&
+      (removed.value as { before: { goalId: string } }).before.goalId === goalId && end?.savedCents === 300_000_00,
+    `added ${JSON.stringify(added.value)}, mid ${mid?.savedCents}, stranger ${JSON.stringify(notMine.value)}, removed ${JSON.stringify(removed.value)}, end ${end?.savedCents}`,
+  );
+
+  const stamp = (await goals()).find((goal) => goal.id === goalId)?.updatedAt;
+  const edited = await tool("update_goal", { goalId, expectedUpdatedAt: stamp, targetAmountCents: 2_500_000_00 });
+  const outOfDate = await tool("update_goal", { goalId, expectedUpdatedAt: stamp, name: name("otro") });
+  const after = (await goals()).find((goal) => goal.id === goalId);
+  assert(
+    next("RF-229: update_goal changes only what is sent and answers the old value, and a call quoting an old stamp is refused as out of date"),
+    !edited.isError && JSON.stringify((edited.value as { before: unknown }).before) === JSON.stringify({ targetAmountCents: 2_000_000_00 }) &&
+      outOfDate.isError && (outOfDate.value as { error: string }).error === es.errors.stale &&
+      after?.targetAmountCents === 2_500_000_00 && after.name === name("viaje"),
+    `edited ${JSON.stringify(edited.value)}, old ${JSON.stringify(outOfDate.value)}, row ${JSON.stringify(after)}`,
+  );
+
+  const archived = await tool("archive_goal", { goalId });
+  const [active, inArchive] = [await goals(), await goals(tool, { archived: true })];
+  const restored = await tool("restore_goal", { goalId });
+  const back = await goals();
+  assert(
+    next("RF-229: archive_goal takes a goal out of the list and into the archived one, and restore_goal brings it back"),
+    !archived.isError && !active.some((goal) => goal.id === goalId) && inArchive.some((goal) => goal.id === goalId) &&
+      !restored.isError && back.some((goal) => goal.id === goalId),
+    `active ${active.length}, archived ${inArchive.length}, back ${back.length}`,
   );
 }
