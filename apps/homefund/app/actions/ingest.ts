@@ -1,18 +1,16 @@
 "use server";
 
-import { eq } from "drizzle-orm";
 import { refresh } from "next/cache";
 
 import {
   acceptDelivery,
   DeliveryNotPending,
+  forgetMerchant,
   rejectDelivery,
   restoreShape,
   ShapeNotSilenced,
 } from "@/db/queries/ingest-review";
 import type { TransactionSplitInput } from "@/db/queries/transactions";
-import { ingestMerchants } from "@/db/schema";
-import { withUserDb } from "@/db/session";
 import { pgErrorCode } from "@/lib/db-error";
 import { ActionError } from "@/lib/errors";
 import { toCents } from "@/lib/money";
@@ -88,14 +86,7 @@ export const rejectDeliveryAction = authActionClient
 export const forgetMerchantAction = authActionClient
   .inputSchema(forgetMerchantSchema)
   .action(async ({ parsedInput: { merchantId } }) => {
-    const deleted = await withUserDb((tx) =>
-      tx
-        .delete(ingestMerchants)
-        .where(eq(ingestMerchants.id, merchantId))
-        .returning({ id: ingestMerchants.id }),
-    );
-
-    if (deleted.length === 0) throw new ActionError("errors.notFound");
+    if (!(await forgetMerchant(merchantId))) throw new ActionError("errors.notFound");
 
     refresh();
   });
