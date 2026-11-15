@@ -564,6 +564,8 @@ export const completeCounterpartySchema = z.object({
   accountId: z.uuid({ error: "transactions.errors.accountInvalid" }),
 });
 
+export type CompleteCounterpartyInput = z.infer<typeof completeCounterpartySchema>;
+
 // A malformed value never reaches Postgres: a bad type falls back to "all", a
 // bad date or a repeated key drops to undefined, so the query filters on the
 // well-formed subset only (RF-23).
