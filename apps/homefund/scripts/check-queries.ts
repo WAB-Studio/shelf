@@ -20234,7 +20234,10 @@ async function mcpAccountLifecycleSuite(): Promise<void> {
   const before = await sheetOf(today);
   await tool("record_movement", { fromAccountId: counted.accountId, toAccountId: null, amountCents: 10_000_00, occurredAt: today, description: `Harness rf233 gasto ${tag}`, categoryId: category });
   const stale = await tool("reconcile_account", { accountId: counted.accountId, reconciledOn: today, realAmountCents: before.account.derivedCents, expectedDerivedCents: before.account.derivedCents });
-  const early = await tool("reconcile_account", { accountId: counted.accountId, reconciledOn: "2025-12-01", realAmountCents: 0, expectedDerivedCents: 0 });
+  const earlySheet = await sheetOf("2025-12-01");
+  const early = await tool("reconcile_account", {
+    accountId: counted.accountId, reconciledOn: "2025-12-01", realAmountCents: 0, expectedDerivedCents: earlySheet.account.derivedCents,
+  });
   assert(
     next("RF-233: reconcile_account refuses a figure the ledger has moved from, and a day before the account opened with that day in the sentence"),
     stale.isError && (stale.value as { error: string }).error === es.errors.reconcileStale &&
