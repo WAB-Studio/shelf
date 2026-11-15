@@ -57,6 +57,16 @@ function carryOver(
  * data layer is imported here.
  */
 export async function proxy(request: NextRequest) {
+  // English is gone (RF-221): `/en/...` is the same path under `/es`, query string kept. Answered before
+  // anything else, so the target (`/es`, which has no `en` segment) cannot come back here.
+  const requested = request.nextUrl.pathname;
+  if (requested === "/en" || requested.startsWith("/en/")) {
+    // `clone` keeps the query string.
+    const target = request.nextUrl.clone();
+    target.pathname = `/es${requested.slice("/en".length)}`;
+    return NextResponse.redirect(target);
+  }
+
   // A copy of the incoming headers, with the path set (never appended) so a caller
   // cannot smuggle in one of their own. next-intl forwards the request it is
   // handed, so the layout reads this value and the incoming request stays as sent.

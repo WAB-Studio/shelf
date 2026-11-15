@@ -7,7 +7,6 @@ import { useState } from "react";
 import { KeepSignedInSelect } from "@/components/auth/keep-signed-in-select";
 import { SignOutButton } from "@/components/auth/sign-out-button";
 import { FUND_SETTINGS, SETTINGS_KEYS, destinations } from "@/components/fund/destinations";
-import { LanguageSwitcher } from "@/components/language-switcher";
 import { ThemeSwitcher } from "@/components/theme-switcher";
 import { Box, Flex, NavPanel, NavList, type NavListItem, Text } from "@/components/ui";
 import { usePathname } from "@/i18n/navigation";
@@ -76,7 +75,6 @@ export function SettingsPanel({
       )}
       <NavList items={items} onNavigate={() => setOpen(false)} />
       <Flex direction="column" gap="2">
-        <LanguageSwitcher width="100%" showText />
         <ThemeSwitcher width="100%" showText />
         {keepSignedIn !== undefined && <KeepSignedInSelect saved={keepSignedIn} width="100%" />}
         <SignOutButton />
