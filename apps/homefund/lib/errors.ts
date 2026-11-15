@@ -4,7 +4,11 @@
  * `useTranslations`, so an error path stays translated like everything else.
  */
 export class ActionError extends Error {
-  constructor(public messageKey: string) {
+  // What the sentence names, as `{date}` does: set by a refusal that carries a figure with its key.
+  constructor(
+    public messageKey: string,
+    public values?: Record<string, string>,
+  ) {
     super(messageKey);
     this.name = "ActionError";
   }

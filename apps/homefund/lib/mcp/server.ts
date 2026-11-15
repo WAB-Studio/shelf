@@ -22,6 +22,7 @@ import { registerBudgetTools } from "@/lib/mcp/budget-tools";
 import { registerGoalTools } from "@/lib/mcp/goal-tools";
 import { registerPlannedPaymentTools } from "@/lib/mcp/planned-payment-tools";
 import { registerRecurringTools } from "@/lib/mcp/recurring-tools";
+import { registerAccountTools } from "@/lib/mcp/account-tools";
 import { BatchRefusal, registerInboxTools } from "@/lib/mcp/inbox-tools";
 import { registerLabelTools } from "@/lib/mcp/label-tools";
 import { registerMemberDebtTools } from "@/lib/mcp/member-debt-tools";
@@ -46,8 +47,8 @@ const say = (key: string) => t(key as never);
 // A write refuses in the key a form would show; the whole catalogue is read, since those keys live in
 // every namespace. A key the catalogue lacks answers the generic sentence, never the key itself.
 const tForm = createTranslator({ locale: "es", messages: es });
-function refusal(key: string): string {
-  return tForm.has(key as never) ? tForm(key as never) : t("errors.unknown");
+function refusal(key: string, values?: Record<string, string>): string {
+  return tForm.has(key as never) ? tForm(key as never, values as never) : t("errors.unknown");
 }
 
 // The owner `withMcpAuth` carries, put there by the route's `verify` alone.
@@ -74,7 +75,7 @@ async function run(ctx: ServerContext, load: (owner: string) => Promise<unknown>
     if (error instanceof BatchRefusal) {
       return text({ error: refusal(error.messageKey), deliveryId: error.deliveryId, ...(error.field ? { field: error.field } : {}) }, true);
     }
-    if (error instanceof ActionError) return text({ error: refusal(error.messageKey) }, true);
+    if (error instanceof ActionError) return text({ error: refusal(error.messageKey, error.values) }, true);
     const code = pgErrorCode(error);
     if (code !== undefined && Object.hasOwn(DATABASE_REFUSALS, code)) return text({ error: refusal(DATABASE_REFUSALS[code]) }, true);
     console.error("mcp tool failed:", error instanceof Error ? error.name : "unknown", code ?? "");
@@ -87,10 +88,15 @@ const MONTH = z.string().regex(MONTH_PATTERN);
 function registerReadTools(server: McpServer): void {
   server.registerTool(
     "list_accounts",
-    { ...titled(say, "listAccounts"), description: t("tools.listAccounts"), inputSchema: z.object({}), annotations: READ },
-    (_input, ctx) =>
+    {
+      ...titled(say, "listAccounts"),
+      description: t("tools.listAccounts"),
+      inputSchema: z.object({ archived: z.boolean().optional().describe(t("params.accountsArchived")) }),
+      annotations: READ,
+    },
+    (input: { archived?: boolean }, ctx) =>
       run(ctx, async () =>
-        (await listAccounts({ archived: false })).map((account) => ({
+        (await listAccounts({ archived: input.archived ?? false })).map((account) => ({
           id: account.id,
           name: account.name,
           kind: account.kind,
@@ -204,6 +210,7 @@ export function buildHandler(): (request: Request) => Promise<Response> {
     registerGoalTools(server, run, say);
     registerPlannedPaymentTools(server, run, say);
     registerRecurringTools(server, run, say);
+    registerAccountTools(server, run, say);
   }, {
     serverInfo: { name: "homefund", version: pkg.version },
     instructions: t("instructions"),
