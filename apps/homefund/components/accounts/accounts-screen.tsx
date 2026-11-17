@@ -13,7 +13,6 @@ import {
   handAccountToGroupAction,
   restoreAccountAction,
 } from "@/app/actions/accounts";
-import { useOwnerLabel } from "@/components/fund/owner-mark";
 import { AccountFormDialog } from "@/components/accounts/account-form-dialog";
 import {
   BilledAmountDialog,
@@ -21,7 +20,7 @@ import {
   type BilledTarget,
 } from "@/components/accounts/foreign-estimates";
 import { ReconcileDialog } from "@/components/accounts/reconcile-dialog";
-import { AccountsTable, PaidByLine } from "@/components/accounts/accounts-table";
+import { AccountDetail, AccountsTable, PaidByLine } from "@/components/accounts/accounts-table";
 import {
   Box,
   Button,
@@ -34,7 +33,6 @@ import {
   Flex,
   IconButton,
   Money,
-  PersonalMark,
   ScreenHeader,
   SegmentedControl,
   Separator,
@@ -44,6 +42,7 @@ import {
 import type { AccountRow } from "@/db/queries/accounts";
 import type { AccountPendingSettlement } from "@/db/queries/debt-statements";
 import { usePathname, useRouter } from "@/i18n/navigation";
+import { holdsMoneyApartFromPockets } from "@/lib/account-detail";
 import { civilDateToDate } from "@/lib/dates";
 import { useActionErrorToast } from "@/lib/use-action-toast";
 import { BASE_CURRENCY, type CurrencyCode } from "@/lib/currency";
@@ -233,6 +232,9 @@ export function AccountsScreen({
     ([value, label]) => ({ value, label }),
   ).sort((a, b) => a.label.localeCompare(b.label));
 
+  // A filter that cannot narrow anything is not drawn (RF-240): «Propietario» needs both placements in the tab.
+  const hasBothPlacements = accounts.some((a) => a.ownerUserId) && accounts.some((a) => !a.ownerUserId);
+
   // The entities present in this tab's accounts, named once each, sorted.
   const institutionOptions = Array.from(
     new Set(
@@ -261,7 +263,11 @@ export function AccountsScreen({
   function splitByPlacement(section: Section) {
     const personal = section.rows.filter((a) => a.ownerUserId);
     const group = section.rows.filter((a) => !a.ownerUserId);
-    if (personal.length === 0 || group.length === 0) {
+    // Personal is what a list says nothing about; a list that is the fund's alone names the fund (RF-240).
+    if (personal.length === 0) {
+      return [{ key: section.key, label: groupName ?? tKey("common.fund"), rows: section.rows }];
+    }
+    if (group.length === 0) {
       return [{ key: section.key, label: "", rows: section.rows }];
     }
     return [
@@ -359,34 +365,38 @@ export function AccountsScreen({
               ]}
               width={140}
             />
-            <FilterSelect
-              label={t("ownerLabel")}
-              value={ownerFilter}
-              onValueChange={(value) =>
-                patchQuery({ owner: value === ANY ? null : value })
-              }
-              items={[
-                { value: ANY, label: t("allOwners") },
-                { value: "personal", label: t("ownerPersonal") },
-                { value: "group", label: t("ownerFund") },
-              ]}
-              width={170}
-            />
-            <FilterSelect
-              label={t("institutionLabel")}
-              value={institutionFilter}
-              onValueChange={(value) =>
-                patchQuery({ institution: value === ANY ? null : value })
-              }
-              items={[
-                { value: ANY, label: t("allInstitutions") },
-                ...institutionOptions.map((institution) => ({
-                  value: institution,
-                  label: institution,
-                })),
-              ]}
-              width={190}
-            />
+            {hasBothPlacements && (
+              <FilterSelect
+                label={t("ownerLabel")}
+                value={ownerFilter}
+                onValueChange={(value) =>
+                  patchQuery({ owner: value === ANY ? null : value })
+                }
+                items={[
+                  { value: ANY, label: t("allOwners") },
+                  { value: "personal", label: t("ownerPersonal") },
+                  { value: "group", label: t("ownerFund") },
+                ]}
+                width={170}
+              />
+            )}
+            {institutionOptions.length > 1 && (
+              <FilterSelect
+                label={t("institutionLabel")}
+                value={institutionFilter}
+                onValueChange={(value) =>
+                  patchQuery({ institution: value === ANY ? null : value })
+                }
+                items={[
+                  { value: ANY, label: t("allInstitutions") },
+                  ...institutionOptions.map((institution) => ({
+                    value: institution,
+                    label: institution,
+                  })),
+                ]}
+                width={190}
+              />
+            )}
             {holderOptions.length > 0 && (
               <FilterSelect
                 label={t("holderFilter")}
@@ -664,38 +674,18 @@ function AccountCard({
   // is the first entry and every other currency the account holds follows it.
   // A parent leads with the total of itself and its pockets and names its own part under it (RF-173).
   const [settlement, ...others] = account.totalBalances ?? account.balances;
-  const freePart = account.totalBalances ? account.balances[0] : undefined;
-
-  const ownerOf = useOwnerLabel();
-  const ownerLabel = account.foreignOwner ? ownerOf(account.ownerName) : t("ownerPersonal");
+  const freePart = holdsMoneyApartFromPockets(account.balances, account.totalBalances) ? account.balances[0] : undefined;
 
   return (
     <Card>
       <Flex direction="column" gap="3">
       <Flex justify="between" align="start" gap="3">
         <Flex direction="column" gap="1" flexGrow="1" minWidth="0">
-          <Flex align="center" gap="2" wrap="wrap">
-            <Text weight="medium">
-              {account.thirdParty ? t("creditOf", { name: account.name, person: account.thirdParty.personName }) : account.name}
-            </Text>
-            {account.ownerUserId && <PersonalMark label={ownerLabel} />}
-          </Flex>
+          <Text weight="medium">
+            {account.thirdParty ? t("creditOf", { name: account.name, person: account.thirdParty.personName }) : account.name}
+          </Text>
+          <AccountDetail account={account} />
           <PaidByLine account={account} />
-          {account.foreignOwner && (
-            <Text size="2" color="gray">
-              {ownerLabel}
-            </Text>
-          )}
-          {account.holderName && (
-            <Text size="2" color="gray">
-              {t("holderOf", { name: account.holderName })}
-            </Text>
-          )}
-          {account.institution && (
-            <Text size="2" color="gray">
-              {account.institution}
-            </Text>
-          )}
           {/* The settlement currency is the figure the card leads with, and each
               other currency the account holds sits under it naming itself: no
               line here is the sum of two currencies (RF-124).
