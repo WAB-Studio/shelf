@@ -200,6 +200,11 @@ export function onlyBankAccount(text: string, accounts: readonly AccountOption[]
 // A bank's words for a credit card: «T.Cred *1234», «tarjeta crédito 1234», «tarjeta de crédito».
 const CREDIT_CARD_WORDS = /\b(?:t\.?\s?cred|tarjeta\s+(?:de\s+)?cr[eé]dito)/iu;
 
+/** Whether the message words a credit-card purchase. */
+export function namesCreditCard(text: string): boolean {
+  return CREDIT_CARD_WORDS.test(text);
+}
+
 export type CardPurchaseOption = { id: string; subtype: string; lastFour?: string | null };
 
 /**

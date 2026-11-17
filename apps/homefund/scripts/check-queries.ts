@@ -23063,4 +23063,33 @@ async function loanFiguresSuite(): Promise<void> {
     kept?.account === bank && kept.to_account === null && refusedForeign === "refused" && afterForeign?.account === bank && refusedDecided === "refused",
     JSON.stringify({ kept, refusedForeign, afterForeign, refusedDecided }),
   );
+
+  // A card purchase stored against a loan is read as unassigned; the same loan on a payment message is left alone.
+  const { accountId: debt } = await asUser(user, () =>
+    createAccount({
+      kind: "liability", subtype: "loan", groupId: null, isShared: false, institution: null, settlementCurrency: BASE_CURRENCY, lastFour: null,
+      balanceOn: shiftDate(today, -5), ownerUserId: user.id, name: `Harness cred carro ${tag}`, amountMinor: 1_000_00,
+    }),
+  );
+  track("accounts", debt);
+  const stored = async (text: string) => {
+    const [row] = await fixtureSql.begin(async (tx) => {
+      await tx`select set_config('request.jwt.claims', ${claims}, true)`;
+      return tx<{ id: string }[]>`
+        insert into ingest_deliveries (external_ref, raw_text, shape_hash, proposed_account_id, proposed_direction, proposed_amount_cents)
+        values (${`harness-debt-${randomUUID()}`}, ${text}, ${createHash("sha256").update(text).digest("hex")}, ${debt}, 'expense', 8540000)
+        returning id`;
+    });
+    return row.id;
+  };
+  const purchaseId = await stored(`Compraste $85.400 en EXITO ${tag} con tu T.Cred *7788`);
+  const paymentId = await stored(`Pagaste $85.400 en una tienda ${tag}`);
+  const read = await asUser(user, () => listPendingDeliveries());
+  const purchase = read.find((row) => row.id === purchaseId);
+  const payment = read.find((row) => row.id === paymentId);
+  assert(
+    next("A card purchase stored against a loan is read with no account and out of the one-tap batch; a message that names no card keeps its account"),
+    purchase?.proposedAccountId === null && purchase.isComplete === false && payment?.proposedAccountId === debt,
+    JSON.stringify({ purchase: purchase?.proposedAccountId, complete: purchase?.isComplete, payment: payment?.proposedAccountId }),
+  );
 }
