@@ -4180,6 +4180,7 @@ async function main(): Promise<void> {
   await mcpDeletesSuite();
   await mcpMoneyModelSuite();
   await payOwnCardSuite();
+  await mcpInputErrorsSuite();
 }
 
 // A member recorded without a login is someone in the fund: a leader whose fund holds one is not alone, so an
@@ -20999,5 +21000,45 @@ async function payOwnCardSuite(): Promise<void> {
     card?.direction === "transfer" && card.from === bank && card.to === nu && shop?.direction === "expense" && shop.to === null &&
       ambiguous?.direction === "expense" && ambiguous.to === null && second !== nu,
     JSON.stringify({ card, shop, ambiguous }),
+  );
+}
+
+// RF-251: a tool refused for its input says which field and why, in Spanish, whether the protocol's check or a form's schema refused it.
+async function mcpInputErrorsSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const { POST } = await import("@/app/mcp/route");
+  const owner = await createMembershipFreeUser();
+  const bank = randomUUID();
+  await fixtureSql`
+    insert into accounts (id, owner_user_id, name, kind, subtype, initial_balance_cents, initial_balance_on)
+    values (${bank}, ${owner.id}, ${`Harness rf251 banco ${tag}`}, 'asset', 'bank', 0, '2026-01-01')`;
+  track("accounts", bank);
+  const { id: credentialId, token } = await asUser(owner, () =>
+    issueWebhookCredential({ name: `Harness rf251 ${tag}`, purpose: "mcp", defaultAccountId: null, defaultCategoryId: null }),
+  );
+  keep("webhook_credentials", credentialId);
+  const { tool } = mcpClient(POST, token);
+  type Refusal = { error: string; field?: string };
+  const refusalOf = (answer: { isError: boolean; value: unknown }) => (answer.isError && typeof answer.value === "object" ? (answer.value as Refusal) : null);
+
+  const tooBig = refusalOf(await tool("list_movements", { limit: 500 }));
+  const wrongType = refusalOf(await tool("list_movements", { limit: "5" }));
+  const missing = refusalOf(await tool("record_movement", { fromAccountId: bank, toAccountId: null, categoryId: randomUUID(), occurredAt: "2026-09-01", description: null }));
+  assert(
+    next("RF-251: an input the protocol refuses is answered in Spanish with the field and the reason, as the same {error, field} every refusal is"),
+    tooBig?.error === "limit debe ser como máximo 200" && tooBig.field === "limit" &&
+      wrongType?.error === "limit debe ser un número" && wrongType.field === "limit" &&
+      missing?.field === "amountCents" && missing.error === "amountCents es obligatorio",
+    `too big ${JSON.stringify(tooBig)}, wrong type ${JSON.stringify(wrongType)}, missing ${JSON.stringify(missing)}`,
+  );
+
+  const badRef = refusalOf(await tool("record_movement", {
+    fromAccountId: bank, toAccountId: null, amountCents: 1_000_00, occurredAt: "2026-09-01", description: null, categoryId: randomUUID(), requestRef: "no-es-un-uuid",
+  }));
+  assert(
+    next("RF-251: a form schema's refusal names the field it is about instead of «algo salió mal» alone"),
+    badRef !== null && badRef.field === "requestRef" && badRef.error.startsWith("requestRef ") && badRef.error !== es.errors.unexpected,
+    `bad requestRef ${JSON.stringify(badRef)}`,
   );
 }

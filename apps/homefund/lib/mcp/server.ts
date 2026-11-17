@@ -14,6 +14,7 @@ import { actAsCredentialOwner } from "@/db/session";
 import { MONTH_PATTERN, lastClosedMonth } from "@/lib/dates";
 import { ABOVE_USUAL_FACTOR, USUAL_WINDOW_MONTHS } from "@/lib/month-review-rules";
 import { ActionError, DATABASE_REFUSALS } from "@/lib/errors";
+import { readInput } from "@/lib/mcp/input-errors";
 import { env } from "@/lib/env";
 import { pgErrorCode } from "@/lib/db-error";
 import { DESTROY, READ, titled } from "@/lib/mcp/annotations";
@@ -57,6 +58,22 @@ function refusal(key: string, values?: Record<string, string>): string {
   return tForm.has(key as never) ? tForm(key as never, values as never) : t("errors.unknown");
 }
 
+// A form's own message is a catalogue key; read through the whole catalogue it is the sentence the form shows.
+function knownSentence(message: string): string | undefined {
+  return tForm.has(message as never) ? tForm(message as never) : undefined;
+}
+
+// The database refusals a tool can reach without a screen's mapping: each answers what to fix, never the driver's message.
+const MCP_DATABASE_REFUSALS: Record<string, string> = {
+  "22P02": "mcp.errors.db.format",
+  "22003": "mcp.errors.db.range",
+  "23505": "mcp.errors.db.duplicate",
+  "23503": "errors.referenceGone",
+  "23514": "mcp.errors.db.rule",
+  "42501": "errors.notFound",
+  "57014": "mcp.errors.db.busy",
+};
+
 // The owner `withMcpAuth` carries, put there by the route's `verify` alone.
 function ownerOf(ctx: ServerContext): string | null {
   const owner = ctx.http?.authInfo?.extra?.ownerUserId;
@@ -81,9 +98,15 @@ async function run(ctx: ServerContext, load: (owner: string) => Promise<unknown>
     if (error instanceof BatchRefusal) {
       return text({ error: refusal(error.messageKey), deliveryId: error.deliveryId, ...(error.field ? { field: error.field } : {}) }, true);
     }
-    if (error instanceof ActionError) return text({ error: refusal(error.messageKey, error.values) }, true);
+    if (error instanceof ActionError) {
+      // A form's generic «something went wrong» names the field it was about, so Claude knows what to fix.
+      const sentence =
+        error.messageKey === "errors.unexpected" && error.field ? `${error.field} ${say("errors.input.invalid")}` : refusal(error.messageKey, error.values);
+      return text({ error: sentence, ...(error.field ? { field: error.field } : {}) }, true);
+    }
     const code = pgErrorCode(error);
     if (code !== undefined && Object.hasOwn(DATABASE_REFUSALS, code)) return text({ error: refusal(DATABASE_REFUSALS[code]) }, true);
+    if (code !== undefined && Object.hasOwn(MCP_DATABASE_REFUSALS, code)) return text({ error: refusal(MCP_DATABASE_REFUSALS[code]) }, true);
     console.error("mcp tool failed:", error instanceof Error ? error.name : "unknown", code ?? "");
     return text({ error: t("errors.unknown") }, true);
   }
@@ -200,6 +223,12 @@ function registerStatementTools(server: McpServer): void {
 
 export function buildHandler(): (request: Request) => Promise<Response> {
   return createMcpHandler((server) => {
+    // The protocol's own input check answers in English and in zod's words; this one reads the same schema and names each
+    // field and why in Spanish, as every other refusal. `validateToolInput` is private in the SDK's types only.
+    (server as unknown as { validateToolInput: (tool: { inputSchema?: z.ZodType }, args: unknown) => Promise<unknown> }).validateToolInput = async (
+      tool,
+      args,
+    ) => (tool.inputSchema ? readInput(tool.inputSchema, args, (key, values) => t(key as never, values as never), knownSentence) : args);
     registerReadTools(server);
     registerStatementTools(server);
     registerLedgerTools(server, run, say);
