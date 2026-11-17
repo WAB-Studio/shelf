@@ -11,7 +11,8 @@ const UPPERCASE_WORD = /^[A-ZÁÉÍÓÚÑÜ]+$/u;
 const GATEWAY_SUFFIX = /\*[A-Z0-9]{1,4}$/u;
 const AMOUNT = String.raw`(?:COP\s?|\$\s?)?[\d.,]*`;
 // Where a business or a person's name ends in a bank's sentence.
-const NAME_END = String.raw`(?=\s+(?:con\s+(?:tu|la|el)|desde|por|el\s+\d|a\s+las)\b|[,;]|\.(?:\s|$)|\s*$)`;
+// A time of day or a card label also closes it: «en RAPPI RESTAURANTE 15:32. 12/11/2026 T.Cred *4521».
+const NAME_END = String.raw`(?=\s+(?:con\s+(?:tu|la|el)|desde|por|el\s+\d+|a\s+las|\d{1,2}:\d{2}|T\.?\s?(?:cred|deb))\b|[,;]|\.(?:\s|$)|\s*$)`;
 // A person's name as the bank prints it: capitals only.
 const PERSON = String.raw`((?:[A-ZÁÉÍÓÚÑÜ][A-ZÁÉÍÓÚÑÜ.'-]+\s*)+)`;
 
@@ -21,7 +22,7 @@ function flatten(text: string): string {
 
 /** A name the bank shouts in capitals, written as a person reads it («FONDO NACIONAL DEL AHORRO» → «Fondo Nacional del Ahorro»). */
 export function readableName(raw: string): string {
-  const name = raw.replace(/[\s.,;]+$/u, "").replace(GATEWAY_SUFFIX, "").trim();
+  const name = raw.replace(/[\s.,;*]+$/u, "").replace(GATEWAY_SUFFIX, "").trim();
   if (name === "" || /\p{Ll}/u.test(name)) return name;
 
   return name
@@ -43,6 +44,29 @@ type Shape = (text: string) => string | null;
 // «Compraste COP80.800,00 en X con tu T.Cred *4872»: the business.
 const purchase: Shape = (text) => {
   const match = new RegExp(String.raw`\bcompraste\s+${AMOUNT}\s*en\s+(.+?)${NAME_END}`, "iu").exec(text);
+  return match ? readableName(match[1]) : null;
+};
+
+// A cash withdrawal at a cash machine: «Retiraste $300.000 en cajero…», «Retiro por $300.000», «Cajero … $300.000».
+const WITHDRAWAL = /\b(?:retiraste|retiro\s+(?:por|de|en|exitoso)|cajero|atm)\b/iu;
+
+/** Whether the message reports cash taken out at a cash machine, which moves money into the person's own cash. */
+export function looksLikeCashWithdrawal(text: string): boolean {
+  return WITHDRAWAL.test(text);
+}
+
+const withdrawal: Shape = (text) => (looksLikeCashWithdrawal(text) ? "Retiro en cajero" : null);
+
+// «Bancolombia le informa Compra por $38.000 en RAPPI RESTAURANTE 15:32…» and «Compra aprobada por $52.300 en EXITO
+// COLINA»: the noun form, with no «compraste».
+const purchaseNoun: Shape = (text) => {
+  const match = new RegExp(String.raw`\bcompra\s+(?:aprobada\s+)?por\s+${AMOUNT}\s*en\s+(.+?)${NAME_END}`, "iu").exec(text);
+  return match ? readableName(match[1]) : null;
+};
+
+// «Pagaste en UBER TRIP»: a payment that names the business and no figure.
+const paidAt: Shape = (text) => {
+  const match = new RegExp(String.raw`\bpagaste\s+(?:${AMOUNT}\s*)?en\s+(.+?)${NAME_END}`, "iu").exec(text);
   return match ? readableName(match[1]) : null;
 };
 
@@ -99,7 +123,18 @@ const deposit: Shape = (text) => {
 };
 
 // Specific before general: a QR payment names a key, a plain payment a business.
-const SHAPES: Shape[] = [keyPayment, purchase, approvedPurchase, payment, incomingTransfer, deposit, transfer];
+const SHAPES: Shape[] = [
+  withdrawal,
+  keyPayment,
+  purchase,
+  purchaseNoun,
+  approvedPurchase,
+  paidAt,
+  payment,
+  incomingTransfer,
+  deposit,
+  transfer,
+];
 
 /** The short description a bank alert's words give, whatever boilerplate surrounds them; null when none of its shapes fits. */
 export function describeAlert(text: string): string | null {
@@ -109,6 +144,24 @@ export function describeAlert(text: string): string | null {
     if (description) return description;
   }
   return null;
+}
+
+// What a description reads like once the amount was cut out of the sentence it was taken from: «por $ en», a
+// lead of «: » or a sender label cut to «Da : ».
+const DAMAGED = /\$(?!\s?\d)|^\s*[:;,.]|\b\p{L}{1,3}\s:\s/u;
+
+/**
+ * The description of a message as a person would write it: what its own words say when a shape fits, else the
+ * stored one, else, when that one is a sentence with its figure cut out, the business the message names. Runs
+ * when a delivery is read as well as when it is written, so rows stored damaged read right (RF-279).
+ */
+export function repairDescription(stored: string | null, rawText: string, merchantLabel: string | null): string | null {
+  const described = describeAlert(rawText);
+  if (described) return described;
+  if (stored === null || !DAMAGED.test(stored) || merchantLabel === null) return stored;
+
+  const business = readableName(merchantLabel.replace(/\s+\d{1,2}:\d{2}\b.*$/u, ""));
+  return business === "" ? stored : business;
 }
 
 // The sender labels a bank's alert opens with.

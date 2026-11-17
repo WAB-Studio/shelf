@@ -18,7 +18,15 @@ import { pgErrorCode } from "@/lib/db-error";
 import { todayInBogota } from "@/lib/dates";
 import type { EmailVerdict } from "@/lib/ingest/classify";
 import { DUPLICATE_WINDOW_DAYS, judgeDuplicate, type DuplicateCandidate } from "@/lib/ingest/duplicates";
-import { describeAlert, looksLikeBankAlert, onlyBankAccount, paidOwnCard } from "@/lib/ingest/describe";
+import {
+  describeAlert,
+  looksLikeBankAlert,
+  looksLikeCashWithdrawal,
+  onlyBankAccount,
+  paidOwnCard,
+  repairDescription,
+} from "@/lib/ingest/describe";
+import { keywordCategory } from "@/lib/ingest/learned-category";
 import { emailDescription, emailMerchant } from "@/lib/ingest/email";
 import { fingerprintMessage, merchantOf } from "@/lib/ingest/fingerprint";
 import { applyRecipient, extractNumber, matchRecipient } from "@/lib/ingest/recipient-number";
@@ -226,8 +234,15 @@ export async function recordIngestDelivery({
     const rejectReason = verdictReason ?? (original.kind === "repeats" ? "duplicate" : null);
     const duplicateOfId = original.kind === "repeats" ? original.of.id : null;
 
+    // Only a category of the movement's own kind can be proposed: an income never takes an expense category,
+    // whoever named it (the text, a trusted merchant, the key's default), or the write would be refused (RF-278).
+    const proposedKind = (payload.direction ?? read.direction) === "income" ? "income" : "expense";
+    const ofKind = (categoryId: string | null | undefined): string | null =>
+      categoryId && categoryRows.some((row) => row.id === categoryId && row.kind === proposedKind) ? categoryId : null;
+    const kindRows = categoryRows.filter((row) => row.kind === proposedKind);
+
     const proposal = interpretQuickEntry(payload.text, {
-      categories: categoryRows,
+      categories: kindRows,
       accounts: accountRows,
       defaultAccountId,
       yearGuard: email ? "any" : "dated",
@@ -236,17 +251,17 @@ export async function recordIngestDelivery({
     const proposedAmountCents = rejectReason === null ? readAmountCents : null;
 
     const memory = merchantRows?.[0] ?? null;
-    const trustedCategoryId = memory?.state === "trusted" ? memory.trustedCategoryId : null;
+    const trustedCategoryId = memory?.state === "trusted" ? ofKind(memory.trustedCategoryId) : null;
     const recipient = matchRecipient(extractedIdentifier, recipientRows);
 
-    let proposedCategoryId =
-      trustedCategoryId ?? proposal.categoryId ?? defaultCategoryId ?? null;
+    const fallbackCategoryId = ofKind(defaultCategoryId);
+    let proposedCategoryId = trustedCategoryId ?? proposal.categoryId ?? fallbackCategoryId;
     let categorySource: "merchant" | "interpreter" | "credential_default" | "recipient" | null =
       trustedCategoryId
         ? "merchant"
         : proposal.categoryId
           ? "interpreter"
-          : defaultCategoryId
+          : fallbackCategoryId
             ? "credential_default"
             : null;
 
@@ -258,6 +273,9 @@ export async function recordIngestDelivery({
     )
       .trim()
       .slice(0, MAX_DESCRIPTION_LENGTH);
+    // A sentence with its figure cut out names no one: the business the message names stands in (RF-279).
+    description =
+      repairDescription(description, payload.text, merchant?.label ?? null)?.slice(0, MAX_DESCRIPTION_LENGTH) ?? "";
 
     // An alert that names no account tail belongs to the person's only account at that bank.
     let proposedAccountId =
@@ -299,6 +317,18 @@ export async function recordIngestDelivery({
         categorySource = null;
       }
     }
+    // Cash taken out at a cash machine moves money into the person's own cash: a transfer, as «Retirar efectivo»
+    // writes it. The cash account is the one of the source's scope; with none or several, the person picks (RF-278).
+    if (!recipient && proposedDirection !== "income" && looksLikeCashWithdrawal(payload.text)) {
+      const source = accountRows.find((row) => row.id === proposedAccountId);
+      const cash = accountRows.filter(
+        (row) => row.subtype === "cash" && row.id !== source?.id && (row.groupId ?? null) === (source?.groupId ?? null),
+      );
+      proposedDirection = "transfer";
+      proposedToAccountId = cash.length === 1 ? cash[0].id : null;
+      proposedCategoryId = null;
+      categorySource = null;
+    }
     // A delivery that names an account settling outside BASE_CURRENCY is
     // forced rejected below (errors.foreignCurrencyUnsupported): `pesos`
     // above read the amount as pesos, which only that settlement makes true.
@@ -335,6 +365,17 @@ export async function recordIngestDelivery({
       if (learned !== null) {
         proposedCategoryId = learned;
         categorySource = "merchant";
+      } else {
+        // Then what the merchant's own name points at, before the key's blanket default (RF-280).
+        const named = keywordCategory(
+          merchantLabel ?? proposedDescription,
+          proposedDirection === "income" ? "income" : "expense",
+          categoryRows,
+        );
+        if (named !== null) {
+          proposedCategoryId = named;
+          categorySource = "interpreter";
+        }
       }
     }
     const merchantKey = merchant?.key ?? donor?.merchantKey ?? null;

@@ -18,6 +18,7 @@ import {
   movementDefaults,
   NO_CHOICE,
   readyInput,
+  withChoice,
   type DeliveryChoice,
 } from "@/components/ingest/delivery-card";
 import { InboxTable, type InboxTableRow } from "@/components/ingest/inbox-table";
@@ -194,36 +195,40 @@ export function InboxScreen({
   );
   const accountNames = new Map(options.accounts.map((a) => [a.id, a.name]));
 
-  const tableRows: InboxTableRow[] = deliveries.map((delivery) => ({
-    id: delivery.id,
-    createdAt: delivery.createdAt,
-    occurredOn: delivery.proposedOccurredAt,
-    selectable: readyOf(delivery) !== null,
-    selected: selected.has(delivery.id),
-    merchantLabel: delivery.merchantLabel,
-    via: arrivedVia(delivery, (badge, name) =>
-      t("arrivedVia", { kind: tKey(`webhooks.kind.${badge}`), name }),
-    ),
-    rawText: delivery.rawText,
-    category: categoryInfo(
-      options,
-      categoryNames,
-      choiceOf(delivery.id).categoryId ?? proposedCategoryId(delivery, options),
-    ),
-    account: delivery.proposedAccountId
-      ? [delivery.proposedAccountId, delivery.proposedToAccountId]
-          .filter((id) => id !== null)
-          .map((id) => accountNames.get(id) ?? "")
-          .join(" → ")
-      : null,
-    amountMinor: delivery.proposedAmountCents,
-    direction: delivery.proposedDirection ?? "expense",
-    currency: deliveryCurrency(delivery, options),
-    isComplete: readyOf(delivery) !== null || delivery.isComplete,
-    recorded: delivery.recorded !== null,
-    canSaveNumber: delivery.extractedIdentifier !== null && delivery.recipientId === null,
-    beforeOpeningOn: delivery.beforeOpening ? delivery.proposedOccurredAt : null,
-  }));
+  const tableRows: InboxTableRow[] = deliveries.map((proposal) => {
+    const delivery = withChoice(proposal, choiceOf(proposal.id));
+    const toAccount = options.accounts.find((account) => account.id === delivery.proposedToAccountId);
+
+    return {
+      id: delivery.id,
+      createdAt: delivery.createdAt,
+      occurredOn: delivery.proposedOccurredAt,
+      selectable: readyOf(proposal) !== null,
+      selected: selected.has(delivery.id),
+      merchantLabel: delivery.merchantLabel,
+      via: arrivedVia(delivery, (badge, name) => t("arrivedVia", { kind: badge, name })),
+      rawText: delivery.rawText,
+      category: categoryInfo(
+        options,
+        categoryNames,
+        choiceOf(delivery.id).categoryId ?? proposedCategoryId(delivery, options),
+      ),
+      account: delivery.proposedAccountId
+        ? [delivery.proposedAccountId, delivery.proposedToAccountId]
+            .filter((id) => id !== null)
+            .map((id) => accountNames.get(id) ?? "")
+            .join(" → ")
+        : null,
+      amountMinor: delivery.proposedAmountCents,
+      direction: delivery.proposedDirection ?? "expense",
+      withdrawal: delivery.proposedDirection === "transfer" && toAccount?.subtype === "cash",
+      currency: deliveryCurrency(delivery, options),
+      isComplete: readyOf(proposal) !== null || delivery.isComplete,
+      recorded: delivery.recorded !== null,
+      canSaveNumber: delivery.extractedIdentifier !== null && delivery.recipientId === null,
+      beforeOpeningOn: delivery.beforeOpening ? delivery.proposedOccurredAt : null,
+    };
+  });
 
   const reviewing = deliveries.find((one) => one.id === reviewId) ?? null;
 

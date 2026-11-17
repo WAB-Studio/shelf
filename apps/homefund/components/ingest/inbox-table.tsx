@@ -33,7 +33,7 @@ export type InboxTableRow = {
   selectable: boolean;
   selected: boolean;
   merchantLabel: string | null;
-  // «Llegó por <kind> · <key name>», or null once the key is gone (RF-203).
+  // Where it came from, in words, or null once the key is gone (RF-203).
   via: string | null;
   rawText: string;
   category: { name: string; color: string | null } | null;
@@ -44,6 +44,8 @@ export type InboxTableRow = {
   currency: CurrencyCode;
   // What the proposal would record: money out unless the message says money in.
   direction: "income" | "expense" | "transfer";
+  // A transfer into the person's own cash: «Retirar efectivo».
+  withdrawal: boolean;
   isComplete: boolean;
   // A movement recorded by hand already stands for it, so discarding is what the row proposes (RF-246).
   recorded: boolean;
@@ -216,7 +218,9 @@ export function InboxTable({
                 row.direction === "income"
                   ? "kindIncome"
                   : row.direction === "transfer"
-                    ? "kindTransfer"
+                    ? row.withdrawal
+                      ? "kindWithdrawal"
+                      : "kindTransfer"
                     : "kindExpense",
               )}
             </Text>
