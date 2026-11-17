@@ -84,7 +84,7 @@ export const transactions = finances.table(
     // trigger that books it — no grant names the column — and it is what reports read to keep the
     // adjustment out of every income, expense and budget figure; `kind` still derives from the legs.
     reconciliationId: uuid().references(() => accountReconciliations.id, { onDelete: "cascade" }),
-    // How the row was written (RF-253): the web, Claude through the MCP, the Bandeja's accept or a statement or sheet
+    // How the row was written (RF-256): the web, Claude through the MCP, the Bandeja's accept or a statement or sheet
     // import. Null for what predates the column and for what the database itself generates (a recurring rule's
     // movement, a reconciliation's adjustment), which carry their own marks. Immutable: no grant updates it.
     createdVia: text({ enum: ["web", "mcp", "inbox", "import"] }),

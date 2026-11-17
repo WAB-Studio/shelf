@@ -5525,7 +5525,7 @@ const UPDATE_GRANT_GAPS: Record<string, string[]> = {
     "amount_from_words",
     "created_at",
     "created_by",
-    // Fixed at insert (RF-253): how a movement was written is never edited after.
+    // Fixed at insert (RF-256): how a movement was written is never edited after.
     "created_via",
     "external_ref",
     "group_id",

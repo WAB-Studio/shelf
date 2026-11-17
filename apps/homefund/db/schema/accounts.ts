@@ -33,7 +33,7 @@ export const accounts = finances.table(
     name: text().notNull(),
     kind: text({ enum: ["asset", "liability"] }).notNull(),
     // The durable marker of what the account is: a bank account, physical cash, a card, a loan or money a person
-    // owes the household (`receivable`, RF-249). A cash account (RF-56) is `subtype = 'cash'`. `bank`/`card` follow
+    // owes the household (`receivable`, RF-255). A cash account (RF-56) is `subtype = 'cash'`. `bank`/`card` follow
     // the kind (`loan` and `receivable` are kept as named), so a caller that names neither has one derived by
     // `set_account_subtype`; the default lets it be omitted.
     subtype: text({ enum: ["bank", "cash", "card", "loan", "receivable"] }).notNull().default("bank"),

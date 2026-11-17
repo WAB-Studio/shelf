@@ -9,7 +9,7 @@ import { POSTGRES_TIMESTAMPTZ_TEXT } from "@/lib/validation/transaction";
 export const ACCOUNT_KINDS = ["asset", "liability"] as const;
 
 // What the account is: a bank account, physical cash, a card (RF-56), a loan (RF-178) or money a person owes
-// the household, a receivable (RF-249).
+// the household, a receivable (RF-255).
 export const ACCOUNT_SUBTYPES = ["bank", "cash", "card", "loan", "receivable"] as const;
 
 // Which subtypes each kind admits, mirroring the accounts_subtype_kind DB CHECK:

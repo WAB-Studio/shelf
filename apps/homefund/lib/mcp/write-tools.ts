@@ -169,7 +169,7 @@ export type MovementFilterInput = {
 };
 
 const MOVEMENT_KINDS = ["expense", "income", "transfer", "adjustment"] as const;
-// How a movement was written (RF-253): the web, Claude through the MCP, the Bandeja's accept, a statement or sheet import.
+// How a movement was written (RF-256): the web, Claude through the MCP, the Bandeja's accept, a statement or sheet import.
 const CREATED_VIA = ["web", "mcp", "inbox", "import"] as const;
 
 // The filters a listing and its totals take, the one set the Movimientos screen offers.

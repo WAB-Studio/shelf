@@ -59,7 +59,7 @@ export type CreateTransactionArgs = {
   madeByMemberId?: string | null | SQL;
   // RF-133: one side is not known yet and waits for a person; insert only.
   awaitingCounterparty?: boolean;
-  // How the row was written (RF-253). Absent is the door the caller came through: the MCP's, or the web's.
+  // How the row was written (RF-256). Absent is the door the caller came through: the MCP's, or the web's.
   createdVia?: "web" | "mcp" | "inbox" | "import";
   occurredAt: string;
   description: string | null;
@@ -99,7 +99,7 @@ export type TransactionListFilters = {
   from?: string;
   to?: string;
   memberUserId?: string;
-  // How the row was written (RF-253).
+  // How the row was written (RF-256).
   createdVia?: "web" | "mcp" | "inbox" | "import";
   accountId?: string;
   categoryId?: string;
@@ -145,7 +145,7 @@ export type TransactionListRow = {
   fromAccountId: string | null;
   toAccountId: string | null;
   createdBy: string;
-  // How it was written (RF-253); null for what predates the column and for what the database generates.
+  // How it was written (RF-256); null for what predates the column and for what the database generates.
   createdVia: "web" | "mcp" | "inbox" | "import" | null;
   // A generated movement carries its rule id; a manual one has none. The review
   // stamp is null until it is confirmed or its amount corrected (RF-31).

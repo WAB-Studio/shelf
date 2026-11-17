@@ -21006,7 +21006,7 @@ async function payOwnCardSuite(): Promise<void> {
   );
 }
 
-// RF-249: money a person owes the household is an asset of its own subtype, which the MCP names by an enum; a credit somebody
+// RF-255: money a person owes the household is an asset of its own subtype, which the MCP names by an enum; a credit somebody
 // else pays still opens its hidden receivable (RF-216), now as that subtype.
 async function mcpReceivableSuite(): Promise<void> {
   console.log("");
@@ -21034,7 +21034,7 @@ async function mcpReceivableSuite(): Promise<void> {
   const onLiability = await tool("create_account", { name: name("mal"), kind: "liability", subtype: "receivable", openingBalanceCents: 0, balanceOn: "2026-01-01" });
   const unknown = await tool("create_account", { name: name("raro"), kind: "asset", subtype: "savings", openingBalanceCents: 0, balanceOn: "2026-01-01" });
   assert(
-    next("RF-249: create_account opens an asset of subtype receivable, list_accounts reads it so, and a receivable on a liability or an unknown subtype is refused"),
+    next("RF-255: create_account opens an asset of subtype receivable, list_accounts reads it so, and a receivable on a liability or an unknown subtype is refused"),
     !owes.isError && (await subtypeOf(owesId))?.subtype === "receivable" && listed?.subtype === "receivable" &&
       onLiability.isError && (onLiability.value as { error: string }).error === es.accounts.errors.subtypeKindMismatch && unknown.isError,
     `opened ${JSON.stringify(owes.value)}, listed ${JSON.stringify(listed)}, liability ${JSON.stringify(onLiability.value)}, unknown ${JSON.stringify(unknown.value)}`,
@@ -21051,7 +21051,7 @@ async function mcpReceivableSuite(): Promise<void> {
   });
   const [owed] = await fixtureSql<{ balance_cents: string }[]>`select balance_cents::text from account_balances where id = ${owesId}`;
   assert(
-    next("RF-249: lending is a transfer into the receivable and collecting one out of it, with no warning, and its balance is what is still owed"),
+    next("RF-255: lending is a transfer into the receivable and collecting one out of it, with no warning, and its balance is what is still owed"),
     !lent.isError && !collected.isError && (lent.value as { warnings?: unknown }).warnings === undefined &&
       (collected.value as { warnings?: unknown }).warnings === undefined && owed?.balance_cents === "6000000",
     `lent ${JSON.stringify(lent.value)}, collected ${JSON.stringify(collected.value)}, owed ${owed?.balance_cents}`,
@@ -21063,7 +21063,7 @@ async function mcpReceivableSuite(): Promise<void> {
   track("accounts", linked.receivableAccountId);
   const hidden = !((await tool("list_accounts")).value as { id: string }[]).some((row) => row.id === linked.receivableAccountId);
   assert(
-    next("RF-249: the «Me debe» a credit somebody else pays opens is a receivable and stays out of every account list (RF-216)"),
+    next("RF-255: the «Me debe» a credit somebody else pays opens is a receivable and stays out of every account list (RF-216)"),
     (await subtypeOf(linked.receivableAccountId))?.subtype === "receivable" && hidden,
     `linked ${JSON.stringify(linked)}, row ${JSON.stringify(await subtypeOf(linked.receivableAccountId))}, hidden ${hidden}`,
   );
@@ -21105,7 +21105,7 @@ async function legacyChannelSuite(): Promise<void> {
   );
 }
 
-// RF-253: each movement remembers the door it came through, and Claude can read it and filter by it.
+// RF-256: each movement remembers the door it came through, and Claude can read it and filter by it.
 async function mcpOriginSuite(): Promise<void> {
   console.log("");
   const tag = randomUUID().slice(0, 8);
@@ -21149,7 +21149,7 @@ async function mcpOriginSuite(): Promise<void> {
   await tool("import_statement", { accountId: ids.bank, rows: line, statement, previewKey: preview.value?.previewKey });
   const [imported] = await fixtureSql<{ id: string }[]>`select id from transactions where description = ${name("extracto")}`;
   assert(
-    next("RF-253: a movement remembers the door it came through: Claude's tool, the web's form, the Bandeja's accept and a statement import"),
+    next("RF-256: a movement remembers the door it came through: Claude's tool, the web's form, the Bandeja's accept and a statement import"),
     (await viaOf(byClaude)) === "mcp" && (await viaOf(byWeb.transactionId)) === "web" && byInbox !== undefined && (await viaOf(byInbox)) === "inbox" &&
       imported !== undefined && (await viaOf(imported.id)) === "import",
     `claude ${await viaOf(byClaude)}, web ${await viaOf(byWeb.transactionId)}, inbox ${byInbox ? await viaOf(byInbox) : accepted.value && JSON.stringify(accepted.value)}, import ${imported ? await viaOf(imported.id) : preview.value && JSON.stringify(preview.value)}`,
@@ -21158,7 +21158,7 @@ async function mcpOriginSuite(): Promise<void> {
   const listed = async (filter: Record<string, unknown>) => (await tool("list_movements", { ...filter, accountId: ids.bank })).value as { id: string; createdVia: string | null }[];
   const [onlyClaude, onlyWeb, all] = [await listed({ createdVia: "mcp" }), await listed({ createdVia: "web" }), await listed({})];
   assert(
-    next("RF-253: list_movements answers each movement's createdVia and filters by it"),
+    next("RF-256: list_movements answers each movement's createdVia and filters by it"),
     onlyClaude.length === 1 && onlyClaude[0].id === byClaude && onlyClaude[0].createdVia === "mcp" &&
       onlyWeb.length === 1 && onlyWeb[0].id === byWeb.transactionId && all.length === 4 && all.every((row) => row.createdVia !== undefined),
     `mcp ${JSON.stringify(onlyClaude)}, web ${JSON.stringify(onlyWeb)}, all ${all.length}`,
