@@ -147,7 +147,7 @@ function registerReadTools(server: McpServer): void {
     },
   );
 
-  // RF-249: whether each account's alerts keep arriving, by fixed rules; Claude explains a gap, the app calls no model.
+  // RF-251: whether each account's alerts keep arriving, by fixed rules; Claude explains a gap, the app calls no model.
   server.registerTool(
     "alert_channels",
     {

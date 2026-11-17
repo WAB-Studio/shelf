@@ -1,4 +1,4 @@
-// How long an account may go without an alert before it reads as silent (RF-249).
+// How long an account may go without an alert before it reads as silent (RF-251).
 export const SILENT_AFTER_DAYS = 7;
 
 export type AlertChannelFacts = {

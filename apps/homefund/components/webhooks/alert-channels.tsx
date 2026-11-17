@@ -6,7 +6,7 @@ import { Flex, Heading, Link, Text } from "@/components/ui";
 import { Link as LocaleLink } from "@/i18n/navigation";
 import type { AlertChannel } from "@/lib/alert-channels";
 
-// RF-249: per bank or card account, when its last alert arrived and how, so a channel that broke is seen in
+// RF-251: per bank or card account, when its last alert arrived and how, so a channel that broke is seen in
 // days, not at the end of the month. `nowIso` comes from the server so the relative time never differs on hydration.
 export function AlertChannels({ channels, nowIso }: { channels: AlertChannel[]; nowIso: string }) {
   const t = useTranslations("webhooks.alertChannels");

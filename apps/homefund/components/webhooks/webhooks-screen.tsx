@@ -90,7 +90,7 @@ export function WebhooksScreen({
   // RF-187: where Resend Inbound receives; null hides the forwarding way.
   inboundDomain: string | null;
   apkReady: boolean;
-  // RF-249: the account-by-account state of the alerts, and the instant it was read.
+  // RF-251: the account-by-account state of the alerts, and the instant it was read.
   alertChannels: AlertChannel[];
   nowIso: string;
 }) {

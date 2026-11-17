@@ -21004,7 +21004,7 @@ async function payOwnCardSuite(): Promise<void> {
   );
 }
 
-// RF-249: alert_channels says per account when its last alert arrived and how; a silent account is told apart from
+// RF-251: alert_channels says per account when its last alert arrived and how; a silent account is told apart from
 // one that never received any, and another person's accounts never show.
 async function alertChannelsSuite(): Promise<void> {
   console.log("");
@@ -21045,7 +21045,7 @@ async function alertChannelsSuite(): Promise<void> {
   const rows = (answer.value ?? []) as { accountId: string; status: string; lastVia: string | null; daysSince: number | null }[];
   const byId = new Map(rows.map((row) => [row.accountId, row]));
   assert(
-    next("RF-249: alert_channels reads an account with a week of silence as silent, one with a fresh alert as active, one with none as never, and shows no one else's"),
+    next("RF-251: alert_channels reads an account with a week of silence as silent, one with a fresh alert as active, one with none as never, and shows no one else's"),
     !answer.isError && byId.get(silent)?.status === "silent" && byId.get(silent)?.daysSince === 10 &&
       byId.get(fresh)?.status === "active" && byId.get(fresh)?.lastVia === "phone" &&
       byId.get(never)?.status === "never" && byId.get(never)?.lastVia === null && !byId.has(foreign),

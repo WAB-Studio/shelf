@@ -5,7 +5,7 @@ import { sql } from "drizzle-orm";
 import { withUserDb } from "@/db/session";
 import type { AlertChannelFacts } from "@/lib/alert-channels";
 
-// Where each bank or card account stands as a channel of alerts (RF-249): the last delivery that landed on it
+// Where each bank or card account stands as a channel of alerts (RF-251): the last delivery that landed on it
 // and how it arrived, in one round trip. A delivery belongs to the account the movement it became is on, or,
 // while it waits, the account it proposes. A delivery the channel refused as no purchase (a promotion, a
 // statement, a failed attempt) is no alert; a repeat of one still shows the channel alive.
