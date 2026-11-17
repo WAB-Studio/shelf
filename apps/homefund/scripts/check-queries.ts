@@ -21124,7 +21124,7 @@ async function pocketCoverSuite(): Promise<void> {
   );
 
   const lines = [{ line: 1, date: day, description: `EXTRACTO ${tag}`, amountCents: -70_000_00, reference: `R242-${tag}`, categoryId: ids.category }];
-  const statement = { periodStart: day, cutOffDate: day };
+  const statement = { periodStart: day, cutOffDate: day, closingBalanceCents: 0 };
   const preview = await tool("preview_statement", { accountId: ids.stmt, rows: lines, statement });
   const imported = await tool("import_statement", { accountId: ids.stmt, rows: lines, statement, previewKey: (preview.value as { previewKey?: string }).previewKey });
   const [imp] = await fixtureSql<{ id: string }[]>`select id from transactions where from_account_id = ${ids.stmt} and external_ref is not null and amount_cents = ${70_000_00}`;
