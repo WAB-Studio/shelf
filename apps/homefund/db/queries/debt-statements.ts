@@ -2,7 +2,14 @@ import "server-only";
 
 import { sql, type SQL } from "drizzle-orm";
 
-import { minimumPaymentSql, unpaidStatementMinimumSql } from "@/db/queries/debt-minimum";
+import {
+  minimumPaidSql,
+  minimumPaymentSql,
+  paidSince,
+  periodStartSql,
+  totalDueSql,
+  unpaidStatementMinimumSql,
+} from "@/db/queries/debt-minimum";
 import { withUserDb } from "@/db/session";
 import { nextDayOfMonthOnOrAfter, todayInBogota } from "@/lib/dates";
 
@@ -12,6 +19,10 @@ export type CurrentStatement = {
   balanceCents: number;
   // Null when no figure is known: no terms minimum and no unpaid statement. Never zero for that.
   minimumPaymentCents: number | null;
+  // What was paid this period covers its minimum, so none is asked again.
+  minimumPaid: boolean;
+  // What paying the latest statement in full asks now, or everything owed when there is no statement.
+  totalDueCents: number;
   nextCutOffDate: string | null;
   nextDueDate: string | null;
 };
@@ -35,6 +46,8 @@ export async function getCurrentStatement(
       period_start: string;
       balance_cents: string;
       minimum_payment_cents: string | null;
+      minimum_paid: boolean;
+      total_due_cents: string;
       statement_cut_off_day: number | null;
       payment_due_day: number | null;
       latest_cut_off_date: string | null;
@@ -43,7 +56,23 @@ export async function getCurrentStatement(
       select
         coalesce(ls.cut_off_date + 1, a.initial_balance_on) as period_start,
         b.balance_cents,
+        ${minimumPaidSql({
+          fixed: sql`dt.minimum_payment_cents`,
+          pct: sql`dt.minimum_payment_pct`,
+          balance: sql`b.balance_cents`,
+          statementMinimum: sql`ls.minimum_payment_cents`,
+          paid: sql`pp.paid`,
+        })} as minimum_paid,
+        ${totalDueSql({ balance: sql`b.balance_cents`, statementClosing: sql`ls.closing_balance_cents`, paid: sql`pp.paid` })} as total_due_cents,
         ${minimumPaymentSql({
+          paid: minimumPaidSql({
+            fixed: sql`dt.minimum_payment_cents`,
+            pct: sql`dt.minimum_payment_pct`,
+            balance: sql`b.balance_cents`,
+            statementMinimum: sql`ls.minimum_payment_cents`,
+            paid: sql`pp.paid`,
+          }),
+          paidCents: sql`pp.paid`,
           fixed: sql`dt.minimum_payment_cents`,
           pct: sql`dt.minimum_payment_pct`,
           balance: sql`b.balance_cents`,
@@ -67,12 +96,22 @@ export async function getCurrentStatement(
       -- The latest closed statement, if any: the same row answers the period's
       -- opening date and, below, the cut-off and due dates the bank printed.
       left join lateral (
-        select s.cut_off_date, s.payment_due_date, s.minimum_payment_cents
+        select s.cut_off_date, s.payment_due_date, s.minimum_payment_cents, s.closing_balance_cents
         from account_statements s
         where s.account_id = dt.account_id
         order by s.cut_off_date desc
         limit 1
       ) ls on true
+      cross join lateral (select ${periodStartSql({
+        statementCutOff: sql`ls.cut_off_date`,
+        cutOffDay: sql`dt.statement_cut_off_day`,
+        today,
+      })} as since) ps
+      cross join lateral (select ${paidSince({
+        account: sql`dt.account_id`,
+        currency: sql`a.settlement_currency`,
+        since: sql`ps.since`,
+      })} as paid) pp
       where dt.account_id = ${accountId}
     `);
 
@@ -84,6 +123,8 @@ export async function getCurrentStatement(
       // A bigint arrives from the driver as a string; the ledger keeps cents a number.
       balanceCents: Number(row.balance_cents),
       minimumPaymentCents: row.minimum_payment_cents === null ? null : Number(row.minimum_payment_cents),
+      minimumPaid: row.minimum_paid,
+      totalDueCents: Number(row.total_due_cents),
       nextCutOffDate:
         row.latest_cut_off_date !== null
           ? row.latest_cut_off_date

@@ -484,6 +484,11 @@ export type ReconcileOverviewRow = {
   latestReconciledOn: string | null;
   // The day the account was added to HomeFund, in Bogota: a never-counted account ages from it.
   addedOn: string;
+  // The limit the terms store, in the settlement currency; null when the account has none.
+  creditLimitCents: number | null;
+  // What purchases in another currency still waiting to be billed add to the debt, in the settlement currency:
+  // the bank already counts them in its available credit, the settlement pocket does not.
+  toBillCents: number;
 };
 
 /**
@@ -511,6 +516,15 @@ export async function listReconcileOverview(
           string | null
         >`(select max(r.reconciled_on)::text from account_reconciliations r where r.account_id = accounts.id)`,
         addedOn: sql<string>`(accounts.created_at at time zone 'America/Bogota')::date::text`,
+        creditLimitCents: sql<
+          string | null
+        >`(select dt.credit_limit_cents::text from debt_terms dt where dt.account_id = accounts.id)`,
+        toBillCents: sql<string>`coalesce((
+          select sum(case when t.from_account_id = accounts.id then t.counter_amount_cents else -t.counter_amount_cents end)
+          from transactions t
+          where (t.from_account_id = accounts.id or t.to_account_id = accounts.id)
+            and t.currency <> accounts.settlement_currency and t.counter_is_estimate
+        ), 0)::text`,
       })
       .from(accounts)
       .where(
@@ -522,7 +536,12 @@ export async function listReconcileOverview(
         accounts.name,
       );
 
-    return rows.map((row) => ({ ...row, derivedCents: Number(row.derivedCents) }));
+    return rows.map((row) => ({
+      ...row,
+      derivedCents: Number(row.derivedCents),
+      creditLimitCents: row.creditLimitCents === null ? null : Number(row.creditLimitCents),
+      toBillCents: Number(row.toBillCents),
+    }));
   });
 }
 

@@ -19,6 +19,7 @@ import {
 import type { DebtOverviewRow, DebtPocket } from "@/db/queries/debt-overview";
 import type { CurrencyCode } from "@/lib/currency";
 import { civilDateToDate } from "@/lib/dates";
+import { formatRatePercent } from "@/lib/validation/debt-terms";
 import type { Locale } from "@/lib/locales";
 import { useMoneyText } from "@/lib/use-privacy";
 
@@ -62,6 +63,8 @@ export type DebtTableRow = {
   owedCents: number;
   creditCents: number;
   otherOwed: DebtPocket[];
+  // A card or a loan: what «Pagar» is called and asks differs.
+  subtype: string;
   terms: DebtOverviewRow | null;
   canWrite: boolean;
   // Who pays this credit when somebody else does: its row says so under the name.
@@ -268,6 +271,8 @@ export function DebtsTable({
   const t = useTranslations("debts");
   const tKey = useTranslations();
   const format = useFormatter();
+  const moneyText = useMoneyText();
+  const locale = useLocale() as Locale;
 
   const pageCount = Math.max(1, Math.ceil(total / pageSize));
   const from = (page - 1) * pageSize + 1;
@@ -278,6 +283,10 @@ export function DebtsTable({
       day: "numeric",
       month: "short",
     });
+  }
+
+  function monthName(date: string | null): string {
+    return format.dateTime(date === null ? new Date() : civilDateToDate(date), { month: "long" });
   }
 
   function absent(): ReactNode {
@@ -332,12 +341,21 @@ export function DebtsTable({
         row.terms?.availableCreditCents == null ? (
           absent()
         ) : (
-          <Money
-            minor={row.terms.availableCreditCents}
-            currency={row.currency}
-            tone="income"
-            signed={false}
-          />
+          <Flex direction="column" align="end">
+            <Money
+              minor={Math.min(row.terms.availableCreditCents, row.terms.creditLimitCents ?? row.terms.availableCreditCents)}
+              currency={row.currency}
+              tone="income"
+              signed={false}
+            />
+            {row.terms.creditLimitCents !== null && row.terms.availableCreditCents > row.terms.creditLimitCents && (
+              <Text size="1" color="gray">
+                {t("favourShort", {
+                  amount: moneyText(row.terms.availableCreditCents - row.terms.creditLimitCents, row.currency, locale),
+                })}
+              </Text>
+            )}
+          </Flex>
         ),
     },
     {
@@ -366,7 +384,11 @@ export function DebtsTable({
       align: "end",
       numeric: true,
       cell: (row) =>
-        row.terms?.minimumPaymentCents == null || row.owedCents === 0 ? (
+        row.terms?.minimumPaid ? (
+          <Text size="1" color="gray">
+            {t("minimumPaidMonth", { month: monthName(row.terms.nextDueDate ?? row.terms.nextCutOffDate) })}
+          </Text>
+        ) : row.terms?.minimumPaymentCents == null || row.owedCents === 0 ? (
           absent()
         ) : (
           <Text color="gray">
@@ -483,7 +505,7 @@ export function DebtsTable({
               ? [
                   {
                     key: "pay",
-                    label: t("rowPay"),
+                    label: t(row.subtype === "loan" ? "rowPayLoan" : "rowPayCard"),
                     onSelect: () => onPay(row),
                   },
                 ]
@@ -547,7 +569,7 @@ function DebtMeta({
   onEditTerms: () => void;
 }) {
   const t = useTranslations("debts");
-  const format = useFormatter();
+  const locale = useLocale() as Locale;
 
   if (row.terms === null) {
     // A caller who cannot write the debt is told what it lacks, not invited to
@@ -576,13 +598,8 @@ function DebtMeta({
   return (
     <Text size="2" color="gray">
       {t("revolvingMeta", {
-        // The effective monthly step the server derived off the annual rate, only
-        // read as a percentage here.
-        pct: format.number(row.terms.monthlyRatePct, {
-          style: "percent",
-          minimumFractionDigits: 1,
-          maximumFractionDigits: 1,
-        }),
+        // The rate as the person typed it: the stored annual fraction shifted as text, never a monthly step.
+        rate: formatRatePercent(row.terms.annualRate, locale === "es" ? "," : "."),
       })}
     </Text>
   );

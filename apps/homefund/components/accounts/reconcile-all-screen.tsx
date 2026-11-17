@@ -30,6 +30,7 @@ import { civilDateToDate, todayInBogota } from "@/lib/dates";
 import type { CurrencyCode } from "@/lib/currency";
 import type { Locale } from "@/lib/locales";
 import { amountToInput, parseAmount } from "@/lib/money";
+import { useMoneyText } from "@/lib/use-privacy";
 import { useActionErrorToast, type MessageKey } from "@/lib/use-action-toast";
 import { checkRealAmount, flipsSign } from "@/lib/validation/account-reconciliation";
 
@@ -46,6 +47,11 @@ export type ReconcileAllRow = {
   // Days since the last count, or since the account was added when it was never counted.
   ageDays: number;
   never: boolean;
+  // The limit the terms store, which the cupo helper opens with; null when there is none.
+  creditLimitCents: number | null;
+  // Purchases in another currency not billed yet, which the bank already counts against the limit: the
+  // helper takes them off so they are not counted twice.
+  toBillCents: number;
 };
 
 // A refusal sits under the row it names; the other rows keep what was typed.
@@ -61,10 +67,21 @@ export function ReconcileAllScreen({ rows }: { rows: ReconcileAllRow[] }) {
   const router = useRouter();
   const locale = useLocale() as Locale;
   const format = useFormatter();
+  const moneyText = useMoneyText();
   const onActionError = useActionErrorToast();
 
   const [typed, setTyped] = useState<Record<string, string>>({});
-  const [cupos, setCupos] = useState<Record<string, Cupo>>({});
+  // A card with a stored limit opens the helper with it already written.
+  const [cupos, setCupos] = useState<Record<string, Cupo>>(() =>
+    Object.fromEntries(
+      rows
+        .filter((row) => row.kind === "liability" && row.creditLimitCents !== null)
+        .map((row) => [
+          row.id,
+          { open: true, total: amountToInput(row.creditLimitCents!, row.currency, locale), available: "" },
+        ]),
+    ),
+  );
   const [refusal, setRefusal] = useState<Refusal | null>(null);
 
   const reconcile = useAction(reconcileAccountsAction, {
@@ -131,7 +148,9 @@ export function ReconcileAllScreen({ rows }: { rows: ReconcileAllRow[] }) {
     const [total, available] = [parseAmount(next.total), parseAmount(next.available)];
     if (total === null || available === null) return;
 
-    const owed = total - available;
+    // The bank's available credit already counts what is waiting to be billed in another currency, which this
+    // pocket does not hold: it comes off, or the purchase is owed twice.
+    const owed = total - available - row.toBillCents;
     setFigure(row.id, `${owed < 0 ? "-" : ""}${amountToInput(Math.abs(owed), row.currency, locale)}`);
   }
 
@@ -284,6 +303,15 @@ export function ReconcileAllScreen({ rows }: { rows: ReconcileAllRow[] }) {
                           </FieldControl>
                         </Field>
                       </Flex>
+                    )}
+                    {cupo.open && (
+                      <Text size="2" color="gray">
+                        {row.toBillCents !== 0
+                          ? t("reconcileAllCupoNoteForeign", {
+                              amount: moneyText(row.toBillCents, row.currency, locale),
+                            })
+                          : t("reconcileAllCupoNote")}
+                      </Text>
                     )}
                   </Flex>
                 )}

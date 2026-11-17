@@ -3,7 +3,7 @@ import "server-only";
 import { z } from "zod";
 
 import { upsertDebtTerms } from "@/db/queries/debt-terms";
-import { recordDebtPayment } from "@/db/queries/installment-plans";
+import { recordLoanInstalment, type LoanInstalmentResult } from "@/db/queries/loan-instalment";
 import { getSettlementCurrencies } from "@/db/queries/transactions";
 import { assertRefined, requireMinor } from "@/lib/action-amounts";
 import { BASE_CURRENCY } from "@/lib/currency";
@@ -128,7 +128,9 @@ function mapPaymentError(error: unknown): never {
 
 /**
  * Records a payment that credits a liability from an asset (RF-16). The
- * transfer's scope and kind fall to triggers.
+ * transfer's scope and kind fall to triggers. A payment into a loan splits its interest from
+ * its capital unless it is an extra payment (RF-282): the interest is an expense of the source, the
+ * capital the transfer.
  *
  * The amount is read in the currency the SOURCE settles in, which is the one
  * `set_transaction_currency` books the movement in (RF-121). A source and a debt
@@ -144,7 +146,8 @@ export async function payDebt({
   amount,
   occurredAt,
   requestRef,
-}: RecordDebtPaymentInput): Promise<{ transactionId: string }> {
+  extra,
+}: RecordDebtPaymentInput): Promise<Pick<LoanInstalmentResult, "transactionId" | "interestCents" | "capitalCents" | "basis">> {
   const settlement = await getSettlementCurrencies({ fromAccountId, toAccountId });
   const currency = settlement.from ?? BASE_CURRENCY;
 
@@ -152,18 +155,19 @@ export async function payDebt({
 
   const amountCents = requireMinor(amount);
 
-  let result: Awaited<ReturnType<typeof recordDebtPayment>>;
+  let result: LoanInstalmentResult;
   try {
-    result = await recordDebtPayment({
+    result = await recordLoanInstalment({
       fromAccountId,
       toAccountId,
       amountCents,
       occurredAt,
       requestRef,
+      extra,
     });
   } catch (error) {
     mapPaymentError(error);
   }
 
-  return { transactionId: result.transactionId };
+  return result;
 }

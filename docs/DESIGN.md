@@ -836,3 +836,24 @@ todas las cuentas a la vez.
   Inicio, a lo sumo una línea en la columna de al lado, «3 cuentas sin cuadrar hace más de un mes · Cuadrar todo»; sin cuentas así, nada.
 - **Inicio no muestra los «Descuadre»** (2026-11-17). Las últimas del listado de Inicio son lo que pasó; la diferencia de un cuadre sigue en
   Movimientos y en el historial de la cuenta.
+
+## Decisión del 2026-11-17: pagar tarjetas y créditos, extractos y cupo, por el usuario
+
+- **Pagar tarjeta.** El botón y el diálogo se llaman «Pagar tarjeta». Bajo «Desde» va «Cuánto pagas» con tres opciones en un
+  control segmentado: «Mínimo $X», «Total $Y» y «Otro». Elegir una escribe su cifra en el campo de monto; escribir en el
+  campo elige «Otro». Se abre en «Mínimo» (en «Total» si no hay mínimo). «Total» es lo que pide el último extracto, o todo
+  lo que se debe si no hay extracto. Si el monto pasa lo que se debe, un aviso ámbar sin cerrar nada dice «Pagas $X más de lo
+  que debes…» y el botón sigue activo. Con el mínimo cubierto: «El mínimo de este periodo ya está pagado.»
+- **Mínimo pagado.** Donde la ficha, la fila o la tarjeta del móvil nombraban «Pago mínimo $X», dice en gris «Mínimo de
+  noviembre pagado». Lo abonado en el periodo se descuenta: un abono parcial pide solo el resto.
+- **Cupo disponible.** Nunca pasa del cupo. Con saldo a favor la cifra es el cupo y la nota dice «de $8.000.000 · a favor $1.101.844».
+- **Pagar cuota.** En un préstamo el botón y el diálogo se llaman «Pagar cuota»; las opciones son «Cuota $X» y «Abono extra».
+  Bajo el monto, en gris, una línea dice con qué se separan intereses y capital (el plan de pagos, o la tasa E.A. y los días
+  desde el último pago). Sin tasa: «Este crédito no tiene tasa: el saldo no cuenta intereses.» y el enlace «Agregar la tasa».
+  Al guardar, el aviso dice cuánto fue a capital y cuánto a intereses.
+- **Tasa.** «Tasa E.A. (%)» en el formulario, en la exportación y en la línea de la deuda («Rotativo · 28,5 % E.A.»); acepta coma.
+- **Extractos.** Cinco campos: fecha de corte, fecha de vencimiento, total y, opcionales, mínimo, intereses y comisiones. Las
+  fechas abren en las que dan el día de corte y el de pago guardados. Encima de la tabla, «Editar» y «Borrar» actúan sobre el
+  último extracto, con «Solo el último extracto se puede corregir o borrar.»; borrar pide confirmación y nombra el corte.
+- **Cuadrar todo.** El cupo total abre con el cupo guardado. Bajo los campos, una línea dice de dónde sale lo que se debe: el
+  cupo total menos el disponible, menos lo que el banco ya cuenta de compras en otra moneda por facturar.
