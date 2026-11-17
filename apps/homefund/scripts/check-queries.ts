@@ -4179,6 +4179,7 @@ async function main(): Promise<void> {
   await mcpMembersSuite();
   await mcpDeletesSuite();
   await mcpMoneyModelSuite();
+  await pocketCoverSuite();
 }
 
 // A member recorded without a login is someone in the fund: a leader whose fund holds one is not alone, so an
@@ -20893,5 +20894,180 @@ async function mcpMoneyModelSuite(): Promise<void> {
     next("RF-241: record_movement marks an unknown counterparty as waiting for it, and refuses the mark on a transfer"),
     waiting?.awaiting_counterparty === true && refused.isError && (refused.value as { error: string }).error === es.mcp.errors.awaitsNeedsOneSide,
     `waiting ${JSON.stringify(waiting)}, refused ${JSON.stringify(refused.value)}`,
+  );
+}
+
+// RF-244: money that leaves a savings account with pockets comes out of its pocket when the account's own part cannot carry it.
+// The database books one transfer per pocket for the shortfall, on the movement's day, caused by it, from every write path.
+async function pocketCoverSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const today = todayInBogota();
+  const day = shiftDate(today, -3);
+  const { POST } = await import("@/app/mcp/route");
+  const { bookMovement } = await import("@/db/queries/ledger-write");
+  const owner = await createMembershipFreeUser();
+  const name = (what: string) => `Harness rf241 ${what} ${tag}`;
+  const ids = {
+    category: randomUUID(), main: randomUUID(), dinero: randomUUID(), viaje: randomUUID(), bare: randomUUID(), thin: randomUUID(),
+    poco: randomUUID(), card: randomUUID(), stmt: randomUUID(), stmtPocket: randomUUID(),
+  };
+  await fixtureSql.begin(async (tx) => {
+    await tx`insert into categories (id, owner_user_id, name, kind, color) values (${ids.category}, ${owner.id}, ${name("base")}, 'expense', '#8C4A4A')`;
+    const open = (id: string, label: string, cents: number, extra: { kind?: string; subtype?: string; parent?: string } = {}) => tx`
+      insert into accounts (id, owner_user_id, name, kind, subtype, initial_balance_cents, initial_balance_on, parent_account_id)
+      values (${id}, ${owner.id}, ${label}, ${extra.kind ?? "asset"}, ${extra.subtype ?? "bank"}, ${cents}, '2026-01-01', ${extra.parent ?? null})`;
+    await open(ids.main, name("ahorros"), 100_000_00);
+    await open(ids.dinero, "Dinero", 500_000_00, { parent: ids.main });
+    await open(ids.viaje, "Viaje", 200_000_00, { parent: ids.main });
+    await open(ids.bare, name("sin bolsillos"), 0);
+    await open(ids.thin, name("delgada"), 10_000_00);
+    await open(ids.poco, "Poco", 30_000_00, { parent: ids.thin });
+    await open(ids.card, name("tarjeta"), 0, { kind: "liability", subtype: "card" });
+    await open(ids.stmt, name("extracto"), 50_000_00);
+    await open(ids.stmtPocket, "Extracto bolsillo", 80_000_00, { parent: ids.stmt });
+  });
+  track("categories", ids.category);
+  for (const id of [ids.main, ids.dinero, ids.viaje, ids.bare, ids.thin, ids.poco, ids.card, ids.stmt, ids.stmtPocket]) track("accounts", id);
+  const { id: keyId, token } = await asUser(owner, () =>
+    issueWebhookCredential({ name: name("clave"), purpose: "mcp", defaultAccountId: null, defaultCategoryId: null }),
+  );
+  keep("webhook_credentials", keyId);
+  const { tool } = mcpClient(POST, token);
+
+  const free = async (id: string) => {
+    const [row] = await fixtureSql<{ cents: string }[]>`select balance_cents::text as cents from account_balances where id = ${id} and currency = 'COP'`;
+    return Number(row?.cents);
+  };
+  const coversOf = (cause: string) => fixtureSql<{ pocket: string; parent: string; cents: number; day: string; description: string }[]>`
+    select from_account_id as pocket, to_account_id as parent, amount_cents::int as cents, occurred_at::text as day, description
+    from transactions where caused_by_transaction_id = ${cause} and pocket_cover order by amount_cents desc, id`;
+  const stamp = async (id: string) => (await fixtureSql<{ stamp: string }[]>`select updated_at::text as stamp from transactions where id = ${id}`)[0]!.stamp;
+  const spend = async (from: string, cents: number, on = day) => {
+    const made = await tool("record_movement", { fromAccountId: from, toAccountId: null, amountCents: cents, occurredAt: on, description: name("gasto"), categoryId: ids.category });
+    const value = made.value as { transactionId: string; pocketCovers?: { pocketName: string; amountCents: number; currency: string }[] };
+    if (value?.transactionId) track("transactions", value.transactionId);
+    return { made, id: value?.transactionId ?? "", covers: value?.pocketCovers };
+  };
+  const revise = async (id: string, patch: Record<string, unknown>) =>
+    tool("update_movement", { transactionId: id, expectedUpdatedAt: await stamp(id), categoryId: ids.category, ...patch });
+
+  const within = await spend(ids.main, 60_000_00);
+  assert(
+    next("RF-244: an expense the account's free part carries books no transfer and says nothing about pockets"),
+    !within.made.isError && within.covers === undefined && (await coversOf(within.id)).length === 0 && (await free(ids.main)) === 40_000_00,
+    `answer ${JSON.stringify(within.made.value)}, free ${await free(ids.main)}`,
+  );
+
+  const over = await spend(ids.main, 140_000_00);
+  const [cover] = await coversOf(over.id);
+  const [row] = await fixtureSql<{ pocketCover: boolean; causedBy: string | null; kind: string }[]>`
+    select pocket_cover as "pocketCover", caused_by_transaction_id as "causedBy", kind from transactions
+    where caused_by_transaction_id = ${over.id}`;
+  assert(
+    next("RF-244: an expense that leaves the free part negative books one transfer from the pocket for exactly the shortfall, on the movement's day, caused by it, and record_movement says so"),
+    over.covers?.length === 1 && over.covers[0].pocketName === "Dinero" && over.covers[0].amountCents === 100_000_00 && over.covers[0].currency === "COP" &&
+      cover?.pocket === ids.dinero && cover.parent === ids.main && cover.cents === 100_000_00 && cover.day === day &&
+      cover.description === "Del bolsillo Dinero (automático)" && row?.pocketCover === true && row.causedBy === over.id && row.kind === "transfer" &&
+      (await free(ids.main)) === 0 && (await free(ids.dinero)) === 400_000_00,
+    `answer ${JSON.stringify(over.made.value)}, cover ${JSON.stringify(cover)}, free ${await free(ids.main)}, Dinero ${await free(ids.dinero)}`,
+  );
+
+  const bigger = await revise(over.id, { amountCents: 250_000_00 });
+  const [afterEdit] = await coversOf(over.id);
+  assert(
+    next("RF-244: an edit to the amount takes back what the movement booked and books the new shortfall, and says so"),
+    !bigger.isError && (bigger.value as { pocketCovers?: { amountCents: number }[] }).pocketCovers?.[0]?.amountCents === 210_000_00 &&
+      (await coversOf(over.id)).length === 1 && afterEdit?.cents === 210_000_00 && (await free(ids.main)) === 0,
+    `answer ${JSON.stringify(bigger.value)}, covers ${JSON.stringify(await coversOf(over.id))}`,
+  );
+
+  const moved = await revise(over.id, { occurredAt: shiftDate(day, 1) });
+  const [afterMove] = await coversOf(over.id);
+  const named = await revise(over.id, { description: name("otro nombre") });
+  const [afterName] = await coversOf(over.id);
+  assert(
+    next("RF-244: an edit to the date moves the transfer to the new day; one that changes no figure leaves it as it was"),
+    !moved.isError && afterMove?.day === shiftDate(day, 1) && afterMove.cents === 210_000_00 && !named.isError && afterName?.day === afterMove.day,
+    `moved ${JSON.stringify(afterMove)}, renamed ${JSON.stringify(afterName)}`,
+  );
+
+  const huge = await revise(over.id, { amountCents: 900_000_00 });
+  const pair = await coversOf(over.id);
+  assert(
+    next("RF-244: with several pockets the largest balance goes first, and what the pockets cannot give stays negative"),
+    !huge.isError && pair.length === 2 && pair[0].pocket === ids.dinero && pair[0].cents === 500_000_00 && pair[1].pocket === ids.viaje &&
+      pair[1].cents === 200_000_00 && (await free(ids.main)) === -160_000_00,
+    `covers ${JSON.stringify(pair)}, free ${await free(ids.main)}`,
+  );
+
+  const small = await revise(over.id, { amountCents: 1_000_00 });
+  assert(
+    next("RF-244: an edit that no longer needs the pockets takes the transfers back and the pockets get their money back"),
+    !small.isError && (await coversOf(over.id)).length === 0 && (await free(ids.dinero)) === 500_000_00 && (await free(ids.viaje)) === 200_000_00,
+    `Dinero ${await free(ids.dinero)}, Viaje ${await free(ids.viaje)}`,
+  );
+
+  await revise(over.id, { amountCents: 140_000_00 });
+  const [booked] = await coversOf(over.id);
+  const [coverRow] = await fixtureSql<{ id: string }[]>`select id from transactions where caused_by_transaction_id = ${over.id} and pocket_cover`;
+  const listed = (await tool("list_movements", { limit: 10 })).value as { id: string; pocketCover: boolean }[];
+  const undone = await tool("delete_movement", { transactionId: coverRow!.id });
+  await revise(over.id, { description: name("sin tocar cifras") });
+  assert(
+    next("RF-244: list_movements marks the transfer, and the person undoes it by deleting it: the expense stays, the account is negative again and nothing books it back until a figure changes"),
+    booked?.cents === 100_000_00 && listed.find((one) => one.id === coverRow!.id)?.pocketCover === true && !undone.isError &&
+      (await coversOf(over.id)).length === 0 && (await free(ids.main)) === -100_000_00,
+    `undone ${JSON.stringify(undone.value)}, covers ${JSON.stringify(await coversOf(over.id))}, free ${await free(ids.main)}`,
+  );
+
+  await revise(over.id, { amountCents: 150_000_00 });
+  const again = await coversOf(over.id);
+  const [pocketBefore] = [await free(ids.dinero)];
+  const gone = await tool("delete_movement", { transactionId: over.id });
+  assert(
+    next("RF-244: a figure that changes books the transfer again, and deleting the movement deletes its transfer with it"),
+    again.length === 1 && again[0].cents === 110_000_00 && pocketBefore === 390_000_00 && !gone.isError &&
+      (await coversOf(over.id)).length === 0 && (await free(ids.dinero)) === 500_000_00,
+    `again ${JSON.stringify(again)}, pocket ${pocketBefore}, gone ${JSON.stringify(gone.value)}`,
+  );
+
+  const web = await asUser(owner, () =>
+    bookMovement(
+      createTransactionSchema.parse({
+        fromAccountId: ids.main, toAccountId: null, amount: "250.000", occurredAt: today, description: name("web"),
+        splits: [{ categoryId: ids.category, amount: "250.000" }], labelIds: [],
+      }),
+    ),
+  );
+  track("transactions", web.transactionId);
+  const [webCover] = await coversOf(web.transactionId);
+  assert(
+    next("RF-244: the form's write path books it too, with the web answer unchanged"),
+    webCover?.cents === 210_000_00 && webCover.pocket === ids.dinero && webCover.day === today && web.pocketCovers === undefined,
+    `cover ${JSON.stringify(webCover)}, answer ${JSON.stringify(web)}`,
+  );
+
+  const bare = await spend(ids.bare, 5_000_00);
+  const thin = await spend(ids.thin, 100_000_00);
+  const card = await spend(ids.card, 5_000_00);
+  const [thinCover] = await coversOf(thin.id);
+  assert(
+    next("RF-244: no pockets, a card, or pockets that hold less than the shortfall keep today's behaviour: only what the pockets have moves, the rest stays negative"),
+    bare.covers === undefined && (await free(ids.bare)) === -5_000_00 && card.covers === undefined && (await coversOf(card.id)).length === 0 &&
+      thin.covers?.length === 1 && thinCover?.cents === 30_000_00 && (await free(ids.thin)) === -60_000_00 && (await free(ids.poco)) === 0,
+    `bare ${await free(ids.bare)}, thin ${await free(ids.thin)}, cover ${JSON.stringify(thinCover)}`,
+  );
+
+  const lines = [{ line: 1, date: day, description: `EXTRACTO ${tag}`, amountCents: -70_000_00, reference: `R242-${tag}`, categoryId: ids.category }];
+  const statement = { periodStart: day, cutOffDate: day };
+  const preview = await tool("preview_statement", { accountId: ids.stmt, rows: lines, statement });
+  const imported = await tool("import_statement", { accountId: ids.stmt, rows: lines, statement, previewKey: (preview.value as { previewKey?: string }).previewKey });
+  const [imp] = await fixtureSql<{ id: string }[]>`select id from transactions where from_account_id = ${ids.stmt} and external_ref is not null and amount_cents = ${70_000_00}`;
+  const [lineCover] = imp ? await coversOf(imp.id) : [];
+  assert(
+    next("RF-244: a statement line that overdraws the account books the transfer too"),
+    !imported.isError && lineCover?.pocket === ids.stmtPocket && lineCover.cents === 20_000_00 && lineCover.day === day && (await free(ids.stmt)) === 0,
+    `imported ${JSON.stringify(imported.value)}, cover ${JSON.stringify(lineCover)}, free ${await free(ids.stmt)}`,
   );
 }

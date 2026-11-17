@@ -154,6 +154,9 @@ export type TransactionListRow = {
   // The reconciliation that booked this movement as its adjustment (RF-138); null for every
   // movement a person made.
   reconciliationId: string | null;
+  // The transfer the database booked from a pocket into its account to cover what a movement left of the
+  // account's free part below zero (RF-244); its cause is `causedByTransactionId`.
+  pocketCover: boolean;
   // `updated_at::text` as Postgres prints it; an edit sends it back so a save after someone
   // else's is refused. Never a Date: its milliseconds make the row look newer than itself.
   updatedAt: string;
@@ -176,6 +179,44 @@ export class ResendChangedError extends Error {
   }
 }
 
+// What the database moved from a pocket into its account for a movement (RF-244), as a caller reads it back.
+export type PocketCover = {
+  transactionId: string;
+  pocketAccountId: string;
+  pocketName: string;
+  amountCents: number;
+  currency: CurrencyCode;
+};
+
+/** The transfers a movement drew from its account's pockets, largest first; none for nearly every movement. */
+export async function readPocketCovers(tx: Transaction, causeId: string): Promise<PocketCover[]> {
+  const rows = await tx.execute<{
+    id: string;
+    pocket_account_id: string;
+    pocket_name: string;
+    amount_cents: string;
+    currency: CurrencyCode;
+  }>(sql`
+    select t.id, t.from_account_id as pocket_account_id, p.name as pocket_name, t.amount_cents, t.currency
+    from transactions t
+    join accounts p on p.id = t.from_account_id
+    where t.caused_by_transaction_id = ${causeId}::uuid and t.pocket_cover
+    order by t.amount_cents desc, t.id
+  `);
+  return rows.map((row) => ({
+    transactionId: row.id,
+    pocketAccountId: row.pocket_account_id,
+    pocketName: row.pocket_name,
+    amountCents: Number(row.amount_cents),
+    currency: row.currency,
+  }));
+}
+
+/** `readPocketCovers` for a caller with no transaction of its own: an edit's answer. */
+export function pocketCoversOf(causeId: string): Promise<PocketCover[]> {
+  return withUserDb((tx) => readPocketCovers(tx, causeId));
+}
+
 export type CreateMovementArgs = CreateTransactionArgs & {
   // The key a form mints when it opens; it is stored as `form:<requestRef>` and wins over
   // `externalRef`, so a copy of the same submit answers with the movement the first one booked.
@@ -183,6 +224,9 @@ export type CreateMovementArgs = CreateTransactionArgs & {
   // Its own column grant (migration 0040); written in the same transaction as the movement, so a
   // cause that vanished mid-write takes the movement down with it.
   causedByTransactionId?: string | null;
+  // Reads back, in the same transaction, what the pockets covered for it (RF-244): one more statement,
+  // so only the caller that tells a person asks.
+  reportPocketCovers?: boolean;
 };
 
 /**
@@ -196,8 +240,9 @@ export type CreateMovementArgs = CreateTransactionArgs & {
 export async function createTransaction({
   requestRef,
   causedByTransactionId,
+  reportPocketCovers = false,
   ...args
-}: CreateMovementArgs): Promise<{ transactionId: string }> {
+}: CreateMovementArgs): Promise<{ transactionId: string; pocketCovers?: PocketCover[] }> {
   const externalRef = requestRef ? `form:${requestRef}` : args.externalRef;
 
   try {
@@ -209,7 +254,8 @@ export async function createTransaction({
           where id = ${created.transactionId}
         `);
       }
-      return created;
+      if (!reportPocketCovers || args.fromAccountId === null) return created;
+      return { ...created, pocketCovers: await readPocketCovers(tx, created.transactionId) };
     });
   } catch (error) {
     const index = pgConstraintName(error) ?? "";
@@ -755,6 +801,7 @@ export async function listTransactions(
         reviewedAt: transactions.reviewedAt,
         causedByTransactionId: transactions.causedByTransactionId,
         reconciliationId: transactions.reconciliationId,
+        pocketCover: transactions.pocketCover,
         // Qualified: the joined accounts carry an `updated_at` of their own.
         updatedAt: sql<string>`transactions.updated_at::text`,
         // Written with the joined alias, never a Drizzle column reference: a
