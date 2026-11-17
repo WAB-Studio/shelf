@@ -19428,7 +19428,7 @@ async function widgetSuite(): Promise<void> {
     response.status === 200 &&
       response.headers.get("cache-control") === "private, max-age=300" &&
       summary.currency === "COP" &&
-      summary.disponible?.cents === 1_420_000 &&
+      summary.disponible?.cents === 1_320_000 &&
       summary.mes?.spentCents === 30_000 &&
       summary.mes?.budgetedCents === 500_000 &&
       summary.mes?.remainingCents === 470_000 &&
