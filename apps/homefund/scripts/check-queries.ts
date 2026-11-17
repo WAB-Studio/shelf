@@ -21040,7 +21040,7 @@ async function legacyChannelSuite(): Promise<void> {
   );
 }
 
-// RF-253, RF-254: record_card_statement plans before it writes and then writes what it planned: the terms (updated only
+// RF-258, RF-259: record_card_statement plans before it writes and then writes what it planned: the terms (updated only
 // by a statement no older than the latest), the closed statement (once per cut-off), the deferrals by the bank's
 // authorization number (an older statement never overwrites a newer) and which purchases are not booked yet.
 async function cardStatementSuite(): Promise<void> {
@@ -21107,7 +21107,7 @@ async function cardStatementSuite(): Promise<void> {
   const planned = (await tool("record_card_statement", { ...first, dryRun: true })).value as Plan;
   const afterPlan = await detail();
   assert(
-    next("RF-254: record_card_statement with dryRun plans a new card (terms created, statement recorded, both deferrals inserted, the purchase booked a day before matched and the other one new) and writes nothing"),
+    next("RF-259: record_card_statement with dryRun plans a new card (terms created, statement recorded, both deferrals inserted, the purchase booked a day before matched and the other one new) and writes nothing"),
     planned.dryRun === true && planned.terms.action === "created" && planned.statement.action === "recorded" &&
       planned.deferrals.map((one) => one.action).join() === "inserted,inserted" && planned.deferrals.every((one) => one.chargesInterest) &&
       planned.purchases.newCount === 1 && planned.purchases.new[0]?.index === 1 && planned.purchases.booked[0]?.transactionId === bookedId &&
@@ -21119,7 +21119,7 @@ async function cardStatementSuite(): Promise<void> {
   const stored = await detail();
   const ext = stored.cardDeferrals.find((one) => one.authorizationNumber === "AUT-0001");
   assert(
-    next("RF-254: the same call without dryRun writes the terms, the closed statement and both deferrals, and get_debt reads their monthly interest and what paying them off saves as integer cents"),
+    next("RF-259: the same call without dryRun writes the terms, the closed statement and both deferrals, and get_debt reads their monthly interest and what paying them off saves as integer cents"),
     written.dryRun === false && stored.terms !== null && Number(stored.terms.annualRate) === 0.2833 && stored.terms.paymentDueDay === 2 &&
       stored.statements.some((one) => one.cutOffDate === "2026-10-16") && stored.cardDeferrals.length === 2 &&
       ext?.pendingBalanceCents === 471_000_000 && Number.isSafeInteger(ext.monthlyInterestCents) && ext.monthlyInterestCents > 9_000_000 &&
@@ -21129,7 +21129,7 @@ async function cardStatementSuite(): Promise<void> {
 
   const replay = (await tool("record_card_statement", first)).value as Plan;
   assert(
-    next("RF-254: sending the same statement again is idempotent: the cut-off is already recorded, the terms and both deferrals are the same"),
+    next("RF-259: sending the same statement again is idempotent: the cut-off is already recorded, the terms and both deferrals are the same"),
     replay.statement.action === "alreadyRecorded" && replay.terms.action === "same" && replay.deferrals.every((one) => one.action === "same"),
     JSON.stringify(replay),
   );
@@ -21144,7 +21144,7 @@ async function cardStatementSuite(): Promise<void> {
   const updated = (await tool("record_card_statement", newer)).value as Plan;
   const afterNewer = await detail();
   assert(
-    next("RF-254: a newer statement updates the terms it prints (the rate) and keeps the rest, updates the deferral it lists and names the one it no longer lists"),
+    next("RF-259: a newer statement updates the terms it prints (the rate) and keeps the rest, updates the deferral it lists and names the one it no longer lists"),
     updated.terms.action === "updated" && updated.terms.changes.join() === "annualRate" && updated.deferrals[0]?.action === "updated" &&
       updated.missingFromStatement.map((one) => one.authorizationNumber).join() === "AUT-0002" &&
       Number(afterNewer.terms?.annualRate) === 0.25 && afterNewer.terms?.creditLimitCents === 1_100_000_000 && afterNewer.terms.statementCutOffDay === 16 &&
@@ -21163,7 +21163,7 @@ async function cardStatementSuite(): Promise<void> {
   const stale = (await tool("record_card_statement", older)).value as Plan;
   const afterOlder = await detail();
   assert(
-    next("RF-254: an older statement is recorded but never undoes what a newer one set: the terms are kept and its deferral is stale"),
+    next("RF-259: an older statement is recorded but never undoes what a newer one set: the terms are kept and its deferral is stale"),
     stale.statement.action === "recorded" && stale.terms.action === "kept" && stale.deferrals[0]?.action === "stale" &&
       Number(afterOlder.terms?.annualRate) === 0.25 &&
       afterOlder.cardDeferrals.find((one) => one.authorizationNumber === "AUT-0001")?.pendingBalanceCents === 437_480_000 &&
@@ -21180,7 +21180,7 @@ async function cardStatementSuite(): Promise<void> {
   const noRate = await tool("record_card_statement", { ...first, accountId: bareId, terms: {}, dryRun: true });
   const errorOf = (result: { isError?: boolean; value: unknown }) => (result.isError ? (result.value as { error: string }).error : "no error");
   assert(
-    next("RF-254: record_card_statement refuses a repeated authorization number, a bank account, another person's card and a card with no terms and no rate"),
+    next("RF-259: record_card_statement refuses a repeated authorization number, a bank account, another person's card and a card with no terms and no rate"),
     errorOf(repeated) === es.cardStatement.errors.authorizationRepeated && errorOf(onBank) === es.debts.errors.notLiability &&
       errorOf(asStranger) === es.errors.notFound && errorOf(noRate) === es.cardStatement.errors.rateNeeded,
     JSON.stringify({ repeated: errorOf(repeated), onBank: errorOf(onBank), asStranger: errorOf(asStranger), noRate: errorOf(noRate) }),

@@ -18,7 +18,7 @@ import type { CardDeferralInput, CardPurchaseInput } from "@/lib/validation/card
 import { debtTermsSchema, fractionToPercent, percentToFraction } from "@/lib/validation/debt-terms";
 import type { DebtTermsInput } from "@/lib/validation/debt-terms";
 
-// What a statement read off a card's PDF changes in HomeFund (RF-254): its terms, the closed statement, the
+// What a statement read off a card's PDF changes in HomeFund (RF-259): its terms, the closed statement, the
 // deferrals it lists, and which of its purchases are not booked yet. Every part is planned first from what is
 // stored, so a dry run and a real call answer the same plan, and only then written. The parts commit one after
 // another, never as one transaction: a second call of the same input finds the first parts already done and
@@ -167,7 +167,7 @@ function sameFigures(row: CardDeferralRow, incoming: CardDeferralInput): boolean
 }
 
 /**
- * Plans, and unless `dryRun` writes, what one card statement changes (RF-254). The terms are overwritten only
+ * Plans, and unless `dryRun` writes, what one card statement changes (RF-259). The terms are overwritten only
  * by a statement no older than the latest one recorded, so an old PDF never undoes what a newer one set; the
  * deferrals are upserted by the bank's authorization number under the same rule; the statement is recorded
  * once per cut-off. The purchases are only compared with what is booked, never written.

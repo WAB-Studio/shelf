@@ -6,7 +6,7 @@ import { finances } from "./_schema";
 import { accounts } from "./accounts";
 import { appUsers } from "./app-users";
 
-// A deferral as the issuer prints it on a card's statement (RF-253): what was deferred, into how many
+// A deferral as the issuer prints it on a card's statement (RF-258): what was deferred, into how many
 // instalments, where it stands and at what rate. It is the bank's word and keeps no movement, unlike
 // `deferrals` (RF-136), which a person confirms on a purchase they booked: an extension of term has no
 // purchase to point at. Told apart by the authorization number within the card; a later statement

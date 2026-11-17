@@ -24,7 +24,7 @@ import { deferPurchaseSchema, undeferPurchaseSchema } from "@/lib/validation/def
 type Run = (ctx: ServerContext, load: (owner: string) => Promise<unknown>) => Promise<CallToolResult>;
 type Say = (key: string) => string;
 
-// RF-254 rides along: `record_card_statement` stores what Claude read off a card's statement PDF.
+// RF-259 rides along: `record_card_statement` stores what Claude read off a card's statement PDF.
 // RF-234: the debt screen's statement, billed-amount and deferral controls and the cash withdrawal, through their own
 // schemas and write functions. The debt is an account `list_debts` answers; what a statement or a deferral left
 // reads back in `get_debt`.
@@ -78,7 +78,7 @@ export function registerDebtStatementTools(server: McpServer, run: Run, t: Say):
       }),
   );
 
-  // RF-254: one call for a statement PDF. `dryRun` plans and writes nothing; the real call writes the same plan.
+  // RF-259: one call for a statement PDF. `dryRun` plans and writes nothing; the real call writes the same plan.
   server.registerTool(
     "record_card_statement",
     {

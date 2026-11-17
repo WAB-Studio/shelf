@@ -9,7 +9,7 @@ import type { CurrencyCode } from "@/lib/currency";
 import { useMoneyText } from "@/lib/use-privacy";
 
 /**
- * The deferrals the issuer prints on a card's statement (RF-253): each one's cuota, rate and pending
+ * The deferrals the issuer prints on a card's statement (RF-258): each one's cuota, rate and pending
  * balance, what a month of it costs in interest and what paying it off today saves. One that charges
  * interest over more than one cuota carries the notice that says what it will cost. Every figure
  * arrives derived from the server; nothing is summed across currencies (RF-124). `cardNames` names the

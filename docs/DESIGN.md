@@ -81,7 +81,7 @@ highlight, a white ground, pill buttons), with HomeFund's own palette and faces.
   «Confirmar diferido». «Quitar diferido» replaces the button once deferred. The balance, «Deuda total» and «Pago mínimo»
   never change with it. A statement line printing «1/36» reaches the person through the MCP preview as «Diferir en 36
   cuotas»; accepting the preview confirms it.
-- `Deudas · diferidos de la tarjeta` is built under RF-253 (2026-11-17), words only, no board: the debt's detail, and Deudas
+- `Deudas · diferidos de la tarjeta` is built under RF-258 (2026-11-17), words only, no board: the debt's detail, and Deudas
   under the table, list «Diferidos de la tarjeta» in a `Panel`, one `PanelBlock` per deferral: the description with the pending
   balance at the end, «Cuota 7 de 24 · $ 335.000 al mes · 28,1 % E.A.», «Autorización …» (and «En <tarjeta>» on Deudas). One that
   charges interest adds «Interés de este mes ~$ X», «Si lo pagas hoy te ahorras ~$ X» and an amber `Callout`: «Esta compra quedó

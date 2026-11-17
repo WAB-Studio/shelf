@@ -34,7 +34,7 @@ CREATE POLICY "card_deferrals_insert" ON "finances"."card_deferrals" AS PERMISSI
 CREATE POLICY "card_deferrals_update" ON "finances"."card_deferrals" AS PERMISSIVE FOR UPDATE TO "authenticated" USING ((select private.can_write_account("finances"."card_deferrals"."account_id"))) WITH CHECK ((select private.can_write_account("finances"."card_deferrals"."account_id")));--> statement-breakpoint
 CREATE POLICY "card_deferrals_delete" ON "finances"."card_deferrals" AS PERMISSIVE FOR DELETE TO "authenticated" USING ((select private.can_write_account("finances"."card_deferrals"."account_id")));--> statement-breakpoint
 ALTER TABLE "finances"."card_deferrals" FORCE ROW LEVEL SECURITY;--> statement-breakpoint
--- RF-253, hand-written: drizzle-kit diffs neither a grant nor a trigger. All three API roles are revoked
+-- RF-258, hand-written: drizzle-kit diffs neither a grant nor a trigger. All three API roles are revoked
 -- before `authenticated` gets back what the policies gate. The card and the bank's number are named once, on
 -- insert; a later statement rewrites the figures and the day they were read.
 REVOKE ALL ON TABLE "finances"."card_deferrals" FROM public, anon, authenticated, service_role;--> statement-breakpoint

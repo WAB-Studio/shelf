@@ -259,7 +259,7 @@ export function DebtDetailScreen({ data }: { data: DebtDetailData }) {
         </Flex>
       )}
 
-      {/* What the issuer printed as deferred, with its monthly interest and what paying it off saves (RF-253). */}
+      {/* What the issuer printed as deferred, with its monthly interest and what paying it off saves (RF-258). */}
       {cardDeferrals.length > 0 && (
         <Flex direction="column" px={{ initial: "0", md: "6" }}>
           <CardDeferrals rows={cardDeferrals} />

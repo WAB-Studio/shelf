@@ -14414,7 +14414,7 @@ async function checkThirdPartyCredits() {
   });
 }
 
-// RF-253: the deferrals a card's statement prints are read and written by whoever reads and writes the card, alone;
+// RF-258: the deferrals a card's statement prints are read and written by whoever reads and writes the card, alone;
 // they hang off a liability, one per authorization number per card; a later statement rewrites the figures and never
 // the card or the number; every write leaves its audit row; anon and service_role hold nothing.
 async function checkCardDeferrals() {

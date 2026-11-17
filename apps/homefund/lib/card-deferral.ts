@@ -1,4 +1,4 @@
-// What a deferral the issuer prints on a card costs (RF-253). Nothing here is stored: the bank's figures
+// What a deferral the issuer prints on a card costs (RF-258). Nothing here is stored: the bank's figures
 // are, and a month's interest and what paying it off saves derive from them. Every amount is an integer
 // number of cents; the rate is the one non-integer figure, turned into an integer count of parts per
 // billion once, before it touches an amount, so no float ever rounds a cent.

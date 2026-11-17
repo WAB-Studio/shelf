@@ -8,7 +8,7 @@ import type { CardDeferral } from "@/db/schema";
 import { withUserDb } from "@/db/session";
 import { chargesInterest, deferralCost } from "@/lib/card-deferral";
 
-// A deferral as the bank printed it, with what it costs derived on read (RF-253): a month's interest on
+// A deferral as the bank printed it, with what it costs derived on read (RF-258): a month's interest on
 // what is pending, and what paying it off today saves. Scope is the policy's: `withUserDb` shows only the
 // caller's readable rows.
 export type CardDeferralRow = CardDeferral & {

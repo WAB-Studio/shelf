@@ -1,7 +1,7 @@
 import { addCivilDays } from "@/lib/dates";
 
 // The days either side of a statement line a booked movement may sit on and still be that purchase: a
-// bank posts a day or two after the person bought, and the person books it on either date (RF-254).
+// bank posts a day or two after the person bought, and the person books it on either date (RF-259).
 export const PURCHASE_DATE_WINDOW_DAYS = 2;
 
 export type StatementPurchase = { occurredOn: string; amountCents: number; currency: string };

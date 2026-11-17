@@ -5,7 +5,7 @@ import { isCivilDate } from "@/lib/dates";
 import { maxAmountMinor } from "@/lib/money";
 import { rateSchema } from "@/lib/validation/debt-terms";
 
-// What a card statement carries beyond its own closing figures and the terms (RF-254): the deferrals it
+// What a card statement carries beyond its own closing figures and the terms (RF-259): the deferrals it
 // lists and the purchases it shows. The statement itself and the terms keep their own schemas.
 export const MAX_CARD_DEFERRALS = 50;
 export const MAX_CARD_PURCHASES = 300;

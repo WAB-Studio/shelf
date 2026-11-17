@@ -58,7 +58,7 @@ export type DebtDetailData = {
   terms: DebtTerms | null;
   // The purchases a person deferred into instalments (RF-136); derived on read, none moves the balance.
   deferrals: DeferralRow[];
-  // The deferrals the issuer printed on a statement (RF-253), each with what it costs a month and what paying it off saves.
+  // The deferrals the issuer printed on a statement (RF-258), each with what it costs a month and what paying it off saves.
   cardDeferrals: CardDeferralRow[];
   statements: AccountStatementRow[];
   currentStatement: CurrentStatement | null;
