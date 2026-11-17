@@ -163,11 +163,14 @@ export type MovementFilterInput = {
   to?: string;
   kind?: (typeof MOVEMENT_KINDS)[number];
   createdByUserId?: string;
+  createdVia?: (typeof CREATED_VIA)[number];
   recurringRuleId?: string;
   q?: string;
 };
 
 const MOVEMENT_KINDS = ["expense", "income", "transfer", "adjustment"] as const;
+// How a movement was written (RF-253): the web, Claude through the MCP, the Bandeja's accept, a statement or sheet import.
+const CREATED_VIA = ["web", "mcp", "inbox", "import"] as const;
 
 // The filters a listing and its totals take, the one set the Movimientos screen offers.
 export function movementFilterShape(t: Say) {
@@ -181,6 +184,7 @@ export function movementFilterShape(t: Say) {
     label: z.string().optional().describe(d("filterLabel")),
     kind: z.enum(MOVEMENT_KINDS).optional().describe(d("filterKind")),
     createdByUserId: z.string().optional().describe(d("filterCreatedBy")),
+    createdVia: z.enum(CREATED_VIA).optional().describe(d("filterCreatedVia")),
     recurringRuleId: z.string().optional().describe(d("filterRecurringRule")),
     q: z.string().trim().min(1).max(MOVEMENT_SEARCH_MAX).optional().describe(d("filterQ")),
   };
@@ -206,6 +210,7 @@ export async function movementFilters(owner: string, input: MovementFilterInput)
     to: input.to,
     ...(input.kind === undefined ? {} : movementTypeFilter(input.kind)),
     memberUserId: input.createdByUserId === undefined ? undefined : idOf("errors.notFound", input.createdByUserId),
+    createdVia: input.createdVia,
     recurringRuleId: input.recurringRuleId === undefined ? undefined : idOf("errors.notFound", input.recurringRuleId),
     search: input.q,
   };
@@ -229,6 +234,8 @@ export function movementRow(row: TransactionListRow) {
     forHousehold: row.forHousehold,
     madeByMemberId: row.madeByMemberId,
     madeByName: row.madeByName,
+    // How it was written; null for what predates the column and for what a recurring rule or a reconciliation generated.
+    createdVia: row.createdVia,
     labelIds: row.labels.map((label) => label.id),
     splits: row.splits,
     updatedAt: row.updatedAt,

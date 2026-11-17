@@ -24,7 +24,7 @@ import {
   transactions,
 } from "@/db/schema";
 import type { Transaction } from "@/db/session";
-import { withUserDb, withUserDbOrTx } from "@/db/session";
+import { actingForCredential, withUserDb, withUserDbOrTx } from "@/db/session";
 import { stampIs } from "@/db/queries/stamp";
 import type { CurrencyCode } from "@/lib/currency";
 import { pgConstraintName, pgErrorCode } from "@/lib/db-error";
@@ -59,6 +59,8 @@ export type CreateTransactionArgs = {
   madeByMemberId?: string | null | SQL;
   // RF-133: one side is not known yet and waits for a person; insert only.
   awaitingCounterparty?: boolean;
+  // How the row was written (RF-253). Absent is the door the caller came through: the MCP's, or the web's.
+  createdVia?: "web" | "mcp" | "inbox" | "import";
   occurredAt: string;
   description: string | null;
   externalRef: string | null;
@@ -97,6 +99,8 @@ export type TransactionListFilters = {
   from?: string;
   to?: string;
   memberUserId?: string;
+  // How the row was written (RF-253).
+  createdVia?: "web" | "mcp" | "inbox" | "import";
   accountId?: string;
   categoryId?: string;
   // «Lo hizo» (RF-182): the fund member who made the movement; `null` keeps the fund movements nobody made.
@@ -141,6 +145,8 @@ export type TransactionListRow = {
   fromAccountId: string | null;
   toAccountId: string | null;
   createdBy: string;
+  // How it was written (RF-253); null for what predates the column and for what the database generates.
+  createdVia: "web" | "mcp" | "inbox" | "import" | null;
   // A generated movement carries its rule id; a manual one has none. The review
   // stamp is null until it is confirmed or its amount corrected (RF-31).
   recurringRuleId: string | null;
@@ -256,6 +262,7 @@ export async function insertTransaction(
     contributedByMemberId = null,
     madeByMemberId = null,
     awaitingCounterparty = false,
+    createdVia = actingForCredential() ? "mcp" : "web",
     occurredAt,
     description,
     externalRef,
@@ -276,6 +283,7 @@ export async function insertTransaction(
       contributed_by_member_id,
       made_by_member_id,
       awaiting_counterparty,
+      created_via,
       occurred_at,
       description,
       external_ref
@@ -291,6 +299,7 @@ export async function insertTransaction(
       ${contributorMark(sql`${fromAccountId}::uuid`, sql`${toAccountId}::uuid`, sql`${contributedByMemberId}::uuid`)},
       ${madeByMemberId},
       ${awaitingCounterparty},
+      ${createdVia},
       ${occurredAt},
       ${description},
       ${externalRef}
@@ -593,6 +602,7 @@ export function transactionListConditions(filters: TransactionListFilters): SQL[
       })`;
     conditions.push(filters.forPersonId === null ? sql`not ${named}` : named);
   }
+  if (filters.createdVia) conditions.push(eq(transactions.createdVia, filters.createdVia));
   if (filters.kind) conditions.push(eq(transactions.kind, filters.kind));
   if (filters.kind === "expense" || filters.kind === "income") {
     conditions.push(isNull(transactions.reconciliationId));
@@ -770,6 +780,7 @@ export async function listTransactions(
         fromAccountId: transactions.fromAccountId,
         toAccountId: transactions.toAccountId,
         createdBy: transactions.createdBy,
+        createdVia: transactions.createdVia,
         recurringRuleId: transactions.recurringRuleId,
         reviewedAt: transactions.reviewedAt,
         causedByTransactionId: transactions.causedByTransactionId,

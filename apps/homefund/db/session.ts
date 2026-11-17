@@ -44,6 +44,11 @@ export function actAsCredentialOwner<T>(userId: string, fn: () => Promise<T>): P
   );
 }
 
+/** Whether the caller is a bearer credential's owner (`/mcp`) and not a signed-in person: how a write tells Claude from the web. */
+export function actingForCredential(): boolean {
+  return acting.getStore() !== undefined;
+}
+
 export async function getSessionUser(): Promise<SessionUser | null> {
   return (await getVerifiedClaims())?.user ?? null;
 }

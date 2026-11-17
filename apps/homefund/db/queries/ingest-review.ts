@@ -319,6 +319,7 @@ export async function acceptDelivery({
       labelIds,
       contributedByMemberId,
       madeByMemberId: madeByMemberId ?? defaultMadeBy(fromAccountId),
+      createdVia: "inbox",
     });
 
     const updated = await tx

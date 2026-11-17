@@ -84,6 +84,10 @@ export const transactions = finances.table(
     // trigger that books it — no grant names the column — and it is what reports read to keep the
     // adjustment out of every income, expense and budget figure; `kind` still derives from the legs.
     reconciliationId: uuid().references(() => accountReconciliations.id, { onDelete: "cascade" }),
+    // How the row was written (RF-253): the web, Claude through the MCP, the Bandeja's accept or a statement or sheet
+    // import. Null for what predates the column and for what the database itself generates (a recurring rule's
+    // movement, a reconciliation's adjustment), which carry their own marks. Immutable: no grant updates it.
+    createdVia: text({ enum: ["web", "mcp", "inbox", "import"] }),
     createdBy: uuid()
       .notNull()
       .references(() => appUsers.id, { onDelete: "restrict" }),
@@ -129,6 +133,7 @@ export const transactions = finances.table(
       "transactions_estimate_needs_counter",
       sql`${table.counterIsEstimate} = false or ${table.counterAmountCents} is not null`,
     ),
+    check("transactions_created_via_valid", sql`${table.createdVia} is null or ${table.createdVia} in ('web', 'mcp', 'inbox', 'import')`),
     check("transactions_description_length", sql`length(${table.description}) <= 200`),
     check("transactions_external_ref_length", sql`length(${table.externalRef}) <= 200`),
     foreignKey({

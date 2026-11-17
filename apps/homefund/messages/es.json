@@ -2105,6 +2105,7 @@
       "reviewTransactionIds": "Los movimientos que nombra el ítem de review_month, de 1 a 50.",
       "reviewRule": "La regla del ítem de review_month: above_usual, twin, from_words o reconciliation_gap.",
       "filterKind": "Solo movimientos de este tipo: expense, income, transfer o adjustment (los ajustes de un cuadre).",
+      "filterCreatedVia": "Cómo se escribió el movimiento: web (la app), mcp (Claude), inbox (aceptado de la Bandeja) o import (un extracto o una hoja). Los anteriores a este dato y los que genera HomeFund solos (recurrentes, ajustes de cuadre) no salen con ninguno.",
       "filterCreatedBy": "Solo movimientos que creó esta persona (su userId, de list_members con hasLogin).",
       "filterRecurringRule": "Solo movimientos que generó esta regla recurrente (id de list_recurring_rules).",
       "filterQ": "Texto a buscar en la descripción; si parece una cifra («12.500»), también el monto. Hasta 80 caracteres.",

@@ -4182,6 +4182,7 @@ async function main(): Promise<void> {
   await payOwnCardSuite();
   await mcpReceivableSuite();
   await legacyChannelSuite();
+  await mcpOriginSuite();
 }
 
 // A member recorded without a login is someone in the fund: a leader whose fund holds one is not alone, so an
@@ -21100,5 +21101,65 @@ async function legacyChannelSuite(): Promise<void> {
     next("RF-244: the SMS of an alert whose email was stored before the channel flag is its duplicate, 20 hours on, by the printed day and minute"),
     sms.status === "rejected" && row?.reason === "duplicate" && row.of === mail.deliveryId,
     JSON.stringify({ sms, row }),
+  );
+}
+
+// RF-253: each movement remembers the door it came through, and Claude can read it and filter by it.
+async function mcpOriginSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const today = todayInBogota();
+  const { POST } = await import("@/app/mcp/route");
+  const owner = await createMembershipFreeUser();
+  const name = (what: string) => `Harness rf253 ${what} ${tag}`;
+  const ids = { bank: randomUUID(), spend: randomUUID() };
+  await fixtureSql.begin(async (tx) => {
+    await tx`insert into accounts (id, owner_user_id, name, kind, subtype, initial_balance_cents, initial_balance_on)
+      values (${ids.bank}, ${owner.id}, ${name("banco")}, 'asset', 'bank', 500000000, '2026-01-01')`;
+    await tx`insert into categories (id, owner_user_id, name, kind, color) values (${ids.spend}, ${owner.id}, ${name("gasto")}, 'expense', '#8C4A4A')`;
+  });
+  track("accounts", ids.bank);
+  track("categories", ids.spend);
+  const { id: credentialId, token } = await asUser(owner, () =>
+    issueWebhookCredential({ name: name("clave"), purpose: "mcp", defaultAccountId: null, defaultCategoryId: null }),
+  );
+  keep("webhook_credentials", credentialId);
+  const { tool } = mcpClient(POST, token);
+  const viaOf = async (transactionId: string) => (await fixtureSql<{ created_via: string | null }[]>`select created_via from transactions where id = ${transactionId}`)[0]?.created_via;
+
+  const byClaude = (await tool("record_movement", { fromAccountId: ids.bank, toAccountId: null, amountCents: 1_000_00, occurredAt: today, description: name("claude"), categoryId: ids.spend })).value.transactionId as string;
+  const byWeb = await asUser(owner, () =>
+    createTransaction({ fromAccountId: ids.bank, toAccountId: null, amountCents: 2_000_00, occurredAt: today, description: name("web"), externalRef: null, splits: [{ categoryId: ids.spend, amountCents: 2_000_00 }], labelIds: [] }),
+  );
+  keep("transactions", byWeb.transactionId);
+  const claims = JSON.stringify({ sub: owner.id, role: "authenticated", aud: "authenticated" });
+  const deliveryId = await fixtureSql.begin(async (tx) => {
+    await tx`select set_config('request.jwt.claims', ${claims}, true)`;
+    const [row] = await tx<{ id: string }[]>`
+      insert into ingest_deliveries (external_ref, raw_text, shape_hash)
+      values (${`harness-rf253-${tag}`}, ${name("mensaje")}, ${createHash("sha256").update(`rf253-${tag}`).digest("hex")}) returning id`;
+    return row.id;
+  });
+  const accepted = await tool("accept_deliveries", { deliveries: [{ id: deliveryId, accountId: ids.bank, amountCents: 3_000_00, categoryId: ids.spend, description: name("bandeja"), date: today }] });
+  const byInbox = (accepted.value as { accepted: { transactionId: string }[] }).accepted?.[0]?.transactionId;
+  const line = [{ line: 1, date: today, description: name("extracto"), amountCents: -4_000_00, categoryId: ids.spend }];
+  const statement = { periodStart: today, cutOffDate: today, closingBalanceCents: 0 };
+  const preview = await tool("preview_statement", { accountId: ids.bank, rows: line, statement });
+  await tool("import_statement", { accountId: ids.bank, rows: line, statement, previewKey: preview.value?.previewKey });
+  const [imported] = await fixtureSql<{ id: string }[]>`select id from transactions where description = ${name("extracto")}`;
+  assert(
+    next("RF-253: a movement remembers the door it came through: Claude's tool, the web's form, the Bandeja's accept and a statement import"),
+    (await viaOf(byClaude)) === "mcp" && (await viaOf(byWeb.transactionId)) === "web" && byInbox !== undefined && (await viaOf(byInbox)) === "inbox" &&
+      imported !== undefined && (await viaOf(imported.id)) === "import",
+    `claude ${await viaOf(byClaude)}, web ${await viaOf(byWeb.transactionId)}, inbox ${byInbox ? await viaOf(byInbox) : accepted.value && JSON.stringify(accepted.value)}, import ${imported ? await viaOf(imported.id) : preview.value && JSON.stringify(preview.value)}`,
+  );
+
+  const listed = async (filter: Record<string, unknown>) => (await tool("list_movements", { ...filter, accountId: ids.bank })).value as { id: string; createdVia: string | null }[];
+  const [onlyClaude, onlyWeb, all] = [await listed({ createdVia: "mcp" }), await listed({ createdVia: "web" }), await listed({})];
+  assert(
+    next("RF-253: list_movements answers each movement's createdVia and filters by it"),
+    onlyClaude.length === 1 && onlyClaude[0].id === byClaude && onlyClaude[0].createdVia === "mcp" &&
+      onlyWeb.length === 1 && onlyWeb[0].id === byWeb.transactionId && all.length === 4 && all.every((row) => row.createdVia !== undefined),
+    `mcp ${JSON.stringify(onlyClaude)}, web ${JSON.stringify(onlyWeb)}, all ${all.length}`,
   );
 }

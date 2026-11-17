@@ -1107,7 +1107,7 @@ async function insertNewTransactionsBatch(
     chunk.map(
       (item) =>
         sql`(${item.fromAccountId}, ${item.toAccountId}, ${item.amountCents}, ${item.currency},
-          ${item.counterAmountCents}, ${item.counterIsEstimate}, ${householdSql(item)}, ${contributorSql(item)}, ${makerSql(item)},
+          ${item.counterAmountCents}, ${item.counterIsEstimate}, ${householdSql(item)}, ${contributorSql(item)}, ${makerSql(item)}, 'import',
           ${item.row.object.occurredAt}, ${item.row.object.description}, ${item.row.externalRef})`,
     ),
     sql`, `,
@@ -1115,7 +1115,7 @@ async function insertNewTransactionsBatch(
   const inserted = (await tx.execute(
     sql`insert into ${transactions}
       (from_account_id, to_account_id, amount_cents, currency, counter_amount_cents, counter_is_estimate,
-        for_household, contributed_by_member_id, made_by_member_id, occurred_at, description, external_ref)
+        for_household, contributed_by_member_id, made_by_member_id, created_via, occurred_at, description, external_ref)
       values ${rowValues}
       returning id`,
   )) as unknown as { id: string }[];
@@ -1137,9 +1137,9 @@ async function insertNewTransactionsSerially(
       const [inserted] = (await tx.execute(
         sql`insert into ${transactions}
           (from_account_id, to_account_id, amount_cents, currency, counter_amount_cents, counter_is_estimate,
-            for_household, contributed_by_member_id, made_by_member_id, occurred_at, description, external_ref)
+            for_household, contributed_by_member_id, made_by_member_id, created_via, occurred_at, description, external_ref)
           values (${item.fromAccountId}, ${item.toAccountId}, ${item.amountCents}, ${item.currency},
-            ${item.counterAmountCents}, ${item.counterIsEstimate}, ${householdSql(item)}, ${contributorSql(item)}, ${makerSql(item)}, ${item.row.object.occurredAt}, ${item.row.object.description}, ${item.row.externalRef})
+            ${item.counterAmountCents}, ${item.counterIsEstimate}, ${householdSql(item)}, ${contributorSql(item)}, ${makerSql(item)}, 'import', ${item.row.object.occurredAt}, ${item.row.object.description}, ${item.row.externalRef})
           returning id`,
       )) as unknown as { id: string }[];
       await insertSplitRows(tx, item.splits.map((split) => ({ transactionId: inserted.id, ...split })));

@@ -2105,6 +2105,7 @@
       "reviewTransactionIds": "The movements the review_month item names, 1 to 50.",
       "reviewRule": "The review_month item's rule: above_usual, twin, from_words or reconciliation_gap.",
       "filterKind": "Only movements of this kind: expense, income, transfer or adjustment (a reconciliation's adjustments).",
+      "filterCreatedVia": "How the movement was written: web (the app), mcp (Claude), inbox (accepted from the Inbox) or import (a statement or a sheet). Those predating this field and those HomeFund generates itself (recurring, reconciliation adjustments) match none.",
       "filterCreatedBy": "Only movements this person created (their userId, from list_members with hasLogin).",
       "filterRecurringRule": "Only movements this recurring rule generated (id from list_recurring_rules).",
       "filterQ": "Text to look for in the description; when it reads as a figure («12,500»), the amount too. Up to 80 characters.",
