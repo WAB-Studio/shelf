@@ -12,6 +12,7 @@ import { parseForm } from "@/lib/mcp/parse-form";
 import { centsToDecimal } from "@/lib/money";
 import {
   cancelPlannedPaymentSchema,
+  createExpectedIncomeSchema,
   createPlannedPaymentSchema,
   settlePlannedPaymentSchema,
   updatePlannedPaymentSchema,
@@ -65,6 +66,37 @@ export function registerPlannedPaymentTools(server: McpServer, run: Run, t: Say)
             dueDate: input.dueDate,
             remindOn: input.remindOn,
             description: input.description,
+          }),
+        ),
+      ),
+  );
+
+  // RF-253: an income somebody owes, which settles on its own when an income of about that amount lands in the account.
+  server.registerTool(
+    "create_expected_income",
+    {
+      ...titled(t, "createExpectedIncome"),
+      description: t("tools.createExpectedIncome"),
+      inputSchema: z.object({
+        toAccountId: z.string().describe(d("incomeAccountId")),
+        amountCents: z.number().int().describe(d("amountCents")),
+        from: z.string().describe(d("incomeFrom")),
+        dueDate: z.string().describe(d("incomeDueDate")),
+        remindOn: z.string().nullish().describe(d("plannedRemindOn")),
+      }),
+      annotations: ADD,
+    },
+    (input, ctx) =>
+      run(ctx, () =>
+        openPlannedPayment(
+          parseForm(createExpectedIncomeSchema, {
+            fromAccountId: null,
+            toAccountId: input.toAccountId,
+            amount: centsToDecimal(input.amountCents),
+            categoryId: null,
+            dueDate: input.dueDate,
+            remindOn: input.remindOn,
+            description: input.from,
           }),
         ),
       ),

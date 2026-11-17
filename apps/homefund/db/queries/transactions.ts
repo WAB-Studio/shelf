@@ -309,7 +309,11 @@ export async function insertTransaction(
     labelIds,
   }: CreateTransactionArgs,
 ): Promise<{ transactionId: string }> {
+  // An income that lands where an expected income waits (RF-253) settles it in the same statement, so no income
+  // path pays a round trip for it: the nearest amount within five per cent, dated from a month before its day to
+  // two after. A currency conversion, an adjustment and a movement into another account never match.
   const [row] = await tx.execute<{ id: string }>(sql`
+    with created as (
     insert into transactions (
       from_account_id,
       to_account_id,
@@ -341,7 +345,23 @@ export async function insertTransaction(
       ${description},
       ${externalRef}
     )
-    returning id
+    returning id, from_account_id, to_account_id, amount_cents, occurred_at, counter_amount_cents, reconciliation_id
+    ), settled as (
+      update planned_payments p set status = 'done', settled_transaction_id = created.id
+      from created
+      where created.from_account_id is null and created.counter_amount_cents is null
+        and created.reconciliation_id is null
+        and p.id = (
+          select e.id from planned_payments e
+          where e.status = 'pending' and e.from_account_id is null
+            and e.to_account_id = created.to_account_id
+            and abs(e.amount_cents - created.amount_cents) * 100 <= e.amount_cents * 5
+            and created.occurred_at between e.due_date - 30 and e.due_date + 60
+          order by abs(e.amount_cents - created.amount_cents), e.due_date, e.id
+          limit 1)
+      returning p.id
+    )
+    select id from created
   `);
 
   const transactionId = row.id;

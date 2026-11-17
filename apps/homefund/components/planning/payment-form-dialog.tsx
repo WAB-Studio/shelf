@@ -9,6 +9,7 @@ import { Controller, useForm, useWatch, type Resolver } from "react-hook-form";
 import { toast } from "sonner";
 
 import {
+  createExpectedIncomeAction,
   createPlannedPaymentAction,
   updatePlannedPaymentAction,
 } from "@/app/actions/planned-payments";
@@ -41,6 +42,7 @@ import { useActionErrorToast } from "@/lib/use-action-toast";
 import {
   createPlannedPaymentSchema,
   refinePaymentAmount,
+  requireAnIncome,
   updatePlannedPaymentSchema,
   type CreatePlannedPaymentInput,
   type UpdatePlannedPaymentInput,
@@ -70,24 +72,33 @@ export function PaymentFormDialog({
   onOpenChange,
   options,
   payment,
+  income = false,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   options: TransactionFormOptions;
   payment?: PlannedPaymentRow;
+  // Opens the form for an expected income (RF-253); a payment that is already one opens so on its own.
+  income?: boolean;
 }) {
   const t = useTranslations("plannedPayments");
+  const isIncome = income || (!!payment && payment.fromAccountId === null && payment.toAccountId !== null);
 
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Content>
-        <Dialog.Title>{payment ? t("editTitle") : t("addTitle")}</Dialog.Title>
+        <Dialog.Title>
+          {isIncome
+            ? t(payment ? "incomeEditTitle" : "incomeAddTitle")
+            : t(payment ? "editTitle" : "addTitle")}
+        </Dialog.Title>
         {/* Closing unmounts the content, and the key remounts on a change of
             subject, so the form below is always born with fresh defaults. */}
         <PaymentForm
-          key={payment?.id ?? "create"}
+          key={payment?.id ?? (isIncome ? "create-income" : "create")}
           options={options}
           payment={payment}
+          isIncome={isIncome}
           onOpenChange={onOpenChange}
         />
       </Dialog.Content>
@@ -98,10 +109,12 @@ export function PaymentFormDialog({
 function PaymentForm({
   options,
   payment,
+  isIncome,
   onOpenChange,
 }: {
   options: TransactionFormOptions;
   payment?: PlannedPaymentRow;
+  isIncome: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
   const t = useTranslations("plannedPayments");
@@ -127,9 +140,8 @@ function PaymentForm({
   // form refuses exactly what the action refuses against the currencies it reads
   // back (RF-121, RNF-10).
   const resolver: Resolver<PaymentFormValues> = (values, context, options_) => {
-    const schema = (
-      isEdit ? updatePlannedPaymentSchema : createPlannedPaymentSchema
-    ).superRefine(
+    const base = isEdit ? updatePlannedPaymentSchema : createPlannedPaymentSchema;
+    const schema = (isIncome ? base.superRefine(requireAnIncome) : base).superRefine(
       refinePaymentAmount({
         from: values.fromAccountId
           ? options.accountCurrencies[values.fromAccountId] ?? null
@@ -202,6 +214,13 @@ function PaymentForm({
     onSuccess: onActionSuccess,
     onError: onActionError,
   });
+  const createIncome = useAction(createExpectedIncomeAction, {
+    onSuccess: () => {
+      toast.success(t("incomeCreated"));
+      onOpenChange(false);
+    },
+    onError: onActionError,
+  });
   const update = useAction(updatePlannedPaymentAction, {
     onSuccess: onActionSuccess,
     onError: (result) => {
@@ -210,7 +229,7 @@ function PaymentForm({
     },
   });
 
-  const isPending = isEdit ? update.isPending : create.isPending;
+  const isPending = isEdit ? update.isPending : isIncome ? createIncome.isPending : create.isPending;
 
   function onSubmit(values: PaymentFormValues) {
     // The resolver already parsed `values` against the schema for this mode,
@@ -220,6 +239,13 @@ function PaymentForm({
       update.execute({
         ...(values as UpdatePlannedPaymentInput),
         expectedUpdatedAt: payment?.updatedAt,
+      });
+    } else if (isIncome) {
+      // The same schema the form ran, with the source and the category left out.
+      createIncome.execute({
+        ...(values as CreatePlannedPaymentInput),
+        fromAccountId: null,
+        categoryId: null,
       });
     } else {
       create.execute(values as CreatePlannedPaymentInput);
@@ -235,13 +261,13 @@ function PaymentForm({
           render={({ field, fieldState }) => (
             <Field invalid={fieldState.invalid}>
               <FieldLabel htmlFor="payment-concept">
-                {t("conceptLabel")}
+                {t(isIncome ? "incomeFromLabel" : "conceptLabel")}
               </FieldLabel>
               <FieldControl>
                 <TextField.Root
                   id="payment-concept"
                   size="3"
-                  placeholder={t("conceptPlaceholder")}
+                  placeholder={t(isIncome ? "incomeFromPlaceholder" : "conceptPlaceholder")}
                   disabled={isPending}
                   value={field.value ?? ""}
                   onChange={(event) => field.onChange(event.target.value || null)}
@@ -277,6 +303,7 @@ function PaymentForm({
 
         {/* The source and destination the settled movement carries; whichever
             slot is set fixes the payment's scope (RF-74). */}
+        {!isIncome && (
         <Controller
           name="fromAccountId"
           control={form.control}
@@ -307,13 +334,14 @@ function PaymentForm({
             </Field>
           )}
         />
+        )}
 
         <Controller
           name="toAccountId"
           control={form.control}
           render={({ field, fieldState }) => (
             <Field invalid={fieldState.invalid}>
-              <FieldLabel htmlFor="payment-to">{t("toLabel")}</FieldLabel>
+              <FieldLabel htmlFor="payment-to">{t(isIncome ? "incomeToLabel" : "toLabel")}</FieldLabel>
               <Select.Root
                 size="3"
                 value={field.value ?? NO_ACCOUNT}
@@ -344,7 +372,7 @@ function PaymentForm({
           control={form.control}
           render={({ field, fieldState }) => (
             <Field invalid={fieldState.invalid}>
-              <FieldLabel htmlFor="payment-due">{t("dueLabel")}</FieldLabel>
+              <FieldLabel htmlFor="payment-due">{t(isIncome ? "incomeDueLabel" : "dueLabel")}</FieldLabel>
               <FieldControl>
                 <DateInput
                   {...field}
@@ -387,7 +415,9 @@ function PaymentForm({
           )}
         />
 
-        {/* Optional: the category the settled movement earmarks (RF-161). */}
+        {/* Optional: the category the settled movement earmarks (RF-161); an expected income leaves it to the
+            movement that settles it. */}
+        {!isIncome && (
         <Controller
           name="categoryId"
           control={form.control}
@@ -435,12 +465,13 @@ function PaymentForm({
             </Field>
           )}
         />
+        )}
 
         <Callout.Root color="jade" variant="soft">
           <Callout.Icon>
             <Info size={16} aria-hidden />
           </Callout.Icon>
-          <Callout.Text>{t("reminderHint")}</Callout.Text>
+          <Callout.Text>{t(isIncome ? "incomeHint" : "reminderHint")}</Callout.Text>
         </Callout.Root>
 
         {stale && (
