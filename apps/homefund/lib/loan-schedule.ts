@@ -143,3 +143,12 @@ export function uncoveredRows(summary: Pick<LoanScheduleSummary, "rows">, usualP
     .filter((row) => row.state !== "paid" && row.totalCents > usualPaymentCents * (1 + SHORT_FRACTION))
     .map((row) => ({ number: row.number, dueOn: row.dueOn, totalCents: row.totalCents, shortCents: row.totalCents - usualPaymentCents }));
 }
+
+/** What a credit somebody else pays says of its schedule: the digest, what the payer usually sends and the cuotas it will not cover. */
+export type CreditScheduleDigest = LoanScheduleDigest & { personUsualCents: number | null; uncovered: ShortRow[] };
+
+/** `paidByMonth` is what the payer sent each month, newest first. */
+export function creditDigest(summary: LoanScheduleSummary, paidByMonth: number[]): CreditScheduleDigest {
+  const personUsualCents = usualPayment(paidByMonth);
+  return { ...digest(summary), personUsualCents, uncovered: uncoveredRows(summary, personUsualCents) };
+}

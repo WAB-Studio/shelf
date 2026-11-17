@@ -15,12 +15,14 @@ import type {
 import { listDeferralsForAccount } from "@/db/queries/deferrals";
 import type { DeferralRow } from "@/db/queries/deferrals";
 import { getUserGroup } from "@/db/queries/groups";
+import { scheduleOf, schedulePaymentsSql, scheduleRowsSql } from "@/db/queries/loan-schedule";
 import { listThirdPartyCredits } from "@/db/queries/third-party-credits";
 import type { ThirdPartyCreditView } from "@/db/queries/third-party-credits";
 import { foreignOwnerSql, ownerNameSql } from "@/db/queries/accounts";
 import { accounts, debtTerms } from "@/db/schema";
 import type { Account, DebtTerms } from "@/db/schema";
 import { withUserDb } from "@/db/session";
+import type { LoanScheduleSummary } from "@/lib/loan-schedule";
 
 // One pocket of the account: the view derives a figure per currency and no
 // surface sums two of them (RF-124).
@@ -67,6 +69,8 @@ export type DebtDetailData = {
   hasGroup: boolean;
   // Set when somebody else pays this credit (RF-211); its «Me debe» account is not a source of the credit's own payment.
   thirdParty: ThirdPartyCreditView | null;
+  // The payment schedule the bank printed for a loan, read against its payments (RF-256); null when it has none.
+  schedule: LoanScheduleSummary | null;
 };
 
 type AccountRead = {
@@ -74,6 +78,7 @@ type AccountRead = {
   terms: DebtTerms | null;
   canWrite: boolean;
   payFrom: DebtDetailData["payFrom"];
+  schedule: LoanScheduleSummary | null;
 } | null;
 
 /**
@@ -135,6 +140,9 @@ async function readAccount(accountId: string): Promise<AccountRead> {
             -- A «Me debe» is no account a payment comes from (RF-216).
             and not exists (select 1 from third_party_credits c where c.receivable_account_id = x.id)
         ), '[]'::jsonb)`,
+        // The loan's schedule and what reached it ride along: no read of their own (RF-256).
+        scheduleRows: scheduleRowsSql("accounts.id"),
+        schedulePayments: schedulePaymentsSql("accounts.id", "accounts.settlement_currency"),
         terms: debtTerms,
       })
       .from(accounts)
@@ -174,6 +182,7 @@ async function readAccount(accountId: string): Promise<AccountRead> {
       terms: row.terms,
       canWrite: row.canWrite,
       payFrom: row.payFrom,
+      schedule: scheduleOf(row.scheduleRows, row.schedulePayments),
     };
   });
 }
@@ -219,5 +228,6 @@ export async function getDebtDetail(
     payFrom: read.payFrom,
     hasGroup: group !== null,
     thirdParty,
+    schedule: read.schedule,
   };
 }

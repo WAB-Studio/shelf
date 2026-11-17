@@ -3,12 +3,14 @@ import "server-only";
 import { sql } from "drizzle-orm";
 
 import { insertAccount } from "@/db/queries/accounts";
+import { scheduleOf, schedulePaymentsSql, scheduleRowsSql, type RawPayment, type RawRow } from "@/db/queries/loan-schedule";
 import { bookMovement } from "@/db/queries/ledger-write";
 import { withUserDb } from "@/db/session";
 import type { CurrencyCode } from "@/lib/currency";
 import { todayInBogota } from "@/lib/dates";
 import { pgConstraintName, pgErrorCode } from "@/lib/db-error";
 import { ActionError } from "@/lib/errors";
+import { creditDigest, type CreditScheduleDigest } from "@/lib/loan-schedule";
 import { creditHistory, monthOf, type CreditMonth } from "@/lib/third-party-credit";
 import { createTransactionSchema } from "@/lib/validation/transaction";
 import type {
@@ -39,13 +41,16 @@ export type ThirdPartyCreditView = {
   // The current month first, one line per month since the first trace.
   months: CreditMonth[];
   canWrite: boolean;
+  // The bank's payment schedule when the loan has one (RF-256): what is left of it with interest, what the payer
+  // usually sends and the cuotas that amount will not cover; null when it has none.
+  schedule: CreditScheduleDigest | null;
 };
 
 type RawMonth = { month: string; paid: string; paidOn: string | null; lender: string; lenderOn: string | null };
 
 type RawCredit = Omit<
   ThirdPartyCreditView,
-  "installmentCents" | "owedCents" | "personOwesCents" | "personPaidCents" | "months"
+  "installmentCents" | "owedCents" | "personOwesCents" | "personPaidCents" | "months" | "schedule"
 > & {
   installmentCents: string | null;
   openedOn: string;
@@ -53,6 +58,8 @@ type RawCredit = Omit<
   receivableBalance: string;
   paidTotal: string;
   rows: RawMonth[];
+  scheduleRows: RawRow[];
+  schedulePayments: RawPayment[];
 };
 
 /**
@@ -73,6 +80,8 @@ export async function listThirdPartyCredits(liabilityAccountId?: string): Promis
         coalesce(lb.balance_cents, 0)::text as "liabilityBalance",
         coalesce(rb.balance_cents, 0)::text as "receivableBalance",
         private.can_write_account(c.liability_account_id) as "canWrite",
+        ${scheduleRowsSql("c.liability_account_id")} as "scheduleRows",
+        ${schedulePaymentsSql("c.liability_account_id", "l.settlement_currency")} as "schedulePayments",
         coalesce((select sum(t.amount_cents) from transactions t
           where t.from_account_id = c.receivable_account_id and t.to_account_id is not null
             and t.currency = l.settlement_currency), 0)::text as "paidTotal",
@@ -97,24 +106,27 @@ export async function listThirdPartyCredits(liabilityAccountId?: string): Promis
   );
 
   return rows.map((row) => {
-    const { openedOn, liabilityBalance, receivableBalance, paidTotal, rows: monthRows, ...rest } = row;
+    const { openedOn, liabilityBalance, receivableBalance, paidTotal, rows: monthRows, scheduleRows, schedulePayments, ...rest } = row;
+    const months = creditHistory(
+      monthRows.map((m) => ({
+        month: m.month,
+        paidCents: Number(m.paid),
+        paidOn: m.paidOn,
+        lenderCents: Number(m.lender),
+        lenderOn: m.lenderOn,
+      })),
+      monthOf(openedOn),
+      currentMonth,
+    );
+    const schedule = scheduleOf(scheduleRows, schedulePayments);
     return {
       ...rest,
       installmentCents: row.installmentCents === null ? null : Number(row.installmentCents),
       owedCents: Math.max(0, -Number(liabilityBalance)),
       personOwesCents: Number(receivableBalance),
       personPaidCents: Number(paidTotal),
-      months: creditHistory(
-        monthRows.map((m) => ({
-          month: m.month,
-          paidCents: Number(m.paid),
-          paidOn: m.paidOn,
-          lenderCents: Number(m.lender),
-          lenderOn: m.lenderOn,
-        })),
-        monthOf(openedOn),
-        currentMonth,
-      ),
+      months,
+      schedule: schedule === null ? null : creditDigest(schedule, months.map((month) => month.paidCents)),
     };
   });
 }

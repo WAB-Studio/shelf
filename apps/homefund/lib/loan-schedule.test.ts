@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import { ActionError } from "./errors";
-import { digest, median, readSchedule, uncoveredRows, usualPayment, type ScheduleRow } from "./loan-schedule";
+import { creditDigest, digest, median, readSchedule, uncoveredRows, usualPayment, type ScheduleRow } from "./loan-schedule";
 import { parseLoanSchedule } from "./validation/loan-schedule";
 
 // A made-up loan: 2.400.000 pesos over 12 months at 1,8 % a month, level capital-plus-interest and an insurance on
@@ -156,6 +156,20 @@ test("a cuota already paid is never short", () => {
   const paid = readSchedule(rows, [{ occurredOn: "2027-11-05", amountCents: rows[COUNT - 1].totalCents }], "2027-11-06");
   assert.ok(paid);
   assert.deepEqual(uncoveredRows(paid, FIXED), []);
+});
+
+test("a credit's digest carries what the payer usually sends and the cuota it will not cover", () => {
+  const summary = readSchedule(rows, [], "2026-12-01");
+  assert.ok(summary);
+  const credit = creditDigest(summary, [0, FIXED, FIXED, FIXED]);
+  assert.equal(credit.personUsualCents, FIXED);
+  assert.deepEqual(
+    credit.uncovered.map((row) => row.number),
+    [COUNT],
+  );
+  assert.equal("rows" in credit, false);
+  assert.equal(creditDigest(summary, [0, 0]).personUsualCents, null);
+  assert.deepEqual(creditDigest(summary, []).uncovered, []);
 });
 
 const payload = (change: (row: Record<string, number | string>[]) => void = () => {}) => {
