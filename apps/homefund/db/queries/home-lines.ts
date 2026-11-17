@@ -12,6 +12,7 @@ import { withUserDb } from "@/db/session";
 import { currentMonthRange, nextDayOfMonthOnOrAfter, todayInBogota } from "@/lib/dates";
 import { fixItems, type FixItem, type ShortLoan } from "@/lib/fund/home-lines";
 import { isExpectedIncome } from "@/lib/fund/glance";
+import type { UpcomingCardDebt, UpcomingLoanDebt } from "@/lib/fund/upcoming";
 import { isStale } from "@/lib/reconcile-age";
 
 // One card this month: what its statement asks, or null while no statement of this month is registered.
@@ -40,6 +41,7 @@ export type HomeAhead = {
 
 type CardRow = {
   account_id: string;
+  name: string;
   currency: string;
   owed_cents: string;
   due_date: string | null;
@@ -50,20 +52,12 @@ type CardRow = {
   minimum_paid: boolean;
 };
 
-/**
- * What Inicio says about the month's payments and what comes next, in two parallel reads: each card that still owes
- * with its latest statement's total and due date, and the pending planned payments (RF-74). A statement counts only
- * while its due date falls in this month or later; an older one is not this month's, so the card asks for its extract.
- * A card whose minimum is already paid is left out (RF-281).
- */
-export async function getHomeAhead(): Promise<HomeAhead> {
-  const today = todayInBogota();
-  const { start, endExclusive } = currentMonthRange();
-
-  const [cardRows, pending] = await Promise.all([
-    withUserDb((tx) =>
-      tx.execute<CardRow>(sql`
-        select a.id as account_id, a.settlement_currency as currency, (-b.balance_cents)::text as owed_cents,
+// Every card that still owes, with its latest statement and whether this period's minimum is paid, in one statement.
+// Another member's personal card is theirs to pay (RF-58).
+function readCardRows(today: string) {
+  return withUserDb((tx) =>
+    tx.execute<CardRow>(sql`
+        select a.id as account_id, a.name, a.settlement_currency as currency, (-b.balance_cents)::text as owed_cents,
           ls.payment_due_date::text as due_date, ls.closing_balance_cents::text as closing_cents,
           ls.minimum_payment_cents::text as minimum_cents, dt.payment_due_day,
           ${minimumPaidSql({
@@ -90,7 +84,21 @@ export async function getHomeAhead(): Promise<HomeAhead> {
           -- Another member's personal card is theirs to pay (RF-58).
           and (a.owner_user_id is null or a.owner_user_id = (select auth.uid()))
         order by a.name`),
-    ),
+  );
+}
+
+/**
+ * What Inicio says about the month's payments and what comes next, in two parallel reads: each card that still owes
+ * with its latest statement's total and due date, and the pending planned payments (RF-74). A statement counts only
+ * while its due date falls in this month or later; an older one is not this month's, so the card asks for its extract.
+ * A card whose minimum is already paid is left out (RF-281).
+ */
+export async function getHomeAhead(): Promise<HomeAhead> {
+  const today = todayInBogota();
+  const { start, endExclusive } = currentMonthRange();
+
+  const [cardRows, pending] = await Promise.all([
+    readCardRows(today),
     listPlannedPayments({ status: "pending" }),
   ]);
 
@@ -144,6 +152,89 @@ export async function getHomeAhead(): Promise<HomeAhead> {
     nextIncome: nextIncome ? view(nextIncome) : null,
     nextBill: nextBill ? view(nextBill) : null,
   };
+}
+
+export type UpcomingDebts = {
+  cards: (UpcomingCardDebt & { dueDate: string })[];
+  loans: (UpcomingLoanDebt & { dueDate: string })[];
+};
+
+/**
+ * Each debt's next payment for «Lo que viene» (RF-304), in two parallel reads. A card that still owes, whose period's
+ * minimum is not paid, asks its latest statement's total and minimum on the statement's due day; a statement older than
+ * this month is not this month's, so the card says its extract is missing and takes its own payment day. A loan that
+ * still owes asks the first cuota its schedule has not paid in full, less what already landed on it; with no schedule,
+ * the cuota and day its terms name. A debt with no day to name is left out.
+ */
+export async function getUpcomingDebts(): Promise<UpcomingDebts> {
+  const today = todayInBogota();
+  const { start } = currentMonthRange();
+
+  const [cardRows, loanRows] = await Promise.all([
+    readCardRows(today),
+    withUserDb((tx) =>
+      tx.execute<{
+        id: string;
+        name: string;
+        currency: string;
+        minimum_cents: string | null;
+        payment_due_day: number | null;
+        rows: RawRow[];
+        payments: RawPayment[];
+      }>(sql`
+        select a.id, a.name, a.settlement_currency as currency, dt.minimum_payment_cents::text as minimum_cents,
+          dt.payment_due_day, ${scheduleRowsSql("a.id")} as rows,
+          ${schedulePaymentsSql("a.id", "a.settlement_currency")} as payments
+        from accounts a
+        join account_balances b on b.id = a.id and b.currency = a.settlement_currency
+        left join debt_terms dt on dt.account_id = a.id
+        where a.kind = 'liability' and a.subtype = 'loan' and a.archived_at is null and b.balance_cents < 0
+          and (a.owner_user_id is null or a.owner_user_id = (select auth.uid()))
+        order by a.name`),
+    ),
+  ]);
+
+  const cards = cardRows.flatMap((row): UpcomingDebts["cards"] => {
+    if (row.minimum_paid) return [];
+    const counts = row.due_date !== null && row.due_date >= start;
+    const dueDate = counts
+      ? row.due_date
+      : row.payment_due_day === null
+        ? null
+        : nextDayOfMonthOnOrAfter(row.payment_due_day, today);
+    if (dueDate === null) return [];
+
+    const base = { accountId: row.account_id, name: row.name, currency: row.currency, dueDate };
+    if (!counts) return [{ ...base, totalCents: null, minimumCents: null }];
+    const total = Math.min(-Number(row.closing_cents), Number(row.owed_cents));
+    if (total <= 0) return [];
+    const minimum = row.minimum_cents === null ? null : Number(row.minimum_cents);
+    return [{ ...base, totalCents: total, minimumCents: minimum !== null && minimum > 0 && minimum < total ? minimum : null }];
+  });
+
+  const loans = loanRows.flatMap((row): UpcomingDebts["loans"] => {
+    const base = { accountId: row.id, name: row.name, currency: row.currency };
+    const schedule = scheduleOf(row.rows, row.payments);
+    if (schedule !== null) {
+      const { next } = schedule;
+      if (next === null) return [];
+      return [
+        { ...base, dueDate: next.dueOn, amountCents: next.totalCents - next.paidCents, number: next.number, count: schedule.count },
+      ];
+    }
+    if (row.minimum_cents === null || row.payment_due_day === null) return [];
+    return [
+      {
+        ...base,
+        dueDate: nextDayOfMonthOnOrAfter(row.payment_due_day, today),
+        amountCents: Number(row.minimum_cents),
+        number: null,
+        count: null,
+      },
+    ];
+  });
+
+  return { cards, loans };
 }
 
 /**

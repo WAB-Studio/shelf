@@ -10,6 +10,7 @@ import type { Account } from "@/db/schema";
 import { withUserDb, type Transaction } from "@/db/session";
 import { pgErrorCode } from "@/lib/db-error";
 import { splitInstalment, type InstalmentBasis } from "@/lib/loan-instalment";
+import { rowToPay } from "@/lib/loan-schedule";
 
 class InstalmentRefusal extends Error {
   readonly code = "23514";
@@ -48,6 +49,11 @@ type LoanRead = {
  * come back in one statement; then the interest is booked as an expense of the source in that category and the
  * capital as the transfer into the loan. The loan therefore comes down by the capital alone.
  *
+ * With a schedule the cuota the payment pays is the row the schedule's own reading gives it (`rowToPay`), so the row's
+ * interest and insurance are the interest, less what an earlier part-payment of it covered, and the loan comes down by
+ * that row's capital. The interest expense carries the transfer's reference plus «:interest», which is how the schedule
+ * counts it toward the cuota.
+ *
  * A resent `requestRef` answers with the transfer the first copy booked, and books nothing.
  */
 export async function recordLoanInstalment({
@@ -67,7 +73,7 @@ export async function recordLoanInstalment({
   extra?: boolean;
 }): Promise<LoanInstalmentResult> {
   const capitalRef = requestRef ? `form:${requestRef}` : null;
-  const interestRef = requestRef ? `form:${requestRef}:interest` : null;
+  const formInterestRef = requestRef ? `form:${requestRef}:interest` : null;
 
   try {
     return await withUserDb(async (tx) => {
@@ -114,7 +120,7 @@ export async function recordLoanInstalment({
               owedCents: Number(read.owed_cents),
               annualRate: read.annual_rate,
               days: read.days,
-              row: schedule?.next ?? null,
+              row: schedule === null ? null : rowToPay(schedule.rows, occurredAt),
             });
 
       let capitalId: string | null = null;
@@ -141,7 +147,8 @@ export async function recordLoanInstalment({
             amountCents: split.interestCents,
             occurredAt,
             description: `Intereses ${loanName[0]?.name ?? ""}`.trim(),
-            externalRef: interestRef,
+            // Without a request the transfer's reference is its own id, so the interest names the transfer it came with.
+            externalRef: formInterestRef ?? (capitalId ? `${capitalId}:interest` : null),
             splits: [{ categoryId, amountCents: split.interestCents }],
             labelIds: [],
           })
@@ -157,7 +164,7 @@ export async function recordLoanInstalment({
     const rows = await withUserDb((tx) =>
       tx.execute<{ id: string; amount_cents: string; interest: boolean }>(sql`
         select t.id, t.amount_cents::text, (t.to_account_id is null) as interest from transactions t
-        where t.external_ref in (${capitalRef}, ${interestRef})
+        where t.external_ref in (${capitalRef}, ${formInterestRef})
           and (t.to_account_id = ${toAccountId} or t.from_account_id = ${fromAccountId})
       `),
     );

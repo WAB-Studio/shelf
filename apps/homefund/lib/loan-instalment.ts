@@ -5,8 +5,9 @@ export type InstalmentBasis = "schedule" | "rate" | "none";
 
 export type InstalmentSplit = { interestCents: number; capitalCents: number; basis: InstalmentBasis };
 
-// The bank's printed row for the cuota being paid: what is not capital in it.
-export type ScheduleShare = { interestCents: number; insuranceCents: number };
+// The bank's printed row for the cuota being paid: what is not capital in it, and how much of that earlier payments
+// toward the same cuota already covered.
+export type ScheduleShare = { interestCents: number; insuranceCents: number; paidInterestCents?: number };
 
 /**
  * The interest a balance accrues over `days` at an effective annual rate: owed times ((1 + rate)^(days/365) - 1),
@@ -19,8 +20,9 @@ export function accruedInterestCents(owedCents: number, annualRate: string, days
 }
 
 /**
- * The split of a payment. A schedule row's own interest and insurance win; else the stored rate over the days
- * since the last payment; else nothing is known and everything is capital. The interest never exceeds the payment.
+ * The split of a payment. A schedule row's own interest and insurance, less what an earlier part-payment of the same
+ * cuota already covered, win; else the stored rate over the days since the last payment; else nothing is known and
+ * everything is capital. The interest never exceeds the payment, so a payment above the cuota is extra capital.
  */
 export function splitInstalment({
   amountCents,
@@ -40,7 +42,7 @@ export function splitInstalment({
     return { interestCents, capitalCents: amountCents - interestCents, basis };
   };
 
-  if (row !== null) return interestOf("schedule", row.interestCents + row.insuranceCents);
+  if (row !== null) return interestOf("schedule", row.interestCents + row.insuranceCents - (row.paidInterestCents ?? 0));
   if (annualRate !== null) return interestOf("rate", accruedInterestCents(owedCents, annualRate, days));
   return { interestCents: 0, capitalCents: amountCents, basis: "none" };
 }

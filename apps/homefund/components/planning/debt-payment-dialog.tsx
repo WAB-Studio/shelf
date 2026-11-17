@@ -8,6 +8,7 @@ import { Controller, useForm, useWatch } from "react-hook-form";
 import { toast } from "sonner";
 
 import { recordDebtPaymentAction } from "@/app/actions/installment-plans";
+import { StartedEarlierOffer } from "@/components/accounts/started-earlier-offer";
 import { CreditAndOwedLine, owesBesideCredit } from "@/components/planning/debts-table";
 import {
   Button,
@@ -208,6 +209,11 @@ function PaymentForm({
     else if (next === "other") form.setValue("amount", "");
   }
 
+  // The day the server refused as earlier than the debt's opening: the offer to begin the debt earlier shows under
+  // it for as long as the date is still that one.
+  const [refusedDay, setRefusedDay] = useState<string | null>(null);
+  const day = useWatch({ control: form.control, name: "occurredAt" });
+
   const typedCents = parseAmount(useWatch({ control: form.control, name: "amount" }));
   // More than the debt asks, which is allowed: the card or the loan is then in credit, and the person is told.
   const overCents = typedCents !== null && typedCents > debt.owedCents ? typedCents - debt.owedCents : 0;
@@ -226,18 +232,21 @@ function PaymentForm({
       );
       onOpenChange(false);
     },
-    onError: onActionError,
+    onError(result) {
+      if (result.error.serverError === "errors.movementBeforeOpening") {
+        form.setError("occurredAt", { type: "server", message: "errors.movementBeforeOpening" });
+        setRefusedDay(form.getValues("occurredAt"));
+      } else onActionError(result);
+    },
   });
 
   const isPending = pay.isPending;
+  const submit = form.handleSubmit((values) => {
+    pay.execute({ ...values, requestRef, ...(choice === "extra" ? { extra: true } : {}) });
+  });
 
   return (
-    <form
-      onSubmit={form.handleSubmit((values) => {
-        pay.execute({ ...values, requestRef, ...(choice === "extra" ? { extra: true } : {}) });
-      })}
-      noValidate
-    >
+    <form onSubmit={submit} noValidate>
       <FieldGroup>
         <Field>
           <FieldLabel>{tKey("debts.nameLabel")}</FieldLabel>
@@ -427,6 +436,18 @@ function PaymentForm({
             </Field>
           )}
         />
+
+        {refusedDay !== null && refusedDay === day && (
+          <StartedEarlierOffer
+            accountIds={[debt.accountId]}
+            occurredAt={day}
+            onMoved={() => {
+              setRefusedDay(null);
+              form.clearErrors("occurredAt");
+              void submit();
+            }}
+          />
+        )}
 
         <Field>
           <Flex gap="3" justify="end">

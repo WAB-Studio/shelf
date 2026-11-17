@@ -39,16 +39,3 @@ export function loanStanding({
   }
   return { owedCents: balanceOwedCents, count: null, source: "balance" };
 }
-
-export type Reconciliation = { kind: "same" | "payerAhead" | "personAhead"; cents: number };
-
-/**
- * How what the payer still owes the person sits against what the credit still owes the lender, both capital. They part
- * when one side paid and the other has not yet passed it on: «payerAhead» is money the payer sent that has not reached
- * the lender, «personAhead» a cuota the person paid before the payer sent it.
- */
-export function reconcileCredit(creditOwedCents: number, payerOwesCents: number): Reconciliation {
-  const gap = creditOwedCents - payerOwesCents;
-  if (gap === 0) return { kind: "same", cents: 0 };
-  return gap > 0 ? { kind: "payerAhead", cents: gap } : { kind: "personAhead", cents: -gap };
-}

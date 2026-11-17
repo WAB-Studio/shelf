@@ -19,7 +19,7 @@ export type Holding = {
   currency: string;
   // What sits in the accounts, a pocket counted once with its account.
   haveCents: number;
-  // What others owe: receivable accounts, the hidden ones of a credit somebody else pays included.
+  // What others owe: the receivable accounts the person lists, and what a credit somebody else pays and a friend «se le cobra» owe.
   owedToMeCents: number;
   // What is owed on cards and loans, as a positive figure.
   owesCents: number;
@@ -29,8 +29,9 @@ export type Holding = {
 
 /**
  * Per currency: the money in the accounts, what is owed to the person, what they owe and the net of the three.
- * Every row's `balances` is its own free part, so a pocket and its account add up once. `owedByPeople` is what
- * friends owe for what was spent for them (RF-293), which no account holds: it joins what is owed to the person.
+ * Every row's `balances` is its own free part, so a pocket and its account add up once. `owedByPeople` is what the
+ * people the person is owed by owe (RF-293): a credit's capital and what was spent for a friend. No account holds
+ * either, so the hidden «Me debe» of a credit is left out and the figure comes from here (RF-301).
  */
 export function summarizeAccounts(
   accounts: HomeAccount[],
@@ -46,6 +47,7 @@ export function summarizeAccounts(
   };
 
   for (const account of accounts) {
+    if (account.internal) continue;
     for (const { currency, balanceCents } of account.balances) {
       const holding = of(currency);
       if (account.kind === "liability") holding.owesCents -= balanceCents;

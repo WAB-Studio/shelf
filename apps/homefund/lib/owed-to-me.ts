@@ -1,8 +1,9 @@
 // What other people owe the person, computed and never stored (decision 2 of 2026-11-17). Two sources: a credit
-// somebody else pays (RF-216), whose figure is what the payer still owes in capital, and a person «se le cobra»
-// (RF-242), whose figure is what was spent for them less what they returned. Pure, so the query and the tests share it.
+// somebody else pays (RF-216), whose figure is the capital the loan still owes (what the bank says is left, RF-301),
+// and a person «se le cobra» (RF-242), whose figure is what was spent for them less what they returned. Pure, so the
+// query and the tests share it.
 
-export type OwedLineKind = "opening" | "payment" | "other" | "spent" | "returned";
+export type OwedLineKind = "capital" | "spent" | "returned";
 
 // One line of a breakdown; `cents` is signed by what it does to the figure: what grows it above zero, what shrinks it below.
 export type OwedLine = {
@@ -23,6 +24,8 @@ export type OwedPerson = {
   // The person's label when the figure comes from «se le cobra»; null for a credit.
   labelId: string | null;
   breakdown: OwedLine[];
+  // A credit with a payment schedule: what its unpaid cuotas ask with interest and insurance, and how many they are.
+  withInterest: { cents: number; count: number } | null;
 };
 
 export type OwedCurrency = { currency: string; totalCents: number; people: OwedPerson[] };
@@ -32,18 +35,9 @@ export function owedByPerson(lines: OwedLine[]): number {
   return lines.reduce((sum, line) => sum + line.cents, 0);
 }
 
-/**
- * A credit's lines: the opening, each payment the payer sent and, when the receivable's balance holds more than
- * the opening less the payments, «other» so the lines always add up to the balance.
- */
-export function creditLines(opening: { cents: number; on: string }, payments: { on: string; cents: number }[], balanceCents: number): OwedLine[] {
-  const lines: OwedLine[] = [{ kind: "opening", occurredOn: opening.on, cents: opening.cents, description: null, transactionId: null }];
-  for (const payment of payments) {
-    lines.push({ kind: "payment", occurredOn: payment.on, cents: -payment.cents, description: null, transactionId: null });
-  }
-  const other = balanceCents - owedByPerson(lines);
-  if (other !== 0) lines.push({ kind: "other", occurredOn: null, cents: other, description: null, transactionId: null });
-  return lines;
+/** A credit's one line: the capital the loan still owes, which is the whole figure. */
+export function creditLines(capitalCents: number): OwedLine[] {
+  return [{ kind: "capital", occurredOn: null, cents: capitalCents, description: null, transactionId: null }];
 }
 
 /** Groups people by currency, never summing across currencies (RF-124); the largest owed first, currencies in order. */

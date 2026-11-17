@@ -7,7 +7,7 @@ import { Button, Dialog, Flex, Separator, Text } from "@/components/ui";
 import type { CurrencyCode } from "@/lib/currency";
 import { civilDateToDate } from "@/lib/dates";
 import type { LoanScheduleSummary } from "@/lib/loan-schedule";
-import { reconcileCredit, type LoanStanding } from "@/lib/loan-standing";
+import type { LoanStanding } from "@/lib/loan-standing";
 import type { Locale } from "@/lib/locales";
 import { useMoneyText } from "@/lib/use-privacy";
 
@@ -26,7 +26,6 @@ export function LoanStandingBlock({
   termMonths,
   installmentCents,
   paymentCount,
-  payer,
 }: {
   standing: LoanStanding;
   currency: CurrencyCode;
@@ -35,8 +34,6 @@ export function LoanStandingBlock({
   termMonths: number | null;
   installmentCents: number | null;
   paymentCount: number;
-  // The person who pays this loan for the caller, and what they still owe of its capital (RF-211).
-  payer: { person: string; owesCents: number } | null;
 }) {
   const t = useTranslations("loanStanding");
   const format = useFormatter();
@@ -81,12 +78,6 @@ export function LoanStandingBlock({
       lines.push({ key: "installment", label: t("lineInstallment"), value: amount(installmentCents) });
     }
   }
-  if (payer !== null) {
-    lines.push({ key: "payer", label: t("linePayer", { person: payer.person }), value: amount(payer.owesCents) });
-  }
-
-  const reconciliation = payer === null ? null : reconcileCredit(balanceOwedCents, payer.owesCents);
-
   return (
     <Flex direction="column" align="start" gap="1">
       <Text size="4" weight="bold">
@@ -116,11 +107,6 @@ export function LoanStandingBlock({
                 </Fragment>
               ))}
             </Flex>
-            {payer !== null && reconciliation !== null && (
-              <Text size="2" color="gray">
-                {t(`reconcile.${reconciliation.kind}`, { person: payer.person, amount: amount(reconciliation.cents) })}
-              </Text>
-            )}
           </Flex>
           <Flex justify="end" mt="4">
             <Dialog.Close>

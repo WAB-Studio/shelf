@@ -224,6 +224,21 @@ export const handAccountToGroupSchema = z.object({
 });
 
 
+// «¿Empezó antes?» (RF-303): a movement dated before an account's opening names the account(s) it touches and its day,
+// and the opening moves back to that day. The day is a civil date no later than today, like every opening.
+export const findLaterOpeningSchema = z.object({
+  accountIds: z.array(z.uuid({ error: "errors.notFound" })).min(1).max(2),
+  occurredAt: accountBalanceOnSchema,
+});
+
+export const moveOpeningEarlierSchema = z.object({
+  accountId: z.uuid({ error: "errors.notFound" }),
+  occurredAt: accountBalanceOnSchema,
+});
+
+export type FindLaterOpeningInput = z.infer<typeof findLaterOpeningSchema>;
+export type MoveOpeningEarlierInput = z.infer<typeof moveOpeningEarlierSchema>;
+
 export const restoreAccountSchema = z.object({
   accountId: z.uuid({ error: "errors.notFound" }),
 });

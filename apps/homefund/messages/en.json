@@ -520,6 +520,7 @@
     "reconcileAllTitle": "Reconcile everything",
     "reconcileAllOpen": "Reconcile everything",
     "reconcileAllIntro": "Type what the bank says today. Whatever you leave empty is not touched.",
+    "reconcileIncludesPockets": "With its pockets: {amount} in them",
     "reconcileAllBack": "Back to Accounts",
     "reconcileAllRealAsset": "What the bank says today",
     "reconcileAllRealLiability": "What you owe today (total limit − available)",
@@ -597,6 +598,13 @@
       "placementInvalid": "Choose where the category goes."
     }
   },
+  "startedEarlier": {
+    "looking": "Checking since when it exists…",
+    "titleDebt": "This debt begins on {opened}. Did it begin earlier?",
+    "titleAccount": "This account begins on {opened}. Did it begin earlier?",
+    "change": "Change to {date}",
+    "moved": "Done: it now begins on {date}"
+  },
   "owedToMe": {
     "title": "Owed to you",
     "lineTotal": "You are owed <total></total>",
@@ -604,9 +612,9 @@
     "sourceCredit": "From the credit they pay",
     "sourcePerson": "From what you spent for this person",
     "breakdownTitle": "What {person} owes you",
-    "breakdownOpening": "Debt when it was joined ({date})",
-    "breakdownPayment": "Paid you on {date}",
-    "breakdownOther": "Other movements of the account",
+    "breakdownCapital": "Capital the credit still owes",
+    "breakdownCreditHow": "This is what the bank says is left of the credit, without interest. Each cuota {person} sends you pays capital and interest, and only the capital lowers this figure.",
+    "withInterest": "With interest, {amount} in {count, plural, one {# cuota} other {# cuotas}}",
     "breakdownSpent": "Spent on {date}",
     "breakdownSpentNamed": "Spent on {date}: {description}",
     "breakdownReturned": "Returned on {date}",
@@ -1132,10 +1140,16 @@
   },
   "upcoming": {
     "title": "Coming up",
+    "cardMinimum": "Statement total; minimum {minimum}",
+    "cardTotalOnly": "Statement total",
+    "cardNoStatement": "Its statement is missing: this is the card’s payment day",
+    "loanNumber": "Cuota {number} of {count}",
     "add": "Add",
     "emptyTitle": "Nothing coming up yet",
     "emptyDescription": "Tap “Add” to note a payment that is due, income you expect or something that repeats every month.",
     "kind": {
+      "card": "Card payment",
+      "loan": "Loan cuota",
       "payment": "Payment",
       "income": "Coming to you",
       "subscription": "Subscription",
@@ -1147,6 +1161,7 @@
     },
     "paused": "Paused",
     "late": {
+      "debt": "Overdue",
       "payment": "Overdue",
       "income": "Should have arrived",
       "subscription": "Should have been charged and has not shown up"
@@ -1440,6 +1455,9 @@
     "termsLoanTitle": "Loan details",
     "currencyLabel": "Currency",
     "owedTodayLabel": "What you owe today",
+    "owedOnLabel": "What you owed that day",
+    "sinceLabel": "Since when do you have it?",
+    "sinceHint": "If you have had it longer, put the day it began: that way you can record payments and purchases from those dates.",
     "installmentLabel": "Monthly cuota",
     "termLabel": "Term (cuotas)",
     "termHint": "How many cuotas it had when it began.",
@@ -1633,7 +1651,7 @@
     "reconcileTooMany": "That is too many accounts at once. Reconcile up to 50.",
     "reconcileRepeated": "An account is reconciled once a day.",
     "adjustmentReadOnly": "A gap movement cannot be edited or deleted; fix it by reconciling the account again.",
-    "movementBeforeOpening": "The date is before the account's opening. Change the date or the account's opening."
+    "movementBeforeOpening": "That date is before the day the account begins. Pick another date."
   },
   "data": {
     "screen": {
@@ -2024,7 +2042,7 @@
     "amountLabel": "Amount",
     "stateLabel": "State",
     "stateComplete": "Complete",
-    "beforeOpening": "Dated {date}, before the account's opening",
+    "beforeOpening": "Dated {date}: the account did not exist yet",
     "stateIncomplete": "Incomplete",
     "openForm": "Open the prefilled form",
     "categoryFromMerchant": "Category from the merchant",
@@ -2807,10 +2825,7 @@
     "breakdownTitle": "How much {person} still owes",
     "breakdownOpen": "See how what {person} still owes is worked out",
     "breakdownHint": "See how it is worked out",
-    "breakdownOpening": "Debt when it was followed ({date})",
-    "breakdownPayments": "Payments from {person}",
-    "breakdownNoPayments": "{person} has not paid anything yet.",
-    "breakdownOther": "Other movements of the account",
+    "breakdownHow": "This is the capital the credit still owes: what the bank says is left, without interest. Each cuota {person} sends you pays capital and interest, and only the capital lowers this figure.",
     "breakdownOwes": "Still owes",
     "breakdownSchedule": "With interest and insurance, {count, plural, one {# cuota is left} other {# cuotas are left}}: {amount}",
     "breakdownLoading": "Reading the payments…",
@@ -2820,7 +2835,6 @@
     "unlink": "Unlink",
     "intro": "{person} pays this credit. They send you the cuota and you pay {lender}.",
     "introNoLender": "{person} pays this credit. They send you the cuota and you pay the bank.",
-    "openingLine": "Debt when you linked it: {amount} on {date}",
     "waiting": "{person} has not sent the {month} cuota yet (due on the {day}).",
     "waitingNoDay": "{person} has not sent the {month} cuota yet.",
     "colMonth": "Month",
@@ -2828,11 +2842,6 @@
     "colPaid": "You paid {lender}",
     "colPaidBank": "You paid the bank",
     "colDifference": "Difference",
-    "reconcile": {
-      "same": "The credit owes {credit} of capital, the same as {person} owes you.",
-      "payerAhead": "The credit owes {credit} of capital and {person} owes you {amount} less: they sent you more than you have paid the bank.",
-      "personAhead": "The credit owes {credit} of capital and {person} owes you {amount} more: you paid the bank before {person} sent their part."
-    },
     "paymentDescription": "Payment from {person}",
     "errors": {
       "nameRequired": "Write who pays it.",
@@ -2897,17 +2906,11 @@
     "lineTermValue": "{count, plural, one {# cuota} other {# cuotas}}",
     "linePayments": "Payments made",
     "lineInstallment": "Monthly cuota",
-    "linePayer": "{person} owes you (capital)",
     "source": {
       "schedule": "From the bank's payment schedule: what is left of each cuota, with interest and insurance.",
       "term": "From what you owe today and the loan's term, less the payments you made. It leaves interest out.",
       "instalment": "From what you owe today divided by the cuota. A rough count: it leaves interest out.",
       "balance": "From what you owe today: what you borrowed less what you paid."
-    },
-    "reconcile": {
-      "same": "{person} owes you the same as you owe the bank.",
-      "payerAhead": "{person} owes you {amount} less than you owe the bank: they sent you more than you have paid.",
-      "personAhead": "{person} owes you {amount} more than you owe the bank: you paid cuotas before {person} sent them."
     }
   },
   "recipients": {

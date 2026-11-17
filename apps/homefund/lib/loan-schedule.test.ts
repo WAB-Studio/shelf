@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import { ActionError } from "./errors";
-import { creditDigest, digest, median, readSchedule, uncoveredRows, usualPayment, type ScheduleRow } from "./loan-schedule";
+import { creditDigest, digest, median, readSchedule, rowToPay, uncoveredRows, usualPayment, type ScheduleRow } from "./loan-schedule";
 import { parseLoanSchedule } from "./validation/loan-schedule";
 
 // A made-up loan: 2.400.000 pesos over 12 months at 1,8 % a month, level capital-plus-interest and an insurance on
@@ -85,6 +85,44 @@ test("a payment within 15 days of a due day pays that row, in full or short by a
   assert.equal(summary?.rows[2].state, "pending");
   assert.equal(summary?.next?.number, 3);
   assert.equal(summary?.paidCount, 2);
+});
+
+test("a payment is its capital plus the interest booked with it: both together pay the cuota, the capital alone does not", () => {
+  const [first] = rows;
+  const capital = first.principalCents;
+  const interest = first.interestCents + first.insuranceCents;
+  const whole = readSchedule(rows, [{ occurredOn: first.dueOn, amountCents: capital, interestCents: interest }], "2026-12-06");
+  assert.equal(whole?.rows[0].state, "paid");
+  assert.equal(whole?.rows[0].paidInterestCents, interest);
+  assert.equal(whole?.next?.number, 2);
+  assert.equal(whole?.partialCount, 0);
+
+  const bare = readSchedule(rows, [{ occurredOn: first.dueOn, amountCents: capital }], "2026-12-06");
+  assert.equal(bare?.rows[0].state, "partial");
+});
+
+test("two whole payments leave two rows paid and the remaining capital where the second row says", () => {
+  const payments = rows.slice(0, 2).map((row) => ({
+    occurredOn: row.dueOn,
+    amountCents: row.principalCents,
+    interestCents: row.interestCents + row.insuranceCents,
+  }));
+  const summary = readSchedule(rows, payments, "2027-01-20");
+  assert.deepEqual(summary?.rows.slice(0, 2).map((row) => row.state), ["paid", "paid"]);
+  assert.equal(summary?.next?.number, 3);
+  assert.equal(
+    PRINCIPAL - payments.reduce((sum, payment) => sum + payment.amountCents, 0),
+    rows[1].remainingCents,
+  );
+});
+
+test("the row to pay is the one the reading gives the payment, never one already paid", () => {
+  const first = readSchedule(rows, [], "2026-12-01");
+  assert.equal(rowToPay(first!.rows, "2026-12-05")?.number, 1);
+  const paid = readSchedule(rows, [{ occurredOn: "2026-12-05", amountCents: rows[0].totalCents }], "2026-12-06");
+  assert.equal(rowToPay(paid!.rows, "2027-01-05")?.number, 2);
+  assert.equal(rowToPay(paid!.rows, "2026-12-06"), null);
+  assert.equal(rowToPay(paid!.rows, "2026-09-01"), null);
 });
 
 test("a payment nearer a later row than an earlier one belongs to the later", () => {

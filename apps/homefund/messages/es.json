@@ -520,6 +520,7 @@
     "reconcileAllTitle": "Cuadrar todo",
     "reconcileAllOpen": "Cuadrar todo",
     "reconcileAllIntro": "Escribe lo que dice el banco hoy. Lo que dejes vacío no se toca.",
+    "reconcileIncludesPockets": "Con sus bolsillos: {amount} en ellos",
     "reconcileAllBack": "Volver a Cuentas",
     "reconcileAllRealAsset": "Lo que dice el banco hoy",
     "reconcileAllRealLiability": "Lo que debes hoy (cupo total − disponible)",
@@ -597,6 +598,13 @@
       "placementInvalid": "Elige dónde va la categoría."
     }
   },
+  "startedEarlier": {
+    "looking": "Buscando desde cuándo existe…",
+    "titleDebt": "Esta deuda empieza el {opened}. ¿Empezó antes?",
+    "titleAccount": "Esta cuenta empieza el {opened}. ¿Empezó antes?",
+    "change": "Cambiar a {date}",
+    "moved": "Listo: ahora empieza el {date}"
+  },
   "owedToMe": {
     "title": "Te deben",
     "lineTotal": "Te deben <total></total>",
@@ -604,9 +612,9 @@
     "sourceCredit": "Por el crédito que paga",
     "sourcePerson": "Por lo que gastaste para esta persona",
     "breakdownTitle": "Lo que te debe {person}",
-    "breakdownOpening": "Deuda cuando se unió ({date})",
-    "breakdownPayment": "Te pagó el {date}",
-    "breakdownOther": "Otros movimientos de la cuenta",
+    "breakdownCapital": "Capital que le queda al crédito",
+    "breakdownCreditHow": "Es lo que el banco dice que falta del crédito, sin intereses. Cada cuota que {person} te manda paga capital e intereses, y solo el capital baja esta cifra.",
+    "withInterest": "Con intereses, {amount} en {count, plural, one {# cuota} other {# cuotas}}",
     "breakdownSpent": "Gasto del {date}",
     "breakdownSpentNamed": "Gasto del {date}: {description}",
     "breakdownReturned": "Te devolvió el {date}",
@@ -1132,10 +1140,16 @@
   },
   "upcoming": {
     "title": "Lo que viene",
+    "cardMinimum": "Total del extracto; mínimo {minimum}",
+    "cardTotalOnly": "Total del extracto",
+    "cardNoStatement": "Falta su extracto: esta es la fecha de pago de la tarjeta",
+    "loanNumber": "Cuota {number} de {count}",
     "add": "Agregar",
     "emptyTitle": "Aún no tienes nada por venir",
     "emptyDescription": "Toca «Agregar» para anotar un pago que vence, un ingreso que esperas o algo que se repite cada mes.",
     "kind": {
+      "card": "Pago de tarjeta",
+      "loan": "Cuota del crédito",
       "payment": "Pago",
       "income": "Te llega",
       "subscription": "Suscripción",
@@ -1147,6 +1161,7 @@
     },
     "paused": "En pausa",
     "late": {
+      "debt": "Venció",
       "payment": "Venció",
       "income": "Debió llegar",
       "subscription": "Debió cobrarse y aún no aparece"
@@ -1440,6 +1455,9 @@
     "termsLoanTitle": "Datos del préstamo",
     "currencyLabel": "Moneda",
     "owedTodayLabel": "Lo que debes hoy",
+    "owedOnLabel": "Lo que debías ese día",
+    "sinceLabel": "¿Desde cuándo la tienes?",
+    "sinceHint": "Si la tienes desde antes, pon el día en que empezó: así puedes anotar pagos y compras de esas fechas.",
     "installmentLabel": "Cuota mensual",
     "termLabel": "Plazo (cuotas)",
     "termHint": "Cuántas cuotas tenía cuando empezó.",
@@ -1633,7 +1651,7 @@
     "reconcileTooMany": "Son demasiadas cuentas a la vez. Cuadra hasta 50.",
     "reconcileRepeated": "Una cuenta se cuadra una sola vez por día.",
     "adjustmentReadOnly": "Una diferencia no se edita ni se borra; se corrige cuadrando la cuenta de nuevo.",
-    "movementBeforeOpening": "La fecha es anterior a la apertura de la cuenta. Cambia la fecha o la apertura de la cuenta."
+    "movementBeforeOpening": "Esa fecha es anterior al día en que empieza la cuenta. Elige otra fecha."
   },
   "data": {
     "screen": {
@@ -2024,7 +2042,7 @@
     "amountLabel": "Monto",
     "stateLabel": "Estado",
     "stateComplete": "Completo",
-    "beforeOpening": "Fecha {date}, anterior a la apertura de la cuenta",
+    "beforeOpening": "Fecha {date}: la cuenta aún no existía ese día",
     "stateIncomplete": "Incompleto",
     "openForm": "Abrir formulario prellenado",
     "categoryFromMerchant": "Categoría del comercio",
@@ -2807,10 +2825,7 @@
     "breakdownTitle": "Cuánto le falta a {person}",
     "breakdownOpen": "Ver cómo se calcula lo que {person} todavía debe",
     "breakdownHint": "Ver cómo se calcula",
-    "breakdownOpening": "Deuda cuando se unió ({date})",
-    "breakdownPayments": "Pagos de {person}",
-    "breakdownNoPayments": "{person} todavía no ha pagado nada.",
-    "breakdownOther": "Otros movimientos de la cuenta",
+    "breakdownHow": "Es el capital que le queda al crédito: lo que el banco dice que falta, sin intereses. Cada cuota que {person} te manda paga capital e intereses, y solo el capital baja esta cifra.",
     "breakdownOwes": "Le falta",
     "breakdownSchedule": "Con intereses y seguro, {count, plural, one {le falta # cuota} other {le faltan # cuotas}}: {amount}",
     "breakdownLoading": "Leyendo los pagos…",
@@ -2820,7 +2835,6 @@
     "unlink": "Desunir",
     "intro": "Este crédito lo paga {person}. Él te manda la cuota y tú le pagas a {lender}.",
     "introNoLender": "Este crédito lo paga {person}. Él te manda la cuota y tú le pagas al banco.",
-    "openingLine": "Deuda cuando lo uniste: {amount} el {date}",
     "waiting": "{person} aún no manda la cuota de {month} (vence el {day}).",
     "waitingNoDay": "{person} aún no manda la cuota de {month}.",
     "colMonth": "Mes",
@@ -2828,11 +2842,6 @@
     "colPaid": "Pagaste a {lender}",
     "colPaidBank": "Pagaste al banco",
     "colDifference": "Diferencia",
-    "reconcile": {
-      "same": "El crédito debe {credit} de capital, lo mismo que te debe {person}.",
-      "payerAhead": "El crédito debe {credit} de capital y {person} te debe {amount} menos: te mandó más de lo que has pagado al banco.",
-      "personAhead": "El crédito debe {credit} de capital y {person} te debe {amount} más: pagaste al banco antes de que {person} mandara su parte."
-    },
     "paymentDescription": "Pago de {person}",
     "errors": {
       "nameRequired": "Escribe quién lo paga.",
@@ -2897,17 +2906,11 @@
     "lineTermValue": "{count, plural, one {# cuota} other {# cuotas}}",
     "linePayments": "Pagos hechos",
     "lineInstallment": "Cuota mensual",
-    "linePayer": "{person} te debe (capital)",
     "source": {
       "schedule": "Sale del plan de pagos del banco: lo que falta de cada cuota, con intereses y seguro.",
       "term": "Sale de lo que debes hoy y del plazo del préstamo, menos los pagos que ya hiciste. No cuenta intereses.",
       "instalment": "Sale de lo que debes hoy dividido entre la cuota. Es una cuenta aproximada: no cuenta intereses.",
       "balance": "Sale de lo que debes hoy: lo que pediste menos lo que has pagado."
-    },
-    "reconcile": {
-      "same": "{person} te debe lo mismo que tú debes al banco.",
-      "payerAhead": "{person} te debe {amount} menos que tú al banco: te mandó más de lo que has pagado.",
-      "personAhead": "{person} te debe {amount} más que tú al banco: pagaste cuotas antes de que {person} las mandara."
     }
   },
   "recipients": {

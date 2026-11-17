@@ -117,7 +117,18 @@ export async function getDashboardData(): Promise<DashboardData> {
   // A group account is one bucket, never split across its members (RF-67); the
   // signed sum of derived balances IS net worth with no per-kind branch (RNF-05).
   // One bucket per owner AND currency, since an account holds several at once.
-  const buckets = netWorthByOwner(accounts, balances);
+  // The hidden «Me debe» of a credit somebody else pays counts what the credit still owes, the figure Inicio's lines
+  // and Cuentas' «Te deben» show, and never its own bookkeeping balance (RF-301).
+  const payerOwes = new Map(
+    accounts.flatMap((account) =>
+      account.internalOwesCents == null ? [] : [[account.id, { currency: account.settlementCurrency, cents: account.internalOwesCents }] as const],
+    ),
+  );
+  const counted = balances.map((balance) => {
+    const owes = payerOwes.get(balance.accountId);
+    return owes && owes.currency === balance.currency ? { ...balance, balanceCents: owes.cents } : balance;
+  });
+  const buckets = netWorthByOwner(accounts, counted);
 
   const netWorth: OwnerNetWorthNamed[] = buckets.map((bucket) => {
     if (bucket.bucket === "group") {
