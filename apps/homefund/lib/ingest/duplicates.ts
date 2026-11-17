@@ -48,12 +48,19 @@ function sameDirection(a: DuplicateFacts["direction"], b: DuplicateCandidate["di
   return a === null || b === null || a === "transfer" || b === "transfer" || a === b;
 }
 
-// The time of day a bank prints in its alert, in minutes: «a las 17:03», «31/08/2026 20:44:43».
-const CLOCK = /(?:\ba las\s+|\d{4}\s+|\/\d{2}\s+)(\d{1,2}):(\d{2})(?::\d{2})?\b/;
+// The time of day a bank prints in its alert, in minutes: «a las 17:03», «31/08/2026 20:44:43», «a las 7:03 p. m.».
+const CLOCK = /(?:\ba las\s+|\d{4}\s+|\/\d{2}\s+)(\d{1,2}):(\d{2})(?::\d{2})?(?:\s?([ap])\.?\s?m\b\.?)?/i;
+const NOON = 12;
 
 function clockOf(text: string): number | null {
   const match = CLOCK.exec(text);
-  return match ? Number(match[1]) * 60 + Number(match[2]) : null;
+  if (!match) return null;
+
+  const meridiem = match[3]?.toLowerCase();
+  let hour = Number(match[1]);
+  if (meridiem === "p" && hour < NOON) hour += NOON;
+  if (meridiem === "a" && hour === NOON) hour = 0;
+  return hour * 60 + Number(match[2]);
 }
 
 // The tails each text gives for the person's own account; a text that gives none agrees with any.
@@ -64,15 +71,19 @@ function tailsAgree(a: string, b: string, direction: DuplicateFacts["direction"]
   return first.size === 0 || second.size === 0 || [...first].some((tail) => second.has(tail));
 }
 
-// Two alerts are close when the times of day they print are within the window on the same day; an alert
-// that prints none is placed by when it arrived.
+// Minutes between the times of day the two alerts print, when both print one on the same day; null otherwise.
+function printedGap(fresh: DuplicateFacts, candidate: DuplicateCandidate): number | null {
+  const printed = [clockOf(fresh.text), clockOf(candidate.rawText)];
+  if (printed[0] === null || printed[1] === null || candidate.occurredOn !== fresh.occurredOn) return null;
+  return Math.abs(printed[0] - printed[1]);
+}
+
+// Two alerts are close when the times of day they print are within the window on the same day, however
+// long apart they arrived; an alert that prints none is placed by when it arrived.
 function closeInTime(fresh: DuplicateFacts, candidate: DuplicateCandidate): boolean {
   const window = CHANNEL_WINDOW_MINUTES;
-  const printed = [clockOf(fresh.text), clockOf(candidate.rawText)];
-  if (printed[0] !== null && printed[1] !== null && candidate.occurredOn === fresh.occurredOn) {
-    return Math.abs(printed[0] - printed[1]) <= window;
-  }
-  return Math.abs(fresh.receivedAt - candidate.receivedAt) <= window * 60_000;
+  const printed = printedGap(fresh, candidate);
+  return printed !== null ? printed <= window : Math.abs(fresh.receivedAt - candidate.receivedAt) <= window * 60_000;
 }
 
 // The same alert through the other channel: another primary, same figure, a tail that does not contradict.
