@@ -9,7 +9,7 @@
   "peerDependencies": {
     "@supabase/ssr": "^0.12.5",
     "drizzle-orm": "^0.45.2",
-    "next": "16.4.1",
+    "next": "16.4.6",
     "react": "19.2.8"
   }
 }
