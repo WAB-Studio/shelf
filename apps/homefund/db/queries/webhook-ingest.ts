@@ -17,7 +17,7 @@ import { pgErrorCode } from "@/lib/db-error";
 import { todayInBogota } from "@/lib/dates";
 import type { EmailVerdict } from "@/lib/ingest/classify";
 import { DUPLICATE_WINDOW_DAYS, judgeDuplicate, type DuplicateCandidate } from "@/lib/ingest/duplicates";
-import { describeAlert, looksLikeBankAlert, onlyBankAccount } from "@/lib/ingest/describe";
+import { describeAlert, looksLikeBankAlert, onlyBankAccount, paidOwnCard } from "@/lib/ingest/describe";
 import { emailDescription, emailMerchant } from "@/lib/ingest/email";
 import { fingerprintMessage, merchantOf } from "@/lib/ingest/fingerprint";
 import { applyRecipient, extractNumber, matchRecipient } from "@/lib/ingest/recipient-number";
@@ -283,6 +283,16 @@ export async function recordIngestDelivery({
       } else if (applied.categoryId) {
         proposedCategoryId = applied.categoryId;
         categorySource = "recipient";
+      }
+    }
+    // A payment to the institution of exactly one of the person's cards or loans pays that card: a transfer.
+    if (!recipient && proposedDirection === "expense") {
+      const card = paidOwnCard(payload.text, accountRows);
+      if (card !== null && card !== proposedAccountId) {
+        proposedDirection = "transfer";
+        proposedToAccountId = card;
+        proposedCategoryId = null;
+        categorySource = null;
       }
     }
     // A delivery that names an account settling outside BASE_CURRENCY is

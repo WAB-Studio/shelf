@@ -342,6 +342,8 @@ export function registerLedgerTools(server: McpServer, run: Run, t: Say): void {
             transactionId: id,
             // Absent keeps the movement's labels; a list replaces them, as the form's picker does.
             labelIds: patch.labels === undefined ? current.labels.map((label) => label.id) : await resolveLabelIds(owner, patch.labels),
+            // An edit through this tool never moves the person it was for (RF-242).
+            forPersonId: current.forPerson?.id ?? null,
             causedByTransactionId: current.causedByTransactionId,
             expectedUpdatedAt,
           }),

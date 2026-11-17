@@ -21,7 +21,7 @@ import {
   rejectDeliverySchema,
   restoreShapeSchema,
 } from "@/lib/validation/ingest";
-import type { SplitFields } from "@/lib/validation/transaction";
+import { type SplitFields, withPerson } from "@/lib/validation/transaction";
 
 function toSplitCents(splits: SplitFields[]): TransactionSplitInput[] {
   return splits.map((split) => ({
@@ -59,7 +59,7 @@ export const acceptDeliveryAction = authActionClient
         occurredAt: parsedInput.occurredAt,
         description: parsedInput.description,
         splits,
-        labelIds: parsedInput.labelIds,
+        labelIds: withPerson(parsedInput.labelIds, parsedInput.forPersonId),
         contributedByMemberId: parsedInput.contributedByMemberId ?? null,
         madeByMemberId: parsedInput.madeByMemberId ?? null,
       }));

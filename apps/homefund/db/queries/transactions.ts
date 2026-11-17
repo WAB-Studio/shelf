@@ -103,6 +103,8 @@ export type TransactionListFilters = {
   madeByMemberId?: string | null;
   // The label a movement carries through the join, RF-89.
   labelId?: string;
+  // «Para quién» (RF-242): a person's id, or `null` for the movements that name nobody.
+  forPersonId?: string | null;
   kind?: string;
   // A reconciliation's adjustment only (RF-138).
   adjustments?: boolean;
@@ -148,7 +150,9 @@ export type TransactionListRow = {
   fromSettlementCurrency: CurrencyCode | null;
   toSettlementCurrency: CurrencyCode | null;
   splits: { categoryId: string; amountCents: number; description: string | null }[];
+  // The tags; the person the movement was for is `forPerson`, never in this list (RF-242).
   labels: { id: string; name: string; color: string | null }[];
+  forPerson: { id: string; name: string; color: string | null; chargeDefault: boolean } | null;
   // The movement that produced this one, one hop only (RF-132); null for most rows.
   causedByTransactionId: string | null;
   // The reconciliation that booked this movement as its adjustment (RF-138); null for every
@@ -628,6 +632,13 @@ export function transactionListConditions(filters: TransactionListFilters): SQL[
         where tl.transaction_id = ${transactions.id} and tl.label_id = ${filters.labelId})`,
     );
   }
+  if (filters.forPersonId !== undefined) {
+    const named = sql`exists (select 1 from ${transactionLabels} tl join labels pl on pl.id = tl.label_id
+      where tl.transaction_id = ${transactions.id} and pl.kind = 'person'${
+        filters.forPersonId === null ? sql`` : sql` and pl.id = ${filters.forPersonId}`
+      })`;
+    conditions.push(filters.forPersonId === null ? sql`not ${named}` : named);
+  }
   if (filters.kind) conditions.push(eq(transactions.kind, filters.kind));
   if (filters.kind === "expense" || filters.kind === "income") {
     conditions.push(isNull(transactions.reconciliationId));
@@ -768,8 +779,16 @@ export async function listTransactions(
   const labelsJson = sql<{ id: string; name: string; color: string | null }[]>`coalesce((
     select jsonb_agg(jsonb_build_object('id', l.id, 'name', l.name, 'color', l.color) order by l.name)
     from ${transactionLabels} tl join labels l on l.id = tl.label_id
-    where tl.transaction_id = ${outerId}
+    where tl.transaction_id = ${outerId} and l.kind = 'tag'
   ), '[]'::jsonb)`;
+
+  // «Para quién» (RF-242): at most one person is written; the first by name is the read if a sheet ever brought more.
+  const forPersonJson = sql<TransactionListRow["forPerson"]>`(
+    select jsonb_build_object('id', l.id, 'name', l.name, 'color', l.color, 'chargeDefault', l.charge_default)
+    from ${transactionLabels} tl join labels l on l.id = tl.label_id
+    where tl.transaction_id = ${outerId} and l.kind = 'person'
+    order by l.name limit 1
+  )`;
 
   // Read under the caller's policies like the rest of the row, so a payment in another
   // scope that points here reads as none. One movement settles one payment: the index is unique.
@@ -812,6 +831,7 @@ export async function listTransactions(
         toSettlementCurrency: sql<string | null>`to_account.settlement_currency`,
         splits: splitsJson,
         labels: labelsJson,
+        forPerson: forPersonJson,
         settledPlannedPayment: settledPlannedPaymentJson,
       })
       .from(transactions)
