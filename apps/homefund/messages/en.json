@@ -1575,6 +1575,18 @@
     "androidDownload": "Download HomeFund Avisos",
     "androidDownloadHint": "When you open the file, Android asks to allow installs from this browser",
     "androidDownloadMissing": "The download is not ready yet. Ask whoever runs HomeFund to turn it on.",
+    "alertChannels": {
+      "heading": "Are the alerts arriving?",
+      "last": "Last alert: {when} · {via}",
+      "never": "No alert has ever arrived",
+      "via": {
+        "email": "by email",
+        "phone": "by SMS"
+      },
+      "silent": "{days, plural, one {# day} other {# days}} without alerts while your other accounts receive them. Check this account's shortcut or app.",
+      "reconcileHint": "With no alerts this account never sees its purchases: reconcile it every month with the statement.",
+      "reconcileLink": "Reconcile accounts"
+    },
     "bankEmails": {
       "heading": "Bank emails",
       "description": "Every 10 minutes your bank's emails (Bancolombia, Nequi, Nu, Lulo, Falabella, Banco de Bogotá, PSE…) reach the Inbox by themselves. It only reads mail; nothing else leaves your computer.",
@@ -1838,6 +1850,7 @@
       "listAccounts": "The open accounts the person can see, personal and the fund's, with their balance per currency in cents. A fund account may carry holderMemberId and holderName, the member it is in the name of (mum's BBVA); without them it is everyone's. A pocket carries parentAccountId, the account it sits inside; a parent's balances are its own free part, without its pockets. The internal «owes me» account of a credit somebody else pays is not listed: that balance is personOwesCents in list_third_party_credits. archived true lists the archived accounts, the ones restore_account restores.",
       "reviewMonth": "«Review the month»: the movements that stand out in a closed month by fixed rules (an amount far above what the person pays at the same place or in the same category, with its usual range, two equal on one day, an amount read from words, a reconciliation gap), and whether each is already marked fine.",
       "monthParam": "The month, YYYY-MM. Absent, the last closed month.",
+      "alertChannels": "Says whether the bank alerts are arriving, account by account (the person's own bank accounts and cards, and any account that already received an alert): accountId, accountName, lastAlertAt (when the last one arrived, UTC), lastVia (email or phone: SMS, notification or shortcut), alertsLast30Days, daysSince and status: active (an alert in the last {days} days), silent (it had alerts and has had none for {days} days or more while another account still receives: that account's channel probably broke), quiet (none for {days} days or more but no account receives: it points at no account in particular) or never (no alert has ever arrived: suggest reconciling it every month with the statement, reconcile_account). Use it when the person asks why an expense is missing or a reconcile does not close. It only reads.",
       "spendingPatterns": "The person's spending patterns, over their personal accounts and the fund's they see, in the last closed months (12 when months is absent) plus the current one, by fixed rules: spending (spending by category and month, in cents and per currency), recurring (charges that repeat with the same description on the same account, monthly or weekly: typical amount, how many times, last charge, next expected and whether it is still running), outliers (expenses over {factor} times their category's usual in the {window} months before) and growing (categories whose recent monthly average is over {growth} % of the months before). Currencies are never added together: compare each on its own. Use it when the person asks where their money goes, which subscriptions they have or how to spend less: find the patterns, explain them with figures and propose concrete actions (cancel or renegotiate a charge, set a budget, check an unusual expense). It only reads: nothing changes until the person asks.",
       "monthsParam": "How many closed months to read, 1 to 24. Absent, 12.",
       "previewStatement": "Step 1 of importing a bank statement: says what each line would do, writing nothing. Each line: «new» (will be created), «matches» (already recorded by hand or as a transfer's other side; only linked), «already_imported» (skipped) or «invalid» (with its reason). «proposal» is the account the person used before for that description: ask them before passing it as counterAccountId. A transfer with an account in another currency carries «counter»: ask the person how much arrived (or left) in that account, pass it as counterAmountCents and confirm the resulting rate with them. Always pass «statement» (periodStart and cutOffDate as the statement prints them, and its printed closing balance, required and signed like the account: a debt's is negative): the cut-off date is how a re-import finds the same statement, and every line must fall inside the period. «removals» lists what a re-import of that statement would drop because its lines no longer name it («deletes» removes the movement, «unlinks» only this statement's link to it): show it to the person. Show the summary to the person before step 2. Only for the statement a bank printed, of a bank, card or loan account: a cash account is refused, and so are five or more expenses of one day with no bank reference (it looks like a receipt: use record_movement with splits). Never for chat messages, receipts or loading a history.",
@@ -2156,6 +2169,7 @@
       "listAccounts": "View accounts",
       "listMembers": "View members",
       "reviewMonth": "Review the month",
+      "alertChannels": "Check that alerts arrive",
       "spendingPatterns": "View spending patterns",
       "previewStatement": "Preview a statement",
       "importStatement": "Import a statement",

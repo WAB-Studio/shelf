@@ -4187,6 +4187,7 @@ async function main(): Promise<void> {
   await legacyChannelSuite();
   await recordedMovementSuite();
   await mcpForPersonSuite();
+  await alertChannelsSuite();
 }
 
 // A member recorded without a login is someone in the fund: a leader whose fund holds one is not alone, so an
@@ -15392,6 +15393,7 @@ const [READ_CLASS, ADD_CLASS, ADD_ONCE_CLASS, OVERWRITE_CLASS, DESTROY_CLASS] = 
 ] as const;
 const TOOL_CLASSES = [
   ["accept_deliveries", ...ADD_CLASS],
+  ["alert_channels", ...READ_CLASS],
   ["archive_account", ...OVERWRITE_CLASS],
   ["archive_budget", ...OVERWRITE_CLASS],
   ["archive_goal", ...OVERWRITE_CLASS],
@@ -21545,5 +21547,54 @@ async function mcpForPersonSuite(): Promise<void> {
     report.spendingForPersons.length === 2 && report.spendingForPersons.find((row) => row.personId === angelaId)?.spentCents === 30_000_00 &&
       report.spendingForPersons.find((row) => row.personId === papaId)?.spentCents === 10_000_00 && report.spendingForPersons.every((row) => row.currency === "COP"),
     JSON.stringify(report.spendingForPersons),
+  );
+}
+
+// RF-251: alert_channels says per account when its last alert arrived and how; a silent account is told apart from
+// one that never received any, and another person's accounts never show.
+async function alertChannelsSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const { POST } = await import("@/app/mcp/route");
+  const { recordIngestDelivery } = await import("@/db/queries/webhook-ingest");
+  const user = await createMembershipFreeUser();
+  const stranger = await createMembershipFreeUser();
+  const open = async (who: HarnessUser, name: string) => {
+    const { accountId } = await asUser(who, () =>
+      createAccount({
+        kind: "asset", subtype: "bank", groupId: null, isShared: false, institution: null, lastFour: null,
+        settlementCurrency: BASE_CURRENCY, balanceOn: "2026-01-01", ownerUserId: who.id,
+        name: `Harness rf249 ${name} ${tag}`, amountMinor: 100_000_00,
+      }),
+    );
+    track("accounts", accountId);
+    return accountId;
+  };
+  const [silent, fresh, never, foreign] = [await open(user, "callada"), await open(user, "viva"), await open(user, "nunca"), await open(stranger, "ajena")];
+  const { id: credentialId, token } = await asUser(user, () =>
+    issueWebhookCredential({ name: `Harness rf249 ${tag}`, purpose: "mcp", defaultAccountId: null, defaultCategoryId: null }),
+  );
+  keep("webhook_credentials", credentialId);
+  const arrive = async (account: string, text: string) => {
+    const { deliveryId } = await recordIngestDelivery({
+      ownerUserId: user.id, credentialId, defaultAccountId: account, defaultCategoryId: null,
+      payload: { text: `${text} ${tag}` } as Parameters<typeof recordIngestDelivery>[0]["payload"],
+    });
+    return deliveryId;
+  };
+  const old = await arrive(silent, "Bancolombia: Compraste $9,000.00 en TIENDA UNO con tu tarjeta *3397 el 01/11/2026 a las 10:00.");
+  await arrive(fresh, "Bancolombia: Compraste $8,000.00 en TIENDA DOS con tu tarjeta *3397 el 16/11/2026 a las 10:00.");
+  await fixtureSql`update ingest_deliveries set created_at = now() - interval '10 days' where id = ${old}`;
+
+  const { tool } = mcpClient(POST, token);
+  const answer = await tool("alert_channels");
+  const rows = (answer.value ?? []) as { accountId: string; status: string; lastVia: string | null; daysSince: number | null }[];
+  const byId = new Map(rows.map((row) => [row.accountId, row]));
+  assert(
+    next("RF-251: alert_channels reads an account with a week of silence as silent, one with a fresh alert as active, one with none as never, and shows no one else's"),
+    !answer.isError && byId.get(silent)?.status === "silent" && byId.get(silent)?.daysSince === 10 &&
+      byId.get(fresh)?.status === "active" && byId.get(fresh)?.lastVia === "phone" &&
+      byId.get(never)?.status === "never" && byId.get(never)?.lastVia === null && !byId.has(foreign),
+    JSON.stringify(rows),
   );
 }
