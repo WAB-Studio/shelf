@@ -487,6 +487,9 @@ export const categorySheetDescriptor = {
   columns: [
     { key: "name", field: "name" },
     { key: "kind", field: "kind", choice: "categoryKind" },
+    // A fund copies the person's categories, so the same name can sit in both places; a restore does not read
+    // it back.
+    { key: "placement", field: "ownerUserId", choice: "placement" },
     { key: "parent", field: "parentId", ref: { entity: "categories" } },
     { key: "color", field: "color", choice: "color" },
   ],

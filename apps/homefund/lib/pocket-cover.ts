@@ -4,6 +4,15 @@
 
 export type CoverPocket = { id: string; name: string; balanceCents: number; openedOn: string };
 
+// An asset a debt may be paid from: its free balance in the currency it settles in and the pockets that
+// balance leaves out, which the payment may draw from (RF-249).
+export type PayFromAccount = {
+  id: string;
+  name: string;
+  balanceCents: number;
+  pockets: CoverPocket[];
+};
+
 export type PocketCover = {
   takes: { id: string; name: string; cents: number }[];
   totalCents: number;

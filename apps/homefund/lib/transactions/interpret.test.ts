@@ -628,6 +628,44 @@ test("«a N cuotas» reads the instalments and leaves the amount alone", () => {
   assert.equal(interpretQuickEntry("nevera 2.400.000", phraseCtx).instalments, null);
 });
 
+test("a currency in words switches the movement's currency and leaves the figure", () => {
+  const read = (text: string) => interpretQuickEntry(text, phraseCtx);
+  assert.equal(read("Spotify 15,99 dólares").currency, "USD");
+  assert.equal(read("Spotify 15,99 dólares").amountPesos, "15,99");
+  assert.equal(read("Spotify 15,99 dolares").currency, "USD");
+  assert.equal(read("Spotify 15,99 usd").currency, "USD");
+  assert.equal(read("Spotify usd 15,99").currency, "USD");
+  assert.equal(read("Spotify US$15,99").currency, "USD");
+  assert.equal(read("Spotify US$15,99").amountPesos, "15,99");
+  assert.equal(read("regalo 20 euros").currency, "EUR");
+  assert.equal(read("regalo 20 eur").currency, "EUR");
+  assert.equal(read("Spotify 15,99").currency, null);
+  // A word that only contains one is no currency.
+  assert.equal(read("cafe 5.000 eurovision").currency, null);
+  assert.equal(interpretQuickEntry("cafe 5.000 usd", { ...phraseCtx, today: undefined }).currency, null);
+});
+
+test("the description drops what the phrase used as a figure, a currency, a day or instalments", () => {
+  const read = (text: string) => interpretQuickEntry(text, phraseCtx).description;
+  assert.equal(read("nevera 1.200.000 a 12 cuotas"), "nevera");
+  assert.equal(read("Arriendo octubre 1.400.000"), "Arriendo octubre");
+  assert.equal(read("uber 38.000 ayer"), "uber");
+  assert.equal(read("hoy cafe con leche 5.000"), "cafe con leche");
+  assert.equal(read("cafe 5.000 el 10/11"), "cafe");
+  assert.equal(read("cafe 5.000 el 10/11/2026"), "cafe");
+  assert.equal(read("cafe 2026-11-09 5.000"), "cafe");
+  assert.equal(read("Spotify 15,99 dólares"), "Spotify");
+  assert.equal(read("Spotify US$15,99"), "Spotify");
+  assert.equal(read("regalo mamá 20 euros ayer"), "regalo mamá");
+  assert.equal(read("pan y leche $ 8.000"), "pan y leche");
+});
+
+test("a bank's message keeps its whole text as the description", () => {
+  const text = "Compraste $24.000 en EXITO el 24/08/26 a las 18:31";
+  const noClock = { ...phraseCtx, today: undefined };
+  assert.ok(interpretQuickEntry(text, noClock).description.includes("24/08/26"));
+});
+
 test("common spends get the category the person already has for them", () => {
   const category = (text: string) => interpretQuickEntry(text, phraseCtx).categoryId;
   assert.equal(category("netflix 44.900"), "sub");

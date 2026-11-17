@@ -39,6 +39,15 @@ test("shows the first-account guide at 1280 px with no fund", async ({ page }) =
   await expect(page.getByRole("link", { name: home.createFund })).toBeVisible();
 });
 
+test("Ajustes keeps «Crear un fondo» reachable with no fund, at 1280 px", async ({ page }) => {
+  await page.goto("/es/settings");
+
+  const entry = page.getByRole("link", { name: messages.nav.createFund, exact: true }).filter({ visible: true });
+  await expect(entry.first()).toBeVisible();
+  await entry.first().click();
+  await expect(page).toHaveURL(/\/es\/onboarding/);
+});
+
 test.describe("leading an empty fund", () => {
   test.beforeAll(async () => {
     const { memberUserId } = readScope();
@@ -53,5 +62,12 @@ test.describe("leading an empty fund", () => {
 
   test("shows the first-account guide at 1280 px", async ({ page }) => {
     await expectGuide(page);
+  });
+
+  test("Ajustes no longer offers «Crear un fondo»", async ({ page }) => {
+    await page.goto("/es/settings");
+
+    await expect(page.getByRole("link", { name: messages.nav.fundSettings }).filter({ visible: true }).first()).toBeVisible();
+    await expect(page.getByRole("link", { name: messages.nav.createFund, exact: true })).toHaveCount(0);
   });
 });
