@@ -11,6 +11,7 @@ import {
 } from "@/db/queries/debt-overview";
 import type { DebtOverviewRow, DebtPocket } from "@/db/queries/debt-overview";
 import { BASE_CURRENCY, type CurrencyCode } from "@/lib/currency";
+import type { PayFromAccount } from "@/lib/pocket-cover";
 
 // One consolidated set, in one currency. Every figure in it is denominated in
 // `currency` and none of them counts a movement, a limit or a rate booked in
@@ -78,7 +79,7 @@ export type DebtsScreenData = {
     paidBy: string | null;
     subtype: DebtSubtype;
   }[];
-  payFrom: { id: string; name: string; balanceCents: number }[];
+  payFrom: PayFromAccount[];
 };
 
 // The set a currency starts at, so a currency the fund holds nothing in still
@@ -322,6 +323,15 @@ export async function getDebtsScreenData(
       // What the source settles in, never a sum across the currencies it holds
       // (RF-124). The roster orders the settlement pocket first.
       balanceCents: account.balances[0]?.balanceCents ?? 0,
+      pockets: accounts
+        .filter((pocket) => pocket.parentAccountId === account.id && pocket.archivedAt === null)
+        .map((pocket) => ({
+          id: pocket.id,
+          name: pocket.name,
+          balanceCents:
+            pocket.balances.find((balance) => balance.currency === pocket.settlementCurrency)?.balanceCents ?? 0,
+          openedOn: pocket.initialBalanceOn,
+        })),
     }));
 
   return {

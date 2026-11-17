@@ -12,6 +12,16 @@ import { pgErrorCode } from "@/lib/db-error";
 import { todayInBogota } from "@/lib/dates";
 import { checkRealAmount, flipsSign } from "@/lib/validation/account-reconciliation";
 
+// What an account's open pockets hold on `day` (RF-173): inside the bank's balance, outside the account's own free part.
+// Written with the column's own name, never a Drizzle column reference, for the reason `listAccounts` gives.
+const pocketsOn = (day: string) => sql`coalesce((
+  select sum(private.account_settlement_balance_on(p.id, ${day}::date))
+  from accounts p where p.parent_account_id = accounts.id and p.archived_at is null), 0)`;
+
+// The figure Cuentas shows and a bank statement prints: the account's own balance and its pockets', which the bank
+// does not tell apart. Every screen that counts an account reads it from here (RF-302).
+const totalOn = (day: string) => sql<string>`(private.account_settlement_balance_on(accounts.id, ${day}::date) + ${pocketsOn(day)})::bigint`;
+
 export type ReconciliationRow = {
   id: string;
   reconciledOn: string;
@@ -34,7 +44,7 @@ export type ReconcileSheet = {
     archived: boolean;
     openedOn: string;
     latestReconciledOn: string | null;
-    // The account's balance on the asked day, in its settlement currency (RF-137).
+    // The account's balance on the asked day, in its settlement currency, with its pockets (RF-137, RF-302).
     derivedCents: number;
   };
   // Newest day first, then newest write first.
@@ -101,7 +111,7 @@ async function readReconcileHeader(
         latestReconciledOn: sql<
           string | null
         >`(select max(r.reconciled_on) from account_reconciliations r where r.account_id = accounts.id)`,
-        derivedCents: sql<string>`private.account_settlement_balance_on(accounts.id, ${on}::date)`,
+        derivedCents: totalOn(on),
       })
       .from(accounts)
       .where(eq(accounts.id, accountId))
@@ -180,7 +190,8 @@ export async function reconcileAccount(
       const [now] = await tx
         .select({
           writable: sql<boolean>`private.can_write_account(accounts.id)`,
-          derivedCents: sql<string>`private.account_settlement_balance_on(accounts.id, ${args.reconciledOn}::date)`,
+          derivedCents: totalOn(args.reconciledOn),
+          pocketsCents: sql<string>`${pocketsOn(args.reconciledOn)}::bigint`,
         })
         .from(accounts)
         .where(eq(accounts.id, args.accountId))
@@ -198,7 +209,8 @@ export async function reconcileAccount(
         {
           accountId: args.accountId,
           reconciledOn: args.reconciledOn,
-          countedBalanceCents: signedByAccountKind(args.accountId, args.realMagnitudeCents),
+          // The database books the gap against the account's own balance, so what its pockets hold comes off the count.
+          countedBalanceCents: sql`${signedByAccountKind(args.accountId, args.realMagnitudeCents)} - ${Number(now.pocketsCents)}::bigint`,
         },
         {
           returning: {
@@ -354,7 +366,8 @@ export async function reconcileAccounts(args: ReconcileManyArgs): Promise<Reconc
           latestOn: sql<
             string | null
           >`(select max(r.reconciled_on) from account_reconciliations r where r.account_id = accounts.id)`,
-          derivedCents: sql<string>`private.account_settlement_balance_on(accounts.id, ${args.reconciledOn}::date)`,
+          derivedCents: totalOn(args.reconciledOn),
+          pocketsCents: sql<string>`${pocketsOn(args.reconciledOn)}::bigint`,
         })
         .from(accounts)
         .where(inArray(accounts.id, ids));
@@ -408,7 +421,8 @@ export async function reconcileAccounts(args: ReconcileManyArgs): Promise<Reconc
         planned.map((plan) => ({
           accountId: plan.row.id,
           reconciledOn: args.reconciledOn,
-          countedBalanceCents: plan.countedCents,
+          // The database books the gap against the account's own balance, so what its pockets hold comes off the count.
+          countedBalanceCents: plan.countedCents - Number(plan.row.pocketsCents),
         })),
         { returning: { id: accountReconciliations.id, accountId: accountReconciliations.accountId } },
       );
@@ -479,8 +493,11 @@ export type ReconcileOverviewRow = {
   lastFour: string | null;
   holderName: string | null;
   settlementCurrency: CurrencyCode;
-  // What HomeFund derives for today in the settlement currency, the ledger's own sign (RF-114).
+  // What HomeFund derives for today in the settlement currency, the ledger's own sign (RF-114), with the account's
+  // pockets inside it (RF-302).
   derivedCents: number;
+  // What the pockets inside `derivedCents` hold, told apart for the person; zero for an account with none.
+  pocketsCents: number;
   latestReconciledOn: string | null;
   // The day the account was added to HomeFund, in Bogota: a never-counted account ages from it.
   addedOn: string;
@@ -511,7 +528,8 @@ export async function listReconcileOverview(
         lastFour: accounts.lastFour,
         holderName: sql<string | null>`(select gm.name from group_members gm where gm.id = accounts.holder_member_id)`,
         settlementCurrency: accounts.settlementCurrency,
-        derivedCents: sql<string>`private.account_settlement_balance_on(accounts.id, ${today}::date)`,
+        derivedCents: totalOn(today),
+        pocketsCents: sql<string>`${pocketsOn(today)}::bigint`,
         latestReconciledOn: sql<
           string | null
         >`(select max(r.reconciled_on)::text from account_reconciliations r where r.account_id = accounts.id)`,
@@ -539,6 +557,7 @@ export async function listReconcileOverview(
     return rows.map((row) => ({
       ...row,
       derivedCents: Number(row.derivedCents),
+      pocketsCents: Number(row.pocketsCents),
       creditLimitCents: row.creditLimitCents === null ? null : Number(row.creditLimitCents),
       toBillCents: Number(row.toBillCents),
     }));

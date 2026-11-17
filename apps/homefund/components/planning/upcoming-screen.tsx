@@ -17,6 +17,7 @@ import {
   skipRecurringRuleAction,
 } from "@/app/actions/recurring-rules";
 import { OwnerMark } from "@/components/fund/owner-mark";
+import { DebtPaymentDialog, paymentDebtOf, type PaymentDebt } from "@/components/planning/debt-payment-dialog";
 import { UpcomingFormDialog } from "@/components/planning/upcoming-form-dialog";
 import { UpcomingSettleDialog } from "@/components/planning/upcoming-settle-dialog";
 import {
@@ -34,11 +35,14 @@ import {
   ScreenHeader,
   Text,
 } from "@/components/ui";
+import type { UpcomingDebts } from "@/db/queries/home-lines";
+import type { DebtsScreenData } from "@/db/queries/debts-screen";
 import type { PlannedPaymentRow } from "@/db/queries/planned-payments";
 import type { RecurringRuleRow } from "@/db/queries/recurring-rules";
 import type { RecurringCharge } from "@/db/queries/spending-patterns";
 import type { TransactionFormOptions } from "@/db/queries/transaction-form";
 import { useRouter } from "@/i18n/navigation";
+import type { CurrencyCode } from "@/lib/currency";
 import { civilDateToDate, todayInBogota } from "@/lib/dates";
 import { monthlyByCurrency } from "@/lib/fund/subscriptions";
 import { dateAfterSkip, previewOf, upcomingItems, type UpcomingItem } from "@/lib/fund/upcoming";
@@ -48,14 +52,17 @@ import { useMoneyText } from "@/lib/use-privacy";
 type Removal = { payment: PlannedPaymentRow } | { rule: RecurringRuleRow };
 
 /**
- * «Lo que viene»: the payments that fall due, the incomes that are expected, the rules that repeat and the
- * subscriptions HomeFund found, as one list ordered by date. Each row says what it is, its amount and day, its
- * account and offers one action; the rest sit in its menu. A kind with nothing in it shows nothing.
+ * «Lo que viene»: the payments that fall due, each card's and each loan's next payment (RF-308), the incomes that
+ * are expected, the rules that repeat and the subscriptions HomeFund found, as one list ordered by date. Each row says
+ * what it is, its amount and day, its account and offers one action; the rest sit in its menu. A kind with nothing in
+ * it shows nothing.
  */
 export function UpcomingScreen({
   payments,
   rules,
   charges,
+  debts,
+  payment,
   unreviewedCount,
   options,
   hasGroup,
@@ -63,6 +70,9 @@ export function UpcomingScreen({
   payments: PlannedPaymentRow[];
   rules: RecurringRuleRow[];
   charges: RecurringCharge[];
+  debts: UpcomingDebts;
+  // The debts the cards and loans above are paid through, and the assets they are paid from: the same dialog Deudas opens.
+  payment: Pick<DebtsScreenData, "withTerms" | "withoutTerms" | "payFrom">;
   unreviewedCount: number;
   options: TransactionFormOptions;
   hasGroup: boolean;
@@ -80,9 +90,22 @@ export function UpcomingScreen({
   const [settleTarget, setSettleTarget] = useState<PlannedPaymentRow | null>(null);
   const [cancelTarget, setCancelTarget] = useState<PlannedPaymentRow | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Removal | null>(null);
+  const [payTarget, setPayTarget] = useState<{ debt: PaymentDebt; currency: CurrencyCode } | null>(null);
 
   const [onlySubscriptions, setOnlySubscriptions] = useState(false);
-  const all = useMemo(() => upcomingItems({ payments, rules, charges }), [payments, rules, charges]);
+  const all = useMemo(
+    () =>
+      upcomingItems({
+        payments,
+        rules,
+        charges,
+        debts: [
+          ...debts.cards.map((debt) => ({ kind: "card" as const, date: debt.dueDate, debt })),
+          ...debts.loans.map((debt) => ({ kind: "loan" as const, date: debt.dueDate, debt })),
+        ],
+      }),
+    [payments, rules, charges, debts],
+  );
   const subscriptions = useMemo(() => all.filter((item) => item.kind === "subscription"), [all]);
   const items = onlySubscriptions ? subscriptions : all;
   // What the listed subscriptions cost a month, one figure per currency, never summed across currencies.
@@ -92,6 +115,20 @@ export function UpcomingScreen({
     .map(([currency, cents]) => moneyText(cents, currency, locale))
     .join(" · ");
   const accountNames = new Map(options.accountDirectory.map((account) => [account.id, account.name]));
+
+  // The payment dialog's own debt, read as the debts screen reads it; a loan asks what is left of its next cuota.
+  function payDebt(item: Extract<UpcomingItem, { kind: "card" | "loan" }>) {
+    const { accountId, currency } = item.debt;
+    const withTerms = payment.withTerms.find((row) => row.accountId === accountId);
+    const without = payment.withoutTerms.find((row) => row.accountId === accountId);
+    const found = withTerms ? paymentDebtOf({ ...withTerms, terms: withTerms }) : without ? paymentDebtOf({ ...without, terms: null }) : null;
+    if (found === null) return;
+    const debt: PaymentDebt =
+      item.kind === "loan"
+        ? { ...found, loan: { hasSchedule: item.debt.number !== null, hasRate: found.loan?.hasRate ?? false, instalmentCents: item.debt.amountCents } }
+        : found;
+    setPayTarget({ debt, currency: currency as CurrencyCode });
+  }
 
   const cancelState = useAction(cancelPlannedPaymentAction, {
     onSuccess() {
@@ -170,6 +207,7 @@ export function UpcomingScreen({
               onEditRule={(rule) => setFormTarget({ rule })}
               onCancel={setCancelTarget}
               onDelete={setDeleteTarget}
+              onPayDebt={payDebt}
             />
           ))}
         </Flex>
@@ -193,6 +231,18 @@ export function UpcomingScreen({
         payment={settleTarget ?? undefined}
         options={options}
       />
+
+      {payTarget && (
+        <DebtPaymentDialog
+          open
+          onOpenChange={(open) => {
+            if (!open) setPayTarget(null);
+          }}
+          debt={payTarget.debt}
+          currency={payTarget.currency}
+          payFrom={payment.payFrom}
+        />
+      )}
 
       {cancelTarget && (
         <ConfirmDialog
@@ -236,6 +286,7 @@ function UpcomingCard({
   onEditRule,
   onCancel,
   onDelete,
+  onPayDebt,
 }: {
   item: UpcomingItem;
   accountNames: Map<string, string>;
@@ -244,6 +295,7 @@ function UpcomingCard({
   onEditRule: (rule: RecurringRuleRow) => void;
   onCancel: (payment: PlannedPaymentRow) => void;
   onDelete: (target: Removal) => void;
+  onPayDebt: (item: Extract<UpcomingItem, { kind: "card" | "loan" }>) => void;
 }) {
   const moneyText = useMoneyText();
   const t = useTranslations("upcoming");
@@ -348,6 +400,34 @@ function UpcomingCard({
       );
       break;
     }
+    case "card": {
+      const { debt } = item;
+      kindWord = t("kind.card");
+      // The title already names the card.
+      accountId = null;
+      note = [
+        late ? t("late.debt") : null,
+        debt.totalCents === null
+          ? t("cardNoStatement")
+          : debt.minimumCents === null
+            ? t("cardTotalOnly")
+            : t("cardMinimum", { minimum: moneyText(debt.minimumCents, debt.currency, locale) }),
+      ]
+        .filter(Boolean)
+        .join(" · ");
+      action = { label: t("act.pay"), pending: false, onPress: () => onPayDebt(item) };
+      break;
+    }
+    case "loan": {
+      const { debt } = item;
+      kindWord = t("kind.loan");
+      accountId = null;
+      note = [late ? t("late.debt") : null, debt.number === null || debt.count === null ? null : t("loanNumber", { number: debt.number, count: debt.count })]
+        .filter(Boolean)
+        .join(" · ");
+      action = { label: t("act.pay"), pending: false, onPress: () => onPayDebt(item) };
+      break;
+    }
     case "subscription": {
       const { charge } = item;
       kindWord = t("kind.subscription");
@@ -386,7 +466,7 @@ function UpcomingCard({
               }
               title={title}
               subtitle={[kindWord, account].filter(Boolean).join(" · ")}
-              amount={moneyText(amountCents, currency, locale)}
+              amount={item.kind === "card" && item.debt.totalCents === null ? "—" : moneyText(amountCents, currency, locale)}
               tone={income ? "income" : "transfer"}
               wrap
             />

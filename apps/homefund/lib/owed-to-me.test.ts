@@ -11,16 +11,13 @@ const person = (name: string, currency: string, cents: number): OwedPerson => ({
   source: "person",
   labelId: name,
   breakdown: [],
+  withInterest: null,
 });
 
-test("a credit's lines add up to the receivable's balance, with «other» only when they do not", () => {
-  const plain = creditLines({ cents: 900_00, on: "2026-01-02" }, [{ on: "2026-02-01", cents: 150_00 }], 750_00);
-  assert.deepEqual(plain.map((line) => line.kind), ["opening", "payment"]);
-  assert.equal(owedByPerson(plain), 750_00);
-
-  const adjusted = creditLines({ cents: 900_00, on: "2026-01-02" }, [{ on: "2026-02-01", cents: 150_00 }], 700_00);
-  assert.deepEqual(adjusted.map((line) => line.kind), ["opening", "payment", "other"]);
-  assert.equal(owedByPerson(adjusted), 700_00);
+test("a credit is one line, the capital its loan still owes, which is the whole figure", () => {
+  const lines = creditLines(453_269_600);
+  assert.deepEqual(lines.map((line) => line.kind), ["capital"]);
+  assert.equal(owedByPerson(lines), 453_269_600);
 });
 
 test("people are grouped by currency, the largest first, and who owes nothing is left out", () => {

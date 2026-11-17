@@ -2,6 +2,7 @@ import "server-only";
 
 import { sql, type SQL } from "drizzle-orm";
 
+import { interestBookedWith } from "@/db/queries/debt-minimum";
 import { insertRow } from "@/db/insert-row";
 import { loanScheduleRows } from "@/db/schema";
 import { withUserDb, type Transaction } from "@/db/session";
@@ -19,7 +20,7 @@ import {
 import type { LoanScheduleInput } from "@/lib/validation/loan-schedule";
 
 export type RawRow = Record<keyof ScheduleRow, string | number>;
-export type RawPayment = { occurredOn: string; amountCents: string };
+export type RawPayment = { occurredOn: string; amountCents: string; interestCents: string };
 
 // The bank's rows of one loan, in order, as a jsonb array. `account` is the SQL text of the loan's id in the
 // statement that embeds this, a literal of ours: it is written with the alias's own name, never a Drizzle column
@@ -35,10 +36,12 @@ export function scheduleRowsSql(account: string): SQL<RawRow[]> {
   ), '[]'::jsonb)`;
 }
 
-// What reached the loan: each transfer into it in its own currency, the payments a schedule's rows are read against.
+// What reached the loan: each transfer into it in its own currency, with the interest expense booked beside it (the
+// same reference plus «:interest», RF-282), the payments a schedule's rows are read against.
 export function schedulePaymentsSql(account: string, currency: string): SQL<RawPayment[]> {
   return sql<RawPayment[]>`coalesce((
-    select jsonb_agg(jsonb_build_object('occurredOn', t.occurred_at::text, 'amountCents', t.amount_cents::text))
+    select jsonb_agg(jsonb_build_object('occurredOn', t.occurred_at::text, 'amountCents', t.amount_cents::text,
+      'interestCents', ${interestBookedWith("t")}::text))
     from transactions t
     where t.to_account_id = ${sql.raw(account)} and t.from_account_id is not null
       and t.currency = ${sql.raw(currency)}
@@ -58,7 +61,13 @@ export function scheduleOf(rows: RawRow[], payments: RawPayment[]): LoanSchedule
       totalCents: Number(row.totalCents),
       remainingCents: Number(row.remainingCents),
     })),
-    payments.map((payment): SchedulePayment => ({ occurredOn: payment.occurredOn, amountCents: Number(payment.amountCents) })),
+    payments.map(
+      (payment): SchedulePayment => ({
+        occurredOn: payment.occurredOn,
+        amountCents: Number(payment.amountCents),
+        interestCents: Number(payment.interestCents ?? 0),
+      }),
+    ),
     todayInBogota(),
   );
 }

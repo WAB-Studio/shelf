@@ -27,6 +27,7 @@ import {
 const scope = readScope();
 const stamp = randomUUID().slice(0, 8);
 const GROUP_NAME = "Fondo de la prueba";
+const FUND_HEADING = messages.categories.fundSection.replace("{name}", GROUP_NAME);
 
 function atCount(message: string, count: number): string {
   const branch = /other \{([^}]*)\}/.exec(message)?.[1] ?? message;
@@ -71,7 +72,7 @@ test.describe("categories", () => {
     await expect(shown.getByText(groupCategoryName, { exact: true })).toHaveCount(1);
     if (!laptop(page)) return;
     await expect(shown.getByText(scope.categoryName, { exact: true })).toHaveCount(1);
-    await expect(shown.getByText(GROUP_NAME, { exact: true }).first()).toBeVisible();
+    await expect(shown.getByText(FUND_HEADING, { exact: true }).first()).toBeVisible();
     await expect(shown.getByText(messages.categories.personalSection, { exact: true }).first()).toBeVisible();
   });
 });
@@ -183,7 +184,7 @@ test.describe("the fund's categories by role (C3i)", () => {
       await page.goto("/es/settings/categories");
 
       const shown = band(page);
-      const heading = shown.getByText(GROUP_NAME, { exact: true });
+      const heading = shown.getByText(FUND_HEADING, { exact: true });
       const note = shown.getByText(messages.categories.leaderOnly, { exact: true });
       await expect(heading).toHaveCount(1);
       await expect(note).toHaveCount(1);

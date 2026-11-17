@@ -70,6 +70,22 @@ const DAY_WORDS: [RegExp, number][] = [
 ];
 // «a 12 cuotas», «en 6 cuotas», «12 cuotas»: how many instalments a card purchase is split into (RF-273).
 const INSTALMENTS_PATTERN = /(?<![\p{L}\p{N}_])(?:(?:a|en)\s+)?(\d{1,2})\s+cuotas?(?![\p{L}\p{N}_])/iu;
+// A currency said in words beside the figure: «15,99 dólares», «usd 9», «US$15», «20 euros». «US$» sits
+// against its figure, so only the letters-and-word forms need a boundary after them.
+const CURRENCY_WORD =
+  /(?<![\p{L}\p{N}_])(?:us\$|(?:d[oó]lar(?:es)?|usd|euros?|eur)(?![\p{L}\p{N}_])|€)/iu;
+const CURRENCY_OF_WORD: [RegExp, string][] = [
+  [/^(?:us\$|d[oó]lar|usd)/iu, "USD"],
+  [/^(?:euro|eur|€)/iu, "EUR"],
+];
+// What a typed phrase says about the day, with the «el» that may lead a date.
+const DATE_WORDS_IN_TEXT = [
+  /(?<![\p{L}\p{N}_])(?:el\s+)?\d{4}-\d{2}-\d{2}(?![\d])/giu,
+  /(?<![\p{L}\p{N}_])(?:el\s+)?\d{1,2}\/\d{1,2}\/(?:\d{4}|\d{2})(?![\d/])/giu,
+  /(?<![\p{L}\p{N}_])(?:el\s+)?(?<![\d/])\d{1,2}\/\d{1,2}(?![\d/])/giu,
+  /(?<![\p{L}\p{N}_])(?:anteayer|ayer|hoy)(?![\p{L}\p{N}_])/giu,
+];
+
 // Thousands written with dots and then a second dot before one or two digits: «12.000.50» is either
 // «12.000,50» or «1.200.050», and a guess would move real money.
 const MARKS_AMBIGUOUS = /^\d{1,3}(?:\.\d{3})+\.\d{1,2}$/;
@@ -112,6 +128,8 @@ interface QuickEntryProposal {
   occurredAt: string | null;
   // The instalments a phrase asks («a 12 cuotas»), never read from a bank's message (RF-273).
   instalments: number | null;
+  // The currency a typed phrase names in words («dólares», «usd», «euros»); null when it names none.
+  currency: "USD" | "EUR" | null;
 }
 
 // The day the message names, as `YYYY-MM-DD`; null when it names none or names
@@ -489,6 +507,21 @@ export function interpretQuickEntry(
       " ",
     );
   }
+  // A typed phrase keeps only the words it did not use as a figure: the currency, the day and the
+  // instalments it read leave the description too. A bank's message keeps its text.
+  const typed = ctx.today !== undefined;
+  const currencyWord = typed ? CURRENCY_WORD.exec(text)?.[0] : undefined;
+  const currency = currencyWord
+    ? ((CURRENCY_OF_WORD.find(([pattern]) => pattern.test(currencyWord))?.[1] ?? null) as "USD" | "EUR" | null)
+    : null;
+  if (typed) {
+    description = description.replace(new RegExp(CURRENCY_WORD.source, "giu"), " ");
+    if (amountMatch) description = description.replace(/\$\s*(?=\s|$)/u, " ");
+    description = description.replace(INSTALMENTS_PATTERN, " ");
+    if (readOccurredAt(text, ctx.today) !== null) {
+      for (const pattern of DATE_WORDS_IN_TEXT) description = description.replace(pattern, " ");
+    }
+  }
   description = description.replace(/\s+/g, " ").trim();
 
   return {
@@ -502,5 +535,6 @@ export function interpretQuickEntry(
     direction,
     occurredAt: readOccurredAt(text, ctx.today),
     instalments,
+    currency,
   };
 }

@@ -41,6 +41,8 @@ export type ReconcileAllRow = {
   currency: CurrencyCode;
   // The figure HomeFund derives for today, the ledger's own sign: a debt is negative.
   derivedCents: number;
+  // What the account's pockets hold, inside `derivedCents`: the bank counts them with the account.
+  pocketsCents: number;
   institution: string | null;
   lastFour: string | null;
   holderName: string | null;
@@ -227,6 +229,11 @@ export function ReconcileAllScreen({ rows }: { rows: ReconcileAllRow[] }) {
                       tone="plain"
                       signed
                     />
+                    {row.pocketsCents !== 0 && (
+                      <Text size="1" color="gray">
+                        {t("reconcileIncludesPockets", { amount: moneyText(row.pocketsCents, row.currency, locale) })}
+                      </Text>
+                    )}
                   </Flex>
                 </Flex>
 

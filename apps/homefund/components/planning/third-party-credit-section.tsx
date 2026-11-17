@@ -200,9 +200,6 @@ export function ThirdPartyCreditSection({
         <Flex direction="column" gap="1">
           <Text size="2">{lender === null ? t("introNoLender", { person }) : t("intro", { person, lender })}</Text>
           {dueNote !== undefined && <Text size="2">{dueNote}</Text>}
-          <Text size="2" color="gray">
-            {t("openingLine", { amount: amount(credit.openingCents), date: day(credit.openedOn) })}
-          </Text>
         </Flex>
         {waiting && (
           <Callout.Root color="amber" variant="soft" role="status">

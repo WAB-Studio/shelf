@@ -321,7 +321,6 @@ export function DebtDetailScreen({ data }: { data: DebtDetailData }) {
                 termMonths={terms?.termMonths ?? null}
                 installmentCents={terms?.minimumPaymentCents ?? null}
                 paymentCount={paymentCount}
-                payer={thirdParty === null ? null : { person: thirdParty.personName, owesCents: thirdParty.personOwesCents }}
               />
             ) : (
               balanceLine
@@ -518,7 +517,8 @@ export function DebtDetailScreen({ data }: { data: DebtDetailData }) {
                   loan: {
                     hasSchedule: schedule !== null,
                     hasRate: terms !== null,
-                    instalmentCents: schedule?.next?.totalCents ?? terms?.minimumPaymentCents ?? null,
+                    // The next cuota asks only what is missing of it (RF-287).
+                    instalmentCents: schedule?.next ? schedule.next.totalCents - schedule.next.paidCents : (terms?.minimumPaymentCents ?? null),
                   },
                 }
               : {}),

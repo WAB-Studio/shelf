@@ -2,6 +2,7 @@ import "server-only";
 
 import { sql } from "drizzle-orm";
 
+import { scheduleOf, schedulePaymentsSql, scheduleRowsSql, type RawPayment, type RawRow } from "@/db/queries/loan-schedule";
 import { withUserDb, type Transaction } from "@/db/session";
 import {
   creditLines,
@@ -19,45 +20,35 @@ type RawLine = {
   name: string;
   labelId: string | null;
   currency: string;
-  line: OwedLineKind | "balance";
+  line: OwedLineKind;
   occurredOn: string | null;
   cents: string | null;
   description: string | null;
   transactionId: string | null;
+  // A credit's schedule and payments, read where the figure is: only the credit's line carries them.
+  scheduleRows: RawRow[] | null;
+  schedulePayments: RawPayment[] | null;
 };
 
 // Every line, both sources, in ONE statement. The policies scope each table, so a person's label and the movements
-// carrying it answer only what the caller may read. A credit's lines are the receivable's opening, the transfers
-// out of it and its balance; a person's are their expenses and the incomes marked «de <persona>», both through the
-// movement-label join (RF-242). A reconciliation's adjustment is no spending and no return (RF-138).
+// carrying it answer only what the caller may read. A credit is one line: the capital its loan still owes, read off
+// the loan's own balance and never off the hidden receivable, so it is what the bank says is left (RF-301); its
+// schedule rides along for «con intereses». A person's lines are their expenses and the incomes marked «de <persona>»,
+// both through the movement-label join (RF-242). A reconciliation's adjustment is no spending and no return (RF-138).
 function linesSql(onlyLabelId: string | null) {
   return sql`
     select 'credit' as source, 'credit:' || c.id::text as key, c.person_name as name, null::uuid as "labelId",
-      l.settlement_currency as currency, 'opening' as line, r.initial_balance_on::text as "occurredOn",
-      r.initial_balance_cents::text as cents, null::text as description, null::uuid as "transactionId"
+      l.settlement_currency as currency, 'capital' as line, null::text as "occurredOn",
+      greatest(0, -coalesce(lb.balance_cents, 0))::text as cents, null::text as description, null::uuid as "transactionId",
+      ${scheduleRowsSql("l.id")} as "scheduleRows", ${schedulePaymentsSql("l.id", "l.settlement_currency")} as "schedulePayments"
     from third_party_credits c
     join accounts l on l.id = c.liability_account_id
-    join accounts r on r.id = c.receivable_account_id
-    where ${onlyLabelId}::uuid is null
-    union all
-    select 'credit', 'credit:' || c.id::text, c.person_name, null, l.settlement_currency, 'payment', t.occurred_at::text,
-      t.amount_cents::text, null, t.id
-    from third_party_credits c
-    join accounts l on l.id = c.liability_account_id
-    join transactions t on t.from_account_id = c.receivable_account_id and t.to_account_id is not null
-      and t.currency = l.settlement_currency
-    where ${onlyLabelId}::uuid is null
-    union all
-    select 'credit', 'credit:' || c.id::text, c.person_name, null, l.settlement_currency, 'balance', null,
-      coalesce(rb.balance_cents, 0)::text, null, null
-    from third_party_credits c
-    join accounts l on l.id = c.liability_account_id
-    left join account_balances rb on rb.id = c.receivable_account_id and rb.currency = l.settlement_currency
+    left join account_balances lb on lb.id = l.id and lb.currency = l.settlement_currency
     where ${onlyLabelId}::uuid is null
     union all
     select 'person', 'person:' || p.id::text, p.name, p.id, t.currency,
       case when t.kind = 'expense' then 'spent' else 'returned' end, t.occurred_at::text,
-      t.amount_cents::text, t.description, t.id
+      t.amount_cents::text, t.description, t.id, null::jsonb, null::jsonb
     from labels p
     join transaction_labels tl on tl.label_id = p.id
     join transactions t on t.id = tl.transaction_id
@@ -78,15 +69,12 @@ function peopleFrom(rows: RawLine[]): OwedPerson[] {
     const [first] = own;
     const money = (row: RawLine) => Number(row.cents);
     if (first.source === "credit") {
-      const opening = own.find((row) => row.line === "opening");
-      const balance = own.find((row) => row.line === "balance");
-      const payments = own.filter((row) => row.line === "payment");
-      const breakdown = creditLines(
-        { cents: opening ? money(opening) : 0, on: opening?.occurredOn ?? "" },
-        payments.map((row) => ({ on: row.occurredOn ?? "", cents: money(row) })),
-        balance ? money(balance) : 0,
-      );
-      return { key: `${first.key}|${first.currency}`, name: first.name, currency: first.currency, cents: owedByPerson(breakdown), source: "credit", labelId: null, breakdown };
+      const capital = own.find((row) => row.line === "capital");
+      const breakdown = creditLines(capital ? money(capital) : 0);
+      const schedule = capital?.scheduleRows && capital.schedulePayments ? scheduleOf(capital.scheduleRows, capital.schedulePayments) : null;
+      const withInterest =
+        schedule !== null && schedule.remainingCount > 0 ? { cents: schedule.remainingTotalCents, count: schedule.remainingCount } : null;
+      return { key: `${first.key}|${first.currency}`, name: first.name, currency: first.currency, cents: owedByPerson(breakdown), source: "credit", labelId: null, breakdown, withInterest };
     }
     const breakdown: OwedLine[] = own.map((row) => ({
       kind: row.line === "spent" ? "spent" : "returned",
@@ -95,7 +83,7 @@ function peopleFrom(rows: RawLine[]): OwedPerson[] {
       description: row.description,
       transactionId: row.transactionId,
     }));
-    return { key: `${first.key}|${first.currency}`, name: first.name, currency: first.currency, cents: owedByPerson(breakdown), source: "person", labelId: first.labelId, breakdown };
+    return { key: `${first.key}|${first.currency}`, name: first.name, currency: first.currency, cents: owedByPerson(breakdown), source: "person", labelId: first.labelId, breakdown, withInterest: null };
   });
 }
 
