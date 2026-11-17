@@ -1723,6 +1723,14 @@
     "rejectDescription": "Sale de la bandeja sin anotar ningún movimiento.",
     "rejectOnce": "Descartar solo este",
     "rejectAndSilence": "Descartar y no volver a preguntar",
+    "alreadyRecorded": "Ya registrado",
+    "alreadyRecordedAs": "Ya está anotado como «{description}» el {date}.",
+    "alreadyRecordedOn": "Ya hay un movimiento igual anotado el {date}.",
+    "seeRecorded": "Ver el movimiento",
+    "rejectDuplicate": "Descartar: ya está registrado",
+    "rejectDuplicateTitle": "Descartar: ya está registrado",
+    "rejectDuplicateDescription": "Sale de la bandeja sin anotar un segundo movimiento. El que ya existe no cambia.",
+    "recordAnyway": "Anotar igual",
     "rejectedToast": "Mensaje descartado.",
     "silencedToast": "Listo: los mensajes así no vuelven a la bandeja.",
     "silencedTitle": "Mensajes silenciados",
@@ -1764,7 +1772,7 @@
       "reminder": "Recordatorio de pago",
       "promotion": "Publicidad",
       "bill": "Factura por pagar",
-      "duplicate": "Ya estaba (comprobante)",
+      "duplicate": "Ya estaba registrado",
       "no_movement_signal": "Sin movimiento"
     }
   },

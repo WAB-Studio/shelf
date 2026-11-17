@@ -26,6 +26,7 @@ export type AcceptDeliveryInput = z.infer<typeof acceptDeliverySchema>;
 export const rejectDeliverySchema = z.object({
   deliveryId: z.uuid({ error: "ingest.errors.deliveryInvalid" }),
   silenceShape: z.boolean(),
+  reason: z.literal("duplicate").optional(),
 });
 
 // The only way out of `ambiguous`, so a merchant that was learned wrong can be
