@@ -34,6 +34,8 @@ export type ToPayPayment = {
 
 export type HomeAhead = {
   cards: ToPayCard[];
+  // Each loan's next cuota when it falls due this month, a late one included.
+  loans: (UpcomingLoanDebt & { dueDate: string })[];
   payments: ToPayPayment[];
   nextIncome: ToPayPayment | null;
   nextBill: ToPayPayment | null;
@@ -97,9 +99,10 @@ export async function getHomeAhead(): Promise<HomeAhead> {
   const today = todayInBogota();
   const { start, endExclusive } = currentMonthRange();
 
-  const [cardRows, pending] = await Promise.all([
+  const [cardRows, pending, loanRows] = await Promise.all([
     readCardRows(today),
     listPlannedPayments({ status: "pending" }),
+    readLoanRows(),
   ]);
 
   const cards = cardRows.flatMap((row): ToPayCard[] => {
@@ -148,40 +151,27 @@ export async function getHomeAhead(): Promise<HomeAhead> {
 
   return {
     cards,
+    loans: instalmentsOf(loanRows, today).filter((loan) => loan.dueDate < endExclusive),
     payments: outgoing.filter((payment) => payment.dueDate < endExclusive).map(view),
     nextIncome: nextIncome ? view(nextIncome) : null,
     nextBill: nextBill ? view(nextBill) : null,
   };
 }
 
-export type UpcomingDebts = {
-  cards: (UpcomingCardDebt & { dueDate: string })[];
-  loans: (UpcomingLoanDebt & { dueDate: string })[];
+type LoanRow = {
+  id: string;
+  name: string;
+  currency: string;
+  minimum_cents: string | null;
+  payment_due_day: number | null;
+  rows: RawRow[];
+  payments: RawPayment[];
 };
 
-/**
- * Each debt's next payment for «Lo que viene» (RF-308), in two parallel reads. A card that still owes, whose period's
- * minimum is not paid, asks its latest statement's total and minimum on the statement's due day; a statement older than
- * this month is not this month's, so the card says its extract is missing and takes its own payment day. A loan that
- * still owes asks the first cuota its schedule has not paid in full, less what already landed on it; with no schedule,
- * the cuota and day its terms name. A debt with no day to name is left out.
- */
-export async function getUpcomingDebts(): Promise<UpcomingDebts> {
-  const today = todayInBogota();
-  const { start } = currentMonthRange();
-
-  const [cardRows, loanRows] = await Promise.all([
-    readCardRows(today),
-    withUserDb((tx) =>
-      tx.execute<{
-        id: string;
-        name: string;
-        currency: string;
-        minimum_cents: string | null;
-        payment_due_day: number | null;
-        rows: RawRow[];
-        payments: RawPayment[];
-      }>(sql`
+// The loans that still owe, with their terms and their schedule against what was paid, in one statement.
+function readLoanRows() {
+  return withUserDb((tx) =>
+    tx.execute<LoanRow>(sql`
         select a.id, a.name, a.settlement_currency as currency, dt.minimum_payment_cents::text as minimum_cents,
           dt.payment_due_day, ${scheduleRowsSql("a.id")} as rows,
           ${schedulePaymentsSql("a.id", "a.settlement_currency")} as payments
@@ -191,28 +181,18 @@ export async function getUpcomingDebts(): Promise<UpcomingDebts> {
         where a.kind = 'liability' and a.subtype = 'loan' and a.archived_at is null and b.balance_cents < 0
           and (a.owner_user_id is null or a.owner_user_id = (select auth.uid()))
         order by a.name`),
-    ),
-  ]);
+  );
+}
 
-  const cards = cardRows.flatMap((row): UpcomingDebts["cards"] => {
-    if (row.minimum_paid) return [];
-    const counts = row.due_date !== null && row.due_date >= start;
-    const dueDate = counts
-      ? row.due_date
-      : row.payment_due_day === null
-        ? null
-        : nextDayOfMonthOnOrAfter(row.payment_due_day, today);
-    if (dueDate === null) return [];
+export type UpcomingDebts = {
+  cards: (UpcomingCardDebt & { dueDate: string })[];
+  loans: (UpcomingLoanDebt & { dueDate: string })[];
+};
 
-    const base = { accountId: row.account_id, name: row.name, currency: row.currency, dueDate };
-    if (!counts) return [{ ...base, totalCents: null, minimumCents: null }];
-    const total = Math.min(-Number(row.closing_cents), Number(row.owed_cents));
-    if (total <= 0) return [];
-    const minimum = row.minimum_cents === null ? null : Number(row.minimum_cents);
-    return [{ ...base, totalCents: total, minimumCents: minimum !== null && minimum > 0 && minimum < total ? minimum : null }];
-  });
-
-  const loans = loanRows.flatMap((row): UpcomingDebts["loans"] => {
+// Each loan's next cuota: the first its schedule has not paid in full, less what already landed on it; with no
+// schedule, the cuota and day its terms name. A loan with no day to name is left out.
+function instalmentsOf(loanRows: LoanRow[], today: string): UpcomingDebts["loans"] {
+  return loanRows.flatMap((row): UpcomingDebts["loans"] => {
     const base = { accountId: row.id, name: row.name, currency: row.currency };
     const schedule = scheduleOf(row.rows, row.payments);
     if (schedule !== null) {
@@ -233,6 +213,43 @@ export async function getUpcomingDebts(): Promise<UpcomingDebts> {
       },
     ];
   });
+}
+
+/**
+ * Each debt's next payment for «Lo que viene» (RF-308), in two parallel reads. A card that still owes, whose period's
+ * minimum is not paid, asks its latest statement's total and minimum on the statement's due day; a statement older than
+ * this month is not this month's, so the card says its extract is missing and takes its own payment day. A loan that
+ * still owes asks the first cuota its schedule has not paid in full, less what already landed on it; with no schedule,
+ * the cuota and day its terms name. A debt with no day to name is left out.
+ */
+export async function getUpcomingDebts(): Promise<UpcomingDebts> {
+  const today = todayInBogota();
+  const { start } = currentMonthRange();
+
+  const [cardRows, loanRows] = await Promise.all([
+    readCardRows(today),
+    readLoanRows(),
+  ]);
+
+  const cards = cardRows.flatMap((row): UpcomingDebts["cards"] => {
+    if (row.minimum_paid) return [];
+    const counts = row.due_date !== null && row.due_date >= start;
+    const dueDate = counts
+      ? row.due_date
+      : row.payment_due_day === null
+        ? null
+        : nextDayOfMonthOnOrAfter(row.payment_due_day, today);
+    if (dueDate === null) return [];
+
+    const base = { accountId: row.account_id, name: row.name, currency: row.currency, dueDate };
+    if (!counts) return [{ ...base, totalCents: null, minimumCents: null }];
+    const total = Math.min(-Number(row.closing_cents), Number(row.owed_cents));
+    if (total <= 0) return [];
+    const minimum = row.minimum_cents === null ? null : Number(row.minimum_cents);
+    return [{ ...base, totalCents: total, minimumCents: minimum !== null && minimum > 0 && minimum < total ? minimum : null }];
+  });
+
+  const loans = instalmentsOf(loanRows, today);
 
   return { cards, loans };
 }

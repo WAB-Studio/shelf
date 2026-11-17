@@ -41,6 +41,10 @@ type LoanRead = {
   scope_owner: string | null;
   scope_group: string | null;
   category_id: string | null;
+  // The hidden «Me debe» of a credit somebody else pays, and what the payer is ahead by: what they sent beyond the
+  // capital the loan has come down by (the loan's owed less what the receivable says they still owe).
+  receivable_id: string | null;
+  prepaid_cents: string;
 };
 
 /**
@@ -74,6 +78,7 @@ export async function recordLoanInstalment({
 }): Promise<LoanInstalmentResult> {
   const capitalRef = requestRef ? `form:${requestRef}` : null;
   const formInterestRef = requestRef ? `form:${requestRef}:interest` : null;
+  const formPayerInterestRef = requestRef ? `form:${requestRef}:interest:payer` : null;
 
   try {
     return await withUserDb(async (tx) => {
@@ -98,8 +103,14 @@ export async function recordLoanInstalment({
                 or (c.group_id is not null and c.group_id = src.group_id))
               and lower(c.name) = any(${sql.raw(`array[${INTEREST_CATEGORY_NAMES.map((name) => `'${name}'`).join(",")}]`)})
             order by array_position(${sql.raw(`array[${INTEREST_CATEGORY_NAMES.map((name) => `'${name}'`).join(",")}]`)}, lower(c.name))
-            limit 1) as category_id
+            limit 1) as category_id,
+          tpc.receivable_account_id as receivable_id,
+          greatest(0, greatest(0, -coalesce((select b.balance_cents from account_balances b
+              where b.id = l.id and b.currency = l.settlement_currency), 0))
+            - coalesce((select b.balance_cents from account_balances b
+              where b.id = tpc.receivable_account_id and b.currency = l.settlement_currency), 0))::text as prepaid_cents
         from accounts l
+        left join third_party_credits tpc on tpc.liability_account_id = l.id
         left join accounts src on src.id = ${fromAccountId}
         where l.id = ${toAccountId}
       `);
@@ -136,20 +147,42 @@ export async function recordLoanInstalment({
         capitalId = txn.id;
       }
 
+      // The interest the payer's money covers is not the person's expense (RF-216): it moves into the hidden
+      // «Me debe», which keeps it equal to the loan's capital. The payer covers what they sent beyond this
+      // payment's capital; the rest, 4x1000 aside, is the person's own interest expense.
+      const coveredCents =
+        read.receivable_id !== null && read.receivable_id !== fromAccountId
+          ? Math.min(split.interestCents, Math.max(0, Number(read.prepaid_cents) - split.capitalCents))
+          : 0;
+      const ownInterestCents = split.interestCents - coveredCents;
+
       let interestId: string | null = null;
-      if (split.interestCents > 0) {
+      if (coveredCents > 0) {
+        interestId = (
+          await insertTransaction(tx, {
+            fromAccountId,
+            toAccountId: read.receivable_id,
+            amountCents: coveredCents,
+            occurredAt,
+            description: `Intereses ${await loanNameOf(tx, toAccountId)}`.trim(),
+            externalRef: formPayerInterestRef ?? (capitalId ? `${capitalId}:interest:payer` : null),
+            splits: [],
+            labelIds: [],
+          })
+        ).transactionId;
+      }
+      if (ownInterestCents > 0) {
         const categoryId = read.category_id ?? (await openInterestCategory(tx, read));
-        const loanName = await tx.execute<{ name: string }>(sql`select name from accounts where id = ${toAccountId}`);
         interestId = (
           await insertTransaction(tx, {
             fromAccountId,
             toAccountId: null,
-            amountCents: split.interestCents,
+            amountCents: ownInterestCents,
             occurredAt,
-            description: `Intereses ${loanName[0]?.name ?? ""}`.trim(),
+            description: `Intereses ${await loanNameOf(tx, toAccountId)}`.trim(),
             // Without a request the transfer's reference is its own id, so the interest names the transfer it came with.
             externalRef: formInterestRef ?? (capitalId ? `${capitalId}:interest` : null),
-            splits: [{ categoryId, amountCents: split.interestCents }],
+            splits: [{ categoryId, amountCents: ownInterestCents }],
             labelIds: [],
           })
         ).transactionId;
@@ -163,20 +196,25 @@ export async function recordLoanInstalment({
     // The first copy booked both rows in one transaction, so either ref names it.
     const rows = await withUserDb((tx) =>
       tx.execute<{ id: string; amount_cents: string; interest: boolean }>(sql`
-        select t.id, t.amount_cents::text, (t.to_account_id is null) as interest from transactions t
-        where t.external_ref in (${capitalRef}, ${formInterestRef})
+        select t.id, t.amount_cents::text, (t.to_account_id is distinct from ${toAccountId}::uuid) as interest from transactions t
+        where t.external_ref in (${capitalRef}, ${formInterestRef}, ${formPayerInterestRef})
           and (t.to_account_id = ${toAccountId} or t.from_account_id = ${fromAccountId})
       `),
     );
     const capital = rows.find((row) => !row.interest);
-    const interest = rows.find((row) => row.interest);
-    const first = capital ?? interest;
+    const interests = rows.filter((row) => row.interest);
+    const first = capital ?? interests[0];
     if (!first) throw error;
 
-    const interestCents = interest ? Number(interest.amount_cents) : 0;
+    const interestCents = interests.reduce((sum, row) => sum + Number(row.amount_cents), 0);
     const capitalCents = capital ? Number(capital.amount_cents) : 0;
     return { transactionId: first.id, interestCents, capitalCents, basis: "rate" };
   }
+}
+
+async function loanNameOf(tx: Transaction, accountId: string): Promise<string> {
+  const [row] = await tx.execute<{ name: string }>(sql`select name from accounts where id = ${accountId}`);
+  return row?.name ?? "";
 }
 
 // A person with no interest category gets one named for it, in the scope the source account lives in.

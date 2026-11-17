@@ -177,6 +177,19 @@ export function dayNet(
   return [...nets];
 }
 
+// What a day's net leaves out, per currency: the money moved between the person's own accounts, which the net never
+// counts but the day still lists (RF-19). Order of first appearance.
+export function dayLeftOut(
+  rows: { kind: string; currency: string; amountCents: number; reconciliationId: string | null }[],
+): [string, number][] {
+  const moved = new Map<string, number>();
+  for (const row of rows) {
+    if (row.reconciliationId !== null || row.kind !== "transfer") continue;
+    moved.set(row.currency, (moved.get(row.currency) ?? 0) + row.amountCents);
+  }
+  return [...moved];
+}
+
 // The chart palette: violets, jade, amber, sky and slate, never red, which a chart
 // keeps for what was exceeded.
 export const CHART_PALETTE = [

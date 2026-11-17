@@ -449,12 +449,12 @@ export function interpretQuickEntry(
       ? prefixWord(text, namedAccounts[0].name)
       : null;
 
-  // The first category whose name reads as a substring of the text; the token
-  // it matched drops out of the description below.
+  // The first category whose name reads in the text as whole words, so «vivienda» is never found inside
+  // «Davivienda»; the token it matched drops out of the description below.
   const substringCategory =
     ctx.categories.find((category) => {
       const name = category.name.trim().toLowerCase();
-      return name.length > 0 && lower.includes(name);
+      return name.length > 0 && new RegExp(`(?<![\\p{L}\\p{N}])${escapeRegExp(name)}(?![\\p{L}\\p{N}])`, "u").test(lower);
     }) ?? null;
   // Failing that, the one category a word of the text begins a word of.
   const namedCategories = substringCategory

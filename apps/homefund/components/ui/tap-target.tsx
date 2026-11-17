@@ -9,8 +9,11 @@ export function TapTarget({
   gap,
   px,
   width,
+  flow = false,
   children,
 }: Pick<FlexProps, "align" | "justify" | "gap" | "px" | "width"> & {
+  // Reads the content as one sentence that wraps as text, not as a row of columns.
+  flow?: boolean;
   children?: ReactNode;
 }) {
   return (
@@ -24,7 +27,7 @@ export function TapTarget({
       minWidth="44px"
       minHeight="44px"
     >
-      {children}
+      {flow ? <span>{children}</span> : children}
     </Flex>
   );
 }

@@ -12,6 +12,7 @@ import {
   paidOwnCard,
   readableName,
   repairDescription,
+  withoutClock,
 } from "./describe";
 
 // Synthetic messages that mimic the shapes Bancolombia sends; no real figure, name or number.
@@ -133,4 +134,11 @@ test("an ATM withdrawal is told from a purchase", () => {
   assert.equal(looksLikeCashWithdrawal("Retiro por $200.000 en cajero."), true);
   assert.equal(looksLikeCashWithdrawal("Bancolombia: Compraste $12.000 en Tienda La Esquina con tu T.Deb *4872."), false);
   assert.equal(describeAlert("Cajero DAVIVIENDA CALLE 80 $300.000"), "Retiro en cajero");
+});
+
+test("a description never keeps the time of day the bank printed after the business", () => {
+  assert.equal(withoutClock("RAPPI* 15:32"), "RAPPI");
+  assert.equal(withoutClock("UBER TRIP 08:12"), "UBER TRIP");
+  assert.equal(withoutClock("Éxito Colina"), "Éxito Colina");
+  assert.equal(repairDescription("UBER TRIP 08:12", "Uber trip 08:12", null), "UBER TRIP");
 });

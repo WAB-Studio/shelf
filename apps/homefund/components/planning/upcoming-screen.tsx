@@ -422,9 +422,16 @@ function UpcomingCard({
       const { debt } = item;
       kindWord = t("kind.loan");
       accountId = null;
-      note = [late ? t("late.debt") : null, debt.number === null || debt.count === null ? null : t("loanNumber", { number: debt.number, count: debt.count })]
-        .filter(Boolean)
-        .join(" · ");
+      note =
+        late && debt.number !== null
+          ? t("loanOverdue", {
+              number: debt.number,
+              amount: moneyText(debt.amountCents, debt.currency, locale),
+              date: format.dateTime(civilDateToDate(item.date), { day: "numeric", month: "short" }),
+            })
+          : [late ? t("late.debt") : null, debt.number === null || debt.count === null ? null : t("loanNumber", { number: debt.number, count: debt.count })]
+              .filter(Boolean)
+              .join(" · ");
       action = { label: t("act.pay"), pending: false, onPress: () => onPayDebt(item) };
       break;
     }

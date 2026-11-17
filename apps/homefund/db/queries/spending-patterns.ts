@@ -6,6 +6,7 @@ import { hasUsualHistorySql, isAboveUsualSql, usualMedianSql } from "@/db/querie
 import { patternKeySql } from "@/db/queries/learned-category";
 import { withUserDb } from "@/db/session";
 import { monthRange, shiftMonth, todayInBogota } from "@/lib/dates";
+import { readSubscription, type SeriesCharge } from "@/lib/fund/subscription-rules";
 import { USUAL_WINDOW_MONTHS } from "@/lib/month-review-rules";
 import { CATEGORY_PATH_SEPARATOR } from "@/lib/spreadsheet/sheet-layout";
 
@@ -67,12 +68,9 @@ export type SpendingPatterns = {
   growing: GrowingCategory[];
 };
 
-// The fixed rules (RF-184). A series repeats when it holds this many charges on distinct days,
-// its median gap falls in a cadence's band, and two thirds of its gaps and of its amounts hold
-// steady (an amount within 20 % of the series' median).
-const MIN_OCCURRENCES = 3;
-// A series is still running while its next charge is at most this many days late.
-const GRACE_DAYS = { monthly: 10, weekly: 3 } as const;
+// A merchant charged this many times on distinct days is a candidate for a subscription; the rules that settle it are
+// `readSubscription`'s (RF-311).
+const MIN_OCCURRENCES = 2;
 // A category grows when its average over the recent months is over this percent of the months before.
 export const GROWTH_PERCENT = 125;
 const RECENT_MONTHS = 3;
@@ -147,37 +145,15 @@ function patternsSql(w: Window): SQL {
       where pattern_key is not null
       group by 1, 2, 3, 4
     ),
-    gaps as (
-      select c.*, c.occurred_at - lag(c.occurred_at)
-        over (partition by c.pattern_key, c.account_id, c.currency order by c.occurred_at) as gap
-      from charges c
-    ),
+    -- Every merchant with at least two charges is a candidate; the TypeScript rules decide which are subscriptions.
     series as (
-      select pattern_key, account_id, currency, count(*)::int as occurrences,
-        percentile_disc(0.5) within group (order by gap) as median_gap,
-        percentile_disc(0.5) within group (order by amount_cents) as typical_cents,
-        min(occurred_at) as first_date, max(occurred_at) as last_date,
+      select pattern_key, account_id, currency,
         (array_agg(description order by occurred_at desc))[1] as description,
-        (array_agg(transaction_id order by occurred_at desc))[1] as transaction_id
-      from gaps
+        (array_agg(transaction_id order by occurred_at desc))[1] as transaction_id,
+        jsonb_agg(jsonb_build_object('date', to_char(occurred_at, 'YYYY-MM-DD'), 'cents', amount_cents) order by occurred_at) as charges
+      from charges
       group by 1, 2, 3
       having count(*) >= ${MIN_OCCURRENCES}
-    ),
-    cadenced as (
-      select s.*, b.cadence, b.lo, b.hi, b.grace,
-        case b.cadence when 'monthly' then (s.last_date + interval '1 month')::date else s.last_date + 7 end as next_expected
-      from series s
-      join (values ('monthly', 25, 35, ${GRACE_DAYS.monthly}::int), ('weekly', 6, 8, ${GRACE_DAYS.weekly}::int))
-        as b(cadence, lo, hi, grace) on s.median_gap between b.lo and b.hi
-    ),
-    recurring as (
-      select c.*
-      from cadenced c
-      join gaps g using (pattern_key, account_id, currency)
-      group by c.pattern_key, c.account_id, c.currency, c.occurrences, c.median_gap, c.typical_cents, c.first_date,
-        c.last_date, c.description, c.transaction_id, c.cadence, c.lo, c.hi, c.grace, c.next_expected
-      having 3 * count(*) filter (where 5 * g.amount_cents between 4 * c.typical_cents and 6 * c.typical_cents) >= 2 * c.occurrences
-        and 3 * count(*) filter (where g.gap between c.lo and c.hi) >= 2 * (c.occurrences - 1)
     ),
     -- RF-155's «above usual»: a line over three times its category's median in the six months
     -- before its month, once that median rests on three lines.
@@ -214,19 +190,36 @@ function patternsSql(w: Window): SQL {
     )`;
 }
 
-// The repeated charges as JSON; it reads `recurring` and `names` from `patternsSql`'s chain.
-function recurringJson(w: Window): SQL {
+type Candidate = {
+  name: string;
+  accountId: string;
+  accountName: string;
+  scope: "personal" | "fund";
+  category: string | null;
+  currency: string;
+  charges: SeriesCharge[];
+};
+
+// The merchants charged more than once, as JSON; it reads `series` and `names` from `patternsSql`'s chain.
+function candidatesJson(): SQL {
   return sql`(select json_agg(json_build_object(
       'name', r.description, 'accountId', r.account_id, 'accountName', a.name,
       'scope', case when a.group_id is null then 'personal' else 'fund' end,
       'category', (select n.path from transaction_splits s join names n on n.id = s.category_id
         where s.transaction_id = r.transaction_id order by s.amount_cents desc, s.id limit 1),
-      'currency', r.currency, 'cadence', r.cadence, 'typicalCents', r.typical_cents,
-      'occurrences', r.occurrences, 'firstDate', to_char(r.first_date, 'YYYY-MM-DD'),
-      'lastDate', to_char(r.last_date, 'YYYY-MM-DD'), 'nextExpected', to_char(r.next_expected, 'YYYY-MM-DD'),
-      'active', r.next_expected + r.grace >= ${w.today}::date
-    ) order by r.next_expected, r.description)
-    from recurring r join accounts a on a.id = r.account_id)`;
+      'currency', r.currency, 'charges', r.charges
+    ) order by r.description)
+    from series r join accounts a on a.id = r.account_id)`;
+}
+
+// The candidates that are subscriptions (RF-311), soonest next charge first.
+function subscriptionsOf(candidates: Candidate[] | null, today: string): RecurringCharge[] {
+  return (candidates ?? [])
+    .flatMap(({ charges, ...candidate }): RecurringCharge[] => {
+      const found = readSubscription(charges, today);
+      return found === null ? [] : [{ ...candidate, cadence: "monthly", ...found }];
+    })
+    .sort((a, b) => a.nextExpected.localeCompare(b.nextExpected) || a.name.localeCompare(b.name));
 }
 
 /**
@@ -239,7 +232,7 @@ export async function getSpendingPatterns(months: number, today: string = todayI
   return withUserDb(async (tx) => {
     const [row] = await tx.execute<{
       spending: CategorySpending[] | null;
-      recurring: RecurringCharge[] | null;
+      candidates: Candidate[] | null;
       outliers: SpendingOutlier[] | null;
       growing: GrowingCategory[] | null;
     }>(sql`
@@ -252,7 +245,7 @@ export async function getSpendingPatterns(months: number, today: string = todayI
               json_object_agg(month, cents order by month) as months
             from spending group by 1, 2) s
           left join names n on n.id = s.category_id) as spending,
-        ${recurringJson(w)} as recurring,
+        ${candidatesJson()} as candidates,
         (select json_agg(x.item order by x.occurred_at desc, x.transaction_id) from (
           select o.occurred_at, o.transaction_id, json_build_object(
               'transactionId', o.transaction_id, 'date', to_char(o.occurred_at, 'YYYY-MM-DD'),
@@ -279,7 +272,7 @@ export async function getSpendingPatterns(months: number, today: string = todayI
       currentMonth: w.currentMonth,
       recentMonths: Array.from({ length: w.recentCount }, (_, i) => shiftMonth(w.recentFrom, i)),
       spending: row?.spending ?? [],
-      recurring: row?.recurring ?? [],
+      recurring: subscriptionsOf(row?.candidates ?? null, w.today),
       outliers: row?.outliers ?? [],
       growing: row?.growing ?? [],
     };
@@ -293,9 +286,9 @@ export async function getSpendingPatterns(months: number, today: string = todayI
 export async function listRecurringCharges(today: string = todayInBogota()): Promise<RecurringCharge[]> {
   const w = windowOf(12, today, 0);
   return withUserDb(async (tx) => {
-    const [row] = await tx.execute<{ recurring: RecurringCharge[] | null }>(sql`
+    const [row] = await tx.execute<{ candidates: Candidate[] | null }>(sql`
       ${patternsSql(w)}
-      select ${recurringJson(w)} as recurring`);
-    return row?.recurring ?? [];
+      select ${candidatesJson()} as candidates`);
+    return subscriptionsOf(row?.candidates ?? null, w.today);
   });
 }

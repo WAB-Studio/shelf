@@ -11,6 +11,7 @@ import {
   totalDueSql,
   unpaidStatementMinimumSql,
 } from "@/db/queries/debt-minimum";
+import { scheduleOf, scheduleRowsSql, schedulePaymentsSql, type RawPayment, type RawRow } from "@/db/queries/loan-schedule";
 import type { DebtTerms } from "@/db/schema";
 import { withUserDb } from "@/db/session";
 import type { CurrencyCode } from "@/lib/currency";
@@ -30,6 +31,11 @@ export type DebtPocket = {
   // takes away. Null while nothing is pending. Never added to the owed (RF-124).
   toBillCents: number | null;
 };
+
+function nextInstalmentOf(rows: RawRow[], payments: RawPayment[]): DebtOverviewRow["nextInstalment"] {
+  const next = scheduleOf(rows, payments)?.next;
+  return next ? { number: next.number, dueOn: next.dueOn, amountCents: next.totalCents - next.paidCents } : null;
+}
 
 export type DebtOverviewRow = {
   accountId: string;
@@ -53,6 +59,8 @@ export type DebtOverviewRow = {
   minimumPaymentCents: number | null;
   // What was paid this period covers its minimum: the screen says so instead of asking it again.
   minimumPaid: boolean;
+  // A loan's first cuota its schedule has not paid in full, with what of it is still missing; null with no schedule.
+  nextInstalment: { number: number; dueOn: string; amountCents: number } | null;
   // What paying the latest statement in full asks now, or everything owed when there is no statement.
   totalDueCents: number;
   nextCutOffDate: string | null;
@@ -148,8 +156,20 @@ export async function getDebtOverviewWithPockets(): Promise<{
   const nextCutOff = nextDayOfMonthOnOrAfterSql(sql`dt.statement_cut_off_day`, today);
   const nextDue = nextDayOfMonthOnOrAfterSql(sql`dt.payment_due_day`, today);
 
+  // A loan with a payment schedule asks its next cuota, which «minimum paid» never answers: only a card, or a loan with
+  // no schedule, has a period whose minimum is covered.
+  const minimumPaid = sql<boolean>`((a.subtype = 'card' or not exists (select 1 from loan_schedule_rows r where r.account_id = b.id)) and ${minimumPaidSql({
+    fixed: sql`dt.minimum_payment_cents`,
+    pct: sql`dt.minimum_payment_pct`,
+    balance: sql`b.settlement_cents`,
+    statementMinimum: sql`s.minimum_payment_cents`,
+    paid: sql`pp.paid`,
+  })})`;
+
   return withUserDb(async (tx) => {
     const rows = await tx.execute<{
+      schedule_rows: RawRow[];
+      schedule_payments: RawPayment[];
       account_id: string;
       // Null on a liability with no terms.
       debt_kind: DebtTerms["debtKind"] | null;
@@ -239,21 +259,9 @@ export async function getDebtOverviewWithPockets(): Promise<{
         mr.monthly_rate as monthly_rate_pct,
         dt.annual_rate::text as annual_rate,
         ${totalDueSql({ balance: sql`b.settlement_cents`, statementClosing: sql`s.closing_balance_cents`, paid: sql`pp.paid` })} as total_due_cents,
-        ${minimumPaidSql({
-          fixed: sql`dt.minimum_payment_cents`,
-          pct: sql`dt.minimum_payment_pct`,
-          balance: sql`b.settlement_cents`,
-          statementMinimum: sql`s.minimum_payment_cents`,
-          paid: sql`pp.paid`,
-        })} as minimum_paid,
+        ${minimumPaid} as minimum_paid,
         ${minimumPaymentSql({
-          paid: minimumPaidSql({
-            fixed: sql`dt.minimum_payment_cents`,
-            pct: sql`dt.minimum_payment_pct`,
-            balance: sql`b.settlement_cents`,
-            statementMinimum: sql`s.minimum_payment_cents`,
-            paid: sql`pp.paid`,
-          }),
+          paid: minimumPaid,
           paidCents: sql`pp.paid`,
           fixed: sql`dt.minimum_payment_cents`,
           pct: sql`dt.minimum_payment_pct`,
@@ -265,6 +273,8 @@ export async function getDebtOverviewWithPockets(): Promise<{
             minimum: sql`s.minimum_payment_cents`,
           }),
         })} as minimum_payment_cents,
+        case when a.subtype = 'loan' then ${scheduleRowsSql("b.id")} else '[]'::jsonb end as schedule_rows,
+        case when a.subtype = 'loan' then ${schedulePaymentsSql("b.id", "a.settlement_currency")} else '[]'::jsonb end as schedule_payments,
         dt.minimum_payment_cents as fixed_minimum_cents,
         dt.minimum_payment_pct::text as minimum_pct,
         dt.statement_cut_off_day as cut_off_day,
@@ -335,6 +345,7 @@ export async function getDebtOverviewWithPockets(): Promise<{
           monthlyRatePct: Number(row.monthly_rate_pct),
           annualRate: row.annual_rate ?? "0",
           minimumPaid: row.minimum_paid,
+          nextInstalment: nextInstalmentOf(row.schedule_rows, row.schedule_payments),
           totalDueCents: Number(row.total_due_cents),
           minimumPaymentCents:
             row.minimum_payment_cents === null ? null : Number(row.minimum_payment_cents),

@@ -9,6 +9,7 @@ import {
   categoryChartColor,
   chartColor,
   isRedish,
+  dayLeftOut,
   dayNet,
   nearestLimit,
   nextDebtPayment,
@@ -91,6 +92,17 @@ test("dayNet counts income and expense only, per currency", () => {
     [["COP", 300]],
   );
   assert.deepEqual(dayNet([]), []);
+});
+
+test("dayLeftOut sums what moved between own accounts, which dayNet never counts", () => {
+  const row = (kind: string, amountCents: number, reconciliationId: string | null = null, currency = "COP") => ({
+    kind, currency, amountCents, reconciliationId,
+  });
+  assert.deepEqual(
+    dayLeftOut([row("expense", 200), row("transfer", 999), row("transfer", 1), row("transfer", 5, "r1"), row("transfer", 7, null, "USD")]),
+    [["COP", 1000], ["USD", 7]],
+  );
+  assert.deepEqual(dayLeftOut([row("income", 500)]), []);
 });
 
 test("chartColor is stable per key and stays inside the palette", () => {
