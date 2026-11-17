@@ -19,7 +19,7 @@ import {
   ResendChangedError,
   updateTransaction,
 } from "@/db/queries/transactions";
-import type { TransactionSplitInput } from "@/db/queries/transactions";
+import type { PocketCover, TransactionSplitInput } from "@/db/queries/transactions";
 import { BASE_CURRENCY, type CurrencyCode } from "@/lib/currency";
 import { withUserDb } from "@/db/session";
 import { pgErrorCode } from "@/lib/db-error";
@@ -184,8 +184,9 @@ export async function bookMovement(
   input: CreateTransactionInput,
   alsoCheck: () => Promise<void> = async () => {},
   // `awaitingCounterparty` is Claude's «I do not know the other side» (RF-133); only a one-sided movement has a side to wait for.
-  options: { awaitingCounterparty?: boolean } = {},
-): Promise<{ transactionId: string }> {
+  // `reportPocketCovers` reads back what the pockets covered for it (RF-242).
+  options: { awaitingCounterparty?: boolean; reportPocketCovers?: boolean } = {},
+): Promise<{ transactionId: string; pocketCovers?: PocketCover[] }> {
   if (options.awaitingCounterparty && input.fromAccountId !== null && input.toAccountId !== null) {
     throw new ActionError("mcp.errors.awaitsNeedsOneSide");
   }
@@ -215,6 +216,7 @@ export async function bookMovement(
       splits: toSplitMinor(input.splits),
       labelIds: input.labelIds,
       causedByTransactionId: input.causedByTransactionId,
+      reportPocketCovers: options.reportPocketCovers ?? false,
     });
   } catch (error) {
     return mapTransactionError(error);
