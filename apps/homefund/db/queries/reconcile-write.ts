@@ -1,12 +1,18 @@
 import "server-only";
 
-import { reconcileAccount } from "@/db/queries/account-reconciliations";
+import {
+  reconcileAccount,
+  reconcileAccounts,
+  type ReconcileManyResult,
+  type ReconciledRow,
+} from "@/db/queries/account-reconciliations";
 import { getSettlementCurrencies } from "@/db/queries/transactions";
 import { BASE_CURRENCY } from "@/lib/currency";
 import { ActionError } from "@/lib/errors";
 import {
   checkRealAmount,
   type ReconcileAccountInput,
+  type ReconcileAccountsInput,
 } from "@/lib/validation/account-reconciliation";
 
 // A refusal that names a day is data, not a thrown key: `ActionError` carries a key and nothing
@@ -57,4 +63,52 @@ export async function confirmReconciliation({
   }
 
   return { ok: true, id: result.id, gapCents: result.gapCents };
+}
+
+// The sentence key a refused count answers in, and the day it names: one table for the screen and the MCP.
+export function manyRefusalKey(
+  refusal: Extract<ReconcileManyResult, { ok: false }>,
+): { messageKey: string; date?: string } {
+  switch (refusal.reason) {
+    case "stale":
+      return { messageKey: "errors.reconcileStale" };
+    case "future":
+      return { messageKey: "errors.reconcileFutureDay" };
+    case "beforeOpening":
+      return { messageKey: "errors.reconcileBeforeOpening", ...(refusal.date ? { date: refusal.date } : {}) };
+    case "beforeLatest":
+      return { messageKey: "errors.reconcileBeforeLatest", ...(refusal.date ? { date: refusal.date } : {}) };
+    case "denied":
+      return { messageKey: "errors.notFound" };
+    case "amount":
+      return { messageKey: refusal.messageKey ?? "errors.unexpected" };
+    case "signFlip":
+      return { messageKey: "mcp.errors.reconcileSign" };
+    case "archived":
+      return { messageKey: "errors.reconcileFailed" };
+  }
+}
+
+export type ReconcileManyActionResult =
+  | { ok: true; rows: ReconciledRow[] }
+  | { ok: false; accountId: string; name: string | null; messageKey: string; date?: string };
+
+/**
+ * Counts many accounts on one day, all or nothing (RF-252). Each figure is read against the currency
+ * its own account settles in, read off the account and never off the payload (RNF-10). The screen
+ * shows a count that looks like a slip beside its row before it is sent, so nothing here refuses it.
+ */
+export async function confirmReconciliations({
+  reconciledOn,
+  items,
+}: ReconcileAccountsInput): Promise<ReconcileManyActionResult> {
+  const result = await reconcileAccounts({
+    reconciledOn,
+    dryRun: false,
+    expectedFrame: "ledger",
+    items: items.map((item) => ({ ...item, guardSign: false })),
+  });
+  if (result.ok) return result;
+
+  return { ok: false, accountId: result.accountId, name: result.name, ...manyRefusalKey(result) };
 }
