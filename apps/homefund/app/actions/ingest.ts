@@ -13,7 +13,7 @@ import {
 } from "@/db/queries/ingest-review";
 import type { AcceptDeliveryArgs } from "@/db/queries/ingest-review";
 import type { TransactionSplitInput } from "@/db/queries/transactions";
-import { pgErrorCode } from "@/lib/db-error";
+import { pgErrorCode, pgErrorMentions } from "@/lib/db-error";
 import { ActionError } from "@/lib/errors";
 import { toCents } from "@/lib/money";
 import { authActionClient } from "@/lib/safe-action";
@@ -43,6 +43,10 @@ function mapReviewError(error: unknown): never {
   const code = pgErrorCode(error);
   if (code === "42501" || code === "23503") {
     throw new ActionError("errors.notFound");
+  }
+  // The split trigger's refusal of a category of the other kind than the movement (RF-278): said in plain words.
+  if (code === "23514" && pgErrorMentions(error, "must share the movement's kind")) {
+    throw new ActionError("ingest.errors.categoryKind");
   }
   throw error;
 }

@@ -6,7 +6,9 @@
  * The copy is read from the message file the screen reads, so a rewording moves
  * both at once and never leaves a spec asserting a string nobody renders.
  */
-import { expect, type Locator, type Page } from "@playwright/test";
+import { createHash, randomUUID } from "node:crypto";
+
+import { expect, type APIRequestContext, type Locator, type Page } from "@playwright/test";
 
 import messages from "@/messages/es.json";
 
@@ -57,6 +59,11 @@ const defaulted = {
   categoryId: scope.categoryId,
   categorySource: "credential_default" as const,
 };
+
+// «Marcar las N que están listas para anotarlas juntas», the plural the message file spells.
+function readyLabel(count: number): string {
+  return `Marcar las ${count} que están listas para anotarlas juntas`;
+}
 
 function acceptButton(page: import("@playwright/test").Page) {
   return page.getByRole("button", { name: ingest.accept, exact: true });
@@ -132,9 +139,8 @@ test.describe("the inbox queue", () => {
           returning id`;
         await tx`update ingest_deliveries set credential_id = ${key.id} where id = ${deliveryId}`;
       });
-      const via = messages.ingest.arrivedVia
-        .replace("{kind}", messages.webhooks.kind.android)
-        .replace("{name}", "Mi celular e2e");
+      // A phone's key says where the message came from, never the key's own name (RF-203, RF-278).
+      const via = "Llegó por notificación del celular";
 
       await page.goto("/es/inbox");
       await expect(
@@ -348,7 +354,7 @@ test.describe("the card without the form", () => {
     await page.goto("/es/inbox");
 
     await expect(page.getByRole("checkbox")).toHaveCount(2);
-    await page.getByRole("button", { name: ingest.selectReady.replace("{count}", "2"), exact: true }).click();
+    await page.getByRole("button", { name: readyLabel(2), exact: true }).click();
     await expect(band(page).getByText("2 elegidas")).toBeVisible();
     await page.getByRole("button", { name: ingest.acceptSelected.replace("{count}", "2"), exact: true }).click();
 
@@ -362,7 +368,7 @@ test.describe("the card without the form", () => {
     const [first, , third] = await seedQueue([complete, second, { ...complete, merchant: "Exito Envigado" }]);
     await page.goto("/es/inbox");
 
-    await page.getByRole("button", { name: ingest.selectReady.replace("{count}", "3"), exact: true }).click();
+    await page.getByRole("button", { name: readyLabel(3), exact: true }).click();
     // A delivery decided elsewhere while the page was open: its accept is refused, and the whole batch with it.
     await fixtureSql`update ingest_deliveries set status = 'rejected', resolved_at = now() where id = ${third}`;
     await page.getByRole("button", { name: ingest.acceptSelected.replace("{count}", "3"), exact: true }).click();
@@ -500,5 +506,214 @@ test.describe("the queue at 360 px", () => {
         `control ${index} named ${JSON.stringify(await control.textContent())}`,
       ).toBeGreaterThanOrEqual(32);
     }
+  });
+});
+
+// What the card proposes and lets the person change, read from the messages a bank sends (RF-278, RF-279, RF-280).
+// Every message here is synthetic: invented names, figures and numbers.
+test.describe("the card's proposal, at 390 px", () => {
+  test.use({ viewport: { width: 390, height: 800 } });
+
+  const DAY = "10/11/2026";
+  const created: { accounts: string[]; categories: string[] } = { accounts: [], categories: [] };
+
+  async function addAccount(name: string, subtype: "bank" | "cash"): Promise<string> {
+    const id = randomUUID();
+    await asHarnessUser(async (tx) => {
+      await tx`
+        insert into accounts (id, owner_user_id, name, kind, subtype, initial_balance_cents, initial_balance_on)
+        values (${id}, ${scope.userId}, ${name}, 'asset', ${subtype}, 0, '2025-01-01')`;
+    });
+    created.accounts.push(id);
+    return id;
+  }
+
+  async function addCategory(name: string, kind: "income" | "expense"): Promise<string> {
+    const id = randomUUID();
+    await asHarnessUser(async (tx) => {
+      await tx`
+        insert into categories (id, owner_user_id, name, kind, color)
+        values (${id}, ${scope.userId}, ${name}, ${kind}, '#4C8C4A')`;
+    });
+    created.categories.push(id);
+    return id;
+  }
+
+  // A message through the real ingest door, under a key whose defaults are an expense category: the worst case for
+  // an income, which used to take it.
+  async function receive(request: APIRequestContext, text: string): Promise<string> {
+    const token = `e2e-${randomUUID()}`;
+    await asHarnessUser(async (tx) => {
+      await tx`
+        insert into webhook_credentials (name, token_hash, kind, default_account_id, default_category_id)
+        values ('Llave e2e', ${createHash("sha256").update(token).digest("hex")}, 'android',
+          ${scope.accountId}, ${scope.categoryId})`;
+    });
+    const response = await request.post("/api/webhooks/ingest", {
+      headers: { authorization: `Bearer ${token}` },
+      data: { text },
+    });
+    expect(response.status()).toBe(200);
+    const [delivery] = await fixtureSql<{ id: string }[]>`
+      select id from ingest_deliveries where owner_user_id = ${scope.userId} and raw_text = ${text}`;
+    return delivery.id;
+  }
+
+  test.beforeEach(async () => {
+    await clearLedger();
+    await seedQueue([]);
+  });
+
+  test.afterEach(async () => {
+    await clearLedger();
+    await asHarnessUser(async (tx) => {
+      await tx`delete from webhook_credentials where name = 'Llave e2e'`;
+      for (const id of created.categories) await tx`delete from categories where id = ${id}`;
+      for (const id of created.accounts) await tx`delete from accounts where id = ${id}`;
+    });
+    created.accounts.length = 0;
+    created.categories.length = 0;
+  });
+
+  test("an income is never proposed an expense category, and is recorded once an income one is chosen @mobile", async ({ page, request }) => {
+    const incomeName = "Ingreso e2e";
+    await addCategory(incomeName, "income");
+    const text = `Bancolombia: Recibiste una transferencia por $450.000 de CARLOS PEREZ en tu cuenta de Ahorros el ${DAY} a las 19:05.`;
+    const deliveryId = await receive(request, text);
+
+    const [proposal] = await fixtureSql<{ category: string | null; direction: string }[]>`
+      select proposed_category_id as category, proposed_direction as direction from ingest_deliveries where id = ${deliveryId}`;
+    expect(proposal).toEqual({ category: null, direction: "income" });
+
+    await page.goto("/es/inbox");
+    await expect(band(page).getByText(ingest.categoryMissing, { exact: true })).toBeVisible();
+    await expect(acceptButton(page)).toHaveCount(0);
+    await expect(reviewButton(page)).toHaveCount(1);
+
+    await page.getByRole("combobox", { name: ingest.categoryLabel }).click();
+    await expect(page.getByRole("option", { name: scope.categoryName, exact: true })).toHaveCount(0);
+    await page.getByRole("option", { name: incomeName, exact: true }).click();
+    await acceptButton(page).click();
+
+    await expect(page.getByText(ingest.acceptedToast)).toBeVisible();
+    await expect(page.getByText(messages.errors.unexpected)).toHaveCount(0);
+    const [movement] = await fixtureSql<{ from: string | null; to: string | null; amount: string }[]>`
+      select from_account_id as from, to_account_id as to, amount_cents::text as amount
+      from transactions where owner_user_id = ${scope.userId}`;
+    expect(movement).toEqual({ from: null, to: scope.accountId, amount: "45000000" });
+  });
+
+  test("a stored income card that carries an expense category reads as incomplete @mobile", async ({ page }) => {
+    await seedQueue([{ ...complete, direction: "income", categorySource: "credential_default", trusted: false }]);
+    await page.goto("/es/inbox");
+
+    await expect(band(page).getByText(ingest.categoryMissing, { exact: true })).toBeVisible();
+    await expect(acceptButton(page)).toHaveCount(0);
+    await expect(reviewButton(page)).toHaveCount(1);
+  });
+
+  test("a cash machine withdrawal is proposed as «Retirar efectivo» into the person's cash and recorded as a transfer @mobile", async ({ page, request }) => {
+    const cashId = await addAccount("Efectivo e2e", "cash");
+    const text = `Davivienda: Retiraste $300.000 en CAJERO CALLE 80 con tu T.Deb *1234 el ${DAY} a las 19:05.`;
+    const deliveryId = await receive(request, text);
+
+    const [proposal] = await fixtureSql<{ direction: string; to: string | null; category: string | null; description: string | null }[]>`
+      select proposed_direction as direction, proposed_to_account_id as to, proposed_category_id as category,
+        proposed_description as description
+      from ingest_deliveries where id = ${deliveryId}`;
+    expect(proposal).toEqual({ direction: "transfer", to: cashId, category: null, description: "Retiro en cajero" });
+
+    await page.goto("/es/inbox");
+    await expect(band(page).getByText(ingest.kindWithdrawal, { exact: true }).first()).toBeVisible();
+    await acceptButton(page).click();
+
+    await expect(page.getByText(ingest.acceptedToast)).toBeVisible();
+    const movements = await fixtureSql<{ from: string; to: string; amount: string; splits: number }[]>`
+      select t.from_account_id as from, t.to_account_id as to, t.amount_cents::text as amount,
+        (select count(*)::int from transaction_splits s where s.transaction_id = t.id) as splits
+      from transactions t where t.owner_user_id = ${scope.userId}`;
+    expect(movements).toEqual([{ from: scope.accountId, to: cashId, amount: "30000000", splits: 0 }]);
+  });
+
+  test("the card changes the kind and the account, as the wide screen does @mobile", async ({ page }) => {
+    const otherId = await addAccount("Otra cuenta e2e", "bank");
+    await seedQueue([complete]);
+    await page.goto("/es/inbox");
+
+    // To an income: the expense category falls away and the card asks for an income one.
+    await page.getByRole("radio", { name: ingest.kindIncome, exact: true }).click();
+    await expect(band(page).getByText(ingest.categoryMissing, { exact: true })).toBeVisible();
+    await expect(reviewButton(page)).toHaveCount(1);
+
+    // Back to an expense on another account: ready again, and recorded on that account.
+    await page.getByRole("radio", { name: ingest.kindExpense, exact: true }).click();
+    await page.getByRole("combobox", { name: ingest.accountLabel }).click();
+    await page.getByRole("option", { name: "Otra cuenta e2e", exact: true }).click();
+    await page.getByRole("combobox", { name: ingest.categoryLabel }).click();
+    await page.getByRole("option", { name: scope.categoryName, exact: true }).click();
+    await acceptButton(page).click();
+
+    await expect(page.getByText(ingest.acceptedToast)).toBeVisible();
+    const [movement] = await fixtureSql<{ from: string | null }[]>`
+      select from_account_id as from from transactions where owner_user_id = ${scope.userId}`;
+    expect(movement.from).toBe(otherId);
+  });
+
+  test("the card turns an expense into a move between the person's own accounts @mobile", async ({ page }) => {
+    const otherId = await addAccount("Otra cuenta e2e", "bank");
+    await seedQueue([complete]);
+    await page.goto("/es/inbox");
+
+    await page.getByRole("radio", { name: ingest.kindTransfer, exact: true }).click();
+    await expect(reviewButton(page)).toHaveCount(1);
+    await page.getByRole("combobox", { name: ingest.toAccountLabel }).click();
+    await page.getByRole("option", { name: "Otra cuenta e2e", exact: true }).click();
+    await acceptButton(page).click();
+
+    await expect(page.getByText(ingest.acceptedToast)).toBeVisible();
+    const [movement] = await fixtureSql<{ from: string; to: string }[]>`
+      select from_account_id as from, to_account_id as to from transactions where owner_user_id = ${scope.userId}`;
+    expect(movement).toEqual({ from: scope.accountId, to: otherId });
+  });
+
+  test("a merchant's own name, not the SMS around it, becomes the description @mobile", async ({ request }) => {
+    const sent = [
+      [`Bancolombia le informa Compra por $38.000 en RAPPI RESTAURANTE 15:32. ${DAY} T.Cred *4521. Inquietudes al 018000000000.`, "Rappi Restaurante"],
+      [`Davivienda: Compra aprobada por $52.300 en EXITO COLINA con tu T.Cred *4521 el ${DAY}.`, "Exito Colina"],
+      [`Nequi: Pagaste en UBER TRIP el ${DAY}.`, "Uber Trip"],
+    ] as const;
+    for (const [text, description] of sent) {
+      const id = await receive(request, text);
+      const [row] = await fixtureSql<{ description: string | null }[]>`
+        select proposed_description as description from ingest_deliveries where id = ${id}`;
+      expect(row.description).toBe(description);
+    }
+  });
+
+  test("a row stored with the sentence cut is recorded under the merchant @mobile", async ({ page }) => {
+    await seedQueue([
+      {
+        ...complete,
+        merchant: "RAPPI*",
+        text: "Bancolombia le informa Compra por $38.000 en RAPPI RESTAURANTE 15:32. 10/11/2026 T.Cred *4521.",
+        description: "Bancolombia le informa Compra por $ en RAPPI* 15:32. 10/11/2026 T.Cred *4521.",
+      },
+    ]);
+    await page.goto("/es/inbox");
+    await acceptButton(page).click();
+
+    await expect(page.getByText(ingest.acceptedToast)).toBeVisible();
+    const [movement] = await fixtureSql<{ description: string }[]>`
+      select description from transactions where owner_user_id = ${scope.userId}`;
+    expect(movement.description).toBe("Rappi Restaurante");
+  });
+
+  test("a merchant like Exito is proposed Mercado, not the key's blanket default @mobile", async ({ request }) => {
+    const groceries = await addCategory("Mercado", "expense");
+    const id = await receive(request, `Davivienda: Compra aprobada por $52.300 en EXITO COLINA con tu T.Cred *4521 el ${DAY}.`);
+
+    const [row] = await fixtureSql<{ category: string | null }[]>`
+      select proposed_category_id as category from ingest_deliveries where id = ${id}`;
+    expect(row.category).toBe(groceries);
   });
 });

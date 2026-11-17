@@ -7,6 +7,7 @@ import { defaultMadeBy, insertTransaction } from "@/db/queries/transactions";
 import type { CreateTransactionArgs } from "@/db/queries/transactions";
 import {
   accounts,
+  categories,
   ingestDeliveries,
   ingestMerchants,
   ingestShapes,
@@ -15,6 +16,7 @@ import {
 } from "@/db/schema";
 import { credentialBadge, type CredentialBadge, type CredentialKind } from "@/lib/validation/webhook";
 import { withUserDb, withUserDbOrTx, type Transaction } from "@/db/session";
+import { repairDescription } from "@/lib/ingest/describe";
 import { inboxPendingCount } from "@/lib/ingest/inbox-pending";
 
 export type PendingDeliveryRow = {
@@ -119,7 +121,7 @@ function isComplete(
     | "proposedCategoryId"
     | "categorySource"
     | "proposedOccurredAt"
-  > & { accountOpeningOn: string | null },
+  > & { accountOpeningOn: string | null; categoryKind: "income" | "expense" | null },
 ): boolean {
   // A day before the account opened cannot be one tap.
   if (isBeforeOpening(row)) return false;
@@ -130,6 +132,11 @@ function isComplete(
       row.proposedAccountId !== null &&
       row.proposedToAccountId !== null
     );
+  }
+
+  // A category of the other kind would be refused on write (RF-278).
+  if (row.categoryKind !== null && row.categoryKind !== (row.proposedDirection === "income" ? "income" : "expense")) {
+    return false;
   }
 
   return (
@@ -190,9 +197,11 @@ export async function listDeliveries({
         transactionId: ingestDeliveries.transactionId,
         recorded: recordedMovementSql,
         accountOpeningOn: accounts.initialBalanceOn,
+        categoryKind: categories.kind,
       })
       .from(ingestDeliveries)
       .leftJoin(accounts, eq(accounts.id, ingestDeliveries.proposedAccountId))
+      .leftJoin(categories, eq(categories.id, ingestDeliveries.proposedCategoryId))
       .leftJoin(recipients, eq(recipients.id, ingestDeliveries.recipientId))
       .leftJoin(webhookCredentials, eq(webhookCredentials.id, ingestDeliveries.credentialId))
       .leftJoin(
@@ -211,11 +220,15 @@ export async function listDeliveries({
       .$dynamic();
     const rows = await (limit === undefined ? query : query.limit(limit).offset(offset ?? 0));
 
-    return rows.map(({ accountOpeningOn, credentialPurpose, credentialKind, ...row }) => ({
+    return rows.map(({ accountOpeningOn, categoryKind, credentialPurpose, credentialKind, ...row }) => ({
       ...row,
+      // A description stored damaged is read again from the message it came from (RF-279).
+      proposedDescription: row.recipientId === null
+        ? repairDescription(row.proposedDescription, row.rawText, row.merchantLabel)
+        : row.proposedDescription,
       credentialBadge:
         credentialPurpose && credentialKind ? credentialBadge(credentialPurpose, credentialKind) : null,
-      isComplete: isComplete({ ...row, accountOpeningOn }),
+      isComplete: isComplete({ ...row, accountOpeningOn, categoryKind }),
       beforeOpening: isBeforeOpening({ ...row, accountOpeningOn }),
     }));
   });
