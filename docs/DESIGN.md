@@ -836,3 +836,30 @@ todas las cuentas a la vez.
   Inicio, a lo sumo una línea en la columna de al lado, «3 cuentas sin cuadrar hace más de un mes · Cuadrar todo»; sin cuentas así, nada.
 - **Inicio no muestra los «Descuadre»** (2026-11-17). Las últimas del listado de Inicio son lo que pasó; la diferencia de un cuadre sigue en
   Movimientos y en el historial de la cuenta.
+
+## Decisión del 2026-11-17 (tercera): el crédito y la tarjeta dicen una cosa a la vez, por el usuario
+
+«La usabilidad es muy rara, requiere saber exactamente cómo se creó la app.» Un préstamo trae cinco cifras de «lo que falta»
+y los bloques de una tarjeta; una tarjeta ofrece «Lo paga otra persona»; hay tres formularios para crear una deuda. Se
+construye con estas palabras, sin tablero previo, y se refina con lo construido.
+
+- **Préstamo, encima**, una sola cifra junto al nombre: «Falta pagar $168.000 en 3 cuotas», y bajo ella «De dónde sale».
+  «De dónde sale» abre una ventana con una frase que dice de dónde viene la cifra (el plan del banco, el plazo, la cuota o
+  el saldo) y una línea por cada dato que la compone, en palabras: cuotas pagadas («1 de 4»), pagadas a medias, que faltan,
+  lo que falta con intereses y seguro, capital que debes, cuándo termina y, si lo paga otra persona, lo que ella debe del
+  capital y una frase que explica la diferencia con lo que tú debes al banco. Sin deuda: «No debes nada».
+- Bajo ella una sola ficha, «Próxima cuota» (lo que falta de esa cuota, si se pagó corta). Sin plan de pagos el bloque
+  «Plan de pagos» dice «Pídele a Claude que lea tu plan de pagos» y no ofrece subirlo.
+- **Cuota pagada corta**: insignia ámbar «Parcial · faltan $8.000», nunca «Vencida»; «Vencida» es la cuota a la que no
+  llegó nada. Una cuota parcial cuenta entre las que faltan, nunca entre las pagadas.
+- **«Lo paga <persona>»** conserva solo lo de la persona: lo que mandó, lo que todavía debe (capital), este mes y «Mes a
+  mes». «Diferencia» lleva su signo («−$80.000») y, si el banco cobró y la persona no mandó nada, debajo: «John no mandó la
+  cuota». «Registrar pago de John» acepta una fecha anterior al día en que se unió el crédito.
+- **Un préstamo no trae** «Compras en otra moneda», «Periodo abierto» ni «Extractos»; **una tarjeta no ofrece** «Lo paga otra
+  persona».
+- **Crear una deuda**: Deudas ofrece «Nueva tarjeta» y «Nuevo préstamo», dos formularios. La tarjeta pide nombre, entidad,
+  moneda, lo que debes hoy, cupo, día de corte, día de pago, pago mínimo («Monto fijo» o «% del saldo») y «Tasa E.A. (%)»; el
+  préstamo, nombre, entidad, moneda, lo que debes hoy, cuota mensual, día de pago, plazo («Plazo (cuotas)») y «Tasa E.A.
+  (%)». El mismo formulario completa o edita las condiciones desde el menú de la fila («Completar datos», «Editar»). «Añadir
+  cuenta» ya no ofrece «Lo que debo»: dice «¿Una tarjeta o un préstamo? Se agregan en Deudas».
+- **Deudas a 1280**: el nombre de cada fila abre su detalle.

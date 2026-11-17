@@ -30,6 +30,9 @@ export default async function DebtsPage(
   const { locale } = await props.params;
   if (!hasLocale(routing.locales, locale)) notFound();
 
+  // A link from Inicio or Cuentas names the class of the debt to open the form on (RF-286).
+  const { new: requested } = await props.searchParams;
+  const newSubtype = requested === "card" || requested === "loan" ? requested : null;
 
   const [data, group, memberDebts, cardDeferrals] = await Promise.all([
     getDebtsScreenData(),
@@ -43,7 +46,7 @@ export default async function DebtsPage(
 
   return (
     <Page>
-      <DebtsScreen data={data} hasGroup={group !== null}>
+      <DebtsScreen data={data} hasGroup={group !== null} newSubtype={newSubtype}>
         {listed.length > 0 && <CardDeferrals rows={listed} cardNames={cardNames} />}
         {memberDebts && <MemberDebtsSection data={memberDebts} />}
       </DebtsScreen>

@@ -253,19 +253,34 @@ export async function removeThirdPartyCredit(liabilityAccountId: string): Promis
   if (rows.length === 0) throw new ActionError("errors.notFound");
 }
 
+// Moves the receivable's opening to `openedOn`, adding `deltaCents` to what it opened with.
+async function moveReceivableOpening(receivableAccountId: string, openedOn: string, deltaCents: number): Promise<void> {
+  await withUserDb((tx) =>
+    tx.execute(sql`
+      update accounts
+         set initial_balance_on = ${openedOn}::date, initial_balance_cents = initial_balance_cents + ${deltaCents}::bigint
+       where id = ${receivableAccountId}::uuid`),
+  );
+}
+
 /**
  * The payer's money arriving (RF-213): one TRANSFER from the credit's receivable to `toAccountId`, never an
- * income. It is booked by the same write as the movement form, so the form's schema judges it again and a
- * movement dated before an account's opening is refused as it is anywhere else.
+ * income. It is booked by the same write as the movement form, so the form's schema judges it again.
+ *
+ * A payment dated before the day the credit was followed moves the hidden receivable's opening back to that
+ * day, and adds the payment to what it opened with: the payer owed that much more then, so what they owe
+ * today does not change (RF-288). The person never meets a refusal about the opening of an account they cannot see.
  */
 export async function recordThirdPartyPayment(
   input: RecordThirdPartyPaymentInput,
   describe: (person: string) => string,
 ): Promise<{ transactionId: string }> {
   const [link] = await withUserDb((tx) =>
-    tx.execute<{ receivableAccountId: string; personName: string }>(sql`
-      select receivable_account_id as "receivableAccountId", person_name as "personName" from third_party_credits
-      where liability_account_id = ${input.liabilityAccountId}::uuid`),
+    tx.execute<{ receivableAccountId: string; personName: string; openedOn: string }>(sql`
+      select c.receivable_account_id as "receivableAccountId", c.person_name as "personName",
+        r.initial_balance_on::text as "openedOn"
+      from third_party_credits c join accounts r on r.id = c.receivable_account_id
+      where c.liability_account_id = ${input.liabilityAccountId}::uuid`),
   );
   if (!link) throw new ActionError("errors.notFound");
   if (link.receivableAccountId === input.toAccountId) throw new ActionError("thirdPartyCredit.errors.sameAccount");
@@ -281,5 +296,14 @@ export async function recordThirdPartyPayment(
     requestRef: input.requestRef,
   });
   if (!movement.success) throw new ActionError(movement.error.issues[0].message);
-  return bookMovement(movement.data);
+
+  const earlier = input.occurredAt < link.openedOn;
+  if (earlier) await moveReceivableOpening(link.receivableAccountId, input.occurredAt, input.amountCents);
+  try {
+    return await bookMovement(movement.data);
+  } catch (error) {
+    // The payment was refused: the opening goes back where it was, so no figure moved for nothing.
+    if (earlier) await moveReceivableOpening(link.receivableAccountId, link.openedOn, -input.amountCents);
+    throw error;
+  }
 }

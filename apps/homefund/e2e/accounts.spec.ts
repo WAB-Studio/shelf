@@ -198,14 +198,8 @@ async function dropAccount(accountId: string): Promise<void> {
   await fixtureSql`delete from accounts where id = ${accountId}`;
 }
 
-test("creates an account from the form and stores its opening balance signed by its kind", async ({
-  page,
-}) => {
-  // A liability, so the sign is a decision and not the identity: an opening debt
-  // is stored negative, which is what keeps net worth a plain sum (RNF-05).
-  const name = `Tarjeta ${Date.now()}`;
-  const owedPesos = "250000";
-  const owedCents = -25000000;
+test("creates an account from the form and stores its opening balance", async ({ page }) => {
+  const name = `Cuenta ${Date.now()}`;
 
   await page.goto("/es/settings/accounts");
   await page.getByRole("button", { name: accounts.add, exact: true }).click();
@@ -213,35 +207,26 @@ test("creates an account from the form and stores its opening balance signed by 
   const dialog = page.getByRole("dialog");
   await expect(dialog).toBeVisible();
 
-  await dialog.getByRole("textbox", { name: accounts.nameLabel }).fill(name);
-  await dialog
-    .getByRole("radio", { name: accounts.kindLiability, exact: true })
-    .click();
-  await dialog
-    .getByRole("radio", { name: accounts.subtypeCard, exact: true })
-    .click();
-  // The amount field renames itself with the kind, so this also proves the
-  // toggle above landed.
-  await dialog
-    .getByRole("textbox", { name: accounts.openingOwedLabel })
-    .fill(owedPesos);
+  // Cuentas adds what a person holds: a debt has its own forms in Deudas (RF-286).
+  await expect(dialog.getByRole("radio", { name: accounts.kindLiability, exact: true })).toHaveCount(0);
+  await expect(dialog.getByRole("radio", { name: accounts.subtypeCard, exact: true })).toHaveCount(0);
+  await expect(dialog.getByRole("link", { name: accounts.debtHintLink })).toBeVisible();
 
+  await dialog.getByRole("textbox", { name: accounts.nameLabel }).fill(name);
+  await dialog.getByRole("textbox", { name: accounts.openingBalanceLabel }).fill("250000");
   await dialog.getByRole("button", { name: messages.common.save }).click();
 
   await expect(dialog).toBeHidden();
   await expect(band(page).getByText(name, { exact: true })).toBeVisible();
 
-  const rows = await fixtureSql<
-    { id: string; kind: string; subtype: string; initial_balance_cents: string }[]
-  >`
-    select id, kind, subtype, initial_balance_cents::text as initial_balance_cents
+  const rows = await fixtureSql<{ id: string; kind: string; initial_balance_cents: string }[]>`
+    select id, kind, initial_balance_cents::text as initial_balance_cents
     from accounts
     where owner_user_id = ${scope.userId} and name = ${name}`;
 
   expect(rows).toHaveLength(1);
-  expect(rows[0].kind).toBe("liability");
-  expect(rows[0].subtype).toBe("card");
-  expect(rows[0].initial_balance_cents).toBe(String(owedCents));
+  expect(rows[0].kind).toBe("asset");
+  expect(rows[0].initial_balance_cents).toBe("25000000");
 
   // Written through the interface, so it carries no fixture id: dropped here
   // rather than by the tracked cleanup.

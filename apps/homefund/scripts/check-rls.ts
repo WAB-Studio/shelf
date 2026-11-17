@@ -14340,6 +14340,7 @@ async function checkThirdPartyCredits() {
     columns: "rf211-4. the accounts of a link cannot be changed by an update (42501)",
     audit: "rf211-5. linking, editing and removing each leave an audit row naming the person",
     grants: "rf211-6. anon and service_role hold no privilege on third_party_credits",
+    opening: "rf288-1. a payer's payment dated before the credit was followed is refused by the receivable's opening until its owner moves the opening back and raises it by the payment (what it derives stays), a stranger moves no opening, and the link that hides the receivable (RF-216) stays",
   };
   const fixture = async (tx: M1Tx) => {
     const [owner, stranger] = [randomUUID(), randomUUID()];
@@ -14426,6 +14427,34 @@ async function checkThirdPartyCredits() {
     const moveLiability = await m1Refusal(tx, (sp) => sp`update third_party_credits set liability_account_id = ${f.other}`);
     await tx`reset role`;
     return [{ ok: moveReceivable === "42501" && moveLiability === "42501", detail: `receivable ${moveReceivable}, liability ${moveLiability}` }];
+  });
+
+  await rf136Rows([labels.opening], async (tx) => {
+    const f = await fixture(tx);
+    const paidOn = (await tx<{ day: string }[]>`select (${todayInBogota()}::date - 30)::text as day`)[0].day;
+    const [{ id: lender }] = await tx<{ id: string }[]>`
+      insert into accounts (owner_user_id, name, kind, subtype, settlement_currency, initial_balance_cents, initial_balance_on)
+      values (${f.owner}, 'rls rf288 bank', 'asset', 'bank', 'COP', 0, (${todayInBogota()}::date - 60)) returning id`;
+    await tx`update accounts set initial_balance_cents = 12000 where id = ${f.owes}`;
+    await enterUserContext(tx, f.owner);
+    await link(f.credit, f.owes)(tx);
+    const pay = (sp: M1Tx) =>
+      sp`insert into transactions (from_account_id, to_account_id, amount_cents, occurred_at, description)
+        values (${f.owes}, ${lender}, 5000, ${paidOn}, 'rls rf288 payment')`;
+    const refused = await m1Refusal(tx, pay);
+    await enterUserContext(tx, f.stranger);
+    const strangerMoves = (await tx`update accounts set initial_balance_on = ${paidOn}, initial_balance_cents = 17000 where id = ${f.owes} returning id`).length;
+    await enterUserContext(tx, f.owner);
+    const moved = (await tx`update accounts set initial_balance_on = ${paidOn}, initial_balance_cents = initial_balance_cents + 5000 where id = ${f.owes} returning id`).length;
+    const accepted = await m1Refusal(tx, pay);
+    const [balance] = await tx<{ balance_cents: string }[]>`select balance_cents::text from account_balances where id = ${f.owes}`;
+    const linked = await tx<{ receivable: string }[]>`select receivable_account_id as receivable from third_party_credits where liability_account_id = ${f.credit}`;
+    await tx`reset role`;
+    return [{
+      ok: refused === "MO001" && strangerMoves === 0 && moved === 1 && accepted === null && balance.balance_cents === "12000" &&
+        linked.length === 1 && linked[0].receivable === f.owes,
+      detail: `before the move ${refused}, a stranger moves ${strangerMoves}, the owner moves ${moved}, then the payment ${accepted ?? "accepted"}, derived ${balance.balance_cents} (expected 12000), link kept ${linked.length}`,
+    }];
   });
 
   await rf136Rows([labels.grants], async (tx) => {

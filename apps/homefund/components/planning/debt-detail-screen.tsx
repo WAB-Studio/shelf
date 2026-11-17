@@ -10,6 +10,7 @@ import { AccountStatementDialog } from "@/components/planning/account-statement-
 import { OwnerMark } from "@/components/fund/owner-mark";
 import { DebtPaymentDialog } from "@/components/planning/debt-payment-dialog";
 import { LoanScheduleSection } from "@/components/planning/loan-schedule-section";
+import { LoanStandingBlock } from "@/components/planning/loan-standing";
 import {
   CreditAndOwedLine,
   owesBesideCredit,
@@ -36,6 +37,7 @@ import type { DebtPocket } from "@/db/queries/debt-overview";
 import type { PendingSettlement } from "@/db/queries/debt-statements";
 import type { CurrencyCode } from "@/lib/currency";
 import { civilDateToDate, todayInBogota } from "@/lib/dates";
+import { loanStanding } from "@/lib/loan-standing";
 import { useMoneyText } from "@/lib/use-privacy";
 
 // The em dash a cell or a tile with nothing to name reads as in the desktop design, not a
@@ -55,6 +57,7 @@ export function DebtDetailScreen({ data }: { data: DebtDetailData }) {
   const t = useTranslations("installments");
   const tDebts = useTranslations("debts");
   const tThirdParty = useTranslations("thirdPartyCredit");
+  const tSchedule = useTranslations("loanSchedule");
   const format = useFormatter();
   const locale = useLocale();
 
@@ -70,7 +73,12 @@ export function DebtDetailScreen({ data }: { data: DebtDetailData }) {
     payFrom,
     thirdParty,
     schedule,
+    paymentCount,
   } = data;
+
+  // A loan and a card are two things (RF-288): the loan leads with what is left and its schedule, and has no statements,
+  // no purchases in another currency and no open period; the card has no «Lo paga otra persona».
+  const isLoan = account.subtype === "loan";
 
   // The currency the card bills in: the cupo, the minimum and the interest are
   // all read in it, and it is the one a statement is cut in (RF-121).
@@ -82,6 +90,14 @@ export function DebtDetailScreen({ data }: { data: DebtDetailData }) {
   // nothing and reads «A favor» (RF-80).
   const owedCents = Math.max(0, -account.balanceCents);
   const creditCents = Math.max(0, account.balanceCents);
+
+  const standing = loanStanding({
+    balanceOwedCents: owedCents,
+    schedule,
+    termMonths: terms?.termMonths ?? null,
+    installmentCents: terms?.minimumPaymentCents ?? null,
+    paymentCount,
+  });
 
   // The pockets in other currencies, as the list reads them off the overview.
   const otherOwed: DebtPocket[] = account.balances
@@ -176,7 +192,32 @@ export function DebtDetailScreen({ data }: { data: DebtDetailData }) {
     </Flex>
   );
 
-  const tiles = [
+  // A loan reads its next cuota off the bank's schedule when it has one (RF-266).
+  const scheduleNext = schedule?.next ?? null;
+  const loanNextTile =
+    schedule === null
+      ? null
+      : {
+          key: "nextPayment",
+          label: tSchedule("tileNext"),
+          value:
+            scheduleNext === null ? (
+              NO_VALUE
+            ) : (
+              // A cuota paid short asks only what is missing of it.
+              <Money minor={scheduleNext.totalCents - scheduleNext.paidCents} currency={currency} signed={false} size="inherit" />
+            ),
+          note:
+            scheduleNext === null
+              ? tSchedule("tileNextDone")
+              : tSchedule("tileNextNote", {
+                  number: scheduleNext.number,
+                  count: schedule.count,
+                  date: shortDate(scheduleNext.dueOn),
+                }),
+        };
+
+  const cardTiles = [
     {
       key: "balance",
       label: tDebts("tableBalance"),
@@ -204,7 +245,7 @@ export function DebtDetailScreen({ data }: { data: DebtDetailData }) {
         ) : nextPayment.amountCents === null ? (
           <>
             {shortDate(nextPayment.date)}
-            {minimumMissing}
+            {!isLoan && minimumMissing}
           </>
         ) : (
           shortDate(nextPayment.date)
@@ -234,6 +275,7 @@ export function DebtDetailScreen({ data }: { data: DebtDetailData }) {
             }),
     },
   ];
+  const tiles = isLoan ? (loanNextTile === null ? [cardTiles[1]] : [loanNextTile]) : cardTiles;
 
   return (
     <Flex direction="column" gap="4">
@@ -242,7 +284,20 @@ export function DebtDetailScreen({ data }: { data: DebtDetailData }) {
         meta={
           <>
             <OwnerMark foreignOwner={account.foreignOwner} ownerName={account.ownerName} />
-            {balanceLine}
+            {isLoan ? (
+              <LoanStandingBlock
+                standing={standing}
+                currency={currency}
+                balanceOwedCents={owedCents}
+                schedule={schedule}
+                termMonths={terms?.termMonths ?? null}
+                installmentCents={terms?.minimumPaymentCents ?? null}
+                paymentCount={paymentCount}
+                payer={thirdParty === null ? null : { person: thirdParty.personName, owesCents: thirdParty.personOwesCents }}
+              />
+            ) : (
+              balanceLine
+            )}
           </>
         }
         metaWraps
@@ -261,7 +316,7 @@ export function DebtDetailScreen({ data }: { data: DebtDetailData }) {
                 {tDebts("rowPay")}
               </Button>
               {/* A credit somebody else pays (RF-211) is set up once; its section carries the rest. */}
-              {thirdParty === null && (
+              {isLoan && thirdParty === null && (
                 <Button
                   type="button"
                   variant="surface"
@@ -280,33 +335,45 @@ export function DebtDetailScreen({ data }: { data: DebtDetailData }) {
 
       {thirdParty !== null && <ThirdPartyCreditSection credit={thirdParty} banks={payFrom} />}
 
-      {/* The schedule the bank printed for a loan, read against its payments (RF-266). */}
-      {schedule !== null && <LoanScheduleSection schedule={schedule} currency={currency} />}
+      {/* The schedule the bank printed for a loan, read against its payments (RF-266); with none the loan says how to load it (RF-289). */}
+      {isLoan && schedule !== null && <LoanScheduleSection schedule={schedule} currency={currency} />}
+      {isLoan && schedule === null && (
+        <Flex direction="column" gap="1" px={{ initial: "0", md: "6" }}>
+          <Heading as="h2" size="3">
+            {tSchedule("title")}
+          </Heading>
+          <Text size="2" color="gray">
+            {tSchedule("askClaude")}
+          </Text>
+        </Flex>
+      )}
 
       {/* Purchases a person confirmed as deferred: the balance holds them whole (RF-136). */}
-      {deferrals.length > 0 && (
+      {!isLoan && deferrals.length > 0 && (
         <Flex direction="column" px={{ initial: "0", md: "6" }}>
           <DeferredPurchases rows={deferrals} />
         </Flex>
       )}
 
       {/* What the issuer printed as deferred, with its monthly interest and what paying it off saves (RF-258). */}
-      {cardDeferrals.length > 0 && (
+      {!isLoan && cardDeferrals.length > 0 && (
         <Flex direction="column" px={{ initial: "0", md: "6" }}>
           <CardDeferrals rows={cardDeferrals} />
         </Flex>
       )}
 
-      <SettlementSection
-        accountId={account.id}
-        currency={currency}
-        pending={pendingSettlements}
-        canWrite={canWrite}
-      />
+      {!isLoan && (
+        <SettlementSection
+          accountId={account.id}
+          currency={currency}
+          pending={pendingSettlements}
+          canWrite={canWrite}
+        />
+      )}
 
       {/* The period nobody has cut yet: live figures, and never one of the
           snapshots below (RF-129). */}
-      {currentStatement !== null && (
+      {!isLoan && currentStatement !== null && (
         <Flex direction="column" px={{ initial: "0", md: "6" }}>
           <Panel title={t("currentPeriod")}>
             <Flex direction="column" px="4" py="1">
@@ -369,17 +436,19 @@ export function DebtDetailScreen({ data }: { data: DebtDetailData }) {
         </Flex>
       )}
 
-      <StatementsSection
-        account={{
-          id: account.id,
-          name: account.name,
-          kind: "liability",
-          nextPeriodStart: currentStatement?.periodStart ?? todayInBogota(),
-        }}
-        currency={currency}
-        statements={statements}
-        canWrite={canWrite}
-      />
+      {!isLoan && (
+        <StatementsSection
+          account={{
+            id: account.id,
+            name: account.name,
+            kind: "liability",
+            nextPeriodStart: currentStatement?.periodStart ?? todayInBogota(),
+          }}
+          currency={currency}
+          statements={statements}
+          canWrite={canWrite}
+        />
+      )}
 
       {dialog === "statement" && (
         <AccountStatementDialog

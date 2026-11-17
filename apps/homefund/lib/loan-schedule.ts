@@ -40,6 +40,8 @@ export type LoanScheduleSummary = {
   rows: RowView[];
   count: number;
   paidCount: number;
+  // Rows something landed on that still fall short of the cuota: they are part of `remainingCount`, never of `paidCount`.
+  partialCount: number;
   remainingCount: number;
   // The first row not paid in full; null once every row is.
   next: RowView | null;
@@ -98,6 +100,7 @@ export function readSchedule(rows: ScheduleRow[], payments: SchedulePayment[], t
     rows: views,
     count: views.length,
     paidCount: views.length - open.length,
+    partialCount: open.filter((row) => row.state === "partial").length,
     remainingCount: open.length,
     next: open[0] ?? null,
     remainingTotalCents: open.reduce((sum, row) => sum + Math.max(0, row.totalCents - row.paidCents), 0),
@@ -116,6 +119,7 @@ export function digest(summary: LoanScheduleSummary): LoanScheduleDigest {
   return {
     count: summary.count,
     paidCount: summary.paidCount,
+    partialCount: summary.partialCount,
     remainingCount: summary.remainingCount,
     next: summary.next,
     remainingTotalCents: summary.remainingTotalCents,

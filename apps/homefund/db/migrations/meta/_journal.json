@@ -750,6 +750,13 @@
       "when": 1794933270000,
       "tag": "0110_a_loan_has_a_payment_schedule",
       "breakpoints": true
+    },
+    {
+      "idx": 112,
+      "version": "7",
+      "when": 1794933390000,
+      "tag": "0112_a_loan_knows_its_term",
+      "breakpoints": true
     }
   ]
 }

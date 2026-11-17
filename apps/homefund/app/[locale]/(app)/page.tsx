@@ -254,7 +254,11 @@ export default async function HomePage(props: PageProps<"/[locale]">) {
           <Flex align="stretch" justify="center" gap="4" wrap="wrap">
             {ACCOUNT_CLASSES.map((tile) => (
               <Card key={tile.subtype} asChild>
-                <PlainLink href={`/settings/accounts?new=${tile.subtype}`} width={240}>
+                {/* A card is a debt, and its form lives in Deudas (RF-286). */}
+                <PlainLink
+                  href={tile.subtype === "card" ? "/planning/debts?new=card" : `/settings/accounts?new=${tile.subtype}`}
+                  width={240}
+                >
                   <Flex direction="column" align="center" gap="3">
                     <CategoryTile
                       color={tile.surface}
