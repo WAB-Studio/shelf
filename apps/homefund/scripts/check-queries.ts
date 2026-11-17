@@ -4181,6 +4181,7 @@ async function main(): Promise<void> {
   await mcpMoneyModelSuite();
   await payOwnCardSuite();
   await legacyChannelSuite();
+  await cardStatementSuite();
 }
 
 // A member recorded without a login is someone in the fund: a leader whose fund holds one is not alone, so an
@@ -21036,5 +21037,152 @@ async function legacyChannelSuite(): Promise<void> {
     next("RF-244: the SMS of an alert whose email was stored before the channel flag is its duplicate, 20 hours on, by the printed day and minute"),
     sms.status === "rejected" && row?.reason === "duplicate" && row.of === mail.deliveryId,
     JSON.stringify({ sms, row }),
+  );
+}
+
+// RF-253, RF-254: record_card_statement plans before it writes and then writes what it planned: the terms (updated only
+// by a statement no older than the latest), the closed statement (once per cut-off), the deferrals by the bank's
+// authorization number (an older statement never overwrites a newer) and which purchases are not booked yet.
+async function cardStatementSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const today = todayInBogota();
+  const { POST } = await import("@/app/mcp/route");
+  const owner = await createMembershipFreeUser();
+  const stranger = await createMembershipFreeUser();
+  const category = randomUUID();
+  await fixtureSql`insert into categories (id, owner_user_id, name, kind, color) values (${category}, ${owner.id}, ${`Harness rf254 Compras ${tag}`}, 'expense', ${CATEGORY_COLORS[0]})`;
+  track("categories", category);
+  const open = async (who: HarnessUser) => {
+    const { id, token } = await asUser(who, () => issueWebhookCredential({ name: `Harness rf254 ${tag}`, purpose: "mcp", defaultAccountId: null, defaultCategoryId: null }));
+    keep("webhook_credentials", id);
+    return mcpClient(POST, token).tool;
+  };
+  const tool = await open(owner);
+  const strangerTool = await open(stranger);
+  const card = await tool("create_account", { name: `Harness rf254 tarjeta ${tag}`, kind: "liability", subtype: "card", openingBalanceCents: 0, balanceOn: "2026-01-01" });
+  const cardId = (card.value as { accountId: string }).accountId;
+  track("accounts", cardId);
+  const bank = await tool("create_account", { name: `Harness rf254 banco ${tag}`, kind: "asset", subtype: "bank", openingBalanceCents: 100_000_000, balanceOn: "2026-01-01" });
+  const bankId = (bank.value as { accountId: string }).accountId;
+  track("accounts", bankId);
+  const booked = await tool("record_movement", {
+    fromAccountId: cardId, toAccountId: null, amountCents: 150_000_00, occurredAt: shiftDate(today, -1), description: `Harness rf254 compra ${tag}`, categoryId: category,
+  });
+  const bookedId = (booked.value as { transactionId: string }).transactionId;
+
+  type Plan = {
+    dryRun: boolean;
+    statement: { action: string };
+    terms: { action: string; changes: string[] };
+    deferrals: { authorizationNumber: string; action: string; monthlyInterestCents: number; savingsCents: number; chargesInterest: boolean }[];
+    missingFromStatement: { authorizationNumber: string }[];
+    purchases: { newCount: number; booked: { index: number; transactionId: string }[]; new: { index: number }[] };
+  };
+  type Detail = {
+    terms: { annualRate: string; creditLimitCents: number; statementCutOffDay: number; paymentDueDay: number } | null;
+    statements: { cutOffDate: string }[];
+    cardDeferrals: { authorizationNumber: string; pendingBalanceCents: number; monthlyInterestCents: number; savingsCents: number; chargesInterest: boolean }[];
+  };
+  const detail = async () => (await tool("get_debt", { accountId: cardId })).value as Detail;
+  const extension = {
+    authorizationNumber: "AUT-0001", description: "AMPLIACION DE PLAZO", currency: "COP", originalAmountCents: 804_500_000,
+    instalments: 24, currentInstalment: 7, monthlyInstalmentCents: 33_520_000, pendingBalanceCents: 471_000_000, annualRatePct: "28.1",
+  };
+  const figma = {
+    authorizationNumber: "AUT-0002", description: "FIGMA", currency: "USD", originalAmountCents: 12_000,
+    instalments: 36, currentInstalment: 1, monthlyInstalmentCents: 333, pendingBalanceCents: 12_000, annualRatePct: "28",
+  };
+  const first = {
+    accountId: cardId,
+    statement: { periodStart: "2026-09-17", cutOffDate: "2026-10-16", paymentDueDate: "2026-11-02", closingBalanceCents: 1_000_000_00, minimumPaymentCents: 50_000_00 },
+    terms: { annualRatePct: "28.33", creditLimitCents: 1_100_000_000, statementCutOffDay: 16, paymentDueDay: 2 },
+    deferrals: [extension, figma],
+    purchases: [
+      { occurredOn: today, amountCents: 150_000_00, currency: "COP", description: "COMPRA DE EJEMPLO" },
+      { occurredOn: today, amountCents: 77_700, currency: "COP", description: "OTRA COMPRA" },
+    ],
+  };
+
+  const planned = (await tool("record_card_statement", { ...first, dryRun: true })).value as Plan;
+  const afterPlan = await detail();
+  assert(
+    next("RF-254: record_card_statement with dryRun plans a new card (terms created, statement recorded, both deferrals inserted, the purchase booked a day before matched and the other one new) and writes nothing"),
+    planned.dryRun === true && planned.terms.action === "created" && planned.statement.action === "recorded" &&
+      planned.deferrals.map((one) => one.action).join() === "inserted,inserted" && planned.deferrals.every((one) => one.chargesInterest) &&
+      planned.purchases.newCount === 1 && planned.purchases.new[0]?.index === 1 && planned.purchases.booked[0]?.transactionId === bookedId &&
+      afterPlan.terms === null && afterPlan.statements.length === 0 && afterPlan.cardDeferrals.length === 0,
+    JSON.stringify({ planned, afterPlan }),
+  );
+
+  const written = (await tool("record_card_statement", first)).value as Plan;
+  const stored = await detail();
+  const ext = stored.cardDeferrals.find((one) => one.authorizationNumber === "AUT-0001");
+  assert(
+    next("RF-254: the same call without dryRun writes the terms, the closed statement and both deferrals, and get_debt reads their monthly interest and what paying them off saves as integer cents"),
+    written.dryRun === false && stored.terms !== null && Number(stored.terms.annualRate) === 0.2833 && stored.terms.paymentDueDay === 2 &&
+      stored.statements.some((one) => one.cutOffDate === "2026-10-16") && stored.cardDeferrals.length === 2 &&
+      ext?.pendingBalanceCents === 471_000_000 && Number.isSafeInteger(ext.monthlyInterestCents) && ext.monthlyInterestCents > 9_000_000 &&
+      ext.monthlyInterestCents < 10_000_000 && ext.savingsCents > ext.monthlyInterestCents && ext.chargesInterest,
+    JSON.stringify({ written, stored }),
+  );
+
+  const replay = (await tool("record_card_statement", first)).value as Plan;
+  assert(
+    next("RF-254: sending the same statement again is idempotent: the cut-off is already recorded, the terms and both deferrals are the same"),
+    replay.statement.action === "alreadyRecorded" && replay.terms.action === "same" && replay.deferrals.every((one) => one.action === "same"),
+    JSON.stringify(replay),
+  );
+
+  const newer = {
+    accountId: cardId,
+    statement: { periodStart: "2026-10-17", cutOffDate: "2026-11-16", paymentDueDate: "2026-12-02", closingBalanceCents: 900_000_00, minimumPaymentCents: 45_000_00 },
+    terms: { annualRatePct: "25" },
+    deferrals: [{ ...extension, currentInstalment: 8, pendingBalanceCents: 437_480_000 }],
+    purchases: [],
+  };
+  const updated = (await tool("record_card_statement", newer)).value as Plan;
+  const afterNewer = await detail();
+  assert(
+    next("RF-254: a newer statement updates the terms it prints (the rate) and keeps the rest, updates the deferral it lists and names the one it no longer lists"),
+    updated.terms.action === "updated" && updated.terms.changes.join() === "annualRate" && updated.deferrals[0]?.action === "updated" &&
+      updated.missingFromStatement.map((one) => one.authorizationNumber).join() === "AUT-0002" &&
+      Number(afterNewer.terms?.annualRate) === 0.25 && afterNewer.terms?.creditLimitCents === 1_100_000_000 && afterNewer.terms.statementCutOffDay === 16 &&
+      afterNewer.cardDeferrals.find((one) => one.authorizationNumber === "AUT-0001")?.pendingBalanceCents === 437_480_000 &&
+      afterNewer.cardDeferrals.some((one) => one.authorizationNumber === "AUT-0002"),
+    JSON.stringify({ updated, afterNewer }),
+  );
+
+  const older = {
+    accountId: cardId,
+    statement: { periodStart: "2026-08-17", cutOffDate: "2026-09-16", paymentDueDate: "2026-10-02", closingBalanceCents: 800_000_00 },
+    terms: { annualRatePct: "20" },
+    deferrals: [{ ...extension, currentInstalment: 6, pendingBalanceCents: 504_960_000 }],
+    purchases: [],
+  };
+  const stale = (await tool("record_card_statement", older)).value as Plan;
+  const afterOlder = await detail();
+  assert(
+    next("RF-254: an older statement is recorded but never undoes what a newer one set: the terms are kept and its deferral is stale"),
+    stale.statement.action === "recorded" && stale.terms.action === "kept" && stale.deferrals[0]?.action === "stale" &&
+      Number(afterOlder.terms?.annualRate) === 0.25 &&
+      afterOlder.cardDeferrals.find((one) => one.authorizationNumber === "AUT-0001")?.pendingBalanceCents === 437_480_000 &&
+      afterOlder.statements.some((one) => one.cutOffDate === "2026-09-16"),
+    JSON.stringify({ stale, afterOlder }),
+  );
+
+  const repeated = await tool("record_card_statement", { ...first, deferrals: [extension, extension], dryRun: true });
+  const onBank = await tool("record_card_statement", { ...first, accountId: bankId, dryRun: true });
+  const asStranger = await strangerTool("record_card_statement", { ...first, dryRun: true });
+  const bare = await tool("create_account", { name: `Harness rf254 sin terminos ${tag}`, kind: "liability", subtype: "card", openingBalanceCents: 0, balanceOn: "2026-01-01" });
+  const bareId = (bare.value as { accountId: string }).accountId;
+  track("accounts", bareId);
+  const noRate = await tool("record_card_statement", { ...first, accountId: bareId, terms: {}, dryRun: true });
+  const errorOf = (result: { isError?: boolean; value: unknown }) => (result.isError ? (result.value as { error: string }).error : "no error");
+  assert(
+    next("RF-254: record_card_statement refuses a repeated authorization number, a bank account, another person's card and a card with no terms and no rate"),
+    errorOf(repeated) === es.cardStatement.errors.authorizationRepeated && errorOf(onBank) === es.debts.errors.notLiability &&
+      errorOf(asStranger) === es.errors.notFound && errorOf(noRate) === es.cardStatement.errors.rateNeeded,
+    JSON.stringify({ repeated: errorOf(repeated), onBank: errorOf(onBank), asStranger: errorOf(asStranger), noRate: errorOf(noRate) }),
   );
 }

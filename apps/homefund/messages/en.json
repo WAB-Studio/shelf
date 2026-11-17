@@ -1227,6 +1227,29 @@
       "alreadyDeferred": "This purchase is already deferred."
     }
   },
+  "cardStatement": {
+    "errors": {
+      "authorizationInvalid": "The authorization number must be 1 to 40 characters.",
+      "descriptionInvalid": "The description must be 1 to 200 characters.",
+      "currencyInvalid": "Pick a valid currency, such as «COP» or «USD».",
+      "amountInvalid": "Write a valid amount, in whole cents.",
+      "instalmentsInvalid": "The instalments must be a number from 1 to 120.",
+      "currentInstalmentInvalid": "The current instalment must be a number from 1 to the total.",
+      "dateInvalid": "Write a valid date, YYYY-MM-DD.",
+      "tooMany": "The statement carries too many rows for one call.",
+      "authorizationRepeated": "The same authorization number comes twice on the statement.",
+      "rateNeeded": "This card has no terms yet: give the statement's effective annual rate (terms.annualRatePct)."
+    }
+  },
+  "cardDeferrals": {
+    "title": "Card deferrals",
+    "step": "Cuota {current} of {total} · {amount} a month · {rate} E.A.",
+    "onCard": "On {card}",
+    "authorization": "Authorization {number}",
+    "monthlyInterest": "This month's interest ~{amount}",
+    "payOffSaves": "Pay it off today and save ~{amount}",
+    "notice": "This purchase was set at {count} cuotas; it will cost you ~{amount} in interest. Pay it in full or change it to 1 cuota at your bank"
+  },
   "installments": {
     "paymentTitle": "Pay down the debt",
     "fromLabel": "Pay from",
@@ -1890,6 +1913,7 @@
       "reconcileAccount": "Reconciles an account on a day: the person counts what is really there (realAmountCents, in cents and in the account's currency; for a debt, what is owed; negative if it fell below zero) and HomeFund records ONE adjustment movement for the difference, so the balance equals what was counted. Pass in expectedDerivedCents the derivedCents you read in get_reconcile_sheet for that day: if a movement changed meanwhile, it is refused and the sheet must be read again. The day cannot be future, nor before the opening, nor before the last reconciliation. Returns id and gapCents (counted minus derived, in the same convention: for a debt, positive means more is owed). If the count has the opposite sign of the derived balance and the gap exceeds the balance (the typical slip: a debt typed negative), it is refused; only with confirmSignChange true, after confirming with the person, is it written. CONFIRM with the person the account, the day, what was counted and the resulting adjustment before calling it.",
       "listReconciliations": "An account's reconciliations (accountId from list_accounts), newest first, each with its gap. Read only.",
       "recordAccountStatement": "Records a closed statement of a card or credit (accountId from list_debts), by hand, like the «Record statement» button: periodStart and cutOffDate (YYYY-MM-DD, as the statement prints them), closingBalanceCents (the closing balance, what is owed) and, optional, paymentDueDate, openingBalanceCents, creditsCents, debitsCents, minimumPaymentCents, interestChargedCents and feesChargedCents; all in whole cents in the debt's currency. A statement with the same cut-off date is refused: it is already recorded. It reads back in get_debt (statements). Returns accountId and cutOffDate. CONFIRM the statement's figures with the person before calling it.",
+      "recordCardStatement": "Stores in one call what Claude reads off a card statement PDF (accountId from list_debts, a liability account). Call it FIRST with dryRun true: it writes nothing and returns the plan; show the person that list (terms, deferrals, new purchases) and ask for ONE yes; only then repeat the call without dryRun. Takes: statement (the closed statement: periodStart, cutOffDate, closingBalanceCents and, optional, paymentDueDate, minimumPaymentCents, interestChargedCents, feesChargedCents, openingBalanceCents, creditsCents, debitsCents; like record_account_statement, and a cut-off already recorded is skipped); terms (optional: annualRatePct, creditLimitCents, statementCutOffDay, paymentDueDay, minimumPaymentCents or minimumPaymentPct, avalCents; what is missing keeps what is stored, and a statement as new as or newer than the latest recorded updates the terms, an older one leaves them); deferrals (each deferral the statement lists, per currency: authorizationNumber, description, currency, originalAmountCents, instalments, currentInstalment, monthlyInstalmentCents, pendingBalanceCents and annualRatePct; stored or updated by authorization number, and one already stored from a newer statement is not overwritten); purchases (the statement's purchases: occurredOn, amountCents, currency, description). Purchases are NOT written: each is compared with the card's movements of the same amount and currency within 2 days and the answer says which are new (purchases.new, by index) and which are already booked (purchases.booked); record the new ones afterwards with record_movement. Returns statement, terms (created, updated, same, kept or none, and which fields change), deferrals (inserted, updated, same or stale, with the monthly interest and what paying it off today saves), missingFromStatement (stored deferrals this statement no longer lists) and dryRun. All in whole cents. A card with no terms needs terms.annualRatePct.",
       "recordBilledAmount": "Records what the issuer really billed for a purchase made in another currency (RF-123), replacing the estimate: transactionId of the purchase (from get_debt, pendingSettlements), accountId of the debt, currency (the currency the debt bills in) and billedCents (what was billed, in cents). Not possible before an account reconciliation. Returns transactionId. CONFIRM the purchase and the statement's figure with the person before calling it.",
       "deferPurchase": "Defers a card or credit purchase into instalments (transactionId from list_movements; instalments, the number of instalments): the balance does not change, the debt spreads what is left to bill (read in get_debt, deferrals). Only a purchase (an expense of a debt) is deferred, and only once: to change the number, remove the deferral with undefer_purchase and defer again. Returns transactionId and instalments. CONFIRM the purchase and the number of instalments the statement says with the person before calling it.",
       "undeferPurchase": "Removes a purchase's deferral (transactionId): the purchase counts whole again. Returns before with the number of instalments it had, to defer it again with defer_purchase. CONFIRM with the person which purchase before calling it.",
@@ -2096,6 +2120,22 @@
       "billedCurrency": "The currency the debt bills in (COP or USD).",
       "billedCents": "What the issuer billed, in whole cents, positive.",
       "deferInstalments": "The number of instalments the purchase is deferred into, the one the statement prints.",
+      "cardDryRun": "true to plan without writing anything: it returns what the call would do. Use it first.",
+      "cardStatement": "The closed statement as the PDF prints it.",
+      "cardTerms": "The terms the statement prints; what is missing keeps what is stored.",
+      "cardAuthorizationNumber": "The bank's authorization number for the deferral, as printed.",
+      "cardDeferralDescription": "The deferral's description on the statement («AMPLIACION DE PLAZO», the merchant…).",
+      "cardSectionCurrency": "Currency of the statement section it appears in, ISO code («COP», «USD»).",
+      "cardOriginalAmountCents": "The original deferred amount, in whole cents of its currency.",
+      "cardInstalments": "Number of instalments agreed.",
+      "cardCurrentInstalment": "The instalment it is at, from 1 to the number of instalments.",
+      "cardMonthlyInstalmentCents": "The monthly instalment, in whole cents.",
+      "cardPendingBalanceCents": "What is still pending of the deferral, in whole cents.",
+      "cardDeferralRatePct": "The deferral's effective annual rate as the statement prints it, as text («28.1»; «0» for no interest).",
+      "cardDeferrals": "The deferrals the statement lists.",
+      "cardPurchaseAmountCents": "The purchase's amount, positive, in whole cents of the currency it was spent in.",
+      "cardPurchaseDescription": "The purchase's description on the statement.",
+      "cardPurchases": "The statement's purchases, to learn which are already booked.",
       "withdrawSourceAccountId": "The asset account the cash comes out of (id from list_accounts).",
       "auditEntity": "The name of the table whose changes are asked for, like «transactions» or «accounts»; all when absent.",
       "rateFrom": "Source currency, a three-letter code («USD»).",
@@ -2189,6 +2229,7 @@
       "reconcileAccount": "Reconcile an account",
       "listReconciliations": "View an account's reconciliations",
       "recordAccountStatement": "Record a debt's statement",
+      "recordCardStatement": "Store what a card statement says",
       "recordBilledAmount": "Record what the issuer billed",
       "deferPurchase": "Defer a purchase into instalments",
       "undeferPurchase": "Remove a purchase's deferral",

@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { useFormatter, useLocale, useTranslations } from "next-intl";
 import { Fragment, useState } from "react";
 
+import { CardDeferrals } from "@/components/planning/card-deferrals";
 import { DeferredPurchases } from "@/components/planning/deferral-control";
 import { OwnerMark } from "@/components/fund/owner-mark";
 import { DebtPaymentDialog } from "@/components/planning/debt-payment-dialog";
@@ -59,6 +60,7 @@ export function DebtDetailScreen({ data }: { data: DebtDetailData }) {
     account,
     terms,
     deferrals,
+    cardDeferrals,
     statements,
     currentStatement,
     pendingSettlements,
@@ -254,6 +256,13 @@ export function DebtDetailScreen({ data }: { data: DebtDetailData }) {
       {deferrals.length > 0 && (
         <Flex direction="column" px={{ initial: "0", md: "6" }}>
           <DeferredPurchases rows={deferrals} />
+        </Flex>
+      )}
+
+      {/* What the issuer printed as deferred, with its monthly interest and what paying it off saves (RF-253). */}
+      {cardDeferrals.length > 0 && (
+        <Flex direction="column" px={{ initial: "0", md: "6" }}>
+          <CardDeferrals rows={cardDeferrals} />
         </Flex>
       )}
 

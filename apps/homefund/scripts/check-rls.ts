@@ -324,6 +324,7 @@ async function main() {
   await checkMemberDebts();
   await checkRecipients();
   await checkThirdPartyCredits();
+  await checkCardDeferrals();
 }
 
 // RF-136: a deferral is read and written exactly when its purchase's liability account is, carries 2 to 72
@@ -5242,6 +5243,8 @@ const INSERT_GRANT_GAPS: Record<string, string[]> = {
     "record_id",
   ],
   budgets: ["archived_at", "created_at", "id", "updated_at"],
+  // The id, the stamps and `created_by` (the column default) are the database's; the card, the number and the bank's figures are the input.
+  card_deferrals: ["created_at", "created_by", "id", "updated_at"],
   categories: ["created_at", "id", "updated_at"],
   debt_terms: ["created_at", "updated_at"],
   // `created_by` is the column default from `auth.uid()`; the movement, the account and the count are the input.
@@ -5403,6 +5406,8 @@ const UPDATE_GRANT_GAPS: Record<string, string[]> = {
     "record_id",
   ],
   budgets: ["category_id", "created_at", "external_ref", "group_id", "id", "owner_user_id", "updated_at"],
+  // A later statement rewrites the figures; the card and the bank's number are what the row is.
+  card_deferrals: ["account_id", "authorization_number", "created_at", "created_by", "id", "updated_at"],
   categories: ["created_at", "group_id", "id", "kind", "owner_user_id", "seed_key", "updated_at"],
   debt_terms: ["account_id", "created_at", "updated_at"],
   // A deferral is replaced by deleting it and deferring again: no column is writable.
@@ -5556,6 +5561,7 @@ const UPDATE_GRANT_GAPS: Record<string, string[]> = {
 const DELETE_GRANTS: string[] = [
   "accounts",
   "budgets",
+  "card_deferrals",
   "categories",
   "debt_terms",
   "deferrals",
@@ -14404,6 +14410,104 @@ async function checkThirdPartyCredits() {
       select count(*)::int as held from unnest(array['anon', 'service_role']) r
       where has_any_column_privilege(r, 'finances.third_party_credits'::regclass, 'SELECT, INSERT, UPDATE, REFERENCES')
          or has_table_privilege(r, 'finances.third_party_credits'::regclass, 'DELETE, TRUNCATE')`;
+    return [{ ok: held === 0, detail: `anon/service_role with a privilege ${held}` }];
+  });
+}
+
+// RF-253: the deferrals a card's statement prints are read and written by whoever reads and writes the card, alone;
+// they hang off a liability, one per authorization number per card; a later statement rewrites the figures and never
+// the card or the number; every write leaves its audit row; anon and service_role hold nothing.
+async function checkCardDeferrals() {
+  console.log("");
+  const labels = {
+    owner: "rf253-1. the owner of a card records a deferral, reads it, rewrites its figures and removes it; a stranger reads none, updates none, removes none and records none (42501)",
+    shape: "rf253-2. a deferral on an asset account is 23514; a second one with the same authorization number on the card is 23505; a blank number, a current instalment past the total, a negative pending balance and a rate above 200 percent are 23514",
+    columns: "rf253-3. the card and the authorization number of a deferral cannot be changed by an update (42501)",
+    audit: "rf253-4. recording, rewriting and removing each leave an audit row naming the person",
+    grants: "rf253-5. anon and service_role hold no privilege on card_deferrals",
+  };
+  const fixture = async (tx: M1Tx) => {
+    const [owner, stranger] = [randomUUID(), randomUUID()];
+    await tx`insert into auth.users (id) values (${owner}), (${stranger})`;
+    await tx`insert into app_users (id) values (${owner}), (${stranger})`;
+    const account = async (name: string, kind: "asset" | "liability") => {
+      const [{ id }] = await tx<{ id: string }[]>`
+        insert into accounts (owner_user_id, name, kind, subtype, settlement_currency, initial_balance_on)
+        values (${owner}, ${name}, ${kind}, ${kind === "asset" ? "bank" : "card"}, 'COP', ${todayInBogota()}) returning id`;
+      return id;
+    };
+    return { owner, stranger, card: await account("rls rf253 card", "liability"), bank: await account("rls rf253 bank", "asset") };
+  };
+  const defer = (
+    card: string,
+    over: { authorization?: string; current?: number; pending?: number; rate?: string } = {},
+  ) => (sp: M1Tx) =>
+    sp`insert into card_deferrals (account_id, authorization_number, description, currency, original_amount_cents, instalments,
+        current_instalment, monthly_instalment_cents, pending_balance_cents, annual_rate, statement_on)
+      values (${card}, ${over.authorization ?? "AUT-1"}, 'AMPLIACION DE PLAZO', 'COP', 804500000, 24, ${over.current ?? 7}, 33520000,
+        ${over.pending ?? 471000000}, ${over.rate ?? "0.281"}, ${todayInBogota()})`;
+
+  await rf136Rows([labels.owner, labels.audit], async (tx) => {
+    const f = await fixture(tx);
+    await enterUserContext(tx, f.owner);
+    const recorded = await m1Refusal(tx, defer(f.card));
+    const mine = (await tx`select id from card_deferrals`).length;
+    const rewritten = (await tx`update card_deferrals set pending_balance_cents = 437480000, current_instalment = 8 returning id`).length;
+    await enterUserContext(tx, f.stranger);
+    const strangerSees = (await tx`select id from card_deferrals`).length;
+    const strangerUpdates = (await tx`update card_deferrals set pending_balance_cents = 1 returning id`).length;
+    const strangerRemoves = (await tx`delete from card_deferrals returning id`).length;
+    const strangerRecords = await m1Refusal(tx, defer(f.card, { authorization: "AUT-2" }));
+    await enterUserContext(tx, f.owner);
+    const removed = (await tx`delete from card_deferrals returning id`).length;
+    await tx`reset role`;
+    const trail = await tx<{ action: string; actor_user_id: string | null }[]>`
+      select action, actor_user_id from audit_log
+      where entity = 'card_deferrals' and actor_user_id = ${f.owner} order by id`;
+    return [
+      {
+        ok: recorded === null && mine === 1 && rewritten === 1 && removed === 1 && strangerSees === 0 && strangerUpdates === 0 &&
+          strangerRemoves === 0 && strangerRecords === "42501",
+        detail: `record ${recorded ?? "accepted"}, owner sees ${mine}, rewrites ${rewritten}, removes ${removed}; stranger sees ${strangerSees}, updates ${strangerUpdates}, removes ${strangerRemoves}, records ${strangerRecords}`,
+      },
+      {
+        ok: JSON.stringify(trail.map((row) => row.action)) === JSON.stringify(["INSERT", "UPDATE", "DELETE"]),
+        detail: `audit ${JSON.stringify(trail)}`,
+      },
+    ];
+  });
+
+  await rf136Rows([labels.shape], async (tx) => {
+    const f = await fixture(tx);
+    await enterUserContext(tx, f.owner);
+    await defer(f.card)(tx);
+    const onAsset = await m1Refusal(tx, defer(f.bank, { authorization: "AUT-9" }));
+    const twice = await m1Refusal(tx, defer(f.card));
+    const blank = await m1Refusal(tx, defer(f.card, { authorization: "  " }));
+    const past = await m1Refusal(tx, defer(f.card, { authorization: "AUT-3", current: 25 }));
+    const negative = await m1Refusal(tx, defer(f.card, { authorization: "AUT-4", pending: -1 }));
+    const rate = await m1Refusal(tx, defer(f.card, { authorization: "AUT-5", rate: "2.5" }));
+    return [{
+      ok: onAsset === "23514" && twice === "23505" && blank === "23514" && past === "23514" && negative === "23514" && rate === "23514",
+      detail: `asset ${onAsset}, twice ${twice}, blank ${blank}, past the total ${past}, negative ${negative}, rate ${rate}`,
+    }];
+  });
+
+  await rf136Rows([labels.columns], async (tx) => {
+    const f = await fixture(tx);
+    await enterUserContext(tx, f.owner);
+    await defer(f.card)(tx);
+    const moveCard = await m1Refusal(tx, (sp) => sp`update card_deferrals set account_id = ${f.bank}`);
+    const renumber = await m1Refusal(tx, (sp) => sp`update card_deferrals set authorization_number = 'AUT-X'`);
+    await tx`reset role`;
+    return [{ ok: moveCard === "42501" && renumber === "42501", detail: `card ${moveCard}, number ${renumber}` }];
+  });
+
+  await rf136Rows([labels.grants], async (tx) => {
+    const [{ held }] = await tx<{ held: number }[]>`
+      select count(*)::int as held from unnest(array['anon', 'service_role']) r
+      where has_any_column_privilege(r, 'finances.card_deferrals'::regclass, 'SELECT, INSERT, UPDATE, REFERENCES')
+         or has_table_privilege(r, 'finances.card_deferrals'::regclass, 'DELETE, TRUNCATE')`;
     return [{ ok: held === 0, detail: `anon/service_role with a privilege ${held}` }];
   });
 }
