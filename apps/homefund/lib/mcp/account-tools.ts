@@ -3,7 +3,7 @@ import "server-only";
 import type { CallToolResult, McpServer, ServerContext } from "@modelcontextprotocol/server";
 import { z } from "zod";
 
-import { getReconcileSheet, listAccountReconciliations } from "@/db/queries/account-reconciliations";
+import { getReconcileSheet, listAccountReconciliations, type ReconcileSheet } from "@/db/queries/account-reconciliations";
 import { retireAccount } from "@/db/queries/account-write";
 import { listAccounts, restoreAccount } from "@/db/queries/accounts";
 import { confirmReconciliation } from "@/db/queries/reconcile-write";
@@ -37,6 +37,29 @@ export function accountRow(account: Awaited<ReturnType<typeof listAccounts>>[num
     balances: account.balances,
     canWrite: account.canWrite,
   };
+}
+
+// RF-245: Claude reads and sends a debt as what is owed, positive, in every figure of the count; the ledger keeps it
+// negative. The one place the two meet is here, so the sheet, the history and the count never disagree on a sign.
+const owed = (kind: "asset" | "liability", cents: number) => (kind === "liability" && cents !== 0 ? -cents : cents);
+
+function sheetAsOwed(sheet: ReconcileSheet) {
+  const { kind } = sheet.account;
+  return {
+    account: { ...sheet.account, derivedCents: owed(kind, sheet.account.derivedCents) },
+    history: sheet.history.map((row) => ({
+      ...row,
+      countedCents: owed(kind, row.countedCents),
+      derivedCents: owed(kind, row.derivedCents),
+      gapCents: owed(kind, row.gapCents),
+    })),
+  };
+}
+
+// A count whose sign is the opposite of the balance and whose gap is bigger than the balance itself is the shape of a
+// sign slip (a debt typed negative), which books a gap twice the balance; it waits for the person's yes.
+function flipsSign(real: number, derived: number): boolean {
+  return real !== 0 && derived !== 0 && Math.sign(real) !== Math.sign(derived) && Math.abs(real - derived) > Math.abs(derived);
 }
 
 type Run = (ctx: ServerContext, load: (owner: string) => Promise<unknown>) => Promise<CallToolResult>;
@@ -95,7 +118,7 @@ export function registerAccountTools(server: McpServer, run: Run, t: Say): void 
           parseForm(day, input.on),
         );
         if (sheet === null) throw new ActionError("errors.notFound");
-        return sheet;
+        return sheetAsOwed(sheet);
       }),
   );
 
@@ -110,21 +133,29 @@ export function registerAccountTools(server: McpServer, run: Run, t: Say): void 
         reconciledOn: z.string().describe(d("reconcileOn")),
         realAmountCents: z.number().int().describe(d("reconcileRealAmountCents")),
         expectedDerivedCents: z.number().int().describe(d("reconcileExpectedDerivedCents")),
+        confirmSignChange: z.boolean().optional().describe(d("reconcileConfirmSignChange")),
       }),
       annotations: OVERWRITE,
     },
     (input, ctx) =>
       run(ctx, async () => {
-        const result = await confirmReconciliation(
-          parseForm(reconcileAccountSchema, {
-            accountId: input.accountId,
-            reconciledOn: input.reconciledOn,
-            realAmount: centsToDecimal(input.realAmountCents),
-            expectedDerivedCents: input.expectedDerivedCents,
-          }),
-        );
+        const form = parseForm(reconcileAccountSchema, {
+          accountId: input.accountId,
+          reconciledOn: input.reconciledOn,
+          realAmount: centsToDecimal(input.realAmountCents),
+          expectedDerivedCents: input.expectedDerivedCents,
+        });
+        const sheet = await getReconcileSheet(form.accountId, form.reconciledOn);
+        if (sheet === null) throw new ActionError("errors.notFound");
+        const { kind } = sheet.account;
+        const derived = owed(kind, sheet.account.derivedCents);
+        if (!input.confirmSignChange && flipsSign(input.realAmountCents, derived)) {
+          throw new ActionError("mcp.errors.reconcileSign", { real: String(input.realAmountCents), derived: String(derived) });
+        }
+        // The stamp is the ledger's own figure, so what Claude read as owed is turned back before the write compares them.
+        const result = await confirmReconciliation({ ...form, expectedDerivedCents: owed(kind, input.expectedDerivedCents) });
         if (!result.ok) throw new ActionError(result.messageKey, result.date ? { date: result.date } : undefined);
-        return { id: result.id, gapCents: result.gapCents };
+        return { id: result.id, gapCents: owed(kind, result.gapCents) };
       }),
   );
 
