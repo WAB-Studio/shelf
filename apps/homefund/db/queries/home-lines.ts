@@ -160,7 +160,7 @@ export type UpcomingDebts = {
 };
 
 /**
- * Each debt's next payment for «Lo que viene» (RF-304), in two parallel reads. A card that still owes, whose period's
+ * Each debt's next payment for «Lo que viene» (RF-308), in two parallel reads. A card that still owes, whose period's
  * minimum is not paid, asks its latest statement's total and minimum on the statement's due day; a statement older than
  * this month is not this month's, so the card says its extract is missing and takes its own payment day. A loan that
  * still owes asks the first cuota its schedule has not paid in full, less what already landed on it; with no schedule,

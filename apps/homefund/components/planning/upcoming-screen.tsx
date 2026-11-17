@@ -52,7 +52,7 @@ import { useMoneyText } from "@/lib/use-privacy";
 type Removal = { payment: PlannedPaymentRow } | { rule: RecurringRuleRow };
 
 /**
- * «Lo que viene»: the payments that fall due, each card's and each loan's next payment (RF-304), the incomes that
+ * «Lo que viene»: the payments that fall due, each card's and each loan's next payment (RF-308), the incomes that
  * are expected, the rules that repeat and the subscriptions HomeFund found, as one list ordered by date. Each row says
  * what it is, its amount and day, its account and offers one action; the rest sit in its menu. A kind with nothing in
  * it shows nothing.

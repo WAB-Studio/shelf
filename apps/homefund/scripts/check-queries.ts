@@ -22700,7 +22700,7 @@ async function payDebtsSuite(): Promise<void> {
       {
         accountId: scheduled,
         rows: [1, 2, 3].map((number) => ({
-          number, dueOn: shiftDate(today, number * 30 - 20), principalCents: 90_000_000, interestCents: 9_000_000, insuranceCents: 1_000_000,
+          number, dueOn: shiftDate(today, number * 30 - 10), principalCents: 90_000_000, interestCents: 9_000_000, insuranceCents: 1_000_000,
           totalCents: 100_000_000, remainingCents: 300_000_000 - number * 90_000_000,
         })),
       },
@@ -22803,7 +22803,7 @@ async function payDebtsSuite(): Promise<void> {
   );
 }
 
-// RF-300 to RF-304: a loan's payment marks its own cuota paid and the loan's balance is the schedule's; what the payer of a
+// RF-300 to RF-303 and RF-308: a loan's payment marks its own cuota paid and the loan's balance is the schedule's; what the payer of a
 // credit owes is that balance and the same figure everywhere; an account is counted with its pockets, as Cuentas shows it.
 async function loanFiguresSuite(): Promise<void> {
   console.log("");

@@ -147,7 +147,7 @@ test.describe("a loan with a plan of payments and a payer", () => {
           (${loanId}, ${scope.userId}, ${loanName}, 'liability', 'loan', ${-4 * PRINCIPAL}, ${opening}),
           (${bankId2}, ${scope.userId}, ${bankName2}, 'asset', 'bank', ${50_000_000}, ${opening}),
           (${receivableId}, ${scope.userId}, ${`Me debe ${stamp}`}, 'asset', 'receivable', ${13_000_000}, ${today})`;
-      // Four cuotas: the first two fell 45 and 15 days ago, and the first was paid 10 % short.
+      // Four cuotas: the first two fell 45 and 15 days ago, and the second was paid 10 % short.
       for (const [index, offset] of [-45, -15, 15, 45].entries()) {
         await tx`
           insert into loan_schedule_rows (account_id, number, due_on, principal_cents, interest_cents, insurance_cents,
@@ -158,8 +158,8 @@ test.describe("a loan with a plan of payments and a payer", () => {
       await tx`
         insert into transactions (from_account_id, to_account_id, amount_cents, occurred_at, description)
         values
-          (${bankId2}, ${loanId}, ${FIRST_PAID}, ${addCivilDays(today, -45)}, ${`Cuota 1 ${stamp}`}),
-          (${bankId2}, ${loanId}, ${TOTAL}, ${addCivilDays(today, -15)}, ${`Cuota 2 ${stamp}`})`;
+          (${bankId2}, ${loanId}, ${TOTAL}, ${addCivilDays(today, -45)}, ${`Cuota 1 ${stamp}`}),
+          (${bankId2}, ${loanId}, ${FIRST_PAID}, ${addCivilDays(today, -15)}, ${`Cuota 2 ${stamp}`})`;
       await tx`
         insert into third_party_credits (liability_account_id, receivable_account_id, person_name, installment_cents)
         values (${loanId}, ${receivableId}, ${PAYER}, ${TOTAL})`;

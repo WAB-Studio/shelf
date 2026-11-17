@@ -1,5 +1,3 @@
-import { civilDateToDate } from "@/lib/dates";
-
 // The payment schedule a bank prints for an instalment loan (RF-264), read against the loan's payments. Only the rows
 // are stored; which are paid, the next one, what is left and every warning derive here from the rows and the payments.
 export type ScheduleRow = {
@@ -21,7 +19,7 @@ export type RowState = "paid" | "partial" | "pending";
 
 export type RowView = ScheduleRow & {
   state: RowState;
-  // What the payments that landed near the row's day add up to, interest included.
+  // What the payments that paid the row add up to, interest included.
   paidCents: number;
   // The part of `paidCents` that was interest.
   paidInterestCents: number;
@@ -29,8 +27,6 @@ export type RowView = ScheduleRow & {
   overdue: boolean;
 };
 
-// A payment belongs to the row whose day it lands within this many days of.
-export const PAYMENT_WINDOW_DAYS = 15;
 // A cuota differs from the usual one by more than this fraction of it (RF-264).
 export const DIFFERS_FRACTION = 0.05;
 // A payment that falls short of a cuota by no more than this fraction of it still pays it, and a usual payment that
@@ -57,10 +53,6 @@ export type LoanScheduleSummary = {
   differing: DifferingRow[];
 };
 
-function daysBetween(a: string, b: string): number {
-  return Math.round((civilDateToDate(a).getTime() - civilDateToDate(b).getTime()) / 86_400_000);
-}
-
 /** The middle of the figures, integer cents; the two middle ones average for an even count. 0 for none. */
 export function median(values: number[]): number {
   if (values.length === 0) return 0;
@@ -69,38 +61,26 @@ export function median(values: number[]): number {
   return sorted.length % 2 === 1 ? sorted[middle] : Math.round((sorted[middle - 1] + sorted[middle]) / 2);
 }
 
-/** The index of the row whose due day is nearest to `occurredOn`, within `PAYMENT_WINDOW_DAYS`, the earlier row on a tie; -1 for none. */
-function nearestRow(ordered: ScheduleRow[], occurredOn: string): number {
-  let best = -1;
-  let bestDistance = PAYMENT_WINDOW_DAYS + 1;
-  ordered.forEach((row, index) => {
-    const distance = Math.abs(daysBetween(occurredOn, row.dueOn));
-    if (distance < bestDistance) {
-      best = index;
-      bestDistance = distance;
-    }
-  });
-  return best;
-}
-
 // A row is paid when what landed reaches its cuota less `SHORT_FRACTION`.
 function isPaid(row: ScheduleRow, landedCents: number): boolean {
   return landedCents * 100 >= row.totalCents * (100 - SHORT_FRACTION * 100);
 }
 
 /**
- * Gives each payment to the row whose due day is nearest to it, within `PAYMENT_WINDOW_DAYS`; a payment near no row
- * (a prepayment, an old one) pays none. What a payment gives a row is its capital and the interest it booked: the
- * cuota is capital, interest and insurance together. A row is paid when what landed near it reaches its cuota less
- * `SHORT_FRACTION`, partial when something did and pending when nothing did.
+ * Gives each payment, oldest first, to the oldest row not yet paid, whatever the payment's day: a cuota paid late still
+ * pays the late row and never the next one. What a payment gives a row is its capital and the interest it booked: the
+ * cuota is capital, interest and insurance together; what it holds above the cuota is extra capital and pays no other
+ * row. A row is paid when what landed reaches its cuota less `SHORT_FRACTION`, partial when something did and pending
+ * when nothing did. Once every row is paid a payment pays none.
  */
 export function readSchedule(rows: ScheduleRow[], payments: SchedulePayment[], today: string): LoanScheduleSummary | null {
   if (rows.length === 0) return null;
   const ordered = [...rows].sort((a, b) => a.number - b.number);
   const landed = new Array<number>(ordered.length).fill(0);
   const landedInterest = new Array<number>(ordered.length).fill(0);
-  for (const payment of payments) {
-    const best = nearestRow(ordered, payment.occurredOn);
+  const inOrder = [...payments].sort((a, b) => a.occurredOn.localeCompare(b.occurredOn));
+  for (const payment of inOrder) {
+    const best = ordered.findIndex((row, index) => !isPaid(row, landed[index]));
     if (best < 0) continue;
     landed[best] += payment.amountCents + (payment.interestCents ?? 0);
     landedInterest[best] += payment.interestCents ?? 0;
@@ -131,13 +111,11 @@ export function readSchedule(rows: ScheduleRow[], payments: SchedulePayment[], t
 }
 
 /**
- * The row a payment dated `occurredOn` pays: the one the reading above gives it, when that row is not yet paid. Null
- * when it lands near no row or on a row already paid, so the payment is a prepayment and the schedule says nothing of it.
- * A payment is split by this row, so the split and the reading always agree on which cuota it belongs to.
+ * The row the next payment pays: the oldest not yet paid, the one the reading above gives it. Null once every row is
+ * paid. A payment is split by this row, so the split and the reading always agree on which cuota it belongs to.
  */
-export function rowToPay(rows: RowView[], occurredOn: string): RowView | null {
-  const index = nearestRow(rows, occurredOn);
-  return index >= 0 && rows[index].state !== "paid" ? rows[index] : null;
+export function rowToPay(rows: RowView[]): RowView | null {
+  return rows.find((row) => row.state !== "paid") ?? null;
 }
 
 /** The summary without its rows: what a list answers where the whole schedule would be noise. */

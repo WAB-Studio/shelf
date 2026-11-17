@@ -6,7 +6,7 @@ import { scopedCategoryName, type ScopeMark } from "@/lib/fund/category-names";
 import type { CategoryScope } from "@/lib/fund/category-scope";
 import { isExpectedIncome } from "@/lib/fund/glance";
 
-// A card's next payment (RF-304): what its latest statement asks and the day it is due. With no statement of this
+// A card's next payment (RF-308): what its latest statement asks and the day it is due. With no statement of this
 // period the figures are null and the day is the card's own payment day; the line says its extract is missing.
 export type UpcomingCardDebt = {
   accountId: string;
@@ -16,7 +16,7 @@ export type UpcomingCardDebt = {
   minimumCents: number | null;
 };
 
-// A loan's next cuota (RF-304): the first one its schedule has not paid in full, or what its terms say, and what of it
+// A loan's next cuota (RF-308): the first one its schedule has not paid in full, or what its terms say, and what of it
 // is still missing.
 export type UpcomingLoanDebt = {
   accountId: string;
@@ -70,7 +70,7 @@ export function upcomingItems({
   payments: PlannedPaymentRow[];
   rules: RecurringRuleRow[];
   charges: RecurringCharge[];
-  // Each card's and each loan's next payment, which no planned payment stands for (RF-304).
+  // Each card's and each loan's next payment, which no planned payment stands for (RF-308).
   debts?: ({ kind: "card"; date: string; debt: UpcomingCardDebt } | { kind: "loan"; date: string; debt: UpcomingLoanDebt })[];
 }): UpcomingItem[] {
   const ruled = new Set(

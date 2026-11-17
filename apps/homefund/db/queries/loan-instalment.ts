@@ -49,7 +49,7 @@ type LoanRead = {
  * come back in one statement; then the interest is booked as an expense of the source in that category and the
  * capital as the transfer into the loan. The loan therefore comes down by the capital alone.
  *
- * With a schedule the cuota the payment pays is the row the schedule's own reading gives it (`rowToPay`), so the row's
+ * With a schedule the cuota the payment pays is the oldest row not yet paid (`rowToPay`), whatever the payment's day, so the row's
  * interest and insurance are the interest, less what an earlier part-payment of it covered, and the loan comes down by
  * that row's capital. The interest expense carries the transfer's reference plus «:interest», which is how the schedule
  * counts it toward the cuota.
@@ -120,7 +120,7 @@ export async function recordLoanInstalment({
               owedCents: Number(read.owed_cents),
               annualRate: read.annual_rate,
               days: read.days,
-              row: schedule === null ? null : rowToPay(schedule.rows, occurredAt),
+              row: schedule === null ? null : rowToPay(schedule.rows),
             });
 
       let capitalId: string | null = null;
