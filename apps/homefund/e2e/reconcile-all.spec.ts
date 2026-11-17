@@ -136,7 +136,7 @@ test.describe("«Cuadrar todo»", () => {
       await cardRow.getByRole("button", { name: accounts.reconcileAllCupoToggle, exact: true }).click();
       await cardRow.getByRole("textbox", { name: accounts.reconcileAllCupoTotal, exact: true }).fill("5000000");
       await cardRow.getByRole("textbox", { name: accounts.reconcileAllCupoAvailable, exact: true }).fill("4800000");
-      await expect(figureField(cardRow, accounts.reconcileAllRealLiability)).toHaveValue("200.000");
+      await expect(figureField(cardRow, accounts.reconcileAllRealLiability)).toHaveValue("200000");
       expect(flat(await cardRow.innerText())).toContain(`${MINUS}${peso(100_000)}`);
 
       // Nothing is written until the one button.
@@ -199,7 +199,7 @@ test.describe("«Cuadrar todo»", () => {
       await page.getByRole("button", { name: submitLabel(2), exact: true }).click();
       await expect(rowOf(page, savings).getByText(accounts.reconcileAllStale, { exact: true })).toBeVisible();
       await expect(page).toHaveURL(/\/settings\/accounts\/reconcile$/);
-      await expect(figureField(rowOf(page, card), accounts.reconcileAllRealLiability)).toHaveValue("250.000");
+      await expect(figureField(rowOf(page, card), accounts.reconcileAllRealLiability)).toHaveValue("250000");
       expect(await countsOf(card)).toEqual([]);
       expect(await countsOf(savings)).toEqual([]);
     } finally {
