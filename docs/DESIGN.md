@@ -934,3 +934,33 @@ construye con estas palabras, sin tablero previo, y se refina con lo construido.
   franja ámbar bajo la cuenta dice «Se tomarán $300.000 de Viajes» antes de guardar. Al guardar, el aviso ofrece «Deshacer».
 - **Una transferencia se lee con palabras de persona.** En Movimientos, Inicio y el detalle: «Pago cuota Lulo», «Pago tarjeta
   Visa», «John te pagó la cuota», y «Entre mis cuentas» para lo demás. «Traspaso» ya no sale en pantalla.
+
+## Decisión del 2026-11-17: Inicio en líneas cortas, por el usuario
+
+Las palabras primero. Quien abre Inicio contesta en voz alta, sin saber cómo está hecha la app: ¿cuánto tengo?, ¿qué pago este mes?,
+¿en qué se me fue?, ¿hay algo por arreglar?, ¿qué viene? Cada línea es una frase corta con su cifra y cada cifra dice de dónde sale.
+
+- **Tienes.** La cifra grande de la tarjeta oscura dice «Tienes en tus cuentas» y es lo que hay en las cuentas que la persona ve (un
+  bolsillo cuenta una vez con su cuenta; lo que otros le deben no entra). El patrimonio va debajo, pequeño, como un botón «Patrimonio
+  $4.894.500 · ver la resta» que abre «Cómo sale tu patrimonio»: lo que tienes en tus cuentas, lo que te deben (solo si algo), lo que
+  debes en tarjetas y créditos, y el patrimonio. Dos monedas, dos cifras: nunca se suman.
+- **Este mes pagas $X.** Una tarjeta con título y debajo una línea por cada pago, la más próxima primero, cada una un enlace: «Visa
+  $3.148.800 el 20 nov (mínimo $310.000)». La tarjeta que no tiene extracto de este mes dice «Mastercard el 25 nov: falta su extracto» y
+  una nota gris «Sin contar lo que pidan los extractos que faltan». En el celular y en el escritorio por igual. Sin pagos: «Este mes no
+  tienes pagos por hacer.»
+- **Te deben.** Un lugar entre «Este mes pagas» y «En <mes> gastaste», que dibuja otro carril; mientras no lo dibuja, no hay nada.
+- **En noviembre gastaste $X.** Con las tres categorías más grandes en una línea gris, «Arriendo $1.400.000 · Mercado $478.000», y el
+  enlace «Ver reportes». Reemplaza la barra «El mes de un vistazo».
+- **Por arreglar.** Una tarjeta solo con lo que existe, cada línea un enlace a su arreglo: «Emergencias gastó $150.000 más de lo que
+  tenía» (a Cuentas, donde está «Pasar $150.000 desde Ahorros»), «Nequi está por debajo de cero: −$16.000», «2 avisos por revisar en la
+  Bandeja», «Lulo: 2 cuotas quedaron cortas por $7.612» y «3 cuentas sin cuadrar hace más de un mes · Cuadrar todo». Sin nada raro no se
+  dibuja. «Revisar el mes» abre el mes en curso con esta misma lista arriba.
+- **Viene.** El próximo ingreso esperado y el próximo gasto, «Ingreso de $800.000 (Cliente) el 28 nov», «Arriendo $1.400.000 el 5 dic».
+  Sin ninguno de los dos no se dibuja.
+- **Ajuste por cuadre.** Así se llama, en toda la app, lo que antes se llamaba «Diferencia» al cuadrar. La cifra del mes en Inicio es un
+  botón que abre cada cuenta con lo que su cuadre movió: «Nequi +$28.000», «Efectivo −$17.000». No sale en los últimos movimientos.
+- **Cuentas.** «Lo que tengo» es la suma de las filas que se ven. «Libre» nunca es mayor que el total y no se dibuja mientras un
+  bolsillo esté en negativo. Un bolsillo en negativo dice, en rojo, «Gastó $150.000 más de lo que tenía» y un botón «Pasar $150.000 desde
+  Ahorros» que lo mueve de un toque. En el celular, «Saldo inicial … el 1/10/2026» dice su fecha en la primera tarjeta de cada fecha.
+- **Chicos.** Sin fondo no hay «Aportes del mes». «Crear cuenta» de un Inicio vacío abre el formulario. «Crear un fondo» lleva debajo
+  «Un fondo es una cuenta compartida: invitas a otras personas y llevan juntos los gastos del hogar.»

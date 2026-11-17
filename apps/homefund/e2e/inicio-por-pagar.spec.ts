@@ -65,8 +65,12 @@ test.afterEach(async () => {
   created = [];
 });
 
+// The card's own rows: «Este mes pagas» and «Viene» may name the same payment in their lines.
 function rows(page: Page, name: string) {
-  return page.getByRole("link").filter({ hasText: `${name} ${stamp}` });
+  return heading(page)
+    .locator("xpath=ancestor::*[contains(@class, 'rt-Card')][1]")
+    .getByRole("link")
+    .filter({ hasText: `${name} ${stamp}` });
 }
 
 function heading(page: Page) {

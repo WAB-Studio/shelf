@@ -32,3 +32,16 @@ export function holdsMoneyApartFromPockets(own: Balance[], total: Balance[] | un
   if (!total) return false;
   return total.some((all) => (own.find((part) => part.currency === all.currency)?.balanceCents ?? 0) !== all.balanceCents);
 }
+
+/**
+ * The account's own part to show beside its total, or none: a part that is no line of its own (it is the total) or
+ * that is greater than the total never shows, since a pocket below zero takes the difference and «Libre» must read
+ * as part of the whole.
+ */
+export function freePartToShow(own: Balance[], total: Balance[] | undefined): Balance | undefined {
+  if (!holdsMoneyApartFromPockets(own, total)) return undefined;
+  const [free] = own;
+  const whole = total?.find((all) => all.currency === free?.currency);
+  if (!free || !whole || free.balanceCents > whole.balanceCents) return undefined;
+  return free;
+}

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { holdsMoneyApartFromPockets, nameCarriesHolder } from "./account-detail";
+import { freePartToShow, holdsMoneyApartFromPockets, nameCarriesHolder } from "./account-detail";
 
 test("a name that already says its holder is recognised without case or accents", () => {
   assert.equal(nameCarriesHolder("Mamá — BBVA", "Mamá"), true);
@@ -24,4 +24,13 @@ test("the free part is a line only when it differs from the total", () => {
   assert.equal(holdsMoneyApartFromPockets(cop(100), cop(250)), true);
   assert.equal(holdsMoneyApartFromPockets([], cop(250)), true);
   assert.equal(holdsMoneyApartFromPockets([], []), false);
+});
+
+test("«Libre» never reads greater than the total: a pocket below zero takes the line away", () => {
+  const free = [{ currency: "COP", balanceCents: 905_100_000 }];
+
+  assert.deepEqual(freePartToShow(free, [{ currency: "COP", balanceCents: 800_000_000 }]), undefined);
+  assert.deepEqual(freePartToShow(free, [{ currency: "COP", balanceCents: 905_100_000 }]), undefined);
+  assert.deepEqual(freePartToShow(free, [{ currency: "COP", balanceCents: 950_000_000 }]), free[0]);
+  assert.deepEqual(freePartToShow(free, undefined), undefined);
 });
