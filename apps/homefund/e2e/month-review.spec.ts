@@ -46,8 +46,8 @@ test.beforeEach(async () => {
     await tx`
       insert into categories (id, owner_user_id, name, kind, color)
       values (${categoryId}, ${scope.userId}, ${`Mercado ${stamp}`}, 'expense', '#8C4A4A')`;
-    // Three months of a usual 100.000, then 400.000: far above it.
-    for (const n of [4, 3, 2]) await spend(tx, 10_000_000, `${before(n)}-10`, categoryId);
+    // Four months of a usual 100.000 under one description, then 400.000: far above it.
+    for (const n of [5, 4, 3, 2]) await spend(tx, 10_000_000, `${before(n)}-10`, categoryId);
     ids.big = await spend(tx, 40_000_000, `${month}-10`, categoryId);
     ids.twinA = await spend(tx, 5_000_000, `${month}-15`, scope.categoryId);
     ids.twinB = await spend(tx, 5_000_000, `${month}-15`, scope.categoryId);
@@ -77,7 +77,9 @@ for (const width of [360, 1280]) {
     await page.goto(`/es/reports/review?month=${month}`);
     await expect(page.getByRole("heading", { level: 1, name: /^Revisar / })).toBeVisible();
     await expect(page.getByText("¿Es correcto este monto?")).toBeVisible();
-    await expect(page.getByText(/Lo usual en Mercado .*:\s\$\s100\.000\s\(mediana de los últimos 6 meses\)/)).toBeVisible();
+    await expect(
+      page.getByText(/Tus gastos en «Revisión [0-9a-f]{8}» suelen ser de \$\s100\.000, según 4 veces en los últimos 6 meses\./),
+    ).toBeVisible();
     await expect(page.getByText("¿Se registró dos veces?")).toHaveCount(1);
     await expect(page.getByText("2 movimientos iguales")).toBeVisible();
     await expect(page.getByText("¿Leímos bien este monto?")).toBeVisible();
