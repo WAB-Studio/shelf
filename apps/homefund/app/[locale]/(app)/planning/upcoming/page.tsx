@@ -6,7 +6,6 @@ import { notFound } from "next/navigation";
 import { UpcomingScreen } from "@/components/planning/upcoming-screen";
 import { Page } from "@/components/ui";
 import { getDebtsScreenData } from "@/db/queries/debts-screen";
-import { getUserGroup } from "@/db/queries/groups";
 import { getUpcomingDebts } from "@/db/queries/home-lines";
 import { listPlannedPayments } from "@/db/queries/planned-payments";
 import {
@@ -34,13 +33,12 @@ export default async function UpcomingPage(
   const { locale } = await props.params;
   if (!hasLocale(routing.locales, locale)) notFound();
 
-  const [payments, rules, charges, unreviewedCount, options, group, debts, debtsData] = await Promise.all([
+  const [payments, rules, charges, unreviewedCount, options, debts, debtsData] = await Promise.all([
     listPlannedPayments({ status: "pending" }),
     listRecurringRules(),
     listRecurringCharges(),
     countUnreviewedGenerated(),
     getTransactionFormOptions(),
-    getUserGroup(),
     getUpcomingDebts(),
     getDebtsScreenData({ withoutForeign: true }),
   ]);
@@ -55,7 +53,6 @@ export default async function UpcomingPage(
         payment={{ withTerms: debtsData.withTerms, withoutTerms: debtsData.withoutTerms, payFrom: debtsData.payFrom }}
         unreviewedCount={unreviewedCount}
         options={options}
-        hasGroup={group !== null}
       />
     </Page>
   );

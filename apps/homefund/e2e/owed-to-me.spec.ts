@@ -73,6 +73,13 @@ test("spending for a charged person and noting his return shows what is still ow
     await expect(dialog.getByText(owed.breakdownOwes, { exact: true })).toBeVisible();
     await expect(dialog.getByText(/Te devolvió el/)).toBeVisible();
 
+    // «Registrar pago» opens the movement form on «Ingreso» with «Te lo devolvió» already naming the person.
+    await dialog.getByRole("button", { name: owed.breakdownRegisterPayment, exact: true }).click();
+    const form = page.getByRole("dialog");
+    await expect(form.getByRole("radio", { name: messages.transactions.kindIncome, exact: true })).toBeChecked();
+    await expect(form.locator("#movement-for-person")).toContainText(carlos);
+    await page.keyboard.press("Escape");
+
     await page.goto("/es/settings/accounts");
     await expect(page.getByRole("region", { name: owed.sectionTitle })).toContainText(carlos);
   } finally {

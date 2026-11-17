@@ -13,6 +13,8 @@ import type { TransactionFormOptions } from "@/db/queries/transaction-form";
 type MovementEntry = {
   // The one movement form, expense tab first (RF-272): the FAB's one tap, no page change.
   openForm: () => void;
+  // The same form on «Ingreso» with «Te lo devolvió» already naming the person, for a friend's payment back.
+  openReturn: (personId: string) => void;
 };
 
 const MovementEntryContext = createContext<MovementEntry | null>(null);
@@ -39,8 +41,21 @@ export function MovementEntryProvider({
 }) {
   const t = useTranslations("transactions");
   const [open, setOpen] = useState(false);
+  const [returnedBy, setReturnedBy] = useState<string | null>(null);
 
-  const value = useMemo<MovementEntry>(() => ({ openForm: () => setOpen(true) }), []);
+  const value = useMemo<MovementEntry>(
+    () => ({
+      openForm: () => {
+        setReturnedBy(null);
+        setOpen(true);
+      },
+      openReturn: (personId) => {
+        setReturnedBy(personId);
+        setOpen(true);
+      },
+    }),
+    [],
+  );
 
   return (
     <MovementEntryContext.Provider value={value}>
@@ -52,7 +67,14 @@ export function MovementEntryProvider({
             <Dialog.Title>{t("formTitle")}</Dialog.Title>
           </VisuallyHidden>
           {/* Closing unmounts the content, so the form is born fresh each open. */}
-          {open && <MovementForm mode="create" options={options} onDone={() => setOpen(false)} />}
+          {open && (
+            <MovementForm
+              mode="create"
+              options={options}
+              defaults={returnedBy === null ? undefined : { tab: "income", forPersonId: returnedBy }}
+              onDone={() => setOpen(false)}
+            />
+          )}
         </Dialog.Content>
       </Dialog.Root>
     </MovementEntryContext.Provider>

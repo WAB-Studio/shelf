@@ -197,6 +197,33 @@ export function onlyBankAccount(text: string, accounts: readonly AccountOption[]
   return found.length === 1 ? found[0].id : null;
 }
 
+// A bank's words for a credit card: «T.Cred *1234», «tarjeta crédito 1234», «tarjeta de crédito».
+const CREDIT_CARD_WORDS = /\b(?:t\.?\s?cred|tarjeta\s+(?:de\s+)?cr[eé]dito)/iu;
+
+export type CardPurchaseOption = { id: string; subtype: string; lastFour?: string | null };
+
+/**
+ * Whether the text is a bank's card purchase, and the card it names. Only a card whose last four match the
+ * ending the message gives is proposed; with none, or the ending unknown, the person picks. A loan or any other
+ * debt is never proposed: a card's word («Cred») also starts the name «Crédito carro».
+ */
+export function cardPurchase(
+  text: string,
+  tails: ReadonlySet<string>,
+  accounts: readonly CardPurchaseOption[],
+  defaultAccountId: string | null,
+): { isCard: false } | { isCard: true; accountId: string | null } {
+  if (!CREDIT_CARD_WORDS.test(text)) return { isCard: false };
+
+  const cards = accounts.filter((account) => account.subtype === "card");
+  if (tails.size === 0) {
+    return { isCard: true, accountId: cards.find((card) => card.id === defaultAccountId)?.id ?? null };
+  }
+
+  const named = cards.filter((card) => card.lastFour && tails.has(card.lastFour));
+  return { isCard: true, accountId: named.length === 1 ? named[0].id : null };
+}
+
 // The payee a payment names: «Pagaste $X a NU Compañía de Financiamiento desde…», or a receipt's «Empresa: …».
 function payeeOf(text: string): string | null {
   return PAID_TO.exec(flatten(text))?.[1] ?? emailMerchant(flatten(text));

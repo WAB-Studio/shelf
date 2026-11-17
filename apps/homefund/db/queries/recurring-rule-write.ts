@@ -155,7 +155,7 @@ export async function resumeRecurringRule(id: string): Promise<void> {
  * Lets the coming run pass: the next run moves one period on and nothing is booked for the one skipped. The row
  * is written back as it was read, quoting its stamp, so a run or an edit that landed first refuses it as stale.
  */
-export async function skipRecurringRule(id: string): Promise<void> {
+export async function skipRecurringRule(id: string): Promise<{ previousRunOn: string }> {
   const rule = (await listRecurringRules()).find((one) => one.id === id);
   if (!rule) throw new ActionError("errors.notFound");
 
@@ -171,6 +171,28 @@ export async function skipRecurringRule(id: string): Promise<void> {
       nextRunOn,
       expectedUpdatedAt: rule.updatedAt,
     });
+  } catch (error) {
+    mapRecurringRuleError(error);
+  }
+
+  if (outcome === "stale") throw new ActionError("errors.stale");
+  if (outcome === "missing") throw new ActionError("errors.notFound");
+
+  return { previousRunOn: rule.nextRunOn };
+}
+
+/**
+ * Takes a skip back: the next run returns to the day it had, only while one skip from there lands where the rule
+ * stands now, so a run or an edit that came after leaves the rule alone.
+ */
+export async function undoSkipRecurringRule(id: string, nextRunOn: string): Promise<void> {
+  const rule = (await listRecurringRules()).find((one) => one.id === id);
+  if (!rule) throw new ActionError("errors.notFound");
+  if (dateAfterSkip({ ...rule, nextRunOn }) !== rule.nextRunOn) throw new ActionError("errors.stale");
+
+  let outcome: Awaited<ReturnType<typeof updateRecurringRule>>;
+  try {
+    outcome = await updateRecurringRule({ ...rule, nextRunOn, expectedUpdatedAt: rule.updatedAt });
   } catch (error) {
     mapRecurringRuleError(error);
   }

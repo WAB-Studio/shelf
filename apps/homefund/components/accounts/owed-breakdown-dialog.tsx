@@ -2,6 +2,7 @@
 
 import { useFormatter, useLocale, useTranslations } from "next-intl";
 
+import { useMovementEntry } from "@/components/transactions/movement-entry-provider";
 import { Button, Dialog, Flex, Money, Separator, Text } from "@/components/ui";
 import type { CurrencyCode } from "@/lib/currency";
 import { civilDateToDate } from "@/lib/dates";
@@ -17,6 +18,7 @@ import { useMoneyText } from "@/lib/use-privacy";
  */
 export function OwedBreakdownDialog({ person, onOpenChange }: { person: OwedPerson; onOpenChange: (open: boolean) => void }) {
   const t = useTranslations("owedToMe");
+  const { openReturn } = useMovementEntry();
   const format = useFormatter();
   const locale = useLocale() as Locale;
   const moneyText = useMoneyText();
@@ -75,7 +77,20 @@ export function OwedBreakdownDialog({ person, onOpenChange }: { person: OwedPers
             </>
           )}
         </Flex>
-        <Flex justify="end" mt="4">
+        <Flex justify="end" gap="3" mt="4">
+          {/* Only a friend «se le cobra» pays back by an income; a credit somebody else pays is paid to the bank. */}
+          {!credit && person.labelId !== null && (
+            <Button
+              type="button"
+              onClick={() => {
+                const labelId = person.labelId as string;
+                onOpenChange(false);
+                openReturn(labelId);
+              }}
+            >
+              {t("breakdownRegisterPayment")}
+            </Button>
+          )}
           <Dialog.Close>
             <Button type="button" variant="soft" color="gray">
               {t("breakdownClose")}

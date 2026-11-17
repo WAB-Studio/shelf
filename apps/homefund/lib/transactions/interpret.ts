@@ -123,6 +123,8 @@ interface QuickEntryProposal {
   ask: AmountAsk | null;
   categoryId: string | null;
   description: string;
+  // A typed phrase without the figure, currency, day and instalments read from it; the category and account words stay.
+  phrase: string;
   accountId: string | null;
   direction: "income" | "expense" | null;
   occurredAt: string | null;
@@ -497,6 +499,8 @@ export function interpretQuickEntry(
       amountEnd + ((isAsk ? tokenMatch : multiplierMatch)?.[0].length ?? 0);
     description = `${text.slice(0, amountMatch.index)} ${text.slice(cutEnd)}`;
   }
+  // The words as typed, minus the figures read from them: the category and account words stay.
+  let phrase = description;
   if (matchedCategory && !remembered && !merchant) {
     const token = namedCategoryWord ?? matchedCategory.name.trim();
     description = description.replace(new RegExp(escapeRegExp(token), "i"), " ");
@@ -514,14 +518,18 @@ export function interpretQuickEntry(
   const currency = currencyWord
     ? ((CURRENCY_OF_WORD.find(([pattern]) => pattern.test(currencyWord))?.[1] ?? null) as "USD" | "EUR" | null)
     : null;
-  if (typed) {
-    description = description.replace(new RegExp(CURRENCY_WORD.source, "giu"), " ");
-    if (amountMatch) description = description.replace(/\$\s*(?=\s|$)/u, " ");
-    description = description.replace(INSTALMENTS_PATTERN, " ");
+  const dropReadWords = (value: string): string => {
+    if (!typed) return value;
+    let kept = value.replace(new RegExp(CURRENCY_WORD.source, "giu"), " ");
+    if (amountMatch) kept = kept.replace(/\$\s*(?=\s|$)/u, " ");
+    kept = kept.replace(INSTALMENTS_PATTERN, " ");
     if (readOccurredAt(text, ctx.today) !== null) {
-      for (const pattern of DATE_WORDS_IN_TEXT) description = description.replace(pattern, " ");
+      for (const pattern of DATE_WORDS_IN_TEXT) kept = kept.replace(pattern, " ");
     }
-  }
+    return kept;
+  };
+  description = dropReadWords(description);
+  phrase = dropReadWords(phrase).replace(/\s+/g, " ").trim();
   description = description.replace(/\s+/g, " ").trim();
 
   return {
@@ -530,6 +538,7 @@ export function interpretQuickEntry(
     ask,
     categoryId: matchedCategory?.id ?? null,
     description,
+    phrase,
     // A uniquely named bank tail outranks the last-used fallback (RF-97, RF-22).
     accountId: matchedAccountId ?? ctx.defaultAccountId,
     direction,
