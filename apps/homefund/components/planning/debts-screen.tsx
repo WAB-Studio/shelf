@@ -312,6 +312,12 @@ export function DebtsScreen({
         note:
           nextPayment === null
             ? t("tileNoNextPayment")
+            : nextPayment.instalmentNumber !== undefined
+              ? t(nextPayment.date < todayInBogota() ? "tileNextPaymentOverdueInstalment" : "tileNextPaymentInstalment", {
+                  number: nextPayment.instalmentNumber,
+                  date: shortDate(nextPayment.date),
+                  name: nextPayment.name,
+                })
             : t(nextPayment.amountCents === null ? "tileNextPaymentNoMinimum" : "tileNextPaymentNote", {
                 date: shortDate(nextPayment.date),
                 name: nextPayment.name,

@@ -7,6 +7,7 @@ import { Callout } from "@/components/ui";
 import type { CurrencyCode } from "@/lib/currency";
 import type { Locale } from "@/lib/locales";
 import type { PocketCover } from "@/lib/pocket-cover";
+import { signPrefix } from "@/lib/money";
 import { useMoneyText } from "@/lib/use-privacy";
 
 // What a movement will draw from an account's pockets, as one phrase: «$300.000 de Viajes y $50.000 de
@@ -57,7 +58,7 @@ export function OverdraftNotice({
         <InfoIcon size={16} />
       </Callout.Icon>
       <Callout.Text>
-        {t("overdraftNotice", { account: accountName, amount: moneyText(balanceCents, currency, locale) })}
+        {t("overdraftNotice", { account: accountName, amount: `${signPrefix(balanceCents)}${moneyText(balanceCents, currency, locale)}` })}
       </Callout.Text>
     </Callout.Root>
   );

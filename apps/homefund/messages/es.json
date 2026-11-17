@@ -1410,6 +1410,8 @@
     "tileNoNextPayment": "Sin cuotas programadas",
     "tileMonthlyInterestNote": "{pct} del saldo",
     "tileNextPayment": "Próximo pago",
+    "tileNextPaymentInstalment": "Cuota {number} · {date} · {name}",
+    "tileNextPaymentOverdueInstalment": "Cuota {number} vencida · {date} · {name}",
     "tileNextPaymentNote": "{date} · {name}",
     "tileNextPaymentNoMinimum": "{date} · {name} · Sin mínimo: registra el extracto",
     "tileAvailableCredit": "Cupo disponible",

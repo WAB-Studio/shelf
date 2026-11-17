@@ -363,7 +363,8 @@ export default async function HomePage(props: PageProps<"/[locale]">) {
     inboxCount: dashboardData.inboxPendingCount,
     shortLoans: shortLoans ?? [],
     overdueLoans: (ahead?.loans ?? [])
-      .filter((loan) => loan.dueDate < today && loan.number !== null)
+      // A loan's first late cuota is the one Inicio asks to fix; the next ones follow it.
+      .filter((loan, index, all) => loan.dueDate < today && loan.number !== null && all.findIndex((one) => one.accountId === loan.accountId) === index)
       .map((loan) => ({ accountId: loan.accountId, name: loan.name, number: loan.number!, amountCents: loan.amountCents, dueOn: loan.dueDate, currency: loan.currency })),
     staleCount,
   });

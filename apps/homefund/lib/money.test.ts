@@ -9,6 +9,7 @@ import {
   amountToInput,
   formatCompactMoney,
   formatMoney,
+  formatSignedMoney,
   maxAmountMinor,
   parseAmount,
   pesosToCents,
@@ -227,4 +228,10 @@ test("centsToDecimal writes the stored integer's digits without dividing", () =>
   assert.equal(centsToDecimal(115), "1.15");
   assert.equal(centsToDecimal(9_999_999_999_999), "99999999999.99");
   assert.equal(Number(centsToDecimal(435)), 4.35);
+});
+
+test("formatSignedMoney keeps the minus of a negative balance and leaves formatMoney alone", () => {
+  assert.match(formatSignedMoney(-331_567_00, "COP", "es"), /^\u2212\$\s?331\.567$/);
+  assert.equal(formatSignedMoney(331_567_00, "COP", "es"), formatMoney(331_567_00, "COP", "es"));
+  assert.equal(formatMoney(-331_567_00, "COP", "es"), formatMoney(331_567_00, "COP", "es"));
 });

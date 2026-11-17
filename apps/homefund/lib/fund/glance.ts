@@ -52,6 +52,8 @@ export type DueDebt = {
   // What was paid this period covers its minimum: nothing is due on this debt until the next one.
   minimumPaid?: boolean;
   nextDueDate: string | null;
+  // A loan's first cuota not paid in full; it names the next payment instead of a card's statement date.
+  nextInstalment?: { number: number; dueOn: string; amountCents: number } | null;
 };
 
 export type NextDebtPayment = {
@@ -60,6 +62,8 @@ export type NextDebtPayment = {
   // Null while no minimum is known: a payment's due date without its figure, never a zero.
   amountCents: number | null;
   date: string;
+  // Set when the payment is a loan's cuota: its number, so the screen says «Cuota 3» and not a statement.
+  instalmentNumber?: number;
 };
 
 // The earliest payment among the debts that owe something: the one the debts screen
@@ -69,13 +73,16 @@ export function nextDebtPayment<T extends DueDebt>(
 ): (NextDebtPayment & { row: T }) | null {
   let next: (NextDebtPayment & { row: T }) | null = null;
   for (const row of rows) {
-    if (row.nextDueDate === null || row.owedCents <= 0 || row.minimumPaid) continue;
-    if (next !== null && next.date <= row.nextDueDate) continue;
+    const cuota = row.nextInstalment ?? null;
+    const date = cuota?.dueOn ?? row.nextDueDate;
+    if (date === null || row.owedCents <= 0 || (cuota === null && row.minimumPaid)) continue;
+    if (next !== null && next.date <= date) continue;
     next = {
       accountId: row.accountId,
       currency: row.currency,
-      amountCents: row.minimumPaymentCents,
-      date: row.nextDueDate,
+      amountCents: cuota?.amountCents ?? row.minimumPaymentCents,
+      date,
+      ...(cuota ? { instalmentNumber: cuota.number } : {}),
       row,
     };
   }

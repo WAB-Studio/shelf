@@ -151,7 +151,7 @@ export async function getHomeAhead(): Promise<HomeAhead> {
 
   return {
     cards,
-    loans: instalmentsOf(loanRows, today).filter((loan) => loan.dueDate < endExclusive),
+    loans: instalmentsOf(loanRows, today, endExclusive).filter((loan) => loan.dueDate < endExclusive),
     payments: outgoing.filter((payment) => payment.dueDate < endExclusive).map(view),
     nextIncome: nextIncome ? view(nextIncome) : null,
     nextBill: nextBill ? view(nextBill) : null,
@@ -191,10 +191,23 @@ export type UpcomingDebts = {
 
 // Each loan's next cuota: the first its schedule has not paid in full, less what already landed on it; with no
 // schedule, the cuota and day its terms name. A loan with no day to name is left out.
-function instalmentsOf(loanRows: LoanRow[], today: string): UpcomingDebts["loans"] {
+// With `before`, every cuota unpaid in full that falls due before that day, a late one included: a loan can owe
+// two in one month, and the month's figure counts each.
+function instalmentsOf(loanRows: LoanRow[], today: string, before?: string): UpcomingDebts["loans"] {
   return loanRows.flatMap((row): UpcomingDebts["loans"] => {
     const base = { accountId: row.id, name: row.name, currency: row.currency };
     const schedule = scheduleOf(row.rows, row.payments);
+    if (schedule !== null && before !== undefined) {
+      return schedule.rows
+        .filter((cuota) => cuota.state !== "paid" && cuota.dueOn < before)
+        .map((cuota) => ({
+          ...base,
+          dueDate: cuota.dueOn,
+          amountCents: cuota.totalCents - cuota.paidCents,
+          number: cuota.number,
+          count: schedule.count,
+        }));
+    }
     if (schedule !== null) {
       const { next } = schedule;
       if (next === null) return [];

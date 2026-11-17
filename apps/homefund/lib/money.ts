@@ -262,6 +262,19 @@ export function formatMoney(
 }
 
 /**
+ * The minus a negative figure is drawn with: `formatMoney` takes a magnitude and
+ * never writes one. Empty for zero and positives.
+ */
+export function signPrefix(minor: number): string {
+  return minor < 0 ? "\u2212" : "";
+}
+
+/** `formatMoney` with the sign of a balance that may be below zero. */
+export function formatSignedMoney(minor: number, currency: CurrencyCode, locale: Locale): string {
+  return `${signPrefix(minor)}${formatMoney(minor, currency, locale)}`;
+}
+
+/**
  * A magnitude in the short form a chart label has room for («$ 2,6 M»): display
  * only, never read back. Takes the same magnitude `formatMoney` does.
  */

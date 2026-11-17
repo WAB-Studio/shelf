@@ -1410,6 +1410,8 @@
     "tileNoNextPayment": "No scheduled installments",
     "tileMonthlyInterestNote": "{pct} of the balance",
     "tileNextPayment": "Next payment",
+    "tileNextPaymentInstalment": "Instalment {number} · {date} · {name}",
+    "tileNextPaymentOverdueInstalment": "Instalment {number} overdue · {date} · {name}",
     "tileNextPaymentNote": "{date} · {name}",
     "tileNextPaymentNoMinimum": "{date} · {name} · No minimum: record the statement",
     "tileAvailableCredit": "Available credit",

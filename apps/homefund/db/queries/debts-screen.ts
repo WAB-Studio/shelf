@@ -47,6 +47,8 @@ export type DebtsScreenData = {
       // What the paying debt bills in, so the figure is drawn in it.
       currency: CurrencyCode;
       date: string;
+      // A loan's cuota number when the payment is one.
+      instalmentNumber?: number;
       name: string;
     } | null;
   };
@@ -309,6 +311,7 @@ export async function getDebtsScreenData(
           amountCents: next.amountCents,
           currency: next.row.currency,
           date: next.date,
+          instalmentNumber: next.instalmentNumber,
           name: next.row.name,
         };
 

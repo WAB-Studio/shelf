@@ -76,7 +76,7 @@ export type PaymentDebt = {
 };
 
 // The debt a list row pays, as the dialog reads it. The list holds no payment schedule, so a loan's
-// instalment is the fixed minimum its terms name.
+// instalment is its schedule's next cuota, as «Lo que viene» reads it, else the fixed minimum its terms name.
 export function paymentDebtOf(row: {
   accountId: string;
   name: string;
@@ -97,7 +97,13 @@ export function paymentDebtOf(row: {
     minimumPaid: terms?.minimumPaid ?? false,
     totalDueCents: terms?.totalDueCents ?? row.owedCents,
     ...(row.subtype === "loan"
-      ? { loan: { hasSchedule: false, hasRate: terms !== null, instalmentCents: terms?.minimumPaymentCents ?? null } }
+      ? {
+          loan: {
+            hasSchedule: terms?.nextInstalment != null,
+            hasRate: terms !== null,
+            instalmentCents: terms?.nextInstalment?.amountCents ?? terms?.minimumPaymentCents ?? null,
+          },
+        }
       : {}),
   };
 }

@@ -40,7 +40,7 @@ export function PaysLine({
 
   const rows = [
     ...ahead.cards.map((card) => ({ kind: "card" as const, key: card.accountId, dueDate: card.dueDate, card })),
-    ...ahead.loans.map((loan) => ({ kind: "loan" as const, key: loan.accountId, dueDate: loan.dueDate, loan })),
+    ...ahead.loans.map((loan) => ({ kind: "loan" as const, key: `${loan.accountId}:${loan.number ?? 0}`, dueDate: loan.dueDate, loan })),
     ...ahead.payments.map((payment) => ({ kind: "payment" as const, key: payment.id, dueDate: payment.dueDate, payment })),
   ].sort((a, b) => a.dueDate.localeCompare(b.dueDate));
 
