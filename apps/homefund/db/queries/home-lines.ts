@@ -5,6 +5,7 @@ import { sql } from "drizzle-orm";
 import { listReconcileAges } from "@/db/queries/account-reconciliations";
 import { listAccounts } from "@/db/queries/accounts";
 import { countInboxPending } from "@/db/queries/ingest-review";
+import { minimumPaidSql, paidSince, periodStartSql } from "@/db/queries/debt-minimum";
 import { listPlannedPayments } from "@/db/queries/planned-payments";
 import { scheduleOf, scheduleRowsSql, schedulePaymentsSql, type RawPayment, type RawRow } from "@/db/queries/loan-schedule";
 import { withUserDb } from "@/db/session";
@@ -45,12 +46,15 @@ type CardRow = {
   closing_cents: string | null;
   minimum_cents: string | null;
   payment_due_day: number | null;
+  // What was paid this period covers its minimum (RF-281): the card asks nothing more this month.
+  minimum_paid: boolean;
 };
 
 /**
  * What Inicio says about the month's payments and what comes next, in two parallel reads: each card that still owes
  * with its latest statement's total and due date, and the pending planned payments (RF-74). A statement counts only
  * while its due date falls in this month or later; an older one is not this month's, so the card asks for its extract.
+ * A card whose minimum is already paid is left out (RF-281).
  */
 export async function getHomeAhead(): Promise<HomeAhead> {
   const today = todayInBogota();
@@ -61,14 +65,27 @@ export async function getHomeAhead(): Promise<HomeAhead> {
       tx.execute<CardRow>(sql`
         select a.id as account_id, a.settlement_currency as currency, (-b.balance_cents)::text as owed_cents,
           ls.payment_due_date::text as due_date, ls.closing_balance_cents::text as closing_cents,
-          ls.minimum_payment_cents::text as minimum_cents, dt.payment_due_day
+          ls.minimum_payment_cents::text as minimum_cents, dt.payment_due_day,
+          ${minimumPaidSql({
+            fixed: sql`dt.minimum_payment_cents`,
+            pct: sql`dt.minimum_payment_pct`,
+            balance: sql`b.balance_cents`,
+            statementMinimum: sql`ls.minimum_payment_cents`,
+            paid: sql`pp.paid`,
+          })} as minimum_paid
         from accounts a
         join debt_terms dt on dt.account_id = a.id
         join account_balances b on b.id = a.id and b.currency = a.settlement_currency
         left join lateral (
-          select s.payment_due_date, s.closing_balance_cents, s.minimum_payment_cents
+          select s.cut_off_date, s.payment_due_date, s.closing_balance_cents, s.minimum_payment_cents
           from account_statements s where s.account_id = a.id order by s.cut_off_date desc limit 1
         ) ls on true
+        cross join lateral (select ${periodStartSql({
+          statementCutOff: sql`ls.cut_off_date`,
+          cutOffDay: sql`dt.statement_cut_off_day`,
+          today,
+        })} as since) ps
+        cross join lateral (select ${paidSince({ account: sql`a.id`, currency: sql`a.settlement_currency`, since: sql`ps.since` })} as paid) pp
         where a.kind = 'liability' and a.subtype = 'card' and a.archived_at is null and b.balance_cents < 0
           -- Another member's personal card is theirs to pay (RF-58).
           and (a.owner_user_id is null or a.owner_user_id = (select auth.uid()))
@@ -78,6 +95,8 @@ export async function getHomeAhead(): Promise<HomeAhead> {
   ]);
 
   const cards = cardRows.flatMap((row): ToPayCard[] => {
+    // A card whose minimum is paid asks nothing more this month: the line leaves it out.
+    if (row.minimum_paid) return [];
     const counts = row.due_date !== null && row.due_date >= start;
     const dueDate = counts
       ? row.due_date

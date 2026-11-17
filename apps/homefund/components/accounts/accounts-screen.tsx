@@ -287,13 +287,11 @@ export function AccountsScreen({
     ];
   }
 
-  // «Lo que tengo» is the sum of the asset rows on screen, nothing hidden. What a person who pays a credit still owes is
-  // money the person has coming, but its «Me debe» is hidden: it joins the net alone, so the net still reads assets
-  // minus credit plus that (RF-216) while «Lo que tengo» adds up from the rows a person can see.
-  function totalsOf(list: Section[], rows: AccountRow[]) {
-    const owedByPayers = rows.flatMap((row) =>
-      row.thirdParty ? [{ currency: row.settlementCurrency, cents: row.thirdParty.personOwesCents }] : [],
-    );
+  // «Lo que tengo» is the sum of the asset rows on screen, nothing hidden. What other people owe the person is the
+  // «Te deben» section below (a payer's credit and a friend «se le cobra» alike, RF-293): its own tile, so the net
+  // reads what is had, less what is owed, plus what is owed to the person, as the screen shows each.
+  function totalsOf(list: Section[]) {
+    const owedToMe = owed.map((group) => ({ currency: group.currency as CurrencyCode, cents: group.totalCents }));
     const have = list.filter((x) => !x.owes).map((x) => ({ figures: x.figures, sign: 1 as const }));
     const owe = list.filter((x) => x.owes).map((x) => ({ figures: x.figures, sign: 1 as const }));
     return (
@@ -301,6 +299,9 @@ export function AccountsScreen({
         tiles={[
           { key: "have", label: t("kindAsset"), value: <Figures figures={mergeFigures(have)} /> },
           { key: "owe", label: t("kindLiability"), value: <Figures figures={mergeFigures(owe)} /> },
+          ...(owedToMe.length === 0
+            ? []
+            : [{ key: "owed", label: tKey("owedToMe.title"), value: <Figures figures={owedToMe} /> }]),
           {
             key: "net",
             label: t("netLabel"),
@@ -308,7 +309,7 @@ export function AccountsScreen({
               <Figures
                 figures={mergeFigures([
                   ...have,
-                  { figures: owedByPayers, sign: 1 as const },
+                  { figures: owedToMe, sign: 1 as const },
                   ...owe.map((x) => ({ ...x, sign: -1 as const })),
                 ])}
               />
@@ -449,7 +450,7 @@ export function AccountsScreen({
             )}
           </FilterBar>
 
-          {!archived && deskSections.length > 0 && totalsOf(deskSections, filteredAccounts)}
+          {!archived && deskSections.length > 0 && totalsOf(deskSections)}
 
           <AccountsTable
             stale={stale}
@@ -548,7 +549,7 @@ export function AccountsScreen({
             emptyState
           ) : (
             <>
-              {!archived && totalsOf(phoneSections, accounts)}
+              {!archived && totalsOf(phoneSections)}
               <Flex direction="column" gap="5">
                 {phoneSections.map((section) => (
                   <Flex key={section.key} direction="column" gap="3">

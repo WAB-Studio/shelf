@@ -192,6 +192,9 @@ export function MovementForm({
   // that ignores it leaves it where it was (RF-132).
   causedByTransactionId?: string | null;
   defaults?: {
+    // The tab it opens on when the sides alone do not say it: a Bandeja card that proposed an income with no account
+    // yet still opens on «Ingreso».
+    tab?: MovementTab;
     fromAccountId?: string | null;
     toAccountId?: string | null;
     amount?: string;
@@ -255,7 +258,7 @@ export function MovementForm({
   const openingTo = movement ? movement.toAccountId : namesSides ? (defaults?.toAccountId ?? null) : null;
   const openingAccountId = openingFrom ?? openingTo;
 
-  const [tab, setTab] = useState<MovementTab>(() => tabOf(openingFrom, openingTo));
+  const [tab, setTab] = useState<MovementTab>(() => defaults?.tab ?? tabOf(openingFrom, openingTo));
   const [accountDialogOpen, setAccountDialogOpen] = useState(false);
 
   // The settlement rules need what each named account settles in, and the values

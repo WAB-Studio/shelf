@@ -50,6 +50,8 @@ import type { AcceptDeliveryInput } from "@/lib/validation/ingest";
 import type { CredentialBadge } from "@/lib/validation/webhook";
 
 type ReviewDefaults = {
+  // The kind the card shows, so the form opens on the same tab.
+  tab: "expense" | "income" | "transfer";
   fromAccountId: string | null;
   toAccountId: string | null;
   amount: string;
@@ -122,6 +124,7 @@ export function movementDefaults(
   const categoryId = isTransfer ? null : (choice.categoryId ?? proposedCategoryId(delivery, options));
 
   return {
+    tab: delivery.proposedDirection ?? "expense",
     fromAccountId: isIncome ? null : accountId,
     toAccountId: isTransfer ? delivery.proposedToAccountId : isIncome ? accountId : null,
     amount,
@@ -158,9 +161,17 @@ export function readyInput(
     return null;
   }
 
+  // The tab is the form's own: the write names its sides and derives the kind from them.
+  const form = movementDefaults(proposal, options, choice);
   return {
     deliveryId: delivery.id,
-    ...movementDefaults(proposal, options, choice),
+    fromAccountId: form.fromAccountId,
+    toAccountId: form.toAccountId,
+    amount: form.amount,
+    occurredAt: form.occurredAt,
+    description: form.description,
+    splits: form.splits,
+    forPersonId: form.forPersonId,
     labelIds: [],
   };
 }

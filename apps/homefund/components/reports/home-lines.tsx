@@ -85,7 +85,7 @@ export function PaysLine({
                   })}
             </TextLink>
           ) : (
-            <TextLink key={row.key} href="/planning/payments" size="2">
+            <TextLink key={row.key} href="/planning/upcoming" size="2">
               {t.rich("paysPayment", {
                 name: row.payment.description ?? t("dueNoName"),
                 amount: figure(row.payment.amountCents, row.payment.currency),
@@ -184,7 +184,7 @@ export function AheadLine({ ahead }: { ahead: Pick<HomeAhead, "nextIncome" | "ne
           {t("aheadTitle")}
         </Heading>
         {nextIncome && (
-          <TextLink href="/planning/payments" size="2">
+          <TextLink href="/planning/upcoming" size="2">
             {t.rich("aheadIncome", {
               amount: figure(nextIncome.amountCents, nextIncome.currency),
               name: nextIncome.description ?? t("dueNoName"),
@@ -193,7 +193,7 @@ export function AheadLine({ ahead }: { ahead: Pick<HomeAhead, "nextIncome" | "ne
           </TextLink>
         )}
         {nextBill && (
-          <TextLink href="/planning/payments" size="2">
+          <TextLink href="/planning/upcoming" size="2">
             {t.rich("aheadBill", {
               name: nextBill.description ?? t("dueNoName"),
               amount: figure(nextBill.amountCents, nextBill.currency),
