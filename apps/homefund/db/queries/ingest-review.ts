@@ -2,6 +2,7 @@ import "server-only";
 
 import { and, asc, desc, eq, inArray, isNotNull, sql } from "drizzle-orm";
 
+import { recordedMovementSql, type RecordedMovement } from "@/db/queries/ingest-recorded";
 import { defaultMadeBy, insertTransaction } from "@/db/queries/transactions";
 import type { CreateTransactionArgs } from "@/db/queries/transactions";
 import {
@@ -48,6 +49,8 @@ export type PendingDeliveryRow = {
   // Set once the delivery left the queue: when, and the movement an acceptance wrote.
   resolvedAt: Date | null;
   transactionId: string | null;
+  // A movement recorded by hand that this waiting delivery repeats (RF-246); null for the rest.
+  recorded: RecordedMovement | null;
 };
 
 export type RejectReason = NonNullable<typeof ingestDeliveries.$inferSelect.rejectReason>;
@@ -89,6 +92,8 @@ export type AcceptDeliveryArgs = Omit<CreateTransactionArgs, "externalRef"> & {
 export type RejectDeliveryArgs = {
   deliveryId: string;
   silenceShape: boolean;
+  // Why a person sent it away; only «duplicate», for a delivery whose movement already exists (RF-246).
+  reason?: "duplicate";
 };
 
 function isBeforeOpening(
@@ -183,6 +188,7 @@ export async function listDeliveries({
         createdAt: ingestDeliveries.createdAt,
         resolvedAt: ingestDeliveries.resolvedAt,
         transactionId: ingestDeliveries.transactionId,
+        recorded: recordedMovementSql,
         accountOpeningOn: accounts.initialBalanceOn,
       })
       .from(ingestDeliveries)
@@ -361,11 +367,12 @@ export async function acceptDelivery({
 export async function rejectDelivery({
   deliveryId,
   silenceShape,
+  reason,
 }: RejectDeliveryArgs, outerTx?: Transaction): Promise<void> {
   return withUserDbOrTx(outerTx, async (tx) => {
     const [delivery] = await tx
       .update(ingestDeliveries)
-      .set({ status: "rejected", resolvedAt: sql`now()` })
+      .set({ status: "rejected", resolvedAt: sql`now()`, ...(reason ? { rejectReason: reason } : {}) })
       .where(
         and(
           eq(ingestDeliveries.id, deliveryId),
