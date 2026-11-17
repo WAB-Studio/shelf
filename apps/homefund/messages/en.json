@@ -1721,6 +1721,14 @@
     "rejectDescription": "It leaves the inbox and no movement is recorded.",
     "rejectOnce": "Discard this one",
     "rejectAndSilence": "Discard and never ask again",
+    "alreadyRecorded": "Already recorded",
+    "alreadyRecordedAs": "Already recorded as “{description}” on {date}.",
+    "alreadyRecordedOn": "An identical movement is already recorded on {date}.",
+    "seeRecorded": "See the movement",
+    "rejectDuplicate": "Discard: already recorded",
+    "rejectDuplicateTitle": "Discard: already recorded",
+    "rejectDuplicateDescription": "It leaves the inbox without recording a second movement. The one that exists stays as it is.",
+    "recordAnyway": "Record anyway",
     "rejectedToast": "Message discarded.",
     "silencedToast": "Done: messages like this one no longer reach the inbox.",
     "silencedTitle": "Silenced messages",
@@ -1762,7 +1770,7 @@
       "reminder": "Payment reminder",
       "promotion": "Advertising",
       "bill": "Bill to pay",
-      "duplicate": "Already there (receipt)",
+      "duplicate": "Already recorded",
       "no_movement_signal": "No movement"
     }
   },
