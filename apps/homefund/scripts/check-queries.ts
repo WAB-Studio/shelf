@@ -129,6 +129,7 @@ import { getExpensesByCategory } from "@/db/queries/reports/expenses-by-category
 import { getMonthlyFlow, getSixMonthFlow } from "@/db/queries/reports/monthly-flow";
 import { netWorthByOwner } from "@/db/queries/reports/net-worth";
 import { getReportsData } from "@/db/queries/reports/reports-screen";
+import { getSpendingForPersons } from "@/db/queries/reports/spending-for-person";
 import {
   addGoalContribution,
   archiveGoal,
@@ -3368,6 +3369,7 @@ async function reconcileSuite(
     (await trips(() => getFundSpending(range))) +
     (await trips(() => getUnassignedIncome(range))) +
     (await trips(() => getSpendingByMaker(range))) +
+    (await trips(() => getSpendingForPersons(range))) +
     (await trips(() => getUserGroup())) +
     (await trips(() => getSessionUser())) +
     (group ? await trips(() => listMembers(group.id, { archived: false })) : 0);
@@ -4183,6 +4185,7 @@ async function main(): Promise<void> {
   await payOwnCardSuite();
   await legacyChannelSuite();
   await recordedMovementSuite();
+  await mcpForPersonSuite();
 }
 
 // A member recorded without a login is someone in the fund: a leader whose fund holds one is not alone, so an
@@ -15398,6 +15401,7 @@ const TOOL_CLASSES = [
   ["create_goal", ...ADD_CLASS],
   ["create_label", ...ADD_CLASS],
   ["create_member", ...ADD_CLASS],
+  ["create_person", ...ADD_CLASS],
   ["create_planned_payment", ...ADD_CLASS],
   ["create_recurring_rule", ...ADD_CLASS],
   ["defer_purchase", ...OVERWRITE_CLASS],
@@ -15432,6 +15436,7 @@ const TOOL_CLASSES = [
   ["list_members", ...READ_CLASS],
   ["list_merchants", ...READ_CLASS],
   ["list_movements", ...READ_CLASS],
+  ["list_persons", ...READ_CLASS],
   ["list_planned_payments", ...READ_CLASS],
   ["list_recipients", ...READ_CLASS],
   ["list_reconciliations", ...READ_CLASS],
@@ -21296,5 +21301,132 @@ async function recordedMovementSuite(): Promise<void> {
     next("RF-246: rejecting it as a duplicate stores the reason, leaves the queue and writes no movement"),
     row?.status === "rejected" && row.reason === "duplicate" && !(await marked()).has(same),
     JSON.stringify(row),
+  );
+}
+
+// RF-242: «Para quién». A person is a label of its own kind; a movement for one stays the payer's own expense, and
+// Claude lists and creates persons, records, edits and filters by `forPerson`, by name or id, in the same funnels as the form.
+async function mcpForPersonSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const today = todayInBogota();
+  const { POST } = await import("@/app/mcp/route");
+  const [leader, member] = [await createMembershipFreeUser(), await createMembershipFreeUser()];
+  const ids = { group: randomUUID(), leader: randomUUID(), member: randomUUID(), mine: randomUUID(), cash: randomUUID(), category: randomUUID(), fundCategory: randomUUID() };
+  const name = (what: string) => `Harness rf242 ${what} ${tag}`;
+  await fixtureSql.begin(async (tx) => {
+    await tx`insert into groups (id, name, cash_mode) values (${ids.group}, ${name("fondo")}, 'shared')`;
+    await tx`insert into group_members (id, group_id, user_id, name, role) values
+      (${ids.leader}, ${ids.group}, ${leader.id}, ${name("lider")}, 'leader'), (${ids.member}, ${ids.group}, ${member.id}, ${name("miembro")}, 'member')`;
+    await tx`insert into accounts (id, owner_user_id, name, kind, subtype, initial_balance_cents, initial_balance_on)
+      values (${ids.mine}, ${leader.id}, ${name("tarjeta")}, 'asset', 'bank', 0, '2026-01-01')`;
+    await tx`insert into accounts (id, group_id, is_shared, name, kind, subtype, initial_balance_cents, initial_balance_on)
+      values (${ids.cash}, ${ids.group}, true, ${name("caja")}, 'asset', 'cash', 0, '2026-01-01')`;
+    await tx`insert into categories (id, owner_user_id, name, kind, color) values (${ids.category}, ${leader.id}, ${name("propia")}, 'expense', '#8C4A4A')`;
+    await tx`insert into categories (id, group_id, name, kind, color) values (${ids.fundCategory}, ${ids.group}, ${name("fondo")}, 'expense', '#8C4A4A')`;
+  });
+  track("groups", ids.group);
+  for (const id of [ids.leader, ids.member]) track("group_members", id);
+  track("accounts", ids.mine);
+  track("accounts", ids.cash);
+  track("categories", ids.category);
+  track("categories", ids.fundCategory);
+  const clientOf = async (user: HarnessUser) => {
+    const { id, token } = await asUser(user, () => issueWebhookCredential({ name: name("clave"), purpose: "mcp", defaultAccountId: null, defaultCategoryId: null }));
+    keep("webhook_credentials", id);
+    return mcpClient(POST, token).tool;
+  };
+  const [tool, memberTool] = [await clientOf(leader), await clientOf(member)];
+  type Person = { id: string; name: string; scope: string; chargeDefault: boolean; movementCount: number; canManage: boolean };
+  type Row = { id: string; kind: string; labelIds: string[]; forPersonId: string | null; forPersonName: string | null; updatedAt: string };
+
+  const angela = await tool("create_person", { name: name("Ángela") });
+  const papa = await tool("create_person", { name: name("Papá"), chargeDefault: true });
+  const fundPerson = await tool("create_person", { name: name("Abuela"), placement: "group" });
+  const refused = await memberTool("create_person", { name: name("intrusa"), placement: "group" });
+  const blank = await tool("create_person", { name: "   " });
+  const tagNamed = await tool("create_label", { name: name("viaje") });
+  const [angelaId, papaId, fundPersonId] = [angela, papa, fundPerson].map((made) => (made.value as { labelId: string }).labelId);
+  const persons = (await tool("list_persons")).value as Person[];
+  const tags = (await tool("list_labels")).value as { id: string }[];
+  assert(
+    next("RF-242: create_person makes a person who is not charged unless told, a fund's person only for its leader; list_persons lists them with scope and the default, and list_labels never does"),
+    !angela.isError && !papa.isError && !fundPerson.isError && refused.isError && blank.isError && !tagNamed.isError &&
+      persons.find((one) => one.id === angelaId)?.chargeDefault === false && persons.find((one) => one.id === papaId)?.chargeDefault === true &&
+      persons.find((one) => one.id === fundPersonId)?.scope === "fund" && persons.every((one) => one.movementCount === 0) &&
+      !persons.some((one) => one.id === (tagNamed.value as { labelId: string }).labelId) &&
+      !tags.some((one) => persons.some((person) => person.id === one.id)),
+    JSON.stringify({ angela: angela.value, refused: refused.value, persons, tags }),
+  );
+
+  const expense = (extra: Record<string, unknown>) => ({
+    fromAccountId: ids.mine, toAccountId: null, amountCents: 30_000_00, occurredAt: today, description: name("comida"),
+    categoryId: ids.category, ...extra,
+  });
+  const byName = await tool("record_movement", expense({ forPerson: name("ÁNGELA") }));
+  const byId = await tool("record_movement", expense({ forPerson: angelaId, labels: [name("viaje")] }));
+  const forPapa = await tool("record_movement", expense({ forPerson: papaId, amountCents: 10_000_00 }));
+  const plain = await tool("record_movement", expense({ amountCents: 5_000_00 }));
+  const unknown = await tool("record_movement", expense({ forPerson: name("nadie") }));
+  const asTag = await tool("record_movement", expense({ forPerson: name("viaje") }));
+  const personAsTag = await tool("record_movement", expense({ labels: [name("Ángela")] }));
+  const wrongScope = await tool("record_movement", expense({ forPerson: fundPersonId }));
+  const read = async (filter: Record<string, unknown> = {}) => (await tool("list_movements", { accountId: ids.mine, ...filter })).value as Row[];
+  const all = await read();
+  const forAngela = await read({ forPerson: name("Ángela") });
+  const forAngelaById = await read({ forPerson: angelaId });
+  const nobody = await read({ forPerson: "nobody" });
+  assert(
+    next("RF-242: record_movement takes forPerson by name or id and books an ordinary expense that carries the person apart from the tags; an unknown name, a tag, a person written as a label and a person of the other scope are refused"),
+    !byName.isError && !byId.isError && !forPapa.isError && !plain.isError && unknown.isError && asTag.isError && personAsTag.isError && wrongScope.isError &&
+      all.length === 4 && all.every((row) => row.kind === "expense") &&
+      forAngela.length === 2 && forAngela.every((row) => row.forPersonId === angelaId && row.forPersonName === name("Ángela")) &&
+      forAngela.some((row) => row.labelIds.length === 1) && forAngela.every((row) => !row.labelIds.includes(angelaId)) &&
+      forAngelaById.length === 2 && nobody.length === 1 && nobody[0].forPersonId === null,
+    JSON.stringify({ byName: byName.value, unknown: unknown.value, asTag: asTag.value, personAsTag: personAsTag.value, wrongScope: wrongScope.value, counts: [all.length, forAngela.length, forAngelaById.length, nobody.length] }),
+  );
+
+  const totals = (await tool("movement_totals", { accountId: ids.mine, forPerson: name("Ángela") })).value as { count: number; nets: { netCents: number }[] };
+  const loans = await fixtureSql`select (select count(*)::int from accounts where owner_user_id = ${leader.id}) as accounts,
+    (select count(*)::int from third_party_credits c join accounts a on a.id = c.liability_account_id where a.owner_user_id = ${leader.id}) as credits`;
+  const counted = ((await tool("list_persons")).value as Person[]).find((one) => one.id === angelaId);
+  assert(
+    next("RF-242: movement_totals narrows by forPerson to what was spent for them, a person is counted by the movements that carry it, and no receivable or credit is made"),
+    totals.count === 2 && totals.nets.length === 1 && totals.nets[0].netCents === -60_000_00 && counted?.movementCount === 2 && loans[0].accounts === 1 && loans[0].credits === 0,
+    JSON.stringify({ totals, counted, loans }),
+  );
+
+  const target = forAngela[0];
+  const keeps = await tool("update_movement", { transactionId: target.id, expectedUpdatedAt: target.updatedAt, description: name("otra nota") });
+  const keptRow = (await read({ forPerson: angelaId })).find((row) => row.id === target.id) as Row;
+  const swaps = await tool("update_movement", { transactionId: target.id, expectedUpdatedAt: keptRow.updatedAt, forPerson: name("Papá") });
+  const swappedRow = (await read()).find((row) => row.id === target.id) as Row;
+  const clears = await tool("update_movement", { transactionId: target.id, expectedUpdatedAt: swappedRow.updatedAt, forPerson: null });
+  const clearedRow = (await read()).find((row) => row.id === target.id) as Row;
+  assert(
+    next("RF-242: update_movement keeps the person when forPerson is absent, replaces it with another and clears it with null, answering what it overwrote"),
+    !keeps.isError && keptRow.forPersonId === angelaId && !swaps.isError && swappedRow.forPersonId === papaId &&
+      JSON.stringify((swaps.value as { before: unknown }).before) === JSON.stringify({ forPerson: angelaId }) && !clears.isError && clearedRow.forPersonId === null,
+    JSON.stringify({ keeps: keeps.value, kept: keptRow.forPersonId, swaps: swaps.value, swapped: swappedRow.forPersonId, cleared: clearedRow.forPersonId }),
+  );
+
+  const charged = await tool("update_label", { labelId: papaId, chargeDefault: false });
+  const tagCharged = await tool("update_label", { labelId: (tagNamed.value as { labelId: string }).labelId, chargeDefault: true });
+  const after = (await tool("list_persons")).value as Person[];
+  const chargeRows = await fixtureSql`select charge_default from labels where id = ${(tagNamed.value as { labelId: string }).labelId}`;
+  assert(
+    next("RF-242: update_label turns «se le cobra» off for a person and answers the old value, while a tag stays not charged whatever is sent; the server's instructions say spending for another person is the payer's own expense"),
+    !charged.isError && after.find((one) => one.id === papaId)?.chargeDefault === false &&
+      JSON.stringify((charged.value as { before: unknown }).before) === JSON.stringify({ chargeDefault: true }) && !tagCharged.isError && chargeRows[0].charge_default === false &&
+      es.mcp.instructionsPerson.includes("forPerson") && es.mcp.instructionsPerson.includes("Nunca lo registres como préstamo"),
+    JSON.stringify({ charged: charged.value, after, chargeRows }),
+  );
+
+  const report = (await tool("get_report", { month: today.slice(0, 7) })).value as { spendingForPersons: { personId: string; name: string; currency: string; spentCents: number }[] };
+  assert(
+    next("RF-242: Informes sums the month's expenses by the person they were for and per currency, counting only the movements that name one"),
+    report.spendingForPersons.length === 2 && report.spendingForPersons.find((row) => row.personId === angelaId)?.spentCents === 30_000_00 &&
+      report.spendingForPersons.find((row) => row.personId === papaId)?.spentCents === 10_000_00 && report.spendingForPersons.every((row) => row.currency === "COP"),
+    JSON.stringify(report.spendingForPersons),
   );
 }
