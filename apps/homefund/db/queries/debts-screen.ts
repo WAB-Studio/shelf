@@ -10,6 +10,7 @@ import {
   toBillKey,
 } from "@/db/queries/debt-overview";
 import type { DebtOverviewRow, DebtPocket } from "@/db/queries/debt-overview";
+import type { Account } from "@/db/schema";
 import { BASE_CURRENCY, type CurrencyCode } from "@/lib/currency";
 
 // One consolidated set, in one currency. Every figure in it is denominated in
@@ -49,6 +50,8 @@ export type DebtsScreenData = {
   };
   withTerms: (DebtOverviewRow & {
     name: string;
+    // A card or a loan: what «Pagar» asks of each differs.
+    subtype: Account["subtype"];
     // A debt of the caller's own, not the fund's: its row wears the personal mark.
     personal: boolean;
     // Another member's personal debt (RF-58): read-only, named by its owner.
@@ -61,6 +64,7 @@ export type DebtsScreenData = {
   withoutTerms: {
     accountId: string;
     name: string;
+    subtype: Account["subtype"];
     personal: boolean;
     foreignOwner: boolean;
     ownerName: string | null;
@@ -161,6 +165,7 @@ export async function getDebtsScreenData(
       { foreignOwner: account.foreignOwner, ownerName: account.ownerName },
     ]),
   );
+  const subtypeById = new Map(accounts.map((account) => [account.id, account.subtype]));
   const paidByById = new Map(accounts.map((account) => [account.id, account.thirdParty?.personName ?? null]));
   const personalById = new Map(
     accounts.map((account) => [account.id, account.ownerUserId !== null]),
@@ -186,6 +191,7 @@ export async function getDebtsScreenData(
       {
         ...row,
         name,
+        subtype: subtypeById.get(row.accountId) ?? "card",
         personal: personalById.get(row.accountId) ?? false,
         foreignOwner: ownerById.get(row.accountId)?.foreignOwner ?? false,
         ownerName: ownerById.get(row.accountId)?.ownerName ?? null,
@@ -210,6 +216,7 @@ export async function getDebtsScreenData(
       return {
         accountId: account.id,
         name: account.name,
+        subtype: account.subtype,
         personal: account.ownerUserId !== null,
         foreignOwner: account.foreignOwner,
         ownerName: account.ownerName,

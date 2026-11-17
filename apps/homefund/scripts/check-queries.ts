@@ -4204,6 +4204,7 @@ async function main(): Promise<void> {
   await unpaidStatementMinimumSuite();
   await cardStatementSuite();
   await owedToMeSuite();
+  await payDebtsSuite();
 }
 
 // A member recorded without a login is someone in the fund: a leader whose fund holds one is not alone, so an
@@ -19840,7 +19841,8 @@ async function mcpDebtsSuite(): Promise<void> {
     ((await tool("list_accounts")).value as { id: string; balances: { balanceCents: number }[] }[]).find((row) => row.id === id)?.balances[0]?.balanceCents ?? 0;
   const owedBefore = await balanceOf(loanId);
   const requestRef = randomUUID();
-  const pay = { fromAccountId: bank.accountId, toAccountId: loanId, amountCents: 1_000_000_00, occurredOn: "2026-03-01", requestRef };
+  // `extra` keeps this one a single transfer of the whole payment; the split of an instalment is RF-282's.
+  const pay = { fromAccountId: bank.accountId, toAccountId: loanId, amountCents: 1_000_000_00, occurredOn: "2026-03-01", extra: true, requestRef };
   const paid = await tool("record_debt_payment", pay);
   const again = await tool("record_debt_payment", pay);
   const owedAfter = await balanceOf(loanId);
@@ -22174,10 +22176,10 @@ async function unpaidStatementMinimumSuite(): Promise<void> {
   track("transactions", transactionId);
   const paid = await read();
   assert(
-    next("RF-254: once the payments after the cut-off cover the statement's minimum, the card reads no minimum (null), never 0 and never the printed one again"),
+    next("RF-254: once the payments after the cut-off cover the statement's minimum, the card reads no minimum (null), never 0 and never the printed one again, is marked paid, and is no longer Inicio's next payment"),
     paid.row?.owedCents !== undefined && paid.row.owedCents > 0 && paid.row.minimumPaymentCents === null &&
-      paid.next?.amountCents === null && paid.current?.minimumPaymentCents === null,
-    JSON.stringify({ row: paid.row?.minimumPaymentCents, next: paid.next?.amountCents, current: paid.current?.minimumPaymentCents }),
+      paid.row.minimumPaid === true && paid.next === null && paid.current?.minimumPaymentCents === null,
+    JSON.stringify({ row: paid.row?.minimumPaymentCents, paid: paid.row?.minimumPaid, next: paid.next, current: paid.current?.minimumPaymentCents }),
   );
 }
 
@@ -22581,5 +22583,214 @@ async function owedToMeSuite(): Promise<void> {
       john.breakdown.map((line) => line.kind).join() === "opening,payment" &&
       withCredit !== undefined && withCredit.totalCents === withCredit.people.reduce((sum, one) => sum + one.cents, 0),
     JSON.stringify({ john, credit: credit?.personOwesCents }),
+  );
+}
+
+// RF-281 to RF-285: paying a card by its minimum, a loan's instalment split into interest and capital, the last
+// statement corrected or taken back, and the cupo helper's two figures.
+async function payDebtsSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const today = todayInBogota();
+  const user = await createMembershipFreeUser();
+  const stranger = await createMembershipFreeUser();
+  const { payDebt } = await import("@/db/queries/debt-write");
+  const { deleteAccountStatement, reviseAccountStatement } = await import("@/db/queries/account-statements");
+  const { setLoanSchedule } = await import("@/db/queries/loan-schedule");
+  const { accruedInterestCents } = await import("@/lib/loan-instalment");
+
+  const mk = async (name: string, kind: "asset" | "liability", subtype: "bank" | "card" | "loan", amountMinor: number, daysBack = 60) => {
+    const { accountId } = await asUser(user, () =>
+      createAccount({
+        kind, subtype, groupId: null, isShared: false, institution: null, settlementCurrency: BASE_CURRENCY, lastFour: null,
+        balanceOn: shiftDate(today, -daysBack), ownerUserId: user.id, name: `Harness rf282 ${name} ${tag}`, amountMinor,
+      }),
+    );
+    track("accounts", accountId);
+    return accountId;
+  };
+  const terms = (accountId: string, patch: Partial<Parameters<typeof upsertDebtTerms>[0]>) =>
+    asUser(user, async () => {
+      await upsertDebtTerms({
+        accountId, debtKind: "installment", annualRate: "0.165", minimumPaymentCents: null, minimumPaymentPct: null,
+        creditLimitCents: null, statementCutOffDay: null, paymentDueDay: null, avalCents: null, ...patch,
+      });
+      keep("debt_terms", accountId);
+    });
+  const owedOf = async (accountId: string) =>
+    (await asUser(user, () => getAccountBalances())).find((row) => row.accountId === accountId && row.currency === BASE_CURRENCY)?.balanceCents;
+  type Booked = { id: string; amount_cents: string; from_account_id: string | null; to_account_id: string | null; category_id: string | null };
+  const rowsOf = async (ref: string) => {
+    const out: Booked[] = [];
+    await asOwner(user.id, async (tx) => {
+      out.push(
+        ...(await tx<Booked[]>`
+          select t.id, t.amount_cents::text, t.from_account_id, t.to_account_id,
+            (select s.category_id from transaction_splits s where s.transaction_id = t.id limit 1) as category_id
+          from transactions t where t.external_ref like ${`form:${ref}%`} order by t.to_account_id nulls last`),
+      );
+    });
+    return out;
+  };
+
+  // RF-282: a loan with a rate and no schedule splits by the rate over the days since it was opened.
+  const bank = await mk("banco", "asset", "bank", 900_000_000);
+  const loan = await mk("credito", "liability", "loan", 1_000_000_000);
+  await terms(loan, { annualRate: "0.165" });
+  const ref = randomUUID();
+  const instalment = 78_000_000;
+  const paid = await asUser(user, () => payDebt({ fromAccountId: bank, toAccountId: loan, amount: "780000", occurredAt: today, requestRef: ref }));
+  const expectedInterest = accruedInterestCents(1_000_000_000, "0.165", 60);
+  const booked = await rowsOf(ref);
+  const interestRow = booked.find((row) => row.to_account_id === null);
+  const capitalRow = booked.find((row) => row.to_account_id === loan);
+  const after = await owedOf(loan);
+  assert(
+    next("RF-282: paying an instalment of a loan with a rate splits it: interest an expense of the source in a category, capital the transfer, and the loan comes down by the capital alone"),
+    paid.interestCents === expectedInterest && paid.capitalCents === instalment - expectedInterest && paid.basis === "rate" &&
+      Number(interestRow?.amount_cents) === expectedInterest && interestRow?.from_account_id === bank && interestRow.category_id !== null &&
+      Number(capitalRow?.amount_cents) === instalment - expectedInterest && after === -(1_000_000_000 - (instalment - expectedInterest)),
+    JSON.stringify({ paid, expectedInterest, booked, after }),
+  );
+  const resent = await asUser(user, () => payDebt({ fromAccountId: bank, toAccountId: loan, amount: "780000", occurredAt: today, requestRef: ref }));
+  const afterResend = await rowsOf(ref);
+  assert(
+    next("RF-282: the same instalment sent again books nothing and answers with the one the first booked"),
+    afterResend.length === 2 && resent.transactionId === paid.transactionId && resent.interestCents === expectedInterest,
+    JSON.stringify({ resent, afterResend: afterResend.length }),
+  );
+
+  // An extra payment goes whole to capital.
+  const extraRef = randomUUID();
+  const extra = await asUser(user, () => payDebt({ fromAccountId: bank, toAccountId: loan, amount: "100000", occurredAt: today, requestRef: extraRef, extra: true }));
+  const extraRows = await rowsOf(extraRef);
+  assert(
+    next("RF-282: an extra payment into a loan is all capital: one transfer, no interest expense"),
+    extra.interestCents === 0 && extra.capitalCents === 10_000_000 && extraRows.length === 1 && extraRows[0].to_account_id === loan,
+    JSON.stringify({ extra, extraRows }),
+  );
+
+  // A loan with no terms and no schedule has no interest to split off, and a card is paid whole.
+  const bare = await mk("sin tasa", "liability", "loan", 50_000_000);
+  const bareRef = randomUUID();
+  const bareResult = await asUser(user, () => payDebt({ fromAccountId: bank, toAccountId: bare, amount: "100000", occurredAt: today, requestRef: bareRef }));
+  const card = await mk("tarjeta", "liability", "card", 400_000_000);
+  const cardRef = randomUUID();
+  const cardResult = await asUser(user, () => payDebt({ fromAccountId: bank, toAccountId: card, amount: "100000", occurredAt: today, requestRef: cardRef }));
+  assert(
+    next("RF-282: a loan with no rate and a card are paid whole to the debt: no interest is split off"),
+    bareResult.basis === "none" && bareResult.interestCents === 0 && bareResult.capitalCents === 10_000_000 &&
+      cardResult.interestCents === 0 && (await rowsOf(cardRef)).length === 1,
+    JSON.stringify({ bareResult, cardResult }),
+  );
+
+  // RF-282: a schedule row's own interest and insurance win over the rate.
+  const scheduled = await mk("con plan", "liability", "loan", 300_000_000);
+  await terms(scheduled, { annualRate: "0.165" });
+  await asUser(user, () =>
+    setLoanSchedule(
+      {
+        accountId: scheduled,
+        rows: [1, 2, 3].map((number) => ({
+          number, dueOn: shiftDate(today, number * 30 - 10), principalCents: 90_000_000, interestCents: 9_000_000, insuranceCents: 1_000_000,
+          totalCents: 100_000_000, remainingCents: 300_000_000 - number * 90_000_000,
+        })),
+      },
+      false,
+    ),
+  );
+  const scheduleRef = randomUUID();
+  const fromSchedule = await asUser(user, () => payDebt({ fromAccountId: bank, toAccountId: scheduled, amount: "1000000", occurredAt: today, requestRef: scheduleRef }));
+  assert(
+    next("RF-282: with a payment schedule the cuota splits as the bank printed it: interest and insurance 10000000 cents, capital the rest"),
+    fromSchedule.basis === "schedule" && fromSchedule.interestCents === 10_000_000 && fromSchedule.capitalCents === 90_000_000,
+    JSON.stringify(fromSchedule),
+  );
+
+  // RF-281: what was paid in the period counts against its minimum; once covered the card asks none and says so.
+  const visa = await mk("visa", "liability", "card", 400_000_000, 90);
+  const cutOffDay = Number(shiftDate(today, -10).slice(8, 10));
+  await terms(visa, { debtKind: "revolving", minimumPaymentCents: 20_000_000, creditLimitCents: 800_000_000, statementCutOffDay: cutOffDay, paymentDueDay: 28 });
+  const readVisa = () => asUser(user, async () => (await getDebtOverview()).find((debt) => debt.accountId === visa));
+  const before = await readVisa();
+  const part = await asUser(user, () => payDebt({ fromAccountId: bank, toAccountId: visa, amount: "50000", occurredAt: today, requestRef: randomUUID() }));
+  const partial = await readVisa();
+  const rest = await asUser(user, () => payDebt({ fromAccountId: bank, toAccountId: visa, amount: "150000", occurredAt: today, requestRef: randomUUID() }));
+  const covered = await readVisa();
+  assert(
+    next("RF-281: a part-payment asks only the rest of the minimum, and paying the minimum leaves none due (null) with the period marked paid; the total owed is what paying it all asks"),
+    before?.minimumPaymentCents === 20_000_000 && before.minimumPaid === false && before.totalDueCents === 400_000_000 &&
+      part.capitalCents === 5_000_000 && partial?.minimumPaymentCents === 15_000_000 && partial.minimumPaid === false &&
+      rest.capitalCents === 15_000_000 && covered?.minimumPaymentCents === null && covered.minimumPaid === true &&
+      covered.totalDueCents === 400_000_000 - 20_000_000,
+    JSON.stringify({ before: [before?.minimumPaymentCents, before?.minimumPaid], partial: [partial?.minimumPaymentCents, partial?.minimumPaid], covered: [covered?.minimumPaymentCents, covered?.minimumPaid, covered?.totalDueCents] }),
+  );
+
+  // RF-284: only the last statement is corrected or taken back; a stranger touches none.
+  const statementCard = await mk("extractos", "liability", "card", 400_000_000, 120);
+  const record = (cutOff: string, closing: number) =>
+    asUser(user, async () => {
+      const row = await recordAccountStatement({
+        accountId: statementCard, periodStart: shiftDate(cutOff, -30), cutOffDate: cutOff, paymentDueDate: shiftDate(cutOff, 15),
+        openingBalanceCents: null, closingBalanceCents: closing, creditsCents: null, debitsCents: null,
+        minimumPaymentCents: 20_000_000, interestChargedCents: null, feesChargedCents: null,
+      });
+      if (row) track("account_statements", row.id);
+      return row!.id;
+    });
+  const [older, latest] = [await record(shiftDate(today, -45), 380_000_000), await record(shiftDate(today, -15), 400_000_000)];
+  const change = (id: string, cutOff: string, closing: number) => ({
+    statementId: id, accountId: statementCard, periodStart: shiftDate(cutOff, -30), cutOffDate: cutOff, paymentDueDate: shiftDate(cutOff, 15),
+    openingBalanceCents: null, closingBalanceCents: closing, creditsCents: null, debitsCents: null, minimumPaymentCents: 25_000_000,
+    interestChargedCents: 1_500_000, feesChargedCents: null,
+  });
+  const [olderEdit, strangerEdit, latestEdit] = [
+    await asUser(user, () => reviseAccountStatement(change(older, shiftDate(today, -46), 390_000_000))),
+    await asUser(stranger, () => reviseAccountStatement(change(latest, shiftDate(today, -14), 410_000_000))),
+    await asUser(user, () => reviseAccountStatement(change(latest, shiftDate(today, -14), 410_000_000))),
+  ];
+  const kept = await asUser(user, () => getDebtDetail(statementCard));
+  const edited = kept?.statements.find((row) => row.id === latest);
+  const untouched = kept?.statements.find((row) => row.id === older);
+  assert(
+    next("RF-284: the last statement is corrected (figures stored signed like the debt); an earlier one and a stranger's attempt change nothing"),
+    olderEdit === "missing" && strangerEdit === "missing" && latestEdit === "done" && edited?.closingBalanceCents === -410_000_000 &&
+      edited.minimumPaymentCents === 25_000_000 && edited.interestChargedCents === 1_500_000 && edited.cutOffDate === shiftDate(today, -14) &&
+      untouched?.closingBalanceCents === -380_000_000 && untouched.cutOffDate === shiftDate(today, -45),
+    JSON.stringify({ olderEdit, strangerEdit, latestEdit, edited, untouched }),
+  );
+  const behind = await asUser(user, () => reviseAccountStatement(change(latest, shiftDate(today, -45), 410_000_000)));
+  const [olderDelete, strangerDelete, latestDelete] = [
+    await asUser(user, () => deleteAccountStatement({ accountId: statementCard, statementId: older })),
+    await asUser(stranger, () => deleteAccountStatement({ accountId: statementCard, statementId: latest })),
+    await asUser(user, () => deleteAccountStatement({ accountId: statementCard, statementId: latest })),
+  ];
+  const olderNow = await asUser(user, () => deleteAccountStatement({ accountId: statementCard, statementId: older }));
+  const emptied = await asUser(user, () => getDebtDetail(statementCard));
+  assert(
+    next("RF-284: a cut-off moved to or before the previous statement's is refused; only the last statement is taken back, and the one before it becomes the last"),
+    behind === "beforePrevious" && olderDelete === "missing" && strangerDelete === "missing" && latestDelete === "done" &&
+      olderNow === "done" && emptied?.statements.length === 0,
+    JSON.stringify({ behind, olderDelete, strangerDelete, latestDelete, olderNow, left: emptied?.statements.length }),
+  );
+
+  // RF-285: the cupo helper opens with the stored limit and takes off what the bank counts in another currency.
+  const category = await asUser(user, () => createCategory({ scope: { ownerUserId: user.id }, name: `Harness rf285 ${tag}`, kind: "expense", parentId: null, color: "#222222" }));
+  track("categories", category.categoryId);
+  const { transactionId: usd } = await asUser(user, () =>
+    createTransaction({
+      fromAccountId: visa, toAccountId: null, amountCents: 1_599, currency: "USD", counterAmountCents: 6_500_000, counterIsEstimate: true,
+      occurredAt: today, description: "Harness compra USD", externalRef: null,
+      splits: [{ categoryId: category.categoryId, amountCents: 1_599 }], labelIds: [],
+    }),
+  );
+  keep("transactions", usd);
+  const overview = await asUser(user, () => listReconcileOverview(today));
+  const visaRow = overview.find((row) => row.id === visa);
+  const bankRow = overview.find((row) => row.id === bank);
+  assert(
+    next("RF-285: the reconcile overview carries the stored limit and the purchases in another currency still to bill, which a bank's available credit already counts"),
+    visaRow?.creditLimitCents === 800_000_000 && visaRow.toBillCents === 6_500_000 && bankRow?.creditLimitCents === null && bankRow.toBillCents === 0,
+    JSON.stringify({ visa: [visaRow?.creditLimitCents, visaRow?.toBillCents], bank: [bankRow?.creditLimitCents, bankRow?.toBillCents] }),
   );
 }

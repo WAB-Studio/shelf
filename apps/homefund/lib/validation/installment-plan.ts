@@ -37,6 +37,8 @@ export const recordDebtPaymentSchema = z.object({
   // Minted by the form when it opens: a submit sent again after a lost answer carries the same
   // one, and the server answers with the payment the first copy booked.
   requestRef: z.uuid({ error: "errors.unexpected" }).optional(),
+  // «Abono extra» into a loan: all of it goes to capital, with no interest split off (RF-282).
+  extra: z.boolean().optional(),
 });
 
 export type RecordDebtPaymentInput = z.infer<typeof recordDebtPaymentSchema>;

@@ -646,7 +646,7 @@ test.describe("the row menus", () => {
     );
 
     await rowMenu(page, debtName).click();
-    await page.getByRole("menuitem", { name: debts.rowPay, exact: true }).click();
+    await page.getByRole("menuitem", { name: debts.rowPayCard, exact: true }).click();
 
     const dialog = page.getByRole("dialog");
     await expect(dialog).toBeVisible();
@@ -671,6 +671,113 @@ test.describe("the row menus", () => {
     await expect
       .poll(async () => digitsOf(row.getByRole("cell").nth(6)))
       .toBe(pesos(MENU_DEBT_OWED_CENTS - MENU_PAID_CENTS));
+  });
+});
+
+const PAY_OWED_CENTS = 40_000_000;
+const PAY_MINIMUM_CENTS = 5_000_000;
+
+// The words a message holds before its figure, which is what the segmented choice's accessible name starts with.
+function choiceStartingWith(message: string): RegExp {
+  return new RegExp(`^${message.split("{")[0]}`);
+}
+
+test.describe("paying a card", () => {
+  const sourceId = randomUUID();
+  const sourceName = `Pagadora tarjeta ${stamp}`;
+  const cardPayId = randomUUID();
+  const cardPayName = `Tarjeta a pagar ${stamp}`;
+
+  test.beforeEach(async () => {
+    await seedAsset({ id: sourceId, name: sourceName, openingCents: 900_000_000 });
+    await seedDebt({
+      id: cardPayId,
+      name: cardPayName,
+      owedCents: PAY_OWED_CENTS,
+      terms: {
+        debtKind: "revolving",
+        annualRate: 0.28,
+        minimumPaymentCents: PAY_MINIMUM_CENTS,
+        creditLimitCents: 80_000_000,
+        cutOffDay: 15,
+        dueDay: 28,
+      },
+    });
+  });
+
+  test.afterEach(async () => {
+    await dropAccounts([cardPayId, sourceId]);
+  });
+
+  async function openPayment(page: Page): Promise<Locator> {
+    await page.goto(`/es/planning/debts/${cardPayId}`);
+    await page.getByRole("button", { name: debts.rowPayCard, exact: true }).click();
+    const dialog = page.getByRole("dialog");
+    await expect(dialog).toBeVisible();
+    await dialog.getByLabel(installments.fromLabel).click();
+    await page.getByRole("option", { name: sourceName, exact: true }).click();
+    return dialog;
+  }
+
+  test("paying the minimum writes it in the field, books it and says the month's minimum is paid", async ({ page }) => {
+    const dialog = await openPayment(page);
+
+    // The minimum is what the dialog opens on, its figure already in the field.
+    await expect(dialog.getByRole("radio", { name: choiceStartingWith(installments.choiceMinimum) })).toBeChecked();
+    expect(digitsIn(await dialog.getByRole("textbox", { name: installments.amountLabel }).inputValue())).toBe(
+      pesos(PAY_MINIMUM_CENTS),
+    );
+
+    await dialog.getByRole("button", { name: installments.paymentSave, exact: true }).click();
+    await expect(page.getByText(installments.paymentSaved, { exact: true })).toBeVisible();
+
+    await expect(page.getByText(/^Mínimo de .+ pagado$/).first()).toBeVisible();
+    const [paid] = await fixtureSql<{ cents: string }[]>`
+      select amount_cents::text as cents from transactions where to_account_id = ${cardPayId}`;
+    expect(Number(paid.cents)).toBe(PAY_MINIMUM_CENTS);
+  });
+
+  test("the total fills what paying the card in full asks, and saving it leaves the card at no debt", async ({ page }) => {
+    const dialog = await openPayment(page);
+
+    await dialog.getByRole("radio", { name: choiceStartingWith(installments.choiceTotal) }).click();
+    await expect
+      .poll(async () => digitsIn(await dialog.getByRole("textbox", { name: installments.amountLabel }).inputValue()))
+      .toBe(pesos(PAY_OWED_CENTS));
+
+    await dialog.getByRole("button", { name: installments.paymentSave, exact: true }).click();
+    await expect(page.getByText(installments.paymentSaved, { exact: true })).toBeVisible();
+
+    await expect
+      .poll(async () => {
+        const [row] = await fixtureSql<{ cents: string }[]>`
+          select balance_cents::text as cents from account_balances where id = ${cardPayId}`;
+        return Number(row.cents);
+      })
+      .toBe(0);
+  });
+
+  test("paying more than is owed warns by how much and can still be confirmed", async ({ page }) => {
+    const dialog = await openPayment(page);
+    const over = pesos(PAY_OWED_CENTS) + 10_000;
+
+    await dialog.getByRole("radio", { name: choiceStartingWith(installments.choiceOther) }).click();
+    await dialog.getByRole("textbox", { name: installments.amountLabel }).fill(String(over));
+
+    const warning = dialog.getByRole("status").filter({ hasText: /Pagas .+ más de lo que debes/ });
+    await expect(warning).toBeVisible();
+    expect(digitsIn(await warning.innerText())).toBe(10_000);
+
+    await dialog.getByRole("button", { name: installments.paymentSave, exact: true }).click();
+    await expect(page.getByText(installments.paymentSaved, { exact: true })).toBeVisible();
+
+    await expect
+      .poll(async () => {
+        const [row] = await fixtureSql<{ cents: string }[]>`
+          select balance_cents::text as cents from account_balances where id = ${cardPayId}`;
+        return Number(row.cents);
+      })
+      .toBe(10_000 * 100);
   });
 });
 
@@ -888,9 +995,6 @@ test.describe("the detail route", () => {
   }) => {
     // The statements table draws from `lg` up; the phone reads cards.
     await page.setViewportSize({ width: 1280, height: 900 });
-    // After the last seeded cut-off and short of it — a period the earlier
-    // closes leave open (RF-129).
-    const periodStart = addCivilDays(dayOfMonthBack(1, DETAIL_CUT_OFF_DAY), 1);
     const cutOffDate = todayInBogota();
     const closingMajor = "2150000";
 
@@ -903,13 +1007,11 @@ test.describe("the detail route", () => {
     const dialog = page.getByRole("dialog");
     await expect(dialog).toBeVisible();
 
-    // A date input carries no textbox role, so it is reached by its label.
-    await dialog
-      .getByLabel(installments.statementPeriodStartLabel)
-      .fill(periodStart);
+    // A date input carries no textbox role, so it is reached by its label. The period opens where the last
+    // one closed: it is never asked.
     await dialog.getByLabel(installments.statementCutOffLabel).fill(cutOffDate);
     await dialog
-      .getByRole("textbox", { name: installments.statementClosingLabel })
+      .getByRole("textbox", { name: installments.statementTotalLabel })
       .fill(closingMajor);
     await dialog
       .getByRole("button", { name: installments.statementRecordSave, exact: true })

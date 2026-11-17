@@ -73,8 +73,20 @@ export const accountStatements = finances.table(
       to: authenticatedRole,
       withCheck: sql`(select private.can_write_account(${table.accountId}))`,
     }),
-    // No UPDATE policy: a statement is an immutable historical snapshot.
-    // No DELETE policy either: a statement leaves only with its account, down the foreign key's cascade.
+    // The LAST statement of an account can be corrected or taken back (RF-284): an earlier one is a snapshot the
+    // later periods were opened on, so it stays. The account's scope gates both. «Last» is a function, not a
+    // subquery: a policy that reads its own table recurses.
+    pgPolicy("account_statements_update", {
+      for: "update",
+      to: authenticatedRole,
+      using: sql`(select private.can_write_account(${table.accountId})) and (select private.is_last_statement(${table.accountId}, ${table.cutOffDate}))`,
+      withCheck: sql`(select private.can_write_account(${table.accountId}))`,
+    }),
+    pgPolicy("account_statements_delete", {
+      for: "delete",
+      to: authenticatedRole,
+      using: sql`(select private.can_write_account(${table.accountId})) and (select private.is_last_statement(${table.accountId}, ${table.cutOffDate}))`,
+    }),
   ],
 );
 
