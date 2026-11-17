@@ -481,7 +481,10 @@ export async function relabelMovements(input: {
         if (moved.length !== ids.length) throw new ActionError("errors.notFound");
       }
       if (input.labelIds !== undefined) {
-        await tx.execute(sql`delete from transaction_labels where transaction_id in (${list})`);
+        // Only the tags are replaced: the person a movement was for (RF-242) rides the same join and stays.
+        await tx.execute(sql`
+          delete from transaction_labels tl using labels l
+          where l.id = tl.label_id and l.kind = 'tag' and tl.transaction_id in (${list})`);
         if (input.labelIds.length > 0) {
           const pairs = ids.flatMap((id) => input.labelIds!.map((labelId) => sql`(${id}::uuid, ${labelId}::uuid)`));
           await tx.execute(sql`insert into transaction_labels (transaction_id, label_id) values ${sql.join(pairs, sql`, `)}`);

@@ -21074,11 +21074,14 @@ async function mcpWritesSuite(): Promise<void> {
   const state = async (transactionIds: string[]) =>
     fixtureSql<{ id: string; labels: string[]; categories: string[] }[]>`
       select t.id,
-        coalesce((select array_agg(l.label_id::text order by l.label_id) from transaction_labels l where l.transaction_id = t.id), '{}') as labels,
+        coalesce((select array_agg(l.label_id::text order by l.label_id) from transaction_labels l join labels b on b.id = l.label_id and b.kind = 'tag' where l.transaction_id = t.id), '{}') as labels,
         coalesce((select array_agg(s.category_id::text) from transaction_splits s where s.transaction_id = t.id), '{}') as categories
       from transactions t where t.id in ${fixtureSql(transactionIds)} order by t.id`;
   const stampOf = async (transactionId: string) => (await fixtureSql<{ updated_at: string }[]>`select updated_at::text from transactions where id = ${transactionId}`)[0]?.updated_at;
   const stampBefore = await stampOf(rows[0]);
+  // The person a movement was for rides the same join as its tags and is not replaced with them (RF-242).
+  const [person] = await fixtureSql<{ id: string }[]>`insert into labels (owner_user_id, name, color, kind) values (${owner.id}, ${name("Hijo")}, '#4A8C5A', 'person') returning id`;
+  await fixtureSql`insert into transaction_labels (transaction_id, label_id) values (${rows[0]}, ${person.id})`;
   const done = await tool("relabel_movements", { transactionIds: rows, expectedCount: 3, labels: [labelIds(mama)], categoryId: ids.pets });
   const after = await state(rows);
   assert(
@@ -21086,7 +21089,8 @@ async function mcpWritesSuite(): Promise<void> {
     !done.isError && done.value.updated === 3 &&
       after.every((row) => row.labels.length === 1 && row.labels[0] === labelIds(mama) && row.categories.length === 1 && row.categories[0] === ids.pets) &&
       done.value.before.every((row: { labelIds: string[]; categoryId: string }) => row.labelIds[0] === labelIds(papa) && row.categoryId === ids.food) &&
-      (await stampOf(rows[0])) !== stampBefore,
+      (await stampOf(rows[0])) !== stampBefore &&
+      (await fixtureSql<{ n: number }[]>`select count(*)::int as n from transaction_labels where transaction_id = ${rows[0]} and label_id = ${person.id}`)[0]?.n === 1,
     `done ${JSON.stringify(done.value)}, after ${JSON.stringify(after)}`,
   );
 
