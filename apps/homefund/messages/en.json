@@ -391,6 +391,8 @@
     "parentLabel": "Inside",
     "parentNone": "None",
     "parentDescription": "Makes this a pocket of a savings account, like a bank's pockets. The money stays counted once.",
+    "lastFourDetail": "ending in {digits}",
+    "freeOfTotal": "Free <amount></amount>",
     "freePart": "Free",
     "settlementCurrencyLabel": "Settlement currency",
     "settlementCurrencyHint": "It's the currency the account settles its movements in.",
