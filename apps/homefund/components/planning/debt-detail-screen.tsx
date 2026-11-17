@@ -5,6 +5,7 @@ import { useFormatter, useLocale, useTranslations } from "next-intl";
 import { Fragment, useState } from "react";
 
 import { DeferredPurchases } from "@/components/planning/deferral-control";
+import { AccountStatementDialog } from "@/components/planning/account-statement-dialog";
 import { OwnerMark } from "@/components/fund/owner-mark";
 import { DebtPaymentDialog } from "@/components/planning/debt-payment-dialog";
 import {
@@ -71,7 +72,7 @@ export function DebtDetailScreen({ data }: { data: DebtDetailData }) {
   // all read in it, and it is the one a statement is cut in (RF-121).
   const currency = account.settlementCurrency;
 
-  const [dialog, setDialog] = useState<"pay" | "thirdParty" | null>(null);
+  const [dialog, setDialog] = useState<"pay" | "thirdParty" | "statement" | null>(null);
   // The pocket it bills in, read by its sign off the balance the view derives
   // from movements: below zero it owes, above zero it holds a credit that owes
   // nothing and reads «A favor» (RF-80).
@@ -106,6 +107,21 @@ export function DebtDetailScreen({ data }: { data: DebtDetailData }) {
           amountCents: currentStatement.minimumPaymentCents,
           date: currentStatement.nextDueDate,
         };
+
+  // A debt that owes with no minimum known says so and, with no statement yet, offers the one that
+  // would bring it: a zero would read as «owes nothing due».
+  const minimumMissing = (
+    <Flex direction="column" align="start" gap="1">
+      <Text size="2" color="gray">
+        {statements.length === 0 ? t("statementNoneToMinimum") : t("statementMinimumMissing")}
+      </Text>
+      {statements.length === 0 && canWrite && (
+        <Button type="button" variant="ghost" size="1" onClick={() => setDialog("statement")}>
+          {t("statementRecord")}
+        </Button>
+      )}
+    </Flex>
+  );
 
   function shortDate(date: string): string {
     return format.dateTime(civilDateToDate(date), {
@@ -168,7 +184,7 @@ export function DebtDetailScreen({ data }: { data: DebtDetailData }) {
       // The open period's own minimum, derived by the server on the live
       // balance; a debt with no due day names no next payment.
       value:
-        nextPayment === null ? (
+        nextPayment === null || nextPayment.amountCents === null ? (
           NO_VALUE
         ) : (
           <Money
@@ -178,7 +194,17 @@ export function DebtDetailScreen({ data }: { data: DebtDetailData }) {
             size="inherit"
           />
         ),
-      note: nextPayment === null ? tDebts("tileNoNextPayment") : shortDate(nextPayment.date),
+      note:
+        nextPayment === null ? (
+          tDebts("tileNoNextPayment")
+        ) : nextPayment.amountCents === null ? (
+          <>
+            {shortDate(nextPayment.date)}
+            {minimumMissing}
+          </>
+        ) : (
+          shortDate(nextPayment.date)
+        ),
     },
     {
       key: "availableCredit",
@@ -292,12 +318,16 @@ export function DebtDetailScreen({ data }: { data: DebtDetailData }) {
                   <Fact
                     label={t("statementMinimum")}
                     value={
-                      <Money
-                        minor={currentStatement.minimumPaymentCents}
-                        currency={currency}
-                        signed={false}
-                        size="inherit"
-                      />
+                      currentStatement.minimumPaymentCents === null ? (
+                        minimumMissing
+                      ) : (
+                        <Money
+                          minor={currentStatement.minimumPaymentCents}
+                          currency={currency}
+                          signed={false}
+                          size="inherit"
+                        />
+                      )
                     }
                   />
                 </>
@@ -336,6 +366,22 @@ export function DebtDetailScreen({ data }: { data: DebtDetailData }) {
         statements={statements}
         canWrite={canWrite}
       />
+
+      {dialog === "statement" && (
+        <AccountStatementDialog
+          open
+          onOpenChange={(open) => {
+            if (!open) setDialog(null);
+          }}
+          account={{
+            id: account.id,
+            name: account.name,
+            kind: "liability",
+            nextPeriodStart: currentStatement?.periodStart ?? todayInBogota(),
+          }}
+          currency={currency}
+        />
+      )}
 
       {dialog === "thirdParty" && (
         <SetUpThirdPartyDialog

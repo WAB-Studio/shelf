@@ -282,7 +282,7 @@ export function DebtsScreen({
         key: "nextPayment",
         label: t("tileNextPayment"),
         value:
-          nextPayment === null ? (
+          nextPayment === null || nextPayment.amountCents === null ? (
             NO_VALUE
           ) : (
             <Money
@@ -295,7 +295,7 @@ export function DebtsScreen({
         note:
           nextPayment === null
             ? t("tileNoNextPayment")
-            : t("tileNextPaymentNote", {
+            : t(nextPayment.amountCents === null ? "tileNextPaymentNoMinimum" : "tileNextPaymentNote", {
                 date: shortDate(nextPayment.date),
                 name: nextPayment.name,
               }),
@@ -451,12 +451,15 @@ export function DebtsScreen({
                 {totals.nextPayment !== null &&
                   totals.nextPayment.currency === set.currency && (
                     <Text size="2" color="gray">
-                      {t("nextPayment", {
-                        amount: moneyText(
-                          totals.nextPayment.amountCents,
-                          totals.nextPayment.currency,
-                          locale,
-                        ),
+                      {t(totals.nextPayment.amountCents === null ? "nextPaymentNoMinimum" : "nextPayment", {
+                        amount:
+                          totals.nextPayment.amountCents === null
+                            ? ""
+                            : moneyText(
+                                totals.nextPayment.amountCents,
+                                totals.nextPayment.currency,
+                                locale,
+                              ),
                         date: format.dateTime(
                           civilDateToDate(totals.nextPayment.date),
                           { day: "numeric", month: "short" },

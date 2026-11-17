@@ -41,6 +41,14 @@ test("nextDebtPayment picks the earliest due date among debts that owe", () => {
   assert.equal(nextDebtPayment([]), null);
 });
 
+test("nextDebtPayment names the date and no figure while no minimum is known, never a zero", () => {
+  const next = nextDebtPayment([
+    { accountId: "z", currency: "COP", owedCents: 9, minimumPaymentCents: null, nextDueDate: "2026-12-02" },
+  ]);
+  assert.equal(next?.amountCents, null);
+  assert.equal(next?.date, "2026-12-02");
+});
+
 test("shares always add up to 100", () => {
   for (const values of [[1, 1, 1], [5, 3, 2], [7, 7, 7, 7, 7, 7, 7], [1]]) {
     assert.equal(shares(values).reduce((a, b) => a + b, 0), 100);

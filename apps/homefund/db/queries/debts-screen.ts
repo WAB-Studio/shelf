@@ -39,7 +39,8 @@ export type DebtsScreenData = {
     byCurrency: DebtCurrencyTotals[];
     nextPayment: {
       accountId: string;
-      amountCents: number;
+      // Null while no minimum is known (RF-254): the date stands, the figure is never a zero.
+      amountCents: number | null;
       // What the paying debt bills in, so the figure is drawn in it.
       currency: CurrencyCode;
       date: string;
