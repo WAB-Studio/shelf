@@ -155,6 +155,13 @@ test("a description is the sentence a person acts on, from the amount's remainde
   for (const [raw, expected] of cases) assert.equal(emailDescription(raw), expected, raw);
 });
 
+test("the bank's boilerplate ahead of its label never reaches the description", () => {
+  assert.equal(
+    emailDescription("Alertas y Notificaciones Listo! Todo salió bien con tus movimientos Bancolombia: Compraste COP en COMERCIO EJEMPLO con tu T.Cred *1234, el 08/08/2026 a las 17:03."),
+    "Compraste en COMERCIO EJEMPLO con tu T.Cred *1234",
+  );
+});
+
 test("a receipt that names its business in a field adds it to a subject that does not", () => {
   assert.equal(
     emailDescription("PSE - Transacción Aprobada CUS 510567233 — ¡Hola, Juan Ejemplo! Valor: $ Empresa: EMPRESA EJEMPLO SA Descripción: Pago factura Fecha: 25/07/2026"),
