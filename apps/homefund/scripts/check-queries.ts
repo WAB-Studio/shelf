@@ -4195,6 +4195,7 @@ async function main(): Promise<void> {
   await reconcileOverviewSuite();
   await reconcileAgesSuite();
   await inicioWithoutAdjustmentsSuite();
+  await pocketFundExportSuite();
   await recordedMovementSuite();
   await mcpForPersonSuite();
   await alertChannelsSuite();
@@ -17081,7 +17082,7 @@ async function accountPocketSuite(): Promise<void> {
     }
   };
 
-  const parent = await open(owner, "ahorros", 249_816_00);
+  const parent = await open(owner, "ahorros", 5_502_154_00);
   track("accounts", parent.accountId);
   const pocket = await open(owner, "bolsillo", 5_252_338_00, { parentAccountId: parent.accountId });
   track("accounts", pocket.accountId);
@@ -17136,7 +17137,7 @@ async function accountPocketSuite(): Promise<void> {
   const becomePocket = await refusedWith(() =>
     asUser(owner, () => updateAccount({
       accountId: parent.accountId, name: `Harness rf173 ahorros ${tag}`, subtype: "bank", isShared: false, institution: null,
-      parentAccountId: loose.accountId, settlementCurrency: BASE_CURRENCY, amountMinor: 249_816_00, balanceOn: "2026-01-01",
+      parentAccountId: loose.accountId, settlementCurrency: BASE_CURRENCY, amountMinor: 5_502_154_00, balanceOn: "2026-01-01",
     })),
   );
   assert(
@@ -19427,7 +19428,7 @@ async function widgetSuite(): Promise<void> {
     response.status === 200 &&
       response.headers.get("cache-control") === "private, max-age=300" &&
       summary.currency === "COP" &&
-      summary.disponible?.cents === 1_420_000 &&
+      summary.disponible?.cents === 1_320_000 &&
       summary.mes?.spentCents === 30_000 &&
       summary.mes?.budgetedCents === 500_000 &&
       summary.mes?.remainingCents === 470_000 &&
@@ -22347,5 +22348,135 @@ async function inicioWithoutAdjustmentsSuite(): Promise<void> {
     next("RF-263: the list Inicio reads leaves a reconciliation's adjustment out, which the list of adjustments still holds"),
     only.length === 1 && without.length === 0 && only[0].reconciliationId !== null,
     `${without.length} without, ${only.length} adjustments`,
+  );
+}
+
+// RF-296: a new pocket takes what the person sets aside from the free part of its parent and the parent's total never grows.
+// RF-297: a new fund starts from the categories its founder already has. RF-298 and RF-299: the export keeps a split's
+// lines, names a pocket's parent and carries the planned, expected and deferred sheets.
+async function pocketFundExportSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const owner = await createMembershipFreeUser();
+  const common = {
+    kind: "asset" as const, subtype: "bank" as const, groupId: null, isShared: false, institution: null,
+    settlementCurrency: BASE_CURRENCY, balanceOn: "2026-01-01", ownerUserId: owner.id,
+  };
+  const { accountId: parentId } = await asUser(owner, () =>
+    createAccount({ ...common, name: `Harness rf296 ahorros ${tag}`, amountMinor: 100_000_00 }),
+  );
+  track("accounts", parentId);
+  const { accountId: pocketId } = await asUser(owner, () =>
+    createAccount({ ...common, name: `Harness rf296 viajes ${tag}`, amountMinor: 30_000_00, parentAccountId: parentId }),
+  );
+  track("accounts", pocketId);
+  const [balances, [opening], moved] = await Promise.all([
+    asUser(owner, () => getAccountBalances([parentId, pocketId])),
+    fixtureSql<{ initial_balance_cents: string }[]>`select initial_balance_cents from accounts where id = ${pocketId}`,
+    fixtureSql<{ id: string; amount_cents: string; from_account_id: string }[]>`
+      select id, amount_cents, from_account_id from transactions where to_account_id = ${pocketId}`,
+  ]);
+  for (const row of moved) track("transactions", row.id);
+  const balanceOf = (id: string) => balances.find((row) => row.accountId === id)?.balanceCents;
+  assert(
+    next("RF-296: a new pocket opens empty and takes its amount from the parent's free part by one transfer, so the parent's total stays what it was"),
+    Number(opening.initial_balance_cents) === 0 && moved.length === 1 && moved[0].from_account_id === parentId &&
+      balanceOf(parentId) === 70_000_00 && balanceOf(pocketId) === 30_000_00,
+    JSON.stringify({ opening, moved, balances }),
+  );
+
+  const tooMuch = await attempt(() =>
+    asUser(owner, () => createAccount({ ...common, name: `Harness rf296 de mas ${tag}`, amountMinor: 80_000_00, parentAccountId: parentId })),
+  );
+  const [leftover] = await fixtureSql<{ n: string }[]>`select count(*) as n from accounts where name = ${`Harness rf296 de mas ${tag}`}`;
+  assert(
+    next("RF-296: a pocket asked for more than the parent has free is refused and nothing is written"),
+    tooMuch.error.includes("accounts.errors.pocketExceedsFree") && Number(leftover.n) === 0,
+    JSON.stringify({ tooMuch: tooMuch.error, leftover }),
+  );
+
+  // RF-297
+  const founder = await createMembershipFreeUser();
+  const mine = { parent: randomUUID(), child: randomUUID(), income: randomUUID() };
+  await fixtureSql`
+    insert into categories (id, owner_user_id, name, kind, color)
+    values (${mine.parent}, ${founder.id}, ${`Harness rf297 mercado ${tag}`}, 'expense', '#4C8C4A'),
+           (${mine.income}, ${founder.id}, ${`Harness rf297 extra ${tag}`}, 'income', '#2E6FBF')`;
+  await fixtureSql`
+    insert into categories (id, owner_user_id, parent_id, name, kind)
+    values (${mine.child}, ${founder.id}, ${mine.parent}, ${`Harness rf297 frutas ${tag}`}, 'expense')`;
+  for (const id of Object.values(mine)) track("categories", id);
+  const { groupId } = await asUser(founder, () =>
+    createGroup({ name: `Harness fondo rf297 ${tag}`, leaderName: "Harness rf297", cashMode: "shared", locale: "es" }),
+  );
+  track("groups", groupId);
+  const copied = await fixtureSql<{ id: string; name: string; kind: string; color: string | null; parent_name: string | null }[]>`
+    select c.id, c.name, c.kind, c.color, p.name as parent_name
+    from categories c left join categories p on p.id = c.parent_id where c.group_id = ${groupId}`;
+  for (const row of copied) track("categories", row.id);
+  const [member] = await fixtureSql<{ id: string }[]>`select id from group_members where group_id = ${groupId}`;
+  track("group_members", member.id);
+  const [cash] = await fixtureSql<{ id: string }[]>`select id from accounts where group_id = ${groupId}`;
+  track("accounts", cash.id);
+  assert(
+    next("RF-297: a new fund holds the categories its founder already has, tree and kinds included, and never the twenty defaults"),
+    copied.length === 3 &&
+      copied.some((row) => row.name.startsWith("Harness rf297 frutas") && row.parent_name?.startsWith("Harness rf297 mercado")) &&
+      copied.some((row) => row.name.startsWith("Harness rf297 extra") && row.kind === "income"),
+    JSON.stringify(copied),
+  );
+
+  // RF-298, RF-299
+  const food = randomUUID();
+  const cleaning = randomUUID();
+  await fixtureSql`
+    insert into categories (id, owner_user_id, name, kind, color)
+    values (${food}, ${owner.id}, ${`Harness rf298 mercado ${tag}`}, 'expense', '#4C8C4A'),
+           (${cleaning}, ${owner.id}, ${`Harness rf298 aseo ${tag}`}, 'expense', '#2E6FBF')`;
+  track("categories", food);
+  track("categories", cleaning);
+  const { transactionId } = await asUser(owner, () =>
+    createTransaction({
+      fromAccountId: parentId, toAccountId: null, amountCents: 35_000_00, occurredAt: "2026-02-01",
+      description: "Harness rf298 compra", externalRef: null, labelIds: [],
+      splits: [{ categoryId: food, amountCents: 20_000_00 }, { categoryId: cleaning, amountCents: 15_000_00 }],
+    }),
+  );
+  track("transactions", transactionId);
+  const { plannedPaymentId } = await asUser(owner, () =>
+    createPlannedPayment({
+      fromAccountId: parentId, toAccountId: null, amountCents: 9_000_00, categoryId: food, dueDate: "2026-12-01",
+      remindOn: null, description: `Harness rf299 arriendo ${tag}`,
+    }),
+  );
+  keep("planned_payments", plannedPaymentId);
+  const { plannedPaymentId: expectedId } = await asUser(owner, () =>
+    createPlannedPayment({
+      fromAccountId: null, toAccountId: parentId, amountCents: 5_000_00, categoryId: null, dueDate: "2026-12-05",
+      remindOn: null, description: `Harness rf299 John ${tag}`,
+    }),
+  );
+  keep("planned_payments", expectedId);
+
+  const exported = await asUser(owner, () =>
+    readExport({ entityKeys: ["accounts", "transactions", "plannedPayments", "expectedIncome", "deferredPurchases"] }),
+  );
+  const split = (exported.transactions ?? []).find((row) => row.description === "Harness rf298 compra");
+  const pocket = (exported.accounts ?? []).find((row) => row.name === `Harness rf296 viajes ${tag}`);
+  const planned = (exported.plannedPayments ?? []).filter((row) => String(row.description).includes(tag));
+  const expected = (exported.expectedIncome ?? []).filter((row) => String(row.description).includes(tag));
+  assert(
+    next("RF-298: a split expense exports its biggest line's category and every line's category and amount; a pocket names its parent"),
+    split?.category === `Harness rf298 mercado ${tag}` &&
+      split?.division === `Harness rf298 mercado ${tag} 20000 · Harness rf298 aseo ${tag} 15000` &&
+      pocket?.insideOf === `Harness rf296 ahorros ${tag}`,
+    JSON.stringify({ split, pocket }),
+  );
+  assert(
+    next("RF-299: the export carries planned payments, expected income apart from them, and deferred purchases"),
+    planned.length === 1 && planned[0].fromAccount === `Harness rf296 ahorros ${tag}` && planned[0].amount === 9_000_00 &&
+      expected.length === 1 && expected[0].toAccount === `Harness rf296 ahorros ${tag}` && !("fromAccount" in expected[0]) &&
+      Array.isArray(exported.deferredPurchases),
+    JSON.stringify({ planned, expected }),
   );
 }

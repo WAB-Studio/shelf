@@ -174,6 +174,9 @@ test("the data screen carries every exportable entity into its download link", a
         "goalContributions",
         "debts",
         "statements",
+        "plannedPayments",
+        "expectedIncome",
+        "deferredPurchases",
       ].join("%2C"),
   );
 });

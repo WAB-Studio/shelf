@@ -5,7 +5,7 @@ import { randomUUID } from "node:crypto";
 import { sql } from "drizzle-orm";
 
 import { insertRow } from "@/db/insert-row";
-import { seedCategoryTree } from "@/db/queries/seed-categories";
+import { seedFundCategories } from "@/db/queries/seed-categories";
 import { accounts, groupMembers, groups } from "@/db/schema";
 import type { Group } from "@/db/schema";
 import type { Transaction } from "@/db/session";
@@ -30,7 +30,7 @@ export type CreateGroupArgs = {
 
 /**
  * One transaction: the group, the caller as its leader, the group's cash and its
- * seed categories. Order matters — the accounts and categories INSERT policies
+ * categories its founder already uses. Order matters — the accounts and categories INSERT policies
  * ask whether the caller leads the group, which only holds once the leader row
  * lands. The group's own id is generated here, client-side: an unclaimed group
  * fails its SELECT policy, so `returning` would hand back nothing.
@@ -102,5 +102,5 @@ async function insertGroup(
     });
   }
 
-  await seedCategoryTree(tx, { groupId }, locale);
+  await seedFundCategories(tx, groupId, userId, locale);
 }

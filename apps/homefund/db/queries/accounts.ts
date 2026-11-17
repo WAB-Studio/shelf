@@ -11,6 +11,7 @@ import { withUserDb, withUserDbOrTx } from "@/db/session";
 import type { CurrencyCode } from "@/lib/currency";
 import { pgConstraintName, pgErrorCode } from "@/lib/db-error";
 import { ActionError } from "@/lib/errors";
+import { insertTransaction } from "@/db/queries/transactions";
 
 type AccountKind = Account["kind"];
 type AccountSubtype = Account["subtype"];
@@ -233,7 +234,44 @@ export type CreateAccountArgs = {
 export async function createAccount(
   args: CreateAccountArgs,
 ): Promise<{ accountId: string }> {
-  return refuseForeignHolder(() => withUserDb((tx) => insertAccount(tx, args)));
+  return refuseForeignHolder(() =>
+    withUserDb((tx) => (args.parentAccountId ? insertPocket(tx, args) : insertAccount(tx, args))),
+  );
+}
+
+/**
+ * A new pocket opens empty and takes what the person sets aside from the free part of its parent by one
+ * transfer dated the opening day, so the parent's total never grows (RF-296). The amount above what is free is
+ * refused: the parent's own balance would go below zero and the pockets would be asked to cover it (RF-249).
+ */
+export async function insertPocket(
+  tx: Transaction,
+  args: CreateAccountArgs,
+): Promise<{ accountId: string }> {
+  // The insert first: the pocket trigger names a parent that cannot hold it (PK001) before any amount is judged.
+  const created = await insertAccount(tx, { ...args, amountMinor: 0 });
+  if (args.amountMinor === 0) return created;
+
+  const parentId = args.parentAccountId as string;
+  const [free] = await tx.execute<{ balance_cents: string | null }>(sql`
+    select balance_cents from account_balances
+    where id = ${parentId}::uuid and currency = ${args.settlementCurrency}
+  `);
+  if (args.amountMinor > Number(free?.balance_cents ?? 0))
+    throw new ActionError("accounts.errors.pocketExceedsFree");
+
+  await insertTransaction(tx, {
+    fromAccountId: parentId,
+    toAccountId: created.accountId,
+    amountCents: args.amountMinor,
+    currency: args.settlementCurrency,
+    occurredAt: args.balanceOn,
+    description: args.name,
+    externalRef: null,
+    splits: [],
+    labelIds: [],
+  });
+  return created;
 }
 
 // RF-181: a holder that is no member of the account's fund, or a holder on a personal account, is the one

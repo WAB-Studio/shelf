@@ -409,6 +409,8 @@
     "openingBalanceLabel": "Opening balance",
     "openingOwedLabel": "Opening debt",
     "openingBalanceOnLabel": "Opening date",
+    "pocketAmountLabel": "How much you set aside from {parent}",
+    "pocketDateLabel": "From the day",
     "openingBalanceRow": "<amount></amount> on {date}",
     "balanceInCurrency": "<amount></amount> in {currency}",
     "creditOf": "{name} ({person})",
@@ -452,6 +454,7 @@
       "parentInvalid": "Choose an open asset account of the same owner and currency.",
       "pocketMustBeAsset": "Only a savings or cash account can be a pocket.",
       "hasPockets": "This account has pockets. Move or archive its pockets first.",
+      "pocketExceedsFree": "That is more than the account has free. Set aside less.",
       "moveNoFund": "You must belong to a fund before moving an account into it.",
       "moveNotYours": "You can only move an account of yours to the fund.",
       "moveAlready": "That account already belongs to the fund.",
@@ -1475,7 +1478,10 @@
       "goals": "Savings goals",
       "goalContributions": "Goal contributions",
       "debts": "Debts",
-      "statements": "Statements"
+      "statements": "Statements",
+      "plannedPayments": "Planned payments",
+      "expectedIncome": "Expected income",
+      "deferredPurchases": "Deferred purchases"
     },
     "columns": {
       "name": "Name",
@@ -1535,7 +1541,13 @@
       "interestCharged": "Interest",
       "feesCharged": "Fees",
       "source": "Source",
-      "externalRef": "External reference"
+      "externalRef": "External reference",
+      "insideOf": "Inside",
+      "division": "Split",
+      "dueOn": "Due",
+      "remindOn": "Remind on",
+      "status": "Status",
+      "instalments": "Instalments"
     },
     "choices": {
       "accountKind": {
@@ -1546,7 +1558,8 @@
         "bank": "Bank",
         "cash": "Cash",
         "card": "Card",
-        "loan": "Loan"
+        "loan": "Loan",
+        "receivable": "Owed to you"
       },
       "categoryKind": {
         "expense": "Expense",
@@ -1577,6 +1590,11 @@
       "flag": {
         "yes": "Yes",
         "no": "No"
+      },
+      "plannedStatus": {
+        "pending": "Pending",
+        "done": "Done",
+        "cancelled": "Cancelled"
       }
     },
     "filenames": {

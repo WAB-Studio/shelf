@@ -203,8 +203,15 @@ function AccountForm({
 
   // Drives the amount label: it reads differently for an asset than for a debt.
   const kind = useWatch({ control: form.control, name: "kind" });
-  const amountLabel =
-    kind === "liability" ? t("openingOwedLabel") : t("openingBalanceLabel");
+  const parentAccountId = useWatch({ control: form.control, name: "parentAccountId" });
+  const parentName = parentCandidates.find((row) => row.id === parentAccountId)?.name;
+  // A new pocket asks what the person sets aside of its parent, not an opening balance (RF-296).
+  const carvesFromParent = !isEdit && kind === "asset" && !!parentName;
+  const amountLabel = carvesFromParent
+    ? t("pocketAmountLabel", { parent: parentName })
+    : kind === "liability"
+      ? t("openingOwedLabel")
+      : t("openingBalanceLabel");
 
   // The control offers only the subtypes the kind admits (accounts_subtype_kind):
   // an asset stays bank-or-cash, a liability is always a card. On edit the kind is
@@ -574,7 +581,7 @@ function AccountForm({
           render={({ field, fieldState }) => (
             <Field invalid={fieldState.invalid}>
               <FieldLabel htmlFor="account-balance-on">
-                {t("openingBalanceOnLabel")}
+                {carvesFromParent ? t("pocketDateLabel") : t("openingBalanceOnLabel")}
               </FieldLabel>
               <FieldControl>
                 <DateInput
