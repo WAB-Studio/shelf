@@ -3,22 +3,19 @@
 import { useFormatter, useLocale, useTranslations } from "next-intl";
 import { Fragment } from "react";
 
-import { Badge, Callout, Flex, Heading, Money, Panel, PanelBlock, Separator, StatTiles, Text } from "@/components/ui";
+import { Badge, Callout, Flex, Heading, Panel, PanelBlock, Separator, Text } from "@/components/ui";
 import type { CurrencyCode } from "@/lib/currency";
 import { civilDateToDate } from "@/lib/dates";
 import type { LoanScheduleSummary, RowView } from "@/lib/loan-schedule";
 import type { Locale } from "@/lib/locales";
 import { useMoneyText } from "@/lib/use-privacy";
 
-// The em dash a tile with nothing to name reads as elsewhere on the screen.
-const NO_VALUE = "—";
-
 const STATE_COLOR = { paid: "green", partial: "amber", pending: "gray" } as const;
 
 /**
- * The payment schedule the bank printed for a loan (RF-266): the next cuota, how many are left, what is still to pay
- * with interest and insurance and when it ends, a warning ahead of a cuota far from the usual one, and one line per
- * cuota with its state in words. Every figure arrives derived from the rows and the loan's payments; none is summed here.
+ * The payment schedule the bank printed for a loan (RF-266): a warning ahead of a cuota far from the usual one and one
+ * line per cuota with its state in words. What is left to pay, the next cuota and the counters sit under «De dónde sale»
+ * (RF-287). Every figure arrives derived from the rows and the loan's payments; none is summed here.
  */
 export function LoanScheduleSection({ schedule, currency }: { schedule: LoanScheduleSummary; currency: CurrencyCode }) {
   const t = useTranslations("loanSchedule");
@@ -34,40 +31,15 @@ export function LoanScheduleSection({ schedule, currency }: { schedule: LoanSche
     return `${format.dateTime(when, { month: "long" })} ${format.dateTime(when, { year: "numeric" })}`;
   };
 
-  const { next, count, remainingCount } = schedule;
   const [firstDiffering, ...otherDiffering] = schedule.differing;
 
-  const tiles = [
-    {
-      key: "next",
-      label: t("tileNext"),
-      value: next === null ? NO_VALUE : <Money minor={next.totalCents} currency={currency} signed={false} size="inherit" />,
-      note: next === null ? t("tileNextDone") : t("tileNextNote", { number: next.number, count, date: day(next.dueOn) }),
-    },
-    {
-      key: "left",
-      label: t("tileLeft"),
-      value: remainingCount,
-      note: t("tileLeftNote", { count }),
-    },
-    {
-      key: "remaining",
-      label: t("tileRemaining"),
-      value: <Money minor={schedule.remainingTotalCents} currency={currency} signed={false} size="inherit" />,
-      note: t("tileRemainingNote"),
-    },
-    {
-      key: "ends",
-      label: t("tileEnds"),
-      value: monthName(schedule.endsOn),
-      note: day(schedule.endsOn),
-    },
-  ];
-
+  // A row paid short says how much is missing, in every case: «Vencida» is for a cuota nothing reached (RF-287).
   function stateLine(row: RowView): { text: string; color: "green" | "amber" | "red" | "gray" } {
     if (row.state === "paid") return { text: t("statePaid"), color: STATE_COLOR.paid };
+    if (row.state === "partial") {
+      return { text: t("statePartial", { left: amount(row.totalCents - row.paidCents) }), color: STATE_COLOR.partial };
+    }
     if (row.overdue) return { text: t("stateOverdue"), color: "red" };
-    if (row.state === "partial") return { text: t("statePartial", { paid: amount(row.paidCents) }), color: STATE_COLOR.partial };
     return { text: t("statePending"), color: STATE_COLOR.pending };
   }
 
@@ -90,8 +62,6 @@ export function LoanScheduleSection({ schedule, currency }: { schedule: LoanSche
           </Callout.Root>
         )}
       </Flex>
-
-      <StatTiles tiles={tiles} />
 
       <Flex direction="column" px={{ initial: "0", md: "6" }}>
         <Panel title={t("rowsTitle")}>

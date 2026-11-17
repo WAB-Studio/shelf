@@ -11,12 +11,14 @@ import {
   Figure,
   Flex,
   Money,
+  PlainLink,
   RowMenu,
   TablePagination,
   Text,
   type DataColumn,
 } from "@/components/ui";
 import type { DebtOverviewRow, DebtPocket } from "@/db/queries/debt-overview";
+import type { DebtSubtype } from "@/db/queries/debts-screen";
 import type { CurrencyCode } from "@/lib/currency";
 import { civilDateToDate } from "@/lib/dates";
 import { formatRatePercent } from "@/lib/validation/debt-terms";
@@ -69,6 +71,8 @@ export type DebtTableRow = {
   canWrite: boolean;
   // Who pays this credit when somebody else does: its row says so under the name.
   paidBy: string | null;
+  // A card and a loan open different forms (RF-286).
+  subtype: DebtSubtype;
 };
 
 const AMOUNT_SLOT = "\u0000";
@@ -306,9 +310,12 @@ export function DebtsTable({
       cell: (row) => (
         <Flex direction="column" gap="1" minWidth="0">
           <Flex align="center" gap="2" minWidth="0">
-            <Text size="2" weight="medium" truncate>
-              {row.name}
-            </Text>
+            {/* The name is the way into the debt at every width, not only the menu's «Ver detalle» (RF-288). */}
+            <PlainLink href={`/planning/debts/${row.accountId}`}>
+              <Text size="2" weight="medium" truncate>
+                {row.name}
+              </Text>
+            </PlainLink>
             <OwnerMark
               personal={row.personal}
               foreignOwner={row.foreignOwner}

@@ -1152,14 +1152,14 @@ test.describe("a debt whose terms fail to save", () => {
   async function fillAndSave(page: Page, name: string): Promise<Locator> {
     await page.goto("/es/planning/debts");
     await page
-      .getByRole("button", { name: debts.add, exact: true })
+      .getByRole("button", { name: debts.addCard, exact: true })
       .filter({ visible: true })
       .first()
       .click();
     const dialog = page.getByRole("dialog");
     await expect(dialog).toBeVisible();
     await dialog.getByRole("textbox", { name: debts.nameLabel }).fill(name);
-    await dialog.getByRole("textbox", { name: debts.openingBalanceLabel }).fill("100000");
+    await dialog.getByRole("textbox", { name: debts.owedTodayLabel }).fill("100000");
     await dialog.getByRole("textbox", { name: debts.annualRateLabel }).fill("24");
     return dialog;
   }
@@ -1178,6 +1178,153 @@ test.describe("a debt whose terms fail to save", () => {
     expect(Number(rows[0].annual_rate)).toBeCloseTo(ANNUAL_RATE, 6);
 
     await dropAccounts(rows.map((row) => row.id));
+  });
+});
+
+// One form for each class of debt (RF-286): the card asks its limit, cut-off day, payment day and minimum; the loan its
+// cuota, payment day, term and rate. Each creates the account of its own class with the terms it was given.
+test.describe("a debt is created by the form of its class", () => {
+  test.afterEach(async () => {
+    const left = await fixtureSql<{ id: string }[]>`
+      select id from accounts
+      where owner_user_id = ${scope.userId} and name like ${`Clase % ${stamp}%`}`;
+    if (left.length > 0) await dropAccounts(left.map((row) => row.id));
+  });
+
+  async function termsOf(name: string) {
+    const [row] = await fixtureSql<
+      {
+        subtype: string;
+        initial: string;
+        debt_kind: string;
+        annual_rate: string;
+        minimum: string | null;
+        limit: string | null;
+        cut_off: number | null;
+        due: number | null;
+        term: number | null;
+      }[]
+    >`
+      select a.subtype, a.initial_balance_cents::text as initial, t.debt_kind, t.annual_rate::text as annual_rate,
+        t.minimum_payment_cents::text as minimum, t.credit_limit_cents::text as "limit",
+        t.statement_cut_off_day as cut_off, t.payment_due_day as due, t.term_months as term
+      from accounts a join debt_terms t on t.account_id = a.id
+      where a.owner_user_id = ${scope.userId} and a.name = ${name}`;
+    return row;
+  }
+
+  test("the card form takes the limit, the cut-off day, the payment day and the minimum", async ({ page }) => {
+    const name = `Clase tarjeta ${stamp} ${randomUUID().slice(0, 4)}`;
+    await page.goto("/es/planning/debts");
+    await page.getByRole("button", { name: debts.addCard, exact: true }).filter({ visible: true }).first().click();
+    const dialog = page.getByRole("dialog");
+    await expect(dialog.getByRole("heading", { name: debts.addCardTitle })).toBeVisible();
+    // Nothing a loan asks, and no «Tipo» to choose: the class is the form.
+    await expect(dialog.getByRole("textbox", { name: debts.termLabel })).toHaveCount(0);
+    await expect(dialog.getByRole("textbox", { name: debts.installmentLabel })).toHaveCount(0);
+
+    await dialog.getByRole("textbox", { name: debts.nameLabel }).fill(name);
+    await dialog.getByRole("textbox", { name: debts.owedTodayLabel }).fill("1200000");
+    await dialog.getByRole("textbox", { name: debts.creditLimitLabel }).fill("5000000");
+    await dialog.getByRole("textbox", { name: debts.cutOffDayLabel }).fill("12");
+    await dialog.getByRole("textbox", { name: debts.dueDayLabel }).fill("27");
+    await dialog.getByRole("textbox", { name: debts.minimumFixed, exact: true }).fill("90000");
+    await dialog.getByRole("textbox", { name: debts.annualRateLabel }).fill("28.5");
+    await dialog.getByRole("button", { name: debts.save, exact: true }).click();
+    await expect(dialog).toBeHidden();
+
+    expect(await termsOf(name)).toEqual({
+      subtype: "card",
+      initial: "-120000000",
+      debt_kind: "revolving",
+      annual_rate: "0.285",
+      minimum: "9000000",
+      limit: "500000000",
+      cut_off: 12,
+      due: 27,
+      term: null,
+    });
+  });
+
+  test("the loan form takes the cuota, the payment day, the term and the rate", async ({ page }) => {
+    const name = `Clase préstamo ${stamp} ${randomUUID().slice(0, 4)}`;
+    await page.goto("/es/planning/debts");
+    await page.getByRole("button", { name: debts.addLoan, exact: true }).filter({ visible: true }).first().click();
+    const dialog = page.getByRole("dialog");
+    await expect(dialog.getByRole("heading", { name: debts.addLoanTitle })).toBeVisible();
+    // Nothing a card asks.
+    await expect(dialog.getByRole("textbox", { name: debts.creditLimitLabel })).toHaveCount(0);
+    await expect(dialog.getByRole("textbox", { name: debts.cutOffDayLabel })).toHaveCount(0);
+
+    // The cuota is the one thing a loan must say: the form refuses without it and keeps what was typed.
+    await dialog.getByRole("textbox", { name: debts.nameLabel }).fill(name);
+    await dialog.getByRole("textbox", { name: debts.owedTodayLabel }).fill("3000000");
+    await dialog.getByRole("textbox", { name: debts.annualRateLabel }).fill("19");
+    await dialog.getByRole("button", { name: debts.save, exact: true }).click();
+    await expect(dialog.getByText(debts.errors.installmentRequired)).toBeVisible();
+    await expect(dialog).toBeVisible();
+
+    await dialog.getByRole("textbox", { name: debts.installmentLabel }).fill("330000");
+    await dialog.getByRole("textbox", { name: debts.dueDayLabel }).fill("15");
+    await dialog.getByRole("textbox", { name: debts.termLabel }).fill("12");
+    await dialog.getByRole("button", { name: debts.save, exact: true }).click();
+    await expect(dialog).toBeHidden();
+
+    expect(await termsOf(name)).toEqual({
+      subtype: "loan",
+      initial: "-300000000",
+      debt_kind: "installment",
+      annual_rate: "0.19",
+      minimum: "33000000",
+      limit: null,
+      cut_off: null,
+      due: 15,
+      term: 12,
+    });
+  });
+
+  test("a debt that carries terms is edited by the same form, opened on what it holds", async ({ page }) => {
+    const name = `Clase edición ${stamp} ${randomUUID().slice(0, 4)}`;
+    await page.goto("/es/planning/debts");
+    await page.getByRole("button", { name: debts.addLoan, exact: true }).filter({ visible: true }).first().click();
+    const dialog = page.getByRole("dialog");
+    await dialog.getByRole("textbox", { name: debts.nameLabel }).fill(name);
+    await dialog.getByRole("textbox", { name: debts.owedTodayLabel }).fill("2000000");
+    await dialog.getByRole("textbox", { name: debts.installmentLabel }).fill("250000");
+    await dialog.getByRole("textbox", { name: debts.annualRateLabel }).fill("20");
+    await dialog.getByRole("button", { name: debts.save, exact: true }).click();
+    await expect(dialog).toBeHidden();
+
+    await rowMenu(page, name).click();
+    await page.getByRole("menuitem", { name: messages.common.edit, exact: true }).click();
+    await expect(dialog.getByRole("heading", { name: debts.termsLoanTitle })).toBeVisible();
+    // It opens on what the debt holds, so saving a change is never read as someone else's.
+    await expect(dialog.getByRole("textbox", { name: debts.installmentLabel })).toHaveValue(/250\.000|250,000|250000/);
+    await expect(dialog.getByRole("textbox", { name: debts.annualRateLabel })).toHaveValue("20");
+    await dialog.getByRole("textbox", { name: debts.termLabel }).fill("10");
+    await dialog.getByRole("button", { name: debts.save, exact: true }).click();
+    await expect(dialog).toBeHidden();
+
+    const [row] = await fixtureSql<{ term: number | null; minimum: string | null }[]>`
+      select t.term_months as term, t.minimum_payment_cents::text as minimum
+      from accounts a join debt_terms t on t.account_id = a.id
+      where a.owner_user_id = ${scope.userId} and a.name = ${name}`;
+    expect(row).toEqual({ term: 10, minimum: "25000000" });
+  });
+
+  test("the list names each debt as a link to its detail", async ({ page }) => {
+    const name = `Clase enlace ${stamp} ${randomUUID().slice(0, 4)}`;
+    const id = randomUUID();
+    await asHarnessUser(async (tx) => {
+      await tx`
+        insert into accounts (id, owner_user_id, name, kind, subtype, initial_balance_cents, initial_balance_on)
+        values (${id}, ${scope.userId}, ${name}, 'liability', 'loan', ${-10_000_00}, ${todayInBogota()})`;
+    });
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.goto("/es/planning/debts");
+    // A debt with no terms sits in the same table: its name opens it too.
+    await page.getByRole("table", { name: debts.title }).getByRole("link", { name, exact: true }).click();
+    await expect(page).toHaveURL(`/es/planning/debts/${id}`);
   });
 });
 

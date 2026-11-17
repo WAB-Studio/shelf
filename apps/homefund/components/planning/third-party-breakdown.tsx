@@ -9,12 +9,13 @@ import { Button, Dialog, Flex, Money, Separator, Spinner, Text } from "@/compone
 import type { ThirdPartyCreditView } from "@/db/queries/third-party-credits";
 import type { CurrencyCode } from "@/lib/currency";
 import { civilDateToDate } from "@/lib/dates";
+import { reconcileCredit } from "@/lib/loan-standing";
 import type { Locale } from "@/lib/locales";
 import { useMoneyText } from "@/lib/use-privacy";
 
 type Breakdown = Pick<
   ThirdPartyCreditView,
-  "personName" | "openingCents" | "openedOn" | "payments" | "otherCents" | "personOwesCents" | "schedule"
+  "personName" | "openingCents" | "openedOn" | "payments" | "otherCents" | "personOwesCents" | "schedule" | "owedCents"
 >;
 
 /**
@@ -28,6 +29,8 @@ function BreakdownBody({ credit, currency }: { credit: Breakdown; currency: Curr
   const locale = useLocale() as Locale;
   const moneyText = useMoneyText();
   const { personName: person, schedule } = credit;
+  // What the credit asks of the person against what the payer owes them: one sentence says why they differ (RF-287).
+  const reconciliation = reconcileCredit(credit.owedCents, credit.personOwesCents);
   const day = (date: string) => format.dateTime(civilDateToDate(date), { day: "numeric", month: "short", year: "numeric" });
   const money = (cents: number) => <Money minor={cents} currency={currency} signed={false} size="inherit" />;
 
@@ -76,6 +79,9 @@ function BreakdownBody({ credit, currency }: { credit: Breakdown; currency: Curr
           </Text>
         </Flex>
       </Flex>
+      <Text size="2" color="gray">
+        {t(`reconcile.${reconciliation.kind}`, { person, credit: moneyText(credit.owedCents, currency, locale), amount: moneyText(reconciliation.cents, currency, locale) })}
+      </Text>
       {schedule !== null && schedule.remainingCount > 0 && (
         <Text size="2" color="gray">
           {t("breakdownSchedule", { count: schedule.remainingCount, amount: moneyText(schedule.remainingTotalCents, currency, locale) })}

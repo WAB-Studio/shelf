@@ -12,6 +12,7 @@ import { getOwedToMe } from "@/db/queries/owed-to-me";
 import { listCallerMembers } from "@/db/queries/group-members";
 import { getUserGroup } from "@/db/queries/groups";
 import { requireUser } from "@/db/session";
+import { redirect } from "@/i18n/navigation";
 import { routing } from "@/i18n/routing";
 import { todayInBogota } from "@/lib/dates";
 import { isStale } from "@/lib/reconcile-age";
@@ -42,6 +43,10 @@ export default async function AccountsPage(
   // It is read through the create form's own field schema, so a fabricated value
   // is dropped here and the screen simply opens with no class chosen.
   const parsed = createAccountSchema.shape.subtype.safeParse(requestedSubtype);
+  // A card or a loan is a debt: its form is the one in Deudas (RF-286).
+  if (parsed.success && (parsed.data === "card" || parsed.data === "loan")) {
+    redirect({ href: `/planning/debts?new=${parsed.data}`, locale });
+  }
   const newSubtype = parsed.success ? parsed.data : null;
 
   // The policies scope the rows: a personal-only caller sees only their own

@@ -34,6 +34,8 @@ export type UpsertDebtTermsArgs = {
   statementCutOffDay: number | null;
   paymentDueDay: number | null;
   avalCents: number | null;
+  // The loan's cuotas (RF-286). Undefined leaves the stored term alone; null clears it.
+  termMonths?: number | null;
   // RF-156: the form opened on a debt with no terms, so terms found holding other values are
   // someone else's and are kept. Absent, the terms are rewritten whatever they hold.
   keepOthers?: true;
@@ -67,11 +69,11 @@ export async function upsertDebtTerms(
     const [row] = await insertRow(
       tx,
       debtTerms,
-      { accountId: args.accountId, ...writable },
+      { accountId: args.accountId, ...writable, termMonths: args.termMonths ?? null },
       {
         onConflict: {
           target: debtTerms.accountId,
-          set: writable,
+          set: args.termMonths === undefined ? writable : { ...writable, termMonths: args.termMonths },
           // Terms already holding these very values are the person's own retry, whose first
           // answer was lost on the way back; any others are kept.
           where: !args.keepOthers

@@ -757,6 +757,13 @@
       "when": 1794943296033,
       "tag": "0111_a_card_statement_can_be_corrected",
       "breakpoints": true
+    },
+    {
+      "idx": 112,
+      "version": "7",
+      "when": 1794943356033,
+      "tag": "0112_a_loan_knows_its_term",
+      "breakpoints": true
     }
   ]
 }

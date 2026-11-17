@@ -157,6 +157,13 @@ const debtTermsFields = {
   creditLimit: creditLimitSchema.nullish(),
   statementCutOffDay: dayOfMonthSchema("debts.errors.cutOffDayInvalid").nullish(),
   paymentDueDay: dayOfMonthSchema("debts.errors.dueDayInvalid").nullish(),
+  // The cuotas a loan was taken for (RF-286); left out, the stored term stays as it was.
+  termMonths: z
+    .number({ error: "debts.errors.termInvalid" })
+    .int({ error: "debts.errors.termInvalid" })
+    .min(1, { error: "debts.errors.termInvalid" })
+    .max(600, { error: "debts.errors.termInvalid" })
+    .nullish(),
   aval: avalSchema.nullish(),
 };
 

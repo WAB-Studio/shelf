@@ -11,29 +11,35 @@ import { z } from "zod";
 import { createAccountAction } from "@/app/actions/accounts";
 import { saveDebtTermsAction } from "@/app/actions/debt-terms";
 import {
+  AmountField,
   Button,
   Callout,
   Dialog,
   Field,
   FieldControl,
+  FieldDescription,
   FieldGroup,
   FieldLabel,
   FieldMessage,
   Flex,
   SegmentedControl,
+  Select,
   Spinner,
   Text,
   TextField,
-  AmountField,
 } from "@/components/ui";
+import type { DebtOverviewRow } from "@/db/queries/debt-overview";
+import type { DebtSubtype } from "@/db/queries/debts-screen";
 import {
   BASE_CURRENCY,
   minorUnitExponent,
+  OFFERED_CURRENCIES,
   type CurrencyCode,
   type OfferedCurrency,
 } from "@/lib/currency";
 import { todayInBogota } from "@/lib/dates";
-import { useMoneyText } from "@/lib/use-privacy";
+import type { Locale } from "@/lib/locales";
+import { amountToInput } from "@/lib/money";
 import { useActionErrorToast } from "@/lib/use-action-toast";
 import {
   ACCOUNT_PLACEMENTS,
@@ -41,8 +47,8 @@ import {
   type CreateAccountInput,
 } from "@/lib/validation/account";
 import {
-  DEBT_KINDS,
   debtTermsSchema,
+  fractionToPercent,
   type DebtTermsInput,
 } from "@/lib/validation/debt-terms";
 
@@ -51,12 +57,20 @@ function amountInputMode(currency: CurrencyCode): "decimal" | "numeric" {
   return minorUnitExponent(currency) > 0 ? "decimal" : "numeric";
 }
 
-// The bare liability the "complete" mode writes terms onto: the screen resolves
-// its derived balance and passes it in, so the dialog never reads a stored one.
+// The liability the "complete" mode writes terms onto: the screen resolves its
+// derived balance and passes it in, so the dialog never reads a stored one. A
+// debt that already carries terms arrives with them (`stored`), and the form
+// opens on them.
 export type DebtAccount = {
   accountId: string;
   name: string;
   owedCents: number;
+};
+
+// The debt a form writes terms onto: which class it is decides the fields.
+export type DebtTermsTarget = DebtAccount & {
+  subtype: DebtSubtype;
+  stored?: DebtOverviewRow["stored"];
 };
 
 // Create mode owns both an account and its terms, but the account does not exist
@@ -71,6 +85,22 @@ const createDebtSchema = z.object({
   ...debtTermsShape,
 });
 
+// A loan is asked its cuota before anything else about its terms: without it
+// the screen cannot say how many are left.
+function requireLoanInstallment(
+  data: { subtype: string; minimumPayment?: string | null },
+  ctx: z.RefinementCtx,
+) {
+  if (data.subtype === "loan" && !data.minimumPayment?.trim()) {
+    ctx.addIssue({ code: "custom", message: "debts.errors.installmentRequired", path: ["minimumPayment"] });
+  }
+}
+const createLoanSchema = createDebtSchema.superRefine(requireLoanInstallment);
+const termsLoanSchema = debtTermsSchema.superRefine(
+  // The terms half carries no subtype: only the loan form reaches it asking for a cuota.
+  (data, ctx) => requireLoanInstallment({ subtype: data.debtKind === "installment" ? "loan" : "card", minimumPayment: data.minimumPayment }, ctx),
+);
+
 // A superset of both modes' shapes plus the UI-only minimum toggle: the resolver
 // strips whichever key the active schema does not declare, so `accountId` never
 // reaches the create step and the account fields never reach the terms step.
@@ -78,13 +108,13 @@ type DebtFormValues = {
   accountId: string;
   name: string;
   kind: "liability";
-  subtype: "card";
+  subtype: DebtSubtype;
   settlementCurrency: OfferedCurrency;
   placement: (typeof ACCOUNT_PLACEMENTS)[number];
   institution: string;
   amount: string;
   balanceOn: string;
-  debtKind: (typeof DEBT_KINDS)[number];
+  debtKind: "revolving" | "installment";
   annualRate: string;
   // Which minimum the user is entering; drives which input shows and keeps the
   // other value null so a fixed amount and a percentage never coexist.
@@ -94,13 +124,20 @@ type DebtFormValues = {
   creditLimit: string | null;
   statementCutOffDay: number | null;
   paymentDueDay: number | null;
+  termMonths: number | null;
   aval: string | null;
 };
 
+/**
+ * One form for each class of debt (RF-286): a card asks its limit, cut-off day, payment day and minimum; a loan its
+ * cuota, payment day, term and rate. It creates the debt with its terms, completes a debt that has none, or edits the
+ * terms a debt carries; the class decides which fields stand and nothing else about the form changes.
+ */
 export function DebtFormDialog({
   open,
   onOpenChange,
   mode,
+  subtype,
   hasGroup,
   account,
   currency = BASE_CURRENCY,
@@ -108,11 +145,12 @@ export function DebtFormDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
   mode: "create" | "complete";
+  // The class of a new debt; a debt that exists carries its own.
+  subtype: DebtSubtype;
   hasGroup: boolean;
-  account?: DebtAccount;
-  // The currency the account settles in: the balance reads in it and the terms
-  // are typed in its minor unit (RF-121). A new debt has none yet, so a caller
-  // that names none is on the base currency.
+  account?: DebtTermsTarget;
+  // The currency the account settles in: the terms are typed in its minor unit
+  // (RF-121). A new debt picks its own in the form.
   currency?: OfferedCurrency;
 }) {
   const t = useTranslations("debts");
@@ -125,19 +163,25 @@ export function DebtFormDialog({
     onOpenChange(next);
   }
 
+  const creating = mode === "create" && !createdId;
+  const title = creating
+    ? subtype === "loan"
+      ? t("addLoanTitle")
+      : t("addCardTitle")
+    : subtype === "loan"
+      ? t("termsLoanTitle")
+      : t("termsCardTitle");
+
   return (
     <Dialog.Root open={open} onOpenChange={handleOpenChange}>
       <Dialog.Content>
-        <Dialog.Title>
-          {mode === "create" && !createdId
-            ? t("addTitle")
-            : t("completeTermsTitle")}
-        </Dialog.Title>
+        <Dialog.Title>{title}</Dialog.Title>
         {/* Closing unmounts the content, and the key remounts on a change of
             subject, so the form below is always born with fresh defaults. */}
         <DebtForm
-          key={account?.accountId ?? "create"}
+          key={`${account?.accountId ?? "create"}:${subtype}`}
           mode={mode}
+          subtype={subtype}
           hasGroup={hasGroup}
           account={account}
           currency={currency}
@@ -152,55 +196,59 @@ export function DebtFormDialog({
 
 function DebtForm({
   mode,
+  subtype,
   hasGroup,
   account,
-  currency,
+  currency: accountCurrency,
   createdId,
   onCreated,
   onOpenChange,
 }: {
   mode: "create" | "complete";
+  subtype: DebtSubtype;
   hasGroup: boolean;
-  account?: DebtAccount;
+  account?: DebtTermsTarget;
   currency: OfferedCurrency;
   createdId: string | null;
   onCreated: (accountId: string) => void;
   onOpenChange: (open: boolean) => void;
 }) {
-  const moneyText = useMoneyText();
   const t = useTranslations("debts");
   // Root-scoped: the keys under `common` sit outside the `debts` namespace.
   const tKey = useTranslations();
-  const locale = useLocale();
+  const locale = useLocale() as Locale;
 
+  const isLoan = subtype === "loan";
   // Create until the account exists; after that only its terms are saved.
   const isCreate = mode === "create" && !createdId;
+  const stored = account?.stored;
   const form = useForm<DebtFormValues>({
     // useForm reads the option on every render, so the resolver follows the mode.
     resolver: (isCreate
-      ? zodResolver(createDebtSchema)
-      : zodResolver(debtTermsSchema)) as unknown as Resolver<DebtFormValues>,
+      ? zodResolver(isLoan ? createLoanSchema : createDebtSchema)
+      : zodResolver(isLoan ? termsLoanSchema : debtTermsSchema)) as unknown as Resolver<DebtFormValues>,
     defaultValues: {
       accountId: account?.accountId ?? "",
       name: "",
       kind: "liability",
-      // The create schema requires both; the form offers neither as a choice.
-      subtype: "card",
-      settlementCurrency: currency,
+      subtype,
+      settlementCurrency: accountCurrency,
       placement: "personal",
       institution: "",
       amount: "",
-      // No date field rides on this form: the owed amount is true as of today.
+      // No date field rides on the form: what the debt owes is true as of today.
       balanceOn: todayInBogota(),
-      debtKind: "revolving",
-      annualRate: "",
-      minimumMode: "fixed",
-      minimumPayment: null,
-      minimumPaymentPct: null,
-      creditLimit: null,
-      statementCutOffDay: null,
-      paymentDueDay: null,
-      aval: null,
+      debtKind: isLoan ? "installment" : "revolving",
+      annualRate: stored ? fractionToPercent(stored.annualRate) : "",
+      minimumMode: stored?.minimumPaymentPct != null ? "pct" : "fixed",
+      minimumPayment:
+        stored?.fixedMinimumCents != null ? amountToInput(stored.fixedMinimumCents, accountCurrency, locale) : null,
+      minimumPaymentPct: stored?.minimumPaymentPct != null ? fractionToPercent(stored.minimumPaymentPct) : null,
+      creditLimit: stored?.creditLimitCents != null ? amountToInput(stored.creditLimitCents, accountCurrency, locale) : null,
+      statementCutOffDay: stored?.statementCutOffDay ?? null,
+      paymentDueDay: stored?.paymentDueDay ?? null,
+      termMonths: stored?.termMonths ?? null,
+      aval: stored?.avalCents != null ? amountToInput(stored.avalCents, accountCurrency, locale) : null,
     },
   });
 
@@ -220,27 +268,29 @@ function DebtForm({
     },
   });
 
-
   const isPending = createAccount.isPending || saveTerms.isPending;
 
   // Drives which minimum input shows; the toggle nulls the other value so the
   // schema's amount-XOR-percentage check can never fail through this form.
   const minimumMode = useWatch({ control: form.control, name: "minimumMode" });
+  // The currency a new debt settles in decides how its amounts are typed (RF-121).
+  const pickedCurrency = useWatch({ control: form.control, name: "settlementCurrency" });
+  const currency = isCreate ? pickedCurrency : accountCurrency;
 
-  function termsInput(
-    values: DebtFormValues,
-    accountId: string,
-  ): DebtTermsInput {
+  function termsInput(values: DebtFormValues, accountId: string): DebtTermsInput & { replace?: boolean } {
     return {
       accountId,
-      debtKind: values.debtKind,
+      debtKind: isLoan ? "installment" : "revolving",
       annualRate: values.annualRate,
       minimumPayment: values.minimumPayment,
       minimumPaymentPct: values.minimumPaymentPct,
       creditLimit: values.creditLimit,
       statementCutOffDay: values.statementCutOffDay,
       paymentDueDay: values.paymentDueDay,
+      termMonths: values.termMonths,
       aval: values.aval,
+      // A debt that already carried terms is edited, not completed: the form held what was stored.
+      ...(stored ? { replace: true } : {}),
     };
   }
 
@@ -265,11 +315,10 @@ function DebtForm({
       const created = await createAccount.executeAsync({
         name: values.name,
         kind: "liability",
-        // A debt is a card: the only subtype a liability admits (accounts_subtype_kind).
-        subtype: "card",
+        subtype,
         placement: values.placement,
         institution: values.institution,
-        settlementCurrency: currency,
+        settlementCurrency: values.settlementCurrency,
         amount: values.amount,
         balanceOn: values.balanceOn,
       } satisfies CreateAccountInput);
@@ -290,6 +339,45 @@ function DebtForm({
 
     toast.success(t("saved"));
     onOpenChange(false);
+  }
+
+  const optional = (
+    <Text size="2" weight="regular" color="gray">
+      {tKey("common.optional")}
+    </Text>
+  );
+
+  // A day of the month, typed as a number: blank is none.
+  function dayField(name: "statementCutOffDay" | "paymentDueDay" | "termMonths", id: string, label: string, hint?: string) {
+    return (
+      <Controller
+        name={name}
+        control={form.control}
+        render={({ field, fieldState }) => (
+          <Field invalid={fieldState.invalid}>
+            <FieldLabel htmlFor={id}>
+              <Flex as="span" align="center" gap="1">
+                {label}
+                {optional}
+              </Flex>
+            </FieldLabel>
+            <FieldControl>
+              <TextField.Root
+                id={id}
+                size="3"
+                inputMode="numeric"
+                value={field.value == null ? "" : String(field.value)}
+                onChange={(event) => field.onChange(event.target.value === "" ? null : Number(event.target.value))}
+                onBlur={field.onBlur}
+                disabled={isPending}
+              />
+            </FieldControl>
+            {hint && <FieldDescription>{hint}</FieldDescription>}
+            <FieldMessage error={fieldState.error} />
+          </Field>
+        )}
+      />
+    );
   }
 
   return (
@@ -322,28 +410,12 @@ function DebtForm({
             )}
           />
         ) : (
-          // The account already exists; its name is fixed and its balance is
-          // derived, so both show read-only and terms never write a balance.
-          <>
-            <Field>
-              <FieldLabel>{t("nameLabel")}</FieldLabel>
-              <Text size="3">{account?.name ?? form.getValues("name")}</Text>
-            </Field>
-            {account && (
-              <Field>
-                <FieldLabel>{t("openingBalanceLabel")}</FieldLabel>
-                <Text size="3">
-                  {/* JSX cannot travel through `t()`, and this is the same figure
-                    `Money` draws, character for character (RF-121). */}
-                  {moneyText(
-                    Math.abs(account?.owedCents ?? 0),
-                    currency,
-                    locale,
-                  )}
-                </Text>
-              </Field>
-            )}
-          </>
+          // The account already exists; its name is fixed and what it owes is
+          // derived, so terms never write a balance.
+          <Field>
+            <FieldLabel>{t("nameLabel")}</FieldLabel>
+            <Text size="3">{account?.name ?? form.getValues("name")}</Text>
+          </Field>
         )}
 
         {/* The group placement only exists when the caller has a group: without
@@ -354,9 +426,7 @@ function DebtForm({
             control={form.control}
             render={({ field, fieldState }) => (
               <Field invalid={fieldState.invalid}>
-                <FieldLabel id="debt-placement-label">
-                  {t("placementLabel")}
-                </FieldLabel>
+                <FieldLabel id="debt-placement-label">{t("placementLabel")}</FieldLabel>
                 <FieldControl>
                   <SegmentedControl.Root
                     size="3"
@@ -364,12 +434,8 @@ function DebtForm({
                     onValueChange={field.onChange}
                     aria-labelledby="debt-placement-label"
                   >
-                    <SegmentedControl.Item value="personal">
-                      {t("placementPersonal")}
-                    </SegmentedControl.Item>
-                    <SegmentedControl.Item value="group">
-                      {t("placementGroup")}
-                    </SegmentedControl.Item>
+                    <SegmentedControl.Item value="personal">{t("placementPersonal")}</SegmentedControl.Item>
+                    <SegmentedControl.Item value="group">{t("placementGroup")}</SegmentedControl.Item>
                   </SegmentedControl.Root>
                 </FieldControl>
                 <FieldMessage error={fieldState.error} />
@@ -387,9 +453,7 @@ function DebtForm({
                 <FieldLabel htmlFor="debt-institution">
                   <Flex as="span" align="center" gap="1">
                     {t("institutionLabel")}
-                    <Text size="2" weight="regular" color="gray">
-                      {tKey("common.optional")}
-                    </Text>
+                    {optional}
                   </Flex>
                 </FieldLabel>
                 <FieldControl>
@@ -407,15 +471,39 @@ function DebtForm({
           />
         )}
 
+        {/* Above the amounts because it decides how they read (RF-121). */}
+        {isCreate && (
+          <Controller
+            name="settlementCurrency"
+            control={form.control}
+            render={({ field, fieldState }) => (
+              <Field invalid={fieldState.invalid}>
+                <FieldLabel htmlFor="debt-currency">{t("currencyLabel")}</FieldLabel>
+                <Select.Root size="3" value={field.value} onValueChange={field.onChange} disabled={isPending}>
+                  <FieldControl>
+                    <Select.Trigger id="debt-currency" />
+                  </FieldControl>
+                  <Select.Content position="popper">
+                    {OFFERED_CURRENCIES.map((code) => (
+                      <Select.Item key={code} value={code}>
+                        {code}
+                      </Select.Item>
+                    ))}
+                  </Select.Content>
+                </Select.Root>
+                <FieldMessage error={fieldState.error} />
+              </Field>
+            )}
+          />
+        )}
+
         {isCreate && (
           <Controller
             name="amount"
             control={form.control}
             render={({ field, fieldState }) => (
               <Field invalid={fieldState.invalid}>
-                <FieldLabel htmlFor="debt-amount">
-                  {t("openingBalanceLabel")}
-                </FieldLabel>
+                <FieldLabel htmlFor="debt-amount">{t("owedTodayLabel")}</FieldLabel>
                 <FieldControl>
                   <AmountField
                     {...field}
@@ -431,276 +519,156 @@ function DebtForm({
           />
         )}
 
-        <Controller
-          name="debtKind"
-          control={form.control}
-          render={({ field, fieldState }) => (
-            <Field invalid={fieldState.invalid}>
-              <FieldLabel id="debt-kind-label">{t("kindLabel")}</FieldLabel>
-              <FieldControl>
-                <SegmentedControl.Root
-                  size="3"
-                  value={field.value}
-                  onValueChange={field.onChange}
-                  aria-labelledby="debt-kind-label"
-                >
-                  <SegmentedControl.Item value="revolving">
-                    {t("kindRevolving")}
-                  </SegmentedControl.Item>
-                  <SegmentedControl.Item value="installment">
-                    {t("kindInstallment")}
-                  </SegmentedControl.Item>
-                </SegmentedControl.Root>
-              </FieldControl>
-              <FieldMessage error={fieldState.error} />
-            </Field>
-          )}
-        />
+        {isLoan ? (
+          <>
+            <Controller
+              name="minimumPayment"
+              control={form.control}
+              render={({ field, fieldState }) => (
+                <Field invalid={fieldState.invalid}>
+                  <FieldLabel htmlFor="debt-installment">{t("installmentLabel")}</FieldLabel>
+                  <FieldControl>
+                    <AmountField
+                      id="debt-installment"
+                      size="3"
+                      inputMode={amountInputMode(currency)}
+                      value={field.value ?? ""}
+                      onChange={(event) => field.onChange(event.target.value || null)}
+                      onBlur={field.onBlur}
+                      disabled={isPending}
+                    />
+                  </FieldControl>
+                  <FieldMessage error={fieldState.error} />
+                </Field>
+              )}
+            />
+            {dayField("paymentDueDay", "debt-due-day", t("dueDayLabel"))}
+            {dayField("termMonths", "debt-term", t("termLabel"), t("termHint"))}
+          </>
+        ) : (
+          <>
+            <Controller
+              name="creditLimit"
+              control={form.control}
+              render={({ field, fieldState }) => (
+                <Field invalid={fieldState.invalid}>
+                  <FieldLabel htmlFor="debt-credit-limit">
+                    <Flex as="span" align="center" gap="1">
+                      {t("creditLimitLabel")}
+                      {optional}
+                    </Flex>
+                  </FieldLabel>
+                  <FieldControl>
+                    <AmountField
+                      id="debt-credit-limit"
+                      size="3"
+                      inputMode={amountInputMode(currency)}
+                      value={field.value ?? ""}
+                      onChange={(event) => field.onChange(event.target.value || null)}
+                      onBlur={field.onBlur}
+                      disabled={isPending}
+                    />
+                  </FieldControl>
+                  <FieldMessage error={fieldState.error} />
+                </Field>
+              )}
+            />
+            {dayField("statementCutOffDay", "debt-cut-off-day", t("cutOffDayLabel"))}
+            {dayField("paymentDueDay", "debt-due-day", t("dueDayLabel"))}
+
+            {/* The minimum is a fixed amount XOR a percentage: the toggle nulls the
+                value it hides, so only one ever reaches the schema. */}
+            <Controller
+              name="minimumMode"
+              control={form.control}
+              render={({ field }) => (
+                <Field>
+                  <FieldLabel id="debt-minimum-label">
+                    <Flex as="span" align="center" gap="1">
+                      {t("minimumLabel")}
+                      {optional}
+                    </Flex>
+                  </FieldLabel>
+                  <FieldControl>
+                    <SegmentedControl.Root
+                      size="3"
+                      value={field.value}
+                      onValueChange={(value) => {
+                        field.onChange(value);
+                        if (value === "fixed") {
+                          form.setValue("minimumPaymentPct", null);
+                        } else {
+                          form.setValue("minimumPayment", null);
+                        }
+                      }}
+                      aria-labelledby="debt-minimum-label"
+                    >
+                      <SegmentedControl.Item value="fixed">{t("minimumFixed")}</SegmentedControl.Item>
+                      <SegmentedControl.Item value="pct">{t("minimumPct")}</SegmentedControl.Item>
+                    </SegmentedControl.Root>
+                  </FieldControl>
+                </Field>
+              )}
+            />
+
+            {minimumMode === "fixed" ? (
+              <Controller
+                name="minimumPayment"
+                control={form.control}
+                render={({ field, fieldState }) => (
+                  <Field invalid={fieldState.invalid}>
+                    <FieldLabel htmlFor="debt-minimum-fixed">{t("minimumFixed")}</FieldLabel>
+                    <FieldControl>
+                      <AmountField
+                        id="debt-minimum-fixed"
+                        size="3"
+                        inputMode={amountInputMode(currency)}
+                        value={field.value ?? ""}
+                        onChange={(event) => field.onChange(event.target.value || null)}
+                        onBlur={field.onBlur}
+                        disabled={isPending}
+                      />
+                    </FieldControl>
+                    <FieldMessage error={fieldState.error} />
+                  </Field>
+                )}
+              />
+            ) : (
+              <Controller
+                name="minimumPaymentPct"
+                control={form.control}
+                render={({ field, fieldState }) => (
+                  <Field invalid={fieldState.invalid}>
+                    <FieldLabel htmlFor="debt-minimum-pct">{t("minimumPct")}</FieldLabel>
+                    <FieldControl>
+                      <TextField.Root
+                        id="debt-minimum-pct"
+                        size="3"
+                        inputMode="decimal"
+                        value={field.value ?? ""}
+                        onChange={(event) => field.onChange(event.target.value || null)}
+                        onBlur={field.onBlur}
+                        disabled={isPending}
+                      />
+                    </FieldControl>
+                    <FieldMessage error={fieldState.error} />
+                  </Field>
+                )}
+              />
+            )}
+          </>
+        )}
 
         <Controller
           name="annualRate"
           control={form.control}
           render={({ field, fieldState }) => (
             <Field invalid={fieldState.invalid}>
-              <FieldLabel htmlFor="debt-rate">
-                {t("annualRateLabel")}
-              </FieldLabel>
+              <FieldLabel htmlFor="debt-rate">{t("annualRateLabel")}</FieldLabel>
               <FieldControl>
-                <TextField.Root
-                  {...field}
-                  id="debt-rate"
-                  size="3"
-                  inputMode="decimal"
-                  disabled={isPending}
-                />
+                <TextField.Root {...field} id="debt-rate" size="3" inputMode="decimal" disabled={isPending} />
               </FieldControl>
-              <FieldMessage error={fieldState.error} />
-            </Field>
-          )}
-        />
-
-        {/* The minimum is a fixed amount XOR a percentage: the toggle nulls the
-            value it hides, so only one ever reaches the schema. */}
-        <Controller
-          name="minimumMode"
-          control={form.control}
-          render={({ field }) => (
-            <Field>
-              <FieldLabel id="debt-minimum-label">
-                <Flex as="span" align="center" gap="1">
-                  {t("minimumLabel")}
-                  <Text size="2" weight="regular" color="gray">
-                    {tKey("common.optional")}
-                  </Text>
-                </Flex>
-              </FieldLabel>
-              <FieldControl>
-                <SegmentedControl.Root
-                  size="3"
-                  value={field.value}
-                  onValueChange={(value) => {
-                    field.onChange(value);
-                    if (value === "fixed") {
-                      form.setValue("minimumPaymentPct", null);
-                    } else {
-                      form.setValue("minimumPayment", null);
-                    }
-                  }}
-                  aria-labelledby="debt-minimum-label"
-                >
-                  <SegmentedControl.Item value="fixed">
-                    {t("minimumFixed")}
-                  </SegmentedControl.Item>
-                  <SegmentedControl.Item value="pct">
-                    {t("minimumPct")}
-                  </SegmentedControl.Item>
-                </SegmentedControl.Root>
-              </FieldControl>
-            </Field>
-          )}
-        />
-
-        {minimumMode === "fixed" ? (
-          <Controller
-            name="minimumPayment"
-            control={form.control}
-            render={({ field, fieldState }) => (
-              <Field invalid={fieldState.invalid}>
-                <FieldLabel htmlFor="debt-minimum-fixed">
-                  {t("minimumFixed")}
-                </FieldLabel>
-                <FieldControl>
-                  <AmountField
-                    id="debt-minimum-fixed"
-                    size="3"
-                    inputMode={amountInputMode(currency)}
-                    value={field.value ?? ""}
-                    onChange={(event) =>
-                      field.onChange(event.target.value || null)
-                    }
-                    onBlur={field.onBlur}
-                    disabled={isPending}
-                  />
-                </FieldControl>
-                <FieldMessage error={fieldState.error} />
-              </Field>
-            )}
-          />
-        ) : (
-          <Controller
-            name="minimumPaymentPct"
-            control={form.control}
-            render={({ field, fieldState }) => (
-              <Field invalid={fieldState.invalid}>
-                <FieldLabel htmlFor="debt-minimum-pct">
-                  {t("minimumPct")}
-                </FieldLabel>
-                <FieldControl>
-                  <TextField.Root
-                    id="debt-minimum-pct"
-                    size="3"
-                    inputMode="decimal"
-                    value={field.value ?? ""}
-                    onChange={(event) =>
-                      field.onChange(event.target.value || null)
-                    }
-                    onBlur={field.onBlur}
-                    disabled={isPending}
-                  />
-                </FieldControl>
-                <FieldMessage error={fieldState.error} />
-              </Field>
-            )}
-          />
-        )}
-
-        <Controller
-          name="creditLimit"
-          control={form.control}
-          render={({ field, fieldState }) => (
-            <Field invalid={fieldState.invalid}>
-              <FieldLabel htmlFor="debt-credit-limit">
-                <Flex as="span" align="center" gap="1">
-                  {t("creditLimitLabel")}
-                  <Text size="2" weight="regular" color="gray">
-                    {tKey("common.optional")}
-                  </Text>
-                </Flex>
-              </FieldLabel>
-              <FieldControl>
-                <AmountField
-                  id="debt-credit-limit"
-                  size="3"
-                  inputMode={amountInputMode(currency)}
-                  value={field.value ?? ""}
-                  onChange={(event) =>
-                    field.onChange(event.target.value || null)
-                  }
-                  onBlur={field.onBlur}
-                  disabled={isPending}
-                />
-              </FieldControl>
-              <FieldMessage error={fieldState.error} />
-            </Field>
-          )}
-        />
-
-        <Controller
-          name="statementCutOffDay"
-          control={form.control}
-          render={({ field, fieldState }) => (
-            <Field invalid={fieldState.invalid}>
-              <FieldLabel htmlFor="debt-cut-off-day">
-                <Flex as="span" align="center" gap="1">
-                  {t("cutOffDayLabel")}
-                  <Text size="2" weight="regular" color="gray">
-                    {tKey("common.optional")}
-                  </Text>
-                </Flex>
-              </FieldLabel>
-              <FieldControl>
-                <TextField.Root
-                  id="debt-cut-off-day"
-                  size="3"
-                  inputMode="numeric"
-                  value={field.value == null ? "" : String(field.value)}
-                  onChange={(event) =>
-                    field.onChange(
-                      event.target.value === ""
-                        ? null
-                        : Number(event.target.value),
-                    )
-                  }
-                  onBlur={field.onBlur}
-                  disabled={isPending}
-                />
-              </FieldControl>
-              <FieldMessage error={fieldState.error} />
-            </Field>
-          )}
-        />
-
-        <Controller
-          name="paymentDueDay"
-          control={form.control}
-          render={({ field, fieldState }) => (
-            <Field invalid={fieldState.invalid}>
-              <FieldLabel htmlFor="debt-due-day">
-                <Flex as="span" align="center" gap="1">
-                  {t("dueDayLabel")}
-                  <Text size="2" weight="regular" color="gray">
-                    {tKey("common.optional")}
-                  </Text>
-                </Flex>
-              </FieldLabel>
-              <FieldControl>
-                <TextField.Root
-                  id="debt-due-day"
-                  size="3"
-                  inputMode="numeric"
-                  value={field.value == null ? "" : String(field.value)}
-                  onChange={(event) =>
-                    field.onChange(
-                      event.target.value === ""
-                        ? null
-                        : Number(event.target.value),
-                    )
-                  }
-                  onBlur={field.onBlur}
-                  disabled={isPending}
-                />
-              </FieldControl>
-              <FieldMessage error={fieldState.error} />
-            </Field>
-          )}
-        />
-
-        <Controller
-          name="aval"
-          control={form.control}
-          render={({ field, fieldState }) => (
-            <Field invalid={fieldState.invalid}>
-              <FieldLabel htmlFor="debt-aval">
-                <Flex as="span" align="center" gap="1">
-                  {t("avalLabel")}
-                  <Text size="2" weight="regular" color="gray">
-                    {tKey("common.optional")}
-                  </Text>
-                </Flex>
-              </FieldLabel>
-              <FieldControl>
-                <AmountField
-                  id="debt-aval"
-                  size="3"
-                  inputMode={amountInputMode(currency)}
-                  value={field.value ?? ""}
-                  onChange={(event) =>
-                    field.onChange(event.target.value || null)
-                  }
-                  onBlur={field.onBlur}
-                  disabled={isPending}
-                />
-              </FieldControl>
+              <FieldDescription>{t("annualRateHint")}</FieldDescription>
               <FieldMessage error={fieldState.error} />
             </Field>
           )}
@@ -715,12 +683,7 @@ function DebtForm({
         <Field>
           <Flex gap="3" justify="end">
             <Dialog.Close>
-              <Button
-                type="button"
-                variant="soft"
-                color="gray"
-                disabled={isPending}
-              >
+              <Button type="button" variant="soft" color="gray" disabled={isPending}>
                 {tKey("common.cancel")}
               </Button>
             </Dialog.Close>

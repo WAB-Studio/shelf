@@ -59,6 +59,7 @@ export async function saveDebtTerms(
     creditLimit,
     statementCutOffDay,
     paymentDueDay,
+    termMonths,
     aval,
   }: DebtTermsInput,
   { replace = false }: { replace?: boolean } = {},
@@ -87,6 +88,7 @@ export async function saveDebtTerms(
       creditLimitCents: creditLimit != null ? requireMinor(creditLimit) : null,
       statementCutOffDay: statementCutOffDay ?? null,
       paymentDueDay: paymentDueDay ?? null,
+      termMonths,
       avalCents: aval != null ? requireMinor(aval) : null,
       // The form writes terms onto a debt that had none (RF-156): any found are someone else's.
       keepOthers: replace ? undefined : true,

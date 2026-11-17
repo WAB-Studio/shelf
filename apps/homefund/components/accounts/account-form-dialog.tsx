@@ -24,6 +24,7 @@ import {
   Spinner,
   Text,
   TextField,
+  TextLink,
   AmountField,
   DateInput,
 } from "@/components/ui";
@@ -298,7 +299,7 @@ function AccountForm({
             </Field>
           )}
         />
-        {isEdit ? (
+        {isEdit && (
           <Field>
             {/* Not labelable: a read-only Text names nothing a <label> can target. */}
             <FieldLabel>{t("kindLabel")}</FieldLabel>
@@ -309,40 +310,6 @@ function AccountForm({
             </Text>
             <FieldDescription>{t("kindLocked")}</FieldDescription>
           </Field>
-        ) : (
-          <Controller
-            name="kind"
-            control={form.control}
-            render={({ field, fieldState }) => (
-              <Field invalid={fieldState.invalid}>
-                <FieldLabel id="account-kind-label">{t("kindLabel")}</FieldLabel>
-                <FieldControl>
-                  <SegmentedControl.Root
-                    size="3"
-                    value={field.value}
-                    onValueChange={(value) => {
-                      field.onChange(value);
-                      // Carry the subtype under the new kind: a liability is a
-                      // card, an asset falls back to a bank account.
-                      form.setValue(
-                        "subtype",
-                        value === "liability" ? "card" : "bank",
-                      );
-                    }}
-                    aria-labelledby="account-kind-label"
-                  >
-                    <SegmentedControl.Item value="asset">
-                      {t("kindAsset")}
-                    </SegmentedControl.Item>
-                    <SegmentedControl.Item value="liability">
-                      {t("kindLiability")}
-                    </SegmentedControl.Item>
-                  </SegmentedControl.Root>
-                </FieldControl>
-                <FieldMessage error={fieldState.error} />
-              </Field>
-            )}
-          />
         )}
         {/* What the account is (RF-56): bank, cash, or a card. The options are
             filtered to the kind, so a card never sits under an asset. */}
@@ -370,6 +337,15 @@ function AccountForm({
             </Field>
           )}
         />
+        {/* A card or a loan is a debt with its own form, in Deudas (RF-286): Cuentas adds what a person holds. */}
+        {!isEdit && (
+          <Text as="div" size="2" color="gray">
+            {t("debtHint")}{" "}
+            <TextLink href="/planning/debts" size="2">
+              {t("debtHintLink")}
+            </TextLink>
+          </Text>
+        )}
         {/* Placement is set at creation and immutable after (RF-60): a personal
             account is the caller's own; a group account is offered only when they
             belong to one. On edit the picker is gone, like `kind`. */}
