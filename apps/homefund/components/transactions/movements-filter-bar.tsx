@@ -14,7 +14,12 @@ import {
 import type { TransactionFormOptions } from "@/db/queries/transaction-form";
 import { civilDateToDate } from "@/lib/dates";
 import { categoryNamesById } from "@/lib/fund/category-names";
-import { HOUSEHOLD_MAKER, MOVEMENT_SEARCH_MAX, type MovementTypeValue } from "@/lib/validation/transaction";
+import {
+  HOUSEHOLD_MAKER,
+  MOVEMENT_SEARCH_MAX,
+  NO_PERSON,
+  type MovementTypeValue,
+} from "@/lib/validation/transaction";
 
 // The type filter's value, mirrored one-to-one onto the `?type=` query and, on
 // the server, onto the movement's generated kind (RF-19, RF-23).
@@ -30,6 +35,8 @@ export type MovementsFilters = {
   account: string | null;
   category: string | null;
   label: string | null;
+  // «Para quién» (RF-242): a person's id, or `nobody`.
+  person: string | null;
   // The deep-link flag: kept through any other change so the filtered view stays
   // put until the user clears it (RF-31).
   unreviewed: boolean;
@@ -119,6 +126,9 @@ export function MovementsFilterBar({
     });
   }
 
+  const tags = options.labels.filter((label) => label.kind === "tag");
+  const persons = options.labels.filter((label) => label.kind === "person");
+
   const named = (list: { id: string; name: string }[], id: string) =>
     list.find((one) => one.id === id)?.name ?? id;
 
@@ -150,6 +160,15 @@ export function MovementsFilterBar({
       key: "label",
       label: named(options.labels, filters.label),
       clear: { label: null },
+    });
+  }
+  if (filters.person) {
+    chips.push({
+      key: "person",
+      label: `${t("forPersonLabel")}: ${
+        filters.person === NO_PERSON ? t("forPersonNone") : named(options.labels, filters.person)
+      }`,
+      clear: { person: null },
     });
   }
   if (filters.member) {
@@ -258,7 +277,7 @@ export function MovementsFilterBar({
 
       {/* The ledger spans both scopes, so the read filter offers every label —
           unlike the write pickers, which narrow to one (RF-89). */}
-      {options.labels.length > 0 && (
+      {tags.length > 0 && (
         <FilterSelect
           label={t("labelFilterLabel")}
           value={filters.label ?? ANY}
@@ -267,10 +286,24 @@ export function MovementsFilterBar({
           }
           items={[
             { value: ANY, label: t("allLabels") },
-            ...options.labels.map((label) => ({
+            ...tags.map((label) => ({
               value: label.id,
               label: label.name,
             })),
+          ]}
+          width={180}
+        />
+      )}
+
+      {persons.length > 0 && (
+        <FilterSelect
+          label={t("forPersonLabel")}
+          value={filters.person ?? ANY}
+          onValueChange={(value) => set({ person: value === ANY ? null : value })}
+          items={[
+            { value: ANY, label: t("allPersons") },
+            { value: NO_PERSON, label: t("forPersonNone") },
+            ...persons.map((person) => ({ value: person.id, label: person.name })),
           ]}
           width={180}
         />

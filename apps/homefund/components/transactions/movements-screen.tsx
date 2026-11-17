@@ -70,7 +70,7 @@ import { accountNamesById, touchesForeignAccount } from "@/lib/fund/account-name
 import { categoryNamesById } from "@/lib/fund/category-names";
 import { dayNet } from "@/lib/fund/glance";
 import { useActionErrorToast } from "@/lib/use-action-toast";
-import { HOUSEHOLD_MAKER, MOVEMENT_SEARCH_MAX } from "@/lib/validation/transaction";
+import { HOUSEHOLD_MAKER, MOVEMENT_SEARCH_MAX, NO_PERSON } from "@/lib/validation/transaction";
 
 // A Radix Select item may not carry an empty value, so the "any" option rides
 // this sentinel and maps back to null the moment it is picked.
@@ -131,6 +131,10 @@ export function MovementsScreen({
   const router = useRouter();
   const onActionError = useActionErrorToast();
   const { openQuick } = useQuickEntry();
+
+  // A person is whom a movement was for (RF-242); the label filter offers the tags alone.
+  const tagLabels = options.labels.filter((label) => label.kind === "tag");
+  const personLabels = options.labels.filter((label) => label.kind === "person");
 
   const [showFilters, setShowFilters] = useState(false);
   // The row a menu opened a dialog over; the ledger holds it, so both dialogs
@@ -256,6 +260,7 @@ export function MovementsScreen({
       filters.account ||
       filters.category ||
       filters.label ||
+      filters.person ||
       filters.rule ||
       filters.q,
     );
@@ -272,6 +277,7 @@ export function MovementsScreen({
     if (next.account) query.account = next.account;
     if (next.category) query.category = next.category;
     if (next.label) query.label = next.label;
+    if (next.person) query.person = next.person;
     if (next.unreviewed) query.unreviewed = "1";
     if (next.rule) query.rule = next.rule;
     if (next.q) query.q = next.q;
@@ -545,7 +551,7 @@ export function MovementsScreen({
 
                 {/* The ledger spans both scopes, so the read filter offers every
                     label — unlike the write pickers, which narrow to one (RF-89). */}
-                {options.labels.length > 0 && (
+                {tagLabels.length > 0 && (
                   <FilterField label={t("labelFilterLabel")}>
                     {(id) => (
                       <Select.Root
@@ -559,7 +565,7 @@ export function MovementsScreen({
                           <Select.Item value={ANY}>
                             {t("allLabels")}
                           </Select.Item>
-                          {options.labels.map((label) => (
+                          {tagLabels.map((label) => (
                             <Select.Item key={label.id} value={label.id}>
                               <Flex as="span" align="center" gap="2">
                                 {/* `color` is a nullable column; a label stored
@@ -569,6 +575,30 @@ export function MovementsScreen({
                                 )}
                                 {label.name}
                               </Flex>
+                            </Select.Item>
+                          ))}
+                        </Select.Content>
+                      </Select.Root>
+                    )}
+                  </FilterField>
+                )}
+
+                {personLabels.length > 0 && (
+                  <FilterField label={t("forPersonLabel")}>
+                    {(id) => (
+                      <Select.Root
+                        value={filters.person ?? ANY}
+                        onValueChange={(value) =>
+                          patchFilters({ person: value === ANY ? null : value })
+                        }
+                      >
+                        <Select.Trigger id={id} />
+                        <Select.Content position="popper">
+                          <Select.Item value={ANY}>{t("allPersons")}</Select.Item>
+                          <Select.Item value={NO_PERSON}>{t("forPersonNone")}</Select.Item>
+                          {personLabels.map((person) => (
+                            <Select.Item key={person.id} value={person.id}>
+                              {person.name}
                             </Select.Item>
                           ))}
                         </Select.Content>
@@ -866,6 +896,8 @@ function rowSubtitle(
     row.madeByName,
     account,
     row.splits.length > 1 ? t("linesCount", { count: row.splits.length }) : null,
+    // A quiet tag, never part of the description (RF-242).
+    row.forPerson ? t("forPersonTag", { name: row.forPerson.name }) : null,
   ].filter(Boolean);
   return parts.length > 0 ? parts.join(" · ") : undefined;
 }
