@@ -252,7 +252,7 @@ export function DebtDetailScreen({ data }: { data: DebtDetailData }) {
 
       {thirdParty !== null && <ThirdPartyCreditSection credit={thirdParty} banks={payFrom} />}
 
-      {/* The schedule the bank printed for a loan, read against its payments (RF-258). */}
+      {/* The schedule the bank printed for a loan, read against its payments (RF-266). */}
       {schedule !== null && <LoanScheduleSection schedule={schedule} currency={currency} />}
 
       {/* Purchases a person confirmed as deferred: the balance holds them whole (RF-136). */}

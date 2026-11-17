@@ -86,7 +86,7 @@ export function ThirdPartyCreditSection({
           ? t("noteDue", { day: credit.dueDay })
           : undefined;
 
-  // With the bank's schedule at hand, what the payer still has to send reads beside the capital, with interest (RF-258).
+  // With the bank's schedule at hand, what the payer still has to send reads beside the capital, with interest (RF-266).
   const { schedule } = credit;
   const scheduleNote =
     schedule !== null && schedule.remainingCount > 0
@@ -111,7 +111,7 @@ export function ThirdPartyCreditSection({
       key: "owes",
       label: t("personOwes", { person }),
       value: <Money minor={credit.personOwesCents} currency={currency} signed={false} size="inherit" />,
-      // How the figure is worked out opens from its note (RF-262).
+      // How the figure is worked out opens from its note (RF-267).
       note: (
         <Button
           type="button"
@@ -143,7 +143,7 @@ export function ThirdPartyCreditSection({
     return { text: kind === "person" ? t("arrived", values) : t("lenderPaid", values), done: true };
   }
 
-  // The month in progress with nothing from the payer yet, named before it is late (RF-262).
+  // The month in progress with nothing from the payer yet, named before it is late (RF-267).
   const waiting = now !== undefined && now.paidCents === 0 && credit.personOwesCents > 0;
   const monthOnly = (month: string) => format.dateTime(civilDateToDate(`${month}-01`), { month: "long" });
   const lender = credit.lenderName;

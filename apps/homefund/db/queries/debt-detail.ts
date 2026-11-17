@@ -69,7 +69,7 @@ export type DebtDetailData = {
   hasGroup: boolean;
   // Set when somebody else pays this credit (RF-211); its «Me debe» account is not a source of the credit's own payment.
   thirdParty: ThirdPartyCreditView | null;
-  // The payment schedule the bank printed for a loan, read against its payments (RF-256); null when it has none.
+  // The payment schedule the bank printed for a loan, read against its payments (RF-264); null when it has none.
   schedule: LoanScheduleSummary | null;
 };
 
@@ -140,7 +140,7 @@ async function readAccount(accountId: string): Promise<AccountRead> {
             -- A «Me debe» is no account a payment comes from (RF-216).
             and not exists (select 1 from third_party_credits c where c.receivable_account_id = x.id)
         ), '[]'::jsonb)`,
-        // The loan's schedule and what reached it ride along: no read of their own (RF-256).
+        // The loan's schedule and what reached it ride along: no read of their own (RF-264).
         scheduleRows: scheduleRowsSql("accounts.id"),
         schedulePayments: schedulePaymentsSql("accounts.id", "accounts.settlement_currency"),
         terms: debtTerms,

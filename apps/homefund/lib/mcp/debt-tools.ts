@@ -83,7 +83,7 @@ export function registerDebtTools(server: McpServer, run: Run, t: Say): void {
       ),
   );
 
-  // RF-257: the bank's «plan de pagos» of a loan, replaced whole; `dryRun` reads it against the payments and writes nothing.
+  // RF-265: the bank's «plan de pagos» of a loan, replaced whole; `dryRun` reads it against the payments and writes nothing.
   server.registerTool(
     "set_loan_schedule",
     {

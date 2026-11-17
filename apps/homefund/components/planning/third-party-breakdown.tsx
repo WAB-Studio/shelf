@@ -18,7 +18,7 @@ type Breakdown = Pick<
 >;
 
 /**
- * How «le falta» is built (RF-262): what the payer owed the day the credit was followed, each transfer they sent
+ * How «le falta» is built (RF-267): what the payer owed the day the credit was followed, each transfer they sent
  * with its day and amount, and what is left. Every figure arrives derived from movements; none is summed here but
  * the line that names the difference, when the balance holds more than the opening less the payments.
  */

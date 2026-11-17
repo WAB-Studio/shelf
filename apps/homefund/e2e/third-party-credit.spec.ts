@@ -68,7 +68,7 @@ test("a credit somebody else pays is set up, read and recorded from its screen",
   await expect(main.getByText(t.notArrived)).toBeVisible();
   await expect(main.getByText(t.lenderNot)).toBeVisible();
 
-  // RF-262: the credit names who pays it near the top, says how the debt began, offers its actions in plain buttons and
+  // RF-267: the credit names who pays it near the top, says how the debt began, offers its actions in plain buttons and
   // warns before the month's cuota is late.
   await expect(main.getByText(t.introNoLender.replace("{person}", PERSON))).toBeVisible();
   await expect(main.getByText(/Deuda cuando lo uniste: .*300\.000 el /)).toBeVisible();
@@ -104,7 +104,7 @@ test("a credit somebody else pays is set up, read and recorded from its screen",
   await expect(page.getByText(`${creditName} (${PERSON})`).filter({ visible: true }).first()).toBeVisible();
   await expect(page.getByText(/Lo paga Persona Uno · le falta/).filter({ visible: true }).first()).toBeVisible();
 
-  // RF-262: the figure opens how it is worked out: the opening, each payment of the payer's, what is left.
+  // RF-267: the figure opens how it is worked out: the opening, each payment of the payer's, what is left.
   await page.getByRole("button", { name: t.breakdownOpen.replace("{person}", PERSON) }).filter({ visible: true }).first().click();
   const breakdown = page.getByRole("dialog");
   await expect(breakdown.getByRole("heading", { name: t.breakdownTitle.replace("{person}", PERSON) })).toBeVisible();

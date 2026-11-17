@@ -78,7 +78,7 @@ async function readLoan(tx: Transaction, accountId: string): Promise<LoanRead | 
   return row ?? null;
 }
 
-/** The loan's schedule read against its payments (RF-256), or null when it carries none or the caller cannot see it. */
+/** The loan's schedule read against its payments (RF-264), or null when it carries none or the caller cannot see it. */
 export async function getLoanSchedule(accountId: string): Promise<LoanScheduleSummary | null> {
   const loan = await withUserDb((tx) => readLoan(tx, accountId));
   return loan === null ? null : scheduleOf(loan.rows, loan.payments);
@@ -106,7 +106,7 @@ function mapScheduleError(error: unknown): never {
 }
 
 /**
- * Sets a loan's payment schedule (RF-256): the bank's rows replace any the loan holds, in ONE transaction, the old
+ * Sets a loan's payment schedule (RF-264): the bank's rows replace any the loan holds, in ONE transaction, the old
  * ones deleted and the new ones written. With `dryRun` nothing is written and the answer is what the write would
  * leave, read against the payments the loan already has, so the person says yes to what they will see.
  */

@@ -1,6 +1,6 @@
 import { civilDateToDate } from "@/lib/dates";
 
-// The payment schedule a bank prints for an instalment loan (RF-256), read against the loan's payments. Only the rows
+// The payment schedule a bank prints for an instalment loan (RF-264), read against the loan's payments. Only the rows
 // are stored; which are paid, the next one, what is left and every warning derive here from the rows and the payments.
 export type ScheduleRow = {
   number: number;
@@ -28,7 +28,7 @@ export type RowView = ScheduleRow & {
 
 // A payment belongs to the row whose day it lands within this many days of.
 export const PAYMENT_WINDOW_DAYS = 15;
-// A cuota differs from the usual one by more than this fraction of it (RF-256).
+// A cuota differs from the usual one by more than this fraction of it (RF-264).
 export const DIFFERS_FRACTION = 0.05;
 // A payment that falls short of a cuota by no more than this fraction of it still pays it, and a usual payment that
 // falls short by no more than it still covers it: the bank rounds, and the payer sends a round figure.

@@ -22,7 +22,7 @@ ALTER TABLE "finances"."loan_schedule_rows" ADD CONSTRAINT "loan_schedule_rows_a
 CREATE POLICY "loan_schedule_rows_select" ON "finances"."loan_schedule_rows" AS PERMISSIVE FOR SELECT TO "authenticated" USING ((select private.can_read_account("finances"."loan_schedule_rows"."account_id")));--> statement-breakpoint
 CREATE POLICY "loan_schedule_rows_insert" ON "finances"."loan_schedule_rows" AS PERMISSIVE FOR INSERT TO "authenticated" WITH CHECK ((select private.can_write_account("finances"."loan_schedule_rows"."account_id")));--> statement-breakpoint
 CREATE POLICY "loan_schedule_rows_delete" ON "finances"."loan_schedule_rows" AS PERMISSIVE FOR DELETE TO "authenticated" USING ((select private.can_write_account("finances"."loan_schedule_rows"."account_id")));--> statement-breakpoint
--- RF-256, hand-written: drizzle-kit diffs neither a grant nor a trigger. All three API roles are revoked before
+-- RF-264, hand-written: drizzle-kit diffs neither a grant nor a trigger. All three API roles are revoked before
 -- `authenticated` gets back what the policies gate. A schedule is replaced whole (delete, then insert), so no
 -- column is ever updated and no UPDATE is granted.
 REVOKE ALL ON TABLE "finances"."loan_schedule_rows" FROM public, anon, authenticated, service_role;--> statement-breakpoint

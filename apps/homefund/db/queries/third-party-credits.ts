@@ -51,7 +51,7 @@ export type ThirdPartyCreditView = {
   // The current month first, one line per month since the first trace.
   months: CreditMonth[];
   canWrite: boolean;
-  // The bank's payment schedule when the loan has one (RF-256): what is left of it with interest, what the payer
+  // The bank's payment schedule when the loan has one (RF-264): what is left of it with interest, what the payer
   // usually sends and the cuotas that amount will not cover; null when it has none.
   schedule: CreditScheduleDigest | null;
 };

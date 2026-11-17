@@ -16,7 +16,7 @@ const NO_VALUE = "—";
 const STATE_COLOR = { paid: "green", partial: "amber", pending: "gray" } as const;
 
 /**
- * The payment schedule the bank printed for a loan (RF-258): the next cuota, how many are left, what is still to pay
+ * The payment schedule the bank printed for a loan (RF-266): the next cuota, how many are left, what is still to pay
  * with interest and insurance and when it ends, a warning ahead of a cuota far from the usual one, and one line per
  * cuota with its state in words. Every figure arrives derived from the rows and the loan's payments; none is summed here.
  */

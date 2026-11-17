@@ -5,7 +5,7 @@ import { BASE_CURRENCY } from "@/lib/currency";
 import { ActionError } from "@/lib/errors";
 import { maxAmountMinor } from "@/lib/money";
 
-// RF-256: the rows of a bank's payment schedule, as the bank printed them, in integer cents. A schedule is read
+// RF-264: the rows of a bank's payment schedule, as the bank printed them, in integer cents. A schedule is read
 // whole or refused whole, and a refusal names the row it is about (`{row}`, counting from 1) so a misread
 // figure is found in the paper at once.
 export const MAX_SCHEDULE_ROWS = 600;

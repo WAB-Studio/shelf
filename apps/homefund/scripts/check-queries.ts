@@ -19825,7 +19825,7 @@ async function mcpDebtsSuite(): Promise<void> {
     `fromCard ${JSON.stringify(fromCard.value)}`,
   );
 
-  // RF-257: a loan's payment schedule. Four made-up rows whose last cuota is the largest; one cuota is paid before the
+  // RF-265: a loan's payment schedule. Four made-up rows whose last cuota is the largest; one cuota is paid before the
   // schedule is written, and the person who pays the loan sends the same amount each month.
   type ScheduleAnswer = {
     dryRun: boolean; replaced: number; rows: number;
@@ -19851,7 +19851,7 @@ async function mcpDebtsSuite(): Promise<void> {
   const untouched = (await tool("get_debt", { accountId: planId })).value as ScheduleDetail;
   const dryValue = dry.value as ScheduleAnswer;
   assert(
-    next("RF-257: set_loan_schedule with dryRun writes nothing and answers the schedule read against what was already paid"),
+    next("RF-265: set_loan_schedule with dryRun writes nothing and answers the schedule read against what was already paid"),
     !dry.isError && dryValue.dryRun && dryValue.replaced === 0 && dryValue.rows === 4 && dryValue.schedule.remainingCount === 3 &&
       dryValue.schedule.next?.number === 2 && dryValue.schedule.remainingTotalCents === 74_500_00 && dryValue.schedule.endsOn === "2026-06-05" &&
       dryValue.schedule.differing.map((row) => row.number).join() === "4" && untouched.schedule === null,
@@ -19862,7 +19862,7 @@ async function mcpDebtsSuite(): Promise<void> {
   const detailed = (await tool("get_debt", { accountId: planId })).value as ScheduleDetail;
   const replaced = await tool("set_loan_schedule", { accountId: planId, rows });
   assert(
-    next("RF-257: the schedule is written whole, get_debt reads it back with the paid cuota marked and the next one, and a second call replaces it"),
+    next("RF-265: the schedule is written whole, get_debt reads it back with the paid cuota marked and the next one, and a second call replaces it"),
     !written.isError && !(written.value as ScheduleAnswer).dryRun && detailed.schedule?.rows.map((row) => row.state).join() === "paid,pending,pending,pending" &&
       detailed.schedule.paidCount === 1 && detailed.schedule.next?.number === 2 && detailed.schedule.remainingTotalCents === 74_500_00 &&
       !replaced.isError && (replaced.value as ScheduleAnswer).replaced === 4,
@@ -19880,7 +19880,7 @@ async function mcpDebtsSuite(): Promise<void> {
   ]);
   const errorOf = (answer: { isError: boolean; value: unknown }) => (answer.value as { error?: string }).error;
   assert(
-    next("RF-257: a schedule whose cuota is not its parts, whose capital does not fall or that leaves capital owed is refused naming the row, a card or a bank account takes none and a stranger's loan reads as not found"),
+    next("RF-265: a schedule whose cuota is not its parts, whose capital does not fall or that leaves capital owed is refused naming the row, a card or a bank account takes none and a stranger's loan reads as not found"),
     badTotal.isError && errorOf(badTotal) === say(es.loanSchedule.errors.totalMismatch, 2) &&
       badChain.isError && errorOf(badChain) === say(es.loanSchedule.errors.chainBroken, 3) &&
       badEnd.isError && errorOf(badEnd) === say(es.loanSchedule.errors.notPaidOff, 3) &&
@@ -19903,21 +19903,21 @@ async function mcpDebtsSuite(): Promise<void> {
     schedule: { remainingCount: number; remainingTotalCents: number; personUsualCents: number | null; uncovered: { number: number; shortCents: number }[]; rows?: unknown } | null;
   }[]).find((row) => row.liabilityAccountId === planId);
   assert(
-    next("RF-257: list_third_party_credits carries the schedule's summary, what the payer usually sends and the cuota that amount will not cover"),
+    next("RF-265: list_third_party_credits carries the schedule's summary, what the payer usually sends and the cuota that amount will not cover"),
     !link.isError && credit?.schedule?.remainingCount === 3 && credit.schedule.remainingTotalCents === 74_500_00 &&
       credit.schedule.personUsualCents === 23_500_00 && credit.schedule.uncovered.length === 1 &&
       credit.schedule.uncovered[0].number === 4 && credit.schedule.uncovered[0].shortCents === 4_150_00 && credit.schedule.rows === undefined,
     `credit ${JSON.stringify(credit)}`,
   );
 
-  // RF-262: «le falta» shows how it is built: the opening and its day, each payment of the payer's and what is left.
+  // RF-267: «le falta» shows how it is built: the opening and its day, each payment of the payer's and what is left.
   const built = ((await tool("list_third_party_credits")).value as {
     liabilityAccountId: string; openingCents: number; openedOn: string; personOwesCents: number; otherCents: number;
     payments: { occurredOn: string; amountCents: number }[];
   }[]).find((row) => row.liabilityAccountId === planId);
   const detailBuilt = (await tool("get_debt", { accountId: planId })).value as { thirdParty: { payments: unknown[] } | null };
   assert(
-    next("RF-262: list_third_party_credits and get_debt carry the opening and its day and each payment of the payer's, which add up to what is left"),
+    next("RF-267: list_third_party_credits and get_debt carry the opening and its day and each payment of the payer's, which add up to what is left"),
     built?.openingCents === 66_500_00 && built.openedOn === "2026-01-01" && built.payments.length === 2 &&
       built.payments[0].occurredOn === "2026-03-04" && built.payments[0].amountCents === 23_500_00 && built.payments[1].occurredOn === "2026-04-04" &&
       built.openingCents - built.payments.reduce((sum, payment) => sum + payment.amountCents, 0) === built.personOwesCents &&

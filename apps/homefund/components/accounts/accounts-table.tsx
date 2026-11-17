@@ -26,7 +26,7 @@ const WIDTHS = {
 
 /**
  * «Lo paga <persona> · le falta $X» under a credit somebody else pays (RF-216): the one place its hidden «Me debe»
- * shows, as a figure on the credit and never as an account. The figure opens its breakdown (RF-262): what the payer
+ * shows, as a figure on the credit and never as an account. The figure opens its breakdown (RF-267): what the payer
  * owed when the credit was followed, each payment of theirs and what is left. Nothing for any other account.
  */
 export function PaidByLine({ account }: { account: AccountRow }) {

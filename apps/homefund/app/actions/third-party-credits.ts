@@ -53,7 +53,7 @@ export const recordThirdPartyPaymentAction = authActionClient
     return created;
   });
 
-// RF-262: how «le falta» is built, read when a person opens it from a list that carries only the figure.
+// RF-267: how «le falta» is built, read when a person opens it from a list that carries only the figure.
 export const readThirdPartyCreditAction = authActionClient
   .inputSchema(removeThirdPartyCreditSchema)
   .action(async ({ parsedInput: { liabilityAccountId } }) => {

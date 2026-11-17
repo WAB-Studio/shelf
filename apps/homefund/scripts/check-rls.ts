@@ -5291,7 +5291,7 @@ const INSERT_GRANT_GAPS: Record<string, string[]> = {
   installment_lines: ["created_at", "id", "paid_transaction_id"],
   installment_plans: ["created_at", "id", "updated_at"],
   labels: ["created_at", "id", "updated_at"],
-  // A schedule row is written whole on insert; `id` and the stamp are the table's (RF-256).
+  // A schedule row is written whole on insert; `id` and the stamp are the table's (RF-264).
   loan_schedule_rows: ["created_at", "id"],
   // `created_by` is the column default from `auth.uid()` (RF-183).
   member_debts: ["created_at", "created_by", "id"],
@@ -5485,7 +5485,7 @@ const UPDATE_GRANT_GAPS: Record<string, string[]> = {
   ],
   // `kind` is written on insert alone: a label never changes kind (RF-242).
   labels: ["created_at", "external_ref", "group_id", "id", "kind", "owner_user_id", "updated_at"],
-  // A schedule is replaced whole, deleted and written again (RF-256): no column is writable.
+  // A schedule is replaced whole, deleted and written again (RF-264): no column is writable.
   loan_schedule_rows: [
     "account_id",
     "created_at",
@@ -14425,7 +14425,7 @@ async function checkThirdPartyCredits() {
   });
 }
 
-// RF-256: a loan's payment schedule is read and written by whoever reads and writes the loan, alone; it belongs to a
+// RF-264: a loan's payment schedule is read and written by whoever reads and writes the loan, alone; it belongs to a
 // loan account; a row's total is the sum of its parts; a schedule is replaced by delete and insert, never updated;
 // every write leaves its audit row; anon and service_role hold nothing.
 async function checkLoanSchedule() {
