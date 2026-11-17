@@ -614,6 +614,31 @@ Elegidas por el crítico; el usuario puede cambiarlas («Elige lo que recomiende
 
 Un bolsillo es una cuenta dentro de otra, como los de Bancolombia: «Bolsillo Dinero» vive dentro de «Ahorros Bancolombia 3397». En la lista de Cuentas la cuenta madre muestra el total de ella y sus bolsillos; debajo, sangrada, la línea «Libre» con lo que queda en la madre misma, y luego cada bolsillo con su propio saldo, también sangrado. En el celular el bolsillo es una tarjeta sangrada bajo la de su madre y la madre muestra el total con «Libre» debajo. El formulario de la cuenta, al crear y al editar, trae un campo opcional «Dentro de» con las cuentas de ahorro de la misma persona o fondo y la misma moneda, y «Ninguna». Pasar dinero a un bolsillo es una transferencia normal entre las dos cuentas.
 
+## Decisión del 2026-11-17: Cuentas sin lo que se repite ni lo que está vacío, por el usuario
+
+«Esto es un mierdón de cantidad de cosas.» Cada fila de Cuentas decía «Personal» con un ícono de persona aunque todas lo fueran,
+repetía el titular en el nombre y en una línea, dejaba una columna «Últimos cuatro» con «—» en casi todas y ponía una fila «Libre»
+bajo cada cuenta con bolsillos. Una cosa se dice una vez y en el lugar donde informa; lo vacío no se dibuja.
+
+- **El ámbito se dice en la banda, no en la fila.** Sale el ícono de persona y sale la línea «Personal» / «El fondo» de cada fila.
+  Si la lista mezcla cuentas personales y del fondo, la banda de cada tipo ya dice «Cuentas · Personal» y «Cuentas · <fondo>». Si
+  todas son del fondo, la banda lo nombra («Cuentas · <fondo>»). Si todas son personales, no se escribe «Personal» en ninguna parte.
+  Solo la cuenta personal de otro miembro lleva su dueño («De Andrea»), porque ahí sí distingue.
+- **El titular tiene un solo lugar: el campo «Titular» de la cuenta del fondo (RF-181).** El nombre de la cuenta dice el banco o el
+  producto («BBVA»), no a quién pertenece. Un nombre que ya trae al titular («Mamá — BBVA») no se reescribe, y su fila no repite
+  «Titular: Mamá»: la línea del titular solo sale cuando el nombre no lo dice.
+- **Una línea de detalle bajo el nombre**, en gris, con lo que tenga y nada más, separado por « · »: la entidad, «terminada en 3397», el
+  titular, el dueño ajeno. Una cuenta sin nada de eso es una sola línea. Salen las columnas «Entidad» y «Últimos cuatro»: la tabla
+  queda en Nombre, Saldo y el menú, y el filtro «Entidad» sigue donde está. En el celular la tarjeta usa la misma línea en vez de
+  tres.
+- **Sin fila «Libre».** La cuenta con bolsillos muestra el total de ella y sus bolsillos, y los bolsillos debajo, sangrados. Lo que
+  queda en la madre se escribe como una nota gris bajo el total («Libre $ 249.816») solo cuando es distinto del total, es decir,
+  cuando algún bolsillo tiene dinero; si no, no se escribe. La tarjeta del celular sigue la misma regla.
+- **Los filtros que no filtran no se dibujan.** «Propietario» solo aparece cuando hay cuentas personales y del fondo; «Entidad», solo
+  cuando hay dos entidades o más.
+- Estados: lista vacía, lista filtrada vacía, archivadas (solo «Restaurar» y «Eliminar») y quien lee la cuenta de otro (sin menú) siguen
+  como estaban.
+
 ## Decisión del 2026-11-10: Cuentas por tipo, por el usuario
 
 «Me molesta que las tarjetas sean cuentas, entiendo que todos van en el mismo pero puede ser que lo separemos por tipos.» La lista de Cuentas se parte en secciones, cada una con su título y su subtotal por moneda: «Cuentas» (bancarias y efectivo, con sus bolsillos como hasta ahora), «Tarjetas de crédito» y «Préstamos» (subtipo `loan`, RF-178, decidido el mismo día). Una sección sin cuentas no aparece, y dentro de cada una las cuentas personales y las del fondo siguen separadas. Un préstamo cuenta como deuda donde cuenta cualquier pasivo (deudas, extractos); desde Deudas solo se crea una tarjeta. Salen la insignia «Lo que tengo / Lo que debo» de cada fila, la columna Tipo y el filtro Tipo, porque la sección ya lo dice. Encima de la lista (no en Archivadas), tres cifras: lo que tengo, lo que debo (con signo: una tarjeta a favor sale en negativo) y el neto, por moneda y sin sumar monedas distintas; un tipo vacío muestra 0; respetan el botón de ocultar montos. En el celular son las mismas secciones, con tarjetas.

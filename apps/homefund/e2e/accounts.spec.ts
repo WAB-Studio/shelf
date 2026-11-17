@@ -84,27 +84,14 @@ type Placement = "personal" | "fund";
 
 /**
  * The placement the displayed band states for an account. The phone heads a run
- * of cards with it and calls the group by its own name, so it is the last band
- * to appear above the card; the laptop's table gives every row a scope cell
- * under the name instead, and nothing at all precedes the first row's.
+ * of cards with it and the laptop heads a run of rows with it, both calling the
+ * group by its own name, so it is the last band to appear above the account.
  */
 async function placementOf(
   page: Page,
   name: string,
   fundBand: string,
 ): Promise<Placement | null> {
-  const rows = page
-    .getByRole("table", { name: accounts.title })
-    .getByRole("row")
-    .filter({ hasText: name });
-
-  if ((await rows.count()) > 0) {
-    const scope = await rows.getByRole("cell").first().innerText();
-    if (scope.includes(accounts.ownerFund)) return "fund";
-
-    return scope.includes(accounts.ownerPersonal) ? "personal" : null;
-  }
-
   // The shell's `loading.tsx` stands two boxes of its own under `main > div` until
   // the list streams in; until one band remains there is nothing to read yet.
   const shown = band(page);
@@ -319,14 +306,13 @@ test.describe("the laptop row", () => {
       from account_balances where id = ${account.id}`;
     expect(Number(derived.balance_cents)).toBe(openingCents - movementCents);
 
-    // The fourth of the five tracks, after the name, the entity and the last four
-    // digits.
+    // The second of the three tracks, after the name and before the menu.
     const cell = page
       .getByRole("table", { name: accounts.title })
       .getByRole("row")
       .filter({ hasText: account.name })
       .getByRole("cell")
-      .nth(3);
+      .nth(1);
     await expect(cell).toBeVisible();
 
     // The table states no opening figure, so what says the column is derived is
@@ -508,7 +494,7 @@ test.describe("with a fund behind the caller", () => {
   });
 });
 
-test("lists a pocket under its parent, the parent with the total of both and its own part as «Libre»", async ({
+test("lists a pocket under its parent, the parent with the total of both and its own part as a «Libre» note under it", async ({
   page,
 }) => {
   // The dense table renders from `lg` up; both projects drive it at the laptop's width, as «the laptop row» does.
@@ -522,14 +508,16 @@ test("lists a pocket under its parent, the parent with the total of both and its
 
   await page.goto("/es/settings/accounts");
   const table = page.getByRole("table", { name: accounts.title });
-  const rows = table.getByRole("row").filter({ hasText: new RegExp(`${parent.name}|${accounts.freePart}|${pocket.name}`) });
-  await expect(rows).toHaveCount(3);
+  const rows = table.getByRole("row").filter({ hasText: new RegExp(`${parent.name}|${pocket.name}`) });
+  // No row of its own for «Libre» (RF-240): the parent's balance cell carries it under the total.
+  await expect(rows).toHaveCount(2);
   await expect(rows.nth(0)).toContainText(parent.name);
-  await expect(rows.nth(1)).toContainText(accounts.freePart);
-  await expect(rows.nth(2)).toContainText(pocket.name);
-  expect(pesosOf(await rows.nth(0).getByRole("cell").nth(3).innerText())).toBe(5_502_154);
-  expect(pesosOf(await rows.nth(1).getByRole("cell").nth(3).innerText())).toBe(249_816);
-  expect(pesosOf(await rows.nth(2).getByRole("cell").nth(3).innerText())).toBe(5_252_338);
+  await expect(rows.nth(1)).toContainText(pocket.name);
+  const [total, free] = (await rows.nth(0).getByRole("cell").nth(1).innerText()).split("\n");
+  expect(pesosOf(total)).toBe(5_502_154);
+  expect(free).toContain(accounts.freePart);
+  expect(pesosOf(free)).toBe(249_816);
+  expect(pesosOf(await rows.nth(1).getByRole("cell").nth(1).innerText())).toBe(5_252_338);
 
   await dropAccount(pocket.id);
   await dropAccount(parent.id);

@@ -391,6 +391,8 @@
     "parentLabel": "Dentro de",
     "parentNone": "Ninguna",
     "parentDescription": "La vuelve un bolsillo de una cuenta de ahorros, como los del banco. El dinero se cuenta una sola vez.",
+    "lastFourDetail": "terminada en {digits}",
+    "freeOfTotal": "Libre <amount></amount>",
     "freePart": "Libre",
     "settlementCurrencyLabel": "Moneda de liquidación",
     "settlementCurrencyHint": "Es la moneda en la que la cuenta liquida sus movimientos.",
