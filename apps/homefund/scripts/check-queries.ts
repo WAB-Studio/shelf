@@ -17082,7 +17082,7 @@ async function accountPocketSuite(): Promise<void> {
     }
   };
 
-  const parent = await open(owner, "ahorros", 249_816_00);
+  const parent = await open(owner, "ahorros", 5_502_154_00);
   track("accounts", parent.accountId);
   const pocket = await open(owner, "bolsillo", 5_252_338_00, { parentAccountId: parent.accountId });
   track("accounts", pocket.accountId);
@@ -17137,7 +17137,7 @@ async function accountPocketSuite(): Promise<void> {
   const becomePocket = await refusedWith(() =>
     asUser(owner, () => updateAccount({
       accountId: parent.accountId, name: `Harness rf173 ahorros ${tag}`, subtype: "bank", isShared: false, institution: null,
-      parentAccountId: loose.accountId, settlementCurrency: BASE_CURRENCY, amountMinor: 249_816_00, balanceOn: "2026-01-01",
+      parentAccountId: loose.accountId, settlementCurrency: BASE_CURRENCY, amountMinor: 5_502_154_00, balanceOn: "2026-01-01",
     })),
   );
   assert(
