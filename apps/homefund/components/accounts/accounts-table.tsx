@@ -2,6 +2,10 @@
 
 import { useState, type ReactNode } from "react";
 import { useTranslations } from "next-intl";
+import { useAction } from "next-safe-action/hooks";
+import { toast } from "sonner";
+
+import { createTransactionAction } from "@/app/actions/transactions";
 
 import { useOwnerLabel } from "@/components/fund/owner-mark";
 import { ThirdPartyBreakdownDialog } from "@/components/planning/third-party-breakdown";
@@ -15,7 +19,11 @@ import {
   type DataColumn,
 } from "@/components/ui";
 import type { AccountRow } from "@/db/queries/accounts";
-import { holdsMoneyApartFromPockets, nameCarriesHolder } from "@/lib/account-detail";
+import { freePartToShow, nameCarriesHolder } from "@/lib/account-detail";
+import { todayInBogota } from "@/lib/dates";
+import { pocketCover } from "@/lib/fund/home-lines";
+import { centsToDecimal } from "@/lib/money";
+import { useActionErrorToast } from "@/lib/use-action-toast";
 
 // The tracks of the Cuentas artboard, in order.
 const WIDTHS = {
@@ -81,13 +89,65 @@ export function PaidByLine({ account }: { account: AccountRow }) {
 export function FreePartWarning({ account }: { account: AccountRow }) {
   const t = useTranslations("accounts");
   const own = account.balances[0];
-  if (account.kind !== "asset" || !own || own.balanceCents >= 0) return null;
+  // A pocket below zero has its own line, with the way to cover it.
+  if (account.kind !== "asset" || account.parentAccountId || !own || own.balanceCents >= 0) return null;
 
   return (
     <Text size="2" color="red">
       {t("freePartNegative")}
     </Text>
     );
+}
+
+/**
+ * A pocket below zero: «gastó $X más de lo que tenía» and a one-tap «Pasar $X desde <cuenta>» that moves what it lacks
+ * from its account, as an ordinary transfer. Nothing for an account that is no pocket or has no balance below zero;
+ * the button only for a pocket the caller writes.
+ */
+export function PocketShortfall({ account, parentName }: { account: AccountRow; parentName: string | null }) {
+  const t = useTranslations("accounts");
+  const onActionError = useActionErrorToast();
+  const own = account.balances[0];
+  const cover = own ? pocketCover({ balanceCents: own.balanceCents, parentAccountId: account.parentAccountId }) : null;
+  const move = useAction(createTransactionAction, {
+    onSuccess() {
+      toast.success(t("pocketCovered", { pocket: account.name }));
+    },
+    onError: onActionError,
+  });
+  if (!own || !cover) return null;
+
+  const amount = () => <Money minor={cover.cents} currency={own.currency} tone="plain" size="inherit" signed={false} />;
+
+  return (
+    <Flex direction="column" gap="1" align="start">
+      <Text size="2" color="red">
+        {t.rich("pocketShort", { amount })}
+      </Text>
+      {account.canWrite && parentName && (
+        <Button
+          type="button"
+          variant="soft"
+          size="1"
+          loading={move.isPending}
+          onClick={() =>
+            move.execute({
+              fromAccountId: cover.parentId,
+              toAccountId: account.id,
+              amount: centsToDecimal(cover.cents),
+              occurredAt: todayInBogota(),
+              description: t("pocketCoverDescription", { pocket: account.name }),
+              splits: [],
+              labelIds: [],
+              requestRef: crypto.randomUUID(),
+            })
+          }
+        >
+          {t.rich("pocketCover", { amount, account: parentName })}
+        </Button>
+      )}
+    </Flex>
+  );
 }
 
 /**
@@ -145,6 +205,7 @@ export function AccountsTable({
   hasGroup,
   empty,
   stale,
+  names,
   onEdit,
   onReconcile,
   onArchive,
@@ -161,6 +222,8 @@ export function AccountsTable({
   empty?: ReactNode;
   // The accounts not counted for over a month (RF-262).
   stale: ReadonlySet<string>;
+  // Each account's name by id, so a pocket can name the account it covers from.
+  names: ReadonlyMap<string, string>;
   onEdit: (row: AccountRow) => void;
   onReconcile: (row: AccountRow) => void;
   onArchive: (row: AccountRow) => void;
@@ -184,6 +247,7 @@ export function AccountsTable({
           <AccountDetail account={row} />
           <PaidByLine account={row} />
           <FreePartWarning account={row} />
+          <PocketShortfall account={row} parentName={row.parentAccountId ? (names.get(row.parentAccountId) ?? null) : null} />
           <StaleCountLine stale={stale.has(row.id)} onReconcile={() => onReconcile(row)} />
         </Flex>
       ),
@@ -204,7 +268,7 @@ export function AccountsTable({
         // A parent leads with the total of itself and its pockets and names its own part under it only when
         // that part is not the whole (RF-173, RF-240).
         const [settlement, ...others] = row.totalBalances ?? row.balances;
-        const free = holdsMoneyApartFromPockets(row.balances, row.totalBalances) ? row.balances[0] : undefined;
+        const free = freePartToShow(row.balances, row.totalBalances);
 
         return (
           <Flex direction="column" gap="1" align="end">

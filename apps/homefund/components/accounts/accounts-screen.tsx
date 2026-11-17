@@ -20,7 +20,7 @@ import {
   type BilledTarget,
 } from "@/components/accounts/foreign-estimates";
 import { ReconcileDialog } from "@/components/accounts/reconcile-dialog";
-import { AccountDetail, AccountsTable, FreePartWarning, PaidByLine, StaleCountLine } from "@/components/accounts/accounts-table";
+import { AccountDetail, AccountsTable, FreePartWarning, PaidByLine, PocketShortfall, StaleCountLine } from "@/components/accounts/accounts-table";
 import {
   Box,
   Button,
@@ -43,7 +43,7 @@ import {
 import type { AccountRow } from "@/db/queries/accounts";
 import type { AccountPendingSettlement } from "@/db/queries/debt-statements";
 import { usePathname, useRouter } from "@/i18n/navigation";
-import { holdsMoneyApartFromPockets } from "@/lib/account-detail";
+import { freePartToShow } from "@/lib/account-detail";
 import { civilDateToDate } from "@/lib/dates";
 import { useActionErrorToast } from "@/lib/use-action-toast";
 import { BASE_CURRENCY, type CurrencyCode } from "@/lib/currency";
@@ -282,16 +282,14 @@ export function AccountsScreen({
     ];
   }
 
-  // What a person who pays a credit still owes is money the person has coming: the «Me debe» is hidden, so its
-  // balance rides on the credit and counts here, and the net still reads assets minus credit plus that (RF-216).
+  // «Lo que tengo» is the sum of the asset rows on screen, nothing hidden. What a person who pays a credit still owes is
+  // money the person has coming, but its «Me debe» is hidden: it joins the net alone, so the net still reads assets
+  // minus credit plus that (RF-216) while «Lo que tengo» adds up from the rows a person can see.
   function totalsOf(list: Section[], rows: AccountRow[]) {
     const owedByPayers = rows.flatMap((row) =>
       row.thirdParty ? [{ currency: row.settlementCurrency, cents: row.thirdParty.personOwesCents }] : [],
     );
-    const have = [
-      ...list.filter((x) => !x.owes).map((x) => ({ figures: x.figures, sign: 1 as const })),
-      { figures: owedByPayers, sign: 1 as const },
-    ];
+    const have = list.filter((x) => !x.owes).map((x) => ({ figures: x.figures, sign: 1 as const }));
     const owe = list.filter((x) => x.owes).map((x) => ({ figures: x.figures, sign: 1 as const }));
     return (
       <StatTiles
@@ -301,7 +299,15 @@ export function AccountsScreen({
           {
             key: "net",
             label: t("netLabel"),
-            value: <Figures figures={mergeFigures([...have, ...owe.map((x) => ({ ...x, sign: -1 as const }))])} />,
+            value: (
+              <Figures
+                figures={mergeFigures([
+                  ...have,
+                  { figures: owedByPayers, sign: 1 as const },
+                  ...owe.map((x) => ({ ...x, sign: -1 as const })),
+                ])}
+              />
+            ),
           },
         ]}
       />
@@ -310,6 +316,20 @@ export function AccountsScreen({
 
   const deskSections = sectionsOf(filteredAccounts);
   const phoneSections = sectionsOf(accounts);
+  const names = new Map(accounts.map((account) => [account.id, account.name]));
+
+  // The opening date is said on the first card that has it; a later card of the same date says only its figure.
+  const openingDated = new Set<string>();
+  const seenOn = new Set<string>();
+  for (const section of phoneSections) {
+    for (const part of splitByPlacement(section)) {
+      for (const account of part.rows) {
+        if (seenOn.has(account.initialBalanceOn)) continue;
+        seenOn.add(account.initialBalanceOn);
+        openingDated.add(account.id);
+      }
+    }
+  }
 
   const pendingFor = (account: AccountRow) =>
     pendingSettlements.filter((movement) => movement.accountId === account.id);
@@ -428,6 +448,7 @@ export function AccountsScreen({
 
           <AccountsTable
             stale={stale}
+            names={names}
             sections={deskSections.flatMap((section) => {
               const parts = splitByPlacement(section);
               return parts.map((part) => ({
@@ -545,6 +566,8 @@ export function AccountsScreen({
                           <AccountCard
                             account={account}
                             stale={stale.has(account.id)}
+                            names={names}
+                            showOpeningDate={openingDated.has(account.id)}
                             archived={archived}
                             pending={pendingFor(account)}
                             onConfirm={setBilledTarget}
@@ -674,6 +697,8 @@ export function AccountsScreen({
 function AccountCard({
   account,
   stale,
+  names,
+  showOpeningDate,
   archived,
   pending,
   onConfirm,
@@ -686,6 +711,9 @@ function AccountCard({
 }: {
   account: AccountRow;
   stale: boolean;
+  names: ReadonlyMap<string, string>;
+  // Whether the opening line carries its date: it does not repeat on every card.
+  showOpeningDate: boolean;
   archived: boolean;
   pending: AccountPendingSettlement[];
   onConfirm: (target: BilledTarget) => void;
@@ -704,7 +732,7 @@ function AccountCard({
   // is the first entry and every other currency the account holds follows it.
   // A parent leads with the total of itself and its pockets and names its own part under it (RF-173).
   const [settlement, ...others] = account.totalBalances ?? account.balances;
-  const freePart = holdsMoneyApartFromPockets(account.balances, account.totalBalances) ? account.balances[0] : undefined;
+  const freePart = freePartToShow(account.balances, account.totalBalances);
 
   return (
     <Card>
@@ -717,6 +745,10 @@ function AccountCard({
           <AccountDetail account={account} />
           <PaidByLine account={account} />
           <FreePartWarning account={account} />
+          <PocketShortfall
+            account={account}
+            parentName={account.parentAccountId ? (names.get(account.parentAccountId) ?? null) : null}
+          />
           <StaleCountLine stale={stale} onReconcile={onReconcile} />
           {/* The settlement currency is the figure the card leads with, and each
               other currency the account holds sits under it naming itself: no
@@ -767,7 +799,7 @@ function AccountCard({
               {t("openingBalanceLabel")}
             </Text>
             <Text size="2" color="gray">
-              {t.rich("openingBalanceRow", {
+              {t.rich(showOpeningDate ? "openingBalanceRow" : "openingBalanceBare", {
                 amount: () => (
                   <Money
                     minor={account.initialBalanceCents}
