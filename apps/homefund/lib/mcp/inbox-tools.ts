@@ -257,7 +257,13 @@ export function registerInboxTools(server: McpServer, run: Run, t: Say): void {
               return { ...base, resolvedAt: row.resolvedAt, transactionId: row.transactionId, rejectReason: row.rejectReason };
             }
             // What the message did not give: Claude fills these in the list it shows, never silently.
-            return { ...base, notDetected: notDetectedOf(row, lookup), beforeAccountOpening: row.beforeOpening };
+            return {
+              ...base,
+              notDetected: notDetectedOf(row, lookup),
+              beforeAccountOpening: row.beforeOpening,
+              // A movement already recorded by hand that this one repeats: say so before anyone records it twice (RF-246).
+              alreadyRecorded: row.recorded,
+            };
           });
         }),
       ),
