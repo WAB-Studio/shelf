@@ -220,6 +220,11 @@ function renderCases({ transactionId, debtAccountId }: HttpScope): RenderCase[] 
       title: title("accounts.title"),
     },
     {
+      path: `/${LOCALE}/settings/accounts/reconcile`,
+      status: 200,
+      title: title("accounts.reconcileAllTitle"),
+    },
+    {
       path: `/${LOCALE}/settings/categories`,
       status: 200,
       title: title("categories.title"),

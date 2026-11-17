@@ -26,7 +26,7 @@ import { registerBudgetTools } from "@/lib/mcp/budget-tools";
 import { registerGoalTools } from "@/lib/mcp/goal-tools";
 import { registerPlannedPaymentTools } from "@/lib/mcp/planned-payment-tools";
 import { registerRecurringTools } from "@/lib/mcp/recurring-tools";
-import { accountRow, registerAccountTools } from "@/lib/mcp/account-tools";
+import { AccountRefusal, accountRow, registerAccountTools } from "@/lib/mcp/account-tools";
 import { registerDebtStatementTools } from "@/lib/mcp/statement-tools";
 import { registerReportTools } from "@/lib/mcp/report-tools";
 import { registerReviewTools } from "@/lib/mcp/review-tools";
@@ -99,6 +99,9 @@ async function run(ctx: ServerContext, load: (owner: string) => Promise<unknown>
     }
     if (error instanceof BatchRefusal) {
       return text({ error: refusal(error.messageKey), deliveryId: error.deliveryId, ...(error.field ? { field: error.field } : {}) }, true);
+    }
+    if (error instanceof AccountRefusal) {
+      return text({ error: refusal(error.messageKey, error.values), accountId: error.accountId, account: error.account }, true);
     }
     if (error instanceof ActionError) {
       // A form's generic «something went wrong» names the field it was about, so Claude knows what to fix.

@@ -1,12 +1,16 @@
 import "server-only";
 
-import { desc, eq, sql } from "drizzle-orm";
+import { desc, eq, inArray, sql } from "drizzle-orm";
 
 import { insertRow } from "@/db/insert-row";
+import { internalAccountSql } from "@/db/queries/accounts";
 import { accountReconciliations, accounts, transactions } from "@/db/schema";
-import { withUserDb } from "@/db/session";
+import { withUserDb, withUserDbOrTx } from "@/db/session";
+import type { Transaction } from "@/db/session";
 import type { CurrencyCode } from "@/lib/currency";
 import { pgErrorCode } from "@/lib/db-error";
+import { todayInBogota } from "@/lib/dates";
+import { checkRealAmount, flipsSign } from "@/lib/validation/account-reconciliation";
 
 export type ReconciliationRow = {
   id: string;
@@ -243,4 +247,305 @@ async function mapRefusal(
   }
 
   throw error;
+}
+
+export type ReconcileManyItem = {
+  accountId: string;
+  // The written figure; read in the account's own currency, signed by the person and then by the account's kind.
+  realAmount: string;
+  // The derived figure the person was shown, in the ledger's own sign unless `expectedFrame` says «owed».
+  // Null skips the staleness check, which only a dry run may ask for.
+  expectedDerivedCents: number | null;
+  // True refuses a count that looks like a sign slip (`flipsSign`) instead of booking it.
+  guardSign: boolean;
+};
+
+export type ReconcileManyArgs = {
+  reconciledOn: string;
+  items: ReconcileManyItem[];
+  // The lot is booked and rolled back: every refusal and the gaps are the real ones, nothing stays.
+  dryRun: boolean;
+  // «owed» reads a liability's expected figure positive, as the MCP speaks it (RF-245).
+  expectedFrame: "ledger" | "owed";
+};
+
+// Every figure in the ledger's own sign: a debt is negative.
+export type ReconciledRow = {
+  accountId: string;
+  name: string;
+  kind: "asset" | "liability";
+  currency: CurrencyCode;
+  derivedCents: number;
+  countedCents: number;
+  gapCents: number;
+  signFlip: boolean;
+  // Null on a dry run and when the gap is zero: no movement was booked.
+  reconciliationId: string | null;
+};
+
+export type ReconcileManyResult =
+  | { ok: true; rows: ReconciledRow[] }
+  | {
+      ok: false;
+      accountId: string;
+      name: string | null;
+      reason:
+        | "stale"
+        | "future"
+        | "beforeOpening"
+        | "beforeLatest"
+        | "archived"
+        | "denied"
+        | "amount"
+        | "signFlip";
+      // The refusal's own key, when the figure typed is what failed.
+      messageKey?: string;
+      date?: string;
+      // The figures a sign refusal names, as the ledger holds them.
+      counted?: number;
+      derived?: number;
+      kind?: "asset" | "liability";
+    };
+
+type ManyRefusal = Extract<ReconcileManyResult, { ok: false }>;
+
+class ManyRefused extends Error {
+  constructor(public result: ManyRefusal) {
+    super(result.reason);
+  }
+}
+
+// A dry run ends by throwing what it computed, so the transaction rolls back and the caller still gets the rows.
+class RolledBack extends Error {
+  constructor(public rows: ReconciledRow[]) {
+    super("dry run");
+  }
+}
+
+/**
+ * Counts many accounts on one day, all or nothing (RF-260). ONE transaction and a fixed number of
+ * round trips, however many accounts: one lock statement, one read of every account, one multi-row
+ * insert (the triggers book each gap) and one read of the gaps booked. Each account is refused in
+ * the words `reconcileAccount` uses and the answer names the first one that fails; nothing is written
+ * then. The locks are taken in id order so two overlapping counts cannot deadlock.
+ */
+export async function reconcileAccounts(args: ReconcileManyArgs): Promise<ReconcileManyResult> {
+  const ids = args.items.map((item) => item.accountId);
+
+  try {
+    return await withUserDb(async (tx) => {
+      // Only a writer takes a lock, so a stranger never holds an account's. `offset 0` keeps the order
+      // the lock is taken in.
+      await tx.execute(
+        sql`select pg_advisory_xact_lock(hashtextextended(a.id::text, 0))
+          from (select id from accounts where id in (${sql.join(ids.map((id) => sql`${id}::uuid`), sql`, `)})
+            and private.can_write_account(id) order by id offset 0) a`,
+      );
+
+      const found = await tx
+        .select({
+          id: accounts.id,
+          name: accounts.name,
+          kind: accounts.kind,
+          currency: accounts.settlementCurrency,
+          writable: sql<boolean>`private.can_write_account(accounts.id)`,
+          archived: sql<boolean>`accounts.archived_at is not null`,
+          openedOn: sql<string>`accounts.initial_balance_on`,
+          latestOn: sql<
+            string | null
+          >`(select max(r.reconciled_on) from account_reconciliations r where r.account_id = accounts.id)`,
+          derivedCents: sql<string>`private.account_settlement_balance_on(accounts.id, ${args.reconciledOn}::date)`,
+        })
+        .from(accounts)
+        .where(inArray(accounts.id, ids));
+      const byId = new Map(found.map((row) => [row.id, row]));
+
+      const planned = args.items.map((item) => {
+        const row = byId.get(item.accountId);
+        const refuse = (
+          reason: ManyRefusal["reason"],
+          extra: Partial<ManyRefusal> = {},
+        ): never => {
+          throw new ManyRefused({
+            ok: false,
+            accountId: item.accountId,
+            name: row?.name ?? null,
+            reason,
+            ...extra,
+          });
+        };
+
+        if (!row || !row.writable) return refuse("denied");
+        if (args.reconciledOn > todayInBogota()) return refuse("future");
+        if (args.reconciledOn < row.openedOn) return refuse("beforeOpening", { date: row.openedOn });
+        if (row.latestOn !== null && args.reconciledOn < row.latestOn) {
+          return refuse("beforeLatest", { date: row.latestOn });
+        }
+        if (row.archived) return refuse("archived");
+
+        const real = checkRealAmount(item.realAmount, row.currency);
+        if (!real.ok) return refuse("amount", { messageKey: real.messageKey });
+
+        const derivedCents = Number(row.derivedCents);
+        const expected =
+          item.expectedDerivedCents !== null && args.expectedFrame === "owed" && row.kind === "liability" && item.expectedDerivedCents !== 0
+            ? -item.expectedDerivedCents
+            : item.expectedDerivedCents;
+        if (expected !== null && expected !== derivedCents) return refuse("stale");
+
+        const countedCents = row.kind === "liability" && real.cents !== 0 ? -real.cents : real.cents;
+        const signFlip = flipsSign(countedCents, derivedCents);
+        if (signFlip && item.guardSign && !args.dryRun) {
+          return refuse("signFlip", { counted: countedCents, derived: derivedCents, kind: row.kind });
+        }
+
+        return { row, derivedCents, countedCents, signFlip };
+      });
+
+      const inserted = await insertRow(
+        tx,
+        accountReconciliations,
+        planned.map((plan) => ({
+          accountId: plan.row.id,
+          reconciledOn: args.reconciledOn,
+          countedBalanceCents: plan.countedCents,
+        })),
+        { returning: { id: accountReconciliations.id, accountId: accountReconciliations.accountId } },
+      );
+      const reconciliationOf = new Map(inserted.map((row) => [row.accountId, row.id]));
+
+      // A movement saved after the read still lands before the trigger computes the gap, so the gap told
+      // back is the one booked, read off its marked movement.
+      const booked = await tx
+        .select({
+          reconciliationId: transactions.reconciliationId,
+          amount: transactions.amountCents,
+          into: transactions.toAccountId,
+        })
+        .from(transactions)
+        .where(inArray(transactions.reconciliationId, [...reconciliationOf.values()]));
+      const gapOf = new Map(
+        booked.map((row) => [row.reconciliationId, row.into === null ? -row.amount : row.amount]),
+      );
+
+      const rows: ReconciledRow[] = planned.map((plan) => {
+        const id = reconciliationOf.get(plan.row.id) ?? null;
+        const gapCents = (id !== null ? gapOf.get(id) : undefined) ?? 0;
+        return {
+          accountId: plan.row.id,
+          name: plan.row.name,
+          kind: plan.row.kind,
+          currency: plan.row.currency,
+          derivedCents: plan.derivedCents,
+          countedCents: plan.countedCents,
+          gapCents,
+          signFlip: plan.signFlip,
+          reconciliationId: args.dryRun || gapCents === 0 ? null : id,
+        };
+      });
+
+      if (args.dryRun) throw new RolledBack(rows);
+      return { ok: true as const, rows };
+    });
+  } catch (error) {
+    if (error instanceof RolledBack) return { ok: true, rows: error.rows };
+    if (error instanceof ManyRefused) return error.result;
+    return mapManyRefusal(error, args);
+  }
+}
+
+// A trigger's refusal that no read above caught (a day moved under the transaction) cannot say which
+// account it was, so the first one stands for the lot.
+function mapManyRefusal(error: unknown, args: ReconcileManyArgs): ManyRefusal {
+  const code = pgErrorCode(error);
+  const accountId = args.items[0].accountId;
+  const base = { ok: false as const, accountId, name: null };
+
+  if (code === "42501") return { ...base, reason: "denied" };
+  if (code === "RC001") return { ...base, reason: "future" };
+  if (code === "RC004") return { ...base, reason: "archived" };
+  if (code === "RC002") return { ...base, reason: "beforeOpening" };
+  if (code === "RC003") return { ...base, reason: "beforeLatest" };
+
+  throw error;
+}
+
+export type ReconcileOverviewRow = {
+  id: string;
+  name: string;
+  kind: "asset" | "liability";
+  subtype: string;
+  institution: string | null;
+  lastFour: string | null;
+  holderName: string | null;
+  settlementCurrency: CurrencyCode;
+  // What HomeFund derives for today in the settlement currency, the ledger's own sign (RF-114).
+  derivedCents: number;
+  latestReconciledOn: string | null;
+  // The day the account was added to HomeFund, in Bogota: a never-counted account ages from it.
+  addedOn: string;
+};
+
+/**
+ * Every open account the caller can write, with the figure HomeFund derives for today and when it was last
+ * counted (RF-261). ONE round trip, and no balance column: the figure is the database's own derivation. A
+ * pocket is an account of its own here; the hidden «Me debe» of a credit somebody else pays is left out.
+ */
+export async function listReconcileOverview(
+  today: string,
+  outerTx?: Transaction,
+): Promise<ReconcileOverviewRow[]> {
+  return withUserDbOrTx(outerTx, async (tx) => {
+    const rows = await tx
+      .select({
+        id: accounts.id,
+        name: accounts.name,
+        kind: accounts.kind,
+        subtype: accounts.subtype,
+        institution: accounts.institution,
+        lastFour: accounts.lastFour,
+        holderName: sql<string | null>`(select gm.name from group_members gm where gm.id = accounts.holder_member_id)`,
+        settlementCurrency: accounts.settlementCurrency,
+        derivedCents: sql<string>`private.account_settlement_balance_on(accounts.id, ${today}::date)`,
+        latestReconciledOn: sql<
+          string | null
+        >`(select max(r.reconciled_on)::text from account_reconciliations r where r.account_id = accounts.id)`,
+        addedOn: sql<string>`(accounts.created_at at time zone 'America/Bogota')::date::text`,
+      })
+      .from(accounts)
+      .where(
+        sql`accounts.archived_at is null and private.can_write_account(accounts.id) and not ${internalAccountSql}`,
+      )
+      .orderBy(
+        sql`accounts.kind = 'liability'`,
+        desc(sql`accounts.owner_user_id is not null`),
+        accounts.name,
+      );
+
+    return rows.map((row) => ({ ...row, derivedCents: Number(row.derivedCents) }));
+  });
+}
+
+export type ReconcileAgeRow = Pick<ReconcileOverviewRow, "id" | "latestReconciledOn" | "addedOn">;
+
+/**
+ * When each open account the caller writes was last counted, for the quiet «Cuádrala» of Cuentas and Inicio
+ * (RF-262). ONE round trip, and no balance derived: the nudge only reads dates, so it costs the screens it rides
+ * on no scan of any account's movements.
+ */
+export async function listReconcileAges(outerTx?: Transaction): Promise<ReconcileAgeRow[]> {
+  return withUserDbOrTx(outerTx, (tx) =>
+    tx
+      .select({
+        id: accounts.id,
+        latestReconciledOn: sql<
+          string | null
+        >`(select max(r.reconciled_on)::text from account_reconciliations r where r.account_id = accounts.id)`,
+        addedOn: sql<string>`(accounts.created_at at time zone 'America/Bogota')::date::text`,
+      })
+      .from(accounts)
+      .where(
+        sql`accounts.archived_at is null and private.can_write_account(accounts.id) and not ${internalAccountSql}`,
+      ),
+  );
 }

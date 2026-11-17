@@ -112,6 +112,8 @@ export type TransactionListFilters = {
   kind?: string;
   // A reconciliation's adjustment only (RF-138).
   adjustments?: boolean;
+  // Leaves a reconciliation's adjustment out (RF-263): Inicio's recent movements are what happened, not a count's gap.
+  withoutAdjustments?: boolean;
   // The deep-link target: keep only generated movements still awaiting review
   // (`recurring_rule_id is not null and reviewed_at is null`), RF-31.
   unreviewed?: boolean;
@@ -674,6 +676,7 @@ export function transactionListConditions(filters: TransactionListFilters): SQL[
     conditions.push(isNull(transactions.reconciliationId));
   }
   if (filters.adjustments) conditions.push(isNotNull(transactions.reconciliationId));
+  if (filters.withoutAdjustments) conditions.push(isNull(transactions.reconciliationId));
   if (filters.unreviewed) {
     // "Waiting for a person" (RF-133): a generated movement not yet confirmed,
     // or one `awaiting_counterparty` — never every one-sided movement. Income

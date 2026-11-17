@@ -18,6 +18,7 @@ import {
 } from "@/components/reports/recent-movements";
 import { InvitationCard } from "@/components/members/invitation-card";
 import { DueRemindersCard } from "@/components/planning/due-reminders-card";
+import { ReconcileNudgeLine } from "@/components/accounts/reconcile-nudge-line";
 import { MonthReviewLine } from "@/components/reports/month-review-line";
 import { QuickEntryPill } from "@/components/transactions/quick-entry-pill";
 import {
@@ -39,6 +40,7 @@ import {
 } from "@/components/ui";
 import { listBudgetsWithStatus } from "@/db/queries/budgets";
 import { resolveWithdrawalTarget } from "@/db/queries/cash";
+import { listReconcileAges } from "@/db/queries/account-reconciliations";
 import { getDebtOverview } from "@/db/queries/debt-overview";
 import { listDueReminders } from "@/db/queries/due-reminders";
 import { getMonthReviewPending } from "@/db/queries/month-review";
@@ -51,7 +53,8 @@ import { getTransactionFormOptions } from "@/db/queries/transaction-form";
 import { listTransactions } from "@/db/queries/transactions";
 import type { TransactionListRow } from "@/db/queries/transactions";
 import { requireUser, withSharedTransaction } from "@/db/session";
-import { currentMonthRange } from "@/lib/dates";
+import { currentMonthRange, todayInBogota } from "@/lib/dates";
+import { isStale } from "@/lib/reconcile-age";
 import { Link as LocaleLink } from "@/i18n/navigation";
 import { routing } from "@/i18n/routing";
 import { PERSONAL_CASH_ACCOUNT_NAME } from "@/lib/fund/seed";
@@ -133,7 +136,7 @@ export default async function HomePage(props: PageProps<"/[locale]">) {
     [group, invitation, withdrawal, due],
     dashboardData,
     [rows, options],
-    [monthExpenses, debts, review, budgets, goals],
+    [monthExpenses, debts, review, budgets, goals, counts],
     t,
     td,
     ta,
@@ -151,7 +154,7 @@ export default async function HomePage(props: PageProps<"/[locale]">) {
     ),
     getDashboardData(),
     withSharedTransaction(() =>
-      Promise.all([listTransactions({}, { limit: RECENT_LIMIT }), getTransactionFormOptions()]),
+      Promise.all([listTransactions({ withoutAdjustments: true }, { limit: RECENT_LIMIT }), getTransactionFormOptions()]),
     ),
     // The month glance and the right column ride the same fan-out (RNF-09); each one
     // is optional, so a failed read drops its block, never Inicio.
@@ -171,6 +174,8 @@ export default async function HomePage(props: PageProps<"/[locale]">) {
           "listGoalsWithProgress",
           listGoalsWithProgress().then((all) => all.filter((one) => !one.foreignOwner)),
         ),
+        // The accounts not counted in a month, for one quiet line (RF-262): a failed read drops the line.
+        optional("listReconcileAges", listReconcileAges()),
       ]),
     ),
     getTranslations("transactions"),
@@ -322,6 +327,9 @@ export default async function HomePage(props: PageProps<"/[locale]">) {
     (debts ?? []).filter((debt) => !foreignAccountIds.has(debt.accountId)),
   );
 
+  const today = todayInBogota();
+  const staleCount = (counts ?? []).filter((row) => isStale(row, today)).length;
+
   return (
     <Page gutter="flush-md">
       <Box display={{ initial: "none", md: "block" }}>
@@ -339,6 +347,8 @@ export default async function HomePage(props: PageProps<"/[locale]">) {
           aside={
             <>
               {review && <MonthReviewLine month={review.month} count={review.count} />}
+
+              {staleCount > 0 && <ReconcileNudgeLine count={staleCount} />}
 
               {due.total > 0 && <DueRemindersCard rows={due.rows} total={due.total} />}
 

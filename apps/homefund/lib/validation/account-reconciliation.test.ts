@@ -5,8 +5,10 @@ import { addCivilDays, todayInBogota } from "@/lib/dates";
 
 import {
   checkRealAmount,
+  flipsSign,
   importedAdjustmentSchema,
   reconcileAccountSchema,
+  reconcileAccountsSchema,
 } from "./account-reconciliation";
 
 const accountId = "0b2f6a54-7a3c-4f43-9a55-6d5a1e8f3c11";
@@ -189,4 +191,28 @@ test("the cap is inclusive: 99 999 999 999 whole units pass, one cent more is to
   assert.deepEqual(checkRealAmount("99999999999", "COP"), { ok: true, cents: 9_999_999_999_900 });
   assert.deepEqual(checkRealAmount("-99999999999", "USD"), { ok: true, cents: -9_999_999_999_900 });
   assert.deepEqual(checkRealAmount("100000000000", "COP"), { ok: false, messageKey: TOO });
+});
+
+const second = "5d1c7a3e-2b9f-4e0a-8c47-1f3a9b6d2e50";
+
+function parseMany(items: unknown, reconciledOn = todayInBogota()) {
+  return reconcileAccountsSchema.safeParse({ reconciledOn, items });
+}
+
+test("a count of many accounts takes one day and each account once", () => {
+  const item = (id: string) => ({ accountId: id, realAmount: "1000", expectedDerivedCents: 0 });
+
+  assert.equal(parseMany([item(accountId), item(second)]).success, true);
+  assert.equal(parseMany([]).success, false);
+  assert.equal(parseMany([item(accountId), item(accountId)]).success, false);
+  assert.equal(parseMany([item(accountId)], addCivilDays(todayInBogota(), 1)).success, false);
+  assert.equal(parseMany([{ ...item(accountId), realAmount: "" }]).success, false);
+});
+
+test("a count with the opposite sign of the balance is a slip; zero and the same sign are not", () => {
+  assert.equal(flipsSign(-1_020_000, 1_000_000), true);
+  assert.equal(flipsSign(1_020_000, -1_000_000), true);
+  assert.equal(flipsSign(1_020_000, 1_000_000), false);
+  assert.equal(flipsSign(0, 1_000_000), false);
+  assert.equal(flipsSign(500, 0), false);
 });
