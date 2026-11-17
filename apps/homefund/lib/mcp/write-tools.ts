@@ -28,7 +28,7 @@ import { ActionError } from "@/lib/errors";
 import { CATEGORY_COLORS } from "@/lib/fund/category-color";
 import { ADD, ADD_ONCE, DESTROY, OVERWRITE, READ, previousFields, titled } from "@/lib/mcp/annotations";
 import { categoryNameWarnings, movementWarnings, withWarnings, type Probe } from "@/lib/mcp/debt-guard";
-import { resolveLabelIds } from "@/lib/mcp/label-tools";
+import { resolveLabelIds, resolvePersonId } from "@/lib/mcp/label-tools";
 import { parseForm } from "@/lib/mcp/parse-form";
 import { centsToDecimal } from "@/lib/money";
 import { createAccountSchema, updateAccountSchema } from "@/lib/validation/account";
@@ -39,6 +39,7 @@ import {
   HOUSEHOLD_MAKER,
   MOVEMENT_SEARCH_MAX,
   movementTypeFilter,
+  NO_PERSON,
   occurredAtSchema,
   updateTransactionSchema,
 } from "@/lib/validation/transaction";
@@ -64,6 +65,7 @@ function movementShape(t: Say) {
     forHousehold: z.boolean().optional().describe(d("forHousehold")),
     madeByMemberId: z.string().nullish().describe(d("madeByMemberId")),
     labels: z.array(z.string()).optional().describe(d("labels")),
+    forPerson: z.string().nullish().describe(d("forPerson")),
   };
 }
 
@@ -159,6 +161,7 @@ export type MovementFilterInput = {
   categoryId?: string;
   madeByMemberId?: string;
   label?: string;
+  forPerson?: string;
   from?: string;
   to?: string;
   kind?: (typeof MOVEMENT_KINDS)[number];
@@ -179,6 +182,7 @@ export function movementFilterShape(t: Say) {
     categoryId: z.string().optional().describe(d("filterCategoryId")),
     madeByMemberId: z.string().optional().describe(d("filterMadeByMemberId")),
     label: z.string().optional().describe(d("filterLabel")),
+    forPerson: z.string().optional().describe(d("filterForPerson")),
     kind: z.enum(MOVEMENT_KINDS).optional().describe(d("filterKind")),
     createdByUserId: z.string().optional().describe(d("filterCreatedBy")),
     recurringRuleId: z.string().optional().describe(d("filterRecurringRule")),
@@ -197,11 +201,15 @@ export async function movementFilters(owner: string, input: MovementFilterInput)
         ? null
         : idOf("transactions.errors.madeByInvalid", input.madeByMemberId);
   const [labelId] = input.label === undefined ? [] : await resolveLabelIds(owner, [input.label]);
+  // `nobody` keeps the movements that name no person (RF-242).
+  const forPersonId =
+    input.forPerson === undefined ? undefined : input.forPerson === NO_PERSON ? null : await resolvePersonId(owner, input.forPerson);
   return {
     accountId,
     categoryId,
     madeByMemberId,
     labelId,
+    forPersonId,
     from: input.from,
     to: input.to,
     ...(input.kind === undefined ? {} : movementTypeFilter(input.kind)),
@@ -230,6 +238,8 @@ export function movementRow(row: TransactionListRow) {
     madeByMemberId: row.madeByMemberId,
     madeByName: row.madeByName,
     labelIds: row.labels.map((label) => label.id),
+    forPersonId: row.forPerson?.id ?? null,
+    forPersonName: row.forPerson?.name ?? null,
     splits: row.splits,
     updatedAt: row.updatedAt,
   };
@@ -251,6 +261,7 @@ function storedMovement(row: TransactionListRow): Record<string, unknown> {
     forHousehold: row.forHousehold,
     madeByMemberId: row.madeByMemberId,
     labels: row.labels.map((label) => label.id),
+    forPerson: row.forPerson?.id ?? null,
   };
 }
 
@@ -302,6 +313,7 @@ export function registerLedgerTools(server: McpServer, run: Run, t: Say): void {
           parseForm(createTransactionSchema, {
             ...movementForm(input),
             labelIds: await resolveLabelIds(owner, input.labels ?? []),
+            forPersonId: input.forPerson ? await resolvePersonId(owner, input.forPerson) : null,
             requestRef: input.requestRef,
           }),
           undefined,
@@ -337,8 +349,13 @@ export function registerLedgerTools(server: McpServer, run: Run, t: Say): void {
             transactionId: id,
             // Absent keeps the movement's labels; a list replaces them, as the form's picker does.
             labelIds: patch.labels === undefined ? current.labels.map((label) => label.id) : await resolveLabelIds(owner, patch.labels),
-            // An edit through this tool never moves the person it was for (RF-242).
-            forPersonId: current.forPerson?.id ?? null,
+            // Absent keeps the person it was for; null clears it; a name or id replaces it (RF-242).
+            forPersonId:
+              patch.forPerson === undefined
+                ? (current.forPerson?.id ?? null)
+                : patch.forPerson === null
+                  ? null
+                  : await resolvePersonId(owner, patch.forPerson),
             causedByTransactionId: current.causedByTransactionId,
             expectedUpdatedAt,
           }),
