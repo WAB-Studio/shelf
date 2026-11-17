@@ -268,6 +268,7 @@ export function buildHandler(): (request: Request) => Promise<Response> {
   }, {
     serverInfo: { name: "homefund", version: pkg.version },
     // Spending for another person is its own paragraph, so the money model's lines can change without touching it (RF-242).
-    instructions: `${t("instructions")}\n\n${t("instructionsPerson")}`,
+    // Read raw: the text names «<persona>» placeholders, which the message formatter would take for a tag and answer with the key.
+    instructions: `${t.raw("instructions")}\n\n${t.raw("instructionsPerson")}`,
   });
 }

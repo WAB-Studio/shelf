@@ -362,6 +362,9 @@ export default async function HomePage(props: PageProps<"/[locale]">) {
     accounts: dashboardData.accounts.filter((account) => !account.foreignOwner),
     inboxCount: dashboardData.inboxPendingCount,
     shortLoans: shortLoans ?? [],
+    overdueLoans: (ahead?.loans ?? [])
+      .filter((loan) => loan.dueDate < today && loan.number !== null)
+      .map((loan) => ({ accountId: loan.accountId, name: loan.name, number: loan.number!, amountCents: loan.amountCents, dueOn: loan.dueDate, currency: loan.currency })),
     staleCount,
   });
 

@@ -20,7 +20,7 @@ import {
 import type { DebtOverviewRow, DebtPocket } from "@/db/queries/debt-overview";
 import type { DebtSubtype } from "@/db/queries/debts-screen";
 import type { CurrencyCode } from "@/lib/currency";
-import { civilDateToDate } from "@/lib/dates";
+import { civilDateToDate, todayInBogota } from "@/lib/dates";
 import { formatRatePercent } from "@/lib/validation/debt-terms";
 import type { Locale } from "@/lib/locales";
 import { useMoneyText } from "@/lib/use-privacy";
@@ -389,7 +389,15 @@ export function DebtsTable({
       align: "end",
       numeric: true,
       cell: (row) =>
-        row.terms?.minimumPaid ? (
+        row.terms?.nextInstalment ? (
+          <Text size="2" color="gray">
+            {t(row.terms.nextInstalment.dueOn < todayInBogota() ? "overdueInstalment" : "nextInstalment", {
+              number: row.terms.nextInstalment.number,
+              amount: moneyText(row.terms.nextInstalment.amountCents, row.currency, locale),
+              date: shortDate(row.terms.nextInstalment.dueOn),
+            })}
+          </Text>
+        ) : row.terms?.minimumPaid ? (
           <Text size="1" color="gray">
             {t("minimumPaidMonth", { month: monthName(row.terms.nextDueDate ?? row.terms.nextCutOffDate) })}
           </Text>

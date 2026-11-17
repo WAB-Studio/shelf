@@ -157,11 +157,17 @@ const DAMAGED = /\$(?!\s?\d)|^\s*[:;,.]|\b\p{L}{1,3}\s:\s/u;
  */
 export function repairDescription(stored: string | null, rawText: string, merchantLabel: string | null): string | null {
   const described = describeAlert(rawText);
-  if (described) return described;
-  if (stored === null || !DAMAGED.test(stored) || merchantLabel === null) return stored;
+  if (described) return withoutClock(described);
+  if (stored === null || !DAMAGED.test(stored) || merchantLabel === null) return stored === null ? null : withoutClock(stored);
 
   const business = readableName(merchantLabel.replace(/\s+\d{1,2}:\d{2}\b.*$/u, ""));
-  return business === "" ? stored : business;
+  return business === "" ? withoutClock(stored) : business;
+}
+
+/** A description without the time of day a bank prints after the business («RAPPI* 15:32» → «RAPPI»). */
+export function withoutClock(description: string): string {
+  const cut = description.replace(/\s+\d{1,2}:\d{2}(?::\d{2})?(?:\s*[ap]\.?\s?m\.?)?\s*$/iu, "").replace(/[\s*]+$/u, "");
+  return cut === "" ? description : cut;
 }
 
 // The sender labels a bank's alert opens with.

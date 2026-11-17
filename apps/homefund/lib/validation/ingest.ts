@@ -35,6 +35,17 @@ export const rejectDeliverySchema = z.object({
   reason: z.literal("duplicate").optional(),
 });
 
+// The account or accounts a person picked on a pending card (RF-312), kept on the delivery.
+export const chooseDeliveryAccountsSchema = z
+  .object({
+    deliveryId: z.uuid({ error: "ingest.errors.deliveryInvalid" }),
+    accountId: z.uuid({ error: "ingest.errors.deliveryInvalid" }).optional(),
+    toAccountId: z.uuid({ error: "ingest.errors.deliveryInvalid" }).optional(),
+  })
+  .refine((input) => input.accountId !== undefined || input.toAccountId !== undefined, {
+    error: "ingest.errors.deliveryInvalid",
+  });
+
 // The only way out of `ambiguous`, so a merchant that was learned wrong can be
 // learned again from scratch (RF-94).
 export const forgetMerchantSchema = z.object({

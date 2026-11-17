@@ -73,7 +73,7 @@ import {
 } from "@/lib/transactions/transfer-words";
 import { accountNamesById, touchesForeignAccount } from "@/lib/fund/account-names";
 import { categoryNamesById } from "@/lib/fund/category-names";
-import { dayNet } from "@/lib/fund/glance";
+import { dayLeftOut, dayNet } from "@/lib/fund/glance";
 import { useActionErrorToast } from "@/lib/use-action-toast";
 import { HOUSEHOLD_MAKER, MOVEMENT_SEARCH_MAX, NO_PERSON } from "@/lib/validation/transaction";
 
@@ -731,6 +731,15 @@ export function MovementsScreen({
                       ))}
                     </Text>
                   </Flex>
+                  {dayLeftOut(group.rows).map(([currency, moved]) => (
+                    <Text key={currency} size="1" color="gray">
+                      {t.rich("dayLeftOut", {
+                        amount: () => (
+                          <Money minor={moved} currency={currency as CurrencyCode} tone="plain" signed={false} size="inherit" />
+                        ),
+                      })}
+                    </Text>
+                  ))}
                   {group.rows.map((row) => (
                     <Fragment key={row.id}>
                       <Separator size="4" />

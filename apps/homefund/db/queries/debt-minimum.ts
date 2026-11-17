@@ -61,15 +61,18 @@ export function unpaidStatementMinimumSql({
 
 /**
  * The interest a payment into a loan booked beside its transfer (RF-282): an expense of the same source whose reference
- * is the transfer's plus «:interest». `alias` is the transfer's alias in the statement that embeds this. The payment
+ * is the transfer's plus «:interest» (the part a credit's payer covers goes to its hidden receivable, with «:interest:payer»). `alias` is the transfer's alias in the statement that embeds this. The payment
  * the person made is the transfer and this together; the loan's balance only falls by the transfer.
  */
 export function interestBookedWith(alias: string): SQL<number> {
   const t = sql.raw(alias);
   return sql<number>`coalesce((
     select sum(i.amount_cents) from transactions i
-    where i.to_account_id is null and i.from_account_id = ${t}.from_account_id
-      and i.external_ref = ${t}.external_ref || ':interest'
+    where i.from_account_id = ${t}.from_account_id
+      -- Either an expense of the source, or the part a credit's payer covers, which moves into the credit's hidden receivable.
+      and (i.to_account_id is null or i.to_account_id = (
+        select c.receivable_account_id from third_party_credits c where c.liability_account_id = ${t}.to_account_id))
+      and i.external_ref in (${t}.external_ref || ':interest', ${t}.external_ref || ':interest:payer')
       and i.owner_user_id is not distinct from ${t}.owner_user_id and i.group_id is not distinct from ${t}.group_id
   ), 0)`;
 }

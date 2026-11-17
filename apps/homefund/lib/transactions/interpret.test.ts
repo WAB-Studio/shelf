@@ -688,3 +688,11 @@ test("what the person typed before outranks the common spends", () => {
     "trans",
   );
 });
+
+test("a category name is found as whole words, never inside another word", () => {
+  const categories = [{ id: "housing", name: "Vivienda", kind: "expense" }];
+  const found = (text: string) =>
+    interpretQuickEntry(text, { categories, accounts: [], defaultAccountId: null }).categoryId;
+  assert.equal(found("Davivienda: Compra por $52.300 en AMAZON PRIME"), null);
+  assert.equal(found("pagué la vivienda 500000"), "housing");
+});

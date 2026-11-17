@@ -120,8 +120,14 @@ export function DashboardSummary({
                   ? OWNER_COLORS[owned.indexOf(bucket) % OWNER_COLORS.length]
                   : "var(--gray-9)";
 
+              // One owner is the whole net worth the line under the figure already says: a share of nothing explains nothing.
+              if (owners.length < 2) return null;
+
               return (
                 <Flex key={currency} direction="column" gap="2">
+                  <Text size="2" color="gray">
+                    {t("ownerBarLabel", { currency })}
+                  </Text>
                   {owned.length > 0 && (
                     <ProportionBar
                       aria-label={t("ownerBarLabel", { currency })}

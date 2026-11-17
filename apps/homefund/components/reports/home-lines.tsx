@@ -5,7 +5,7 @@ import type { HomeAhead } from "@/db/queries/home-lines";
 import type { CategoryExpense } from "@/db/queries/reports/expenses-by-category";
 import type { MonthlyFlow } from "@/db/queries/reports/monthly-flow";
 import type { CurrencyCode } from "@/lib/currency";
-import { civilDateToDate } from "@/lib/dates";
+import { civilDateToDate, todayInBogota } from "@/lib/dates";
 import { scopedCategoryName } from "@/lib/fund/category-names";
 import { topWithRest } from "@/lib/fund/glance";
 
@@ -32,7 +32,7 @@ export function PaysLine({
   ahead,
   names,
 }: {
-  ahead: Pick<HomeAhead, "cards" | "payments">;
+  ahead: Pick<HomeAhead, "cards" | "loans" | "payments">;
   names: Record<string, string>;
 }) {
   const t = useTranslations("dashboard");
@@ -40,13 +40,18 @@ export function PaysLine({
 
   const rows = [
     ...ahead.cards.map((card) => ({ kind: "card" as const, key: card.accountId, dueDate: card.dueDate, card })),
+    ...ahead.loans.map((loan) => ({ kind: "loan" as const, key: loan.accountId, dueDate: loan.dueDate, loan })),
     ...ahead.payments.map((payment) => ({ kind: "payment" as const, key: payment.id, dueDate: payment.dueDate, payment })),
   ].sort((a, b) => a.dueDate.localeCompare(b.dueDate));
 
   const totals = new Map<string, number>();
   for (const row of rows) {
     const [currency, cents] =
-      row.kind === "card" ? [row.card.currency, row.card.totalCents ?? 0] : [row.payment.currency, row.payment.amountCents];
+      row.kind === "card"
+        ? [row.card.currency, row.card.totalCents ?? 0]
+        : row.kind === "loan"
+          ? [row.loan.currency, row.loan.amountCents]
+          : [row.payment.currency, row.payment.amountCents];
     if (cents > 0) totals.set(currency, (totals.get(currency) ?? 0) + cents);
   }
   const missing = ahead.cards.some((card) => card.totalCents === null);
@@ -74,7 +79,7 @@ export function PaysLine({
 
         {rows.map((row) =>
           row.kind === "card" ? (
-            <TextLink key={row.key} href={`/planning/debts/${row.card.accountId}`} size="2">
+            <TextLink key={row.key} href={`/planning/debts/${row.card.accountId}`} size="2" flow>
               {row.card.totalCents === null
                 ? t("paysCardNoStatement", { name: names[row.card.accountId] ?? "", date: shortDate(row.dueDate) })
                 : t.rich(row.card.minimumCents === null ? "paysCard" : "paysCardMinimum", {
@@ -84,8 +89,17 @@ export function PaysLine({
                     date: shortDate(row.dueDate),
                   })}
             </TextLink>
+          ) : row.kind === "loan" ? (
+            <TextLink key={row.key} href={`/planning/debts/${row.loan.accountId}`} size="2" flow>
+              {t.rich(row.loan.number === null ? "paysPayment" : row.dueDate < todayInBogota() ? "paysLoanOverdue" : "paysLoan", {
+                name: row.loan.name,
+                number: row.loan.number ?? 0,
+                amount: figure(row.loan.amountCents, row.loan.currency),
+                date: shortDate(row.dueDate),
+              })}
+            </TextLink>
           ) : (
-            <TextLink key={row.key} href="/planning/upcoming" size="2">
+            <TextLink key={row.key} href="/planning/upcoming" size="2" flow>
               {t.rich("paysPayment", {
                 name: row.payment.description ?? t("dueNoName"),
                 amount: figure(row.payment.amountCents, row.payment.currency),
@@ -184,7 +198,7 @@ export function AheadLine({ ahead }: { ahead: Pick<HomeAhead, "nextIncome" | "ne
           {t("aheadTitle")}
         </Heading>
         {nextIncome && (
-          <TextLink href="/planning/upcoming" size="2">
+          <TextLink href="/planning/upcoming" size="2" flow>
             {t.rich("aheadIncome", {
               amount: figure(nextIncome.amountCents, nextIncome.currency),
               name: nextIncome.description ?? t("dueNoName"),
@@ -193,7 +207,7 @@ export function AheadLine({ ahead }: { ahead: Pick<HomeAhead, "nextIncome" | "ne
           </TextLink>
         )}
         {nextBill && (
-          <TextLink href="/planning/upcoming" size="2">
+          <TextLink href="/planning/upcoming" size="2" flow>
             {t.rich("aheadBill", {
               name: nextBill.description ?? t("dueNoName"),
               amount: figure(nextBill.amountCents, nextBill.currency),

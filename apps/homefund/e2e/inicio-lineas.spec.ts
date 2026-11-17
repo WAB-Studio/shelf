@@ -173,6 +173,35 @@ for (const width of [390, 1280]) {
   });
 }
 
+// RF-309: every line of Inicio is one sentence that wraps as text, at the narrowest phone: words kept apart, one column.
+test.describe("at 360 the lines read as sentences", () => {
+  test.beforeEach(async ({ page }) => {
+    await page.setViewportSize({ width: 360, height: 800 });
+    await page.goto("/es");
+  });
+
+  for (const name of ["pays", "fix", "ahead"] as const) {
+    test(`«${name}» links read with spaces and each is one column`, async ({ page }) => {
+      const links = line(page, name).getByRole("link");
+      await expect(links.first()).toBeVisible();
+      const count = await links.count();
+
+      for (let index = 0; index < count; index += 1) {
+        const link = links.nth(index);
+        const text = await link.innerText();
+        // A figure, a bracket or a word never touches the one before it.
+        expect(text, text).not.toMatch(/[\p{L}\d)]\$/u);
+        expect(text, text).not.toMatch(/\d(?:el|\()/u);
+        // The link's flex wrapper holds a single flowing child, so the sentence wraps as text and never splits in columns.
+        const columns = await link.evaluate((el) => el.firstElementChild?.childElementCount ?? 0);
+        expect(columns).toBe(1);
+        const [box, card] = await Promise.all([link.boundingBox(), line(page, name).boundingBox()]);
+        expect(box!.x + box!.width).toBeLessThanOrEqual(card!.x + card!.width + 1);
+      }
+    });
+  }
+});
+
 test("the count's adjustment stays out of the recent movements", async ({ page }) => {
   await page.goto("/es");
   await expect(page.getByText(names.counted)).toHaveCount(0);

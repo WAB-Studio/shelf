@@ -71,7 +71,10 @@ export type FixItem =
   | { kind: "negative"; name: string; cents: number; currency: string }
   | { kind: "inbox"; count: number }
   | { kind: "short"; accountId: string; name: string; count: number; shortCents: number; currency: string }
+  | { kind: "overdue"; accountId: string; name: string; number: number; amountCents: number; dueOn: string; currency: string }
   | { kind: "reconcile"; count: number };
+
+export type OverdueLoan = { accountId: string; name: string; number: number; amountCents: number; dueOn: string; currency: string };
 
 export type ShortLoan = { accountId: string; name: string; currency: string; count: number; shortCents: number };
 
@@ -83,6 +86,8 @@ export function fixItems(input: {
   accounts: HomeAccount[];
   inboxCount: number;
   shortLoans: ShortLoan[];
+  // Loans whose next cuota is past its day and unpaid.
+  overdueLoans?: OverdueLoan[];
   staleCount: number;
 }): FixItem[] {
   const names = new Map(input.accounts.map((account) => [account.id, account.name]));
@@ -107,6 +112,7 @@ export function fixItems(input: {
   }
 
   if (input.inboxCount > 0) items.push({ kind: "inbox", count: input.inboxCount });
+  for (const loan of input.overdueLoans ?? []) items.push({ kind: "overdue", ...loan });
   for (const loan of input.shortLoans) items.push({ kind: "short", ...loan });
   if (input.staleCount > 0) items.push({ kind: "reconcile", count: input.staleCount });
 

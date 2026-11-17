@@ -38,6 +38,7 @@ export type ReconcileAllRow = {
   id: string;
   name: string;
   kind: "asset" | "liability";
+  subtype: string;
   currency: CurrencyCode;
   // The figure HomeFund derives for today, the ledger's own sign: a debt is negative.
   derivedCents: number;
@@ -62,6 +63,22 @@ type Refusal = { accountId: string; text: string };
 type Cupo = { open: boolean; total: string; available: string };
 
 const NO_CUPO: Cupo = { open: false, total: "", available: "" };
+
+// Under one peso (100 cents) apart reads as the same figure: an adjustment of «+$0» helps no one.
+const CLOSE_ENOUGH_CENTS = 100;
+
+// The derived figure in the field's frame: a debt in what is owed.
+function derivedFigure(row: ReconcileAllRow, locale: Locale): string {
+  const framed = row.kind === "liability" ? -row.derivedCents : row.derivedCents;
+  return `${framed < 0 ? "-" : ""}${amountToInput(Math.abs(framed), row.currency, locale)}`;
+}
+
+function isCloseEnough(row: ReconcileAllRow, typed: string): boolean {
+  const check = checkRealAmount(typed, row.currency);
+  if (!check.ok) return false;
+  const counted = row.kind === "liability" && check.cents !== 0 ? -check.cents : check.cents;
+  return Math.abs(counted - row.derivedCents) < CLOSE_ENOUGH_CENTS;
+}
 
 export function ReconcileAllScreen({ rows }: { rows: ReconcileAllRow[] }) {
   const t = useTranslations("accounts");
@@ -162,7 +179,8 @@ export function ReconcileAllScreen({ rows }: { rows: ReconcileAllRow[] }) {
       reconciledOn: todayInBogota(),
       items: ready.map((row) => ({
         accountId: row.id,
-        realAmount: typed[row.id],
+        // A count under one peso off books no adjustment: the figure sent is the derived one itself.
+        realAmount: isCloseEnough(row, typed[row.id]) ? derivedFigure(row, locale) : typed[row.id],
         expectedDerivedCents: row.derivedCents,
       })),
     });
@@ -180,6 +198,8 @@ export function ReconcileAllScreen({ rows }: { rows: ReconcileAllRow[] }) {
       <Flex direction="column" gap="3">
         {rows.map((row) => {
           const liability = row.kind === "liability";
+          // A loan has no limit, statement or cut-off: only a card talks of cupo.
+          const loan = row.subtype === "loan";
           const check = checks.get(row.id) ?? null;
           const cupo = cupos[row.id] ?? NO_CUPO;
           const parts = [
@@ -192,7 +212,8 @@ export function ReconcileAllScreen({ rows }: { rows: ReconcileAllRow[] }) {
 
           // The gap in the field's frame: what was typed minus «Según HomeFund», a debt in what is owed.
           const counted = check?.ok ? (liability && check.cents !== 0 ? -check.cents : check.cents) : null;
-          const gap = counted === null ? null : counted - row.derivedCents;
+          const rawGap = counted === null ? null : counted - row.derivedCents;
+          const gap = rawGap !== null && Math.abs(rawGap) < CLOSE_ENOUGH_CENTS ? 0 : rawGap;
           const fieldGap = gap === null ? null : liability ? -gap : gap;
           const slip = counted !== null && flipsSign(counted, row.derivedCents);
           const refused = refusal?.accountId === row.id ? refusal.text : undefined;
@@ -231,7 +252,9 @@ export function ReconcileAllScreen({ rows }: { rows: ReconcileAllRow[] }) {
                     />
                     {row.pocketsCents !== 0 && (
                       <Text size="1" color="gray">
-                        {t("reconcileIncludesPockets", { amount: moneyText(row.pocketsCents, row.currency, locale) })}
+                        {t.rich("reconcileIncludesPockets", {
+                          amount: () => <Money minor={row.pocketsCents} currency={row.currency} tone="plain" signed size="inherit" />,
+                        })}
                       </Text>
                     )}
                   </Flex>
@@ -239,7 +262,7 @@ export function ReconcileAllScreen({ rows }: { rows: ReconcileAllRow[] }) {
 
                 <Field invalid={check?.ok === false || refused !== undefined}>
                   <FieldLabel htmlFor={`reconcile-all-${row.id}`}>
-                    {t(liability ? "reconcileAllRealLiability" : "reconcileAllRealAsset")}
+                    {t(loan ? "reconcileAllRealLoan" : liability ? "reconcileAllRealLiability" : "reconcileAllRealAsset")}
                   </FieldLabel>
                   <FieldControl tap>
                     {/* A plain field, not the amount field: a debt paid too much is typed with a minus, which the
@@ -254,7 +277,7 @@ export function ReconcileAllScreen({ rows }: { rows: ReconcileAllRow[] }) {
                     />
                   </FieldControl>
                   {liability && (
-                    <FieldDescription>{t("reconcileAllHintLiability")}</FieldDescription>
+                    <FieldDescription>{t(loan ? "reconcileAllHintLoan" : "reconcileAllHintLiability")}</FieldDescription>
                   )}
                   <FieldError
                     errors={
@@ -265,7 +288,7 @@ export function ReconcileAllScreen({ rows }: { rows: ReconcileAllRow[] }) {
                   </FieldError>
                 </Field>
 
-                {liability && (
+                {liability && !loan && (
                   <Flex direction="column" gap="2" align="start">
                     <Button
                       type="button"
