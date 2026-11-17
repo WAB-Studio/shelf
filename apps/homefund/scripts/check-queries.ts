@@ -4270,10 +4270,10 @@ async function roundTripSuite(scope: HarnessScope, userId: string): Promise<void
   await getTransactionFormOptions();
   const form = await trips(() => getTransactionFormOptions());
   // One transaction: the single read's BEGIN, settle and COMMIT once, plus the
-  // other eight reads as statements. Eight transactions cost eight times `single`.
+  // other nine reads as statements. Eight transactions cost eight times `single`.
   assert(
     next("getTransactionFormOptions opens one transaction, not eight"),
-    form === single + 8,
+    form === single + 9,
     `${form} round trips for the form options, ${single} for one read of them`,
   );
 
