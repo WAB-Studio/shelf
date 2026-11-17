@@ -21047,7 +21047,7 @@ async function legacyChannelSuite(): Promise<void> {
   );
 }
 
-// RF-252: many accounts counted on one day, all or nothing, with a dry run that writes nothing; a debt reads owed, positive,
+// RF-260: many accounts counted on one day, all or nothing, with a dry run that writes nothing; a debt reads owed, positive,
 // in the count, the dry run and the history alike.
 async function mcpReconcileManySuite(): Promise<void> {
   console.log("");
@@ -21094,7 +21094,7 @@ async function mcpReconcileManySuite(): Promise<void> {
   const byId = (rows: Counted["rows"], id: string) => rows.find((row) => row.accountId === id);
   const untouched = [await ledger(savings), await ledger(wallet), await ledger(card)];
   assert(
-    next("RF-252: reconcile_accounts with dryRun returns each gap and the balance that would result, writes nothing, and costs the round trips of one account"),
+    next("RF-260: reconcile_accounts with dryRun returns each gap and the balance that would result, writes nothing, and costs the round trips of one account"),
     dry.dryRun === true && byId(dry.rows, savings)?.derivedCents === 2_000_000_00 && byId(dry.rows, savings)?.gapCents === 150_000_00 &&
       byId(dry.rows, wallet)?.gapCents === -20_000_00 && byId(dry.rows, wallet)?.resultingBalanceCents === 280_000_00 &&
       byId(dry.rows, card)?.derivedCents === 1_000_000_00 && byId(dry.rows, card)?.gapCents === 20_000_00 && dry.rows.every((row) => row.reconciliationId === null) &&
@@ -21105,7 +21105,7 @@ async function mcpReconcileManySuite(): Promise<void> {
   const single = (await tool("reconcile_account", { accountId: wallet, reconciledOn: today, realAmountCents: 250_000_00, dryRun: true })).value as Counted["rows"][number] & { dryRun: boolean };
   const needsFigure = await tool("reconcile_account", { accountId: wallet, reconciledOn: today, realAmountCents: 250_000_00 });
   assert(
-    next("RF-252: reconcile_account with dryRun answers the gap without the derived figure and writes nothing; without dryRun the figure is required"),
+    next("RF-260: reconcile_account with dryRun answers the gap without the derived figure and writes nothing; without dryRun the figure is required"),
     single.dryRun === true && single.gapCents === -50_000_00 && await ledger(wallet) === 300_000_00 &&
       needsFigure.isError && (needsFigure.value as { error: string }).error === es.mcp.errors.reconcileNeedsExpected,
     `single ${JSON.stringify(single)}, refused ${JSON.stringify(needsFigure.value)}`,
@@ -21118,7 +21118,7 @@ async function mcpReconcileManySuite(): Promise<void> {
   });
   const afterStale = [await ledger(savings), await ledger(wallet), await ledger(card)];
   assert(
-    next("RF-252: a count of many with one stale account writes none and names the account"),
+    next("RF-260: a count of many with one stale account writes none and names the account"),
     slip.rows[0]?.signFlip === true && withStale.isError && (withStale.value as { error: string; accountId: string }).error === es.errors.reconcileStale &&
       (withStale.value as { accountId: string }).accountId === wallet && afterStale[0] === 2_000_000_00 && afterStale[2] === -1_000_000_00,
     `slip ${JSON.stringify(slip)}, stale ${JSON.stringify(withStale.value)}, ledger ${JSON.stringify(afterStale)}`,
@@ -21134,7 +21134,7 @@ async function mcpReconcileManySuite(): Promise<void> {
   const history = (await tool("list_reconciliations", { accountId: card })).value as { countedCents: number; derivedCents: number; gapCents: number }[];
   const after = [await ledger(savings), await ledger(wallet), await ledger(card)];
   assert(
-    next("RF-252: reconcile_accounts books one adjustment per account in one go, refuses a debt typed negative, and a debt reads owed in list_reconciliations"),
+    next("RF-260: reconcile_accounts books one adjustment per account in one go, refuses a debt typed negative, and a debt reads owed in list_reconciliations"),
     signed.isError && (signed.value as { error: string }).error.includes("-102000000") && !written.isError &&
       (written.value as Counted).rows.every((row) => row.reconciliationId !== null) &&
       after[0] === 2_150_000_00 && after[1] === 280_000_00 && after[2] === -1_020_000_00 &&
@@ -21143,7 +21143,7 @@ async function mcpReconcileManySuite(): Promise<void> {
   );
 }
 
-// RF-253: «Cuadrar todo» reads every open account the caller writes, with today's derived figure and its last count, in one
+// RF-261: «Cuadrar todo» reads every open account the caller writes, with today's derived figure and its last count, in one
 // round trip; an archived account and another person's are not there.
 async function reconcileOverviewSuite(): Promise<void> {
   console.log("");
@@ -21178,7 +21178,7 @@ async function reconcileOverviewSuite(): Promise<void> {
   await asUser(owner, () => listReconcileOverview(today));
   const trips = roundTrips() - overviewBefore;
   assert(
-    next("RF-253: the overview lists the open accounts the caller writes with today's derived figure and last count, assets before debts, in one read"),
+    next("RF-261: the overview lists the open accounts the caller writes with today's derived figure and last count, assets before debts, in one read"),
     rows.findIndex((row) => row.id === bank) < rows.findIndex((row) => row.id === card) && listedBank?.derivedCents === 790_000_00 &&
       listedBank.latestReconciledOn === today && listedCard?.derivedCents === -300_000_00 && listedCard.latestReconciledOn === null &&
       listedCard.addedOn === today && !rows.some((row) => row.id === closed || row.id === theirs) && trips === unit,
@@ -21186,7 +21186,7 @@ async function reconcileOverviewSuite(): Promise<void> {
   );
 }
 
-// RF-254: the nudge reads only dates, one round trip, for the accounts the caller writes.
+// RF-262: the nudge reads only dates, one round trip, for the accounts the caller writes.
 async function reconcileAgesSuite(): Promise<void> {
   console.log("");
   const tag = randomUUID().slice(0, 8);
@@ -21209,7 +21209,7 @@ async function reconcileAgesSuite(): Promise<void> {
   const after = (await asUser(owner, () => listReconcileAges())).find((row) => row.id === accountId);
   const trips = roundTrips() - agesBefore;
   assert(
-    next("RF-254: the ages read says when an account was added and last counted, in one read"),
+    next("RF-262: the ages read says when an account was added and last counted, in one read"),
     before?.latestReconciledOn === null && before.addedOn === today && after?.latestReconciledOn === today && trips === unit,
     `before ${JSON.stringify(before)}, after ${JSON.stringify(after)}, ${trips} round trips against ${unit}`,
   );
@@ -21298,7 +21298,7 @@ async function recordedMovementSuite(): Promise<void> {
   );
 }
 
-// RF-259: the list Inicio reads leaves a reconciliation's adjustment out, which the list of adjustments still holds.
+// RF-263: the list Inicio reads leaves a reconciliation's adjustment out, which the list of adjustments still holds.
 async function inicioWithoutAdjustmentsSuite(): Promise<void> {
   console.log("");
   const tag = randomUUID().slice(0, 8);
@@ -21317,7 +21317,7 @@ async function inicioWithoutAdjustmentsSuite(): Promise<void> {
     Promise.all([listTransactions({ withoutAdjustments: true }, { limit: 50 }), listTransactions({ adjustments: true }, { limit: 50 })]),
   );
   assert(
-    next("RF-259: the list Inicio reads leaves a reconciliation's adjustment out, which the list of adjustments still holds"),
+    next("RF-263: the list Inicio reads leaves a reconciliation's adjustment out, which the list of adjustments still holds"),
     only.length === 1 && without.length === 0 && only[0].reconciliationId !== null,
     `${without.length} without, ${only.length} adjustments`,
   );

@@ -1,5 +1,5 @@
 /**
- * RF-259 from the screens: Inicio's recent movements leave a reconciliation's adjustment («Descuadre») out, and
+ * RF-263 from the screens: Inicio's recent movements leave a reconciliation's adjustment («Descuadre») out, and
  * Movimientos keeps it.
  */
 import { randomUUID } from "node:crypto";

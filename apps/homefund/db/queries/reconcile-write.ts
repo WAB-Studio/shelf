@@ -94,7 +94,7 @@ export type ReconcileManyActionResult =
   | { ok: false; accountId: string; name: string | null; messageKey: string; date?: string };
 
 /**
- * Counts many accounts on one day, all or nothing (RF-252). Each figure is read against the currency
+ * Counts many accounts on one day, all or nothing (RF-260). Each figure is read against the currency
  * its own account settles in, read off the account and never off the payload (RNF-10). The screen
  * shows a count that looks like a slip beside its row before it is sent, so nothing here refuses it.
  */

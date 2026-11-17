@@ -1,5 +1,5 @@
 /**
- * RF-253 from the screen: «Cuadrar todo» lists the open accounts the caller writes with the figure
+ * RF-261 from the screen: «Cuadrar todo» lists the open accounts the caller writes with the figure
  * HomeFund derives today, shows each gap before anything is written, and one button counts every account
  * that has a figure, all or nothing. Every figure a test expects is stated here from the rows it seeds.
  *

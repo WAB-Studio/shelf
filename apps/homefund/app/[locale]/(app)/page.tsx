@@ -174,7 +174,7 @@ export default async function HomePage(props: PageProps<"/[locale]">) {
           "listGoalsWithProgress",
           listGoalsWithProgress().then((all) => all.filter((one) => !one.foreignOwner)),
         ),
-        // The accounts not counted in a month, for one quiet line (RF-254): a failed read drops the line.
+        // The accounts not counted in a month, for one quiet line (RF-262): a failed read drops the line.
         optional("listReconcileAges", listReconcileAges()),
       ]),
     ),

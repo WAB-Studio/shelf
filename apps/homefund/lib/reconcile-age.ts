@@ -1,6 +1,6 @@
 import { civilDateToDate } from "@/lib/dates";
 
-// A count older than this is worth a nudge (RF-254).
+// A count older than this is worth a nudge (RF-262).
 export const STALE_AFTER_DAYS = 30;
 
 const DAY_MS = 86_400_000;

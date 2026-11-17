@@ -53,7 +53,7 @@ export function PaidByLine({ account }: { account: AccountRow }) {
 }
 
 /**
- * The quiet «Cuádrala» under an account not counted for over a month (RF-254): a text button that opens the account's
+ * The quiet «Cuádrala» under an account not counted for over a month (RF-262): a text button that opens the account's
  * own «Cuadrar». Nothing for an account counted lately, or one the caller only reads.
  */
 export function StaleCountLine({ stale, onReconcile }: { stale: boolean; onReconcile: () => void }) {
@@ -121,7 +121,7 @@ export function AccountsTable({
   // go (RF-60, RF-61), mirroring the phone's card.
   hasGroup: boolean;
   empty?: ReactNode;
-  // The accounts not counted for over a month (RF-254).
+  // The accounts not counted for over a month (RF-262).
   stale: ReadonlySet<string>;
   onEdit: (row: AccountRow) => void;
   onReconcile: (row: AccountRow) => void;

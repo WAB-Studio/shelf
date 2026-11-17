@@ -57,7 +57,7 @@ export default async function AccountsPage(
     // with no fund has no roster (the fund rides as a subselect). Archived members come too, so a holder
     // who left still reads by name.
     archived ? Promise.resolve([]) : listCallerMembers(user.id, { archived: "all" }),
-    // When each account was last counted, for the quiet «Cuádrala» (RF-254); the archived tab shows none.
+    // When each account was last counted, for the quiet «Cuádrala» (RF-262); the archived tab shows none.
     archived ? Promise.resolve([]) : listReconcileAges(),
   ]);
   const heldBy = new Set(accounts.map((account) => account.holderMemberId));

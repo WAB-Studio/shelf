@@ -22,7 +22,7 @@ export async function generateMetadata(
   return { title: t("reconcileAllTitle") };
 }
 
-// «Cuadrar todo» (RF-253): every open account the caller can write, with today's derived figure, on one screen.
+// «Cuadrar todo» (RF-261): every open account the caller can write, with today's derived figure, on one screen.
 export default async function ReconcileAllPage(
   props: PageProps<"/[locale]/settings/accounts/reconcile">,
 ) {

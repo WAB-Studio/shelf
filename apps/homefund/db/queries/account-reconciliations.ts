@@ -323,7 +323,7 @@ class RolledBack extends Error {
 }
 
 /**
- * Counts many accounts on one day, all or nothing (RF-252). ONE transaction and a fixed number of
+ * Counts many accounts on one day, all or nothing (RF-260). ONE transaction and a fixed number of
  * round trips, however many accounts: one lock statement, one read of every account, one multi-row
  * insert (the triggers book each gap) and one read of the gaps booked. Each account is refused in
  * the words `reconcileAccount` uses and the answer names the first one that fails; nothing is written
@@ -488,7 +488,7 @@ export type ReconcileOverviewRow = {
 
 /**
  * Every open account the caller can write, with the figure HomeFund derives for today and when it was last
- * counted (RF-253). ONE round trip, and no balance column: the figure is the database's own derivation. A
+ * counted (RF-261). ONE round trip, and no balance column: the figure is the database's own derivation. A
  * pocket is an account of its own here; the hidden «Me debe» of a credit somebody else pays is left out.
  */
 export async function listReconcileOverview(
@@ -530,7 +530,7 @@ export type ReconcileAgeRow = Pick<ReconcileOverviewRow, "id" | "latestReconcile
 
 /**
  * When each open account the caller writes was last counted, for the quiet «Cuádrala» of Cuentas and Inicio
- * (RF-254). ONE round trip, and no balance derived: the nudge only reads dates, so it costs the screens it rides
+ * (RF-262). ONE round trip, and no balance derived: the nudge only reads dates, so it costs the screens it rides
  * on no scan of any account's movements.
  */
 export async function listReconcileAges(outerTx?: Transaction): Promise<ReconcileAgeRow[]> {

@@ -1,5 +1,5 @@
 /**
- * RF-254 from the screens: an account not counted for over a month carries a quiet «Cuádrala» in Cuentas that opens
+ * RF-262 from the screens: an account not counted for over a month carries a quiet «Cuádrala» in Cuentas that opens
  * its own «Cuadrar», and Inicio says so in one line that opens «Cuadrar todo». An account counted lately carries
  * neither mark.
  */

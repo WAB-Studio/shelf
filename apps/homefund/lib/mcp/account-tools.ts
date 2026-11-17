@@ -214,7 +214,7 @@ export function registerAccountTools(server: McpServer, run: Run, t: Say): void 
       }),
   );
 
-  // RF-252: many accounts counted on one day, all or nothing; the dry run is what the person says yes to.
+  // RF-260: many accounts counted on one day, all or nothing; the dry run is what the person says yes to.
   server.registerTool(
     "reconcile_accounts",
     {

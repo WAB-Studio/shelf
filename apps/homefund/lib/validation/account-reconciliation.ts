@@ -65,7 +65,7 @@ export const reconcileAccountSchema = z.object({
 export const MAX_RECONCILED_TOGETHER = 50;
 
 /**
- * Many accounts counted on one day, all or nothing (RF-252). One day for the lot; each item is
+ * Many accounts counted on one day, all or nothing (RF-260). One day for the lot; each item is
  * what `reconcileAccountSchema` takes for one account, and an account appears once.
  */
 export const reconcileAccountsSchema = z.object({

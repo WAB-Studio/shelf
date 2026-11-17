@@ -132,7 +132,7 @@ export function AccountsScreen({
   newSubtype?: (typeof ACCOUNT_SUBTYPES)[number] | null;
   // The fund members a fund account can be held by (RF-181).
   members: { id: string; name: string }[];
-  // The accounts not counted for over a month (RF-254), each with a quiet «Cuádrala».
+  // The accounts not counted for over a month (RF-262), each with a quiet «Cuádrala».
   staleIds: string[];
 }) {
   const t = useTranslations("accounts");

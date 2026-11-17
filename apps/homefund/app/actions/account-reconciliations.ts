@@ -43,7 +43,7 @@ export const reconcileAccountAction = authActionClient
   });
 
 /**
- * Counts many accounts on one day, all or nothing (RF-253). The screen it serves leaves for Cuentas on
+ * Counts many accounts on one day, all or nothing (RF-261). The screen it serves leaves for Cuentas on
  * success, so the layout purge is all the re-render it needs.
  */
 export const reconcileAccountsAction = authActionClient
