@@ -208,9 +208,7 @@
     "planning": "Planeación",
     "budgets": "Presupuestos",
     "goals": "Metas",
-    "payments": "Pagos",
-    "recurring": "Recurrentes",
-    "subscriptions": "Suscripciones",
+    "upcoming": "Lo que viene",
     "debts": "Deudas",
     "reports": "Reportes",
     "inbox": "Bandeja",
@@ -846,27 +844,20 @@
     "budgetsSummary": "{count, plural, =0 {Sin presupuestos activos} one {# activo · {spent} de {limit} este mes} other {# activos · {spent} de {limit} este mes}}",
     "goalsTitle": "Metas de ahorro",
     "goalsSummary": "{count, plural, =0 {Sin metas} one {# meta · {saved} apartado} other {# metas · {saved} apartado}}",
-    "paymentsTitle": "Pagos planificados",
-    "paymentsSummary": "Próximo · {concept} el {date}",
-    "paymentsEmpty": "Sin pagos pendientes",
     "noConcept": "Sin concepto",
     "debtsTitle": "Deudas",
     "debtsSummary": "{total} · próximo pago el {date}",
     "debtsSummaryNoDate": "{total} en deudas",
     "debtsEmpty": "Sin deudas",
-    "recurringTitle": "Recurrentes",
-    "recurringSummary": "{count, plural, one {# regla · {concept} el {date}} other {# reglas · próxima {concept} el {date}}}",
-    "recurringEmpty": "Sin reglas activas",
-    "subscriptionsTitle": "Suscripciones",
-    "subscriptionsSummary": "{count, plural, one {# activa} other {# activas}} · {amounts}",
-    "perMonth": "{amount} al mes",
-    "subscriptionsEmpty": "Sin cobros repetidos",
     "nav": "Secciones de planeación",
     "over": "Superado",
     "spentOf": "{spent} de {limit}",
     "goalLeft": "Faltan {amount}",
     "goalLeftPace": "Faltan {amount} · {pace}/mes",
-    "debtsNext": "Próximo pago el {date}"
+    "debtsNext": "Próximo pago el {date}",
+    "upcomingTitle": "Lo que viene",
+    "upcomingEmpty": "Nada por venir",
+    "upcomingSummary": "Próximo · {concept} el {date}"
   },
   "budgets": {
     "ofLimit": " / {amount}",
@@ -1093,6 +1084,112 @@
       "incomeNeedsPayer": "Escribe de quién viene."
     }
   },
+  "upcoming": {
+    "title": "Lo que viene",
+    "add": "Agregar",
+    "emptyTitle": "Aún no tienes nada por venir",
+    "emptyDescription": "Toca «Agregar» para anotar un pago que vence, un ingreso que esperas o algo que se repite cada mes.",
+    "kind": {
+      "payment": "Pago",
+      "income": "Te llega",
+      "subscription": "Suscripción",
+      "repeat": {
+        "weekly": "Se repite {n, plural, one {cada semana} other {cada # semanas}}",
+        "monthly": "Se repite {n, plural, one {cada mes} other {cada # meses}}",
+        "yearly": "Se repite {n, plural, one {cada año} other {cada # años}}"
+      }
+    },
+    "paused": "En pausa",
+    "late": {
+      "payment": "Venció",
+      "income": "Debió llegar",
+      "subscription": "Debió cobrarse y aún no aparece"
+    },
+    "estimate": "Estimado con {count, plural, one {# cobro anterior} other {# cobros anteriores}}",
+    "act": {
+      "pay": "Pagar",
+      "arrived": "Ya llegó",
+      "skip": {
+        "weekly": "Saltar esta semana",
+        "monthly": "Saltar este mes",
+        "yearly": "Saltar este año"
+      },
+      "edit": "Editar",
+      "seeMovements": "Ver movimientos"
+    },
+    "menu": {
+      "pause": "Pausar",
+      "resume": "Reanudar",
+      "cancelPayment": "Cancelar este pago",
+      "cancelIncome": "Ya no llegará",
+      "delete": "Eliminar"
+    },
+    "settle": {
+      "payTitle": "Registrar el pago",
+      "incomeTitle": "Registrar el ingreso",
+      "description": "Anota el movimiento real con la fecha en que ocurrió.",
+      "dateLabel": "¿Qué día fue?",
+      "paid": "Pago registrado.",
+      "arrived": "Ingreso registrado."
+    },
+    "cancel": {
+      "payTitle": "Cancelar este pago",
+      "incomeTitle": "Ya no llegará",
+      "description": "Dejará de aparecer en esta lista.",
+      "paid": "Pago cancelado.",
+      "income": "Anotado: ya no llegará."
+    },
+    "delete": {
+      "title": "Eliminar",
+      "description": "Esta acción no se puede deshacer.",
+      "done": "Eliminado."
+    },
+    "skipped": "Saltaste esta vez. Sigue el {date}.",
+    "form": {
+      "addTitle": "Agregar a lo que viene",
+      "editTitle": "Editar",
+      "save": "Guardar",
+      "created": "Listo, quedó en lo que viene.",
+      "updated": "Cambios guardados.",
+      "directionLabel": "¿Pagas o recibes?",
+      "pay": "Pago",
+      "receive": "Ingreso",
+      "repeatLabel": "¿Una vez o se repite?",
+      "once": "Una vez",
+      "repeats": "Se repite",
+      "conceptPay": "¿Qué es?",
+      "conceptPayPlaceholder": "Arriendo",
+      "conceptReceive": "¿De quién?",
+      "conceptReceivePlaceholder": "Cliente o proyecto",
+      "amount": "Monto",
+      "accountPay": "¿De qué cuenta sale?",
+      "accountReceive": "¿A qué cuenta llega?",
+      "accountPlaceholder": "Elige una cuenta",
+      "payTo": "¿Va a otra cuenta tuya, como una tarjeta o un crédito?",
+      "payToNone": "No",
+      "datePay": "¿Qué día vence?",
+      "dateReceive": "¿Qué día lo esperas?",
+      "dateRepeat": "¿Qué día es la primera vez?",
+      "frequency": "¿Cada cuánto?",
+      "every": {
+        "weekly": "{n, plural, one {Cada semana} other {Cada # semanas}}",
+        "monthly": "{n, plural, one {Cada mes} other {Cada # meses}}",
+        "yearly": "{n, plural, one {Cada año} other {Cada # años}}"
+      },
+      "endsOn": "¿Hasta cuándo?",
+      "remindOn": "¿Qué día te aviso?",
+      "category": "Categoría",
+      "categoryNone": "Sin categoría",
+      "hintPay": "Aparece en esta lista y tú registras el gasto cuando lo pagas.",
+      "hintReceive": "Se da por recibido solo cuando entra un ingreso de cerca de este monto a esa cuenta, sea que lo anotes tú o llegue por la Bandeja.",
+      "hintRepeat": "Los movimientos se crean solos y quedan marcados como automáticos hasta que los confirmes."
+    },
+    "cadence": {
+      "monthly": "Cada mes",
+      "weekly": "Cada semana"
+    },
+    "subscriptionsLine": "Suscripciones: {amount} al mes"
+  },
   "recurringRules": {
     "title": "Recurrentes",
     "pausedFailed": "Pausada: no se pudo generar el movimiento. Revisa la regla y reanúdala.",
@@ -1181,20 +1278,6 @@
       "scopeViolation": "La cuenta o la categoría no pertenecen al mismo ámbito.",
       "ended": "Esta regla ya terminó. Cambia su fecha de fin para reanudarla."
     }
-  },
-  "subscriptions": {
-    "title": "Suscripciones",
-    "perMonth": "{amount} al mes",
-    "monthly": "Cada mes",
-    "weekly": "Cada semana",
-    "running": "{count, plural, one {# activa} other {# activas}}",
-    "stopped": "{count, plural, one {# sin cobro reciente} other {# sin cobro reciente}}",
-    "nextCharge": "Próximo cobro estimado: {date} · {count} cobros vistos",
-    "lateCharge": "Debió cobrarse el {date} y aún no aparece · {count} cobros vistos",
-    "lastCharge": "Último cobro: {date}",
-    "emptyTitle": "Aún no hay cobros repetidos",
-    "emptyDescription": "Cuando un mismo cobro aparezca al menos tres veces, cada mes o cada semana, lo verás aquí con su próxima fecha.",
-    "hint": "HomeFund las encuentra solo: un cobro con la misma descripción, en la misma cuenta, cada mes o cada semana, al menos tres veces en el último año. El monto y la fecha son estimados. Pídele a Claude que las revise contigo para decidir cuáles cancelar."
   },
   "debts": {
     "title": "Deudas",
@@ -1819,10 +1902,22 @@
     "emptyTitle": "No hay nada por revisar",
     "emptyDescription": "Cuando llegue algo de estas fuentes, aparece aquí para que lo revises. Conecta la que uses.",
     "emptySource": {
-      "android": { "label": "En Android, la app HomeFund Avisos reenvía los avisos de tu banco.", "link": "Instalar HomeFund Avisos" },
-      "iphone": { "label": "En iPhone, un Atajo manda el SMS del banco o un gasto que escribes.", "link": "Crear el Atajo" },
-      "gmail": { "label": "En Gmail, los correos de tu banco llegan solos.", "link": "Conectar Gmail" },
-      "claude": { "label": "Con Claude, le pides que anote o importe movimientos por ti.", "link": "Conectar Claude" }
+      "android": {
+        "label": "En Android, la app HomeFund Avisos reenvía los avisos de tu banco.",
+        "link": "Instalar HomeFund Avisos"
+      },
+      "iphone": {
+        "label": "En iPhone, un Atajo manda el SMS del banco o un gasto que escribes.",
+        "link": "Crear el Atajo"
+      },
+      "gmail": {
+        "label": "En Gmail, los correos de tu banco llegan solos.",
+        "link": "Conectar Gmail"
+      },
+      "claude": {
+        "label": "Con Claude, le pides que anote o importe movimientos por ti.",
+        "link": "Conectar Claude"
+      }
     },
     "copy": "Copiar",
     "copied": "Copiado",

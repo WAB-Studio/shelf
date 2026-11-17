@@ -17,7 +17,8 @@ import { fixtureSql } from "../scripts/harness/fixtures";
 import { rightOverhang } from "./fit";
 import { asHarnessUser, readScope, test } from "./global-setup";
 
-const rules = messages.recurringRules;
+const upcoming = messages.upcoming;
+const common = messages.common;
 
 const FAILED_LINE = "Pausada: no se pudo generar el movimiento. Revisa la regla y reanúdala.";
 
@@ -55,13 +56,8 @@ test.afterEach(async () => {
   await fixtureSql`delete from categories where id = ${ids.category}`;
 });
 
-// The table and the cards both sit in the DOM, cut apart by CSS: the row is the visible one.
 function row(page: Page): Locator {
-  return page
-    .getByRole("row")
-    .or(page.locator(".rt-Card"))
-    .filter({ hasText: RULE })
-    .filter({ visible: true });
+  return page.locator(".rt-Card").filter({ hasText: RULE }).filter({ visible: true });
 }
 
 const visibleText = (scopeOf: Locator | Page, text: string) =>
@@ -76,7 +72,7 @@ async function stored() {
 test("a rule the run paused shows why on its row", async ({ page }) => {
   // Kills: the row rendering «Pausada» alone.
   await seed({ active: false, reason: "failed" });
-  await page.goto("/es/planning/recurring");
+  await page.goto("/es/planning/upcoming");
 
   await expect(visibleText(row(page), FAILED_LINE)).toHaveCount(1);
 });
@@ -86,13 +82,17 @@ test("resuming a rule the run paused takes the line away, and it stays gone afte
 }) => {
   // Kills: a reason cached on the client or never cleared, so the line outlives the resume.
   await seed({ active: false, reason: "failed" });
-  await page.goto("/es/planning/recurring");
+  await page.goto("/es/planning/upcoming");
   await expect(visibleText(row(page), FAILED_LINE)).toHaveCount(1);
 
-  await row(page).getByRole("switch").filter({ visible: true }).click();
+  await page
+    .getByRole("button", { name: common.actionsFor.replace("{name}", RULE), exact: true })
+    .filter({ visible: true })
+    .click();
+  await page.getByRole("menuitem", { name: upcoming.menu.resume, exact: true }).click();
 
   await expect(page.getByText(FAILED_LINE)).toHaveCount(0);
-  await expect(visibleText(row(page), rules.stateActive)).toHaveCount(1);
+  await expect(row(page).getByRole("button", { name: upcoming.act.skip.weekly, exact: true })).toBeVisible();
   expect(await stored()).toEqual({ is_active: true, paused_reason: null });
 
   await page.reload();
@@ -106,7 +106,7 @@ test.describe("a wide amount on a narrow phone", () => {
   }) => {
     // Kills: an amount that never gives its line away, so the title is cut to its first letters.
     await seed({ active: true, reason: null, amountCents: 2345678901 });
-    await page.goto("/es/planning/recurring");
+    await page.goto("/es/planning/upcoming");
 
     const title = page.getByText(RULE, { exact: true }).filter({ visible: true });
     const card = page.locator(".rt-Card").filter({ visible: true }).filter({ has: title });

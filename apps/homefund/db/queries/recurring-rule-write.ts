@@ -3,6 +3,7 @@ import "server-only";
 import {
   categoryFitsRuleAccount,
   createRecurringRule,
+  listRecurringRules,
   setRecurringRuleActive,
   updateRecurringRule,
 } from "@/db/queries/recurring-rules";
@@ -10,6 +11,7 @@ import { getSettlementCurrencies } from "@/db/queries/transactions";
 import { assertRefined, requireMinor } from "@/lib/action-amounts";
 import { pgErrorCode } from "@/lib/db-error";
 import { ActionError } from "@/lib/errors";
+import { dateAfterSkip } from "@/lib/fund/upcoming";
 import {
   type CreateRecurringRuleInput,
   refineRuleAmount,
@@ -147,4 +149,32 @@ export async function resumeRecurringRule(id: string): Promise<void> {
     throw error;
   });
   if (!resumed) throw new ActionError("errors.notFound");
+}
+
+/**
+ * Lets the coming run pass: the next run moves one period on and nothing is booked for the one skipped. The row
+ * is written back as it was read, quoting its stamp, so a run or an edit that landed first refuses it as stale.
+ */
+export async function skipRecurringRule(id: string): Promise<void> {
+  const rule = (await listRecurringRules()).find((one) => one.id === id);
+  if (!rule) throw new ActionError("errors.notFound");
+
+  const nextRunOn = dateAfterSkip(rule);
+  if (rule.endsOn !== null && nextRunOn > rule.endsOn) {
+    throw new ActionError("recurringRules.errors.endsOnBeforeNextRun");
+  }
+
+  let outcome: Awaited<ReturnType<typeof updateRecurringRule>>;
+  try {
+    outcome = await updateRecurringRule({
+      ...rule,
+      nextRunOn,
+      expectedUpdatedAt: rule.updatedAt,
+    });
+  } catch (error) {
+    mapRecurringRuleError(error);
+  }
+
+  if (outcome === "stale") throw new ActionError("errors.stale");
+  if (outcome === "missing") throw new ActionError("errors.notFound");
 }

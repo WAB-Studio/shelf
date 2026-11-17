@@ -16,7 +16,7 @@ import messages from "@/messages/es.json";
 
 import { fixtureSql } from "../scripts/harness/fixtures";
 import { MEMBER_STORAGE_STATE, asUser, clearGroup, readScope, seedGroup, test } from "./global-setup";
-const payments = messages.plannedPayments;
+const payments = messages.upcoming;
 const transactions = messages.transactions;
 
 const scope = readScope();
@@ -103,7 +103,7 @@ function expectCut(names: string[]) {
 }
 
 async function openPayment(page: Page): Promise<Locator> {
-  await page.goto("/es/planning/payments");
+  await page.goto("/es/planning/upcoming");
   await page.getByRole("button", { name: payments.add, exact: true }).first().click();
   const dialog = page.getByRole("dialog");
   await expect(dialog).toBeVisible();
@@ -140,13 +140,13 @@ test.describe("as a plain member", () => {
     const concept = `Pago ${stamp}`;
     const dialog = await openPayment(page);
 
-    await dialog.getByRole("textbox", { name: payments.conceptLabel }).fill(concept);
-    await dialog.getByRole("textbox", { name: payments.amountLabel }).fill("25000");
-    await choose(page, dialog.locator("#payment-from"), MEMBER_ACCOUNT);
-    await dialog.getByLabel(payments.dueLabel).fill("2027-03-12");
-    await dialog.getByRole("button", { name: payments.save, exact: true }).click();
+    await dialog.getByRole("textbox", { name: payments.form.conceptPay }).fill(concept);
+    await dialog.getByRole("textbox", { name: payments.form.amount }).fill("25000");
+    await choose(page, dialog.locator("#upcoming-account"), MEMBER_ACCOUNT);
+    await dialog.getByLabel(payments.form.datePay).fill("2027-03-12");
+    await dialog.getByRole("button", { name: payments.form.save, exact: true }).click();
 
-    await expect(page.getByText(payments.created, { exact: true })).toBeVisible();
+    await expect(page.getByText(payments.form.created, { exact: true })).toBeVisible();
     await expect(band(page).getByText(concept, { exact: true })).toBeVisible();
   });
 

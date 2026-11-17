@@ -299,7 +299,7 @@ test.describe("a rule's row opens what it generated, not the whole account (RF-1
   }, testInfo) => {
     const desktop = testInfo.project.name === "desktop";
 
-    await page.goto("/es/planning/recurring");
+    await page.goto("/es/planning/upcoming");
 
     // The trigger's accessible name is built from the row it belongs to
     // (`RowMenu`), so it is safe to locate page-wide: Chromium drops the

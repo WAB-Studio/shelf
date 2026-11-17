@@ -44,12 +44,12 @@ test.describe("an overdue payment on the phone", () => {
     await fixtureSql`delete from planned_payments where id = ${id}`;
   });
 
-  test("says Vencido and offers Registrar pago without a menu @mobile", async ({ page }) => {
-    await page.goto("/es/planning/payments");
+  test("says Venció and offers Pagar without a menu @mobile", async ({ page }) => {
+    await page.goto("/es/planning/upcoming");
     await expect(page.getByText(`Predial ${stamp}`).locator("visible=true")).toBeVisible();
-    await expect(page.getByText(messages.plannedPayments.overdueLabel, { exact: false }).first()).toBeVisible();
+    await expect(page.getByText(messages.upcoming.late.payment, { exact: false }).first()).toBeVisible();
     await expect(
-      page.getByRole("button", { name: messages.plannedPayments.settle, exact: true }).first(),
+      page.getByRole("button", { name: messages.upcoming.act.pay, exact: true }).first(),
     ).toBeVisible();
   });
 });

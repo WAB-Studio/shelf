@@ -17,7 +17,7 @@ import messages from "@/messages/es.json";
 import { fixtureSql } from "../scripts/harness/fixtures";
 import { asHarnessUser, readScope, test } from "./global-setup";
 
-const rules = messages.recurringRules;
+const rules = messages.upcoming.form;
 const common = messages.common;
 
 test.use({ viewport: { width: 1280, height: 900 } });
@@ -50,14 +50,14 @@ test.afterEach(async () => {
 });
 
 async function openEdit(page: Page): Promise<Locator> {
-  await page.goto("/es/planning/recurring");
+  await page.goto("/es/planning/upcoming");
   await page
     .getByRole("button", { name: common.actionsFor.replace("{name}", RULE), exact: true })
     .filter({ visible: true })
     .click();
   await page.getByRole("menuitem", { name: common.edit, exact: true }).click();
   const dialog = page.getByRole("dialog");
-  await expect(dialog.getByRole("textbox", { name: rules.conceptLabel })).toHaveValue(RULE);
+  await expect(dialog.getByRole("textbox", { name: rules.conceptPay })).toHaveValue(RULE);
   return dialog;
 }
 
@@ -73,7 +73,7 @@ async function stored() {
 test("a rule nobody touched saves, even after the dialog sat open", async ({ page }) => {
   // Kills: an expected version that never matches, so every ordinary edit is refused.
   const dialog = await openEdit(page);
-  await dialog.getByRole("textbox", { name: rules.amountLabel }).fill("27000");
+  await dialog.getByRole("textbox", { name: rules.amount }).fill("27000");
   await save(dialog).click();
 
   await expect(dialog).toBeHidden();

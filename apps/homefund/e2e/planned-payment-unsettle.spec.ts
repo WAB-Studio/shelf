@@ -21,7 +21,7 @@ import { pageOverflow, rightOverhang } from "./fit";
 import { asHarnessUser, clearLedger, readScope, test } from "./global-setup";
 
 const transactions = messages.transactions;
-const payments = messages.plannedPayments;
+const upcoming = messages.upcoming;
 const common = messages.common;
 const scope = readScope();
 
@@ -45,16 +45,16 @@ async function seedPayment(description: string | null): Promise<void> {
   });
 }
 
-// «Registrar pago» through the dialog, from whichever list the viewport paints.
+// «Pagar» through the dialog, from the row's own button.
 async function settleThroughApp(page: Page, label: string): Promise<string> {
-  await page.goto("/es/planning/payments");
+  await page.goto("/es/planning/upcoming");
   await page
-    .getByRole("button", { name: common.actionsFor.replace("{name}", label), exact: true })
-    .filter({ visible: true })
+    .locator(".rt-Card")
+    .filter({ hasText: label })
+    .getByRole("button", { name: upcoming.act.pay, exact: true })
     .click();
-  await page.getByRole("menuitem", { name: payments.settle, exact: true }).click();
   const dialog = page.getByRole("dialog");
-  await dialog.getByRole("button", { name: payments.settle, exact: true }).click();
+  await dialog.getByRole("button", { name: upcoming.act.pay, exact: true }).click();
   await expect(dialog).toBeHidden();
 
   await expect
@@ -111,9 +111,9 @@ test.describe("the sentence in the confirmation", () => {
 
 test.describe("confirming the delete of a settling movement", () => {
 
-  test("done: the payment is under «Por pagar» again and Planeación offers it to settle", async ({
+  test("done: the payment is under «Por pagar» again and Lo que viene offers it to pay", async ({
     page,
-  }, testInfo) => {
+  }) => {
     // Kills: a delete that removes the movement and leaves the payment done, so nothing is owed any more.
     await seedPayment(NAME);
     const movementId = await settleThroughApp(page, NAME);
@@ -131,12 +131,10 @@ test.describe("confirming the delete of a settling movement", () => {
     await expect(page.getByRole("heading", { name: "Por pagar", level: 2 })).toBeVisible();
     await expect(page.getByRole("link").filter({ hasText: NAME })).toHaveCount(1);
 
-    await page.goto("/es/planning/payments");
-    if (testInfo.project.name === "desktop") {
-      const row = page.getByRole("row").filter({ hasText: NAME });
-      await expect(row.getByRole("button", { name: payments.settle, exact: true })).toBeVisible();
-      await expect(row.getByText(payments.settledMarker, { exact: true })).toHaveCount(0);
-    }
+    await page.goto("/es/planning/upcoming");
+    await expect(
+      page.locator(".rt-Card").filter({ hasText: NAME }).getByRole("button", { name: upcoming.act.pay, exact: true }),
+    ).toBeVisible();
   });
 });
 
@@ -151,7 +149,7 @@ test.describe("an overdue payment on a narrow phone", () => {
         values (${scope.userId}, ${scope.accountId}, 1234567890, ${scope.categoryId},
           ${todayInBogota()}::date - 3, ${label}, ${scope.userId})`;
     });
-    await page.goto("/es/planning/payments");
+    await page.goto("/es/planning/upcoming");
 
     const menu = page
       .getByRole("button", { name: common.actionsFor.replace("{name}", label), exact: true })

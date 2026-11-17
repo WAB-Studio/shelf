@@ -27,7 +27,7 @@ type Say = (key: string) => string;
 
 const FREQUENCIES = ["monthly", "weekly", "yearly"] as const;
 
-// RF-231: the Recurrentes screen's list and writes, through its own query, schemas and write functions, and the «Revisado»
+// RF-231: «Lo que viene»'s rules, with their list and writes, through its own query, schemas and write functions, and the «Revisado»
 // stamp a generated movement takes. A rule is one-sided, an income into one account or an expense out of one.
 export function registerRecurringTools(server: McpServer, run: Run, t: Say): void {
   const d = (key: string) => t(`params.${key}`);

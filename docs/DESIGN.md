@@ -399,7 +399,7 @@ Board C1h corrected the same day: a card in credit reads «Según HomeFund −$ 
     «Casa». Antes de salir, pasa el liderazgo a otro miembro desde «Miembros».» · «Entendido» (RF-59). A leader alone in
     the fund leaves like anyone. No desktop face for either.
 - **A planned payment's reminder mails its author** (RF-141): at 7:00 Bogotá on the reminder date, one plain-text mail
-  «Recordatorio: <nombre> vence el <fecha>» with the amount and a link to «Pagos». A fund payment mails its author only
+  «Recordatorio: <nombre> vence el <fecha>» with the amount and a link to «Lo que viene». A fund payment mails its author only
   while they are in the fund; moving the reminder date mails again; a payment past its due date is not mailed.
 - **The five open debt cases** of the 2026-10-15 audit (Q7 a) are settled one by one in a question session before their
   module; the rest of the debt fixes do not wait.
@@ -447,7 +447,7 @@ Board C1h corrected the same day: a card in credit reads «Según HomeFund −$ 
   «Movimientos», one row per payment: its name, «Vence el 15 dic» (or «Venció el 15 oct» in red once the due date has
   passed) and its amount; oldest due first; at most three, the link reads «Ver los 5» when there are more, else «Ver
   pagos». A row leaves when the payment is paid or archived; a payment with no reminder, or whose reminder date has not
-  come, is not shown; none, and the card does not exist. A row opens that payment in «Pagos». RF-141's email goes out the same morning.
+  come, is not shown; none, and the card does not exist. A row opens «Lo que viene». RF-141's email goes out the same morning.
 - **A sign-out Auth refuses leaves this device signed out** (Q30 a): the session is never restored; the login says
   «Cerraste sesión aquí, pero no pudimos cerrarla en tus otros dispositivos.»
 
@@ -836,3 +836,30 @@ todas las cuentas a la vez.
   Inicio, a lo sumo una línea en la columna de al lado, «3 cuentas sin cuadrar hace más de un mes · Cuadrar todo»; sin cuentas así, nada.
 - **Inicio no muestra los «Descuadre»** (2026-11-17). Las últimas del listado de Inicio son lo que pasó; la diferencia de un cuadre sigue en
   Movimientos y en el historial de la cuenta.
+
+## Decisión del 2026-11-17: «Lo que viene», por el usuario («sí a todo»)
+
+Pagos, Recurrentes, Suscripciones e «Ingreso esperado» eran cuatro pantallas para una sola pregunta: ¿qué me llega o qué debo
+pagar? Ahora es una, `/planning/upcoming`, «Lo que viene». Los tres caminos viejos (`/planning/payments`, `/recurring`,
+`/subscriptions`) llevan a ella, y el mosaico de Planeación tiene una sola ficha ancha con lo próximo. No hay tablero previo.
+
+- **Una lista por fecha**, sin secciones: lo más cercano (y lo vencido) arriba. Cada fila es una `Card` con el disco de la fecha,
+  el nombre, debajo «lo que es · cuenta» y el monto a la derecha; una línea gris cuando hace falta (qué falta o qué estima) y
+  **una** acción, debajo. El resto vive en el menú de tres puntos.
+- **Lo que es, en palabras:** «Pago», «Te llega» (un ingreso esperado), «Se repite cada mes» (cada semana, cada año; «cada 2 meses»)
+  y «Suscripción» (un cobro que HomeFund encontró repitiéndose; solo los que siguen cobrándose, y no si ya hay una regla que lo
+  genera). Una línea gris lo cuenta cuando duele: «Venció», «Debió llegar», «Debió cobrarse y aún no aparece», «En pausa»,
+  «Estimado con 4 cobros anteriores».
+- **La acción:** «Pagar» (un pago; pide el día en que ocurrió y escribe el gasto), «Ya llegó» (un ingreso esperado; igual, escribe el
+  ingreso), «Saltar este mes» (una regla activa: la próxima vez pasa un periodo más adelante y no se escribe nada; «esta semana» y
+  «este año» según la regla), «Editar» (una regla en pausa) y, en una suscripción, «Ver movimientos» (lleva al listado filtrado por
+  su nombre). Menú: Editar, Cancelar este pago / «Ya no llegará», Pausar o Reanudar, «Ver movimientos generados», Eliminar.
+- **Un solo «Agregar»** arriba a la derecha. El diálogo pregunta «¿Pagas o recibes?» («Pago» · «Ingreso») y «¿Una vez o se
+  repite?» («Una vez» · «Se repite»); después «¿Qué es?» o «¿De quién?», «Monto», la cuenta («¿De qué cuenta sale?» / «¿A qué cuenta
+  llega?»), el día («¿Qué día vence?», «¿Qué día lo esperas?», «¿Qué día es la primera vez?»), y según el caso «¿Cada cuánto?»,
+  «¿Hasta cuándo?», «¿Qué día te aviso?» y «Categoría». Un pago de una vez puede preguntar «¿Va a otra cuenta tuya, como una tarjeta o
+  un crédito?» (y entonces no lleva categoría). Las categorías incluyen las subcategorías, «Mercado › Lácteos». Al editar, las dos
+  preguntas no aparecen: lo que ya es no cambia de tipo.
+- **Vacío:** sin nada, «Aún no tienes nada por venir» y «Toca «Agregar» para anotar un pago que vence, un ingreso que esperas o algo
+  que se repite cada mes», con el botón. Ningún tipo vacío muestra su encabezado, porque no hay encabezados.
+- Arriba, el aviso ámbar «N movimientos automáticos sin revisar» solo cuando hay alguno.

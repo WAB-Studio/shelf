@@ -208,9 +208,7 @@
     "planning": "Planning",
     "budgets": "Budgets",
     "goals": "Goals",
-    "payments": "Payments",
-    "recurring": "Recurring",
-    "subscriptions": "Subscriptions",
+    "upcoming": "Coming up",
     "debts": "Debts",
     "reports": "Reports",
     "inbox": "Inbox",
@@ -846,27 +844,20 @@
     "budgetsSummary": "{count, plural, =0 {No active budgets} one {# active · {spent} of {limit} this month} other {# active · {spent} of {limit} this month}}",
     "goalsTitle": "Savings goals",
     "goalsSummary": "{count, plural, =0 {No goals} one {# goal · {saved} set aside} other {# goals · {saved} set aside}}",
-    "paymentsTitle": "Planned payments",
-    "paymentsSummary": "Next · {concept} on {date}",
-    "paymentsEmpty": "No pending payments",
     "noConcept": "No concept",
     "debtsTitle": "Debts",
     "debtsSummary": "{total} · next payment on {date}",
     "debtsSummaryNoDate": "{total} in debts",
     "debtsEmpty": "No debts",
-    "recurringTitle": "Recurring",
-    "recurringSummary": "{count, plural, one {# rule · {concept} on {date}} other {# rules · next {concept} on {date}}}",
-    "recurringEmpty": "No active rules",
-    "subscriptionsTitle": "Subscriptions",
-    "subscriptionsSummary": "{count, plural, one {# active} other {# active}} · {amounts}",
-    "perMonth": "{amount} a month",
-    "subscriptionsEmpty": "No repeated charges",
     "nav": "Planning sections",
     "over": "Over",
     "spentOf": "{spent} of {limit}",
     "goalLeft": "{amount} to go",
     "goalLeftPace": "{amount} to go · {pace}/mo",
-    "debtsNext": "Next payment on {date}"
+    "debtsNext": "Next payment on {date}",
+    "upcomingTitle": "Coming up",
+    "upcomingEmpty": "Nothing coming up",
+    "upcomingSummary": "Next · {concept} on {date}"
   },
   "budgets": {
     "ofLimit": " / {amount}",
@@ -1093,6 +1084,112 @@
       "incomeNeedsPayer": "Write who it comes from."
     }
   },
+  "upcoming": {
+    "title": "Coming up",
+    "add": "Add",
+    "emptyTitle": "Nothing coming up yet",
+    "emptyDescription": "Tap “Add” to note a payment that is due, income you expect or something that repeats every month.",
+    "kind": {
+      "payment": "Payment",
+      "income": "Coming to you",
+      "subscription": "Subscription",
+      "repeat": {
+        "weekly": "Repeats {n, plural, one {every week} other {every # weeks}}",
+        "monthly": "Repeats {n, plural, one {every month} other {every # months}}",
+        "yearly": "Repeats {n, plural, one {every year} other {every # years}}"
+      }
+    },
+    "paused": "Paused",
+    "late": {
+      "payment": "Overdue",
+      "income": "Should have arrived",
+      "subscription": "Should have been charged and has not shown up"
+    },
+    "estimate": "Estimated from {count, plural, one {# earlier charge} other {# earlier charges}}",
+    "act": {
+      "pay": "Pay",
+      "arrived": "It arrived",
+      "skip": {
+        "weekly": "Skip this week",
+        "monthly": "Skip this month",
+        "yearly": "Skip this year"
+      },
+      "edit": "Edit",
+      "seeMovements": "See movements"
+    },
+    "menu": {
+      "pause": "Pause",
+      "resume": "Resume",
+      "cancelPayment": "Cancel this payment",
+      "cancelIncome": "It will not arrive",
+      "delete": "Delete"
+    },
+    "settle": {
+      "payTitle": "Record the payment",
+      "incomeTitle": "Record the income",
+      "description": "Notes the real movement with the date it happened.",
+      "dateLabel": "Which day was it?",
+      "paid": "Payment recorded.",
+      "arrived": "Income recorded."
+    },
+    "cancel": {
+      "payTitle": "Cancel this payment",
+      "incomeTitle": "It will not arrive",
+      "description": "It will stop showing in this list.",
+      "paid": "Payment cancelled.",
+      "income": "Noted: it will not arrive."
+    },
+    "delete": {
+      "title": "Delete",
+      "description": "This cannot be undone.",
+      "done": "Deleted."
+    },
+    "skipped": "Skipped this time. It continues on {date}.",
+    "form": {
+      "addTitle": "Add to what is coming up",
+      "editTitle": "Edit",
+      "save": "Save",
+      "created": "Done, it is in what is coming up.",
+      "updated": "Changes saved.",
+      "directionLabel": "Do you pay or receive?",
+      "pay": "Payment",
+      "receive": "Income",
+      "repeatLabel": "Once or does it repeat?",
+      "once": "Once",
+      "repeats": "It repeats",
+      "conceptPay": "What is it?",
+      "conceptPayPlaceholder": "Rent",
+      "conceptReceive": "From whom?",
+      "conceptReceivePlaceholder": "Client or project",
+      "amount": "Amount",
+      "accountPay": "Which account does it leave?",
+      "accountReceive": "Which account does it reach?",
+      "accountPlaceholder": "Pick an account",
+      "payTo": "Does it go to another account of yours, like a card or a loan?",
+      "payToNone": "No",
+      "datePay": "Which day is it due?",
+      "dateReceive": "Which day do you expect it?",
+      "dateRepeat": "Which day is the first time?",
+      "frequency": "How often?",
+      "every": {
+        "weekly": "{n, plural, one {Every week} other {Every # weeks}}",
+        "monthly": "{n, plural, one {Every month} other {Every # months}}",
+        "yearly": "{n, plural, one {Every year} other {Every # years}}"
+      },
+      "endsOn": "Until when?",
+      "remindOn": "Which day should I remind you?",
+      "category": "Category",
+      "categoryNone": "No category",
+      "hintPay": "It shows in this list and you record the expense when you pay it.",
+      "hintReceive": "It counts as received only when an income of about this amount reaches that account, whether you note it or it arrives through the Inbox.",
+      "hintRepeat": "The movements create themselves and stay marked as automatic until you confirm them."
+    },
+    "cadence": {
+      "monthly": "Every month",
+      "weekly": "Every week"
+    },
+    "subscriptionsLine": "Subscriptions: {amount} a month"
+  },
   "recurringRules": {
     "title": "Recurring",
     "pausedFailed": "Paused: the transaction could not be generated. Check the rule and resume it.",
@@ -1181,20 +1278,6 @@
       "scopeViolation": "The account or category does not belong to the same scope.",
       "ended": "This rule has already ended. Change its end date to resume it."
     }
-  },
-  "subscriptions": {
-    "title": "Subscriptions",
-    "perMonth": "{amount} a month",
-    "monthly": "Every month",
-    "weekly": "Every week",
-    "running": "{count, plural, one {# active} other {# active}}",
-    "stopped": "{count, plural, one {# with no recent charge} other {# with no recent charge}}",
-    "nextCharge": "Next charge expected: {date} · {count} charges seen",
-    "lateCharge": "Due on {date} and not seen yet · {count} charges seen",
-    "lastCharge": "Last charge: {date}",
-    "emptyTitle": "No repeated charges yet",
-    "emptyDescription": "When the same charge shows up at least three times, every month or every week, you will see it here with its next date.",
-    "hint": "HomeFund finds them on its own: a charge with the same description, on the same account, every month or every week, at least three times in the last year. The amount and the date are estimates. Ask Claude to go over them with you and decide which to cancel."
   },
   "debts": {
     "title": "Debts",
@@ -1819,10 +1902,22 @@
     "emptyTitle": "Nothing to review",
     "emptyDescription": "When something arrives from one of these sources, it shows up here for you to review. Connect the one you use.",
     "emptySource": {
-      "android": { "label": "On Android, the HomeFund Avisos app forwards your bank's notices.", "link": "Install HomeFund Avisos" },
-      "iphone": { "label": "On iPhone, a Shortcut sends the bank's text message or an expense you type.", "link": "Create the Shortcut" },
-      "gmail": { "label": "With Gmail, your bank's emails arrive on their own.", "link": "Connect Gmail" },
-      "claude": { "label": "With Claude, you ask it to record or import movements for you.", "link": "Connect Claude" }
+      "android": {
+        "label": "On Android, the HomeFund Avisos app forwards your bank's notices.",
+        "link": "Install HomeFund Avisos"
+      },
+      "iphone": {
+        "label": "On iPhone, a Shortcut sends the bank's text message or an expense you type.",
+        "link": "Create the Shortcut"
+      },
+      "gmail": {
+        "label": "With Gmail, your bank's emails arrive on their own.",
+        "link": "Connect Gmail"
+      },
+      "claude": {
+        "label": "With Claude, you ask it to record or import movements for you.",
+        "link": "Connect Claude"
+      }
     },
     "copy": "Copy",
     "copied": "Copied",

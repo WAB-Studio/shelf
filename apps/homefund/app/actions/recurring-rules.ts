@@ -7,6 +7,7 @@ import {
   pauseRecurringRule,
   resumeRecurringRule,
   reviseRecurringRule,
+  skipRecurringRule,
 } from "@/db/queries/recurring-rule-write";
 import { deleteRecurringRule, markTransactionReviewed } from "@/db/queries/recurring-rules";
 import { ActionError } from "@/lib/errors";
@@ -17,6 +18,7 @@ import {
   markMovementReviewedSchema,
   pauseRecurringRuleSchema,
   resumeRecurringRuleSchema,
+  skipRecurringRuleSchema,
   updateRecurringRuleSchema,
 } from "@/lib/validation/recurring-rule";
 
@@ -60,6 +62,15 @@ export const resumeRecurringRuleAction = authActionClient
   .inputSchema(resumeRecurringRuleSchema)
   .action(async ({ parsedInput: { id } }) => {
     await resumeRecurringRule(id);
+
+    refresh();
+  });
+
+/** Lets the coming run of a rule pass and moves it one period on (RF-292); `skipRecurringRule` holds the body. */
+export const skipRecurringRuleAction = authActionClient
+  .inputSchema(skipRecurringRuleSchema)
+  .action(async ({ parsedInput: { id } }) => {
+    await skipRecurringRule(id);
 
     refresh();
   });
