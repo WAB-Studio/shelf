@@ -4190,6 +4190,7 @@ async function main(): Promise<void> {
   await reconcileOverviewSuite();
   await reconcileAgesSuite();
   await statementRequestsSuite();
+  await statementClosingSuite();
 }
 
 // A member recorded without a login is someone in the fund: a leader whose fund holds one is not alone, so an
@@ -21284,5 +21285,56 @@ async function statementRequestsSuite(): Promise<void> {
     next("RF-260: the list Inicio reads leaves a reconciliation's adjustment out, which the list of adjustments still holds"),
     all.length > 0 && rows.every((row) => row.reconciliationId === null) && all.every((row) => row.reconciliationId !== null),
     `${rows.length} without, ${all.length} adjustments`,
+  );
+}
+
+// RF-261: a statement's preview says where the account would stand at the cut-off against the closing balance printed, a
+// line already recorded from an alert is not duplicated, and the import hands back the count that closes the statement.
+async function statementClosingSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const { POST } = await import("@/app/mcp/route");
+  const owner = await createMembershipFreeUser();
+  const bank = await asUser(owner, () =>
+    createAccount({
+      kind: "asset", subtype: "bank", groupId: null, isShared: false, institution: "Bancolombia", settlementCurrency: BASE_CURRENCY,
+      balanceOn: "2026-01-01", ownerUserId: owner.id, name: `Harness rf261 ahorros ${tag}`, amountMinor: 1_000_000_00,
+    }),
+  );
+  track("accounts", bank.accountId);
+  const [expense, income] = [randomUUID(), randomUUID()];
+  for (const [id, kind, name] of [[expense, "expense", "Gastos"], [income, "income", "Ingresos"]] as const) {
+    await fixtureSql`insert into categories (id, owner_user_id, name, kind, color) values (${id}, ${owner.id}, ${`Harness rf261 ${name} ${tag}`}, ${kind}, ${CATEGORY_COLORS[0]})`;
+    track("categories", id);
+  }
+  const { id: keyId, token } = await asUser(owner, () => issueWebhookCredential({ name: `Harness rf261 ${tag}`, purpose: "mcp", defaultAccountId: null, defaultCategoryId: null }));
+  keep("webhook_credentials", keyId);
+  const { tool } = mcpClient(POST, token);
+  // The alert already put this one in by hand.
+  await tool("record_movement", { fromAccountId: bank.accountId, toAccountId: null, amountCents: 50_000_00, occurredAt: "2026-09-10", description: `Harness rf261 alerta ${tag}`, categoryId: expense, requestRef: randomUUID() });
+
+  const statement = { periodStart: "2026-07-01", cutOffDate: "2026-09-30", closingBalanceCents: 1_160_000_00 };
+  const rows = [
+    { line: 1, date: "2026-09-10", description: "COMPRA", amountCents: -50_000_00, categoryId: expense },
+    { line: 2, date: "2026-09-15", description: "ABONO", amountCents: 200_000_00, categoryId: income },
+  ];
+  type Preview = { previewKey: string; lines: { line: number; status: string }[]; closing: Record<string, number>; reconcile: { accountId: string; reconciledOn: string; realAmountCents: number } };
+  const preview = (await tool("preview_statement", { accountId: bank.accountId, rows, statement })).value as Preview;
+  const imported = await tool("import_statement", { accountId: bank.accountId, rows, statement, previewKey: preview.previewKey });
+  const dry = (await tool("reconcile_accounts", { accounts: [{ accountId: bank.accountId, realAmountCents: preview.reconcile.realAmountCents }], reconciledOn: preview.reconcile.reconciledOn, dryRun: true })).value as {
+    rows: { derivedCents: number; gapCents: number }[];
+  };
+  assert(
+    next("RF-261: the preview shows the closing balance against what the account would stand at with the new lines, and an alert's line is matched, not duplicated"),
+    preview.lines.find((one) => one.line === 1)?.status === "matches" && preview.lines.find((one) => one.line === 2)?.status === "new" &&
+      preview.closing.derivedCents === 950_000_00 && preview.closing.afterImportCents === 1_150_000_00 && preview.closing.gapCents === 10_000_00 &&
+      preview.reconcile.reconciledOn === "2026-09-30" && preview.reconcile.realAmountCents === 1_160_000_00,
+    JSON.stringify(preview),
+  );
+  assert(
+    next("RF-261: the import answers the count that closes the statement, and a dry run of it shows the same gap the preview announced"),
+    !imported.isError && (imported.value as { reconcile: { realAmountCents: number } }).reconcile.realAmountCents === 1_160_000_00 &&
+      dry.rows[0]?.derivedCents === 1_150_000_00 && dry.rows[0].gapCents === 10_000_00,
+    `imported ${JSON.stringify(imported.value)}, dry ${JSON.stringify(dry)}`,
   );
 }

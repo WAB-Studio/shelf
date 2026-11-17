@@ -64,6 +64,20 @@ export type PreviewLine = {
   deferral?: { instalments: number };
 };
 
+// Where the account would stand at the statement's cut-off once its lines are in, against the closing balance the bank
+// printed (RF-261): the figures Claude shows before the one yes, in the account's own sign as `closingBalanceCents` is
+// (a debt is negative). `gapCents` is what a count on the cut-off day would still book after the import.
+export type StatementClosing = {
+  closingBalanceCents: number;
+  derivedCents: number;
+  afterImportCents: number;
+  gapCents: number;
+};
+
+// What `reconcile_accounts` takes to count the account on the cut-off day at the printed closing balance: a debt reads
+// as what is owed, positive (RF-245).
+export type StatementReconcile = { accountId: string; reconciledOn: string; realAmountCents: number };
+
 export type StatementPreview = {
   previewKey: string;
   account: { id: string; name: string; currency: string };
@@ -72,6 +86,8 @@ export type StatementPreview = {
   lines: PreviewLine[];
   counts: Record<LineStatus, number>;
   removals: Removal[];
+  closing: StatementClosing;
+  reconcile: StatementReconcile;
 };
 
 export type StatementImportResult = {
@@ -80,6 +96,8 @@ export type StatementImportResult = {
   skipped: number;
   removed: number;
   unlinked: number;
+  // The count that closes the statement: the account on its cut-off day at the printed closing balance (RF-261).
+  reconcile: StatementReconcile;
 };
 
 export class StatementError extends Error {
@@ -102,6 +120,8 @@ type Context = {
     groupId: string | null;
     kind: "asset" | "liability";
     subtype: "bank" | "cash" | "card" | "loan";
+    // What HomeFund derives for the statement's cut-off day, before anything is imported, as text (a bigint).
+    derivedCents: string;
   } | null;
   // The movement each already-imported reference of this account belongs to.
   refs: { ref: string; transactionId: string }[];
@@ -162,7 +182,8 @@ async function readContext(tx: Transaction, input: StatementInput): Promise<Cont
         where ts.statement_id = (select id from stmt)), '[]') as held,
       (select json_build_object('id', a.id, 'name', a.name, 'currency', a.settlement_currency,
           'canWrite', coalesce(private.can_write_account(a.id), false), 'openedOn', a.initial_balance_on,
-          'ownerUserId', a.owner_user_id, 'groupId', a.group_id, 'kind', a.kind, 'subtype', a.subtype)
+          'ownerUserId', a.owner_user_id, 'groupId', a.group_id, 'kind', a.kind, 'subtype', a.subtype,
+          'derivedCents', private.account_settlement_balance_on(a.id, ${cutOffDate}::date)::text)
         from accounts a where a.id = ${input.accountId} and a.archived_at is null) as account,
       coalesce((select json_agg(json_build_object('ref', s.source_ref, 'transactionId', s.transaction_id))
         from transaction_sources s
@@ -362,6 +383,14 @@ function summarise(input: StatementInput, context: Context): StatementPreview {
   const period = { periodStart, cutOffDate, existing: context.statementId !== null };
   const counts = { new: 0, matches: 0, already_imported: 0, invalid: 0 };
   for (const line of lines) counts[line.status] += 1;
+  // What the import moves on this account: each new line, and each movement it deletes going the other way. A
+  // matched or skipped line is already in the derived figure.
+  const derivedCents = Number(account.derivedCents);
+  const moved =
+    lines.reduce((sum, line) => sum + (line.status === "new" ? rows.find((row) => row.line === line.line)!.amountCents : 0), 0) -
+    removals.reduce((sum, one) => sum + (one.effect === "deletes" ? (one.amountCents ?? 0) : 0), 0);
+  const { closingBalanceCents } = input.statement;
+  const afterImportCents = derivedCents + moved;
   return {
     previewKey: previewKeyOf(input.accountId, rows, lines, period, removals),
     account: { id: account.id, name: account.name, currency: account.currency },
@@ -369,6 +398,12 @@ function summarise(input: StatementInput, context: Context): StatementPreview {
     lines,
     counts,
     removals,
+    closing: { closingBalanceCents, derivedCents, afterImportCents, gapCents: closingBalanceCents - afterImportCents },
+    reconcile: {
+      accountId: account.id,
+      reconciledOn: cutOffDate,
+      realAmountCents: account.kind === "liability" && closingBalanceCents !== 0 ? -closingBalanceCents : closingBalanceCents,
+    },
   };
 }
 
@@ -492,6 +527,7 @@ export async function importStatement(
         skipped: preview.counts.already_imported,
         removed: deleted.length,
         unlinked: unlinked.length,
+        reconcile: preview.reconcile,
       };
     } catch (error) {
       console.error("statement line refused:", pgErrorCode(error) ?? "", pgConstraintName(error) ?? "");
