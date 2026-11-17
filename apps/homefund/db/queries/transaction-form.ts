@@ -10,6 +10,7 @@ import type { AccountRow } from "@/db/queries/accounts";
 import { listScopedCategories } from "@/db/queries/categories";
 import type { ScopedCategoryNode } from "@/db/queries/categories";
 import { listCallerMembers } from "@/db/queries/group-members";
+import { callerGroupInfo } from "@/db/queries/groups";
 import { listScopedLabels } from "@/db/queries/labels";
 import type { ScopedLabelRow } from "@/db/queries/labels";
 import { listTransactions } from "@/db/queries/transactions";
@@ -52,6 +53,8 @@ export type TransactionFormOptions = {
     institution: string | null;
     internalPersonName: string | null;
   }[];
+  // The caller's fund, named in the headings that tell its categories from the person's own.
+  groupName: string | null;
   categories: ScopedCategory[];
   labels: ScopedLabel[];
   members: { userId: string; name: string }[];
@@ -103,6 +106,7 @@ export const getTransactionFormOptions = cache(
       currencies,
       recentMovements,
       frequentCategoryIds,
+      group,
     ] = await withUserDb((tx) =>
       Promise.all([
         listAccounts({ archived: false, withInternal: true }, tx),
@@ -114,12 +118,14 @@ export const getTransactionFormOptions = cache(
         listCurrencyOptions(tx),
         listTransactions({}, { limit: CAUSE_CANDIDATE_LIMIT, tx }),
         listFrequentCategoryIds(user.id, tx),
+        callerGroupInfo(tx, user.id),
       ]),
     );
 
     const activeMembers = members.filter((member) => member.archivedAt === null);
 
     return {
+      groupName: group?.name ?? null,
       // A «Me debe» is no account a person picks (RF-216); it stays in the directory, which only names a movement's sides.
       accounts: accountRows.filter((account) => !account.internal),
       accountDirectory: [...accountRows, ...archivedAccountRows].map((account) => ({

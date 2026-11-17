@@ -129,7 +129,7 @@ test("the three tabs keep the amount, the words and the date", async ({ page }) 
   expect(text).not.toContain("traspaso");
 });
 
-test("an income is written from its tab with the words as typed", async ({ page }) => {
+test("an income is written from its tab with the words as typed, less the figure the field took", async ({ page }) => {
   const dialog = await openForm(page);
   await tab(dialog, transactions.kindIncome).click();
   await words(dialog).fill("Pago de Ana 80.000");
@@ -140,7 +140,7 @@ test("an income is written from its tab with the words as typed", async ({ page 
   await expect(dialog).toBeHidden();
 
   const [saved] = await rows();
-  expect([saved.kind, saved.amount_cents, saved.description]).toEqual(["income", "8000000", "Pago de Ana 80.000"]);
+  expect([saved.kind, saved.amount_cents, saved.description]).toEqual(["income", "8000000", "Pago de Ana"]);
 });
 
 test("a transfer is written from its tab, and one side alone is refused", async ({ page }) => {
@@ -161,7 +161,7 @@ test("a transfer is written from its tab, and one side alone is refused", async 
   expect((await rows()).map((row) => [row.kind, row.amount_cents])).toEqual([["transfer", "3000000"]]);
 });
 
-test("«uber 38.000 ayer» keeps the words, reads the day and the figure, and proposes no wrong category", async ({
+test("«uber 38.000 ayer» keeps the words in the field, reads the day and the figure, saves what is left as the description and proposes no wrong category", async ({
   page,
 }) => {
   const dialog = await openForm(page);
@@ -177,7 +177,7 @@ test("«uber 38.000 ayer» keeps the words, reads the day and the figure, and pr
   await expect(dialog).toBeHidden();
 
   const [saved] = await rows();
-  expect(saved.description).toBe("compra rara 38.000 ayer");
+  expect(saved.description).toBe("compra rara");
   expect(saved.amount_cents).toBe("3800000");
   const yesterday = await fixtureSql<{ day: string }[]>`
     select ((now() at time zone 'America/Bogota')::date - 1)::text as day`;
@@ -294,6 +294,10 @@ test("a card purchase takes «a 12 cuotas» from the words and defers it", async
         return deferred?.instalments ?? 0;
       })
       .toBe(12);
+
+    // The instalments and the figure went to their fields; only the thing bought is the description.
+    const saved = await rows();
+    expect(saved.map((row) => row.description)).toEqual(["nevera"]);
   } finally {
     await clearLedger();
     await fixtureSql`delete from accounts where id = ${cardId}`;
@@ -331,6 +335,13 @@ test("paying a card past what is free says which pocket it will draw from, and �
     // A payment the free part covers draws nothing and says nothing.
     await dialog.getByRole("textbox", { name: messages.installments.amountLabel }).fill("90000");
     await expect(dialog.getByRole("status").filter({ hasText: POCKET_NAME })).toHaveCount(0);
+    await expect(dialog.getByRole("status").filter({ hasText: "quedaría en" })).toHaveCount(0);
+
+    // Past the free part and the pocket together, the account would end below zero: said before saving.
+    await dialog.getByRole("textbox", { name: messages.installments.amountLabel }).fill("700000");
+    await expect(dialog.getByRole("status").filter({ hasText: "quedaría en" })).toContainText(
+      new RegExp(`${MAIN_NAME} quedaría en .*100\\.000`),
+    );
 
     await dialog.getByRole("textbox", { name: messages.installments.amountLabel }).fill("150000");
     await dialog.getByRole("button", { name: messages.installments.paymentSave, exact: true }).click();
@@ -381,5 +392,82 @@ test.describe("with no account yet", () => {
     await page.keyboard.press("Escape");
     await expect(words(dialog)).toHaveValue("almuerzo 25 mil");
     await expect(amountField(dialog)).toHaveValue("25.000");
+  });
+});
+
+test("the words «uber 38.000 ayer» save «uber» as the description, with the day and the figure in their fields", async ({
+  page,
+}) => {
+  const dialog = await openForm(page);
+  await choose(page, dialog.locator("#movement-from"), MAIN_NAME);
+  await words(dialog).fill("uber 38.000 ayer");
+  await expect(amountField(dialog)).toHaveValue("38.000");
+  await dialog.getByRole("button", { name: scope.categoryName, exact: true }).click();
+  await dialog.getByRole("button", { name: transactions.saveMovement, exact: true }).click();
+  await expect(dialog).toBeHidden();
+
+  const [row] = await rows();
+  expect([row.description, row.amount_cents]).toEqual(["uber", "3800000"]);
+});
+
+// «Pagar» in «Lo que viene» says what the movement form says: the pocket it draws from and, when even that does not
+// cover it, that the account would end below zero. The person may still confirm.
+test.describe("«Pagar» in «Lo que viene»", () => {
+  const description = `Matrícula ${stamp}`;
+  const pay = messages.upcoming.act.pay;
+
+  async function plan(pesos: number) {
+    await asHarnessUser(async (tx) => {
+      await tx`
+        insert into planned_payments (owner_user_id, from_account_id, amount_cents, category_id, due_date, description, created_by)
+        values (${scope.userId}, ${ids.main}, ${pesos * 100}, ${scope.categoryId}, (now() at time zone 'America/Bogota')::date,
+          ${description}, ${scope.userId})`;
+    });
+  }
+
+  async function openPay(page: Page): Promise<Locator> {
+    await page.goto("/es/planning/upcoming");
+    const card = page.locator(".rt-Card").filter({ hasText: description }).filter({ visible: true });
+    await card.getByRole("button", { name: pay, exact: true }).click();
+    return page.getByRole("dialog");
+  }
+
+  test.afterEach(async () => {
+    await fixtureSql`delete from planned_payments where description = ${description}`;
+  });
+
+  test("past what is free it names the pocket, and «Deshacer» gives the payment back", async ({ page }) => {
+    await plan(150000);
+    const dialog = await openPay(page);
+
+    await expect(dialog.getByRole("status").filter({ hasText: POCKET_NAME })).toContainText(/Se tomarán .*50\.000 de /);
+    await expect(dialog.getByRole("status").filter({ hasText: "quedaría en" })).toHaveCount(0);
+
+    await dialog.getByRole("button", { name: pay, exact: true }).click();
+    await expect(dialog).toBeHidden();
+    const status = () =>
+      fixtureSql<{ status: string }[]>`select status from planned_payments where description = ${description}`;
+    await expect.poll(async () => (await status())[0].status).toBe("done");
+
+    await page.getByRole("button", { name: transactions.undo, exact: true }).click();
+    await expect.poll(async () => (await status())[0].status).toBe("pending");
+    expect(await rows()).toHaveLength(0);
+  });
+
+  test("past the free part and the pocket together it says the account would end below zero, and still saves", async ({
+    page,
+  }) => {
+    await plan(700000);
+    const dialog = await openPay(page);
+
+    await expect(dialog.getByRole("status").filter({ hasText: "quedaría en" })).toContainText(
+      new RegExp(`${MAIN_NAME} quedaría en .*100\\.000`),
+    );
+
+    await dialog.getByRole("button", { name: pay, exact: true }).click();
+    await expect(dialog).toBeHidden();
+    await expect
+      .poll(async () => (await fixtureSql<{ status: string }[]>`select status from planned_payments where description = ${description}`)[0].status)
+      .toBe("done");
   });
 });

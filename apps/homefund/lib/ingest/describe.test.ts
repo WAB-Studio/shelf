@@ -5,6 +5,7 @@ import { parseAmount } from "@/lib/money";
 import { interpretQuickEntry, readAccountTails } from "@/lib/transactions/interpret";
 
 import {
+  cardPurchase,
   describeAlert,
   looksLikeBankAlert,
   looksLikeCashWithdrawal,
@@ -12,6 +13,7 @@ import {
   paidOwnCard,
   readableName,
   repairDescription,
+  withoutClock,
 } from "./describe";
 
 // Synthetic messages that mimic the shapes Bancolombia sends; no real figure, name or number.
@@ -133,4 +135,24 @@ test("an ATM withdrawal is told from a purchase", () => {
   assert.equal(looksLikeCashWithdrawal("Retiro por $200.000 en cajero."), true);
   assert.equal(looksLikeCashWithdrawal("Bancolombia: Compraste $12.000 en Tienda La Esquina con tu T.Deb *4872."), false);
   assert.equal(describeAlert("Cajero DAVIVIENDA CALLE 80 $300.000"), "Retiro en cajero");
+});
+
+test("a description never keeps the time of day the bank printed after the business", () => {
+  assert.equal(withoutClock("RAPPI* 15:32"), "RAPPI");
+  assert.equal(withoutClock("UBER TRIP 08:12"), "UBER TRIP");
+  assert.equal(withoutClock("Éxito Colina"), "Éxito Colina");
+  assert.equal(repairDescription("UBER TRIP 08:12", "Uber trip 08:12", null), "UBER TRIP");
+});
+
+test("a card purchase names only the card whose last four match, never a loan", () => {
+  const text = "Compraste $85.400 en EXITO con tu T.Cred *7788";
+  const loan = { id: "loan", subtype: "loan", lastFour: null };
+  const visa = { id: "visa", subtype: "card", lastFour: "7788" };
+  const other = { id: "other", subtype: "card", lastFour: "1111" };
+  const tails = readAccountTails(text, "expense");
+
+  assert.deepEqual(cardPurchase(text, tails, [loan, other], null), { isCard: true, accountId: null });
+  assert.deepEqual(cardPurchase(text, tails, [loan, other], "loan"), { isCard: true, accountId: null });
+  assert.deepEqual(cardPurchase(text, tails, [loan, visa, other], null), { isCard: true, accountId: "visa" });
+  assert.deepEqual(cardPurchase("Pagaste $5.000 en una tienda", new Set(), [loan, visa], null), { isCard: false });
 });

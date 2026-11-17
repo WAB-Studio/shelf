@@ -44,6 +44,8 @@ import { civilDateToDate, todayInBogota } from "@/lib/dates";
 import { categoryNamesById, scopedCategoryName } from "@/lib/fund/category-names";
 import { deliveryCurrency } from "@/lib/fund/glance";
 import { proposedCategoryId, scopeOfAccounts } from "@/lib/fund/category-scope";
+import { cardPurchase } from "@/lib/ingest/describe";
+import { readAccountTails } from "@/lib/transactions/interpret";
 import { categoryFromHistory } from "@/lib/ingest/learned-category";
 import { centsToDecimal } from "@/lib/money";
 import { useActionErrorToast, type MessageKey } from "@/lib/use-action-toast";
@@ -177,6 +179,16 @@ export function readyInput(
   };
 }
 
+// A card purchase that no card of the person's matches: the card is asked, never guessed.
+export function asksWhichCard(delivery: Pick<PendingDeliveryRow, "proposedAccountId" | "proposedDirection" | "rawText">): boolean {
+  return (
+    delivery.proposedAccountId === null &&
+    delivery.proposedDirection !== "income" &&
+    delivery.proposedDirection !== "transfer" &&
+    cardPurchase(delivery.rawText, readAccountTails(delivery.rawText, "expense"), [], null).isCard
+  );
+}
+
 // The categories a delivery's account scope and direction can take, a child as «Parent › Child».
 export function categoryChoices(
   delivery: Pick<PendingDeliveryRow, "proposedAccountId" | "proposedDirection">,
@@ -295,6 +307,7 @@ export function DeliveryCard({
   const categories = categoryChoices(delivery, options, (name) => tCategories("scopedName", { name }));
   // The accounts a movement can be written on: never the hidden «Me debe» of a credit somebody else pays.
   const accountChoices = options.accounts.filter((one) => one.internal !== true);
+  const asksCard = asksWhichCard(delivery);
   const kind = delivery.proposedDirection ?? "expense";
   const withdrawal =
     isTransfer &&
@@ -426,6 +439,7 @@ export function DeliveryCard({
 
         <Flex direction="column" gap="2">
           <StackedSegmentedControl.Root
+            wrap
             size="3"
             value={kind}
             aria-label={t("typeLabel")}
@@ -444,7 +458,7 @@ export function DeliveryCard({
             <StackedSegmentedControl.Item value="transfer">{t("kindTransfer")}</StackedSegmentedControl.Item>
           </StackedSegmentedControl.Root>
           {delivery.proposedAccountId === null && (
-            <Text color="amber">{t("accountMissing")}</Text>
+            <Text color="amber">{t(asksCard ? "cardMissing" : "accountMissing")}</Text>
           )}
           <Select.Root
             size="3"
@@ -458,12 +472,14 @@ export function DeliveryCard({
             disabled={accept.isPending}
           >
             <Select.Trigger
-              placeholder={t("accountChoose")}
+              placeholder={t(asksCard ? "cardMissing" : "accountChoose")}
               color={delivery.proposedAccountId ? undefined : "amber"}
               aria-label={t(isTransfer ? "fromAccountLabel" : "accountLabel")}
             />
             <Select.Content position="popper">
-              {accountChoices.map((option) => (
+              {accountChoices
+                .filter((option) => !asksCard || option.subtype === "card")
+                .map((option) => (
                 <Select.Item key={option.id} value={option.id}>
                   {option.name}
                 </Select.Item>

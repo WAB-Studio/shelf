@@ -635,6 +635,57 @@ test.describe("the card's proposal, at 390 px", () => {
     expect(movements).toEqual([{ from: scope.accountId, to: cashId, amount: "30000000", splits: 0 }]);
   });
 
+  async function addDebt(name: string, subtype: "card" | "loan", lastFour: string | null): Promise<string> {
+    const id = randomUUID();
+    await asHarnessUser(async (tx) => {
+      await tx`
+        insert into accounts (id, owner_user_id, name, kind, subtype, last_four, initial_balance_cents, initial_balance_on)
+        values (${id}, ${scope.userId}, ${name}, 'liability', ${subtype}, ${lastFour}, -2000000, '2025-01-01')`;
+    });
+    created.accounts.push(id);
+    return id;
+  }
+
+  test("a card purchase whose ending matches no card asks which card, is never batched and never touches a loan @mobile", async ({
+    page,
+    request,
+  }) => {
+    // «T.Cred» starts the name «Crédito carro»: the loan is the account the old reading proposed.
+    const loanId = await addDebt("Crédito carro e2e", "loan", null);
+    await addDebt("Visa e2e", "card", "1111");
+    const deliveryId = await receive(
+      request,
+      `Bancolombia: Compraste $85.400 en EXITO con tu T.Cred *7788 el ${DAY} a las 19:05.`,
+    );
+
+    const [proposal] = await fixtureSql<{ account: string | null }[]>`
+      select proposed_account_id as account from ingest_deliveries where id = ${deliveryId}`;
+    expect(proposal.account).toBeNull();
+
+    await page.goto("/es/inbox");
+    await expect(band(page).getByText(ingest.cardMissing, { exact: true }).first()).toBeVisible();
+    // Not ready: no checkbox to batch it and no one-tap «Anotar».
+    await expect(band(page).getByRole("checkbox")).toHaveCount(0);
+    await expect(acceptButton(page)).toHaveCount(0);
+
+    const touched = await fixtureSql`
+      select id from transactions where from_account_id = ${loanId} or to_account_id = ${loanId}`;
+    expect(touched).toHaveLength(0);
+  });
+
+  test("a card purchase proposes the card whose last four match @mobile", async ({ request }) => {
+    await addDebt("Crédito carro e2e", "loan", null);
+    const visaId = await addDebt("Visa e2e", "card", "7788");
+    const deliveryId = await receive(
+      request,
+      `Bancolombia: Compraste $85.400 en EXITO con tu T.Cred *7788 el ${DAY} a las 19:05.`,
+    );
+
+    const [proposal] = await fixtureSql<{ account: string | null }[]>`
+      select proposed_account_id as account from ingest_deliveries where id = ${deliveryId}`;
+    expect(proposal.account).toBe(visaId);
+  });
+
   test("the card changes the kind and the account, as the wide screen does @mobile", async ({ page }) => {
     const otherId = await addAccount("Otra cuenta e2e", "bank");
     await seedQueue([complete]);

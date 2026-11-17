@@ -1351,8 +1351,8 @@ async function edgeSuite(): Promise<void> {
     await tx`
       insert into accounts (id, owner_user_id, name, kind, subtype, initial_balance_cents, initial_balance_on, last_four)
       values
-        (${namedAccountId}, ${userId}, 'Harness HTTP named card', 'asset', 'bank', 0, current_date, ${namedTail}),
-        (${decoyAccountId}, ${userId}, 'Harness HTTP decoy card', 'asset', 'bank', 0, current_date, ${decoyTail})`;
+        (${namedAccountId}, ${userId}, 'Harness HTTP named card', 'liability', 'card', 0, current_date, ${namedTail}),
+        (${decoyAccountId}, ${userId}, 'Harness HTTP decoy card', 'liability', 'card', 0, current_date, ${decoyTail})`;
   });
   track("accounts", namedAccountId);
   track("accounts", decoyAccountId);

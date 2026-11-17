@@ -8,12 +8,14 @@ import { toast } from "sonner";
 import {
   acceptDeliveriesAction,
   acceptDeliveryAction,
+  chooseDeliveryAccountsAction,
   rejectDeliveryAction,
 } from "@/app/actions/ingest";
 import { deleteTransactionAction } from "@/app/actions/transactions";
 import { AwaitingCounterparty } from "@/components/ingest/awaiting-counterparty";
 import {
   arrivedVia,
+  asksWhichCard,
   DeliveryCard,
   movementDefaults,
   NO_CHOICE,
@@ -114,6 +116,8 @@ export function InboxScreen({
   const ready = deliveries.filter((delivery) => readyOf(delivery) !== null);
   const chosenInputs = ready.filter((delivery) => selected.has(delivery.id)).map((delivery) => readyOf(delivery)!);
 
+  // The account a card was given outlives a reload: it is kept on the delivery, not only on the screen.
+  const keepAccounts = useAction(chooseDeliveryAccountsAction, { onError: onActionError });
   const remove = useAction(deleteTransactionAction, { onError: onActionError });
   const accept = useAction(acceptDeliveryAction, {
     onSuccess({ data }) {
@@ -219,6 +223,8 @@ export function InboxScreen({
             .map((id) => accountNames.get(id) ?? "")
             .join(" → ")
         : null,
+      askCard: asksWhichCard(delivery),
+      toMissing: delivery.proposedDirection === "transfer" && delivery.proposedToAccountId === null,
       amountMinor: delivery.proposedAmountCents,
       direction: delivery.proposedDirection ?? "expense",
       withdrawal: delivery.proposedDirection === "transfer" && toAccount?.subtype === "cash",
@@ -369,9 +375,16 @@ export function InboxScreen({
                   delivery={delivery}
                   options={options}
                   choice={choiceOf(delivery.id)}
-                  onChoice={(patch) =>
-                    setChoices((current) => ({ ...current, [delivery.id]: { ...choiceOf(delivery.id), ...patch } }))
-                  }
+                  onChoice={(patch) => {
+                    setChoices((current) => ({ ...current, [delivery.id]: { ...choiceOf(delivery.id), ...patch } }));
+                    if (patch.accountId || patch.toAccountId) {
+                      keepAccounts.execute({
+                        deliveryId: delivery.id,
+                        accountId: patch.accountId ?? undefined,
+                        toAccountId: patch.toAccountId ?? undefined,
+                      });
+                    }
+                  }}
                   selected={selected.has(delivery.id)}
                   onSelectedChange={readyOf(delivery) === null ? null : (on) => select(delivery.id, on)}
                   onSaveNumber={() => saveNumber(delivery)}

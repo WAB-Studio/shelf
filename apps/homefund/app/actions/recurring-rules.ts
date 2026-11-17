@@ -8,6 +8,7 @@ import {
   resumeRecurringRule,
   reviseRecurringRule,
   skipRecurringRule,
+  undoSkipRecurringRule,
 } from "@/db/queries/recurring-rule-write";
 import { deleteRecurringRule, markTransactionReviewed } from "@/db/queries/recurring-rules";
 import { ActionError } from "@/lib/errors";
@@ -19,6 +20,7 @@ import {
   pauseRecurringRuleSchema,
   resumeRecurringRuleSchema,
   skipRecurringRuleSchema,
+  undoSkipRecurringRuleSchema,
   updateRecurringRuleSchema,
 } from "@/lib/validation/recurring-rule";
 
@@ -70,7 +72,17 @@ export const resumeRecurringRuleAction = authActionClient
 export const skipRecurringRuleAction = authActionClient
   .inputSchema(skipRecurringRuleSchema)
   .action(async ({ parsedInput: { id } }) => {
-    await skipRecurringRule(id);
+    const { previousRunOn } = await skipRecurringRule(id);
+
+    refresh();
+    return { previousRunOn };
+  });
+
+/** Gives a skipped run back (RF-292): the toast's «Deshacer». */
+export const undoSkipRecurringRuleAction = authActionClient
+  .inputSchema(undoSkipRecurringRuleSchema)
+  .action(async ({ parsedInput: { id, nextRunOn } }) => {
+    await undoSkipRecurringRule(id, nextRunOn);
 
     refresh();
   });

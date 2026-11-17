@@ -163,14 +163,15 @@ export function pickableCategories(
   scope: CategoryScope | null,
   kind: "expense" | "income",
   mark: ScopeMark,
-): { id: string; name: string }[] {
+): { id: string; name: string; scope: CategoryScope }[] {
   return categories
     .filter((category) => category.kind === kind && (scope === null || category.scope === scope))
     .flatMap((category) => [
-      { id: category.id, name: scopedCategoryName(category.name, category.scope, mark) },
+      { id: category.id, name: scopedCategoryName(category.name, category.scope, mark), scope: category.scope },
       ...category.children.map((child) => ({
         id: child.id,
         name: scopedCategoryName(`${category.name} › ${child.name}`, category.scope, mark),
+        scope: category.scope,
       })),
     ]);
 }

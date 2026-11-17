@@ -157,11 +157,17 @@ const DAMAGED = /\$(?!\s?\d)|^\s*[:;,.]|\b\p{L}{1,3}\s:\s/u;
  */
 export function repairDescription(stored: string | null, rawText: string, merchantLabel: string | null): string | null {
   const described = describeAlert(rawText);
-  if (described) return described;
-  if (stored === null || !DAMAGED.test(stored) || merchantLabel === null) return stored;
+  if (described) return withoutClock(described);
+  if (stored === null || !DAMAGED.test(stored) || merchantLabel === null) return stored === null ? null : withoutClock(stored);
 
   const business = readableName(merchantLabel.replace(/\s+\d{1,2}:\d{2}\b.*$/u, ""));
-  return business === "" ? stored : business;
+  return business === "" ? withoutClock(stored) : business;
+}
+
+/** A description without the time of day a bank prints after the business («RAPPI* 15:32» → «RAPPI»). */
+export function withoutClock(description: string): string {
+  const cut = description.replace(/\s+\d{1,2}:\d{2}(?::\d{2})?(?:\s*[ap]\.?\s?m\.?)?\s*$/iu, "").replace(/[\s*]+$/u, "");
+  return cut === "" ? description : cut;
 }
 
 // The sender labels a bank's alert opens with.
@@ -189,6 +195,38 @@ export function onlyBankAccount(text: string, accounts: readonly AccountOption[]
     (account) => account.subtype === "bank" && /bancolombia/iu.test(`${account.name} ${account.institution ?? ""}`),
   );
   return found.length === 1 ? found[0].id : null;
+}
+
+// A bank's words for a credit card: «T.Cred *1234», «tarjeta crédito 1234», «tarjeta de crédito».
+const CREDIT_CARD_WORDS = /\b(?:t\.?\s?cred|tarjeta\s+(?:de\s+)?cr[eé]dito)/iu;
+
+/** Whether the message words a credit-card purchase. */
+export function namesCreditCard(text: string): boolean {
+  return CREDIT_CARD_WORDS.test(text);
+}
+
+export type CardPurchaseOption = { id: string; subtype: string; lastFour?: string | null };
+
+/**
+ * Whether the text is a bank's card purchase, and the card it names. Only a card whose last four match the
+ * ending the message gives is proposed; with none, or the ending unknown, the person picks. A loan or any other
+ * debt is never proposed: a card's word («Cred») also starts the name «Crédito carro».
+ */
+export function cardPurchase(
+  text: string,
+  tails: ReadonlySet<string>,
+  accounts: readonly CardPurchaseOption[],
+  defaultAccountId: string | null,
+): { isCard: false } | { isCard: true; accountId: string | null } {
+  if (!CREDIT_CARD_WORDS.test(text)) return { isCard: false };
+
+  const cards = accounts.filter((account) => account.subtype === "card");
+  if (tails.size === 0) {
+    return { isCard: true, accountId: cards.find((card) => card.id === defaultAccountId)?.id ?? null };
+  }
+
+  const named = cards.filter((card) => card.lastFour && tails.has(card.lastFour));
+  return { isCard: true, accountId: named.length === 1 ? named[0].id : null };
 }
 
 // The payee a payment names: «Pagaste $X a NU Compañía de Financiamiento desde…», or a receipt's «Empresa: …».

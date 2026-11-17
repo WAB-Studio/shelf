@@ -221,6 +221,35 @@ test("«Saltar esta semana» moves a rule one period on without booking anything
   expect(booked).toHaveLength(0);
 });
 
+test("«Saltar esta semana» offers «Deshacer», which gives the run back", async ({ page }) => {
+  // Kills: a skip with no way back, which moved the rent a month on without a word.
+  const rule = `Clase deshacer ${stamp}`;
+  const next = addCivilDays(today, 3);
+  await seedRule(rule, next);
+  const nextRun = async () =>
+    (await fixtureSql<{ next_run_on: string }[]>`
+      select next_run_on::text from recurring_rules where owner_user_id = ${scope.userId} and description = ${rule}`)[0]
+      .next_run_on;
+
+  await page.goto("/es/planning/upcoming");
+  await card(page, rule).getByRole("button", { name: copy.act.skip.weekly, exact: true }).click();
+  await expect.poll(nextRun).toBe(addCivilDays(next, 7));
+
+  await page.getByRole("button", { name: messages.transactions.undo, exact: true }).click();
+  await expect.poll(nextRun).toBe(next);
+});
+
+test("a repeating plan asks for a category and never offers «Sin categoría»", async ({ page }) => {
+  // Kills: a placeholder that offers what the server then refuses.
+  await page.goto("/es/planning/upcoming");
+  await page.getByRole("button", { name: copy.add, exact: true }).first().click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByRole("radio", { name: copy.form.repeats, exact: true }).click();
+
+  await expect(dialog.locator("#upcoming-category")).not.toContainText(copy.form.categoryNone);
+  await expect(dialog.locator("#upcoming-category")).toContainText(copy.form.categoryPlaceholder);
+});
+
 for (const old of ["payments", "recurring", "subscriptions"]) {
   test(`the old /planning/${old} address lands on «Lo que viene»`, async ({ page }) => {
     await page.goto(`/es/planning/${old}`);

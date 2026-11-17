@@ -254,15 +254,18 @@ function WebhookCredentialBody({
           </Flex>
         )}
         {/* The only moment the token can reach the phone; the link is built
-            from it on render and held nowhere. */}
-        <Flex direction="column" gap="2">
-          <Button asChild variant="soft">
-            <a href={androidSetupLink(ingestUrl, token)}>{t("androidSetup")}</a>
-          </Button>
-          <Text size="2" color="gray">
-            {t("androidSetupHint")}
-          </Text>
-        </Flex>
+            from it on render and held nowhere. It opens an Android app, so a key made for an iPhone, an email
+            forward or the widget never offers it. */}
+        {(form.getValues("kind") === "android" || form.getValues("kind") === "other") && (
+          <Flex direction="column" gap="2">
+            <Button asChild variant="soft">
+              <a href={androidSetupLink(ingestUrl, token)}>{t("androidSetup")}</a>
+            </Button>
+            <Text size="2" color="gray">
+              {t("androidSetupHint")}
+            </Text>
+          </Flex>
+        )}
         {/* Always enabled: a clipboard write may legitimately fail, and the
             value stays selectable, so gating the exit would trap a person. */}
         <Flex justify="end">
@@ -378,7 +381,7 @@ function WebhookCredentialBody({
                   <Select.Content position="popper">
                     <Select.Item value={ANY}>{t("defaultNone")}</Select.Item>
                     <ScopedSelectGroups
-                      fundHeading={tKey("categories.selectFundHeading")}
+                      fundHeading={tKey("categories.fundSection", { name: options.groupName ?? "" })}
                       personalHeading={tKey("categories.selectPersonalHeading")}
                       fund={categoryItems("group")}
                       personal={categoryItems("personal")}

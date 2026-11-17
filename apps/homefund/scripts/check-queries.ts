@@ -4270,10 +4270,10 @@ async function roundTripSuite(scope: HarnessScope, userId: string): Promise<void
   await getTransactionFormOptions();
   const form = await trips(() => getTransactionFormOptions());
   // One transaction: the single read's BEGIN, settle and COMMIT once, plus the
-  // other eight reads as statements. Eight transactions cost eight times `single`.
+  // other nine reads as statements. Eight transactions cost eight times `single`.
   assert(
     next("getTransactionFormOptions opens one transaction, not eight"),
-    form === single + 8,
+    form === single + 9,
     `${form} round trips for the form options, ${single} for one read of them`,
   );
 
@@ -22996,5 +22996,100 @@ async function loanFiguresSuite(): Promise<void> {
     whole.interestCents > 0 && plainTerms?.minimumPaid === true && plainTerms.minimumPaymentCents === null &&
       plainCredit?.months[0]?.lenderCents === 78_000_000,
     JSON.stringify({ whole, minimum: [plainTerms?.minimumPaid, plainTerms?.minimumPaymentCents], lender: plainCredit?.months[0]?.lenderCents }),
+  );
+
+  // RF-216, RF-310: the interest of a cuota the payer's money covers is not the person's expense: it moves into the hidden
+  // «Me debe», which stays equal to the loan's capital; a cuota the payer did not send pays its interest as an expense.
+  const covered = await scheduled("credito de John");
+  const coveredLink = await asUser(user, () =>
+    setUpThirdPartyCredit(
+      setUpThirdPartyCreditSchema.parse({ liabilityAccountId: covered, personName: `John ${tag} dos`, receivableAccountId: "", amount: "5000000", openedOn: shiftDate(today, -40), installmentAmount: "", dueDay: "" }),
+      `Me debe John ${tag} dos`,
+    ),
+  );
+  track("accounts", coveredLink.receivableAccountId);
+  const sentOne = await asUser(user, () =>
+    recordThirdPartyPayment(recordThirdPartyPaymentSchema.parse({ liabilityAccountId: covered, toAccountId: bank, amount: "336793", occurredAt: dueOn[0] }), (person) => `Pago de ${person}`),
+  );
+  track("transactions", sentOne.transactionId);
+  const coveredPay = await pay(covered, "336793", dueOn[0]);
+  const uncoveredPay = await pay(covered, "336793", dueOn[1]);
+  const interestRows = await fixtureSql<{ kind: string; cents: string; ref: string }[]>`
+    select kind::text, amount_cents::text as cents, external_ref as ref from transactions
+    where from_account_id = ${bank} and external_ref like '%:interest%'
+      and (to_account_id = ${coveredLink.receivableAccountId} or (to_account_id is null and description like ${"%credito de John " + tag + "%"}))
+    order by occurred_at`;
+  const coveredSchedule = await asUser(user, () => getLoanSchedule(covered));
+  const receivableNow = (await fixtureSql<{ cents: string }[]>`
+    select balance_cents::text as cents from account_balances where id = ${coveredLink.receivableAccountId}`)[0];
+  assert(
+    next("RF-216, RF-310: the interest a credit's payer covers moves into the hidden «Me debe» and never into the person's expenses, while one the payer did not send is the person's own expense; the rows count toward their cuotas"),
+    coveredPay.interestCents === 10_558_200 && uncoveredPay.interestCents === 10_070_000 && interestRows.length === 2 &&
+      interestRows[0].kind === "transfer" && Number(interestRows[0].cents) === 10_558_200 && interestRows[0].ref.endsWith(":interest:payer") &&
+      interestRows[1].kind === "expense" && Number(interestRows[1].cents) === 10_070_000 &&
+      coveredSchedule?.rows.slice(0, 2).every((row) => row.state === "paid") === true && Number(receivableNow?.cents) > 0,
+    JSON.stringify({ coveredPay, uncoveredPay, interestRows, states: coveredSchedule?.rows.map((row) => row.state), receivable: receivableNow }),
+  );
+
+  // RF-312: the account a person picks on a pending Inbox card stays on the delivery, an account that is not theirs is refused,
+  // and a decided delivery is no longer asked.
+  const { chooseDeliveryAccounts } = await import("@/db/queries/ingest-review");
+  const claims = JSON.stringify({ sub: user.id, role: "authenticated", aud: "authenticated" });
+  const deliveryId = await fixtureSql.begin(async (tx) => {
+    await tx`select set_config('request.jwt.claims', ${claims}, true)`;
+    const [row] = await tx<{ id: string }[]>`
+      insert into ingest_deliveries (external_ref, raw_text, shape_hash)
+      values (${`harness-rf312-${tag}`}, ${`Harness rf312 mensaje ${tag}`}, ${createHash("sha256").update(`rf312-${tag}`).digest("hex")})
+      returning id`;
+    return row.id;
+  });
+  const stranger = await createMembershipFreeUser();
+  const { accountId: foreign } = await asUser(stranger, () =>
+    createAccount({
+      kind: "asset", subtype: "bank", groupId: null, isShared: false, institution: null, settlementCurrency: BASE_CURRENCY, lastFour: null,
+      balanceOn: shiftDate(today, -5), ownerUserId: stranger.id, name: `Harness rf312 ajena ${tag}`, amountMinor: 1_000_00,
+    }),
+  );
+  track("accounts", foreign);
+  await asUser(user, () => chooseDeliveryAccounts({ deliveryId, accountId: bank }));
+  const [kept] = await fixtureSql<{ account: string | null; to_account: string | null }[]>`
+    select proposed_account_id as account, proposed_to_account_id as to_account from ingest_deliveries where id = ${deliveryId}`;
+  const refusedForeign = await asUser(user, () => chooseDeliveryAccounts({ deliveryId, accountId: foreign })).then(() => "saved", () => "refused");
+  const [afterForeign] = await fixtureSql<{ account: string | null }[]>`select proposed_account_id as account from ingest_deliveries where id = ${deliveryId}`;
+  await fixtureSql`update ingest_deliveries set status = 'rejected', resolved_at = now() where id = ${deliveryId}`;
+  const refusedDecided = await asUser(user, () => chooseDeliveryAccounts({ deliveryId, accountId: bank })).then(() => "saved", () => "refused");
+  assert(
+    next("RF-312: the account picked on a pending Inbox card is kept on the delivery; another person's account and a decided delivery are refused"),
+    kept?.account === bank && kept.to_account === null && refusedForeign === "refused" && afterForeign?.account === bank && refusedDecided === "refused",
+    JSON.stringify({ kept, refusedForeign, afterForeign, refusedDecided }),
+  );
+
+  // A card purchase stored against a loan is read as unassigned; the same loan on a payment message is left alone.
+  const { accountId: debt } = await asUser(user, () =>
+    createAccount({
+      kind: "liability", subtype: "loan", groupId: null, isShared: false, institution: null, settlementCurrency: BASE_CURRENCY, lastFour: null,
+      balanceOn: shiftDate(today, -5), ownerUserId: user.id, name: `Harness cred carro ${tag}`, amountMinor: 1_000_00,
+    }),
+  );
+  track("accounts", debt);
+  const stored = async (text: string) => {
+    const [row] = await fixtureSql.begin(async (tx) => {
+      await tx`select set_config('request.jwt.claims', ${claims}, true)`;
+      return tx<{ id: string }[]>`
+        insert into ingest_deliveries (external_ref, raw_text, shape_hash, proposed_account_id, proposed_direction, proposed_amount_cents)
+        values (${`harness-debt-${randomUUID()}`}, ${text}, ${createHash("sha256").update(text).digest("hex")}, ${debt}, 'expense', 8540000)
+        returning id`;
+    });
+    return row.id;
+  };
+  const purchaseId = await stored(`Compraste $85.400 en EXITO ${tag} con tu T.Cred *7788`);
+  const paymentId = await stored(`Pagaste $85.400 en una tienda ${tag}`);
+  const read = await asUser(user, () => listPendingDeliveries());
+  const purchase = read.find((row) => row.id === purchaseId);
+  const payment = read.find((row) => row.id === paymentId);
+  assert(
+    next("A card purchase stored against a loan is read with no account and out of the one-tap batch; a message that names no card keeps its account"),
+    purchase?.proposedAccountId === null && purchase.isComplete === false && payment?.proposedAccountId === debt,
+    JSON.stringify({ purchase: purchase?.proposedAccountId, complete: purchase?.isComplete, payment: payment?.proposedAccountId }),
   );
 }

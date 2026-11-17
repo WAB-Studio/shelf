@@ -830,6 +830,7 @@ function InstallmentCard({
   // The next payment is the minimum, with no instalment added to it (RF-136): the same
   // figure the desktop table's «Pago mínimo» column reads.
   const dueCents = row.minimumPaymentCents ?? 0;
+  const instalment = row.nextInstalment;
 
   return (
     <Card>
@@ -853,9 +854,15 @@ function InstallmentCard({
         <Flex justify="between" gap="3">
           <Stat
             label={t("dueInstallments")}
-            value={moneyText(dueCents, row.currency, locale)}
+            value={moneyText(instalment?.amountCents ?? dueCents, row.currency, locale)}
           />
-          {row.nextDueDate !== null && (
+          {instalment !== null ? (
+            <Stat
+              align="right"
+              label={t(instalment.dueOn < todayInBogota() ? "instalmentOverdue" : "instalmentNumber", { number: instalment.number })}
+              value={format.dateTime(civilDateToDate(instalment.dueOn), { day: "numeric", month: "short" })}
+            />
+          ) : row.nextDueDate !== null && (
             <Stat
               align="right"
               label={t("dueDate")}

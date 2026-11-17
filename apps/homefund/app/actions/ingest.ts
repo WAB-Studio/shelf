@@ -5,6 +5,7 @@ import { refresh } from "next/cache";
 import {
   acceptDeliveries,
   acceptDelivery,
+  chooseDeliveryAccounts,
   DeliveryNotPending,
   forgetMerchant,
   rejectDelivery,
@@ -20,6 +21,7 @@ import { authActionClient } from "@/lib/safe-action";
 import {
   acceptDeliveriesSchema,
   acceptDeliverySchema,
+  chooseDeliveryAccountsSchema,
   forgetMerchantSchema,
   rejectDeliverySchema,
   restoreShapeSchema,
@@ -92,6 +94,16 @@ export const acceptDeliveriesAction = authActionClient
 
     refresh();
     return { count: transactionIds.length };
+  });
+
+export const chooseDeliveryAccountsAction = authActionClient
+  .inputSchema(chooseDeliveryAccountsSchema)
+  .action(async ({ parsedInput }) => {
+    try {
+      await chooseDeliveryAccounts(parsedInput);
+    } catch (error) {
+      mapReviewError(error);
+    }
   });
 
 export const rejectDeliveryAction = authActionClient

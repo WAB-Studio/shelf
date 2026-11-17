@@ -19,6 +19,7 @@ import { todayInBogota } from "@/lib/dates";
 import type { EmailVerdict } from "@/lib/ingest/classify";
 import { DUPLICATE_WINDOW_DAYS, judgeDuplicate, type DuplicateCandidate } from "@/lib/ingest/duplicates";
 import {
+  cardPurchase,
   describeAlert,
   looksLikeBankAlert,
   looksLikeCashWithdrawal,
@@ -284,6 +285,11 @@ export async function recordIngestDelivery({
       (readAccountTails(payload.text, payload.direction ?? proposal.direction).size === 0
         ? onlyBankAccount(payload.text, accountRows)
         : null);
+    const cardRead =
+      payload.account_id == null && (payload.direction ?? proposal.direction) !== "income"
+        ? cardPurchase(payload.text, readAccountTails(payload.text, payload.direction ?? proposal.direction), accountRows, defaultAccountId)
+        : { isCard: false as const };
+    if (cardRead.isCard) proposedAccountId = cardRead.accountId;
     let proposedToAccountId: string | null = null;
     let proposedDirection: "income" | "expense" | "transfer" | null =
       payload.direction ?? proposal.direction;

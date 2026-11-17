@@ -16,7 +16,7 @@ import {
 } from "@/db/schema";
 import { credentialBadge, type CredentialBadge, type CredentialKind } from "@/lib/validation/webhook";
 import { withUserDb, withUserDbOrTx, type Transaction } from "@/db/session";
-import { repairDescription } from "@/lib/ingest/describe";
+import { namesCreditCard, repairDescription } from "@/lib/ingest/describe";
 import { inboxPendingCount } from "@/lib/ingest/inbox-pending";
 
 export type PendingDeliveryRow = {
@@ -197,6 +197,7 @@ export async function listDeliveries({
         transactionId: ingestDeliveries.transactionId,
         recorded: recordedMovementSql,
         accountOpeningOn: accounts.initialBalanceOn,
+        accountSubtype: accounts.subtype,
         categoryKind: categories.kind,
       })
       .from(ingestDeliveries)
@@ -220,17 +221,28 @@ export async function listDeliveries({
       .$dynamic();
     const rows = await (limit === undefined ? query : query.limit(limit).offset(offset ?? 0));
 
-    return rows.map(({ accountOpeningOn, categoryKind, credentialPurpose, credentialKind, ...row }) => ({
-      ...row,
-      // A description stored damaged is read again from the message it came from (RF-279).
-      proposedDescription: row.recipientId === null
-        ? repairDescription(row.proposedDescription, row.rawText, row.merchantLabel)
-        : row.proposedDescription,
-      credentialBadge:
-        credentialPurpose && credentialKind ? credentialBadge(credentialPurpose, credentialKind) : null,
-      isComplete: isComplete({ ...row, accountOpeningOn, categoryKind }),
-      beforeOpening: isBeforeOpening({ ...row, accountOpeningOn }),
-    }));
+    return rows.map(({ accountOpeningOn: openingOn, accountSubtype, categoryKind, credentialPurpose, credentialKind, ...stored }) => {
+      // A card purchase stored against a loan or another debt is read as unassigned: the person picks the card.
+      const dropsDebt =
+        accountSubtype === "loan" &&
+        stored.proposedDirection !== "transfer" &&
+        stored.proposedDirection !== "income" &&
+        namesCreditCard(stored.rawText);
+      const row = dropsDebt ? { ...stored, proposedAccountId: null } : stored;
+      const accountOpeningOn = dropsDebt ? null : openingOn;
+
+      return {
+        ...row,
+        // A description stored damaged is read again from the message it came from (RF-279).
+        proposedDescription: row.recipientId === null
+          ? repairDescription(row.proposedDescription, row.rawText, row.merchantLabel)
+          : row.proposedDescription,
+        credentialBadge:
+          credentialPurpose && credentialKind ? credentialBadge(credentialPurpose, credentialKind) : null,
+        isComplete: isComplete({ ...row, accountOpeningOn, categoryKind }),
+        beforeOpening: isBeforeOpening({ ...row, accountOpeningOn }),
+      };
+    });
   });
 }
 
@@ -389,6 +401,32 @@ export async function acceptDeliveries(items: AcceptDeliveryArgs[]): Promise<str
 
     return ids;
   });
+}
+
+/**
+ * Keeps the account a person picked on a pending delivery's card (RF-312): the account it leaves or lands in, whichever
+ * is given, so a reload shows the choice. An account the policies do not show the caller is refused as not found.
+ */
+export async function chooseDeliveryAccounts({
+  deliveryId,
+  accountId,
+  toAccountId,
+}: {
+  deliveryId: string;
+  accountId?: string;
+  toAccountId?: string;
+}): Promise<void> {
+  const rows = await withUserDb((tx) =>
+    tx.execute<{ id: string }>(sql`
+      update ingest_deliveries
+         set proposed_account_id = coalesce(${accountId ?? null}::uuid, proposed_account_id),
+             proposed_to_account_id = coalesce(${toAccountId ?? null}::uuid, proposed_to_account_id)
+       where id = ${deliveryId}::uuid and status = 'pending'
+         and (${accountId ?? null}::uuid is null or exists (select 1 from accounts a where a.id = ${accountId ?? null}::uuid))
+         and (${toAccountId ?? null}::uuid is null or exists (select 1 from accounts a where a.id = ${toAccountId ?? null}::uuid))
+      returning id`),
+  );
+  if (rows.length === 0) throw new DeliveryNotPending();
 }
 
 export async function rejectDelivery({
