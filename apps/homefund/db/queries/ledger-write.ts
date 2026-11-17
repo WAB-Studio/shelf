@@ -183,7 +183,12 @@ export function mapTransactionError(error: unknown): never {
 export async function bookMovement(
   input: CreateTransactionInput,
   alsoCheck: () => Promise<void> = async () => {},
+  // `awaitingCounterparty` is Claude's «I do not know the other side» (RF-133); only a one-sided movement has a side to wait for.
+  options: { awaitingCounterparty?: boolean } = {},
 ): Promise<{ transactionId: string }> {
+  if (options.awaitingCounterparty && input.fromAccountId !== null && input.toAccountId !== null) {
+    throw new ActionError("mcp.errors.awaitsNeedsOneSide");
+  }
   const [, , , counter] = await Promise.all([
     alsoCheck(),
     assertContributorGiven(input),
@@ -202,6 +207,7 @@ export async function bookMovement(
       forHousehold: input.forHousehold ?? false,
       contributedByMemberId: input.contributedByMemberId ?? null,
       madeByMemberId: input.madeByMemberId ?? defaultMadeBy(input.fromAccountId),
+      awaitingCounterparty: options.awaitingCounterparty ?? false,
       occurredAt: input.occurredAt,
       description: input.description,
       externalRef: input.externalRef ?? null,

@@ -17,6 +17,7 @@ import { ActionError, DATABASE_REFUSALS } from "@/lib/errors";
 import { env } from "@/lib/env";
 import { pgErrorCode } from "@/lib/db-error";
 import { DESTROY, READ, titled } from "@/lib/mcp/annotations";
+import { movementWarnings, withWarnings, type Probe } from "@/lib/mcp/debt-guard";
 import { registerDebtTools } from "@/lib/mcp/debt-tools";
 import { registerBudgetTools } from "@/lib/mcp/budget-tools";
 import { registerGoalTools } from "@/lib/mcp/goal-tools";
@@ -34,7 +35,7 @@ import { registerMemberDebtTools } from "@/lib/mcp/member-debt-tools";
 import { registerRecipientTools } from "@/lib/mcp/recipient-tools";
 import { registerThirdPartyCreditTools } from "@/lib/mcp/third-party-credit-tools";
 import { registerLedgerTools } from "@/lib/mcp/write-tools";
-import { statementImportSchema, statementSchema } from "@/lib/validation/statement-import";
+import { statementImportSchema, statementSchema, type StatementInput } from "@/lib/validation/statement-import";
 
 import es from "../../messages/es.json";
 import pkg from "../../package.json";
@@ -157,6 +158,15 @@ function registerReadTools(server: McpServer): void {
   );
 }
 
+// The lines of a statement that read as debt, a loan or a saving in an account's expense or income.
+function statementProbes(input: StatementInput): Probe[] {
+  return input.rows.flatMap((row) =>
+    row.counterAccountId
+      ? []
+      : [{ kind: row.amountCents < 0 ? ("expense" as const) : ("income" as const), description: row.description, categoryIds: row.categoryId ? [row.categoryId] : [], line: row.line }],
+  );
+}
+
 // RF-144: a statement Claude read enters in two calls. The preview writes nothing and returns the
 // key the import must quote back, so no import runs on lines nobody looked at.
 function registerStatementTools(server: McpServer): void {
@@ -164,7 +174,7 @@ function registerStatementTools(server: McpServer): void {
     "preview_statement",
     { ...titled(say, "previewStatement"), description: t("tools.previewStatement"), inputSchema: statementSchema, annotations: READ },
     (input, ctx) =>
-      run(ctx, async () => {
+      run(ctx, async (owner) => {
         const preview = await previewStatement(input);
         // RF-136: a line with instalments reads as the proposal a person confirms, never as done.
         const lines = preview.lines.map((line) =>
@@ -172,7 +182,7 @@ function registerStatementTools(server: McpServer): void {
             ? { ...line, deferral: { ...line.deferral, proposal: t("deferralProposal", { count: line.deferral.instalments }) } }
             : line,
         );
-        return { ...preview, lines };
+        return withWarnings({ ...preview, lines }, await movementWarnings(owner, statementProbes(input), say));
       }),
   );
   server.registerTool(
@@ -183,7 +193,8 @@ function registerStatementTools(server: McpServer): void {
       inputSchema: statementImportSchema,
       annotations: DESTROY,
     },
-    (input, ctx) => run(ctx, () => importStatement(input)),
+    (input, ctx) =>
+      run(ctx, async (owner) => withWarnings(await importStatement(input), await movementWarnings(owner, statementProbes(input), say))),
   );
 }
 

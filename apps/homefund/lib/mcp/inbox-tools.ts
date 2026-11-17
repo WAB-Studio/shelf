@@ -28,6 +28,7 @@ import { proposedCategoryId } from "@/lib/fund/category-scope";
 import { centsToDecimal, toCents } from "@/lib/money";
 import { pgErrorCode } from "@/lib/db-error";
 import { ADD, DESTROY, OVERWRITE, READ, titled } from "@/lib/mcp/annotations";
+import { movementWarnings, withWarnings } from "@/lib/mcp/debt-guard";
 import { resolveLabelIds } from "@/lib/mcp/label-tools";
 import { parseForm } from "@/lib/mcp/parse-form";
 import { acceptDeliverySchema, forgetMerchantSchema, restoreShapeSchema } from "@/lib/validation/ingest";
@@ -288,7 +289,7 @@ export function registerInboxTools(server: McpServer, run: Run, t: Say): void {
             }
           }),
         );
-        return withUserDb(async (tx) => {
+        const result = await withUserDb(async (tx) => {
           const accepted: { deliveryId: string; transactionId: string }[] = [];
           for (const form of forms) {
             try {
@@ -318,6 +319,18 @@ export function registerInboxTools(server: McpServer, run: Run, t: Say): void {
           }
           return { count: accepted.length, accepted };
         });
+        // The same rules as record_movement: a delivery that reads as a debt payment was booked as an expense.
+        const probes = forms.flatMap((form) =>
+          form.fromAccountId !== null && form.toAccountId !== null
+            ? []
+            : [{
+                kind: form.fromAccountId === null ? ("income" as const) : ("expense" as const),
+                description: form.description ?? null,
+                categoryIds: form.splits.map((split) => split.categoryId),
+                deliveryId: form.deliveryId,
+              }],
+        );
+        return withWarnings(result, await movementWarnings(owner, probes, t));
       }),
   );
 

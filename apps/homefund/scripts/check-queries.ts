@@ -4178,6 +4178,7 @@ async function main(): Promise<void> {
   await mcpReviewSuite();
   await mcpMembersSuite();
   await mcpDeletesSuite();
+  await mcpMoneyModelSuite();
 }
 
 // A member recorded without a login is someone in the fund: a leader whose fund holds one is not alone, so an
@@ -20789,5 +20790,108 @@ async function mcpDeletesSuite(): Promise<void> {
     !linked.isError && !unlinked.isError && same((unlinked.value as { before: unknown }).before, linkRow) &&
       !((await tool("list_third_party_credits")).value as { liabilityAccountId: string }[]).some((row) => row.liabilityAccountId === loan.accountId),
     `linked ${JSON.stringify(linked.value)}, unlinked ${JSON.stringify(unlinked.value)}`,
+  );
+}
+
+// RF-241: the server's instructions state the money model, and a write that reads as a debt, a loan or a saving
+// written as an expense or income answers a warning with the way to fix it, never a refusal.
+async function mcpMoneyModelSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const today = todayInBogota();
+  const { POST } = await import("@/app/mcp/route");
+  const owner = await createMembershipFreeUser();
+  const ids = { bank: randomUUID(), savings: randomUUID(), expense: randomUUID(), income: randomUUID() };
+  const name = (what: string) => `Harness rf240 ${what} ${tag}`;
+  await fixtureSql.begin(async (tx) => {
+    await tx`insert into accounts (id, owner_user_id, name, kind, subtype, initial_balance_cents, initial_balance_on)
+      values (${ids.bank}, ${owner.id}, ${name("banco")}, 'asset', 'bank', 0, '2026-01-01'),
+        (${ids.savings}, ${owner.id}, ${name("ahorro")}, 'asset', 'bank', 0, '2026-01-01')`;
+    await tx`insert into categories (id, owner_user_id, name, kind, color) values
+      (${ids.expense}, ${owner.id}, ${name("gasto")}, 'expense', '#8C4A4A'), (${ids.income}, ${owner.id}, ${name("ingreso")}, 'income', '#4A8C5A')`;
+  });
+  for (const id of [ids.bank, ids.savings]) track("accounts", id);
+  for (const id of [ids.expense, ids.income]) track("categories", id);
+  const { id: credentialId, token } = await asUser(owner, () =>
+    issueWebhookCredential({ name: name("clave"), purpose: "mcp", defaultAccountId: null, defaultCategoryId: null }),
+  );
+  keep("webhook_credentials", credentialId);
+  const { tool } = mcpClient(POST, token);
+  type Warned = { transactionId?: string; categoryId?: string; warnings?: { code: string; message: string; liabilities?: { id: string }[] }[] };
+  const expense = (description: string, amountCents: number, categoryId: string = ids.expense) =>
+    tool("record_movement", { fromAccountId: ids.bank, toAccountId: null, amountCents, occurredAt: today, description, categoryId, requestRef: randomUUID() });
+
+  assert(
+    next("RF-241: the server's instructions carry the money model's rules, in Spanish and in English"),
+    ["record_debt_payment", "transferencia", "import_statement", "awaitingCounterparty", "list_accounts", "link_third_party_credit"].every((word) => es.mcp.instructions.includes(word)) &&
+      ["record_debt_payment", "transfer", "import_statement", "awaitingCounterparty", "list_accounts", "link_third_party_credit"].every((word) => en.mcp.instructions.includes(word)) &&
+      es.mcp.instructions.includes("nunca una orden"),
+    `instructions ${es.mcp.instructions.slice(0, 120)}`,
+  );
+
+  const plainMovement = (await expense(name("mercado"), 1_000_00)).value as Warned;
+  const noLiability = (await expense("Pago de tarjeta BBVA", 2_000_00)).value as Warned;
+  const loan = (await tool("create_account", { name: name("tarjeta"), kind: "liability", subtype: "card", openingBalanceCents: 500_000_00, balanceOn: "2026-01-01" })).value as { accountId: string };
+  track("accounts", loan.accountId);
+  const withLiability = (await expense("Cuota libranza", 3_000_00)).value as Warned;
+  const inCategory = (await tool("create_category", { name: name("Deudas"), kind: "expense", placement: "personal" })).value as Warned;
+  const debtCategory = inCategory.categoryId!;
+  track("categories", debtCategory);
+  const viaCategory = (await expense("Transferencia", 4_000_00, debtCategory)).value as Warned;
+  assert(
+    next("RF-241: a plain expense answers no warnings; a debt payment written as an expense answers debtAsExpense, with the person's liabilities by id when they have one"),
+    plainMovement.transactionId !== undefined && plainMovement.warnings === undefined &&
+      noLiability.transactionId !== undefined && noLiability.warnings?.[0]?.code === "debtAsExpense" &&
+      noLiability.warnings[0].message === es.mcp.warnings.debtAsExpenseNoLiability && noLiability.warnings[0].liabilities === undefined &&
+      withLiability.warnings?.[0]?.code === "debtAsExpense" && withLiability.warnings[0].message === es.mcp.warnings.debtAsExpense &&
+      withLiability.warnings[0].liabilities?.[0]?.id === loan.accountId && viaCategory.warnings?.[0]?.code === "debtAsExpense",
+    `plain ${JSON.stringify(plainMovement)}, no liability ${JSON.stringify(noLiability)}, with ${JSON.stringify(withLiability)}, category ${JSON.stringify(viaCategory)}`,
+  );
+
+  const disbursed = (await tool("record_movement", {
+    fromAccountId: null, toAccountId: ids.bank, amountCents: 5_000_00, occurredAt: today, description: "Desembolso crédito", categoryId: ids.income, requestRef: randomUUID(),
+  })).value as Warned;
+  const saved = (await expense("Ahorro mensual", 6_000_00)).value as Warned;
+  const transfer = (await tool("record_movement", {
+    fromAccountId: ids.bank, toAccountId: ids.savings, amountCents: 7_000_00, occurredAt: today, description: "Pago de tarjeta", requestRef: randomUUID(),
+  })).value as Warned;
+  assert(
+    next("RF-241: an income that reads as a disbursement answers loanAsIncome, an expense that saves answers savingsAsExpense and a transfer answers none"),
+    disbursed.warnings?.[0]?.code === "loanAsIncome" && saved.warnings?.[0]?.code === "savingsAsExpense" &&
+      transfer.transactionId !== undefined && transfer.warnings === undefined,
+    `disbursed ${JSON.stringify(disbursed)}, saved ${JSON.stringify(saved)}, transfer ${JSON.stringify(transfer)}`,
+  );
+
+  const mercado = (await tool("list_movements", { q: name("mercado") })).value as { id: string; updatedAt: string }[];
+  const relabelled = (await tool("update_movement", { transactionId: mercado[0].id, expectedUpdatedAt: mercado[0].updatedAt, forHousehold: false })).value as Warned;
+  const renamed = (await tool("update_movement", { transactionId: mercado[0].id, expectedUpdatedAt: (await tool("get_movement", { transactionId: mercado[0].id })).value.updatedAt, description: "Cuota de la libranza" })).value as Warned;
+  assert(
+    next("RF-241: update_movement warns only when the edit touches what the rules read"),
+    relabelled.warnings === undefined && renamed.warnings?.[0]?.code === "debtAsExpense",
+    `untouched ${JSON.stringify(relabelled)}, renamed ${JSON.stringify(renamed)}`,
+  );
+
+  const mercadoCategory = (await tool("create_category", { name: name("Mercado"), kind: "expense", placement: "personal" })).value as Warned;
+  track("categories", mercadoCategory.categoryId!);
+  assert(
+    next("RF-241: create_category writes any name and warns when it says a debt, a loan, a card or a saving"),
+    inCategory.warnings?.[0]?.code === "debtLikeCategory" && inCategory.warnings[0].message === es.mcp.warnings.debtLikeCategory &&
+      mercadoCategory.warnings === undefined,
+    `debt ${JSON.stringify(inCategory)}, plain ${JSON.stringify(mercadoCategory)}`,
+  );
+
+  const awaiting = (await tool("record_movement", {
+    fromAccountId: ids.bank, toAccountId: null, amountCents: 8_000_00, occurredAt: today, description: name("sin contraparte"), categoryId: ids.expense,
+    awaitingCounterparty: true, requestRef: randomUUID(),
+  })).value as Warned;
+  const refused = await tool("record_movement", {
+    fromAccountId: ids.bank, toAccountId: ids.savings, amountCents: 9_000_00, occurredAt: today, description: name("traslado"), awaitingCounterparty: true, requestRef: randomUUID(),
+  });
+  const [waiting] = await fixtureSql<{ awaiting_counterparty: boolean }[]>`
+    select awaiting_counterparty from transactions where id = ${awaiting.transactionId!}`;
+  assert(
+    next("RF-241: record_movement marks an unknown counterparty as waiting for it, and refuses the mark on a transfer"),
+    waiting?.awaiting_counterparty === true && refused.isError && (refused.value as { error: string }).error === es.mcp.errors.awaitsNeedsOneSide,
+    `waiting ${JSON.stringify(waiting)}, refused ${JSON.stringify(refused.value)}`,
   );
 }
