@@ -3,7 +3,7 @@ import "server-only";
 import { sql } from "drizzle-orm";
 import { z } from "zod";
 
-import { createAccount } from "@/db/queries/accounts";
+import { createAccount, insertAccount } from "@/db/queries/accounts";
 import { createCategory, deleteCategory, moveCategoryLines } from "@/db/queries/categories";
 import type { CategoryScope } from "@/db/queries/categories";
 import { getUserGroup } from "@/db/queries/groups";
@@ -447,6 +447,127 @@ export async function mergeMovements(input: {
         ),
       });
       return { transactionId: created.transactionId, lines: lines.length };
+    });
+  } catch (error) {
+    if (error instanceof ActionError) throw error;
+    return mapTransactionError(error);
+  }
+}
+
+// What `convertToLoan` read and, unless it was a dry run, did.
+export type LoanConversion = {
+  receivable: { id: string | null; name: string };
+  currency: string;
+  outgoing: { id: string; amountCents: number; date: string; description: string | null };
+  repayments: { id: string; amountCents: number; date: string; description: string | null }[];
+  // What the person still owes after the repayments: the outgoing amount less what came back.
+  owedCents: number;
+  dryRun: boolean;
+  // Only once written: the account the movements now run through, and whether it was archived at zero.
+  receivableAccountId?: string;
+  archived?: boolean;
+};
+
+/**
+ * Turns an expense the person paid for somebody, and the incomes that repaid it, into transfers through that
+ * person's receivable (RF-252): the expense goes into «Me debe <persona>» and each income comes out of it, their lines
+ * and category dropped, since a loan is no spending and its repayment no earning (RF-241). One transaction: the
+ * account is opened (or the open one of that name reused), every movement rewritten and, when the receivable nets
+ * to zero, archived, together or not at all. `dryRun` writes nothing and answers what would be done; a write quotes
+ * the owed amount that dry run gave, so the person's yes covers what is written.
+ */
+export async function convertToLoan(input: {
+  outgoingId: string;
+  repaymentIds: string[];
+  receivableName: string;
+  dryRun: boolean;
+  expectedOwedCents?: number;
+}): Promise<LoanConversion> {
+  const repaymentIds = [...new Set(input.repaymentIds)];
+  if (repaymentIds.length !== input.repaymentIds.length || repaymentIds.includes(input.outgoingId)) {
+    throw new ActionError("mcp.errors.loan.distinct");
+  }
+  const everyId = [input.outgoingId, ...repaymentIds];
+  try {
+    return await withUserDb(async (tx) => {
+      const found = await listTransactions({ ids: everyId }, { tx });
+      if (found.length !== everyId.length) throw new ActionError("errors.notFound");
+      const outgoing = found.find((row) => row.id === input.outgoingId)!;
+      const repayments = found.filter((row) => row.id !== input.outgoingId);
+      if (found.some((row) => row.reconciliationId !== null)) throw new ActionError("errors.adjustmentReadOnly");
+      if (outgoing.kind !== "expense") throw new ActionError("mcp.errors.loan.notExpense");
+      if (repayments.some((row) => row.kind !== "income")) throw new ActionError("mcp.errors.loan.notIncome");
+      const sameCurrency =
+        found.every((row) => row.currency === outgoing.currency && row.counterAmountCents === null) &&
+        outgoing.fromSettlementCurrency === outgoing.currency &&
+        repayments.every((row) => row.toSettlementCurrency === outgoing.currency);
+      if (!sameCurrency) throw new ActionError("mcp.errors.loan.currency");
+      const owedCents = outgoing.amountCents - repayments.reduce((sum, row) => sum + row.amountCents, 0);
+      if (owedCents < 0) throw new ActionError("mcp.errors.loan.overpaid");
+
+      // The receivable lives where the money left: the expense's account decides owner, group and sharing.
+      const [source] = await tx.execute<{ ownerUserId: string | null; groupId: string | null; isShared: boolean; writable: boolean }>(sql`
+        select owner_user_id as "ownerUserId", group_id as "groupId", is_shared as "isShared",
+          coalesce(private.can_write_account(id), false) as writable
+        from accounts where id = ${outgoing.fromAccountId}::uuid`);
+      if (!source?.writable) throw new ActionError("errors.notFound");
+      const [open] = await tx.execute<{ id: string }>(sql`
+        select a.id from accounts a
+        where a.kind = 'asset' and a.subtype = 'receivable' and a.archived_at is null
+          and lower(a.name) = lower(${input.receivableName})
+          and a.owner_user_id is not distinct from ${source.ownerUserId}::uuid and a.group_id is not distinct from ${source.groupId}::uuid
+          and a.settlement_currency = ${outgoing.currency}
+          and not exists (select 1 from third_party_credits c where c.receivable_account_id = a.id)
+        order by a.created_at limit 1`);
+      const view = (row: (typeof found)[number]) => ({ id: row.id, amountCents: row.amountCents, date: row.occurredAt, description: row.description });
+      const plan: LoanConversion = {
+        receivable: { id: open?.id ?? null, name: input.receivableName },
+        currency: outgoing.currency,
+        outgoing: view(outgoing),
+        repayments: repayments.map(view),
+        owedCents,
+        dryRun: input.dryRun,
+      };
+      if (input.dryRun) return plan;
+      if (input.expectedOwedCents !== owedCents) throw new ActionError("mcp.errors.loan.changed", { owed: String(owedCents) });
+
+      const receivableAccountId =
+        open?.id ??
+        (
+          await insertAccount(tx, {
+            name: input.receivableName,
+            kind: "asset",
+            subtype: "receivable",
+            ownerUserId: source.ownerUserId,
+            groupId: source.groupId,
+            isShared: source.isShared,
+            institution: null,
+            settlementCurrency: outgoing.currency,
+            amountMinor: 0,
+            // Open on the earliest day of the lot, so no movement predates the account (MO001).
+            balanceOn: found.map((row) => row.occurredAt).sort()[0],
+          })
+        ).accountId;
+      const list = (ids: string[]) => sql.join(ids.map((id) => sql`${id}::uuid`), sql`, `);
+      const wrote = await tx.execute<{ id: string }>(sql`
+        update transactions set to_account_id = ${receivableAccountId}::uuid, for_household = false, awaiting_counterparty = false
+        where id = ${outgoing.id}::uuid returning id`);
+      const wroteRepayments =
+        repayments.length === 0
+          ? []
+          : await tx.execute<{ id: string }>(sql`
+              update transactions set from_account_id = ${receivableAccountId}::uuid, contributed_by_member_id = null, awaiting_counterparty = false
+              where id in (${list(repaymentIds)}) returning id`);
+      if (wrote.length + wroteRepayments.length !== everyId.length) throw new ActionError("errors.notFound");
+      // A transfer carries no line: the sum trigger is deferred, so the lines go after the accounts changed.
+      await tx.execute(sql`delete from transaction_splits where transaction_id in (${list(everyId)})`);
+
+      const [balance] = await tx.execute<{ cents: string }>(sql`
+        select coalesce(sum(balance_cents), 0)::text as cents from account_balances
+        where id = ${receivableAccountId}::uuid and currency = ${outgoing.currency}`);
+      const settled = Number(balance?.cents ?? 0) === 0;
+      if (settled) await tx.execute(sql`update accounts set archived_at = now() where id = ${receivableAccountId}::uuid`);
+      return { ...plan, receivable: { id: receivableAccountId, name: input.receivableName }, receivableAccountId, archived: settled };
     });
   } catch (error) {
     if (error instanceof ActionError) throw error;

@@ -31,6 +31,7 @@ import { registerMemberTools } from "@/lib/mcp/member-tools";
 import { registerDeleteTools } from "@/lib/mcp/delete-tools";
 import { BatchRefusal, registerInboxTools } from "@/lib/mcp/inbox-tools";
 import { registerLabelTools } from "@/lib/mcp/label-tools";
+import { registerLoanTools } from "@/lib/mcp/loan-tools";
 import { registerMemberDebtTools } from "@/lib/mcp/member-debt-tools";
 import { registerRecipientTools } from "@/lib/mcp/recipient-tools";
 import { registerThirdPartyCreditTools } from "@/lib/mcp/third-party-credit-tools";
@@ -203,6 +204,7 @@ export function buildHandler(): (request: Request) => Promise<Response> {
     registerReadTools(server);
     registerStatementTools(server);
     registerLedgerTools(server, run, say);
+    registerLoanTools(server, run, say);
     registerInboxTools(server, run, say);
     registerMemberDebtTools(server, run, say);
     registerRecipientTools(server, run, say);

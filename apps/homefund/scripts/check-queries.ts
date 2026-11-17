@@ -4181,6 +4181,7 @@ async function main(): Promise<void> {
   await mcpMoneyModelSuite();
   await payOwnCardSuite();
   await mcpReceivableSuite();
+  await mcpLoanSuite();
 }
 
 // A member recorded without a login is someone in the fund: a leader whose fund holds one is not alone, so an
@@ -15390,6 +15391,7 @@ const TOOL_CLASSES = [
   ["cancel_planned_payment", ...DESTROY_CLASS],
   ["complete_counterparty", ...OVERWRITE_CLASS],
   ["contribute_goal", ...ADD_CLASS],
+  ["convert_to_loan", ...DESTROY_CLASS],
   ["create_account", ...ADD_CLASS],
   ["create_budget", ...ADD_CLASS],
   ["create_category", ...ADD_CLASS],
@@ -21063,5 +21065,116 @@ async function mcpReceivableSuite(): Promise<void> {
     next("RF-249: the «Me debe» a credit somebody else pays opens is a receivable and stays out of every account list (RF-216)"),
     (await subtypeOf(linked.receivableAccountId))?.subtype === "receivable" && hidden,
     `linked ${JSON.stringify(linked)}, row ${JSON.stringify(await subtypeOf(linked.receivableAccountId))}, hidden ${hidden}`,
+  );
+}
+
+// RF-252: an expense paid for somebody and the incomes that repaid it become transfers through that person's «Me debe», in
+// one write that quotes the owed amount a dry run gave, and the receivable is archived when it nets to zero.
+async function mcpLoanSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const today = todayInBogota();
+  const { POST } = await import("@/app/mcp/route");
+  const [owner, stranger] = [await createMembershipFreeUser(), await createMembershipFreeUser()];
+  const name = (what: string) => `Harness rf252 ${what} ${tag}`;
+  const ids = { bank: randomUUID(), spend: randomUUID(), earn: randomUUID() };
+  await fixtureSql.begin(async (tx) => {
+    await tx`insert into accounts (id, owner_user_id, name, kind, subtype, initial_balance_cents, initial_balance_on)
+      values (${ids.bank}, ${owner.id}, ${name("banco")}, 'asset', 'bank', 900000000, '2026-01-01')`;
+    await tx`insert into categories (id, owner_user_id, name, kind, color) values
+      (${ids.spend}, ${owner.id}, ${name("gasto")}, 'expense', '#8C4A4A'), (${ids.earn}, ${owner.id}, ${name("ingreso")}, 'income', '#4A8C5A')`;
+  });
+  track("accounts", ids.bank);
+  for (const id of [ids.spend, ids.earn]) track("categories", id);
+  const clientOf = async (user: HarnessUser) => {
+    const { id, token } = await asUser(user, () => issueWebhookCredential({ name: name("clave"), purpose: "mcp", defaultAccountId: null, defaultCategoryId: null }));
+    keep("webhook_credentials", id);
+    return mcpClient(POST, token).tool;
+  };
+  const tool = await clientOf(owner);
+  const strangerTool = await clientOf(stranger);
+  const spent = async (cents: number, description: string) =>
+    (await tool("record_movement", { fromAccountId: ids.bank, toAccountId: null, amountCents: cents, occurredAt: today, description: name(description), categoryId: ids.spend })).value.transactionId as string;
+  const earned = async (cents: number, description: string) =>
+    (await tool("record_movement", { fromAccountId: null, toAccountId: ids.bank, amountCents: cents, occurredAt: today, description: name(description), categoryId: ids.earn })).value.transactionId as string;
+  const rowOf = async (transactionId: string) =>
+    (await fixtureSql<{ kind: string; from_account_id: string | null; to_account_id: string | null; lines: number }[]>`
+      select kind, from_account_id, to_account_id, (select count(*)::int from transaction_splits where transaction_id = t.id) as lines
+      from transactions t where id = ${transactionId}`)[0];
+  const person = name("Mamá");
+  const accountNamed = async (archived: boolean) =>
+    ((await tool("list_accounts", archived ? { archived: true } : {})).value as { id: string; name: string; subtype: string }[]).find((row) => row.name === `Me debe ${person}`);
+
+  const out = await spent(100_000_00, "le pagué a mamá");
+  const back = await earned(40_000_00, "mamá devolvió una parte");
+  const plan = await tool("convert_to_loan", { outgoingTransactionId: out, personName: person, repaymentTransactionIds: [back], dryRun: true });
+  const stillExpense = await rowOf(out);
+  assert(
+    next("RF-252: convert_to_loan with dryRun answers the plan, the receivable it would open and what stays owed, and writes nothing"),
+    !plan.isError && plan.value.dryRun === true && plan.value.owedCents === 60_000_00 && plan.value.receivable.id === null &&
+      plan.value.receivable.name === `Me debe ${person}` && plan.value.outgoing.id === out && plan.value.repayments[0]?.id === back &&
+      stillExpense?.kind === "expense" && stillExpense.lines === 1 && (await accountNamed(false)) === undefined,
+    `plan ${JSON.stringify(plan.value)}, row ${JSON.stringify(stillExpense)}`,
+  );
+
+  const noOwed = await tool("convert_to_loan", { outgoingTransactionId: out, personName: person, repaymentTransactionIds: [back] });
+  const wrongOwed = await tool("convert_to_loan", { outgoingTransactionId: out, personName: person, repaymentTransactionIds: [back], expectedOwedCents: 1 });
+  assert(
+    next("RF-252: convert_to_loan writes only with the owed amount the dry run gave, and writes nothing otherwise"),
+    noOwed.isError && (noOwed.value as { error: string }).error === es.mcp.errors.loan.needsOwed &&
+      wrongOwed.isError && (wrongOwed.value as { error: string }).error === es.mcp.errors.loan.changed.replace("{owed}", "6000000") &&
+      (await rowOf(out))?.kind === "expense" && (await rowOf(back))?.kind === "income",
+    `no owed ${JSON.stringify(noOwed.value)}, wrong ${JSON.stringify(wrongOwed.value)}`,
+  );
+
+  const done = await tool("convert_to_loan", { outgoingTransactionId: out, personName: person, repaymentTransactionIds: [back], expectedOwedCents: 60_000_00 });
+  const receivable = await accountNamed(false);
+  if (receivable) track("accounts", receivable.id);
+  const [outRow, backRow] = [await rowOf(out), await rowOf(back)];
+  const [owed] = receivable ? await fixtureSql<{ balance_cents: string }[]>`select balance_cents::text from account_balances where id = ${receivable.id}` : [];
+  assert(
+    next("RF-252: convert_to_loan turns the expense into a transfer into «Me debe <persona>» and the income into a transfer out of it, with no lines, and the account keeps what is still owed"),
+    !done.isError && done.value.archived === false && receivable?.subtype === "receivable" && done.value.receivableAccountId === receivable.id &&
+      outRow?.kind === "transfer" && outRow.to_account_id === receivable.id && outRow.from_account_id === ids.bank && outRow.lines === 0 &&
+      backRow?.kind === "transfer" && backRow.from_account_id === receivable.id && backRow.to_account_id === ids.bank && backRow.lines === 0 &&
+      owed?.balance_cents === "6000000",
+    `done ${JSON.stringify(done.value)}, receivable ${JSON.stringify(receivable)}, out ${JSON.stringify(outRow)}, back ${JSON.stringify(backRow)}, owed ${owed?.balance_cents}`,
+  );
+
+  // A second loan to the same person reuses the open account, and one that nets to zero archives it.
+  const second = await spent(50_000_00, "otro préstamo a mamá");
+  const reused = await tool("convert_to_loan", { outgoingTransactionId: second, personName: person, dryRun: true });
+  const secondRepaid = await spent(30_000_00, "gasto para mamá");
+  const secondBack = await earned(30_000_00, "mamá lo devolvió");
+  const settled = await tool("convert_to_loan", { outgoingTransactionId: secondRepaid, personName: `${person} dos`, repaymentTransactionIds: [secondBack], expectedOwedCents: 0 });
+  const settledAccount = ((await tool("list_accounts", { archived: true })).value as { id: string; name: string }[]).find((row) => row.name === `Me debe ${person} dos`);
+  if (settledAccount) track("accounts", settledAccount.id);
+  const openList = ((await tool("list_accounts")).value as { name: string }[]).map((row) => row.name);
+  assert(
+    next("RF-252: a second loan to the same person reuses the open receivable, and one repaid in full archives it"),
+    reused.value.receivable.id === receivable?.id && !settled.isError && settled.value.archived === true && settledAccount !== undefined &&
+      !openList.includes(`Me debe ${person} dos`) && openList.includes(`Me debe ${person}`),
+    `reused ${JSON.stringify(reused.value?.receivable)}, settled ${JSON.stringify(settled.value)}, archived ${JSON.stringify(settledAccount)}`,
+  );
+
+  const income = await earned(10_000_00, "un ingreso");
+  const overpaid = await spent(5_000_00, "poco");
+  const otherExpense = await spent(1_000_00, "otro gasto");
+  const refusals = {
+    notExpense: await tool("convert_to_loan", { outgoingTransactionId: income, personName: person, dryRun: true }),
+    notIncome: await tool("convert_to_loan", { outgoingTransactionId: overpaid, personName: person, repaymentTransactionIds: [otherExpense], dryRun: true }),
+    repeated: await tool("convert_to_loan", { outgoingTransactionId: overpaid, personName: person, repaymentTransactionIds: [overpaid], dryRun: true }),
+    overpaid: await tool("convert_to_loan", { outgoingTransactionId: overpaid, personName: person, repaymentTransactionIds: [income], dryRun: true }),
+    foreign: await strangerTool("convert_to_loan", { outgoingTransactionId: overpaid, personName: person, dryRun: true }),
+  };
+  const said = (key: keyof typeof refusals) => (refusals[key].value as { error: string }).error;
+  assert(
+    next("RF-252: convert_to_loan refuses an income as the loan, a repayment that is no income or repeats the expense, repayments above the expense and another person's rows"),
+    refusals.notExpense.isError && said("notExpense") === es.mcp.errors.loan.notExpense &&
+      refusals.notIncome.isError && said("notIncome") === es.mcp.errors.loan.notIncome &&
+      refusals.repeated.isError && said("repeated") === es.mcp.errors.loan.distinct &&
+      refusals.overpaid.isError && said("overpaid") === es.mcp.errors.loan.overpaid &&
+      refusals.foreign.isError && said("foreign") === es.errors.notFound,
+    JSON.stringify(Object.fromEntries(Object.entries(refusals).map(([key, one]) => [key, one.value]))),
   );
 }
