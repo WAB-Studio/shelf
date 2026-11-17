@@ -405,11 +405,14 @@ function toExportRows<E extends SheetEntity>(
       }
 
       if ("synthetic" in column && column.key === "division") {
-        // A split movement keeps each line's category and amount in one cell (RF-298).
+        // A split movement keeps each line's category and amount in one cell, the biggest first (RF-298).
         const lines = children.splitLines.get(row.id as string) ?? [];
         cell[column.key] =
           lines.length > 1
-            ? lines.map((line) => `${names.categories.get(line.categoryId) ?? ""} ${centsToDecimal(line.amountCents)}`.trim()).join(" · ")
+            ? [...lines]
+                .sort((one, other) => other.amountCents - one.amountCents)
+                .map((line) => `${names.categories.get(line.categoryId) ?? ""} ${centsToDecimal(line.amountCents)}`.trim())
+                .join(" · ")
             : null;
         continue;
       }
