@@ -26,6 +26,7 @@ import { getAccountBalances } from "@/db/queries/account-balances";
 import {
   getReconcileSheet,
   listAccountReconciliations,
+  listReconcileOverview,
   reconcileAccount,
 } from "@/db/queries/account-reconciliations";
 import { deleteMemberDebt, getMemberDebts, recordMemberDebt } from "@/db/queries/member-debts";
@@ -4182,6 +4183,7 @@ async function main(): Promise<void> {
   await payOwnCardSuite();
   await legacyChannelSuite();
   await mcpReconcileManySuite();
+  await reconcileOverviewSuite();
 }
 
 // A member recorded without a login is someone in the fund: a leader whose fund holds one is not alone, so an
@@ -21134,5 +21136,48 @@ async function mcpReconcileManySuite(): Promise<void> {
       after[0] === 2_150_000_00 && after[1] === 280_000_00 && after[2] === -1_020_000_00 &&
       history.length === 1 && history[0].countedCents === 1_020_000_00 && history[0].derivedCents === 1_000_000_00 && history[0].gapCents === 20_000_00,
     `signed ${JSON.stringify(signed.value)}, written ${JSON.stringify(written.value)}, ledger ${JSON.stringify(after)}, history ${JSON.stringify(history)}`,
+  );
+}
+
+// RF-253: «Cuadrar todo» reads every open account the caller writes, with today's derived figure and its last count, in one
+// round trip; an archived account and another person's are not there.
+async function reconcileOverviewSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const today = todayInBogota();
+  const owner = await createMembershipFreeUser();
+  const stranger = await createMembershipFreeUser();
+  const mk = async (user: HarnessUser, name: string, kind: "asset" | "liability", amountMinor: number) => {
+    const { accountId } = await asUser(user, () =>
+      createAccount({
+        kind, subtype: kind === "asset" ? "bank" : "card", groupId: null, isShared: false, institution: null, settlementCurrency: BASE_CURRENCY,
+        balanceOn: "2026-01-01", ownerUserId: user.id, name: `Harness rf253 ${name} ${tag}`, amountMinor,
+      }),
+    );
+    track("accounts", accountId);
+    return accountId;
+  };
+  const [bank, card, closed, theirs] = [
+    await mk(owner, "banco", "asset", 800_000_00), await mk(owner, "tarjeta", "liability", 300_000_00),
+    await mk(owner, "archivada", "asset", 0), await mk(stranger, "ajena", "asset", 0),
+  ];
+  await asUser(owner, () => archiveAccount({ accountId: closed }));
+  await asUser(owner, () => reconcileAccount({ accountId: bank, reconciledOn: today, realMagnitudeCents: 790_000_00, expectedDerivedCents: 800_000_00 }));
+
+  const rows = await asUser(owner, () => listReconcileOverview(today));
+  const [listedBank, listedCard] = [rows.find((row) => row.id === bank), rows.find((row) => row.id === card)];
+  await asUser(owner, () => listAccountReconciliations(bank));
+  const unitBefore = roundTrips();
+  await asUser(owner, () => listAccountReconciliations(bank));
+  const unit = roundTrips() - unitBefore;
+  const overviewBefore = roundTrips();
+  await asUser(owner, () => listReconcileOverview(today));
+  const trips = roundTrips() - overviewBefore;
+  assert(
+    next("RF-253: the overview lists the open accounts the caller writes with today's derived figure and last count, assets before debts, in one read"),
+    rows.findIndex((row) => row.id === bank) < rows.findIndex((row) => row.id === card) && listedBank?.derivedCents === 790_000_00 &&
+      listedBank.latestReconciledOn === today && listedCard?.derivedCents === -300_000_00 && listedCard.latestReconciledOn === null &&
+      listedCard.addedOn === today && !rows.some((row) => row.id === closed || row.id === theirs) && trips === unit,
+    `rows ${JSON.stringify(rows.map((row) => [row.name, row.derivedCents, row.latestReconciledOn]))}, ${trips} round trips against ${unit} for one read`,
   );
 }

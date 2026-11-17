@@ -3,8 +3,10 @@ import "server-only";
 import { desc, eq, inArray, sql } from "drizzle-orm";
 
 import { insertRow } from "@/db/insert-row";
+import { internalAccountSql } from "@/db/queries/accounts";
 import { accountReconciliations, accounts, transactions } from "@/db/schema";
-import { withUserDb } from "@/db/session";
+import { withUserDb, withUserDbOrTx } from "@/db/session";
+import type { Transaction } from "@/db/session";
 import type { CurrencyCode } from "@/lib/currency";
 import { pgErrorCode } from "@/lib/db-error";
 import { todayInBogota } from "@/lib/dates";
@@ -466,4 +468,60 @@ function mapManyRefusal(error: unknown, args: ReconcileManyArgs): ManyRefusal {
   if (code === "RC003") return { ...base, reason: "beforeLatest" };
 
   throw error;
+}
+
+export type ReconcileOverviewRow = {
+  id: string;
+  name: string;
+  kind: "asset" | "liability";
+  subtype: string;
+  institution: string | null;
+  lastFour: string | null;
+  holderName: string | null;
+  settlementCurrency: CurrencyCode;
+  // What HomeFund derives for today in the settlement currency, the ledger's own sign (RF-114).
+  derivedCents: number;
+  latestReconciledOn: string | null;
+  // The day the account was added to HomeFund, in Bogota: a never-counted account ages from it.
+  addedOn: string;
+};
+
+/**
+ * Every open account the caller can write, with the figure HomeFund derives for today and when it was last
+ * counted (RF-253). ONE round trip, and no balance column: the figure is the database's own derivation. A
+ * pocket is an account of its own here; the hidden «Me debe» of a credit somebody else pays is left out.
+ */
+export async function listReconcileOverview(
+  today: string,
+  outerTx?: Transaction,
+): Promise<ReconcileOverviewRow[]> {
+  return withUserDbOrTx(outerTx, async (tx) => {
+    const rows = await tx
+      .select({
+        id: accounts.id,
+        name: accounts.name,
+        kind: accounts.kind,
+        subtype: accounts.subtype,
+        institution: accounts.institution,
+        lastFour: accounts.lastFour,
+        holderName: sql<string | null>`(select gm.name from group_members gm where gm.id = accounts.holder_member_id)`,
+        settlementCurrency: accounts.settlementCurrency,
+        derivedCents: sql<string>`private.account_settlement_balance_on(accounts.id, ${today}::date)`,
+        latestReconciledOn: sql<
+          string | null
+        >`(select max(r.reconciled_on)::text from account_reconciliations r where r.account_id = accounts.id)`,
+        addedOn: sql<string>`(accounts.created_at at time zone 'America/Bogota')::date::text`,
+      })
+      .from(accounts)
+      .where(
+        sql`accounts.archived_at is null and private.can_write_account(accounts.id) and not ${internalAccountSql}`,
+      )
+      .orderBy(
+        sql`accounts.kind = 'liability'`,
+        desc(sql`accounts.owner_user_id is not null`),
+        accounts.name,
+      );
+
+    return rows.map((row) => ({ ...row, derivedCents: Number(row.derivedCents) }));
+  });
 }

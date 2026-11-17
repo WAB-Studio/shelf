@@ -736,3 +736,35 @@ tablero previo; se refina con lo construido.
   para ella ese mes, por moneda, y un toque abre Movimientos ya filtrado. Sin gasto para nadie, la tarjeta no aparece.
 - Estados: guardando, los controles se bloquean; una persona borrada deja sus movimientos sin «para» (el borrado de una etiqueta
   ya dice cuántos movimientos suelta).
+
+## Decisión del 2026-11-17: «Cuadrar todo», por el usuario
+
+Cuadrar once cuentas una por una, desde capturas, tomó docenas de pasos y dos errores: se usó la deuda a la fecha de corte de
+una tarjeta en vez de la de hoy, y se escribió una deuda con el signo contrario. Una sola pantalla, sin diálogos, para contar
+todas las cuentas a la vez.
+
+- **Dónde.** `/settings/accounts/reconcile`, con la flecha de volver a Cuentas. Cuentas la ofrece con «Cuadrar todo» junto a «Añadir»,
+  y la línea de Inicio (abajo) también lleva a ella. Título «Cuadrar todo»; bajo él: «Escribe lo que dice el banco hoy. Lo que dejes
+  vacío no se toca.»
+- **Qué lista.** Toda cuenta abierta que la persona puede escribir, con sus bolsillos, y ninguna de otro miembro, archivada ni
+  «Me debe» de un crédito ajeno. Primero lo que se tiene, luego tarjetas y préstamos; dentro, por nombre. Una tarjeta del celular
+  y una del escritorio son la misma, una sobre otra, en el ancho de la página.
+- **La fila** es una `Card`: el nombre y debajo, en gris, la entidad y «terminada en 3397»; a la derecha «Según HomeFund» con la cifra
+  de hoy. Una línea gris dice cuándo se cuadró: «Cuadrada hace 12 días», «Cuadrada hoy» o «Nunca cuadrada». Debajo, el campo.
+- **El campo** lleva su etiqueta visible: «Lo que dice el banco hoy» en una cuenta; en una tarjeta o un préstamo, «Lo que debes hoy
+  (cupo total − disponible)» y, como ayuda, «No uses la deuda a la fecha de corte». Una deuda se escribe en positivo, lo que se debe;
+  un menos solo si se pagó de más.
+- **Ayuda del cupo.** Solo en tarjetas y préstamos, un enlace «Calcular con el cupo» abre dos campos, «Cupo total» y «Cupo disponible»;
+  lo que se escribe en ellos llena «Lo que debes hoy» con la resta y se puede corregir a mano. Plegado por defecto.
+- **La diferencia sale en vivo**, en cuanto hay una cifra válida: «Diferencia +$ 150.000», en el tono del saldo (a favor en verde, en
+  contra en gris fuerte, nunca solo color: lleva el signo); en cero, «Cuadra. No se registra ningún movimiento». Una cifra con el signo
+  contrario al saldo dice «Tiene el signo contrario al saldo. Revísala» junto a la diferencia, sin bloquear. Una cifra que no se lee
+  dice por qué, bajo el campo.
+- **Un solo botón al final**, «Cuadrar 4 cuentas» (singular con una), que escribe todo o nada. Sin cifras escritas está desactivado y
+  encima dice «Escribe lo que dice el banco de al menos una cuenta». Mientras escribe, «Cuadrando…». Al terminar vuelve a Cuentas con
+  «4 cuentas cuadradas». Si el saldo de una cambió mientras tanto, no se escribe ninguna: bajo esa fila dice «Los movimientos de esta
+  cuenta cambiaron. Revisa la diferencia y vuelve a cuadrar.», las cifras se leen de nuevo y lo escrito se conserva.
+- **Vacío:** sin cuentas que cuadrar, «No hay cuentas para cuadrar» y un enlace a Cuentas.
+- **El aviso «Cuádrala».** Una cuenta que no se cuadra hace más de 30 días lleva, en Cuentas, una marca gris «Cuádrala» (un botón de
+  texto bajo el nombre que abre el cuadre de esa cuenta); una cuenta que nunca se cuadró cuenta los 30 días desde que se añadió. En
+  Inicio, a lo sumo una línea en la columna de al lado, «3 cuentas sin cuadrar hace más de un mes · Cuadrar todo»; sin cuentas así, nada.

@@ -24,6 +24,7 @@ import { AccountDetail, AccountsTable, PaidByLine } from "@/components/accounts/
 import {
   Box,
   Button,
+  ButtonLink,
   Card,
   ConfirmDialog,
   DropdownMenu,
@@ -318,6 +319,13 @@ export function AccountsScreen({
     </Button>
   );
 
+  // One screen to count every account at once; offered where there is something to count.
+  const reconcileAllLink = (
+    <ButtonLink href="/settings/accounts/reconcile" variant="surface" color="gray">
+      {t("reconcileAllOpen")}
+    </ButtonLink>
+  );
+
   // Add would create an active account, so the archived tab offers none, in
   // the header or in the empty state.
   const emptyState = archived ? (
@@ -341,15 +349,18 @@ export function AccountsScreen({
             meta={t("listMeta", { count: filteredAccounts.length })}
             actions={
               !archived && (
-                <Button
-                  type="button"
-                  variant="surface"
-                  color="gray"
-                  onClick={() => setFormTarget("new")}
-                >
-                  <Plus size={15} />
-                  {t("add")}
-                </Button>
+                <>
+                  {accounts.length > 0 && reconcileAllLink}
+                  <Button
+                    type="button"
+                    variant="surface"
+                    color="gray"
+                    onClick={() => setFormTarget("new")}
+                  >
+                    <Plus size={15} />
+                    {t("add")}
+                  </Button>
+                </>
               )
             }
           />
@@ -478,7 +489,17 @@ export function AccountsScreen({
 
       <Box display={{ initial: "block", lg: "none" }}>
         <Flex direction="column" gap="4">
-          <ScreenHeader title={t("title")} actions={!archived ? addButton : undefined} />
+          <ScreenHeader
+            title={t("title")}
+            actions={
+              !archived ? (
+                <>
+                  {accounts.length > 0 && reconcileAllLink}
+                  {addButton}
+                </>
+              ) : undefined
+            }
+          />
           <SegmentedControl.Root
             value={archived ? "archived" : "active"}
             onValueChange={onTabChange}

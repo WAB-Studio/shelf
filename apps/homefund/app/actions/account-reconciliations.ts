@@ -5,12 +5,12 @@ import { z } from "zod";
 
 import { getReconcileSheet } from "@/db/queries/account-reconciliations";
 import type { ReconcileSheet } from "@/db/queries/account-reconciliations";
-import { confirmReconciliation } from "@/db/queries/reconcile-write";
-import type { ReconcileActionResult } from "@/db/queries/reconcile-write";
+import { confirmReconciliation, confirmReconciliations } from "@/db/queries/reconcile-write";
+import type { ReconcileActionResult, ReconcileManyActionResult } from "@/db/queries/reconcile-write";
 import { isCivilDate } from "@/lib/dates";
 import { ActionError } from "@/lib/errors";
 import { authActionClient } from "@/lib/safe-action";
-import { reconcileAccountSchema } from "@/lib/validation/account-reconciliation";
+import { reconcileAccountSchema, reconcileAccountsSchema } from "@/lib/validation/account-reconciliation";
 
 const readReconcileSheetSchema = z.object({
   accountId: z.uuid({ error: "transactions.errors.accountInvalid" }),
@@ -39,5 +39,18 @@ export const reconcileAccountAction = authActionClient
       revalidatePath("/[locale]", "layout");
       refresh();
     }
+    return result;
+  });
+
+/**
+ * Counts many accounts on one day, all or nothing (RF-253). The screen it serves leaves for Cuentas on
+ * success, so the layout purge is all the re-render it needs.
+ */
+export const reconcileAccountsAction = authActionClient
+  .inputSchema(reconcileAccountsSchema)
+  .action(async ({ parsedInput }): Promise<ReconcileManyActionResult> => {
+    const result = await confirmReconciliations(parsedInput);
+
+    if (result.ok) revalidatePath("/[locale]", "layout");
     return result;
   });
