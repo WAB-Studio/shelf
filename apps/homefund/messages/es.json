@@ -2365,6 +2365,20 @@
       "dueDayInvalid": "El día de pago es un número del 1 al 31, o déjalo vacío."
     }
   },
+  "loanSchedule": {
+    "errors": {
+      "rowsRequired": "Pasa al menos una fila del plan de pagos.",
+      "rowsTooMany": "El plan admite hasta 600 filas.",
+      "dateInvalid": "La fecha de la fila {row} no es un día real, con la forma AAAA-MM-DD.",
+      "amountInvalid": "Los montos de la fila {row} son centavos enteros, sin decimales y sin signo.",
+      "totalMismatch": "La cuota de la fila {row} no es la suma de capital, interés y seguro. Revisa la fila contra el papel.",
+      "chainBroken": "En la fila {row} el capital pendiente no baja lo que esa cuota abona a capital. Revisa la fila contra el papel.",
+      "datesNotIncreasing": "La fecha de la fila {row} no es posterior a la de la fila anterior.",
+      "notPaidOff": "La última fila debe dejar el capital pendiente en cero; la fila {row} deja algo.",
+      "notALoan": "El plan de pagos es de un crédito o préstamo, no de otra cuenta.",
+      "invalid": "El plan de pagos no es válido."
+    }
+  },
   "recipients": {
     "title": "Destinatarios",
     "add": "Añadir destinatario",

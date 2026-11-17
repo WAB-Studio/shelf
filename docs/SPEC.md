@@ -273,6 +273,7 @@ accounting exports, native apps. None of this gets built or left
 - [x] **RF-243** — A bank alert reads as a short description through every channel, not only the email's: the SMS, the phone's notification, the iPhone shortcut and the bank's email all give the business or the person alone («Compraste COP80.800,00 en X con tu T.Cred *4872» → «X»; «pagaste … por código QR … a la llave @tienda» → «tienda»; «Transferiste … a la cuenta *3118882698» → «Transferencia a *2698»; a transfer that names its person → the name; «recibiste una transferencia de JULIAN …» or «… de CARLOS NIETO» → «De Julian …», income; «Pagaste … a FONDO NACIONAL DEL AHORRO» → «Fondo Nacional del Ahorro»; «Recibiste una consignación … desde el corresponsal …» → «Consignación corresponsal», income; Banco de Bogotá's «Tu compra por 94,208 fue aprobada con Tarjeta Crédito 4505 … en FARMATODO PRADOS DEL E» → «Farmatodo Prados del E»), a name the bank shouts in capitals written as a person reads it and a gateway's «*DL» suffix dropped; a saved recipient's name still wins (RF-189). The bank's boilerplate ahead of its label («Alertas y Notificaciones Listo! Todo salió bien con tus movimientos») no longer reaches the description of a text no shape fits. An alert from Bancolombia that names no account tail takes the person's only Bancolombia bank account (a card never) when exactly one exists. It narrows RF-206's description. Decided by the user 2026-11-17.
 - [x] **RF-247** — A bank alert or a PSE receipt that pays the institution of one of the person's cards or loans is proposed as a transfer to it, not as an expense with no category: when the payee («Pagaste $4,305.47 a NU Compañía de Financiamiento desde tu producto 3397…», or a receipt's «Empresa: NU Compañía de Financiamiento Descripción: Pago tarjeta Nu») names, as whole words, the `institution` of exactly one card or loan account, the proposal is a transfer from the account the message names to that one; with several cards or loans of that institution, or none, the delivery stays an expense and the person picks. A saved recipient (RF-189) still decides first. Decided by the user 2026-11-17.
 - [x] **RF-135** — A counterparty is remembered per user: a description pattern earns an account and a side after two consecutive agreeing completions, and a completion naming a different account marks the pattern ambiguous, which no later agreement undoes. A remembered pattern prefills the missing side and never fills it on its own.
+- [x] **RF-256** — A loan keeps the payment schedule its bank printed (Lulo's «plan de pagos»): one row per cuota with its number, due day, capital, interest, insurance, the cuota total and the capital still owed once it is paid, all in integer cents. Only the rows are stored; a schedule is replaced whole, never edited row by row, and belongs to a liability of subtype loan, gated by that account's policies. A row is read against the loan's payments, never marked by hand: a transfer into the loan within 15 days of a due day, nearest row first, pays that row, in full when it reaches the cuota less 1 %, partial below it, and a payment near no row pays none. From the rows and the payments derive the next cuota (the first not paid in full), the cuotas left, what is still to pay with interest and insurance, the end date and the usual cuota (the middle one of the whole schedule); an unpaid cuota more than 5 % from the usual one is flagged ahead of its day. A schedule is read whole or refused whole: each row's cuota must be the sum of its three parts, its capital owed must fall by the capital it repays, its day must follow the one before, and the last row must leave nothing owed; a refusal names the row (`{row}`) so a misread figure is found in the paper. Decided by the user 2026-11-17.
 
 The webhook (RF-90) reuses RF-22 (quick entry), RF-25 (created_by) and RF-45 (no write bypasses audit) unchanged: the same interpreter reads the payload text and the same insert path records the movement, so the created-by stamp and the audit hold as on any manual write. RF-52's idempotency shape is mirrored, not reused — RF-52 stays a spreadsheet-import requirement; the webhook applies the same stable-external-reference rule to its own deliveries. The review queue keeps that reuse: it runs RF-22's interpreter to propose rather than to decide, and RF-25 and RF-45 hold unchanged because an accepted proposal is still written through the same insert path.
 
@@ -428,6 +429,7 @@ erDiagram
     accounts ||--o{ deferrals : "its liability leg"
     groups ||--o{ member_debts : "holds"
     group_members ||--o{ member_debts : "owes or is owed"
+    accounts ||--o{ loan_schedule_rows : "a loan has a payment schedule"
     accounts ||--o| third_party_credits : "is paid by someone else (liability)"
     accounts ||--o| third_party_credits : "holds what they owe (receivable)"
     app_users ||--o{ recipients : "saves"
@@ -613,6 +615,19 @@ erDiagram
         date occurred_on
         text description "optional, 1 to 200"
         uuid created_by FK "auth.uid() by default"
+        timestamptz created_at
+    }
+
+    loan_schedule_rows {
+        uuid id PK
+        uuid account_id FK "the loan, a liability of subtype loan"
+        smallint number "1 to 600, unique per loan"
+        date due_on "unique per loan"
+        bigint principal_cents "capital the cuota repays"
+        bigint interest_cents
+        bigint insurance_cents
+        bigint total_cents "= principal + interest + insurance"
+        bigint remaining_cents "capital owed once it is paid"
         timestamptz created_at
     }
 
@@ -996,6 +1011,10 @@ Rules the model must always guarantee, regardless of how they are implemented:
   explicit forget clears it.
 - A movement recorded with only the side an ingest could read is marked
   awaiting its counterparty; naming the other account clears the mark.
+- A loan's payment schedule is the rows its bank printed, replaced whole and never
+  edited; a row's total is the sum of its capital, interest and insurance. Which
+  rows are paid, the next cuota, what is left and every warning derive from the
+  rows and the loan's movements and are never stored.
 - A credit that somebody else pays is a liability linked to a receivable asset
   of its own scope and currency; the link stores only who pays and the lender's
   terms. What the credit owes, what the payer owes and paid and each month's two

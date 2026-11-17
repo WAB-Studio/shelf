@@ -2365,6 +2365,20 @@
       "dueDayInvalid": "The due day is a number from 1 to 31, or leave it empty."
     }
   },
+  "loanSchedule": {
+    "errors": {
+      "rowsRequired": "Pass at least one row of the payment schedule.",
+      "rowsTooMany": "A schedule takes up to 600 rows.",
+      "dateInvalid": "The date of row {row} is not a real day, written YYYY-MM-DD.",
+      "amountInvalid": "The amounts of row {row} are whole cents, with no decimals and no sign.",
+      "totalMismatch": "The cuota of row {row} is not the sum of capital, interest and insurance. Check the row against the paper.",
+      "chainBroken": "In row {row} the remaining capital does not fall by what that cuota repays. Check the row against the paper.",
+      "datesNotIncreasing": "The date of row {row} is not after the one before it.",
+      "notPaidOff": "The last row must leave no capital owed; row {row} leaves some.",
+      "notALoan": "A payment schedule belongs to a credit or a loan, not to another account.",
+      "invalid": "The payment schedule is not valid."
+    }
+  },
   "recipients": {
     "title": "Recipients",
     "add": "Add recipient",
