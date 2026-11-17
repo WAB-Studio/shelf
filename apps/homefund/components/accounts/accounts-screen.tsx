@@ -20,7 +20,7 @@ import {
   type BilledTarget,
 } from "@/components/accounts/foreign-estimates";
 import { ReconcileDialog } from "@/components/accounts/reconcile-dialog";
-import { AccountDetail, AccountsTable, PaidByLine } from "@/components/accounts/accounts-table";
+import { AccountDetail, AccountsTable, PaidByLine, StaleCountLine } from "@/components/accounts/accounts-table";
 import {
   Box,
   Button,
@@ -121,6 +121,7 @@ export function AccountsScreen({
   archived,
   newSubtype,
   members,
+  staleIds,
 }: {
   accounts: AccountRow[];
   groupName: string | null;
@@ -131,9 +132,12 @@ export function AccountsScreen({
   newSubtype?: (typeof ACCOUNT_SUBTYPES)[number] | null;
   // The fund members a fund account can be held by (RF-181).
   members: { id: string; name: string }[];
+  // The accounts not counted for over a month (RF-254), each with a quiet «Cuádrala».
+  staleIds: string[];
 }) {
   const t = useTranslations("accounts");
   const tKey = useTranslations();
+  const stale = new Set(staleIds);
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -422,6 +426,7 @@ export function AccountsScreen({
           {!archived && deskSections.length > 0 && totalsOf(deskSections, filteredAccounts)}
 
           <AccountsTable
+            stale={stale}
             sections={deskSections.flatMap((section) => {
               const parts = splitByPlacement(section);
               return parts.map((part) => ({
@@ -538,6 +543,7 @@ export function AccountsScreen({
                         <Box key={account.id} ml={account.parentAccountId ? "5" : "0"}>
                           <AccountCard
                             account={account}
+                            stale={stale.has(account.id)}
                             archived={archived}
                             pending={pendingFor(account)}
                             onConfirm={setBilledTarget}
@@ -666,6 +672,7 @@ export function AccountsScreen({
 
 function AccountCard({
   account,
+  stale,
   archived,
   pending,
   onConfirm,
@@ -677,6 +684,7 @@ function AccountCard({
   onHandOver,
 }: {
   account: AccountRow;
+  stale: boolean;
   archived: boolean;
   pending: AccountPendingSettlement[];
   onConfirm: (target: BilledTarget) => void;
@@ -707,6 +715,7 @@ function AccountCard({
           </Text>
           <AccountDetail account={account} />
           <PaidByLine account={account} />
+          <StaleCountLine stale={stale} onReconcile={onReconcile} />
           {/* The settlement currency is the figure the card leads with, and each
               other currency the account holds sits under it naming itself: no
               line here is the sum of two currencies (RF-124).

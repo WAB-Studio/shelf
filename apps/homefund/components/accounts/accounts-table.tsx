@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 
 import { useOwnerLabel } from "@/components/fund/owner-mark";
 import {
+  Button,
   DataTable,
   Flex,
   Money,
@@ -52,6 +53,23 @@ export function PaidByLine({ account }: { account: AccountRow }) {
 }
 
 /**
+ * The quiet «Cuádrala» under an account not counted for over a month (RF-254): a text button that opens the account's
+ * own «Cuadrar». Nothing for an account counted lately, or one the caller only reads.
+ */
+export function StaleCountLine({ stale, onReconcile }: { stale: boolean; onReconcile: () => void }) {
+  const t = useTranslations("accounts");
+  if (!stale) return null;
+
+  return (
+    <Flex>
+      <Button type="button" variant="ghost" color="gray" size="1" tap onClick={onReconcile}>
+        {t("reconcileNudge")}
+      </Button>
+    </Flex>
+  );
+}
+
+/**
  * The one gray line under an account's name, with what it has and nothing else (RF-240): its entity, the end of its
  * number, its holder when the name does not already say it, and the owner of another member's account. Nothing
  * for an account with none of them.
@@ -88,6 +106,7 @@ export function AccountsTable({
   archived,
   hasGroup,
   empty,
+  stale,
   onEdit,
   onReconcile,
   onArchive,
@@ -102,6 +121,8 @@ export function AccountsTable({
   // go (RF-60, RF-61), mirroring the phone's card.
   hasGroup: boolean;
   empty?: ReactNode;
+  // The accounts not counted for over a month (RF-254).
+  stale: ReadonlySet<string>;
   onEdit: (row: AccountRow) => void;
   onReconcile: (row: AccountRow) => void;
   onArchive: (row: AccountRow) => void;
@@ -124,6 +145,7 @@ export function AccountsTable({
           </Text>
           <AccountDetail account={row} />
           <PaidByLine account={row} />
+          <StaleCountLine stale={stale.has(row.id)} onReconcile={() => onReconcile(row)} />
         </Flex>
       ),
     },

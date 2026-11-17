@@ -5,12 +5,15 @@ import { notFound } from "next/navigation";
 
 import { AccountsScreen } from "@/components/accounts/accounts-screen";
 import { Page } from "@/components/ui";
+import { listReconcileAges } from "@/db/queries/account-reconciliations";
 import { listAccounts } from "@/db/queries/accounts";
 import { listPendingAssetSettlements } from "@/db/queries/debt-statements";
 import { listCallerMembers } from "@/db/queries/group-members";
 import { getUserGroup } from "@/db/queries/groups";
 import { requireUser } from "@/db/session";
 import { routing } from "@/i18n/routing";
+import { todayInBogota } from "@/lib/dates";
+import { isStale } from "@/lib/reconcile-age";
 import { createAccountSchema } from "@/lib/validation/account";
 
 export async function generateMetadata(
@@ -45,7 +48,8 @@ export default async function AccountsPage(
   // The pending foreign estimates ride the same fan-out; an archived account is
   // read-only, so its tab asks for none.
   const user = await requireUser();
-  const [accounts, group, pending, roster] = await Promise.all([
+  const today = todayInBogota();
+  const [accounts, group, pending, roster, counts] = await Promise.all([
     listAccounts({ archived }),
     getUserGroup(),
     archived ? Promise.resolve([]) : listPendingAssetSettlements(),
@@ -53,6 +57,8 @@ export default async function AccountsPage(
     // with no fund has no roster (the fund rides as a subselect). Archived members come too, so a holder
     // who left still reads by name.
     archived ? Promise.resolve([]) : listCallerMembers(user.id, { archived: "all" }),
+    // When each account was last counted, for the quiet «Cuádrala» (RF-254); the archived tab shows none.
+    archived ? Promise.resolve([]) : listReconcileAges(),
   ]);
   const heldBy = new Set(accounts.map((account) => account.holderMemberId));
   const members = roster.filter((member) => !member.archivedAt || heldBy.has(member.id));
@@ -66,6 +72,7 @@ export default async function AccountsPage(
         archived={archived}
         newSubtype={newSubtype}
         members={members.map((member) => ({ id: member.id, name: member.name }))}
+        staleIds={counts.filter((row) => isStale(row, today)).map((row) => row.id)}
       />
     </Page>
   );

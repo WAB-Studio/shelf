@@ -26,6 +26,7 @@ import { getAccountBalances } from "@/db/queries/account-balances";
 import {
   getReconcileSheet,
   listAccountReconciliations,
+  listReconcileAges,
   listReconcileOverview,
   reconcileAccount,
 } from "@/db/queries/account-reconciliations";
@@ -4184,6 +4185,7 @@ async function main(): Promise<void> {
   await legacyChannelSuite();
   await mcpReconcileManySuite();
   await reconcileOverviewSuite();
+  await reconcileAgesSuite();
 }
 
 // A member recorded without a login is someone in the fund: a leader whose fund holds one is not alone, so an
@@ -21179,5 +21181,34 @@ async function reconcileOverviewSuite(): Promise<void> {
       listedBank.latestReconciledOn === today && listedCard?.derivedCents === -300_000_00 && listedCard.latestReconciledOn === null &&
       listedCard.addedOn === today && !rows.some((row) => row.id === closed || row.id === theirs) && trips === unit,
     `rows ${JSON.stringify(rows.map((row) => [row.name, row.derivedCents, row.latestReconciledOn]))}, ${trips} round trips against ${unit} for one read`,
+  );
+}
+
+// RF-254: the nudge reads only dates, one round trip, for the accounts the caller writes.
+async function reconcileAgesSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const today = todayInBogota();
+  const owner = await createMembershipFreeUser();
+  const { accountId } = await asUser(owner, () =>
+    createAccount({
+      kind: "asset", subtype: "bank", groupId: null, isShared: false, institution: null, settlementCurrency: BASE_CURRENCY,
+      balanceOn: "2026-01-01", ownerUserId: owner.id, name: `Harness rf254 banco ${tag}`, amountMinor: 100_00,
+    }),
+  );
+  track("accounts", accountId);
+  const before = (await asUser(owner, () => listReconcileAges())).find((row) => row.id === accountId);
+  await asUser(owner, () => reconcileAccount({ accountId, reconciledOn: today, realMagnitudeCents: 100_00, expectedDerivedCents: 100_00 }));
+  await asUser(owner, () => listAccountReconciliations(accountId));
+  const unitBefore = roundTrips();
+  await asUser(owner, () => listAccountReconciliations(accountId));
+  const unit = roundTrips() - unitBefore;
+  const agesBefore = roundTrips();
+  const after = (await asUser(owner, () => listReconcileAges())).find((row) => row.id === accountId);
+  const trips = roundTrips() - agesBefore;
+  assert(
+    next("RF-254: the ages read says when an account was added and last counted, in one read"),
+    before?.latestReconciledOn === null && before.addedOn === today && after?.latestReconciledOn === today && trips === unit,
+    `before ${JSON.stringify(before)}, after ${JSON.stringify(after)}, ${trips} round trips against ${unit}`,
   );
 }

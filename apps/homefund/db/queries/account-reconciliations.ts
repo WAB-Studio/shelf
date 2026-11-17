@@ -525,3 +525,27 @@ export async function listReconcileOverview(
     return rows.map((row) => ({ ...row, derivedCents: Number(row.derivedCents) }));
   });
 }
+
+export type ReconcileAgeRow = Pick<ReconcileOverviewRow, "id" | "latestReconciledOn" | "addedOn">;
+
+/**
+ * When each open account the caller writes was last counted, for the quiet «Cuádrala» of Cuentas and Inicio
+ * (RF-254). ONE round trip, and no balance derived: the nudge only reads dates, so it costs the screens it rides
+ * on no scan of any account's movements.
+ */
+export async function listReconcileAges(outerTx?: Transaction): Promise<ReconcileAgeRow[]> {
+  return withUserDbOrTx(outerTx, (tx) =>
+    tx
+      .select({
+        id: accounts.id,
+        latestReconciledOn: sql<
+          string | null
+        >`(select max(r.reconciled_on)::text from account_reconciliations r where r.account_id = accounts.id)`,
+        addedOn: sql<string>`(accounts.created_at at time zone 'America/Bogota')::date::text`,
+      })
+      .from(accounts)
+      .where(
+        sql`accounts.archived_at is null and private.can_write_account(accounts.id) and not ${internalAccountSql}`,
+      ),
+  );
+}
