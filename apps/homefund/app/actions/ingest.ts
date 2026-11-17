@@ -3,6 +3,7 @@
 import { refresh } from "next/cache";
 
 import {
+  acceptDeliveries,
   acceptDelivery,
   DeliveryNotPending,
   forgetMerchant,
@@ -10,17 +11,20 @@ import {
   restoreShape,
   ShapeNotSilenced,
 } from "@/db/queries/ingest-review";
+import type { AcceptDeliveryArgs } from "@/db/queries/ingest-review";
 import type { TransactionSplitInput } from "@/db/queries/transactions";
 import { pgErrorCode } from "@/lib/db-error";
 import { ActionError } from "@/lib/errors";
 import { toCents } from "@/lib/money";
 import { authActionClient } from "@/lib/safe-action";
 import {
+  acceptDeliveriesSchema,
   acceptDeliverySchema,
   forgetMerchantSchema,
   rejectDeliverySchema,
   restoreShapeSchema,
 } from "@/lib/validation/ingest";
+import type { AcceptDeliveryInput } from "@/lib/validation/ingest";
 import { type SplitFields, withPerson } from "@/lib/validation/transaction";
 
 function toSplitCents(splits: SplitFields[]): TransactionSplitInput[] {
@@ -43,32 +47,47 @@ function mapReviewError(error: unknown): never {
   throw error;
 }
 
+function toAcceptArgs(input: AcceptDeliveryInput): AcceptDeliveryArgs {
+  return {
+    deliveryId: input.deliveryId,
+    fromAccountId: input.fromAccountId,
+    toAccountId: input.toAccountId,
+    amountCents: toCents(input.amount),
+    occurredAt: input.occurredAt,
+    description: input.description,
+    splits: toSplitCents(input.splits),
+    labelIds: withPerson(input.labelIds, input.forPersonId),
+    contributedByMemberId: input.contributedByMemberId ?? null,
+    madeByMemberId: input.madeByMemberId ?? null,
+  };
+}
+
 export const acceptDeliveryAction = authActionClient
   .inputSchema(acceptDeliverySchema)
   .action(async ({ parsedInput }) => {
-    const amountCents = toCents(parsedInput.amount);
-    const splits = toSplitCents(parsedInput.splits);
-
     let transactionId: string;
     try {
-      ({ transactionId } = await acceptDelivery({
-        deliveryId: parsedInput.deliveryId,
-        fromAccountId: parsedInput.fromAccountId,
-        toAccountId: parsedInput.toAccountId,
-        amountCents,
-        occurredAt: parsedInput.occurredAt,
-        description: parsedInput.description,
-        splits,
-        labelIds: withPerson(parsedInput.labelIds, parsedInput.forPersonId),
-        contributedByMemberId: parsedInput.contributedByMemberId ?? null,
-        madeByMemberId: parsedInput.madeByMemberId ?? null,
-      }));
+      ({ transactionId } = await acceptDelivery(toAcceptArgs(parsedInput)));
     } catch (error) {
       mapReviewError(error);
     }
 
     refresh();
     return { transactionId };
+  });
+
+export const acceptDeliveriesAction = authActionClient
+  .inputSchema(acceptDeliveriesSchema)
+  .action(async ({ parsedInput }) => {
+    let transactionIds: string[];
+    try {
+      transactionIds = await acceptDeliveries(parsedInput.items.map(toAcceptArgs));
+    } catch (error) {
+      mapReviewError(error);
+    }
+
+    refresh();
+    return { count: transactionIds.length };
   });
 
 export const rejectDeliveryAction = authActionClient

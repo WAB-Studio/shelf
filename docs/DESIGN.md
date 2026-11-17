@@ -573,6 +573,22 @@ Board C1h corrected the same day: a card in credit reads «Según HomeFund −$ 
   the description, «Salió de / Entró a <cuenta> · <fecha>» and the amount; one account select («¿A qué cuenta fue?» or
   «¿De qué cuenta vino?») and «Completar». A remembered account prefills the select with «Sugerida: la usaste antes con
   esta descripción.»; it never completes on its own.
+- The Bandeja's card and row work without opening the form (the user, 2026-11-17):
+  - **The date is the movement's**, as the message prints it («Fecha: 14 nov 2026»), never the hour it arrived; a delivery that
+    prints none shows the day it arrived. The laptop table's first column reads the same day.
+  - **The category is chosen on the card**: below the account, a one-line select labelled «Categoría» lists the categories of the
+    account's scope and kind (a child as «Padre › Hijo»); with none it reads «Falta la categoría» in amber. Choosing one makes the
+    card ready, so «Anotar» saves it in one tap with that category (the same way «Para quién» rides on «Anotar», RF-242). A
+    transfer shows no category.
+  - **«Descartar» is on the card**, a soft red button beside «Anotar» (or «Completar y anotar»), not inside the ⋮ menu, which keeps
+    only «Olvidar el comercio» and is absent when there is nothing to forget. It still asks first and still offers «Descartar y no
+    volver a preguntar».
+  - **Several at once**: each ready card and each ready row carries a checkbox named «Elegir <comercio>». Above the list a quiet
+    bar reads «Elegir las listas (n)» with nothing chosen; with some, «n elegidas», «Anotar n» (primary) and «Quitar la selección». A
+    delivery that is not ready has no checkbox. «Anotar n» records them all in one write: if any is refused, none is recorded and
+    the toast says so; when it succeeds the toast reads «n movimientos anotados» and the cards leave the list.
+  - **«Ya registrado»** (RF-246): the card leads with a red «Descartar como repetido», one tap with no confirmation, and keeps
+    «Anotar igual» as a gray text button; the row's menu leads with the same item.
 - A transfer between two currencies is imported at the rate the person confirms (the user, 2026-10-30: «deben ser por
   trm, se confirma con el usuario cuánto le llegó»). The preview marks it `needs_counter_amount` and names the other
   account's currency; Claude asks how much arrived or left there and confirms the resulting TRM. It is booked in the

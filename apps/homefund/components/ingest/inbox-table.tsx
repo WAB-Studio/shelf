@@ -6,6 +6,7 @@ import { useFormatter, useTranslations } from "next-intl";
 import {
   Badge,
   CategoryTile,
+  Checkbox,
   DataTable,
   Flex,
   Money,
@@ -26,6 +27,11 @@ const NO_VALUE = "—";
 export type InboxTableRow = {
   id: string;
   createdAt: Date;
+  // The day the message prints; null when it prints none (the arrival day stands in).
+  occurredOn: string | null;
+  // A ready row carries a checkbox, and the screen records the chosen ones together.
+  selectable: boolean;
+  selected: boolean;
   merchantLabel: string | null;
   // «Llegó por <kind> · <key name>», or null once the key is gone (RF-203).
   via: string | null;
@@ -51,6 +57,7 @@ export type InboxTableRow = {
 // that floor is where every fixed track and the flexible message column both
 // have to fit — never a wider viewport most of this table will actually see.
 const WIDTHS = {
+  select: "44px",
   arrived: "88px",
   message: "minmax(0, 1fr)",
   via: "180px",
@@ -75,9 +82,11 @@ export function InboxTable({
   onReview,
   onReject,
   onSaveNumber,
+  onSelectedChange,
 }: {
   rows: InboxTableRow[];
   empty?: ReactNode;
+  onSelectedChange: (id: string, selected: boolean) => void;
   onSaveNumber: (id: string) => void;
   onAccept: (id: string) => void;
   onReview: (id: string) => void;
@@ -88,12 +97,26 @@ export function InboxTable({
 
   const columns: DataColumn<InboxTableRow>[] = [
     {
+      key: "select",
+      header: t("chooseColumn"),
+      width: WIDTHS.select,
+      cell: (row) =>
+        row.selectable ? (
+          <Checkbox
+            size="3"
+            checked={row.selected}
+            onCheckedChange={(checked) => onSelectedChange(row.id, checked === true)}
+            aria-label={t("chooseDelivery", { name: row.merchantLabel ?? t("noMerchant") })}
+          />
+        ) : null,
+    },
+    {
       key: "arrived",
       header: t("dateLabel"),
       width: WIDTHS.arrived,
       cell: (row) => (
         <Text size="2" color="gray">
-          {format.dateTime(row.createdAt, {
+          {format.dateTime(row.occurredOn === null ? row.createdAt : civilDateToDate(row.occurredOn), {
             day: "numeric",
             month: "short",
           })}

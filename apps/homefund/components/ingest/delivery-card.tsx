@@ -21,6 +21,7 @@ import {
   Box,
   Button,
   Card,
+  Checkbox,
   ConfirmDialog,
   Dialog,
   DropdownMenu,
@@ -38,9 +39,9 @@ import {
 import type { PendingDeliveryRow } from "@/db/queries/ingest-review";
 import type { TransactionFormOptions } from "@/db/queries/transaction-form";
 import { civilDateToDate, todayInBogota } from "@/lib/dates";
-import { categoryNamesById } from "@/lib/fund/category-names";
+import { categoryNamesById, scopedCategoryName } from "@/lib/fund/category-names";
 import { deliveryCurrency } from "@/lib/fund/glance";
-import { proposedCategoryId } from "@/lib/fund/category-scope";
+import { proposedCategoryId, scopeOfAccounts } from "@/lib/fund/category-scope";
 import { categoryFromHistory } from "@/lib/ingest/learned-category";
 import { centsToDecimal } from "@/lib/money";
 import { useActionErrorToast } from "@/lib/use-action-toast";
@@ -65,10 +66,15 @@ const SOURCE_MESSAGE = {
   credential_default: "categoryFromDefault",
 } as const satisfies Record<NonNullable<PendingDeliveryRow["categorySource"]>, string>;
 
-function movementDefaults(
+// What the person set on the card itself, kept by the screen so one write can carry it: a category of their own
+// and, optionally, whom the movement was for (RF-242).
+export type DeliveryChoice = { categoryId: string | null; forPersonId: string | null };
+export const NO_CHOICE: DeliveryChoice = { categoryId: null, forPersonId: null };
+
+export function movementDefaults(
   delivery: PendingDeliveryRow,
   options: TransactionFormOptions,
-  forPersonId: string | null,
+  choice: DeliveryChoice,
 ): ReviewDefaults {
   const amount =
     delivery.proposedAmountCents === null
@@ -77,7 +83,7 @@ function movementDefaults(
   const accountId = delivery.proposedAccountId;
   const isIncome = delivery.proposedDirection === "income";
   const isTransfer = delivery.proposedDirection === "transfer";
-  const categoryId = isTransfer ? null : proposedCategoryId(delivery, options);
+  const categoryId = isTransfer ? null : (choice.categoryId ?? proposedCategoryId(delivery, options));
 
   return {
     fromAccountId: isIncome ? null : accountId,
@@ -86,31 +92,57 @@ function movementDefaults(
     occurredAt: delivery.proposedOccurredAt ?? todayInBogota(),
     description: delivery.proposedDescription,
     splits: categoryId ? [{ categoryId, amount }] : [],
-    forPersonId,
+    forPersonId: choice.forPersonId,
   };
 }
 
-function completeInput(
+// The payload of a delivery that is ready for one tap: complete as proposed, or made complete by the category
+// the person chose on the card (a chosen category stands for the person, as a saved recipient's does).
+export function readyInput(
   delivery: PendingDeliveryRow,
   options: TransactionFormOptions,
-  forPersonId: string | null,
+  choice: DeliveryChoice,
 ): AcceptDeliveryInput | null {
+  const isTransfer = delivery.proposedDirection === "transfer";
+  const chosen = !isTransfer && choice.categoryId !== null;
+  const ready = chosen
+    ? delivery.proposedAmountCents !== null && delivery.proposedAccountId !== null && !delivery.beforeOpening
+    : delivery.isComplete;
   if (
-    !delivery.isComplete ||
+    !ready ||
     delivery.proposedAmountCents === null ||
     delivery.proposedAccountId === null ||
-    (delivery.proposedDirection === "transfer"
+    (isTransfer
       ? delivery.proposedToAccountId === null
-      : proposedCategoryId(delivery, options) === null)
+      : (choice.categoryId ?? proposedCategoryId(delivery, options)) === null)
   ) {
     return null;
   }
 
   return {
     deliveryId: delivery.id,
-    ...movementDefaults(delivery, options, forPersonId),
+    ...movementDefaults(delivery, options, choice),
     labelIds: [],
   };
+}
+
+// The categories a delivery's account scope and direction can take, a child as «Parent › Child».
+export function categoryChoices(
+  delivery: Pick<PendingDeliveryRow, "proposedAccountId" | "proposedDirection">,
+  options: TransactionFormOptions,
+  mark: (name: string) => string,
+): { id: string; path: string }[] {
+  const scope = scopeOfAccounts([delivery.proposedAccountId], options.accounts);
+  const kind = delivery.proposedDirection === "income" ? "income" : "expense";
+  return options.categories
+    .filter((category) => (scope === null || category.scope === scope) && category.kind === kind)
+    .flatMap((category) => [
+      { id: category.id, path: scopedCategoryName(category.name, category.scope, mark) },
+      ...category.children.map((child) => ({
+        id: child.id,
+        path: `${scopedCategoryName(category.name, category.scope, mark)} › ${child.name}`,
+      })),
+    ]);
 }
 
 // «Llegó por <kind> · <key name>»; null once the key is gone, so nothing is claimed about it.
@@ -125,10 +157,19 @@ export function arrivedVia(
 export function DeliveryCard({
   delivery,
   options,
+  choice,
+  onChoice,
+  selected,
+  onSelectedChange,
   onSaveNumber,
 }: {
   delivery: PendingDeliveryRow;
   options: TransactionFormOptions;
+  choice: DeliveryChoice;
+  onChoice: (patch: Partial<DeliveryChoice>) => void;
+  // A checkbox only for a card that is ready to record; the screen records the chosen ones together.
+  selected: boolean;
+  onSelectedChange: ((selected: boolean) => void) | null;
   // Offered when the message names a number nobody saved yet (RF-189).
   onSaveNumber: () => void;
 }) {
@@ -168,7 +209,11 @@ export function DeliveryCard({
   const reject = useAction(rejectDeliveryAction, {
     onSuccess() {
       toast.success(
-        silenceShape.current ? t("silencedToast") : t("rejectedToast"),
+        delivery.recorded
+          ? t("duplicateRejectedToast")
+          : silenceShape.current
+            ? t("silencedToast")
+            : t("rejectedToast"),
       );
       setRejectOpen(false);
     },
@@ -182,7 +227,7 @@ export function DeliveryCard({
     onError: onActionError,
   });
 
-  const [forPersonId, setForPersonId] = useState<string | null>(null);
+  const forPersonId = choice.forPersonId;
   // The persons of the proposed account's scope (RF-242): a person of the other scope would be refused on write.
   const proposedScope = options.accounts.find((one) => one.id === delivery.proposedAccountId)?.groupId
     ? "group"
@@ -190,9 +235,11 @@ export function DeliveryCard({
   const persons = options.labels.filter(
     (label) => label.kind === "person" && label.scope === proposedScope,
   );
-  const input = completeInput(delivery, options, forPersonId);
-  const defaults = movementDefaults(delivery, options, forPersonId);
-  const categoryId = proposedCategoryId(delivery, options);
+  const input = readyInput(delivery, options, choice);
+  const defaults = movementDefaults(delivery, options, choice);
+  const categoryId = choice.categoryId ?? proposedCategoryId(delivery, options);
+  const tCategories = useTranslations("categories");
+  const categories = categoryChoices(delivery, options, (name) => tCategories("scopedName", { name }));
   const accountName = (id: string | null) =>
     options.accounts.find((one) => one.id === id)?.name ?? null;
   const account = isTransfer
@@ -206,11 +253,21 @@ export function DeliveryCard({
       : (categoryNamesById(options.categories, (name) =>
           tKey("categories.scopedName", { name }),
         ).get(categoryId) ?? null);
-  const learnedFromHistory = category !== null && categoryFromHistory(delivery);
-  const receivedOn = format.dateTime(delivery.createdAt, {
-    dateStyle: "medium",
-    timeStyle: "short",
-  });
+  const chosen = choice.categoryId !== null;
+  const learnedFromHistory = !chosen && category !== null && categoryFromHistory(delivery);
+  // The day the message prints, never the hour it arrived; a message that prints none shows its arrival.
+  const dateLine =
+    delivery.proposedOccurredAt === null
+      ? t("receivedOn", {
+          date: format.dateTime(delivery.createdAt, { dateStyle: "medium", timeStyle: "short" }),
+        })
+      : t("occurredOn", {
+          date: format.dateTime(civilDateToDate(delivery.proposedOccurredAt), {
+            day: "numeric",
+            month: "short",
+            year: "numeric",
+          }),
+        });
 
   const via = arrivedVia(delivery, (badge, name) =>
     t("arrivedVia", { kind: tKey(`webhooks.kind.${badge}`), name }),
@@ -229,12 +286,20 @@ export function DeliveryCard({
     <Card>
       <Flex direction="column" gap="4">
         <Flex justify="between" align="start" gap="3">
-          <Flex direction="column" gap="1" minWidth="0">
+          {onSelectedChange && (
+            <Checkbox
+              size="3"
+              checked={selected}
+              onCheckedChange={(checked) => onSelectedChange(checked === true)}
+              aria-label={t("chooseDelivery", { name: delivery.merchantLabel ?? t("noMerchant") })}
+            />
+          )}
+          <Flex direction="column" gap="1" minWidth="0" flexGrow="1">
             <Heading as="h2" size="3">
               {delivery.merchantLabel ?? t("noMerchant")}
             </Heading>
             <Text size="2" color="gray">
-              {t("receivedOn", { date: receivedOn })}
+              {dateLine}
             </Text>
             {via && (
               <Text size="2" color="gray">
@@ -243,39 +308,30 @@ export function DeliveryCard({
             )}
           </Flex>
 
-          <Box flexShrink="0">
-            <DropdownMenu.Root>
-              <DropdownMenu.Trigger>
-                <IconButton
-                  type="button"
-                  variant="ghost"
-                  color="gray"
-                  size="3"
-                  aria-label={tKey("common.actionsFor", {
-                    name: delivery.merchantLabel ?? t("noMerchant"),
-                  })}
-                >
-                  <EllipsisVertical size={16} />
-                </IconButton>
-              </DropdownMenu.Trigger>
-              <DropdownMenu.Content>
-                <DropdownMenu.Item
-                  color="red"
-                  onSelect={() => setRejectOpen(true)}
-                >
-                  {t(delivery.recorded ? "rejectDuplicate" : "reject")}
-                </DropdownMenu.Item>
-                {delivery.merchantId && (
-                  <>
-                    <DropdownMenu.Separator />
-                    <DropdownMenu.Item onSelect={() => setForgetOpen(true)}>
-                      {t("forgetMerchant")}
-                    </DropdownMenu.Item>
-                  </>
-                )}
-              </DropdownMenu.Content>
-            </DropdownMenu.Root>
-          </Box>
+          {delivery.merchantId && (
+            <Box flexShrink="0">
+              <DropdownMenu.Root>
+                <DropdownMenu.Trigger>
+                  <IconButton
+                    type="button"
+                    variant="ghost"
+                    color="gray"
+                    size="3"
+                    aria-label={tKey("common.actionsFor", {
+                      name: delivery.merchantLabel ?? t("noMerchant"),
+                    })}
+                  >
+                    <EllipsisVertical size={16} />
+                  </IconButton>
+                </DropdownMenu.Trigger>
+                <DropdownMenu.Content>
+                  <DropdownMenu.Item onSelect={() => setForgetOpen(true)}>
+                    {t("forgetMerchant")}
+                  </DropdownMenu.Item>
+                </DropdownMenu.Content>
+              </DropdownMenu.Root>
+            </Box>
+          )}
         </Flex>
 
         {delivery.proposedAmountCents === null ? (
@@ -333,12 +389,28 @@ export function DeliveryCard({
             </Text>
           )}
           {!isTransfer && (
-            <Text color={category ? undefined : "amber"}>
-              {category ?? t("categoryMissing")}
-            </Text>
+            <Select.Root
+              size="3"
+              value={categoryId ?? undefined}
+              onValueChange={(value) => onChoice({ categoryId: value })}
+              disabled={accept.isPending}
+            >
+              <Select.Trigger
+                placeholder={t("categoryMissing")}
+                color={categoryId ? undefined : "amber"}
+                aria-label={t("categoryLabel")}
+              />
+              <Select.Content position="popper">
+                {categories.map((option) => (
+                  <Select.Item key={option.id} value={option.id}>
+                    {option.path}
+                  </Select.Item>
+                ))}
+              </Select.Content>
+            </Select.Root>
           )}
           <Flex gap="2" wrap="wrap">
-            {delivery.categorySource && (
+            {delivery.categorySource && !chosen && (
               <Badge
                 color={learnedFromHistory ? "blue" : "gray"}
                 variant={learnedFromHistory ? "soft" : undefined}
@@ -398,7 +470,7 @@ export function DeliveryCard({
             <Select.Root
               size="3"
               value={forPersonId ?? "none"}
-              onValueChange={(value) => setForPersonId(value === "none" ? null : value)}
+              onValueChange={(value) => onChoice({ forPersonId: value === "none" ? null : value })}
               disabled={accept.isPending}
             >
               <Select.Trigger id={`delivery-for-person-${delivery.id}`} />
@@ -439,27 +511,41 @@ export function DeliveryCard({
 
         {delivery.recorded ? (
           <Flex direction="column" gap="2">
-            <Button type="button" size="3" color="red" onClick={() => setRejectOpen(true)}>
+            <Button
+              type="button"
+              size="3"
+              color="red"
+              disabled={reject.isPending}
+              onClick={() => runReject(false)}
+            >
+              {reject.isPending && <Spinner />}
               {t("rejectDuplicate")}
             </Button>
             <Button type="button" size="3" variant="ghost" color="gray" onClick={() => setReviewOpen(true)}>
               {t("recordAnyway")}
             </Button>
           </Flex>
-        ) : input ? (
-          <Button
-            type="button"
-            size="3"
-            disabled={accept.isPending}
-            onClick={() => accept.execute(input)}
-          >
-            {accept.isPending && <Spinner />}
-            {t("accept")}
-          </Button>
         ) : (
-          <Button type="button" size="3" onClick={() => setReviewOpen(true)}>
-            {t("review")}
-          </Button>
+          <Flex gap="3">
+            {input ? (
+              <Button
+                type="button"
+                size="3"
+                disabled={accept.isPending}
+                onClick={() => accept.execute(input)}
+              >
+                {accept.isPending && <Spinner />}
+                {t("accept")}
+              </Button>
+            ) : (
+              <Button type="button" size="3" onClick={() => setReviewOpen(true)}>
+                {t("review")}
+              </Button>
+            )}
+            <Button type="button" size="3" color="red" variant="soft" onClick={() => setRejectOpen(true)}>
+              {t("reject")}
+            </Button>
+          </Flex>
         )}
       </Flex>
 
@@ -485,27 +571,23 @@ export function DeliveryCard({
       <ConfirmDialog
         open={rejectOpen}
         onOpenChange={setRejectOpen}
-        title={t(delivery.recorded ? "rejectDuplicateTitle" : "rejectTitle")}
+        title={t("rejectTitle")}
         description={
-          delivery.recorded ? (
-            <Text>{t("rejectDuplicateDescription")}</Text>
-          ) : (
-            <Flex direction="column" gap="3">
-              <Text>{t("rejectDescription")}</Text>
-              <Button
-                type="button"
-                color="red"
-                variant="soft"
-                disabled={reject.isPending}
-                onClick={() => runReject(true)}
-              >
-                {reject.isPending && <Spinner />}
-                {t("rejectAndSilence")}
-              </Button>
-            </Flex>
-          )
+          <Flex direction="column" gap="3">
+            <Text>{t("rejectDescription")}</Text>
+            <Button
+              type="button"
+              color="red"
+              variant="soft"
+              disabled={reject.isPending}
+              onClick={() => runReject(true)}
+            >
+              {reject.isPending && <Spinner />}
+              {t("rejectAndSilence")}
+            </Button>
+          </Flex>
         }
-        confirmLabel={t(delivery.recorded ? "rejectDuplicate" : "rejectOnce")}
+        confirmLabel={t("rejectOnce")}
         cancelLabel={tKey("common.cancel")}
         pending={reject.isPending}
         tone="danger"
