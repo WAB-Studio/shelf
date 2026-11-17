@@ -283,7 +283,7 @@ test.describe("the inbox queue", () => {
 });
 
 // The card does its own work: the date the message prints, a category chosen in place, «Descartar» in sight, several
-// recorded in one write, and a delivery a movement already covers discarded in one tap (RF-255).
+// recorded in one write, and a delivery a movement already covers discarded in one tap (RF-257).
 test.describe("the card without the form", () => {
   test.use({ viewport: { width: 360, height: 740 } });
 
