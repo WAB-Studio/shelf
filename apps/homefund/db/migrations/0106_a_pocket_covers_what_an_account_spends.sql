@@ -1,6 +1,6 @@
 ALTER TABLE "finances"."transactions" ADD COLUMN "pocket_cover" boolean DEFAULT false NOT NULL;--> statement-breakpoint
 ALTER TABLE "finances"."transactions" ADD CONSTRAINT "transactions_pocket_cover_shape" CHECK (not "finances"."transactions"."pocket_cover" or (num_nonnulls("finances"."transactions"."from_account_id", "finances"."transactions"."to_account_id") = 2 and "finances"."transactions"."caused_by_transaction_id" is not null));--> statement-breakpoint
--- RF-244: money that leaves a savings account with pockets comes out of its pocket when the account's own (free)
+-- RF-249: money that leaves a savings account with pockets comes out of its pocket when the account's own (free)
 -- part cannot carry it. After a movement from such an account is written, or edited in its amount, accounts,
 -- currency or date, the free part is read; if it is below zero the shortfall the movement caused, at most its
 -- own amount, moves from the pockets into the account as one transfer per pocket, largest balance first so the

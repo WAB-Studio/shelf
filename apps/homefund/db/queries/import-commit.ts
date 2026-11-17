@@ -338,7 +338,7 @@ async function writeImport(
   input: CommitInput,
   scope: CommitScope,
 ): Promise<CommitOutcome> {
-  // A sheet restores history: the pockets cover nothing while it lands (RF-244).
+  // A sheet restores history: the pockets cover nothing while it lands (RF-249).
   await tx.execute(sql`select set_config('app.import_history', 'on', true)`);
   const outcome: CommitOutcome = { inserted: 0, updated: 0 };
   const count = (row: CommitRow<unknown>) => {

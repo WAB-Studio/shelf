@@ -190,7 +190,7 @@ export async function bookMovement(
   input: CreateTransactionInput,
   alsoCheck: () => Promise<void> = async () => {},
   // `awaitingCounterparty` is Claude's «I do not know the other side» (RF-133); only a one-sided movement has a side to wait for.
-  // `reportPocketCovers` reads back what the pockets covered for it (RF-244).
+  // `reportPocketCovers` reads back what the pockets covered for it (RF-249).
   options: { awaitingCounterparty?: boolean; reportPocketCovers?: boolean } = {},
 ): Promise<{ transactionId: string; pocketCovers?: PocketCover[] }> {
   if (options.awaitingCounterparty && input.fromAccountId !== null && input.toAccountId !== null) {

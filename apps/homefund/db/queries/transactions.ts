@@ -159,7 +159,7 @@ export type TransactionListRow = {
   // movement a person made.
   reconciliationId: string | null;
   // The transfer the database booked from a pocket into its account to cover what a movement left of the
-  // account's free part below zero (RF-244); its cause is `causedByTransactionId`.
+  // account's free part below zero (RF-249); its cause is `causedByTransactionId`.
   pocketCover: boolean;
   // `updated_at::text` as Postgres prints it; an edit sends it back so a save after someone
   // else's is refused. Never a Date: its milliseconds make the row look newer than itself.
@@ -183,7 +183,7 @@ export class ResendChangedError extends Error {
   }
 }
 
-// What the database moved from a pocket into its account for a movement (RF-244), as a caller reads it back.
+// What the database moved from a pocket into its account for a movement (RF-249), as a caller reads it back.
 export type PocketCover = {
   transactionId: string;
   pocketAccountId: string;
@@ -228,7 +228,7 @@ export type CreateMovementArgs = CreateTransactionArgs & {
   // Its own column grant (migration 0040); written in the same transaction as the movement, so a
   // cause that vanished mid-write takes the movement down with it.
   causedByTransactionId?: string | null;
-  // Reads back, in the same transaction, what the pockets covered for it (RF-244): one more statement,
+  // Reads back, in the same transaction, what the pockets covered for it (RF-249): one more statement,
   // so only the caller that tells a person asks.
   reportPocketCovers?: boolean;
 };

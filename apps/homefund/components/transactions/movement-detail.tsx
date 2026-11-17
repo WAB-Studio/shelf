@@ -195,7 +195,7 @@ export function MovementDetail({
     year: "numeric",
   });
 
-  // What the database moved from a pocket for it is no cost: it is listed apart and left out of the total (RF-244).
+  // What the database moved from a pocket for it is no cost: it is listed apart and left out of the total (RF-249).
   const covers = causedCharges.filter((charge) => charge.pocketCover);
   const charges = causedCharges.filter((charge) => !charge.pocketCover);
 
@@ -545,7 +545,7 @@ export function MovementDetail({
           </Text>
         )}
 
-        {/* An automatic transfer is undone, never edited: its figure is the shortfall it covers (RF-244). */}
+        {/* An automatic transfer is undone, never edited: its figure is the shortfall it covers (RF-249). */}
         {movement.pocketCover && (
           <Text size="2" color="gray" align="center">
             {t("pocketCoverNote")}

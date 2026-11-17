@@ -81,7 +81,7 @@ export const transactions = finances.table(
     // referencing, so the foreign key is declared below, one hop only: nothing here reads a chain.
     causedByTransactionId: uuid(),
     // True on the transfer the database books from a pocket into its parent when a movement would leave the
-    // parent's free part below zero (RF-244). Written only by that trigger — no grant names the column — and its
+    // parent's free part below zero (RF-249). Written only by that trigger — no grant names the column — and its
     // cause is the movement that needed it, so it goes with it.
     pocketCover: boolean().notNull().default(false),
     // The reconciliation this movement adjusts the ledger for (RF-137, RF-138). Written only by the

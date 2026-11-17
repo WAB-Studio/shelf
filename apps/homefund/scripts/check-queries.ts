@@ -4181,6 +4181,7 @@ async function main(): Promise<void> {
   await mcpMoneyModelSuite();
   await pocketCoverSuite();
   await payOwnCardSuite();
+  await legacyChannelSuite();
 }
 
 // A member recorded without a login is someone in the fund: a leader whose fund holds one is not alone, so an
@@ -15869,10 +15870,12 @@ async function statementImportSuite(): Promise<void> {
     values (${owner.id}, ${counterpartyPatternKey("TRANSF A BOLSILLO 7781")}, 'TRANSF A BOLSILLO', 'to', 'trusted', ${ids.card})`;
 
   const { tool: callTool } = mcpClient(POST, token);
-  // A statement is named by its cut-off date; unless a call names one, it is the span of its lines.
+  // A statement is named by its cut-off date; unless a call names one, it is the span of its lines. Its closing balance is
+  // the printed one (RF-248): a call that names none prints zero.
   const tool = (name: string, args: Record<string, unknown>) => {
     const days = ((args.rows ?? []) as { date: string }[]).map((row) => row.date).sort();
-    return callTool(name, args.statement ? args : { ...args, statement: { periodStart: days[0], cutOffDate: days[days.length - 1] } });
+    const period = (args.statement ?? { periodStart: days[0], cutOffDate: days[days.length - 1] }) as Record<string, unknown>;
+    return callTool(name, { ...args, statement: { closingBalanceCents: 0, ...period } });
   };
   const count = async () => {
     const [row] = await fixtureSql<{ movements: number; sources: number }[]>`
@@ -16109,7 +16112,7 @@ async function statementImportSuite(): Promise<void> {
   const unnamed = await callTool("preview_statement", { accountId: ids.card, rows: cardRows });
   // A line outside the period it names is refused too.
   const outside = await callTool("preview_statement", {
-    accountId: ids.card, rows: cardRows, statement: { periodStart: "2026-10-05", cutOffDate: "2026-10-31" },
+    accountId: ids.card, rows: cardRows, statement: { periodStart: "2026-10-05", cutOffDate: "2026-10-31", closingBalanceCents: 0 },
   });
   assert(
     next("RF-134: a statement names its period, and no line may fall outside it"),
@@ -16188,6 +16191,38 @@ async function statementImportSuite(): Promise<void> {
     !lastImport.isError && lastImport.value?.removed === 1 && novStatements[0]?.n === 1 && (await novMovement("TRES")) === undefined,
     `import ${JSON.stringify(lastImport.value)}, statements ${novStatements[0]?.n}`,
   );
+
+  // RF-248: a statement is a bank's paper with its printed closing balance; cash has none, and a receipt split into products is no statement.
+  const cash = randomUUID();
+  await fixtureSql`
+    insert into accounts (id, owner_user_id, name, kind, subtype, initial_balance_cents, initial_balance_on)
+    values (${cash}, ${owner.id}, ${`Harness rf244 efectivo ${tag}`}, 'asset', 'cash', 0, '2026-01-01')`;
+  track("accounts", cash);
+  const oneLine = [{ line: 1, date: "2026-09-20", description: "CAFE", amountCents: -500_000, categoryId: ids.food }];
+  const cashPreview = await tool("preview_statement", { accountId: cash, rows: oneLine });
+  const noClosing = await callTool("preview_statement", {
+    accountId: ids.bank, rows: oneLine, statement: { periodStart: "2026-09-20", cutOffDate: "2026-09-20" },
+  });
+  const withClosing = await tool("preview_statement", { accountId: ids.bank, rows: oneLine });
+  assert(
+    next("RF-248: a statement of a cash account is refused, and one without its printed closing balance never reaches the import"),
+    cashPreview.isError && cashPreview.value?.error === es.mcp.errors.statement.cashAccount &&
+      noClosing.isError && !withClosing.isError,
+    `cash ${JSON.stringify(cashPreview.value)}, no closing ${JSON.stringify(noClosing.value)}, with ${JSON.stringify(withClosing.value)}`,
+  );
+  const exploded = (count: number, extra: (index: number) => Record<string, unknown> = () => ({})) =>
+    Array.from({ length: count }, (_, index) => ({
+      line: index + 1, date: "2026-09-21", description: `PRODUCTO ${index + 1}`, amountCents: -(index + 1) * 100_000, categoryId: ids.food, ...extra(index),
+    }));
+  const receipt = await tool("preview_statement", { accountId: ids.bank, rows: exploded(5) });
+  const fewer = await tool("preview_statement", { accountId: ids.bank, rows: exploded(4) });
+  const referenced = await tool("preview_statement", { accountId: ids.bank, rows: exploded(5, (index) => ({ reference: `P${index}-${tag}` })) });
+  assert(
+    next("RF-248: five expenses on one day with no bank reference read as a receipt and are refused; four, or five with their references, are not"),
+    receipt.isError && receipt.value?.error === es.mcp.errors.statement.looksLikeReceipt && receipt.value?.line === 1 &&
+      !fewer.isError && !referenced.isError,
+    `five ${JSON.stringify(receipt.value)}, four ${JSON.stringify(fewer.value?.counts)}, referenced ${JSON.stringify(referenced.value?.counts)}`,
+  );
 }
 
 
@@ -16224,7 +16259,7 @@ async function deferralImportSuite(): Promise<void> {
     return row?.cents;
   };
 
-  const march = { periodStart: "2026-03-01", cutOffDate: "2026-03-31" };
+  const march = { periodStart: "2026-03-01", cutOffDate: "2026-03-31", closingBalanceCents: 0 };
   const rows = [
     { line: 1, date: "2026-03-15", description: "NEVERA 1/36", amountCents: -360_000_000, categoryId: ids.food, instalments: 36 },
     { line: 2, date: "2026-03-16", description: "CAFE", amountCents: -1_000_000, categoryId: ids.food },
@@ -20925,7 +20960,7 @@ async function mcpMoneyModelSuite(): Promise<void> {
   );
 }
 
-// RF-244: money that leaves a savings account with pockets comes out of its pocket when the account's own part cannot carry it.
+// RF-249: money that leaves a savings account with pockets comes out of its pocket when the account's own part cannot carry it.
 // The database books one transfer per pocket for the shortfall, on the movement's day, caused by it, from every write path.
 async function pocketCoverSuite(): Promise<void> {
   console.log("");
@@ -20982,7 +21017,7 @@ async function pocketCoverSuite(): Promise<void> {
 
   const within = await spend(ids.main, 60_000_00);
   assert(
-    next("RF-244: an expense the account's free part carries books no transfer and says nothing about pockets"),
+    next("RF-249: an expense the account's free part carries books no transfer and says nothing about pockets"),
     !within.made.isError && within.covers === undefined && (await coversOf(within.id)).length === 0 && (await free(ids.main)) === 40_000_00,
     `answer ${JSON.stringify(within.made.value)}, free ${await free(ids.main)}`,
   );
@@ -20993,7 +21028,7 @@ async function pocketCoverSuite(): Promise<void> {
     select pocket_cover as "pocketCover", caused_by_transaction_id as "causedBy", kind from transactions
     where caused_by_transaction_id = ${over.id}`;
   assert(
-    next("RF-244: an expense that leaves the free part negative books one transfer from the pocket for exactly the shortfall, on the movement's day, caused by it, and record_movement says so"),
+    next("RF-249: an expense that leaves the free part negative books one transfer from the pocket for exactly the shortfall, on the movement's day, caused by it, and record_movement says so"),
     over.covers?.length === 1 && over.covers[0].pocketName === "Dinero" && over.covers[0].amountCents === 100_000_00 && over.covers[0].currency === "COP" &&
       cover?.pocket === ids.dinero && cover.parent === ids.main && cover.cents === 100_000_00 && cover.day === day &&
       cover.description === "Del bolsillo Dinero (automático)" && row?.pocketCover === true && row.causedBy === over.id && row.kind === "transfer" &&
@@ -21004,7 +21039,7 @@ async function pocketCoverSuite(): Promise<void> {
   const bigger = await revise(over.id, { amountCents: 250_000_00 });
   const [afterEdit] = await coversOf(over.id);
   assert(
-    next("RF-244: an edit to the amount takes back what the movement booked and books the new shortfall, and says so"),
+    next("RF-249: an edit to the amount takes back what the movement booked and books the new shortfall, and says so"),
     !bigger.isError && (bigger.value as { pocketCovers?: { amountCents: number }[] }).pocketCovers?.[0]?.amountCents === 210_000_00 &&
       (await coversOf(over.id)).length === 1 && afterEdit?.cents === 210_000_00 && (await free(ids.main)) === 0,
     `answer ${JSON.stringify(bigger.value)}, covers ${JSON.stringify(await coversOf(over.id))}`,
@@ -21015,7 +21050,7 @@ async function pocketCoverSuite(): Promise<void> {
   const named = await revise(over.id, { description: name("otro nombre") });
   const [afterName] = await coversOf(over.id);
   assert(
-    next("RF-244: an edit to the date moves the transfer to the new day; one that changes no figure leaves it as it was"),
+    next("RF-249: an edit to the date moves the transfer to the new day; one that changes no figure leaves it as it was"),
     !moved.isError && afterMove?.day === shiftDate(day, 1) && afterMove.cents === 210_000_00 && !named.isError && afterName?.day === afterMove.day,
     `moved ${JSON.stringify(afterMove)}, renamed ${JSON.stringify(afterName)}`,
   );
@@ -21023,7 +21058,7 @@ async function pocketCoverSuite(): Promise<void> {
   const huge = await revise(over.id, { amountCents: 900_000_00 });
   const pair = await coversOf(over.id);
   assert(
-    next("RF-244: with several pockets the largest balance goes first, and what the pockets cannot give stays negative"),
+    next("RF-249: with several pockets the largest balance goes first, and what the pockets cannot give stays negative"),
     !huge.isError && pair.length === 2 && pair[0].pocket === ids.dinero && pair[0].cents === 500_000_00 && pair[1].pocket === ids.viaje &&
       pair[1].cents === 200_000_00 && (await free(ids.main)) === -160_000_00,
     `covers ${JSON.stringify(pair)}, free ${await free(ids.main)}`,
@@ -21031,7 +21066,7 @@ async function pocketCoverSuite(): Promise<void> {
 
   const small = await revise(over.id, { amountCents: 1_000_00 });
   assert(
-    next("RF-244: an edit that no longer needs the pockets takes the transfers back and the pockets get their money back"),
+    next("RF-249: an edit that no longer needs the pockets takes the transfers back and the pockets get their money back"),
     !small.isError && (await coversOf(over.id)).length === 0 && (await free(ids.dinero)) === 500_000_00 && (await free(ids.viaje)) === 200_000_00,
     `Dinero ${await free(ids.dinero)}, Viaje ${await free(ids.viaje)}`,
   );
@@ -21043,7 +21078,7 @@ async function pocketCoverSuite(): Promise<void> {
   const undone = await tool("delete_movement", { transactionId: coverRow!.id });
   await revise(over.id, { description: name("sin tocar cifras") });
   assert(
-    next("RF-244: list_movements marks the transfer, and the person undoes it by deleting it: the expense stays, the account is negative again and nothing books it back until a figure changes"),
+    next("RF-249: list_movements marks the transfer, and the person undoes it by deleting it: the expense stays, the account is negative again and nothing books it back until a figure changes"),
     booked?.cents === 100_000_00 && listed.find((one) => one.id === coverRow!.id)?.pocketCover === true && !undone.isError &&
       (await coversOf(over.id)).length === 0 && (await free(ids.main)) === -100_000_00,
     `undone ${JSON.stringify(undone.value)}, covers ${JSON.stringify(await coversOf(over.id))}, free ${await free(ids.main)}`,
@@ -21054,7 +21089,7 @@ async function pocketCoverSuite(): Promise<void> {
   const [pocketBefore] = [await free(ids.dinero)];
   const gone = await tool("delete_movement", { transactionId: over.id });
   assert(
-    next("RF-244: a figure that changes books the transfer again, and deleting the movement deletes its transfer with it"),
+    next("RF-249: a figure that changes books the transfer again, and deleting the movement deletes its transfer with it"),
     again.length === 1 && again[0].cents === 110_000_00 && pocketBefore === 390_000_00 && !gone.isError &&
       (await coversOf(over.id)).length === 0 && (await free(ids.dinero)) === 500_000_00,
     `again ${JSON.stringify(again)}, pocket ${pocketBefore}, gone ${JSON.stringify(gone.value)}`,
@@ -21071,7 +21106,7 @@ async function pocketCoverSuite(): Promise<void> {
   track("transactions", web.transactionId);
   const [webCover] = await coversOf(web.transactionId);
   assert(
-    next("RF-244: the form's write path books it too, with the web answer unchanged"),
+    next("RF-249: the form's write path books it too, with the web answer unchanged"),
     webCover?.cents === 210_000_00 && webCover.pocket === ids.dinero && webCover.day === today && web.pocketCovers === undefined,
     `cover ${JSON.stringify(webCover)}, answer ${JSON.stringify(web)}`,
   );
@@ -21081,7 +21116,7 @@ async function pocketCoverSuite(): Promise<void> {
   const card = await spend(ids.card, 5_000_00);
   const [thinCover] = await coversOf(thin.id);
   assert(
-    next("RF-244: no pockets, a card, or pockets that hold less than the shortfall keep today's behaviour: only what the pockets have moves, the rest stays negative"),
+    next("RF-249: no pockets, a card, or pockets that hold less than the shortfall keep today's behaviour: only what the pockets have moves, the rest stays negative"),
     bare.covers === undefined && (await free(ids.bare)) === -5_000_00 && card.covers === undefined && (await coversOf(card.id)).length === 0 &&
       thin.covers?.length === 1 && thinCover?.cents === 30_000_00 && (await free(ids.thin)) === -60_000_00 && (await free(ids.poco)) === 0,
     `bare ${await free(ids.bare)}, thin ${await free(ids.thin)}, cover ${JSON.stringify(thinCover)}`,
@@ -21094,7 +21129,7 @@ async function pocketCoverSuite(): Promise<void> {
   const [imp] = await fixtureSql<{ id: string }[]>`select id from transactions where from_account_id = ${ids.stmt} and external_ref is not null and amount_cents = ${70_000_00}`;
   const [lineCover] = imp ? await coversOf(imp.id) : [];
   assert(
-    next("RF-244: a statement line that overdraws the account books the transfer too"),
+    next("RF-249: a statement line that overdraws the account books the transfer too"),
     !imported.isError && lineCover?.pocket === ids.stmtPocket && lineCover.cents === 20_000_00 && lineCover.day === day && (await free(ids.stmt)) === 0,
     `imported ${JSON.stringify(imported.value)}, cover ${JSON.stringify(lineCover)}, free ${await free(ids.stmt)}`,
   );
@@ -21141,5 +21176,41 @@ async function payOwnCardSuite(): Promise<void> {
     card?.direction === "transfer" && card.from === bank && card.to === nu && shop?.direction === "expense" && shop.to === null &&
       ambiguous?.direction === "expense" && ambiguous.to === null && second !== nu,
     JSON.stringify({ card, shop, ambiguous }),
+  );
+}
+
+// RF-244: a bank email stored before the channel was recorded reads as the phone's; the key it came through says
+// otherwise, so the SMS of the same alert, whatever hours later, is its duplicate.
+async function legacyChannelSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const { recordIngestDelivery } = await import("@/db/queries/webhook-ingest");
+  const user = await createMembershipFreeUser();
+  const make = async (kind: "android" | "bank_emails") => {
+    const { id } = await asUser(user, () =>
+      issueWebhookCredential({ name: `Harness rf244 ${kind} ${tag}`, kind, defaultAccountId: null, defaultCategoryId: null }),
+    );
+    keep("webhook_credentials", id);
+    return id;
+  };
+  const [gmail, phone] = [await make("bank_emails"), await make("android")];
+  const deliver = (credentialId: string, text: string, email?: { movement: true; receipt: false; priced: true }) =>
+    recordIngestDelivery({
+      ownerUserId: user.id, credentialId, defaultAccountId: null, defaultCategoryId: null,
+      payload: { text } as Parameters<typeof recordIngestDelivery>[0]["payload"], email,
+    });
+  const mail = await deliver(
+    gmail,
+    `Bancolombia: JUAN, compraste COP80.800,00 en PIZZERIA ${tag} con tu T.Cred *4872, el 14/11/2026 a las 19:05.`,
+    { movement: true, receipt: false, priced: true },
+  );
+  await fixtureSql`update ingest_deliveries set from_email = false, created_at = now() - interval '20 hours' where id = ${mail.deliveryId}`;
+  const sms = await deliver(phone, `Bancolombia: Compraste COP80.800,00 en PIZZERIA ${tag} con tu T.Cred *4872, el 14/11/26 a las 19:05. Si tienes dudas, encuentranos aqui.`);
+  const [row] = await fixtureSql<{ reason: string | null; of: string | null }[]>`
+    select reject_reason as reason, duplicate_of_id as of from ingest_deliveries where id = ${sms.deliveryId}`;
+  assert(
+    next("RF-244: the SMS of an alert whose email was stored before the channel flag is its duplicate, 20 hours on, by the printed day and minute"),
+    sms.status === "rejected" && row?.reason === "duplicate" && row.of === mail.deliveryId,
+    JSON.stringify({ sms, row }),
   );
 }

@@ -232,7 +232,7 @@ export function movementRow(row: TransactionListRow) {
     madeByName: row.madeByName,
     labelIds: row.labels.map((label) => label.id),
     splits: row.splits,
-    // The transfer HomeFund booked from a pocket into its account on its own (RF-244); deleting it undoes it.
+    // The transfer HomeFund booked from a pocket into its account on its own (RF-249); deleting it undoes it.
     pocketCover: row.pocketCover,
     updatedAt: row.updatedAt,
   };
@@ -310,7 +310,7 @@ export function registerLedgerTools(server: McpServer, run: Run, t: Say): void {
           undefined,
           { awaitingCounterparty: input.awaitingCounterparty, reportPocketCovers: true },
         );
-        // Said only when the database moved money out of a pocket for it (RF-244).
+        // Said only when the database moved money out of a pocket for it (RF-249).
         const answer = booked.pocketCovers?.length ? booked : { transactionId: booked.transactionId };
         return withWarnings(answer, await movementWarnings(owner, warningProbe(input), t));
       }),
