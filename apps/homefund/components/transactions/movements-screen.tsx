@@ -66,6 +66,11 @@ import type { TransactionListRow } from "@/db/queries/transactions";
 import { usePathname, useRouter } from "@/i18n/navigation";
 import { BASE_CURRENCY, type CurrencyCode } from "@/lib/currency";
 import { addCivilDays, civilDateToDate, todayInBogota } from "@/lib/dates";
+import {
+  narrateTransfers,
+  transferSidesById,
+  type TransferNarration,
+} from "@/lib/transactions/transfer-words";
 import { accountNamesById, touchesForeignAccount } from "@/lib/fund/account-names";
 import { categoryNamesById } from "@/lib/fund/category-names";
 import { dayNet } from "@/lib/fund/glance";
@@ -168,6 +173,13 @@ export function MovementsScreen({
   const categoryNames = categoryNamesById(options.categories, (name) =>
     tc("scopedName", { name }),
   );
+  // A transfer into a debt, or out of a payer's hidden account, reads as what happened (RF-272).
+  const transfers = narrateTransfers(
+    rows,
+    transferSidesById(options.accountDirectory),
+    accountNames,
+    t,
+  );
   const categoryColors = new Map<string, string | null>();
   for (const category of options.categories) {
     categoryColors.set(category.id, category.color);
@@ -223,9 +235,9 @@ export function MovementsScreen({
   const tableRows: MovementTableRow[] = pageRows.map((row) => ({
     id: row.id,
     occurredAt: row.occurredAt,
-    title: row.description || rowTitle(row, categoryNames, t),
+    title: row.description || rowTitle(row, categoryNames, t, transfers),
     category: rowCategory(row, categoryNames, categoryColors),
-    account: rowSubtitle(row, accountNames, t) ?? "",
+    account: rowSubtitle(row, accountNames, t, transfers) ?? "",
     label: row.labels[0]?.name ?? null,
     amountMinor:
       row.reconciliationId !== null && row.toAccountId === null
@@ -724,19 +736,19 @@ export function MovementsScreen({
                       <Separator size="4" />
                       <MovementCard
                         row={row}
-                        title={row.description || rowTitle(row, categoryNames, t)}
+                        title={row.description || rowTitle(row, categoryNames, t, transfers)}
                         subtitle={
                           row.description
                             ? [
-                                rowTitle(row, categoryNames, t),
-                                rowSubtitle(row, accountNames, t),
+                                rowTitle(row, categoryNames, t, transfers),
+                                rowSubtitle(row, accountNames, t, transfers),
                               ]
                                 .filter(Boolean)
                                 .join(" · ")
-                            : rowSubtitle(row, accountNames, t)
+                            : rowSubtitle(row, accountNames, t, transfers)
                         }
                         color={rowColor(row, categoryColors)}
-                        categoryName={rowTitle(row, categoryNames, t)}
+                        categoryName={rowTitle(row, categoryNames, t, transfers)}
                         amount={
                           row.reconciliationId !== null ? (
                             <Money
@@ -879,9 +891,10 @@ function rowTitle(
   row: TransactionListRow,
   categoryNames: Map<string, string>,
   t: ReturnType<typeof useTranslations>,
+  transfers: Map<string, TransferNarration>,
 ): string {
   if (row.reconciliationId !== null) return t("kindAdjustment");
-  if (row.kind === "transfer") return t("kindTransfer");
+  if (row.kind === "transfer") return transfers.get(row.id)?.title ?? t("kindTransfer");
   const first = row.splits[0]?.categoryId;
   const fallback = row.kind === "income" ? t("kindIncome") : t("kindExpense");
   return (first && categoryNames.get(first)) || fallback;
@@ -893,8 +906,9 @@ function rowSubtitle(
   row: TransactionListRow,
   accountNames: Map<string, string>,
   t: ReturnType<typeof useTranslations<"transactions">>,
+  transfers: Map<string, TransferNarration>,
 ): string | undefined {
-  const account = accountOfRow(row, accountNames);
+  const account = accountOfRow(row, accountNames, transfers);
   // Who made it comes first: it is what a person scans a household ledger for (RF-182).
   const parts = [
     row.madeByName,
@@ -909,12 +923,15 @@ function rowSubtitle(
 function accountOfRow(
   row: TransactionListRow,
   accountNames: Map<string, string>,
+  transfers: Map<string, TransferNarration>,
 ): string | undefined {
   if (row.reconciliationId !== null) {
     const accountId = row.toAccountId ?? row.fromAccountId;
     return (accountId && accountNames.get(accountId)) ?? undefined;
   }
   if (row.kind === "transfer") {
+    const narrated = transfers.get(row.id);
+    if (narrated) return narrated.account;
     const from =
       (row.fromAccountId && accountNames.get(row.fromAccountId)) ?? "";
     const to = (row.toAccountId && accountNames.get(row.toAccountId)) ?? "";

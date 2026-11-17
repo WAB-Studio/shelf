@@ -39,6 +39,8 @@ export type AccountRow = {
   // The «Me debe» of a credit somebody else pays (RF-216): an asset the ledger keeps and no list offers. Absent on
   // the rows `cash.ts` builds, which never read one.
   internal?: boolean;
+  // Who the credit is for, on the hidden «Me debe» alone: the name a list says instead of the account's.
+  internalPersonName?: string | null;
   // Set on a credit somebody else pays: who pays it and what they still owe, the hidden receivable's balance in
   // the credit's currency, so a total counts it without listing the account.
   thirdParty?: { personName: string; personOwesCents: number } | null;
@@ -152,6 +154,8 @@ export async function listAccounts(
         archivedAt: accounts.archivedAt,
         updatedAt: sql<string>`accounts.updated_at::text`,
         internal: internalAccountSql,
+        internalPersonName: sql<string | null>`(
+          select c.person_name from third_party_credits c where c.receivable_account_id = accounts.id)`,
         // One credit, one payer: the receivable's settlement-currency balance, derived like every other.
         thirdParty: sql<{ personName: string; personOwesCents: string } | null>`(
           select jsonb_build_object('personName', c.person_name, 'personOwesCents', coalesce(rb.balance_cents, 0)::text)

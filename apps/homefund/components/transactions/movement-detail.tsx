@@ -39,6 +39,10 @@ import type { TransactionListRow } from "@/db/queries/transactions";
 import { Link as LocaleLink, useRouter } from "@/i18n/navigation";
 import type { CurrencyCode } from "@/lib/currency";
 import { civilDateToDate } from "@/lib/dates";
+import {
+  narrateTransfers,
+  transferSidesById,
+} from "@/lib/transactions/transfer-words";
 import { deriveRate } from "@/lib/money";
 import { foreignSettlementCurrency } from "@/lib/validation/transaction";
 import { useActionErrorToast } from "@/lib/use-action-toast";
@@ -126,6 +130,13 @@ export function MovementDetail({
     tc("scopedName", { name }),
   );
   const categoryPaths = categoryPathsById(options.categories, categoryNames);
+  // A transfer into a debt, or out of a payer's hidden account, reads as what happened (RF-272).
+  const narrated = narrateTransfers(
+    [movement],
+    transferSidesById(options.accountDirectory),
+    accountNames,
+    t,
+  ).get(movement.id);
   const categoryColors = new Map<string, string | null>();
   for (const category of options.categories) {
     categoryColors.set(category.id, category.color);
@@ -172,7 +183,7 @@ export function MovementDetail({
   const caption = isAdjustment
     ? null
     : kind === "transfer"
-      ? t("kindTransfer")
+      ? (narrated?.title ?? t("kindTransfer"))
       : (firstSplit && categoryNames.get(firstSplit)) ||
         (kind === "income" ? t("kindIncome") : t("kindExpense"));
   const tileColor = isAdjustment || kind === "transfer" ? null : (firstSplit && categoryColors.get(firstSplit)) ?? null;
@@ -184,7 +195,8 @@ export function MovementDetail({
         accountNames.get((movement.toAccountId ?? movement.fromAccountId) as string)) ??
       ""
     : kind === "transfer"
-      ? `${(movement.fromAccountId && accountNames.get(movement.fromAccountId)) ?? ""} → ${(movement.toAccountId && accountNames.get(movement.toAccountId)) ?? ""}`
+      ? (narrated?.account ??
+        `${(movement.fromAccountId && accountNames.get(movement.fromAccountId)) ?? ""} → ${(movement.toAccountId && accountNames.get(movement.toAccountId)) ?? ""}`)
       : kind === "income"
         ? (movement.toAccountId && accountNames.get(movement.toAccountId)) ?? ""
         : (movement.fromAccountId && accountNames.get(movement.fromAccountId)) ?? "";

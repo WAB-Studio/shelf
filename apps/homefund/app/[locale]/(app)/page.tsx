@@ -64,6 +64,7 @@ import { formatMoney } from "@/lib/money";
 import { tagFigure } from "@/lib/privacy";
 import { accountNamesById } from "@/lib/fund/account-names";
 import { categoryNamesById } from "@/lib/fund/category-names";
+import { narrateTransfers, transferSidesById } from "@/lib/transactions/transfer-words";
 import { nearestLimit, nextDebtPayment } from "@/lib/fund/glance";
 
 export async function generateMetadata(
@@ -311,6 +312,13 @@ export default async function HomePage(props: PageProps<"/[locale]">) {
     adjustment: t("kindAdjustment"),
   };
 
+  const transfers = narrateTransfers(
+    rows,
+    transferSidesById(options.accountDirectory),
+    accountNames,
+    t,
+  );
+
   // The withdrawal's destination read-only: the caller's resolved cash by name,
   // or the personal cash create-on-demand will open when they have none (RF-68).
   const willCreateCash = withdrawal.reason === "no-cash-account";
@@ -403,19 +411,20 @@ export default async function HomePage(props: PageProps<"/[locale]">) {
                       tile={
                         <CategoryTile
                           color={rowColor(row, categoryColors)}
-                          name={rowTitle(row, categoryNames, kindLabels)}
+                          name={rowTitle(row, categoryNames, kindLabels, transfers)}
                           transfer={row.kind === "transfer" || row.reconciliationId !== null}
                         />
                       }
                       title={
                         row.description ||
-                        rowTitle(row, categoryNames, kindLabels)
+                        rowTitle(row, categoryNames, kindLabels, transfers)
                       }
                       subtitle={rowCaption(
                         row,
                         categoryNames,
                         accountNames,
                         kindLabels,
+                        transfers,
                       )}
                       amount={<Figures>{rowAmount(row, locale)}</Figures>}
                       tone={rowTone(row)}
@@ -444,6 +453,7 @@ export default async function HomePage(props: PageProps<"/[locale]">) {
             <RecentMovements
               rows={rows}
               kindLabels={kindLabels}
+              transfers={transfers}
               accountNames={accountNames}
               categoryNames={categoryNames}
               categoryColors={categoryColors}
