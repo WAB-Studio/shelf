@@ -22032,7 +22032,11 @@ async function alertChannelsSuite(): Promise<void> {
   };
   const old = await arrive(silent, "Bancolombia: Compraste $9,000.00 en TIENDA UNO con tu tarjeta *3397 el 01/11/2026 a las 10:00.");
   await arrive(fresh, "Bancolombia: Compraste $8,000.00 en TIENDA DOS con tu tarjeta *3397 el 16/11/2026 a las 10:00.");
-  await fixtureSql`update ingest_deliveries set created_at = now() - interval '10 days' where id = ${old}`;
+  // The row's own trigger keeps created_at as born, so the alert is aged with triggers off for this transaction alone.
+  await fixtureSql.begin(async (tx) => {
+    await tx`set local session_replication_role = replica`;
+    await tx`update ingest_deliveries set created_at = now() - interval '10 days' where id = ${old}`;
+  });
 
   const { tool } = mcpClient(POST, token);
   const answer = await tool("alert_channels");
