@@ -1961,6 +1961,43 @@
     },
     "errors": {
       "unauthorized": "La clave no es válida o fue revocada.",
+      "input": {
+        "required": "es obligatorio",
+        "invalid": "no es válido",
+        "type": {
+          "string": "debe ser un texto",
+          "number": "debe ser un número",
+          "int": "debe ser un número entero, en centavos si es un monto",
+          "boolean": "debe ser true o false",
+          "array": "debe ser una lista",
+          "object": "debe ser un objeto",
+          "other": "no tiene el tipo esperado"
+        },
+        "format": {
+          "uuid": "debe ser un UUID",
+          "date": "debe ser una fecha AAAA-MM-DD",
+          "other": "no tiene el formato esperado"
+        },
+        "tooSmall": {
+          "number": "debe ser al menos {min}",
+          "string": "debe tener al menos {min} caracteres",
+          "array": "debe traer al menos {min} elementos"
+        },
+        "tooBig": {
+          "number": "debe ser como máximo {max}",
+          "string": "debe tener como máximo {max} caracteres",
+          "array": "debe traer como máximo {max} elementos"
+        },
+        "oneOf": "debe ser uno de: {values}",
+        "unknownKeys": "no existe en esta herramienta: {keys}"
+      },
+      "db": {
+        "format": "Un identificador o un valor no tiene el formato esperado: revisa los ids que pasaste.",
+        "range": "Un número está fuera del rango permitido.",
+        "duplicate": "Eso ya existe: no se escribió una segunda copia.",
+        "rule": "Lo que pediste rompe una regla de HomeFund: revisa las cuentas, la categoría y los montos del movimiento.",
+        "busy": "HomeFund tardó demasiado en responder. Inténtalo de nuevo."
+      },
       "unknown": "No se pudo completar. Inténtalo de nuevo.",
       "personIsNotATag": "Ese nombre es de una persona, no de una etiqueta: pásalo en forPerson.",
       "openMonth": "Solo se revisa un mes cerrado: pide uno anterior al mes en curso.",

@@ -1961,6 +1961,43 @@
     },
     "errors": {
       "unauthorized": "The key is not valid or was revoked.",
+      "input": {
+        "required": "is required",
+        "invalid": "is not valid",
+        "type": {
+          "string": "must be text",
+          "number": "must be a number",
+          "int": "must be a whole number, in cents if it is an amount",
+          "boolean": "must be true or false",
+          "array": "must be a list",
+          "object": "must be an object",
+          "other": "is not of the expected type"
+        },
+        "format": {
+          "uuid": "must be a UUID",
+          "date": "must be a date YYYY-MM-DD",
+          "other": "does not have the expected format"
+        },
+        "tooSmall": {
+          "number": "must be at least {min}",
+          "string": "must have at least {min} characters",
+          "array": "must hold at least {min} items"
+        },
+        "tooBig": {
+          "number": "must be at most {max}",
+          "string": "must have at most {max} characters",
+          "array": "must hold at most {max} items"
+        },
+        "oneOf": "must be one of: {values}",
+        "unknownKeys": "does not exist in this tool: {keys}"
+      },
+      "db": {
+        "format": "An id or a value does not have the expected format: check the ids you passed.",
+        "range": "A number is outside the allowed range.",
+        "duplicate": "That already exists: no second copy was written.",
+        "rule": "What you asked breaks a HomeFund rule: check the accounts, the category and the amounts of the movement.",
+        "busy": "HomeFund took too long to answer. Try again."
+      },
       "unknown": "It could not be done. Try again.",
       "personIsNotATag": "That name belongs to a person, not a label: pass it in forPerson.",
       "openMonth": "Only a closed month is reviewed: ask for one before the current month.",
