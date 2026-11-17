@@ -17,11 +17,12 @@ import { pgErrorCode } from "@/lib/db-error";
 import { todayInBogota } from "@/lib/dates";
 import type { EmailVerdict } from "@/lib/ingest/classify";
 import { DUPLICATE_WINDOW_DAYS, judgeDuplicate, type DuplicateCandidate } from "@/lib/ingest/duplicates";
+import { describeAlert, looksLikeBankAlert, onlyBankAccount } from "@/lib/ingest/describe";
 import { emailDescription, emailMerchant } from "@/lib/ingest/email";
 import { fingerprintMessage, merchantOf } from "@/lib/ingest/fingerprint";
 import { applyRecipient, extractNumber, matchRecipient } from "@/lib/ingest/recipient-number";
 import { parseAmount } from "@/lib/money";
-import { interpretQuickEntry } from "@/lib/transactions/interpret";
+import { interpretQuickEntry, readAccountTails } from "@/lib/transactions/interpret";
 import type { WebhookPayloadInput } from "@/lib/validation/webhook";
 
 export type IngestDeliveryResult = {
@@ -137,6 +138,8 @@ export async function recordIngestDelivery({
           id: accounts.id,
           name: accounts.name,
           lastFour: accounts.lastFour,
+          institution: accounts.institution,
+          subtype: accounts.subtype,
           groupId: accounts.groupId,
           settlementCurrency: accounts.settlementCurrency,
         })
@@ -243,12 +246,22 @@ export async function recordIngestDelivery({
             ? "credential_default"
             : null;
 
-    // A bank email's remainder carries its date, identifiers and help line; its sentence is the description (RF-206).
-    let description = (email ? emailDescription(proposal.description) : proposal.description)
+    // A bank alert's remainder carries its label, date, identifiers and help line, whichever channel brought
+    // it (SMS, notification, shortcut or email): what it says happened is the description (RF-206).
+    let description = (
+      describeAlert(payload.text) ??
+      (email || looksLikeBankAlert(payload.text) ? emailDescription(proposal.description) : proposal.description)
+    )
       .trim()
       .slice(0, MAX_DESCRIPTION_LENGTH);
 
-    let proposedAccountId = payload.account_id ?? proposal.accountId;
+    // An alert that names no account tail belongs to the person's only account at that bank.
+    let proposedAccountId =
+      payload.account_id ??
+      proposal.accountId ??
+      (readAccountTails(payload.text, payload.direction ?? proposal.direction).size === 0
+        ? onlyBankAccount(payload.text, accountRows)
+        : null);
     let proposedToAccountId: string | null = null;
     let proposedDirection: "income" | "expense" | "transfer" | null =
       payload.direction ?? proposal.direction;

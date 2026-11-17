@@ -970,6 +970,7 @@ void (async () => {
     await widgetKeySuite();
     await renderSuite(LATE_RENDER_CASES, httpCookie);
     await emailDuplicateSuite();
+    await alertDescriptionSuite();
     await mcpClassesSuite();
   } catch (error) {
     assert(
@@ -1906,6 +1907,38 @@ async function emailDuplicateSuite(): Promise<void> {
       mailRow?.of === phone.id &&
       second.body.status === "pending",
     `phone ${JSON.stringify(phoneRow)}, email ${JSON.stringify(mailRow)} ${JSON.stringify(mail.body)}, second ${JSON.stringify(second.body)}`,
+  );
+}
+
+// A bank alert reads as a short description through every channel: the phone's SMS and the bank's email alike.
+async function alertDescriptionSuite(): Promise<void> {
+  const userId = httpUserId;
+  if (!userId) throw new Error("alertDescriptionSuite ran before the session was read");
+  const token = await edgeCredential(userId);
+  const post = async (path: string, payload: Record<string, string>) => {
+    const response = await fetch(`${HARNESS_BASE_URL}${path}`, {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+      body: JSON.stringify(payload),
+    });
+    const body = (await response.json()) as Record<string, unknown>;
+    if (typeof body.deliveryId === "string") landedDeliveries.push(body.deliveryId);
+    const [row] = await fixtureSql<{ description: string | null }[]>`
+      select proposed_description as description from ingest_deliveries where id = ${String(body.deliveryId)}`;
+    return row?.description ?? null;
+  };
+  const tag = randomUUID().slice(0, 6).toUpperCase();
+  const sms = await post("/api/webhooks/ingest", {
+    text: `Bancolombia: Compraste COP80.800,00 en PIZZERIA ${tag} con tu T.Cred *4872, el 14/11/2026 a las 19:05. Si tienes dudas, encuentranos aqui: 6045109095.`,
+  });
+  const mail = await post("/api/webhooks/email", {
+    subject: "Alertas y Notificaciones",
+    text: `Alertas y Notificaciones Listo! Todo salió bien con tus movimientos Bancolombia: Pagaste $1,000,000.00 a FONDO ${tag} DEL AHORRO desde tu producto 3397 el 14/11/2026 a las 19:06. Si tienes dudas, encuentranos aqui: 6045109095.`,
+  });
+  assert(
+    next("a bank SMS and a bank email both land with the business alone as the description"),
+    sms === `Pizzeria ${tag}` && mail === `Fondo ${tag} del Ahorro`,
+    `the SMS read ${JSON.stringify(sms)}, the email ${JSON.stringify(mail)}`,
   );
 }
 

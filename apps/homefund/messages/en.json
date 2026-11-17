@@ -540,6 +540,13 @@
     "add": "Add label",
     "addTitle": "Add label",
     "editTitle": "Edit label",
+    "addPerson": "Add person",
+    "addPersonTitle": "Add person",
+    "editPersonTitle": "Edit person",
+    "chargeLabel": "Charged",
+    "chargeHint": "Off, what you spend for this person is only your expense and they owe you nothing. On, you are reminded to charge it; a debt is never created on its own.",
+    "personCharged": "Charged",
+    "personNotCharged": "Not charged",
     "nameLabel": "Name",
     "colorLabel": "Color",
     "colorOption": "Color {number}",
@@ -567,7 +574,9 @@
       "nameRequired": "Enter the label's name.",
       "nameTooLong": "The name cannot exceed 80 characters.",
       "colorRequired": "Choose a color.",
-      "placementInvalid": "Choose where the label goes."
+      "placementInvalid": "Choose where the label goes.",
+      "kindInvalid": "Choose whether it is a label or a person.",
+      "chargeNeedsPerson": "Only a person can be charged."
     }
   },
   "transactions": {
@@ -1871,8 +1880,8 @@
       "completeCounterparty": "Sets the missing account of a one-sided movement (transactionId from list_awaiting_counterparty; accountId from list_accounts): the movement becomes a transfer and the Inbox learns from that choice. A movement that already has both accounts is refused. Returns transactionId. CONFIRM with the person which account goes on which movement before calling it.",
       "archiveAccount": "Archives an account (accountId from list_accounts): it leaves the list and takes no new movements, keeps its history and can be restored with restore_account. An account with open pockets is not archived: archive the pockets first. Returns accountId. CONFIRM with the person which account before calling it.",
       "restoreAccount": "Restores an archived account (accountId from list_accounts with archived true). Returns accountId. CONFIRM with the person which one before calling it.",
-      "getReconcileSheet": "An account's «Reconcile» sheet for a day (on, YYYY-MM-DD): the account (kind, currency, openedOn, latestReconciledOn, canWrite) and derivedCents, what HomeFund computes should be there that day, in cents and in the account's currency (for a debt, what is owed), plus its reconciliation history. Pass derivedCents as expectedDerivedCents to reconcile_account. Read only.",
-      "reconcileAccount": "Reconciles an account on a day: the person counts what is really there (realAmountCents, in cents and in the account's currency; for a debt, what is owed; negative if it fell below zero) and HomeFund records ONE adjustment movement for the difference, so the balance equals what was counted. Pass in expectedDerivedCents the derivedCents you read in get_reconcile_sheet for that day: if a movement changed meanwhile, it is refused and the sheet must be read again. The day cannot be future, nor before the opening, nor before the last reconciliation. Returns id and gapCents (counted minus derived). CONFIRM with the person the account, the day, what was counted and the resulting adjustment before calling it.",
+      "getReconcileSheet": "An account's «Reconcile» sheet for a day (on, YYYY-MM-DD): the account (kind, currency, openedOn, latestReconciledOn, canWrite) and derivedCents, what HomeFund computes should be there that day, in cents and in the account's currency, plus its reconciliation history (countedCents, derivedCents, gapCents). For a debt every figure is what is owed, positive, like realAmountCents: a positive gapCents means more is owed. Pass derivedCents as expectedDerivedCents to reconcile_account. Read only.",
+      "reconcileAccount": "Reconciles an account on a day: the person counts what is really there (realAmountCents, in cents and in the account's currency; for a debt, what is owed; negative if it fell below zero) and HomeFund records ONE adjustment movement for the difference, so the balance equals what was counted. Pass in expectedDerivedCents the derivedCents you read in get_reconcile_sheet for that day: if a movement changed meanwhile, it is refused and the sheet must be read again. The day cannot be future, nor before the opening, nor before the last reconciliation. Returns id and gapCents (counted minus derived, in the same convention: for a debt, positive means more is owed). If the count has the opposite sign of the derived balance and the gap exceeds the balance (the typical slip: a debt typed negative), it is refused; only with confirmSignChange true, after confirming with the person, is it written. CONFIRM with the person the account, the day, what was counted and the resulting adjustment before calling it.",
       "listReconciliations": "An account's reconciliations (accountId from list_accounts), newest first, each with its gap. Read only.",
       "recordAccountStatement": "Records a closed statement of a card or credit (accountId from list_debts), by hand, like the «Record statement» button: periodStart and cutOffDate (YYYY-MM-DD, as the statement prints them), closingBalanceCents (the closing balance, what is owed) and, optional, paymentDueDate, openingBalanceCents, creditsCents, debitsCents, minimumPaymentCents, interestChargedCents and feesChargedCents; all in whole cents in the debt's currency. A statement with the same cut-off date is refused: it is already recorded. It reads back in get_debt (statements). Returns accountId and cutOffDate. CONFIRM the statement's figures with the person before calling it.",
       "recordBilledAmount": "Records what the issuer really billed for a purchase made in another currency (RF-123), replacing the estimate: transactionId of the purchase (from get_debt, pendingSettlements), accountId of the debt, currency (the currency the debt bills in) and billedCents (what was billed, in cents). Not possible before an account reconciliation. Returns transactionId. CONFIRM the purchase and the statement's figure with the person before calling it.",
@@ -1941,6 +1950,7 @@
       },
       "moveNeedsCount": "To move lines pass expectedCount, the number the dryRun true call returned and the person confirmed.",
       "moveCountChanged": "The lines to move are no longer the ones counted: nothing was moved. Call again with dryRun true and confirm the new number.",
+      "reconcileSign": "The count ({real}) has the opposite sign of the balance HomeFund derives ({derived}) and the adjustment would be bigger than the balance. A debt's owed amount is positive. Fix the sign, or, if it really is what was counted and the person confirmed it, pass confirmSignChange true.",
       "awaitsNeedsOneSide": "awaitingCounterparty only applies to an expense or an income: a transfer already has its two accounts."
     },
     "params": {
@@ -2065,6 +2075,7 @@
       "accountsArchived": "true to list the archived accounts; by default, the open ones.",
       "reconcileOn": "The day, YYYY-MM-DD, no future.",
       "reconcileRealAmountCents": "What the person counted, in whole cents and in the account's currency (for a debt, what is owed); negative if it fell below zero.",
+      "reconcileConfirmSignChange": "true only when the person confirmed the count really has the opposite sign of the derived balance.",
       "reconcileExpectedDerivedCents": "The derivedCents get_reconcile_sheet returned for that same day.",
       "statementPeriodStart": "First day of the statement's period, YYYY-MM-DD.",
       "statementCutOffDate": "The statement's cut-off date, YYYY-MM-DD; it does not repeat on one debt.",

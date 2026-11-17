@@ -32,7 +32,7 @@ function rethrowLabelError(error: unknown): never {
  */
 export const createLabelAction = authActionClient
   .inputSchema(createLabelSchema)
-  .action(async ({ parsedInput: { placement, name, color }, ctx }) => {
+  .action(async ({ parsedInput: { placement, name, color, kind, chargeDefault }, ctx }) => {
     let scope: LabelScope;
     if (placement === "group") {
       const group = await getUserGroup();
@@ -44,7 +44,7 @@ export const createLabelAction = authActionClient
 
     let labelId: string;
     try {
-      ({ labelId } = await createLabel({ scope, name, color }));
+      ({ labelId } = await createLabel({ scope, name, color, kind, chargeDefault }));
     } catch (error) {
       rethrowLabelError(error);
     }

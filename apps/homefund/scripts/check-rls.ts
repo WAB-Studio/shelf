@@ -5480,7 +5480,8 @@ const UPDATE_GRANT_GAPS: Record<string, string[]> = {
     "start_date",
     "updated_at",
   ],
-  labels: ["created_at", "external_ref", "group_id", "id", "owner_user_id", "updated_at"],
+  // `kind` is written on insert alone: a label never changes kind (RF-242).
+  labels: ["created_at", "external_ref", "group_id", "id", "kind", "owner_user_id", "updated_at"],
   // An entry is replaced by deleting it and writing it again (RF-183): no column is writable.
   member_debts: ["amount_cents", "created_at", "created_by", "creditor_member_id", "currency", "debtor_member_id", "description", "group_id", "id", "kind", "occurred_on"],
   // The OAuth tables carry no grant (RF-168), bar the consent's insert of a code: only the server's own pool writes them.

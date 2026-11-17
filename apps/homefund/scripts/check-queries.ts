@@ -20385,6 +20385,33 @@ async function mcpAccountLifecycleSuite(): Promise<void> {
     !done.isError && Math.abs((done.value as { gapCents: number }).gapCents) === 5_000_00 && balance === real && history.length === 1,
     `done ${JSON.stringify(done.value)}, balance ${balance} of ${real}, history ${history.length}`,
   );
+
+  // RF-245: a loan is read and counted as what is owed, positive, in the sheet, the count and the history alike.
+  const loan = (await tool("create_account", {
+    name: `Harness rf245 credito ${tag}`, kind: "liability", subtype: "loan", openingBalanceCents: 1_000_000_00, balanceOn: "2026-01-01",
+  })).value as { accountId: string };
+  track("accounts", loan.accountId);
+  type LoanSheet = { account: { kind: string; derivedCents: number }; history: { countedCents: number; derivedCents: number; gapCents: number }[] };
+  const loanSheet = async () => (await tool("get_reconcile_sheet", { accountId: loan.accountId, on: today })).value as LoanSheet;
+  const owedBefore = await loanSheet();
+  const slip = await tool("reconcile_account", {
+    accountId: loan.accountId, reconciledOn: today, realAmountCents: -1_020_000_00, expectedDerivedCents: owedBefore.account.derivedCents,
+  });
+  const afterSlip = await loanSheet();
+  const loanDone = await tool("reconcile_account", {
+    accountId: loan.accountId, reconciledOn: today, realAmountCents: 1_020_000_00, expectedDerivedCents: owedBefore.account.derivedCents,
+  });
+  const afterCount = await loanSheet();
+  const [ledger] = await fixtureSql<{ balance_cents: string }[]>`select balance_cents::text from account_balances where id = ${loan.accountId}`;
+  assert(
+    next("RF-245: a loan's sheet, count and history all say what is owed as a positive figure, and a count with the opposite sign that the gap outgrows the balance is refused"),
+    owedBefore.account.kind === "liability" && owedBefore.account.derivedCents === 1_000_000_00 &&
+      slip.isError && (slip.value as { error: string }).error === es.mcp.errors.reconcileSign.replace("{real}", "-102000000").replace("{derived}", "100000000") &&
+      afterSlip.history.length === 0 && !loanDone.isError && (loanDone.value as { gapCents: number }).gapCents === 20_000_00 &&
+      afterCount.account.derivedCents === 1_020_000_00 && afterCount.history[0]?.countedCents === 1_020_000_00 &&
+      afterCount.history[0].derivedCents === 1_000_000_00 && afterCount.history[0].gapCents === 20_000_00 && ledger?.balance_cents === "-102000000",
+    `sheet ${JSON.stringify(owedBefore.account)}, slip ${JSON.stringify(slip.value)}, done ${JSON.stringify(loanDone.value)}, after ${JSON.stringify(afterCount)}, ledger ${ledger?.balance_cents}`,
+  );
 }
 
 // RF-234: Claude records a statement, defers and undefers a purchase and withdraws cash, through the debt screen's own

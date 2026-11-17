@@ -4,7 +4,7 @@ import { asc, eq, or, sql } from "drizzle-orm";
 
 import { insertRow } from "@/db/insert-row";
 import { callerGroupId, callerGroupInfo } from "@/db/queries/groups";
-import { labels } from "@/db/schema";
+import { type LabelKind, labels } from "@/db/schema";
 import type { Transaction } from "@/db/session";
 import { requireUser, withUserDb, withUserDbOrTx } from "@/db/session";
 
@@ -16,6 +16,9 @@ export type LabelRow = {
   id: string;
   name: string;
   color: string | null;
+  // A person is whom a movement was for (RF-242); `chargeDefault` is false on a tag.
+  kind: LabelKind;
+  chargeDefault: boolean;
 };
 
 // A row carries the scope it was read from: a movement's labels must share its
@@ -29,6 +32,8 @@ export type LabelManagementRow = {
   id: string;
   name: string;
   color: string | null;
+  kind: LabelKind;
+  chargeDefault: boolean;
   // How many transactions wear the label, through `transaction_labels`.
   movementCount: number;
   budgetCount: number;
@@ -38,12 +43,16 @@ export type UpdateLabelArgs = {
   labelId: string;
   name: string;
   color: string | null;
+  // `undefined` leaves «se le cobra» alone; a tag keeps false whatever is asked.
+  chargeDefault?: boolean;
 };
 
 export type CreateLabelArgs = {
   scope: LabelScope;
   name: string;
   color: string | null;
+  kind?: LabelKind;
+  chargeDefault?: boolean;
 };
 
 function scopeWhere(scope: LabelScope) {
@@ -56,7 +65,13 @@ function scopeWhere(scope: LabelScope) {
 export async function listLabels(scope: LabelScope): Promise<LabelRow[]> {
   return withUserDb(async (tx) =>
     tx
-      .select({ id: labels.id, name: labels.name, color: labels.color })
+      .select({
+        id: labels.id,
+        name: labels.name,
+        color: labels.color,
+        kind: labels.kind,
+        chargeDefault: labels.chargeDefault,
+      })
       .from(labels)
       .where(scopeWhere(scope))
       .orderBy(asc(labels.name)),
@@ -78,6 +93,8 @@ export async function listScopedLabels(
         id: labels.id,
         name: labels.name,
         color: labels.color,
+        kind: labels.kind,
+        chargeDefault: labels.chargeDefault,
         ownerUserId: labels.ownerUserId,
       })
       .from(labels)
@@ -122,6 +139,8 @@ export async function listManagedLabels(
         id: labels.id,
         name: labels.name,
         color: labels.color,
+        kind: labels.kind,
+        chargeDefault: labels.chargeDefault,
         movementCount,
         budgetCount,
       })
@@ -150,6 +169,8 @@ export async function createLabel({
   scope,
   name,
   color,
+  kind = "tag",
+  chargeDefault = false,
 }: CreateLabelArgs): Promise<{ labelId: string }> {
   const ownerUserId = "ownerUserId" in scope ? scope.ownerUserId : null;
   const groupId = "groupId" in scope ? scope.groupId : null;
@@ -158,7 +179,7 @@ export async function createLabel({
     const [row] = await insertRow(
       tx,
       labels,
-      { ownerUserId, groupId, name, color },
+      { ownerUserId, groupId, name, color, kind, chargeDefault },
       { returning: { id: labels.id } },
     );
 
@@ -166,17 +187,24 @@ export async function createLabel({
   });
 }
 
-// The placement is immutable, so no scope column is named here; the UPDATE grant
-// covers `(name, color)` only. A false row count is a denied or absent label.
+// The placement and the kind are immutable, so neither is named here; the UPDATE grant
+// covers `(name, color, charge_default)` only. A false row count is a denied or absent label.
 export async function updateLabel({
   labelId,
   name,
   color,
+  chargeDefault,
 }: UpdateLabelArgs): Promise<boolean> {
   return withUserDb(async (tx) => {
     const rows = await tx
       .update(labels)
-      .set({ name, color })
+      .set({
+        name,
+        color,
+        ...(chargeDefault === undefined
+          ? {}
+          : { chargeDefault: sql`${labels.kind} = 'person' and ${chargeDefault}` }),
+      })
       .where(eq(labels.id, labelId))
       .returning({ id: labels.id });
 

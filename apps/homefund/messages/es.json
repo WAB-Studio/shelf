@@ -540,6 +540,13 @@
     "add": "Añadir etiqueta",
     "addTitle": "Añadir etiqueta",
     "editTitle": "Editar etiqueta",
+    "addPerson": "Añadir persona",
+    "addPersonTitle": "Añadir persona",
+    "editPersonTitle": "Editar persona",
+    "chargeLabel": "Se le cobra",
+    "chargeHint": "Apagado, lo que gastas para esta persona es solo gasto tuyo y no te debe nada. Encendido, se te recuerda cobrárselo; una deuda nunca se crea sola.",
+    "personCharged": "Se le cobra",
+    "personNotCharged": "No se le cobra",
     "nameLabel": "Nombre",
     "colorLabel": "Color",
     "colorOption": "Color {number}",
@@ -567,7 +574,9 @@
       "nameRequired": "Escribe el nombre de la etiqueta.",
       "nameTooLong": "El nombre no puede pasar de 80 caracteres.",
       "colorRequired": "Elige un color.",
-      "placementInvalid": "Elige dónde va la etiqueta."
+      "placementInvalid": "Elige dónde va la etiqueta.",
+      "kindInvalid": "Elige si es una etiqueta o una persona.",
+      "chargeNeedsPerson": "Solo una persona puede llevar «Se le cobra»."
     }
   },
   "transactions": {
@@ -1871,8 +1880,8 @@
       "completeCounterparty": "Pone la cuenta que le falta a un movimiento de un solo lado (transactionId de list_awaiting_counterparty; accountId de list_accounts): el movimiento pasa a ser una transferencia y la Bandeja aprende de esa elección. Un movimiento que ya tiene sus dos cuentas se rechaza. Devuelve transactionId. CONFIRMA con la persona cuál cuenta va en cuál movimiento antes de llamarla.",
       "archiveAccount": "Archiva una cuenta (accountId de list_accounts): deja de salir en la lista y no admite movimientos nuevos, conserva su historia y se puede restaurar con restore_account. Una cuenta con bolsillos abiertos no se archiva: archiva primero los bolsillos. Devuelve accountId. CONFIRMA con la persona cuál cuenta antes de llamarla.",
       "restoreAccount": "Restaura una cuenta archivada (accountId de list_accounts con archived true). Devuelve accountId. CONFIRMA con la persona cuál antes de llamarla.",
-      "getReconcileSheet": "La hoja de «Cuadrar» de una cuenta para un día (on, AAAA-MM-DD): la cuenta (kind, moneda, openedOn, latestReconciledOn, canWrite) y derivedCents, lo que HomeFund calcula que debería haber ese día, en centavos y en la moneda de la cuenta (en una deuda, lo que se debe), más su historial de cuadres. Pasa derivedCents como expectedDerivedCents a reconcile_account. Solo lee.",
-      "reconcileAccount": "Cuadra una cuenta en un día: la persona cuenta cuánto hay de verdad (realAmountCents, en centavos y en la moneda de la cuenta; en una deuda, lo que se debe; negativo si quedó por debajo de cero) y HomeFund registra UN movimiento de ajuste por la diferencia, de modo que el saldo queda igual a lo contado. Pasa en expectedDerivedCents el derivedCents que leíste en get_reconcile_sheet para ese día: si entre tanto cambió un movimiento, se rechaza y hay que volver a leer la hoja. El día no puede ser futuro, ni antes de la apertura, ni antes del último cuadre. Devuelve id y gapCents (lo contado menos lo derivado). CONFIRMA con la persona la cuenta, el día, lo contado y el ajuste que resulta antes de llamarla.",
+      "getReconcileSheet": "La hoja de «Cuadrar» de una cuenta para un día (on, AAAA-MM-DD): la cuenta (kind, moneda, openedOn, latestReconciledOn, canWrite) y derivedCents, lo que HomeFund calcula que debería haber ese día, en centavos y en la moneda de la cuenta, más su historial de cuadres (countedCents, derivedCents, gapCents). En una deuda todo va como lo que se debe, en positivo, igual que realAmountCents: gapCents positivo es que se debe más. Pasa derivedCents como expectedDerivedCents a reconcile_account. Solo lee.",
+      "reconcileAccount": "Cuadra una cuenta en un día: la persona cuenta cuánto hay de verdad (realAmountCents, en centavos y en la moneda de la cuenta; en una deuda, lo que se debe; negativo si quedó por debajo de cero) y HomeFund registra UN movimiento de ajuste por la diferencia, de modo que el saldo queda igual a lo contado. Pasa en expectedDerivedCents el derivedCents que leíste en get_reconcile_sheet para ese día: si entre tanto cambió un movimiento, se rechaza y hay que volver a leer la hoja. El día no puede ser futuro, ni antes de la apertura, ni antes del último cuadre. Devuelve id y gapCents (lo contado menos lo derivado, en la misma convención: en una deuda, positivo es que se debe más). Si lo contado tiene el signo contrario al saldo derivado y la diferencia supera al saldo (el error típico: una deuda en negativo), se rechaza; solo con confirmSignChange true, tras confirmarlo con la persona, se escribe. CONFIRMA con la persona la cuenta, el día, lo contado y el ajuste que resulta antes de llamarla.",
       "listReconciliations": "Los cuadres de una cuenta (accountId de list_accounts), el más reciente primero, cada uno con su diferencia. Solo lee.",
       "recordAccountStatement": "Registra un extracto cerrado de una tarjeta o crédito (accountId de list_debts), a mano, como el botón «Registrar extracto»: periodStart y cutOffDate (AAAA-MM-DD, como los imprime el extracto), closingBalanceCents (el saldo de cierre, lo que se debe) y, opcionales, paymentDueDate, openingBalanceCents, creditsCents, debitsCents, minimumPaymentCents, interestChargedCents y feesChargedCents; todo en centavos enteros y en la moneda de la deuda. Un extracto con la misma fecha de corte se rechaza: ya está registrado. Se lee después en get_debt (statements). Devuelve accountId y cutOffDate. CONFIRMA con la persona las cifras del extracto antes de llamarla.",
       "recordBilledAmount": "Registra lo que el emisor cobró de verdad por una compra hecha en otra moneda (RF-123), reemplazando el estimado: transactionId de la compra (de get_debt, pendingSettlements), accountId de la deuda, currency (la moneda en que la deuda cobra) y billedCents (lo cobrado, en centavos). No se puede antes de una conciliación de la cuenta. Devuelve transactionId. CONFIRMA con la persona la compra y la cifra del extracto antes de llamarla.",
@@ -1941,6 +1950,7 @@
       },
       "moveNeedsCount": "Para mover líneas pasa expectedCount, el número que devolvió la llamada con dryRun true y que la persona confirmó.",
       "moveCountChanged": "Las líneas a mover ya no son las que se contaron: no se movió nada. Vuelve a llamar con dryRun true y confirma el número nuevo.",
+      "reconcileSign": "Lo contado ({real}) tiene el signo contrario al saldo que HomeFund deriva ({derived}) y el ajuste sería mayor que el saldo. En una deuda, lo que se debe va en positivo. Corrige el signo, o, si de verdad es lo contado y la persona lo confirmó, pasa confirmSignChange true.",
       "awaitsNeedsOneSide": "awaitingCounterparty solo vale en un gasto o un ingreso: una transferencia ya tiene sus dos cuentas."
     },
     "params": {
@@ -2065,6 +2075,7 @@
       "accountsArchived": "true para listar las cuentas archivadas; por defecto, las abiertas.",
       "reconcileOn": "El día, AAAA-MM-DD, sin futuro.",
       "reconcileRealAmountCents": "Lo que la persona contó, en centavos enteros y en la moneda de la cuenta (en una deuda, lo que se debe); negativo si quedó bajo cero.",
+      "reconcileConfirmSignChange": "true solo cuando la persona confirmó que lo contado tiene de verdad el signo contrario al saldo derivado.",
       "reconcileExpectedDerivedCents": "El derivedCents que devolvió get_reconcile_sheet para ese mismo día.",
       "statementPeriodStart": "Primer día del periodo del extracto, AAAA-MM-DD.",
       "statementCutOffDate": "Fecha de corte del extracto, AAAA-MM-DD; no se repite en una misma deuda.",

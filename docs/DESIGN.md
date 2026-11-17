@@ -712,3 +712,25 @@ movimientos y su pago es una transferencia, nunca un ingreso), pero nadie la ve:
 - **«Dejar de seguir»** quita el vínculo y archiva la cuenta interna, que pasa a Archivadas con sus movimientos; la
   confirmación lo dice.
 
+## Decisión del 2026-11-17: «Para quién», por el usuario
+
+«Cuando gasta a nombre de otra persona… Ángela es mi pareja y no le cobraría dinero a menos que te diga.» Un gasto hecho por
+otra persona sigue siendo gasto de quien lo paga: «Para» dice de quién fue, y no crea deuda ni cuenta por cobrar. Sin
+tablero previo; se refina con lo construido.
+
+- **Las personas viven en «Etiquetas»** (RF-242), con su propio botón «Añadir persona» junto a «Añadir etiqueta», en el celular y
+  en el escritorio. Una persona es una fila más, con su color, y lleva una insignia: «No se le cobra» (gris) o «Se le cobra»
+  (ámbar); nunca solo color. El diálogo de una persona tiene el nombre, el interruptor «Se le cobra» con su línea de ayuda («Apagado,
+  lo que gastas para esta persona es solo gasto tuyo y no te debe nada. Encendido, se te recuerda cobrárselo; una deuda nunca se
+  crea sola»), el color y dónde va. Apagado desde el primer día.
+- **El campo «Para quién»** (no «Para»: ese nombre ya lo lleva el destino de un traspaso) del formulario de movimiento, de la anotación rápida y de la tarjeta de la Bandeja es opcional, un selector
+  de una sola persona con «Nadie» como primera opción, bajo las etiquetas; solo aparece en un gasto o un ingreso, nunca en un traspaso.
+  Si la persona elegida «se le cobra», una línea bajo el selector dice «Se le cobra: este gasto sigue siendo tuyo hasta que
+  registres lo que te debe.» Sin personas, el campo no sale.
+- **En la lista** el movimiento lleva una etiqueta discreta «para Ángela» en gris, junto a su categoría, y nunca dentro de la
+  descripción; el detalle la repite bajo las etiquetas.
+- **Filtros.** Movimientos suma el filtro «Para quién» (una persona o «Nadie»), y el total de arriba cuenta lo que el filtro deja:
+  «Ángela · este mes». Informes suma, bajo el gasto por categoría, la tarjeta «Para quién»: una fila por persona con lo que se gastó
+  para ella ese mes, por moneda, y un toque abre Movimientos ya filtrado. Sin gasto para nadie, la tarjeta no aparece.
+- Estados: guardando, los controles se bloquean; una persona borrada deja sus movimientos sin «para» (el borrado de una etiqueta
+  ya dice cuántos movimientos suelta).
