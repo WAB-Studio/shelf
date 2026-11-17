@@ -41,7 +41,17 @@ export type TransactionFormOptions = {
   accounts: AccountRow[];
   // Every account the caller can read, archived ones included, as a movement or a plan
   // names it: a row on an archived account still reads its name and its owner (RF-58).
-  accountDirectory: { id: string; name: string; foreignOwner: boolean; ownerName: string | null }[];
+  accountDirectory: {
+    id: string;
+    name: string;
+    foreignOwner: boolean;
+    ownerName: string | null;
+    // What a list needs to say a transfer in a person's words instead of its accounts' (a debt, a payer's hidden account).
+    kind: AccountRow["kind"];
+    subtype: AccountRow["subtype"];
+    institution: string | null;
+    internalPersonName: string | null;
+  }[];
   categories: ScopedCategory[];
   labels: ScopedLabel[];
   members: { userId: string; name: string }[];
@@ -117,6 +127,10 @@ export const getTransactionFormOptions = cache(
         name: account.name,
         foreignOwner: account.foreignOwner,
         ownerName: account.ownerName,
+        kind: account.kind,
+        subtype: account.subtype,
+        institution: account.institution,
+        internalPersonName: account.internalPersonName ?? null,
       })),
       categories,
       labels,

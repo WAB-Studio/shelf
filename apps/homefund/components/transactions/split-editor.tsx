@@ -256,8 +256,8 @@ export function SplitEditor({
         )}
       </Flex>
 
-      {/* The live gap the schema refuses to let through: green at rest, red the
-          moment the rows stop summing to the total. */}
+      {/* The live gap the schema refuses to let through, in the words of its direction: green at rest,
+          red the moment the rows stop summing to the total (RF-275). */}
       <ToneSurface
         tone={remainderMinor === 0 ? "success" : "danger"}
         strong
@@ -266,16 +266,21 @@ export function SplitEditor({
         justify="between"
         px="3"
         py="2"
+        role="status"
       >
         <Text size="2" weight="medium" color={remainderMinor === 0 ? "grass" : "red"}>
-          {t("splitUnassigned")}
+          {remainderMinor === 0
+            ? t("splitDone")
+            : remainderMinor < 0
+              ? t("splitOver")
+              : t("splitMissing")}
         </Text>
         <Figure
           size="2"
           weight="bold"
           color={remainderMinor === 0 ? "grass" : "red"}
         >
-          {moneyText(remainderMinor, currency, locale)}
+          {moneyText(Math.abs(remainderMinor), currency, locale)}
         </Figure>
       </ToneSurface>
     </Flex>

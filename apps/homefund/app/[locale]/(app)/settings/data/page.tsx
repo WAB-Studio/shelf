@@ -6,7 +6,7 @@ import { notFound } from "next/navigation";
 import { DataScreen } from "@/components/data/data-screen";
 import { Page } from "@/components/ui";
 import { requireUser } from "@/db/session";
-import { SHEET_ENTITIES } from "@/lib/spreadsheet/schema";
+import { EXPORT_ENTITIES } from "@/lib/spreadsheet/schema";
 import { routing } from "@/i18n/routing";
 
 export async function generateMetadata(
@@ -31,7 +31,7 @@ export default async function DataPage(
 
   return (
     <Page>
-      <DataScreen entities={SHEET_ENTITIES} />
+      <DataScreen entities={EXPORT_ENTITIES} />
     </Page>
   );
 }

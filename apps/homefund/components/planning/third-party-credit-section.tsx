@@ -86,22 +86,12 @@ export function ThirdPartyCreditSection({
           ? t("noteDue", { day: credit.dueDay })
           : undefined;
 
-  // With the bank's schedule at hand, what the payer still has to send reads beside the capital, with interest (RF-266).
+  // What the loan still asks sits at the top of the screen (RF-287); this section keeps the payer's own side.
   const { schedule } = credit;
-  const scheduleNote =
-    schedule !== null && schedule.remainingCount > 0
-      ? t("scheduleLeft", { person, count: schedule.remainingCount, amount: amount(schedule.remainingTotalCents) })
-      : undefined;
   // The first cuota the payer's usual amount will not cover, said before its day.
   const [uncovered, ...moreUncovered] = schedule?.uncovered ?? [];
 
   const tiles = [
-    {
-      key: "remaining",
-      label: t("remaining"),
-      value: <Money minor={credit.owedCents} currency={currency} signed={false} size="inherit" />,
-      note: scheduleNote ?? dueNote,
-    },
     {
       key: "paid",
       label: t("personPaid", { person }),
@@ -150,9 +140,21 @@ export function ThirdPartyCreditSection({
 
   // One side of a month on a line: the amount and its day, or the dash.
   const side = (cents: number, on: string | null) => (cents === 0 || on === null ? NONE : `${amount(cents)} · ${day(on)}`);
-  // What the payer sent less what was paid to the lender: where the 4x1000 and the cushion go.
-  const difference = (month: CreditMonth) =>
-    month.paidCents === 0 && month.lenderCents === 0 ? NONE : amount(month.paidCents - month.lenderCents);
+  // What the payer sent less what was paid to the lender, with its sign: where the 4x1000 and the cushion go. A month the
+  // lender was paid and the payer sent nothing says so in words (RF-287).
+  const difference = (month: CreditMonth, align: "start" | "end") =>
+    month.paidCents === 0 && month.lenderCents === 0 ? (
+      NONE
+    ) : (
+      <Flex direction="column" align={align}>
+        <Money minor={month.paidCents - month.lenderCents} currency={currency} signed="always" size="inherit" />
+        {month.paidCents === 0 && (
+          <Text size="1" color="gray">
+            {t("notSent", { person })}
+          </Text>
+        )}
+      </Flex>
+    );
 
   // One side of a month for the table: the amount and, under it, the day of its last transfer.
   const cell = (cents: number, on: string | null) =>
@@ -197,11 +199,7 @@ export function ThirdPartyCreditSection({
         </Flex>
         <Flex direction="column" gap="1">
           <Text size="2">{lender === null ? t("introNoLender", { person }) : t("intro", { person, lender })}</Text>
-          <Text size="2" weight="medium">
-            {t("capitalLeft", { amount: amount(credit.owedCents) })}
-            {schedule !== null && schedule.remainingCount > 0 &&
-              ` · ${t("withInterest", { amount: amount(schedule.remainingTotalCents), count: schedule.remainingCount })}`}
-          </Text>
+          {dueNote !== undefined && <Text size="2">{dueNote}</Text>}
           <Text size="2" color="gray">
             {t("openingLine", { amount: amount(credit.openingCents), date: day(credit.openedOn) })}
           </Text>
@@ -274,9 +272,14 @@ export function ThirdPartyCreditSection({
                     <Text size="2" color="gray">
                       {lender === null ? t("colPaidBank") : t("colPaid", { lender })}: {side(month.lenderCents, month.lenderOn)}
                     </Text>
-                    <Text size="2" color="gray">
-                      {t("colDifference")}: {difference(month)}
-                    </Text>
+                    <Flex align="start" gap="1">
+                      <Text size="2" color="gray">
+                        {t("colDifference")}:
+                      </Text>
+                      <Text size="2" color="gray" as="div">
+                        {difference(month, "start")}
+                      </Text>
+                    </Flex>
                   </Flex>
                 </PanelBlock>
               ))}
@@ -297,7 +300,7 @@ export function ThirdPartyCreditSection({
                     <Table.RowHeaderCell>{monthName(month.month)}</Table.RowHeaderCell>
                     <Table.Cell>{cell(month.paidCents, month.paidOn)}</Table.Cell>
                     <Table.Cell>{cell(month.lenderCents, month.lenderOn)}</Table.Cell>
-                    <Table.Cell justify="end">{difference(month)}</Table.Cell>
+                    <Table.Cell justify="end">{difference(month, "end")}</Table.Cell>
                   </Table.Row>
                 ))}
               </Table.Body>

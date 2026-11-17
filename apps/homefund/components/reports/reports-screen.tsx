@@ -103,12 +103,14 @@ export function ReportsScreen({ data, month }: { data: ReportsData; month: strin
             </section>
           </Flex>
 
-          <Flex direction="column" gap="3" asChild>
-            <section>
-              <Heading as="h2" size="4">{t("contributionsTitle")}</Heading>
-              <ContributionsBody data={data} />
-            </section>
-          </Flex>
+          {data.hasGroup && (
+            <Flex direction="column" gap="3" asChild>
+              <section>
+                <Heading as="h2" size="4">{t("contributionsTitle")}</Heading>
+                <ContributionsBody data={data} />
+              </section>
+            </Flex>
+          )}
 
           {spendingForPersons.length > 0 && (
             <Flex direction="column" gap="3" asChild>
@@ -144,10 +146,12 @@ export function ReportsScreen({ data, month }: { data: ReportsData; month: strin
                 <ExpenseBands expenses={expensesByCategory} months={sixMonthFlow} monthStart={`${month}-01`} />
               </ReportCard>
 
-              <ReportCard>
-                <Heading as="h2" size="4">{t("contributionsTitle")}</Heading>
-                <ContributionsBody data={data} />
-              </ReportCard>
+              {data.hasGroup && (
+                <ReportCard>
+                  <Heading as="h2" size="4">{t("contributionsTitle")}</Heading>
+                  <ContributionsBody data={data} />
+                </ReportCard>
+              )}
             </ReportRow>
 
             {spendingForPersons.length > 0 && (

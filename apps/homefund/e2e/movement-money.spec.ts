@@ -15,7 +15,7 @@
  */
 import { randomUUID } from "node:crypto";
 
-import { expect, type Locator, type Page, type TestInfo } from "@playwright/test";
+import { expect, type Locator, type Page } from "@playwright/test";
 
 import { TIME_ZONE } from "@/lib/locales";
 import messages from "@/messages/es.json";
@@ -147,24 +147,16 @@ async function seedExpense(options: {
   return id;
 }
 
-function isDesktop(testInfo: TestInfo): boolean {
-  return testInfo.project.name === "desktop";
-}
-
-// The dashboard's two ways into the full form: the laptop draws a button of its
-// own beside the quick-entry row, the phone reaches it through the quick sheet.
-async function openFullForm(page: Page, testInfo: TestInfo, reload = true): Promise<Locator> {
+// The dashboard's one tap into the movement form (RF-272), on the laptop and on the phone alike.
+async function openFullForm(page: Page, reload = true): Promise<Locator> {
   if (reload) await page.goto("/es");
-  if (isDesktop(testInfo)) {
-    await page.getByRole("button", { name: transactions.quickTypeLink, exact: true }).click();
-  } else {
-    await page.getByRole("button", { name: transactions.quickPlaceholder, exact: true }).click();
-    await page.getByRole("link", { name: transactions.quickTypeLink, exact: true }).click();
-  }
+  await page.getByRole("button", { name: transactions.quickPlaceholder, exact: true }).click();
   const dialog = page.getByRole("dialog");
   await expect(dialog.locator("form").getByRole("heading", { name: transactions.formTitle })).toBeVisible();
   return dialog;
 }
+
+const tabOf = (dialog: Locator, name: string) => dialog.getByRole("radio", { name, exact: true });
 
 async function choose(page: Page, trigger: Locator, option: string) {
   await trigger.click();
@@ -178,8 +170,11 @@ async function fillAccounts(
   dialog: Locator,
   accounts: { from: string | null; to: string | null },
 ) {
-  await choose(page, field(dialog, "movement-from"), accounts.from ?? transactions.accountNone);
-  await choose(page, field(dialog, "movement-to"), accounts.to ?? transactions.accountNone);
+  // The tab follows the sides: a lone destination is an income, both sides a transfer (RF-272).
+  if (accounts.from === null) await tabOf(dialog, transactions.kindIncome).click();
+  else if (accounts.to !== null) await tabOf(dialog, transactions.kindTransfer).click();
+  if (accounts.from !== null) await choose(page, field(dialog, "movement-from"), accounts.from);
+  if (accounts.to !== null) await choose(page, field(dialog, "movement-to"), accounts.to);
 }
 
 const saveButton = (dialog: Locator) =>
@@ -224,17 +219,16 @@ test.describe("on the laptop", () => {
 
   test("an income names only a destination, and 1 234 567,89 is stored as 123456789 cents with one split", async ({
     page,
-  }, testInfo) => {
+  }) => {
     // Kills: the amount multiplied by a hundred a second time before it is written.
     const before = await balanceOf(ids.source);
-    const dialog = await openFullForm(page, testInfo);
+    const dialog = await openFullForm(page);
 
     await fillAccounts(page, dialog, { from: null, to: SOURCE_NAME });
     await field(dialog, "movement-amount").fill("1 234 567,89");
     await pickCategory(dialog, INCOME_CATEGORY);
 
-    // The kind is read off the accounts and shown, never chosen (RF-18).
-    await expect(dialog.getByText(transactions.kindIncome, { exact: true })).toBeVisible();
+    await expect(tabOf(dialog, transactions.kindIncome)).toBeChecked();
 
     await saveButton(dialog).click();
     await expect(dialog).toBeHidden();
@@ -254,15 +248,15 @@ test.describe("on the laptop", () => {
 
   test("a transfer between two accounts is a transfer with both legs, no split, and both balances move", async ({
     page,
-  }, testInfo) => {
+  }) => {
     // Kills: the movement written with one of its two legs only.
     const [sourceBefore, targetBefore] = [await balanceOf(ids.source), await balanceOf(ids.target)];
-    const dialog = await openFullForm(page, testInfo);
+    const dialog = await openFullForm(page);
 
     await fillAccounts(page, dialog, { from: SOURCE_NAME, to: TARGET_NAME });
     await field(dialog, "movement-amount").fill("30000");
 
-    await expect(dialog.getByText(transactions.kindTransfer, { exact: true })).toBeVisible();
+    await expect(tabOf(dialog, transactions.kindTransfer)).toBeChecked();
     // A transfer carries no category (RF-69): the editor is not even on the form.
     await expect(dialog.getByRole("button", { name: transactions.splitDivide, exact: true })).toHaveCount(0);
 
@@ -283,9 +277,9 @@ test.describe("on the laptop", () => {
 
   test("an expense split in two, 30 000 and 20 000, stores two splits that sum to the 50 000 amount", async ({
     page,
-  }, testInfo) => {
+  }) => {
     // Kills: only the first split row reaching the database.
-    const dialog = await openFullForm(page, testInfo);
+    const dialog = await openFullForm(page);
 
     await fillAccounts(page, dialog, { from: SOURCE_NAME, to: null });
     await field(dialog, "movement-amount").fill("50000");
@@ -315,9 +309,9 @@ test.describe("on the laptop", () => {
 
   test("splits that leave 10 000 unassigned are refused on the form and write nothing", async ({
     page,
-  }, testInfo) => {
+  }) => {
     // Kills: the sum rule dropped from the form's schema, so the short split goes to the server.
-    const dialog = await openFullForm(page, testInfo);
+    const dialog = await openFullForm(page);
 
     await fillAccounts(page, dialog, { from: SOURCE_NAME, to: null });
     await field(dialog, "movement-amount").fill("50000");
@@ -425,9 +419,9 @@ test.describe("at 360 px", () => {
     expect(overflow).toBeLessThanOrEqual(0);
   }
 
-  test("the movement form fits the phone, its save button inside the screen @mobile", async ({ page }, testInfo) => {
+  test("the movement form fits the phone, its save button inside the screen @mobile", async ({ page }) => {
     // Kills: the two-column body kept below the breakpoint, which pushes the dialog past 360.
-    const dialog = await openFullForm(page, testInfo);
+    const dialog = await openFullForm(page);
     await fillAccounts(page, dialog, { from: SOURCE_NAME, to: null });
 
     await expectFits(page, dialog);

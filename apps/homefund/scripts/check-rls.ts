@@ -2326,9 +2326,9 @@ async function checkDebtDerivedFigures() {
 
 // Assertions 81-85, 275 and 276: the account_statements snapshots. The generator, replicated inline, freezes
 // the balance to the movements on or before a past cut-off; the unique key makes a re-run a no-op; and the
-// snapshot is immutable — no UPDATE and no DELETE grant, so not even its owner rewrites or erases it — and
-// gated by the account's scope, so an unrelated user can neither read nor mint one. Only the account's own
-// cascade takes a statement away. Every fixture is seeded through the app's own policies and rolled back.
+// last statement of an account may be corrected and taken back by its writer (RF-284) while an earlier one stays a
+// record, its account and its source never move, and an unrelated user can neither read nor mint one. The account's
+// own cascade takes the rest away. Every fixture is seeded through the app's own policies and rolled back.
 async function checkAccountStatementPolicies() {
   console.log("");
   const subject = randomUUID();
@@ -2337,9 +2337,9 @@ async function checkAccountStatementPolicies() {
   const labels = [
     "81. the statement balance counts only what settled in the card's own currency on or before the cut-off",
     "82. re-running the same insert under the unique key inserts nothing",
-    "83. an update of a statement by authenticated is refused",
+    "83. the last statement's printed figure can be corrected, and its source never changes",
     "84. an unrelated member can neither read nor write a statement on the subject's liability",
-    "275. the statement's own owner is refused the delete and the row survives it",
+    "275. the owner takes back the last statement and an earlier one is refused both the rewrite and the delete",
     "276. deleting the liability account still carries its statement off",
   ];
   const tailLabel = "85. the rolled-back account statement transaction leaves no trace";
@@ -2457,18 +2457,26 @@ async function checkAccountStatementPolicies() {
       const second = await generate();
       assert(labels[1], second.length === 0, `second-run inserted rows = ${second.length}`);
 
-      // 83: no UPDATE grant on account_statements — a rewrite is refused outright (immutability).
+      // 83: the printed figures carry an UPDATE grant and the policy admits the account's last statement; the
+      // source has no grant, so a statement never turns from recorded into imported (RF-284).
       const [{ id: statementId }] = await tx<{ id: string }[]>`
         select id from account_statements where account_id = ${card} and cut_off_date = ${dates.cut_off}`;
+      const corrected = await tx<{ closing_balance_cents: string }[]>`
+        update account_statements set closing_balance_cents = -240000 where id = ${statementId}
+        returning closing_balance_cents`;
       let updateCode: string | undefined;
       await tx
         .savepoint(async (sp) => {
-          await sp`update account_statements set closing_balance_cents = 0 where id = ${statementId}`;
+          await sp`update account_statements set source = 'imported' where id = ${statementId}`;
         })
         .catch((error: unknown) => {
           updateCode = pgErrorCode(error);
         });
-      assert(labels[2], updateCode === "42501", `sqlstate ${updateCode ?? "none"}`);
+      assert(
+        labels[2],
+        corrected.length === 1 && corrected[0].closing_balance_cents === "-240000" && updateCode === "42501",
+        `corrected rows = ${corrected.length}, source sqlstate ${updateCode ?? "none"}`,
+      );
 
       // 84: an unrelated user (no shared group) sees no statement on the subject's liability and cannot
       // mint one there. The distinct cut-off keeps the unique key clear, so only the write policy can reject.
@@ -2491,38 +2499,41 @@ async function checkAccountStatementPolicies() {
         `unrelated read = ${otherSees}, unrelated insert sqlstate ${otherInsertCode ?? "none"}`,
       );
 
-      // 275: neither DELETE policy nor DELETE grant survives on the table, so the one caller who reads the
-      // row and writes everything else on its account is refused it too — the snapshot is a record (RF-84).
+      // 275: a statement is the person's to take back only while it is the account's last: an earlier one is
+      // filtered out of both the rewrite and the delete, which touch no row and raise nothing, and the last one
+      // goes (RF-284). The earlier one lands first so there is one to refuse.
       await enterUserContext(tx, subject);
-      let deleteCode: string | undefined;
-      await tx
-        .savepoint(async (sp) => {
-          await sp`delete from account_statements where id = ${statementId}`;
-        })
-        .catch((error: unknown) => {
-          deleteCode = pgErrorCode(error);
-        });
-      const [{ count: afterRefusal }] = await tx<{ count: string }[]>`
-        select count(*)::text as count from account_statements where id = ${statementId}`;
+      const [{ id: earlierId }] = await tx<{ id: string }[]>`
+        insert into account_statements (account_id, period_start, cut_off_date, closing_balance_cents)
+        values (${card}, ${dates.period_start}, ${dates.before_cut}, -200000) returning id`;
+      const earlierRewritten = await tx<{ id: string }[]>`
+        update account_statements set closing_balance_cents = 0 where id = ${earlierId} returning id`;
+      const earlierDeleted = await tx<{ id: string }[]>`
+        delete from account_statements where id = ${earlierId} returning id`;
+      const lastDeleted = await tx<{ id: string }[]>`
+        delete from account_statements where id = ${statementId} returning id`;
+      const [{ count: afterTakeBack }] = await tx<{ count: string }[]>`
+        select count(*)::text as count from account_statements where id in (${statementId}, ${earlierId})`;
       assert(
         labels[4],
-        deleteCode === "42501" && afterRefusal === "1",
-        `sqlstate ${deleteCode ?? "none"}, rows left = ${afterRefusal}`,
+        earlierRewritten.length === 0 && earlierDeleted.length === 0 && lastDeleted.length === 1 && afterTakeBack === "1",
+        `earlier rewritten = ${earlierRewritten.length}, earlier deleted = ${earlierDeleted.length}, last deleted = ${lastDeleted.length}, rows left = ${afterTakeBack}`,
       );
 
-      // 276: the control for 275 — a statement nothing can reach would satisfy it just as well. Referential
+      // 276: the control for 275 — a statement nothing can reach would satisfy it just as well. The earlier one is
+      // what the take-back left. Referential
       // integrity runs outside row security and outside the grant, so the account's cascade still takes the
       // statement with it. The card's two movements hold the account under `on delete restrict` and go first;
       // both counts are read as `postgres`, so an unreadable row would show up as 0 before the delete.
       await tx`reset role`;
       const [{ count: beforeCascade }] = await tx<{ count: string }[]>`
-        select count(*)::text as count from account_statements where id = ${statementId}`;
+        select count(*)::text as count from account_statements where id = ${earlierId}`;
       await enterUserContext(tx, subject);
       await tx`delete from transactions where from_account_id = ${card} or to_account_id = ${card}`;
       await tx`delete from accounts where id = ${card}`;
       await tx`reset role`;
       const [{ count: afterCascade }] = await tx<{ count: string }[]>`
-        select count(*)::text as count from account_statements where id = ${statementId}`;
+        select count(*)::text as count from account_statements where id = ${earlierId}`;
       assert(
         labels[5],
         beforeCascade === "1" && afterCascade === "0",
@@ -5379,22 +5390,9 @@ const UPDATE_GRANT_GAPS: Record<string, string[]> = {
     "id",
     "reconciled_on",
   ],
-  account_statements: [
-    "account_id",
-    "closed_at",
-    "closing_balance_cents",
-    "credits_cents",
-    "cut_off_date",
-    "debits_cents",
-    "fees_charged_cents",
-    "id",
-    "interest_charged_cents",
-    "minimum_payment_cents",
-    "opening_balance_cents",
-    "payment_due_date",
-    "period_start",
-    "source",
-  ],
+  // The printed figures and the dates are the person's to correct on the last statement (RF-284); its account, its
+  // source and its own stamps never move.
+  account_statements: ["account_id", "closed_at", "id", "source"],
   accounts: ["created_at", "group_id", "id", "kind", "owner_user_id", "updated_at"],
   allowed_emails: ["added_at", "email"],
   app_users: ["created_at", "id", "updated_at"],
@@ -5581,6 +5579,8 @@ const UPDATE_GRANT_GAPS: Record<string, string[]> = {
 // DELETE the policies filter; TRUNCATE consults neither a policy nor a row trigger, so the
 // audit trail (RF-45) has nothing to record — the list stays empty.
 const DELETE_GRANTS: string[] = [
+  // The last statement of an account may be taken back (RF-284); the policy filters every other row.
+  "account_statements",
   "accounts",
   "budgets",
   "card_deferrals",
@@ -9547,7 +9547,7 @@ async function checkAccountStatementShape() {
     "289. an asset closes a period with no due date and no minimum",
     "290. a due date before the cut-off is refused",
     "291. a second statement on the same account and cut-off is refused",
-    "292. anon and service_role hold nothing on the table, and authenticated holds column grants only",
+    "292. anon and service_role hold nothing on the table, and authenticated holds DELETE table-wide and column grants for the rest",
     "293. the asset close left an audit_log row naming account_statements",
   ];
   const tailLabel = "294. the rolled-back account statement shape transaction leaves no trace";
@@ -9571,7 +9571,8 @@ async function checkAccountStatementShape() {
   );
 
   // 292: a rename carries the old grants forward, so this reads both the table ACL and every column
-  // ACL. `authenticated` must hold nothing table-wide — the column form is the whole grant.
+  // ACL. `authenticated` holds DELETE table-wide (the policy admits only a last statement, RF-284) and the rest
+  // by column.
   const tableAcl = await sql<{ role: string; priv: string }[]>`
     select a.grantee::regrole::text as role, a.privilege_type as priv
     from pg_class c
@@ -9648,8 +9649,8 @@ async function checkAccountStatementShape() {
       assert(
         labels[4],
         strangers.length === 0 &&
-          !tableAcl.some((row) => row.role === "authenticated") &&
-          columnPrivileges.join(",") === "INSERT,SELECT",
+          tableAcl.map((row) => row.priv).join(",") === "DELETE" &&
+          columnPrivileges.join(",") === "INSERT,SELECT,UPDATE",
         `anon and service_role hold [${
           strangers.map((row) => `${row.role}:${row.priv}`).join(", ") || "nothing"
         }], authenticated holds [${
@@ -14340,6 +14341,7 @@ async function checkThirdPartyCredits() {
     columns: "rf211-4. the accounts of a link cannot be changed by an update (42501)",
     audit: "rf211-5. linking, editing and removing each leave an audit row naming the person",
     grants: "rf211-6. anon and service_role hold no privilege on third_party_credits",
+    opening: "rf288-1. a payer's payment dated before the credit was followed is refused by the receivable's opening until its owner moves the opening back and raises it by the payment (what it derives stays), a stranger moves no opening, and the link that hides the receivable (RF-216) stays",
   };
   const fixture = async (tx: M1Tx) => {
     const [owner, stranger] = [randomUUID(), randomUUID()];
@@ -14426,6 +14428,34 @@ async function checkThirdPartyCredits() {
     const moveLiability = await m1Refusal(tx, (sp) => sp`update third_party_credits set liability_account_id = ${f.other}`);
     await tx`reset role`;
     return [{ ok: moveReceivable === "42501" && moveLiability === "42501", detail: `receivable ${moveReceivable}, liability ${moveLiability}` }];
+  });
+
+  await rf136Rows([labels.opening], async (tx) => {
+    const f = await fixture(tx);
+    const paidOn = (await tx<{ day: string }[]>`select (${todayInBogota()}::date - 30)::text as day`)[0].day;
+    const [{ id: lender }] = await tx<{ id: string }[]>`
+      insert into accounts (owner_user_id, name, kind, subtype, settlement_currency, initial_balance_cents, initial_balance_on)
+      values (${f.owner}, 'rls rf288 bank', 'asset', 'bank', 'COP', 0, (${todayInBogota()}::date - 60)) returning id`;
+    await tx`update accounts set initial_balance_cents = 12000 where id = ${f.owes}`;
+    await enterUserContext(tx, f.owner);
+    await link(f.credit, f.owes)(tx);
+    const pay = (sp: M1Tx) =>
+      sp`insert into transactions (from_account_id, to_account_id, amount_cents, occurred_at, description)
+        values (${f.owes}, ${lender}, 5000, ${paidOn}, 'rls rf288 payment')`;
+    const refused = await m1Refusal(tx, pay);
+    await enterUserContext(tx, f.stranger);
+    const strangerMoves = (await tx`update accounts set initial_balance_on = ${paidOn}, initial_balance_cents = 17000 where id = ${f.owes} returning id`).length;
+    await enterUserContext(tx, f.owner);
+    const moved = (await tx`update accounts set initial_balance_on = ${paidOn}, initial_balance_cents = initial_balance_cents + 5000 where id = ${f.owes} returning id`).length;
+    const accepted = await m1Refusal(tx, pay);
+    const [balance] = await tx<{ balance_cents: string }[]>`select balance_cents::text from account_balances where id = ${f.owes}`;
+    const linked = await tx<{ receivable: string }[]>`select receivable_account_id as receivable from third_party_credits where liability_account_id = ${f.credit}`;
+    await tx`reset role`;
+    return [{
+      ok: refused === "MO001" && strangerMoves === 0 && moved === 1 && accepted === null && balance.balance_cents === "12000" &&
+        linked.length === 1 && linked[0].receivable === f.owes,
+      detail: `before the move ${refused}, a stranger moves ${strangerMoves}, the owner moves ${moved}, then the payment ${accepted ?? "accepted"}, derived ${balance.balance_cents} (expected 12000), link kept ${linked.length}`,
+    }];
   });
 
   await rf136Rows([labels.grants], async (tx) => {

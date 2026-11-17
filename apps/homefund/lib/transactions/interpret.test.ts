@@ -561,3 +561,92 @@ test("a wallet receipt's origin is the person's account when the money left, its
   assert.equal(accountOf("Realizaste una transferencia a PERSONA por $24.000 Origen cuenta • 1234 Llave • 3001234567"), "own");
   assert.equal(accountOf("Recibiste $76.000 de PERSONA Origen cuenta • 5678 Destino ahorro • 1234"), "own");
 });
+
+// The phrase the movement form reads (RF-273, RF-274): the figure, the day, the instalments and the
+// category it proposes, none of which changes the words the person typed.
+const TODAY = "2026-11-17";
+const phraseCtx = {
+  categories: [
+    { id: "sub", name: "Suscripciones", kind: "expense" },
+    { id: "trans", name: "Transporte", kind: "expense" },
+    { id: "comida", name: "Comida", kind: "expense" },
+    { id: "salud", name: "Salud", kind: "expense" },
+    { id: "gas", name: "Combustible", kind: "expense" },
+  ],
+  accounts: [],
+  defaultAccountId: null,
+  today: TODAY,
+};
+
+test("«28,5», «12.000» and «12.000,50» read as the figure written", () => {
+  const read = (text: string) => interpretQuickEntry(text, phraseCtx).amountPesos;
+  assert.equal(read("cafe 28,5"), "28,5");
+  assert.equal(read("arriendo 12.000"), "12000");
+  assert.equal(read("arriendo 12.000,50"), "12000,50");
+});
+
+test("«12.000.50» asks which reading is meant and proposes no figure", () => {
+  const result = interpretQuickEntry("mercado 12.000.50", phraseCtx);
+  assert.equal(result.amountPesos, null);
+  assert.deepEqual(result.ask, {
+    token: "12.000.50",
+    marks: true,
+    choices: [
+      { cents: 1_200_050, fromWords: false },
+      { cents: 120_005_000, fromWords: false },
+    ],
+  });
+});
+
+test("«ayer», «hoy» and an explicit date set the day", () => {
+  const read = (text: string) => interpretQuickEntry(text, phraseCtx).occurredAt;
+  assert.equal(read("uber al aeropuerto 38.000 ayer"), "2026-11-16");
+  assert.equal(read("cafe 5.000 hoy"), TODAY);
+  assert.equal(read("cafe 5.000 anteayer"), "2026-11-15");
+  assert.equal(read("cafe 5.000 el 10/11"), "2026-11-10");
+  assert.equal(read("cafe 5.000 el 10/11/2026"), "2026-11-10");
+  assert.equal(read("cafe 5.000 2026-11-09"), "2026-11-09");
+  // A day with no year that has not come yet this year is last year's.
+  assert.equal(read("cafe 5.000 20/12"), "2025-12-20");
+  assert.equal(read("cafe 5.000"), null);
+});
+
+test("without a clock «ayer» names no day", () => {
+  assert.equal(interpretQuickEntry("cafe 5.000 ayer", { ...phraseCtx, today: undefined }).occurredAt, null);
+});
+
+test("an ISO date is no amount", () => {
+  assert.equal(interpretQuickEntry("cafe 2026-11-09 5.000", phraseCtx).amountPesos, "5000");
+});
+
+test("«a N cuotas» reads the instalments and leaves the amount alone", () => {
+  const result = interpretQuickEntry("nevera 2.400.000 a 12 cuotas", phraseCtx);
+  assert.equal(result.instalments, 12);
+  assert.equal(result.amountPesos, "2400000");
+  assert.equal(interpretQuickEntry("nevera a 6 cuotas 2.400.000", phraseCtx).amountPesos, "2400000");
+  assert.equal(interpretQuickEntry("nevera 2.400.000 en 1 cuota", phraseCtx).instalments, null);
+  assert.equal(interpretQuickEntry("nevera 2.400.000", phraseCtx).instalments, null);
+});
+
+test("common spends get the category the person already has for them", () => {
+  const category = (text: string) => interpretQuickEntry(text, phraseCtx).categoryId;
+  assert.equal(category("netflix 44.900"), "sub");
+  assert.equal(category("uber 38.000"), "trans");
+  assert.equal(category("almuerzo 25.000"), "comida");
+  assert.equal(category("gasolina 80.000"), "gas");
+  assert.equal(category("farmacia 12.000"), "salud");
+  assert.equal(category("peluqueria 30.000"), null);
+});
+
+test("what the person typed before outranks the common spends", () => {
+  const memory = [{ text: "Uber a la oficina", categoryId: "gas" }];
+  assert.equal(
+    interpretQuickEntry("uber 20.000", { ...phraseCtx, memory }).categoryId,
+    "gas",
+  );
+  // A remembered category the form no longer offers is skipped.
+  assert.equal(
+    interpretQuickEntry("uber 20.000", { ...phraseCtx, memory: [{ text: "uber", categoryId: "gone" }] }).categoryId,
+    "trans",
+  );
+});

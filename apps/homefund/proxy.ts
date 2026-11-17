@@ -16,6 +16,9 @@ import { env } from "@/lib/env";
 
 const handleLocaleRouting = createMiddleware(routing);
 
+// «Pagos», «Recurrentes» and «Suscripciones» became one screen, «Lo que viene».
+const RETIRED_PLANNING_PATH = /^\/[^/]+\/planning\/(payments|recurring|subscriptions)\/?$/;
+
 // The requested path, handed to the signed-in shell. A layout has no other way
 // to learn which route is rendering under it, and `app/[locale]/(app)/layout.tsx`
 // is the last place that can still set a status: everything below it is wrapped
@@ -164,6 +167,15 @@ export async function proxy(request: NextRequest) {
 
   if (signedIn && pathname === loginPathname) {
     const url = new URL(`/${segment}`, request.url);
+
+    return carryOver(NextResponse.redirect(url), response, headers);
+  }
+
+  // A page under `loading.tsx` can only redirect once its shell has flushed, a refresh no script and no crawler
+  // follows; the old addresses are answered here, after the sign-in gate, as a redirect.
+  if (signedIn && RETIRED_PLANNING_PATH.test(pathname)) {
+    const url = request.nextUrl.clone();
+    url.pathname = `/${segment}/planning/upcoming`;
 
     return carryOver(NextResponse.redirect(url), response, headers);
   }

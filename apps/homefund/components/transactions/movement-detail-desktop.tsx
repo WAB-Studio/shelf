@@ -36,6 +36,10 @@ import type { TransactionListRow } from "@/db/queries/transactions";
 import { useRouter } from "@/i18n/navigation";
 import type { CurrencyCode } from "@/lib/currency";
 import { civilDateToDate } from "@/lib/dates";
+import {
+  narrateTransfers,
+  transferSidesById,
+} from "@/lib/transactions/transfer-words";
 import { deriveRate } from "@/lib/money";
 import { foreignSettlementCurrency } from "@/lib/validation/transaction";
 import { useActionErrorToast } from "@/lib/use-action-toast";
@@ -123,6 +127,13 @@ export function MovementDetailDesktop({
     tc("scopedName", { name }),
   );
   const categoryPaths = categoryPathsById(options.categories, categoryNames);
+  // A transfer into a debt, or out of a payer's hidden account, reads as what happened (RF-272).
+  const narrated = narrateTransfers(
+    [movement],
+    transferSidesById(options.accountDirectory),
+    accountNames,
+    t,
+  ).get(movement.id);
   const categoryColors = new Map<string, string | null>();
   for (const category of options.categories) {
     categoryColors.set(category.id, category.color);
@@ -151,7 +162,7 @@ export function MovementDetailDesktop({
     : kind === "income"
       ? t("kindIncome")
       : kind === "transfer"
-        ? t("kindTransfer")
+        ? (narrated?.title ?? t("kindTransfer"))
         : t("kindExpense");
 
   // A transfer names no category, so its tile stays the neutral surface (RF-69).
@@ -165,7 +176,8 @@ export function MovementDetailDesktop({
         accountNames.get((movement.toAccountId ?? movement.fromAccountId) as string)) ??
       ""
     : kind === "transfer"
-      ? `${(movement.fromAccountId && accountNames.get(movement.fromAccountId)) ?? ""} → ${(movement.toAccountId && accountNames.get(movement.toAccountId)) ?? ""}`
+      ? (narrated?.account ??
+        `${(movement.fromAccountId && accountNames.get(movement.fromAccountId)) ?? ""} → ${(movement.toAccountId && accountNames.get(movement.toAccountId)) ?? ""}`)
       : kind === "income"
         ? (movement.toAccountId && accountNames.get(movement.toAccountId)) ?? ""
         : (movement.fromAccountId && accountNames.get(movement.fromAccountId)) ?? "";
@@ -336,12 +348,6 @@ export function MovementDetailDesktop({
                 <Text size="2" weight="medium">
                   {kindLabel}
                 </Text>
-                {/* An adjustment is booked by a count, not deduced from the accounts. */}
-                {!isAdjustment && (
-                  <Text size="2" color="gray">
-                    {t("kindDerivedFrom")}
-                  </Text>
-                )}
               </Flex>
             </Flex>
           </Panel>
@@ -432,7 +438,7 @@ export function MovementDetailDesktop({
               {movement.forPerson && (
                 <>
                   <Separator size="4" />
-                  <Fact label={t("forPersonLabel")} value={movement.forPerson.name} />
+                  <Fact label={t(movement.kind === "income" ? "fromPersonLabel" : "forPersonLabel")} value={movement.forPerson.name} />
                 </>
               )}
             </Flex>

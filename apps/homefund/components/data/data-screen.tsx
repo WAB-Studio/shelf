@@ -27,7 +27,7 @@ import {
   DateInput,
 } from "@/components/ui";
 import { BACKGROUND_SHEETS } from "@/lib/spreadsheet/sheet-layout";
-import type { SheetEntity } from "@/lib/spreadsheet/schema";
+import type { ExportEntity } from "@/lib/spreadsheet/schema";
 import { useActionErrorToast, type MessageKey } from "@/lib/use-action-toast";
 
 // The commit action JSON-encodes a row failure into its one error string
@@ -61,20 +61,20 @@ function parseCommitRowFailure(serverError: string | undefined): CommitRowFailur
 export function DataScreen({
   entities,
 }: {
-  entities: readonly SheetEntity[];
+  entities: readonly ExportEntity[];
 }) {
   const t = useTranslations("data");
   // Root-scoped: a row's error is a full catalogue key from another namespace.
   const tKey = useTranslations();
   const locale = useLocale();
 
-  const [selected, setSelected] = useState<Set<SheetEntity>>(
+  const [selected, setSelected] = useState<Set<ExportEntity>>(
     () => new Set(entities),
   );
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
 
-  function toggle(entity: SheetEntity, on: boolean) {
+  function toggle(entity: ExportEntity, on: boolean) {
     setSelected((current) => {
       const next = new Set(current);
       if (on) next.add(entity);
@@ -154,7 +154,7 @@ export function DataScreen({
   // The column and the raw value ride straight from the pipeline (RF-51); only
   // the column's own header and the message key still need translating here.
   // A background sheet is hidden in the export, so its name carries how to show it.
-  const sheetLabel = (entity: SheetEntity) =>
+  const sheetLabel = (entity: ExportEntity) =>
     BACKGROUND_SHEETS.has(entity)
       ? t("screen.hiddenSheet", { sheet: t(`sheets.${entity}`) })
       : t(`sheets.${entity}`);

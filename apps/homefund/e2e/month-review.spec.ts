@@ -9,7 +9,7 @@ import { expect, type Page } from "@playwright/test";
 
 import { fixtureSql } from "../scripts/harness/fixtures";
 import { asHarnessUser, readScope, test } from "./global-setup";
-import { addCivilMonths, currentMonthStart } from "@/lib/dates";
+import { addCivilMonths, currentMonthStart, todayInBogota } from "@/lib/dates";
 
 const scope = readScope();
 const stamp = randomUUID().slice(0, 8);
@@ -136,7 +136,7 @@ test("‹ › step between the seeded month and its neighbours, and «Reportes»
     "href",
     `/es/reports/review?month=${addCivilMonths(`${month}-01`, 1).slice(0, 7)}`,
   );
-  // Last month is the newest closed one: no step into the open month.
+  // The current month is the newest one: no step past it.
   await page.goto("/es/reports/review");
   await expect(page.getByRole("link", { name: "mes siguiente ›" })).toHaveCount(0);
   await page.goto("/es/reports");
@@ -156,4 +156,32 @@ test("«Deshacer» under «Revisados» drops the mark: the item waits again, aft
   await expect(page.getByRole("button", { name: /^Revisados/ })).toHaveCount(0);
   await page.reload();
   await expect(okButtons(page)).toHaveCount(4);
+});
+
+test("the review opens the current month and lists what is odd now, «Nada sobresale» only when nothing is", async ({ page }) => {
+  const pocketId = randomUUID();
+  const parentId = randomUUID();
+  await asHarnessUser(async (tx) => {
+    await tx`
+      insert into accounts (id, owner_user_id, name, kind, subtype, initial_balance_cents, initial_balance_on)
+      values
+        (${parentId}, ${scope.userId}, ${`Madre ${stamp}`}, 'asset', 'bank', 90_000_000, ${addCivilMonths(currentMonthStart(), -2)}),
+        (${pocketId}, ${scope.userId}, ${`Bolsillo ${stamp}`}, 'asset', 'bank', 0, ${addCivilMonths(currentMonthStart(), -2)})`;
+    await tx`update accounts set parent_account_id = ${parentId} where id = ${pocketId}`;
+    const [spent] = await tx<{ id: string }[]>`
+      insert into transactions (from_account_id, amount_cents, occurred_at, description)
+      values (${pocketId}, 15_000_000, ${todayInBogota()}, ${`Gasto bolsillo ${stamp}`}) returning id`;
+    await tx`insert into transaction_splits (transaction_id, category_id, amount_cents) values (${spent.id}, ${scope.categoryId}, 15_000_000)`;
+  });
+  try {
+    await page.goto("/es/reports/review");
+    await expect(page.getByRole("heading", { level: 1, name: /^Revisar / })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Por arreglar" })).toBeVisible();
+    await expect(page.getByRole("link", { name: new RegExp(`^Bolsillo ${stamp} gastó \\$\\s150\\.000 más de lo que tenía$`) })).toBeVisible();
+    await expect(page.getByText(/^Nada sobresale/)).toHaveCount(0);
+  } finally {
+    await fixtureSql`delete from transactions where from_account_id in (${pocketId}, ${parentId})`;
+    await fixtureSql`delete from accounts where id = ${pocketId}`;
+    await fixtureSql`delete from accounts where id = ${parentId}`;
+  }
 });

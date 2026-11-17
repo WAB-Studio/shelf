@@ -31,6 +31,8 @@ export type DebtCurrencyTotals = {
   creditLimitCents: number | null;
 };
 
+export type DebtSubtype = "card" | "loan";
+
 export type DebtsScreenData = {
   totals: DebtCurrencyTotals & {
     // One set per currency the fund's debts hold, the base currency first and
@@ -57,6 +59,8 @@ export type DebtsScreenData = {
     canWrite: boolean;
     // Who pays this credit when somebody else does (RF-211); null for any other debt.
     paidBy: string | null;
+    // A card or a loan: which form edits it (RF-286) and what «Pagar» asks of it (RF-281).
+    subtype: DebtSubtype;
   })[];
   withoutTerms: {
     accountId: string;
@@ -72,6 +76,7 @@ export type DebtsScreenData = {
     otherOwed: DebtPocket[];
     canWrite: boolean;
     paidBy: string | null;
+    subtype: DebtSubtype;
   }[];
   payFrom: { id: string; name: string; balanceCents: number }[];
 };
@@ -161,6 +166,7 @@ export async function getDebtsScreenData(
       { foreignOwner: account.foreignOwner, ownerName: account.ownerName },
     ]),
   );
+  const subtypeById = new Map(accounts.map((account) => [account.id, account.subtype === "loan" ? "loan" : "card"] as const));
   const paidByById = new Map(accounts.map((account) => [account.id, account.thirdParty?.personName ?? null]));
   const personalById = new Map(
     accounts.map((account) => [account.id, account.ownerUserId !== null]),
@@ -192,6 +198,7 @@ export async function getDebtsScreenData(
         // Absent from the roster is a debt the caller may not write.
         canWrite: writableById.get(row.accountId) ?? false,
         paidBy: paidByById.get(row.accountId) ?? null,
+        subtype: subtypeById.get(row.accountId) ?? "card",
       },
     ];
   });
@@ -227,6 +234,7 @@ export async function getDebtsScreenData(
           })),
         canWrite: account.canWrite,
         paidBy: account.thirdParty?.personName ?? null,
+        subtype: (account.subtype === "loan" ? "loan" : "card") as DebtSubtype,
       };
     });
 

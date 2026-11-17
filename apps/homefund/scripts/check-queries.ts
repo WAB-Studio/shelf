@@ -74,6 +74,7 @@ import {
 } from "@/db/queries/categories";
 import { createGroup } from "@/db/queries/create-group";
 import { getDebtDetail } from "@/db/queries/debt-detail";
+import { getOwedToMe, getPersonLedger } from "@/db/queries/owed-to-me";
 import { getDebtOverview, sumDebtCreditTotals } from "@/db/queries/debt-overview";
 import type { DebtOverviewRow, DebtPocket } from "@/db/queries/debt-overview";
 import { getCurrentStatement } from "@/db/queries/debt-statements";
@@ -4195,12 +4196,15 @@ async function main(): Promise<void> {
   await reconcileOverviewSuite();
   await reconcileAgesSuite();
   await inicioWithoutAdjustmentsSuite();
+  await pocketFundExportSuite();
   await recordedMovementSuite();
   await mcpForPersonSuite();
   await alertChannelsSuite();
   await expectedIncomeSuite();
   await unpaidStatementMinimumSuite();
   await cardStatementSuite();
+  await owedToMeSuite();
+  await payDebtsSuite();
 }
 
 // A member recorded without a login is someone in the fund: a leader whose fund holds one is not alone, so an
@@ -17081,7 +17085,7 @@ async function accountPocketSuite(): Promise<void> {
     }
   };
 
-  const parent = await open(owner, "ahorros", 249_816_00);
+  const parent = await open(owner, "ahorros", 5_502_154_00);
   track("accounts", parent.accountId);
   const pocket = await open(owner, "bolsillo", 5_252_338_00, { parentAccountId: parent.accountId });
   track("accounts", pocket.accountId);
@@ -17136,7 +17140,7 @@ async function accountPocketSuite(): Promise<void> {
   const becomePocket = await refusedWith(() =>
     asUser(owner, () => updateAccount({
       accountId: parent.accountId, name: `Harness rf173 ahorros ${tag}`, subtype: "bank", isShared: false, institution: null,
-      parentAccountId: loose.accountId, settlementCurrency: BASE_CURRENCY, amountMinor: 249_816_00, balanceOn: "2026-01-01",
+      parentAccountId: loose.accountId, settlementCurrency: BASE_CURRENCY, amountMinor: 5_502_154_00, balanceOn: "2026-01-01",
     })),
   );
   assert(
@@ -19228,10 +19232,12 @@ async function thirdPartyCreditSuite(): Promise<void> {
 
   const sameAccount = await refused(() => pay("10.000", today, linked.receivableAccountId));
   const zero = recordThirdPartyPaymentSchema.safeParse({ liabilityAccountId: credit, toAccountId: bank, amount: "0", occurredAt: today });
-  const beforeOpening = await refused(() => pay("10.000", shiftDate(today, -47)));
+  // A date before the day the credit was followed is the person's to give (RF-288: the hidden receivable moves its own
+  // opening back); one before the account the money lands in opened is still refused, as anywhere else.
+  const beforeOpening = await refused(() => pay("10.000", shiftDate(today, -60)));
   const strangerPays = await refused(() => asUser(stranger, () => recordThirdPartyPayment(recordThirdPartyPaymentSchema.parse({ liabilityAccountId: credit, toAccountId: bank, amount: "10.000", occurredAt: today }), () => "x")));
   assert(
-    next("RF-213: the payer's money cannot arrive in the receivable itself, be zero, predate the receivable's opening, or be recorded by someone who cannot write the credit"),
+    next("RF-213: the payer's money cannot arrive in the receivable itself, be zero, predate the account it lands in, or be recorded by someone who cannot write the credit"),
     sameAccount === "thirdPartyCredit.errors.sameAccount" && !zero.success && beforeOpening !== null && strangerPays === "errors.notFound",
     `same ${sameAccount}, zero ${zero.success}, before opening ${beforeOpening}, stranger ${strangerPays}`,
   );
@@ -19427,7 +19433,7 @@ async function widgetSuite(): Promise<void> {
     response.status === 200 &&
       response.headers.get("cache-control") === "private, max-age=300" &&
       summary.currency === "COP" &&
-      summary.disponible?.cents === 1_420_000 &&
+      summary.disponible?.cents === 1_320_000 &&
       summary.mes?.spentCents === 30_000 &&
       summary.mes?.budgetedCents === 500_000 &&
       summary.mes?.remainingCents === 470_000 &&
@@ -19532,9 +19538,9 @@ async function learnedCategorySuite(): Promise<void> {
     return transactionId;
   };
   type Delivered = { id: string; category: string | null; source: string | null };
-  const deliver = async (owner: { id: string }, text: string): Promise<Delivered> => {
+  const deliver = async (owner: { id: string }, text: string, defaultCategoryId: string = other): Promise<Delivered> => {
     const result = await recordIngestDelivery({
-      ownerUserId: owner.id, credentialId, defaultAccountId: bank, defaultCategoryId: other,
+      ownerUserId: owner.id, credentialId, defaultAccountId: bank, defaultCategoryId,
       payload: { text } as Parameters<typeof recordIngestDelivery>[0]["payload"],
     });
     const [row] = await fixtureSql<{ category: string | null; source: string | null }[]>`
@@ -19590,10 +19596,15 @@ async function learnedCategorySuite(): Promise<void> {
     JSON.stringify(edited),
   );
 
-  const theirs = await deliver(stranger, `${place} 1200000 5`);
+  // A key's default is a category of its owner's own scope (RF-280): the stranger keeps their own, never the user's.
+  const { categoryId: theirDefault } = await asUser(stranger, () =>
+    createCategory({ scope: { ownerUserId: stranger.id }, name: `Harness rf210 propia ${tag}`, kind: "expense", parentId: null, color: "#0E7490" }),
+  );
+  track("categories", theirDefault);
+  const theirs = await deliver(stranger, `${place} 1200000 5`, theirDefault);
   assert(
     next("RF-210: another person's history teaches nothing to someone with none, who keeps the key's default"),
-    theirs.category === other && theirs.source === "credential_default",
+    theirs.category === theirDefault && theirs.source === "credential_default",
     JSON.stringify(theirs),
   );
 
@@ -19837,7 +19848,8 @@ async function mcpDebtsSuite(): Promise<void> {
     ((await tool("list_accounts")).value as { id: string; balances: { balanceCents: number }[] }[]).find((row) => row.id === id)?.balances[0]?.balanceCents ?? 0;
   const owedBefore = await balanceOf(loanId);
   const requestRef = randomUUID();
-  const pay = { fromAccountId: bank.accountId, toAccountId: loanId, amountCents: 1_000_000_00, occurredOn: "2026-03-01", requestRef };
+  // `extra` keeps this one a single transfer of the whole payment; the split of an instalment is RF-282's.
+  const pay = { fromAccountId: bank.accountId, toAccountId: loanId, amountCents: 1_000_000_00, occurredOn: "2026-03-01", extra: true, requestRef };
   const paid = await tool("record_debt_payment", pay);
   const again = await tool("record_debt_payment", pay);
   const owedAfter = await balanceOf(loanId);
@@ -22171,10 +22183,10 @@ async function unpaidStatementMinimumSuite(): Promise<void> {
   track("transactions", transactionId);
   const paid = await read();
   assert(
-    next("RF-254: once the payments after the cut-off cover the statement's minimum, the card reads no minimum (null), never 0 and never the printed one again"),
+    next("RF-254: once the payments after the cut-off cover the statement's minimum, the card reads no minimum (null), never 0 and never the printed one again, is marked paid, and is no longer Inicio's next payment"),
     paid.row?.owedCents !== undefined && paid.row.owedCents > 0 && paid.row.minimumPaymentCents === null &&
-      paid.next?.amountCents === null && paid.current?.minimumPaymentCents === null,
-    JSON.stringify({ row: paid.row?.minimumPaymentCents, next: paid.next?.amountCents, current: paid.current?.minimumPaymentCents }),
+      paid.row.minimumPaid === true && paid.next === null && paid.current?.minimumPaymentCents === null,
+    JSON.stringify({ row: paid.row?.minimumPaymentCents, paid: paid.row?.minimumPaid, next: paid.next, current: paid.current?.minimumPaymentCents }),
   );
 }
 
@@ -22347,5 +22359,445 @@ async function inicioWithoutAdjustmentsSuite(): Promise<void> {
     next("RF-263: the list Inicio reads leaves a reconciliation's adjustment out, which the list of adjustments still holds"),
     only.length === 1 && without.length === 0 && only[0].reconciliationId !== null,
     `${without.length} without, ${only.length} adjustments`,
+  );
+}
+
+// RF-296: a new pocket takes what the person sets aside from the free part of its parent and the parent's total never grows.
+// RF-297: a new fund starts from the categories its founder already has. RF-298 and RF-299: the export keeps a split's
+// lines, names a pocket's parent and carries the planned, expected and deferred sheets.
+async function pocketFundExportSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const owner = await createMembershipFreeUser();
+  const common = {
+    kind: "asset" as const, subtype: "bank" as const, groupId: null, isShared: false, institution: null,
+    settlementCurrency: BASE_CURRENCY, balanceOn: "2026-01-01", ownerUserId: owner.id,
+  };
+  const { accountId: parentId } = await asUser(owner, () =>
+    createAccount({ ...common, name: `Harness rf296 ahorros ${tag}`, amountMinor: 100_000_00 }),
+  );
+  track("accounts", parentId);
+  const { accountId: pocketId } = await asUser(owner, () =>
+    createAccount({ ...common, name: `Harness rf296 viajes ${tag}`, amountMinor: 30_000_00, parentAccountId: parentId }),
+  );
+  track("accounts", pocketId);
+  const [balances, [opening], moved] = await Promise.all([
+    asUser(owner, () => getAccountBalances([parentId, pocketId])),
+    fixtureSql<{ initial_balance_cents: string }[]>`select initial_balance_cents from accounts where id = ${pocketId}`,
+    fixtureSql<{ id: string; amount_cents: string; from_account_id: string }[]>`
+      select id, amount_cents, from_account_id from transactions where to_account_id = ${pocketId}`,
+  ]);
+  for (const row of moved) track("transactions", row.id);
+  const balanceOf = (id: string) => balances.find((row) => row.accountId === id)?.balanceCents;
+  assert(
+    next("RF-296: a new pocket opens empty and takes its amount from the parent's free part by one transfer, so the parent's total stays what it was"),
+    Number(opening.initial_balance_cents) === 0 && moved.length === 1 && moved[0].from_account_id === parentId &&
+      balanceOf(parentId) === 70_000_00 && balanceOf(pocketId) === 30_000_00,
+    JSON.stringify({ opening, moved, balances }),
+  );
+
+  const tooMuch = await attempt(() =>
+    asUser(owner, () => createAccount({ ...common, name: `Harness rf296 de mas ${tag}`, amountMinor: 80_000_00, parentAccountId: parentId })),
+  );
+  const [leftover] = await fixtureSql<{ n: string }[]>`select count(*) as n from accounts where name = ${`Harness rf296 de mas ${tag}`}`;
+  assert(
+    next("RF-296: a pocket asked for more than the parent has free is refused and nothing is written"),
+    tooMuch.error.includes("accounts.errors.pocketExceedsFree") && Number(leftover.n) === 0,
+    JSON.stringify({ tooMuch: tooMuch.error, leftover }),
+  );
+
+  // RF-297
+  const founder = await createMembershipFreeUser();
+  const mine = { parent: randomUUID(), child: randomUUID(), income: randomUUID() };
+  await fixtureSql`
+    insert into categories (id, owner_user_id, name, kind, color)
+    values (${mine.parent}, ${founder.id}, ${`Harness rf297 mercado ${tag}`}, 'expense', '#4C8C4A'),
+           (${mine.income}, ${founder.id}, ${`Harness rf297 extra ${tag}`}, 'income', '#2E6FBF')`;
+  await fixtureSql`
+    insert into categories (id, owner_user_id, parent_id, name, kind)
+    values (${mine.child}, ${founder.id}, ${mine.parent}, ${`Harness rf297 frutas ${tag}`}, 'expense')`;
+  for (const id of Object.values(mine)) track("categories", id);
+  const { groupId } = await asUser(founder, () =>
+    createGroup({ name: `Harness fondo rf297 ${tag}`, leaderName: "Harness rf297", cashMode: "shared", locale: "es" }),
+  );
+  track("groups", groupId);
+  const copied = await fixtureSql<{ id: string; name: string; kind: string; color: string | null; parent_name: string | null }[]>`
+    select c.id, c.name, c.kind, c.color, p.name as parent_name
+    from categories c left join categories p on p.id = c.parent_id where c.group_id = ${groupId}`;
+  for (const row of copied) track("categories", row.id);
+  const [member] = await fixtureSql<{ id: string }[]>`select id from group_members where group_id = ${groupId}`;
+  track("group_members", member.id);
+  const [cash] = await fixtureSql<{ id: string }[]>`select id from accounts where group_id = ${groupId}`;
+  track("accounts", cash.id);
+  assert(
+    next("RF-297: a new fund holds the categories its founder already has, tree and kinds included, and never the twenty defaults"),
+    copied.length === 3 &&
+      copied.some((row) => row.name.startsWith("Harness rf297 frutas") && row.parent_name?.startsWith("Harness rf297 mercado")) &&
+      copied.some((row) => row.name.startsWith("Harness rf297 extra") && row.kind === "income"),
+    JSON.stringify(copied),
+  );
+
+  // RF-298, RF-299
+  const food = randomUUID();
+  const cleaning = randomUUID();
+  await fixtureSql`
+    insert into categories (id, owner_user_id, name, kind, color)
+    values (${food}, ${owner.id}, ${`Harness rf298 mercado ${tag}`}, 'expense', '#4C8C4A'),
+           (${cleaning}, ${owner.id}, ${`Harness rf298 aseo ${tag}`}, 'expense', '#2E6FBF')`;
+  track("categories", food);
+  track("categories", cleaning);
+  const { transactionId } = await asUser(owner, () =>
+    createTransaction({
+      fromAccountId: parentId, toAccountId: null, amountCents: 35_000_00, occurredAt: "2026-02-01",
+      description: "Harness rf298 compra", externalRef: null, labelIds: [],
+      splits: [{ categoryId: food, amountCents: 20_000_00 }, { categoryId: cleaning, amountCents: 15_000_00 }],
+    }),
+  );
+  track("transactions", transactionId);
+  const { plannedPaymentId } = await asUser(owner, () =>
+    createPlannedPayment({
+      fromAccountId: parentId, toAccountId: null, amountCents: 9_000_00, categoryId: food, dueDate: "2026-12-01",
+      remindOn: null, description: `Harness rf299 arriendo ${tag}`,
+    }),
+  );
+  keep("planned_payments", plannedPaymentId);
+  const { plannedPaymentId: expectedId } = await asUser(owner, () =>
+    createPlannedPayment({
+      fromAccountId: null, toAccountId: parentId, amountCents: 5_000_00, categoryId: null, dueDate: "2026-12-05",
+      remindOn: null, description: `Harness rf299 John ${tag}`,
+    }),
+  );
+  keep("planned_payments", expectedId);
+
+  const exported = await asUser(owner, () =>
+    readExport({ entityKeys: ["accounts", "transactions", "plannedPayments", "expectedIncome", "deferredPurchases"] }),
+  );
+  const split = (exported.transactions ?? []).find((row) => row.description === "Harness rf298 compra");
+  const pocket = (exported.accounts ?? []).find((row) => row.name === `Harness rf296 viajes ${tag}`);
+  const planned = (exported.plannedPayments ?? []).filter((row) => String(row.description).includes(tag));
+  const expected = (exported.expectedIncome ?? []).filter((row) => String(row.description).includes(tag));
+  assert(
+    next("RF-298: a split expense exports its biggest line's category and every line's category and amount; a pocket names its parent"),
+    split?.category === `Harness rf298 mercado ${tag}` &&
+      split?.division === `Harness rf298 mercado ${tag} 20000 · Harness rf298 aseo ${tag} 15000` &&
+      pocket?.insideOf === `Harness rf296 ahorros ${tag}`,
+    JSON.stringify({ split, pocket }),
+  );
+  assert(
+    next("RF-299: the export carries planned payments, expected income apart from them, and deferred purchases"),
+    planned.length === 1 && planned[0].fromAccount === `Harness rf296 ahorros ${tag}` && planned[0].amount === 9_000_00 &&
+      expected.length === 1 && expected[0].toAccount === `Harness rf296 ahorros ${tag}` && !("fromAccount" in expected[0]) &&
+      Array.isArray(exported.deferredPurchases),
+    JSON.stringify({ planned, expected }),
+  );
+}
+
+// RF-293 to RF-295: what other people owe the person is computed, never stored: a person «se le cobra» owes what was
+// spent for them less what they returned (an income marked «de <persona>»), a credit somebody else pays owes what the
+// payer still owes in capital, and two currencies never add up.
+async function owedToMeSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const today = todayInBogota();
+  const { POST } = await import("@/app/mcp/route");
+  const { bookMovement } = await import("@/db/queries/ledger-write");
+  const owner = await createMembershipFreeUser();
+  const name = (what: string) => `Harness rf293 ${what} ${tag}`;
+  const ids = { cop: randomUUID(), usd: randomUUID(), category: randomUUID(), incomeCategory: randomUUID(), loan: randomUUID() };
+  await fixtureSql.begin(async (tx) => {
+    await tx`insert into accounts (id, owner_user_id, name, kind, subtype, initial_balance_cents, initial_balance_on, settlement_currency)
+      values (${ids.cop}, ${owner.id}, ${name("banco")}, 'asset', 'bank', 1000000000, '2026-01-01', 'COP'),
+        (${ids.usd}, ${owner.id}, ${name("dolares")}, 'asset', 'bank', 100000000, '2026-01-01', 'USD'),
+        (${ids.loan}, ${owner.id}, ${name("credito")}, 'liability', 'loan', -900000000, '2026-01-01', 'COP')`;
+    await tx`insert into categories (id, owner_user_id, name, kind, color) values (${ids.category}, ${owner.id}, ${name("gasto")}, 'expense', '#8C4A4A'),
+      (${ids.incomeCategory}, ${owner.id}, ${name("ingreso")}, 'income', '#2F7D5B')`;
+  });
+  track("categories", ids.category);
+  track("categories", ids.incomeCategory);
+  for (const id of [ids.cop, ids.usd, ids.loan]) track("accounts", id);
+  const { id: keyId, token } = await asUser(owner, () =>
+    issueWebhookCredential({ name: name("clave"), purpose: "mcp", defaultAccountId: null, defaultCategoryId: null }),
+  );
+  keep("webhook_credentials", keyId);
+  const { tool } = mcpClient(POST, token);
+  type Person = { id: string; name: string; owed: { currency: string; cents: number }[] };
+
+  const carlos = (await tool("create_person", { name: name("Carlos"), chargeDefault: true })).value as { labelId: string };
+  const ana = (await tool("create_person", { name: name("Ana"), chargeDefault: false })).value as { labelId: string };
+  const lola = (await tool("create_person", { name: name("Lola"), chargeDefault: true })).value as { labelId: string };
+  const spend = (forPerson: string, cents: number, from = ids.cop) =>
+    tool("record_movement", { fromAccountId: from, toAccountId: null, amountCents: cents, occurredAt: today, description: name("gasto"), categoryId: ids.category, forPerson, requestRef: randomUUID() });
+  const back = (fromPerson: string, cents: number, to = ids.cop) =>
+    tool("record_movement", { fromAccountId: null, toAccountId: to, amountCents: cents, occurredAt: today, description: name("devolvio"), categoryId: ids.incomeCategory, fromPerson, requestRef: randomUUID() });
+
+  const spentCarlos = await spend(carlos.labelId, 100_000_00);
+  await spend(carlos.labelId, 50_000_00);
+  await spend(ana.labelId, 70_000_00);
+  await spend(lola.labelId, 20_000_00, ids.usd);
+  await spend(lola.labelId, 10_000_00);
+  const partial = await back(carlos.labelId, 40_000_00);
+  const asLabelOwner = (await asUser(owner, () => getOwedToMe())).flatMap((group) => group.people.map((one) => ({ ...one, currency: group.currency })));
+  const find = (label: string, currency = "COP") => asLabelOwner.find((one) => one.labelId === label && one.currency === currency);
+  assert(
+    next("RF-293: a person se le cobra owes what was spent for them less what an income marked «de» them returned, and a charge flag off owes nothing"),
+    !spentCarlos.isError && !partial.isError && find(carlos.labelId)?.cents === 110_000_00 && find(ana.labelId) === undefined &&
+      find(carlos.labelId)?.breakdown.length === 3 && find(carlos.labelId)?.breakdown.filter((line) => line.kind === "returned").length === 1,
+    JSON.stringify(asLabelOwner),
+  );
+  assert(
+    next("RF-293: two currencies are kept apart: the same person owes in each, never one sum"),
+    find(lola.labelId)?.cents === 10_000_00 && find(lola.labelId, "USD")?.cents === 20_000_00,
+    JSON.stringify(asLabelOwner.filter((one) => one.labelId === lola.labelId)),
+  );
+
+  const settled = await back(carlos.labelId, 110_000_00);
+  const afterSettling = await asUser(owner, () => getOwedToMe());
+  const stray = await tool("record_movement", { fromAccountId: ids.cop, toAccountId: null, amountCents: 1_000_00, occurredAt: today, description: name("x"), categoryId: ids.category, fromPerson: carlos.labelId, requestRef: randomUUID() });
+  const both = await tool("record_movement", { fromAccountId: null, toAccountId: ids.cop, amountCents: 1_000_00, occurredAt: today, description: name("y"), categoryId: ids.incomeCategory, fromPerson: carlos.labelId, forPerson: ana.labelId, requestRef: randomUUID() });
+  assert(
+    next("RF-293: what they returned in full leaves them off the list, and fromPerson is refused on an expense or beside forPerson"),
+    !settled.isError && !afterSettling.flatMap((group) => group.people).some((one) => one.labelId === carlos.labelId) && stray.isError && both.isError,
+    JSON.stringify({ afterSettling, stray: stray.value, both: both.value }),
+  );
+
+  const ledger = await asUser(owner, () => getPersonLedger(carlos.labelId));
+  const persons = (await tool("list_persons")).value as Person[];
+  assert(
+    next("RF-295: a person's ledger says spent, returned and what is left, and list_persons answers each person's owed per currency"),
+    ledger.length === 1 && ledger[0].spentCents === 150_000_00 && ledger[0].returnedCents === 150_000_00 && ledger[0].owedCents === 0 &&
+      persons.find((one) => one.id === lola.labelId)?.owed.length === 2 && persons.find((one) => one.id === carlos.labelId)?.owed.length === 0 &&
+      persons.find((one) => one.id === ana.labelId)?.owed.length === 0,
+    JSON.stringify({ ledger, persons }),
+  );
+
+  const linked = await asUser(owner, () =>
+    setUpThirdPartyCredit(
+      setUpThirdPartyCreditSchema.parse({ liabilityAccountId: ids.loan, personName: name("John"), receivableAccountId: "", amount: "9.000.000", openedOn: "2026-01-02", installmentAmount: "", dueDay: "" }),
+      name("Me debe John"),
+    ),
+  );
+  track("accounts", linked.receivableAccountId);
+  const paid = await asUser(owner, () =>
+    bookMovement(createTransactionSchema.parse({ fromAccountId: linked.receivableAccountId, toAccountId: ids.cop, amount: "1.500.000", occurredAt: today, description: null, splits: [], labelIds: [] })),
+  );
+  track("transactions", paid.transactionId);
+  const withCredit = (await asUser(owner, () => getOwedToMe())).find((group) => group.currency === "COP");
+  const john = withCredit?.people.find((one) => one.source === "credit" && one.name === name("John"));
+  const [credit] = await asUser(owner, () => listThirdPartyCredits(ids.loan));
+  assert(
+    next("RF-294: a credit somebody else pays owes what the payer still owes in capital, the figure the credit's own screen shows, with the lines adding up"),
+    john?.cents === 7_500_000_00 && john.cents === credit.personOwesCents && john.breakdown.reduce((sum, line) => sum + line.cents, 0) === john.cents &&
+      john.breakdown.map((line) => line.kind).join() === "opening,payment" &&
+      withCredit !== undefined && withCredit.totalCents === withCredit.people.reduce((sum, one) => sum + one.cents, 0),
+    JSON.stringify({ john, credit: credit?.personOwesCents }),
+  );
+}
+
+// RF-281 to RF-285: paying a card by its minimum, a loan's instalment split into interest and capital, the last
+// statement corrected or taken back, and the cupo helper's two figures.
+async function payDebtsSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const today = todayInBogota();
+  const user = await createMembershipFreeUser();
+  const stranger = await createMembershipFreeUser();
+  const { payDebt } = await import("@/db/queries/debt-write");
+  const { deleteAccountStatement, reviseAccountStatement } = await import("@/db/queries/account-statements");
+  const { setLoanSchedule } = await import("@/db/queries/loan-schedule");
+  const { accruedInterestCents } = await import("@/lib/loan-instalment");
+
+  const mk = async (name: string, kind: "asset" | "liability", subtype: "bank" | "card" | "loan", amountMinor: number, daysBack = 60) => {
+    const { accountId } = await asUser(user, () =>
+      createAccount({
+        kind, subtype, groupId: null, isShared: false, institution: null, settlementCurrency: BASE_CURRENCY, lastFour: null,
+        balanceOn: shiftDate(today, -daysBack), ownerUserId: user.id, name: `Harness rf282 ${name} ${tag}`, amountMinor,
+      }),
+    );
+    track("accounts", accountId);
+    return accountId;
+  };
+  const terms = (accountId: string, patch: Partial<Parameters<typeof upsertDebtTerms>[0]>) =>
+    asUser(user, async () => {
+      await upsertDebtTerms({
+        accountId, debtKind: "installment", annualRate: "0.165", minimumPaymentCents: null, minimumPaymentPct: null,
+        creditLimitCents: null, statementCutOffDay: null, paymentDueDay: null, avalCents: null, ...patch,
+      });
+      keep("debt_terms", accountId);
+    });
+  const owedOf = async (accountId: string) =>
+    (await asUser(user, () => getAccountBalances())).find((row) => row.accountId === accountId && row.currency === BASE_CURRENCY)?.balanceCents;
+  type Booked = { id: string; amount_cents: string; from_account_id: string | null; to_account_id: string | null; category_id: string | null };
+  const rowsOf = async (ref: string) => {
+    const out: Booked[] = [];
+    await asOwner(user.id, async (tx) => {
+      out.push(
+        ...(await tx<Booked[]>`
+          select t.id, t.amount_cents::text, t.from_account_id, t.to_account_id,
+            (select s.category_id from transaction_splits s where s.transaction_id = t.id limit 1) as category_id
+          from transactions t where t.external_ref like ${`form:${ref}%`} order by t.to_account_id nulls last`),
+      );
+    });
+    return out;
+  };
+
+  // RF-282: a loan with a rate and no schedule splits by the rate over the days since it was opened.
+  const bank = await mk("banco", "asset", "bank", 900_000_000);
+  const loan = await mk("credito", "liability", "loan", 1_000_000_000);
+  await terms(loan, { annualRate: "0.165" });
+  const ref = randomUUID();
+  const instalment = 78_000_000;
+  const paid = await asUser(user, () => payDebt({ fromAccountId: bank, toAccountId: loan, amount: "780000", occurredAt: today, requestRef: ref }));
+  const expectedInterest = accruedInterestCents(1_000_000_000, "0.165", 60);
+  const booked = await rowsOf(ref);
+  const interestRow = booked.find((row) => row.to_account_id === null);
+  const capitalRow = booked.find((row) => row.to_account_id === loan);
+  const after = await owedOf(loan);
+  assert(
+    next("RF-282: paying an instalment of a loan with a rate splits it: interest an expense of the source in a category, capital the transfer, and the loan comes down by the capital alone"),
+    paid.interestCents === expectedInterest && paid.capitalCents === instalment - expectedInterest && paid.basis === "rate" &&
+      Number(interestRow?.amount_cents) === expectedInterest && interestRow?.from_account_id === bank && interestRow.category_id !== null &&
+      Number(capitalRow?.amount_cents) === instalment - expectedInterest && after === -(1_000_000_000 - (instalment - expectedInterest)),
+    JSON.stringify({ paid, expectedInterest, booked, after }),
+  );
+  const resent = await asUser(user, () => payDebt({ fromAccountId: bank, toAccountId: loan, amount: "780000", occurredAt: today, requestRef: ref }));
+  const afterResend = await rowsOf(ref);
+  assert(
+    next("RF-282: the same instalment sent again books nothing and answers with the one the first booked"),
+    afterResend.length === 2 && resent.transactionId === paid.transactionId && resent.interestCents === expectedInterest,
+    JSON.stringify({ resent, afterResend: afterResend.length }),
+  );
+
+  // An extra payment goes whole to capital.
+  const extraRef = randomUUID();
+  const extra = await asUser(user, () => payDebt({ fromAccountId: bank, toAccountId: loan, amount: "100000", occurredAt: today, requestRef: extraRef, extra: true }));
+  const extraRows = await rowsOf(extraRef);
+  assert(
+    next("RF-282: an extra payment into a loan is all capital: one transfer, no interest expense"),
+    extra.interestCents === 0 && extra.capitalCents === 10_000_000 && extraRows.length === 1 && extraRows[0].to_account_id === loan,
+    JSON.stringify({ extra, extraRows }),
+  );
+
+  // A loan with no terms and no schedule has no interest to split off, and a card is paid whole.
+  const bare = await mk("sin tasa", "liability", "loan", 50_000_000);
+  const bareRef = randomUUID();
+  const bareResult = await asUser(user, () => payDebt({ fromAccountId: bank, toAccountId: bare, amount: "100000", occurredAt: today, requestRef: bareRef }));
+  const card = await mk("tarjeta", "liability", "card", 400_000_000);
+  const cardRef = randomUUID();
+  const cardResult = await asUser(user, () => payDebt({ fromAccountId: bank, toAccountId: card, amount: "100000", occurredAt: today, requestRef: cardRef }));
+  assert(
+    next("RF-282: a loan with no rate and a card are paid whole to the debt: no interest is split off"),
+    bareResult.basis === "none" && bareResult.interestCents === 0 && bareResult.capitalCents === 10_000_000 &&
+      cardResult.interestCents === 0 && (await rowsOf(cardRef)).length === 1,
+    JSON.stringify({ bareResult, cardResult }),
+  );
+
+  // RF-282: a schedule row's own interest and insurance win over the rate.
+  const scheduled = await mk("con plan", "liability", "loan", 300_000_000);
+  await terms(scheduled, { annualRate: "0.165" });
+  await asUser(user, () =>
+    setLoanSchedule(
+      {
+        accountId: scheduled,
+        rows: [1, 2, 3].map((number) => ({
+          number, dueOn: shiftDate(today, number * 30 - 10), principalCents: 90_000_000, interestCents: 9_000_000, insuranceCents: 1_000_000,
+          totalCents: 100_000_000, remainingCents: 300_000_000 - number * 90_000_000,
+        })),
+      },
+      false,
+    ),
+  );
+  const scheduleRef = randomUUID();
+  const fromSchedule = await asUser(user, () => payDebt({ fromAccountId: bank, toAccountId: scheduled, amount: "1000000", occurredAt: today, requestRef: scheduleRef }));
+  assert(
+    next("RF-282: with a payment schedule the cuota splits as the bank printed it: interest and insurance 10000000 cents, capital the rest"),
+    fromSchedule.basis === "schedule" && fromSchedule.interestCents === 10_000_000 && fromSchedule.capitalCents === 90_000_000,
+    JSON.stringify(fromSchedule),
+  );
+
+  // RF-281: what was paid in the period counts against its minimum; once covered the card asks none and says so.
+  const visa = await mk("visa", "liability", "card", 400_000_000, 90);
+  const cutOffDay = Number(shiftDate(today, -10).slice(8, 10));
+  await terms(visa, { debtKind: "revolving", minimumPaymentCents: 20_000_000, creditLimitCents: 800_000_000, statementCutOffDay: cutOffDay, paymentDueDay: 28 });
+  const readVisa = () => asUser(user, async () => (await getDebtOverview()).find((debt) => debt.accountId === visa));
+  const before = await readVisa();
+  const part = await asUser(user, () => payDebt({ fromAccountId: bank, toAccountId: visa, amount: "50000", occurredAt: today, requestRef: randomUUID() }));
+  const partial = await readVisa();
+  const rest = await asUser(user, () => payDebt({ fromAccountId: bank, toAccountId: visa, amount: "150000", occurredAt: today, requestRef: randomUUID() }));
+  const covered = await readVisa();
+  assert(
+    next("RF-281: a part-payment asks only the rest of the minimum, and paying the minimum leaves none due (null) with the period marked paid; the total owed is what paying it all asks"),
+    before?.minimumPaymentCents === 20_000_000 && before.minimumPaid === false && before.totalDueCents === 400_000_000 &&
+      part.capitalCents === 5_000_000 && partial?.minimumPaymentCents === 15_000_000 && partial.minimumPaid === false &&
+      rest.capitalCents === 15_000_000 && covered?.minimumPaymentCents === null && covered.minimumPaid === true &&
+      covered.totalDueCents === 400_000_000 - 20_000_000,
+    JSON.stringify({ before: [before?.minimumPaymentCents, before?.minimumPaid], partial: [partial?.minimumPaymentCents, partial?.minimumPaid], covered: [covered?.minimumPaymentCents, covered?.minimumPaid, covered?.totalDueCents] }),
+  );
+
+  // RF-284: only the last statement is corrected or taken back; a stranger touches none.
+  const statementCard = await mk("extractos", "liability", "card", 400_000_000, 120);
+  const record = (cutOff: string, closing: number) =>
+    asUser(user, async () => {
+      const row = await recordAccountStatement({
+        accountId: statementCard, periodStart: shiftDate(cutOff, -30), cutOffDate: cutOff, paymentDueDate: shiftDate(cutOff, 15),
+        openingBalanceCents: null, closingBalanceCents: closing, creditsCents: null, debitsCents: null,
+        minimumPaymentCents: 20_000_000, interestChargedCents: null, feesChargedCents: null,
+      });
+      if (row) track("account_statements", row.id);
+      return row!.id;
+    });
+  const [older, latest] = [await record(shiftDate(today, -45), 380_000_000), await record(shiftDate(today, -15), 400_000_000)];
+  const change = (id: string, cutOff: string, closing: number) => ({
+    statementId: id, accountId: statementCard, periodStart: shiftDate(cutOff, -30), cutOffDate: cutOff, paymentDueDate: shiftDate(cutOff, 15),
+    openingBalanceCents: null, closingBalanceCents: closing, creditsCents: null, debitsCents: null, minimumPaymentCents: 25_000_000,
+    interestChargedCents: 1_500_000, feesChargedCents: null,
+  });
+  const [olderEdit, strangerEdit, latestEdit] = [
+    await asUser(user, () => reviseAccountStatement(change(older, shiftDate(today, -46), 390_000_000))),
+    await asUser(stranger, () => reviseAccountStatement(change(latest, shiftDate(today, -14), 410_000_000))),
+    await asUser(user, () => reviseAccountStatement(change(latest, shiftDate(today, -14), 410_000_000))),
+  ];
+  const kept = await asUser(user, () => getDebtDetail(statementCard));
+  const edited = kept?.statements.find((row) => row.id === latest);
+  const untouched = kept?.statements.find((row) => row.id === older);
+  assert(
+    next("RF-284: the last statement is corrected (figures stored signed like the debt); an earlier one and a stranger's attempt change nothing"),
+    olderEdit === "missing" && strangerEdit === "missing" && latestEdit === "done" && edited?.closingBalanceCents === -410_000_000 &&
+      edited.minimumPaymentCents === 25_000_000 && edited.interestChargedCents === 1_500_000 && edited.cutOffDate === shiftDate(today, -14) &&
+      untouched?.closingBalanceCents === -380_000_000 && untouched.cutOffDate === shiftDate(today, -45),
+    JSON.stringify({ olderEdit, strangerEdit, latestEdit, edited, untouched }),
+  );
+  const behind = await asUser(user, () => reviseAccountStatement(change(latest, shiftDate(today, -45), 410_000_000)));
+  const [olderDelete, strangerDelete, latestDelete] = [
+    await asUser(user, () => deleteAccountStatement({ accountId: statementCard, statementId: older })),
+    await asUser(stranger, () => deleteAccountStatement({ accountId: statementCard, statementId: latest })),
+    await asUser(user, () => deleteAccountStatement({ accountId: statementCard, statementId: latest })),
+  ];
+  const olderNow = await asUser(user, () => deleteAccountStatement({ accountId: statementCard, statementId: older }));
+  const emptied = await asUser(user, () => getDebtDetail(statementCard));
+  assert(
+    next("RF-284: a cut-off moved to or before the previous statement's is refused; only the last statement is taken back, and the one before it becomes the last"),
+    behind === "beforePrevious" && olderDelete === "missing" && strangerDelete === "missing" && latestDelete === "done" &&
+      olderNow === "done" && emptied?.statements.length === 0,
+    JSON.stringify({ behind, olderDelete, strangerDelete, latestDelete, olderNow, left: emptied?.statements.length }),
+  );
+
+  // RF-285: the cupo helper opens with the stored limit and takes off what the bank counts in another currency.
+  const category = await asUser(user, () => createCategory({ scope: { ownerUserId: user.id }, name: `Harness rf285 ${tag}`, kind: "expense", parentId: null, color: "#222222" }));
+  track("categories", category.categoryId);
+  const { transactionId: usd } = await asUser(user, () =>
+    createTransaction({
+      fromAccountId: visa, toAccountId: null, amountCents: 1_599, currency: "USD", counterAmountCents: 6_500_000, counterIsEstimate: true,
+      occurredAt: today, description: "Harness compra USD", externalRef: null,
+      splits: [{ categoryId: category.categoryId, amountCents: 1_599 }], labelIds: [],
+    }),
+  );
+  keep("transactions", usd);
+  const overview = await asUser(user, () => listReconcileOverview(today));
+  const visaRow = overview.find((row) => row.id === visa);
+  const bankRow = overview.find((row) => row.id === bank);
+  assert(
+    next("RF-285: the reconcile overview carries the stored limit and the purchases in another currency still to bill, which a bank's available credit already counts"),
+    visaRow?.creditLimitCents === 800_000_000 && visaRow.toBillCents === 6_500_000 && bankRow?.creditLimitCents === null && bankRow.toBillCents === 0,
+    JSON.stringify({ visa: [visaRow?.creditLimitCents, visaRow?.toBillCents], bank: [bankRow?.creditLimitCents, bankRow?.toBillCents] }),
   );
 }

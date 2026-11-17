@@ -48,6 +48,8 @@ export default async function ReconcileAllPage(
             holderName: row.holderName,
             ageDays: days,
             never,
+            creditLimitCents: row.creditLimitCents,
+            toBillCents: row.toBillCents,
           };
         })}
       />

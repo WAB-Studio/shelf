@@ -14,8 +14,8 @@ import { useMemo, useState, type ReactNode } from "react";
 
 import { OwnerMark } from "@/components/fund/owner-mark";
 import { DebtFormDialog } from "@/components/planning/debt-form-dialog";
-import type { DebtAccount } from "@/components/planning/debt-form-dialog";
-import { DebtPaymentDialog } from "@/components/planning/debt-payment-dialog";
+import type { DebtTermsTarget } from "@/components/planning/debt-form-dialog";
+import { DebtPaymentDialog, paymentDebtOf, type PaymentDebt } from "@/components/planning/debt-payment-dialog";
 import { DebtsTable } from "@/components/planning/debts-table";
 import {
   CreditAndOwedLine,
@@ -39,7 +39,7 @@ import {
   StatTiles,
   Text,
 } from "@/components/ui";
-import type { DebtCurrencyTotals, DebtsScreenData } from "@/db/queries/debts-screen";
+import type { DebtCurrencyTotals, DebtSubtype, DebtsScreenData } from "@/db/queries/debts-screen";
 import type { DebtOverviewRow, DebtPocket } from "@/db/queries/debt-overview";
 import { Link as LocaleLink, useRouter } from "@/i18n/navigation";
 import {
@@ -48,7 +48,8 @@ import {
   type CurrencyCode,
   type OfferedCurrency,
 } from "@/lib/currency";
-import { civilDateToDate } from "@/lib/dates";
+import { civilDateToDate, todayInBogota } from "@/lib/dates";
+import { formatRatePercent } from "@/lib/validation/debt-terms";
 import { useMoneyText } from "@/lib/use-privacy";
 import type { Locale } from "@/lib/locales";
 
@@ -71,17 +72,18 @@ const columns = columnHelper.columns([columnHelper.accessor("accountId", {})]);
 // everything but "create" which liability it acts on, and what that liability
 // bills in — every amount the dialog reads and writes is in that currency.
 type DialogTarget =
-  | { mode: "create" }
-  | { mode: "complete"; account: DebtAccount; currency: CurrencyCode }
+  | { mode: "create"; subtype: DebtSubtype }
+  | { mode: "complete"; account: DebtTermsTarget; currency: CurrencyCode }
   | {
       mode: "pay";
-      account: DebtAccount & { creditCents: number; otherOwed: DebtPocket[] };
+      account: PaymentDebt;
       currency: CurrencyCode;
     };
 
 // A row with its name and owner, which is what the phone's cards read.
 type OverviewCard = DebtOverviewRow & {
   name: string;
+  subtype: string;
   personal: boolean;
   foreignOwner: boolean;
   ownerName: string | null;
@@ -113,17 +115,20 @@ function OtherOwed({ pockets }: { pockets: DebtPocket[] }) {
  * dense table of the desktop design on a laptop, and the same liabilities as cards read by
  * their `debtKind` on a phone. Every figure arrives already derived from the
  * backend and stays integer cents; the peso and percent readings are display
- * only. One `DebtFormDialog` serves the header's "new debt" and each bare
- * liability's "complete terms", and the same target state opens the payment
+ * only. One `DebtFormDialog` serves the header's «Nueva tarjeta» and «Nuevo préstamo»
+ * and each liability's terms, and the same target state opens the payment
  * (RF-16).
  */
 export function DebtsScreen({
   data,
   hasGroup,
+  newSubtype,
   children,
 }: {
   data: DebtsScreenData;
   hasGroup: boolean;
+  // The class a link asked to open the form on (RF-286).
+  newSubtype?: DebtSubtype | null;
   // What the fund's members owe each other (RF-183), under the debts at every width.
   children?: ReactNode;
 }) {
@@ -134,7 +139,9 @@ export function DebtsScreen({
   const locale = useLocale() as Locale;
   const router = useRouter();
 
-  const [target, setTarget] = useState<DialogTarget | null>(null);
+  const [target, setTarget] = useState<DialogTarget | null>(
+    newSubtype ? { mode: "create", subtype: newSubtype } : null,
+  );
 
   const { totals, withTerms, withoutTerms, payFrom } = data;
   const isEmpty = withTerms.length === 0 && withoutTerms.length === 0;
@@ -148,7 +155,7 @@ export function DebtsScreen({
   }
 
   function payTarget(
-    account: DebtAccount & { creditCents: number; otherOwed: DebtPocket[] },
+    account: PaymentDebt,
     currency: CurrencyCode,
   ) {
     setTarget({ mode: "pay", account, currency });
@@ -168,6 +175,7 @@ export function DebtsScreen({
         owedCents: row.owedCents,
         creditCents: row.creditCents,
         otherOwed: row.otherOwed,
+        subtype: row.subtype,
         terms: row,
         canWrite: row.canWrite,
         paidBy: row.paidBy,
@@ -199,11 +207,18 @@ export function DebtsScreen({
 
   const pageRows = table.getPaginatedRowModel().rows.map((row) => row.original);
 
-  const addButton = (
-    <Button type="button" onClick={() => setTarget({ mode: "create" })}>
-      <Plus size={16} />
-      {t("add")}
-    </Button>
+  // One door per class of debt: each opens its own form (RF-286).
+  const addButtons = (
+    <Flex gap="2" wrap="wrap">
+      <Button type="button" onClick={() => setTarget({ mode: "create", subtype: "card" })}>
+        <Plus size={16} />
+        {t("addCard")}
+      </Button>
+      <Button type="button" variant="surface" color="gray" onClick={() => setTarget({ mode: "create", subtype: "loan" })}>
+        <Plus size={16} />
+        {t("addLoan")}
+      </Button>
+    </Flex>
   );
 
   // The table's own slot: inside its frame the stack keeps its own height, so
@@ -212,7 +227,7 @@ export function DebtsScreen({
     <EmptyState
       title={t("emptyTitle")}
       description={t("emptyDescription")}
-      action={addButton}
+      action={addButtons}
     />
   );
 
@@ -312,7 +327,7 @@ export function DebtsScreen({
             NO_VALUE
           ) : (
             <Money
-              minor={set.availableCreditCents}
+              minor={Math.min(set.availableCreditCents, set.creditLimitCents ?? set.availableCreditCents)}
               currency={set.currency}
               signed={false}
               size="inherit"
@@ -343,17 +358,7 @@ export function DebtsScreen({
                   date: shortDate(totals.nextPayment.date),
                 })
           }
-          actions={
-            <Button
-              type="button"
-              variant="surface"
-              color="gray"
-              onClick={() => setTarget({ mode: "create" })}
-            >
-              <Plus size={15} />
-              {t("add")}
-            </Button>
-          }
+          actions={addButtons}
         />
         {/* One labelled set per currency, none of them summing another: a card
             that bills in pesos and buys in dollars owes in both (RF-124). */}
@@ -385,18 +390,7 @@ export function DebtsScreen({
           empty={tableEmpty}
           onPrev={() => table.previousPage()}
           onNext={() => table.nextPage()}
-          onPay={(row) =>
-            payTarget(
-              {
-                accountId: row.accountId,
-                name: row.name,
-                owedCents: row.owedCents,
-                creditCents: row.creditCents,
-                otherOwed: row.otherOwed,
-              },
-              row.currency,
-            )
-          }
+          onPay={(row) => payTarget(paymentDebtOf(row), row.currency)}
           onDetail={(row) => router.push(`/planning/debts/${row.accountId}`)}
           onEditTerms={(row) =>
             setTarget({
@@ -405,6 +399,8 @@ export function DebtsScreen({
                 accountId: row.accountId,
                 name: row.name,
                 owedCents: row.owedCents,
+                subtype: row.subtype,
+                stored: row.terms?.stored,
               },
               currency: row.currency,
             })
@@ -416,7 +412,7 @@ export function DebtsScreen({
         <Flex direction="column" gap="4">
           <ScreenHeader
             title={t("title")}
-            actions={addButton}
+            actions={addButtons}
           />
 
 
@@ -488,23 +484,14 @@ export function DebtsScreen({
             <EmptyState
               title={t("emptyTitle")}
               description={t("emptyDescription")}
-              action={addButton}
+              action={addButtons}
             />
           ) : (
             <Flex direction="column" gap="3">
               {withTerms.map((row) => {
                 const onPay = row.canWrite
                   ? () =>
-                      payTarget(
-                        {
-                          accountId: row.accountId,
-                          name: row.name,
-                          owedCents: row.owedCents,
-                          creditCents: row.creditCents,
-                          otherOwed: row.otherOwed,
-                        },
-                        row.currency,
-                      )
+                      payTarget(paymentDebtOf({ ...row, terms: row }), row.currency)
                   : undefined;
 
                 return row.debtKind === "revolving" ? (
@@ -526,6 +513,7 @@ export function DebtsScreen({
                               accountId: debt.accountId,
                               name: debt.name,
                               owedCents: debt.owedCents,
+                              subtype: debt.subtype,
                             },
                             currency: debt.currency,
                           })
@@ -534,16 +522,7 @@ export function DebtsScreen({
                   onPay={
                     debt.canWrite
                       ? () =>
-                          payTarget(
-                            {
-                              accountId: debt.accountId,
-                              name: debt.name,
-                              owedCents: debt.owedCents,
-                              creditCents: debt.creditCents,
-                              otherOwed: debt.otherOwed,
-                            },
-                            debt.currency,
-                          )
+                          payTarget(paymentDebtOf({ ...debt, terms: null }), debt.currency)
                       : undefined
                   }
                 />
@@ -561,10 +540,13 @@ export function DebtsScreen({
           if (!open) setTarget(null);
         }}
         mode={target?.mode === "complete" ? "complete" : "create"}
+        subtype={
+          target?.mode === "complete" ? target.account.subtype : target?.mode === "create" ? target.subtype : "card"
+        }
         hasGroup={hasGroup}
         account={target?.mode === "complete" ? target.account : undefined}
-        // The terms are typed in the minor unit of what the card bills in
-        // (RF-121). A new debt picks its own currency, so the create mode falls
+        // The terms are typed in the minor unit of what the debt bills in
+        // (RF-121). A new debt picks its own currency in the form, so the create mode falls
         // back to the base one.
         currency={
           target?.mode === "complete"
@@ -710,9 +692,11 @@ function Stat({
  */
 function CardActions({
   accountId,
+  loan,
   onPay,
 }: {
   accountId: string;
+  loan: boolean;
   onPay?: () => void;
 }) {
   const t = useTranslations("debts");
@@ -726,7 +710,7 @@ function CardActions({
       </Button>
       {onPay && (
         <Button type="button" tap variant="ghost" size="2" onClick={onPay}>
-          {t("rowPay")}
+          {t(loan ? "rowPayLoan" : "rowPayCard")}
         </Button>
       )}
     </Flex>
@@ -746,9 +730,10 @@ function RevolvingCard({
   const locale = useLocale() as Locale;
 
   // A card in credit or at zero owes no minimum (RF-80).
-  const showMinimum = row.minimumPaymentCents !== null && row.owedCents > 0;
+  const showMinimum = row.minimumPaymentCents !== null && row.owedCents > 0 && !row.minimumPaid;
   const hasFooter =
     showMinimum ||
+    row.minimumPaid ||
     row.nextCutOffDate !== null ||
     row.availableCreditCents !== null;
 
@@ -764,14 +749,8 @@ function RevolvingCard({
           ownerName={row.ownerName}
           paidBy={row.paidBy}
           meta={t("revolvingMeta", {
-            // The effective monthly step the server derived off the annual rate,
-            // read as a percentage here and nowhere divided, so the card and the
-            // row can never state the rate a hair apart.
-            pct: format.number(row.monthlyRatePct, {
-              style: "percent",
-              minimumFractionDigits: 1,
-              maximumFractionDigits: 1,
-            }),
+            // The rate as the person typed it: the stored annual fraction shifted as text, never a monthly step.
+            rate: formatRatePercent(row.annualRate, locale === "es" ? "," : "."),
           })}
           currency={row.currency}
           owedCents={row.owedCents}
@@ -782,6 +761,15 @@ function RevolvingCard({
         {hasFooter && (
           <>
             <Separator size="4" />
+            {row.minimumPaid && (
+              <Text size="2" color="gray">
+                {t("minimumPaidMonth", {
+                  month: format.dateTime(civilDateToDate(row.nextDueDate ?? row.nextCutOffDate ?? todayInBogota()), {
+                    month: "long",
+                  }),
+                })}
+              </Text>
+            )}
             {(showMinimum || row.nextCutOffDate !== null) && (
               <Flex justify="between" gap="3">
                 {showMinimum && (
@@ -808,19 +796,20 @@ function RevolvingCard({
             )}
             {row.availableCreditCents !== null && (
               <Text size="1" color="gray">
-                {t("availableCredit", {
-                  amount: moneyText(
-                    row.availableCreditCents,
-                    row.currency,
-                    locale,
-                  ),
-                })}
+                {row.creditLimitCents !== null && row.availableCreditCents > row.creditLimitCents
+                  ? t("availableCreditFavour", {
+                      amount: moneyText(row.creditLimitCents, row.currency, locale),
+                      favour: moneyText(row.availableCreditCents - row.creditLimitCents, row.currency, locale),
+                    })
+                  : t("availableCredit", {
+                      amount: moneyText(row.availableCreditCents, row.currency, locale),
+                    })}
               </Text>
             )}
           </>
         )}
 
-        <CardActions accountId={row.accountId} onPay={onPay} />
+        <CardActions accountId={row.accountId} loan={row.subtype === "loan"} onPay={onPay} />
       </Flex>
     </Card>
   );
@@ -878,7 +867,7 @@ function InstallmentCard({
           )}
         </Flex>
 
-        <CardActions accountId={row.accountId} onPay={onPay} />
+        <CardActions accountId={row.accountId} loan={row.subtype === "loan"} onPay={onPay} />
       </Flex>
     </Card>
   );
@@ -892,6 +881,7 @@ function NoTermsCard({
   debt: {
     accountId: string;
     name: string;
+    subtype: string;
     personal: boolean;
     foreignOwner: boolean;
     ownerName: string | null;
@@ -932,7 +922,7 @@ function NoTermsCard({
             </Button>
           </Flex>
         )}
-        <CardActions accountId={debt.accountId} onPay={onPay} />
+        <CardActions accountId={debt.accountId} loan={debt.subtype === "loan"} onPay={onPay} />
       </Flex>
     </Card>
   );

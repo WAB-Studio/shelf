@@ -1073,3 +1073,12 @@ test("an older file's external reference column is still read as the row's key (
   assert.equal(rows[0].externalRef, "old-1");
   assert.equal(rows[0].status, "update");
 });
+
+test("a restore still reads the old header «Tasa efectiva anual (%)» as the rate, beside the new one (RF-179, RF-283)", async () => {
+  const { LEGACY_COLUMN_HEADERS } = await import("./import-pipeline");
+  const legacy = LEGACY_COLUMN_HEADERS.debts ?? {};
+  assert.equal(legacy["Tasa efectiva anual (%)"], "annualRate");
+  assert.equal(legacy["Effective annual rate (%)"], "annualRate");
+  assert.ok(!(messages.data.columns.annualRate in legacy), "the current header is a label of its own, not a legacy alias");
+  assert.ok(sheetDescriptors.debts.columns.some((column) => column.key === "annualRate"));
+});

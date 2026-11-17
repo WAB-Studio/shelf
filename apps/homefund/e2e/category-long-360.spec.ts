@@ -111,15 +111,15 @@ async function expectOptionClamped(page: Page, trigger: Locator, name: string) {
 test.describe("a 60-character fund category in a dialog", () => {
   test("the payment dialog keeps «Guardar» on screen and the option its whole name @mobile", async ({ page }) => {
     // Kills: dropping the Box maxWidth around the item; slicing the name in JS.
-    await page.goto("/es/planning/payments");
-    await page.getByRole("button", { name: messages.plannedPayments.add, exact: true }).first().click();
+    await page.goto("/es/planning/upcoming");
+    await page.getByRole("button", { name: messages.upcoming.add, exact: true }).first().click();
     const dialog = page.getByRole("dialog");
     await expect(dialog).toBeVisible();
 
-    await expectOptionClamped(page, dialog.locator("#payment-category"), LONG_CATEGORY + FUND_MARK);
-    await pick(page, dialog.locator("#payment-category"), LONG_CATEGORY + FUND_MARK);
+    await expectOptionClamped(page, dialog.locator("#upcoming-category"), LONG_CATEGORY + FUND_MARK);
+    await pick(page, dialog.locator("#upcoming-category"), LONG_CATEGORY + FUND_MARK);
 
-    await expectSaveReachable(page, dialog, messages.plannedPayments.save);
+    await expectSaveReachable(page, dialog, messages.upcoming.form.save);
   });
 });
 

@@ -6,7 +6,8 @@ import { notFound, unstable_rethrow } from "next/navigation";
 
 import { WithdrawCashCard } from "@/components/cash/withdraw-dialog";
 import { DashboardSummary } from "@/components/reports/dashboard-summary";
-import { MonthGlance } from "@/components/reports/month-glance";
+import { AheadLine, PaysLine, SpentLine } from "@/components/reports/home-lines";
+import { FixLines } from "@/components/reports/fix-lines";
 import { HomeAside } from "@/components/reports/home-aside";
 import {
   RecentMovements,
@@ -18,7 +19,7 @@ import {
 } from "@/components/reports/recent-movements";
 import { InvitationCard } from "@/components/members/invitation-card";
 import { DueRemindersCard } from "@/components/planning/due-reminders-card";
-import { ReconcileNudgeLine } from "@/components/accounts/reconcile-nudge-line";
+import { OwedToMeLine } from "@/components/accounts/owed-to-me-line";
 import { MonthReviewLine } from "@/components/reports/month-review-line";
 import { QuickEntryPill } from "@/components/transactions/quick-entry-pill";
 import {
@@ -41,8 +42,9 @@ import {
 import { listBudgetsWithStatus } from "@/db/queries/budgets";
 import { resolveWithdrawalTarget } from "@/db/queries/cash";
 import { listReconcileAges } from "@/db/queries/account-reconciliations";
-import { getDebtOverview } from "@/db/queries/debt-overview";
+import { getHomeAhead, listMonthAdjustments, listShortInstalments } from "@/db/queries/home-lines";
 import { listDueReminders } from "@/db/queries/due-reminders";
+import { getOwedToMe } from "@/db/queries/owed-to-me";
 import { getMonthReviewPending } from "@/db/queries/month-review";
 import { listGoalsWithProgress } from "@/db/queries/savings-goals";
 import { getPendingInvitation } from "@/db/queries/group-members";
@@ -64,7 +66,9 @@ import { formatMoney } from "@/lib/money";
 import { tagFigure } from "@/lib/privacy";
 import { accountNamesById } from "@/lib/fund/account-names";
 import { categoryNamesById } from "@/lib/fund/category-names";
-import { nearestLimit, nextDebtPayment } from "@/lib/fund/glance";
+import { narrateTransfers, transferSidesById } from "@/lib/transactions/transfer-words";
+import { nearestLimit } from "@/lib/fund/glance";
+import { fixItems, summarizeAccounts } from "@/lib/fund/home-lines";
 
 export async function generateMetadata(
   props: PageProps<"/[locale]">,
@@ -136,7 +140,7 @@ export default async function HomePage(props: PageProps<"/[locale]">) {
     [group, invitation, withdrawal, due],
     dashboardData,
     [rows, options],
-    [monthExpenses, debts, review, budgets, goals, counts],
+    [monthExpenses, ahead, review, budgets, goals, counts, shortLoans, adjustments, owed],
     t,
     td,
     ta,
@@ -161,7 +165,9 @@ export default async function HomePage(props: PageProps<"/[locale]">) {
     withSharedTransaction(() =>
       Promise.all([
         optional("getExpensesByCategory", getExpensesByCategory(currentMonthRange())),
-        optional("getDebtOverview", getDebtOverview()),
+        // The month's payments and what comes next, the cuotas paid short and the month's adjustments by account:
+        // each one drops its own line when its read fails.
+        optional("getHomeAhead", getHomeAhead()),
         // The review line is optional: a failed read drops the line, never Inicio.
         optional("getMonthReviewPending", getMonthReviewPending()),
         // Another member's personal budgets and goals are not the caller's to watch:
@@ -176,6 +182,10 @@ export default async function HomePage(props: PageProps<"/[locale]">) {
         ),
         // The accounts not counted in a month, for one quiet line (RF-262): a failed read drops the line.
         optional("listReconcileAges", listReconcileAges()),
+        optional("listShortInstalments", listShortInstalments()),
+        optional("listMonthAdjustments", listMonthAdjustments(currentMonthRange())),
+        // What other people owe the person, for line 3 of Inicio (decision 2 of 2026-11-17): a failed read drops the line.
+        optional("getOwedToMe", getOwedToMe()),
       ]),
     ),
     getTranslations("transactions"),
@@ -218,13 +228,18 @@ export default async function HomePage(props: PageProps<"/[locale]">) {
             description={td("emptyDescription")}
             action={
               <Flex direction="column" align="center" gap="3" mt="2">
-                <ButtonLink href="/settings/accounts" size="3">
+                <ButtonLink href="/settings/accounts?new=bank" size="3">
                   {td("createAccount")}
                 </ButtonLink>
                 {!group && (
-                  <TextLink href="/onboarding" justify="center" px="2">
-                    {td("createFund")}
-                  </TextLink>
+                  <Flex direction="column" align="center" gap="1">
+                    <TextLink href="/onboarding" justify="center" px="2">
+                      {td("createFund")}
+                    </TextLink>
+                    <Text size="2" color="gray" align="center">
+                      {td("createFundHint")}
+                    </Text>
+                  </Flex>
                 )}
               </Flex>
             }
@@ -254,7 +269,11 @@ export default async function HomePage(props: PageProps<"/[locale]">) {
           <Flex align="stretch" justify="center" gap="4" wrap="wrap">
             {ACCOUNT_CLASSES.map((tile) => (
               <Card key={tile.subtype} asChild>
-                <PlainLink href={`/settings/accounts?new=${tile.subtype}`} width={240}>
+                {/* A card is a debt, and its form lives in Deudas (RF-286). */}
+                <PlainLink
+                  href={tile.subtype === "card" ? "/planning/debts?new=card" : `/settings/accounts?new=${tile.subtype}`}
+                  width={240}
+                >
                   <Flex direction="column" align="center" gap="3">
                     <CategoryTile
                       color={tile.surface}
@@ -277,9 +296,14 @@ export default async function HomePage(props: PageProps<"/[locale]">) {
           </Flex>
 
           {!group && (
-            <TextLink href="/onboarding" size="2" weight="medium">
-              {td("createFund")}
-            </TextLink>
+            <Flex direction="column" align="center" gap="1">
+              <TextLink href="/onboarding" size="2" weight="medium">
+                {td("createFund")}
+              </TextLink>
+              <Text size="2" color="gray" align="center">
+                {td("createFundHint")}
+              </Text>
+            </Flex>
           )}
         </Flex>
       </Page>
@@ -311,6 +335,13 @@ export default async function HomePage(props: PageProps<"/[locale]">) {
     adjustment: t("kindAdjustment"),
   };
 
+  const transfers = narrateTransfers(
+    rows,
+    transferSidesById(options.accountDirectory),
+    accountNames,
+    t,
+  );
+
   // The withdrawal's destination read-only: the caller's resolved cash by name,
   // or the personal cash create-on-demand will open when they have none (RF-68).
   const willCreateCash = withdrawal.reason === "no-cash-account";
@@ -319,16 +350,22 @@ export default async function HomePage(props: PageProps<"/[locale]">) {
       accountNames.get(withdrawal.targetCashAccountId)) ||
     PERSONAL_CASH_ACCOUNT_NAME[locale];
 
-  // Another member's personal debt is theirs to pay: Inicio names only the caller's and the fund's (RF-58).
-  const foreignAccountIds = new Set(
-    options.accountDirectory.filter((account) => account.foreignOwner).map((account) => account.id),
-  );
-  const nextDebt = nextDebtPayment(
-    (debts ?? []).filter((debt) => !foreignAccountIds.has(debt.accountId)),
-  );
-
   const today = todayInBogota();
   const staleCount = (counts ?? []).filter((row) => isStale(row, today)).length;
+  // A friend «se le cobra» owes through no account; a credit somebody else pays already sits in its hidden «Me debe».
+  const holdings = summarizeAccounts(
+    dashboardData.accounts,
+    (owed ?? []).flatMap((group) =>
+      group.people.filter((person) => person.source === "person").map((person) => ({ currency: group.currency, cents: person.cents })),
+    ),
+  );
+  // Another member's personal account is theirs to fix (RF-58).
+  const fixes = fixItems({
+    accounts: dashboardData.accounts.filter((account) => !account.foreignOwner),
+    inboxCount: dashboardData.inboxPendingCount,
+    shortLoans: shortLoans ?? [],
+    staleCount,
+  });
 
   return (
     <Page gutter="flush-md">
@@ -340,15 +377,17 @@ export default async function HomePage(props: PageProps<"/[locale]">) {
         <Columns
           lead={
             <>
-              <DashboardSummary data={dashboardData} />
-              <MonthGlance flows={dashboardData.monthFlow} expenses={monthExpenses ?? []} />
+              <DashboardSummary data={dashboardData} holdings={holdings} adjustments={adjustments ?? []} />
+              {ahead && <PaysLine ahead={ahead} names={Object.fromEntries(accountNames)} />}
+              <OwedToMeLine owed={owed ?? []} />
+              <SpentLine month={today.slice(0, 7)} flows={dashboardData.monthFlow} expenses={monthExpenses ?? []} />
+              <FixLines items={fixes} />
+              {ahead && <AheadLine ahead={ahead} />}
             </>
           }
           aside={
             <>
               {review && <MonthReviewLine month={review.month} count={review.count} />}
-
-              {staleCount > 0 && <ReconcileNudgeLine count={staleCount} />}
 
               {due.total > 0 && <DueRemindersCard rows={due.rows} total={due.total} />}
 
@@ -358,10 +397,8 @@ export default async function HomePage(props: PageProps<"/[locale]">) {
                     budgets={nearestLimit(budgets ?? [], ASIDE_BUDGETS)}
                     budgetNames={categoryNames}
                     goal={goals?.[0] ?? null}
-                    debt={nextDebt}
-                    debtName={
-                      nextDebt ? (accountNames.get(nextDebt.accountId) ?? null) : null
-                    }
+                    debt={null}
+                    debtName={null}
                   />
                 </Flex>
               </Box>
@@ -403,19 +440,20 @@ export default async function HomePage(props: PageProps<"/[locale]">) {
                       tile={
                         <CategoryTile
                           color={rowColor(row, categoryColors)}
-                          name={rowTitle(row, categoryNames, kindLabels)}
+                          name={rowTitle(row, categoryNames, kindLabels, transfers)}
                           transfer={row.kind === "transfer" || row.reconciliationId !== null}
                         />
                       }
                       title={
                         row.description ||
-                        rowTitle(row, categoryNames, kindLabels)
+                        rowTitle(row, categoryNames, kindLabels, transfers)
                       }
                       subtitle={rowCaption(
                         row,
                         categoryNames,
                         accountNames,
                         kindLabels,
+                        transfers,
                       )}
                       amount={<Figures>{rowAmount(row, locale)}</Figures>}
                       tone={rowTone(row)}
@@ -444,6 +482,7 @@ export default async function HomePage(props: PageProps<"/[locale]">) {
             <RecentMovements
               rows={rows}
               kindLabels={kindLabels}
+              transfers={transfers}
               accountNames={accountNames}
               categoryNames={categoryNames}
               categoryColors={categoryColors}

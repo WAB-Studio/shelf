@@ -13,7 +13,7 @@ import {
 } from "@/components/fund/destinations";
 import { PrivacyToggle } from "@/components/fund/privacy-toggle";
 import { SettingsPanel } from "@/components/fund/settings-panel";
-import { useQuickEntry } from "@/components/transactions/quick-entry-provider";
+import { useMovementEntry } from "@/components/transactions/movement-entry-provider";
 import {
   Badge,
   Flex,
@@ -63,7 +63,7 @@ export function AppSidebar({
 }) {
   const t = useTranslations("nav");
   const pathname = usePathname();
-  const { openQuick } = useQuickEntry();
+  const { openForm } = useMovementEntry();
 
   // The queue's waiting count, spoken rather than left as a bare number.
   const pendingBadge = pendingCount > 0 && (
@@ -138,7 +138,7 @@ export function AppSidebar({
         <SidebarAction
           icon={<Plus size={18} strokeWidth={2.2} />}
           label={t("record")}
-          onClick={openQuick}
+          onClick={openForm}
         />
         {/* The whole row is the trigger, so the panel behind Ajustes is also a
             click away from the person it belongs to. */}

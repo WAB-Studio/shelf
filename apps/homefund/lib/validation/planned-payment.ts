@@ -147,6 +147,8 @@ export type UpdatePlannedPaymentInput = z.infer<typeof updatePlannedPaymentSchem
 export const settlePlannedPaymentSchema = z.object({
   plannedPaymentId: z.uuid({ error: "plannedPayments.errors.plannedPaymentInvalid" }),
   occurredAt: occurredAtSchema,
+  // An expected income carries none until it arrives: the one the person picks then, which an income needs.
+  categoryId: z.uuid({ error: "plannedPayments.errors.categoryInvalid" }).nullish(),
 });
 
 export type SettlePlannedPaymentInput = z.infer<typeof settlePlannedPaymentSchema>;

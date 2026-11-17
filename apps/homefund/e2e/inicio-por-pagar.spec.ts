@@ -65,8 +65,12 @@ test.afterEach(async () => {
   created = [];
 });
 
+// The card's own rows: «Este mes pagas» and «Viene» may name the same payment in their lines.
 function rows(page: Page, name: string) {
-  return page.getByRole("link").filter({ hasText: `${name} ${stamp}` });
+  return heading(page)
+    .locator("xpath=ancestor::*[contains(@class, 'rt-Card')][1]")
+    .getByRole("link")
+    .filter({ hasText: `${name} ${stamp}` });
 }
 
 function heading(page: Page) {
@@ -98,13 +102,13 @@ test("due reminders list overdue first with their wording and amounts", async ({
   await expect(page.getByRole("link", { name: "Ver pagos" })).toBeVisible();
 });
 
-test("a row opens Pagos on that payment", async ({ page }) => {
+test("a row opens «Lo que viene» on that payment", async ({ page }) => {
   // Kills: a row that is not a link, or a link to another screen.
   await seed([{ name: "Abrir", pesos: 123000, due: 2, remind: 0 }]);
   await page.goto("/es");
 
   await rows(page, "Abrir").click();
 
-  await expect(page).toHaveURL(/\/es\/planning\/payments/);
+  await expect(page).toHaveURL(/\/es\/planning\/upcoming/);
   await expect(page.getByText(`Abrir ${stamp}`).filter({ visible: true }).first()).toBeVisible();
 });

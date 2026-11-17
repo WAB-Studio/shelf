@@ -143,6 +143,60 @@ export async function recordAccountStatement(
   }
 }
 
+export type ReviseAccountStatementArgs = RecordAccountStatementArgs & { statementId: string };
+
+// The statement corrected or removed, or what kept it from being: «last» is the policy's word, so a row the
+// policies hide, one that is not the last and one that is gone all read the same.
+export type StatementChange = "done" | "missing" | "beforePrevious";
+
+/**
+ * Rewrites the LAST statement of an account (RF-284): the policy admits no other. A cut-off that moves to or
+ * before the previous statement's would reorder the history and is refused.
+ */
+export async function reviseAccountStatement(args: ReviseAccountStatementArgs): Promise<StatementChange> {
+  return withUserDb(async (tx) => {
+    const [previous] = await tx.execute<{ cut_off_date: string | null }>(sql`
+      select max(s.cut_off_date) as cut_off_date from account_statements s
+      where s.account_id = ${args.accountId} and s.id <> ${args.statementId}
+        and s.cut_off_date < (select c.cut_off_date from account_statements c where c.id = ${args.statementId})
+    `);
+    if (previous?.cut_off_date && previous.cut_off_date >= args.cutOffDate) return "beforePrevious";
+
+    const rows = await tx.execute<{ id: string }>(sql`
+      update account_statements set
+        period_start = ${args.periodStart},
+        cut_off_date = ${args.cutOffDate},
+        payment_due_date = ${args.paymentDueDate},
+        opening_balance_cents = ${args.openingBalanceCents === null ? null : signedByAccountKind(args.accountId, args.openingBalanceCents)},
+        closing_balance_cents = ${signedByAccountKind(args.accountId, args.closingBalanceCents)},
+        credits_cents = ${args.creditsCents},
+        debits_cents = ${args.debitsCents},
+        minimum_payment_cents = ${args.minimumPaymentCents},
+        interest_charged_cents = ${args.interestChargedCents},
+        fees_charged_cents = ${args.feesChargedCents}
+      where id = ${args.statementId} and account_id = ${args.accountId}
+      returning id
+    `);
+    return rows.length === 1 ? "done" : "missing";
+  });
+}
+
+/** Takes back the LAST statement of an account (RF-284). */
+export async function deleteAccountStatement({
+  accountId,
+  statementId,
+}: {
+  accountId: string;
+  statementId: string;
+}): Promise<StatementChange> {
+  return withUserDb(async (tx) => {
+    const rows = await tx.execute<{ id: string }>(sql`
+      delete from account_statements where id = ${statementId} and account_id = ${accountId} returning id
+    `);
+    return rows.length === 1 ? "done" : "missing";
+  });
+}
+
 export type AccountStatementHistory = {
   account: {
     id: string;

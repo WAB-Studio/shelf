@@ -127,6 +127,10 @@ export type SeedDelivery = {
   // complete enough to accept in one tap (RF-94).
   trusted?: boolean;
   text?: string;
+  // The kind the proposal reads as; an expense unless the spec says otherwise.
+  direction?: "income" | "expense" | "transfer";
+  toAccountId?: string | null;
+  description?: string | null;
 };
 
 /**
@@ -160,7 +164,8 @@ export async function seedQueue(rows: SeedDelivery[]): Promise<string[]> {
         insert into ingest_deliveries (
           external_ref, raw_text, shape_hash, merchant_key, merchant_label,
           proposed_amount_cents, proposed_account_id, proposed_category_id,
-          category_source, proposed_direction, proposed_occurred_at, proposed_description)
+          category_source, proposed_direction, proposed_occurred_at, proposed_description,
+          proposed_to_account_id)
         values (
           ${randomUUID()},
           ${text},
@@ -171,9 +176,10 @@ export async function seedQueue(rows: SeedDelivery[]): Promise<string[]> {
           ${row.accountId},
           ${row.categoryId},
           ${row.categorySource},
-          'expense',
+          ${row.direction ?? "expense"},
           (now() at time zone ${TIME_ZONE})::date,
-          ${row.merchant})
+          ${row.description === undefined ? row.merchant : row.description},
+          ${row.toAccountId ?? null})
         returning id`;
 
       ids.push(delivery.id);

@@ -49,6 +49,8 @@ export type DueDebt = {
   currency: string;
   owedCents: number;
   minimumPaymentCents: number | null;
+  // What was paid this period covers its minimum: nothing is due on this debt until the next one.
+  minimumPaid?: boolean;
   nextDueDate: string | null;
 };
 
@@ -67,7 +69,7 @@ export function nextDebtPayment<T extends DueDebt>(
 ): (NextDebtPayment & { row: T }) | null {
   let next: (NextDebtPayment & { row: T }) | null = null;
   for (const row of rows) {
-    if (row.nextDueDate === null || row.owedCents <= 0) continue;
+    if (row.nextDueDate === null || row.owedCents <= 0 || row.minimumPaid) continue;
     if (next !== null && next.date <= row.nextDueDate) continue;
     next = {
       accountId: row.accountId,

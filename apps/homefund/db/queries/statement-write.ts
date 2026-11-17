@@ -1,6 +1,6 @@
 import "server-only";
 
-import { recordAccountStatement } from "@/db/queries/account-statements";
+import { deleteAccountStatement, recordAccountStatement, reviseAccountStatement } from "@/db/queries/account-statements";
 import { createDeferral, deleteDeferral } from "@/db/queries/deferrals";
 import { BilledAmountRefused, recordBilledAmount } from "@/db/queries/debt-statements";
 import { getSettlementCurrencies } from "@/db/queries/transactions";
@@ -11,6 +11,7 @@ import { ActionError } from "@/lib/errors";
 import { parseAmount } from "@/lib/money";
 import {
   type RecordAccountStatementInput,
+  type ReviseAccountStatementInput,
   refineAccountStatementAmounts,
 } from "@/lib/validation/account-statement";
 import type { RecordBilledAmountInput } from "@/lib/validation/debt-settlement";
@@ -119,6 +120,60 @@ export async function recordStatement({
     if (error instanceof ActionError) throw error;
     mapStatementError(error);
   }
+}
+
+/**
+ * Corrects the LAST statement of an account (RF-284). The policy admits no other, so a statement that is not
+ * the last, one already gone and one outside the caller's scope all answer `errors.notFound`.
+ */
+export async function reviseStatement({ statementId, ...input }: ReviseAccountStatementInput): Promise<void> {
+  const settlement = await getSettlementCurrencies({ fromAccountId: input.accountId, toAccountId: null });
+  assertRefined(
+    {
+      closingBalance: input.closingBalance,
+      openingBalance: input.openingBalance,
+      credits: input.credits,
+      debits: input.debits,
+      minimumPayment: input.minimumPayment,
+      interestCharged: input.interestCharged,
+      feesCharged: input.feesCharged,
+    },
+    refineAccountStatementAmounts(settlement.from ?? BASE_CURRENCY),
+  );
+
+  let change: Awaited<ReturnType<typeof reviseAccountStatement>>;
+  try {
+    change = await reviseAccountStatement({
+      statementId,
+      accountId: input.accountId,
+      periodStart: input.periodStart,
+      cutOffDate: input.cutOffDate,
+      paymentDueDate: input.paymentDueDate,
+      openingBalanceCents: toOptionalMinor(input.openingBalance),
+      closingBalanceCents: requireMinor(input.closingBalance),
+      creditsCents: toOptionalMinor(input.credits),
+      debitsCents: toOptionalMinor(input.debits),
+      minimumPaymentCents: toOptionalMinor(input.minimumPayment),
+      interestChargedCents: toOptionalMinor(input.interestCharged),
+      feesChargedCents: toOptionalMinor(input.feesCharged),
+    });
+  } catch (error) {
+    mapStatementError(error);
+  }
+
+  if (change === "beforePrevious") throw new ActionError("installments.errors.cutOffBeforePrevious");
+  if (change === "missing") throw new ActionError("errors.notFound");
+}
+
+/** Takes back the LAST statement of an account (RF-284). */
+export async function removeStatement(args: { accountId: string; statementId: string }): Promise<void> {
+  let change: Awaited<ReturnType<typeof deleteAccountStatement>>;
+  try {
+    change = await deleteAccountStatement(args);
+  } catch (error) {
+    mapStatementError(error);
+  }
+  if (change !== "done") throw new ActionError("errors.notFound");
 }
 
 /**

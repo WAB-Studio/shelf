@@ -128,84 +128,113 @@ export function refineAccountStatementAmounts(currency: CurrencyCode) {
  * `recordAccountStatement` resolves the sign from the account's own kind, the
  * same shape `createAccountSchema` gives its opening balance.
  */
-export const recordAccountStatementSchema = z
-  .object({
-    accountId: z.uuid({ error: "installments.errors.accountInvalid" }),
-    currency: settlementCurrencySchema,
-    periodStart: z.string(),
-    cutOffDate: z.string(),
-    paymentDueDate: optionalDateField,
-    openingBalance: optionalFigureField,
-    closingBalance: z.string(),
-    credits: optionalFigureField,
-    debits: optionalFigureField,
-    minimumPayment: optionalFigureField,
-    interestCharged: optionalFigureField,
-    feesCharged: optionalFigureField,
-  })
-  .superRefine((data, ctx) => {
-    if (data.cutOffDate.trim().length === 0) {
-      ctx.addIssue({
-        code: "custom",
-        message: "installments.errors.cutOffRequired",
-        path: ["cutOffDate"],
-      });
-    } else if (!isCivilDate(data.cutOffDate)) {
-      ctx.addIssue({
-        code: "custom",
-        message: "installments.errors.cutOffInvalid",
-        path: ["cutOffDate"],
-      });
-    }
+const statementFields = {
+  accountId: z.uuid({ error: "installments.errors.accountInvalid" }),
+  currency: settlementCurrencySchema,
+  periodStart: z.string(),
+  cutOffDate: z.string(),
+  paymentDueDate: optionalDateField,
+  openingBalance: optionalFigureField,
+  closingBalance: z.string(),
+  credits: optionalFigureField,
+  debits: optionalFigureField,
+  minimumPayment: optionalFigureField,
+  interestCharged: optionalFigureField,
+  feesCharged: optionalFigureField,
+};
 
-    const cutOffValid = isCivilDate(data.cutOffDate);
+type StatementFigures = {
+  periodStart: string;
+  cutOffDate: string;
+  paymentDueDate: string | null;
+  currency: string;
+  closingBalance: string;
+  openingBalance: string | null;
+  credits: string | null;
+  debits: string | null;
+  minimumPayment: string | null;
+  interestCharged: string | null;
+  feesCharged: string | null;
+};
 
-    if (data.periodStart.trim().length === 0) {
-      ctx.addIssue({
-        code: "custom",
-        message: "installments.errors.startDateRequired",
-        path: ["periodStart"],
-      });
-    } else if (!isCivilDate(data.periodStart)) {
+// The dates' order, the amounts' reading: one rule for recording a statement and for correcting the last one.
+function refineStatement(data: StatementFigures, ctx: z.RefinementCtx): void {
+  if (data.cutOffDate.trim().length === 0) {
+    ctx.addIssue({
+      code: "custom",
+      message: "installments.errors.cutOffRequired",
+      path: ["cutOffDate"],
+    });
+  } else if (!isCivilDate(data.cutOffDate)) {
+    ctx.addIssue({
+      code: "custom",
+      message: "installments.errors.cutOffInvalid",
+      path: ["cutOffDate"],
+    });
+  }
+
+  const cutOffValid = isCivilDate(data.cutOffDate);
+
+  if (data.periodStart.trim().length === 0) {
+    ctx.addIssue({
+      code: "custom",
+      message: "installments.errors.startDateRequired",
+      path: ["periodStart"],
+    });
+  } else if (!isCivilDate(data.periodStart)) {
+    ctx.addIssue({
+      code: "custom",
+      message: "installments.errors.startDateInvalid",
+      path: ["periodStart"],
+    });
+  } else if (cutOffValid && data.periodStart > data.cutOffDate) {
+    // Mirrors `account_statements_period_before_cut_off`.
+    ctx.addIssue({
+      code: "custom",
+      message: "installments.errors.periodStartAfterCutOff",
+      path: ["periodStart"],
+    });
+  }
+
+  if (data.paymentDueDate !== null) {
+    if (!isCivilDate(data.paymentDueDate)) {
       ctx.addIssue({
         code: "custom",
         message: "installments.errors.startDateInvalid",
-        path: ["periodStart"],
+        path: ["paymentDueDate"],
       });
-    } else if (cutOffValid && data.periodStart > data.cutOffDate) {
-      // Mirrors `account_statements_period_before_cut_off`.
+    } else if (cutOffValid && data.paymentDueDate < data.cutOffDate) {
+      // Mirrors `account_statements_due_after_cut_off`.
       ctx.addIssue({
         code: "custom",
-        message: "installments.errors.periodStartAfterCutOff",
-        path: ["periodStart"],
+        message: "installments.errors.dueBeforeCutOff",
+        path: ["paymentDueDate"],
       });
     }
+  }
 
-    if (data.paymentDueDate !== null) {
-      if (!isCivilDate(data.paymentDueDate)) {
-        ctx.addIssue({
-          code: "custom",
-          message: "installments.errors.startDateInvalid",
-          path: ["paymentDueDate"],
-        });
-      } else if (cutOffValid && data.paymentDueDate < data.cutOffDate) {
-        // Mirrors `account_statements_due_after_cut_off`.
-        ctx.addIssue({
-          code: "custom",
-          message: "installments.errors.dueBeforeCutOff",
-          path: ["paymentDueDate"],
-        });
-      }
-    }
+  // The currency's own shape already failed above; reading amounts against a
+  // code the runtime does not know would only repeat that one issue for
+  // every field it names.
+  if (!isCurrencyCode(data.currency)) return;
 
-    // The currency's own shape already failed above; reading amounts against a
-    // code the runtime does not know would only repeat that one issue for
-    // every field it names.
-    if (!isCurrencyCode(data.currency)) return;
+  refineAccountStatementAmounts(data.currency)(data, ctx);
+}
 
-    refineAccountStatementAmounts(data.currency)(data, ctx);
-  });
+export const recordAccountStatementSchema = z.object(statementFields).superRefine(refineStatement);
 
 export type RecordAccountStatementInput = z.infer<
   typeof recordAccountStatementSchema
 >;
+
+// The last statement corrected (RF-284): the same fields, naming the statement they replace.
+export const reviseAccountStatementSchema = z
+  .object({ ...statementFields, statementId: z.uuid({ error: "errors.unexpected" }) })
+  .superRefine(refineStatement);
+
+export type ReviseAccountStatementInput = z.infer<typeof reviseAccountStatementSchema>;
+
+export const deleteAccountStatementSchema = z.object({
+  accountId: z.uuid({ error: "installments.errors.accountInvalid" }),
+  statementId: z.uuid({ error: "errors.unexpected" }),
+});

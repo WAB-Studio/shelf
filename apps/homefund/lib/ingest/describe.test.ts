@@ -4,7 +4,15 @@ import { test } from "node:test";
 import { parseAmount } from "@/lib/money";
 import { interpretQuickEntry, readAccountTails } from "@/lib/transactions/interpret";
 
-import { describeAlert, looksLikeBankAlert, onlyBankAccount, paidOwnCard, readableName } from "./describe";
+import {
+  describeAlert,
+  looksLikeBankAlert,
+  looksLikeCashWithdrawal,
+  onlyBankAccount,
+  paidOwnCard,
+  readableName,
+  repairDescription,
+} from "./describe";
 
 // Synthetic messages that mimic the shapes Bancolombia sends; no real figure, name or number.
 const DATE = "el 14/11/2026 a las 19:05";
@@ -94,4 +102,35 @@ test("a reference that starts with three capitals is no currency mark, so it is 
 
   assert.equal(parseAmount(read.amountPesos ?? ""), 354_321_000);
   assert.equal(parseAmount(interpretQuickEntry("Compraste COP80.800,00 en X", { categories: [], accounts: [], defaultAccountId: null }).amountPesos ?? ""), 8_080_000);
+});
+
+// Synthetic: the shapes of the damaged descriptions, with invented merchants, figures and numbers.
+const NOUN_PURCHASE = "Bancolombia le informa Compra por $38.000 en RAPPI RESTAURANTE 15:32. 12/11/2026 T.Cred *4521. Inquietudes al 018000000000.";
+const APPROVED_PURCHASE = "Davivienda: Compra aprobada por $52.300 en EXITO COLINA con tu T.Cred *4521 el 12/11/2026.";
+
+test("a purchase named by its noun yields the business, never the sentence with its amount cut out", () => {
+  assert.equal(describeAlert(NOUN_PURCHASE), "Rappi Restaurante");
+  assert.equal(describeAlert(APPROVED_PURCHASE), "Exito Colina");
+  assert.equal(describeAlert("Bancolombia le informa Compra por $ en RAPPI* 15:32. 12/11/2026 T.Cred *4521."), "Rappi");
+  assert.equal(describeAlert("Nequi: Pagaste en UBER TRIP"), "Uber Trip");
+  assert.equal(describeAlert("Nequi: Pagaste $18.500 en UBER TRIP el 12/11/2026."), "Uber Trip");
+});
+
+test("a row stored with a damaged description reads the business again from its message", () => {
+  assert.equal(repairDescription("Bancolombia le informa Compra por $ en RAPPI* 15:32. 12/11/2026", NOUN_PURCHASE, "RAPPI*"), "Rappi Restaurante");
+  assert.equal(repairDescription(": Pagaste en UBER TRIP", "Nequi: Pagaste en UBER TRIP", "UBER TRIP"), "Uber Trip");
+  // No shape fits the message: the business stands in for the broken sentence.
+  assert.equal(repairDescription("Da : Compra aprobada por $ en TIENDA UNO", "Texto raro de un banco", "TIENDA UNO"), "Tienda Uno");
+  // A sound description is left alone, and so is a damaged one with no business to replace it.
+  assert.equal(repairDescription("Almuerzo con Ana", "Almuerzo con Ana 25000", null), "Almuerzo con Ana");
+  assert.equal(repairDescription(": algo", "Texto raro", null), ": algo");
+  assert.equal(repairDescription(null, "Texto raro", "X"), null);
+});
+
+test("an ATM withdrawal is told from a purchase", () => {
+  assert.equal(looksLikeCashWithdrawal("Bancolombia: Retiraste $300.000 en CAJERO CALLE 80 con tu T.Deb *1234."), true);
+  assert.equal(looksLikeCashWithdrawal("Cajero DAVIVIENDA CALLE 80 $300.000"), true);
+  assert.equal(looksLikeCashWithdrawal("Retiro por $200.000 en cajero."), true);
+  assert.equal(looksLikeCashWithdrawal("Bancolombia: Compraste $12.000 en Tienda La Esquina con tu T.Deb *4872."), false);
+  assert.equal(describeAlert("Cajero DAVIVIENDA CALLE 80 $300.000"), "Retiro en cajero");
 });

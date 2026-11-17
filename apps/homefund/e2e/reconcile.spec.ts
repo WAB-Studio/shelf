@@ -362,7 +362,7 @@ test.describe("confirming (B7)", () => {
         page
           .getByRole("row")
           .or(page.locator('a[href*="/movements/"]'))
-          .getByText("Diferencia", { exact: true }),
+          .getByText("Ajuste por cuadre", { exact: true }),
       ).toHaveCount(0);
     } finally {
       await dropAccount(account.id);

@@ -3,7 +3,14 @@ import "server-only";
 import { sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
-import { minimumPaymentSql, unpaidStatementMinimumSql } from "@/db/queries/debt-minimum";
+import {
+  minimumPaidSql,
+  minimumPaymentSql,
+  paidSince,
+  periodStartSql,
+  totalDueSql,
+  unpaidStatementMinimumSql,
+} from "@/db/queries/debt-minimum";
 import type { DebtTerms } from "@/db/schema";
 import { withUserDb } from "@/db/session";
 import type { CurrencyCode } from "@/lib/currency";
@@ -41,12 +48,30 @@ export type DebtOverviewRow = {
   // The fraction 0..1 the interest above is charged at, like `minimum_payment_pct`
   // reads: the screen formats it as a percentage and derives nothing.
   monthlyRatePct: number;
+  // The stored effective annual fraction as text («0.285»), so a screen can show the rate the way it was typed.
+  annualRate: string;
   minimumPaymentCents: number | null;
+  // What was paid this period covers its minimum: the screen says so instead of asking it again.
+  minimumPaid: boolean;
+  // What paying the latest statement in full asks now, or everything owed when there is no statement.
+  totalDueCents: number;
   nextCutOffDate: string | null;
   nextDueDate: string | null;
   // The card's other pockets, in currency order. The screen shows them; no
   // figure above counts them.
   otherOwed: DebtPocket[];
+  // The stored terms, as the form that edits them opens on (RF-286). `annualRate` and `minimumPaymentPct` are the
+  // ledger's fractions, as text.
+  stored: {
+    annualRate: string;
+    fixedMinimumCents: number | null;
+    minimumPaymentPct: string | null;
+    statementCutOffDay: number | null;
+    paymentDueDay: number | null;
+    termMonths: number | null;
+    creditLimitCents: number | null;
+    avalCents: number | null;
+  };
 };
 
 // The next date on or after `today` whose day-of-month is `dayCol`, clamped to the
@@ -134,7 +159,16 @@ export async function getDebtOverviewWithPockets(): Promise<{
       available_credit_cents: string | null;
       monthly_interest_cents: string;
       monthly_rate_pct: string;
+      minimum_paid: boolean;
+      total_due_cents: string;
       minimum_payment_cents: string | null;
+      annual_rate: string | null;
+      fixed_minimum_cents: string | null;
+      minimum_pct: string | null;
+      cut_off_day: number | null;
+      due_day: number | null;
+      term_months: number | null;
+      aval_cents: string | null;
       next_cut_off_date: string | null;
       next_due_date: string | null;
       currency: string;
@@ -203,7 +237,24 @@ export async function getDebtOverviewWithPockets(): Promise<{
         dt.credit_limit_cents + b.settlement_cents as available_credit_cents,
         round(greatest(0, -b.settlement_cents) * mr.monthly_rate)::bigint as monthly_interest_cents,
         mr.monthly_rate as monthly_rate_pct,
+        dt.annual_rate::text as annual_rate,
+        ${totalDueSql({ balance: sql`b.settlement_cents`, statementClosing: sql`s.closing_balance_cents`, paid: sql`pp.paid` })} as total_due_cents,
+        ${minimumPaidSql({
+          fixed: sql`dt.minimum_payment_cents`,
+          pct: sql`dt.minimum_payment_pct`,
+          balance: sql`b.settlement_cents`,
+          statementMinimum: sql`s.minimum_payment_cents`,
+          paid: sql`pp.paid`,
+        })} as minimum_paid,
         ${minimumPaymentSql({
+          paid: minimumPaidSql({
+            fixed: sql`dt.minimum_payment_cents`,
+            pct: sql`dt.minimum_payment_pct`,
+            balance: sql`b.settlement_cents`,
+            statementMinimum: sql`s.minimum_payment_cents`,
+            paid: sql`pp.paid`,
+          }),
+          paidCents: sql`pp.paid`,
           fixed: sql`dt.minimum_payment_cents`,
           pct: sql`dt.minimum_payment_pct`,
           balance: sql`b.settlement_cents`,
@@ -214,6 +265,12 @@ export async function getDebtOverviewWithPockets(): Promise<{
             minimum: sql`s.minimum_payment_cents`,
           }),
         })} as minimum_payment_cents,
+        dt.minimum_payment_cents as fixed_minimum_cents,
+        dt.minimum_payment_pct::text as minimum_pct,
+        dt.statement_cut_off_day as cut_off_day,
+        dt.payment_due_day as due_day,
+        dt.term_months,
+        dt.aval_cents,
         coalesce(s.cut_off_date, nc.next_cut_off) as next_cut_off_date,
         coalesce(s.payment_due_date, nd.next_due) as next_due_date,
         b.other_owed
@@ -226,12 +283,22 @@ export async function getDebtOverviewWithPockets(): Promise<{
       -- (RF-131): the same row getCurrentStatement reads, so the overview and
       -- the detail screen never name different dates for the same debt.
       left join lateral (
-        select s.cut_off_date, s.payment_due_date, s.minimum_payment_cents
+        select s.cut_off_date, s.payment_due_date, s.minimum_payment_cents, s.closing_balance_cents
         from account_statements s
         where s.account_id = dt.account_id
         order by s.cut_off_date desc
         limit 1
       ) s on true
+      cross join lateral (select ${periodStartSql({
+        statementCutOff: sql`s.cut_off_date`,
+        cutOffDay: sql`dt.statement_cut_off_day`,
+        today,
+      })} as since) ps
+      cross join lateral (select ${paidSince({
+        account: sql`b.id`,
+        currency: sql`a.settlement_currency`,
+        since: sql`ps.since`,
+      })} as paid) pp
       cross join lateral (select ${nextCutOff} as next_cut_off) nc
       cross join lateral (select ${nextDue} as next_due) nd
       -- One expression for both readings, so the figure and its rate can never
@@ -266,10 +333,23 @@ export async function getDebtOverviewWithPockets(): Promise<{
             row.available_credit_cents === null ? null : Number(row.available_credit_cents),
           monthlyInterestCents: Number(row.monthly_interest_cents),
           monthlyRatePct: Number(row.monthly_rate_pct),
+          annualRate: row.annual_rate ?? "0",
+          minimumPaid: row.minimum_paid,
+          totalDueCents: Number(row.total_due_cents),
           minimumPaymentCents:
             row.minimum_payment_cents === null ? null : Number(row.minimum_payment_cents),
           nextCutOffDate: row.next_cut_off_date,
           nextDueDate: row.next_due_date,
+          stored: {
+            annualRate: row.annual_rate ?? "0",
+            fixedMinimumCents: row.fixed_minimum_cents === null ? null : Number(row.fixed_minimum_cents),
+            minimumPaymentPct: row.minimum_pct,
+            statementCutOffDay: row.cut_off_day,
+            paymentDueDay: row.due_day,
+            termMonths: row.term_months,
+            creditLimitCents: row.credit_limit_cents === null ? null : Number(row.credit_limit_cents),
+            avalCents: row.aval_cents === null ? null : Number(row.aval_cents),
+          },
           otherOwed: row.other_owed.map((pocket) => ({
             currency: pocket.currency,
             owedCents: Number(pocket.owedCents),

@@ -7,7 +7,7 @@ import { AppSidebar } from "@/components/fund/app-sidebar";
 import { InstallHint } from "@/components/fund/install-hint";
 import { PrivacyToggle } from "@/components/fund/privacy-toggle";
 import { AppTabs } from "@/components/fund/app-tabs";
-import { QuickEntryProvider } from "@/components/transactions/quick-entry-provider";
+import { MovementEntryProvider } from "@/components/transactions/movement-entry-provider";
 import { AppMark, Box, Flex, Heading } from "@/components/ui";
 import { getShellSummary } from "@/db/queries/app-shell";
 import { getTransactionFormOptions } from "@/db/queries/transaction-form";
@@ -78,7 +78,7 @@ export default async function AppLayout(props: LayoutProps<"/[locale]">) {
   const fundName = group?.name ?? t("appName");
 
   return (
-    <QuickEntryProvider options={options}>
+    <MovementEntryProvider options={options}>
       <Flex flexGrow="1">
         <AppSidebar
           fundName={fundName}
@@ -113,6 +113,6 @@ export default async function AppLayout(props: LayoutProps<"/[locale]">) {
           keepSignedIn={keepSignedIn}
         />
       </Box>
-    </QuickEntryProvider>
+    </MovementEntryProvider>
   );
 }

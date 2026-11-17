@@ -32,6 +32,7 @@ import {
   RawText,
   Select,
   Spinner,
+  StackedSegmentedControl,
   Text,
   TextLink,
   VisuallyHidden,
@@ -44,11 +45,13 @@ import { deliveryCurrency } from "@/lib/fund/glance";
 import { proposedCategoryId, scopeOfAccounts } from "@/lib/fund/category-scope";
 import { categoryFromHistory } from "@/lib/ingest/learned-category";
 import { centsToDecimal } from "@/lib/money";
-import { useActionErrorToast } from "@/lib/use-action-toast";
+import { useActionErrorToast, type MessageKey } from "@/lib/use-action-toast";
 import type { AcceptDeliveryInput } from "@/lib/validation/ingest";
 import type { CredentialBadge } from "@/lib/validation/webhook";
 
 type ReviewDefaults = {
+  // The kind the card shows, so the form opens on the same tab.
+  tab: "expense" | "income" | "transfer";
   fromAccountId: string | null;
   toAccountId: string | null;
   amount: string;
@@ -66,16 +69,51 @@ const SOURCE_MESSAGE = {
   credential_default: "categoryFromDefault",
 } as const satisfies Record<NonNullable<PendingDeliveryRow["categorySource"]>, string>;
 
-// What the person set on the card itself, kept by the screen so one write can carry it: a category of their own
-// and, optionally, whom the movement was for (RF-242).
-export type DeliveryChoice = { categoryId: string | null; forPersonId: string | null };
-export const NO_CHOICE: DeliveryChoice = { categoryId: null, forPersonId: null };
+// What the person set on the card itself, kept by the screen so one write can carry it: the kind of movement, its
+// account or accounts, a category of their own and, optionally, whom the movement was for (RF-242, RF-278). Each
+// is null while the message's own proposal stands.
+export type DeliveryChoice = {
+  direction: "income" | "expense" | "transfer" | null;
+  accountId: string | null;
+  toAccountId: string | null;
+  categoryId: string | null;
+  forPersonId: string | null;
+};
+export const NO_CHOICE: DeliveryChoice = {
+  direction: null,
+  accountId: null,
+  toAccountId: null,
+  categoryId: null,
+  forPersonId: null,
+};
+
+// The delivery as the person left it: the proposal with what they changed laid over it. A category of the other
+// kind than the one now chosen reads as none (`proposedCategoryId`), so changing the kind never carries one over.
+export function withChoice(delivery: PendingDeliveryRow, choice: DeliveryChoice): PendingDeliveryRow {
+  return {
+    ...delivery,
+    proposedDirection: choice.direction ?? delivery.proposedDirection,
+    proposedAccountId: choice.accountId ?? delivery.proposedAccountId,
+    proposedToAccountId: choice.toAccountId ?? delivery.proposedToAccountId,
+  };
+}
+
+// Whether the person changed what the message proposed (not the «para quién», which rides along either way).
+export function changedProposal(choice: DeliveryChoice): boolean {
+  return (
+    choice.direction !== null ||
+    choice.accountId !== null ||
+    choice.toAccountId !== null ||
+    choice.categoryId !== null
+  );
+}
 
 export function movementDefaults(
-  delivery: PendingDeliveryRow,
+  proposal: PendingDeliveryRow,
   options: TransactionFormOptions,
   choice: DeliveryChoice,
 ): ReviewDefaults {
+  const delivery = withChoice(proposal, choice);
   const amount =
     delivery.proposedAmountCents === null
       ? ""
@@ -86,6 +124,7 @@ export function movementDefaults(
   const categoryId = isTransfer ? null : (choice.categoryId ?? proposedCategoryId(delivery, options));
 
   return {
+    tab: delivery.proposedDirection ?? "expense",
     fromAccountId: isIncome ? null : accountId,
     toAccountId: isTransfer ? delivery.proposedToAccountId : isIncome ? accountId : null,
     amount,
@@ -96,32 +135,43 @@ export function movementDefaults(
   };
 }
 
-// The payload of a delivery that is ready for one tap: complete as proposed, or made complete by the category
-// the person chose on the card (a chosen category stands for the person, as a saved recipient's does).
+// The payload of a delivery that is ready for one tap: complete as proposed, or made complete by what the person
+// chose on the card (a chosen category stands for the person, as a saved recipient's does).
 export function readyInput(
-  delivery: PendingDeliveryRow,
+  proposal: PendingDeliveryRow,
   options: TransactionFormOptions,
   choice: DeliveryChoice,
 ): AcceptDeliveryInput | null {
+  const delivery = withChoice(proposal, choice);
   const isTransfer = delivery.proposedDirection === "transfer";
-  const chosen = !isTransfer && choice.categoryId !== null;
-  const ready = chosen
-    ? delivery.proposedAmountCents !== null && delivery.proposedAccountId !== null && !delivery.beforeOpening
+  const changed = changedProposal(choice);
+  const ready = changed
+    ? delivery.proposedAmountCents !== null &&
+      delivery.proposedAccountId !== null &&
+      (choice.accountId !== null || !delivery.beforeOpening)
     : delivery.isComplete;
   if (
     !ready ||
     delivery.proposedAmountCents === null ||
     delivery.proposedAccountId === null ||
     (isTransfer
-      ? delivery.proposedToAccountId === null
+      ? delivery.proposedToAccountId === null || delivery.proposedToAccountId === delivery.proposedAccountId
       : (choice.categoryId ?? proposedCategoryId(delivery, options)) === null)
   ) {
     return null;
   }
 
+  // The tab is the form's own: the write names its sides and derives the kind from them.
+  const form = movementDefaults(proposal, options, choice);
   return {
     deliveryId: delivery.id,
-    ...movementDefaults(delivery, options, choice),
+    fromAccountId: form.fromAccountId,
+    toAccountId: form.toAccountId,
+    amount: form.amount,
+    occurredAt: form.occurredAt,
+    description: form.description,
+    splits: form.splits,
+    forPersonId: form.forPersonId,
     labelIds: [],
   };
 }
@@ -145,7 +195,7 @@ export function categoryChoices(
     ]);
 }
 
-// «Llegó por <kind> · <key name>»; null once the key is gone, so nothing is claimed about it.
+// Where it came from, in words («Llegó por SMS»); null once the key is gone, so nothing is claimed about it.
 export function arrivedVia(
   delivery: Pick<PendingDeliveryRow, "credentialBadge" | "credentialName">,
   say: (badge: CredentialBadge, name: string) => string,
@@ -155,7 +205,7 @@ export function arrivedVia(
 }
 
 export function DeliveryCard({
-  delivery,
+  delivery: proposal,
   options,
   choice,
   onChoice,
@@ -179,6 +229,8 @@ export function DeliveryCard({
   const format = useFormatter();
   const onActionError = useActionErrorToast();
 
+  // The proposal with what the person changed on the card laid over it; everything below reads this one.
+  const delivery = withChoice(proposal, choice);
   const isIncome = delivery.proposedDirection === "income";
   const isTransfer = delivery.proposedDirection === "transfer";
   const currency = deliveryCurrency(delivery, options);
@@ -235,18 +287,17 @@ export function DeliveryCard({
   const persons = options.labels.filter(
     (label) => label.kind === "person" && label.scope === proposedScope,
   );
-  const input = readyInput(delivery, options, choice);
-  const defaults = movementDefaults(delivery, options, choice);
+  const input = readyInput(proposal, options, choice);
+  const defaults = movementDefaults(proposal, options, choice);
   const categoryId = choice.categoryId ?? proposedCategoryId(delivery, options);
   const tCategories = useTranslations("categories");
   const categories = categoryChoices(delivery, options, (name) => tCategories("scopedName", { name }));
-  const accountName = (id: string | null) =>
-    options.accounts.find((one) => one.id === id)?.name ?? null;
-  const account = isTransfer
-    ? [accountName(delivery.proposedAccountId), accountName(delivery.proposedToAccountId)]
-        .map((name) => name ?? "?")
-        .join(" → ")
-    : accountName(delivery.proposedAccountId);
+  // The accounts a movement can be written on: never the hidden «Me debe» of a credit somebody else pays.
+  const accountChoices = options.accounts.filter((one) => one.internal !== true);
+  const kind = delivery.proposedDirection ?? "expense";
+  const withdrawal =
+    isTransfer &&
+    options.accounts.find((one) => one.id === delivery.proposedToAccountId)?.subtype === "cash";
   const category =
     categoryId === null
       ? null
@@ -269,9 +320,7 @@ export function DeliveryCard({
           }),
         });
 
-  const via = arrivedVia(delivery, (badge, name) =>
-    t("arrivedVia", { kind: tKey(`webhooks.kind.${badge}`), name }),
-  );
+  const via = arrivedVia(delivery, (badge, name) => t("arrivedVia", { kind: badge, name }));
 
   function runReject(nextSilenceShape: boolean) {
     silenceShape.current = nextSilenceShape;
@@ -349,7 +398,7 @@ export function DeliveryCard({
               />
             </Heading>
             <Badge color={isIncome ? "jade" : "gray"} variant="soft" radius="full">
-              {t(isIncome ? "kindIncome" : isTransfer ? "kindTransfer" : "kindExpense")}
+              {t(isIncome ? "kindIncome" : withdrawal ? "kindWithdrawal" : isTransfer ? "kindTransfer" : "kindExpense")}
             </Badge>
           </Flex>
         )}
@@ -375,9 +424,74 @@ export function DeliveryCard({
         )}
 
         <Flex direction="column" gap="2">
-          <Text color={account ? undefined : "amber"}>
-            {account ?? t("accountMissing")}
-          </Text>
+          <StackedSegmentedControl.Root
+            size="3"
+            value={kind}
+            aria-label={t("typeLabel")}
+            onValueChange={(value) => {
+              const direction = value as DeliveryChoice["direction"];
+              if (direction === kind) return;
+              // The proposal's own kind is no change; any other kind drops the category, which is of the old one.
+              onChoice({
+                direction: direction === (proposal.proposedDirection ?? "expense") ? null : direction,
+                categoryId: null,
+              });
+            }}
+          >
+            <StackedSegmentedControl.Item value="expense">{t("kindExpense")}</StackedSegmentedControl.Item>
+            <StackedSegmentedControl.Item value="income">{t("kindIncome")}</StackedSegmentedControl.Item>
+            <StackedSegmentedControl.Item value="transfer">{t("kindTransfer")}</StackedSegmentedControl.Item>
+          </StackedSegmentedControl.Root>
+          {delivery.proposedAccountId === null && (
+            <Text color="amber">{t("accountMissing")}</Text>
+          )}
+          <Select.Root
+            size="3"
+            value={delivery.proposedAccountId ?? undefined}
+            onValueChange={(value) => {
+              // A category of the other scope than the new account would be refused on write.
+              const sameScope =
+                scopeOfAccounts([value], options.accounts) === scopeOfAccounts([delivery.proposedAccountId], options.accounts);
+              onChoice(sameScope ? { accountId: value } : { accountId: value, categoryId: null });
+            }}
+            disabled={accept.isPending}
+          >
+            <Select.Trigger
+              placeholder={t("accountChoose")}
+              color={delivery.proposedAccountId ? undefined : "amber"}
+              aria-label={t(isTransfer ? "fromAccountLabel" : "accountLabel")}
+            />
+            <Select.Content position="popper">
+              {accountChoices.map((option) => (
+                <Select.Item key={option.id} value={option.id}>
+                  {option.name}
+                </Select.Item>
+              ))}
+            </Select.Content>
+          </Select.Root>
+          {isTransfer && (
+            <Select.Root
+              size="3"
+              value={delivery.proposedToAccountId ?? undefined}
+              onValueChange={(value) => onChoice({ toAccountId: value })}
+              disabled={accept.isPending}
+            >
+              <Select.Trigger
+                placeholder={t("accountChoose")}
+                color={delivery.proposedToAccountId ? undefined : "amber"}
+                aria-label={t("toAccountLabel")}
+              />
+              <Select.Content position="popper">
+                {accountChoices
+                  .filter((option) => option.id !== delivery.proposedAccountId)
+                  .map((option) => (
+                    <Select.Item key={option.id} value={option.id}>
+                      {option.name}
+                    </Select.Item>
+                  ))}
+              </Select.Content>
+            </Select.Root>
+          )}
           {delivery.beforeOpening && delivery.proposedOccurredAt !== null && (
             <Text size="2" color="amber">
               {t("beforeOpening", {
@@ -549,6 +663,11 @@ export function DeliveryCard({
               {t("reject")}
             </Button>
           </Flex>
+        )}
+        {accept.result.serverError && (
+          <Text size="2" color="red" role="alert">
+            {tKey(accept.result.serverError as MessageKey)}
+          </Text>
         )}
       </Flex>
 

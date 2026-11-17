@@ -75,6 +75,8 @@ export type DebtDetailData = {
   thirdParty: ThirdPartyCreditView | null;
   // The payment schedule the bank printed for a loan, read against its payments (RF-264); null when it has none.
   schedule: LoanScheduleSummary | null;
+  // How many payments reached the debt: a loan's term is read against it when it has no schedule (RF-287).
+  paymentCount: number;
 };
 
 type AccountRead = {
@@ -83,6 +85,7 @@ type AccountRead = {
   canWrite: boolean;
   payFrom: DebtDetailData["payFrom"];
   schedule: LoanScheduleSummary | null;
+  paymentCount: number;
 } | null;
 
 /**
@@ -187,6 +190,7 @@ async function readAccount(accountId: string): Promise<AccountRead> {
       canWrite: row.canWrite,
       payFrom: row.payFrom,
       schedule: scheduleOf(row.scheduleRows, row.schedulePayments),
+      paymentCount: row.schedulePayments.length,
     };
   });
 }
@@ -235,5 +239,6 @@ export async function getDebtDetail(
     hasGroup: group !== null,
     thirdParty,
     schedule: read.schedule,
+    paymentCount: read.paymentCount,
   };
 }

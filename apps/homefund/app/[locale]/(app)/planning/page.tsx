@@ -15,7 +15,7 @@ import { getTransactionFormOptions } from "@/db/queries/transaction-form";
 import { civilDateToDate } from "@/lib/dates";
 import { categoryNamesById } from "@/lib/fund/category-names";
 import { nearestLimit, sumByCurrency } from "@/lib/fund/glance";
-import { monthlyByCurrency } from "@/lib/fund/subscriptions";
+import { previewOf, upcomingItems } from "@/lib/fund/upcoming";
 import { formatMoney } from "@/lib/money";
 import { tagFigure } from "@/lib/privacy";
 import { routing } from "@/i18n/routing";
@@ -88,17 +88,22 @@ export default async function PlanningPage(
     )
     .join(" · ");
 
-  // The list arrives soonest due first, so the head is the next pending payment.
-  const soonest = payments[0];
-  const paymentsSummary = soonest
-    ? t("paymentsSummary", {
-        concept: soonest.description ?? t("noConcept"),
-        date: format.dateTime(civilDateToDate(soonest.dueDate), {
+  // One list of everything coming, soonest first; the tile names the head and shows the next three.
+  const upcoming = upcomingItems({
+    payments,
+    rules,
+    charges,
+  });
+  const soonest = upcoming[0] ? previewOf(upcoming[0]) : null;
+  const upcomingSummary = soonest
+    ? t("upcomingSummary", {
+        concept: soonest.name ?? t("noConcept"),
+        date: format.dateTime(civilDateToDate(upcoming[0].date), {
           day: "numeric",
           month: "short",
         }),
       })
-    : t("paymentsEmpty");
+    : t("upcomingEmpty");
 
   // Three states: no debts reads the empty line; a debt with a next payment names
   // its total and date; a debt without a due date names its total alone, since the
@@ -127,43 +132,17 @@ export default async function PlanningPage(
         })
       : t("debtsSummaryNoDate", { total });
 
-  // The list arrives soonest next run first, so the head names the nearest rule.
-  const nextRule = rules[0];
-  const recurringSummary = nextRule
-    ? t("recurringSummary", {
-        count: rules.length,
-        concept: nextRule.description ?? t("noConcept"),
-        date: format.dateTime(civilDateToDate(nextRule.nextRunOn), {
-          day: "numeric",
-          month: "short",
-        }),
-      })
-    : t("recurringEmpty");
-
-  // The count once, then a month's cost per currency, never summed across currencies.
-  const subscriptionsSummary =
-    charges.length === 0
-      ? t("subscriptionsEmpty")
-      : t("subscriptionsSummary", {
-          count: charges.length,
-          amounts: monthlyByCurrency(charges)
-            .map(([currency, cents]) => t("perMonth", { amount: tagFigure(formatMoney(cents, currency, locale)) }))
-            .join(" · "),
-        });
-
   return (
     <Page>
       <PlanningHub
         budgetsSummary={budgetsSummary}
         goalsSummary={goalsSummary}
-        paymentsSummary={paymentsSummary}
+        upcomingSummary={upcomingSummary}
         debtsSummary={debtsSummary}
-        recurringSummary={recurringSummary}
-        subscriptionsSummary={subscriptionsSummary}
         budgetsTop={nearestLimit(budgets, 5)}
         budgetNames={categoryNames}
         goal={goals[0] ?? null}
-        payments={payments.slice(0, 3)}
+        upcoming={upcoming.slice(0, 3)}
         debtsTotal={total}
         debtsNext={
           debts.totals.nextPayment !== null
