@@ -21004,7 +21004,7 @@ async function payOwnCardSuite(): Promise<void> {
   );
 }
 
-// RF-251: a tool refused for its input says which field and why, in Spanish, whether the protocol's check or a form's schema refused it.
+// RF-252: a tool refused for its input says which field and why, in Spanish, whether the protocol's check or a form's schema refused it.
 async function mcpInputErrorsSuite(): Promise<void> {
   console.log("");
   const tag = randomUUID().slice(0, 8);
@@ -21027,7 +21027,7 @@ async function mcpInputErrorsSuite(): Promise<void> {
   const wrongType = refusalOf(await tool("list_movements", { limit: "5" }));
   const missing = refusalOf(await tool("record_movement", { fromAccountId: bank, toAccountId: null, categoryId: randomUUID(), occurredAt: "2026-09-01", description: null }));
   assert(
-    next("RF-251: an input the protocol refuses is answered in Spanish with the field and the reason, as the same {error, field} every refusal is"),
+    next("RF-252: an input the protocol refuses is answered in Spanish with the field and the reason, as the same {error, field} every refusal is"),
     tooBig?.error === "limit debe ser como máximo 200" && tooBig.field === "limit" &&
       wrongType?.error === "limit debe ser un número" && wrongType.field === "limit" &&
       missing?.field === "amountCents" && missing.error === "amountCents es obligatorio",
@@ -21038,7 +21038,7 @@ async function mcpInputErrorsSuite(): Promise<void> {
     fromAccountId: bank, toAccountId: null, amountCents: 1_000_00, occurredAt: "2026-09-01", description: null, categoryId: randomUUID(), requestRef: "no-es-un-uuid",
   }));
   assert(
-    next("RF-251: a form schema's refusal names the field it is about instead of «algo salió mal» alone"),
+    next("RF-252: a form schema's refusal names the field it is about instead of «algo salió mal» alone"),
     badRef !== null && badRef.field === "requestRef" && badRef.error.startsWith("requestRef ") && badRef.error !== es.errors.unexpected,
     `bad requestRef ${JSON.stringify(badRef)}`,
   );
