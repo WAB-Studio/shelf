@@ -35,7 +35,7 @@ import {
   MovementsTable,
   type MovementTableRow,
 } from "@/components/transactions/movements-table";
-import { useQuickEntry } from "@/components/transactions/quick-entry-provider";
+import { useMovementEntry } from "@/components/transactions/movement-entry-provider";
 import {
   Box,
   Button,
@@ -135,7 +135,7 @@ export function MovementsScreen({
   const pathname = usePathname();
   const router = useRouter();
   const onActionError = useActionErrorToast();
-  const { openQuick } = useQuickEntry();
+  const { openForm } = useMovementEntry();
 
   // A person is whom a movement was for (RF-242); the label filter offers the tags alone.
   const tagLabels = options.labels.filter((label) => label.kind === "tag");
@@ -342,7 +342,7 @@ export function MovementsScreen({
         icon={<ArrowRightLeft size={40} strokeWidth={1.6} />}
         title={t("emptyTitle")}
         action={
-          <Button type="button" size="3" mt="2" onClick={openQuick}>
+          <Button type="button" size="3" mt="2" onClick={openForm}>
             <Plus size={18} strokeWidth={2.2} />
             {t("quickTitle")}
           </Button>

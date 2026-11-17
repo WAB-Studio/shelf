@@ -5,7 +5,7 @@ import { useTranslations } from "next-intl";
 
 import { TAB_KEYS, destinations, isCurrent } from "@/components/fund/destinations";
 import { SettingsPanel } from "@/components/fund/settings-panel";
-import { useQuickEntry } from "@/components/transactions/quick-entry-provider";
+import { useMovementEntry } from "@/components/transactions/movement-entry-provider";
 import {
   BottomNav,
   type BottomNavTab,
@@ -24,7 +24,7 @@ export function AppTabs({
   keepSignedIn: string;
 }) {
   const t = useTranslations("nav");
-  const { openQuick } = useQuickEntry();
+  const { openForm } = useMovementEntry();
   const pathname = usePathname();
 
   const tabs: BottomNavTab[] = destinations(TAB_KEYS, hasGroup).map(
@@ -42,15 +42,14 @@ export function AppTabs({
     }),
   );
 
-  // The raised action opens the expense quick sheet in place (RF-22): one tap, no
-  // route change. Income and transfer live behind the sheet's link.
+  // The raised action opens the movement form in place (RF-272): one tap, no route change.
   const centerAction = (
     <IconButton
       type="button"
       size="4"
       radius="full"
       aria-label={t("quickEntry")}
-      onClick={openQuick}
+      onClick={openForm}
     >
       <Plus size={26} />
     </IconButton>

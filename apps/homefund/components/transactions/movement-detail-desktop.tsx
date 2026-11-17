@@ -348,12 +348,6 @@ export function MovementDetailDesktop({
                 <Text size="2" weight="medium">
                   {kindLabel}
                 </Text>
-                {/* An adjustment is booked by a count, not deduced from the accounts. */}
-                {!isAdjustment && (
-                  <Text size="2" color="gray">
-                    {t("kindDerivedFrom")}
-                  </Text>
-                )}
               </Flex>
             </Flex>
           </Panel>
