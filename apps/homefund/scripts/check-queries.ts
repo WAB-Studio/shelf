@@ -15476,6 +15476,7 @@ const TOOL_CLASSES = [
   ["reconcile_accounts", ...OVERWRITE_CLASS],
   ["record_account_statement", ...ADD_CLASS],
   ["record_billed_amount", ...OVERWRITE_CLASS],
+  ["record_card_statement", ...OVERWRITE_CLASS],
   ["record_debt_payment", ...ADD_ONCE_CLASS],
   ["record_member_debt", ...ADD_CLASS],
   ["record_movement", ...ADD_ONCE_CLASS],
