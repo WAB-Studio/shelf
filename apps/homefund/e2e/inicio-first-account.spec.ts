@@ -36,7 +36,7 @@ async function expectGuide(page: Page): Promise<void> {
 
 test("shows the first-account guide at 1280 px with no fund", async ({ page }) => {
   await expectGuide(page);
-  await expect(page.getByRole("link", { name: home.createFund })).toBeVisible();
+  await expect(page.getByRole("main").getByRole("link", { name: home.createFund })).toBeVisible();
 });
 
 test("Ajustes keeps «Crear un fondo» reachable with no fund, at 1280 px", async ({ page }) => {
