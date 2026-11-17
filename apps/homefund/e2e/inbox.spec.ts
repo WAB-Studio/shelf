@@ -435,7 +435,7 @@ test.describe("a category that came from a credential default", () => {
       await expect(amounts.nth(0)).toHaveValue(AMOUNT_PESOS);
 
       await expect(
-        dialog.getByRole("combobox", { name: transactions.fromLabel }),
+        dialog.getByRole("combobox", { name: transactions.accountLabel, exact: true }),
       ).toHaveText(scope.accountName);
       await expect(
         dialog.getByRole("button", { name: scope.categoryName, exact: true, pressed: true }),
@@ -463,7 +463,7 @@ test.describe("a category that came from a credential default", () => {
       await expect(amounts.nth(0)).toHaveValue(AMOUNT_PESOS);
 
       await expect(
-        dialog.getByRole("combobox", { name: transactions.fromLabel }),
+        dialog.getByRole("combobox", { name: transactions.accountLabel, exact: true }),
       ).toHaveText(scope.accountName);
       await expect(
         dialog.getByRole("button", { name: scope.categoryName, exact: true, pressed: true }),

@@ -15,6 +15,11 @@
   scrollbar-width: none;
 }
 
+.wrap.root {
+  flex-wrap: wrap;
+  overflow-x: visible;
+}
+
 .root.root::-webkit-scrollbar {
   display: none;
 }
@@ -95,5 +100,13 @@
   .item[data-state="on"] :global(.rt-SegmentedControlItemLabelActive) {
     color: inherit;
     font-weight: var(--font-weight-medium);
+  }
+}
+
+/* A wrapping set keeps room around its labels in the joined row too, so the longest one never touches the
+   segment's edge. */
+@media (min-width: 768px) {
+  .wrap .item :global(.rt-SegmentedControlItemLabel) {
+    padding-inline: var(--space-4);
   }
 }

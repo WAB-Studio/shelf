@@ -11,7 +11,7 @@
  */
 import { randomUUID } from "node:crypto";
 
-import { expect, type Locator, type Page, type TestInfo } from "@playwright/test";
+import { expect, type Locator, type Page } from "@playwright/test";
 import messages from "@/messages/es.json";
 
 import { fixtureSql } from "../scripts/harness/fixtures";
@@ -79,10 +79,6 @@ test.afterEach(async () => {
   await dropRows();
 });
 
-function isDesktop(testInfo: TestInfo): boolean {
-  return testInfo.project.name === "desktop";
-}
-
 // What a select offers, read off its open list; the list closes again after.
 async function offered(page: Page, trigger: Locator): Promise<string[]> {
   await trigger.click();
@@ -110,16 +106,13 @@ async function openPayment(page: Page): Promise<Locator> {
   return dialog;
 }
 
-async function openFullForm(page: Page, testInfo: TestInfo): Promise<Locator> {
+async function openFullForm(page: Page): Promise<Locator> {
   await page.goto("/es");
-  if (isDesktop(testInfo)) {
-    await page.getByRole("button", { name: transactions.quickTypeLink, exact: true }).click();
-  } else {
-    await page.getByRole("button", { name: transactions.quickPlaceholder, exact: true }).click();
-    await page.getByRole("link", { name: transactions.quickTypeLink, exact: true }).click();
-  }
+  await page.getByRole("button", { name: transactions.quickPlaceholder, exact: true }).click();
   const dialog = page.getByRole("dialog");
   await expect(dialog.locator("form").getByRole("heading", { name: transactions.formTitle })).toBeVisible();
+  // Both selects live on the transfer tab (RF-272).
+  await dialog.getByRole("radio", { name: transactions.kindTransfer, exact: true }).click();
   return dialog;
 }
 
@@ -152,9 +145,9 @@ test.describe("as a plain member", () => {
 
   test("the movement form cuts both selects and saves a transfer between the member's accounts", async ({
     page,
-  }, testInfo) => {
+  }) => {
     // Kills: one select cut only.
-    const dialog = await openFullForm(page, testInfo);
+    const dialog = await openFullForm(page);
 
     expectCut(await offered(page, dialog.locator("#movement-from")));
     expectCut(await offered(page, dialog.locator("#movement-to")));

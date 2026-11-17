@@ -104,7 +104,7 @@ test.describe("quick entry", () => {
     await expect(sheet).toBeVisible();
     await sheet.getByRole("combobox", { name: transactions.accountLabel, exact: true }).click();
     await page.getByRole("option", { name: FUND_ACCOUNT, exact: true }).click();
-    await sheet.getByRole("textbox", { name: transactions.quickTitle, exact: true }).fill(typed);
+    await sheet.locator("#movement-description").fill(typed);
     return sheet;
   }
 

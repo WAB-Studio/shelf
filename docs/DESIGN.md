@@ -911,3 +911,26 @@ construye con estas palabras, sin tablero previo, y se refina con lo construido.
   (%)». El mismo formulario completa o edita las condiciones desde el menú de la fila («Completar datos», «Editar»). «Añadir
   cuenta» ya no ofrece «Lo que debo»: dice «¿Una tarjeta o un préstamo? Se agregan en Deudas».
 - **Deudas a 1280**: el nombre de cada fila abre su detalle.
+
+## Decisión del 2026-11-17: un solo formulario de movimiento, por el usuario («sí a todo»)
+
+- **Una pantalla, tres pestañas.** «Nuevo movimiento» y «Editar movimiento» son el mismo formulario. Arriba, tres pestañas:
+  «Gasto», «Ingreso» y «Entre mis cuentas». En el teléfono caen a una segunda línea antes que recortarse. Cambiar de pestaña
+  conserva el monto, las palabras y la fecha, y lleva la cuenta al lugar que pide la pestaña nueva. Editar abre la pestaña del
+  movimiento.
+- **El orden del campo.** «Descripción», luego «Monto» y moneda, luego la cuenta («Cuenta» en gasto e ingreso; «Sale de» y
+  «Entra a» en «Entre mis cuentas»), luego las categorías, «Para quién» y las etiquetas, y la fecha. Ninguna frase explica el
+  modelo: no hay «origen», «destino», «Solo destino = ingreso…» ni «deducido de las cuentas».
+- **Las palabras proponen, no mandan.** Lo que se escribe en «Descripción» se guarda tal cual. Mientras se escribe, el formulario
+  propone el monto, el día («hoy», «ayer», una fecha), la categoría y, en una tarjeta, «a 12 cuotas»; todo sigue editable y lo
+  que la persona corrigió no se le quita. Con «12.000.50» no adivina: pregunta «¿Quisiste decir 12.000,50 o 1.200.050?» y espera.
+- **Cuotas.** «Diferir en cuotas» ya no es un paso aparte: con una tarjeta elegida, «Cuotas» es un campo opcional del gasto.
+- **Sin cuentas.** Donde iría la cuenta dice «Aún no tienes cuentas donde anotar esto. Lo que escribiste se queda aquí.» con
+  «Crear cuenta», que abre el diálogo de la cuenta encima del formulario. Guardar en ese estado abre lo mismo; nunca sale
+  «Elige al menos una cuenta» sobre una lista vacía.
+- **Dividir.** La primera línea se puede editar siempre. Bajo el total, la franja roja dice «Falta asignar $X»; sobre él, «Te
+  pasaste $X»; cuadrado, queda verde con «Todo asignado».
+- **El bolsillo se dice antes.** Si un gasto, o una salida de una cuenta, pasa de lo libre y la cuenta tiene bolsillos, una
+  franja ámbar bajo la cuenta dice «Se tomarán $300.000 de Viajes» antes de guardar. Al guardar, el aviso ofrece «Deshacer».
+- **Una transferencia se lee con palabras de persona.** En Movimientos, Inicio y el detalle: «Pago cuota Lulo», «Pago tarjeta
+  Visa», «John te pagó la cuota», y «Entre mis cuentas» para lo demás. «Traspaso» ya no sale en pantalla.

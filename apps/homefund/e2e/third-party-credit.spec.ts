@@ -47,7 +47,7 @@ test.afterAll(async () => {
   });
 });
 
-test("a credit somebody else pays is set up, read and recorded from its screen", async ({ page }, testInfo) => {
+test("a credit somebody else pays is set up, read and recorded from its screen", async ({ page }) => {
   await page.goto(`/es/planning/debts/${creditId}`);
   const main = page.getByRole("main");
   await expect(main.getByRole("heading", { name: t.title.replace("{person}", PERSON) })).toBeHidden();
@@ -115,14 +115,9 @@ test("a credit somebody else pays is set up, read and recorded from its screen",
 
   // Nor does the full movement form offer it as a side of a movement.
   await page.goto("/es");
-  if (testInfo.project.name === "desktop") {
-    await page.getByRole("button", { name: messages.transactions.quickTypeLink, exact: true }).click();
-  } else {
-    await page.getByRole("button", { name: messages.transactions.quickPlaceholder, exact: true }).click();
-    await page.getByRole("link", { name: messages.transactions.quickTypeLink, exact: true }).click();
-  }
+  await page.getByRole("button", { name: messages.transactions.quickPlaceholder, exact: true }).click();
   const form = page.getByRole("dialog");
-  await form.getByRole("combobox", { name: messages.transactions.fromLabel }).click();
+  await form.getByRole("combobox", { name: messages.transactions.accountLabel, exact: true }).click();
   await expect(page.getByRole("option", { name: bankName, exact: true })).toBeVisible();
   await expect(page.getByRole("option", { name: receivableName, exact: true })).toHaveCount(0);
 });
