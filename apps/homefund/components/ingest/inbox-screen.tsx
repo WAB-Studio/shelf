@@ -202,10 +202,17 @@ export function InboxScreen({
     onError: onActionError,
   });
 
+  // A delivery a recorded movement already stands for is discarded as that, never silenced as a shape (RF-246).
+  const rejectingRecorded = deliveries.find((one) => one.id === rejectId)?.recorded != null;
+
   function runReject(nextSilenceShape: boolean) {
     if (!rejectId) return;
     silenceShape.current = nextSilenceShape;
-    reject.execute({ deliveryId: rejectId, silenceShape: nextSilenceShape });
+    reject.execute({
+      deliveryId: rejectId,
+      silenceShape: nextSilenceShape,
+      ...(rejectingRecorded ? { reason: "duplicate" as const } : {}),
+    });
   }
 
   // Accepting from the table's menu never writes on its own for an incomplete
@@ -246,6 +253,7 @@ export function InboxScreen({
     direction: delivery.proposedDirection ?? "expense",
     currency: deliveryCurrency(delivery, options),
     isComplete: delivery.isComplete,
+    recorded: delivery.recorded !== null,
     canSaveNumber: delivery.extractedIdentifier !== null && delivery.recipientId === null,
     beforeOpeningOn: delivery.beforeOpening ? delivery.proposedOccurredAt : null,
   }));
@@ -364,23 +372,27 @@ export function InboxScreen({
       <ConfirmDialog
         open={rejectId !== null}
         onOpenChange={(open) => !open && setRejectId(null)}
-        title={t("rejectTitle")}
+        title={t(rejectingRecorded ? "rejectDuplicateTitle" : "rejectTitle")}
         description={
-          <Flex direction="column" gap="3">
-            <Text>{t("rejectDescription")}</Text>
-            <Button
-              type="button"
-              color="red"
-              variant="soft"
-              disabled={reject.isPending}
-              onClick={() => runReject(true)}
-            >
-              {reject.isPending && <Spinner />}
-              {t("rejectAndSilence")}
-            </Button>
-          </Flex>
+          rejectingRecorded ? (
+            <Text>{t("rejectDuplicateDescription")}</Text>
+          ) : (
+            <Flex direction="column" gap="3">
+              <Text>{t("rejectDescription")}</Text>
+              <Button
+                type="button"
+                color="red"
+                variant="soft"
+                disabled={reject.isPending}
+                onClick={() => runReject(true)}
+              >
+                {reject.isPending && <Spinner />}
+                {t("rejectAndSilence")}
+              </Button>
+            </Flex>
+          )
         }
-        confirmLabel={t("rejectOnce")}
+        confirmLabel={t(rejectingRecorded ? "rejectDuplicate" : "rejectOnce")}
         cancelLabel={tKey("common.cancel")}
         pending={reject.isPending}
         tone="danger"

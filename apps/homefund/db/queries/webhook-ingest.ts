@@ -9,6 +9,7 @@ import {
   ingestDeliveries,
   ingestMerchants,
   recipients,
+  webhookCredentials,
 } from "@/db/schema";
 import { learnedCategoryId } from "@/db/queries/learned-category";
 import { withImpersonatedDb } from "@/db/session";
@@ -177,7 +178,9 @@ export async function recordIngestDelivery({
               id: ingestDeliveries.id,
               status: ingestDeliveries.status,
               receipt: ingestDeliveries.receipt,
-              fromEmail: ingestDeliveries.fromEmail,
+              // A row stored before the channel was recorded (every bank email then read as the phone's) is
+              // still told by the key it came through (RF-244).
+              fromEmail: sql<boolean>`coalesce(${ingestDeliveries.fromEmail} or ${webhookCredentials.kind} = 'bank_emails', false)`,
               rawText: ingestDeliveries.rawText,
               occurredOn: ingestDeliveries.proposedOccurredAt,
               receivedAt: ingestDeliveries.createdAt,
@@ -187,6 +190,7 @@ export async function recordIngestDelivery({
               merchantLabel: ingestDeliveries.merchantLabel,
             })
             .from(ingestDeliveries)
+            .leftJoin(webhookCredentials, eq(webhookCredentials.id, ingestDeliveries.credentialId))
             .where(
               and(
                 inArray(ingestDeliveries.status, ["pending", "accepted"]),

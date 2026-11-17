@@ -39,6 +39,8 @@ export type InboxTableRow = {
   // What the proposal would record: money out unless the message says money in.
   direction: "income" | "expense" | "transfer";
   isComplete: boolean;
+  // A movement recorded by hand already stands for it, so discarding is what the row proposes (RF-246).
+  recorded: boolean;
   // The message names a number nobody saved yet (RF-189).
   canSaveNumber: boolean;
   // The proposal's own day, set only when it is before the account opened.
@@ -207,12 +209,19 @@ export function InboxTable({
       cell: (row) => (
         <Flex direction="column" align="end" gap="1">
           <Flex align="center" justify="end" gap="2">
-            <Badge color={row.isComplete ? "green" : "amber"}>
-              {row.isComplete ? t("stateComplete") : t("stateIncomplete")}
-            </Badge>
+            {row.recorded ? (
+              <Badge color="blue">{t("alreadyRecorded")}</Badge>
+            ) : (
+              <Badge color={row.isComplete ? "green" : "amber"}>
+                {row.isComplete ? t("stateComplete") : t("stateIncomplete")}
+              </Badge>
+            )}
             <RowMenu
               rowName={row.merchantLabel ?? t("noMerchant")}
               items={[
+                ...(row.recorded
+                  ? [{ key: "rejectRecorded", label: t("rejectDuplicate"), tone: "danger" as const, onSelect: () => onReject(row.id) }]
+                  : []),
                 {
                   key: "accept",
                   label: t("accept"),
@@ -230,12 +239,9 @@ export function InboxTable({
                 ...(row.canSaveNumber
                   ? [{ key: "saveNumber", label: t("saveNumber"), onSelect: () => onSaveNumber(row.id) }]
                   : []),
-                {
-                  key: "reject",
-                  label: t("reject"),
-                  tone: "danger",
-                  onSelect: () => onReject(row.id),
-                },
+                ...(row.recorded
+                  ? []
+                  : [{ key: "reject", label: t("reject"), tone: "danger" as const, onSelect: () => onReject(row.id) }]),
               ]}
             />
           </Flex>
