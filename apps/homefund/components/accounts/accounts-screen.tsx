@@ -63,7 +63,7 @@ type RowAction =
 type Figure = { currency: CurrencyCode; cents: number };
 
 type Section = {
-  key: "accounts" | "cards" | "loans";
+  key: "accounts" | "receivables" | "cards" | "loans";
   label: string;
   // Whether the section adds up what is owed: its figures then carry the debt as a positive number.
   owes: boolean;
@@ -248,7 +248,8 @@ export function AccountsScreen({
   // one is left out. Built once per list, and the tiles read their figures from it.
   function sectionsOf(list: AccountRow[]): Section[] {
     const types: { key: Section["key"]; label: string; owes: boolean; has: (a: AccountRow) => boolean }[] = [
-      { key: "accounts", label: t("sectionAccounts"), owes: false, has: (a) => a.kind === "asset" },
+      { key: "accounts", label: t("sectionAccounts"), owes: false, has: (a) => a.kind === "asset" && a.subtype !== "receivable" },
+      { key: "receivables", label: t("sectionReceivables"), owes: false, has: (a) => a.subtype === "receivable" },
       { key: "cards", label: t("sectionCards"), owes: true, has: (a) => a.kind === "liability" && a.subtype === "card" },
       { key: "loans", label: t("sectionLoans"), owes: true, has: (a) => a.kind === "liability" && a.subtype === "loan" },
     ];

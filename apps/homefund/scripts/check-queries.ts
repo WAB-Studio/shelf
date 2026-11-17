@@ -4180,6 +4180,7 @@ async function main(): Promise<void> {
   await mcpDeletesSuite();
   await mcpMoneyModelSuite();
   await payOwnCardSuite();
+  await mcpReceivableSuite();
 }
 
 // A member recorded without a login is someone in the fund: a leader whose fund holds one is not alone, so an
@@ -20965,5 +20966,68 @@ async function payOwnCardSuite(): Promise<void> {
     card?.direction === "transfer" && card.from === bank && card.to === nu && shop?.direction === "expense" && shop.to === null &&
       ambiguous?.direction === "expense" && ambiguous.to === null && second !== nu,
     JSON.stringify({ card, shop, ambiguous }),
+  );
+}
+
+// RF-249: money a person owes the household is an asset of its own subtype, which the MCP names by an enum; a credit somebody
+// else pays still opens its hidden receivable (RF-216), now as that subtype.
+async function mcpReceivableSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const today = todayInBogota();
+  const { POST } = await import("@/app/mcp/route");
+  const owner = await createMembershipFreeUser();
+  const name = (what: string) => `Harness rf249 ${what} ${tag}`;
+  const bank = randomUUID();
+  await fixtureSql`
+    insert into accounts (id, owner_user_id, name, kind, subtype, initial_balance_cents, initial_balance_on)
+    values (${bank}, ${owner.id}, ${name("banco")}, 'asset', 'bank', 500000000, '2026-01-01')`;
+  track("accounts", bank);
+  const { id: credentialId, token } = await asUser(owner, () =>
+    issueWebhookCredential({ name: name("clave"), purpose: "mcp", defaultAccountId: null, defaultCategoryId: null }),
+  );
+  keep("webhook_credentials", credentialId);
+  const { tool } = mcpClient(POST, token);
+  const subtypeOf = async (id: string) => (await fixtureSql<{ subtype: string; kind: string }[]>`select subtype, kind from accounts where id = ${id}`)[0];
+
+  const owes = await tool("create_account", { name: name("me debe"), kind: "asset", subtype: "receivable", openingBalanceCents: 0, balanceOn: "2026-01-01" });
+  const owesId = (owes.value as { accountId: string }).accountId;
+  track("accounts", owesId);
+  const listed = ((await tool("list_accounts")).value as { id: string; subtype: string }[]).find((row) => row.id === owesId);
+  const onLiability = await tool("create_account", { name: name("mal"), kind: "liability", subtype: "receivable", openingBalanceCents: 0, balanceOn: "2026-01-01" });
+  const unknown = await tool("create_account", { name: name("raro"), kind: "asset", subtype: "savings", openingBalanceCents: 0, balanceOn: "2026-01-01" });
+  assert(
+    next("RF-249: create_account opens an asset of subtype receivable, list_accounts reads it so, and a receivable on a liability or an unknown subtype is refused"),
+    !owes.isError && (await subtypeOf(owesId))?.subtype === "receivable" && listed?.subtype === "receivable" &&
+      onLiability.isError && (onLiability.value as { error: string }).error === es.accounts.errors.subtypeKindMismatch && unknown.isError,
+    `opened ${JSON.stringify(owes.value)}, listed ${JSON.stringify(listed)}, liability ${JSON.stringify(onLiability.value)}, unknown ${JSON.stringify(unknown.value)}`,
+  );
+
+  const category = randomUUID();
+  await fixtureSql`insert into categories (id, owner_user_id, name, kind, color) values (${category}, ${owner.id}, ${name("gasto")}, 'expense', '#8C4A4A')`;
+  track("categories", category);
+  const lent = await tool("record_movement", {
+    fromAccountId: bank, toAccountId: owesId, amountCents: 100_000_00, occurredAt: today, description: "Préstamo", requestRef: randomUUID(),
+  });
+  const collected = await tool("record_movement", {
+    fromAccountId: owesId, toAccountId: bank, amountCents: 40_000_00, occurredAt: today, description: "Abono al préstamo", requestRef: randomUUID(),
+  });
+  const [owed] = await fixtureSql<{ balance_cents: string }[]>`select balance_cents::text from account_balances where id = ${owesId}`;
+  assert(
+    next("RF-249: lending is a transfer into the receivable and collecting one out of it, with no warning, and its balance is what is still owed"),
+    !lent.isError && !collected.isError && (lent.value as { warnings?: unknown }).warnings === undefined &&
+      (collected.value as { warnings?: unknown }).warnings === undefined && owed?.balance_cents === "6000000",
+    `lent ${JSON.stringify(lent.value)}, collected ${JSON.stringify(collected.value)}, owed ${owed?.balance_cents}`,
+  );
+
+  const credit = (await tool("create_account", { name: name("credito"), kind: "liability", subtype: "loan", openingBalanceCents: 300_000_00, balanceOn: "2026-01-01" })).value as { accountId: string };
+  track("accounts", credit.accountId);
+  const linked = (await tool("link_third_party_credit", { liabilityAccountId: credit.accountId, personName: name("papa") })).value as { receivableAccountId: string };
+  track("accounts", linked.receivableAccountId);
+  const hidden = !((await tool("list_accounts")).value as { id: string }[]).some((row) => row.id === linked.receivableAccountId);
+  assert(
+    next("RF-249: the «Me debe» a credit somebody else pays opens is a receivable and stays out of every account list (RF-216)"),
+    (await subtypeOf(linked.receivableAccountId))?.subtype === "receivable" && hidden,
+    `linked ${JSON.stringify(linked)}, row ${JSON.stringify(await subtypeOf(linked.receivableAccountId))}, hidden ${hidden}`,
   );
 }

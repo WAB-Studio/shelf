@@ -715,6 +715,13 @@
       "when": 1794930163460,
       "tag": "0105_a_movement_says_who_it_was_for",
       "breakpoints": true
+    },
+    {
+      "idx": 107,
+      "version": "7",
+      "when": 1794931825713,
+      "tag": "0107_a_receivable_is_money_owed_to_you",
+      "breakpoints": true
     }
   ]
 }

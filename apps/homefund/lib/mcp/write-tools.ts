@@ -31,7 +31,7 @@ import { categoryNameWarnings, movementWarnings, withWarnings, type Probe } from
 import { resolveLabelIds } from "@/lib/mcp/label-tools";
 import { parseForm } from "@/lib/mcp/parse-form";
 import { centsToDecimal } from "@/lib/money";
-import { createAccountSchema, updateAccountSchema } from "@/lib/validation/account";
+import { ACCOUNT_KINDS, ACCOUNT_PLACEMENTS, ACCOUNT_SUBTYPES, createAccountSchema, updateAccountSchema } from "@/lib/validation/account";
 import { createCategoryInputSchema, updateCategorySchema } from "@/lib/validation/category";
 import {
   createTransactionSchema,
@@ -375,9 +375,9 @@ export function registerLedgerTools(server: McpServer, run: Run, t: Say): void {
       description: t("tools.createAccount"),
       inputSchema: z.object({
         name: z.string().describe(d("accountName")),
-        kind: z.string().describe(d("accountKind")),
-        subtype: z.string().describe(d("accountSubtype")),
-        placement: z.string().default("personal").describe(d("accountPlacement")),
+        kind: z.enum(ACCOUNT_KINDS).describe(d("accountKind")),
+        subtype: z.enum(ACCOUNT_SUBTYPES).describe(d("accountSubtype")),
+        placement: z.enum(ACCOUNT_PLACEMENTS).default("personal").describe(d("accountPlacement")),
         settlementCurrency: z.string().default("COP").describe(d("settlementCurrency")),
         openingBalanceCents: z.number().int().describe(d("openingBalanceCents")),
         balanceOn: z.string().describe(d("balanceOn")),
@@ -405,7 +405,7 @@ export function registerLedgerTools(server: McpServer, run: Run, t: Say): void {
         accountId: z.string().describe(d("accountId")),
         expectedUpdatedAt: z.string().describe(d("expectedUpdatedAt")),
         name: z.string().optional().describe(d("accountName")),
-        subtype: z.string().optional().describe(d("accountSubtype")),
+        subtype: z.enum(ACCOUNT_SUBTYPES).optional().describe(d("accountSubtype")),
         settlementCurrency: z.string().optional().describe(d("settlementCurrency")),
         openingBalanceCents: z.number().int().optional().describe(d("openingBalanceCents")),
         balanceOn: z.string().optional().describe(d("balanceOn")),

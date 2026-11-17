@@ -166,7 +166,7 @@ export async function setUpThirdPartyCredit(
           await insertAccount(tx, {
             name: receivableName.slice(0, 80),
             kind: "asset",
-            subtype: "bank",
+            subtype: "receivable",
             ownerUserId: credit.ownerUserId,
             groupId: credit.groupId,
             isShared: credit.isShared,
