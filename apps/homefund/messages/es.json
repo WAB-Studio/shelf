@@ -1261,6 +1261,29 @@
       "alreadyDeferred": "Esta compra ya está diferida."
     }
   },
+  "cardStatement": {
+    "errors": {
+      "authorizationInvalid": "El número de autorización debe tener entre 1 y 40 caracteres.",
+      "descriptionInvalid": "La descripción debe tener entre 1 y 200 caracteres.",
+      "currencyInvalid": "Elige una moneda válida, como «COP» o «USD».",
+      "amountInvalid": "Escribe un monto válido, en centavos enteros.",
+      "instalmentsInvalid": "Las cuotas deben ser un número entre 1 y 120.",
+      "currentInstalmentInvalid": "La cuota actual debe ser un número entre 1 y el total de cuotas.",
+      "dateInvalid": "Escribe una fecha válida, AAAA-MM-DD.",
+      "tooMany": "El extracto trae demasiadas filas para una sola llamada.",
+      "authorizationRepeated": "El mismo número de autorización viene dos veces en el extracto.",
+      "rateNeeded": "Esta tarjeta aún no tiene condiciones: di la tasa efectiva anual del extracto (terms.annualRatePct)."
+    }
+  },
+  "cardDeferrals": {
+    "title": "Diferidos de la tarjeta",
+    "step": "Cuota {current} de {total} · {amount} al mes · {rate} E.A.",
+    "onCard": "En {card}",
+    "authorization": "Autorización {number}",
+    "monthlyInterest": "Interés de este mes ~{amount}",
+    "payOffSaves": "Si lo pagas hoy te ahorras ~{amount}",
+    "notice": "Esta compra quedó a {count} cuotas; te costará ~{amount} de interés. Págala completa o cámbiala a 1 cuota en tu banco"
+  },
   "installments": {
     "paymentTitle": "Abonar a la deuda",
     "fromLabel": "Pagar desde",
@@ -1961,6 +1984,7 @@
       "reconcileAccount": "Cuadra una cuenta en un día: la persona cuenta cuánto hay de verdad (realAmountCents, en centavos y en la moneda de la cuenta; en una deuda, lo que se debe; negativo si quedó por debajo de cero) y HomeFund registra UN movimiento de ajuste por la diferencia, de modo que el saldo queda igual a lo contado. Pasa en expectedDerivedCents el derivedCents que leíste en get_reconcile_sheet para ese día: si entre tanto cambió un movimiento, se rechaza y hay que volver a leer la hoja. El día no puede ser futuro, ni antes de la apertura, ni antes del último cuadre. Devuelve id y gapCents (lo contado menos lo derivado, en la misma convención: en una deuda, positivo es que se debe más). Si lo contado tiene el signo contrario al saldo derivado y la diferencia supera al saldo (el error típico: una deuda en negativo), se rechaza; solo con confirmSignChange true, tras confirmarlo con la persona, se escribe. CONFIRMA con la persona la cuenta, el día, lo contado y el ajuste que resulta antes de llamarla.",
       "listReconciliations": "Los cuadres de una cuenta (accountId de list_accounts), el más reciente primero, cada uno con su diferencia. Solo lee.",
       "recordAccountStatement": "Registra un extracto cerrado de una tarjeta o crédito (accountId de list_debts), a mano, como el botón «Registrar extracto»: periodStart y cutOffDate (AAAA-MM-DD, como los imprime el extracto), closingBalanceCents (el saldo de cierre, lo que se debe) y, opcionales, paymentDueDate, openingBalanceCents, creditsCents, debitsCents, minimumPaymentCents, interestChargedCents y feesChargedCents; todo en centavos enteros y en la moneda de la deuda. Un extracto con la misma fecha de corte se rechaza: ya está registrado. Se lee después en get_debt (statements). Devuelve accountId y cutOffDate. CONFIRMA con la persona las cifras del extracto antes de llamarla.",
+      "recordCardStatement": "Guarda de una sola vez lo que Claude lee en el PDF de un extracto de tarjeta (accountId de list_debts, una cuenta liability). PRIMERO llámala con dryRun true: no escribe nada y devuelve el plan; muéstrale a la persona esa lista (términos, diferidos, compras nuevas) y pídele UN solo sí; solo con él repite la llamada sin dryRun. Recibe: statement (el extracto cerrado: periodStart, cutOffDate, closingBalanceCents y, opcionales, paymentDueDate, minimumPaymentCents, interestChargedCents, feesChargedCents, openingBalanceCents, creditsCents, debitsCents; como record_account_statement, y un corte ya registrado se salta); terms (opcional: annualRatePct, creditLimitCents, statementCutOffDay, paymentDueDay, minimumPaymentCents o minimumPaymentPct, avalCents; lo que falta conserva lo guardado, y un extracto igual o más nuevo que el último registrado actualiza los términos, uno más viejo los deja); deferrals (cada diferido que el extracto lista, por moneda: authorizationNumber, description, currency, originalAmountCents, instalments, currentInstalment, monthlyInstalmentCents, pendingBalanceCents y annualRatePct; se guardan o actualizan por su número de autorización, y uno ya guardado por un extracto más nuevo no se pisa); purchases (las compras del extracto: occurredOn, amountCents, currency, description). Las compras NO se escriben: cada una se compara con los movimientos de la tarjeta del mismo monto y moneda a ±2 días y se devuelve cuáles son nuevas (purchases.new, por índice) y cuáles ya están (purchases.booked); las nuevas se anotan después con record_movement. Devuelve statement, terms (created, updated, same, kept o none, y qué campos cambian), deferrals (inserted, updated, same o stale, con el interés mensual y lo que ahorra pagarlo hoy), missingFromStatement (diferidos guardados que este extracto ya no lista) y dryRun. Todo en centavos enteros. Si la tarjeta no tiene términos, terms.annualRatePct es obligatorio.",
       "recordBilledAmount": "Registra lo que el emisor cobró de verdad por una compra hecha en otra moneda (RF-123), reemplazando el estimado: transactionId de la compra (de get_debt, pendingSettlements), accountId de la deuda, currency (la moneda en que la deuda cobra) y billedCents (lo cobrado, en centavos). No se puede antes de una conciliación de la cuenta. Devuelve transactionId. CONFIRMA con la persona la compra y la cifra del extracto antes de llamarla.",
       "deferPurchase": "Difiere una compra de una tarjeta o crédito en cuotas (transactionId de list_movements; instalments, el número de cuotas): el saldo no cambia, la deuda reparte lo que falta por facturar (se lee en get_debt, deferrals). Solo una compra (un gasto de una deuda) se difiere, y una sola vez: para cambiar el número, quita el diferido con undefer_purchase y difiere de nuevo. Devuelve transactionId e instalments. CONFIRMA con la persona la compra y el número de cuotas que dice el extracto antes de llamarla.",
       "undeferPurchase": "Quita el diferido de una compra (transactionId): la compra vuelve a contar entera. Devuelve before con el número de cuotas que tenía, para diferirla de nuevo con defer_purchase. CONFIRMA con la persona cuál compra antes de llamarla.",
@@ -2222,6 +2246,22 @@
       "billedCurrency": "La moneda en que la deuda cobra (COP o USD).",
       "billedCents": "Lo que el emisor cobró, en centavos enteros, positivo.",
       "deferInstalments": "Número de cuotas en que se difiere la compra, el que imprime el extracto.",
+      "cardDryRun": "true para planear sin escribir nada: devuelve qué haría la llamada. Úsalo primero.",
+      "cardStatement": "El extracto cerrado tal como lo imprime el PDF.",
+      "cardTerms": "Las condiciones que imprime el extracto; lo que falta conserva lo guardado.",
+      "cardAuthorizationNumber": "Número de autorización del banco para el diferido, tal como lo imprime.",
+      "cardDeferralDescription": "Descripción del diferido en el extracto («AMPLIACION DE PLAZO», el comercio…).",
+      "cardSectionCurrency": "Moneda de la sección del extracto donde aparece, código ISO («COP», «USD»).",
+      "cardOriginalAmountCents": "Valor original diferido, en centavos enteros de su moneda.",
+      "cardInstalments": "Número de cuotas pactadas.",
+      "cardCurrentInstalment": "Cuota en la que va, de 1 al número de cuotas.",
+      "cardMonthlyInstalmentCents": "Valor de la cuota mensual, en centavos enteros.",
+      "cardPendingBalanceCents": "Saldo pendiente del diferido, en centavos enteros.",
+      "cardDeferralRatePct": "Tasa efectiva anual del diferido como la imprime el extracto, en texto («28.1»; «0» sin interés).",
+      "cardDeferrals": "Los diferidos que lista el extracto.",
+      "cardPurchaseAmountCents": "Valor de la compra, positivo, en centavos enteros de la moneda en que se gastó.",
+      "cardPurchaseDescription": "Descripción de la compra en el extracto.",
+      "cardPurchases": "Las compras del extracto, para saber cuáles ya están anotadas.",
       "withdrawSourceAccountId": "Cuenta de activo de la que sale el efectivo (id de list_accounts).",
       "auditEntity": "El nombre de la tabla cuyos cambios se piden, como «transactions» o «accounts»; si falta, todas.",
       "rateFrom": "Moneda de origen, código de tres letras («USD»).",
@@ -2321,6 +2361,7 @@
       "reconcileAccount": "Cuadrar una cuenta",
       "listReconciliations": "Ver los cuadres de una cuenta",
       "recordAccountStatement": "Registrar un extracto de una deuda",
+      "recordCardStatement": "Guardar lo que dice un extracto de tarjeta",
       "recordBilledAmount": "Registrar lo que cobró el emisor",
       "deferPurchase": "Diferir una compra en cuotas",
       "undeferPurchase": "Quitar el diferido de una compra",

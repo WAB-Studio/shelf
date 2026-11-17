@@ -283,6 +283,8 @@ accounting exports, native apps. None of this gets built or left
 - [x] **RF-247** — A bank alert or a PSE receipt that pays the institution of one of the person's cards or loans is proposed as a transfer to it, not as an expense with no category: when the payee («Pagaste $4,305.47 a NU Compañía de Financiamiento desde tu producto 3397…», or a receipt's «Empresa: NU Compañía de Financiamiento Descripción: Pago tarjeta Nu») names, as whole words, the `institution` of exactly one card or loan account, the proposal is a transfer from the account the message names to that one; with several cards or loans of that institution, or none, the delivery stays an expense and the person picks. A saved recipient (RF-189) still decides first. Decided by the user 2026-11-17.
 - [x] **RF-254** — A debt that owes names its next payment's minimum from the latest closed statement's printed minimum while the payments into the debt after that cut-off have not yet covered it, else from its terms (the fixed amount, or the percentage of what is owed), else from nothing: Inicio's «Próximo pago de deuda», the Deudas screen and its tile, and the debt's detail all read the one figure from one query. With none known they never draw `$0`, which reads as «owes nothing»: Inicio and Deudas keep the date and say «Sin mínimo: registra el extracto», and the detail says «Sin extracto: regístralo para ver el pago mínimo» beside «Registrar extracto» until a statement exists.
 - [x] **RF-257** — The Bandeja's card and row work without opening the movement form: they show the day the message prints («Fecha: 14 nov 2026», the arrival day when it prints none) instead of the hour it arrived; the card carries a «Categoría» select of the account's scope and direction (a child as «Padre › Hijo») and choosing one makes the card ready, so «Anotar» saves it in one tap with that category; «Descartar» is a button on the card beside «Anotar» (the ⋮ menu keeps only «Olvidar el comercio»), still asking first; each ready card and row has a checkbox, and «Elegir las listas (n)», «Anotar n» and «Quitar la selección» record the chosen ones in one write (`acceptDeliveriesAction`, one transaction: if any is refused none is recorded, and the toast says so); a delivery marked «Ya registrado» (RF-246) is discarded as a repeat in one tap, with no confirmation. Decided by the user 2026-11-17.
+- [x] **RF-258** — A card shows the deferrals its issuer prints on a statement, apart from the purchases a person defers by hand (RF-136): each with its description, original amount, number of cuotas, current cuota, monthly cuota, pending balance, effective annual rate and the bank's authorization number, in the currency of the statement section it sits in, kept per card and authorization number (`card_deferrals`); a later statement replaces its figures and an older one never overwrites a newer. The card's detail and Deudas list them with the interest a month of each costs, the pending balance at the effective monthly step of its rate, and «Si lo pagas hoy te ahorras ~$X», the interest the remaining cuotas would still charge, both in integer cents and in the deferral's own currency, never summed across currencies. A deferral over more than one cuota at a rate above zero with a balance pending carries the notice «Esta compra quedó a N cuotas; te costará ~$X de interés. Págala completa o cámbiala a 1 cuota en tu banco».
+- [x] **RF-259** — Claude stores what it read off a card statement PDF in one call, `record_card_statement`, by the screens' own schemas and write functions and with the person's own permissions: the closed statement (RF-129, once per cut-off), the terms it prints (rate, limit, cut-off and due day, minimum, aval; what is missing keeps what is stored, and a statement as new as or newer than the latest recorded overwrites the terms that `set_debt_terms` would refuse as out of date, an older one leaves them), the deferrals it lists (RF-258, by authorization number) and the purchases it shows, each compared with the movements booked on the card for the same amount and currency within two days and answered as booked or new, never written. `dryRun` plans and writes nothing, and the tool's description asks Claude to call it first, show the person the list and ask for one yes. It answers what each part did, the stored deferrals the statement no longer lists, and refuses a repeated authorization number, an account that is not a liability, a card that is not the person's and a card with no terms and no rate. Each description asks Claude to confirm with the person first.
 - [x] **RF-135** — A counterparty is remembered per user: a description pattern earns an account and a side after two consecutive agreeing completions, and a completion naming a different account marks the pattern ambiguous, which no later agreement undoes. A remembered pattern prefills the missing side and never fills it on its own.
 
 The webhook (RF-90) reuses RF-22 (quick entry), RF-25 (created_by) and RF-45 (no write bypasses audit) unchanged: the same interpreter reads the payload text and the same insert path records the movement, so the created-by stamp and the audit hold as on any manual write. RF-52's idempotency shape is mirrored, not reused — RF-52 stays a spreadsheet-import requirement; the webhook applies the same stable-external-reference rule to its own deliveries. The review queue keeps that reuse: it runs RF-22's interpreter to propose rather than to decide, and RF-25 and RF-45 hold unchanged because an accepted proposal is still written through the same insert path.
@@ -437,6 +439,7 @@ erDiagram
     group_members ||--o{ transactions : "puts in (De quién)"
     transactions ||--o| deferrals : "deferred into instalments"
     accounts ||--o{ deferrals : "its liability leg"
+    accounts ||--o{ card_deferrals : "printed on its statement"
     groups ||--o{ member_debts : "holds"
     group_members ||--o{ member_debts : "owes or is owed"
     accounts ||--o| third_party_credits : "is paid by someone else (liability)"
@@ -612,6 +615,24 @@ erDiagram
         smallint instalments "2 to 72"
         uuid created_by FK "auth.uid() by default"
         timestamptz created_at
+    }
+
+    card_deferrals {
+        uuid id PK
+        uuid account_id FK "the card; a liability"
+        text authorization_number "the bank's; unique within the card"
+        text description "1 to 200"
+        text currency "the statement section it sits in"
+        bigint original_amount_cents "above zero"
+        smallint instalments "1 to 120"
+        smallint current_instalment "1 to instalments"
+        bigint monthly_instalment_cents
+        bigint pending_balance_cents
+        numeric annual_rate "effective annual fraction, 0 to 2"
+        date statement_on "the cut-off it was read from"
+        uuid created_by FK "auth.uid() by default"
+        timestamptz created_at
+        timestamptz updated_at
     }
 
     member_debts {

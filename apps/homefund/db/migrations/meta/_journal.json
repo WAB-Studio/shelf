@@ -736,6 +736,13 @@
       "when": 1794933150696,
       "tag": "0108_a_movement_remembers_how_it_was_made",
       "breakpoints": true
+    },
+    {
+      "idx": 109,
+      "version": "7",
+      "when": 1794932660800,
+      "tag": "0109_a_card_defers_what_the_bank_prints",
+      "breakpoints": true
     }
   ]
 }

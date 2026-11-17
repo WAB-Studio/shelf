@@ -4,6 +4,7 @@ import type { CallToolResult, McpServer, ServerContext } from "@modelcontextprot
 import { z } from "zod";
 
 import { withdrawToCash } from "@/db/queries/cash-write";
+import { recordCardStatement } from "@/db/queries/card-statement-write";
 import { getMovementDeferral } from "@/db/queries/deferrals";
 import { deferPurchase, recordBilled, recordStatement, undeferPurchase } from "@/db/queries/statement-write";
 import { getSettlementCurrencies } from "@/db/queries/transactions";
@@ -16,11 +17,14 @@ import { centsToDecimal } from "@/lib/money";
 import { recordAccountStatementSchema } from "@/lib/validation/account-statement";
 import { withdrawCashSchema } from "@/lib/validation/cash";
 import { recordBilledAmountSchema } from "@/lib/validation/debt-settlement";
+import { cardStatementExtrasSchema } from "@/lib/validation/card-statement";
+import { DEBT_KINDS } from "@/lib/validation/debt-terms";
 import { deferPurchaseSchema, undeferPurchaseSchema } from "@/lib/validation/deferral";
 
 type Run = (ctx: ServerContext, load: (owner: string) => Promise<unknown>) => Promise<CallToolResult>;
 type Say = (key: string) => string;
 
+// RF-259 rides along: `record_card_statement` stores what Claude read off a card's statement PDF.
 // RF-234: the debt screen's statement, billed-amount and deferral controls and the cash withdrawal, through their own
 // schemas and write functions. The debt is an account `list_debts` answers; what a statement or a deferral left
 // reads back in `get_debt`.
@@ -71,6 +75,104 @@ export function registerDebtStatementTools(server: McpServer, run: Run, t: Say):
           }),
         );
         return { accountId, cutOffDate: input.cutOffDate };
+      }),
+  );
+
+  // RF-259: one call for a statement PDF. `dryRun` plans and writes nothing; the real call writes the same plan.
+  server.registerTool(
+    "record_card_statement",
+    {
+      ...titled(t, "recordCardStatement"),
+      description: t("tools.recordCardStatement"),
+      inputSchema: z.object({
+        accountId: z.string().describe(d("debtAccountId")),
+        dryRun: z.boolean().optional().describe(d("cardDryRun")),
+        statement: z
+          .object({
+            periodStart: z.string().describe(d("statementPeriodStart")),
+            cutOffDate: z.string().describe(d("statementCutOffDate")),
+            paymentDueDate: z.string().nullish().describe(d("statementPaymentDueDate")),
+            closingBalanceCents: z.number().int().describe(d("statementClosingBalanceCents")),
+            openingBalanceCents: optionalCents("statementOpeningBalanceCents"),
+            creditsCents: optionalCents("statementCreditsCents"),
+            debitsCents: optionalCents("statementDebitsCents"),
+            minimumPaymentCents: optionalCents("statementMinimumPaymentCents"),
+            interestChargedCents: optionalCents("statementInterestChargedCents"),
+            feesChargedCents: optionalCents("statementFeesChargedCents"),
+          })
+          .describe(d("cardStatement")),
+        terms: z
+          .object({
+            debtKind: z.enum(DEBT_KINDS).optional().describe(d("debtKind")),
+            annualRatePct: z.string().nullish().describe(d("annualRatePct")),
+            creditLimitCents: optionalCents("creditLimitCents"),
+            statementCutOffDay: z.number().int().nullish().describe(d("statementCutOffDay")),
+            paymentDueDay: z.number().int().nullish().describe(d("paymentDueDay")),
+            minimumPaymentCents: optionalCents("minimumPaymentCents"),
+            minimumPaymentPct: z.string().nullish().describe(d("minimumPaymentPct")),
+            avalCents: optionalCents("avalCents"),
+          })
+          .optional()
+          .describe(d("cardTerms")),
+        deferrals: z
+          .array(
+            z.object({
+              authorizationNumber: z.string().describe(d("cardAuthorizationNumber")),
+              description: z.string().describe(d("cardDeferralDescription")),
+              currency: z.string().describe(d("cardSectionCurrency")),
+              originalAmountCents: z.number().int().describe(d("cardOriginalAmountCents")),
+              instalments: z.number().int().describe(d("cardInstalments")),
+              currentInstalment: z.number().int().describe(d("cardCurrentInstalment")),
+              monthlyInstalmentCents: z.number().int().describe(d("cardMonthlyInstalmentCents")),
+              pendingBalanceCents: z.number().int().describe(d("cardPendingBalanceCents")),
+              annualRatePct: z.string().describe(d("cardDeferralRatePct")),
+            }),
+          )
+          .optional()
+          .describe(d("cardDeferrals")),
+        purchases: z
+          .array(
+            z.object({
+              occurredOn: z.string().describe(d("occurredOn")),
+              amountCents: z.number().int().describe(d("cardPurchaseAmountCents")),
+              currency: z.string().describe(d("cardSectionCurrency")),
+              description: z.string().nullish().describe(d("cardPurchaseDescription")),
+            }),
+          )
+          .optional()
+          .describe(d("cardPurchases")),
+      }),
+      annotations: OVERWRITE,
+    },
+    (input, ctx) =>
+      run(ctx, async () => {
+        const accountId = parseForm(z.uuid({ error: "installments.errors.accountInvalid" }), input.accountId);
+        const settlement = await getSettlementCurrencies({ fromAccountId: accountId, toAccountId: null });
+        const statement = parseForm(recordAccountStatementSchema, {
+          accountId,
+          currency: settlement.from ?? BASE_CURRENCY,
+          periodStart: input.statement.periodStart,
+          cutOffDate: input.statement.cutOffDate,
+          paymentDueDate: input.statement.paymentDueDate ?? null,
+          openingBalance: text(input.statement.openingBalanceCents),
+          closingBalance: centsToDecimal(input.statement.closingBalanceCents),
+          credits: text(input.statement.creditsCents),
+          debits: text(input.statement.debitsCents),
+          minimumPayment: text(input.statement.minimumPaymentCents),
+          interestCharged: text(input.statement.interestChargedCents),
+          feesCharged: text(input.statement.feesChargedCents),
+        });
+        const extras = parseForm(cardStatementExtrasSchema, {
+          deferrals: input.deferrals ?? [],
+          purchases: input.purchases ?? [],
+        });
+        return recordCardStatement({
+          accountId,
+          dryRun: input.dryRun ?? false,
+          statement,
+          terms: input.terms ?? {},
+          ...extras,
+        });
       }),
   );
 

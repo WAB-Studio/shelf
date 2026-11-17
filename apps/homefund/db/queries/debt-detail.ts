@@ -12,6 +12,8 @@ import type {
   CurrentStatement,
   PendingSettlement,
 } from "@/db/queries/debt-statements";
+import { listCardDeferrals } from "@/db/queries/card-deferrals";
+import type { CardDeferralRow } from "@/db/queries/card-deferrals";
 import { listDeferralsForAccount } from "@/db/queries/deferrals";
 import type { DeferralRow } from "@/db/queries/deferrals";
 import { getUserGroup } from "@/db/queries/groups";
@@ -56,6 +58,8 @@ export type DebtDetailData = {
   terms: DebtTerms | null;
   // The purchases a person deferred into instalments (RF-136); derived on read, none moves the balance.
   deferrals: DeferralRow[];
+  // The deferrals the issuer printed on a statement (RF-258), each with what it costs a month and what paying it off saves.
+  cardDeferrals: CardDeferralRow[];
   statements: AccountStatementRow[];
   currentStatement: CurrentStatement | null;
   // The foreign-currency purchases the issuer has not billed yet (RF-123).
@@ -182,7 +186,7 @@ async function readAccount(accountId: string): Promise<AccountRead> {
  * One debt's whole detail (RF-16, RF-136, RNF-09): the account with
  * its derived balance and terms, the purchases a person deferred, its closed statements, the open period's live figures, the purchases
  * still waiting for a statement (RF-123), and the roster a payment is made from.
- * Eight independent reads in ONE `Promise.all` — nothing chains.
+ * Nine independent reads in ONE `Promise.all` — nothing chains.
  *
  * The statements are the closes a person recorded, each carrying the gap between
  * what it printed and what the movements derive (RF-129). None is generated here.
@@ -195,10 +199,11 @@ async function readAccount(accountId: string): Promise<AccountRead> {
 export async function getDebtDetail(
   accountId: string,
 ): Promise<DebtDetailData | null> {
-  const [read, deferrals, statements, currentStatement, pendingSettlements, group, [thirdParty = null]] =
+  const [read, deferrals, cardDeferrals, statements, currentStatement, pendingSettlements, group, [thirdParty = null]] =
     await Promise.all([
       readAccount(accountId),
       listDeferralsForAccount(accountId),
+      listCardDeferrals(accountId),
       listAccountStatements(accountId),
       getCurrentStatement(accountId),
       listPendingSettlements(accountId),
@@ -212,6 +217,7 @@ export async function getDebtDetail(
     account: read.account,
     terms: read.terms,
     deferrals,
+    cardDeferrals,
     statements,
     currentStatement,
     pendingSettlements,
