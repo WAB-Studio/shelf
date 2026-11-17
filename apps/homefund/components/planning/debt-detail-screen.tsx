@@ -7,6 +7,7 @@ import { Fragment, useState } from "react";
 import { DeferredPurchases } from "@/components/planning/deferral-control";
 import { OwnerMark } from "@/components/fund/owner-mark";
 import { DebtPaymentDialog } from "@/components/planning/debt-payment-dialog";
+import { LoanScheduleSection } from "@/components/planning/loan-schedule-section";
 import {
   CreditAndOwedLine,
   owesBesideCredit,
@@ -65,6 +66,7 @@ export function DebtDetailScreen({ data }: { data: DebtDetailData }) {
     canWrite,
     payFrom,
     thirdParty,
+    schedule,
   } = data;
 
   // The currency the card bills in: the cupo, the minimum and the interest are
@@ -249,6 +251,9 @@ export function DebtDetailScreen({ data }: { data: DebtDetailData }) {
       <StatTiles tiles={tiles} />
 
       {thirdParty !== null && <ThirdPartyCreditSection credit={thirdParty} banks={payFrom} />}
+
+      {/* The schedule the bank printed for a loan, read against its payments (RF-258). */}
+      {schedule !== null && <LoanScheduleSection schedule={schedule} currency={currency} />}
 
       {/* Purchases a person confirmed as deferred: the balance holds them whole (RF-136). */}
       {deferrals.length > 0 && (

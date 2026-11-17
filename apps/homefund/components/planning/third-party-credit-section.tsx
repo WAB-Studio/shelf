@@ -10,6 +10,7 @@ import { EditThirdPartyDialog } from "@/components/planning/third-party-credit-d
 import { ThirdPartyPaymentDialog } from "@/components/planning/third-party-payment-dialog";
 import {
   Button,
+  Callout,
   ConfirmDialog,
   Flex,
   Heading,
@@ -62,6 +63,11 @@ export function ThirdPartyCreditSection({
   const day = (date: string) => format.dateTime(civilDateToDate(date), { day: "numeric", month: "short" });
   const monthName = (month: string) =>
     format.dateTime(civilDateToDate(`${month}-01`), { month: "long", year: "numeric" });
+  // «agosto 2027»: the month of a cuota and its year, never «de».
+  const cuotaMonth = (date: string) => {
+    const when = civilDateToDate(date);
+    return `${format.dateTime(when, { month: "long" })} ${format.dateTime(when, { year: "numeric" })}`;
+  };
 
   // The current month is always the first line of the history.
   const [now, ...before] = credit.months;
@@ -75,12 +81,21 @@ export function ThirdPartyCreditSection({
           ? t("noteDue", { day: credit.dueDay })
           : undefined;
 
+  // With the bank's schedule at hand, what the payer still has to send reads beside the capital, with interest (RF-258).
+  const { schedule } = credit;
+  const scheduleNote =
+    schedule !== null && schedule.remainingCount > 0
+      ? t("scheduleLeft", { person, count: schedule.remainingCount, amount: amount(schedule.remainingTotalCents) })
+      : undefined;
+  // The first cuota the payer's usual amount will not cover, said before its day.
+  const [uncovered, ...moreUncovered] = schedule?.uncovered ?? [];
+
   const tiles = [
     {
       key: "remaining",
       label: t("remaining"),
       value: <Money minor={credit.owedCents} currency={currency} signed={false} size="inherit" />,
-      note: dueNote,
+      note: scheduleNote ?? dueNote,
     },
     {
       key: "paid",
@@ -142,6 +157,22 @@ export function ThirdPartyCreditSection({
       </Flex>
 
       <StatTiles tiles={tiles} />
+
+      {uncovered && schedule?.personUsualCents != null && (
+        <Flex direction="column" px={{ initial: "0", md: "6" }}>
+          <Callout.Root color="amber" variant="soft" role="status">
+            <Callout.Text>
+              {t("scheduleUncovered", {
+                month: cuotaMonth(uncovered.dueOn),
+                amount: amount(uncovered.totalCents),
+                person,
+                usual: amount(schedule.personUsualCents),
+              })}
+              {moreUncovered.length > 0 && ` ${t("scheduleUncoveredMore", { count: moreUncovered.length })}`}
+            </Callout.Text>
+          </Callout.Root>
+        </Flex>
+      )}
 
       {now && (
         <Flex direction="column" px={{ initial: "0", md: "6" }}>

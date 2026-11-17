@@ -712,6 +712,26 @@ movimientos y su pago es una transferencia, nunca un ingreso), pero nadie la ve:
 - **«Dejar de seguir»** quita el vínculo y archiva la cuenta interna, que pasa a Archivadas con sus movimientos; la
   confirmación lo dice.
 
+## Decisión del 2026-11-17: el plan de pagos en el crédito, por el usuario
+
+El banco imprime un «plan de pagos» con cada cuota; el crédito lo guarda y lo lee contra lo que ya se pagó. Se construye
+con estas palabras, sin tablero previo, y se refina con lo construido.
+
+- **Sin plan** el crédito no cambia: ningún bloque, ninguna ficha, ningún aviso.
+- **Con plan**, bajo las fichas del saldo (y bajo «Lo paga <persona>» si la hay), el bloque «Plan de pagos»: cuatro fichas,
+  «Próxima cuota» (el valor, con «Cuota 4 de 12 · 5 mar 2027»; «Todas pagadas» al final), «Cuotas por pagar» («de 12»),
+  «Falta pagar» («Con intereses y seguro») y «Termina» (el mes y el año, con el día debajo). Encima de ellas, un aviso
+  ámbar si alguna cuota sin pagar se aleja más de 5 % de la usual: «En noviembre 2027 la cuota es $619.285; la usual es
+  $194.679.», y «Otras 2 cuotas más se alejan más de 5 % de la usual.» si hay más.
+- **«Cuotas»**, una tarjeta con una fila por cuota: «Cuota 3 · 5 feb 2027» y, debajo, «Capital · Interés · Seguro»; a la
+  derecha el total, una insignia con el estado en palabras (verde «Pagada», ámbar «Parcial · $X», roja «Vencida», gris «Por
+  pagar») y «Saldo $X», el capital que queda. Un estado nunca es solo color.
+- **«Lo paga <persona>»**: la ficha «Falta del crédito» cambia su nota por «A John le faltan 14 cuotas: $4.200.000 con
+  intereses» («le falta 1 cuota» en singular); y un aviso ámbar bajo las fichas, «En agosto 2027 la cuota es $356.789; John
+  suele mandar $327.000.», más «Otras 2 cuotas más tampoco la cubren.» si hay más. Sin cuotas por pagar la nota vuelve a la
+  cuota y el día de pago del banco.
+- En el celular, una columna: las fichas se apilan y cada fila de cuota baja el total y la insignia bajo sus cifras.
+
 ## Decisión del 2026-11-17: «Para quién», por el usuario
 
 «Cuando gasta a nombre de otra persona… Ángela es mi pareja y no le cobraría dinero a menos que te diga.» Un gasto hecho por
