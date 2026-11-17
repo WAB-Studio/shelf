@@ -9,6 +9,7 @@ import { getDebtsScreenData } from "@/db/queries/debts-screen";
 import { ActionError } from "@/lib/errors";
 import { ADD_ONCE, READ, titled } from "@/lib/mcp/annotations";
 import { parseForm } from "@/lib/mcp/parse-form";
+import { todayInBogota } from "@/lib/dates";
 import { centsToDecimal } from "@/lib/money";
 import { DEBT_KINDS, debtTermsSchema } from "@/lib/validation/debt-terms";
 import { recordDebtPaymentSchema } from "@/lib/validation/installment-plan";
@@ -91,8 +92,8 @@ export function registerDebtTools(server: McpServer, run: Run, t: Say): void {
         fromAccountId: z.string().describe(d("debtFromAccountId")),
         toAccountId: z.string().describe(d("debtAccountId")),
         amountCents: z.number().int().describe(d("amountCents")),
-        occurredOn: z.string().describe(d("occurredOn")),
-        requestRef: z.string().optional().describe(d("requestRef")),
+        occurredOn: z.string().optional().describe(d("occurredOnDefault")),
+        requestRef: z.uuid().describe(d("requestRef")),
       }),
       annotations: ADD_ONCE,
     },
@@ -103,7 +104,7 @@ export function registerDebtTools(server: McpServer, run: Run, t: Say): void {
             fromAccountId: input.fromAccountId,
             toAccountId: input.toAccountId,
             amount: centsToDecimal(input.amountCents),
-            occurredAt: input.occurredOn,
+            occurredAt: input.occurredOn ?? todayInBogota(),
             requestRef: input.requestRef,
           }),
         ),

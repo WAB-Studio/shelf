@@ -146,7 +146,7 @@ export function registerDebtStatementTools(server: McpServer, run: Run, t: Say):
       inputSchema: z.object({
         sourceAccountId: z.string().describe(d("withdrawSourceAccountId")),
         amountCents: z.number().int().describe(d("amountCents")),
-        requestRef: z.string().optional().describe(d("requestRef")),
+        requestRef: z.uuid().describe(d("requestRef")),
       }),
       annotations: ADD_ONCE,
     },

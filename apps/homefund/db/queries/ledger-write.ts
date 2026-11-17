@@ -454,6 +454,50 @@ export async function mergeMovements(input: {
   }
 }
 
+/**
+ * Puts the same labels, and optionally the same category, on every movement of an explicit list, in one
+ * transaction: all or none. `labelIds` replaces each movement's labels (empty clears them); `categoryId` is
+ * written only on movements of exactly one line, since a receipt's lines are not one category, and the split
+ * trigger still refuses a kind or scope that disagrees. A movement an adjustment booked is refused, as an edit is.
+ * Each one is rewritten as it was, which stamps a new `updated_at`.
+ */
+export async function relabelMovements(input: {
+  transactionIds: string[];
+  labelIds?: string[];
+  categoryId?: string;
+}): Promise<{ updated: number }> {
+  const ids = [...new Set(input.transactionIds)];
+  const list = sql.join(ids.map((id) => sql`${id}::uuid`), sql`, `);
+  try {
+    return await withUserDb(async (tx) => {
+      const found = await listTransactions({ ids }, { tx });
+      if (found.length !== ids.length) throw new ActionError("errors.notFound");
+      if (found.some((row) => row.reconciliationId !== null)) throw new ActionError("errors.adjustmentReadOnly");
+      if (input.categoryId !== undefined) {
+        if (found.some((row) => row.splits.length !== 1)) throw new ActionError("mcp.errors.relabel.lines");
+        const moved = await tx.execute<{ id: string }>(sql`
+          update transaction_splits set category_id = ${input.categoryId}::uuid
+          where transaction_id in (${list}) returning id`);
+        if (moved.length !== ids.length) throw new ActionError("errors.notFound");
+      }
+      if (input.labelIds !== undefined) {
+        await tx.execute(sql`delete from transaction_labels where transaction_id in (${list})`);
+        if (input.labelIds.length > 0) {
+          const pairs = ids.flatMap((id) => input.labelIds!.map((labelId) => sql`(${id}::uuid, ${labelId}::uuid)`));
+          await tx.execute(sql`insert into transaction_labels (transaction_id, label_id) values ${sql.join(pairs, sql`, `)}`);
+        }
+      }
+      const touched = await tx.execute<{ id: string }>(sql`
+        update transactions set description = description where id in (${list}) returning id`);
+      if (touched.length !== ids.length) throw new ActionError("errors.notFound");
+      return { updated: touched.length };
+    });
+  } catch (error) {
+    if (error instanceof ActionError) throw error;
+    return mapTransactionError(error);
+  }
+}
+
 /** Moves every line of one category to another of the same kind, optionally inside a date range (RF-176). */
 export async function moveCategoryMovements(input: {
   fromCategoryId: string;

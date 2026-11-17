@@ -5,6 +5,7 @@ import { z } from "zod";
 
 import { openPlannedPayment, revisePlannedPayment, settlePlanned } from "@/db/queries/planned-payment-write";
 import { cancelPlannedPayment, listPlannedPayments } from "@/db/queries/planned-payments";
+import { todayInBogota } from "@/lib/dates";
 import { ActionError } from "@/lib/errors";
 import { ADD, ADD_ONCE, DESTROY, OVERWRITE, READ, previousFields, titled } from "@/lib/mcp/annotations";
 import { parseForm } from "@/lib/mcp/parse-form";
@@ -132,13 +133,13 @@ export function registerPlannedPaymentTools(server: McpServer, run: Run, t: Say)
       description: t("tools.settlePlannedPayment"),
       inputSchema: z.object({
         plannedPaymentId: z.string().describe(d("plannedPaymentId")),
-        occurredOn: z.string().describe(d("occurredOn")),
+        occurredOn: z.string().optional().describe(d("occurredOnDefault")),
       }),
       annotations: ADD_ONCE,
     },
     (input, ctx) =>
       run(ctx, () =>
-        settlePlanned(parseForm(settlePlannedPaymentSchema, { plannedPaymentId: input.plannedPaymentId, occurredAt: input.occurredOn })),
+        settlePlanned(parseForm(settlePlannedPaymentSchema, { plannedPaymentId: input.plannedPaymentId, occurredAt: input.occurredOn ?? todayInBogota() })),
       ),
   );
 

@@ -4180,6 +4180,7 @@ async function main(): Promise<void> {
   await mcpDeletesSuite();
   await mcpMoneyModelSuite();
   await payOwnCardSuite();
+  await mcpWritesSuite();
 }
 
 // A member recorded without a login is someone in the fund: a leader whose fund holds one is not alone, so an
@@ -15359,8 +15360,11 @@ function mcpClient(POST: (request: Request) => Promise<Response>, token: string)
     const frame = text.startsWith("{") ? text : (text.split("\n").find((line) => line.startsWith("data:")) ?? "").slice(5);
     return { status: response.status, body: frame ? JSON.parse(frame) : null };
   };
+  // The tools that book a movement take a requestRef (RF-250); a call that names none gets a fresh one, so each test stays about its own subject.
+  const NEEDS_REF = ["record_movement", "record_debt_payment", "record_third_party_payment", "withdraw_cash"];
   const tool = async (name: string, args: Record<string, unknown> = {}) => {
-    const { body } = await rpc(token, "tools/call", { name, arguments: args });
+    const sent = NEEDS_REF.includes(name) ? { requestRef: randomUUID(), ...args } : args;
+    const { body } = await rpc(token, "tools/call", { name, arguments: sent });
     const raw: string = body?.result?.content?.[0]?.text ?? "null";
     return {
       isError: body?.result?.isError === true,
@@ -15452,6 +15456,7 @@ const TOOL_CLASSES = [
   ["record_movement", ...ADD_ONCE_CLASS],
   ["record_third_party_payment", ...ADD_ONCE_CLASS],
   ["reject_deliveries", ...DESTROY_CLASS],
+  ["relabel_movements", ...OVERWRITE_CLASS],
   ["remove_goal_contribution", ...DESTROY_CLASS],
   ["rename_member", ...OVERWRITE_CLASS],
   ["restore_account", ...OVERWRITE_CLASS],
@@ -20965,5 +20970,113 @@ async function payOwnCardSuite(): Promise<void> {
     card?.direction === "transfer" && card.from === bank && card.to === nu && shop?.direction === "expense" && shop.to === null &&
       ambiguous?.direction === "expense" && ambiguous.to === null && second !== nu,
     JSON.stringify({ card, shop, ambiguous }),
+  );
+}
+
+// RF-250: a write of a movement names its requestRef and defaults its day to today in Bogotá, and a list of movements is
+// labelled, and optionally recategorized, in one call that covers exactly the rows the person confirmed.
+async function mcpWritesSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const today = todayInBogota();
+  const { POST } = await import("@/app/mcp/route");
+  const [owner, stranger] = [await createMembershipFreeUser(), await createMembershipFreeUser()];
+  const name = (what: string) => `Harness rf250 ${what} ${tag}`;
+  const ids = { bank: randomUUID(), savings: randomUUID(), food: randomUUID(), pets: randomUUID() };
+  await fixtureSql.begin(async (tx) => {
+    await tx`insert into accounts (id, owner_user_id, name, kind, subtype, initial_balance_cents, initial_balance_on) values
+      (${ids.bank}, ${owner.id}, ${name("banco")}, 'asset', 'bank', 500000000, '2026-01-01'),
+      (${ids.savings}, ${owner.id}, ${name("ahorro")}, 'asset', 'bank', 0, '2026-01-01')`;
+    await tx`insert into categories (id, owner_user_id, name, kind, color) values
+      (${ids.food}, ${owner.id}, ${name("mercado")}, 'expense', '#8C4A4A'), (${ids.pets}, ${owner.id}, ${name("mascotas")}, 'expense', '#4A5A8C')`;
+  });
+  for (const id of [ids.bank, ids.savings]) track("accounts", id);
+  for (const id of [ids.food, ids.pets]) track("categories", id);
+  const clientOf = async (user: HarnessUser) => {
+    const { id, token } = await asUser(user, () => issueWebhookCredential({ name: name("clave"), purpose: "mcp", defaultAccountId: null, defaultCategoryId: null }));
+    keep("webhook_credentials", id);
+    return { token, ...mcpClient(POST, token) };
+  };
+  const { token, tool, rpc } = await clientOf(owner);
+  const strangerTool = (await clientOf(stranger)).tool;
+  // Straight to the transport: `tool` above gives a call that names no requestRef a fresh one.
+  const refused = async (toolName: string, args: Record<string, unknown>) => {
+    const { body } = await rpc(token, "tools/call", { name: toolName, arguments: args });
+    return body?.result?.isError === true || body?.error !== undefined;
+  };
+
+  const loan = (await tool("create_account", { name: name("credito"), kind: "liability", subtype: "loan", openingBalanceCents: 100_000_00, balanceOn: "2026-01-01" })).value as { accountId: string };
+  track("accounts", loan.accountId);
+  const bare: [string, Record<string, unknown>][] = [
+    ["record_movement", { fromAccountId: ids.bank, toAccountId: null, amountCents: 1_000_00, categoryId: ids.food }],
+    ["record_debt_payment", { fromAccountId: ids.bank, toAccountId: loan.accountId, amountCents: 1_000_00 }],
+    ["record_third_party_payment", { liabilityAccountId: loan.accountId, toAccountId: ids.bank, amountCents: 1_000_00 }],
+    ["withdraw_cash", { sourceAccountId: ids.bank, amountCents: 1_000_00 }],
+  ];
+  const noRef = await Promise.all(bare.map(([toolName, args]) => refused(toolName, args)));
+  const badRef = await Promise.all(bare.map(([toolName, args]) => refused(toolName, { ...args, requestRef: "not-a-uuid" })));
+  assert(
+    next("RF-250: record_movement, record_debt_payment, record_third_party_payment and withdraw_cash refuse a call with no requestRef, or one that is no UUID"),
+    noRef.every(Boolean) && badRef.every(Boolean),
+    `without ${JSON.stringify(noRef)}, malformed ${JSON.stringify(badRef)}`,
+  );
+
+  const dayOf = async (transactionId: string) => (await fixtureSql<{ occurred_at: string }[]>`select occurred_at::text from transactions where id = ${transactionId}`)[0]?.occurred_at;
+  const dated = await tool("record_movement", { fromAccountId: ids.bank, toAccountId: null, amountCents: 2_000_00, description: name("hoy"), categoryId: ids.food });
+  const paid = await tool("record_debt_payment", { fromAccountId: ids.bank, toAccountId: loan.accountId, amountCents: 3_000_00 });
+  assert(
+    next("RF-250: a movement and a debt payment with no date are dated today in Bogotá"),
+    !dated.isError && !paid.isError && (await dayOf(dated.value.transactionId)) === today && (await dayOf(paid.value.transactionId)) === today,
+    `movement ${JSON.stringify(dated.value)}, payment ${JSON.stringify(paid.value)}, today ${today}`,
+  );
+
+  const label = async (labelName: string) => ((await tool("create_label", { name: labelName, placement: "personal" })).value as { labelId?: string; id?: string });
+  const [mama, papa] = [await label(name("Mamá")), await label(name("Papá"))];
+  const labelIds = (m: { labelId?: string; id?: string }) => m.labelId ?? m.id!;
+  const made = async (description: string, categoryId = ids.food) =>
+    (await tool("record_movement", { fromAccountId: ids.bank, toAccountId: null, amountCents: 5_000_00, occurredAt: today, description: name(description), categoryId, labels: [labelIds(papa)] })).value.transactionId as string;
+  const rows = [await made("uno"), await made("dos"), await made("tres")];
+  const transfer = (await tool("record_movement", { fromAccountId: ids.bank, toAccountId: ids.savings, amountCents: 1_000_00, occurredAt: today, description: name("traslado") })).value.transactionId as string;
+  const state = async (transactionIds: string[]) =>
+    fixtureSql<{ id: string; labels: string[]; categories: string[] }[]>`
+      select t.id,
+        coalesce((select array_agg(l.label_id::text order by l.label_id) from transaction_labels l where l.transaction_id = t.id), '{}') as labels,
+        coalesce((select array_agg(s.category_id::text) from transaction_splits s where s.transaction_id = t.id), '{}') as categories
+      from transactions t where t.id in ${fixtureSql(transactionIds)} order by t.id`;
+  const stampOf = async (transactionId: string) => (await fixtureSql<{ updated_at: string }[]>`select updated_at::text from transactions where id = ${transactionId}`)[0]?.updated_at;
+  const stampBefore = await stampOf(rows[0]);
+  const done = await tool("relabel_movements", { transactionIds: rows, expectedCount: 3, labels: [labelIds(mama)], categoryId: ids.pets });
+  const after = await state(rows);
+  assert(
+    next("RF-250: relabel_movements replaces the labels and sets the category of every listed movement, stamps each anew and answers what each held"),
+    !done.isError && done.value.updated === 3 &&
+      after.every((row) => row.labels.length === 1 && row.labels[0] === labelIds(mama) && row.categories.length === 1 && row.categories[0] === ids.pets) &&
+      done.value.before.every((row: { labelIds: string[]; categoryId: string }) => row.labelIds[0] === labelIds(papa) && row.categoryId === ids.food) &&
+      (await stampOf(rows[0])) !== stampBefore,
+    `done ${JSON.stringify(done.value)}, after ${JSON.stringify(after)}`,
+  );
+
+  const wrongCount = await tool("relabel_movements", { transactionIds: rows, expectedCount: 2, labels: [] });
+  const repeated = await tool("relabel_movements", { transactionIds: [rows[0], rows[0]], expectedCount: 2, labels: [] });
+  const nothing = await tool("relabel_movements", { transactionIds: rows, expectedCount: 3 });
+  const withTransfer = await tool("relabel_movements", { transactionIds: [rows[0], transfer], expectedCount: 2, labels: [labelIds(papa)], categoryId: ids.food });
+  const foreign = await strangerTool("relabel_movements", { transactionIds: rows, expectedCount: 3, labels: [] });
+  const untouched = await state(rows);
+  assert(
+    next("RF-250: relabel_movements writes nothing for a count that is not the list's, a repeated id, no change, a transfer given a category or another person's rows"),
+    wrongCount.isError && (wrongCount.value as { error: string }).error === es.mcp.errors.relabel.count.replace("{count}", "3") &&
+      repeated.isError && nothing.isError && (nothing.value as { error: string }).error === es.mcp.errors.relabel.nothing &&
+      withTransfer.isError && (withTransfer.value as { error: string }).error === es.mcp.errors.relabel.lines &&
+      foreign.isError && (foreign.value as { error: string }).error === es.errors.notFound &&
+      untouched.every((row) => row.labels[0] === labelIds(mama) && row.categories[0] === ids.pets),
+    `count ${JSON.stringify(wrongCount.value)}, repeated ${JSON.stringify(repeated.value)}, nothing ${JSON.stringify(nothing.value)}, transfer ${JSON.stringify(withTransfer.value)}, stranger ${JSON.stringify(foreign.value)}`,
+  );
+
+  const cleared = await tool("relabel_movements", { transactionIds: rows, expectedCount: 3, labels: [] });
+  const bare2 = await state(rows);
+  assert(
+    next("RF-250: relabel_movements with no labels clears them and leaves the category alone"),
+    !cleared.isError && bare2.every((row) => row.labels.length === 0 && row.categories[0] === ids.pets),
+    `cleared ${JSON.stringify(cleared.value)}, state ${JSON.stringify(bare2)}`,
   );
 }

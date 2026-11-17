@@ -14,6 +14,7 @@ import {
   moveCategoryMovements,
   openAccount,
   openCategory,
+  relabelMovements,
   reviseMovement,
 } from "@/db/queries/ledger-write";
 import {
@@ -30,6 +31,7 @@ import { ADD, ADD_ONCE, DESTROY, OVERWRITE, READ, previousFields, titled } from 
 import { categoryNameWarnings, movementWarnings, withWarnings, type Probe } from "@/lib/mcp/debt-guard";
 import { resolveLabelIds } from "@/lib/mcp/label-tools";
 import { parseForm } from "@/lib/mcp/parse-form";
+import { todayInBogota } from "@/lib/dates";
 import { centsToDecimal } from "@/lib/money";
 import { createAccountSchema, updateAccountSchema } from "@/lib/validation/account";
 import { createCategoryInputSchema, updateCategorySchema } from "@/lib/validation/category";
@@ -289,15 +291,18 @@ export function registerLedgerTools(server: McpServer, run: Run, t: Say): void {
     {
       ...titled(t, "recordMovement"),
       description: t("tools.recordMovement"),
+      // The date is today in Bogotá unless given, and the requestRef is required: a retry reuses it, so a lost answer never duplicates.
       inputSchema: z.object({
         ...shape,
-        requestRef: z.string().optional().describe(d("requestRef")),
+        occurredAt: z.string().optional().describe(d("occurredAtDefault")),
+        requestRef: z.uuid().describe(d("requestRef")),
         awaitingCounterparty: z.boolean().optional().describe(d("awaitingCounterparty")),
       }),
       annotations: ADD_ONCE,
     },
-    (input: MovementInput & { requestRef?: string; awaitingCounterparty?: boolean }, ctx) =>
+    (given: Omit<MovementInput, "occurredAt"> & { occurredAt?: string; requestRef: string; awaitingCounterparty?: boolean }, ctx) =>
       run(ctx, async (owner) => {
+        const input = { ...given, occurredAt: given.occurredAt ?? todayInBogota() };
         const booked = await bookMovement(
           parseForm(createTransactionSchema, {
             ...movementForm(input),
@@ -570,6 +575,43 @@ export function registerLedgerTools(server: McpServer, run: Run, t: Say): void {
           occurredAt: input.occurredAt === undefined ? undefined : parseForm(occurredAtSchema, input.occurredAt),
         });
         return { ...merged, originals: originals.map(movementRow) };
+      }),
+  );
+
+  // The same labels, and optionally one category, on an explicit list of movements: the person's yes covers exactly those rows.
+  server.registerTool(
+    "relabel_movements",
+    {
+      ...titled(t, "relabelMovements"),
+      description: t("tools.relabelMovements"),
+      inputSchema: z.object({
+        transactionIds: z.array(z.string()).min(1).max(100).describe(d("transactionIds")),
+        expectedCount: z.number().int().min(1).describe(d("relabelExpectedCount")),
+        labels: z.array(z.string()).optional().describe(d("relabelLabels")),
+        categoryId: z.string().optional().describe(d("relabelCategoryId")),
+      }),
+      annotations: OVERWRITE,
+    },
+    (input: { transactionIds: string[]; expectedCount: number; labels?: string[]; categoryId?: string }, ctx) =>
+      run(ctx, async (owner) => {
+        const transactionIds = input.transactionIds.map((id) => idOf("errors.notFound", id));
+        if (new Set(transactionIds).size !== transactionIds.length || transactionIds.length !== input.expectedCount) {
+          throw new ActionError("mcp.errors.relabel.count", { count: String(new Set(transactionIds).size) });
+        }
+        if (input.labels === undefined && input.categoryId === undefined) throw new ActionError("mcp.errors.relabel.nothing");
+        const categoryId = input.categoryId === undefined ? undefined : idOf("errors.notFound", input.categoryId);
+        const labelIds = input.labels === undefined ? undefined : await resolveLabelIds(owner, input.labels);
+        // What each movement held, read before it is rewritten, so the answer can put it back.
+        const before = await listTransactions({ ids: transactionIds }, { limit: transactionIds.length });
+        const { updated } = await relabelMovements({ transactionIds, labelIds, categoryId });
+        return {
+          updated,
+          before: before.map((row) => ({
+            id: row.id,
+            labelIds: row.labels.map((label) => label.id),
+            categoryId: row.splits.length === 1 ? row.splits[0].categoryId : null,
+          })),
+        };
       }),
   );
 
