@@ -23,7 +23,7 @@ type Say = (key: string) => string;
 
 const STATUSES = ["pending", "done", "cancelled"] as const;
 
-// RF-230: the Por pagar screen's list and writes, through its own query, schemas and write functions. A payment is the id
+// RF-230: «Lo que viene»'s payments, with their list and writes, through its own query, schemas and write functions. A payment is the id
 // `list_planned_payments` answers; settling it books the real movement, and deleting that movement puts it back to pending.
 export function registerPlannedPaymentTools(server: McpServer, run: Run, t: Say): void {
   const d = (key: string) => t(`params.${key}`);

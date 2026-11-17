@@ -188,6 +188,10 @@ export const resumeRecurringRuleSchema = z.object({
   id: z.uuid({ error: "recurringRules.errors.ruleInvalid" }),
 });
 
+export const skipRecurringRuleSchema = z.object({
+  id: z.uuid({ error: "recurringRules.errors.ruleInvalid" }),
+});
+
 export const deleteRecurringRuleSchema = z.object({
   id: z.uuid({ error: "recurringRules.errors.ruleInvalid" }),
 });

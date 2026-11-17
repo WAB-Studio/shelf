@@ -2,7 +2,6 @@ import type { LucideIcon } from "lucide-react";
 import {
   ArrowRightLeft,
   CalendarDays,
-  CalendarSync,
   ChartColumnBig,
   ChartLine,
   CreditCard,
@@ -10,7 +9,6 @@ import {
   House,
   Contact,
   Inbox,
-  Repeat,
   ScrollText,
   Settings,
   Tag,
@@ -35,9 +33,7 @@ const CATALOGUE = {
   planning: { href: "/planning", icon: Target },
   budgets: { href: "/planning/budgets", icon: ChartColumnBig },
   goals: { href: "/planning/goals", icon: Target },
-  payments: { href: "/planning/payments", icon: CalendarDays },
-  recurring: { href: "/planning/recurring", icon: Repeat },
-  subscriptions: { href: "/planning/subscriptions", icon: CalendarSync },
+  upcoming: { href: "/planning/upcoming", icon: CalendarDays },
   debts: { href: "/planning/debts", icon: CreditCard },
   reports: { href: "/reports", icon: ChartLine },
   inbox: { href: "/inbox", icon: Inbox },
@@ -65,30 +61,26 @@ export type Destination = {
 export const TAB_KEYS = ["home", "movements", "inbox"] as const;
 
 // The sidebar's own list, in the order the desktop design fixes.
-// Planeación opens in place: a laptop has the height to offer its six screens
+// Planeación opens in place: a laptop has the height to offer its screens
 // directly, so the hub behind the phone's tab is not a stop on the way here.
 export const PRIMARY_KEYS = [
   "home",
   "movements",
   "budgets",
   "goals",
-  "payments",
-  "recurring",
-  "subscriptions",
+  "upcoming",
   "debts",
   "reports",
   "inbox",
 ] as const;
 
-// Planeación's own six, in the order the sidebar and `PlanningSubNav`'s chips
+// Planeación's own four, in the order the sidebar and `PlanningSubNav`'s chips
 // both keep. The hub reads this list only for each area's `href` and `icon`;
 // it orders its own cards separately.
 export const PLANNING_KEYS = [
   "budgets",
   "goals",
-  "payments",
-  "recurring",
-  "subscriptions",
+  "upcoming",
   "debts",
 ] as const;
 

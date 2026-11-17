@@ -206,12 +206,16 @@ function renderCases({ transactionId, debtAccountId }: HttpScope): RenderCase[] 
     {
       path: `/${LOCALE}/planning/payments`,
       status: 200,
-      title: title("plannedPayments.title"),
+      title: title("upcoming.title"),
+      landsOn: `/${LOCALE}/planning/upcoming`,
+      why: "«Pagos» became «Lo que viene»",
     },
     {
       path: `/${LOCALE}/planning/recurring`,
       status: 200,
-      title: title("recurringRules.title"),
+      title: title("upcoming.title"),
+      landsOn: `/${LOCALE}/planning/upcoming`,
+      why: "«Recurrentes» became «Lo que viene»",
     },
     { path: `/${LOCALE}/settings`, status: 200, title: title("nav.settings") },
     {
@@ -443,7 +447,8 @@ let httpCookie = "";
 
 // Pages added after the render cases were numbered: rendered at the run's end so no earlier `H` shifts.
 const LATE_RENDER_CASES: RenderCase[] = [
-  { path: `/${LOCALE}/planning/subscriptions`, status: 200, title: title("subscriptions.title") },
+  { path: `/${LOCALE}/planning/subscriptions`, status: 200, title: title("upcoming.title"), landsOn: `/${LOCALE}/planning/upcoming`, why: "«Suscripciones» became «Lo que viene»" },
+  { path: `/${LOCALE}/planning/upcoming`, status: 200, title: title("upcoming.title") },
 ];
 
 async function guardSuite(routes: AppRoute[]): Promise<void> {

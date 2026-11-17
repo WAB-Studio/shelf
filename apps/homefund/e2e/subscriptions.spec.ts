@@ -1,10 +1,11 @@
 /**
- * «Suscripciones» (RF-185): a charge booked on the same account every month shows as one card with
- * its cadence, its typical amount and its account, and the screen holds a 390 px phone.
+ * Subscriptions in «Lo que viene» (RF-290): a charge booked on the same account every month shows as one
+ * row marked «Suscripción» with its cadence, its typical amount and its account, and the screen holds a
+ * 390 px phone.
  *
  * Written from the contract: four monthly expenses whose descriptions differ only in a reference
  * number must read as one subscription, a one-off expense must not, and a series that stopped
- * months ago sits apart under «sin cobro reciente».
+ * months ago is not coming, so it is not listed.
  */
 import { randomUUID } from "node:crypto";
 
@@ -15,7 +16,7 @@ import messages from "@/messages/es.json";
 import { fixtureSql } from "../scripts/harness/fixtures";
 import { asHarnessUser, readScope, test } from "./global-setup";
 
-const copy = messages.subscriptions;
+const copy = messages.upcoming;
 
 const scope = readScope();
 const stamp = randomUUID().slice(0, 8).replace(/[0-9]/g, "x");
@@ -62,30 +63,27 @@ function card(page: Page, text: string) {
 test("a monthly charge reads as one subscription with its cadence, and a one-off charge does not", async ({
   page,
 }) => {
-  await page.goto("/es/planning/subscriptions");
+  await page.goto("/es/planning/upcoming");
 
   await expect(page.getByRole("heading", { name: copy.title, level: 1 })).toBeVisible();
   const series = card(page, SERIES);
   await expect(series).toHaveCount(1);
-  await expect(series).toContainText(copy.monthly);
+  await expect(series).toContainText(copy.kind.subscription);
+  await expect(series).toContainText(copy.cadence.monthly);
   await expect(series).toContainText("44.900");
   await expect(card(page, ONE_OFF)).toHaveCount(0);
-  await expect(page.getByText(/\$\s?[\d.]+ al mes/).filter({ visible: true }).first()).toBeVisible();
 });
 
-test("a series that stopped months ago sits under its own label with its last date", async ({ page }) => {
-  await page.goto("/es/planning/subscriptions");
+test("a series that stopped months ago is not listed", async ({ page }) => {
+  await page.goto("/es/planning/upcoming");
 
-  const ended = card(page, ENDED);
-  await expect(ended).toHaveCount(1);
-  await expect(ended).toContainText("Último cobro");
-  await expect(page.getByText(/sin cobro reciente$/).filter({ visible: true })).toBeVisible();
-  await expect(card(page, SERIES)).not.toContainText("Último cobro");
+  await expect(card(page, SERIES)).toHaveCount(1);
+  await expect(card(page, ENDED)).toHaveCount(0);
 });
 
 test("holds a 390 px phone without sideways scroll @mobile", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto("/es/planning/subscriptions");
+  await page.goto("/es/planning/upcoming");
   await expect(card(page, SERIES)).toHaveCount(1);
 
   const overflow = await page.evaluate(

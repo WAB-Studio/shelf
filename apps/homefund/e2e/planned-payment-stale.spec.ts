@@ -16,7 +16,7 @@ import messages from "@/messages/es.json";
 import { fixtureSql } from "../scripts/harness/fixtures";
 import { asHarnessUser, readScope, test } from "./global-setup";
 
-const payments = messages.plannedPayments;
+const payments = messages.upcoming.form;
 const common = messages.common;
 
 test.use({ viewport: { width: 1280, height: 900 } });
@@ -43,19 +43,19 @@ test.afterEach(async () => {
 });
 
 async function openEdit(tab: Page): Promise<Locator> {
-  await tab.goto("/es/planning/payments");
+  await tab.goto("/es/planning/upcoming");
   await tab
     .getByRole("button", { name: common.actionsFor.replace("{name}", CONCEPT), exact: true })
     .filter({ visible: true })
     .click();
   await tab.getByRole("menuitem", { name: common.edit, exact: true }).click();
   const dialog = tab.getByRole("dialog");
-  await expect(dialog.getByRole("textbox", { name: payments.conceptLabel })).toHaveValue(CONCEPT);
+  await expect(dialog.getByRole("textbox", { name: payments.conceptPay })).toHaveValue(CONCEPT);
   return dialog;
 }
 
 const save = (dialog: Locator) => dialog.getByRole("button", { name: payments.save, exact: true });
-const amount = (dialog: Locator) => dialog.getByRole("textbox", { name: payments.amountLabel });
+const amount = (dialog: Locator) => dialog.getByRole("textbox", { name: payments.amount });
 
 async function storedAmount(): Promise<string> {
   const [row] = await fixtureSql<{ amount_cents: string }[]>`
