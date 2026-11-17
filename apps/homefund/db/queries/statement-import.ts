@@ -6,11 +6,11 @@ import { sql } from "drizzle-orm";
 
 import { jsonbParam } from "@/db/jsonb-param";
 import { deferrablePurchaseSql } from "@/db/queries/deferrals";
-import { derivedBalanceAt } from "@/db/queries/account-statements";
 import { insertTransaction, trustedPatternsSql } from "@/db/queries/transactions";
 import { withUserDb, type Transaction } from "@/db/session";
 import { pgConstraintName, pgErrorCode } from "@/lib/db-error";
 import { learnedPattern, proposalFor, type TrustedPattern } from "@/lib/ingest/counterparty-pattern";
+import { receiptLikeLine } from "@/lib/statement-receipt";
 import type { StatementInput, StatementRow } from "@/lib/validation/statement-import";
 
 // What a statement line becomes (RF-144, RF-134):
@@ -84,7 +84,7 @@ export type StatementImportResult = {
 
 export class StatementError extends Error {
   constructor(
-    readonly key: "notFound" | "readOnly" | "previewChanged" | "invalidLines" | "lineRefused",
+    readonly key: "notFound" | "readOnly" | "previewChanged" | "invalidLines" | "lineRefused" | "cashAccount" | "looksLikeReceipt",
     readonly line?: number,
   ) {
     super(key);
@@ -101,6 +101,7 @@ type Context = {
     ownerUserId: string | null;
     groupId: string | null;
     kind: "asset" | "liability";
+    subtype: "bank" | "cash" | "card" | "loan";
   } | null;
   // The movement each already-imported reference of this account belongs to.
   refs: { ref: string; transactionId: string }[];
@@ -161,7 +162,7 @@ async function readContext(tx: Transaction, input: StatementInput): Promise<Cont
         where ts.statement_id = (select id from stmt)), '[]') as held,
       (select json_build_object('id', a.id, 'name', a.name, 'currency', a.settlement_currency,
           'canWrite', coalesce(private.can_write_account(a.id), false), 'openedOn', a.initial_balance_on,
-          'ownerUserId', a.owner_user_id, 'groupId', a.group_id, 'kind', a.kind)
+          'ownerUserId', a.owner_user_id, 'groupId', a.group_id, 'kind', a.kind, 'subtype', a.subtype)
         from accounts a where a.id = ${input.accountId} and a.archived_at is null) as account,
       coalesce((select json_agg(json_build_object('ref', s.source_ref, 'transactionId', s.transaction_id))
         from transaction_sources s
@@ -337,6 +338,10 @@ function summarise(input: StatementInput, context: Context): StatementPreview {
   const account = context.account;
   if (!account) throw new StatementError("notFound");
   if (!account.canWrite) throw new StatementError("readOnly");
+  // A statement is a bank's paper (RF-244): cash has none, and a receipt split into products is no statement.
+  if (account.subtype === "cash") throw new StatementError("cashAccount");
+  const receipt = receiptLikeLine(input.rows);
+  if (receipt !== null) throw new StatementError("looksLikeReceipt", receipt);
   const rows = [...input.rows].sort((a, b) => a.line - b.line);
   const lines = withDeferrals(classify(rows, context), rows, account, context.candidates);
   // What this statement held that no line names any more. A reconciled movement is never deleted.
@@ -372,20 +377,15 @@ export async function previewStatement(input: StatementInput): Promise<Statement
   return withUserDb(async (tx) => summarise(input, await readContext(tx, input)));
 }
 
-// The statement's row, read off an imported statement. Without a printed closing balance it takes the
-// one the account's movements derive at the cut-off, the way a close cut by the app does (RF-129).
+// The statement's row, read off an imported statement, with the closing balance the bank printed.
 async function cutStatement(
   tx: Transaction,
   input: StatementInput,
   period: StatementPreview["statement"],
 ): Promise<string> {
-  const printed = input.statement.closingBalanceCents;
   const [row] = await tx.execute<{ id: string }>(sql`
     insert into account_statements (account_id, period_start, cut_off_date, closing_balance_cents, source)
-    select a.id, ${period.periodStart}::date, ${period.cutOffDate}::date,
-      ${printed === undefined ? derivedBalanceAt(sql`a`, sql`${period.cutOffDate}::date`)
-        : sql`${printed}::bigint`},
-      'imported'
+    select a.id, ${period.periodStart}::date, ${period.cutOffDate}::date, ${input.statement.closingBalanceCents}::bigint, 'imported'
     from accounts a where a.id = ${input.accountId}
     returning id`);
   return row!.id;

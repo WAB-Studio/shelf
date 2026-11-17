@@ -30,12 +30,12 @@ export const statementRowSchema = z.object({
 
 // The statement the lines were read from. A statement is told apart by its account and its cut-off
 // date, so a re-import names the same one and replaces its rows (RF-134): Claude reads both off the
-// statement. Without a printed closing balance the one the movements derive is recorded.
+// statement. The closing balance is the one the bank printed, never one derived at import time (RF-244).
 const statementPeriodSchema = z.object({
   periodStart: occurredAtSchema,
   cutOffDate: occurredAtSchema,
   // As the statement printed it, signed like the account (a card's debt is negative).
-  closingBalanceCents: z.number().int().min(-Number.MAX_SAFE_INTEGER).max(Number.MAX_SAFE_INTEGER).optional(),
+  closingBalanceCents: z.number().int().min(-Number.MAX_SAFE_INTEGER).max(Number.MAX_SAFE_INTEGER),
 });
 
 export const statementSchema = z
