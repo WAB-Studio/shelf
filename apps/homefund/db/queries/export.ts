@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, asc, eq, exists, gte, inArray, lte, sql } from "drizzle-orm";
+import { and, asc, eq, exists, gte, inArray, isNotNull, isNull, lte, sql } from "drizzle-orm";
 import type { PgColumn } from "drizzle-orm/pg-core";
 import type { SQL } from "drizzle-orm";
 
@@ -12,9 +12,11 @@ import {
   budgets,
   categories,
   debtTerms,
+  deferrals,
   goalContributions,
   groupMembers,
   labels,
+  plannedPayments,
   recurringRules,
   savingsGoals,
   transactionLabels,
@@ -23,7 +25,15 @@ import {
 } from "@/db/schema";
 import { withUserDb } from "@/db/session";
 import { TIME_ZONE } from "@/lib/locales";
-import { SHEET_ENTITIES, sheetDescriptors } from "@/lib/spreadsheet/schema";
+import { centsToDecimal } from "@/lib/money";
+import {
+  EXPORT_ENTITIES,
+  REPORT_ENTITIES,
+  exportColumns,
+  sheetDescriptors,
+  type ExportEntity,
+  type ReportEntity,
+} from "@/lib/spreadsheet/schema";
 import { CATEGORY_PATH_SEPARATOR, HELD_KEY_PREFIX } from "@/lib/spreadsheet/sheet-layout";
 import { LABEL_SEPARATOR, type RefEntity, type SheetEntity } from "@/lib/spreadsheet/schema";
 import { fractionToPercent } from "@/lib/validation/debt-terms";
@@ -58,14 +68,15 @@ export type ExportRow<E extends SheetEntity> = Record<KeyOf<E>, CellValue>;
 
 // Only the requested entities are read, so an absent key means "not asked for",
 // distinct from a key present with an empty array.
-export type ExportResult = Partial<{ [E in SheetEntity]: ExportRow<E>[] }>;
+export type ExportResult = Partial<{ [E in SheetEntity]: ExportRow<E>[] }> &
+  Partial<Record<ReportEntity, Record<string, CellValue>[]>>;
 
 // The movement list's own filters, less the range the export already bounds and
 // the single-id lookup only a detail page uses.
 export type TransactionExportFilters = Omit<TransactionListFilters, "id" | "from" | "to">;
 
 export type ExportInput = {
-  entityKeys: SheetEntity[];
+  entityKeys: ExportEntity[];
   from?: Date | string;
   to?: Date | string;
   // Narrows the transactions sheet alone (RF-118); every other entity stays
@@ -121,8 +132,8 @@ type ColumnView =
 
 // True when an entity's descriptor points at the given entity by name, so its name
 // map is worth a round trip.
-function referencesEntity(entity: SheetEntity, ref: RefEntity): boolean {
-  const columns = sheetDescriptors[entity].columns as readonly ColumnView[];
+function referencesEntity(entity: ExportEntity, ref: RefEntity): boolean {
+  const columns = exportColumns[entity] as readonly ColumnView[];
   return columns.some((column) => column.ref?.entity === ref);
 }
 
@@ -179,6 +190,70 @@ async function readEntityRows<E extends SheetEntity>(
       .orderBy(...(entity === "transactions" ? chronological : []));
 
     return rows as Record<string, unknown>[];
+  });
+}
+
+function isReport(entity: ExportEntity): entity is ReportEntity {
+  return (REPORT_ENTITIES as readonly string[]).includes(entity);
+}
+
+// The raw rows of a report sheet (RF-299): what is planned, what is expected to come in and what a card
+// deferred, in the caller's RLS scope. An income expected has no account it leaves from.
+async function readReportRows(entity: ReportEntity): Promise<Record<string, unknown>[]> {
+  return withUserDb(async (tx) => {
+    if (entity === "deferredPurchases") {
+      return tx
+        .select({
+          occurredAt: transactions.occurredAt,
+          accountId: deferrals.accountId,
+          amount: transactions.amountCents,
+          description: transactions.description,
+          instalments: deferrals.instalments,
+        })
+        .from(deferrals)
+        .innerJoin(transactions, eq(transactions.id, deferrals.transactionId))
+        .orderBy(asc(transactions.occurredAt), asc(deferrals.id));
+    }
+    return tx
+      .select({
+        dueOn: plannedPayments.dueDate,
+        fromAccountId: plannedPayments.fromAccountId,
+        toAccountId: plannedPayments.toAccountId,
+        amount: plannedPayments.amountCents,
+        description: plannedPayments.description,
+        categoryId: plannedPayments.categoryId,
+        remindOn: plannedPayments.remindOn,
+        status: plannedPayments.status,
+      })
+      .from(plannedPayments)
+      .where(entity === "expectedIncome" ? isNull(plannedPayments.fromAccountId) : isNotNull(plannedPayments.fromAccountId))
+      .orderBy(asc(plannedPayments.dueDate), asc(plannedPayments.id));
+  });
+}
+
+// A report row as its sheet reads it: references as names, money as integer cents.
+function toReportRows(
+  entity: ReportEntity,
+  rows: Record<string, unknown>[],
+  names: NameMaps,
+): Record<string, CellValue>[] {
+  const columns = exportColumns[entity] as readonly { key: string }[];
+  const account = (id: unknown) => (typeof id === "string" ? names.accounts.get(id) ?? null : null);
+  return rows.map((row) => {
+    const all: Record<string, CellValue> = {
+      dueOn: (row.dueOn ?? null) as CellValue,
+      fromAccount: account(row.fromAccountId),
+      toAccount: account(row.toAccountId),
+      account: account(row.accountId),
+      amount: (row.amount ?? null) as CellValue,
+      description: (row.description ?? null) as CellValue,
+      category: typeof row.categoryId === "string" ? names.categories.get(row.categoryId) ?? null : null,
+      remindOn: (row.remindOn ?? null) as CellValue,
+      status: (row.status ?? null) as CellValue,
+      occurredAt: (row.occurredAt ?? null) as CellValue,
+      instalments: (row.instalments ?? null) as CellValue,
+    };
+    return Object.fromEntries(columns.map((column) => [column.key, all[column.key] ?? null]));
   });
 }
 
@@ -250,7 +325,44 @@ async function readLinkedIds(
   });
 }
 
+// A split movement's lines (RF-69): each one's category and amount, grouped by transaction, read in the
+// same round trip and under the same predicates as the labels.
+type SplitLine = { categoryId: string; amountCents: number };
+
+async function readSplitLines(conditions: SQL[]): Promise<Map<string, SplitLine[]>> {
+  return withUserDb(async (tx) => {
+    const exported =
+      conditions.length === 0
+        ? undefined
+        : exists(
+            tx
+              .select({ present: sql`1` })
+              .from(transactions)
+              .where(and(eq(transactions.id, transactionSplits.transactionId), ...conditions)),
+          );
+
+    const rows = await tx
+      .select({
+        transactionId: transactionSplits.transactionId,
+        categoryId: transactionSplits.categoryId,
+        amountCents: transactionSplits.amountCents,
+      })
+      .from(transactionSplits)
+      .where(exported)
+      .orderBy(asc(transactionSplits.id));
+
+    const byTransaction = new Map<string, SplitLine[]>();
+    for (const row of rows) {
+      const lines = byTransaction.get(row.transactionId) ?? [];
+      lines.push({ categoryId: row.categoryId, amountCents: row.amountCents });
+      byTransaction.set(row.transactionId, lines);
+    }
+    return byTransaction;
+  });
+}
+
 const emptyLinkMap = new Map<string, string[]>();
+const emptySplitMap = new Map<string, SplitLine[]>();
 
 // Every id→name map a reference cell reads, keyed by the entity it names.
 type NameMaps = Record<RefEntity, Map<string, string>>;
@@ -259,7 +371,7 @@ const sortedNames = (map: Map<string, string>) => [...new Set(map.values())].sor
 
 // A transaction's children, by transaction id.
 type Children = {
-  splitCategoryIds: Map<string, string[]>;
+  splitLines: Map<string, SplitLine[]>;
   labelIds: Map<string, string[]>;
   // Member id to name, for «De quién» (RF-167).
   memberNames: Map<string, string>;
@@ -292,11 +404,22 @@ function toExportRows<E extends SheetEntity>(
         continue;
       }
 
+      if ("synthetic" in column && column.key === "division") {
+        // A split movement keeps each line's category and amount in one cell (RF-298).
+        const lines = children.splitLines.get(row.id as string) ?? [];
+        cell[column.key] =
+          lines.length > 1
+            ? lines.map((line) => `${names.categories.get(line.categoryId) ?? ""} ${centsToDecimal(line.amountCents)}`.trim()).join(" · ")
+            : null;
+        continue;
+      }
+
       if ("synthetic" in column) {
-        // A transaction's category (RF-69): the name of its SINGLE split. Zero splits
-        // (a transfer) or more than one (no faithful single cell) leave it blank.
-        const ids = children.splitCategoryIds.get(row.id as string) ?? [];
-        cell[column.key] = ids.length === 1 ? names.categories.get(ids[0]) ?? null : null;
+        // A transaction's category (RF-69): the name of its single split, or of the biggest line of a
+        // split one, so a restore books it where most of it went. A transfer has none.
+        const lines = children.splitLines.get(row.id as string) ?? [];
+        const biggest = lines.reduce<SplitLine | null>((top, line) => (top === null || line.amountCents > top.amountCents ? line : top), null);
+        cell[column.key] = biggest ? names.categories.get(biggest.categoryId) ?? null : null;
         continue;
       }
 
@@ -389,10 +512,12 @@ async function readExportCore(
   input: ExportInput,
   withOptions: boolean,
 ): Promise<{ data: ExportResult; options: ExportOptions }> {
-  const requested = SHEET_ENTITIES.filter((entity) => input.entityKeys.includes(entity));
+  const requestedAll = EXPORT_ENTITIES.filter((entity) => input.entityKeys.includes(entity));
+  const requested = requestedAll.filter((entity): entity is SheetEntity => !isReport(entity));
+  const requestedReports = requestedAll.filter(isReport);
 
-  const needsAccounts = withOptions || requested.some((entity) => referencesEntity(entity, "accounts"));
-  const needsCategories = withOptions || requested.some((entity) => referencesEntity(entity, "categories"));
+  const needsAccounts = withOptions || requestedAll.some((entity) => referencesEntity(entity, "accounts"));
+  const needsCategories = withOptions || requestedAll.some((entity) => referencesEntity(entity, "categories"));
   const needsLabels = requested.some((entity) => referencesEntity(entity, "labels"));
   const needsGoals = requested.some((entity) => referencesEntity(entity, "goals"));
   const needsSplits = requested.includes("transactions");
@@ -410,7 +535,7 @@ async function readExportCore(
         ];
   const narrowed = [...listed, ...named];
 
-  const [sets, accountNames, categoryNames, labelNames, goalNames, splitCategoryIds, labelIds, memberNames] = await Promise.all([
+  const [sets, reportSets, accountNames, categoryNames, labelNames, goalNames, splitLines, labelIds, memberNames] = await Promise.all([
     Promise.all(
       requested.map((entity) =>
         readEntityRows(
@@ -424,11 +549,12 @@ async function readExportCore(
         ),
       ),
     ),
+    Promise.all(requestedReports.map((entity) => readReportRows(entity))),
     needsAccounts ? readNameMap(accounts) : Promise.resolve(emptyNameMap),
     needsCategories ? readCategoryPaths() : Promise.resolve(emptyNameMap),
     needsLabels ? readNameMap(labels) : Promise.resolve(emptyNameMap),
     needsGoals ? readNameMap(savingsGoals) : Promise.resolve(emptyNameMap),
-    needsSplits ? readLinkedIds(transactionSplits, transactionSplits.categoryId, narrowed) : Promise.resolve(emptyLinkMap),
+    needsSplits ? readSplitLines(narrowed) : Promise.resolve(emptySplitMap),
     needsSplits ? readLinkedIds(transactionLabels, transactionLabels.labelId, narrowed) : Promise.resolve(emptyLinkMap),
     requested.includes("transactions") ? readNameMap(groupMembers) : Promise.resolve(emptyNameMap),
   ]);
@@ -439,11 +565,14 @@ async function readExportCore(
     labels: labelNames,
     goals: goalNames,
   };
-  const children: Children = { splitCategoryIds, labelIds, memberNames };
+  const children: Children = { splitLines, labelIds, memberNames };
 
   const data: ExportResult = {};
   requested.forEach((entity, index) => {
     data[entity] = toExportRows(entity, sets[index], names, children) as never;
+  });
+  requestedReports.forEach((entity, index) => {
+    data[entity] = toReportRows(entity, reportSets[index], names);
   });
 
   return {

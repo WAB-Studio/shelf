@@ -7,7 +7,7 @@ import { readExportWithOptions } from "@/db/queries/export";
 import type { TransactionExportFilters } from "@/db/queries/export";
 import { requireUser } from "@/db/session";
 import { TIME_ZONE } from "@/lib/locales";
-import { SHEET_ENTITIES, type SheetEntity } from "@/lib/spreadsheet/schema";
+import { EXPORT_ENTITIES, type ExportEntity } from "@/lib/spreadsheet/schema";
 import { buildWorkbook, choiceLabelFrom, type SheetLabels } from "@/lib/spreadsheet/workbook";
 import {
   forPersonFilter,
@@ -31,16 +31,16 @@ function todayInBogota(): string {
 
 // The requested entities, from a comma-separated list or repeated `entities` keys;
 // anything unknown is dropped and an empty selection falls back to all of them (RF-142).
-function requestedEntities(params: URLSearchParams): SheetEntity[] {
-  const known = SHEET_ENTITIES as readonly string[];
+function requestedEntities(params: URLSearchParams): ExportEntity[] {
+  const known = EXPORT_ENTITIES as readonly string[];
   const picked = params
     .getAll("entities")
     .flatMap((value) => value.split(","))
     .map((value) => value.trim())
-    .filter((value): value is SheetEntity => known.includes(value));
+    .filter((value): value is ExportEntity => known.includes(value));
 
-  const unique = SHEET_ENTITIES.filter((entity) => picked.includes(entity));
-  return unique.length > 0 ? unique : [...SHEET_ENTITIES];
+  const unique = EXPORT_ENTITIES.filter((entity) => picked.includes(entity));
+  return unique.length > 0 ? unique : [...EXPORT_ENTITIES];
 }
 
 /**
@@ -101,7 +101,7 @@ export async function GET(
     data,
     labels,
     options,
-    hideBackground: entityKeys.length === SHEET_ENTITIES.length,
+    hideBackground: entityKeys.length === EXPORT_ENTITIES.length,
   });
   const buffer = await workbook.xlsx.writeBuffer();
   const filename = `${t("filenames.export")}-${todayInBogota()}.xlsx`;

@@ -1,5 +1,7 @@
 import "server-only";
 
+import { asc, eq } from "drizzle-orm";
+
 import { insertRow } from "@/db/insert-row";
 import type { CategoryScope } from "@/db/queries/categories";
 import { categories } from "@/db/schema";
@@ -59,4 +61,61 @@ export async function seedCategoryTree(
   );
   if (childRows.length > 0) await insertRow(tx, categories, childRows);
   return parentRows.length + childRows.length;
+}
+
+/**
+ * Gives a new fund the categories its founder already uses, tree, kinds, colours and the salary key
+ * included, in place of the twenty defaults; a founder with none gets the defaults (RF-297). A category
+ * names one scope, so the fund holds its own rows, but the set a person built is never doubled by a
+ * default one.
+ */
+export async function seedFundCategories(
+  tx: Transaction,
+  groupId: string,
+  ownerUserId: string,
+  locale: Locale,
+): Promise<number> {
+  const own = await tx
+    .select({
+      id: categories.id,
+      parentId: categories.parentId,
+      name: categories.name,
+      kind: categories.kind,
+      color: categories.color,
+      seedKey: categories.seedKey,
+    })
+    .from(categories)
+    .where(eq(categories.ownerUserId, ownerUserId))
+    .orderBy(asc(categories.createdAt), asc(categories.id));
+  if (own.length === 0) return seedCategoryTree(tx, { groupId }, locale);
+
+  const parents = own.filter((row) => row.parentId === null);
+  const parentRows = await insertRow(
+    tx,
+    categories,
+    parents.map((row) => ({
+      groupId,
+      name: row.name,
+      kind: row.kind,
+      color: row.color,
+      ...(row.seedKey ? { seedKey: row.seedKey } : {}),
+    })),
+    { returning: { id: categories.id } },
+  );
+  const copyOf = new Map(parents.map((row, index) => [row.id, parentRows[index].id]));
+  const children = own.filter((row) => row.parentId !== null && copyOf.has(row.parentId));
+  if (children.length > 0) {
+    await insertRow(
+      tx,
+      categories,
+      children.map((row) => ({
+        groupId,
+        parentId: copyOf.get(row.parentId as string),
+        name: row.name,
+        kind: row.kind,
+        color: row.color,
+      })),
+    );
+  }
+  return parents.length + children.length;
 }

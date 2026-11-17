@@ -409,6 +409,8 @@
     "openingBalanceLabel": "Saldo inicial",
     "openingOwedLabel": "Deuda inicial",
     "openingBalanceOnLabel": "Fecha inicial",
+    "pocketAmountLabel": "Cuánto apartas de {parent}",
+    "pocketDateLabel": "Desde el día",
     "openingBalanceRow": "<amount></amount> el {date}",
     "balanceInCurrency": "<amount></amount> en {currency}",
     "creditOf": "{name} ({person})",
@@ -452,6 +454,7 @@
       "parentInvalid": "Elige una cuenta de activo abierta del mismo dueño y la misma moneda.",
       "pocketMustBeAsset": "Solo una cuenta de ahorros o de efectivo puede ser un bolsillo.",
       "hasPockets": "Esta cuenta tiene bolsillos. Mueve o archiva primero sus bolsillos.",
+      "pocketExceedsFree": "Es más de lo que tiene libre la cuenta. Aparta menos.",
       "moveNoFund": "Para pasar una cuenta al fondo primero debes pertenecer a uno.",
       "moveNotYours": "Solo puedes pasar al fondo una cuenta tuya.",
       "moveAlready": "Esa cuenta ya es del fondo.",
@@ -1475,7 +1478,10 @@
       "goals": "Metas de ahorro",
       "goalContributions": "Aportes a metas",
       "debts": "Deudas",
-      "statements": "Extractos"
+      "statements": "Extractos",
+      "plannedPayments": "Pagos planificados",
+      "expectedIncome": "Ingresos esperados",
+      "deferredPurchases": "Compras diferidas"
     },
     "columns": {
       "name": "Nombre",
@@ -1535,7 +1541,13 @@
       "interestCharged": "Intereses",
       "feesCharged": "Comisiones",
       "source": "Origen",
-      "externalRef": "Referencia externa"
+      "externalRef": "Referencia externa",
+      "insideOf": "Dentro de",
+      "division": "División",
+      "dueOn": "Vence",
+      "remindOn": "Avisar el",
+      "status": "Estado",
+      "instalments": "Cuotas"
     },
     "choices": {
       "accountKind": {
@@ -1546,7 +1558,8 @@
         "bank": "Bancaria",
         "cash": "Efectivo",
         "card": "Tarjeta",
-        "loan": "Préstamo"
+        "loan": "Préstamo",
+        "receivable": "Por cobrar"
       },
       "categoryKind": {
         "expense": "Gasto",
@@ -1577,6 +1590,11 @@
       "flag": {
         "yes": "Sí",
         "no": "No"
+      },
+      "plannedStatus": {
+        "pending": "Pendiente",
+        "done": "Hecho",
+        "cancelled": "Cancelado"
       }
     },
     "filenames": {
