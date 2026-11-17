@@ -768,3 +768,5 @@ todas las cuentas a la vez.
 - **El aviso «Cuádrala».** Una cuenta que no se cuadra hace más de 30 días lleva, en Cuentas, una marca gris «Cuádrala» (un botón de
   texto bajo el nombre que abre el cuadre de esa cuenta); una cuenta que nunca se cuadró cuenta los 30 días desde que se añadió. En
   Inicio, a lo sumo una línea en la columna de al lado, «3 cuentas sin cuadrar hace más de un mes · Cuadrar todo»; sin cuentas así, nada.
+- **Inicio no muestra los «Descuadre»** (2026-11-17). Las últimas del listado de Inicio son lo que pasó; la diferencia de un cuadre sigue en
+  Movimientos y en el historial de la cuenta.

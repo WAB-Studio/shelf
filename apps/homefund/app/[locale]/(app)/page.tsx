@@ -154,7 +154,7 @@ export default async function HomePage(props: PageProps<"/[locale]">) {
     ),
     getDashboardData(),
     withSharedTransaction(() =>
-      Promise.all([listTransactions({}, { limit: RECENT_LIMIT }), getTransactionFormOptions()]),
+      Promise.all([listTransactions({ withoutAdjustments: true }, { limit: RECENT_LIMIT }), getTransactionFormOptions()]),
     ),
     // The month glance and the right column ride the same fan-out (RNF-09); each one
     // is optional, so a failed read drops its block, never Inicio.

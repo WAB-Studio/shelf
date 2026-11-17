@@ -4186,6 +4186,7 @@ async function main(): Promise<void> {
   await mcpReconcileManySuite();
   await reconcileOverviewSuite();
   await reconcileAgesSuite();
+  await inicioWithoutAdjustmentsSuite();
   await recordedMovementSuite();
 }
 
@@ -21294,5 +21295,30 @@ async function recordedMovementSuite(): Promise<void> {
     next("RF-246: rejecting it as a duplicate stores the reason, leaves the queue and writes no movement"),
     row?.status === "rejected" && row.reason === "duplicate" && !(await marked()).has(same),
     JSON.stringify(row),
+  );
+}
+
+// RF-259: the list Inicio reads leaves a reconciliation's adjustment out, which the list of adjustments still holds.
+async function inicioWithoutAdjustmentsSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const today = todayInBogota();
+  const owner = await createMembershipFreeUser();
+  const { accountId } = await asUser(owner, () =>
+    createAccount({
+      kind: "asset", subtype: "bank", groupId: null, isShared: false, institution: null, settlementCurrency: BASE_CURRENCY,
+      balanceOn: "2026-01-01", ownerUserId: owner.id, name: `Harness rf259 banco ${tag}`, amountMinor: 100_000_00,
+    }),
+  );
+  track("accounts", accountId);
+  await asUser(owner, () => reconcileAccount({ accountId, reconciledOn: today, realMagnitudeCents: 100_500_00, expectedDerivedCents: 100_000_00 }));
+
+  const [without, only] = await asUser(owner, () =>
+    Promise.all([listTransactions({ withoutAdjustments: true }, { limit: 50 }), listTransactions({ adjustments: true }, { limit: 50 })]),
+  );
+  assert(
+    next("RF-259: the list Inicio reads leaves a reconciliation's adjustment out, which the list of adjustments still holds"),
+    only.length === 1 && without.length === 0 && only[0].reconciliationId !== null,
+    `${without.length} without, ${only.length} adjustments`,
   );
 }
