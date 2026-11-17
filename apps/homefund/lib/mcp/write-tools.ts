@@ -27,6 +27,7 @@ import { pgErrorCode } from "@/lib/db-error";
 import { ActionError } from "@/lib/errors";
 import { CATEGORY_COLORS } from "@/lib/fund/category-color";
 import { ADD, ADD_ONCE, DESTROY, OVERWRITE, READ, previousFields, titled } from "@/lib/mcp/annotations";
+import { categoryNameWarnings, movementWarnings, withWarnings, type Probe } from "@/lib/mcp/debt-guard";
 import { resolveLabelIds } from "@/lib/mcp/label-tools";
 import { parseForm } from "@/lib/mcp/parse-form";
 import { centsToDecimal } from "@/lib/money";
@@ -131,6 +132,13 @@ function patched(current: TransactionListRow, patch: Partial<MovementInput>): Mo
 }
 
 const idOf = (key: string, value: string) => parseForm(z.uuid({ error: key }), value);
+
+// The side a movement leaves open says its kind; a transfer is no expense or income, so it earns no warning.
+function warningProbe(movement: MovementInput): Probe[] {
+  const kind = movement.fromAccountId === null ? "income" : movement.toAccountId === null ? "expense" : null;
+  const lines = movement.splits ?? (movement.categoryId ? [{ categoryId: movement.categoryId }] : []);
+  return kind === null ? [] : [{ kind, description: movement.description, categoryIds: lines.map((line) => line.categoryId) }];
+}
 
 // The categories as list_categories answers them: parents and children in one flat list.
 export async function categoryRows(owner: string) {
@@ -281,19 +289,26 @@ export function registerLedgerTools(server: McpServer, run: Run, t: Say): void {
     {
       ...titled(t, "recordMovement"),
       description: t("tools.recordMovement"),
-      inputSchema: z.object({ ...shape, requestRef: z.string().optional().describe(d("requestRef")) }),
+      inputSchema: z.object({
+        ...shape,
+        requestRef: z.string().optional().describe(d("requestRef")),
+        awaitingCounterparty: z.boolean().optional().describe(d("awaitingCounterparty")),
+      }),
       annotations: ADD_ONCE,
     },
-    (input: MovementInput & { requestRef?: string }, ctx) =>
-      run(ctx, async (owner) =>
-        bookMovement(
+    (input: MovementInput & { requestRef?: string; awaitingCounterparty?: boolean }, ctx) =>
+      run(ctx, async (owner) => {
+        const booked = await bookMovement(
           parseForm(createTransactionSchema, {
             ...movementForm(input),
             labelIds: await resolveLabelIds(owner, input.labels ?? []),
             requestRef: input.requestRef,
           }),
-        ),
-      ),
+          undefined,
+          { awaitingCounterparty: input.awaitingCounterparty },
+        );
+        return withWarnings(booked, await movementWarnings(owner, warningProbe(input), t));
+      }),
   );
 
   // The stamp is the one Claude read in list_movements: an edit after someone else's save is refused stale (RF-156).
@@ -315,9 +330,10 @@ export function registerLedgerTools(server: McpServer, run: Run, t: Say): void {
         const id = idOf("errors.notFound", transactionId);
         const current = await getTransactionById(id);
         if (!current) throw new ActionError("errors.notFound");
+        const merged = patched(current, patch);
         await reviseMovement(
           parseForm(updateTransactionSchema, {
-            ...movementForm(patched(current, patch)),
+            ...movementForm(merged),
             transactionId: id,
             // Absent keeps the movement's labels; a list replaces them, as the form's picker does.
             labelIds: patch.labels === undefined ? current.labels.map((label) => label.id) : await resolveLabelIds(owner, patch.labels),
@@ -327,7 +343,11 @@ export function registerLedgerTools(server: McpServer, run: Run, t: Say): void {
         );
         // A categoryId patch replaces the lines, so what it overwrote is the lines.
         const sent = { ...patch, splits: patch.splits ?? (patch.categoryId === undefined ? undefined : []) };
-        return { transactionId: id, before: previousFields(storedMovement(current), sent) };
+        // An edit that touches none of what the rules read warns of nothing, whatever the row already was.
+        const reread = ["description", "categoryId", "splits", "fromAccountId", "toAccountId"].some((key) => patch[key as keyof typeof patch] !== undefined);
+        const lines = merged.splits ?? current.splits;
+        const warnings = reread ? await movementWarnings(owner, warningProbe({ ...merged, splits: lines }), t) : [];
+        return withWarnings({ transactionId: id, before: previousFields(storedMovement(current), sent) }, warnings);
       }),
   );
 
@@ -475,7 +495,9 @@ export function registerLedgerTools(server: McpServer, run: Run, t: Say): void {
       run(ctx, async (owner) => {
         const placement = input.placement === "personal" || input.placement === "group" ? input.placement : undefined;
         const color = input.color ?? (await freeCategoryColor(owner, placement));
-        return openCategory(parseForm(createCategoryInputSchema, { ...input, color }), owner);
+        const form = parseForm(createCategoryInputSchema, { ...input, color });
+        // The web allows any name, so a debt's or a saving's is written and warned of, not refused.
+        return withWarnings(await openCategory(form, owner), categoryNameWarnings(form.name, t));
       }),
   );
 
