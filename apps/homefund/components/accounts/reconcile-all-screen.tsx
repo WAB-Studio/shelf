@@ -21,6 +21,7 @@ import {
   ScreenHeader,
   Spinner,
   Text,
+  TextField,
   TextLink,
 } from "@/components/ui";
 import { useRouter } from "@/i18n/navigation";
@@ -215,7 +216,9 @@ export function ReconcileAllScreen({ rows }: { rows: ReconcileAllRow[] }) {
                     {t(liability ? "reconcileAllRealLiability" : "reconcileAllRealAsset")}
                   </FieldLabel>
                   <FieldControl tap>
-                    <AmountField
+                    {/* A plain field, not the amount field: a debt paid too much is typed with a minus, which the
+                        amount field would drop. */}
+                    <TextField.Root
                       id={`reconcile-all-${row.id}`}
                       size="3"
                       inputMode="text"
