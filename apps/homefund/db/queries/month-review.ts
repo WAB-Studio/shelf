@@ -2,12 +2,12 @@ import "server-only";
 
 import { sql, type SQL } from "drizzle-orm";
 
-import { hasUsualHistorySql, isAboveUsualSql, usualMedianSql } from "@/db/queries/above-usual";
+import { aboveUsualMovementsSql } from "@/db/queries/above-usual";
 import { transactionReviews } from "@/db/schema";
 import { withUserDb } from "@/db/session";
 import { addCivilMonths, lastClosedMonth, monthRange } from "@/lib/dates";
 
-import { USUAL_WINDOW_MONTHS, type ReviewRule } from "@/lib/month-review-rules";
+import { USUAL_WINDOW_MONTHS, type ReviewRule, type UsualBasis } from "@/lib/month-review-rules";
 
 // One of a twin's equal movements, so the person sees what to compare.
 export type ReviewEntry = { id: string; description: string | null; createdBy: string; createdAt: string };
@@ -21,7 +21,13 @@ export type ReviewItem = {
   accountName: string;
   categoryName: string | null;
   description: string | null;
+  // What «above usual» was compared with (RF-239): the middle and the typical range (the middle half) of
+  // the earlier movements of its description or category, and how many they were. Null on the other rules.
   usualCents: number | null;
+  usualLowCents: number | null;
+  usualHighCents: number | null;
+  usualBasis: UsualBasis | null;
+  usualCount: number | null;
   usualWindowMonths: number;
   entries: ReviewEntry[];
   countedCents: number | null;
@@ -45,54 +51,33 @@ function reviewItemsSql(month: string): SQL {
       from transactions t
       where t.occurred_at >= ${start}::date and t.occurred_at < ${endExclusive}::date
     ),
-    expense_splits as (
-      select t.id as transaction_id, t.occurred_at, t.currency, s.category_id, s.amount_cents
-      from transaction_splits s
-      join transactions t on t.id = s.transaction_id
-      where t.kind = 'expense' and t.reconciliation_id is null and s.category_id is not null
-        and t.occurred_at >= ${historyStart}::date and t.occurred_at < ${endExclusive}::date
-    ),
-    -- A category's usual in a currency: the median of its splits in the six months before the
-    -- month, once it has at least three.
-    usual as (
-      select category_id, currency,
-        ${usualMedianSql(sql`amount_cents`)} as median_cents
-      from expense_splits
-      where occurred_at < ${start}::date
-      group by category_id, currency
-      having ${hasUsualHistorySql}
-    ),
-    -- One item per movement: its largest split over three times its category's usual.
-    above_usual as (
-      select distinct on (e.transaction_id) e.transaction_id, e.category_id, e.amount_cents, u.median_cents
-      from expense_splits e
-      join usual u using (category_id, currency)
-      where e.occurred_at >= ${start}::date and ${isAboveUsualSql(sql`e.amount_cents`, sql`u.median_cents`)}
-      order by e.transaction_id, e.amount_cents desc
-    ),
+    ${aboveUsualMovementsSql({ start, endExclusive, historyStart })},
     flagged as (
       select 'above_usual'::text as rule, array[a.transaction_id] as ids, a.amount_cents,
-        a.category_id, a.median_cents::bigint as usual_cents, null::bigint as counted_cents,
-        true as one_description
+        a.category_id, a.mid::bigint as usual_cents, null::bigint as counted_cents,
+        true as one_description, a.low::bigint as usual_low, a.high::bigint as usual_high,
+        a.basis as usual_basis, a.n as usual_count
       from above_usual a
       union all
       select 'twin', array_agg(t.id order by t.id), t.amount_cents, null, null, null,
-        count(distinct coalesce(t.description, '')) = 1
+        count(distinct coalesce(t.description, '')) = 1, null, null, null, null
       from month_tx t
       where t.reconciliation_id is null
       group by t.occurred_at, t.from_account_id, t.to_account_id, t.amount_cents, t.currency
       having count(*) >= 2
       union all
-      select 'from_words', array[t.id], t.amount_cents, null, null, null, true
+      select 'from_words', array[t.id], t.amount_cents, null, null, null, true, null, null, null, null
       from month_tx t where t.amount_from_words
       union all
-      select 'reconciliation_gap', array[t.id], t.amount_cents, null, null, r.counted_balance_cents, true
+      select 'reconciliation_gap', array[t.id], t.amount_cents, null, null, r.counted_balance_cents, true,
+        null, null, null, null
       from month_tx t join account_reconciliations r on r.id = t.reconciliation_id
     ),
     -- A twin's ids share their day and accounts, so its first movement speaks for all of them; its
     -- description too, unless the twin's movements read differently.
     marked as (
-      select f.rule, f.ids, f.amount_cents, f.usual_cents, f.counted_cents, t.occurred_at, t.currency,
+      select f.rule, f.ids, f.amount_cents, f.usual_cents, f.usual_low, f.usual_high, f.usual_basis, f.usual_count,
+        f.counted_cents, t.occurred_at, t.currency,
         t.account_id,
         case when f.one_description then t.description end as description,
         case when f.rule = 'reconciliation_gap' then null else coalesce(f.category_id,
@@ -124,7 +109,9 @@ export async function getMonthReview(month: string): Promise<MonthReview> {
         (select json_agg(json_build_object(
           'rule', m.rule, 'transactionIds', m.ids, 'occurredAt', m.occurred_at,
           'amountCents', m.amount_cents, 'currency', m.currency, 'accountName', a.name,
-          'categoryName', c.name, 'description', m.description, 'usualCents', m.usual_cents, 'usualWindowMonths', ${USUAL_WINDOW_MONTHS}::int,
+          'categoryName', c.name, 'description', m.description, 'usualCents', m.usual_cents, 'usualLowCents', m.usual_low,
+          'usualHighCents', m.usual_high, 'usualBasis', m.usual_basis, 'usualCount', m.usual_count,
+          'usualWindowMonths', ${USUAL_WINDOW_MONTHS}::int,
           'entries', coalesce(m.entries, '[]'::json), 'countedCents', m.counted_cents,
           'reviewed', m.reviewed, 'canMark', m.can_mark
         ) order by m.occurred_at, m.rule, m.ids[1])
