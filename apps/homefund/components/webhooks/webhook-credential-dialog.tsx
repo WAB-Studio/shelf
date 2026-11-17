@@ -378,7 +378,7 @@ function WebhookCredentialBody({
                   <Select.Content position="popper">
                     <Select.Item value={ANY}>{t("defaultNone")}</Select.Item>
                     <ScopedSelectGroups
-                      fundHeading={tKey("categories.selectFundHeading")}
+                      fundHeading={tKey("categories.fundSection", { name: options.groupName ?? "" })}
                       personalHeading={tKey("categories.selectPersonalHeading")}
                       fund={categoryItems("group")}
                       personal={categoryItems("personal")}

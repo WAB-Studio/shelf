@@ -30,7 +30,7 @@ import {
   AmountField,
   DateInput,
 } from "@/components/ui";
-import { PocketNotice, usePocketList } from "@/components/transactions/pocket-notice";
+import { OverdraftNotice, PocketNotice, usePocketList } from "@/components/transactions/pocket-notice";
 import type { DebtOverviewRow, DebtPocket } from "@/db/queries/debt-overview";
 import {
   BASE_CURRENCY,
@@ -221,9 +221,9 @@ function PaymentForm({
 
   // What the payment will draw from the source's pockets, said before saving and again after (RF-249, RF-276).
   const fromAccountId = useWatch({ control: form.control, name: "fromAccountId" });
-  const pocketPlan = useMemo(() => {
+  const cover = useMemo(() => {
     const source = payFrom.find((one) => one.id === fromAccountId);
-    if (!source || source.pockets.length === 0 || typedCents === null || typedCents <= 0) return null;
+    if (!source || typedCents === null || typedCents <= 0) return null;
 
     const plan = planPocketCover({
       amountCents: typedCents,
@@ -231,9 +231,13 @@ function PaymentForm({
       pockets: source.pockets,
       occurredOn: day,
     });
-    return plan.totalCents > 0 ? plan : null;
+    const left = source.balanceCents - typedCents + plan.totalCents;
+    return {
+      plan: plan.totalCents > 0 ? plan : null,
+      overdraft: left < 0 ? { accountName: source.name, balanceCents: left } : null,
+    };
   }, [payFrom, fromAccountId, typedCents, day]);
-  const pocketList = usePocketList(pocketPlan, currency);
+  const pocketList = usePocketList(cover?.plan ?? null, currency);
   const remove = useAction(deleteTransactionAction, { onError: onActionError });
   const pay = useAction(recordDebtPaymentAction, {
     onError(result) {
@@ -423,6 +427,7 @@ function PaymentForm({
         />
 
         {pocketList && <PocketNotice list={pocketList} />}
+        {cover?.overdraft && <OverdraftNotice {...cover.overdraft} currency={currency} />}
 
         {overCents > 0 && (
           <Callout.Root color="amber" variant="soft" role="status">

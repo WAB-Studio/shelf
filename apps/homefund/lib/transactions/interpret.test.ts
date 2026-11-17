@@ -660,6 +660,15 @@ test("the description drops what the phrase used as a figure, a currency, a day 
   assert.equal(read("pan y leche $ 8.000"), "pan y leche");
 });
 
+test("the phrase the form saves drops the figures it read and keeps the category word", () => {
+  const read = (text: string) => interpretQuickEntry(text, phraseCtx).phrase;
+  assert.equal(read("nevera 1.200.000 a 12 cuotas"), "nevera");
+  assert.equal(read("uber 38.000 ayer"), "uber");
+  assert.equal(read("Spotify 15,99 dólares"), "Spotify");
+  assert.equal(read("38.000"), "");
+  assert.equal(read("almuerzo 25.000"), "almuerzo");
+});
+
 test("a bank's message keeps its whole text as the description", () => {
   const text = "Compraste $24.000 en EXITO el 24/08/26 a las 18:31";
   const noClock = { ...phraseCtx, today: undefined };

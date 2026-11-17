@@ -57,8 +57,8 @@ test("pickableCategories offers each subcategory under its parent, cut to the sc
   ] as const;
   const mark = (name: string) => `${name} (fondo)`;
   assert.deepEqual(pickableCategories(categories, "personal", "expense", mark), [
-    { id: "m", name: "Mercado" },
-    { id: "l", name: "Mercado › Lácteos" },
+    { id: "m", name: "Mercado", scope: "personal" },
+    { id: "l", name: "Mercado › Lácteos", scope: "personal" },
   ]);
   assert.deepEqual(pickableCategories(categories, "group", "expense", mark).map((c) => c.name), [
     "Casa (fondo)",

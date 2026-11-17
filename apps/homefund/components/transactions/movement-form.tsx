@@ -63,7 +63,7 @@ import {
 } from "@/lib/currency";
 import { civilDateToDate, todayInBogota } from "@/lib/dates";
 import { PocketNotice, usePocketList } from "@/components/transactions/pocket-notice";
-import { planPocketCover, type CoverPocket } from "@/lib/pocket-cover";
+import { readCover } from "@/lib/pocket-cover";
 import { interpretQuickEntry, type AmountAsk } from "@/lib/transactions/interpret";
 import { amountToInput, convertMinor, deriveRate, parseAmount } from "@/lib/money";
 import { useMoneyText } from "@/lib/use-privacy";
@@ -567,16 +567,20 @@ export function MovementForm({
     [options.recentMovements, kind],
   );
 
-  // The words are saved as typed. They only propose: the figure, the day, the category, the account and the
+  // The words are saved as typed, less the figures they gave to the fields. They also propose: the figure, the day, the category, the account and the
   // instalments, each of which stays a suggestion the fields may overwrite (RF-273).
-  function readPhrase(text: string) {
-    const proposal = interpretQuickEntry(text, {
+  function interpretPhrase(text: string) {
+    return interpretQuickEntry(text, {
       categories: phraseCategories,
       accounts: kind === "transfer" ? [] : writableAccounts.map((one) => ({ id: one.id, name: one.name })),
       defaultAccountId: null,
       today: todayInBogota(),
       memory: phraseMemory,
     });
+  }
+
+  function readPhrase(text: string) {
+    const proposal = interpretPhrase(text);
 
     if (proposal.ask?.token !== ask?.token) {
       setPickedChoice("");
@@ -679,32 +683,14 @@ export function MovementForm({
   // (RF-276). Only a fresh entry: an edit reads its figures again on the server.
   const pocketPlan = useMemo(() => {
     if (isEdit || isAccept || kind === "income") return null;
-    const account = options.accounts.find((one) => one.id === fromAccountId);
-    const minor = parseAmount(amount);
-    if (!account || account.kind !== "asset" || minor === null || minor <= 0) return null;
-    if (currency !== account.settlementCurrency) return null;
-    const into = options.accounts.find((one) => one.id === toAccountId);
-    if (into?.parentAccountId === account.id) return null;
-
-    const balanceOf = (row: { balances: { currency: string; balanceCents: number }[] }) =>
-      row.balances.find((balance) => balance.currency === account.settlementCurrency)?.balanceCents ?? 0;
-    const pockets: CoverPocket[] = options.accounts
-      .filter((one) => one.parentAccountId === account.id)
-      .map((one) => ({
-        id: one.id,
-        name: one.name,
-        balanceCents: balanceOf(one),
-        openedOn: one.initialBalanceOn,
-      }));
-    if (pockets.length === 0) return null;
-
-    const plan = planPocketCover({
-      amountCents: minor,
-      freeCents: balanceOf(account),
-      pockets,
+    return readCover({
+      accounts: options.accounts,
+      fromAccountId,
+      toAccountId,
+      amountCents: parseAmount(amount),
+      currency,
       occurredOn: occurredAt,
-    });
-    return plan.totalCents > 0 ? plan : null;
+    }).plan;
   }, [isEdit, isAccept, kind, options.accounts, fromAccountId, toAccountId, amount, currency, occurredAt]);
 
   const pocketList = usePocketList(pocketPlan, currency);
@@ -843,9 +829,13 @@ export function MovementForm({
       if (instalmentsInvalid) return;
       const count = offersInstalments ? instalmentsCount : null;
       const list = pocketList;
+      // The figure, the day, the currency and the instalments the phrase gave to their fields leave the description.
+      const typed = (values.description ?? "").trim();
+      const description = typed === "" ? null : interpretPhrase(typed).phrase || null;
       void create
         .executeAsync({
           ...(values as CreateTransactionInput),
+          description,
           requestRef,
           amountFromWords: values.amount === wordsAmount,
         })

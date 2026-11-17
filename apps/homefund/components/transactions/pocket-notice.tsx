@@ -36,3 +36,29 @@ export function PocketNotice({ list }: { list: string }) {
     </Callout.Root>
   );
 }
+
+// The account would end below zero even after its pockets give what they can; the person may still confirm.
+export function OverdraftNotice({
+  accountName,
+  balanceCents,
+  currency,
+}: {
+  accountName: string;
+  balanceCents: number;
+  currency: CurrencyCode;
+}) {
+  const t = useTranslations("transactions");
+  const locale = useLocale() as Locale;
+  const moneyText = useMoneyText();
+
+  return (
+    <Callout.Root color="amber" variant="soft" role="status">
+      <Callout.Icon>
+        <InfoIcon size={16} />
+      </Callout.Icon>
+      <Callout.Text>
+        {t("overdraftNotice", { account: accountName, amount: moneyText(balanceCents, currency, locale) })}
+      </Callout.Text>
+    </Callout.Root>
+  );
+}

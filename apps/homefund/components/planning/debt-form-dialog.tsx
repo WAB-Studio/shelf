@@ -113,6 +113,7 @@ type DebtFormValues = {
   settlementCurrency: OfferedCurrency;
   placement: (typeof ACCOUNT_PLACEMENTS)[number];
   institution: string;
+  lastFour: string;
   amount: string;
   balanceOn: string;
   debtKind: "revolving" | "installment";
@@ -236,6 +237,7 @@ function DebtForm({
       settlementCurrency: accountCurrency,
       placement: "personal",
       institution: "",
+      lastFour: "",
       amount: "",
       // «¿Desde cuándo la tienes?»: today unless the person says it began earlier.
       balanceOn: todayInBogota(),
@@ -321,6 +323,7 @@ function DebtForm({
         subtype,
         placement: values.placement,
         institution: values.institution,
+        lastFour: isLoan || values.lastFour === "" ? undefined : values.lastFour,
         settlementCurrency: values.settlementCurrency,
         amount: values.amount,
         balanceOn: values.balanceOn,
@@ -468,6 +471,36 @@ function DebtForm({
                     disabled={isPending}
                   />
                 </FieldControl>
+                <FieldMessage error={fieldState.error} />
+              </Field>
+            )}
+          />
+        )}
+
+        {isCreate && !isLoan && (
+          <Controller
+            name="lastFour"
+            control={form.control}
+            render={({ field, fieldState }) => (
+              <Field invalid={fieldState.invalid}>
+                <FieldLabel htmlFor="debt-last-four">
+                  <Flex as="span" align="center" gap="1">
+                    {t("lastFourLabel")}
+                    {optional}
+                  </Flex>
+                </FieldLabel>
+                <FieldControl>
+                  <TextField.Root
+                    {...field}
+                    id="debt-last-four"
+                    size="3"
+                    inputMode="numeric"
+                    maxLength={4}
+                    autoComplete="off"
+                    disabled={isPending}
+                  />
+                </FieldControl>
+                <FieldDescription>{t("lastFourDescription")}</FieldDescription>
                 <FieldMessage error={fieldState.error} />
               </Field>
             )}

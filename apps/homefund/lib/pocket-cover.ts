@@ -54,3 +54,62 @@ export function planPocketCover({
 
   return { takes, totalCents: shortfall - remaining };
 }
+
+// The slice of an account the cover reads: the form options and the payment dialogs both hold it.
+export type CoverAccount = {
+  id: string;
+  name: string;
+  kind: string;
+  parentAccountId?: string | null;
+  initialBalanceOn: string;
+  settlementCurrency: string;
+  balances: { currency: string; balanceCents: number }[];
+};
+
+export type CoverRead = {
+  // What the pockets will give, null when they give nothing.
+  plan: PocketCover | null;
+  // The account's balance once the movement and the pockets' help land, when that is below zero.
+  overdraft: { accountName: string; balanceCents: number } | null;
+};
+
+/**
+ * What a payment out of an asset account does: the pockets it draws from (RF-249) and whether the account is
+ * still left below zero after them. The movement form, «Pagar» and the card payment say it the same way.
+ */
+export function readCover({
+  accounts,
+  fromAccountId,
+  toAccountId,
+  amountCents,
+  currency,
+  occurredOn,
+}: {
+  accounts: readonly CoverAccount[];
+  fromAccountId: string | null | undefined;
+  toAccountId: string | null | undefined;
+  amountCents: number | null;
+  currency: string;
+  occurredOn: string;
+}): CoverRead {
+  const none: CoverRead = { plan: null, overdraft: null };
+  const account = accounts.find((one) => one.id === fromAccountId);
+  if (!account || account.kind !== "asset" || amountCents === null || amountCents <= 0) return none;
+  if (currency !== account.settlementCurrency) return none;
+  // Paying into one's own pocket moves money inside the account.
+  if (accounts.find((one) => one.id === toAccountId)?.parentAccountId === account.id) return none;
+
+  const balanceOf = (row: CoverAccount) =>
+    row.balances.find((balance) => balance.currency === account.settlementCurrency)?.balanceCents ?? 0;
+  const pockets: CoverPocket[] = accounts
+    .filter((one) => one.parentAccountId === account.id)
+    .map((one) => ({ id: one.id, name: one.name, balanceCents: balanceOf(one), openedOn: one.initialBalanceOn }));
+
+  const freeCents = balanceOf(account);
+  const cover = planPocketCover({ amountCents, freeCents, pockets, occurredOn });
+  const left = freeCents - amountCents + cover.totalCents;
+  return {
+    plan: cover.totalCents > 0 ? cover : null,
+    overdraft: left < 0 ? { accountName: account.name, balanceCents: left } : null,
+  };
+}

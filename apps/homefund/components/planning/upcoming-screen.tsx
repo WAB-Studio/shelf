@@ -15,6 +15,7 @@ import {
   pauseRecurringRuleAction,
   resumeRecurringRuleAction,
   skipRecurringRuleAction,
+  undoSkipRecurringRuleAction,
 } from "@/app/actions/recurring-rules";
 import { OwnerMark } from "@/components/fund/owner-mark";
 import { DebtPaymentDialog, paymentDebtOf, type PaymentDebt } from "@/components/planning/debt-payment-dialog";
@@ -65,7 +66,6 @@ export function UpcomingScreen({
   payment,
   unreviewedCount,
   options,
-  hasGroup,
 }: {
   payments: PlannedPaymentRow[];
   rules: RecurringRuleRow[];
@@ -75,7 +75,6 @@ export function UpcomingScreen({
   payment: Pick<DebtsScreenData, "withTerms" | "withoutTerms" | "payFrom">;
   unreviewedCount: number;
   options: TransactionFormOptions;
-  hasGroup: boolean;
 }) {
   const t = useTranslations("upcoming");
   const tKey = useTranslations();
@@ -115,6 +114,8 @@ export function UpcomingScreen({
     .map(([currency, cents]) => moneyText(cents, currency, locale))
     .join(" · ");
   const accountNames = new Map(options.accountDirectory.map((account) => [account.id, account.name]));
+  // Only what moves a fund account wears the fund's mark.
+  const fundAccountIds = new Set(options.accounts.filter((account) => account.groupId !== null).map((account) => account.id));
 
   // The payment dialog's own debt, read as the debts screen reads it; a loan asks what is left of its next cuota.
   function payDebt(item: Extract<UpcomingItem, { kind: "card" | "loan" }>) {
@@ -163,7 +164,6 @@ export function UpcomingScreen({
     <Flex direction="column" gap="4">
       <ScreenHeader
         title={t("title")}
-        meta={hasGroup ? <FundChip label={tKey("fund.label")} /> : undefined}
         actions={addButton}
       />
 
@@ -202,6 +202,7 @@ export function UpcomingScreen({
               key={`${item.kind}:${previewOf(item).key}`}
               item={item}
               accountNames={accountNames}
+              fundAccountIds={fundAccountIds}
               onSettle={setSettleTarget}
               onEditPayment={(payment) => setFormTarget({ payment })}
               onEditRule={(rule) => setFormTarget({ rule })}
@@ -281,6 +282,7 @@ export function UpcomingScreen({
 function UpcomingCard({
   item,
   accountNames,
+  fundAccountIds,
   onSettle,
   onEditPayment,
   onEditRule,
@@ -290,6 +292,7 @@ function UpcomingCard({
 }: {
   item: UpcomingItem;
   accountNames: Map<string, string>;
+  fundAccountIds: ReadonlySet<string>;
   onSettle: (payment: PlannedPaymentRow) => void;
   onEditPayment: (payment: PlannedPaymentRow) => void;
   onEditRule: (rule: RecurringRuleRow) => void;
@@ -305,13 +308,24 @@ function UpcomingCard({
   const router = useRouter();
   const onActionError = useActionErrorToast();
 
+  const undoSkip = useAction(undoSkipRecurringRuleAction, { onError: onActionError });
+  // The skip applies at once; «Deshacer» gives the run back.
   const skip = useAction(skipRecurringRuleAction, {
-    onSuccess() {
+    onSuccess({ data }) {
       if (item.kind === "rule") {
+        const ruleId = item.rule.id;
         toast.success(
           t("skipped", {
             date: format.dateTime(civilDateToDate(dateAfterSkip(item.rule)), { day: "numeric", month: "long" }),
           }),
+          data
+            ? {
+                action: {
+                  label: tKey("transactions.undo"),
+                  onClick: () => undoSkip.execute({ id: ruleId, nextRunOn: data.previousRunOn }),
+                },
+              }
+            : undefined,
         );
       }
     },
@@ -449,6 +463,8 @@ function UpcomingCard({
   }
 
   const account = accountId ? accountNames.get(accountId) : undefined;
+  const movedId = item.kind === "card" || item.kind === "loan" ? item.debt.accountId : accountId;
+  const ofFund = movedId !== null && fundAccountIds.has(movedId);
   // Another member's personal plan can be read, never changed.
   const mayAct = !foreignOwner;
 
@@ -479,6 +495,7 @@ function UpcomingCard({
           </Text>
         )}
         <OwnerMark foreignOwner={foreignOwner} ownerName={ownerName} />
+        {ofFund && <FundChip label={tKey("fund.label")} />}
         {mayAct && action && (
           <Button
             type="button"

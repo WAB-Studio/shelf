@@ -35,6 +35,7 @@ import {
   TextField,
   AmountField,
   DateInput,
+  ScopedSelectGroups,
 } from "@/components/ui";
 import type { PlannedPaymentRow } from "@/db/queries/planned-payments";
 import type { RecurringRuleRow } from "@/db/queries/recurring-rules";
@@ -231,6 +232,20 @@ function UpcomingForm({
       ),
     [options.categories, options.accounts, fromAccountId, toAccountId, receives, mark],
   );
+
+  const categoryItems = (scope: "personal" | "group") =>
+    categories
+      .filter((category) => category.scope === scope)
+      .map((category) => (
+        <Select.Item key={category.id} value={category.id}>
+          {/* One line whatever the name: the cap keeps it inside a 360 px screen. */}
+          <Box maxWidth="calc(100vw - 6rem)" asChild>
+            <Text as="div" truncate>
+              {category.name}
+            </Text>
+          </Box>
+        </Select.Item>
+      ));
 
   // Another account, direction or scope strands the picked category outside the list.
   useEffect(() => {
@@ -581,20 +596,17 @@ function UpcomingForm({
                   disabled={isPending}
                 >
                   <FieldControl>
-                    <Select.Trigger id="upcoming-category" placeholder={t("categoryNone")} />
+                    <Select.Trigger id="upcoming-category" placeholder={t(repeats ? "categoryPlaceholder" : "categoryNone")} />
                   </FieldControl>
                   <Select.Content position="popper">
                     {!repeats && <Select.Item value={NONE}>{t("categoryNone")}</Select.Item>}
-                    {categories.map((category) => (
-                      <Select.Item key={category.id} value={category.id}>
-                        {/* One line whatever the name: the cap keeps it inside a 360 px screen. */}
-                        <Box maxWidth="calc(100vw - 6rem)" asChild>
-                          <Text as="div" truncate>
-                            {category.name}
-                          </Text>
-                        </Box>
-                      </Select.Item>
-                    ))}
+                    {/* Tied to no account, both lists are offered, each under its own heading. */}
+                    <ScopedSelectGroups
+                      fundHeading={tKey("categories.fundSection", { name: options.groupName ?? "" })}
+                      personalHeading={tKey("categories.selectPersonalHeading")}
+                      fund={categoryItems("group")}
+                      personal={categoryItems("personal")}
+                    />
                   </Select.Content>
                 </Select.Root>
                 <FieldMessage error={fieldState.error} />

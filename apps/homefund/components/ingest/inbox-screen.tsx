@@ -14,6 +14,7 @@ import { deleteTransactionAction } from "@/app/actions/transactions";
 import { AwaitingCounterparty } from "@/components/ingest/awaiting-counterparty";
 import {
   arrivedVia,
+  asksWhichCard,
   DeliveryCard,
   movementDefaults,
   NO_CHOICE,
@@ -219,6 +220,8 @@ export function InboxScreen({
             .map((id) => accountNames.get(id) ?? "")
             .join(" → ")
         : null,
+      askCard: asksWhichCard(delivery),
+      toMissing: delivery.proposedDirection === "transfer" && delivery.proposedToAccountId === null,
       amountMinor: delivery.proposedAmountCents,
       direction: delivery.proposedDirection ?? "expense",
       withdrawal: delivery.proposedDirection === "transfer" && toAccount?.subtype === "cash",
