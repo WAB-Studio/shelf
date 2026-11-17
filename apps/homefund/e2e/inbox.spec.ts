@@ -349,7 +349,7 @@ test.describe("the card without the form", () => {
 
     await expect(page.getByRole("checkbox")).toHaveCount(2);
     await page.getByRole("button", { name: ingest.selectReady.replace("{count}", "2"), exact: true }).click();
-    await expect(page.getByText("2 elegidas")).toBeVisible();
+    await expect(band(page).getByText("2 elegidas")).toBeVisible();
     await page.getByRole("button", { name: ingest.acceptSelected.replace("{count}", "2"), exact: true }).click();
 
     await expect(page.getByText("2 movimientos anotados.")).toBeVisible();

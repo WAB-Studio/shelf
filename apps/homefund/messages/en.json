@@ -1737,6 +1737,7 @@
     "batchAcceptedToast": "{count, plural, one {# movement recorded.} other {# movements recorded.}}",
     "batchRefused": "None was recorded: one was refused.",
     "chooseColumn": "Choose",
+    "categoryChoose": "Choose the category",
     "rejectedToast": "Message discarded.",
     "silencedToast": "Done: messages like this one no longer reach the inbox.",
     "silencedTitle": "Silenced messages",

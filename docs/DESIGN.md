@@ -577,7 +577,7 @@ Board C1h corrected the same day: a card in credit reads «Según HomeFund −$ 
   - **The date is the movement's**, as the message prints it («Fecha: 14 nov 2026»), never the hour it arrived; a delivery that
     prints none shows the day it arrived. The laptop table's first column reads the same day.
   - **The category is chosen on the card**: below the account, a one-line select labelled «Categoría» lists the categories of the
-    account's scope and kind (a child as «Padre › Hijo»); with none it reads «Falta la categoría» in amber. Choosing one makes the
+    account's scope and kind (a child as «Padre › Hijo»); with none, an amber line «Falta la categoría» sits above it and the select reads «Elegir la categoría». Choosing one makes the
     card ready, so «Anotar» saves it in one tap with that category (the same way «Para quién» rides on «Anotar», RF-242). A
     transfer shows no category.
   - **«Descartar» is on the card**, a soft red button beside «Anotar» (or «Completar y anotar»), not inside the ⋮ menu, which keeps

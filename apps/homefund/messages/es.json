@@ -1737,6 +1737,7 @@
     "batchAcceptedToast": "{count, plural, one {# movimiento anotado.} other {# movimientos anotados.}}",
     "batchRefused": "No se anotó ninguno: uno fue rechazado.",
     "chooseColumn": "Elegir",
+    "categoryChoose": "Elegir la categoría",
     "rejectedToast": "Mensaje descartado.",
     "silencedToast": "Listo: los mensajes así no vuelven a la bandeja.",
     "silencedTitle": "Mensajes silenciados",

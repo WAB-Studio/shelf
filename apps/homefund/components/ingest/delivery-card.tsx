@@ -388,6 +388,9 @@ export function DeliveryCard({
               })}
             </Text>
           )}
+          {!isTransfer && categoryId === null && (
+            <Text color="amber">{t("categoryMissing")}</Text>
+          )}
           {!isTransfer && (
             <Select.Root
               size="3"
@@ -396,7 +399,7 @@ export function DeliveryCard({
               disabled={accept.isPending}
             >
               <Select.Trigger
-                placeholder={t("categoryMissing")}
+                placeholder={t("categoryChoose")}
                 color={categoryId ? undefined : "amber"}
                 aria-label={t("categoryLabel")}
               />

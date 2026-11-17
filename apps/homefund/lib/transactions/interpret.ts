@@ -169,12 +169,16 @@ function yearLike(text: string, match: RegExpMatchArray, guard: "dated" | "any")
   );
 }
 
+// An ISO code right before the figure («COP122.000,50», «USD 9,99»). Only the codes a bank prints for pesos or
+// the foreign purchases it converts: any three capitals would read a reference («DCB5FA06») as an amount.
+const CURRENCY_MARK = /(?<![\p{L}\d])(?:COP|USD|EUR|GBP|MXN|CAD|BRL|ARS|CLP|PEN)$/u;
+
 function findAmountToken(text: string, yearGuard?: "dated" | "any"): RegExpExecArray | null {
   // A currency mark right before the run («$», «COP122.000,50») says it is money
   // whatever else the text holds; the letters glue it to a word only otherwise.
   const markedBefore = (match: RegExpMatchArray): boolean => {
     const head = text.slice(0, match.index);
-    return /\$\s*$/.test(head) || /(?<![\p{L}\d])[A-Z]{3}$/u.test(head);
+    return /\$\s*$/.test(head) || CURRENCY_MARK.test(head);
   };
   const candidates = [...text.matchAll(AMOUNT_PATTERN)].filter((match) => {
     const before = text[match.index - 1] ?? "";
