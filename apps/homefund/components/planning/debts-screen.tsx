@@ -14,7 +14,7 @@ import { useMemo, useState, type ReactNode } from "react";
 
 import { OwnerMark } from "@/components/fund/owner-mark";
 import { DebtFormDialog } from "@/components/planning/debt-form-dialog";
-import type { DebtAccount, DebtTermsTarget } from "@/components/planning/debt-form-dialog";
+import type { DebtTermsTarget } from "@/components/planning/debt-form-dialog";
 import { DebtPaymentDialog, paymentDebtOf, type PaymentDebt } from "@/components/planning/debt-payment-dialog";
 import { DebtsTable } from "@/components/planning/debts-table";
 import {
@@ -179,7 +179,6 @@ export function DebtsScreen({
         terms: row,
         canWrite: row.canWrite,
         paidBy: row.paidBy,
-        subtype: row.subtype,
       })),
       ...withoutTerms.map((debt) => ({ ...debt, terms: null })),
     ];

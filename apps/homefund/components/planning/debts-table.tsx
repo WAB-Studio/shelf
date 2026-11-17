@@ -65,13 +65,11 @@ export type DebtTableRow = {
   owedCents: number;
   creditCents: number;
   otherOwed: DebtPocket[];
-  // A card or a loan: what «Pagar» is called and asks differs.
-  subtype: string;
   terms: DebtOverviewRow | null;
   canWrite: boolean;
   // Who pays this credit when somebody else does: its row says so under the name.
   paidBy: string | null;
-  // A card and a loan open different forms (RF-286).
+  // A card or a loan: what «Pagar» is called and asks (RF-281) and which form edits it (RF-286).
   subtype: DebtSubtype;
 };
 

@@ -159,7 +159,6 @@ export async function getDebtOverviewWithPockets(): Promise<{
       available_credit_cents: string | null;
       monthly_interest_cents: string;
       monthly_rate_pct: string;
-      annual_rate: string;
       minimum_paid: boolean;
       total_due_cents: string;
       minimum_payment_cents: string | null;
@@ -266,7 +265,6 @@ export async function getDebtOverviewWithPockets(): Promise<{
             minimum: sql`s.minimum_payment_cents`,
           }),
         })} as minimum_payment_cents,
-        dt.annual_rate::text as annual_rate,
         dt.minimum_payment_cents as fixed_minimum_cents,
         dt.minimum_payment_pct::text as minimum_pct,
         dt.statement_cut_off_day as cut_off_day,
@@ -335,7 +333,7 @@ export async function getDebtOverviewWithPockets(): Promise<{
             row.available_credit_cents === null ? null : Number(row.available_credit_cents),
           monthlyInterestCents: Number(row.monthly_interest_cents),
           monthlyRatePct: Number(row.monthly_rate_pct),
-          annualRate: row.annual_rate,
+          annualRate: row.annual_rate ?? "0",
           minimumPaid: row.minimum_paid,
           totalDueCents: Number(row.total_due_cents),
           minimumPaymentCents:
