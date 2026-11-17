@@ -32,6 +32,7 @@ import {
   Select,
   Spinner,
   Text,
+  TextLink,
   VisuallyHidden,
 } from "@/components/ui";
 import type { PendingDeliveryRow } from "@/db/queries/ingest-review";
@@ -220,6 +221,7 @@ export function DeliveryCard({
     reject.execute({
       deliveryId: delivery.id,
       silenceShape: nextSilenceShape,
+      ...(delivery.recorded ? { reason: "duplicate" as const } : {}),
     });
   }
 
@@ -261,7 +263,7 @@ export function DeliveryCard({
                   color="red"
                   onSelect={() => setRejectOpen(true)}
                 >
-                  {t("reject")}
+                  {t(delivery.recorded ? "rejectDuplicate" : "reject")}
                 </DropdownMenu.Item>
                 {delivery.merchantId && (
                   <>
@@ -293,6 +295,26 @@ export function DeliveryCard({
             <Badge color={isIncome ? "jade" : "gray"} variant="soft" radius="full">
               {t(isIncome ? "kindIncome" : isTransfer ? "kindTransfer" : "kindExpense")}
             </Badge>
+          </Flex>
+        )}
+
+        {delivery.recorded && (
+          <Flex direction="column" align="start" gap="1">
+            <Badge color="blue" variant="soft" radius="full">
+              {t("alreadyRecorded")}
+            </Badge>
+            <Text size="2" color="gray">
+              {t(delivery.recorded.description ? "alreadyRecordedAs" : "alreadyRecordedOn", {
+                description: delivery.recorded.description ?? "",
+                date: format.dateTime(civilDateToDate(delivery.recorded.occurredOn), {
+                  day: "numeric",
+                  month: "short",
+                }),
+              })}
+            </Text>
+            <TextLink href={`/movements/${delivery.recorded.transactionId}`} size="2">
+              {t("seeRecorded")}
+            </TextLink>
           </Flex>
         )}
 
@@ -415,7 +437,16 @@ export function DeliveryCard({
           )}
         </Flex>
 
-        {input ? (
+        {delivery.recorded ? (
+          <Flex direction="column" gap="2">
+            <Button type="button" size="3" color="red" onClick={() => setRejectOpen(true)}>
+              {t("rejectDuplicate")}
+            </Button>
+            <Button type="button" size="3" variant="ghost" color="gray" onClick={() => setReviewOpen(true)}>
+              {t("recordAnyway")}
+            </Button>
+          </Flex>
+        ) : input ? (
           <Button
             type="button"
             size="3"
@@ -454,23 +485,27 @@ export function DeliveryCard({
       <ConfirmDialog
         open={rejectOpen}
         onOpenChange={setRejectOpen}
-        title={t("rejectTitle")}
+        title={t(delivery.recorded ? "rejectDuplicateTitle" : "rejectTitle")}
         description={
-          <Flex direction="column" gap="3">
-            <Text>{t("rejectDescription")}</Text>
-            <Button
-              type="button"
-              color="red"
-              variant="soft"
-              disabled={reject.isPending}
-              onClick={() => runReject(true)}
-            >
-              {reject.isPending && <Spinner />}
-              {t("rejectAndSilence")}
-            </Button>
-          </Flex>
+          delivery.recorded ? (
+            <Text>{t("rejectDuplicateDescription")}</Text>
+          ) : (
+            <Flex direction="column" gap="3">
+              <Text>{t("rejectDescription")}</Text>
+              <Button
+                type="button"
+                color="red"
+                variant="soft"
+                disabled={reject.isPending}
+                onClick={() => runReject(true)}
+              >
+                {reject.isPending && <Spinner />}
+                {t("rejectAndSilence")}
+              </Button>
+            </Flex>
+          )
         }
-        confirmLabel={t("rejectOnce")}
+        confirmLabel={t(delivery.recorded ? "rejectDuplicate" : "rejectOnce")}
         cancelLabel={tKey("common.cancel")}
         pending={reject.isPending}
         tone="danger"
