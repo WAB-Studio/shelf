@@ -34,7 +34,7 @@ import { resolveLabelIds, resolvePersonId } from "@/lib/mcp/label-tools";
 import { parseForm } from "@/lib/mcp/parse-form";
 import { todayInBogota } from "@/lib/dates";
 import { centsToDecimal } from "@/lib/money";
-import { createAccountSchema, updateAccountSchema } from "@/lib/validation/account";
+import { ACCOUNT_KINDS, ACCOUNT_PLACEMENTS, ACCOUNT_SUBTYPES, createAccountSchema, updateAccountSchema } from "@/lib/validation/account";
 import { createCategoryInputSchema, updateCategorySchema } from "@/lib/validation/category";
 import {
   createTransactionSchema,
@@ -169,11 +169,14 @@ export type MovementFilterInput = {
   to?: string;
   kind?: (typeof MOVEMENT_KINDS)[number];
   createdByUserId?: string;
+  createdVia?: (typeof CREATED_VIA)[number];
   recurringRuleId?: string;
   q?: string;
 };
 
 const MOVEMENT_KINDS = ["expense", "income", "transfer", "adjustment"] as const;
+// How a movement was written (RF-256): the web, Claude through the MCP, the Bandeja's accept, a statement or sheet import.
+const CREATED_VIA = ["web", "mcp", "inbox", "import"] as const;
 
 // The filters a listing and its totals take, the one set the Movimientos screen offers.
 export function movementFilterShape(t: Say) {
@@ -188,6 +191,7 @@ export function movementFilterShape(t: Say) {
     forPerson: z.string().optional().describe(d("filterForPerson")),
     kind: z.enum(MOVEMENT_KINDS).optional().describe(d("filterKind")),
     createdByUserId: z.string().optional().describe(d("filterCreatedBy")),
+    createdVia: z.enum(CREATED_VIA).optional().describe(d("filterCreatedVia")),
     recurringRuleId: z.string().optional().describe(d("filterRecurringRule")),
     q: z.string().trim().min(1).max(MOVEMENT_SEARCH_MAX).optional().describe(d("filterQ")),
   };
@@ -217,6 +221,7 @@ export async function movementFilters(owner: string, input: MovementFilterInput)
     to: input.to,
     ...(input.kind === undefined ? {} : movementTypeFilter(input.kind)),
     memberUserId: input.createdByUserId === undefined ? undefined : idOf("errors.notFound", input.createdByUserId),
+    createdVia: input.createdVia,
     recurringRuleId: input.recurringRuleId === undefined ? undefined : idOf("errors.notFound", input.recurringRuleId),
     search: input.q,
   };
@@ -240,6 +245,8 @@ export function movementRow(row: TransactionListRow) {
     forHousehold: row.forHousehold,
     madeByMemberId: row.madeByMemberId,
     madeByName: row.madeByName,
+    // How it was written; null for what predates the column and for what a recurring rule or a reconciliation generated.
+    createdVia: row.createdVia,
     labelIds: row.labels.map((label) => label.id),
     forPersonId: row.forPerson?.id ?? null,
     forPersonName: row.forPerson?.name ?? null,
@@ -412,9 +419,9 @@ export function registerLedgerTools(server: McpServer, run: Run, t: Say): void {
       description: t("tools.createAccount"),
       inputSchema: z.object({
         name: z.string().describe(d("accountName")),
-        kind: z.string().describe(d("accountKind")),
-        subtype: z.string().describe(d("accountSubtype")),
-        placement: z.string().default("personal").describe(d("accountPlacement")),
+        kind: z.enum(ACCOUNT_KINDS).describe(d("accountKind")),
+        subtype: z.enum(ACCOUNT_SUBTYPES).describe(d("accountSubtype")),
+        placement: z.enum(ACCOUNT_PLACEMENTS).default("personal").describe(d("accountPlacement")),
         settlementCurrency: z.string().default("COP").describe(d("settlementCurrency")),
         openingBalanceCents: z.number().int().describe(d("openingBalanceCents")),
         balanceOn: z.string().describe(d("balanceOn")),
@@ -442,7 +449,7 @@ export function registerLedgerTools(server: McpServer, run: Run, t: Say): void {
         accountId: z.string().describe(d("accountId")),
         expectedUpdatedAt: z.string().describe(d("expectedUpdatedAt")),
         name: z.string().optional().describe(d("accountName")),
-        subtype: z.string().optional().describe(d("accountSubtype")),
+        subtype: z.enum(ACCOUNT_SUBTYPES).optional().describe(d("accountSubtype")),
         settlementCurrency: z.string().optional().describe(d("settlementCurrency")),
         openingBalanceCents: z.number().int().optional().describe(d("openingBalanceCents")),
         balanceOn: z.string().optional().describe(d("balanceOn")),

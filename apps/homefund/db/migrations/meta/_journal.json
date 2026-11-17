@@ -722,6 +722,20 @@
       "when": 1794931597534,
       "tag": "0106_a_pocket_covers_what_an_account_spends",
       "breakpoints": true
+    },
+    {
+      "idx": 107,
+      "version": "7",
+      "when": 1794931825713,
+      "tag": "0107_a_receivable_is_money_owed_to_you",
+      "breakpoints": true
+    },
+    {
+      "idx": 108,
+      "version": "7",
+      "when": 1794933150696,
+      "tag": "0108_a_movement_remembers_how_it_was_made",
+      "breakpoints": true
     }
   ]
 }

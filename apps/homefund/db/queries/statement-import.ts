@@ -430,6 +430,7 @@ export async function importStatement(
           amountCents,
           ...(line.counter ? { currency: preview.account.currency, counterAmountCents: line.counter.amountCents } : {}),
           awaitingCounterparty: line.awaitsCounterparty === true,
+          createdVia: "import",
           occurredAt: row.date,
           description: row.description,
           externalRef: null,
