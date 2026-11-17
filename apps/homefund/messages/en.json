@@ -540,6 +540,13 @@
     "add": "Add label",
     "addTitle": "Add label",
     "editTitle": "Edit label",
+    "addPerson": "Add person",
+    "addPersonTitle": "Add person",
+    "editPersonTitle": "Edit person",
+    "chargeLabel": "Charged",
+    "chargeHint": "Off, what you spend for this person is only your expense and they owe you nothing. On, you are reminded to charge it; a debt is never created on its own.",
+    "personCharged": "Charged",
+    "personNotCharged": "Not charged",
     "nameLabel": "Name",
     "colorLabel": "Color",
     "colorOption": "Color {number}",
@@ -567,7 +574,9 @@
       "nameRequired": "Enter the label's name.",
       "nameTooLong": "The name cannot exceed 80 characters.",
       "colorRequired": "Choose a color.",
-      "placementInvalid": "Choose where the label goes."
+      "placementInvalid": "Choose where the label goes.",
+      "kindInvalid": "Choose whether it is a label or a person.",
+      "chargeNeedsPerson": "Only a person can be charged."
     }
   },
   "transactions": {

@@ -540,6 +540,13 @@
     "add": "Añadir etiqueta",
     "addTitle": "Añadir etiqueta",
     "editTitle": "Editar etiqueta",
+    "addPerson": "Añadir persona",
+    "addPersonTitle": "Añadir persona",
+    "editPersonTitle": "Editar persona",
+    "chargeLabel": "Se le cobra",
+    "chargeHint": "Apagado, lo que gastas para esta persona es solo gasto tuyo y no te debe nada. Encendido, se te recuerda cobrárselo; una deuda nunca se crea sola.",
+    "personCharged": "Se le cobra",
+    "personNotCharged": "No se le cobra",
     "nameLabel": "Nombre",
     "colorLabel": "Color",
     "colorOption": "Color {number}",
@@ -567,7 +574,9 @@
       "nameRequired": "Escribe el nombre de la etiqueta.",
       "nameTooLong": "El nombre no puede pasar de 80 caracteres.",
       "colorRequired": "Elige un color.",
-      "placementInvalid": "Elige dónde va la etiqueta."
+      "placementInvalid": "Elige dónde va la etiqueta.",
+      "kindInvalid": "Elige si es una etiqueta o una persona.",
+      "chargeNeedsPerson": "Solo una persona puede llevar «Se le cobra»."
     }
   },
   "transactions": {

@@ -1,10 +1,12 @@
 import { sql } from "drizzle-orm";
-import { check, index, pgPolicy, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { boolean, check, index, pgPolicy, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import { authenticatedRole, authUid } from "drizzle-orm/supabase";
 
 import { finances } from "./_schema";
 import { appUsers } from "./app-users";
 import { groups } from "./groups";
+
+export type LabelKind = "tag" | "person";
 
 // A free tag on a movement, independent of category (RF-70); scoped to a user or a group like a category.
 export const labels = finances.table(
@@ -16,6 +18,11 @@ export const labels = finances.table(
     groupId: uuid().references(() => groups.id, { onDelete: "cascade" }),
     name: text().notNull(),
     color: text(),
+    // `tag` is a free label; `person` is whom a movement was for (RF-242). Fixed at birth, so no edit changes it.
+    kind: text().$type<LabelKind>().notNull().default("tag"),
+    // A person only: «se le cobra» is the default a writer proposes when a movement is for them; false never
+    // makes a debt on its own (RF-242).
+    chargeDefault: boolean().notNull().default(false),
     // The stable per-scope import key (RF-52, RF-142): a re-import matches on it to update instead of duplicate.
     // Auto-filled to `id::text` by a trigger when omitted.
     externalRef: text(),
@@ -30,6 +37,8 @@ export const labels = finances.table(
     uniqueIndex("labels_group_external_ref_unique")
       .on(table.groupId, table.externalRef)
       .where(sql`${table.externalRef} is not null`),
+    check("labels_kind_valid", sql`${table.kind} in ('tag', 'person')`),
+    check("labels_charge_by_kind", sql`${table.chargeDefault} = false or ${table.kind} = 'person'`),
     check("labels_name_length", sql`length(btrim(${table.name})) between 1 and 80`),
     // A label belongs to a user or a group, never both and never neither — mirrors categories.
     check("labels_owner_xor_group", sql`num_nonnulls(${table.ownerUserId}, ${table.groupId}) = 1`),
