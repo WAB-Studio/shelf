@@ -91,3 +91,15 @@ test("holds a 390 px phone without sideways scroll @mobile", async ({ page }) =>
   );
   expect(overflow).toBeLessThanOrEqual(0);
 });
+
+test("the monthly-cost line keeps only the subscriptions when pressed", async ({ page }) => {
+  await page.goto("/es/planning/upcoming");
+
+  const line = page.getByRole("button", { name: /^Suscripciones: .* al mes$/ });
+  await expect(line).toBeVisible();
+  await line.click();
+  await expect(line).toHaveAttribute("aria-pressed", "true");
+  await expect(card(page, SERIES)).toHaveCount(1);
+  await line.click();
+  await expect(line).toHaveAttribute("aria-pressed", "false");
+});

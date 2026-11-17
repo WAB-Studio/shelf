@@ -1150,7 +1150,8 @@
     "cadence": {
       "monthly": "Cada mes",
       "weekly": "Cada semana"
-    }
+    },
+    "subscriptionsLine": "Suscripciones: {amount} al mes"
   },
   "recurringRules": {
     "title": "Recurrentes",

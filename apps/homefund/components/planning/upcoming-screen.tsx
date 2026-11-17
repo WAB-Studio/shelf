@@ -40,6 +40,7 @@ import type { RecurringCharge } from "@/db/queries/spending-patterns";
 import type { TransactionFormOptions } from "@/db/queries/transaction-form";
 import { useRouter } from "@/i18n/navigation";
 import { civilDateToDate, todayInBogota } from "@/lib/dates";
+import { monthlyByCurrency } from "@/lib/fund/subscriptions";
 import { dateAfterSkip, previewOf, upcomingItems, type UpcomingItem } from "@/lib/fund/upcoming";
 import { useActionErrorToast } from "@/lib/use-action-toast";
 import { useMoneyText } from "@/lib/use-privacy";
@@ -69,6 +70,8 @@ export function UpcomingScreen({
   const t = useTranslations("upcoming");
   const tKey = useTranslations();
   const onActionError = useActionErrorToast();
+  const moneyText = useMoneyText();
+  const locale = useLocale();
 
   // "new" and a row share one dialog instance; its own key resets the form.
   const [formTarget, setFormTarget] = useState<
@@ -78,7 +81,16 @@ export function UpcomingScreen({
   const [cancelTarget, setCancelTarget] = useState<PlannedPaymentRow | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Removal | null>(null);
 
-  const items = useMemo(() => upcomingItems({ payments, rules, charges }), [payments, rules, charges]);
+  const [onlySubscriptions, setOnlySubscriptions] = useState(false);
+  const all = useMemo(() => upcomingItems({ payments, rules, charges }), [payments, rules, charges]);
+  const subscriptions = useMemo(() => all.filter((item) => item.kind === "subscription"), [all]);
+  const items = onlySubscriptions ? subscriptions : all;
+  // What the listed subscriptions cost a month, one figure per currency, never summed across currencies.
+  const monthly = monthlyByCurrency(
+    subscriptions.flatMap((item) => (item.kind === "subscription" ? [item.charge] : [])),
+  )
+    .map(([currency, cents]) => moneyText(cents, currency, locale))
+    .join(" · ");
   const accountNames = new Map(options.accountDirectory.map((account) => [account.id, account.name]));
 
   const cancelState = useAction(cancelPlannedPaymentAction, {
@@ -129,6 +141,19 @@ export function UpcomingScreen({
             <Callout.Text>{tKey("recurringRules.unreviewedBanner", { count: unreviewedCount })}</Callout.Text>
           </Callout.Root>
         </PlainLink>
+      )}
+
+      {/* What the subscriptions cost a month; pressing it keeps only them, pressing again brings the rest back. */}
+      {subscriptions.length > 0 && (
+        <Button
+          type="button"
+          variant={onlySubscriptions ? "solid" : "soft"}
+          color="gray"
+          aria-pressed={onlySubscriptions}
+          onClick={() => setOnlySubscriptions((on) => !on)}
+        >
+          {t("subscriptionsLine", { amount: monthly })}
+        </Button>
       )}
 
       {items.length === 0 ? (
