@@ -4,7 +4,7 @@ import { test } from "node:test";
 import { parseAmount } from "@/lib/money";
 import { interpretQuickEntry, readAccountTails } from "@/lib/transactions/interpret";
 
-import { describeAlert, looksLikeBankAlert, onlyBankAccount, readableName } from "./describe";
+import { describeAlert, looksLikeBankAlert, onlyBankAccount, paidOwnCard, readableName } from "./describe";
 
 // Synthetic messages that mimic the shapes Bancolombia sends; no real figure, name or number.
 const DATE = "el 14/11/2026 a las 19:05";
@@ -70,4 +70,20 @@ test("a Bancolombia alert with no tail takes the one Bancolombia bank account, n
   assert.equal(onlyBankAccount(text, [savings, { ...savings, id: "d", name: "Ahorro viaje" }]), null);
   assert.equal(onlyBankAccount(text, [card, other]), null);
   assert.equal(onlyBankAccount("Nequi: Recibiste $5", [savings]), null);
+});
+
+test("a payment to the institution of exactly one of the person's cards pays that card", () => {
+  const nu = { id: "nu", institution: "Nu", subtype: "card" };
+  const bogota = { id: "bogota", institution: "Banco de Bogotá", subtype: "card" };
+  const savings = { id: "ahorros", institution: "Nu", subtype: "bank" };
+  const sms = "Bancolombia: Pagaste $4,305.47 a NU Compania de Financiamiento desde tu producto 3397 el 14/11/2026 a las 19:05.";
+  const receipt = "PSE - Transacción Aprobada Valor: $4.305,47 Empresa: NU Compañía de Financiamiento Descripción: Pago tarjeta Nu Fecha: 14/11/2026";
+
+  assert.equal(paidOwnCard(sms, [nu, bogota, savings]), "nu");
+  assert.equal(paidOwnCard(receipt, [nu, bogota]), "nu");
+  assert.equal(paidOwnCard(sms, [nu, { ...nu, id: "nu2", subtype: "loan" }]), null);
+  assert.equal(paidOwnCard(sms, [bogota, savings]), null);
+  assert.equal(paidOwnCard("Bancolombia: Pagaste $5,000 a GONZALEZ NUTRICION desde tu producto 3397.", [nu]), null);
+  assert.equal(paidOwnCard("Bancolombia: Pagaste $5,000 a Banco de Bogota S.A desde tu producto 3397.", [nu, bogota]), "bogota");
+  assert.equal(describeAlert(sms), "NU Compania de Financiamiento");
 });
