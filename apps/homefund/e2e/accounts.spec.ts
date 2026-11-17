@@ -97,13 +97,14 @@ async function placementOf(
   const shown = band(page);
   if ((await shown.count()) !== 1) return null;
 
-  const text = await shown.innerText();
-  const at = text.indexOf(name);
+  // The laptop's bands are set in capitals, and `innerText` reads them so.
+  const text = (await shown.innerText()).toLowerCase();
+  const at = text.indexOf(name.toLowerCase());
   if (at < 0) return null;
 
   const bands = [
-    [accounts.ownerPersonal, "personal"],
-    [fundBand, "fund"],
+    [accounts.ownerPersonal.toLowerCase(), "personal"],
+    [fundBand.toLowerCase(), "fund"],
   ] as const;
 
   return (
