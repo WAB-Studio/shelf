@@ -184,6 +184,10 @@ test("«Ya llegó» books the income, and the row leaves the list", async ({ pag
 
   const dialog = page.getByRole("dialog");
   await expect(dialog.getByRole("heading", { name: copy.settle.incomeTitle })).toBeVisible();
+  // An expected income carries no category, and an income is never booked without one: the dialog asks for it.
+  await dialog.getByRole("button", { name: copy.act.arrived, exact: true }).click();
+  await expect(dialog.getByText(messages.plannedPayments.errors.settleNeedsCategory, { exact: true })).toBeVisible();
+  await choose(page, dialog.locator("#settle-category"), `Ingreso ${stamp}`);
   await dialog.getByRole("button", { name: copy.act.arrived, exact: true }).click();
 
   await expect(dialog).toBeHidden();

@@ -1126,7 +1126,8 @@
       "alreadySettled": "Este pago ya se registró o se canceló.",
       "incomeHasSource": "Un ingreso esperado no sale de ninguna cuenta.",
       "incomeNeedsAccount": "Elige la cuenta donde llegará.",
-      "incomeNeedsPayer": "Escribe de quién viene."
+      "incomeNeedsPayer": "Escribe de quién viene.",
+      "settleNeedsCategory": "Elige la categoría para registrarlo."
     }
   },
   "upcoming": {
@@ -1174,6 +1175,8 @@
       "incomeTitle": "Registrar el ingreso",
       "description": "Anota el movimiento real con la fecha en que ocurrió.",
       "dateLabel": "¿Qué día fue?",
+      "categoryLabel": "Categoría",
+      "categoryPlaceholder": "Elige una categoría",
       "paid": "Pago registrado.",
       "arrived": "Ingreso registrado."
     },

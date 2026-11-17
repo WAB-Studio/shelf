@@ -129,7 +129,11 @@ test.describe("confirming the delete of a settling movement", () => {
 
     await page.goto("/es");
     await expect(page.getByRole("heading", { name: "Por pagar", level: 2 })).toBeVisible();
-    await expect(page.getByRole("link").filter({ hasText: NAME })).toHaveCount(1);
+    // The card's own row: «Este mes pagas» and «Viene» may name the same payment in their lines.
+    const dueCard = page
+      .getByRole("heading", { name: "Por pagar", level: 2 })
+      .locator("xpath=ancestor::*[contains(@class, 'rt-Card')][1]");
+    await expect(dueCard.getByRole("link").filter({ hasText: NAME })).toHaveCount(1);
 
     await page.goto("/es/planning/upcoming");
     await expect(

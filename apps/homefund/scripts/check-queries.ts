@@ -19232,10 +19232,12 @@ async function thirdPartyCreditSuite(): Promise<void> {
 
   const sameAccount = await refused(() => pay("10.000", today, linked.receivableAccountId));
   const zero = recordThirdPartyPaymentSchema.safeParse({ liabilityAccountId: credit, toAccountId: bank, amount: "0", occurredAt: today });
-  const beforeOpening = await refused(() => pay("10.000", shiftDate(today, -47)));
+  // A date before the day the credit was followed is the person's to give (RF-288: the hidden receivable moves its own
+  // opening back); one before the account the money lands in opened is still refused, as anywhere else.
+  const beforeOpening = await refused(() => pay("10.000", shiftDate(today, -60)));
   const strangerPays = await refused(() => asUser(stranger, () => recordThirdPartyPayment(recordThirdPartyPaymentSchema.parse({ liabilityAccountId: credit, toAccountId: bank, amount: "10.000", occurredAt: today }), () => "x")));
   assert(
-    next("RF-213: the payer's money cannot arrive in the receivable itself, be zero, predate the receivable's opening, or be recorded by someone who cannot write the credit"),
+    next("RF-213: the payer's money cannot arrive in the receivable itself, be zero, predate the account it lands in, or be recorded by someone who cannot write the credit"),
     sameAccount === "thirdPartyCredit.errors.sameAccount" && !zero.success && beforeOpening !== null && strangerPays === "errors.notFound",
     `same ${sameAccount}, zero ${zero.success}, before opening ${beforeOpening}, stranger ${strangerPays}`,
   );
@@ -19536,9 +19538,9 @@ async function learnedCategorySuite(): Promise<void> {
     return transactionId;
   };
   type Delivered = { id: string; category: string | null; source: string | null };
-  const deliver = async (owner: { id: string }, text: string): Promise<Delivered> => {
+  const deliver = async (owner: { id: string }, text: string, defaultCategoryId: string = other): Promise<Delivered> => {
     const result = await recordIngestDelivery({
-      ownerUserId: owner.id, credentialId, defaultAccountId: bank, defaultCategoryId: other,
+      ownerUserId: owner.id, credentialId, defaultAccountId: bank, defaultCategoryId,
       payload: { text } as Parameters<typeof recordIngestDelivery>[0]["payload"],
     });
     const [row] = await fixtureSql<{ category: string | null; source: string | null }[]>`
@@ -19594,10 +19596,15 @@ async function learnedCategorySuite(): Promise<void> {
     JSON.stringify(edited),
   );
 
-  const theirs = await deliver(stranger, `${place} 1200000 5`);
+  // A key's default is a category of its owner's own scope (RF-280): the stranger keeps their own, never the user's.
+  const { categoryId: theirDefault } = await asUser(stranger, () =>
+    createCategory({ scope: { ownerUserId: stranger.id }, name: `Harness rf210 propia ${tag}`, kind: "expense", parentId: null, color: "#0E7490" }),
+  );
+  track("categories", theirDefault);
+  const theirs = await deliver(stranger, `${place} 1200000 5`, theirDefault);
   assert(
     next("RF-210: another person's history teaches nothing to someone with none, who keeps the key's default"),
-    theirs.category === other && theirs.source === "credential_default",
+    theirs.category === theirDefault && theirs.source === "credential_default",
     JSON.stringify(theirs),
   );
 

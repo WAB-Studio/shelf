@@ -444,12 +444,24 @@ const landedDeliveries: string[] = [];
 // otherwise outlive every run.
 let httpUserId: string | undefined;
 let httpCookie = "";
+let lateCases: RenderCase[] = [];
 
 // Pages added after the render cases were numbered: rendered at the run's end so no earlier `H` shifts.
-const LATE_RENDER_CASES: RenderCase[] = [
-  { path: `/${LOCALE}/planning/subscriptions`, status: 200, title: title("upcoming.title"), landsOn: `/${LOCALE}/planning/upcoming`, why: "«Suscripciones» became «Lo que viene»" },
-  { path: `/${LOCALE}/planning/upcoming`, status: 200, title: title("upcoming.title") },
-];
+function lateRenderCases({ transactionId }: HttpScope): RenderCase[] {
+  return [
+    { path: `/${LOCALE}/planning/subscriptions`, status: 200, title: title("upcoming.title"), landsOn: `/${LOCALE}/planning/upcoming`, why: "«Suscripciones» became «Lo que viene»" },
+    { path: `/${LOCALE}/planning/upcoming`, status: 200, title: title("upcoming.title") },
+    // A transaction id names no person, so the page calls `notFound()` after `loading.tsx` flushed: noindex in the
+    // body over a 200 on the wire, as `/movements/[id]` does for an id it cannot find.
+    {
+      path: `/${LOCALE}/settings/labels/${transactionId}`,
+      status: 200,
+      title: title("labels.title"),
+      noindex: true,
+      why: "a transaction id names no person: a streamed notFound()",
+    },
+  ];
+}
 
 async function guardSuite(routes: AppRoute[]): Promise<void> {
   for (const { path } of routes) {
@@ -836,7 +848,8 @@ async function main(): Promise<void> {
   await guardSuite(routes);
   console.log("");
   httpCookie = cookie;
-  coverageSuite([...cases, ...LATE_RENDER_CASES], routes);
+  lateCases = lateRenderCases(scope);
+  coverageSuite([...cases, ...lateCases], routes);
   await renderSuite(cases, cookie);
   console.log("");
   await localeSuite(cookie);
@@ -978,7 +991,7 @@ void (async () => {
     await failureNoStoreSuite();
     await emailIngestSuite();
     await widgetKeySuite();
-    await renderSuite(LATE_RENDER_CASES, httpCookie);
+    await renderSuite(lateCases, httpCookie);
     await emailDuplicateSuite();
     await alertDescriptionSuite();
     await mcpClassesSuite();

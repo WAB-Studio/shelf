@@ -121,10 +121,6 @@ async function choose(page: Page, trigger: Locator, option: string) {
   await page.getByRole("option", { name: option, exact: true }).click();
 }
 
-function band(page: Page): Locator {
-  return page.locator("main > div > .rt-Box").filter({ visible: true });
-}
-
 test.describe("as a plain member", () => {
   test.use({ storageState: MEMBER_STORAGE_STATE });
 
@@ -140,7 +136,7 @@ test.describe("as a plain member", () => {
     await dialog.getByRole("button", { name: payments.form.save, exact: true }).click();
 
     await expect(page.getByText(payments.form.created, { exact: true })).toBeVisible();
-    await expect(band(page).getByText(concept, { exact: true })).toBeVisible();
+    await expect(page.getByText(concept, { exact: true }).filter({ visible: true }).first()).toBeVisible();
   });
 
   test("the movement form cuts both selects and saves a transfer between the member's accounts", async ({

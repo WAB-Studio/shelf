@@ -1126,7 +1126,8 @@
       "alreadySettled": "This payment was already recorded or cancelled.",
       "incomeHasSource": "An expected income leaves from no account.",
       "incomeNeedsAccount": "Pick the account it will land in.",
-      "incomeNeedsPayer": "Write who it comes from."
+      "incomeNeedsPayer": "Write who it comes from.",
+      "settleNeedsCategory": "Choose the category to record it."
     }
   },
   "upcoming": {
@@ -1174,6 +1175,8 @@
       "incomeTitle": "Record the income",
       "description": "Notes the real movement with the date it happened.",
       "dateLabel": "Which day was it?",
+      "categoryLabel": "Category",
+      "categoryPlaceholder": "Choose a category",
       "paid": "Payment recorded.",
       "arrived": "Income recorded."
     },

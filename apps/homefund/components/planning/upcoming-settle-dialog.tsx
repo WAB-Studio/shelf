@@ -3,6 +3,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useTranslations } from "next-intl";
 import { useAction } from "next-safe-action/hooks";
+import { useCallback, useMemo } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { toast } from "sonner";
 
@@ -16,12 +17,16 @@ import {
   FieldLabel,
   FieldMessage,
   Flex,
+  Select,
   Spinner,
   DateInput,
 } from "@/components/ui";
 import type { PlannedPaymentRow } from "@/db/queries/planned-payments";
+import type { TransactionFormOptions } from "@/db/queries/transaction-form";
 import { todayInBogota } from "@/lib/dates";
+import { scopeOfAccounts } from "@/lib/fund/category-scope";
 import { isExpectedIncome } from "@/lib/fund/glance";
+import { pickableCategories } from "@/lib/fund/upcoming";
 import { useActionErrorToast } from "@/lib/use-action-toast";
 import {
   settlePlannedPaymentSchema,
@@ -30,16 +35,19 @@ import {
 
 /**
  * «Pagar» and «Ya llegó»: books the real movement a pending payment or expected income stood for, on the day
- * the person says it happened (RF-161). The action is the one the old Pagos screen ran.
+ * the person says it happened (RF-161). One that carries no category asks for it, since an income or an expense
+ * is never booked without one.
  */
 export function UpcomingSettleDialog({
   open,
   onOpenChange,
   payment,
+  options,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   payment?: PlannedPaymentRow;
+  options: TransactionFormOptions;
 }) {
   const t = useTranslations("upcoming.settle");
   const income = payment ? isExpectedIncome(payment) : false;
@@ -51,7 +59,7 @@ export function UpcomingSettleDialog({
         <Dialog.Description>{t("description")}</Dialog.Description>
         {/* Remounts per payment so the date field is always born at today. */}
         {payment && (
-          <SettleForm key={payment.id} payment={payment} income={income} onOpenChange={onOpenChange} />
+          <SettleForm key={payment.id} payment={payment} income={income} options={options} onOpenChange={onOpenChange} />
         )}
       </Dialog.Content>
     </Dialog.Root>
@@ -61,20 +69,38 @@ export function UpcomingSettleDialog({
 function SettleForm({
   payment,
   income,
+  options,
   onOpenChange,
 }: {
   payment: PlannedPaymentRow;
   income: boolean;
+  options: TransactionFormOptions;
   onOpenChange: (open: boolean) => void;
 }) {
   const t = useTranslations("upcoming");
   const tKey = useTranslations();
+  const mark = useCallback((name: string) => tKey("categories.scopedName", { name }), [tKey]);
+
+  // A payment between the person's own accounts carries none; any other one without it is asked for here.
+  const asksCategory =
+    payment.categoryId === null && !(payment.fromAccountId !== null && payment.toAccountId !== null);
+  const categories = useMemo(
+    () =>
+      pickableCategories(
+        options.categories,
+        scopeOfAccounts([payment.fromAccountId, payment.toAccountId], options.accounts),
+        income ? "income" : "expense",
+        mark,
+      ),
+    [options.categories, options.accounts, payment.fromAccountId, payment.toAccountId, income, mark],
+  );
 
   const form = useForm<SettlePlannedPaymentInput>({
     resolver: zodResolver(settlePlannedPaymentSchema),
     defaultValues: {
       plannedPaymentId: payment.id,
       occurredAt: todayInBogota(),
+      categoryId: null,
     },
   });
 
@@ -89,7 +115,16 @@ function SettleForm({
   });
 
   return (
-    <form onSubmit={form.handleSubmit((values) => settle.execute(values))} noValidate>
+    <form
+      onSubmit={form.handleSubmit((values) => {
+        if (asksCategory && !values.categoryId) {
+          form.setError("categoryId", { message: "plannedPayments.errors.settleNeedsCategory" });
+          return;
+        }
+        settle.execute(values);
+      })}
+      noValidate
+    >
       <FieldGroup>
         <Controller
           name="occurredAt"
@@ -104,6 +139,36 @@ function SettleForm({
             </Field>
           )}
         />
+
+        {asksCategory && (
+          <Controller
+            name="categoryId"
+            control={form.control}
+            render={({ field, fieldState }) => (
+              <Field invalid={fieldState.invalid}>
+                <FieldLabel htmlFor="settle-category">{t("settle.categoryLabel")}</FieldLabel>
+                <Select.Root
+                  size="3"
+                  value={field.value ?? ""}
+                  onValueChange={(value) => field.onChange(value)}
+                  disabled={settle.isPending}
+                >
+                  <FieldControl>
+                    <Select.Trigger id="settle-category" placeholder={t("settle.categoryPlaceholder")} />
+                  </FieldControl>
+                  <Select.Content position="popper">
+                    {categories.map((category) => (
+                      <Select.Item key={category.id} value={category.id}>
+                        {category.name}
+                      </Select.Item>
+                    ))}
+                  </Select.Content>
+                </Select.Root>
+                <FieldMessage error={fieldState.error} />
+              </Field>
+            )}
+          />
+        )}
 
         <Field>
           <Flex gap="3" justify="end">

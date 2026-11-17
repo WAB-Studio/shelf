@@ -191,6 +191,7 @@ export function UpcomingScreen({
           if (!open) setSettleTarget(null);
         }}
         payment={settleTarget ?? undefined}
+        options={options}
       />
 
       {cancelTarget && (
