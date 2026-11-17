@@ -27,6 +27,7 @@ import {
   ChipMultiSelect,
   Field,
   FieldControl,
+  FieldDescription,
   FieldGroup,
   FieldLabel,
   FieldMessage,
@@ -94,6 +95,7 @@ type MovementFormValues = {
   externalRef?: string;
   splits: SplitFields[];
   labelIds: string[];
+  forPersonId: string | null;
   causedByTransactionId: string | null;
 };
 
@@ -192,6 +194,8 @@ export function MovementForm({
     occurredAt?: string;
     description?: string | null;
     splits?: SplitFields[];
+    // The person picked on the Bandeja card before opening the form (RF-242).
+    forPersonId?: string | null;
   };
   // A notice dated before its account opened: the form opens with the refusal already beside the
   // date, which is brought into view.
@@ -306,6 +310,7 @@ export function MovementForm({
             description: split.description,
           })),
           labelIds: movement.labels.map((label) => label.id),
+          forPersonId: movement.forPerson?.id ?? null,
           causedByTransactionId,
         }
       : {
@@ -334,6 +339,7 @@ export function MovementForm({
             defaults?.description !== undefined ? defaults.description : null,
           splits: defaults?.splits ?? [],
           labelIds: [],
+          forPersonId: defaults?.forPersonId ?? null,
           causedByTransactionId,
         },
   });
@@ -447,9 +453,16 @@ export function MovementForm({
   // A movement's labels share its scope, so only that scope's set is on offer
   // (RF-70); the other scope's would be refused by the check on write.
   const scopedLabels = useMemo(
-    () => options.labels.filter((label) => label.scope === scope),
+    () => options.labels.filter((label) => label.scope === scope && label.kind === "tag"),
     [options.labels, scope],
   );
+  // «Para quién» is a person of the same scope (RF-242), offered beside the tags.
+  const scopedPersons = useMemo(
+    () => options.labels.filter((label) => label.scope === scope && label.kind === "person"),
+    [options.labels, scope],
+  );
+  const forPersonId = useWatch({ control: form.control, name: "forPersonId" });
+  const chargedPerson = scopedPersons.find((person) => person.id === forPersonId)?.chargeDefault ?? false;
 
   // Keep the splits in step with the derived kind: a transfer drops them, and a
   // switch between income and expense clears the categories the old kind carried
@@ -488,6 +501,7 @@ export function MovementForm({
     if (lastScope.current === scope) return;
     lastScope.current = scope;
     form.setValue("labelIds", [], { shouldValidate: true });
+    form.setValue("forPersonId", null, { shouldValidate: true });
   }, [scope, form]);
 
   function onActionSuccess() {
@@ -971,6 +985,46 @@ export function MovementForm({
                 </Field>
               )}
             />
+
+            {/* Whom it was for: still the person's own expense, so it asks for nothing more (RF-242). */}
+            {scopedPersons.length > 0 && (
+              <Controller
+                name="forPersonId"
+                control={form.control}
+                render={({ field, fieldState }) => (
+                  <Field invalid={fieldState.invalid}>
+                    <FieldLabel htmlFor="movement-for-person">
+                      <Flex as="span" align="center" gap="1">
+                        {t("forPersonLabel")}
+                        <Text size="2" weight="regular" color="gray">
+                          {tKey("common.optional")}
+                        </Text>
+                      </Flex>
+                    </FieldLabel>
+                    <Select.Root
+                      size="3"
+                      value={field.value ?? NO_ACCOUNT}
+                      onValueChange={(value) => field.onChange(value === NO_ACCOUNT ? null : value)}
+                      disabled={isPending}
+                    >
+                      <FieldControl>
+                        <Select.Trigger id="movement-for-person" />
+                      </FieldControl>
+                      <Select.Content position="popper">
+                        <Select.Item value={NO_ACCOUNT}>{t("forPersonNone")}</Select.Item>
+                        {scopedPersons.map((person) => (
+                          <Select.Item key={person.id} value={person.id}>
+                            {person.name}
+                          </Select.Item>
+                        ))}
+                      </Select.Content>
+                    </Select.Root>
+                    {chargedPerson && <FieldDescription>{t("forPersonCharged")}</FieldDescription>}
+                    <FieldMessage error={fieldState.error} />
+                  </Field>
+                )}
+              />
+            )}
           </FieldGroup>
         </Box>
 

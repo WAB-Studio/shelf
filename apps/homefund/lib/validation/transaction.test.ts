@@ -3,12 +3,14 @@ import { test } from "node:test";
 
 import { maxAmountMinor } from "@/lib/money";
 import {
+  forPersonFilter,
   MOVEMENT_SEARCH_MAX,
   movementFiltersSchema,
   movementTypeFilter,
   transactionFields,
   pesoAmountSchema,
   refineContributor,
+  withPerson,
 } from "./transaction";
 
 const schema = pesoAmountSchema({
@@ -106,4 +108,35 @@ test("the movement search trims its text and drops an empty or oversized one", (
   assert.equal(movementFiltersSchema.parse({}).q, undefined);
   assert.equal(movementFiltersSchema.parse({ q: "x".repeat(MOVEMENT_SEARCH_MAX + 1) }).q, undefined);
   assert.equal(movementFiltersSchema.parse({ q: "x".repeat(MOVEMENT_SEARCH_MAX) }).q?.length, MOVEMENT_SEARCH_MAX);
+});
+
+const PERSON = "7f0b3a52-2f0e-4c63-a6a9-5a0f6a2a1b11";
+const TAG = "0c4d8d1e-6f5b-4a39-8f1c-3e9d2b7a4c22";
+
+// Mutation: drop the dedupe, or return the tags alone.
+test("a person rides the label join once, beside the tags", () => {
+  assert.deepEqual(withPerson([TAG], PERSON), [TAG, PERSON]);
+  assert.deepEqual(withPerson([TAG, PERSON], PERSON), [TAG, PERSON]);
+  assert.deepEqual(withPerson([TAG], null), [TAG]);
+  assert.deepEqual(withPerson([TAG], undefined), [TAG]);
+});
+
+// Mutation: let any string through as a person.
+test("«Para quién» is a person's id, or nothing", () => {
+  const field = transactionFields.forPersonId;
+  assert.equal(field.safeParse(PERSON).success, true);
+  assert.equal(field.safeParse(null).success, true);
+  assert.equal(field.safeParse(undefined).success, true);
+  assert.deepEqual(field.safeParse("Ángela").error?.issues.map((issue) => issue.message), [
+    "transactions.errors.forPersonInvalid",
+  ]);
+});
+
+// Mutation: read `nobody` as an id, or `null` as any.
+test("the person filter reads nobody as null and absent as any", () => {
+  assert.equal(forPersonFilter("nobody"), null);
+  assert.equal(forPersonFilter(PERSON), PERSON);
+  assert.equal(forPersonFilter(undefined), undefined);
+  assert.equal(movementFiltersSchema.parse({ person: "nobody" }).person, "nobody");
+  assert.equal(movementFiltersSchema.parse({}).person, undefined);
 });

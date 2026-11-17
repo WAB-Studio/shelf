@@ -29,6 +29,7 @@ import {
   IconButton,
   Money,
   RawText,
+  Select,
   Spinner,
   Text,
   TextLink,
@@ -53,6 +54,8 @@ type ReviewDefaults = {
   occurredAt: string;
   description: string | null;
   splits: { categoryId: string; amount: string }[];
+  // The person picked on the card (RF-242); the review form opens with it.
+  forPersonId: string | null;
 };
 
 const SOURCE_MESSAGE = {
@@ -65,6 +68,7 @@ const SOURCE_MESSAGE = {
 function movementDefaults(
   delivery: PendingDeliveryRow,
   options: TransactionFormOptions,
+  forPersonId: string | null,
 ): ReviewDefaults {
   const amount =
     delivery.proposedAmountCents === null
@@ -82,12 +86,14 @@ function movementDefaults(
     occurredAt: delivery.proposedOccurredAt ?? todayInBogota(),
     description: delivery.proposedDescription,
     splits: categoryId ? [{ categoryId, amount }] : [],
+    forPersonId,
   };
 }
 
 function completeInput(
   delivery: PendingDeliveryRow,
   options: TransactionFormOptions,
+  forPersonId: string | null,
 ): AcceptDeliveryInput | null {
   if (
     !delivery.isComplete ||
@@ -102,7 +108,7 @@ function completeInput(
 
   return {
     deliveryId: delivery.id,
-    ...movementDefaults(delivery, options),
+    ...movementDefaults(delivery, options, forPersonId),
     labelIds: [],
   };
 }
@@ -127,6 +133,7 @@ export function DeliveryCard({
   onSaveNumber: () => void;
 }) {
   const t = useTranslations("ingest");
+  const tTx = useTranslations("transactions");
   const tKey = useTranslations();
   const format = useFormatter();
   const onActionError = useActionErrorToast();
@@ -175,8 +182,16 @@ export function DeliveryCard({
     onError: onActionError,
   });
 
-  const input = completeInput(delivery, options);
-  const defaults = movementDefaults(delivery, options);
+  const [forPersonId, setForPersonId] = useState<string | null>(null);
+  // The persons of the proposed account's scope (RF-242): a person of the other scope would be refused on write.
+  const proposedScope = options.accounts.find((one) => one.id === delivery.proposedAccountId)?.groupId
+    ? "group"
+    : "personal";
+  const persons = options.labels.filter(
+    (label) => label.kind === "person" && label.scope === proposedScope,
+  );
+  const input = completeInput(delivery, options, forPersonId);
+  const defaults = movementDefaults(delivery, options, forPersonId);
   const categoryId = proposedCategoryId(delivery, options);
   const accountName = (id: string | null) =>
     options.accounts.find((one) => one.id === id)?.name ?? null;
@@ -372,6 +387,30 @@ export function DeliveryCard({
             <Button type="button" size="3" variant="soft" onClick={onSaveNumber}>
               {t("saveNumber")}
             </Button>
+          </Flex>
+        )}
+
+        {persons.length > 0 && delivery.proposedAccountId !== null && (
+          <Flex direction="column" gap="1">
+            <Text as="label" size="2" weight="medium" htmlFor={`delivery-for-person-${delivery.id}`}>
+              {tTx("forPersonLabel")}
+            </Text>
+            <Select.Root
+              size="3"
+              value={forPersonId ?? "none"}
+              onValueChange={(value) => setForPersonId(value === "none" ? null : value)}
+              disabled={accept.isPending}
+            >
+              <Select.Trigger id={`delivery-for-person-${delivery.id}`} />
+              <Select.Content position="popper">
+                <Select.Item value="none">{tTx("forPersonNone")}</Select.Item>
+                {persons.map((person) => (
+                  <Select.Item key={person.id} value={person.id}>
+                    {person.name}
+                  </Select.Item>
+                ))}
+              </Select.Content>
+            </Select.Root>
           </Flex>
         )}
 

@@ -1,3 +1,4 @@
+import { emailMerchant } from "@/lib/ingest/email";
 import { extractNumber } from "@/lib/ingest/recipient-number";
 
 // A bank alert's description as a person would write it, from the alert's own words and whichever channel
@@ -60,9 +61,11 @@ const keyPayment: Shape = (text) => {
   return /^\d{4,}$/.test(match[1]) ? `Pago a *${lastFour(match[1])}` : match[1];
 };
 
+const PAID_TO = new RegExp(String.raw`\bpagaste\s+${AMOUNT}\s*a\s+(?!la\s+(?:llave|cuenta)\b)(.+?)${NAME_END}`, "iu");
+
 // «Pagaste $1,000,000.00 a FONDO NACIONAL DEL AHORRO desde tu producto 3397»: whoever was paid.
 const payment: Shape = (text) => {
-  const match = new RegExp(String.raw`\bpagaste\s+${AMOUNT}\s*a\s+(?!la\s+(?:llave|cuenta)\b)(.+?)${NAME_END}`, "iu").exec(text);
+  const match = PAID_TO.exec(text);
   return match ? readableName(match[1]) : null;
 };
 
@@ -132,5 +135,34 @@ export function onlyBankAccount(text: string, accounts: readonly AccountOption[]
   const found = accounts.filter(
     (account) => account.subtype === "bank" && /bancolombia/iu.test(`${account.name} ${account.institution ?? ""}`),
   );
+  return found.length === 1 ? found[0].id : null;
+}
+
+// The payee a payment names: «Pagaste $X a NU Compañía de Financiamiento desde…», or a receipt's «Empresa: …».
+function payeeOf(text: string): string | null {
+  return PAID_TO.exec(flatten(text))?.[1] ?? emailMerchant(flatten(text));
+}
+
+export type CardOption = { id: string; institution: string | null; subtype: string };
+
+function folded(value: string): string {
+  return value.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
+}
+
+/**
+ * The person's own card or loan that a payment pays: the payee names the institution of exactly one of
+ * them («NU Compañía de Financiamiento» → the Nu card), so the payment is a transfer, not an expense.
+ * Several cards of one institution, or none, leave the destination to the person.
+ */
+export function paidOwnCard(text: string, accounts: readonly CardOption[]): string | null {
+  const payee = payeeOf(text);
+  if (payee === null) return null;
+
+  const name = folded(payee);
+  const found = accounts.filter((account) => {
+    const institution = account.institution === null ? "" : folded(account.institution).trim();
+    if (institution === "" || (account.subtype !== "card" && account.subtype !== "loan")) return false;
+    return new RegExp(String.raw`(?<![a-z0-9])${institution.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![a-z0-9])`).test(name);
+  });
   return found.length === 1 ? found[0].id : null;
 }
