@@ -169,7 +169,7 @@ export function CategoriesScreen({
       ? [
           {
             key: "group",
-            label: groupName,
+            label: t("fundSection", { name: groupName }),
             rows: tableRows(group, "group", canManageGroup),
           },
         ]
@@ -401,7 +401,7 @@ export function CategoriesScreen({
             <Flex direction="column" gap="3">
               <Flex direction="column" gap="1">
                 <Heading as="h2" size="3">
-                  {groupName}
+                  {t("fundSection", { name: groupName })}
                 </Heading>
                 {!canManageGroup && (
                   <Text size="2" color="gray">

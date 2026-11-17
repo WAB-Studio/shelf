@@ -25,6 +25,7 @@ import { accounts, debtTerms } from "@/db/schema";
 import type { Account, DebtTerms } from "@/db/schema";
 import { withUserDb } from "@/db/session";
 import type { LoanScheduleSummary } from "@/lib/loan-schedule";
+import type { PayFromAccount } from "@/lib/pocket-cover";
 
 // One pocket of the account: the view derives a figure per currency and no
 // surface sums two of them (RF-124).
@@ -69,7 +70,7 @@ export type DebtDetailData = {
   // What the policies would admit, so the screen offers no action the database
   // would refuse.
   canWrite: boolean;
-  payFrom: { id: string; name: string; balanceCents: number }[];
+  payFrom: PayFromAccount[];
   hasGroup: boolean;
   // Set when somebody else pays this credit (RF-211); its «Me debe» account is not a source of the credit's own payment.
   thirdParty: ThirdPartyCreditView | null;
@@ -137,7 +138,16 @@ async function readAccount(accountId: string): Promise<AccountRead> {
         // pockets are not what a payment comes from (RF-16).
         payFrom: sql<DebtDetailData["payFrom"]>`coalesce((
           select jsonb_agg(jsonb_build_object(
-            'id', x.id, 'name', x.name, 'balanceCents', xb.balance_cents
+            'id', x.id, 'name', x.name, 'balanceCents', xb.balance_cents,
+            -- The pockets a payment out of it may draw from (RF-249).
+            'pockets', coalesce((
+              select jsonb_agg(jsonb_build_object(
+                'id', p.id, 'name', p.name, 'balanceCents', pb.balance_cents, 'openedOn', p.initial_balance_on::text
+              ))
+              from accounts p
+              join account_balances pb on pb.id = p.id and pb.currency = p.settlement_currency
+              where p.parent_account_id = x.id and p.archived_at is null
+            ), '[]'::jsonb)
           ) order by x.name)
           from accounts x
           join account_balances xb

@@ -300,6 +300,51 @@ test("a card purchase takes «a 12 cuotas» from the words and defers it", async
   }
 });
 
+test("paying a card past what is free says which pocket it will draw from, and «Deshacer» gives it back", async ({
+  page,
+}) => {
+  const cardId = randomUUID();
+  const CARD_NAME = `F1 Visa pago ${stamp}`;
+  await asHarnessUser(async (tx) => {
+    await tx`
+      insert into accounts (id, owner_user_id, name, kind, subtype, initial_balance_cents, initial_balance_on)
+      values (${cardId}, ${scope.userId}, ${CARD_NAME}, 'liability', 'card', -30_000_000, '2026-01-01')`;
+    await tx`
+      insert into debt_terms (
+        account_id, debt_kind, annual_rate, minimum_payment_cents,
+        credit_limit_cents, statement_cut_off_day, payment_due_day)
+      values (${cardId}, 'revolving', 0.28, 500_000, 80_000_000, 15, 28)`;
+  });
+  const paid = () =>
+    fixtureSql<{ id: string }[]>`select id from transactions where to_account_id = ${cardId}`;
+  try {
+    await page.goto(`/es/planning/debts/${cardId}`);
+    await page.getByRole("button", { name: messages.debts.rowPayCard, exact: true }).click();
+    const dialog = page.getByRole("dialog");
+    await dialog.getByLabel(messages.installments.fromLabel).click();
+    await page.getByRole("option", { name: MAIN_NAME, exact: true }).click();
+
+    // 100 000 are free in the main account, so 150 000 take 50 000 from the pocket (RF-249, RF-276).
+    await dialog.getByRole("textbox", { name: messages.installments.amountLabel }).fill("150000");
+    await expect(dialog.getByRole("status").filter({ hasText: POCKET_NAME })).toContainText(/Se tomarán .*50\.000 de /);
+
+    // A payment the free part covers draws nothing and says nothing.
+    await dialog.getByRole("textbox", { name: messages.installments.amountLabel }).fill("90000");
+    await expect(dialog.getByRole("status").filter({ hasText: POCKET_NAME })).toHaveCount(0);
+
+    await dialog.getByRole("textbox", { name: messages.installments.amountLabel }).fill("150000");
+    await dialog.getByRole("button", { name: messages.installments.paymentSave, exact: true }).click();
+    await expect(dialog).toBeHidden();
+
+    await expect.poll(async () => (await paid()).length).toBe(1);
+    await page.getByRole("button", { name: transactions.undo, exact: true }).click();
+    await expect.poll(async () => (await paid()).length).toBe(0);
+  } finally {
+    await clearLedger();
+    await fixtureSql`delete from accounts where id = ${cardId}`;
+  }
+});
+
 test("a transfer into a loan reads «Pago cuota <crédito>» in Movimientos and in its detail", async ({ page }) => {
   const [paid] = await fixtureSql<{ id: string }[]>`
     insert into transactions (owner_user_id, created_by, from_account_id, to_account_id, amount_cents, occurred_at)

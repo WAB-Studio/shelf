@@ -15,6 +15,7 @@ import {
   Tags,
   Target,
   Users,
+  UsersRound,
   Wallet,
   Webhook,
 } from "lucide-react";
@@ -38,6 +39,7 @@ const CATALOGUE = {
   reports: { href: "/reports", icon: ChartLine },
   inbox: { href: "/inbox", icon: Inbox },
   members: { href: "/settings/members", icon: Users },
+  createFund: { href: "/onboarding", icon: UsersRound },
   accounts: { href: "/settings/accounts", icon: Wallet },
   categories: { href: "/settings/categories", icon: Tags },
   labels: { href: "/settings/labels", icon: Tag },
@@ -89,6 +91,7 @@ export const PLANNING_KEYS = [
 export const SIDEBAR_SECONDARY_KEYS = [
   "accounts",
   "members",
+  "createFund",
   "categories",
   "labels",
   "data",
@@ -98,6 +101,7 @@ export const SIDEBAR_SECONDARY_KEYS = [
 export const SETTINGS_KEYS = [
   "planning",
   "members",
+  "createFund",
   "accounts",
   "categories",
   "labels",
@@ -121,13 +125,14 @@ export const FUND_SETTINGS = {
 } as const;
 
 // One group per user with no switching (RF-55), so every destination is a fixed
-// path. Members only exist inside a group, so that entry drops without one.
+// path. Members only exist inside a group, so that entry drops without one; «Crear un fondo»
+// is the reverse and drops once there is one.
 export function destinations(
   keys: readonly DestinationKey[],
   hasGroup: boolean,
 ): Destination[] {
   return keys
-    .filter((key) => key !== "members" || hasGroup)
+    .filter((key) => (key !== "members" || hasGroup) && (key !== "createFund" || !hasGroup))
     .map((key) => ({ key, ...CATALOGUE[key] }));
 }
 

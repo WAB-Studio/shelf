@@ -58,9 +58,11 @@ import type { TransactionListRow } from "@/db/queries/transactions";
 import {
   BASE_CURRENCY,
   type CurrencyCode,
+  isOfferedCurrency,
   OFFERED_CURRENCIES,
 } from "@/lib/currency";
 import { civilDateToDate, todayInBogota } from "@/lib/dates";
+import { PocketNotice, usePocketList } from "@/components/transactions/pocket-notice";
 import { planPocketCover, type CoverPocket } from "@/lib/pocket-cover";
 import { interpretQuickEntry, type AmountAsk } from "@/lib/transactions/interpret";
 import { amountToInput, convertMinor, deriveRate, parseAmount } from "@/lib/money";
@@ -422,6 +424,7 @@ export function MovementForm({
   const proposedDate = useRef<string | null>(null);
   const proposedCategory = useRef<string | null>(null);
   const proposedInstalments = useRef<string | null>(null);
+  const proposedCurrency = useRef<string | null>(null);
   // The figure read from words, which «Revisar el mes» asks about (RF-155).
   const [wordsAmount, setWordsAmount] = useState<string | null>(null);
 
@@ -614,6 +617,21 @@ export function MovementForm({
       proposedDate.current = null;
     }
 
+    // A currency said in words («15,99 dólares») moves the field; taking the word out gives the account's own
+    // back. A code the selector does not offer («euros») is left to the person.
+    const wantedCurrency = proposal.currency !== null && isOfferedCurrency(proposal.currency) ? proposal.currency : null;
+    if (wantedCurrency !== null) {
+      if (wantedCurrency !== proposedCurrency.current) {
+        form.setValue("currency", wantedCurrency, { shouldValidate: true });
+        proposedCurrency.current = wantedCurrency;
+      }
+    } else if (proposedCurrency.current !== null) {
+      if (form.getValues("currency") === proposedCurrency.current) {
+        form.setValue("currency", accountCurrency ?? BASE_CURRENCY, { shouldValidate: true });
+      }
+      proposedCurrency.current = null;
+    }
+
     const wantedInstalments = proposal.instalments === null ? null : String(proposal.instalments);
     if (wantedInstalments !== null) {
       if (wantedInstalments !== proposedInstalments.current) {
@@ -689,13 +707,7 @@ export function MovementForm({
     return plan.totalCents > 0 ? plan : null;
   }, [isEdit, isAccept, kind, options.accounts, fromAccountId, toAccountId, amount, currency, occurredAt]);
 
-  const pocketList = pocketPlan
-    ? format.list(
-        pocketPlan.takes.map((take) =>
-          t("pocketTake", { amount: moneyText(take.cents, currency, locale), name: take.name }),
-        ),
-      )
-    : null;
+  const pocketList = usePocketList(pocketPlan, currency);
 
   // A card purchase may be split into instalments from the same form (RF-136, RF-273): the movement is
   // written first and then deferred, so the balance never changes.
@@ -1195,15 +1207,7 @@ export function MovementForm({
               </>
             )}
 
-            {/* Said before saving, never after: the database takes it from the pockets on its own (RF-249). */}
-            {pocketList && (
-              <Callout.Root color="amber" variant="soft" role="status">
-                <Callout.Icon>
-                  <InfoIcon size={16} />
-                </Callout.Icon>
-                <Callout.Text>{t("pocketNotice", { list: pocketList })}</Callout.Text>
-              </Callout.Root>
-            )}
+            {pocketList && <PocketNotice list={pocketList} />}
 
             {offersInstalments && (
               <Field invalid={submitted && instalmentsInvalid}>

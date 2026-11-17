@@ -1,13 +1,14 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import { useAction } from "next-safe-action/hooks";
 import { Controller, useForm, useWatch } from "react-hook-form";
 import { toast } from "sonner";
 
 import { recordDebtPaymentAction } from "@/app/actions/installment-plans";
+import { deleteTransactionAction } from "@/app/actions/transactions";
 import { StartedEarlierOffer } from "@/components/accounts/started-earlier-offer";
 import { CreditAndOwedLine, owesBesideCredit } from "@/components/planning/debts-table";
 import {
@@ -29,6 +30,7 @@ import {
   AmountField,
   DateInput,
 } from "@/components/ui";
+import { PocketNotice, usePocketList } from "@/components/transactions/pocket-notice";
 import type { DebtOverviewRow, DebtPocket } from "@/db/queries/debt-overview";
 import {
   BASE_CURRENCY,
@@ -38,6 +40,7 @@ import {
 import { todayInBogota } from "@/lib/dates";
 import { type Locale } from "@/lib/locales";
 import { amountToInput, parseAmount } from "@/lib/money";
+import { planPocketCover, type PayFromAccount } from "@/lib/pocket-cover";
 import { useMoneyText } from "@/lib/use-privacy";
 import { useActionErrorToast } from "@/lib/use-action-toast";
 import {
@@ -99,11 +102,7 @@ export function paymentDebtOf(row: {
   };
 }
 
-export type PaymentSource = {
-  id: string;
-  name: string;
-  balanceCents: number;
-};
+export type PaymentSource = PayFromAccount;
 
 export function DebtPaymentDialog({
   open,
@@ -220,18 +219,23 @@ function PaymentForm({
 
   const onActionError = useActionErrorToast();
 
+  // What the payment will draw from the source's pockets, said before saving and again after (RF-249, RF-276).
+  const fromAccountId = useWatch({ control: form.control, name: "fromAccountId" });
+  const pocketPlan = useMemo(() => {
+    const source = payFrom.find((one) => one.id === fromAccountId);
+    if (!source || source.pockets.length === 0 || typedCents === null || typedCents <= 0) return null;
+
+    const plan = planPocketCover({
+      amountCents: typedCents,
+      freeCents: source.balanceCents,
+      pockets: source.pockets,
+      occurredOn: day,
+    });
+    return plan.totalCents > 0 ? plan : null;
+  }, [payFrom, fromAccountId, typedCents, day]);
+  const pocketList = usePocketList(pocketPlan, currency);
+  const remove = useAction(deleteTransactionAction, { onError: onActionError });
   const pay = useAction(recordDebtPaymentAction, {
-    onSuccess({ data }) {
-      toast.success(
-        data && data.interestCents > 0
-          ? t("paymentSavedSplit", {
-              capital: moneyText(data.capitalCents, currency, locale),
-              interest: moneyText(data.interestCents, currency, locale),
-            })
-          : t("paymentSaved"),
-      );
-      onOpenChange(false);
-    },
     onError(result) {
       if (result.error.serverError === "errors.movementBeforeOpening") {
         form.setError("occurredAt", { type: "server", message: "errors.movementBeforeOpening" });
@@ -240,9 +244,37 @@ function PaymentForm({
     },
   });
 
+  // «Deshacer» removes what was just written, and with it what the database drew from a pocket.
+  function saved(
+    data: { transactionId: string; interestCents: number; capitalCents: number } | undefined,
+    list: string | null,
+  ) {
+    const message =
+      data && data.interestCents > 0
+        ? t("paymentSavedSplit", {
+            capital: moneyText(data.capitalCents, currency, locale),
+            interest: moneyText(data.interestCents, currency, locale),
+          })
+        : t("paymentSaved");
+    const transactionId = data?.transactionId;
+    if (list && transactionId) {
+      toast.success(`${message} ${t("paymentSavedPocket", { list })}`, {
+        action: { label: tKey("transactions.undo"), onClick: () => remove.execute({ transactionId }) },
+      });
+    } else {
+      toast.success(message);
+    }
+    onOpenChange(false);
+  }
+
   const isPending = pay.isPending;
   const submit = form.handleSubmit((values) => {
-    pay.execute({ ...values, requestRef, ...(choice === "extra" ? { extra: true } : {}) });
+    const list = pocketList;
+    void pay
+      .executeAsync({ ...values, requestRef, ...(choice === "extra" ? { extra: true } : {}) })
+      .then((result) => {
+        if (result?.data) saved(result.data, list);
+      });
   });
 
   return (
@@ -389,6 +421,8 @@ function PaymentForm({
             </Field>
           )}
         />
+
+        {pocketList && <PocketNotice list={pocketList} />}
 
         {overCents > 0 && (
           <Callout.Root color="amber" variant="soft" role="status">
