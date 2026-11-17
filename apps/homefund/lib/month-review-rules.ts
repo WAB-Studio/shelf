@@ -20,6 +20,10 @@ export const USUAL_MIN_SAME_CATEGORY = 8;
 export const ABOVE_USUAL_P90_PERCENT = 150;
 export const ABOVE_USUAL_MEDIAN_FACTOR = 2;
 
+// A category says nothing when it is mixed: when its 95th percentile is over this many times its median, a few big purchases
+// (a weekly market trip among daily bread) are part of what the category is, and none of them is a surprise.
+export const USUAL_MIXED_FACTOR = 3;
+
 // Below this amount (minor units) nothing stands out, whatever it is compared with; a currency not listed uses COP's.
 export const USUAL_MIN_CENTS: Record<string, number> = { COP: 5_000_000, USD: 1_500 };
 

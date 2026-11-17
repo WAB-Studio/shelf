@@ -5,6 +5,7 @@ import {
   ABOVE_USUAL_FACTOR,
   ABOVE_USUAL_MEDIAN_FACTOR,
   ABOVE_USUAL_P90_PERCENT,
+  USUAL_MIXED_FACTOR,
   USUAL_MIN_CENTS,
   USUAL_MIN_LINES,
   USUAL_MIN_SAME_CATEGORY,
@@ -37,7 +38,8 @@ export function aboveUsualMovementsSql(range: { start: string; endExclusive: str
         percentile_disc(0.25) within group (order by amount_cents) as low,
         percentile_disc(0.5) within group (order by amount_cents) as mid,
         percentile_disc(0.75) within group (order by amount_cents) as high,
-        percentile_disc(0.9) within group (order by amount_cents) as p90`;
+        percentile_disc(0.9) within group (order by amount_cents) as p90,
+        percentile_disc(0.95) within group (order by amount_cents) as p95`;
   return sql`
     -- Each expense with the key of its description and the category of its largest split.
     expense_tx as materialized (
@@ -71,19 +73,21 @@ export function aboveUsualMovementsSql(range: { start: string; endExclusive: str
         m.recurring_rule_id,
         case when d.n is not null then 'description' else 'category' end as basis,
         coalesce(d.n, c.n) as n, coalesce(d.low, c.low) as low, coalesce(d.mid, c.mid) as mid,
-        coalesce(d.high, c.high) as high, coalesce(d.p90, c.p90) as p90
+        coalesce(d.high, c.high) as high, coalesce(d.p90, c.p90) as p90, coalesce(d.p95, c.p95) as p95
       from expense_tx m
       left join usual_description d on d.pattern_key = m.pattern_key and d.currency = m.currency
       left join usual_category c on c.category_id = m.category_id and c.currency = m.currency
       where m.occurred_at >= ${range.start}::date and (d.n is not null or c.n is not null)
     ),
-    -- Nothing stands out that a rule or a planned payment already expects: its own, or one for this amount on this account.
+    -- A mixed category is no basis; nothing stands out that a rule or a planned payment already expects (its own,
+    -- or one for this amount on this account).
     above_usual as (
       select x.transaction_id, x.category_id, x.amount_cents, x.basis, x.n, x.low, x.mid, x.high
       from compared x
       where x.amount_cents * 100 > x.p90 * ${ABOVE_USUAL_P90_PERCENT}::int
         and x.amount_cents >= ${ABOVE_USUAL_MEDIAN_FACTOR}::int * x.mid
         and x.amount_cents >= case x.currency ${sql.join(floors, sql` `)} else ${USUAL_MIN_CENTS.COP}::bigint end
+        and (x.basis = 'description' or x.p95 <= ${USUAL_MIXED_FACTOR}::int * x.mid)
         and x.recurring_rule_id is null
         and not exists (select 1 from recurring_rules r
           where r.from_account_id = x.from_account_id and r.amount_cents = x.amount_cents)

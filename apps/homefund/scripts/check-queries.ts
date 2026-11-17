@@ -14472,13 +14472,20 @@ async function o7m3RuleEdgesSuite(): Promise<void> {
     }),
   );
   track("planned_payments", plannedPaymentId);
-  // A category of forty purchases with no description (36 of 50.000, then a routine 250.000 four times): a purchase nobody
-  // described is read against the category, and the routine against its own four.
+  // A steady category of forty purchases (36 of 50.000 with no description, then a routine 120.000 four times): a purchase
+  // nobody described is read against the category, and the routine against its own four.
   const mixed = await category("mezcla");
   for (let n = 0; n < 36; n += 1) await spend(mixed, 5_000_000, day(12 + (n % 10), 2 + (n % 5)), false, null);
-  for (const back of [2, 3, 4, 5]) await spend(mixed, 25_000_000, day(21, back), false, named("rutina"));
+  for (const back of [2, 3, 4, 5]) await spend(mixed, 12_000_000, day(21, back), false, named("rutina"));
   const fresh = await spend(mixed, 25_000_000, day(22), false, named("nueva"));
-  const routine = await spend(mixed, 25_000_000, day(23), false, named("rutina"));
+  const routine = await spend(mixed, 12_000_000, day(23), false, named("rutina"));
+  // A mixed category (thirty purchases: 27 of 50.000 and 3 market trips of 300.000): the category's tenth does not reach the
+  // trips, but its 95th percentile does, so another trip is no surprise.
+  const bimodal = await category("bimodal");
+  for (let n = 0; n < 27; n += 1) await spend(bimodal, 5_000_000, day(12 + (n % 10), 2 + (n % 5)), false, null);
+  for (const back of [2, 3, 4]) await spend(bimodal, 30_000_000, day(24, back), false, null);
+  const trip = await spend(bimodal, 35_000_000, day(24), false, named("viaje"));
+
   // From words on the month's first day counts; on this month's first day it does not.
   const plain = await category("varios");
   const firstDay = await spend(plain, 1_100_000, day(1), true);
@@ -14492,10 +14499,10 @@ async function o7m3RuleEdgesSuite(): Promise<void> {
   const above = ids("above_usual");
   const aboveFresh = read.items.find((item) => item.rule === "above_usual" && item.transactionIds[0] === fresh);
   assert(
-    next("RF-239 edges: «above usual» needs the history's 90th percentile passed by half again, the window's six months, a floor, and nothing a rule or planned payment expects; the description's history wins over the category's"),
+    next("RF-239 edges: «above usual» needs the history's 90th percentile passed by half again, the window's six months, a floor, and nothing a rule or planned payment expects; the description's history wins over the category's, and a mixed category is no basis"),
     above.includes(overWindow) && above.includes(fresh) && above.length === 2 &&
-      ![calm, afterOld, exactly, tiny, ruled, planned, routine].some((id) => above.includes(id)),
-    `above ${above.length}: window ${above.includes(overWindow)}, fresh ${above.includes(fresh)}, calm ${above.includes(calm)}, too old ${above.includes(afterOld)}, exactly ${above.includes(exactly)}, tiny ${above.includes(tiny)}, ruled ${above.includes(ruled)}, planned ${above.includes(planned)}, routine ${above.includes(routine)}`,
+      ![calm, afterOld, exactly, tiny, ruled, planned, routine, trip].some((id) => above.includes(id)),
+    `above ${above.length}: window ${above.includes(overWindow)}, fresh ${above.includes(fresh)}, calm ${above.includes(calm)}, too old ${above.includes(afterOld)}, exactly ${above.includes(exactly)}, tiny ${above.includes(tiny)}, ruled ${above.includes(ruled)}, planned ${above.includes(planned)}, routine ${above.includes(routine)}, trip ${above.includes(trip)}`,
   );
   assert(
     next("RF-239 edges: a purchase nobody described is read against its category: its typical range and how many it rests on"),
