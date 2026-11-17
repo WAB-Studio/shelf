@@ -180,6 +180,7 @@ function QuickEntryForm({
       madeByMemberId: null,
       splits: [],
       labelIds: [],
+      forPersonId: null,
     },
   });
 
@@ -221,7 +222,12 @@ function QuickEntryForm({
   // The same scope's labels, offered only when it has any: the sheet stays as
   // short as it is today for a caller with none (RF-70).
   const scopedLabels = useMemo(
-    () => options.labels.filter((label) => label.scope === scope),
+    () => options.labels.filter((label) => label.scope === scope && label.kind === "tag"),
+    [options.labels, scope],
+  );
+  // «Para quién» (RF-242): the persons of the same scope, offered only when it has any.
+  const scopedPersons = useMemo(
+    () => options.labels.filter((label) => label.scope === scope && label.kind === "person"),
     [options.labels, scope],
   );
 
@@ -312,6 +318,7 @@ function QuickEntryForm({
     if (lastScope.current !== scope) {
       lastScope.current = scope;
       form.setValue("labelIds", [], { shouldValidate: true });
+      form.setValue("forPersonId", null, { shouldValidate: true });
     }
   }, [amount, splits, scope, currency, accountCurrency, form]);
 
@@ -476,6 +483,37 @@ function QuickEntryForm({
                     disabled={create.isPending}
                   />
                 </FieldControl>
+                <FieldMessage error={fieldState.error} />
+              </Field>
+            )}
+          />
+        )}
+
+        {scopedPersons.length > 0 && (
+          <Controller
+            name="forPersonId"
+            control={form.control}
+            render={({ field, fieldState }) => (
+              <Field invalid={fieldState.invalid}>
+                <FieldLabel htmlFor="quick-for-person">{t("forPersonLabel")}</FieldLabel>
+                <Select.Root
+                  size="3"
+                  value={field.value ?? "none"}
+                  onValueChange={(value) => field.onChange(value === "none" ? null : value)}
+                  disabled={create.isPending}
+                >
+                  <FieldControl>
+                    <Select.Trigger id="quick-for-person" />
+                  </FieldControl>
+                  <Select.Content position="popper">
+                    <Select.Item value="none">{t("forPersonNone")}</Select.Item>
+                    {scopedPersons.map((person) => (
+                      <Select.Item key={person.id} value={person.id}>
+                        {person.name}
+                      </Select.Item>
+                    ))}
+                  </Select.Content>
+                </Select.Root>
                 <FieldMessage error={fieldState.error} />
               </Field>
             )}

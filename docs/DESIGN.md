@@ -724,7 +724,9 @@ tablero previo; se refina con lo construido.
   lo que gastas para esta persona es solo gasto tuyo y no te debe nada. Encendido, se te recuerda cobrárselo; una deuda nunca se
   crea sola»), el color y dónde va. Apagado desde el primer día.
 - **El campo «Para quién»** (no «Para»: ese nombre ya lo lleva el destino de un traspaso) del formulario de movimiento, de la anotación rápida y de la tarjeta de la Bandeja es opcional, un selector
-  de una sola persona con «Nadie» como primera opción, bajo las etiquetas; solo aparece en un gasto o un ingreso, nunca en un traspaso.
+  de una sola persona con «Nadie» como primera opción, bajo las etiquetas; sale en cualquier movimiento, un traspaso incluido, y solo
+  con las personas del mismo ámbito que la cuenta. En la tarjeta de la Bandeja el selector va sobre el botón «Aceptar», para que
+  el toque único también guarde para quién fue.
   Si la persona elegida «se le cobra», una línea bajo el selector dice «Se le cobra: este gasto sigue siendo tuyo hasta que
   registres lo que te debe.» Sin personas, el campo no sale.
 - **En la lista** el movimiento lleva una etiqueta discreta «para Ángela» en gris, junto a su categoría, y nunca dentro de la

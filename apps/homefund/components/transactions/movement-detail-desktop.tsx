@@ -425,6 +425,12 @@ export function MovementDetailDesktop({
                   <Fact label={t("createdBy")} value={creatorName} />
                 </>
               )}
+              {movement.forPerson && (
+                <>
+                  <Separator size="4" />
+                  <Fact label={t("forPersonLabel")} value={movement.forPerson.name} />
+                </>
+              )}
             </Flex>
           </Panel>
 

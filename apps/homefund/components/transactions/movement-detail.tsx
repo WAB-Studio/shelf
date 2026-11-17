@@ -350,6 +350,12 @@ export function MovementDetail({
                 <DetailRow label={t("createdBy")} value={creatorName} />
               </>
             )}
+            {movement.forPerson && (
+              <>
+                <Separator size="4" my="3" />
+                <DetailRow label={t("forPersonLabel")} value={movement.forPerson.name} />
+              </>
+            )}
             {movement.labels.length > 0 && (
               <>
                 <Separator size="4" my="3" />
