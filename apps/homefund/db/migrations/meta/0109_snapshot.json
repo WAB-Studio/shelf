@@ -1,6 +1,6 @@
 {
   "id": "c80a5af8-0e55-4b40-9ff3-abcdaf4b2d19",
-  "prevId": "ab16d11f-4f0b-427b-8fe5-2267fa3edd24",
+  "prevId": "633a8087-6d14-46a1-b960-0c7a07d32fe9",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -853,11 +853,11 @@
         },
         "accounts_subtype_valid": {
           "name": "accounts_subtype_valid",
-          "value": "\"finances\".\"accounts\".\"subtype\" in ('bank', 'cash', 'card', 'loan')"
+          "value": "\"finances\".\"accounts\".\"subtype\" in ('bank', 'cash', 'card', 'loan', 'receivable')"
         },
         "accounts_subtype_kind": {
           "name": "accounts_subtype_kind",
-          "value": "(\"finances\".\"accounts\".\"subtype\" in ('cash', 'bank') and \"finances\".\"accounts\".\"kind\" = 'asset') or (\"finances\".\"accounts\".\"subtype\" in ('card', 'loan') and \"finances\".\"accounts\".\"kind\" = 'liability')"
+          "value": "(\"finances\".\"accounts\".\"subtype\" in ('cash', 'bank', 'receivable') and \"finances\".\"accounts\".\"kind\" = 'asset') or (\"finances\".\"accounts\".\"subtype\" in ('card', 'loan') and \"finances\".\"accounts\".\"kind\" = 'liability')"
         },
         "accounts_initial_balance_sign": {
           "name": "accounts_initial_balance_sign",
@@ -1360,6 +1360,13 @@
           "primaryKey": false,
           "notNull": false
         },
+        "pocket_cover": {
+          "name": "pocket_cover",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
         "reconciliation_id": {
           "name": "reconciliation_id",
           "type": "uuid",
@@ -1385,6 +1392,12 @@
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
+        },
+        "created_via": {
+          "name": "created_via",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
         }
       },
       "indexes": {
@@ -1892,9 +1905,17 @@
           "name": "transactions_caused_by_not_self",
           "value": "\"finances\".\"transactions\".\"caused_by_transaction_id\" is null or \"finances\".\"transactions\".\"caused_by_transaction_id\" <> \"finances\".\"transactions\".\"id\""
         },
+        "transactions_pocket_cover_shape": {
+          "name": "transactions_pocket_cover_shape",
+          "value": "not \"finances\".\"transactions\".\"pocket_cover\" or (num_nonnulls(\"finances\".\"transactions\".\"from_account_id\", \"finances\".\"transactions\".\"to_account_id\") = 2 and \"finances\".\"transactions\".\"caused_by_transaction_id\" is not null)"
+        },
         "transactions_adjustment_one_leg": {
           "name": "transactions_adjustment_one_leg",
           "value": "\"finances\".\"transactions\".\"reconciliation_id\" is null or (num_nonnulls(\"finances\".\"transactions\".\"from_account_id\", \"finances\".\"transactions\".\"to_account_id\") = 1 and \"finances\".\"transactions\".\"counter_amount_cents\" is null)"
+        },
+        "transactions_created_via_valid": {
+          "name": "transactions_created_via_valid",
+          "value": "\"finances\".\"transactions\".\"created_via\" is null or \"finances\".\"transactions\".\"created_via\" in ('web', 'mcp', 'inbox', 'import')"
         }
       },
       "isRLSEnabled": false

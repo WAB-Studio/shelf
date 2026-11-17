@@ -14443,11 +14443,11 @@ async function checkThirdPartyCredits() {
 async function checkCardDeferrals() {
   console.log("");
   const labels = {
-    owner: "rf253-1. the owner of a card records a deferral, reads it, rewrites its figures and removes it; a stranger reads none, updates none, removes none and records none (42501)",
-    shape: "rf253-2. a deferral on an asset account is 23514; a second one with the same authorization number on the card is 23505; a blank number, a current instalment past the total, a negative pending balance and a rate above 200 percent are 23514",
-    columns: "rf253-3. the card and the authorization number of a deferral cannot be changed by an update (42501)",
-    audit: "rf253-4. recording, rewriting and removing each leave an audit row naming the person",
-    grants: "rf253-5. anon and service_role hold no privilege on card_deferrals",
+    owner: "rf258-1. the owner of a card records a deferral, reads it, rewrites its figures and removes it; a stranger reads none, updates none, removes none and records none (42501)",
+    shape: "rf258-2. a deferral on an asset account is 23514; a second one with the same authorization number on the card is 23505; a blank number, a current instalment past the total, a negative pending balance and a rate above 200 percent are 23514",
+    columns: "rf258-3. the card and the authorization number of a deferral cannot be changed by an update (42501)",
+    audit: "rf258-4. recording, rewriting and removing each leave an audit row naming the person",
+    grants: "rf258-5. anon and service_role hold no privilege on card_deferrals",
   };
   const fixture = async (tx: M1Tx) => {
     const [owner, stranger] = [randomUUID(), randomUUID()];
@@ -14459,7 +14459,7 @@ async function checkCardDeferrals() {
         values (${owner}, ${name}, ${kind}, ${kind === "asset" ? "bank" : "card"}, 'COP', ${todayInBogota()}) returning id`;
       return id;
     };
-    return { owner, stranger, card: await account("rls rf253 card", "liability"), bank: await account("rls rf253 bank", "asset") };
+    return { owner, stranger, card: await account("rls rf258 card", "liability"), bank: await account("rls rf258 bank", "asset") };
   };
   const defer = (
     card: string,
@@ -14541,11 +14541,11 @@ async function checkCardDeferrals() {
 async function checkLoanSchedule() {
   console.log("");
   const labels = {
-    owner: "rf256-1. the owner of a loan writes its schedule, reads it and replaces it; a stranger reads none, inserts none and deletes none",
-    shape: "rf256-2. a card or a bank account as the owner of a schedule is LS001; a total that is not the sum of its parts, a negative part, a number past 600 and a repeated number or day are 23514 or 23505",
-    columns: "rf256-3. no column of a schedule row can be updated (42501)",
-    audit: "rf256-4. writing and deleting rows each leave an audit row naming the person",
-    grants: "rf256-5. anon and service_role hold no privilege on loan_schedule_rows",
+    owner: "rf264-1. the owner of a loan writes its schedule, reads it and replaces it; a stranger reads none, inserts none and deletes none",
+    shape: "rf264-2. a card or a bank account as the owner of a schedule is LS001; a total that is not the sum of its parts, a negative part, a number past 600 and a repeated number or day are 23514 or 23505",
+    columns: "rf264-3. no column of a schedule row can be updated (42501)",
+    audit: "rf264-4. writing and deleting rows each leave an audit row naming the person",
+    grants: "rf264-5. anon and service_role hold no privilege on loan_schedule_rows",
   };
   const fixture = async (tx: M1Tx) => {
     const [owner, stranger] = [randomUUID(), randomUUID()];
@@ -14560,9 +14560,9 @@ async function checkLoanSchedule() {
     return {
       owner,
       stranger,
-      loan: await account(owner, "rls rf256 loan", "loan"),
-      card: await account(owner, "rls rf256 card", "card"),
-      bank: await account(owner, "rls rf256 bank", "bank"),
+      loan: await account(owner, "rls rf264 loan", "loan"),
+      card: await account(owner, "rls rf264 card", "card"),
+      bank: await account(owner, "rls rf264 bank", "bank"),
     };
   };
   const row = (account: string, number: number, dueOn: string, parts: [number, number, number, number?] = [100_00, 10_00, 5_00]) => (sp: M1Tx) =>

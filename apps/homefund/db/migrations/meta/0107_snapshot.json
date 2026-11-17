@@ -1,6 +1,6 @@
 {
   "id": "ac4841b9-7efc-4f8c-8a8e-36c8ec2f8ee4",
-  "prevId": "ab16d11f-4f0b-427b-8fe5-2267fa3edd24",
+  "prevId": "ab1f985f-7002-496b-bf87-954cfb776afd",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -1360,6 +1360,13 @@
           "primaryKey": false,
           "notNull": false
         },
+        "pocket_cover": {
+          "name": "pocket_cover",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
         "reconciliation_id": {
           "name": "reconciliation_id",
           "type": "uuid",
@@ -1891,6 +1898,10 @@
         "transactions_caused_by_not_self": {
           "name": "transactions_caused_by_not_self",
           "value": "\"finances\".\"transactions\".\"caused_by_transaction_id\" is null or \"finances\".\"transactions\".\"caused_by_transaction_id\" <> \"finances\".\"transactions\".\"id\""
+        },
+        "transactions_pocket_cover_shape": {
+          "name": "transactions_pocket_cover_shape",
+          "value": "not \"finances\".\"transactions\".\"pocket_cover\" or (num_nonnulls(\"finances\".\"transactions\".\"from_account_id\", \"finances\".\"transactions\".\"to_account_id\") = 2 and \"finances\".\"transactions\".\"caused_by_transaction_id\" is not null)"
         },
         "transactions_adjustment_one_leg": {
           "name": "transactions_adjustment_one_leg",

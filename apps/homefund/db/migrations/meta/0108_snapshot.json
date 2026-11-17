@@ -1360,15 +1360,16 @@
           "primaryKey": false,
           "notNull": false
         },
+        "pocket_cover": {
+          "name": "pocket_cover",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
         "reconciliation_id": {
           "name": "reconciliation_id",
           "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_via": {
-          "name": "created_via",
-          "type": "text",
           "primaryKey": false,
           "notNull": false
         },
@@ -1391,6 +1392,12 @@
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
+        },
+        "created_via": {
+          "name": "created_via",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
         }
       },
       "indexes": {
@@ -1886,10 +1893,6 @@
           "name": "transactions_estimate_needs_counter",
           "value": "\"finances\".\"transactions\".\"counter_is_estimate\" = false or \"finances\".\"transactions\".\"counter_amount_cents\" is not null"
         },
-        "transactions_created_via_valid": {
-          "name": "transactions_created_via_valid",
-          "value": "\"finances\".\"transactions\".\"created_via\" is null or \"finances\".\"transactions\".\"created_via\" in ('web', 'mcp', 'inbox', 'import')"
-        },
         "transactions_description_length": {
           "name": "transactions_description_length",
           "value": "length(\"finances\".\"transactions\".\"description\") <= 200"
@@ -1902,9 +1905,17 @@
           "name": "transactions_caused_by_not_self",
           "value": "\"finances\".\"transactions\".\"caused_by_transaction_id\" is null or \"finances\".\"transactions\".\"caused_by_transaction_id\" <> \"finances\".\"transactions\".\"id\""
         },
+        "transactions_pocket_cover_shape": {
+          "name": "transactions_pocket_cover_shape",
+          "value": "not \"finances\".\"transactions\".\"pocket_cover\" or (num_nonnulls(\"finances\".\"transactions\".\"from_account_id\", \"finances\".\"transactions\".\"to_account_id\") = 2 and \"finances\".\"transactions\".\"caused_by_transaction_id\" is not null)"
+        },
         "transactions_adjustment_one_leg": {
           "name": "transactions_adjustment_one_leg",
           "value": "\"finances\".\"transactions\".\"reconciliation_id\" is null or (num_nonnulls(\"finances\".\"transactions\".\"from_account_id\", \"finances\".\"transactions\".\"to_account_id\") = 1 and \"finances\".\"transactions\".\"counter_amount_cents\" is null)"
+        },
+        "transactions_created_via_valid": {
+          "name": "transactions_created_via_valid",
+          "value": "\"finances\".\"transactions\".\"created_via\" is null or \"finances\".\"transactions\".\"created_via\" in ('web', 'mcp', 'inbox', 'import')"
         }
       },
       "isRLSEnabled": false

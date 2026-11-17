@@ -1,6 +1,6 @@
 {
   "id": "dd0c8387-041e-4418-89bf-050292de1ee3",
-  "prevId": "ab16d11f-4f0b-427b-8fe5-2267fa3edd24",
+  "prevId": "c80a5af8-0e55-4b40-9ff3-abcdaf4b2d19",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -853,11 +853,11 @@
         },
         "accounts_subtype_valid": {
           "name": "accounts_subtype_valid",
-          "value": "\"finances\".\"accounts\".\"subtype\" in ('bank', 'cash', 'card', 'loan')"
+          "value": "\"finances\".\"accounts\".\"subtype\" in ('bank', 'cash', 'card', 'loan', 'receivable')"
         },
         "accounts_subtype_kind": {
           "name": "accounts_subtype_kind",
-          "value": "(\"finances\".\"accounts\".\"subtype\" in ('cash', 'bank') and \"finances\".\"accounts\".\"kind\" = 'asset') or (\"finances\".\"accounts\".\"subtype\" in ('card', 'loan') and \"finances\".\"accounts\".\"kind\" = 'liability')"
+          "value": "(\"finances\".\"accounts\".\"subtype\" in ('cash', 'bank', 'receivable') and \"finances\".\"accounts\".\"kind\" = 'asset') or (\"finances\".\"accounts\".\"subtype\" in ('card', 'loan') and \"finances\".\"accounts\".\"kind\" = 'liability')"
         },
         "accounts_initial_balance_sign": {
           "name": "accounts_initial_balance_sign",
@@ -1360,6 +1360,13 @@
           "primaryKey": false,
           "notNull": false
         },
+        "pocket_cover": {
+          "name": "pocket_cover",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
         "reconciliation_id": {
           "name": "reconciliation_id",
           "type": "uuid",
@@ -1385,6 +1392,12 @@
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
+        },
+        "created_via": {
+          "name": "created_via",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
         }
       },
       "indexes": {
@@ -1892,9 +1905,17 @@
           "name": "transactions_caused_by_not_self",
           "value": "\"finances\".\"transactions\".\"caused_by_transaction_id\" is null or \"finances\".\"transactions\".\"caused_by_transaction_id\" <> \"finances\".\"transactions\".\"id\""
         },
+        "transactions_pocket_cover_shape": {
+          "name": "transactions_pocket_cover_shape",
+          "value": "not \"finances\".\"transactions\".\"pocket_cover\" or (num_nonnulls(\"finances\".\"transactions\".\"from_account_id\", \"finances\".\"transactions\".\"to_account_id\") = 2 and \"finances\".\"transactions\".\"caused_by_transaction_id\" is not null)"
+        },
         "transactions_adjustment_one_leg": {
           "name": "transactions_adjustment_one_leg",
           "value": "\"finances\".\"transactions\".\"reconciliation_id\" is null or (num_nonnulls(\"finances\".\"transactions\".\"from_account_id\", \"finances\".\"transactions\".\"to_account_id\") = 1 and \"finances\".\"transactions\".\"counter_amount_cents\" is null)"
+        },
+        "transactions_created_via_valid": {
+          "name": "transactions_created_via_valid",
+          "value": "\"finances\".\"transactions\".\"created_via\" is null or \"finances\".\"transactions\".\"created_via\" in ('web', 'mcp', 'inbox', 'import')"
         }
       },
       "isRLSEnabled": false
@@ -8235,6 +8256,226 @@
         "third_party_credits_two_accounts": {
           "name": "third_party_credits_two_accounts",
           "value": "\"finances\".\"third_party_credits\".\"liability_account_id\" <> \"finances\".\"third_party_credits\".\"receivable_account_id\""
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "finances.card_deferrals": {
+      "name": "card_deferrals",
+      "schema": "finances",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "account_id": {
+          "name": "account_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "authorization_number": {
+          "name": "authorization_number",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "currency": {
+          "name": "currency",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "original_amount_cents": {
+          "name": "original_amount_cents",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "instalments": {
+          "name": "instalments",
+          "type": "smallint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "current_instalment": {
+          "name": "current_instalment",
+          "type": "smallint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "monthly_instalment_cents": {
+          "name": "monthly_instalment_cents",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "pending_balance_cents": {
+          "name": "pending_balance_cents",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "annual_rate": {
+          "name": "annual_rate",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "statement_on": {
+          "name": "statement_on",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "auth.uid()"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "card_deferrals_account_id_accounts_id_fk": {
+          "name": "card_deferrals_account_id_accounts_id_fk",
+          "tableFrom": "card_deferrals",
+          "tableTo": "accounts",
+          "schemaTo": "finances",
+          "columnsFrom": [
+            "account_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "card_deferrals_created_by_app_users_id_fk": {
+          "name": "card_deferrals_created_by_app_users_id_fk",
+          "tableFrom": "card_deferrals",
+          "tableTo": "app_users",
+          "schemaTo": "finances",
+          "columnsFrom": [
+            "created_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "card_deferrals_account_authorization_unique": {
+          "name": "card_deferrals_account_authorization_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "account_id",
+            "authorization_number"
+          ]
+        }
+      },
+      "policies": {
+        "card_deferrals_select": {
+          "name": "card_deferrals_select",
+          "as": "PERMISSIVE",
+          "for": "SELECT",
+          "to": [
+            "authenticated"
+          ],
+          "using": "(select private.can_read_account(\"finances\".\"card_deferrals\".\"account_id\"))"
+        },
+        "card_deferrals_insert": {
+          "name": "card_deferrals_insert",
+          "as": "PERMISSIVE",
+          "for": "INSERT",
+          "to": [
+            "authenticated"
+          ],
+          "withCheck": "(select private.can_write_account(\"finances\".\"card_deferrals\".\"account_id\"))"
+        },
+        "card_deferrals_update": {
+          "name": "card_deferrals_update",
+          "as": "PERMISSIVE",
+          "for": "UPDATE",
+          "to": [
+            "authenticated"
+          ],
+          "using": "(select private.can_write_account(\"finances\".\"card_deferrals\".\"account_id\"))",
+          "withCheck": "(select private.can_write_account(\"finances\".\"card_deferrals\".\"account_id\"))"
+        },
+        "card_deferrals_delete": {
+          "name": "card_deferrals_delete",
+          "as": "PERMISSIVE",
+          "for": "DELETE",
+          "to": [
+            "authenticated"
+          ],
+          "using": "(select private.can_write_account(\"finances\".\"card_deferrals\".\"account_id\"))"
+        }
+      },
+      "checkConstraints": {
+        "card_deferrals_authorization_length": {
+          "name": "card_deferrals_authorization_length",
+          "value": "length(btrim(\"finances\".\"card_deferrals\".\"authorization_number\")) between 1 and 40"
+        },
+        "card_deferrals_description_length": {
+          "name": "card_deferrals_description_length",
+          "value": "length(btrim(\"finances\".\"card_deferrals\".\"description\")) between 1 and 200"
+        },
+        "card_deferrals_currency_shape": {
+          "name": "card_deferrals_currency_shape",
+          "value": "\"finances\".\"card_deferrals\".\"currency\" ~ '^[A-Z]{3}$'"
+        },
+        "card_deferrals_original_positive": {
+          "name": "card_deferrals_original_positive",
+          "value": "\"finances\".\"card_deferrals\".\"original_amount_cents\" > 0"
+        },
+        "card_deferrals_instalments_range": {
+          "name": "card_deferrals_instalments_range",
+          "value": "\"finances\".\"card_deferrals\".\"instalments\" between 1 and 120"
+        },
+        "card_deferrals_current_instalment_range": {
+          "name": "card_deferrals_current_instalment_range",
+          "value": "\"finances\".\"card_deferrals\".\"current_instalment\" between 1 and \"finances\".\"card_deferrals\".\"instalments\""
+        },
+        "card_deferrals_monthly_non_negative": {
+          "name": "card_deferrals_monthly_non_negative",
+          "value": "\"finances\".\"card_deferrals\".\"monthly_instalment_cents\" >= 0"
+        },
+        "card_deferrals_pending_non_negative": {
+          "name": "card_deferrals_pending_non_negative",
+          "value": "\"finances\".\"card_deferrals\".\"pending_balance_cents\" >= 0"
+        },
+        "card_deferrals_rate_range": {
+          "name": "card_deferrals_rate_range",
+          "value": "\"finances\".\"card_deferrals\".\"annual_rate\" >= 0 and \"finances\".\"card_deferrals\".\"annual_rate\" <= 2"
         }
       },
       "isRLSEnabled": false
