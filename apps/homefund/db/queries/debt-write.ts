@@ -45,18 +45,24 @@ function mapDebtTermsError(error: unknown): never {
  * refinement the form runs, against the currency read back here (RNF-10). An
  * account the policies do not show answers no currency, and the upsert below is
  * refused by the same policy.
+ *
+ * Terms already holding other values are someone else's and are refused as stale, unless `replace` says
+ * the caller read newer ones off a later statement and means to overwrite them.
  */
-export async function saveDebtTerms({
-  accountId,
-  debtKind,
-  annualRate,
-  minimumPayment,
-  minimumPaymentPct,
-  creditLimit,
-  statementCutOffDay,
-  paymentDueDay,
-  aval,
-}: DebtTermsInput): Promise<{ accountId: string }> {
+export async function saveDebtTerms(
+  {
+    accountId,
+    debtKind,
+    annualRate,
+    minimumPayment,
+    minimumPaymentPct,
+    creditLimit,
+    statementCutOffDay,
+    paymentDueDay,
+    aval,
+  }: DebtTermsInput,
+  { replace = false }: { replace?: boolean } = {},
+): Promise<{ accountId: string }> {
   const settlement = await getSettlementCurrencies({
     fromAccountId: accountId,
     toAccountId: null,
@@ -83,7 +89,7 @@ export async function saveDebtTerms({
       paymentDueDay: paymentDueDay ?? null,
       avalCents: aval != null ? requireMinor(aval) : null,
       // The form writes terms onto a debt that had none (RF-156): any found are someone else's.
-      keepOthers: true,
+      keepOthers: replace ? undefined : true,
     });
   } catch (error) {
     mapDebtTermsError(error);

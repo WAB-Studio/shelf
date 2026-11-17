@@ -24,7 +24,7 @@ import {
   transactions,
 } from "@/db/schema";
 import type { Transaction } from "@/db/session";
-import { withUserDb, withUserDbOrTx } from "@/db/session";
+import { actingForCredential, withUserDb, withUserDbOrTx } from "@/db/session";
 import { stampIs } from "@/db/queries/stamp";
 import type { CurrencyCode } from "@/lib/currency";
 import { pgConstraintName, pgErrorCode } from "@/lib/db-error";
@@ -59,6 +59,8 @@ export type CreateTransactionArgs = {
   madeByMemberId?: string | null | SQL;
   // RF-133: one side is not known yet and waits for a person; insert only.
   awaitingCounterparty?: boolean;
+  // How the row was written (RF-256). Absent is the door the caller came through: the MCP's, or the web's.
+  createdVia?: "web" | "mcp" | "inbox" | "import";
   occurredAt: string;
   description: string | null;
   externalRef: string | null;
@@ -97,6 +99,8 @@ export type TransactionListFilters = {
   from?: string;
   to?: string;
   memberUserId?: string;
+  // How the row was written (RF-256).
+  createdVia?: "web" | "mcp" | "inbox" | "import";
   accountId?: string;
   categoryId?: string;
   // «Lo hizo» (RF-182): the fund member who made the movement; `null` keeps the fund movements nobody made.
@@ -108,6 +112,8 @@ export type TransactionListFilters = {
   kind?: string;
   // A reconciliation's adjustment only (RF-138).
   adjustments?: boolean;
+  // Leaves a reconciliation's adjustment out (RF-263): Inicio's recent movements are what happened, not a count's gap.
+  withoutAdjustments?: boolean;
   // The deep-link target: keep only generated movements still awaiting review
   // (`recurring_rule_id is not null and reviewed_at is null`), RF-31.
   unreviewed?: boolean;
@@ -141,6 +147,8 @@ export type TransactionListRow = {
   fromAccountId: string | null;
   toAccountId: string | null;
   createdBy: string;
+  // How it was written (RF-256); null for what predates the column and for what the database generates.
+  createdVia: "web" | "mcp" | "inbox" | "import" | null;
   // A generated movement carries its rule id; a manual one has none. The review
   // stamp is null until it is confirmed or its amount corrected (RF-31).
   recurringRuleId: string | null;
@@ -158,6 +166,9 @@ export type TransactionListRow = {
   // The reconciliation that booked this movement as its adjustment (RF-138); null for every
   // movement a person made.
   reconciliationId: string | null;
+  // The transfer the database booked from a pocket into its account to cover what a movement left of the
+  // account's free part below zero (RF-249); its cause is `causedByTransactionId`.
+  pocketCover: boolean;
   // `updated_at::text` as Postgres prints it; an edit sends it back so a save after someone
   // else's is refused. Never a Date: its milliseconds make the row look newer than itself.
   updatedAt: string;
@@ -180,6 +191,44 @@ export class ResendChangedError extends Error {
   }
 }
 
+// What the database moved from a pocket into its account for a movement (RF-249), as a caller reads it back.
+export type PocketCover = {
+  transactionId: string;
+  pocketAccountId: string;
+  pocketName: string;
+  amountCents: number;
+  currency: CurrencyCode;
+};
+
+/** The transfers a movement drew from its account's pockets, largest first; none for nearly every movement. */
+export async function readPocketCovers(tx: Transaction, causeId: string): Promise<PocketCover[]> {
+  const rows = await tx.execute<{
+    id: string;
+    pocket_account_id: string;
+    pocket_name: string;
+    amount_cents: string;
+    currency: CurrencyCode;
+  }>(sql`
+    select t.id, t.from_account_id as pocket_account_id, p.name as pocket_name, t.amount_cents, t.currency
+    from transactions t
+    join accounts p on p.id = t.from_account_id
+    where t.caused_by_transaction_id = ${causeId}::uuid and t.pocket_cover
+    order by t.amount_cents desc, t.id
+  `);
+  return rows.map((row) => ({
+    transactionId: row.id,
+    pocketAccountId: row.pocket_account_id,
+    pocketName: row.pocket_name,
+    amountCents: Number(row.amount_cents),
+    currency: row.currency,
+  }));
+}
+
+/** `readPocketCovers` for a caller with no transaction of its own: an edit's answer. */
+export function pocketCoversOf(causeId: string): Promise<PocketCover[]> {
+  return withUserDb((tx) => readPocketCovers(tx, causeId));
+}
+
 export type CreateMovementArgs = CreateTransactionArgs & {
   // The key a form mints when it opens; it is stored as `form:<requestRef>` and wins over
   // `externalRef`, so a copy of the same submit answers with the movement the first one booked.
@@ -187,6 +236,9 @@ export type CreateMovementArgs = CreateTransactionArgs & {
   // Its own column grant (migration 0040); written in the same transaction as the movement, so a
   // cause that vanished mid-write takes the movement down with it.
   causedByTransactionId?: string | null;
+  // Reads back, in the same transaction, what the pockets covered for it (RF-249): one more statement,
+  // so only the caller that tells a person asks.
+  reportPocketCovers?: boolean;
 };
 
 /**
@@ -200,8 +252,9 @@ export type CreateMovementArgs = CreateTransactionArgs & {
 export async function createTransaction({
   requestRef,
   causedByTransactionId,
+  reportPocketCovers = false,
   ...args
-}: CreateMovementArgs): Promise<{ transactionId: string }> {
+}: CreateMovementArgs): Promise<{ transactionId: string; pocketCovers?: PocketCover[] }> {
   const externalRef = requestRef ? `form:${requestRef}` : args.externalRef;
 
   try {
@@ -213,7 +266,8 @@ export async function createTransaction({
           where id = ${created.transactionId}
         `);
       }
-      return created;
+      if (!reportPocketCovers || args.fromAccountId === null) return created;
+      return { ...created, pocketCovers: await readPocketCovers(tx, created.transactionId) };
     });
   } catch (error) {
     const index = pgConstraintName(error) ?? "";
@@ -256,6 +310,7 @@ export async function insertTransaction(
     contributedByMemberId = null,
     madeByMemberId = null,
     awaitingCounterparty = false,
+    createdVia = actingForCredential() ? "mcp" : "web",
     occurredAt,
     description,
     externalRef,
@@ -263,7 +318,11 @@ export async function insertTransaction(
     labelIds,
   }: CreateTransactionArgs,
 ): Promise<{ transactionId: string }> {
+  // An income that lands where an expected income waits (RF-253) settles it in the same statement, so no income
+  // path pays a round trip for it: the nearest amount within five per cent, dated from a month before its day to
+  // two after. A currency conversion, an adjustment and a movement into another account never match.
   const [row] = await tx.execute<{ id: string }>(sql`
+    with created as (
     insert into transactions (
       from_account_id,
       to_account_id,
@@ -276,6 +335,7 @@ export async function insertTransaction(
       contributed_by_member_id,
       made_by_member_id,
       awaiting_counterparty,
+      created_via,
       occurred_at,
       description,
       external_ref
@@ -291,11 +351,28 @@ export async function insertTransaction(
       ${contributorMark(sql`${fromAccountId}::uuid`, sql`${toAccountId}::uuid`, sql`${contributedByMemberId}::uuid`)},
       ${madeByMemberId},
       ${awaitingCounterparty},
+      ${createdVia},
       ${occurredAt},
       ${description},
       ${externalRef}
     )
-    returning id
+    returning id, from_account_id, to_account_id, amount_cents, occurred_at, counter_amount_cents, reconciliation_id
+    ), settled as (
+      update planned_payments p set status = 'done', settled_transaction_id = created.id
+      from created
+      where created.from_account_id is null and created.counter_amount_cents is null
+        and created.reconciliation_id is null
+        and p.id = (
+          select e.id from planned_payments e
+          where e.status = 'pending' and e.from_account_id is null
+            and e.to_account_id = created.to_account_id
+            and abs(e.amount_cents - created.amount_cents) * 100 <= e.amount_cents * 5
+            and created.occurred_at between e.due_date - 30 and e.due_date + 60
+          order by abs(e.amount_cents - created.amount_cents), e.due_date, e.id
+          limit 1)
+      returning p.id
+    )
+    select id from created
   `);
 
   const transactionId = row.id;
@@ -593,11 +670,13 @@ export function transactionListConditions(filters: TransactionListFilters): SQL[
       })`;
     conditions.push(filters.forPersonId === null ? sql`not ${named}` : named);
   }
+  if (filters.createdVia) conditions.push(eq(transactions.createdVia, filters.createdVia));
   if (filters.kind) conditions.push(eq(transactions.kind, filters.kind));
   if (filters.kind === "expense" || filters.kind === "income") {
     conditions.push(isNull(transactions.reconciliationId));
   }
   if (filters.adjustments) conditions.push(isNotNull(transactions.reconciliationId));
+  if (filters.withoutAdjustments) conditions.push(isNull(transactions.reconciliationId));
   if (filters.unreviewed) {
     // "Waiting for a person" (RF-133): a generated movement not yet confirmed,
     // or one `awaiting_counterparty` — never every one-sided movement. Income
@@ -770,10 +849,12 @@ export async function listTransactions(
         fromAccountId: transactions.fromAccountId,
         toAccountId: transactions.toAccountId,
         createdBy: transactions.createdBy,
+        createdVia: transactions.createdVia,
         recurringRuleId: transactions.recurringRuleId,
         reviewedAt: transactions.reviewedAt,
         causedByTransactionId: transactions.causedByTransactionId,
         reconciliationId: transactions.reconciliationId,
+        pocketCover: transactions.pocketCover,
         // Qualified: the joined accounts carry an `updated_at` of their own.
         updatedAt: sql<string>`transactions.updated_at::text`,
         // Written with the joined alias, never a Drizzle column reference: a

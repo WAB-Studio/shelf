@@ -22,6 +22,9 @@ Read it before you open, work in or drop a lane. The why behind each rule: `docs
   See `docs/TRAPS.md`, "One database, many branches".
 - Never run two agents that write `reading.word_texts` or spend `reading.model_spend` at once. `HARNESS_LANE` does not
   scope those tables. See `docs/TRAPS.md`, "One database behind every harness lane".
+- Workers never merge `integracion` into their branch nor merge their PR; each pushes once, lets CI run once and leaves the PR open.
+  One integrator combines the open PRs into one batch, renumbers RFs and migrations, runs CI once and merges. Decided by the user
+  2026-11-17: no se multipliquen los tiempos.
 
 ## Cloud lane
 

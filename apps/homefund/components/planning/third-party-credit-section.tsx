@@ -7,18 +7,21 @@ import { toast } from "sonner";
 
 import { removeThirdPartyCreditAction } from "@/app/actions/third-party-credits";
 import { EditThirdPartyDialog } from "@/components/planning/third-party-credit-dialog";
+import { ThirdPartyBreakdownDialog } from "@/components/planning/third-party-breakdown";
 import { ThirdPartyPaymentDialog } from "@/components/planning/third-party-payment-dialog";
 import {
   Button,
+  Box,
+  Callout,
   ConfirmDialog,
   Flex,
   Heading,
   Money,
   Panel,
   PanelBlock,
-  RowMenu,
   Separator,
   StatTiles,
+  Table,
   Text,
 } from "@/components/ui";
 import type { ThirdPartyCreditView } from "@/db/queries/third-party-credits";
@@ -27,6 +30,9 @@ import type { Locale } from "@/lib/locales";
 import { sideState, type CreditMonth } from "@/lib/third-party-credit";
 import { useActionErrorToast } from "@/lib/use-action-toast";
 import { useMoneyText } from "@/lib/use-privacy";
+
+// The em dash an empty cell reads as elsewhere on the screen.
+const NONE = "—";
 
 /**
  * «Lo paga <persona>» (RF-212): a credit somebody else pays, read over three figures, this month's two
@@ -47,7 +53,7 @@ export function ThirdPartyCreditSection({
   const locale = useLocale() as Locale;
   const moneyText = useMoneyText();
   const onActionError = useActionErrorToast();
-  const [dialog, setDialog] = useState<"payment" | "edit" | "stop" | null>(null);
+  const [dialog, setDialog] = useState<"payment" | "edit" | "stop" | "breakdown" | null>(null);
 
   const stop = useAction(removeThirdPartyCreditAction, {
     onSuccess() {
@@ -62,9 +68,14 @@ export function ThirdPartyCreditSection({
   const day = (date: string) => format.dateTime(civilDateToDate(date), { day: "numeric", month: "short" });
   const monthName = (month: string) =>
     format.dateTime(civilDateToDate(`${month}-01`), { month: "long", year: "numeric" });
+  // «agosto 2027»: the month of a cuota and its year, never «de».
+  const cuotaMonth = (date: string) => {
+    const when = civilDateToDate(date);
+    return `${format.dateTime(when, { month: "long" })} ${format.dateTime(when, { year: "numeric" })}`;
+  };
 
   // The current month is always the first line of the history.
-  const [now, ...before] = credit.months;
+  const [now] = credit.months;
 
   const dueNote =
     installmentCents !== null && credit.dueDay !== null
@@ -75,12 +86,21 @@ export function ThirdPartyCreditSection({
           ? t("noteDue", { day: credit.dueDay })
           : undefined;
 
+  // With the bank's schedule at hand, what the payer still has to send reads beside the capital, with interest (RF-266).
+  const { schedule } = credit;
+  const scheduleNote =
+    schedule !== null && schedule.remainingCount > 0
+      ? t("scheduleLeft", { person, count: schedule.remainingCount, amount: amount(schedule.remainingTotalCents) })
+      : undefined;
+  // The first cuota the payer's usual amount will not cover, said before its day.
+  const [uncovered, ...moreUncovered] = schedule?.uncovered ?? [];
+
   const tiles = [
     {
       key: "remaining",
       label: t("remaining"),
       value: <Money minor={credit.owedCents} currency={currency} signed={false} size="inherit" />,
-      note: dueNote,
+      note: scheduleNote ?? dueNote,
     },
     {
       key: "paid",
@@ -91,6 +111,19 @@ export function ThirdPartyCreditSection({
       key: "owes",
       label: t("personOwes", { person }),
       value: <Money minor={credit.personOwesCents} currency={currency} signed={false} size="inherit" />,
+      // How the figure is worked out opens from its note (RF-267).
+      note: (
+        <Button
+          type="button"
+          variant="ghost"
+          size="1"
+          tap={false}
+          aria-label={t("breakdownOpen", { person })}
+          onClick={() => setDialog("breakdown")}
+        >
+          {t("breakdownHint")}
+        </Button>
+      ),
     },
   ];
 
@@ -110,6 +143,30 @@ export function ThirdPartyCreditSection({
     return { text: kind === "person" ? t("arrived", values) : t("lenderPaid", values), done: true };
   }
 
+  // The month in progress with nothing from the payer yet, named before it is late (RF-267).
+  const waiting = now !== undefined && now.paidCents === 0 && credit.personOwesCents > 0;
+  const monthOnly = (month: string) => format.dateTime(civilDateToDate(`${month}-01`), { month: "long" });
+  const lender = credit.lenderName;
+
+  // One side of a month on a line: the amount and its day, or the dash.
+  const side = (cents: number, on: string | null) => (cents === 0 || on === null ? NONE : `${amount(cents)} · ${day(on)}`);
+  // What the payer sent less what was paid to the lender: where the 4x1000 and the cushion go.
+  const difference = (month: CreditMonth) =>
+    month.paidCents === 0 && month.lenderCents === 0 ? NONE : amount(month.paidCents - month.lenderCents);
+
+  // One side of a month for the table: the amount and, under it, the day of its last transfer.
+  const cell = (cents: number, on: string | null) =>
+    cents === 0 || on === null ? (
+      NONE
+    ) : (
+      <Flex direction="column">
+        <Text size="2">{amount(cents)}</Text>
+        <Text size="1" color="gray">
+          {day(on)}
+        </Text>
+      </Flex>
+    );
+
   const rows = now
     ? [
         { key: "person", label: t("personRow", { person }), line: sideLine("person", now) },
@@ -125,23 +182,58 @@ export function ThirdPartyCreditSection({
             {t("title", { person })}
           </Heading>
           {credit.canWrite && (
-            <Flex align="center" gap="2">
+            <Flex align="center" gap="2" wrap="wrap">
               <Button type="button" variant="surface" color="gray" onClick={() => setDialog("payment")}>
                 {t("register", { person })}
               </Button>
-              <RowMenu
-                rowName={t("actionsFor", { person })}
-                items={[
-                  { key: "edit", label: t("edit"), onSelect: () => setDialog("edit") },
-                  { key: "stop", label: t("stop"), onSelect: () => setDialog("stop"), tone: "danger" },
-                ]}
-              />
+              <Button type="button" variant="surface" color="gray" onClick={() => setDialog("edit")}>
+                {t("changePerson")}
+              </Button>
+              <Button type="button" variant="surface" color="red" onClick={() => setDialog("stop")}>
+                {t("unlink")}
+              </Button>
             </Flex>
           )}
         </Flex>
+        <Flex direction="column" gap="1">
+          <Text size="2">{lender === null ? t("introNoLender", { person }) : t("intro", { person, lender })}</Text>
+          <Text size="2" weight="medium">
+            {t("capitalLeft", { amount: amount(credit.owedCents) })}
+            {schedule !== null && schedule.remainingCount > 0 &&
+              ` · ${t("withInterest", { amount: amount(schedule.remainingTotalCents), count: schedule.remainingCount })}`}
+          </Text>
+          <Text size="2" color="gray">
+            {t("openingLine", { amount: amount(credit.openingCents), date: day(credit.openedOn) })}
+          </Text>
+        </Flex>
+        {waiting && (
+          <Callout.Root color="amber" variant="soft" role="status">
+            <Callout.Text>
+              {credit.dueDay === null
+                ? t("waitingNoDay", { person, month: monthOnly(now.month) })
+                : t("waiting", { person, month: monthOnly(now.month), day: credit.dueDay })}
+            </Callout.Text>
+          </Callout.Root>
+        )}
       </Flex>
 
       <StatTiles tiles={tiles} />
+
+      {uncovered && schedule?.personUsualCents != null && (
+        <Flex direction="column" px={{ initial: "0", md: "6" }}>
+          <Callout.Root color="amber" variant="soft" role="status">
+            <Callout.Text>
+              {t("scheduleUncovered", {
+                month: cuotaMonth(uncovered.dueOn),
+                amount: amount(uncovered.totalCents),
+                person,
+                usual: amount(schedule.personUsualCents),
+              })}
+              {moreUncovered.length > 0 && ` ${t("scheduleUncoveredMore", { count: moreUncovered.length })}`}
+            </Callout.Text>
+          </Callout.Root>
+        </Flex>
+      )}
 
       {now && (
         <Flex direction="column" px={{ initial: "0", md: "6" }}>
@@ -165,23 +257,52 @@ export function ThirdPartyCreditSection({
         </Flex>
       )}
 
-      {before.length > 0 && (
+      {credit.months.length > 0 && (
         <Flex direction="column" px={{ initial: "0", md: "6" }}>
           <Panel title={t("history")}>
-            {before.map((month) => (
-              <PanelBlock key={month.month}>
-                <Flex direction="column" py="2">
-                  <Text size="2" weight="medium">
-                    {monthName(month.month)}
-                  </Text>
-                  <Text size="2" color="gray">
-                    {month.paidCents > 0 ? t("monthArrived", { amount: amount(month.paidCents) }) : t("monthNotArrived")}
-                    {" · "}
-                    {month.lenderCents > 0 ? t("monthLender", { amount: amount(month.lenderCents) }) : t("monthLenderNot")}
-                  </Text>
-                </Flex>
-              </PanelBlock>
-            ))}
+            {/* The phone has no room for four columns: each month reads as a block there. */}
+            <Box display={{ initial: "block", md: "none" }}>
+              {credit.months.map((month) => (
+                <PanelBlock key={month.month}>
+                  <Flex direction="column" gap="1" py="2">
+                    <Text size="2" weight="medium">
+                      {monthName(month.month)}
+                    </Text>
+                    <Text size="2" color="gray">
+                      {t("colSent", { person })}: {side(month.paidCents, month.paidOn)}
+                    </Text>
+                    <Text size="2" color="gray">
+                      {lender === null ? t("colPaidBank") : t("colPaid", { lender })}: {side(month.lenderCents, month.lenderOn)}
+                    </Text>
+                    <Text size="2" color="gray">
+                      {t("colDifference")}: {difference(month)}
+                    </Text>
+                  </Flex>
+                </PanelBlock>
+              ))}
+            </Box>
+            <Box display={{ initial: "none", md: "block" }}>
+            <Table.Root size="1">
+              <Table.Header>
+                <Table.Row>
+                  <Table.ColumnHeaderCell>{t("colMonth")}</Table.ColumnHeaderCell>
+                  <Table.ColumnHeaderCell>{t("colSent", { person })}</Table.ColumnHeaderCell>
+                  <Table.ColumnHeaderCell>{lender === null ? t("colPaidBank") : t("colPaid", { lender })}</Table.ColumnHeaderCell>
+                  <Table.ColumnHeaderCell justify="end">{t("colDifference")}</Table.ColumnHeaderCell>
+                </Table.Row>
+              </Table.Header>
+              <Table.Body>
+                {credit.months.map((month) => (
+                  <Table.Row key={month.month}>
+                    <Table.RowHeaderCell>{monthName(month.month)}</Table.RowHeaderCell>
+                    <Table.Cell>{cell(month.paidCents, month.paidOn)}</Table.Cell>
+                    <Table.Cell>{cell(month.lenderCents, month.lenderOn)}</Table.Cell>
+                    <Table.Cell justify="end">{difference(month)}</Table.Cell>
+                  </Table.Row>
+                ))}
+              </Table.Body>
+            </Table.Root>
+            </Box>
           </Panel>
         </Flex>
       )}
@@ -194,6 +315,18 @@ export function ThirdPartyCreditSection({
           }}
           credit={credit}
           banks={banks}
+        />
+      )}
+      {dialog === "breakdown" && (
+        <ThirdPartyBreakdownDialog
+          open
+          onOpenChange={(open) => {
+            if (!open) setDialog(null);
+          }}
+          liabilityAccountId={credit.liabilityAccountId}
+          person={person}
+          currency={currency}
+          credit={credit}
         />
       )}
       {dialog === "edit" && (

@@ -19,7 +19,7 @@ import {
 } from "@/components/ui";
 import type { PlannedPaymentRow } from "@/db/queries/planned-payments";
 import { civilDateToDate, todayInBogota } from "@/lib/dates";
-import { isOverdue } from "@/lib/fund/glance";
+import { isExpectedIncome, isOverdue } from "@/lib/fund/glance";
 
 // The em dash a cell with nothing to name reads as in the desktop design, not a word a
 // translator would ever change.
@@ -114,6 +114,11 @@ export function PaymentsTable({
           <Text size="2" weight="medium" truncate>
             {payment.description ?? t("noConcept")}
           </Text>
+          {isExpectedIncome(payment) && (
+            <Badge color="jade" variant="soft" radius="full">
+              {t("incomeBadge")}
+            </Badge>
+          )}
           {isOverdue(payment, today) && (
             <Badge color="amber" variant="soft" radius="full">
               {t("overdueLabel")}
@@ -178,7 +183,7 @@ export function PaymentsTable({
         <Money
           minor={payment.amountCents}
           currency={payment.currency}
-          tone={payment.status === "pending" ? "expense" : "transfer"}
+          tone={isExpectedIncome(payment) ? "income" : payment.status === "pending" ? "expense" : "transfer"}
           signed={false}
         />
       ),
@@ -201,7 +206,7 @@ export function PaymentsTable({
               color="gray"
               onClick={() => onSettle(payment)}
             >
-              {t("settle")}
+              {t(isExpectedIncome(payment) ? "incomeSettle" : "settle")}
             </Button>
           );
         }
@@ -210,7 +215,7 @@ export function PaymentsTable({
             <Flex align="center" justify="end" gap="1">
               <Check size={14} color="var(--jade-9)" aria-hidden />
               <Text size="2" color="jade">
-                {t("settledMarker")}
+                {t(isExpectedIncome(payment) ? "incomeSettledMarker" : "settledMarker")}
               </Text>
             </Flex>
           );

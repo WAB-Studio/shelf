@@ -3,7 +3,7 @@ import "server-only";
 import { sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
-import { minimumPaymentSql } from "@/db/queries/debt-minimum";
+import { minimumPaymentSql, unpaidStatementMinimumSql } from "@/db/queries/debt-minimum";
 import type { DebtTerms } from "@/db/schema";
 import { withUserDb } from "@/db/session";
 import type { CurrencyCode } from "@/lib/currency";
@@ -90,8 +90,8 @@ export function toBillKey(accountId: string, currency: CurrencyCode): string {
  * struck on what is owed alone, at the effective twelfth-root
  * step of the annual rate, NOT the linear `rate/12`, and that step rides along as
  * a rate of its own so the screen states the percentage without dividing
- * anything; the minimum is 0 for a card that owes nothing, else the fixed
- * amount, or a percentage of the owed, or null. The cut-off and due dates come from the latest
+ * anything; the minimum is 0 for a card that owes nothing, else the latest statement's
+ * printed minimum while it is unpaid, the terms' fixed amount, or a percentage of the owed, or null. The cut-off and due dates come from the latest
  * statement's own printed dates when one exists, and from the terms' fixed days
  * otherwise (RF-131) — the same reading `getCurrentStatement` takes, so the list
  * and the detail screen never name different dates for the same debt. No figure is re-summed from a stored
@@ -207,7 +207,12 @@ export async function getDebtOverviewWithPockets(): Promise<{
           fixed: sql`dt.minimum_payment_cents`,
           pct: sql`dt.minimum_payment_pct`,
           balance: sql`b.settlement_cents`,
-          fallback: sql`null::bigint`,
+          statement: unpaidStatementMinimumSql({
+            account: sql`b.id`,
+            currency: sql`a.settlement_currency`,
+            cutOff: sql`s.cut_off_date`,
+            minimum: sql`s.minimum_payment_cents`,
+          }),
         })} as minimum_payment_cents,
         coalesce(s.cut_off_date, nc.next_cut_off) as next_cut_off_date,
         coalesce(s.payment_due_date, nd.next_due) as next_due_date,
@@ -221,7 +226,7 @@ export async function getDebtOverviewWithPockets(): Promise<{
       -- (RF-131): the same row getCurrentStatement reads, so the overview and
       -- the detail screen never name different dates for the same debt.
       left join lateral (
-        select s.cut_off_date, s.payment_due_date
+        select s.cut_off_date, s.payment_due_date, s.minimum_payment_cents
         from account_statements s
         where s.account_id = dt.account_id
         order by s.cut_off_date desc

@@ -85,6 +85,7 @@ type OverviewCard = DebtOverviewRow & {
   personal: boolean;
   foreignOwner: boolean;
   ownerName: string | null;
+  paidBy: string | null;
 };
 
 // What the currency picker offers and what the terms schema takes. A row may
@@ -169,6 +170,7 @@ export function DebtsScreen({
         otherOwed: row.otherOwed,
         terms: row,
         canWrite: row.canWrite,
+        paidBy: row.paidBy,
       })),
       ...withoutTerms.map((debt) => ({ ...debt, terms: null })),
     ];
@@ -282,7 +284,7 @@ export function DebtsScreen({
         key: "nextPayment",
         label: t("tileNextPayment"),
         value:
-          nextPayment === null ? (
+          nextPayment === null || nextPayment.amountCents === null ? (
             NO_VALUE
           ) : (
             <Money
@@ -295,7 +297,7 @@ export function DebtsScreen({
         note:
           nextPayment === null
             ? t("tileNoNextPayment")
-            : t("tileNextPaymentNote", {
+            : t(nextPayment.amountCents === null ? "tileNextPaymentNoMinimum" : "tileNextPaymentNote", {
                 date: shortDate(nextPayment.date),
                 name: nextPayment.name,
               }),
@@ -451,12 +453,15 @@ export function DebtsScreen({
                 {totals.nextPayment !== null &&
                   totals.nextPayment.currency === set.currency && (
                     <Text size="2" color="gray">
-                      {t("nextPayment", {
-                        amount: moneyText(
-                          totals.nextPayment.amountCents,
-                          totals.nextPayment.currency,
-                          locale,
-                        ),
+                      {t(totals.nextPayment.amountCents === null ? "nextPaymentNoMinimum" : "nextPayment", {
+                        amount:
+                          totals.nextPayment.amountCents === null
+                            ? ""
+                            : moneyText(
+                                totals.nextPayment.amountCents,
+                                totals.nextPayment.currency,
+                                locale,
+                              ),
                         date: format.dateTime(
                           civilDateToDate(totals.nextPayment.date),
                           { day: "numeric", month: "short" },
@@ -594,6 +599,7 @@ function CardHead({
   foreignOwner,
   ownerName,
   meta,
+  paidBy,
   currency,
   owedCents,
   creditCents,
@@ -606,11 +612,14 @@ function CardHead({
   foreignOwner: boolean;
   ownerName: string | null;
   meta: string;
+  // Who pays the credit when somebody else does.
+  paidBy: string | null;
   currency: CurrencyCode;
   owedCents: number;
   creditCents: number;
   otherOwed: DebtPocket[];
 }) {
+  const t = useTranslations("debts");
   const beside = owesBesideCredit(creditCents, otherOwed);
 
   return (
@@ -647,6 +656,11 @@ function CardHead({
         <Text size="1" color="gray">
           {meta}
         </Text>
+        {paidBy !== null && (
+          <Text size="1" color="gray">
+            {t("paidBy", { person: paidBy })}
+          </Text>
+        )}
       </FigureRow>
       {beside && (
         // The credit with a pocket owed is a line too long to sit beside the
@@ -748,6 +762,7 @@ function RevolvingCard({
           personal={row.personal}
           foreignOwner={row.foreignOwner}
           ownerName={row.ownerName}
+          paidBy={row.paidBy}
           meta={t("revolvingMeta", {
             // The effective monthly step the server derived off the annual rate,
             // read as a percentage here and nowhere divided, so the card and the
@@ -837,6 +852,7 @@ function InstallmentCard({
           personal={row.personal}
           foreignOwner={row.foreignOwner}
           ownerName={row.ownerName}
+          paidBy={row.paidBy}
           meta={t("installmentMeta")}
           currency={row.currency}
           owedCents={row.owedCents}
@@ -883,6 +899,7 @@ function NoTermsCard({
     owedCents: number;
     creditCents: number;
     otherOwed: DebtPocket[];
+    paidBy: string | null;
   };
   // Absent for a caller who cannot write the debt: the head already says what it
   // lacks, and the invitation would only lead to a refusal.
@@ -901,6 +918,7 @@ function NoTermsCard({
           personal={debt.personal}
           foreignOwner={debt.foreignOwner}
           ownerName={debt.ownerName}
+          paidBy={debt.paidBy}
           meta={t("noTermsMeta")}
           currency={debt.currency}
           owedCents={debt.owedCents}

@@ -19,7 +19,7 @@ import {
   ResendChangedError,
   updateTransaction,
 } from "@/db/queries/transactions";
-import type { TransactionSplitInput } from "@/db/queries/transactions";
+import type { PocketCover, TransactionSplitInput } from "@/db/queries/transactions";
 import { BASE_CURRENCY, type CurrencyCode } from "@/lib/currency";
 import { withUserDb } from "@/db/session";
 import { pgErrorCode } from "@/lib/db-error";
@@ -190,8 +190,9 @@ export async function bookMovement(
   input: CreateTransactionInput,
   alsoCheck: () => Promise<void> = async () => {},
   // `awaitingCounterparty` is Claude's «I do not know the other side» (RF-133); only a one-sided movement has a side to wait for.
-  options: { awaitingCounterparty?: boolean } = {},
-): Promise<{ transactionId: string }> {
+  // `reportPocketCovers` reads back what the pockets covered for it (RF-249).
+  options: { awaitingCounterparty?: boolean; reportPocketCovers?: boolean } = {},
+): Promise<{ transactionId: string; pocketCovers?: PocketCover[] }> {
   if (options.awaitingCounterparty && input.fromAccountId !== null && input.toAccountId !== null) {
     throw new ActionError("mcp.errors.awaitsNeedsOneSide");
   }
@@ -221,6 +222,7 @@ export async function bookMovement(
       splits: toSplitMinor(input.splits),
       labelIds: withPerson(input.labelIds, input.forPersonId),
       causedByTransactionId: input.causedByTransactionId,
+      reportPocketCovers: options.reportPocketCovers ?? false,
     });
   } catch (error) {
     return mapTransactionError(error);
@@ -447,6 +449,53 @@ export async function mergeMovements(input: {
         ),
       });
       return { transactionId: created.transactionId, lines: lines.length };
+    });
+  } catch (error) {
+    if (error instanceof ActionError) throw error;
+    return mapTransactionError(error);
+  }
+}
+
+/**
+ * Puts the same labels, and optionally the same category, on every movement of an explicit list, in one
+ * transaction: all or none. `labelIds` replaces each movement's labels (empty clears them); `categoryId` is
+ * written only on movements of exactly one line, since a receipt's lines are not one category, and the split
+ * trigger still refuses a kind or scope that disagrees. A movement an adjustment booked is refused, as an edit is.
+ * Each one is rewritten as it was, which stamps a new `updated_at`.
+ */
+export async function relabelMovements(input: {
+  transactionIds: string[];
+  labelIds?: string[];
+  categoryId?: string;
+}): Promise<{ updated: number }> {
+  const ids = [...new Set(input.transactionIds)];
+  const list = sql.join(ids.map((id) => sql`${id}::uuid`), sql`, `);
+  try {
+    return await withUserDb(async (tx) => {
+      const found = await listTransactions({ ids }, { tx });
+      if (found.length !== ids.length) throw new ActionError("errors.notFound");
+      if (found.some((row) => row.reconciliationId !== null)) throw new ActionError("errors.adjustmentReadOnly");
+      if (input.categoryId !== undefined) {
+        if (found.some((row) => row.splits.length !== 1)) throw new ActionError("mcp.errors.relabel.lines");
+        const moved = await tx.execute<{ id: string }>(sql`
+          update transaction_splits set category_id = ${input.categoryId}::uuid
+          where transaction_id in (${list}) returning id`);
+        if (moved.length !== ids.length) throw new ActionError("errors.notFound");
+      }
+      if (input.labelIds !== undefined) {
+        // Only the tags are replaced: the person a movement was for (RF-242) rides the same join and stays.
+        await tx.execute(sql`
+          delete from transaction_labels tl using labels l
+          where l.id = tl.label_id and l.kind = 'tag' and tl.transaction_id in (${list})`);
+        if (input.labelIds.length > 0) {
+          const pairs = ids.flatMap((id) => input.labelIds!.map((labelId) => sql`(${id}::uuid, ${labelId}::uuid)`));
+          await tx.execute(sql`insert into transaction_labels (transaction_id, label_id) values ${sql.join(pairs, sql`, `)}`);
+        }
+      }
+      const touched = await tx.execute<{ id: string }>(sql`
+        update transactions set description = description where id in (${list}) returning id`);
+      if (touched.length !== ids.length) throw new ActionError("errors.notFound");
+      return { updated: touched.length };
     });
   } catch (error) {
     if (error instanceof ActionError) throw error;

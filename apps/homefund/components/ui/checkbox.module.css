@@ -1,0 +1,12 @@
+/* Radix's checkbox tops out at 24px on `size="3"`, short of the 44px floor every control holds. The box a finger
+   lands on is stretched past the square instead of the square being fattened. The class is doubled to outrank
+   `.rt-reset:where(button)`, whose `all: unset` wipes a same-specificity declaration. */
+.hit.hit::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: max(100%, 44px);
+  height: max(100%, 44px);
+  transform: translate(-50%, -50%);
+}

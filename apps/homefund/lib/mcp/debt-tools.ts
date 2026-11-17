@@ -6,11 +6,14 @@ import { z } from "zod";
 import { getDebtDetail } from "@/db/queries/debt-detail";
 import { payDebt, saveDebtTerms } from "@/db/queries/debt-write";
 import { getDebtsScreenData } from "@/db/queries/debts-screen";
+import { setLoanSchedule } from "@/db/queries/loan-schedule";
 import { ActionError } from "@/lib/errors";
-import { ADD_ONCE, READ, titled } from "@/lib/mcp/annotations";
+import { ADD_ONCE, OVERWRITE, READ, titled } from "@/lib/mcp/annotations";
 import { parseForm } from "@/lib/mcp/parse-form";
+import { todayInBogota } from "@/lib/dates";
 import { centsToDecimal } from "@/lib/money";
 import { DEBT_KINDS, debtTermsSchema } from "@/lib/validation/debt-terms";
+import { parseLoanSchedule } from "@/lib/validation/loan-schedule";
 import { recordDebtPaymentSchema } from "@/lib/validation/installment-plan";
 
 type Run = (ctx: ServerContext, load: (owner: string) => Promise<unknown>) => Promise<CallToolResult>;
@@ -81,6 +84,34 @@ export function registerDebtTools(server: McpServer, run: Run, t: Say): void {
       ),
   );
 
+  // RF-265: the bank's «plan de pagos» of a loan, replaced whole; `dryRun` reads it against the payments and writes nothing.
+  server.registerTool(
+    "set_loan_schedule",
+    {
+      ...titled(t, "setLoanSchedule"),
+      description: t("tools.setLoanSchedule"),
+      inputSchema: z.object({
+        accountId: z.string().describe(d("debtAccountId")),
+        rows: z
+          .array(
+            z.object({
+              dueOn: z.string().describe(d("scheduleDueOn")),
+              principalCents: z.number().int().describe(d("schedulePrincipalCents")),
+              interestCents: z.number().int().describe(d("scheduleInterestCents")),
+              insuranceCents: z.number().int().optional().describe(d("scheduleInsuranceCents")),
+              totalCents: z.number().int().optional().describe(d("scheduleTotalCents")),
+              remainingCents: z.number().int().describe(d("scheduleRemainingCents")),
+            }),
+          )
+          .describe(d("scheduleRows")),
+        dryRun: z.boolean().optional().describe(d("scheduleDryRun")),
+      }),
+      annotations: OVERWRITE,
+    },
+    (input, ctx) =>
+      run(ctx, () => setLoanSchedule(parseLoanSchedule({ accountId: input.accountId, rows: input.rows }), input.dryRun === true)),
+  );
+
   // «Abonar»: one transfer from an asset into the debt, booked once per `requestRef`.
   server.registerTool(
     "record_debt_payment",
@@ -91,8 +122,8 @@ export function registerDebtTools(server: McpServer, run: Run, t: Say): void {
         fromAccountId: z.string().describe(d("debtFromAccountId")),
         toAccountId: z.string().describe(d("debtAccountId")),
         amountCents: z.number().int().describe(d("amountCents")),
-        occurredOn: z.string().describe(d("occurredOn")),
-        requestRef: z.string().optional().describe(d("requestRef")),
+        occurredOn: z.string().optional().describe(d("occurredOnDefault")),
+        requestRef: z.uuid().describe(d("requestRef")),
       }),
       annotations: ADD_ONCE,
     },
@@ -103,7 +134,7 @@ export function registerDebtTools(server: McpServer, run: Run, t: Say): void {
             fromAccountId: input.fromAccountId,
             toAccountId: input.toAccountId,
             amount: centsToDecimal(input.amountCents),
-            occurredAt: input.occurredOn,
+            occurredAt: input.occurredOn ?? todayInBogota(),
             requestRef: input.requestRef,
           }),
         ),

@@ -124,13 +124,16 @@ export function HomeAside({
               <Heading as="h2" size="4">{t("asideDebt")}</Heading>
               <Flex justify="between" align="baseline" gap="3">
                 <Text size="3" weight="medium" truncate>{debtName ?? ""}</Text>
-                <Money
-                  minor={debt.amountCents}
-                  currency={debt.currency as CurrencyCode}
-                  signed={false}
-                />
+                {debt.amountCents !== null && (
+                  <Money
+                    minor={debt.amountCents}
+                    currency={debt.currency as CurrencyCode}
+                    signed={false}
+                  />
+                )}
               </Flex>
               <Text size="2" color="gray">{t("dueSoon", { date: shortDate(debt.date) })}</Text>
+              {debt.amountCents === null && <Text size="2" color="gray">{t("dueNoMinimum")}</Text>}
             </Flex>
           </PlainLink>
         </Card>

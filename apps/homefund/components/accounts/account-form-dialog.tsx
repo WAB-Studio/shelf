@@ -49,6 +49,7 @@ const SUBTYPE_LABEL_KEYS = {
   cash: "subtypeCash",
   card: "subtypeCard",
   loan: "subtypeLoan",
+  receivable: "subtypeReceivable",
 } as const;
 
 // A Radix Select item may not carry an empty value, so "no parent" rides this sentinel.

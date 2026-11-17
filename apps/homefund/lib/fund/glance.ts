@@ -9,6 +9,11 @@ export function isOverdue(
   return payment.status === "pending" && payment.dueDate < today;
 }
 
+// A planned payment that leaves from no account is an expected income (RF-253).
+export function isExpectedIncome(payment: { fromAccountId: string | null; toAccountId: string | null }): boolean {
+  return payment.fromAccountId === null && payment.toAccountId !== null;
+}
+
 // What a proposed delivery is read in: its account's own currency, or the fund's
 // when it names none yet, never pesos by default (RF-121, RF-124).
 export function deliveryCurrency<C extends string>(
@@ -50,7 +55,8 @@ export type DueDebt = {
 export type NextDebtPayment = {
   accountId: string;
   currency: string;
-  amountCents: number;
+  // Null while no minimum is known: a payment's due date without its figure, never a zero.
+  amountCents: number | null;
   date: string;
 };
 
@@ -66,7 +72,7 @@ export function nextDebtPayment<T extends DueDebt>(
     next = {
       accountId: row.accountId,
       currency: row.currency,
-      amountCents: row.minimumPaymentCents ?? 0,
+      amountCents: row.minimumPaymentCents,
       date: row.nextDueDate,
       row,
     };

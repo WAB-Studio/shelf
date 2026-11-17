@@ -45,7 +45,7 @@ export function DueRemindersCard({
                     {row.description ?? t("dueNoName")}
                   </Text>
                   <Text size="2" color={late ? "red" : "gray"}>
-                    {t(late ? "dueLate" : "dueSoon", { date })}
+                    {t(row.isIncome ? (late ? "dueIncomeLate" : "dueIncomeSoon") : late ? "dueLate" : "dueSoon", { date })}
                   </Text>
                 </Flex>
                 <Money

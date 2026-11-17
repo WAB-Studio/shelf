@@ -106,6 +106,25 @@ export const createPlannedPaymentSchema = z
   .superRefine(requireAnAccount)
   .superRefine(requireRemindOnBeforeDue);
 
+// An expected income (RF-253) lands in one account, leaves from none, and names who is paying it. It is a
+// planned payment like any other, so only these three facts set it apart.
+export function requireAnIncome(
+  data: { fromAccountId?: string | null; toAccountId?: string | null; description?: string | null },
+  ctx: z.RefinementCtx,
+) {
+  if (data.fromAccountId != null) {
+    ctx.addIssue({ code: "custom", message: "plannedPayments.errors.incomeHasSource", path: ["fromAccountId"] });
+  }
+  if (data.toAccountId == null) {
+    ctx.addIssue({ code: "custom", message: "plannedPayments.errors.incomeNeedsAccount", path: ["toAccountId"] });
+  }
+  if (!data.description?.trim()) {
+    ctx.addIssue({ code: "custom", message: "plannedPayments.errors.incomeNeedsPayer", path: ["description"] });
+  }
+}
+
+export const createExpectedIncomeSchema = createPlannedPaymentSchema.superRefine(requireAnIncome);
+
 export type CreatePlannedPaymentInput = z.infer<typeof createPlannedPaymentSchema>;
 
 export const updatePlannedPaymentSchema = z

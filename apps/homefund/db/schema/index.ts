@@ -36,3 +36,5 @@ export * from "./oauth-calls";
 export * from "./member-debts";
 export * from "./recipients";
 export * from "./third-party-credits";
+export * from "./card-deferrals";
+export * from "./loan-schedule-rows";

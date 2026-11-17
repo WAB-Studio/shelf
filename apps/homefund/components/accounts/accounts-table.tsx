@@ -1,10 +1,12 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { useTranslations } from "next-intl";
 
 import { useOwnerLabel } from "@/components/fund/owner-mark";
+import { ThirdPartyBreakdownDialog } from "@/components/planning/third-party-breakdown";
 import {
+  Button,
   DataTable,
   Flex,
   Money,
@@ -24,10 +26,13 @@ const WIDTHS = {
 
 /**
  * «Lo paga <persona> · le falta $X» under a credit somebody else pays (RF-216): the one place its hidden «Me debe»
- * shows, as a figure on the credit and never as an account. Nothing for any other account.
+ * shows, as a figure on the credit and never as an account. The figure opens its breakdown (RF-267): what the payer
+ * owed when the credit was followed, each payment of theirs and what is left. Nothing for any other account.
  */
 export function PaidByLine({ account }: { account: AccountRow }) {
   const t = useTranslations("accounts");
+  const tCredit = useTranslations("thirdPartyCredit");
+  const [open, setOpen] = useState(false);
   const credit = account.thirdParty;
   if (!credit) return null;
 
@@ -37,17 +42,68 @@ export function PaidByLine({ account }: { account: AccountRow }) {
         ? t.rich("paidBy", {
             person: credit.personName,
             amount: () => (
-              <Money
-                minor={credit.personOwesCents}
-                currency={account.settlementCurrency}
-                tone="plain"
-                size="inherit"
-                signed={false}
-              />
+              <Button
+                type="button"
+                variant="ghost"
+                size="1"
+                tap={false}
+                aria-label={tCredit("breakdownOpen", { person: credit.personName })}
+                onClick={() => setOpen(true)}
+              >
+                <Money
+                  minor={credit.personOwesCents}
+                  currency={account.settlementCurrency}
+                  tone="plain"
+                  size="inherit"
+                  signed={false}
+                />
+              </Button>
             ),
           })
         : t("paidByNothingOwed", { person: credit.personName })}
+      {open && (
+        <ThirdPartyBreakdownDialog
+          open
+          onOpenChange={setOpen}
+          liabilityAccountId={account.id}
+          person={credit.personName}
+          currency={account.settlementCurrency}
+        />
+      )}
     </Text>
+  );
+}
+
+/**
+ * The asset's own part below zero, as a warning on its row (RF-249): the database covers a shortfall from the
+ * account's pockets when they hold it, so what stays negative is money that left with nothing to cover it.
+ */
+export function FreePartWarning({ account }: { account: AccountRow }) {
+  const t = useTranslations("accounts");
+  const own = account.balances[0];
+  if (account.kind !== "asset" || !own || own.balanceCents >= 0) return null;
+
+  return (
+    <Text size="2" color="red">
+      {t("freePartNegative")}
+    </Text>
+    );
+}
+
+/**
+ * The quiet «Cuádrala» under an account not counted for over a month (RF-262): a text button that opens the account's
+ * own «Cuadrar». Nothing for an account counted lately, or one the caller only reads.
+ */
+export function StaleCountLine({ stale, onReconcile }: { stale: boolean; onReconcile: () => void }) {
+  const t = useTranslations("accounts");
+  if (!stale) return null;
+
+  return (
+    <Flex>
+      <Button type="button" variant="ghost" color="gray" size="1" tap onClick={onReconcile}>
+        {t("reconcileNudge")}
+      </Button>
+    </Flex>
   );
 }
 
@@ -88,6 +144,7 @@ export function AccountsTable({
   archived,
   hasGroup,
   empty,
+  stale,
   onEdit,
   onReconcile,
   onArchive,
@@ -102,6 +159,8 @@ export function AccountsTable({
   // go (RF-60, RF-61), mirroring the phone's card.
   hasGroup: boolean;
   empty?: ReactNode;
+  // The accounts not counted for over a month (RF-262).
+  stale: ReadonlySet<string>;
   onEdit: (row: AccountRow) => void;
   onReconcile: (row: AccountRow) => void;
   onArchive: (row: AccountRow) => void;
@@ -124,6 +183,8 @@ export function AccountsTable({
           </Text>
           <AccountDetail account={row} />
           <PaidByLine account={row} />
+          <FreePartWarning account={row} />
+          <StaleCountLine stale={stale.has(row.id)} onReconcile={() => onReconcile(row)} />
         </Flex>
       ),
     },

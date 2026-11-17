@@ -64,6 +64,8 @@ export type DebtTableRow = {
   otherOwed: DebtPocket[];
   terms: DebtOverviewRow | null;
   canWrite: boolean;
+  // Who pays this credit when somebody else does: its row says so under the name.
+  paidBy: string | null;
 };
 
 const AMOUNT_SLOT = "\u0000";
@@ -309,6 +311,11 @@ export function DebtsTable({
               </Badge>
             )}
           </Flex>
+          {row.paidBy !== null && (
+            <Text size="1" color="gray">
+              {t("paidBy", { person: row.paidBy })}
+            </Text>
+          )}
           <DebtMeta row={row} onEditTerms={() => onEditTerms(row)} />
         </Flex>
       ),

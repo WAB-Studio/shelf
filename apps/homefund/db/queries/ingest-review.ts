@@ -325,6 +325,7 @@ export async function acceptDelivery({
       labelIds,
       contributedByMemberId,
       madeByMemberId: madeByMemberId ?? defaultMadeBy(fromAccountId),
+      createdVia: "inbox",
     });
 
     const updated = await tx
@@ -361,6 +362,19 @@ export async function acceptDelivery({
     }
 
     return result;
+  });
+}
+
+/**
+ * Records several deliveries in ONE transaction: if any is refused (a closed account, a date before opening, a
+ * delivery already decided), none is recorded. The transaction ids come back in the order given.
+ */
+export async function acceptDeliveries(items: AcceptDeliveryArgs[]): Promise<string[]> {
+  return withUserDb(async (tx) => {
+    const ids: string[] = [];
+    for (const item of items) ids.push((await acceptDelivery(item, tx)).transactionId);
+
+    return ids;
   });
 }
 

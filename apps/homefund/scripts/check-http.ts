@@ -220,6 +220,11 @@ function renderCases({ transactionId, debtAccountId }: HttpScope): RenderCase[] 
       title: title("accounts.title"),
     },
     {
+      path: `/${LOCALE}/settings/accounts/reconcile`,
+      status: 200,
+      title: title("accounts.reconcileAllTitle"),
+    },
+    {
       path: `/${LOCALE}/settings/categories`,
       status: 200,
       title: title("categories.title"),
@@ -1970,7 +1975,7 @@ async function mcpClassesSuite(): Promise<void> {
   assert(
     next("/mcp lists every tool with a title and an honest class: reads are read-only, an import and a move to the fund are destructive"),
     listed.status === 200 && exposed.length > 0 && exposed.every((one) => typeof one.title === "string" && one.title.length > 0) &&
-      exposed.filter((one) => one.annotations?.readOnlyHint === true).every((one) => /^(list_|get_|review_|spending_|preview_|movement_|propose_)/.test(one.name)) &&
+      exposed.filter((one) => one.annotations?.readOnlyHint === true).every((one) => /^(alert_|list_|get_|review_|spending_|preview_|movement_|propose_)/.test(one.name)) &&
       destructive("import_statement") && destructive("move_account_to_fund"),
     `it answered ${listed.status} with ${exposed.length} tools`,
   );
