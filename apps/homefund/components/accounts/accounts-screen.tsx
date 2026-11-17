@@ -19,6 +19,7 @@ import {
   ForeignEstimates,
   type BilledTarget,
 } from "@/components/accounts/foreign-estimates";
+import { OwedToMeSection } from "@/components/accounts/owed-to-me-section";
 import { ReconcileDialog } from "@/components/accounts/reconcile-dialog";
 import { AccountDetail, AccountsTable, FreePartWarning, PaidByLine, StaleCountLine } from "@/components/accounts/accounts-table";
 import {
@@ -42,6 +43,7 @@ import {
 } from "@/components/ui";
 import type { AccountRow } from "@/db/queries/accounts";
 import type { AccountPendingSettlement } from "@/db/queries/debt-statements";
+import type { OwedCurrency } from "@/lib/owed-to-me";
 import { usePathname, useRouter } from "@/i18n/navigation";
 import { holdsMoneyApartFromPockets } from "@/lib/account-detail";
 import { civilDateToDate } from "@/lib/dates";
@@ -121,6 +123,7 @@ export function AccountsScreen({
   archived,
   newSubtype,
   members,
+  owed,
   staleIds,
 }: {
   accounts: AccountRow[];
@@ -132,6 +135,8 @@ export function AccountsScreen({
   newSubtype?: (typeof ACCOUNT_SUBTYPES)[number] | null;
   // The fund members a fund account can be held by (RF-181).
   members: { id: string; name: string }[];
+  // What other people owe the person, per currency (decision 2 of 2026-11-17): the «Te deben» section.
+  owed: OwedCurrency[];
   // The accounts not counted for over a month (RF-262), each with a quiet «Cuádrala».
   staleIds: string[];
 }) {
@@ -575,6 +580,8 @@ export function AccountsScreen({
           )}
         </Flex>
       </Box>
+
+      {!archived && <OwedToMeSection owed={owed} />}
 
       <AccountFormDialog
         hasGroup={groupName !== null}

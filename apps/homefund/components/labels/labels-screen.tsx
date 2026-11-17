@@ -24,6 +24,7 @@ import {
   Flex,
   ScreenHeader,
   IconButton,
+  PlainLink,
   Text,
   type DataSection,
 } from "@/components/ui";
@@ -298,9 +299,17 @@ function LabelCard({
           {row.color && <ColorSwatch color={row.color} label={row.name} />}
           <Flex direction="column" minWidth="0">
             <Flex align="center" gap="2" minWidth="0">
-              <Text weight="medium" truncate>
-                {row.name}
-              </Text>
+              {row.kind === "person" ? (
+                <PlainLink href={`/settings/labels/${row.id}`} aria-label={t("personOpen", { name: row.name })}>
+                  <Text weight="medium" truncate>
+                    {row.name}
+                  </Text>
+                </PlainLink>
+              ) : (
+                <Text weight="medium" truncate>
+                  {row.name}
+                </Text>
+              )}
               {row.kind === "person" && (
                 <Badge color={row.chargeDefault ? "amber" : "gray"} variant="soft">
                   {t(row.chargeDefault ? "personCharged" : "personNotCharged")}
