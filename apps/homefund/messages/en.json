@@ -186,6 +186,8 @@
     "potCash": "Cash balance",
     "unassigned": "Unassigned",
     "spendingByMakerIn": "Spending by person in {currency}",
+    "forPersonTitle": "Who it was for",
+    "forPersonIn": "Spent for each person in {currency}",
     "madeByHousehold": "The household",
     "contributionsNote": "Unassigned are incomes into the fund that arrived without «From whom»; open them to choose who put them in."
   },

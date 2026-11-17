@@ -186,6 +186,8 @@
     "potCash": "Saldo de la caja",
     "unassigned": "Sin asignar",
     "spendingByMakerIn": "Gasto por persona en {currency}",
+    "forPersonTitle": "Para quién",
+    "forPersonIn": "Gastado para cada persona en {currency}",
     "madeByHousehold": "El hogar",
     "contributionsNote": "Sin asignar son los ingresos al fondo que llegaron sin «De quién»; ábrelos para elegir quién los puso."
   },

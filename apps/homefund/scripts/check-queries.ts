@@ -129,6 +129,7 @@ import { getExpensesByCategory } from "@/db/queries/reports/expenses-by-category
 import { getMonthlyFlow, getSixMonthFlow } from "@/db/queries/reports/monthly-flow";
 import { netWorthByOwner } from "@/db/queries/reports/net-worth";
 import { getReportsData } from "@/db/queries/reports/reports-screen";
+import { getSpendingForPersons } from "@/db/queries/reports/spending-for-person";
 import {
   addGoalContribution,
   archiveGoal,
@@ -3368,6 +3369,7 @@ async function reconcileSuite(
     (await trips(() => getFundSpending(range))) +
     (await trips(() => getUnassignedIncome(range))) +
     (await trips(() => getSpendingByMaker(range))) +
+    (await trips(() => getSpendingForPersons(range))) +
     (await trips(() => getUserGroup())) +
     (await trips(() => getSessionUser())) +
     (group ? await trips(() => listMembers(group.id, { archived: false })) : 0);
@@ -21158,5 +21160,13 @@ async function mcpForPersonSuite(): Promise<void> {
       JSON.stringify((charged.value as { before: unknown }).before) === JSON.stringify({ chargeDefault: true }) && !tagCharged.isError && chargeRows[0].charge_default === false &&
       es.mcp.instructionsPerson.includes("forPerson") && es.mcp.instructionsPerson.includes("Nunca lo registres como préstamo"),
     JSON.stringify({ charged: charged.value, after, chargeRows }),
+  );
+
+  const report = (await tool("get_report", { month: today.slice(0, 7) })).value as { spendingForPersons: { personId: string; name: string; currency: string; spentCents: number }[] };
+  assert(
+    next("RF-242: Informes sums the month's expenses by the person they were for and per currency, counting only the movements that name one"),
+    report.spendingForPersons.length === 2 && report.spendingForPersons.find((row) => row.personId === angelaId)?.spentCents === 30_000_00 &&
+      report.spendingForPersons.find((row) => row.personId === papaId)?.spentCents === 10_000_00 && report.spendingForPersons.every((row) => row.currency === "COP"),
+    JSON.stringify(report.spendingForPersons),
   );
 }
