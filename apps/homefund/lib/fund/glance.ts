@@ -50,7 +50,8 @@ export type DueDebt = {
 export type NextDebtPayment = {
   accountId: string;
   currency: string;
-  amountCents: number;
+  // Null while no minimum is known: a payment's due date without its figure, never a zero.
+  amountCents: number | null;
   date: string;
 };
 
@@ -66,7 +67,7 @@ export function nextDebtPayment<T extends DueDebt>(
     next = {
       accountId: row.accountId,
       currency: row.currency,
-      amountCents: row.minimumPaymentCents ?? 0,
+      amountCents: row.minimumPaymentCents,
       date: row.nextDueDate,
       row,
     };

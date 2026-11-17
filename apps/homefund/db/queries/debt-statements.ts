@@ -2,7 +2,7 @@ import "server-only";
 
 import { sql, type SQL } from "drizzle-orm";
 
-import { minimumPaymentSql } from "@/db/queries/debt-minimum";
+import { minimumPaymentSql, unpaidStatementMinimumSql } from "@/db/queries/debt-minimum";
 import { withUserDb } from "@/db/session";
 import { nextDayOfMonthOnOrAfter, todayInBogota } from "@/lib/dates";
 
@@ -10,7 +10,8 @@ export type CurrentStatement = {
   accountId: string;
   periodStart: string;
   balanceCents: number;
-  minimumPaymentCents: number;
+  // Null when no figure is known: no terms minimum and no unpaid statement. Never zero for that.
+  minimumPaymentCents: number | null;
   nextCutOffDate: string | null;
   nextDueDate: string | null;
 };
@@ -33,7 +34,7 @@ export async function getCurrentStatement(
     const [row] = await tx.execute<{
       period_start: string;
       balance_cents: string;
-      minimum_payment_cents: string;
+      minimum_payment_cents: string | null;
       statement_cut_off_day: number | null;
       payment_due_day: number | null;
       latest_cut_off_date: string | null;
@@ -46,7 +47,12 @@ export async function getCurrentStatement(
           fixed: sql`dt.minimum_payment_cents`,
           pct: sql`dt.minimum_payment_pct`,
           balance: sql`b.balance_cents`,
-          fallback: sql`0`,
+          statement: unpaidStatementMinimumSql({
+            account: sql`dt.account_id`,
+            currency: sql`a.settlement_currency`,
+            cutOff: sql`ls.cut_off_date`,
+            minimum: sql`ls.minimum_payment_cents`,
+          }),
         })} as minimum_payment_cents,
         dt.statement_cut_off_day,
         dt.payment_due_day,
@@ -61,7 +67,7 @@ export async function getCurrentStatement(
       -- The latest closed statement, if any: the same row answers the period's
       -- opening date and, below, the cut-off and due dates the bank printed.
       left join lateral (
-        select s.cut_off_date, s.payment_due_date
+        select s.cut_off_date, s.payment_due_date, s.minimum_payment_cents
         from account_statements s
         where s.account_id = dt.account_id
         order by s.cut_off_date desc
@@ -77,7 +83,7 @@ export async function getCurrentStatement(
       periodStart: row.period_start,
       // A bigint arrives from the driver as a string; the ledger keeps cents a number.
       balanceCents: Number(row.balance_cents),
-      minimumPaymentCents: Number(row.minimum_payment_cents),
+      minimumPaymentCents: row.minimum_payment_cents === null ? null : Number(row.minimum_payment_cents),
       nextCutOffDate:
         row.latest_cut_off_date !== null
           ? row.latest_cut_off_date

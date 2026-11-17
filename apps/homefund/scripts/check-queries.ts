@@ -75,6 +75,7 @@ import { getDebtDetail } from "@/db/queries/debt-detail";
 import { getDebtOverview, sumDebtCreditTotals } from "@/db/queries/debt-overview";
 import type { DebtOverviewRow, DebtPocket } from "@/db/queries/debt-overview";
 import { getCurrentStatement } from "@/db/queries/debt-statements";
+import { nextDebtPayment } from "@/lib/fund/glance";
 import { getDebtTerms, upsertDebtTerms } from "@/db/queries/debt-terms";
 import { getDebtsScreenData } from "@/db/queries/debts-screen";
 import { listDueReminders } from "@/db/queries/due-reminders";
@@ -4180,6 +4181,7 @@ async function main(): Promise<void> {
   await mcpDeletesSuite();
   await mcpMoneyModelSuite();
   await payOwnCardSuite();
+  await unpaidStatementMinimumSuite();
 }
 
 // A member recorded without a login is someone in the fund: a leader whose fund holds one is not alone, so an
@@ -6102,26 +6104,26 @@ async function e5MinimumPayment(leader: HarnessUser): Promise<void> {
 
   const minimumMod = await loadE5Module("@/db/queries/debt-minimum");
   const minimumPaymentSql = minimumMod.minimumPaymentSql as
-    | ((o: { fixed: SQL; pct: SQL; balance: SQL; fallback: SQL }) => SQL)
+    | ((o: { fixed: SQL; pct: SQL; balance: SQL; statement: SQL }) => SQL)
     | undefined;
-  const evaluate = async (o: { fixed: string; pct: string; balance: string; fallback: string }) => {
+  const evaluate = async (o: { fixed: string; pct: string; balance: string; statement: string }) => {
     if (!minimumPaymentSql) return { value: null as string | null, error: "minimumPaymentSql is not exported" };
     return attempt(async () => {
       const rows = await asUser(leader, () =>
         withUserDb((tx) =>
           tx.execute<{ v: string | null }>(
-            sql`select ${minimumPaymentSql({ fixed: sql.raw(o.fixed), pct: sql.raw(o.pct), balance: sql.raw(o.balance), fallback: sql.raw(o.fallback) })} as v`,
+            sql`select ${minimumPaymentSql({ fixed: sql.raw(o.fixed), pct: sql.raw(o.pct), balance: sql.raw(o.balance), statement: sql.raw(o.statement) })} as v`,
           ),
         ),
       );
       return rows[0]?.v === null || rows[0]?.v === undefined ? null : String(rows[0].v);
     });
   };
-  const fixedWins = await evaluate({ fixed: "5000::bigint", pct: "0.10::numeric", balance: "(-1000000)::bigint", fallback: "0" });
-  const pctOnly = await evaluate({ fixed: "null::bigint", pct: "0.05::numeric", balance: "(-1000010)::bigint", fallback: "0" });
-  const pctOnOwed = await evaluate({ fixed: "null::bigint", pct: "0.05::numeric", balance: "1000010::bigint", fallback: "0" });
-  const noneZero = await evaluate({ fixed: "null::bigint", pct: "null::numeric", balance: "(-1000000)::bigint", fallback: "0" });
-  const noneNull = await evaluate({ fixed: "null::bigint", pct: "null::numeric", balance: "(-1000000)::bigint", fallback: "null::bigint" });
+  const fixedWins = await evaluate({ fixed: "5000::bigint", pct: "0.10::numeric", balance: "(-1000000)::bigint", statement: "null::bigint" });
+  const pctOnly = await evaluate({ fixed: "null::bigint", pct: "0.05::numeric", balance: "(-1000010)::bigint", statement: "null::bigint" });
+  const pctOnOwed = await evaluate({ fixed: "null::bigint", pct: "0.05::numeric", balance: "1000010::bigint", statement: "null::bigint" });
+  const statementWins = await evaluate({ fixed: "5000::bigint", pct: "0.10::numeric", balance: "(-1000000)::bigint", statement: "2846828::bigint" });
+  const noneNull = await evaluate({ fixed: "null::bigint", pct: "null::numeric", balance: "(-1000000)::bigint", statement: "null::bigint" });
   assert(
     next("minimumPaymentSql: a fixed amount wins over a percentage"),
     fixedWins.value === "5000",
@@ -6133,9 +6135,9 @@ async function e5MinimumPayment(leader: HarnessUser): Promise<void> {
     `5 percent of -1000010 gave ${pctOnly.value ?? pctOnly.error}, of 1000010 gave ${pctOnOwed.value ?? pctOnOwed.error}`,
   );
   assert(
-    next("minimumPaymentSql: no terms give the caller's own fallback, zero or null"),
-    noneZero.value === "0" && noneNull.value === null && noneNull.error === "",
-    `fallback 0 gave ${noneZero.value ?? noneZero.error}, fallback null gave ${noneNull.value ?? noneNull.error}`,
+    next("minimumPaymentSql: an unpaid statement's minimum wins over the terms, and nothing known gives null, never zero"),
+    statementWins.value === "2846828" && noneNull.value === null && noneNull.error === "",
+    `statement 2846828 gave ${statementWins.value ?? statementWins.error}, nothing known gave ${noneNull.value ?? noneNull.error}`,
   );
 
   const open = async (name: string, amountMinor: number) => {
@@ -6206,8 +6208,8 @@ async function e5MinimumPayment(leader: HarnessUser): Promise<void> {
     `overview ${overviewOf(fixedCard)}; statement ${await statementOf(fixedCard)}`,
   );
   assert(
-    next("No terms for a minimum: the statement reads zero and the overview reads null, never one fallback for both"),
-    overviewOf(bareCard) === null && (await statementOf(bareCard)) === 0,
+    next("No terms for a minimum: the statement and the overview both read null, never a zero for an owed card"),
+    overviewOf(bareCard) === null && (await statementOf(bareCard)) === null,
     `overview ${overviewOf(bareCard)}; statement ${await statementOf(bareCard)}`,
   );
 }
@@ -12806,7 +12808,7 @@ async function o6m2DebtsAndSettledSuite(): Promise<void> {
       if (set.availableCreditCents !== null) integerFigures.push([`${where} ${set.currency} total available`, set.availableCreditCents]);
       if (set.creditLimitCents !== null) integerFigures.push([`${where} ${set.currency} total limit`, set.creditLimitCents]);
     }
-    if (screen.totals.nextPayment !== null) integerFigures.push([`${where} next payment`, screen.totals.nextPayment.amountCents]);
+    if (screen.totals.nextPayment?.amountCents != null) integerFigures.push([`${where} next payment`, screen.totals.nextPayment.amountCents]);
   };
 
   // --- Pocket to bill: a peso card in credit with a dollar purchase the issuer has not billed yet.
@@ -13021,7 +13023,7 @@ async function o6m2DebtsAndSettledSuite(): Promise<void> {
   const lateRow = overviewTwo.find((row) => row.accountId === lateCard);
   const nextTwo = screenTwo.totals.nextPayment;
   assert(
-    next("Next payment owing: card A in credit due today, card B owing 3000000 with no minimum due a week later; the next payment is B's, on B's date, at B's minimum (0) plus its installments (0)"),
+    next("Next payment owing: card A in credit due today, card B owing 3000000 with no minimum due a week later; the next payment is B's, on B's date, with no minimum known (null, never 0)"),
     earlyRow?.nextDueDate === today &&
       earlyRow.creditCents === 2_000_000 &&
       lateRow?.nextDueDate === lateDate &&
@@ -13029,7 +13031,7 @@ async function o6m2DebtsAndSettledSuite(): Promise<void> {
       lateRow.minimumPaymentCents === null &&
       nextTwo?.accountId === lateCard &&
       nextTwo.date === lateDate &&
-      nextTwo.amountCents === 0 &&
+      nextTwo.amountCents === null &&
       nextTwo.currency === "COP",
     `A due ${earlyRow?.nextDueDate} credit ${earlyRow?.creditCents}; B due ${lateRow?.nextDueDate} owed ${lateRow?.owedCents} minimum ${lateRow?.minimumPaymentCents}; next payment ${show(nextTwo)}`,
   );
@@ -20999,5 +21001,74 @@ async function payOwnCardSuite(): Promise<void> {
     card?.direction === "transfer" && card.from === bank && card.to === nu && shop?.direction === "expense" && shop.to === null &&
       ambiguous?.direction === "expense" && ambiguous.to === null && second !== nu,
     JSON.stringify({ card, shop, ambiguous }),
+  );
+}
+
+// RF-252: a card whose terms carry no minimum takes it from its latest closed statement while that is unpaid, on
+// the overview Inicio reads, on the screen's next payment and on the detail; once the payments after the cut-off
+// cover it, or when nothing prints one, the figure is null and never a zero.
+async function unpaidStatementMinimumSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const user = await createMembershipFreeUser();
+  const today = todayInBogota();
+  const base = {
+    groupId: null, isShared: false, settlementCurrency: BASE_CURRENCY, balanceOn: shiftDate(today, -60), ownerUserId: user.id, lastFour: null,
+  };
+  const mk = async (name: string, kind: "asset" | "liability", amountMinor: number) => {
+    const { accountId } = await asUser(user, () =>
+      createAccount({ ...base, name: `Harness rf251 ${name} ${tag}`, kind, subtype: kind === "asset" ? "bank" : "card", institution: null, amountMinor }),
+    );
+    track("accounts", accountId);
+    return accountId;
+  };
+  const bank = await mk("banco", "asset", 900_000_000);
+  const card = await mk("tarjeta", "liability", 400_000_000);
+  await asUser(user, () =>
+    upsertDebtTerms({
+      accountId: card, debtKind: "revolving", annualRate: "0.2833", minimumPaymentCents: null, minimumPaymentPct: null,
+      creditLimitCents: 1_100_000_000, statementCutOffDay: 16, paymentDueDay: 2, avalCents: null,
+    }),
+  );
+  keep("debt_terms", card);
+  const read = () =>
+    asUser(user, async () => {
+      const [overview, current] = await Promise.all([getDebtOverview(), getCurrentStatement(card)]);
+      const row = overview.find((debt) => debt.accountId === card);
+      return { row, current, next: row ? nextDebtPayment([row]) : null };
+    });
+  const before = await read();
+  assert(
+    next("RF-252: a card owing, with no minimum in its terms and no statement, has no minimum anywhere: null on the overview, the next payment and the detail"),
+    before.row?.owedCents === 400_000_000 && before.row.minimumPaymentCents === null && before.next?.amountCents === null &&
+      before.current?.minimumPaymentCents === null,
+    JSON.stringify({ row: before.row?.minimumPaymentCents, next: before.next?.amountCents, current: before.current?.minimumPaymentCents }),
+  );
+  const cutOff = shiftDate(today, -10);
+  const statement = await asUser(user, () =>
+    recordAccountStatement({
+      accountId: card, periodStart: shiftDate(cutOff, -30), cutOffDate: cutOff, paymentDueDate: shiftDate(today, 10),
+      openingBalanceCents: null, closingBalanceCents: 400_000_000, creditsCents: null, debitsCents: null,
+      minimumPaymentCents: 284_682_800, interestChargedCents: null, feesChargedCents: null,
+    }),
+  );
+  if (statement) keep("account_statements", statement.id);
+  const withStatement = await read();
+  assert(
+    next("RF-252: with a statement printing a minimum of 284682800 cents and none in the terms, Inicio's next payment, the overview and the detail all read 2846828 on the statement's due date"),
+    withStatement.row?.minimumPaymentCents === 284_682_800 && withStatement.next?.amountCents === 284_682_800 &&
+      withStatement.next.date === shiftDate(today, 10) && withStatement.current?.minimumPaymentCents === 284_682_800,
+    JSON.stringify({ row: withStatement.row?.minimumPaymentCents, next: withStatement.next, current: withStatement.current?.minimumPaymentCents }),
+  );
+  const { transactionId } = await asUser(user, () =>
+    recordDebtPayment({ fromAccountId: bank, toAccountId: card, amountCents: 284_682_800, occurredAt: shiftDate(today, -1) }),
+  );
+  track("transactions", transactionId);
+  const paid = await read();
+  assert(
+    next("RF-252: once the payments after the cut-off cover the statement's minimum, the card reads no minimum (null), never 0 and never the printed one again"),
+    paid.row?.owedCents !== undefined && paid.row.owedCents > 0 && paid.row.minimumPaymentCents === null &&
+      paid.next?.amountCents === null && paid.current?.minimumPaymentCents === null,
+    JSON.stringify({ row: paid.row?.minimumPaymentCents, next: paid.next?.amountCents, current: paid.current?.minimumPaymentCents }),
   );
 }
