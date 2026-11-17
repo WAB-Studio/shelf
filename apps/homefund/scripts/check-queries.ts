@@ -22876,6 +22876,23 @@ async function loanFiguresSuite(): Promise<void> {
     JSON.stringify({ small, rest, partial: afterSmall?.rows[0], paid: afterRest?.rows[0].state }),
   );
 
+  // RF-317: Inicio's «Este mes pagas» counts every cuota of the month a loan has not paid in full, the late one and the
+  // ones after it, not only the first.
+  const { getHomeAhead } = await import("@/db/queries/home-lines");
+  const month = currentMonthRange();
+  const monthRows = [month.start, shiftDate(month.endExclusive, -1)].map((on, index) => ({
+    number: index + 1, dueOn: on, principalCents: 10_000_000, interestCents: 1_000_000, insuranceCents: 0, totalCents: 11_000_000, remainingCents: 10_000_000 * (1 - index),
+  }));
+  const monthLoan = await mk("credito mes", "liability", "loan", 100_000_000);
+  await asUser(user, () => setLoanSchedule({ accountId: monthLoan, rows: monthRows }, false));
+  const ahead = await asUser(user, () => getHomeAhead());
+  const monthNumbers = ahead.loans.filter((one) => one.accountId === monthLoan).map((one) => one.number);
+  assert(
+    next("RF-317: Inicio counts every cuota of the month a loan has not paid in full, not only its first"),
+    monthNumbers.length === 2 && monthNumbers[0] === 1 && monthNumbers[1] === 2,
+    JSON.stringify({ monthNumbers }),
+  );
+
   // RF-301: what John owes is the loan's capital balance, with the cuotas' interest said apart, in every place it is read.
   const link = await asUser(user, () =>
     setUpThirdPartyCredit(
