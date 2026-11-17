@@ -4,6 +4,7 @@ import type { CallToolResult, McpServer, ServerContext } from "@modelcontextprot
 import { z } from "zod";
 
 import { getUserGroup } from "@/db/queries/groups";
+import { getOwedToMe } from "@/db/queries/owed-to-me";
 import { createLabel, getLabelsScreenData, listScopedLabels, listUsedLabelColors, updateLabel } from "@/db/queries/labels";
 import type { LabelScope } from "@/db/queries/labels";
 import { pgErrorCode } from "@/lib/db-error";
@@ -82,13 +83,17 @@ export function registerLabelTools(server: McpServer, run: Run, t: Say): void {
     { ...titled(t, "listPersons"), description: t("tools.listPersons"), inputSchema: z.object({}), annotations: READ },
     (_input, ctx) =>
       run(ctx, async () => {
-        const data = await getLabelsScreenData();
+        const [data, owed] = await Promise.all([getLabelsScreenData(), getOwedToMe()]);
+        // What each person «se le cobra» still owes, per currency (RF-294); a person who owes nothing has none.
+        const owedBy = (id: string) =>
+          owed.flatMap((group) => group.people.filter((one) => one.labelId === id).map((one) => ({ currency: group.currency, cents: one.cents })));
         const row = (scope: "personal" | "fund", canManage: boolean) => (person: (typeof data.personal)[number]) => ({
           id: person.id,
           name: person.name,
           color: person.color,
           scope,
           chargeDefault: person.chargeDefault,
+          owed: owedBy(person.id),
           movementCount: person.movementCount,
           budgetCount: person.budgetCount,
           canManage,

@@ -986,7 +986,8 @@ export function MovementForm({
               )}
             />
 
-            {/* Whom it was for: still the person's own expense, so it asks for nothing more (RF-242). */}
+            {/* Whom it was for: still the person's own expense, so it asks for nothing more (RF-242). On an income it is
+                who sent the money back, which lowers what they owe (RF-293). */}
             {scopedPersons.length > 0 && (
               <Controller
                 name="forPersonId"
@@ -995,7 +996,7 @@ export function MovementForm({
                   <Field invalid={fieldState.invalid}>
                     <FieldLabel htmlFor="movement-for-person">
                       <Flex as="span" align="center" gap="1">
-                        {t("forPersonLabel")}
+                        {t(kind === "income" ? "fromPersonLabel" : "forPersonLabel")}
                         <Text size="2" weight="regular" color="gray">
                           {tKey("common.optional")}
                         </Text>
@@ -1019,7 +1020,9 @@ export function MovementForm({
                         ))}
                       </Select.Content>
                     </Select.Root>
-                    {chargedPerson && <FieldDescription>{t("forPersonCharged")}</FieldDescription>}
+                    {chargedPerson && (
+                      <FieldDescription>{t(kind === "income" ? "fromPersonCharged" : "forPersonCharged")}</FieldDescription>
+                    )}
                     <FieldMessage error={fieldState.error} />
                   </Field>
                 )}

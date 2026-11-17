@@ -901,7 +901,7 @@ function rowSubtitle(
     account,
     row.splits.length > 1 ? t("linesCount", { count: row.splits.length }) : null,
     // A quiet tag, never part of the description (RF-242).
-    row.forPerson ? t("forPersonTag", { name: row.forPerson.name }) : null,
+    row.forPerson ? t(row.kind === "income" ? "fromPersonTag" : "forPersonTag", { name: row.forPerson.name }) : null,
   ].filter(Boolean);
   return parts.length > 0 ? parts.join(" · ") : undefined;
 }

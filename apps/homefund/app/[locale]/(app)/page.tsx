@@ -19,6 +19,7 @@ import {
 import { InvitationCard } from "@/components/members/invitation-card";
 import { DueRemindersCard } from "@/components/planning/due-reminders-card";
 import { ReconcileNudgeLine } from "@/components/accounts/reconcile-nudge-line";
+import { OwedToMeLine } from "@/components/accounts/owed-to-me-line";
 import { MonthReviewLine } from "@/components/reports/month-review-line";
 import { QuickEntryPill } from "@/components/transactions/quick-entry-pill";
 import {
@@ -43,6 +44,7 @@ import { resolveWithdrawalTarget } from "@/db/queries/cash";
 import { listReconcileAges } from "@/db/queries/account-reconciliations";
 import { getDebtOverview } from "@/db/queries/debt-overview";
 import { listDueReminders } from "@/db/queries/due-reminders";
+import { getOwedToMe } from "@/db/queries/owed-to-me";
 import { getMonthReviewPending } from "@/db/queries/month-review";
 import { listGoalsWithProgress } from "@/db/queries/savings-goals";
 import { getPendingInvitation } from "@/db/queries/group-members";
@@ -136,7 +138,7 @@ export default async function HomePage(props: PageProps<"/[locale]">) {
     [group, invitation, withdrawal, due],
     dashboardData,
     [rows, options],
-    [monthExpenses, debts, review, budgets, goals, counts],
+    [monthExpenses, debts, review, budgets, goals, counts, owed],
     t,
     td,
     ta,
@@ -176,6 +178,8 @@ export default async function HomePage(props: PageProps<"/[locale]">) {
         ),
         // The accounts not counted in a month, for one quiet line (RF-262): a failed read drops the line.
         optional("listReconcileAges", listReconcileAges()),
+        // What other people owe the person, for line 3 of the aside (decision 2 of 2026-11-17): a failed read drops the line.
+        optional("getOwedToMe", getOwedToMe()),
       ]),
     ),
     getTranslations("transactions"),
@@ -349,6 +353,8 @@ export default async function HomePage(props: PageProps<"/[locale]">) {
               {review && <MonthReviewLine month={review.month} count={review.count} />}
 
               {staleCount > 0 && <ReconcileNudgeLine count={staleCount} />}
+
+              <OwedToMeLine owed={owed ?? []} />
 
               {due.total > 0 && <DueRemindersCard rows={due.rows} total={due.total} />}
 

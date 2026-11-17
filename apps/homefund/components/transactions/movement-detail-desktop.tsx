@@ -432,7 +432,7 @@ export function MovementDetailDesktop({
               {movement.forPerson && (
                 <>
                   <Separator size="4" />
-                  <Fact label={t("forPersonLabel")} value={movement.forPerson.name} />
+                  <Fact label={t(movement.kind === "income" ? "fromPersonLabel" : "forPersonLabel")} value={movement.forPerson.name} />
                 </>
               )}
             </Flex>

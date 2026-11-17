@@ -357,7 +357,7 @@ export function MovementDetail({
             {movement.forPerson && (
               <>
                 <Separator size="4" my="3" />
-                <DetailRow label={t("forPersonLabel")} value={movement.forPerson.name} />
+                <DetailRow label={t(movement.kind === "income" ? "fromPersonLabel" : "forPersonLabel")} value={movement.forPerson.name} />
               </>
             )}
             {movement.labels.length > 0 && (
