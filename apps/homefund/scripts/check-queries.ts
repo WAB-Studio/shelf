@@ -4184,6 +4184,7 @@ async function main(): Promise<void> {
   await legacyChannelSuite();
   await mcpReconcileManySuite();
   await reconcileOverviewSuite();
+  await recordedMovementSuite();
 }
 
 // A member recorded without a login is someone in the fund: a leader whose fund holds one is not alone, so an
@@ -21179,5 +21180,88 @@ async function reconcileOverviewSuite(): Promise<void> {
       listedBank.latestReconciledOn === today && listedCard?.derivedCents === -300_000_00 && listedCard.latestReconciledOn === null &&
       listedCard.addedOn === today && !rows.some((row) => row.id === closed || row.id === theirs) && trips === unit,
     `rows ${JSON.stringify(rows.map((row) => [row.name, row.derivedCents, row.latestReconciledOn]))}, ${trips} round trips against ${unit} for one read`,
+  );
+}
+
+// RF-246: a delivery waiting for review that repeats a movement recorded by hand is marked with it, derived on read:
+// the same figure within a day, on its account, the same way round; a movement an acceptance wrote is no match.
+async function recordedMovementSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const today = todayInBogota();
+  const { recordIngestDelivery } = await import("@/db/queries/webhook-ingest");
+  const { acceptDelivery, rejectDelivery } = await import("@/db/queries/ingest-review");
+  const user = await createMembershipFreeUser();
+  const mk = async (name: string): Promise<string> => {
+    const { accountId } = await asUser(user, () =>
+      createAccount({
+        name: `Harness rf246 ${name} ${tag}`, kind: "asset", subtype: "bank", ownerUserId: user.id, groupId: null, isShared: false,
+        institution: null, lastFour: null, settlementCurrency: "COP", amountMinor: 900_000_00, balanceOn: shiftDate(today, -60),
+      }),
+    );
+    track("accounts", accountId);
+    return accountId;
+  };
+  const [bank, other] = [await mk("banco"), await mk("otra")];
+  const { categoryId } = await asUser(user, () =>
+    createCategory({ scope: { ownerUserId: user.id }, name: `Harness rf246 ${tag}`, kind: "expense", parentId: null, color: "#0E7490" }),
+  );
+  track("categories", categoryId);
+  const { id: credentialId } = await asUser(user, () =>
+    issueWebhookCredential({ name: `Harness rf246 ${tag}`, purpose: "ingest", defaultAccountId: bank, defaultCategoryId: categoryId }),
+  );
+  keep("webhook_credentials", credentialId);
+  const record = async (amountCents: number, daysAgo: number, from: string): Promise<string> => {
+    const { transactionId } = await asUser(user, () =>
+      createTransaction({
+        fromAccountId: from, toAccountId: null, amountCents, occurredAt: shiftDate(today, -daysAgo), description: `Tienda ${tag}`,
+        externalRef: null, splits: [{ categoryId, amountCents }], labelIds: [],
+      }),
+    );
+    keep("transactions", transactionId);
+    return transactionId;
+  };
+  const deliver = async (pesos: number, ref: string, accountId = bank): Promise<string> => {
+    const { deliveryId } = await recordIngestDelivery({
+      ownerUserId: user.id, credentialId, defaultAccountId: accountId, defaultCategoryId: categoryId,
+      payload: { text: `Bancolombia: Pagaste $${pesos.toLocaleString("es-CO")} a TIENDA ${tag} ${ref}`, external_ref: `rf246-${tag}-${ref}`, occurred_at: shiftDate(today, -1) } as Parameters<typeof recordIngestDelivery>[0]["payload"],
+    });
+    return deliveryId;
+  };
+  const marked = async () => new Map((await asUser(user, () => listPendingDeliveries())).map((row) => [row.id, row.recorded]));
+
+  const byHand = await record(35_000_00, 2, bank);
+  const same = await deliver(35_000, "a");
+  const otherAccount = await deliver(35_000, "b", other);
+  const otherFigure = await deliver(36_000, "c");
+  const tooOld = await record(37_000_00, 5, bank);
+  const stale = await deliver(37_000, "d");
+  const first = await marked();
+  assert(
+    next("RF-246: a delivery is marked with the movement recorded by hand for its account, figure and day (one day apart), and no other"),
+    first.get(same)?.transactionId === byHand && first.get(otherAccount) === null && first.get(otherFigure) === null &&
+      first.get(stale) === null && tooOld !== byHand,
+    JSON.stringify([...first]),
+  );
+
+  const made = await deliver(38_000, "e");
+  const { transactionId } = await asUser(user, () =>
+    acceptDelivery({ deliveryId: made, fromAccountId: bank, toAccountId: null, amountCents: 38_000_00, occurredAt: shiftDate(today, -1), description: "x", splits: [{ categoryId, amountCents: 38_000_00 }], labelIds: [] }),
+  );
+  keep("transactions", transactionId);
+  const twin = await deliver(38_000, "f");
+  assert(
+    next("RF-246: a movement an acceptance wrote never marks a delivery, so two equal coffees stay two"),
+    (await marked()).get(twin) === null,
+    JSON.stringify([...(await marked())]),
+  );
+
+  await asUser(user, () => rejectDelivery({ deliveryId: same, silenceShape: false, reason: "duplicate" }));
+  const [row] = await fixtureSql<{ status: string; reason: string | null }[]>`
+    select status, reject_reason as reason from ingest_deliveries where id = ${same}`;
+  assert(
+    next("RF-246: rejecting it as a duplicate stores the reason, leaves the queue and writes no movement"),
+    row?.status === "rejected" && row.reason === "duplicate" && !(await marked()).has(same),
+    JSON.stringify(row),
   );
 }
