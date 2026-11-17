@@ -109,7 +109,7 @@ test("a credit somebody else pays is set up, read and recorded from its screen",
   const breakdown = page.getByRole("dialog");
   await expect(breakdown.getByRole("heading", { name: t.breakdownTitle.replace("{person}", PERSON) })).toBeVisible();
   await expect(breakdown.getByText(/Deuda cuando se unió \(/)).toBeVisible();
-  await expect(breakdown.getByText(t.breakdownOwes)).toBeVisible();
+  await expect(breakdown.getByText(t.breakdownOwes, { exact: true })).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(page.getByText(receivableName)).toHaveCount(0);
 
