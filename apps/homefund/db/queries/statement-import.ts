@@ -338,7 +338,7 @@ function summarise(input: StatementInput, context: Context): StatementPreview {
   const account = context.account;
   if (!account) throw new StatementError("notFound");
   if (!account.canWrite) throw new StatementError("readOnly");
-  // A statement is a bank's paper (RF-244): cash has none, and a receipt split into products is no statement.
+  // A statement is a bank's paper (RF-248): cash has none, and a receipt split into products is no statement.
   if (account.subtype === "cash") throw new StatementError("cashAccount");
   const receipt = receiptLikeLine(input.rows);
   if (receipt !== null) throw new StatementError("looksLikeReceipt", receipt);

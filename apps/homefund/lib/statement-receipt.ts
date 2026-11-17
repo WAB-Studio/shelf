@@ -1,5 +1,5 @@
 // A bank prints one line per charge and, on most statements, a reference or authorization number beside it. A
-// receipt a chat or a photo gave has neither: loaded line by line it makes one movement per product (RF-244).
+// receipt a chat or a photo gave has neither: loaded line by line it makes one movement per product (RF-248).
 // This many expense lines on one day, none with a reference, is read as one.
 export const RECEIPT_LINES = 5;
 

@@ -15868,7 +15868,7 @@ async function statementImportSuite(): Promise<void> {
 
   const { tool: callTool } = mcpClient(POST, token);
   // A statement is named by its cut-off date; unless a call names one, it is the span of its lines. Its closing balance is
-  // the printed one (RF-244): a call that names none prints zero.
+  // the printed one (RF-248): a call that names none prints zero.
   const tool = (name: string, args: Record<string, unknown>) => {
     const days = ((args.rows ?? []) as { date: string }[]).map((row) => row.date).sort();
     const period = (args.statement ?? { periodStart: days[0], cutOffDate: days[days.length - 1] }) as Record<string, unknown>;
@@ -16189,7 +16189,7 @@ async function statementImportSuite(): Promise<void> {
     `import ${JSON.stringify(lastImport.value)}, statements ${novStatements[0]?.n}`,
   );
 
-  // RF-244: a statement is a bank's paper with its printed closing balance; cash has none, and a receipt split into products is no statement.
+  // RF-248: a statement is a bank's paper with its printed closing balance; cash has none, and a receipt split into products is no statement.
   const cash = randomUUID();
   await fixtureSql`
     insert into accounts (id, owner_user_id, name, kind, subtype, initial_balance_cents, initial_balance_on)
@@ -16202,7 +16202,7 @@ async function statementImportSuite(): Promise<void> {
   });
   const withClosing = await tool("preview_statement", { accountId: ids.bank, rows: oneLine });
   assert(
-    next("RF-244: a statement of a cash account is refused, and one without its printed closing balance never reaches the import"),
+    next("RF-248: a statement of a cash account is refused, and one without its printed closing balance never reaches the import"),
     cashPreview.isError && cashPreview.value?.error === es.mcp.errors.statement.cashAccount &&
       noClosing.isError && !withClosing.isError,
     `cash ${JSON.stringify(cashPreview.value)}, no closing ${JSON.stringify(noClosing.value)}, with ${JSON.stringify(withClosing.value)}`,
@@ -16215,7 +16215,7 @@ async function statementImportSuite(): Promise<void> {
   const fewer = await tool("preview_statement", { accountId: ids.bank, rows: exploded(4) });
   const referenced = await tool("preview_statement", { accountId: ids.bank, rows: exploded(5, (index) => ({ reference: `P${index}-${tag}` })) });
   assert(
-    next("RF-244: five expenses on one day with no bank reference read as a receipt and are refused; four, or five with their references, are not"),
+    next("RF-248: five expenses on one day with no bank reference read as a receipt and are refused; four, or five with their references, are not"),
     receipt.isError && receipt.value?.error === es.mcp.errors.statement.looksLikeReceipt && receipt.value?.line === 1 &&
       !fewer.isError && !referenced.isError,
     `five ${JSON.stringify(receipt.value)}, four ${JSON.stringify(fewer.value?.counts)}, referenced ${JSON.stringify(referenced.value?.counts)}`,
