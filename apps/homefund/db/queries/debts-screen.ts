@@ -55,6 +55,8 @@ export type DebtsScreenData = {
     foreignOwner: boolean;
     ownerName: string | null;
     canWrite: boolean;
+    // Who pays this credit when somebody else does (RF-211); null for any other debt.
+    paidBy: string | null;
   })[];
   withoutTerms: {
     accountId: string;
@@ -69,6 +71,7 @@ export type DebtsScreenData = {
     creditCents: number;
     otherOwed: DebtPocket[];
     canWrite: boolean;
+    paidBy: string | null;
   }[];
   payFrom: { id: string; name: string; balanceCents: number }[];
 };
@@ -158,6 +161,7 @@ export async function getDebtsScreenData(
       { foreignOwner: account.foreignOwner, ownerName: account.ownerName },
     ]),
   );
+  const paidByById = new Map(accounts.map((account) => [account.id, account.thirdParty?.personName ?? null]));
   const personalById = new Map(
     accounts.map((account) => [account.id, account.ownerUserId !== null]),
   );
@@ -187,6 +191,7 @@ export async function getDebtsScreenData(
         ownerName: ownerById.get(row.accountId)?.ownerName ?? null,
         // Absent from the roster is a debt the caller may not write.
         canWrite: writableById.get(row.accountId) ?? false,
+        paidBy: paidByById.get(row.accountId) ?? null,
       },
     ];
   });
@@ -221,6 +226,7 @@ export async function getDebtsScreenData(
             toBillCents: toBillByPocket.get(toBillKey(account.id, balance.currency)) ?? null,
           })),
         canWrite: account.canWrite,
+        paidBy: account.thirdParty?.personName ?? null,
       };
     });
 

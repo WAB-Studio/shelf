@@ -1,9 +1,10 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { useTranslations } from "next-intl";
 
 import { useOwnerLabel } from "@/components/fund/owner-mark";
+import { ThirdPartyBreakdownDialog } from "@/components/planning/third-party-breakdown";
 import {
   Button,
   DataTable,
@@ -25,10 +26,13 @@ const WIDTHS = {
 
 /**
  * «Lo paga <persona> · le falta $X» under a credit somebody else pays (RF-216): the one place its hidden «Me debe»
- * shows, as a figure on the credit and never as an account. Nothing for any other account.
+ * shows, as a figure on the credit and never as an account. The figure opens its breakdown (RF-267): what the payer
+ * owed when the credit was followed, each payment of theirs and what is left. Nothing for any other account.
  */
 export function PaidByLine({ account }: { account: AccountRow }) {
   const t = useTranslations("accounts");
+  const tCredit = useTranslations("thirdPartyCredit");
+  const [open, setOpen] = useState(false);
   const credit = account.thirdParty;
   if (!credit) return null;
 
@@ -38,16 +42,34 @@ export function PaidByLine({ account }: { account: AccountRow }) {
         ? t.rich("paidBy", {
             person: credit.personName,
             amount: () => (
-              <Money
-                minor={credit.personOwesCents}
-                currency={account.settlementCurrency}
-                tone="plain"
-                size="inherit"
-                signed={false}
-              />
+              <Button
+                type="button"
+                variant="ghost"
+                size="1"
+                tap={false}
+                aria-label={tCredit("breakdownOpen", { person: credit.personName })}
+                onClick={() => setOpen(true)}
+              >
+                <Money
+                  minor={credit.personOwesCents}
+                  currency={account.settlementCurrency}
+                  tone="plain"
+                  size="inherit"
+                  signed={false}
+                />
+              </Button>
             ),
           })
         : t("paidByNothingOwed", { person: credit.personName })}
+      {open && (
+        <ThirdPartyBreakdownDialog
+          open
+          onOpenChange={setOpen}
+          liabilityAccountId={account.id}
+          person={credit.personName}
+          currency={account.settlementCurrency}
+        />
+      )}
     </Text>
   );
 }

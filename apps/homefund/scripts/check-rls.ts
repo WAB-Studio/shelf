@@ -325,6 +325,7 @@ async function main() {
   await checkRecipients();
   await checkThirdPartyCredits();
   await checkCardDeferrals();
+  await checkLoanSchedule();
 }
 
 // RF-136: a deferral is read and written exactly when its purchase's liability account is, carries 2 to 72
@@ -5293,6 +5294,8 @@ const INSERT_GRANT_GAPS: Record<string, string[]> = {
   installment_lines: ["created_at", "id", "paid_transaction_id"],
   installment_plans: ["created_at", "id", "updated_at"],
   labels: ["created_at", "id", "updated_at"],
+  // A schedule row is written whole on insert; `id` and the stamp are the table's (RF-264).
+  loan_schedule_rows: ["created_at", "id"],
   // `created_by` is the column default from `auth.uid()` (RF-183).
   member_debts: ["created_at", "created_by", "id"],
   // The OAuth tables carry no grant (RF-168), bar the consent's insert of a code: only the server's own pool writes them.
@@ -5489,6 +5492,19 @@ const UPDATE_GRANT_GAPS: Record<string, string[]> = {
   ],
   // `kind` is written on insert alone: a label never changes kind (RF-242).
   labels: ["created_at", "external_ref", "group_id", "id", "kind", "owner_user_id", "updated_at"],
+  // A schedule is replaced whole, deleted and written again (RF-264): no column is writable.
+  loan_schedule_rows: [
+    "account_id",
+    "created_at",
+    "due_on",
+    "id",
+    "insurance_cents",
+    "interest_cents",
+    "number",
+    "principal_cents",
+    "remaining_cents",
+    "total_cents",
+  ],
   // An entry is replaced by deleting it and writing it again (RF-183): no column is writable.
   member_debts: ["amount_cents", "created_at", "created_by", "creditor_member_id", "currency", "debtor_member_id", "description", "group_id", "id", "kind", "occurred_on"],
   // The OAuth tables carry no grant (RF-168), bar the consent's insert of a code: only the server's own pool writes them.
@@ -5579,6 +5595,7 @@ const DELETE_GRANTS: string[] = [
   "installment_lines",
   "installment_plans",
   "labels",
+  "loan_schedule_rows",
   "member_debts",
   "planned_payments",
   "recipients",
@@ -14514,6 +14531,106 @@ async function checkCardDeferrals() {
       select count(*)::int as held from unnest(array['anon', 'service_role']) r
       where has_any_column_privilege(r, 'finances.card_deferrals'::regclass, 'SELECT, INSERT, UPDATE, REFERENCES')
          or has_table_privilege(r, 'finances.card_deferrals'::regclass, 'DELETE, TRUNCATE')`;
+    return [{ ok: held === 0, detail: `anon/service_role with a privilege ${held}` }];
+  });
+}
+
+// RF-264: a loan's payment schedule is read and written by whoever reads and writes the loan, alone; it belongs to a
+// loan account; a row's total is the sum of its parts; a schedule is replaced by delete and insert, never updated;
+// every write leaves its audit row; anon and service_role hold nothing.
+async function checkLoanSchedule() {
+  console.log("");
+  const labels = {
+    owner: "rf256-1. the owner of a loan writes its schedule, reads it and replaces it; a stranger reads none, inserts none and deletes none",
+    shape: "rf256-2. a card or a bank account as the owner of a schedule is LS001; a total that is not the sum of its parts, a negative part, a number past 600 and a repeated number or day are 23514 or 23505",
+    columns: "rf256-3. no column of a schedule row can be updated (42501)",
+    audit: "rf256-4. writing and deleting rows each leave an audit row naming the person",
+    grants: "rf256-5. anon and service_role hold no privilege on loan_schedule_rows",
+  };
+  const fixture = async (tx: M1Tx) => {
+    const [owner, stranger] = [randomUUID(), randomUUID()];
+    await tx`insert into auth.users (id) values (${owner}), (${stranger})`;
+    await tx`insert into app_users (id) values (${owner}), (${stranger})`;
+    const account = async (user: string, name: string, subtype: "bank" | "card" | "loan") => {
+      const [{ id }] = await tx<{ id: string }[]>`
+        insert into accounts (owner_user_id, name, kind, subtype, initial_balance_on)
+        values (${user}, ${name}, ${subtype === "bank" ? "asset" : "liability"}, ${subtype}, ${todayInBogota()}) returning id`;
+      return id;
+    };
+    return {
+      owner,
+      stranger,
+      loan: await account(owner, "rls rf256 loan", "loan"),
+      card: await account(owner, "rls rf256 card", "card"),
+      bank: await account(owner, "rls rf256 bank", "bank"),
+    };
+  };
+  const row = (account: string, number: number, dueOn: string, parts: [number, number, number, number?] = [100_00, 10_00, 5_00]) => (sp: M1Tx) =>
+    sp`insert into loan_schedule_rows (account_id, number, due_on, principal_cents, interest_cents, insurance_cents, total_cents, remaining_cents)
+      values (${account}, ${number}, ${dueOn}, ${parts[0]}, ${parts[1]}, ${parts[2]}, ${parts[0] + parts[1] + parts[2]}, ${parts[3] ?? 0})`;
+
+  await rf136Rows([labels.owner, labels.audit], async (tx) => {
+    const f = await fixture(tx);
+    await enterUserContext(tx, f.owner);
+    const first = await m1Refusal(tx, row(f.loan, 1, "2030-01-05", [100_00, 10_00, 5_00, 100_00]));
+    const second = await m1Refusal(tx, row(f.loan, 2, "2030-02-05"));
+    const mine = (await tx`select id from loan_schedule_rows`).length;
+    await enterUserContext(tx, f.stranger);
+    const strangerSees = (await tx`select id from loan_schedule_rows`).length;
+    const strangerRemoves = (await tx`delete from loan_schedule_rows returning id`).length;
+    const strangerInserts = await m1Refusal(tx, row(f.loan, 3, "2030-03-05"));
+    await enterUserContext(tx, f.owner);
+    const removed = (await tx`delete from loan_schedule_rows returning id`).length;
+    await tx`reset role`;
+    const trail = await tx<{ action: string; actor_user_id: string | null }[]>`
+      select action, actor_user_id from audit_log
+      where entity = 'loan_schedule_rows' and actor_user_id = ${f.owner} order by id`;
+    return [
+      {
+        ok: first === null && second === null && mine === 2 && strangerSees === 0 && strangerRemoves === 0 && strangerInserts === "42501" && removed === 2,
+        detail: `owner writes ${first ?? "accepted"}/${second ?? "accepted"}, sees ${mine}, removes ${removed}; stranger sees ${strangerSees}, removes ${strangerRemoves}, inserts ${strangerInserts}`,
+      },
+      {
+        ok: JSON.stringify(trail.map((entry) => entry.action)) === JSON.stringify(["INSERT", "INSERT", "DELETE", "DELETE"]),
+        detail: `audit ${JSON.stringify(trail)}`,
+      },
+    ];
+  });
+
+  await rf136Rows([labels.shape], async (tx) => {
+    const f = await fixture(tx);
+    await enterUserContext(tx, f.owner);
+    await row(f.loan, 1, "2030-01-05")(tx);
+    const onCard = await m1Refusal(tx, row(f.card, 1, "2030-01-05"));
+    const onBank = await m1Refusal(tx, row(f.bank, 1, "2030-01-05"));
+    const sum = await m1Refusal(tx, (sp) =>
+      sp`insert into loan_schedule_rows (account_id, number, due_on, principal_cents, interest_cents, insurance_cents, total_cents, remaining_cents)
+        values (${f.loan}, 2, '2030-02-05', 100, 10, 5, 116, 0)`);
+    const negative = await m1Refusal(tx, row(f.loan, 2, "2030-02-05", [110_00, -5_00, 5_00]));
+    const far = await m1Refusal(tx, row(f.loan, 601, "2030-02-05"));
+    const sameNumber = await m1Refusal(tx, row(f.loan, 1, "2030-02-05"));
+    const sameDay = await m1Refusal(tx, row(f.loan, 2, "2030-01-05"));
+    return [{
+      ok: onCard === "LS001" && onBank === "LS001" && sum === "23514" && negative === "23514" && far === "23514" && sameNumber === "23505" && sameDay === "23505",
+      detail: `card ${onCard}, bank ${onBank}, sum ${sum}, negative ${negative}, number 601 ${far}, same number ${sameNumber}, same day ${sameDay}`,
+    }];
+  });
+
+  await rf136Rows([labels.columns], async (tx) => {
+    const f = await fixture(tx);
+    await enterUserContext(tx, f.owner);
+    await row(f.loan, 1, "2030-01-05")(tx);
+    const moveAccount = await m1Refusal(tx, (sp) => sp`update loan_schedule_rows set account_id = ${f.card}`);
+    const moveAmount = await m1Refusal(tx, (sp) => sp`update loan_schedule_rows set total_cents = total_cents`);
+    await tx`reset role`;
+    return [{ ok: moveAccount === "42501" && moveAmount === "42501", detail: `account ${moveAccount}, amount ${moveAmount}` }];
+  });
+
+  await rf136Rows([labels.grants], async (tx) => {
+    const [{ held }] = await tx<{ held: number }[]>`
+      select count(*)::int as held from unnest(array['anon', 'service_role']) r
+      where has_any_column_privilege(r, 'finances.loan_schedule_rows'::regclass, 'SELECT, INSERT, UPDATE, REFERENCES')
+         or has_table_privilege(r, 'finances.loan_schedule_rows'::regclass, 'DELETE, TRUNCATE')`;
     return [{ ok: held === 0, detail: `anon/service_role with a privilege ${held}` }];
   });
 }

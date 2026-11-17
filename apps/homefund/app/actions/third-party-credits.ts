@@ -4,11 +4,13 @@ import { refresh } from "next/cache";
 import { getTranslations } from "next-intl/server";
 
 import {
+  listThirdPartyCredits,
   recordThirdPartyPayment,
   removeThirdPartyCredit,
   setUpThirdPartyCredit,
   updateThirdPartyCredit,
 } from "@/db/queries/third-party-credits";
+import { ActionError } from "@/lib/errors";
 import { authActionClient } from "@/lib/safe-action";
 import {
   recordThirdPartyPaymentSchema,
@@ -49,4 +51,13 @@ export const recordThirdPartyPaymentAction = authActionClient
     const created = await recordThirdPartyPayment(parsedInput, (person) => t("paymentDescription", { person }));
     refresh();
     return created;
+  });
+
+// RF-267: how «le falta» is built, read when a person opens it from a list that carries only the figure.
+export const readThirdPartyCreditAction = authActionClient
+  .inputSchema(removeThirdPartyCreditSchema)
+  .action(async ({ parsedInput: { liabilityAccountId } }) => {
+    const [credit] = await listThirdPartyCredits(liabilityAccountId);
+    if (!credit) throw new ActionError("errors.notFound");
+    return credit;
   });

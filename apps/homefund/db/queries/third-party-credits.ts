@@ -3,12 +3,14 @@ import "server-only";
 import { sql } from "drizzle-orm";
 
 import { insertAccount } from "@/db/queries/accounts";
+import { scheduleOf, schedulePaymentsSql, scheduleRowsSql, type RawPayment, type RawRow } from "@/db/queries/loan-schedule";
 import { bookMovement } from "@/db/queries/ledger-write";
 import { withUserDb } from "@/db/session";
 import type { CurrencyCode } from "@/lib/currency";
 import { todayInBogota } from "@/lib/dates";
 import { pgConstraintName, pgErrorCode } from "@/lib/db-error";
 import { ActionError } from "@/lib/errors";
+import { creditDigest, type CreditScheduleDigest } from "@/lib/loan-schedule";
 import { creditHistory, monthOf, type CreditMonth } from "@/lib/third-party-credit";
 import { createTransactionSchema } from "@/lib/validation/transaction";
 import type {
@@ -24,6 +26,8 @@ export type ThirdPartyCreditView = {
   id: string;
   liabilityAccountId: string;
   liabilityName: string;
+  // Who lent the money, as the credit's account names it; null when it names none.
+  lenderName: string | null;
   receivableAccountId: string;
   receivableName: string;
   personName: string;
@@ -36,23 +40,39 @@ export type ThirdPartyCreditView = {
   personOwesCents: number;
   // Everything the payer has sent, from the day the receivable opened.
   personPaidCents: number;
+  // What the payer owed the day the person started following the credit, and that day: where «le falta» begins.
+  openingCents: number;
+  openedOn: string;
+  // Each transfer the payer sent, oldest first: the figures «le falta» is built from.
+  payments: PersonPayment[];
+  // What the balance holds beyond the opening less the payments (an adjustment, a movement the person booked by hand);
+  // zero when «le falta» is exactly what the lines above add to.
+  otherCents: number;
   // The current month first, one line per month since the first trace.
   months: CreditMonth[];
   canWrite: boolean;
+  // The bank's payment schedule when the loan has one (RF-264): what is left of it with interest, what the payer
+  // usually sends and the cuotas that amount will not cover; null when it has none.
+  schedule: CreditScheduleDigest | null;
 };
+
+export type PersonPayment = { occurredOn: string; amountCents: number };
 
 type RawMonth = { month: string; paid: string; paidOn: string | null; lender: string; lenderOn: string | null };
 
 type RawCredit = Omit<
   ThirdPartyCreditView,
-  "installmentCents" | "owedCents" | "personOwesCents" | "personPaidCents" | "months"
+  "installmentCents" | "owedCents" | "personOwesCents" | "personPaidCents" | "months" | "schedule" | "openingCents" | "payments" | "otherCents"
 > & {
   installmentCents: string | null;
-  openedOn: string;
+  openingCents: string;
+  rawPayments: { occurredOn: string; amountCents: string }[];
   liabilityBalance: string;
   receivableBalance: string;
   paidTotal: string;
   rows: RawMonth[];
+  scheduleRows: RawRow[];
+  schedulePayments: RawPayment[];
 };
 
 /**
@@ -65,14 +85,21 @@ export async function listThirdPartyCredits(liabilityAccountId?: string): Promis
   const currentMonth = monthOf(todayInBogota());
   const rows = await withUserDb((tx) =>
     tx.execute<RawCredit>(sql`
-      select c.id, c.liability_account_id as "liabilityAccountId", l.name as "liabilityName",
+      select c.id, c.liability_account_id as "liabilityAccountId", l.name as "liabilityName", l.institution as "lenderName",
         c.receivable_account_id as "receivableAccountId", r.name as "receivableName",
         c.person_name as "personName", l.settlement_currency as currency,
         c.installment_cents::text as "installmentCents", c.due_day as "dueDay",
-        r.initial_balance_on::text as "openedOn",
+        r.initial_balance_on::text as "openedOn", r.initial_balance_cents::text as "openingCents",
+        coalesce((select jsonb_agg(jsonb_build_object('occurredOn', t.occurred_at::text, 'amountCents', t.amount_cents::text)
+            order by t.occurred_at, t.created_at)
+          from transactions t
+          where t.from_account_id = c.receivable_account_id and t.to_account_id is not null
+            and t.currency = l.settlement_currency), '[]'::jsonb) as "rawPayments",
         coalesce(lb.balance_cents, 0)::text as "liabilityBalance",
         coalesce(rb.balance_cents, 0)::text as "receivableBalance",
         private.can_write_account(c.liability_account_id) as "canWrite",
+        ${scheduleRowsSql("c.liability_account_id")} as "scheduleRows",
+        ${schedulePaymentsSql("c.liability_account_id", "l.settlement_currency")} as "schedulePayments",
         coalesce((select sum(t.amount_cents) from transactions t
           where t.from_account_id = c.receivable_account_id and t.to_account_id is not null
             and t.currency = l.settlement_currency), 0)::text as "paidTotal",
@@ -97,24 +124,31 @@ export async function listThirdPartyCredits(liabilityAccountId?: string): Promis
   );
 
   return rows.map((row) => {
-    const { openedOn, liabilityBalance, receivableBalance, paidTotal, rows: monthRows, ...rest } = row;
+    const { openingCents, rawPayments, liabilityBalance, receivableBalance, paidTotal, rows: monthRows, scheduleRows, schedulePayments, ...rest } = row;
+    const { openedOn } = row;
+    const months = creditHistory(
+      monthRows.map((m) => ({
+        month: m.month,
+        paidCents: Number(m.paid),
+        paidOn: m.paidOn,
+        lenderCents: Number(m.lender),
+        lenderOn: m.lenderOn,
+      })),
+      monthOf(openedOn),
+      currentMonth,
+    );
+    const schedule = scheduleOf(scheduleRows, schedulePayments);
     return {
       ...rest,
       installmentCents: row.installmentCents === null ? null : Number(row.installmentCents),
       owedCents: Math.max(0, -Number(liabilityBalance)),
       personOwesCents: Number(receivableBalance),
       personPaidCents: Number(paidTotal),
-      months: creditHistory(
-        monthRows.map((m) => ({
-          month: m.month,
-          paidCents: Number(m.paid),
-          paidOn: m.paidOn,
-          lenderCents: Number(m.lender),
-          lenderOn: m.lenderOn,
-        })),
-        monthOf(openedOn),
-        currentMonth,
-      ),
+      openingCents: Number(openingCents),
+      payments: rawPayments.map((payment) => ({ occurredOn: payment.occurredOn, amountCents: Number(payment.amountCents) })),
+      otherCents: Number(receivableBalance) - (Number(openingCents) - Number(paidTotal)),
+      months,
+      schedule: schedule === null ? null : creditDigest(schedule, months.map((month) => month.paidCents)),
     };
   });
 }

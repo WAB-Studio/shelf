@@ -290,6 +290,10 @@ accounting exports, native apps. None of this gets built or left
 - [x] **RF-262** — An account the person writes and has not counted for over 30 days (or, never counted, has had for over 30 days) carries a quiet «Cuádrala» in Cuentas, a text button that opens that account's «Cuadrar» (RF-137); Inicio carries at most one line, «N cuentas sin cuadrar hace más de un mes · Cuadrar todo», that opens «Cuadrar todo» (RF-261), and none when no account qualifies. The marks read only dates, in one round trip, and a failed read drops the line, never Inicio. Decided by the user 2026-11-17.
 - [x] **RF-263** — Inicio's recent movements leave a reconciliation's adjustment («Descuadre») out; it stays in Movimientos and in the account's history (RF-137, RF-138). Decided by the user 2026-11-17.
 - [x] **RF-135** — A counterparty is remembered per user: a description pattern earns an account and a side after two consecutive agreeing completions, and a completion naming a different account marks the pattern ambiguous, which no later agreement undoes. A remembered pattern prefills the missing side and never fills it on its own.
+- [x] **RF-264** — A loan keeps the payment schedule its bank printed (Lulo's «plan de pagos»): one row per cuota with its number, due day, capital, interest, insurance, the cuota total and the capital still owed once it is paid, all in integer cents. Only the rows are stored; a schedule is replaced whole, never edited row by row, and belongs to a liability of subtype loan, gated by that account's policies. A row is read against the loan's payments, never marked by hand: a transfer into the loan within 15 days of a due day, nearest row first, pays that row, in full when it reaches the cuota less 1 %, partial below it, and a payment near no row pays none. From the rows and the payments derive the next cuota (the first not paid in full), the cuotas left, what is still to pay with interest and insurance, the end date and the usual cuota (the middle one of the whole schedule); an unpaid cuota more than 5 % from the usual one is flagged ahead of its day. A schedule is read whole or refused whole: each row's cuota must be the sum of its three parts, its capital owed must fall by the capital it repays, its day must follow the one before, and the last row must leave nothing owed; a refusal names the row (`{row}`) so a misread figure is found in the paper. Decided by the user 2026-11-17.
+- [x] **RF-265** — Claude reads a bank's payment schedule and saves it through the MCP: `set_loan_schedule` takes a loan (`accountId`) and its `rows` in integer cents (`dueOn`, `principalCents`, `interestCents`, `insuranceCents`, an optional printed `totalCents`, `remainingCents`), by RF-264's own schema and write, and replaces the whole schedule. A call with `dryRun` writes nothing and answers how many rows it would replace and leave and the schedule read against what the loan has already been paid (cuotas left, the next one, what is left to pay with interest and insurance, the end date, the usual cuota and the cuotas more than 5 % from it), so the person says one yes to what they will see; the call that writes repeats the rows without `dryRun`. A refusal names the row. `get_debt` answers a loan's `schedule` with its rows, each marked paid, partial or pending and overdue, and `list_third_party_credits` answers the same figures without the rows plus what the payer usually sends (the middle of their last six months in which something arrived) and the unpaid cuotas that amount does not cover, those above it by more than 1 %. Decided by the user 2026-11-17.
+- [x] **RF-266** — A loan's detail shows its payment schedule (RF-264) under the balance, with no action to take: «Plan de pagos» opens on four figures, the next cuota (its amount, its number of the total and its day), the cuotas left, what is still to pay with interest and insurance, and when it ends, then one line per cuota with its capital, interest, insurance, total and the capital left, each with its state in words, «Pagada», «Parcial», «Vencida» or «Por pagar». Ahead of time, a warning names the first unpaid cuota more than 5 % from the usual one, «En agosto 2027 la cuota es $356.789; la usual es $323.000», and how many more are as far. For a credit somebody else pays (RF-211) that has a schedule, the capital's tile adds «A John le faltan 14 cuotas: $4.200.000 con intereses» and, when what the payer usually sends (RF-265) will not cover an unpaid cuota, a warning says it ahead of time: «En agosto 2027 la cuota es $356.789; John suele mandar $327.000». A loan with no schedule draws none of this. Decided by the user 2026-11-17.
+- [x] **RF-267** — «Le falta $X» says where it comes from. In Cuentas the figure under a credit somebody else pays («Lo paga John · le falta $ 2.680.980») is a button, and so is the «Ver cómo se calcula» note under «<Persona> todavía debe» in the credit's detail; each opens a small breakdown: «Deuda cuando se unió (10 nov 2026)» with the amount the payer owed that day, then each transfer the payer sent with its day and amount, then «Le falta» with the figure; a line «Otros movimientos de la cuenta» appears only when the balance holds more than the opening less the payments, so the lines always add up. When the loan has a payment schedule (RF-264) a last line reads «Con intereses y seguro, le faltan N cuotas: $Y». Cuentas reads the breakdown when it opens (pending, refused with a retry, done). The credit's own screen names who pays it near the top: «Este crédito lo paga John. Él te manda la cuota y tú le pagas a Lulo» (the lender is the credit's institution, «al banco» when it has none), «Le falta $X (capital)» and, with a schedule, «con intereses $Y · N cuotas», «Deuda cuando lo uniste: $3.007.980 el 10 nov», the actions «Registrar pago de John», «Cambiar persona» and «Desunir» as plain buttons, a warning «John aún no manda la cuota de diciembre (vence el 15)» while the month's cuota has not arrived, and a month-by-month table: month, «John te mandó» and «Pagaste a Lulo» (amount and day) and «Diferencia» (what the payer sent less what was paid to the lender); on the phone each month reads as a block. The credit's row in Deudas, table and cards, says «Lo paga John». `list_third_party_credits` and `get_debt` answer `lenderName` (the credit's institution), `openingCents`, `openedOn`, `payments` (each `occurredOn` and `amountCents`, oldest first) and `otherCents` beside the figures they carried. Decided by the user 2026-11-17: «¿cómo sé que John me debe este dinero? No veo de dónde pones eso».
 
 The webhook (RF-90) reuses RF-22 (quick entry), RF-25 (created_by) and RF-45 (no write bypasses audit) unchanged: the same interpreter reads the payload text and the same insert path records the movement, so the created-by stamp and the audit hold as on any manual write. RF-52's idempotency shape is mirrored, not reused — RF-52 stays a spreadsheet-import requirement; the webhook applies the same stable-external-reference rule to its own deliveries. The review queue keeps that reuse: it runs RF-22's interpreter to propose rather than to decide, and RF-25 and RF-45 hold unchanged because an accepted proposal is still written through the same insert path.
 
@@ -446,6 +450,7 @@ erDiagram
     accounts ||--o{ card_deferrals : "printed on its statement"
     groups ||--o{ member_debts : "holds"
     group_members ||--o{ member_debts : "owes or is owed"
+    accounts ||--o{ loan_schedule_rows : "a loan has a payment schedule"
     accounts ||--o| third_party_credits : "is paid by someone else (liability)"
     accounts ||--o| third_party_credits : "holds what they owe (receivable)"
     app_users ||--o{ recipients : "saves"
@@ -650,6 +655,19 @@ erDiagram
         date occurred_on
         text description "optional, 1 to 200"
         uuid created_by FK "auth.uid() by default"
+        timestamptz created_at
+    }
+
+    loan_schedule_rows {
+        uuid id PK
+        uuid account_id FK "the loan, a liability of subtype loan"
+        smallint number "1 to 600, unique per loan"
+        date due_on "unique per loan"
+        bigint principal_cents "capital the cuota repays"
+        bigint interest_cents
+        bigint insurance_cents
+        bigint total_cents "= principal + interest + insurance"
+        bigint remaining_cents "capital owed once it is paid"
         timestamptz created_at
     }
 
@@ -1033,6 +1051,10 @@ Rules the model must always guarantee, regardless of how they are implemented:
   explicit forget clears it.
 - A movement recorded with only the side an ingest could read is marked
   awaiting its counterparty; naming the other account clears the mark.
+- A loan's payment schedule is the rows its bank printed, replaced whole and never
+  edited; a row's total is the sum of its capital, interest and insurance. Which
+  rows are paid, the next cuota, what is left and every warning derive from the
+  rows and the loan's movements and are never stored.
 - A credit that somebody else pays is a liability linked to a receivable asset
   of its own scope and currency; the link stores only who pays and the lender's
   terms. What the credit owes, what the payer owes and paid and each month's two

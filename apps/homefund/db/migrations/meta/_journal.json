@@ -743,6 +743,13 @@
       "when": 1794932660800,
       "tag": "0109_a_card_defers_what_the_bank_prints",
       "breakpoints": true
+    },
+    {
+      "idx": 110,
+      "version": "7",
+      "when": 1794932334766,
+      "tag": "0110_a_loan_has_a_payment_schedule",
+      "breakpoints": true
     }
   ]
 }

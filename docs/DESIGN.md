@@ -734,6 +734,50 @@ movimientos y su pago es una transferencia, nunca un ingreso), pero nadie la ve:
 - **«Dejar de seguir»** quita el vínculo y archiva la cuenta interna, que pasa a Archivadas con sus movimientos; la
   confirmación lo dice.
 
+## Decisión del 2026-11-17: el plan de pagos en el crédito, por el usuario
+
+El banco imprime un «plan de pagos» con cada cuota; el crédito lo guarda y lo lee contra lo que ya se pagó. Se construye
+con estas palabras, sin tablero previo, y se refina con lo construido.
+
+- **Sin plan** el crédito no cambia: ningún bloque, ninguna ficha, ningún aviso.
+- **Con plan**, bajo las fichas del saldo (y bajo «Lo paga <persona>» si la hay), el bloque «Plan de pagos»: cuatro fichas,
+  «Próxima cuota» (el valor, con «Cuota 4 de 12 · 5 mar 2027»; «Todas pagadas» al final), «Cuotas por pagar» («de 12»),
+  «Falta pagar» («Con intereses y seguro») y «Termina» (el mes y el año, con el día debajo). Encima de ellas, un aviso
+  ámbar si alguna cuota sin pagar se aleja más de 5 % de la usual: «En noviembre 2027 la cuota es $619.285; la usual es
+  $194.679.», y «Otras 2 cuotas más se alejan más de 5 % de la usual.» si hay más.
+- **«Cuotas»**, una tarjeta con una fila por cuota: «Cuota 3 · 5 feb 2027» y, debajo, «Capital · Interés · Seguro»; a la
+  derecha el total, una insignia con el estado en palabras (verde «Pagada», ámbar «Parcial · $X», roja «Vencida», gris «Por
+  pagar») y «Saldo $X», el capital que queda. Un estado nunca es solo color.
+- **«Lo paga <persona>»**: la ficha «Falta del crédito» cambia su nota por «A John le faltan 14 cuotas: $4.200.000 con
+  intereses» («le falta 1 cuota» en singular); y un aviso ámbar bajo las fichas, «En agosto 2027 la cuota es $356.789; John
+  suele mandar $327.000.», más «Otras 2 cuotas más tampoco la cubren.» si hay más. Sin cuotas por pagar la nota vuelve a la
+  cuota y el día de pago del banco.
+- En el celular, una columna: las fichas se apilan y cada fila de cuota baja el total y la insignia bajo sus cifras.
+
+## Decisión del 2026-11-17 (segunda): «le falta» dice de dónde sale, por el usuario
+
+«¿Cómo sé que John me debe este dinero? No veo de dónde pones eso.» Sin tablero previo; se refina con lo construido.
+
+- **Dónde.** En Cuentas, la cifra de «Lo paga John · le falta $ 2.680.980» es un botón (tinta de texto, sin caja). En el
+  crédito, la ficha «John todavía debe» lleva la nota «Ver cómo se calcula», también un botón.
+- **El diálogo «Cuánto le falta a John»**: «Deuda cuando se unió (10 nov 2026)» y su cifra; «Pagos de John» y, debajo, una
+  línea por pago con el día y el monto en negativo, el más viejo primero (sin pagos: «John todavía no ha pagado nada.»);
+  «Otros movimientos de la cuenta» solo si el saldo guarda algo más; y, tras una línea, «Le falta» en negrita con la cifra.
+  Con plan de pagos, una última línea gris: «Con intereses y seguro, le faltan 14 cuotas: $4.200.000». Un botón «Cerrar».
+- **El crédito mismo relaciona a quien lo paga.** «¿Por qué el crédito mismo no relaciona a John?» Bajo las fichas del saldo,
+  «Lo paga John» abre con tres líneas: «Este crédito lo paga John. Él te manda la cuota y tú le pagas a Lulo.» (el prestamista
+  es la institución del crédito; sin ella, «al banco»), «Le falta $30.000 (capital) · con intereses $33.300 · 3 cuotas» y, en
+  gris, «Deuda cuando lo uniste: $3.007.980 el 10 nov». A la derecha del título, tres botones a la vista: «Registrar pago de
+  John», «Cambiar persona» y «Desunir» (rojo, confirma); ya no hay menú. Un aviso ámbar mientras el mes no ha recibido nada:
+  «John aún no manda la cuota de diciembre (vence el 15).».
+- **«Mes a mes»** es una tabla: «Mes», «John te mandó» y «Pagaste a Lulo» (monto y, debajo, el día), «Diferencia» (lo que
+  John mandó menos lo que pagaste al banco: el 4x1000 y el colchón); un mes sin movimientos lleva rayas. En el celular cada
+  mes es un bloque con sus cuatro líneas.
+- **Deudas.** La fila de un crédito que paga otra persona dice «Lo paga John» en gris bajo el nombre, en la tabla y en las
+  tarjetas.
+- **Estados.** Desde Cuentas el diálogo lee al abrirse: «Leyendo los pagos…» con un indicador, «No pudimos leer el detalle.»
+  con «Reintentar» si falla; desde el crédito ya tiene los datos y no espera.
+
 ## Decisión del 2026-11-17: «Para quién», por el usuario
 
 «Cuando gasta a nombre de otra persona… Ángela es mi pareja y no le cobraría dinero a menos que te diga.» Un gasto hecho por
