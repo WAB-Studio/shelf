@@ -119,3 +119,35 @@ test("a Nu card payment is a receipt of the bank's payment to Nu", () => {
   const nu: DuplicateFacts = { ...receipt, text: "¡Ya entró tu pago! Tu pago fue de $397.167,42" };
   assert.equal(judgeDuplicate(nu, [bank]).kind, "repeats");
 });
+
+// Production, 2026-11-17: an SMS and the email of one alert, both pending.
+const SMS_SHORT_YEAR = "Bancolombia: Compraste COP80.800,00 en PIZZERIA EJEMPLO con tu T.Cred *4872, el 14/11/26 a las 19:05. Si tienes dudas, encuentranos aqui: 6045109095.";
+const MAIL_LONG_YEAR = "Bancolombia: JUAN, compraste COP80.800,00 en PIZZERIA EJEMPLO con tu T.Cred *4872, el 14/11/2026 a las 19:05.";
+
+test("a short year in the SMS and a long one in the email are one printed day and time, whatever the arrival gap", () => {
+  const phone = candidate({ id: "sms", occurredOn: "2026-11-14", rawText: SMS_SHORT_YEAR, receivedAt: NOW - 20 * 60 * MINUTE });
+  const verdict = judgeDuplicate(email({ occurredOn: "2026-11-14", text: MAIL_LONG_YEAR, shapeHash: "d".repeat(64) }), [phone]);
+  assert.equal(verdict.kind === "repeats" && verdict.of.id, "sms");
+
+  const reverse = judgeDuplicate(
+    sms({ occurredOn: "2026-11-14", text: SMS_SHORT_YEAR }),
+    [candidate({ id: "mail", fromEmail: true, occurredOn: "2026-11-14", rawText: MAIL_LONG_YEAR, receivedAt: NOW + 20 * 60 * MINUTE })],
+  );
+  assert.equal(reverse.kind === "repeats" && reverse.of.id, "mail");
+});
+
+test("a burst of emails arriving in one second leaves each alert matched to its own SMS by the printed minute", () => {
+  const phones = [
+    candidate({ id: "a", occurredOn: "2026-11-14", rawText: SMS_SHORT_YEAR, receivedAt: NOW - 900 * MINUTE }),
+    candidate({ id: "b", occurredOn: "2026-11-14", rawText: SMS_SHORT_YEAR.replace("19:05", "21:30"), receivedAt: NOW - 900 * MINUTE }),
+  ];
+  const second = email({ occurredOn: "2026-11-14", text: MAIL_LONG_YEAR.replace("19:05", "21:30"), receivedAt: NOW });
+  const verdict = judgeDuplicate(second, phones);
+  assert.equal(verdict.kind === "repeats" && verdict.of.id, "b");
+});
+
+test("a twelve-hour clock reads as the twenty-four-hour one", () => {
+  const phone = candidate({ id: "sms", occurredOn: "2026-11-14", rawText: SMS_SHORT_YEAR, receivedAt: NOW - 20 * 60 * MINUTE });
+  const verdict = judgeDuplicate(email({ occurredOn: "2026-11-14", text: MAIL_LONG_YEAR.replace("19:05", "7:05 p. m.") }), [phone]);
+  assert.equal(verdict.kind, "repeats");
+});

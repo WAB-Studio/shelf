@@ -4180,6 +4180,7 @@ async function main(): Promise<void> {
   await mcpDeletesSuite();
   await mcpMoneyModelSuite();
   await payOwnCardSuite();
+  await legacyChannelSuite();
   await mcpForPersonSuite();
 }
 
@@ -15871,10 +15872,12 @@ async function statementImportSuite(): Promise<void> {
     values (${owner.id}, ${counterpartyPatternKey("TRANSF A BOLSILLO 7781")}, 'TRANSF A BOLSILLO', 'to', 'trusted', ${ids.card})`;
 
   const { tool: callTool } = mcpClient(POST, token);
-  // A statement is named by its cut-off date; unless a call names one, it is the span of its lines.
+  // A statement is named by its cut-off date; unless a call names one, it is the span of its lines. Its closing balance is
+  // the printed one (RF-248): a call that names none prints zero.
   const tool = (name: string, args: Record<string, unknown>) => {
     const days = ((args.rows ?? []) as { date: string }[]).map((row) => row.date).sort();
-    return callTool(name, args.statement ? args : { ...args, statement: { periodStart: days[0], cutOffDate: days[days.length - 1] } });
+    const period = (args.statement ?? { periodStart: days[0], cutOffDate: days[days.length - 1] }) as Record<string, unknown>;
+    return callTool(name, { ...args, statement: { closingBalanceCents: 0, ...period } });
   };
   const count = async () => {
     const [row] = await fixtureSql<{ movements: number; sources: number }[]>`
@@ -16111,7 +16114,7 @@ async function statementImportSuite(): Promise<void> {
   const unnamed = await callTool("preview_statement", { accountId: ids.card, rows: cardRows });
   // A line outside the period it names is refused too.
   const outside = await callTool("preview_statement", {
-    accountId: ids.card, rows: cardRows, statement: { periodStart: "2026-10-05", cutOffDate: "2026-10-31" },
+    accountId: ids.card, rows: cardRows, statement: { periodStart: "2026-10-05", cutOffDate: "2026-10-31", closingBalanceCents: 0 },
   });
   assert(
     next("RF-134: a statement names its period, and no line may fall outside it"),
@@ -16190,6 +16193,38 @@ async function statementImportSuite(): Promise<void> {
     !lastImport.isError && lastImport.value?.removed === 1 && novStatements[0]?.n === 1 && (await novMovement("TRES")) === undefined,
     `import ${JSON.stringify(lastImport.value)}, statements ${novStatements[0]?.n}`,
   );
+
+  // RF-248: a statement is a bank's paper with its printed closing balance; cash has none, and a receipt split into products is no statement.
+  const cash = randomUUID();
+  await fixtureSql`
+    insert into accounts (id, owner_user_id, name, kind, subtype, initial_balance_cents, initial_balance_on)
+    values (${cash}, ${owner.id}, ${`Harness rf244 efectivo ${tag}`}, 'asset', 'cash', 0, '2026-01-01')`;
+  track("accounts", cash);
+  const oneLine = [{ line: 1, date: "2026-09-20", description: "CAFE", amountCents: -500_000, categoryId: ids.food }];
+  const cashPreview = await tool("preview_statement", { accountId: cash, rows: oneLine });
+  const noClosing = await callTool("preview_statement", {
+    accountId: ids.bank, rows: oneLine, statement: { periodStart: "2026-09-20", cutOffDate: "2026-09-20" },
+  });
+  const withClosing = await tool("preview_statement", { accountId: ids.bank, rows: oneLine });
+  assert(
+    next("RF-248: a statement of a cash account is refused, and one without its printed closing balance never reaches the import"),
+    cashPreview.isError && cashPreview.value?.error === es.mcp.errors.statement.cashAccount &&
+      noClosing.isError && !withClosing.isError,
+    `cash ${JSON.stringify(cashPreview.value)}, no closing ${JSON.stringify(noClosing.value)}, with ${JSON.stringify(withClosing.value)}`,
+  );
+  const exploded = (count: number, extra: (index: number) => Record<string, unknown> = () => ({})) =>
+    Array.from({ length: count }, (_, index) => ({
+      line: index + 1, date: "2026-09-21", description: `PRODUCTO ${index + 1}`, amountCents: -(index + 1) * 100_000, categoryId: ids.food, ...extra(index),
+    }));
+  const receipt = await tool("preview_statement", { accountId: ids.bank, rows: exploded(5) });
+  const fewer = await tool("preview_statement", { accountId: ids.bank, rows: exploded(4) });
+  const referenced = await tool("preview_statement", { accountId: ids.bank, rows: exploded(5, (index) => ({ reference: `P${index}-${tag}` })) });
+  assert(
+    next("RF-248: five expenses on one day with no bank reference read as a receipt and are refused; four, or five with their references, are not"),
+    receipt.isError && receipt.value?.error === es.mcp.errors.statement.looksLikeReceipt && receipt.value?.line === 1 &&
+      !fewer.isError && !referenced.isError,
+    `five ${JSON.stringify(receipt.value)}, four ${JSON.stringify(fewer.value?.counts)}, referenced ${JSON.stringify(referenced.value?.counts)}`,
+  );
 }
 
 
@@ -16226,7 +16261,7 @@ async function deferralImportSuite(): Promise<void> {
     return row?.cents;
   };
 
-  const march = { periodStart: "2026-03-01", cutOffDate: "2026-03-31" };
+  const march = { periodStart: "2026-03-01", cutOffDate: "2026-03-31", closingBalanceCents: 0 };
   const rows = [
     { line: 1, date: "2026-03-15", description: "NEVERA 1/36", amountCents: -360_000_000, categoryId: ids.food, instalments: 36 },
     { line: 2, date: "2026-03-16", description: "CAFE", amountCents: -1_000_000, categoryId: ids.food },
@@ -20968,6 +21003,42 @@ async function payOwnCardSuite(): Promise<void> {
     card?.direction === "transfer" && card.from === bank && card.to === nu && shop?.direction === "expense" && shop.to === null &&
       ambiguous?.direction === "expense" && ambiguous.to === null && second !== nu,
     JSON.stringify({ card, shop, ambiguous }),
+  );
+}
+
+// RF-244: a bank email stored before the channel was recorded reads as the phone's; the key it came through says
+// otherwise, so the SMS of the same alert, whatever hours later, is its duplicate.
+async function legacyChannelSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const { recordIngestDelivery } = await import("@/db/queries/webhook-ingest");
+  const user = await createMembershipFreeUser();
+  const make = async (kind: "android" | "bank_emails") => {
+    const { id } = await asUser(user, () =>
+      issueWebhookCredential({ name: `Harness rf244 ${kind} ${tag}`, kind, defaultAccountId: null, defaultCategoryId: null }),
+    );
+    keep("webhook_credentials", id);
+    return id;
+  };
+  const [gmail, phone] = [await make("bank_emails"), await make("android")];
+  const deliver = (credentialId: string, text: string, email?: { movement: true; receipt: false; priced: true }) =>
+    recordIngestDelivery({
+      ownerUserId: user.id, credentialId, defaultAccountId: null, defaultCategoryId: null,
+      payload: { text } as Parameters<typeof recordIngestDelivery>[0]["payload"], email,
+    });
+  const mail = await deliver(
+    gmail,
+    `Bancolombia: JUAN, compraste COP80.800,00 en PIZZERIA ${tag} con tu T.Cred *4872, el 14/11/2026 a las 19:05.`,
+    { movement: true, receipt: false, priced: true },
+  );
+  await fixtureSql`update ingest_deliveries set from_email = false, created_at = now() - interval '20 hours' where id = ${mail.deliveryId}`;
+  const sms = await deliver(phone, `Bancolombia: Compraste COP80.800,00 en PIZZERIA ${tag} con tu T.Cred *4872, el 14/11/26 a las 19:05. Si tienes dudas, encuentranos aqui.`);
+  const [row] = await fixtureSql<{ reason: string | null; of: string | null }[]>`
+    select reject_reason as reason, duplicate_of_id as of from ingest_deliveries where id = ${sms.deliveryId}`;
+  assert(
+    next("RF-244: the SMS of an alert whose email was stored before the channel flag is its duplicate, 20 hours on, by the printed day and minute"),
+    sms.status === "rejected" && row?.reason === "duplicate" && row.of === mail.deliveryId,
+    JSON.stringify({ sms, row }),
   );
 }
 
