@@ -20,7 +20,7 @@ import {
   type BilledTarget,
 } from "@/components/accounts/foreign-estimates";
 import { ReconcileDialog } from "@/components/accounts/reconcile-dialog";
-import { AccountDetail, AccountsTable, PaidByLine } from "@/components/accounts/accounts-table";
+import { AccountDetail, AccountsTable, FreePartWarning, PaidByLine } from "@/components/accounts/accounts-table";
 import {
   Box,
   Button,
@@ -686,6 +686,7 @@ function AccountCard({
           </Text>
           <AccountDetail account={account} />
           <PaidByLine account={account} />
+          <FreePartWarning account={account} />
           {/* The settlement currency is the figure the card leads with, and each
               other currency the account holds sits under it naming itself: no
               line here is the sum of two currencies (RF-124).

@@ -199,19 +199,23 @@ export function MovementDetailDesktop({
     year: "numeric",
   });
 
+  // What the database moved from a pocket for it is no cost: it is listed apart and left out of the total (RF-241).
+  const covers = causedCharges.filter((charge) => charge.pocketCover);
+  const charges = causedCharges.filter((charge) => !charge.pocketCover);
+
   // What the movement really cost: itself plus the charges it caused, and only
   // those in its own currency — a charge in another one is totalled on a line of
   // its own, since no figure sums two currencies (RF-124, RF-132).
   const combinedTotalCents =
     movement.amountCents +
-    causedCharges.reduce(
+    charges.reduce(
       (sum, charge) =>
         charge.currency === movement.currency ? sum + charge.amountCents : sum,
       0,
     );
 
   const otherCurrencyTotals = new Map<CurrencyCode, number>();
-  for (const charge of causedCharges) {
+  for (const charge of charges) {
     if (charge.currency === movement.currency) continue;
     otherCurrencyTotals.set(
       charge.currency,
@@ -443,7 +447,7 @@ export function MovementDetailDesktop({
           {/* The movement that produced this one, one hop back and no further
               (RF-132): the row is the link. */}
           {cause && (
-            <Panel title={t("causeLabel")}>
+            <Panel title={movement.pocketCover ? t("pocketCoverCauseLabel") : t("causeLabel")}>
               <PanelRow
                 href={`/movements/${cause.id}`}
                 columns={CAUSE_ROW_COLUMNS}
@@ -454,9 +458,9 @@ export function MovementDetailDesktop({
 
           {/* What this movement cost beyond itself (RF-132), each charge with
               its own figure and the total the same currency makes with it. */}
-          {causedCharges.length > 0 && (
+          {charges.length > 0 && (
             <Panel title={t("causedTitle")}>
-              {causedCharges.map((charge) => (
+              {charges.map((charge) => (
                 <PanelRow
                   key={charge.id}
                   href={`/movements/${charge.id}`}
@@ -482,6 +486,19 @@ export function MovementDetailDesktop({
                   </Fragment>
                 ))}
               </Flex>
+            </Panel>
+          )}
+
+          {covers.length > 0 && (
+            <Panel title={t("pocketCoverTitle")}>
+              {covers.map((cover) => (
+                <PanelRow
+                  key={cover.id}
+                  href={`/movements/${cover.id}`}
+                  columns={CAUSE_ROW_COLUMNS}
+                  cells={causeRowCells(cover)}
+                />
+              ))}
             </Panel>
           )}
 
@@ -513,8 +530,21 @@ export function MovementDetailDesktop({
             </Text>
           )}
 
+          {/* An automatic transfer is undone, never edited: its figure is the shortfall it covers (RF-241). */}
+          {movement.pocketCover && (
+            <Text size="2" color="gray">
+              {t("pocketCoverNote")}
+            </Text>
+          )}
+          {movement.pocketCover && !othersOwn && (
+            <Button type="button" size="3" variant="surface" color="red" onClick={() => setDeleteOpen(true)}>
+              <Trash2Icon size={15} />
+              {t("pocketCoverUndo")}
+            </Button>
+          )}
+
           {/* Another member's movement is read here, never changed (RF-58). */}
-          {!isAdjustment && !othersOwn && (
+          {!isAdjustment && !othersOwn && !movement.pocketCover && (
           <Flex gap="3">
             <Flex asChild align="center" justify="center" gap="2" flexGrow="1">
               <Button type="button" size="3" onClick={() => setEditOpen(true)}>
@@ -562,15 +592,17 @@ export function MovementDetailDesktop({
       <ConfirmDialog
         open={deleteOpen}
         onOpenChange={setDeleteOpen}
-        title={t("deleteTitle")}
+        title={movement.pocketCover ? t("pocketCoverUndoTitle") : t("deleteTitle")}
         description={
-          movement.settledPlannedPayment
+          movement.pocketCover
+            ? t("pocketCoverUndoDescription")
+            : movement.settledPlannedPayment
             ? movement.settledPlannedPayment.description
               ? t("deleteSettlesPayment", { name: movement.settledPlannedPayment.description })
               : t("deleteSettlesPaymentUnnamed")
             : t("deleteDescription")
         }
-        confirmLabel={t("delete")}
+        confirmLabel={movement.pocketCover ? t("pocketCoverUndo") : t("delete")}
         cancelLabel={tKey("common.cancel")}
         pending={remove.isPending}
         onConfirm={() => remove.execute({ transactionId: movement.id })}

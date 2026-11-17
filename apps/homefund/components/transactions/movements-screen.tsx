@@ -730,10 +730,14 @@ export function MovementsScreen({
                           )
                         }
                         badge={
-                          row.recurringRuleId !== null ? t("autoBadge") : undefined
+                          row.pocketCover
+                            ? t("pocketCoverBadge")
+                            : row.recurringRuleId !== null
+                              ? t("autoBadge")
+                              : undefined
                         }
                         caused={
-                          row.causedByTransactionId !== null
+                          row.causedByTransactionId !== null && !row.pocketCover
                             ? t("causedBadge")
                             : undefined
                         }

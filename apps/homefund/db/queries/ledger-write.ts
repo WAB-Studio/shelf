@@ -19,7 +19,7 @@ import {
   ResendChangedError,
   updateTransaction,
 } from "@/db/queries/transactions";
-import type { TransactionSplitInput } from "@/db/queries/transactions";
+import type { PocketCover, TransactionSplitInput } from "@/db/queries/transactions";
 import { BASE_CURRENCY, type CurrencyCode } from "@/lib/currency";
 import { withUserDb } from "@/db/session";
 import { pgErrorCode } from "@/lib/db-error";
@@ -183,7 +183,8 @@ export function mapTransactionError(error: unknown): never {
 export async function bookMovement(
   input: CreateTransactionInput,
   alsoCheck: () => Promise<void> = async () => {},
-): Promise<{ transactionId: string }> {
+  { reportPocketCovers = false }: { reportPocketCovers?: boolean } = {},
+): Promise<{ transactionId: string; pocketCovers?: PocketCover[] }> {
   const [, , , counter] = await Promise.all([
     alsoCheck(),
     assertContributorGiven(input),
@@ -209,6 +210,7 @@ export async function bookMovement(
       splits: toSplitMinor(input.splits),
       labelIds: input.labelIds,
       causedByTransactionId: input.causedByTransactionId,
+      reportPocketCovers,
     });
   } catch (error) {
     return mapTransactionError(error);

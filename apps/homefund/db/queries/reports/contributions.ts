@@ -131,6 +131,8 @@ export async function getMemberContributions(range: {
         where t.kind = 'transfer'
           and fa.group_id is not null and ta.group_id is not null
           and (fa.holder_member_id is null) <> (ta.holder_member_id is null)
+          -- RF-241: what the database moves from a pocket into its account is the same money in one place.
+          and not t.pocket_cover
           and t.occurred_at >= ${range.start} and t.occurred_at < ${range.endExclusive}
         union all
         -- RF-167: an income into a fund account credited to the member who put it in, booked as the

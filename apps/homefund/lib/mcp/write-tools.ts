@@ -19,6 +19,7 @@ import {
 import {
   getTransactionById,
   listTransactions,
+  pocketCoversOf,
   type TransactionListFilters,
   type TransactionListRow,
   type TransactionSplitInput,
@@ -223,6 +224,8 @@ export function movementRow(row: TransactionListRow) {
     madeByName: row.madeByName,
     labelIds: row.labels.map((label) => label.id),
     splits: row.splits,
+    // The transfer HomeFund booked from a pocket into its account on its own (RF-241); deleting it undoes it.
+    pocketCover: row.pocketCover,
     updatedAt: row.updatedAt,
   };
 }
@@ -285,15 +288,19 @@ export function registerLedgerTools(server: McpServer, run: Run, t: Say): void {
       annotations: ADD_ONCE,
     },
     (input: MovementInput & { requestRef?: string }, ctx) =>
-      run(ctx, async (owner) =>
-        bookMovement(
+      run(ctx, async (owner) => {
+        const booked = await bookMovement(
           parseForm(createTransactionSchema, {
             ...movementForm(input),
             labelIds: await resolveLabelIds(owner, input.labels ?? []),
             requestRef: input.requestRef,
           }),
-        ),
-      ),
+          undefined,
+          { reportPocketCovers: true },
+        );
+        // Said only when the database moved money out of a pocket for it (RF-241).
+        return booked.pocketCovers?.length ? booked : { transactionId: booked.transactionId };
+      }),
   );
 
   // The stamp is the one Claude read in list_movements: an edit after someone else's save is refused stale (RF-156).
@@ -327,7 +334,12 @@ export function registerLedgerTools(server: McpServer, run: Run, t: Say): void {
         );
         // A categoryId patch replaces the lines, so what it overwrote is the lines.
         const sent = { ...patch, splits: patch.splits ?? (patch.categoryId === undefined ? undefined : []) };
-        return { transactionId: id, before: previousFields(storedMovement(current), sent) };
+        const pocketCovers = await pocketCoversOf(id);
+        return {
+          transactionId: id,
+          before: previousFields(storedMovement(current), sent),
+          ...(pocketCovers.length > 0 ? { pocketCovers } : {}),
+        };
       }),
   );
 
