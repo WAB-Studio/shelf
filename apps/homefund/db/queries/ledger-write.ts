@@ -34,6 +34,7 @@ import {
   refineSettlement,
   type SplitFields,
   type UpdateTransactionInput,
+  withPerson,
 } from "@/lib/validation/transaction";
 
 // The writes behind the forms' actions and behind `/mcp`: each takes input a Zod schema already
@@ -174,6 +175,11 @@ export function mapTransactionError(error: unknown): never {
   throw error;
 }
 
+function mergedPerson(people: (string | null)[]): string | null {
+  const named = new Set(people.filter((id) => id !== null));
+  return named.size === 1 ? [...named][0] : null;
+}
+
 /**
  * Records a movement (RF-17, RF-25). Which of the two accounts is null decides
  * the kind, which the DB generates; an income or expense carries splits summing
@@ -213,7 +219,7 @@ export async function bookMovement(
       externalRef: input.externalRef ?? null,
       requestRef: input.requestRef,
       splits: toSplitMinor(input.splits),
-      labelIds: input.labelIds,
+      labelIds: withPerson(input.labelIds, input.forPersonId),
       causedByTransactionId: input.causedByTransactionId,
     });
   } catch (error) {
@@ -254,7 +260,7 @@ export async function reviseMovement(
       occurredAt: input.occurredAt,
       description: input.description,
       splits: toSplitMinor(input.splits),
-      labelIds: input.labelIds,
+      labelIds: withPerson(input.labelIds, input.forPersonId),
       // Wholesale: an edit clearing the cause sends `null`, and absent means none.
       causedByTransactionId: input.causedByTransactionId ?? null,
       expectedUpdatedAt: input.expectedUpdatedAt,
@@ -434,7 +440,11 @@ export async function mergeMovements(input: {
         description: input.description,
         externalRef: null,
         splits: lines,
-        labelIds: [...new Set(found.flatMap((row) => row.labels.map((label) => label.id)))],
+        // The merged movement is for someone only when every row that names a person names the same one.
+        labelIds: withPerson(
+          [...new Set(found.flatMap((row) => row.labels.map((label) => label.id)))],
+          mergedPerson(found.map((row) => row.forPerson?.id ?? null)),
+        ),
       });
       return { transactionId: created.transactionId, lines: lines.length };
     });
