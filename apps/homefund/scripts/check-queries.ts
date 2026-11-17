@@ -4180,6 +4180,7 @@ async function main(): Promise<void> {
   await mcpDeletesSuite();
   await mcpMoneyModelSuite();
   await payOwnCardSuite();
+  await expectedIncomeSuite();
 }
 
 // A member recorded without a login is someone in the fund: a leader whose fund holds one is not alone, so an
@@ -15392,6 +15393,7 @@ const TOOL_CLASSES = [
   ["create_account", ...ADD_CLASS],
   ["create_budget", ...ADD_CLASS],
   ["create_category", ...ADD_CLASS],
+  ["create_expected_income", ...ADD_CLASS],
   ["create_goal", ...ADD_CLASS],
   ["create_label", ...ADD_CLASS],
   ["create_member", ...ADD_CLASS],
@@ -20999,5 +21001,63 @@ async function payOwnCardSuite(): Promise<void> {
     card?.direction === "transfer" && card.from === bank && card.to === nu && shop?.direction === "expense" && shop.to === null &&
       ambiguous?.direction === "expense" && ambiguous.to === null && second !== nu,
     JSON.stringify({ card, shop, ambiguous }),
+  );
+}
+
+// RF-250: an expected income settles by itself when an income of about its amount lands in its account, and by
+// nothing else: another amount, another account or a date far from the expected day leave it pending.
+async function expectedIncomeSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const today = todayInBogota();
+  const user = await createMembershipFreeUser();
+  const open = async (name: string) => {
+    const { accountId } = await asUser(user, () =>
+      createAccount({
+        kind: "asset", subtype: "bank", groupId: null, isShared: false, institution: null, lastFour: null,
+        settlementCurrency: BASE_CURRENCY, balanceOn: "2026-01-01", ownerUserId: user.id,
+        name: `Harness rf250 ${name} ${tag}`, amountMinor: 100_000_00,
+      }),
+    );
+    track("accounts", accountId);
+    return accountId;
+  };
+  const [bank, other] = [await open("banco"), await open("otra")];
+  const { categoryId } = await asUser(user, () =>
+    createCategory({ scope: { ownerUserId: user.id }, name: `Harness rf250 ingreso ${tag}`, kind: "income", parentId: null, color: CATEGORY_COLORS[0] }),
+  );
+  track("categories", categoryId);
+  const expect = async (description: string, amountCents: number, dueDate: string) => {
+    const { plannedPaymentId } = await asUser(user, () =>
+      createPlannedPayment({ fromAccountId: null, toAccountId: bank, amountCents, categoryId: null, dueDate, remindOn: null, description }),
+    );
+    keep("planned_payments", plannedPaymentId);
+    return plannedPaymentId;
+  };
+  const arrive = async (accountId: string, amountCents: number, occurredAt: string) => {
+    const { transactionId } = await asUser(user, () =>
+      createTransaction({
+        fromAccountId: null, toAccountId: accountId, amountCents, occurredAt, description: `Harness rf250 ingreso ${tag}`,
+        externalRef: null, splits: [{ categoryId, amountCents }], labelIds: [],
+      }),
+    );
+    track("transactions", transactionId);
+    return transactionId;
+  };
+  const stateOf = async (id: string) =>
+    (await fixtureSql<{ status: string; tx: string | null }[]>`
+      select status, settled_transaction_id as tx from planned_payments where id = ${id}`)[0];
+
+  const project = await expect(`Proyecto ${tag}`, 5_000_000_00, addCivilMonths(today, 1));
+  await arrive(other, 5_000_000_00, today);
+  await arrive(bank, 4_000_000_00, today);
+  await arrive(bank, 5_000_000_00, addCivilMonths(today, -6));
+  const untouched = await stateOf(project);
+  const landed = await arrive(bank, 4_900_000_00, today);
+  const settled = await stateOf(project);
+  assert(
+    next("RF-250: an expected income stays pending for another account, a different amount or a far date, and settles on an income within 5 % into its account"),
+    untouched.status === "pending" && settled.status === "done" && settled.tx === landed,
+    JSON.stringify({ untouched, settled, landed }),
   );
 }

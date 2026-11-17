@@ -35,7 +35,7 @@ import type { PlannedPaymentRow } from "@/db/queries/planned-payments";
 import type { TransactionFormOptions } from "@/db/queries/transaction-form";
 import { civilDateToDate, todayInBogota } from "@/lib/dates";
 import { categoryNamesById } from "@/lib/fund/category-names";
-import { isOverdue } from "@/lib/fund/glance";
+import { isExpectedIncome, isOverdue } from "@/lib/fund/glance";
 import { useMoneyText } from "@/lib/use-privacy";
 import { useActionErrorToast } from "@/lib/use-action-toast";
 
@@ -62,7 +62,7 @@ export function PaymentsScreen({
   const onActionError = useActionErrorToast();
 
   // "new" and a row share one dialog instance; its own key resets the form.
-  const [formTarget, setFormTarget] = useState<PlannedPaymentRow | "new" | null>(
+  const [formTarget, setFormTarget] = useState<PlannedPaymentRow | "new" | "income" | null>(
     null,
   );
   const [settleTarget, setSettleTarget] = useState<PlannedPaymentRow | null>(
@@ -139,13 +139,25 @@ export function PaymentsScreen({
       {t("add")}
     </Button>
   );
+  // RF-250: money somebody owes arrives as an income, so it has its own way in.
+  const incomeButton = (
+    <Button type="button" variant="soft" onClick={() => setFormTarget("income")}>
+      <Plus size={16} />
+      {t("incomeAdd")}
+    </Button>
+  );
 
   return (
     <Flex direction="column" gap="4">
       <ScreenHeader
         title={t("title")}
         meta={hasGroup ? <FundChip label={tKey("fund.label")} /> : undefined}
-        actions={addButton}
+        actions={
+          <Flex gap="2" wrap="wrap">
+            {incomeButton}
+            {addButton}
+          </Flex>
+        }
       />
 
 
@@ -154,7 +166,7 @@ export function PaymentsScreen({
         <EmptyState
           title={t("emptyTitle")}
           description={t("emptyDescription")}
-          action={addButton}
+          action={<Flex gap="2" wrap="wrap">{incomeButton}{addButton}</Flex>}
         />
       ) : (
         <Flex direction="column" gap="4">
@@ -218,7 +230,8 @@ export function PaymentsScreen({
           if (!open) setFormTarget(null);
         }}
         options={options}
-        payment={formTarget === "new" ? undefined : (formTarget ?? undefined)}
+        income={formTarget === "income"}
+        payment={typeof formTarget === "object" ? (formTarget ?? undefined) : undefined}
       />
 
       <PaymentSettleDialog
@@ -287,6 +300,7 @@ function PaymentCard({
   const due = civilDateToDate(payment.dueDate);
   const pending = payment.status === "pending";
   const overdue = isOverdue(payment, today);
+  const income = isExpectedIncome(payment);
 
   return (
     <Card>
@@ -301,9 +315,15 @@ function PaymentCard({
               />
             }
             title={payment.description ?? t("noConcept")}
-            subtitle={overdue ? t("overdueReminder") : t("reminder")}
+            subtitle={
+              income
+                ? t(overdue ? "incomeOverdueReminder" : "incomeReminder")
+                : overdue
+                  ? t("overdueReminder")
+                  : t("reminder")
+            }
             amount={moneyText(payment.amountCents, payment.currency, locale)}
-            tone="transfer"
+            tone={income ? "income" : "transfer"}
             wrap
           />
         </Flex>
@@ -343,7 +363,7 @@ function PaymentCard({
       <OwnerMark foreignOwner={payment.foreignOwner} ownerName={payment.ownerName} />
       {pending && !payment.foreignOwner && (
         <Button type="button" variant="surface" color={overdue ? "amber" : "gray"} onClick={onSettle}>
-          {t("settle")}
+          {t(income ? "incomeSettle" : "settle")}
         </Button>
       )}
       </Flex>

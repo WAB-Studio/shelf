@@ -8,7 +8,7 @@ import { settledIn } from "@/db/queries/planned-payments";
 import type { Locale } from "@/lib/locales";
 
 // RF-159's due reminder, with who it mails and the reminder date it is mailed for.
-export type ReminderMailTarget = DueReminder & { email: string; locale: Locale; remindOn: string };
+export type ReminderMailTarget = Omit<DueReminder, "isIncome"> & { email: string; locale: Locale; remindOn: string };
 
 // The cron runs as no one, so this reads past the policies on the owner's pool. A reminder is
 // claimed by recording it before its mail goes out: two runs never mail one reminder date twice.
