@@ -4181,6 +4181,7 @@ async function main(): Promise<void> {
   await mcpMoneyModelSuite();
   await payOwnCardSuite();
   await mcpInputErrorsSuite();
+  await legacyChannelSuite();
 }
 
 // A member recorded without a login is someone in the fund: a leader whose fund holds one is not alone, so an
@@ -21040,5 +21041,41 @@ async function mcpInputErrorsSuite(): Promise<void> {
     next("RF-251: a form schema's refusal names the field it is about instead of «algo salió mal» alone"),
     badRef !== null && badRef.field === "requestRef" && badRef.error.startsWith("requestRef ") && badRef.error !== es.errors.unexpected,
     `bad requestRef ${JSON.stringify(badRef)}`,
+  );
+}
+
+// RF-244: a bank email stored before the channel was recorded reads as the phone's; the key it came through says
+// otherwise, so the SMS of the same alert, whatever hours later, is its duplicate.
+async function legacyChannelSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const { recordIngestDelivery } = await import("@/db/queries/webhook-ingest");
+  const user = await createMembershipFreeUser();
+  const make = async (kind: "android" | "bank_emails") => {
+    const { id } = await asUser(user, () =>
+      issueWebhookCredential({ name: `Harness rf244 ${kind} ${tag}`, kind, defaultAccountId: null, defaultCategoryId: null }),
+    );
+    keep("webhook_credentials", id);
+    return id;
+  };
+  const [gmail, phone] = [await make("bank_emails"), await make("android")];
+  const deliver = (credentialId: string, text: string, email?: { movement: true; receipt: false; priced: true }) =>
+    recordIngestDelivery({
+      ownerUserId: user.id, credentialId, defaultAccountId: null, defaultCategoryId: null,
+      payload: { text } as Parameters<typeof recordIngestDelivery>[0]["payload"], email,
+    });
+  const mail = await deliver(
+    gmail,
+    `Bancolombia: JUAN, compraste COP80.800,00 en PIZZERIA ${tag} con tu T.Cred *4872, el 14/11/2026 a las 19:05.`,
+    { movement: true, receipt: false, priced: true },
+  );
+  await fixtureSql`update ingest_deliveries set from_email = false, created_at = now() - interval '20 hours' where id = ${mail.deliveryId}`;
+  const sms = await deliver(phone, `Bancolombia: Compraste COP80.800,00 en PIZZERIA ${tag} con tu T.Cred *4872, el 14/11/26 a las 19:05. Si tienes dudas, encuentranos aqui.`);
+  const [row] = await fixtureSql<{ reason: string | null; of: string | null }[]>`
+    select reject_reason as reason, duplicate_of_id as of from ingest_deliveries where id = ${sms.deliveryId}`;
+  assert(
+    next("RF-244: the SMS of an alert whose email was stored before the channel flag is its duplicate, 20 hours on, by the printed day and minute"),
+    sms.status === "rejected" && row?.reason === "duplicate" && row.of === mail.deliveryId,
+    JSON.stringify({ sms, row }),
   );
 }
