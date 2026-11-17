@@ -948,7 +948,7 @@ Las palabras primero. Quien abre Inicio contesta en voz alta, sin saber cómo es
   $3.148.800 el 20 nov (mínimo $310.000)». La tarjeta que no tiene extracto de este mes dice «Mastercard el 25 nov: falta su extracto» y
   una nota gris «Sin contar lo que pidan los extractos que faltan». En el celular y en el escritorio por igual. Sin pagos: «Este mes no
   tienes pagos por hacer.»
-- **Te deben.** Un lugar entre «Este mes pagas» y «En <mes> gastaste», que dibuja otro carril; mientras no lo dibuja, no hay nada.
+- **Te deben.** La tercera línea, entre «Este mes pagas» y «En <mes> gastaste»: «Te deben $X: John $Y · Carlos $Z», un botón por nombre; nada cuando nadie debe. En Cuentas es una sección y su propio cuadro, y el neto es lo que tengo, menos lo que debo, más lo que te deben.
 - **En noviembre gastaste $X.** Con las tres categorías más grandes en una línea gris, «Arriendo $1.400.000 · Mercado $478.000», y el
   enlace «Ver reportes». Reemplaza la barra «El mes de un vistazo».
 - **Por arreglar.** Una tarjeta solo con lo que existe, cada línea un enlace a su arreglo: «Emergencias gastó $150.000 más de lo que

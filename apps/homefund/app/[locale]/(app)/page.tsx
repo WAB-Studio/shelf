@@ -352,7 +352,13 @@ export default async function HomePage(props: PageProps<"/[locale]">) {
 
   const today = todayInBogota();
   const staleCount = (counts ?? []).filter((row) => isStale(row, today)).length;
-  const holdings = summarizeAccounts(dashboardData.accounts);
+  // A friend «se le cobra» owes through no account; a credit somebody else pays already sits in its hidden «Me debe».
+  const holdings = summarizeAccounts(
+    dashboardData.accounts,
+    (owed ?? []).flatMap((group) =>
+      group.people.filter((person) => person.source === "person").map((person) => ({ currency: group.currency, cents: person.cents })),
+    ),
+  );
   // Another member's personal account is theirs to fix (RF-58).
   const fixes = fixItems({
     accounts: dashboardData.accounts.filter((account) => !account.foreignOwner),

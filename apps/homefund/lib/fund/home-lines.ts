@@ -29,9 +29,13 @@ export type Holding = {
 
 /**
  * Per currency: the money in the accounts, what is owed to the person, what they owe and the net of the three.
- * Every row's `balances` is its own free part, so a pocket and its account add up once.
+ * Every row's `balances` is its own free part, so a pocket and its account add up once. `owedByPeople` is what
+ * friends owe for what was spent for them (RF-293), which no account holds: it joins what is owed to the person.
  */
-export function summarizeAccounts(accounts: HomeAccount[]): Holding[] {
+export function summarizeAccounts(
+  accounts: HomeAccount[],
+  owedByPeople: { currency: string; cents: number }[] = [],
+): Holding[] {
   const byCurrency = new Map<string, Holding>();
   const of = (currency: string): Holding => {
     const found = byCurrency.get(currency);
@@ -49,6 +53,12 @@ export function summarizeAccounts(accounts: HomeAccount[]): Holding[] {
       else holding.haveCents += balanceCents;
       holding.netCents += balanceCents;
     }
+  }
+
+  for (const { currency, cents } of owedByPeople) {
+    const holding = of(currency);
+    holding.owedToMeCents += cents;
+    holding.netCents += cents;
   }
 
   return [...byCurrency.values()].sort((a, b) => a.currency.localeCompare(b.currency));

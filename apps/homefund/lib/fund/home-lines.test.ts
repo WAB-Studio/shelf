@@ -28,6 +28,13 @@ test("what a person has is the asset rows once, a pocket with its account, and n
   assert.equal(cop.netCents, cop.haveCents + cop.owedToMeCents - cop.owesCents);
 });
 
+test("what friends owe for what was spent for them joins what is owed to the person and the net", () => {
+  const [cop] = summarizeAccounts([savings, card, hidden], [{ currency: "COP", cents: 110_000_00 }]);
+
+  assert.equal(cop.owedToMeCents, 474_000_000 + 110_000_00);
+  assert.equal(cop.netCents, cop.haveCents + cop.owedToMeCents - cop.owesCents);
+});
+
 test("two currencies are two holdings, never one sum", () => {
   const dollars = account(
     { id: "d", name: "Dólares", settlementCurrency: "USD", balances: [{ currency: "USD", balanceCents: 5_000 }] },
