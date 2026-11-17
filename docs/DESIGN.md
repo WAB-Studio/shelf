@@ -515,6 +515,16 @@ Board C1h corrected the same day: a card in credit reads «Según HomeFund −$ 
   - Still to fix from the same critic, no decision needed: the row names the movement's description; «Corregir» comes back
     to the review; the debt detail's header reads the Q9 line as its «Saldo» tile does (Q18 left the header in pesos).
 
+## Decision of 2026-11-17: «Revisar el mes» flags only real surprises, by the user
+
+- «este no es nada inteligente» (RF-239): a whole grocery trip and a 3 kg purchase each read «¿Es correcto este monto?» because the rule
+  compared each with three times the median of the category's split lines, and the household writes groceries as many small lines.
+  The rule now compares the whole movement with the earlier ones of its description, else of its category; see RF-239 for the numbers.
+  Supersedes O7-Q2 a above.
+- The line under «¿Es correcto este monto?» says what the amount was set against, in words a person says aloud: «Tus gastos en
+  «Mercado en Ara» suelen ser de $ 40.000 a $ 80.000, según 12 veces en los últimos 6 meses.» A category reads «Tus gastos en Mercado
+  suelen ser de … según 20 movimientos de los últimos 6 meses.» Never «mediana». One figure when both ends are equal.
+
 ## Decisions of 2026-11-11: HomeFund from an iPhone, by the user
 
 - «Ajustes · Correos del banco» has an «Atajo de iPhone» card under «App para Android»: one line on what it does, then

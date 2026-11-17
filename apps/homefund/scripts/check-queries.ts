@@ -14258,18 +14258,18 @@ async function o7m3MonthReviewSuite(): Promise<void> {
   const thin = await category("ropa");
   const plain = await category("varios");
 
-  // Above usual: three splits of 100.000 in the six months before, then 400.000 in the month.
-  await spend(bank, usual, 10_000_000, day(10, 4));
-  await spend(bank, usual, 10_000_000, day(10, 3));
-  await spend(bank, usual, 10_000_000, day(10, 2));
-  const big = await spend(bank, usual, 40_000_000, day(10));
-  // Not enough history: two splits in the window and one seven months back.
-  await spend(bank, thin, 10_000_000, day(5, 8));
-  await spend(bank, thin, 10_000_000, day(5, 3));
-  await spend(bank, thin, 10_000_000, day(5, 2));
-  await spend(bank, thin, 40_000_000, day(5));
-  // Currency apart: a USD split against the COP history raises nothing.
-  await spend(bank, usual, 40_000_000, day(12), { currency: "USD", counterAmountCents: 160_000_000, counterIsEstimate: true });
+  // Above usual (RF-239): four purchases of 100.000 under one description in the six months before, then 400.000.
+  const market = { description: `Harness o7m3 mercado ${tag}` };
+  for (const back of [5, 4, 3, 2]) await spend(bank, usual, 10_000_000, day(10, back), market);
+  const big = await spend(bank, usual, 40_000_000, day(10), market);
+  // Not enough history: three purchases in the window and one seven months back.
+  const clothes = { description: `Harness o7m3 ropa ${tag}` };
+  await spend(bank, thin, 10_000_000, day(5, 8), clothes);
+  await spend(bank, thin, 10_000_000, day(5, 3), clothes);
+  await spend(bank, thin, 10_000_000, day(5, 2), clothes);
+  await spend(bank, thin, 40_000_000, day(5), clothes);
+  // Currency apart: a USD purchase against the COP history raises nothing.
+  await spend(bank, usual, 40_000_000, day(12), { ...market, currency: "USD", counterAmountCents: 160_000_000, counterIsEstimate: true });
   // Twins: two equal expenses on one account and day; the same amount on another day, or on the
   // same day from another account, is not one.
   const twinA = await spend(bank, plain, 5_000_000, day(15));
@@ -14316,9 +14316,11 @@ async function o7m3MonthReviewSuite(): Promise<void> {
   const fromWords = read.items.filter((item) => item.rule === "from_words");
   const gaps = read.items.filter((item) => item.rule === "reconciliation_gap");
   assert(
-    next("O7-M3 items: one above usual (400.000 against a usual of 100.000), one twin with both ids, one from words, one gap with its count; nothing for thin history, another currency or another day"),
+    next("O7-M3 items: one above usual (400.000 against four earlier purchases of 100.000 under the same description), one twin with both ids, one from words, one gap with its count; nothing for thin history, another currency or another day"),
     read.items.length === 4 &&
       above.length === 1 && above[0].transactionIds[0] === big && above[0].usualCents === 10_000_000 && above[0].amountCents === 40_000_000 &&
+      above[0].usualLowCents === 10_000_000 && above[0].usualHighCents === 10_000_000 &&
+      above[0].usualBasis === "description" && above[0].usualCount === 4 &&
       twins.length === 1 && [...twins[0].transactionIds].sort().join() === [twinA, twinB].sort().join() &&
       fromWords.length === 1 && fromWords[0].transactionIds[0] === words &&
       gaps.length === 1 && gaps[0].countedCents === 52_000_000 && booked !== undefined &&
@@ -14383,9 +14385,10 @@ async function o7m3MonthReviewSuite(): Promise<void> {
 
 // RF-155, O7-Q1 a: a fellow who reads the leader's personal account sees its item on the screen,
 // unmarkable, and Inicio's count never names it: a line they could never clear.
-// RF-155, O7-Q2 a, the edges the mutator found unguarded: the median (not a higher percentile), the
-// six-month window, the strict «more than three times», the month's own first day and the next one's,
-// a movement under two rules counted once on Inicio, and a twin half marked still waiting.
+// RF-239: the edges of «above usual»: the spread (a history with a big day of its own), the six-month window,
+// the strict «over 1.5 times the 90th percentile», the floor, a recurring rule or planned payment that expects the
+// amount, the description's own history over the category's; and RF-155's the month's own first day and the next
+// one's, a movement under two rules counted once on Inicio, and a twin half marked still waiting.
 async function o7m3RuleEdgesSuite(): Promise<void> {
   console.log("");
   const tag = randomUUID().slice(0, 8);
@@ -14407,10 +14410,16 @@ async function o7m3RuleEdgesSuite(): Promise<void> {
     track("categories", categoryId);
     return categoryId;
   };
-  const spend = async (categoryId: string, amountCents: number, occurredAt: string, amountFromWords = false) => {
+  const spend = async (
+    categoryId: string,
+    amountCents: number,
+    occurredAt: string,
+    amountFromWords = false,
+    description: string | null = `Harness o7m3e ${tag}`,
+  ) => {
     const { transactionId } = await asUser(holder, () =>
       createTransaction({
-        fromAccountId: bank, toAccountId: null, amountCents, occurredAt, description: `Harness o7m3e ${tag}`,
+        fromAccountId: bank, toAccountId: null, amountCents, occurredAt, description,
         externalRef: null, splits: [{ categoryId, amountCents }], labelIds: [], amountFromWords,
       }),
     );
@@ -14418,20 +14427,66 @@ async function o7m3RuleEdgesSuite(): Promise<void> {
     return transactionId;
   };
 
-  // A 900.000 outlier in the history: the median stays 100.000, so 350.000 is far above it; the 90th
-  // percentile would be 900.000 and flag nothing.
-  const median = await category("mediana");
-  for (const back of [2, 3, 4]) await spend(median, 10_000_000, day(3, back));
-  await spend(median, 90_000_000, day(3, 5));
-  const overMedian = await spend(median, 35_000_000, day(3));
-  // Three months of history, the oldest the window's first: a five-month window holds two and flags nothing.
+  // Each scenario names its purchases apart: one description is one history.
+  const named = (what: string) => `Harness o7m3e ${what} ${tag}`;
+  // A history with a big day of its own (900.000 among four of 100.000): its 90th percentile is that day, so 350.000 is no surprise.
+  const spread = await category("dispersion");
+  for (const back of [2, 3, 4, 5]) await spend(spread, 10_000_000, day(3, back), false, named("dispersion"));
+  await spend(spread, 90_000_000, day(3, 6), false, named("dispersion"));
+  const calm = await spend(spread, 35_000_000, day(3), false, named("dispersion"));
+  // Four purchases, the oldest in the window's first month, count; one eight months back is outside it.
   const windowed = await category("ventana");
-  for (const back of [2, 3, 7]) await spend(windowed, 10_000_000, day(4, back));
-  const overWindow = await spend(windowed, 40_000_000, day(4));
-  // Exactly three times the usual is not «more than».
+  for (const back of [2, 3, 4, 7]) await spend(windowed, 10_000_000, day(4, back), false, named("ventana"));
+  // 430.000, not the rule's 400.000 below: an amount a rule names is never a surprise.
+  const overWindow = await spend(windowed, 43_000_000, day(4), false, named("ventana"));
+  const tooOld = await category("antigua");
+  for (const back of [2, 3, 4, 8]) await spend(tooOld, 10_000_000, day(4, back), false, named("antigua"));
+  const afterOld = await spend(tooOld, 42_000_000, day(4), false, named("antigua"));
+  // Exactly 1.5 times the 90th percentile (200.000) is not «over» it.
   const edge = await category("borde");
-  for (const back of [2, 3, 4]) await spend(edge, 10_000_000, day(6, back));
-  const exactlyThrice = await spend(edge, 30_000_000, day(6));
+  for (const back of [2, 3, 4]) await spend(edge, 10_000_000, day(6, back), false, named("borde"));
+  await spend(edge, 20_000_000, day(6, 5), false, named("borde"));
+  const exactly = await spend(edge, 30_000_000, day(6), false, named("borde"));
+  // Ten times the usual, but of 1.000 pesos: below the floor.
+  const small = await category("menuda");
+  for (const back of [2, 3, 4, 5]) await spend(small, 100_000, day(7, back), false, named("menuda"));
+  const tiny = await spend(small, 1_000_000, day(7), false, named("menuda"));
+  // A recurring rule or a planned payment that expects the amount on the account: the same surprise raises nothing.
+  const expected = await category("esperada");
+  for (const back of [2, 3, 4, 5]) {
+    await spend(expected, 10_000_000, day(8, back), false, named("regla"));
+    await spend(expected, 10_000_000, day(11, back), false, named("pago"));
+  }
+  const ruled = await spend(expected, 40_000_000, day(8), false, named("regla"));
+  const planned = await spend(expected, 41_000_000, day(11), false, named("pago"));
+  const { recurringRuleId } = await asUser(holder, () =>
+    createRecurringRule({
+      fromAccountId: bank, toAccountId: null, amountCents: 40_000_000, categoryId: expected, description: named("regla"),
+      frequency: "monthly", intervalN: 1, dayOfMonth: 8, nextRunOn: `${shiftMonth(today, 1)}-08`, endsOn: null,
+    }),
+  );
+  track("recurring_rules", recurringRuleId);
+  const { plannedPaymentId } = await asUser(holder, () =>
+    createPlannedPayment({
+      fromAccountId: bank, toAccountId: null, amountCents: 41_000_000, categoryId: expected,
+      dueDate: `${shiftMonth(today, 1)}-11`, remindOn: null, description: named("pago"),
+    }),
+  );
+  track("planned_payments", plannedPaymentId);
+  // A steady category of forty purchases (36 of 50.000 with no description, then a routine 120.000 four times): a purchase
+  // nobody described is read against the category, and the routine against its own four.
+  const mixed = await category("mezcla");
+  for (let n = 0; n < 36; n += 1) await spend(mixed, 5_000_000, day(12 + (n % 10), 2 + (n % 5)), false, null);
+  for (const back of [2, 3, 4, 5]) await spend(mixed, 12_000_000, day(21, back), false, named("rutina"));
+  const fresh = await spend(mixed, 25_000_000, day(22), false, named("nueva"));
+  const routine = await spend(mixed, 12_000_000, day(23), false, named("rutina"));
+  // A mixed category (thirty purchases: 27 of 50.000 and 3 market trips of 300.000): the category's tenth does not reach the
+  // trips, but its 95th percentile does, so another trip is no surprise.
+  const bimodal = await category("bimodal");
+  for (let n = 0; n < 27; n += 1) await spend(bimodal, 5_000_000, day(12 + (n % 10), 2 + (n % 5)), false, null);
+  for (const back of [2, 3, 4]) await spend(bimodal, 30_000_000, day(24, back), false, null);
+  const trip = await spend(bimodal, 35_000_000, day(24), false, named("viaje"));
+
   // From words on the month's first day counts; on this month's first day it does not.
   const plain = await category("varios");
   const firstDay = await spend(plain, 1_100_000, day(1), true);
@@ -14443,10 +14498,18 @@ async function o7m3RuleEdgesSuite(): Promise<void> {
   const read = await asUser(holder, () => getMonthReview(month));
   const ids = (rule: string) => read.items.filter((item) => item.rule === rule).flatMap((item) => item.transactionIds);
   const above = ids("above_usual");
+  const aboveFresh = read.items.find((item) => item.rule === "above_usual" && item.transactionIds[0] === fresh);
   assert(
-    next("O7-M3 edges: «above usual» reads the median of a six-month window and needs more than three times it"),
-    above.includes(overMedian) && above.includes(overWindow) && !above.includes(exactlyThrice) && above.length === 2,
-    `above ${above.length}: median ${above.includes(overMedian)}, window ${above.includes(overWindow)}, exactly thrice ${above.includes(exactlyThrice)}`,
+    next("RF-239 edges: «above usual» needs the history's 90th percentile passed by half again, the window's six months, a floor, and nothing a rule or planned payment expects; the description's history wins over the category's, and a mixed category is no basis"),
+    above.includes(overWindow) && above.includes(fresh) && above.length === 2 &&
+      ![calm, afterOld, exactly, tiny, ruled, planned, routine, trip].some((id) => above.includes(id)),
+    `above ${above.length}: window ${above.includes(overWindow)}, fresh ${above.includes(fresh)}, calm ${above.includes(calm)}, too old ${above.includes(afterOld)}, exactly ${above.includes(exactly)}, tiny ${above.includes(tiny)}, ruled ${above.includes(ruled)}, planned ${above.includes(planned)}, routine ${above.includes(routine)}, trip ${above.includes(trip)}`,
+  );
+  assert(
+    next("RF-239 edges: a purchase nobody described is read against its category: its typical range and how many it rests on"),
+    aboveFresh?.usualBasis === "category" && aboveFresh.usualCount === 40 &&
+      aboveFresh.usualLowCents === 5_000_000 && aboveFresh.usualHighCents === 5_000_000,
+    `fresh ${JSON.stringify(aboveFresh)}`,
   );
   const words = ids("from_words");
   assert(
@@ -14455,7 +14518,7 @@ async function o7m3RuleEdgesSuite(): Promise<void> {
     `first day ${words.includes(firstDay)}, next month's ${words.includes(nextFirst)}`,
   );
   const pending = await asUser(holder, () => getMonthReviewPending());
-  // overMedian, overWindow, firstDay, pairA, pairB: pairA stands under two rules and counts once.
+  // overWindow, fresh, firstDay, pairA, pairB: pairA stands under two rules and counts once.
   assert(
     next("O7-M3 edges: Inicio counts each movement once, though it stands under two rules"),
     pending?.count === 5,
@@ -14551,7 +14614,7 @@ async function o7m3ReaderPendingSuite(userId: string, fellow: HarnessUser): Prom
 }
 
 // What a mutation run left alive in «Revisar el mes»: a count's adjustment beside an
-// equal movement is no twin, and a movement over the usual in two categories reports its largest split.
+// equal movement is no twin, and a movement over the usual in two categories reports its whole amount and its largest split's category.
 async function o8m5ReviewSurvivorsSuite(): Promise<void> {
   console.log("");
   const tag = randomUUID().slice(0, 8);
@@ -14612,8 +14675,8 @@ async function o8m5ReviewSurvivorsSuite(): Promise<void> {
   );
   const above = read.items.filter((item) => item.rule === "above_usual" && item.transactionIds.includes(both));
   assert(
-    next("O8-M5 above usual: a movement over the usual in two categories is one item, read from its largest split"),
-    above.length === 1 && above[0].amountCents === 50_000_000,
+    next("O8-M5 above usual: a movement split in two categories is one item at its whole amount, named for its largest split's category"),
+    above.length === 1 && above[0].amountCents === 90_000_000 && above[0].categoryName === `Harness o8m5 hogar ${tag}`,
     `items ${above.length}, amount ${above[0]?.amountCents}`,
   );
   // A month the caller noted nothing in reads apart from one whose movements raised nothing.
@@ -17394,7 +17457,7 @@ async function mcpCleanupSuite(): Promise<void> {
   );
 }
 
-// «Revisar el mes», made clear: a twin lists the equal movements it names and «above usual» says its window.
+// «Revisar el mes», made clear: a twin lists the equal movements it names and «above usual» says what it was compared with.
 async function monthReviewClearSuite(): Promise<void> {
   console.log("");
   const tag = randomUUID().slice(0, 8);
@@ -17426,8 +17489,8 @@ async function monthReviewClearSuite(): Promise<void> {
 
   const catA = await spend(560_000, day(7), `Gatarina ${tag}`);
   const catB = await spend(560_000, day(7), `Arena ${tag}`);
-  for (const back of [4, 3, 2]) await spend(560_000, day(11, back), `Historia ${tag}`);
-  const big = await spend(2_925_000, day(12), `Carne ${tag}`);
+  for (const back of [5, 4, 3, 2]) await spend(5_600_000, day(11, back), `Carne ${tag}`);
+  const big = await spend(29_250_000, day(12), `Carne ${tag}`);
 
   const items = (await asUser(holder, () => getMonthReview(month))).items;
   const twins = items.filter((item) => item.rule === "twin");
@@ -17441,9 +17504,10 @@ async function monthReviewClearSuite(): Promise<void> {
     `twins ${twins.length}, entries ${entries.length}`,
   );
   assert(
-    next("RF-155: an above-usual item names its category, the median it compares against and the six-month window"),
-    above?.transactionIds[0] === big && above.categoryName === `Harness clear mascotas ${tag}` && above.usualCents === 560_000 &&
-      above.usualWindowMonths === 6 && above.entries.length === 0,
+    next("RF-239: an above-usual item names its category, what it was compared with (four earlier purchases under its description, their typical range) and the six-month window"),
+    above?.transactionIds[0] === big && above.categoryName === `Harness clear mascotas ${tag}` && above.usualCents === 5_600_000 &&
+      above.usualLowCents === 5_600_000 && above.usualHighCents === 5_600_000 && above.usualBasis === "description" &&
+      above.usualCount === 4 && above.usualWindowMonths === 6 && above.entries.length === 0,
     `above ${JSON.stringify(above)}`,
   );
 }
