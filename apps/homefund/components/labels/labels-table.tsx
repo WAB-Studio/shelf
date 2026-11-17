@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { useTranslations } from "next-intl";
 
 import {
+  Badge,
   ColorSwatch,
   DataTable,
   Flex,
@@ -65,6 +66,11 @@ export function LabelsTable<Row extends LabelTableRow>({
           <Text size="2" weight="medium" truncate>
             {row.name}
           </Text>
+          {row.kind === "person" && (
+            <Badge color={row.chargeDefault ? "amber" : "gray"} variant="soft">
+              {t(row.chargeDefault ? "personCharged" : "personNotCharged")}
+            </Badge>
+          )}
         </Flex>
       ),
     },

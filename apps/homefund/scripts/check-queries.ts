@@ -4179,6 +4179,7 @@ async function main(): Promise<void> {
   await mcpMembersSuite();
   await mcpDeletesSuite();
   await mcpMoneyModelSuite();
+  await payOwnCardSuite();
   await legacyChannelSuite();
 }
 
@@ -20352,6 +20353,33 @@ async function mcpAccountLifecycleSuite(): Promise<void> {
     !done.isError && Math.abs((done.value as { gapCents: number }).gapCents) === 5_000_00 && balance === real && history.length === 1,
     `done ${JSON.stringify(done.value)}, balance ${balance} of ${real}, history ${history.length}`,
   );
+
+  // RF-245: a loan is read and counted as what is owed, positive, in the sheet, the count and the history alike.
+  const loan = (await tool("create_account", {
+    name: `Harness rf245 credito ${tag}`, kind: "liability", subtype: "loan", openingBalanceCents: 1_000_000_00, balanceOn: "2026-01-01",
+  })).value as { accountId: string };
+  track("accounts", loan.accountId);
+  type LoanSheet = { account: { kind: string; derivedCents: number }; history: { countedCents: number; derivedCents: number; gapCents: number }[] };
+  const loanSheet = async () => (await tool("get_reconcile_sheet", { accountId: loan.accountId, on: today })).value as LoanSheet;
+  const owedBefore = await loanSheet();
+  const slip = await tool("reconcile_account", {
+    accountId: loan.accountId, reconciledOn: today, realAmountCents: -1_020_000_00, expectedDerivedCents: owedBefore.account.derivedCents,
+  });
+  const afterSlip = await loanSheet();
+  const loanDone = await tool("reconcile_account", {
+    accountId: loan.accountId, reconciledOn: today, realAmountCents: 1_020_000_00, expectedDerivedCents: owedBefore.account.derivedCents,
+  });
+  const afterCount = await loanSheet();
+  const [ledger] = await fixtureSql<{ balance_cents: string }[]>`select balance_cents::text from account_balances where id = ${loan.accountId}`;
+  assert(
+    next("RF-245: a loan's sheet, count and history all say what is owed as a positive figure, and a count with the opposite sign that the gap outgrows the balance is refused"),
+    owedBefore.account.kind === "liability" && owedBefore.account.derivedCents === 1_000_000_00 &&
+      slip.isError && (slip.value as { error: string }).error === es.mcp.errors.reconcileSign.replace("{real}", "-102000000").replace("{derived}", "100000000") &&
+      afterSlip.history.length === 0 && !loanDone.isError && (loanDone.value as { gapCents: number }).gapCents === 20_000_00 &&
+      afterCount.account.derivedCents === 1_020_000_00 && afterCount.history[0]?.countedCents === 1_020_000_00 &&
+      afterCount.history[0].derivedCents === 1_000_000_00 && afterCount.history[0].gapCents === 20_000_00 && ledger?.balance_cents === "-102000000",
+    `sheet ${JSON.stringify(owedBefore.account)}, slip ${JSON.stringify(slip.value)}, done ${JSON.stringify(loanDone.value)}, after ${JSON.stringify(afterCount)}, ledger ${ledger?.balance_cents}`,
+  );
 }
 
 // RF-234: Claude records a statement, defers and undefers a purchase and withdraws cash, through the debt screen's own
@@ -20894,6 +20922,50 @@ async function mcpMoneyModelSuite(): Promise<void> {
     next("RF-241: record_movement marks an unknown counterparty as waiting for it, and refuses the mark on a transfer"),
     waiting?.awaiting_counterparty === true && refused.isError && (refused.value as { error: string }).error === es.mcp.errors.awaitsNeedsOneSide,
     `waiting ${JSON.stringify(waiting)}, refused ${JSON.stringify(refused.value)}`,
+  );
+}
+
+// RF-247: a payment that names the institution of exactly one of the person's cards is proposed as a transfer to it.
+async function payOwnCardSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const { recordIngestDelivery } = await import("@/db/queries/webhook-ingest");
+  const user = await createMembershipFreeUser();
+  const base = {
+    groupId: null, isShared: false, settlementCurrency: BASE_CURRENCY, balanceOn: "2026-01-01", ownerUserId: user.id, lastFour: null,
+  };
+  const mk = async (name: string, kind: "asset" | "liability", subtype: "bank" | "card", institution: string, lastFour: string | null) => {
+    const { accountId } = await asUser(user, () =>
+      createAccount({ ...base, name: `Harness rf247 ${name} ${tag}`, kind, subtype, institution, lastFour, amountMinor: kind === "asset" ? 900_000_00 : 1_000_00 }),
+    );
+    track("accounts", accountId);
+    return accountId;
+  };
+  const bank = await mk("banco", "asset", "bank", "Bancolombia", "3397");
+  const nu = await mk("nu", "liability", "card", "Nu", null);
+  const { id: credentialId } = await asUser(user, () =>
+    issueWebhookCredential({ name: `Harness rf247 ${tag}`, purpose: "ingest", defaultAccountId: null, defaultCategoryId: null }),
+  );
+  keep("webhook_credentials", credentialId);
+  const proposal = async (text: string) => {
+    const { deliveryId } = await recordIngestDelivery({
+      ownerUserId: user.id, credentialId, defaultAccountId: null, defaultCategoryId: null,
+      payload: { text: `${text} ${tag}` } as Parameters<typeof recordIngestDelivery>[0]["payload"],
+    });
+    const [row] = await fixtureSql<{ direction: string | null; from: string | null; to: string | null }[]>`
+      select proposed_direction as direction, proposed_account_id as from, proposed_to_account_id as to
+      from ingest_deliveries where id = ${deliveryId}`;
+    return row;
+  };
+  const card = await proposal("Bancolombia: Pagaste $4,305.47 a NU Compania de Financiamiento desde tu producto 3397 el 14/11/2026 a las 19:05.");
+  const shop = await proposal("Bancolombia: Pagaste $9,000.00 a TIENDA EJEMPLO desde tu producto 3397 el 14/11/2026 a las 19:06.");
+  const second = await mk("nu otra", "liability", "card", "Nu", null);
+  const ambiguous = await proposal("Bancolombia: Pagaste $4,306.47 a NU Compania de Financiamiento desde tu producto 3397 el 14/11/2026 a las 19:07.");
+  assert(
+    next("RF-247: a payment to the institution of exactly one card is a transfer from the account to that card; any other payee, or two cards of it, stays an expense"),
+    card?.direction === "transfer" && card.from === bank && card.to === nu && shop?.direction === "expense" && shop.to === null &&
+      ambiguous?.direction === "expense" && ambiguous.to === null && second !== nu,
+    JSON.stringify({ card, shop, ambiguous }),
   );
 }
 
