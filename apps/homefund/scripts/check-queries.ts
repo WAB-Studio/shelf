@@ -19909,6 +19909,21 @@ async function mcpDebtsSuite(): Promise<void> {
       credit.schedule.uncovered[0].number === 4 && credit.schedule.uncovered[0].shortCents === 4_150_00 && credit.schedule.rows === undefined,
     `credit ${JSON.stringify(credit)}`,
   );
+
+  // RF-262: «le falta» shows how it is built: the opening and its day, each payment of the payer's and what is left.
+  const built = ((await tool("list_third_party_credits")).value as {
+    liabilityAccountId: string; openingCents: number; openedOn: string; personOwesCents: number; otherCents: number;
+    payments: { occurredOn: string; amountCents: number }[];
+  }[]).find((row) => row.liabilityAccountId === planId);
+  const detailBuilt = (await tool("get_debt", { accountId: planId })).value as { thirdParty: { payments: unknown[] } | null };
+  assert(
+    next("RF-262: list_third_party_credits and get_debt carry the opening and its day and each payment of the payer's, which add up to what is left"),
+    built?.openingCents === 66_500_00 && built.openedOn === "2026-01-01" && built.payments.length === 2 &&
+      built.payments[0].occurredOn === "2026-03-04" && built.payments[0].amountCents === 23_500_00 && built.payments[1].occurredOn === "2026-04-04" &&
+      built.openingCents - built.payments.reduce((sum, payment) => sum + payment.amountCents, 0) === built.personOwesCents &&
+      built.personOwesCents === 19_500_00 && built.otherCents === 0 && detailBuilt.thirdParty?.payments.length === 2,
+    `built ${JSON.stringify(built)}`,
+  );
 }
 
 // RF-226: a move of a category's lines runs in two steps: the count a dry run gave, which the person confirmed, is the count

@@ -67,6 +67,15 @@ test("a credit somebody else pays is set up, read and recorded from its screen",
   await expect(main.getByText(/Cuota .*150\.000 · vence el día 15/)).toBeVisible();
   await expect(main.getByText(t.notArrived)).toBeVisible();
   await expect(main.getByText(t.lenderNot)).toBeVisible();
+
+  // RF-262: the credit names who pays it near the top, says how the debt began, offers its actions in plain buttons and
+  // warns before the month's cuota is late.
+  await expect(main.getByText(t.introNoLender.replace("{person}", PERSON))).toBeVisible();
+  await expect(main.getByText(/Deuda cuando lo uniste: .*300\.000 el /)).toBeVisible();
+  await expect(main.getByText(/Persona Uno aún no manda la cuota de .* \(vence el 15\)/)).toBeVisible();
+  await expect(main.getByRole("button", { name: t.changePerson })).toBeVisible();
+  await expect(main.getByRole("button", { name: t.unlink })).toBeVisible();
+
   // The button that set it up is gone; the credit has a payer now.
   await expect(main.getByRole("button", { name: t.setUp })).toBeHidden();
 
@@ -94,6 +103,14 @@ test("a credit somebody else pays is set up, read and recorded from its screen",
   await page.goto("/es/settings/accounts");
   await expect(page.getByText(`${creditName} (${PERSON})`).filter({ visible: true }).first()).toBeVisible();
   await expect(page.getByText(/Lo paga Persona Uno · le falta/).filter({ visible: true }).first()).toBeVisible();
+
+  // RF-262: the figure opens how it is worked out: the opening, each payment of the payer's, what is left.
+  await page.getByRole("button", { name: t.breakdownOpen.replace("{person}", PERSON) }).filter({ visible: true }).first().click();
+  const breakdown = page.getByRole("dialog");
+  await expect(breakdown.getByRole("heading", { name: t.breakdownTitle.replace("{person}", PERSON) })).toBeVisible();
+  await expect(breakdown.getByText(/Deuda cuando se unió \(/)).toBeVisible();
+  await expect(breakdown.getByText(t.breakdownOwes)).toBeVisible();
+  await page.keyboard.press("Escape");
   await expect(page.getByText(receivableName)).toHaveCount(0);
 
   // Nor does the full movement form offer it as a side of a movement.
