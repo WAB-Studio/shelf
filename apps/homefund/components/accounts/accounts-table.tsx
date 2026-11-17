@@ -56,8 +56,25 @@ export function PaidByLine({ account }: { account: AccountRow }) {
  * The quiet «Cuádrala» under an account not counted for over a month (RF-254): a text button that opens the account's
  * own «Cuadrar». Nothing for an account counted lately, or one the caller only reads.
  */
-export function StaleCountLine({ stale, onReconcile }: { stale: boolean; onReconcile: () => void }) {
+export function StaleCountLine({
+  stale,
+  requested,
+  onReconcile,
+}: {
+  stale: boolean;
+  // The period of the statement HomeFund is waiting for on this account, as a person says it (RF-259); it says more
+  // than «Cuádrala», so it takes its place.
+  requested: string | null;
+  onReconcile: () => void;
+}) {
   const t = useTranslations("accounts");
+  if (requested !== null) {
+    return (
+      <Text size="2" color="gray">
+        {t("statementRequestMark", { period: requested })}
+      </Text>
+    );
+  }
   if (!stale) return null;
 
   return (
@@ -107,6 +124,7 @@ export function AccountsTable({
   hasGroup,
   empty,
   stale,
+  requests,
   onEdit,
   onReconcile,
   onArchive,
@@ -123,6 +141,8 @@ export function AccountsTable({
   empty?: ReactNode;
   // The accounts not counted for over a month (RF-254).
   stale: ReadonlySet<string>;
+  // The period each account's awaited statement covers, by account (RF-259).
+  requests: ReadonlyMap<string, string>;
   onEdit: (row: AccountRow) => void;
   onReconcile: (row: AccountRow) => void;
   onArchive: (row: AccountRow) => void;
@@ -145,7 +165,11 @@ export function AccountsTable({
           </Text>
           <AccountDetail account={row} />
           <PaidByLine account={row} />
-          <StaleCountLine stale={stale.has(row.id)} onReconcile={() => onReconcile(row)} />
+          <StaleCountLine
+            stale={stale.has(row.id)}
+            requested={requests.get(row.id) ?? null}
+            onReconcile={() => onReconcile(row)}
+          />
         </Flex>
       ),
     },

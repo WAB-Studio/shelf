@@ -10,6 +10,7 @@ import type { Transaction } from "@/db/session";
 import type { CurrencyCode } from "@/lib/currency";
 import { pgErrorCode } from "@/lib/db-error";
 import { todayInBogota } from "@/lib/dates";
+import type { StatementCadence } from "@/lib/statement-cadence";
 import { checkRealAmount, flipsSign } from "@/lib/validation/account-reconciliation";
 
 export type ReconciliationRow = {
@@ -526,21 +527,37 @@ export async function listReconcileOverview(
   });
 }
 
-export type ReconcileAgeRow = Pick<ReconcileOverviewRow, "id" | "latestReconciledOn" | "addedOn">;
+// What the quiet follow-ups of Cuentas and Inicio read per account: when it was last counted (RF-254) and what its
+// statement cadence says is due (RF-259). Dates only, no balance.
+export type ReconcileAgeRow = Pick<ReconcileOverviewRow, "id" | "name" | "kind" | "latestReconciledOn" | "addedOn"> & {
+  statementCadence: StatementCadence | null;
+  dismissedThrough: string | null;
+  openedOn: string;
+  // The latest cut-off any statement of the account holds, typed or imported.
+  latestStatementCutOff: string | null;
+};
 
 /**
- * When each open account the caller writes was last counted, for the quiet «Cuádrala» of Cuentas and Inicio
- * (RF-254). ONE round trip, and no balance derived: the nudge only reads dates, so it costs the screens it rides
- * on no scan of any account's movements.
+ * When each open account the caller writes was last counted and last given a statement, for the quiet «Cuádrala» and
+ * the statement request (RF-254, RF-259). ONE round trip, and no balance derived: the follow-ups only read dates, so
+ * they cost the screens they ride on no scan of any account's movements.
  */
 export async function listReconcileAges(outerTx?: Transaction): Promise<ReconcileAgeRow[]> {
   return withUserDbOrTx(outerTx, (tx) =>
     tx
       .select({
         id: accounts.id,
+        name: accounts.name,
+        kind: accounts.kind,
+        statementCadence: accounts.statementCadence,
+        dismissedThrough: sql<string | null>`accounts.statement_dismissed_through::text`,
+        openedOn: sql<string>`accounts.initial_balance_on::text`,
         latestReconciledOn: sql<
           string | null
         >`(select max(r.reconciled_on)::text from account_reconciliations r where r.account_id = accounts.id)`,
+        latestStatementCutOff: sql<
+          string | null
+        >`(select max(s.cut_off_date)::text from account_statements s where s.account_id = accounts.id)`,
         addedOn: sql<string>`(accounts.created_at at time zone 'America/Bogota')::date::text`,
       })
       .from(accounts)

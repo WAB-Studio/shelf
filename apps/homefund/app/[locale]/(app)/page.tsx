@@ -19,6 +19,7 @@ import {
 import { InvitationCard } from "@/components/members/invitation-card";
 import { DueRemindersCard } from "@/components/planning/due-reminders-card";
 import { ReconcileNudgeLine } from "@/components/accounts/reconcile-nudge-line";
+import { StatementRequestLine } from "@/components/accounts/statement-request-line";
 import { MonthReviewLine } from "@/components/reports/month-review-line";
 import { QuickEntryPill } from "@/components/transactions/quick-entry-pill";
 import {
@@ -55,6 +56,7 @@ import type { TransactionListRow } from "@/db/queries/transactions";
 import { requireUser, withSharedTransaction } from "@/db/session";
 import { currentMonthRange, todayInBogota } from "@/lib/dates";
 import { isStale } from "@/lib/reconcile-age";
+import { openStatementRequests } from "@/lib/statement-cadence";
 import { Link as LocaleLink } from "@/i18n/navigation";
 import { routing } from "@/i18n/routing";
 import { PERSONAL_CASH_ACCOUNT_NAME } from "@/lib/fund/seed";
@@ -154,7 +156,7 @@ export default async function HomePage(props: PageProps<"/[locale]">) {
     ),
     getDashboardData(),
     withSharedTransaction(() =>
-      Promise.all([listTransactions({}, { limit: RECENT_LIMIT }), getTransactionFormOptions()]),
+      Promise.all([listTransactions({ withoutAdjustments: true }, { limit: RECENT_LIMIT }), getTransactionFormOptions()]),
     ),
     // The month glance and the right column ride the same fan-out (RNF-09); each one
     // is optional, so a failed read drops its block, never Inicio.
@@ -328,7 +330,9 @@ export default async function HomePage(props: PageProps<"/[locale]">) {
   );
 
   const today = todayInBogota();
-  const staleCount = (counts ?? []).filter((row) => isStale(row, today)).length;
+  const requests = openStatementRequests(counts ?? [], today);
+  const requested = new Set(requests.map((request) => request.accountId));
+  const staleCount = (counts ?? []).filter((row) => isStale(row, today) && !requested.has(row.id)).length;
 
   return (
     <Page gutter="flush-md">
@@ -347,6 +351,8 @@ export default async function HomePage(props: PageProps<"/[locale]">) {
           aside={
             <>
               {review && <MonthReviewLine month={review.month} count={review.count} />}
+
+              <StatementRequestLine requests={requests} />
 
               {staleCount > 0 && <ReconcileNudgeLine count={staleCount} />}
 

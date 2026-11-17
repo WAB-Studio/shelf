@@ -5,6 +5,7 @@ import { z } from "zod";
 
 import {
   getReconcileSheet,
+  listReconcileAges,
   reconcileAccounts,
   type ReconcileSheet,
   type ReconciledRow,
@@ -17,6 +18,7 @@ import { OVERWRITE, READ, titled } from "@/lib/mcp/annotations";
 import { parseForm } from "@/lib/mcp/parse-form";
 import { todayInBogota } from "@/lib/dates";
 import { centsToDecimal } from "@/lib/money";
+import { openStatementRequests } from "@/lib/statement-cadence";
 import { MAX_RECONCILED_TOGETHER, reconcileAccountsSchema } from "@/lib/validation/account-reconciliation";
 import { archiveAccountSchema, restoreAccountSchema } from "@/lib/validation/account";
 
@@ -30,6 +32,8 @@ export function accountRow(account: Awaited<ReturnType<typeof listAccounts>>[num
     scope: account.groupId === null ? "personal" : "fund",
     institution: account.institution,
     lastFour: account.lastFour ?? null,
+    // How often the bank issues its statement (RF-259): monthly, quarterly or null when not set.
+    statementCadence: account.statementCadence ?? null,
     // The account this one is a pocket of, null for an account of its own (RF-173); a parent's balances are its free part.
     parentAccountId: account.parentAccountId ?? null,
     // The fund member this account is in the name of (RF-181), null for an account of everyone.
@@ -242,6 +246,28 @@ export function registerAccountTools(server: McpServer, run: Run, t: Say): void 
         const dryRun = input.dryRun === true;
         const rows = (await count(input.reconciledOn ?? todayInBogota(), input.accounts, dryRun)).map(countedRow);
         return { dryRun, written: !dryRun, reconciledOn: input.reconciledOn ?? todayInBogota(), rows };
+      }),
+  );
+
+  // RF-259: the statements HomeFund is waiting for, by the same read and the same rule as Inicio's line.
+  server.registerTool(
+    "list_statement_requests",
+    {
+      ...titled(t, "listStatementRequests"),
+      description: t("tools.listStatementRequests"),
+      inputSchema: z.object({}),
+      annotations: READ,
+    },
+    (_input, ctx) =>
+      run(ctx, async () => {
+        const requests = openStatementRequests(await listReconcileAges(), todayInBogota());
+        return requests.map((request) => ({
+          accountId: request.accountId,
+          name: request.name,
+          cadence: request.cadence,
+          periodStart: request.start,
+          periodEnd: request.end,
+        }));
       }),
   );
 

@@ -31,6 +31,7 @@ import type { AccountRow } from "@/db/queries/accounts";
 import { BASE_CURRENCY, OFFERED_CURRENCIES } from "@/lib/currency";
 import { todayInBogota } from "@/lib/dates";
 import { amountToInput } from "@/lib/money";
+import { STATEMENT_CADENCES, suggestsQuarterly, type StatementCadence } from "@/lib/statement-cadence";
 import { useActionErrorToast } from "@/lib/use-action-toast";
 import {
   ACCOUNT_KINDS,
@@ -55,6 +56,7 @@ const SUBTYPE_LABEL_KEYS = {
 const NO_PARENT = "none";
 // The same for «nobody, it is everyone's» in the holder select (RF-181).
 const NO_HOLDER = "none";
+const NO_CADENCE = "none";
 
 // The kind that admits a class, mirroring SUBTYPES_BY_KIND: a card or a loan is money owed,
 // anything else holds value.
@@ -78,6 +80,8 @@ type AccountFormValues = {
   isShared: boolean;
   institution: string;
   lastFour: string;
+  // How often the bank issues the statement (RF-259); null is not set.
+  statementCadence: StatementCadence | null;
   // The id of the account this one is a pocket of; null for an account of its own (RF-173).
   parentAccountId: string | null;
   // The fund member who holds the account (RF-181); null for an account of everyone.
@@ -168,6 +172,7 @@ function AccountForm({
           isShared: account.isShared,
           institution: account.institution ?? "",
           lastFour: account.lastFour ?? "",
+          statementCadence: account.statementCadence ?? null,
           parentAccountId: account.parentAccountId ?? null,
           holderMemberId: account.holderMemberId ?? null,
           settlementCurrency: account
@@ -192,6 +197,7 @@ function AccountForm({
           isShared: false,
           institution: "",
           lastFour: "",
+          statementCadence: null,
           parentAccountId: null,
           holderMemberId: null,
           settlementCurrency: BASE_CURRENCY as (typeof OFFERED_CURRENCIES)[number],
@@ -213,6 +219,8 @@ function AccountForm({
   // A parent is an open, writable asset that is no pocket itself, of the scope and currency this
   // account settles in; one that already holds pockets cannot become a pocket (RF-173).
   const placement = useWatch({ control: form.control, name: "placement" });
+  const subtype = useWatch({ control: form.control, name: "subtype" });
+  const institution = useWatch({ control: form.control, name: "institution" });
   const currency = useWatch({ control: form.control, name: "settlementCurrency" });
   const hasPockets = !!account && parentCandidates.some((row) => row.parentAccountId === account.id);
   const parentOptions = parentCandidates.filter(
@@ -516,6 +524,53 @@ function AccountForm({
             </Field>
           )}
         />
+        {/* A bank's own paper (RF-259): cash has no statement. A card or a loan reads as monthly until it is set. */}
+        {subtype !== "cash" && (
+          <Controller
+            name="statementCadence"
+            control={form.control}
+            render={({ field, fieldState }) => (
+              <Field invalid={fieldState.invalid}>
+                <FieldLabel htmlFor="account-cadence">
+                  <Flex as="span" align="center" gap="1">
+                    {t("cadenceLabel")}
+                    <Text size="2" weight="regular" color="gray">
+                      {tKey("common.optional")}
+                    </Text>
+                  </Flex>
+                </FieldLabel>
+                <Select.Root
+                  size="3"
+                  value={field.value ?? NO_CADENCE}
+                  onValueChange={(value) =>
+                    field.onChange(value === NO_CADENCE ? null : (value as StatementCadence))
+                  }
+                  disabled={isPending}
+                >
+                  <FieldControl>
+                    <Select.Trigger id="account-cadence" />
+                  </FieldControl>
+                  <Select.Content position="popper">
+                    <Select.Item value={NO_CADENCE}>
+                      {t("cadenceNone")}
+                    </Select.Item>
+                    {STATEMENT_CADENCES.map((cadence) => (
+                      <Select.Item key={cadence} value={cadence}>
+                        {t(cadence === "monthly" ? "cadenceMonthly" : "cadenceQuarterly")}
+                      </Select.Item>
+                    ))}
+                  </Select.Content>
+                </Select.Root>
+                <FieldDescription>
+                  {field.value === null && suggestsQuarterly({ institution, subtype })
+                    ? t("cadenceBancolombia")
+                    : t("cadenceDescription")}
+                </FieldDescription>
+                <FieldMessage error={fieldState.error} />
+              </Field>
+            )}
+          />
+        )}
         {/* Above the amount because it decides how the amount reads (RF-121):
             "10,50" is a dollar figure and no peso figure at all. */}
         <Controller

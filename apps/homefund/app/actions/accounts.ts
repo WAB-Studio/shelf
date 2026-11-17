@@ -2,9 +2,15 @@
 
 import { refresh } from "next/cache";
 
-import { handAccountToGroup, restoreAccount } from "@/db/queries/accounts";
+import {
+  dismissStatementRequest,
+  handAccountToGroup,
+  restoreAccount,
+  stopStatementRequests,
+} from "@/db/queries/accounts";
 import { removeAccount, retireAccount, reviseAccount } from "@/db/queries/account-write";
 import { openAccount } from "@/db/queries/ledger-write";
+import { todayInBogota } from "@/lib/dates";
 import { ActionError } from "@/lib/errors";
 import { authActionClient } from "@/lib/safe-action";
 import {
@@ -13,6 +19,7 @@ import {
   deleteAccountSchema,
   handAccountToGroupSchema,
   restoreAccountSchema,
+  statementRequestSchema,
   updateAccountSchema,
 } from "@/lib/validation/account";
 
@@ -75,6 +82,24 @@ export const deleteAccountAction = authActionClient
   .inputSchema(deleteAccountSchema)
   .action(async ({ parsedInput }) => {
     await removeAccount(parsedInput);
+
+    refresh();
+  });
+
+/** «Ahora no» on a statement request (RF-259): that period is not asked for again. */
+export const dismissStatementRequestAction = authActionClient
+  .inputSchema(statementRequestSchema)
+  .action(async ({ parsedInput: { accountId } }) => {
+    if (!(await dismissStatementRequest(accountId, todayInBogota()))) throw new ActionError("errors.notFound");
+
+    refresh();
+  });
+
+/** «No me lo pidas» on a statement request (RF-259): the account's cadence is turned off. */
+export const stopStatementRequestsAction = authActionClient
+  .inputSchema(statementRequestSchema)
+  .action(async ({ parsedInput: { accountId } }) => {
+    if (!(await stopStatementRequests(accountId))) throw new ActionError("errors.notFound");
 
     refresh();
   });

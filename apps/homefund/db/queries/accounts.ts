@@ -11,6 +11,7 @@ import { withUserDb, withUserDbOrTx } from "@/db/session";
 import type { CurrencyCode } from "@/lib/currency";
 import { pgConstraintName, pgErrorCode } from "@/lib/db-error";
 import { ActionError } from "@/lib/errors";
+import { latestClosedPeriod, type StatementCadence } from "@/lib/statement-cadence";
 
 type AccountKind = Account["kind"];
 type AccountSubtype = Account["subtype"];
@@ -22,6 +23,8 @@ export type AccountRow = {
   subtype: AccountSubtype;
   institution: string | null;
   lastFour?: string | null;
+  // How often the bank issues its statement (RF-259); null is not set.
+  statementCadence?: StatementCadence | null;
   ownerUserId: string | null;
   groupId: string | null;
   isShared: boolean;
@@ -130,6 +133,7 @@ export async function listAccounts(
         subtype: accounts.subtype,
         institution: accounts.institution,
         lastFour: accounts.lastFour,
+        statementCadence: accounts.statementCadence,
         ownerUserId: accounts.ownerUserId,
         groupId: accounts.groupId,
         isShared: accounts.isShared,
@@ -221,6 +225,7 @@ export type CreateAccountArgs = {
   isShared: boolean;
   institution: string | null;
   lastFour?: string | null;
+  statementCadence?: StatementCadence | null;
   parentAccountId?: string | null;
   holderMemberId?: string | null;
   // The currency the account settles in, and the opening amount as an integer
@@ -262,6 +267,7 @@ export async function insertAccount(
     isShared,
     institution,
     lastFour,
+    statementCadence,
     parentAccountId,
     holderMemberId,
     settlementCurrency,
@@ -283,6 +289,7 @@ export async function insertAccount(
       // A blank field means "no institution", the same as an absent one.
       institution: institution === "" ? null : institution,
       lastFour: lastFour ? lastFour : null,
+      statementCadence: statementCadence ?? null,
       parentAccountId: parentAccountId ?? null,
       holderMemberId: holderMemberId ?? null,
       settlementCurrency,
@@ -308,6 +315,8 @@ export type UpdateAccountArgs = {
   isShared: boolean;
   institution: string | null;
   lastFour?: string | null;
+  // Absent leaves the cadence; null clears it (RF-259).
+  statementCadence?: StatementCadence | null;
   parentAccountId?: string | null;
   holderMemberId?: string | null;
   settlementCurrency: CurrencyCode;
@@ -328,6 +337,7 @@ export async function updateAccount({
   isShared,
   institution,
   lastFour,
+  statementCadence,
   parentAccountId,
   holderMemberId,
   settlementCurrency,
@@ -345,6 +355,7 @@ export async function updateAccount({
         isShared,
         institution: institution === "" ? null : institution,
         lastFour: lastFour ? lastFour : null,
+        ...(statementCadence === undefined ? {} : { statementCadence }),
         // Absent leaves the placement as it is; null takes the account out of its parent.
         ...(parentAccountId === undefined ? {} : { parentAccountId }),
         // Absent leaves the holder; null returns the account to everyone (RF-181).
@@ -471,5 +482,40 @@ export async function deleteAccount({
       .returning({ id: accounts.id });
 
     return rows.length > 0;
+  });
+}
+
+/**
+ * «Ahora no» (RF-259): the period HomeFund is asking the statement of is left alone for good. The period is worked out
+ * here from the account's cadence, never taken from the caller. False when the account has no cadence or is not the
+ * caller's to write.
+ */
+export async function dismissStatementRequest(accountId: string, today: string): Promise<boolean> {
+  return withUserDb(async (tx) => {
+    const [row] = await tx
+      .select({ cadence: accounts.statementCadence })
+      .from(accounts)
+      .where(eq(accounts.id, accountId))
+      .limit(1);
+    if (!row?.cadence) return false;
+
+    const updated = await tx
+      .update(accounts)
+      .set({ statementDismissedThrough: latestClosedPeriod(row.cadence, today).end })
+      .where(eq(accounts.id, accountId))
+      .returning({ id: accounts.id });
+    return updated.length > 0;
+  });
+}
+
+/** «No me lo pidas» (RF-259): the account's cadence is turned off, so nothing is asked of it again. */
+export async function stopStatementRequests(accountId: string): Promise<boolean> {
+  return withUserDb(async (tx) => {
+    const updated = await tx
+      .update(accounts)
+      .set({ statementCadence: null })
+      .where(eq(accounts.id, accountId))
+      .returning({ id: accounts.id });
+    return updated.length > 0;
   });
 }

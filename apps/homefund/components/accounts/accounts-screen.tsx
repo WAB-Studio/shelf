@@ -20,6 +20,7 @@ import {
   type BilledTarget,
 } from "@/components/accounts/foreign-estimates";
 import { ReconcileDialog } from "@/components/accounts/reconcile-dialog";
+import { usePeriodLabel } from "@/components/accounts/statement-request-line";
 import { AccountDetail, AccountsTable, PaidByLine, StaleCountLine } from "@/components/accounts/accounts-table";
 import {
   Box,
@@ -47,6 +48,7 @@ import { holdsMoneyApartFromPockets } from "@/lib/account-detail";
 import { civilDateToDate } from "@/lib/dates";
 import { useActionErrorToast } from "@/lib/use-action-toast";
 import { BASE_CURRENCY, type CurrencyCode } from "@/lib/currency";
+import type { StatementRequest } from "@/lib/statement-cadence";
 import type { ACCOUNT_SUBTYPES } from "@/lib/validation/account";
 
 // A Radix Select item may not carry an empty value, so "any" rides this
@@ -122,6 +124,7 @@ export function AccountsScreen({
   newSubtype,
   members,
   staleIds,
+  requests,
 }: {
   accounts: AccountRow[];
   groupName: string | null;
@@ -134,10 +137,14 @@ export function AccountsScreen({
   members: { id: string; name: string }[];
   // The accounts not counted for over a month (RF-254), each with a quiet «Cuádrala».
   staleIds: string[];
+  // The statements HomeFund is waiting for, one per account (RF-259).
+  requests: StatementRequest[];
 }) {
   const t = useTranslations("accounts");
   const tKey = useTranslations();
   const stale = new Set(staleIds);
+  const periodLabel = usePeriodLabel();
+  const requestedPeriods = new Map(requests.map((request) => [request.accountId, periodLabel(request)]));
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -427,6 +434,7 @@ export function AccountsScreen({
 
           <AccountsTable
             stale={stale}
+            requests={requestedPeriods}
             sections={deskSections.flatMap((section) => {
               const parts = splitByPlacement(section);
               return parts.map((part) => ({
@@ -544,6 +552,7 @@ export function AccountsScreen({
                           <AccountCard
                             account={account}
                             stale={stale.has(account.id)}
+                            requested={requestedPeriods.get(account.id) ?? null}
                             archived={archived}
                             pending={pendingFor(account)}
                             onConfirm={setBilledTarget}
@@ -673,6 +682,7 @@ export function AccountsScreen({
 function AccountCard({
   account,
   stale,
+  requested,
   archived,
   pending,
   onConfirm,
@@ -685,6 +695,7 @@ function AccountCard({
 }: {
   account: AccountRow;
   stale: boolean;
+  requested: string | null;
   archived: boolean;
   pending: AccountPendingSettlement[];
   onConfirm: (target: BilledTarget) => void;
@@ -715,7 +726,7 @@ function AccountCard({
           </Text>
           <AccountDetail account={account} />
           <PaidByLine account={account} />
-          <StaleCountLine stale={stale} onReconcile={onReconcile} />
+          <StaleCountLine stale={stale} requested={requested} onReconcile={onReconcile} />
           {/* The settlement currency is the figure the card leads with, and each
               other currency the account holds sits under it naming itself: no
               line here is the sum of two currencies (RF-124).

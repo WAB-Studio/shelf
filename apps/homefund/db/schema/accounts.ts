@@ -51,6 +51,11 @@ export const accounts = finances.table(
     // The fund member who holds this fund account (RF-181): a relative's bank account the leader manages.
     // Null is an account of everyone. The composite key below keeps the member in the account's own fund.
     holderMemberId: uuid(),
+    // How often the bank issues this account's statement (RF-259). Null is «not set», and no account has one until the
+    // person turns it on: a statement is optional.
+    statementCadence: text({ enum: ["monthly", "quarterly"] }),
+    // The last day of the period whose request the person answered «Ahora no» to; that period is never asked for again.
+    statementDismissedThrough: date(),
     archivedAt: timestamp({ withTimezone: true }),
     // The stable per-scope import key (RF-51): a re-import matches on it to update instead of duplicate.
     // Auto-filled to `id::text` by a trigger when omitted; a webhook or upsert value survives untouched.
@@ -77,6 +82,7 @@ export const accounts = finances.table(
     // A personal account is never shared; only a group account carries is_shared.
     check("accounts_personal_not_shared", sql`${table.ownerUserId} is null or ${table.isShared} = false`),
     check("accounts_external_ref_length", sql`length(${table.externalRef}) <= 200`),
+    check("accounts_statement_cadence_valid", sql`${table.statementCadence} is null or ${table.statementCadence} in ('monthly', 'quarterly')`),
     check("accounts_last_four_digits", sql`${table.lastFour} is null or ${table.lastFour} ~ '^[0-9]{4}$'`),
     // The shape of ISO 4217, not a list of codes: which ones a person may pick is an interface question.
     check("accounts_settlement_currency_iso", sql`${table.settlementCurrency} ~ '^[A-Z]{3}$'`),

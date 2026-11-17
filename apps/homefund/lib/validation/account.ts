@@ -3,6 +3,7 @@ import { z } from "zod";
 import { currencySchema, type CurrencyCode } from "@/lib/currency";
 import { isCivilDate, todayInBogota } from "@/lib/dates";
 import { maxAmountMinor, parseAmount } from "@/lib/money";
+import { STATEMENT_CADENCES } from "@/lib/statement-cadence";
 import { POSTGRES_TIMESTAMPTZ_TEXT } from "@/lib/validation/transaction";
 
 // The list the screens and both sides of validation read for an account's kind (RF-09).
@@ -37,6 +38,12 @@ const accountInstitutionSchema = z
   .trim()
   .max(80, { error: "accounts.errors.institutionTooLong" })
   .nullable();
+
+// How often the bank issues the statement (RF-259); absent or null is «not set».
+const accountStatementCadenceSchema = z
+  .enum(STATEMENT_CADENCES, { error: "accounts.errors.cadenceInvalid" })
+  .nullable()
+  .optional();
 
 const accountLastFourSchema = z
   .string()
@@ -166,6 +173,7 @@ export const createAccountSchema = z
     placement: z.enum(ACCOUNT_PLACEMENTS, { error: "accounts.errors.placementInvalid" }),
     institution: accountInstitutionSchema,
     lastFour: accountLastFourSchema.optional(),
+    statementCadence: accountStatementCadenceSchema,
     parentAccountId: accountParentSchema,
     holderMemberId: accountHolderSchema,
     settlementCurrency: accountCurrencySchema,
@@ -194,6 +202,7 @@ export const updateAccountSchema = z
     isShared: z.boolean(),
     institution: accountInstitutionSchema,
     lastFour: accountLastFourSchema.optional(),
+    statementCadence: accountStatementCadenceSchema,
     parentAccountId: accountParentSchema,
     holderMemberId: accountHolderSchema,
     settlementCurrency: accountCurrencySchema,
@@ -211,6 +220,11 @@ export const updateAccountSchema = z
   .superRefine(requireAmountInCurrency);
 
 export type UpdateAccountInput = z.infer<typeof updateAccountSchema>;
+
+// The account a statement request is answered on (RF-259); the period is the server's to work out.
+export const statementRequestSchema = z.object({
+  accountId: z.uuid({ error: "errors.notFound" }),
+});
 
 export const archiveAccountSchema = z.object({
   accountId: z.uuid({ error: "errors.notFound" }),

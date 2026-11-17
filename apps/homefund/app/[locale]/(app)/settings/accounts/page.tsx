@@ -14,6 +14,7 @@ import { requireUser } from "@/db/session";
 import { routing } from "@/i18n/routing";
 import { todayInBogota } from "@/lib/dates";
 import { isStale } from "@/lib/reconcile-age";
+import { openStatementRequests } from "@/lib/statement-cadence";
 import { createAccountSchema } from "@/lib/validation/account";
 
 export async function generateMetadata(
@@ -60,6 +61,8 @@ export default async function AccountsPage(
     // When each account was last counted, for the quiet «Cuádrala» (RF-254); the archived tab shows none.
     archived ? Promise.resolve([]) : listReconcileAges(),
   ]);
+  const requests = openStatementRequests(counts, today);
+  const requested = new Set(requests.map((request) => request.accountId));
   const heldBy = new Set(accounts.map((account) => account.holderMemberId));
   const members = roster.filter((member) => !member.archivedAt || heldBy.has(member.id));
 
@@ -72,7 +75,8 @@ export default async function AccountsPage(
         archived={archived}
         newSubtype={newSubtype}
         members={members.map((member) => ({ id: member.id, name: member.name }))}
-        staleIds={counts.filter((row) => isStale(row, today)).map((row) => row.id)}
+        staleIds={counts.filter((row) => isStale(row, today) && !requested.has(row.id)).map((row) => row.id)}
+        requests={requests}
       />
     </Page>
   );

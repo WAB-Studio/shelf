@@ -768,3 +768,28 @@ todas las cuentas a la vez.
 - **El aviso «Cuádrala».** Una cuenta que no se cuadra hace más de 30 días lleva, en Cuentas, una marca gris «Cuádrala» (un botón de
   texto bajo el nombre que abre el cuadre de esa cuenta); una cuenta que nunca se cuadró cuenta los 30 días desde que se añadió. En
   Inicio, a lo sumo una línea en la columna de al lado, «3 cuentas sin cuadrar hace más de un mes · Cuadrar todo»; sin cuentas así, nada.
+
+## Decisión del 2026-11-17: el extracto que llega, por el usuario
+
+«Cada 3 meses Bancolombia me da el extracto de la cuenta de ahorros; ahí es donde debería pedirme el extracto y te lo paso y ya.»
+Y después: «los extractos son opcionales». Un extracto es opcional y HomeFund lo pide a lo sumo una vez por periodo.
+
+- **El campo «Cada cuánto llega el extracto»** va en el formulario de la cuenta, bajo «Últimos cuatro», con tres opciones: «Sin definir»,
+  «Mensual» y «Trimestral». Ninguna cuenta trae una elegida, tampoco una tarjeta: nada se pide hasta que la persona lo activa. El
+  efectivo no lo lleva. Una cuenta de ahorros de Bancolombia sin definir dice bajo el campo «Bancolombia entrega el extracto de
+  ahorros cada tres meses: elige Trimestral.»; ninguna otra recibe ese consejo y ninguna cadencia se elige sola.
+- **Cuándo se pide**, solo a una cuenta con cadencia. Cuando un periodo cierra (el mes que pasó, o el trimestre que va de enero a marzo,
+  de abril a junio, de julio a septiembre y de octubre a diciembre) y pasan tres días de gracia. Se pide el último periodo cerrado,
+  nunca los anteriores, y no se pide a una cuenta que se añadió después de que cerró. Se deja de pedir cuando existe un extracto cuyo
+  corte cae en el periodo o después, o un cuadre del último día del periodo o después, o cuando la persona dice «Ahora no».
+- **En Cuentas**, bajo el nombre de la cuenta, una línea gris: «Llegó el extracto (jul–sep). Pásaselo a Claude.»; ocupa el lugar de
+  «Cuádrala» de esa cuenta. No lleva botones: no estorba.
+- **En Inicio**, una sola línea en la columna de al lado, de una cuenta a la vez: «Llegó el extracto de Ahorros 3397 (jul–sep). Pásaselo
+  a Claude.», con dos botones de texto debajo: «Ahora no» (ese periodo no se vuelve a pedir) y «No me lo pidas» (apaga la cadencia de la
+  cuenta). Contestada una, sale la siguiente. Nunca bloquea nada. Va encima de la línea «Cuádrala», que no cuenta las cuentas a las
+  que ya se les pide el extracto. Sin extractos que pedir no se dibuja.
+- **Cuadrar por una captura o por una cifra sigue siendo el camino principal.** Un extracto es una manera más de cuadrar y nada depende
+  de él.
+- **Subir el extracto desde la web** no existe todavía: la línea no lo ofrece. El extracto se lee con Claude por el MCP.
+- **Inicio no muestra los «Descuadre».** Las últimas del listado de Inicio son lo que pasó; la diferencia de un cuadre sigue en
+  Movimientos y en el historial de la cuenta.

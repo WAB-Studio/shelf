@@ -51,9 +51,11 @@ import {
   archiveAccount,
   createAccount,
   deleteAccount,
+  dismissStatementRequest,
   handAccountToGroup,
   listAccounts,
   restoreAccount,
+  stopStatementRequests,
   updateAccount,
 } from "@/db/queries/accounts";
 import { getAuditFilterOptions, listAuditLog } from "@/db/queries/audit-log";
@@ -195,6 +197,7 @@ import {
   lastSixMonthStarts,
   todayInBogota,
 } from "@/lib/dates";
+import { latestClosedPeriod } from "@/lib/statement-cadence";
 import { pgErrorCode } from "@/lib/db-error";
 import { provisionalMemberName } from "@/lib/validation/member";
 import { CATEGORY_COLORS } from "@/lib/fund/category-color";
@@ -4186,6 +4189,7 @@ async function main(): Promise<void> {
   await mcpReconcileManySuite();
   await reconcileOverviewSuite();
   await reconcileAgesSuite();
+  await statementRequestsSuite();
 }
 
 // A member recorded without a login is someone in the fund: a leader whose fund holds one is not alone, so an
@@ -15440,6 +15444,7 @@ const TOOL_CLASSES = [
   ["list_reconciliations", ...READ_CLASS],
   ["list_recurring_rules", ...READ_CLASS],
   ["list_silenced_shapes", ...READ_CLASS],
+  ["list_statement_requests", ...READ_CLASS],
   ["list_third_party_credits", ...READ_CLASS],
   ["mark_month_review", ...OVERWRITE_CLASS],
   ["mark_movement_reviewed", ...OVERWRITE_CLASS],
@@ -21210,5 +21215,74 @@ async function reconcileAgesSuite(): Promise<void> {
     next("RF-254: the ages read says when an account was added and last counted, in one read"),
     before?.latestReconciledOn === null && before.addedOn === today && after?.latestReconciledOn === today && trips === unit,
     `before ${JSON.stringify(before)}, after ${JSON.stringify(after)}, ${trips} round trips against ${unit}`,
+  );
+}
+
+// RF-259, RF-260: an account says how often its statement comes, the MCP lists the statements HomeFund waits for until a
+// statement or a count covers them, and Inicio's list leaves a reconciliation's adjustment out.
+async function statementRequestsSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const today = todayInBogota();
+  const { POST } = await import("@/app/mcp/route");
+  const owner = await createMembershipFreeUser();
+  const { id: keyId, token } = await asUser(owner, () => issueWebhookCredential({ name: `Harness rf255 ${tag}`, purpose: "mcp", defaultAccountId: null, defaultCategoryId: null }));
+  keep("webhook_credentials", keyId);
+  const { tool } = mcpClient(POST, token);
+  const mk = async (name: string, kind: "asset" | "liability", subtype: "bank" | "card", cadence: string | null) => {
+    const made = await tool("create_account", {
+      name: `Harness rf255 ${name} ${tag}`, kind, subtype, openingBalanceCents: 100_000_00, balanceOn: "2026-01-01", ...(cadence ? { statementCadence: cadence } : {}),
+    });
+    const accountId = (made.value as { accountId: string }).accountId;
+    track("accounts", accountId);
+    // The account has been here a long while: the period that closed is one it lived through.
+    await fixtureSql`update accounts set created_at = now() - interval '400 days' where id = ${accountId}`;
+    return accountId;
+  };
+  const [savings, covered, loose, card] = [
+    await mk("ahorros", "asset", "bank", "quarterly"), await mk("cubierta", "asset", "bank", "quarterly"),
+    await mk("suelta", "asset", "bank", null), await mk("tarjeta", "liability", "card", null),
+  ];
+  const asked = async () => ((await tool("list_statement_requests")).value as { accountId: string; cadence: string; periodEnd: string }[]);
+  const first = await asked();
+  const period = latestClosedPeriod("quarterly", today);
+  const listed = (await tool("list_accounts")).value as { id: string; statementCadence: string | null; updatedAt: string }[];
+  assert(
+    next("RF-259: an account keeps the cadence it was given, and one with none set (a card too) is asked for nothing"),
+    listed.find((row) => row.id === savings)?.statementCadence === "quarterly" && listed.find((row) => row.id === card)?.statementCadence === null &&
+      first.find((row) => row.accountId === savings)?.periodEnd === period.end && first.some((row) => row.accountId === covered) &&
+      !first.some((row) => row.accountId === loose || row.accountId === card),
+    `listed ${JSON.stringify(listed.map((row) => row.statementCadence))}, asked ${JSON.stringify(first)}`,
+  );
+
+  await asUser(owner, () => reconcileAccount({ accountId: covered, reconciledOn: period.end, realMagnitudeCents: 100_500_00, expectedDerivedCents: 100_000_00 }));
+  const dismissed = await asUser(owner, () => dismissStatementRequest(savings, today));
+  const afterAnswers = await asked();
+  assert(
+    next("RF-259: a count on the period's last day covers its statement, and «Ahora no» hides that period for good"),
+    dismissed && !afterAnswers.some((row) => row.accountId === covered || row.accountId === savings),
+    `dismissed ${dismissed}, asked ${JSON.stringify(afterAnswers)}`,
+  );
+
+  const updated = await tool("update_account", {
+    accountId: loose, statementCadence: "monthly", expectedUpdatedAt: listed.find((row) => row.id === loose)!.updatedAt,
+  });
+  const turnedOn = await asked();
+  const stopped = await asUser(owner, () => stopStatementRequests(loose));
+  const turnedOff = await asked();
+  const cadences = ((await tool("list_accounts")).value as { id: string; statementCadence: string | null }[]);
+  assert(
+    next("RF-259: a cadence turned on asks for the last month, and «No me lo pidas» turns it off"),
+    !updated.isError && turnedOn.some((row) => row.accountId === loose && row.cadence === "monthly") && stopped &&
+      !turnedOff.some((row) => row.accountId === loose) && cadences.find((row) => row.id === loose)?.statementCadence === null,
+    `updated ${JSON.stringify(updated.value)}, on ${JSON.stringify(turnedOn)}, off ${JSON.stringify(turnedOff)}`,
+  );
+
+  const rows = await asUser(owner, () => listTransactions({ withoutAdjustments: true }, { limit: 50 }));
+  const all = await asUser(owner, () => listTransactions({ adjustments: true }, { limit: 50 }));
+  assert(
+    next("RF-260: the list Inicio reads leaves a reconciliation's adjustment out, which the list of adjustments still holds"),
+    all.length > 0 && rows.every((row) => row.reconciliationId === null) && all.every((row) => row.reconciliationId !== null),
+    `${rows.length} without, ${all.length} adjustments`,
   );
 }
