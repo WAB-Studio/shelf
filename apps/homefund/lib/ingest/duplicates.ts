@@ -86,18 +86,11 @@ function closeInTime(fresh: DuplicateFacts, candidate: DuplicateCandidate): bool
   return printed !== null ? printed <= window : Math.abs(fresh.receivedAt - candidate.receivedAt) <= window * 60_000;
 }
 
-// Through the other channel: the flag says so, or, for a row stored before the channel was recorded (every
-// bank email then read as the phone's), the same minute printed in a different wording does. The same
-// channel twice shares its wording, so two equal coffees stay two.
-function otherChannel(fresh: DuplicateFacts, candidate: DuplicateCandidate): boolean {
-  return candidate.fromEmail !== fresh.fromEmail || (printedGap(fresh, candidate) === 0 && candidate.shapeHash !== fresh.shapeHash);
-}
-
 // The same alert through the other channel: another primary, same figure, a tail that does not contradict.
 function sameAlertOtherChannel(fresh: DuplicateFacts, candidate: DuplicateCandidate): boolean {
   return (
     !candidate.receipt &&
-    otherChannel(fresh, candidate) &&
+    candidate.fromEmail !== fresh.fromEmail &&
     closeInTime(fresh, candidate) &&
     tailsAgree(fresh.text, candidate.rawText, fresh.direction ?? candidate.direction)
   );

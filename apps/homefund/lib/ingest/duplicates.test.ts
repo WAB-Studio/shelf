@@ -86,9 +86,8 @@ test("the email of an alert the phone already reported is its duplicate, and the
 });
 
 test("the same channel twice is two purchases", () => {
-  const same = { shapeHash: alert.shapeHash };
-  assert.deepEqual(judgeDuplicate(email(), [candidate({ id: "first", fromEmail: true, rawText: EMAIL, receivedAt: NOW - MINUTE, ...same })]), { kind: "none" });
-  assert.deepEqual(judgeDuplicate(sms(), [candidate({ id: "first", rawText: SMS, receivedAt: NOW - MINUTE, ...same })]), { kind: "none" });
+  assert.deepEqual(judgeDuplicate(email(), [candidate({ id: "first", fromEmail: true, rawText: EMAIL, receivedAt: NOW - MINUTE })]), { kind: "none" });
+  assert.deepEqual(judgeDuplicate(sms(), [candidate({ id: "first", rawText: SMS, receivedAt: NOW - MINUTE })]), { kind: "none" });
 });
 
 test("another account's tail is another movement, and a text with no tail agrees with any", () => {
@@ -145,15 +144,6 @@ test("a burst of emails arriving in one second leaves each alert matched to its 
   const second = email({ occurredOn: "2026-11-14", text: MAIL_LONG_YEAR.replace("19:05", "21:30"), receivedAt: NOW });
   const verdict = judgeDuplicate(second, phones);
   assert.equal(verdict.kind === "repeats" && verdict.of.id, "b");
-});
-
-test("a bank email stored before the channel was recorded reads as the phone's, yet its other wording at the same minute is the same alert", () => {
-  const legacy = candidate({ id: "mail", fromEmail: false, occurredOn: "2026-11-14", rawText: MAIL_LONG_YEAR, shapeHash: "e".repeat(64) });
-  const verdict = judgeDuplicate(sms({ occurredOn: "2026-11-14", text: SMS_SHORT_YEAR, shapeHash: "f".repeat(64) }), [legacy]);
-  assert.equal(verdict.kind === "repeats" && verdict.of.id, "mail");
-
-  const sameWording = candidate({ id: "mail", occurredOn: "2026-11-14", rawText: SMS_SHORT_YEAR, shapeHash: "f".repeat(64) });
-  assert.deepEqual(judgeDuplicate(sms({ occurredOn: "2026-11-14", text: SMS_SHORT_YEAR, shapeHash: "f".repeat(64) }), [sameWording]), { kind: "none" });
 });
 
 test("a twelve-hour clock reads as the twenty-four-hour one", () => {
