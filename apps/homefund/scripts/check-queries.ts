@@ -4181,6 +4181,7 @@ async function main(): Promise<void> {
   await mcpMoneyModelSuite();
   await payOwnCardSuite();
   await legacyChannelSuite();
+  await mcpReconcileManySuite();
 }
 
 // A member recorded without a login is someone in the fund: a leader whose fund holds one is not alone, so an
@@ -15446,6 +15447,7 @@ const TOOL_CLASSES = [
   ["preview_statement", ...READ_CLASS],
   ["propose_rate", ...READ_CLASS],
   ["reconcile_account", ...OVERWRITE_CLASS],
+  ["reconcile_accounts", ...OVERWRITE_CLASS],
   ["record_account_statement", ...ADD_CLASS],
   ["record_billed_amount", ...OVERWRITE_CLASS],
   ["record_debt_payment", ...ADD_ONCE_CLASS],
@@ -21036,5 +21038,101 @@ async function legacyChannelSuite(): Promise<void> {
     next("RF-244: the SMS of an alert whose email was stored before the channel flag is its duplicate, 20 hours on, by the printed day and minute"),
     sms.status === "rejected" && row?.reason === "duplicate" && row.of === mail.deliveryId,
     JSON.stringify({ sms, row }),
+  );
+}
+
+// RF-252: many accounts counted on one day, all or nothing, with a dry run that writes nothing; a debt reads owed, positive,
+// in the count, the dry run and the history alike.
+async function mcpReconcileManySuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const today = todayInBogota();
+  const { POST } = await import("@/app/mcp/route");
+  const owner = await createMembershipFreeUser();
+  const mk = async (name: string, kind: "asset" | "liability", amountMinor: number) => {
+    const { accountId } = await asUser(owner, () =>
+      createAccount({
+        kind, subtype: kind === "asset" ? "bank" : "card", groupId: null, isShared: false, institution: null, settlementCurrency: BASE_CURRENCY,
+        balanceOn: "2026-01-01", ownerUserId: owner.id, name: `Harness rf251 ${name} ${tag}`, amountMinor,
+      }),
+    );
+    track("accounts", accountId);
+    return accountId;
+  };
+  const [savings, wallet, card] = [await mk("ahorros", "asset", 2_000_000_00), await mk("billetera", "asset", 300_000_00), await mk("tarjeta", "liability", 1_000_000_00)];
+  const category = randomUUID();
+  await fixtureSql`insert into categories (id, owner_user_id, name, kind, color) values (${category}, ${owner.id}, ${`Harness rf251 Comida ${tag}`}, 'expense', ${CATEGORY_COLORS[0]})`;
+  track("categories", category);
+  const { id: keyId, token } = await asUser(owner, () => issueWebhookCredential({ name: `Harness rf251 ${tag}`, purpose: "mcp", defaultAccountId: null, defaultCategoryId: null }));
+  keep("webhook_credentials", keyId);
+  const { tool } = mcpClient(POST, token);
+  const ledger = async (id: string) => {
+    const [row] = await fixtureSql<{ balance_cents: string }[]>`select balance_cents::text from account_balances where id = ${id}`;
+    return Number(row?.balance_cents);
+  };
+  type Counted = { dryRun: boolean; rows: { accountId: string; derivedCents: number; realAmountCents: number; gapCents: number; resultingBalanceCents: number; signFlip: boolean; reconciliationId: string | null }[] };
+  const counts = [
+    { accountId: savings, realAmountCents: 2_150_000_00 },
+    { accountId: wallet, realAmountCents: 280_000_00 },
+    { accountId: card, realAmountCents: 1_020_000_00 },
+  ];
+
+  const trips = async (accounts: typeof counts) => {
+    const started = roundTrips();
+    await tool("reconcile_accounts", { accounts, dryRun: true });
+    return roundTrips() - started;
+  };
+  await trips(counts.slice(0, 1));
+  const [one, three] = [await trips(counts.slice(0, 1)), await trips(counts)];
+  const dry = (await tool("reconcile_accounts", { accounts: counts, dryRun: true })).value as Counted;
+  const byId = (rows: Counted["rows"], id: string) => rows.find((row) => row.accountId === id);
+  const untouched = [await ledger(savings), await ledger(wallet), await ledger(card)];
+  assert(
+    next("RF-252: reconcile_accounts with dryRun returns each gap and the balance that would result, writes nothing, and costs the round trips of one account"),
+    dry.dryRun === true && byId(dry.rows, savings)?.derivedCents === 2_000_000_00 && byId(dry.rows, savings)?.gapCents === 150_000_00 &&
+      byId(dry.rows, wallet)?.gapCents === -20_000_00 && byId(dry.rows, wallet)?.resultingBalanceCents === 280_000_00 &&
+      byId(dry.rows, card)?.derivedCents === 1_000_000_00 && byId(dry.rows, card)?.gapCents === 20_000_00 && dry.rows.every((row) => row.reconciliationId === null) &&
+      untouched[0] === 2_000_000_00 && untouched[1] === 300_000_00 && untouched[2] === -1_000_000_00 && one === three,
+    `dry ${JSON.stringify(dry)}, ledger ${JSON.stringify(untouched)}, round trips ${one} for one account, ${three} for three`,
+  );
+
+  const single = (await tool("reconcile_account", { accountId: wallet, reconciledOn: today, realAmountCents: 250_000_00, dryRun: true })).value as Counted["rows"][number] & { dryRun: boolean };
+  const needsFigure = await tool("reconcile_account", { accountId: wallet, reconciledOn: today, realAmountCents: 250_000_00 });
+  assert(
+    next("RF-252: reconcile_account with dryRun answers the gap without the derived figure and writes nothing; without dryRun the figure is required"),
+    single.dryRun === true && single.gapCents === -50_000_00 && await ledger(wallet) === 300_000_00 &&
+      needsFigure.isError && (needsFigure.value as { error: string }).error === es.mcp.errors.reconcileNeedsExpected,
+    `single ${JSON.stringify(single)}, refused ${JSON.stringify(needsFigure.value)}`,
+  );
+
+  const slip = (await tool("reconcile_accounts", { accounts: [{ accountId: card, realAmountCents: -1_020_000_00 }], dryRun: true })).value as Counted;
+  await tool("record_movement", { fromAccountId: wallet, toAccountId: null, amountCents: 10_000_00, occurredAt: today, description: `Harness rf251 gasto ${tag}`, categoryId: category });
+  const withStale = await tool("reconcile_accounts", {
+    accounts: counts.map((item) => ({ ...item, expectedDerivedCents: byId(dry.rows, item.accountId)!.derivedCents })),
+  });
+  const afterStale = [await ledger(savings), await ledger(wallet), await ledger(card)];
+  assert(
+    next("RF-252: a count of many with one stale account writes none and names the account"),
+    slip.rows[0]?.signFlip === true && withStale.isError && (withStale.value as { error: string; accountId: string }).error === es.errors.reconcileStale &&
+      (withStale.value as { accountId: string }).accountId === wallet && afterStale[0] === 2_000_000_00 && afterStale[2] === -1_000_000_00,
+    `slip ${JSON.stringify(slip)}, stale ${JSON.stringify(withStale.value)}, ledger ${JSON.stringify(afterStale)}`,
+  );
+
+  const fresh = (await tool("reconcile_accounts", { accounts: counts, dryRun: true })).value as Counted;
+  const signed = await tool("reconcile_accounts", {
+    accounts: [{ accountId: card, realAmountCents: -1_020_000_00, expectedDerivedCents: 1_000_000_00 }],
+  });
+  const written = await tool("reconcile_accounts", {
+    accounts: counts.map((item) => ({ ...item, expectedDerivedCents: byId(fresh.rows, item.accountId)!.derivedCents })),
+  });
+  const history = (await tool("list_reconciliations", { accountId: card })).value as { countedCents: number; derivedCents: number; gapCents: number }[];
+  const after = [await ledger(savings), await ledger(wallet), await ledger(card)];
+  assert(
+    next("RF-252: reconcile_accounts books one adjustment per account in one go, refuses a debt typed negative, and a debt reads owed in list_reconciliations"),
+    signed.isError && (signed.value as { error: string }).error.includes("-102000000") && !written.isError &&
+      (written.value as Counted).rows.every((row) => row.reconciliationId !== null) &&
+      after[0] === 2_150_000_00 && after[1] === 280_000_00 && after[2] === -1_020_000_00 &&
+      history.length === 1 && history[0].countedCents === 1_020_000_00 && history[0].derivedCents === 1_000_000_00 && history[0].gapCents === 20_000_00,
+    `signed ${JSON.stringify(signed.value)}, written ${JSON.stringify(written.value)}, ledger ${JSON.stringify(after)}, history ${JSON.stringify(history)}`,
   );
 }

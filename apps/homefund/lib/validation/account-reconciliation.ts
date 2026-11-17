@@ -21,6 +21,31 @@ function signedReal(value: string): { negative: boolean; body: string } | null {
   return { negative, body };
 }
 
+const reconciledOnSchema = z
+  .string()
+  .refine(isCivilDate, { error: "transactions.errors.dateInvalid" })
+  .refine((value) => !isCivilDate(value) || value <= todayInBogota(), {
+    error: "errors.reconcileFutureDay",
+  });
+
+const realAmountSchema = z.string().superRefine((value, ctx) => {
+  if (value.trim().length === 0) {
+    ctx.addIssue(realAmountKeys.required);
+    return;
+  }
+
+  const read = signedReal(value);
+  const cents = read === null ? null : parseAmount(read.body);
+  if (cents === null) {
+    ctx.addIssue(realAmountKeys.invalid);
+    return;
+  }
+
+  if (OFFERED_CURRENCIES.every((currency) => cents > maxAmountMinor(currency))) {
+    ctx.addIssue(realAmountKeys.tooLarge);
+  }
+});
+
 /**
  * What a person counted on a day (RF-137). `realAmount` is the written figure, zero
  * allowed: signed first by the person, with one leading minus, then by the account's
@@ -30,32 +55,51 @@ function signedReal(value: string): { negative: boolean; body: string } | null {
  */
 export const reconcileAccountSchema = z.object({
   accountId: z.uuid({ error: "transactions.errors.accountInvalid" }),
-  reconciledOn: z
-    .string()
-    .refine(isCivilDate, { error: "transactions.errors.dateInvalid" })
-    .refine((value) => !isCivilDate(value) || value <= todayInBogota(), {
-      error: "errors.reconcileFutureDay",
-    }),
-  realAmount: z.string().superRefine((value, ctx) => {
-    if (value.trim().length === 0) {
-      ctx.addIssue(realAmountKeys.required);
-      return;
-    }
-
-    const read = signedReal(value);
-    const cents = read === null ? null : parseAmount(read.body);
-    if (cents === null) {
-      ctx.addIssue(realAmountKeys.invalid);
-      return;
-    }
-
-    if (OFFERED_CURRENCIES.every((currency) => cents > maxAmountMinor(currency))) {
-      ctx.addIssue(realAmountKeys.tooLarge);
-    }
-  }),
+  reconciledOn: reconciledOnSchema,
+  realAmount: realAmountSchema,
   // The derived figure the person was shown; a different one now means the ledger moved.
   expectedDerivedCents: z.number().int(),
 });
+
+// The most accounts one count takes: the Cuentas list of a household is far under it.
+export const MAX_RECONCILED_TOGETHER = 50;
+
+/**
+ * Many accounts counted on one day, all or nothing (RF-252). One day for the lot; each item is
+ * what `reconcileAccountSchema` takes for one account, and an account appears once.
+ */
+export const reconcileAccountsSchema = z.object({
+  reconciledOn: reconciledOnSchema,
+  items: z
+    .array(
+      z.object({
+        accountId: z.uuid({ error: "transactions.errors.accountInvalid" }),
+        realAmount: realAmountSchema,
+        expectedDerivedCents: z.number().int(),
+      }),
+    )
+    .min(1, { error: "errors.reconcileNothing" })
+    .max(MAX_RECONCILED_TOGETHER, { error: "errors.reconcileTooMany" })
+    .refine((items) => new Set(items.map((item) => item.accountId)).size === items.length, {
+      error: "errors.reconcileRepeated",
+    }),
+});
+
+export type ReconcileAccountsInput = z.infer<typeof reconcileAccountsSchema>;
+
+/**
+ * A count whose sign is the opposite of the balance and whose gap exceeds the balance is the
+ * shape of a sign slip (a debt typed negative): the gap booked would be twice the balance.
+ * Both figures in one frame; the verdict is the same in the ledger's and in the owed one.
+ */
+export function flipsSign(real: number, derived: number): boolean {
+  return (
+    real !== 0 &&
+    derived !== 0 &&
+    Math.sign(real) !== Math.sign(derived) &&
+    Math.abs(real - derived) > Math.abs(derived)
+  );
+}
 
 export type ReconcileAccountInput = z.infer<typeof reconcileAccountSchema>;
 
