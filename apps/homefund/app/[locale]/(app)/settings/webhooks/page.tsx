@@ -5,11 +5,13 @@ import { notFound } from "next/navigation";
 
 import { Page } from "@/components/ui";
 import { WebhooksScreen } from "@/components/webhooks/webhooks-screen";
+import { listAlertChannels } from "@/db/queries/alert-channels";
 import {
   getWebhookCredentialOptions,
   listWebhookCredentials,
 } from "@/db/queries/webhook-credentials";
 import { routing } from "@/i18n/routing";
+import { readAlertChannels } from "@/lib/alert-channels";
 import { env } from "@/lib/env";
 import { widgetScript } from "@/lib/widget/script";
 
@@ -31,10 +33,12 @@ export default async function WebhooksPage(
   if (!hasLocale(routing.locales, locale)) notFound();
 
 
-  const [credentials, options] = await Promise.all([
+  const [credentials, options, alertFacts] = await Promise.all([
     listWebhookCredentials(),
     getWebhookCredentialOptions(),
+    listAlertChannels(),
   ]);
+  const now = new Date();
 
   // The proxy matcher excludes `/api`, so the ingest path carries no locale.
   const ingestUrl = new URL(
@@ -56,6 +60,8 @@ export default async function WebhooksPage(
         ingestUrl={ingestUrl}
         oauthLine={oauthLine}
         inboundDomain={env.INBOUND_EMAIL_DOMAIN ?? null}
+        alertChannels={readAlertChannels(alertFacts, now)}
+        nowIso={now.toISOString()}
         apkReady={Boolean(env.ANDROID_APK_GITHUB_TOKEN)}
         mcpUrl={new URL("/mcp", env.NEXT_PUBLIC_SITE_URL).toString()}
         widgetScript={widgetScript(env.NEXT_PUBLIC_SITE_URL)}

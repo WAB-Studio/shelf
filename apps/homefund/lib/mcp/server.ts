@@ -6,11 +6,13 @@ import { createTranslator } from "next-intl";
 import { z } from "zod";
 
 import { listAccounts } from "@/db/queries/accounts";
+import { listAlertChannels } from "@/db/queries/alert-channels";
 import { listCallerMembers } from "@/db/queries/group-members";
 import { getMonthReview } from "@/db/queries/month-review";
 import { getSpendingPatterns, GROWTH_PERCENT } from "@/db/queries/spending-patterns";
 import { importStatement, previewStatement, StatementError } from "@/db/queries/statement-import";
 import { actAsCredentialOwner } from "@/db/session";
+import { SILENT_AFTER_DAYS, readAlertChannels } from "@/lib/alert-channels";
 import { MONTH_PATTERN, lastClosedMonth } from "@/lib/dates";
 import { ABOVE_USUAL_FACTOR, USUAL_WINDOW_MONTHS } from "@/lib/month-review-rules";
 import { ActionError, DATABASE_REFUSALS } from "@/lib/errors";
@@ -143,6 +145,18 @@ function registerReadTools(server: McpServer): void {
       if (month > lastClosedMonth()) return Promise.resolve(text({ error: t("errors.openMonth") }, true));
       return run(ctx, () => getMonthReview(month));
     },
+  );
+
+  // RF-249: whether each account's alerts keep arriving, by fixed rules; Claude explains a gap, the app calls no model.
+  server.registerTool(
+    "alert_channels",
+    {
+      ...titled(say, "alertChannels"),
+      description: t("tools.alertChannels", { days: SILENT_AFTER_DAYS }),
+      inputSchema: z.object({}),
+      annotations: READ,
+    },
+    (_input, ctx) => run(ctx, async () => readAlertChannels(await listAlertChannels(), new Date())),
   );
 
   // RF-184: the patterns by fixed rules; Claude finds what to act on in the conversation, the app calls no model.
