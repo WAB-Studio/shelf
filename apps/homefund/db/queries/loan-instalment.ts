@@ -15,9 +15,8 @@ class InstalmentRefusal extends Error {
   readonly code = "23514";
 }
 
-// The names a person's interest category goes by, best first: the one made for it, then the seeded bucket a
-// bank's charges already land in.
-const INTEREST_CATEGORY_NAMES = ["intereses", "intereses de deuda", "interest", "impuestos y comisiones", "taxes and fees"];
+// The names a person's interest category goes by, best first. Interest is not a tax: no other bucket stands in.
+const INTEREST_CATEGORY_NAMES = ["intereses", "intereses de deuda", "interest"];
 const NEW_CATEGORY_NAME = "Intereses";
 const NEW_CATEGORY_COLOR = "#64748B";
 

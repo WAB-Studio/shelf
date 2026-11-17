@@ -22173,10 +22173,10 @@ async function unpaidStatementMinimumSuite(): Promise<void> {
   track("transactions", transactionId);
   const paid = await read();
   assert(
-    next("RF-254: once the payments after the cut-off cover the statement's minimum, the card reads no minimum (null), never 0 and never the printed one again"),
+    next("RF-254: once the payments after the cut-off cover the statement's minimum, the card reads no minimum (null), never 0 and never the printed one again, is marked paid, and is no longer Inicio's next payment"),
     paid.row?.owedCents !== undefined && paid.row.owedCents > 0 && paid.row.minimumPaymentCents === null &&
-      paid.next?.amountCents === null && paid.current?.minimumPaymentCents === null,
-    JSON.stringify({ row: paid.row?.minimumPaymentCents, next: paid.next?.amountCents, current: paid.current?.minimumPaymentCents }),
+      paid.row.minimumPaid === true && paid.next === null && paid.current?.minimumPaymentCents === null,
+    JSON.stringify({ row: paid.row?.minimumPaymentCents, paid: paid.row?.minimumPaid, next: paid.next, current: paid.current?.minimumPaymentCents }),
   );
 }
 
