@@ -13,7 +13,7 @@ export type DueReminder = {
   amountCents: number;
   currency: string;
   dueDate: string;
-  // Leaves from no account: an income somebody owes (RF-250).
+  // Leaves from no account: an income somebody owes (RF-253).
   isIncome: boolean;
 };
 

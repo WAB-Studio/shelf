@@ -70,7 +70,7 @@ export function registerPlannedPaymentTools(server: McpServer, run: Run, t: Say)
       ),
   );
 
-  // RF-250: an income somebody owes, which settles on its own when an income of about that amount lands in the account.
+  // RF-253: an income somebody owes, which settles on its own when an income of about that amount lands in the account.
   server.registerTool(
     "create_expected_income",
     {

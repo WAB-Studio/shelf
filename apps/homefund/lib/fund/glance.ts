@@ -9,7 +9,7 @@ export function isOverdue(
   return payment.status === "pending" && payment.dueDate < today;
 }
 
-// A planned payment that leaves from no account is an expected income (RF-250).
+// A planned payment that leaves from no account is an expected income (RF-253).
 export function isExpectedIncome(payment: { fromAccountId: string | null; toAccountId: string | null }): boolean {
   return payment.fromAccountId === null && payment.toAccountId !== null;
 }

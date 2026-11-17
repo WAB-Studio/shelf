@@ -139,7 +139,7 @@ export function PaymentsScreen({
       {t("add")}
     </Button>
   );
-  // RF-250: money somebody owes arrives as an income, so it has its own way in.
+  // RF-253: money somebody owes arrives as an income, so it has its own way in.
   const incomeButton = (
     <Button type="button" variant="soft" onClick={() => setFormTarget("income")}>
       <Plus size={16} />

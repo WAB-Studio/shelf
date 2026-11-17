@@ -263,7 +263,7 @@ export async function insertTransaction(
     labelIds,
   }: CreateTransactionArgs,
 ): Promise<{ transactionId: string }> {
-  // An income that lands where an expected income waits (RF-250) settles it in the same statement, so no income
+  // An income that lands where an expected income waits (RF-253) settles it in the same statement, so no income
   // path pays a round trip for it: the nearest amount within five per cent, dated from a month before its day to
   // two after. A currency conversion, an adjustment and a movement into another account never match.
   const [row] = await tx.execute<{ id: string }>(sql`

@@ -78,7 +78,7 @@ export function PaymentFormDialog({
   onOpenChange: (open: boolean) => void;
   options: TransactionFormOptions;
   payment?: PlannedPaymentRow;
-  // Opens the form for an expected income (RF-250); a payment that is already one opens so on its own.
+  // Opens the form for an expected income (RF-253); a payment that is already one opens so on its own.
   income?: boolean;
 }) {
   const t = useTranslations("plannedPayments");

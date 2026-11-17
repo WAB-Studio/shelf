@@ -29,7 +29,7 @@ export const createPlannedPaymentAction = authActionClient
     return { plannedPaymentId };
   });
 
-/** Schedules an income that is expected (RF-250); the same write as a payment, under the income's own rule. */
+/** Schedules an income that is expected (RF-253); the same write as a payment, under the income's own rule. */
 export const createExpectedIncomeAction = authActionClient
   .inputSchema(createExpectedIncomeSchema)
   .action(async ({ parsedInput }) => {

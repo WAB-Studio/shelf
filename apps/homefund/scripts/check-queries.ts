@@ -21004,7 +21004,7 @@ async function payOwnCardSuite(): Promise<void> {
   );
 }
 
-// RF-250: an expected income settles by itself when an income of about its amount lands in its account, and by
+// RF-253: an expected income settles by itself when an income of about its amount lands in its account, and by
 // nothing else: another amount, another account or a date far from the expected day leave it pending.
 async function expectedIncomeSuite(): Promise<void> {
   console.log("");
@@ -21056,7 +21056,7 @@ async function expectedIncomeSuite(): Promise<void> {
   const landed = await arrive(bank, 4_900_000_00, today);
   const settled = await stateOf(project);
   assert(
-    next("RF-250: an expected income stays pending for another account, a different amount or a far date, and settles on an income within 5 % into its account"),
+    next("RF-253: an expected income stays pending for another account, a different amount or a far date, and settles on an income within 5 % into its account"),
     untouched.status === "pending" && settled.status === "done" && settled.tx === landed,
     JSON.stringify({ untouched, settled, landed }),
   );

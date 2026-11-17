@@ -106,7 +106,7 @@ export const createPlannedPaymentSchema = z
   .superRefine(requireAnAccount)
   .superRefine(requireRemindOnBeforeDue);
 
-// An expected income (RF-250) lands in one account, leaves from none, and names who is paying it. It is a
+// An expected income (RF-253) lands in one account, leaves from none, and names who is paying it. It is a
 // planned payment like any other, so only these three facts set it apart.
 export function requireAnIncome(
   data: { fromAccountId?: string | null; toAccountId?: string | null; description?: string | null },
