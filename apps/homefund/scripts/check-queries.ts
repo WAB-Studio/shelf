@@ -21004,7 +21004,7 @@ async function payOwnCardSuite(): Promise<void> {
   );
 }
 
-// RF-252: a card whose terms carry no minimum takes it from its latest closed statement while that is unpaid, on
+// RF-254: a card whose terms carry no minimum takes it from its latest closed statement while that is unpaid, on
 // the overview Inicio reads, on the screen's next payment and on the detail; once the payments after the cut-off
 // cover it, or when nothing prints one, the figure is null and never a zero.
 async function unpaidStatementMinimumSuite(): Promise<void> {
@@ -21039,7 +21039,7 @@ async function unpaidStatementMinimumSuite(): Promise<void> {
     });
   const before = await read();
   assert(
-    next("RF-252: a card owing, with no minimum in its terms and no statement, has no minimum anywhere: null on the overview, the next payment and the detail"),
+    next("RF-254: a card owing, with no minimum in its terms and no statement, has no minimum anywhere: null on the overview, the next payment and the detail"),
     before.row?.owedCents === 400_000_000 && before.row.minimumPaymentCents === null && before.next?.amountCents === null &&
       before.current?.minimumPaymentCents === null,
     JSON.stringify({ row: before.row?.minimumPaymentCents, next: before.next?.amountCents, current: before.current?.minimumPaymentCents }),
@@ -21055,7 +21055,7 @@ async function unpaidStatementMinimumSuite(): Promise<void> {
   if (statement) keep("account_statements", statement.id);
   const withStatement = await read();
   assert(
-    next("RF-252: with a statement printing a minimum of 284682800 cents and none in the terms, Inicio's next payment, the overview and the detail all read 2846828 on the statement's due date"),
+    next("RF-254: with a statement printing a minimum of 284682800 cents and none in the terms, Inicio's next payment, the overview and the detail all read 2846828 on the statement's due date"),
     withStatement.row?.minimumPaymentCents === 284_682_800 && withStatement.next?.amountCents === 284_682_800 &&
       withStatement.next.date === shiftDate(today, 10) && withStatement.current?.minimumPaymentCents === 284_682_800,
     JSON.stringify({ row: withStatement.row?.minimumPaymentCents, next: withStatement.next, current: withStatement.current?.minimumPaymentCents }),
@@ -21066,7 +21066,7 @@ async function unpaidStatementMinimumSuite(): Promise<void> {
   track("transactions", transactionId);
   const paid = await read();
   assert(
-    next("RF-252: once the payments after the cut-off cover the statement's minimum, the card reads no minimum (null), never 0 and never the printed one again"),
+    next("RF-254: once the payments after the cut-off cover the statement's minimum, the card reads no minimum (null), never 0 and never the printed one again"),
     paid.row?.owedCents !== undefined && paid.row.owedCents > 0 && paid.row.minimumPaymentCents === null &&
       paid.next?.amountCents === null && paid.current?.minimumPaymentCents === null,
     JSON.stringify({ row: paid.row?.minimumPaymentCents, next: paid.next?.amountCents, current: paid.current?.minimumPaymentCents }),
