@@ -43,6 +43,7 @@ export default async function ReconcileAllPage(
             kind: row.kind,
             currency: row.settlementCurrency,
             derivedCents: row.derivedCents,
+            pocketsCents: row.pocketsCents,
             institution: row.institution,
             lastFour: row.lastFour,
             holderName: row.holderName,

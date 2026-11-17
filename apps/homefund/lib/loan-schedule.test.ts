@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import { ActionError } from "./errors";
-import { creditDigest, digest, median, readSchedule, uncoveredRows, usualPayment, type ScheduleRow } from "./loan-schedule";
+import { creditDigest, digest, median, readSchedule, rowToPay, uncoveredRows, usualPayment, type ScheduleRow } from "./loan-schedule";
 import { parseLoanSchedule } from "./validation/loan-schedule";
 
 // A made-up loan: 2.400.000 pesos over 12 months at 1,8 % a month, level capital-plus-interest and an insurance on
@@ -67,11 +67,11 @@ test("only the cuota more than 5 % from the usual one is flagged, and a paid one
     summary?.differing.map((row) => row.number),
     [COUNT],
   );
-  const paidLast = readSchedule(rows, [{ occurredOn: "2027-11-05", amountCents: rows[COUNT - 1].totalCents }], "2027-11-06");
+  const paidLast = readSchedule(rows, rows.map((row) => ({ occurredOn: row.dueOn, amountCents: row.totalCents })), "2027-11-06");
   assert.deepEqual(paidLast?.differing, []);
 });
 
-test("a payment within 15 days of a due day pays that row, in full or short by a rounding", () => {
+test("payments pay the oldest unpaid rows in turn, in full or short by a rounding", () => {
   const summary = readSchedule(
     rows,
     [
@@ -87,17 +87,75 @@ test("a payment within 15 days of a due day pays that row, in full or short by a
   assert.equal(summary?.paidCount, 2);
 });
 
-test("a payment nearer a later row than an earlier one belongs to the later", () => {
-  const summary = readSchedule(rows, [{ occurredOn: "2027-01-02", amountCents: rows[1].totalCents }], "2027-01-03");
-  assert.equal(summary?.rows[0].state, "pending");
-  assert.equal(summary?.rows[1].state, "paid");
+test("a payment is its capital plus the interest booked with it: both together pay the cuota, the capital alone does not", () => {
+  const [first] = rows;
+  const capital = first.principalCents;
+  const interest = first.interestCents + first.insuranceCents;
+  const whole = readSchedule(rows, [{ occurredOn: first.dueOn, amountCents: capital, interestCents: interest }], "2026-12-06");
+  assert.equal(whole?.rows[0].state, "paid");
+  assert.equal(whole?.rows[0].paidInterestCents, interest);
+  assert.equal(whole?.next?.number, 2);
+  assert.equal(whole?.partialCount, 0);
+
+  const bare = readSchedule(rows, [{ occurredOn: first.dueOn, amountCents: capital }], "2026-12-06");
+  assert.equal(bare?.rows[0].state, "partial");
 });
 
-test("a payment far from every row pays none", () => {
-  const summary = readSchedule(rows, [{ occurredOn: "2026-10-01", amountCents: rows[0].totalCents }], "2026-12-01");
-  assert.equal(summary?.paidCount, 0);
+test("two whole payments leave two rows paid and the remaining capital where the second row says", () => {
+  const payments = rows.slice(0, 2).map((row) => ({
+    occurredOn: row.dueOn,
+    amountCents: row.principalCents,
+    interestCents: row.interestCents + row.insuranceCents,
+  }));
+  const summary = readSchedule(rows, payments, "2027-01-20");
+  assert.deepEqual(summary?.rows.slice(0, 2).map((row) => row.state), ["paid", "paid"]);
+  assert.equal(summary?.next?.number, 3);
+  assert.equal(
+    PRINCIPAL - payments.reduce((sum, payment) => sum + payment.amountCents, 0),
+    rows[1].remainingCents,
+  );
+});
+
+test("the row to pay is the oldest not yet paid, and none once every row is", () => {
+  const first = readSchedule(rows, [], "2026-12-01");
+  assert.equal(rowToPay(first!.rows)?.number, 1);
+  const paid = readSchedule(rows, [{ occurredOn: "2026-12-05", amountCents: rows[0].totalCents }], "2026-12-06");
+  assert.equal(rowToPay(paid!.rows)?.number, 2);
+  const every = readSchedule(rows, rows.map((row) => ({ occurredOn: row.dueOn, amountCents: row.totalCents })), "2027-12-01");
+  assert.equal(rowToPay(every!.rows), null);
+});
+
+test("a cuota paid late still pays the late row, never the next one", () => {
+  const summary = readSchedule(rows, [{ occurredOn: "2027-01-02", amountCents: rows[0].totalCents }], "2027-01-03");
+  assert.equal(summary?.rows[0].state, "paid");
+  assert.equal(summary?.rows[1].state, "pending");
+  assert.equal(summary?.next?.number, 2);
+});
+
+test("a payment pays the oldest unpaid row whatever its day, early or late", () => {
+  const early = readSchedule(rows, [{ occurredOn: "2026-10-01", amountCents: rows[0].totalCents }], "2026-12-01");
+  assert.equal(early?.paidCount, 1);
   const late = readSchedule(rows, [{ occurredOn: "2026-12-21", amountCents: rows[0].totalCents }], "2026-12-22");
-  assert.equal(late?.rows[0].state, "pending");
+  assert.equal(late?.rows[0].state, "paid");
+});
+
+test("what a payment holds above its cuota is extra capital and pays no other row", () => {
+  const summary = readSchedule(rows, [{ occurredOn: "2026-12-05", amountCents: rows[0].totalCents * 3 }], "2026-12-06");
+  assert.deepEqual(summary?.rows.slice(0, 2).map((row) => row.state), ["paid", "pending"]);
+});
+
+test("two payments for one row complete it before the next is touched", () => {
+  const half = Math.floor(rows[0].totalCents / 2);
+  const summary = readSchedule(
+    rows,
+    [
+      { occurredOn: "2026-12-05", amountCents: half },
+      { occurredOn: "2026-12-20", amountCents: rows[0].totalCents - half },
+    ],
+    "2026-12-21",
+  );
+  assert.equal(summary?.rows[0].state, "paid");
+  assert.equal(summary?.rows[1].state, "pending");
 });
 
 test("half a cuota is partial: the row stays next, overdue past its day, and only the rest remains", () => {
@@ -153,7 +211,7 @@ test("a fixed payment covers every cuota but the large last one", () => {
 });
 
 test("a cuota already paid is never short", () => {
-  const paid = readSchedule(rows, [{ occurredOn: "2027-11-05", amountCents: rows[COUNT - 1].totalCents }], "2027-11-06");
+  const paid = readSchedule(rows, rows.map((row) => ({ occurredOn: row.dueOn, amountCents: row.totalCents })), "2027-11-06");
   assert.ok(paid);
   assert.deepEqual(uncoveredRows(paid, FIXED), []);
 });

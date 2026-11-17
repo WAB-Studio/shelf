@@ -42,8 +42,11 @@ export type AccountRow = {
   internal?: boolean;
   // Who the credit is for, on the hidden «Me debe» alone: the name a list says instead of the account's.
   internalPersonName?: string | null;
-  // Set on a credit somebody else pays: who pays it and what they still owe, the hidden receivable's balance in
-  // the credit's currency, so a total counts it without listing the account.
+  // On the hidden «Me debe» alone: what the payer owes in the credit's currency, the capital the credit still owes
+  // (RF-301), which is the figure a total counts in place of this account's own bookkeeping balance.
+  internalOwesCents?: number | null;
+  // Set on a credit somebody else pays: who pays it and what they still owe in the credit's currency, so a list
+  // names the payer without listing the receivable.
   thirdParty?: { personName: string; personOwesCents: number } | null;
   // Only on an account with live pockets: its own balances plus theirs, summed at read time per
   // currency. `balances` stays its own free part (RF-173); no total adds this twice.
@@ -157,11 +160,17 @@ export async function listAccounts(
         internal: internalAccountSql,
         internalPersonName: sql<string | null>`(
           select c.person_name from third_party_credits c where c.receivable_account_id = accounts.id)`,
-        // One credit, one payer: the receivable's settlement-currency balance, derived like every other.
-        thirdParty: sql<{ personName: string; personOwesCents: string } | null>`(
-          select jsonb_build_object('personName', c.person_name, 'personOwesCents', coalesce(rb.balance_cents, 0)::text)
+        internalOwesCents: sql<string | null>`(
+          select greatest(0, -coalesce(lb.balance_cents, 0))::text
           from third_party_credits c
-          left join account_balances rb on rb.id = c.receivable_account_id and rb.currency = accounts.settlement_currency
+          left join account_balances lb on lb.id = c.liability_account_id and lb.currency = accounts.settlement_currency
+          where c.receivable_account_id = accounts.id)`,
+        // One credit, one payer: what the payer owes is the capital the credit owes, the liability's own settlement
+        // balance (RF-301); the hidden receivable's balance is bookkeeping and never read here.
+        thirdParty: sql<{ personName: string; personOwesCents: string } | null>`(
+          select jsonb_build_object('personName', c.person_name, 'personOwesCents', greatest(0, -coalesce(lb.balance_cents, 0))::text)
+          from third_party_credits c
+          left join account_balances lb on lb.id = c.liability_account_id and lb.currency = accounts.settlement_currency
           where c.liability_account_id = accounts.id)`,
       })
       .from(accounts)
@@ -178,6 +187,7 @@ export async function listAccounts(
     // number, in the minor unit of the currency beside it.
     const listed: AccountRow[] = rows.map((row) => ({
       ...row,
+      internalOwesCents: row.internalOwesCents === null ? null : Number(row.internalOwesCents),
       thirdParty: row.thirdParty
         ? { personName: row.thirdParty.personName, personOwesCents: Number(row.thirdParty.personOwesCents) }
         : null,

@@ -352,12 +352,10 @@ export default async function HomePage(props: PageProps<"/[locale]">) {
 
   const today = todayInBogota();
   const staleCount = (counts ?? []).filter((row) => isStale(row, today)).length;
-  // A friend «se le cobra» owes through no account; a credit somebody else pays already sits in its hidden «Me debe».
+  // What other people owe reads off `owed`, the figure Inicio's third line and Cuentas show: no account holds it.
   const holdings = summarizeAccounts(
     dashboardData.accounts,
-    (owed ?? []).flatMap((group) =>
-      group.people.filter((person) => person.source === "person").map((person) => ({ currency: group.currency, cents: person.cents })),
-    ),
+    (owed ?? []).flatMap((group) => group.people.map((person) => ({ currency: group.currency, cents: person.cents }))),
   );
   // Another member's personal account is theirs to fix (RF-58).
   const fixes = fixItems({

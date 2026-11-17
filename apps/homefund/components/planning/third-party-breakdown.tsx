@@ -1,6 +1,6 @@
 "use client";
 
-import { useFormatter, useLocale, useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { useAction } from "next-safe-action/hooks";
 import { useEffect } from "react";
 
@@ -8,80 +8,35 @@ import { readThirdPartyCreditAction } from "@/app/actions/third-party-credits";
 import { Button, Dialog, Flex, Money, Separator, Spinner, Text } from "@/components/ui";
 import type { ThirdPartyCreditView } from "@/db/queries/third-party-credits";
 import type { CurrencyCode } from "@/lib/currency";
-import { civilDateToDate } from "@/lib/dates";
-import { reconcileCredit } from "@/lib/loan-standing";
 import type { Locale } from "@/lib/locales";
 import { useMoneyText } from "@/lib/use-privacy";
 
-type Breakdown = Pick<
-  ThirdPartyCreditView,
-  "personName" | "openingCents" | "openedOn" | "payments" | "otherCents" | "personOwesCents" | "schedule" | "owedCents"
->;
+type Breakdown = Pick<ThirdPartyCreditView, "personName" | "personOwesCents" | "schedule">;
 
 /**
- * How «le falta» is built (RF-267): what the payer owed the day the credit was followed, each transfer they sent
- * with its day and amount, and what is left. Every figure arrives derived from movements; none is summed here but
- * the line that names the difference, when the balance holds more than the opening less the payments.
+ * How «le falta» is built (RF-301): the capital the credit still owes, what the bank says is left, and, with a
+ * payment schedule, what its unpaid cuotas ask with interest and insurance. Every figure arrives derived.
  */
 function BreakdownBody({ credit, currency }: { credit: Breakdown; currency: CurrencyCode }) {
   const t = useTranslations("thirdPartyCredit");
-  const format = useFormatter();
   const locale = useLocale() as Locale;
   const moneyText = useMoneyText();
   const { personName: person, schedule } = credit;
-  // What the credit asks of the person against what the payer owes them: one sentence says why they differ (RF-287).
-  const reconciliation = reconcileCredit(credit.owedCents, credit.personOwesCents);
-  const day = (date: string) => format.dateTime(civilDateToDate(date), { day: "numeric", month: "short", year: "numeric" });
-  const money = (cents: number) => <Money minor={cents} currency={currency} signed={false} size="inherit" />;
 
   return (
     <Flex direction="column" gap="3">
-      <Flex direction="column">
-        <Flex align="center" justify="between" gap="4" py="2">
-          <Text size="2">{t("breakdownOpening", { date: day(credit.openedOn) })}</Text>
-          <Text size="2" weight="medium">
-            {money(credit.openingCents)}
-          </Text>
-        </Flex>
-        <Separator size="4" />
-        <Text size="2" color="gray" mt="3">
-          {t("breakdownPayments", { person })}
-        </Text>
-        {credit.payments.length === 0 ? (
-          <Flex py="2">
-            <Text size="2">{t("breakdownNoPayments", { person })}</Text>
-          </Flex>
-        ) : (
-          credit.payments.map((payment, index) => (
-            <Flex key={`${payment.occurredOn}-${index}`} align="center" justify="between" gap="4" py="2">
-              <Text size="2">{day(payment.occurredOn)}</Text>
-              <Text size="2" weight="medium">
-                {moneyText(-payment.amountCents, currency, locale)}
-              </Text>
-            </Flex>
-          ))
-        )}
-        {credit.otherCents !== 0 && (
-          <Flex align="center" justify="between" gap="4" py="2">
-            <Text size="2">{t("breakdownOther")}</Text>
-            <Text size="2" weight="medium">
-              {moneyText(credit.otherCents, currency, locale)}
-            </Text>
-          </Flex>
-        )}
-        <Separator size="4" />
-        <Flex align="center" justify="between" gap="4" py="3">
-          <Text size="3" weight="bold">
-            {t("breakdownOwes")}
-          </Text>
-          <Text size="3" weight="bold">
-            {money(credit.personOwesCents)}
-          </Text>
-        </Flex>
-      </Flex>
       <Text size="2" color="gray">
-        {t(`reconcile.${reconciliation.kind}`, { person, credit: moneyText(credit.owedCents, currency, locale), amount: moneyText(reconciliation.cents, currency, locale) })}
+        {t("breakdownHow", { person })}
       </Text>
+      <Separator size="4" />
+      <Flex align="center" justify="between" gap="4" py="1">
+        <Text size="3" weight="bold">
+          {t("breakdownOwes")}
+        </Text>
+        <Text size="3" weight="bold">
+          <Money minor={credit.personOwesCents} currency={currency} signed={false} size="inherit" />
+        </Text>
+      </Flex>
       {schedule !== null && schedule.remainingCount > 0 && (
         <Text size="2" color="gray">
           {t("breakdownSchedule", { count: schedule.remainingCount, amount: moneyText(schedule.remainingTotalCents, currency, locale) })}

@@ -14,6 +14,7 @@ import {
   AmountField,
   Button,
   Callout,
+  DateInput,
   Dialog,
   Field,
   FieldControl,
@@ -236,7 +237,7 @@ function DebtForm({
       placement: "personal",
       institution: "",
       amount: "",
-      // No date field rides on the form: what the debt owes is true as of today.
+      // «¿Desde cuándo la tienes?»: today unless the person says it began earlier.
       balanceOn: todayInBogota(),
       debtKind: isLoan ? "installment" : "revolving",
       annualRate: stored ? fractionToPercent(stored.annualRate) : "",
@@ -275,6 +276,8 @@ function DebtForm({
   const minimumMode = useWatch({ control: form.control, name: "minimumMode" });
   // The currency a new debt settles in decides how its amounts are typed (RF-121).
   const pickedCurrency = useWatch({ control: form.control, name: "settlementCurrency" });
+  // What the amount says it is: owed today, or owed on the day the debt began when that was earlier.
+  const since = useWatch({ control: form.control, name: "balanceOn" });
   const currency = isCreate ? pickedCurrency : accountCurrency;
 
   function termsInput(values: DebtFormValues, accountId: string): DebtTermsInput & { replace?: boolean } {
@@ -503,7 +506,7 @@ function DebtForm({
             control={form.control}
             render={({ field, fieldState }) => (
               <Field invalid={fieldState.invalid}>
-                <FieldLabel htmlFor="debt-amount">{t("owedTodayLabel")}</FieldLabel>
+                <FieldLabel htmlFor="debt-amount">{t(since < todayInBogota() ? "owedOnLabel" : "owedTodayLabel")}</FieldLabel>
                 <FieldControl>
                   <AmountField
                     {...field}
@@ -513,6 +516,23 @@ function DebtForm({
                     disabled={isPending}
                   />
                 </FieldControl>
+                <FieldMessage error={fieldState.error} />
+              </Field>
+            )}
+          />
+        )}
+
+        {isCreate && (
+          <Controller
+            name="balanceOn"
+            control={form.control}
+            render={({ field, fieldState }) => (
+              <Field invalid={fieldState.invalid}>
+                <FieldLabel htmlFor="debt-since">{t("sinceLabel")}</FieldLabel>
+                <FieldControl>
+                  <DateInput {...field} id="debt-since" size="3" disabled={isPending} />
+                </FieldControl>
+                <FieldDescription>{t("sinceHint")}</FieldDescription>
                 <FieldMessage error={fieldState.error} />
               </Field>
             )}

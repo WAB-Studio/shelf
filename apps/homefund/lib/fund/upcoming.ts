@@ -6,18 +6,44 @@ import { scopedCategoryName, type ScopeMark } from "@/lib/fund/category-names";
 import type { CategoryScope } from "@/lib/fund/category-scope";
 import { isExpectedIncome } from "@/lib/fund/glance";
 
+// A card's next payment (RF-308): what its latest statement asks and the day it is due. With no statement of this
+// period the figures are null and the day is the card's own payment day; the line says its extract is missing.
+export type UpcomingCardDebt = {
+  accountId: string;
+  name: string;
+  currency: string;
+  totalCents: number | null;
+  minimumCents: number | null;
+};
+
+// A loan's next cuota (RF-308): the first one its schedule has not paid in full, or what its terms say, and what of it
+// is still missing.
+export type UpcomingLoanDebt = {
+  accountId: string;
+  name: string;
+  currency: string;
+  amountCents: number;
+  // Which cuota of how many, when a schedule says.
+  number: number | null;
+  count: number | null;
+};
+
 // One line of «Lo que viene»: what a person has coming, whichever table it sits in.
 export type UpcomingItem =
   | { kind: "payment" | "income"; date: string; payment: PlannedPaymentRow }
   | { kind: "rule"; date: string; rule: RecurringRuleRow }
-  | { kind: "subscription"; date: string; charge: RecurringCharge };
+  | { kind: "subscription"; date: string; charge: RecurringCharge }
+  | { kind: "card"; date: string; debt: UpcomingCardDebt }
+  | { kind: "loan"; date: string; debt: UpcomingLoanDebt };
 
-// Same date: what is owed first, then what repeats, then the estimates.
+// Same date: what is owed first (a payment, then a card or a loan), then what repeats, then the estimates.
 const KIND_ORDER: Record<UpcomingItem["kind"], number> = {
   payment: 0,
-  income: 1,
-  rule: 2,
-  subscription: 3,
+  card: 1,
+  loan: 2,
+  income: 3,
+  rule: 4,
+  subscription: 5,
 };
 
 // A name read the way the subscription finder reads it: without case, accents, digits or punctuation.
@@ -39,10 +65,13 @@ export function upcomingItems({
   payments,
   rules,
   charges,
+  debts = [],
 }: {
   payments: PlannedPaymentRow[];
   rules: RecurringRuleRow[];
   charges: RecurringCharge[];
+  // Each card's and each loan's next payment, which no planned payment stands for (RF-308).
+  debts?: ({ kind: "card"; date: string; debt: UpcomingCardDebt } | { kind: "loan"; date: string; debt: UpcomingLoanDebt })[];
 }): UpcomingItem[] {
   const ruled = new Set(
     rules.map((rule) => `${rule.fromAccountId ?? ""}|${plainName(rule.description)}`),
@@ -54,6 +83,7 @@ export function upcomingItems({
       date: payment.dueDate,
       payment,
     })),
+    ...debts,
     ...rules.map((rule): UpcomingItem => ({ kind: "rule", date: rule.nextRunOn, rule })),
     ...charges
       .filter((charge) => charge.active && !ruled.has(`${charge.accountId}|${plainName(charge.name)}`))
@@ -74,6 +104,14 @@ export function previewOf(item: UpcomingItem): {
 } {
   if (item.kind === "rule") {
     return { key: item.rule.id, name: item.rule.description, amountCents: item.rule.amountCents, currency: item.rule.currency };
+  }
+  if (item.kind === "card") {
+    const { debt } = item;
+    return { key: debt.accountId, name: debt.name, amountCents: debt.totalCents ?? debt.minimumCents ?? 0, currency: debt.currency };
+  }
+  if (item.kind === "loan") {
+    const { debt } = item;
+    return { key: debt.accountId, name: debt.name, amountCents: debt.amountCents, currency: debt.currency };
   }
   if (item.kind === "subscription") {
     const { charge } = item;

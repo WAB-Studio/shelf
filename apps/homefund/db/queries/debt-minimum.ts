@@ -59,10 +59,25 @@ export function unpaidStatementMinimumSql({
     then ${minimum} - ${paidSince({ account, currency, since: cutOff })} end`;
 }
 
-// The payments into the account after `since`, in the currency it bills in.
+/**
+ * The interest a payment into a loan booked beside its transfer (RF-282): an expense of the same source whose reference
+ * is the transfer's plus «:interest». `alias` is the transfer's alias in the statement that embeds this. The payment
+ * the person made is the transfer and this together; the loan's balance only falls by the transfer.
+ */
+export function interestBookedWith(alias: string): SQL<number> {
+  const t = sql.raw(alias);
+  return sql<number>`coalesce((
+    select sum(i.amount_cents) from transactions i
+    where i.to_account_id is null and i.from_account_id = ${t}.from_account_id
+      and i.external_ref = ${t}.external_ref || ':interest'
+      and i.owner_user_id is not distinct from ${t}.owner_user_id and i.group_id is not distinct from ${t}.group_id
+  ), 0)`;
+}
+
+// The payments into the account after `since`, in the currency it bills in: what each one paid, the interest it booked included.
 export function paidSince({ account, currency, since }: { account: SQL; currency: SQL; since: SQL }): SQL<number> {
   return sql`coalesce((
-    select sum(p.amount_cents) from transactions p
+    select sum(p.amount_cents + ${interestBookedWith("p")}) from transactions p
     where p.to_account_id = ${account} and p.from_account_id is not null
       and p.currency = ${currency} and p.occurred_at > ${since}
   ), 0)`;

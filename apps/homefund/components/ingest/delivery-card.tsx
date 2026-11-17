@@ -6,6 +6,7 @@ import { useAction } from "next-safe-action/hooks";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
 
+import { StartedEarlierOffer } from "@/components/accounts/started-earlier-offer";
 import {
   acceptDeliveryAction,
   forgetMerchantAction,
@@ -493,14 +494,22 @@ export function DeliveryCard({
             </Select.Root>
           )}
           {delivery.beforeOpening && delivery.proposedOccurredAt !== null && (
-            <Text size="2" color="amber">
-              {t("beforeOpening", {
-                date: format.dateTime(
-                  civilDateToDate(delivery.proposedOccurredAt),
-                  { day: "numeric", month: "short", year: "numeric" },
-                ),
-              })}
-            </Text>
+            <>
+              <Text size="2" color="amber">
+                {t("beforeOpening", {
+                  date: format.dateTime(
+                    civilDateToDate(delivery.proposedOccurredAt),
+                    { day: "numeric", month: "short", year: "numeric" },
+                  ),
+                })}
+              </Text>
+              {/* The account that refused the day can begin on it; the refresh then offers «Anotar» as any complete one. */}
+              <StartedEarlierOffer
+                accountIds={[delivery.proposedAccountId, delivery.proposedToAccountId].filter((id): id is string => id !== null)}
+                occurredAt={delivery.proposedOccurredAt}
+                onMoved={() => undefined}
+              />
+            </>
           )}
           {!isTransfer && categoryId === null && (
             <Text color="amber">{t("categoryMissing")}</Text>

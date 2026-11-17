@@ -20,7 +20,8 @@ const card = account({ id: "v", name: "Visa", kind: "liability", subtype: "card"
 const hidden = account({ id: "j", name: "Me debe John", subtype: "receivable", internal: true }, 474_000_000);
 
 test("what a person has is the asset rows once, a pocket with its account, and net worth is the three figures", () => {
-  const [cop] = summarizeAccounts([savings, pocket, cash, card, hidden]);
+  // The hidden «Me debe» is bookkeeping: what John owes comes in as a figure of its own, the capital his credit owes.
+  const [cop] = summarizeAccounts([savings, pocket, cash, card, hidden], [{ currency: "COP", cents: 474_000_000 }]);
 
   assert.equal(cop.haveCents, 905_100_000 - 15_000_000 + 12_000_000);
   assert.equal(cop.owedToMeCents, 474_000_000);
@@ -28,10 +29,10 @@ test("what a person has is the asset rows once, a pocket with its account, and n
   assert.equal(cop.netCents, cop.haveCents + cop.owedToMeCents - cop.owesCents);
 });
 
-test("what friends owe for what was spent for them joins what is owed to the person and the net", () => {
-  const [cop] = summarizeAccounts([savings, card, hidden], [{ currency: "COP", cents: 110_000_00 }]);
+test("what people owe joins what is owed to the person and the net, and the hidden account's own balance counts for nothing", () => {
+  const [cop] = summarizeAccounts([savings, card, hidden], [{ currency: "COP", cents: 453_269_600 }, { currency: "COP", cents: 110_000_00 }]);
 
-  assert.equal(cop.owedToMeCents, 474_000_000 + 110_000_00);
+  assert.equal(cop.owedToMeCents, 453_269_600 + 110_000_00);
   assert.equal(cop.netCents, cop.haveCents + cop.owedToMeCents - cop.owesCents);
 });
 

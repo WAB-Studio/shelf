@@ -68,10 +68,10 @@ test("a credit somebody else pays is set up, read and recorded from its screen",
   await expect(main.getByText(t.notArrived)).toBeVisible();
   await expect(main.getByText(t.lenderNot)).toBeVisible();
 
-  // RF-267: the credit names who pays it near the top, says how the debt began, offers its actions in plain buttons and
-  // warns before the month's cuota is late.
+  // RF-267: the credit names who pays it near the top, offers its actions in plain buttons and warns before the
+  // month's cuota is late; no invented «deuda cuando lo uniste» stands as the base (RF-301).
   await expect(main.getByText(t.introNoLender.replace("{person}", PERSON))).toBeVisible();
-  await expect(main.getByText(/Deuda cuando lo uniste: .*300\.000 el /)).toBeVisible();
+  await expect(main.getByText(/Deuda cuando lo uniste/)).toHaveCount(0);
   await expect(main.getByText(/Persona Uno aún no manda la cuota de .* \(vence el 15\)/)).toBeVisible();
   await expect(main.getByRole("button", { name: t.changePerson })).toBeVisible();
   await expect(main.getByRole("button", { name: t.unlink })).toBeVisible();
@@ -104,11 +104,12 @@ test("a credit somebody else pays is set up, read and recorded from its screen",
   await expect(page.getByText(`${creditName} (${PERSON})`).filter({ visible: true }).first()).toBeVisible();
   await expect(page.getByText(/Lo paga Persona Uno · le falta/).filter({ visible: true }).first()).toBeVisible();
 
-  // RF-267: the figure opens how it is worked out: the opening, each payment of the payer's, what is left.
+  // RF-301: the figure opens how it is worked out: the capital the credit owes, which the payer's own sends do not lower.
   await page.getByRole("button", { name: t.breakdownOpen.replace("{person}", PERSON) }).filter({ visible: true }).first().click();
   const breakdown = page.getByRole("dialog");
   await expect(breakdown.getByRole("heading", { name: t.breakdownTitle.replace("{person}", PERSON) })).toBeVisible();
-  await expect(breakdown.getByText(/Deuda cuando se unió \(/)).toBeVisible();
+  await expect(breakdown.getByText(t.breakdownHow.replace("{person}", PERSON))).toBeVisible();
+  await expect(breakdown.getByText(/Deuda cuando se unió/)).toHaveCount(0);
   await expect(breakdown.getByText(t.breakdownOwes, { exact: true })).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(page.getByText(receivableName)).toHaveCount(0);
@@ -146,7 +147,7 @@ test.describe("a loan with a plan of payments and a payer", () => {
           (${loanId}, ${scope.userId}, ${loanName}, 'liability', 'loan', ${-4 * PRINCIPAL}, ${opening}),
           (${bankId2}, ${scope.userId}, ${bankName2}, 'asset', 'bank', ${50_000_000}, ${opening}),
           (${receivableId}, ${scope.userId}, ${`Me debe ${stamp}`}, 'asset', 'receivable', ${13_000_000}, ${today})`;
-      // Four cuotas: the first two fell 45 and 15 days ago, and the first was paid 10 % short.
+      // Four cuotas: the first two fell 45 and 15 days ago, and the second was paid 10 % short.
       for (const [index, offset] of [-45, -15, 15, 45].entries()) {
         await tx`
           insert into loan_schedule_rows (account_id, number, due_on, principal_cents, interest_cents, insurance_cents,
@@ -157,8 +158,8 @@ test.describe("a loan with a plan of payments and a payer", () => {
       await tx`
         insert into transactions (from_account_id, to_account_id, amount_cents, occurred_at, description)
         values
-          (${bankId2}, ${loanId}, ${FIRST_PAID}, ${addCivilDays(today, -45)}, ${`Cuota 1 ${stamp}`}),
-          (${bankId2}, ${loanId}, ${TOTAL}, ${addCivilDays(today, -15)}, ${`Cuota 2 ${stamp}`})`;
+          (${bankId2}, ${loanId}, ${TOTAL}, ${addCivilDays(today, -45)}, ${`Cuota 1 ${stamp}`}),
+          (${bankId2}, ${loanId}, ${FIRST_PAID}, ${addCivilDays(today, -15)}, ${`Cuota 2 ${stamp}`})`;
       await tx`
         insert into third_party_credits (liability_account_id, receivable_account_id, person_name, installment_cents)
         values (${loanId}, ${receivableId}, ${PAYER}, ${TOTAL})`;
@@ -193,7 +194,8 @@ test.describe("a loan with a plan of payments and a payer", () => {
     await expect(dialog.getByText(messages.loanStanding.linePaid, { exact: true })).toBeVisible();
     await expect(dialog.getByText("1 de 4", { exact: true })).toBeVisible();
     await expect(dialog.getByText(messages.loanStanding.linePartial, { exact: true })).toBeVisible();
-    await expect(dialog.getByText(new RegExp(`^${PAYER} te debe`)).first()).toBeVisible();
+    // The payer's figure is the loan's capital, so no second line says it or why it would differ.
+    await expect(dialog.getByText(new RegExp(`^${PAYER} te debe`))).toHaveCount(0);
     await page.keyboard.press("Escape");
 
     // The payer's section keeps its own side only: nothing in it says what the loan lacks a second time.

@@ -21,6 +21,7 @@ import {
 import { acceptDeliveryAction } from "@/app/actions/ingest";
 import { proposeRateAction } from "@/app/actions/rates";
 import { AccountFormDialog } from "@/components/accounts/account-form-dialog";
+import { StartedEarlierOffer } from "@/components/accounts/started-earlier-offer";
 import { SplitEditor } from "@/components/transactions/split-editor";
 import {
   Badge,
@@ -371,6 +372,10 @@ export function MovementForm({
           causedByTransactionId,
         },
   });
+
+  // The day refused as earlier than an account's opening: the offer to begin the account earlier shows under it for
+  // as long as the date is still that one. A delivery the Bandeja flagged arrives already refused.
+  const [refusedDay, setRefusedDay] = useState<string | null>(() => (dateBeforeOpening ? form.getValues("occurredAt") : null));
 
   const fromAccountId = useWatch({ control: form.control, name: "fromAccountId" });
   const toAccountId = useWatch({ control: form.control, name: "toAccountId" });
@@ -756,6 +761,7 @@ export function MovementForm({
   function refuseDate(result: { error: { serverError?: string } }) {
     onActionError(result);
     form.setError("occurredAt", { type: "server", message: "errors.movementBeforeOpening" });
+    setRefusedDay(form.getValues("occurredAt"));
   }
 
   useEffect(() => {
@@ -1453,6 +1459,18 @@ export function MovementForm({
                 </Field>
               )}
             />
+
+            {refusedDay !== null && refusedDay === occurredAt && (
+              <StartedEarlierOffer
+                accountIds={[fromAccountId, toAccountId].filter((id): id is string => Boolean(id))}
+                occurredAt={occurredAt}
+                onMoved={() => {
+                  setRefusedDay(null);
+                  form.clearErrors("occurredAt");
+                  void form.handleSubmit(onSubmit)();
+                }}
+              />
+            )}
 
             {offersHousehold && (
               <Controller
