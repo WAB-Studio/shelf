@@ -87,3 +87,11 @@ test("a payment to the institution of exactly one of the person's cards pays tha
   assert.equal(paidOwnCard("Bancolombia: Pagaste $5,000 a Banco de Bogota S.A desde tu producto 3397.", [nu, bogota]), "bogota");
   assert.equal(describeAlert(sms), "NU Compania de Financiamiento");
 });
+
+test("a reference that starts with three capitals is no currency mark, so it is never read as the amount", () => {
+  const text = "Transacción aprobada en EMPRESA DCB5FA06 — por un valor de $3.543.210,00 fue Aprobada Referencia: DCB5FA06";
+  const read = interpretQuickEntry(text, { categories: [], accounts: [], defaultAccountId: null, yearGuard: "any" });
+
+  assert.equal(parseAmount(read.amountPesos ?? ""), 354_321_000);
+  assert.equal(parseAmount(interpretQuickEntry("Compraste COP80.800,00 en X", { categories: [], accounts: [], defaultAccountId: null }).amountPesos ?? ""), 8_080_000);
+});

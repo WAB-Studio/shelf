@@ -282,6 +282,121 @@ test.describe("the inbox queue", () => {
   });
 });
 
+// The card does its own work: the date the message prints, a category chosen in place, «Descartar» in sight, several
+// recorded in one write, and a delivery a movement already covers discarded in one tap (RF-257).
+test.describe("the card without the form", () => {
+  test.use({ viewport: { width: 360, height: 740 } });
+
+  const second = { ...complete, merchant: "Exito Laureles" };
+
+  async function movementsOf(): Promise<{ id: string; category_id: string }[]> {
+    return fixtureSql<{ id: string; category_id: string }[]>`
+      select t.id, s.category_id from transactions t
+      join transaction_splits s on s.transaction_id = t.id
+      where t.owner_user_id = ${scope.userId}`;
+  }
+
+  test("shows the day the message prints, not the hour it arrived @mobile", async ({ page }) => {
+    await clearLedger();
+    const [deliveryId] = await seedQueue([complete]);
+    await asHarnessUser(async (tx) => {
+      await tx`update ingest_deliveries set proposed_occurred_at = '2026-11-10' where id = ${deliveryId}`;
+    });
+    await page.goto("/es/inbox");
+
+    await expect(band(page).getByText(/Fecha: 10 nov/)).toBeVisible();
+    await expect(band(page).getByText(/Llegó el/)).toHaveCount(0);
+  });
+
+  test("records with a category chosen on the card, without opening the form @mobile", async ({ page }) => {
+    await clearLedger();
+    const [deliveryId] = await seedQueue([{ ...complete, merchant: "Comercio sin categoria", categoryId: null, categorySource: null, trusted: false }]);
+    await page.goto("/es/inbox");
+
+    await expect(reviewButton(page)).toHaveCount(1);
+    await page.getByRole("combobox", { name: ingest.categoryLabel }).click();
+    await page.getByRole("option", { name: scope.categoryName, exact: true }).click();
+
+    await expect(acceptButton(page)).toHaveCount(1);
+    await acceptButton(page).click();
+    await expect(page.getByText(ingest.acceptedToast)).toBeVisible();
+
+    const movements = await movementsOf();
+    expect(movements).toHaveLength(1);
+    expect(movements[0].category_id).toBe(scope.categoryId);
+    const [delivery] = await fixtureSql<{ status: string }[]>`select status from ingest_deliveries where id = ${deliveryId}`;
+    expect(delivery.status).toBe("accepted");
+  });
+
+  test("has «Descartar» on the card itself and asks before sending the message away @mobile", async ({ page }) => {
+    await clearLedger();
+    const [deliveryId] = await seedQueue([complete]);
+    await page.goto("/es/inbox");
+
+    await page.getByRole("button", { name: ingest.reject, exact: true }).click();
+    await page.getByRole("button", { name: ingest.rejectOnce, exact: true }).click();
+    await expect(page.getByText(ingest.rejectedToast)).toBeVisible();
+
+    const [delivery] = await fixtureSql<{ status: string }[]>`select status from ingest_deliveries where id = ${deliveryId}`;
+    expect(delivery.status).toBe("rejected");
+    expect(await movementsOf()).toHaveLength(0);
+  });
+
+  test("records the chosen ready cards in one write, and only the ready ones can be chosen @mobile", async ({ page }) => {
+    await clearLedger();
+    await seedQueue([complete, second, incomplete]);
+    await page.goto("/es/inbox");
+
+    await expect(page.getByRole("checkbox")).toHaveCount(2);
+    await page.getByRole("button", { name: ingest.selectReady.replace("{count}", "2"), exact: true }).click();
+    await expect(band(page).getByText("2 elegidas")).toBeVisible();
+    await page.getByRole("button", { name: ingest.acceptSelected.replace("{count}", "2"), exact: true }).click();
+
+    await expect(page.getByText("2 movimientos anotados.")).toBeVisible();
+    expect(await movementsOf()).toHaveLength(2);
+    await expect(page.getByRole("heading", { name: UNREADABLE })).toBeVisible();
+  });
+
+  test("records none of the batch when one is refused @mobile", async ({ page }) => {
+    await clearLedger();
+    const [first, , third] = await seedQueue([complete, second, { ...complete, merchant: "Exito Envigado" }]);
+    await page.goto("/es/inbox");
+
+    await page.getByRole("button", { name: ingest.selectReady.replace("{count}", "3"), exact: true }).click();
+    // A delivery decided elsewhere while the page was open: its accept is refused, and the whole batch with it.
+    await fixtureSql`update ingest_deliveries set status = 'rejected', resolved_at = now() where id = ${third}`;
+    await page.getByRole("button", { name: ingest.acceptSelected.replace("{count}", "3"), exact: true }).click();
+
+    await expect(page.getByText(ingest.batchRefused)).toBeVisible();
+    expect(await movementsOf()).toHaveLength(0);
+    const [delivery] = await fixtureSql<{ status: string }[]>`select status from ingest_deliveries where id = ${first}`;
+    expect(delivery.status).toBe("pending");
+  });
+
+  test("marks a delivery a hand-made movement covers «Ya registrado» and discards it as a repeat in one tap @mobile", async ({ page }) => {
+    await clearLedger();
+    const [deliveryId] = await seedQueue([complete]);
+    await asHarnessUser(async (tx) => {
+      const [movement] = await tx<{ id: string }[]>`
+        insert into transactions (from_account_id, amount_cents, occurred_at, description)
+        values (${scope.accountId}, ${AMOUNT_CENTS}, (now() at time zone 'America/Bogota')::date, 'Tienda de la vecina')
+        returning id`;
+      await tx`insert into transaction_splits (transaction_id, category_id, amount_cents)
+        values (${movement.id}, ${scope.categoryId}, ${AMOUNT_CENTS})`;
+    });
+    await page.goto("/es/inbox");
+
+    await expect(band(page).getByText(ingest.alreadyRecorded, { exact: true })).toBeVisible();
+    await page.getByRole("button", { name: ingest.rejectDuplicate, exact: true }).click();
+    await expect(page.getByText(ingest.duplicateRejectedToast)).toBeVisible();
+
+    const [delivery] = await fixtureSql<{ status: string; reason: string | null }[]>`
+      select status, reject_reason as reason from ingest_deliveries where id = ${deliveryId}`;
+    expect(delivery).toEqual({ status: "rejected", reason: "duplicate" });
+    expect(await movementsOf()).toHaveLength(1);
+  });
+});
+
 test.describe("a category that came from a credential default", () => {
   test.beforeEach(async () => {
     // Cleared before seeding: a laptop-band case below writes a movement and
