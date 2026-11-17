@@ -80,6 +80,10 @@ export const transactions = finances.table(
     // The movement that produced this one — a tax or a fee a transfer generated (RF-132). Self-
     // referencing, so the foreign key is declared below, one hop only: nothing here reads a chain.
     causedByTransactionId: uuid(),
+    // True on the transfer the database books from a pocket into its parent when a movement would leave the
+    // parent's free part below zero (RF-249). Written only by that trigger — no grant names the column — and its
+    // cause is the movement that needed it, so it goes with it.
+    pocketCover: boolean().notNull().default(false),
     // The reconciliation this movement adjusts the ledger for (RF-137, RF-138). Written only by the
     // trigger that books it — no grant names the column — and it is what reports read to keep the
     // adjustment out of every income, expense and budget figure; `kind` still derives from the legs.
@@ -139,6 +143,11 @@ export const transactions = finances.table(
     check(
       "transactions_caused_by_not_self",
       sql`${table.causedByTransactionId} is null or ${table.causedByTransactionId} <> ${table.id}`,
+    ),
+    // A pocket cover is a transfer, and it names the movement that caused it.
+    check(
+      "transactions_pocket_cover_shape",
+      sql`not ${table.pocketCover} or (num_nonnulls(${table.fromAccountId}, ${table.toAccountId}) = 2 and ${table.causedByTransactionId} is not null)`,
     ),
     // An adjustment touches one account, in its own settlement currency, so no second amount.
     check(

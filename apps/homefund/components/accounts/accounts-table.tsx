@@ -52,6 +52,22 @@ export function PaidByLine({ account }: { account: AccountRow }) {
 }
 
 /**
+ * The asset's own part below zero, as a warning on its row (RF-249): the database covers a shortfall from the
+ * account's pockets when they hold it, so what stays negative is money that left with nothing to cover it.
+ */
+export function FreePartWarning({ account }: { account: AccountRow }) {
+  const t = useTranslations("accounts");
+  const own = account.balances[0];
+  if (account.kind !== "asset" || !own || own.balanceCents >= 0) return null;
+
+  return (
+    <Text size="2" color="red">
+      {t("freePartNegative")}
+    </Text>
+  );
+}
+
+/**
  * The one gray line under an account's name, with what it has and nothing else (RF-240): its entity, the end of its
  * number, its holder when the name does not already say it, and the owner of another member's account. Nothing
  * for an account with none of them.
@@ -124,6 +140,7 @@ export function AccountsTable({
           </Text>
           <AccountDetail account={row} />
           <PaidByLine account={row} />
+          <FreePartWarning account={row} />
         </Flex>
       ),
     },

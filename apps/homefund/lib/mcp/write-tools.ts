@@ -19,6 +19,7 @@ import {
 import {
   getTransactionById,
   listTransactions,
+  pocketCoversOf,
   type TransactionListFilters,
   type TransactionListRow,
   type TransactionSplitInput,
@@ -231,6 +232,8 @@ export function movementRow(row: TransactionListRow) {
     madeByName: row.madeByName,
     labelIds: row.labels.map((label) => label.id),
     splits: row.splits,
+    // The transfer HomeFund booked from a pocket into its account on its own (RF-249); deleting it undoes it.
+    pocketCover: row.pocketCover,
     updatedAt: row.updatedAt,
   };
 }
@@ -305,9 +308,11 @@ export function registerLedgerTools(server: McpServer, run: Run, t: Say): void {
             requestRef: input.requestRef,
           }),
           undefined,
-          { awaitingCounterparty: input.awaitingCounterparty },
+          { awaitingCounterparty: input.awaitingCounterparty, reportPocketCovers: true },
         );
-        return withWarnings(booked, await movementWarnings(owner, warningProbe(input), t));
+        // Said only when the database moved money out of a pocket for it (RF-249).
+        const answer = booked.pocketCovers?.length ? booked : { transactionId: booked.transactionId };
+        return withWarnings(answer, await movementWarnings(owner, warningProbe(input), t));
       }),
   );
 
@@ -349,7 +354,15 @@ export function registerLedgerTools(server: McpServer, run: Run, t: Say): void {
         const reread = ["description", "categoryId", "splits", "fromAccountId", "toAccountId"].some((key) => patch[key as keyof typeof patch] !== undefined);
         const lines = merged.splits ?? current.splits;
         const warnings = reread ? await movementWarnings(owner, warningProbe({ ...merged, splits: lines }), t) : [];
-        return withWarnings({ transactionId: id, before: previousFields(storedMovement(current), sent) }, warnings);
+        const pocketCovers = await pocketCoversOf(id);
+        return withWarnings(
+          {
+            transactionId: id,
+            before: previousFields(storedMovement(current), sent),
+            ...(pocketCovers.length > 0 ? { pocketCovers } : {}),
+          },
+          warnings,
+        );
       }),
   );
 

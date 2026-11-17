@@ -5337,6 +5337,8 @@ const INSERT_GRANT_GAPS: Record<string, string[]> = {
     "id",
     "kind",
     "owner_user_id",
+    // Written only by the trigger that covers a shortfall from a pocket (RF-249).
+    "pocket_cover",
     "reconciliation_id",
     "recurring_rule_id",
     "reviewed_at",
@@ -5530,6 +5532,8 @@ const UPDATE_GRANT_GAPS: Record<string, string[]> = {
     "id",
     "kind",
     "owner_user_id",
+    // Written only by the trigger that covers a shortfall from a pocket (RF-249).
+    "pocket_cover",
     "reconciliation_id",
     "recurring_rule_id",
     "updated_at",
