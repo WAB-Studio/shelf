@@ -86,11 +86,11 @@ test("the raw database message never crosses the wire", async () => {
   assert.doesNotMatch(String(answer), /predate|opening of an account/);
 });
 
-// The words the user decided (docs/DESIGN.md:443-451), in both languages.
+// The words the user decided (docs/DESIGN.md:443-451, RF-303), in both languages.
 test("the movement key reads the decided Spanish words and has an English text", () => {
   assert.equal(
     word(es, MOVEMENT_BEFORE_OPENING),
-    "La fecha es anterior a la apertura de la cuenta. Cambia la fecha o la apertura de la cuenta.",
+    "Esa fecha es anterior al día en que empieza la cuenta. Elige otra fecha.",
   );
   assert.equal(typeof word(en, MOVEMENT_BEFORE_OPENING), "string");
   assert.notEqual(word(en, MOVEMENT_BEFORE_OPENING), word(es, MOVEMENT_BEFORE_OPENING));
