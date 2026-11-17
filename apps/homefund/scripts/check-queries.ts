@@ -14437,7 +14437,8 @@ async function o7m3RuleEdgesSuite(): Promise<void> {
   // Four purchases, the oldest in the window's first month, count; one eight months back is outside it.
   const windowed = await category("ventana");
   for (const back of [2, 3, 4, 7]) await spend(windowed, 10_000_000, day(4, back), false, named("ventana"));
-  const overWindow = await spend(windowed, 40_000_000, day(4), false, named("ventana"));
+  // 430.000, not the rule's 400.000 below: an amount a rule names is never a surprise.
+  const overWindow = await spend(windowed, 43_000_000, day(4), false, named("ventana"));
   const tooOld = await category("antigua");
   for (const back of [2, 3, 4, 8]) await spend(tooOld, 10_000_000, day(4, back), false, named("antigua"));
   const afterOld = await spend(tooOld, 42_000_000, day(4), false, named("antigua"));
