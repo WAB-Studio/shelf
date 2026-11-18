@@ -9,6 +9,7 @@ import { pgErrorCode } from "@/lib/db-error";
 import { ActionError } from "@/lib/errors";
 import { authActionClient } from "@/lib/safe-action";
 import {
+  alreadyOwedOf,
   createLabelSchema,
   deleteLabelSchema,
   updateLabelSchema,
@@ -22,6 +23,8 @@ import {
  */
 function rethrowLabelError(error: unknown): never {
   if (pgErrorCode(error) === "42501") throw new ActionError("errors.notLeader");
+  // What a person already owed needs «se le cobra» on (RF-319): the one check an edit can trip.
+  if (pgErrorCode(error) === "23514") throw new ActionError("labels.errors.alreadyOwedNeedsCharge");
   throw error;
 }
 
@@ -32,7 +35,7 @@ function rethrowLabelError(error: unknown): never {
  */
 export const createLabelAction = authActionClient
   .inputSchema(createLabelSchema)
-  .action(async ({ parsedInput: { placement, name, color, kind, chargeDefault }, ctx }) => {
+  .action(async ({ parsedInput: { placement, name, color, kind, chargeDefault, alreadyOwed }, ctx }) => {
     let scope: LabelScope;
     if (placement === "group") {
       const group = await getUserGroup();
@@ -44,7 +47,7 @@ export const createLabelAction = authActionClient
 
     let labelId: string;
     try {
-      ({ labelId } = await createLabel({ scope, name, color, kind, chargeDefault }));
+      ({ labelId } = await createLabel({ scope, name, color, kind, chargeDefault, alreadyOwed: alreadyOwedOf(alreadyOwed) }));
     } catch (error) {
       rethrowLabelError(error);
     }
@@ -59,7 +62,7 @@ export const updateLabelAction = authActionClient
   .action(async ({ parsedInput }) => {
     let updated: boolean;
     try {
-      updated = await updateLabel(parsedInput);
+      updated = await updateLabel({ ...parsedInput, alreadyOwed: alreadyOwedOf(parsedInput.alreadyOwed) });
     } catch (error) {
       rethrowLabelError(error);
     }

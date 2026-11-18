@@ -29,7 +29,7 @@ export function OwedToMeSection({ owed }: { owed: OwedCurrency[] }) {
   const detail = (person: OwedPerson) => (
     <>
       <Text size="2" color="gray">
-        {t(person.source === "credit" ? "sourceCredit" : "sourcePerson")}
+        {t(person.source === "credit" ? "sourceCredit" : person.breakdown.every((line) => line.kind === "opening") ? "sourceOpening" : "sourcePerson")}
       </Text>
       {person.withInterest !== null && (
         <Text size="2" color="gray">

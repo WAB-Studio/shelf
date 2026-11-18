@@ -1,9 +1,10 @@
 // What other people owe the person, computed and never stored (decision 2 of 2026-11-17). Two sources: a credit
 // somebody else pays (RF-216), whose figure is the capital the loan still owes (what the bank says is left, RF-301),
-// and a person «se le cobra» (RF-242), whose figure is what was spent for them less what they returned. Pure, so the
+// and a person «se le cobra» (RF-242), whose figure is what they already owed, plus what was spent for them, less what they returned. Pure, so the
 // query and the tests share it.
 
-export type OwedLineKind = "capital" | "spent" | "returned";
+// `opening` is what a person already owed before any movement here (RF-319), dated by the day it counts from.
+export type OwedLineKind = "capital" | "opening" | "spent" | "returned";
 
 // One line of a breakdown; `cents` is signed by what it does to the figure: what grows it above zero, what shrinks it below.
 export type OwedLine = {
@@ -30,7 +31,7 @@ export type OwedPerson = {
 
 export type OwedCurrency = { currency: string; totalCents: number; people: OwedPerson[] };
 
-/** What a person «se le cobra» still owes: what was spent for them less what they returned. */
+/** What a person «se le cobra» still owes: what they already owed plus what was spent for them, less what they returned. */
 export function owedByPerson(lines: OwedLine[]): number {
   return lines.reduce((sum, line) => sum + line.cents, 0);
 }

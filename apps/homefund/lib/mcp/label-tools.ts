@@ -12,7 +12,8 @@ import { ActionError } from "@/lib/errors";
 import { ADD, OVERWRITE, READ, previousFields, titled } from "@/lib/mcp/annotations";
 import { nextCategoryColor } from "@/lib/fund/category-color";
 import { parseForm } from "@/lib/mcp/parse-form";
-import { createLabelSchema, LABEL_PLACEMENTS, updateLabelSchema } from "@/lib/validation/label";
+import { centsToDecimal } from "@/lib/money";
+import { alreadyOwedOf, createLabelSchema, LABEL_PLACEMENTS, updateLabelSchema } from "@/lib/validation/label";
 
 type Run = (ctx: ServerContext, load: (owner: string) => Promise<unknown>) => Promise<CallToolResult>;
 type Say = (key: string) => string;
@@ -48,7 +49,25 @@ export async function resolvePersonId(owner: string, ref: string): Promise<strin
 // A denied write on a group's label says who governs it, as the Labels screen does (RF-70).
 function rethrowLabelError(error: unknown): never {
   if (pgErrorCode(error) === "42501") throw new ActionError("errors.notLeader");
+  // What a person already owed needs «se le cobra» on (RF-319): the one check an edit can trip.
+  if (pgErrorCode(error) === "23514") throw new ActionError("labels.errors.alreadyOwedNeedsCharge");
   throw error;
+}
+
+// `alreadyOwed` as Claude sends it (integer cents), turned into what the form's schema reads (RF-319).
+const alreadyOwedInput = z
+  .object({ cents: z.number().int(), currency: z.string(), since: z.string() })
+  .nullable()
+  .optional();
+
+function schemaOwed(value: { cents: number; currency: string; since: string } | null | undefined) {
+  return value ? { amount: centsToDecimal(value.cents), currency: value.currency, since: value.since } : value;
+}
+
+// What a person owes now, per currency: the answer a write gives back so Claude can say the figure (RF-294).
+async function owedNow(labelId: string) {
+  const owed = await getOwedToMe();
+  return owed.flatMap((group) => group.people.filter((one) => one.labelId === labelId).map((one) => ({ currency: group.currency, cents: one.cents })));
 }
 
 const isTag = (label: { kind: string }) => label.kind === "tag";
@@ -93,6 +112,7 @@ export function registerLabelTools(server: McpServer, run: Run, t: Say): void {
           color: person.color,
           scope,
           chargeDefault: person.chargeDefault,
+          alreadyOwed: person.alreadyOwed,
           owed: owedBy(person.id),
           movementCount: person.movementCount,
           budgetCount: person.budgetCount,
@@ -111,6 +131,7 @@ export function registerLabelTools(server: McpServer, run: Run, t: Say): void {
         name: z.string().describe(d("personName")),
         placement: z.enum(LABEL_PLACEMENTS).default("personal").describe(d("labelPlacement")),
         chargeDefault: z.boolean().default(false).describe(d("chargeDefault")),
+        alreadyOwed: alreadyOwedInput.describe(d("alreadyOwed")),
         color: z.string().optional().describe(d("labelColor")),
       }),
       annotations: ADD,
@@ -130,12 +151,22 @@ export function registerLabelTools(server: McpServer, run: Run, t: Say): void {
           color,
           kind: "person",
           chargeDefault: input.chargeDefault,
+          alreadyOwed: schemaOwed(input.alreadyOwed),
         });
+        let created: { labelId: string };
         try {
-          return await createLabel({ scope, name: args.name, color: args.color, kind: "person", chargeDefault: args.chargeDefault });
+          created = await createLabel({
+            scope,
+            name: args.name,
+            color: args.color,
+            kind: "person",
+            chargeDefault: args.chargeDefault,
+            alreadyOwed: alreadyOwedOf(args.alreadyOwed),
+          });
         } catch (error) {
           return rethrowLabelError(error);
         }
+        return { ...created, owed: await owedNow(created.labelId) };
       }),
   );
 
@@ -179,6 +210,7 @@ export function registerLabelTools(server: McpServer, run: Run, t: Say): void {
         name: z.string().optional().describe(d("labelName")),
         color: z.string().optional().describe(d("labelColor")),
         chargeDefault: z.boolean().optional().describe(d("chargeDefault")),
+        alreadyOwed: alreadyOwedInput.describe(d("alreadyOwed")),
       }),
       annotations: OVERWRITE,
     },
@@ -191,15 +223,20 @@ export function registerLabelTools(server: McpServer, run: Run, t: Say): void {
           name: input.name ?? current.name,
           color: input.color ?? current.color,
           chargeDefault: input.chargeDefault,
+          alreadyOwed: schemaOwed(input.alreadyOwed),
         });
         let updated: boolean;
         try {
-          updated = await updateLabel(args);
+          updated = await updateLabel({ ...args, alreadyOwed: alreadyOwedOf(args.alreadyOwed) });
         } catch (error) {
           return rethrowLabelError(error);
         }
         if (!updated) throw new ActionError("errors.notFound");
-        return { labelId: args.labelId, before: previousFields({ name: current.name, color: current.color, chargeDefault: current.chargeDefault }, input) };
+        return {
+          labelId: args.labelId,
+          before: previousFields({ name: current.name, color: current.color, chargeDefault: current.chargeDefault, alreadyOwed: current.alreadyOwed }, input),
+          owed: await owedNow(args.labelId),
+        };
       }),
   );
 }

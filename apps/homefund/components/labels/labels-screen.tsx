@@ -45,7 +45,7 @@ type FormTarget = {
   label?: EditableLabel;
 };
 
-type EditableLabel = Pick<LabelManagementRow, "id" | "name" | "color" | "kind" | "chargeDefault">;
+type EditableLabel = Pick<LabelManagementRow, "id" | "name" | "color" | "kind" | "chargeDefault" | "alreadyOwed">;
 
 // The confirmation names how many movements let go of the label.
 type DeleteTarget = { id: string; movementCount: number };

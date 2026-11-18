@@ -4206,6 +4206,7 @@ async function main(): Promise<void> {
   await owedToMeSuite();
   await payDebtsSuite();
   await loanFiguresSuite();
+  await alreadyOwedSuite();
 }
 
 // A member recorded without a login is someone in the fund: a leader whose fund holds one is not alone, so an
@@ -21495,17 +21496,19 @@ async function mcpReceivableSuite(): Promise<void> {
   const { tool } = mcpClient(POST, token);
   const subtypeOf = async (id: string) => (await fixtureSql<{ subtype: string; kind: string }[]>`select subtype, kind from accounts where id = ${id}`)[0];
 
-  const owes = await tool("create_account", { name: name("me debe"), kind: "asset", subtype: "receivable", openingBalanceCents: 0, balanceOn: "2026-01-01" });
-  const owesId = (owes.value as { accountId: string }).accountId;
+  // RF-319: Claude no longer opens a receivable; the account a person made by hand (RF-255) is still read and still moves money.
+  const refused = await tool("create_account", { name: name("me debe"), kind: "asset", subtype: "receivable", openingBalanceCents: 0, balanceOn: "2026-01-01" });
+  const owesId = randomUUID();
+  await fixtureSql`
+    insert into accounts (id, owner_user_id, name, kind, subtype, initial_balance_cents, initial_balance_on)
+    values (${owesId}, ${owner.id}, ${name("me debe")}, 'asset', 'receivable', 0, '2026-01-01')`;
   track("accounts", owesId);
   const listed = ((await tool("list_accounts")).value as { id: string; subtype: string }[]).find((row) => row.id === owesId);
-  const onLiability = await tool("create_account", { name: name("mal"), kind: "liability", subtype: "receivable", openingBalanceCents: 0, balanceOn: "2026-01-01" });
   const unknown = await tool("create_account", { name: name("raro"), kind: "asset", subtype: "savings", openingBalanceCents: 0, balanceOn: "2026-01-01" });
   assert(
-    next("RF-255: create_account opens an asset of subtype receivable, list_accounts reads it so, and a receivable on a liability or an unknown subtype is refused"),
-    !owes.isError && (await subtypeOf(owesId))?.subtype === "receivable" && listed?.subtype === "receivable" &&
-      onLiability.isError && (onLiability.value as { error: string }).error === es.accounts.errors.subtypeKindMismatch && unknown.isError,
-    `opened ${JSON.stringify(owes.value)}, listed ${JSON.stringify(listed)}, liability ${JSON.stringify(onLiability.value)}, unknown ${JSON.stringify(unknown.value)}`,
+    next("RF-255, RF-319: create_account refuses a receivable and points at create_person, forPerson and fromPerson, list_accounts still reads one made by hand, and an unknown subtype is refused"),
+    refused.isError && (refused.value as { error: string }).error === es.mcp.errors.personOwesIsNotAnAccount && listed?.subtype === "receivable" && unknown.isError,
+    `refused ${JSON.stringify(refused.value)}, listed ${JSON.stringify(listed)}, unknown ${JSON.stringify(unknown.value)}`,
   );
 
   const category = randomUUID();
@@ -23108,5 +23111,105 @@ async function loanFiguresSuite(): Promise<void> {
     next("A card purchase stored against a loan is read with no account and out of the one-tap batch; a message that names no card keeps its account"),
     purchase?.proposedAccountId === null && purchase.isComplete === false && payment?.proposedAccountId === debt,
     JSON.stringify({ purchase: purchase?.proposedAccountId, complete: purchase?.isComplete, payment: payment?.proposedAccountId }),
+  );
+}
+
+// RF-319: a person's «Ya te debía» is the first line of what they owe, beside what was spent and returned, in its own
+// currency, and Claude sets it with create_person and update_label while create_account refuses an account for it.
+async function alreadyOwedSuite(): Promise<void> {
+  console.log("");
+  const tag = randomUUID().slice(0, 8);
+  const today = todayInBogota();
+  const { POST } = await import("@/app/mcp/route");
+  const owner = await createMembershipFreeUser();
+  const name = (what: string) => `Harness rf319 ${what} ${tag}`;
+  const ids = { cop: randomUUID(), category: randomUUID(), incomeCategory: randomUUID() };
+  await fixtureSql.begin(async (tx) => {
+    await tx`insert into accounts (id, owner_user_id, name, kind, subtype, initial_balance_cents, initial_balance_on, settlement_currency)
+      values (${ids.cop}, ${owner.id}, ${name("banco")}, 'asset', 'bank', 1000000000, '2026-01-01', 'COP')`;
+    await tx`insert into categories (id, owner_user_id, name, kind, color) values (${ids.category}, ${owner.id}, ${name("gasto")}, 'expense', '#8C4A4A'),
+      (${ids.incomeCategory}, ${owner.id}, ${name("ingreso")}, 'income', '#2F7D5B')`;
+  });
+  track("categories", ids.category);
+  track("categories", ids.incomeCategory);
+  track("accounts", ids.cop);
+  const { id: keyId, token } = await asUser(owner, () =>
+    issueWebhookCredential({ name: name("clave"), purpose: "mcp", defaultAccountId: null, defaultCategoryId: null }),
+  );
+  keep("webhook_credentials", keyId);
+  const { tool } = mcpClient(POST, token);
+  type Created = { labelId: string; owed: { currency: string; cents: number }[] };
+  const lines = async () => (await asUser(owner, () => getOwedToMe())).flatMap((group) => group.people.map((one) => ({ ...one, currency: group.currency })));
+
+  // Opening only: the sister's old loan left no account.
+  const yulieth = (await tool("create_person", { name: name("Yulieth"), alreadyOwed: { cents: 385_766_00, currency: "COP", since: "2026-03-01" } })).value as Created;
+  const onlyOpening = (await lines()).find((one) => one.labelId === yulieth.labelId);
+  const stored = await fixtureSql`select charge_default, already_owed_cents::text as cents from labels where id = ${yulieth.labelId}`;
+  assert(
+    next("RF-319: create_person with alreadyOwed makes the person charged, answers what they owe and puts the opening alone as the one breakdown line, dated since"),
+    yulieth.owed.length === 1 && yulieth.owed[0].cents === 385_766_00 && onlyOpening?.cents === 385_766_00 && stored[0].charge_default === true &&
+      onlyOpening.breakdown.length === 1 && onlyOpening.breakdown[0].kind === "opening" && onlyOpening.breakdown[0].occurredOn === "2026-03-01",
+    JSON.stringify({ yulieth, onlyOpening, stored }),
+  );
+
+  // Opening plus expenses less returns, the opening first.
+  await tool("record_movement", { fromAccountId: ids.cop, toAccountId: null, amountCents: 50_000_00, occurredAt: today, description: name("gasto"), categoryId: ids.category, forPerson: yulieth.labelId, requestRef: randomUUID() });
+  await tool("record_movement", { fromAccountId: null, toAccountId: ids.cop, amountCents: 100_000_00, occurredAt: today, description: name("devolvio"), categoryId: ids.incomeCategory, fromPerson: yulieth.labelId, requestRef: randomUUID() });
+  const mixed = (await lines()).find((one) => one.labelId === yulieth.labelId);
+  const ledger = await asUser(owner, () => getPersonLedger(yulieth.labelId));
+  assert(
+    next("RF-319: what a person owes is the opening plus the expenses for them less what they returned, the opening is the first line, and the page's ledger reads the same parts"),
+    mixed?.cents === 335_766_00 && mixed.breakdown.map((line) => line.kind).join() === "opening,spent,returned" &&
+      ledger.length === 1 && ledger[0].openingCents === 385_766_00 && ledger[0].openingSince === "2026-03-01" && ledger[0].spentCents === 50_000_00 &&
+      ledger[0].returnedCents === 100_000_00 && ledger[0].owedCents === 335_766_00,
+    JSON.stringify({ mixed, ledger }),
+  );
+
+  // Two currencies stay two figures: dollars already owed, pesos spent for the same person.
+  await tool("record_movement", { fromAccountId: ids.cop, toAccountId: null, amountCents: 200_000_00, occurredAt: today, description: name("gasto 2"), categoryId: ids.category, forPerson: yulieth.labelId, requestRef: randomUUID() });
+  const dollars = (await tool("update_label", { labelId: yulieth.labelId, alreadyOwed: { cents: 20_00, currency: "USD", since: "2026-03-01" } })).value as { owed: { currency: string; cents: number }[] };
+  const both = (await lines()).filter((one) => one.labelId === yulieth.labelId);
+  assert(
+    next("RF-319: an opening in another currency is its own figure, never added to the pesos the person owes for movements"),
+    both.length === 2 && both.find((one) => one.currency === "USD")?.cents === 20_00 && both.find((one) => one.currency === "COP")?.cents === 150_000_00 &&
+      dollars.owed.length === 2,
+    JSON.stringify({ both, dollars }),
+  );
+
+  // Fully returned: no entry; null removes the opening.
+  const removed = await tool("update_label", { labelId: yulieth.labelId, alreadyOwed: null });
+  const afterRemoval = await fixtureSql`select already_owed_cents, already_owed_currency, already_owed_since from labels where id = ${yulieth.labelId}`;
+  const lonely = (await tool("create_person", { name: name("Sin deuda"), alreadyOwed: { cents: 10_00, currency: "COP", since: "2026-03-01" } })).value as Created;
+  await tool("record_movement", { fromAccountId: null, toAccountId: ids.cop, amountCents: 10_00, occurredAt: today, description: name("devolvio todo"), categoryId: ids.incomeCategory, fromPerson: lonely.labelId, requestRef: randomUUID() });
+  const rest = await lines();
+  assert(
+    next("RF-319: a person who returned all of what they already owed is no entry, and null removes the opening"),
+    !removed.isError && afterRemoval[0].already_owed_cents === null && afterRemoval[0].already_owed_currency === null && afterRemoval[0].already_owed_since === null &&
+      !rest.some((one) => one.labelId === lonely.labelId),
+    JSON.stringify({ removed: removed.value, afterRemoval, rest }),
+  );
+
+  // The charge switch cannot be turned off beside an opening, and a tag takes none.
+  const sticky = (await tool("create_person", { name: name("Sigue"), alreadyOwed: { cents: 5_00, currency: "COP", since: "2026-03-01" } })).value as Created;
+  const off = await tool("update_label", { labelId: sticky.labelId, chargeDefault: false });
+  const future = await tool("create_person", { name: name("Futuro"), alreadyOwed: { cents: 5_00, currency: "COP", since: "2999-01-01" } });
+  const free = await tool("create_person", { name: name("Cero"), alreadyOwed: { cents: 0, currency: "COP", since: "2026-03-01" } });
+  assert(
+    next("RF-319: the opening needs «se le cobra», a future date and a zero amount are refused, and the person is told so in words"),
+    off.isError && future.isError && free.isError,
+    JSON.stringify({ off: off.value, future: future.value, free: free.value }),
+  );
+
+  // create_account refuses an account for what a person owes, however it is spelled, and still opens an ordinary one.
+  const account = (extra: Record<string, unknown>) =>
+    tool("create_account", { name: name("cuenta"), kind: "asset", subtype: "bank", openingBalanceCents: 0, balanceOn: "2026-01-01", ...extra });
+  const receivable = await account({ subtype: "receivable" });
+  const named = await account({ name: `Me debe Yulieth ${tag}` });
+  const ordinary = await account({});
+  if (!ordinary.isError) track("accounts", (ordinary.value as { accountId: string }).accountId);
+  assert(
+    next("RF-319: create_account refuses a receivable and a name like «Me debe …» in words that point at create_person, forPerson and fromPerson, and still opens a bank account"),
+    receivable.isError && named.isError && JSON.stringify(receivable.value).includes("create_person") && JSON.stringify(named.value).includes("fromPerson") && !ordinary.isError,
+    JSON.stringify({ receivable: receivable.value, named: named.value, ordinary: ordinary.value }),
   );
 }
