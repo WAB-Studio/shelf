@@ -26,7 +26,7 @@ import { centsToDecimal } from "@/lib/money";
 import { useActionErrorToast } from "@/lib/use-action-toast";
 
 // The tracks of the Cuentas artboard, in order.
-const WIDTHS = {
+export const WIDTHS = {
   name: "minmax(0, 1fr)",
   balance: "168px",
   menu: "36px",
@@ -53,8 +53,9 @@ export function PaidByLine({ account }: { account: AccountRow }) {
               <Button
                 type="button"
                 variant="ghost"
-                size="1"
-                tap={false}
+                color="gray"
+                highContrast
+                inline
                 aria-label={tCredit("breakdownOpen", { person: credit.personName })}
                 onClick={() => setOpen(true)}
               >
@@ -242,7 +243,7 @@ export function AccountsTable({
       cell: (row) => (
         <Flex direction="column" gap="1" minWidth="0" pl={row.parentAccountId ? "5" : "0"}>
           <Text size="2" weight="medium" truncate>
-            {row.thirdParty ? t("creditOf", { name: row.name, person: row.thirdParty.personName }) : row.name}
+            {row.name}
           </Text>
           <AccountDetail account={row} />
           <PaidByLine account={row} />

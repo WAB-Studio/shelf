@@ -101,8 +101,17 @@ test("a credit somebody else pays is set up, read and recorded from its screen",
   // The Accounts list reads the credit with its payer and what they still owe, and holds no «Me debe» of its own.
   const receivableName = t.receivableName.replace("{person}", PERSON);
   await page.goto("/es/settings/accounts");
-  await expect(page.getByText(`${creditName} (${PERSON})`).filter({ visible: true }).first()).toBeVisible();
-  await expect(page.getByText(/Lo paga Persona Uno · le falta/).filter({ visible: true }).first()).toBeVisible();
+  // RF-318: the credit is named as its account; the payer is said once, in the line under it.
+  await expect(page.getByText(creditName, { exact: true }).filter({ visible: true }).first()).toBeVisible();
+  await expect(page.getByText(`${creditName} (${PERSON})`)).toHaveCount(0);
+  const paidBy = page.getByText(/Lo paga Persona Uno · le falta/).filter({ visible: true }).first();
+  await expect(paidBy).toBeVisible();
+  // The figure inside the line is the line's own size.
+  const sizes = await paidBy.evaluate((line) => ({
+    line: getComputedStyle(line).fontSize,
+    figure: getComputedStyle(line.querySelector("button") as HTMLElement).fontSize,
+  }));
+  expect(sizes.figure).toBe(sizes.line);
 
   // RF-301: the figure opens how it is worked out: the capital the credit owes, which the payer's own sends do not lower.
   await page.getByRole("button", { name: t.breakdownOpen.replace("{person}", PERSON) }).filter({ visible: true }).first().click();
