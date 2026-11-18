@@ -15,6 +15,7 @@ import { asHarnessUser, readScope, test } from "./global-setup";
 
 const owed = messages.owedToMe;
 const labels = messages.labels;
+const common = messages.common;
 
 const scope = readScope();
 const stamp = randomUUID().slice(0, 8);
@@ -87,5 +88,46 @@ test("spending for a charged person and noting his return shows what is still ow
     await fixtureSql`delete from labels where id = ${ids.carlos}`;
     await fixtureSql`delete from categories where id in ${fixtureSql([ids.expenseCategory, ids.incomeCategory])}`;
     await fixtureSql`delete from accounts where id = ${ids.account}`;
+  }
+});
+
+test("writing «Ya te debía» on a person who is not charged makes Te deben name them, with the old debt as its own line and on their page", async ({ page }) => {
+  const person = `Yulieth ${stamp}`;
+  const personId = randomUUID();
+  await asHarnessUser(async (tx) => {
+    await tx`insert into labels (id, owner_user_id, name, kind, charge_default) values (${personId}, ${scope.userId}, ${person}, 'person', false)`;
+  });
+
+  try {
+    await page.goto("/es/settings/labels");
+    await page
+      .getByRole("button", { name: common.actionsFor.replace("{name}", person), exact: true })
+      .filter({ visible: true })
+      .first()
+      .click();
+    await page.getByRole("menuitem", { name: common.edit, exact: true }).click();
+    const dialog = page.getByRole("dialog");
+    await dialog.getByLabel(labels.alreadyOwedAmountLabel, { exact: true }).fill("385766");
+    await expect(dialog.getByText(labels.chargeForced)).toBeVisible();
+    await dialog.getByRole("button", { name: common.save, exact: true }).click();
+    await expect(dialog).toBeHidden();
+
+    await page.goto("/es/settings/accounts");
+    const section = page.getByRole("region", { name: owed.sectionTitle });
+    await expect(section).toContainText(person);
+    await expect(section).toContainText(owed.sourceOpening);
+    await expect(section).toContainText("385.766");
+
+    await section.getByRole("button", { name: owed.openFor.replace("{person}", person), exact: true }).click();
+    await expect(page.getByRole("dialog").getByText(/Ya te debía desde el/)).toBeVisible();
+    await page.keyboard.press("Escape");
+
+    await page.goto(`/es/settings/labels/${personId}`);
+    const summary = page.getByText(/^Ya te debía/).first();
+    await expect(summary).toBeVisible();
+    await expect(summary).toContainText("385.766");
+    await expect(summary).toContainText("falta");
+  } finally {
+    await fixtureSql`delete from labels where id = ${personId}`;
   }
 });

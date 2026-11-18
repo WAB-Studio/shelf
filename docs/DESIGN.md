@@ -949,6 +949,14 @@ Las palabras primero. Quien abre Inicio contesta en voz alta, sin saber cómo es
   una nota gris «Sin contar lo que pidan los extractos que faltan». En el celular y en el escritorio por igual. Sin pagos: «Este mes no
   tienes pagos por hacer.»
 - **Te deben.** La tercera línea, entre «Este mes pagas» y «En <mes> gastaste»: «Te deben $X: John $Y · Carlos $Z», un botón por nombre; nada cuando nadie debe. En Cuentas es una sección y su propio cuadro, y el neto es lo que tengo, menos lo que debo, más lo que te deben.
+- **Ya te debía.** Lo que alguien ya te debía antes de usar HomeFund y no dejó cuenta (un préstamo viejo a tu hermana) no es una cuenta
+  «Me debe»: es un campo de la persona. El diálogo de una persona, bajo «Se le cobra», trae «Ya te debía», con una línea («Lo que esta
+  persona ya te debía antes de usar HomeFund y no quedó en ninguna cuenta. Déjalo vacío si no aplica.») y tres campos con su etiqueta
+  encima: «Moneda», «Cuánto» y «Desde cuándo». Escribir el monto enciende «Se le cobra» y lo deja fijo, con la línea «Se enciende solo
+  mientras lleves lo que ya te debía.»; vaciarlo lo quita. En «Te deben» la persona aparece con su cifra y, si esa es su única fuente,
+  con «Ya te debía»; su desglose abre con «Ya te debía desde el 1 mar 2026», antes de los gastos y las devoluciones. La página de la
+  persona dice «Ya te debía $385.766 desde 1 mar 2026 · gastaste $50.000 para Yulieth · te devolvió $100.000 · falta $335.766» y calla
+  la parte que vale cero; si ya no debe, termina en «no te debe nada».
 - **En noviembre gastaste $X.** Con las tres categorías más grandes en una línea gris, «Arriendo $1.400.000 · Mercado $478.000», y el
   enlace «Ver reportes». Reemplaza la barra «El mes de un vistazo».
 - **Por arreglar.** Una tarjeta solo con lo que existe, cada línea un enlace a su arreglo: «Emergencias gastó $150.000 más de lo que

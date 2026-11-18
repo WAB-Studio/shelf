@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { boolean, check, index, pgPolicy, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { bigint, boolean, check, date, index, pgPolicy, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import { authenticatedRole, authUid } from "drizzle-orm/supabase";
 
 import { finances } from "./_schema";
@@ -23,6 +23,11 @@ export const labels = finances.table(
     // A person only: «se le cobra» is the default a writer proposes when a movement is for them; false never
     // makes a debt on its own (RF-242).
     chargeDefault: boolean().notNull().default(false),
+    // A person only: what they already owed before any movement here (RF-319), all three set or none. It is the
+    // first line of what they owe; every later figure is still derived from movements.
+    alreadyOwedCents: bigint({ mode: "number" }),
+    alreadyOwedCurrency: text(),
+    alreadyOwedSince: date(),
     // The stable per-scope import key (RF-52, RF-142): a re-import matches on it to update instead of duplicate.
     // Auto-filled to `id::text` by a trigger when omitted.
     externalRef: text(),
@@ -39,6 +44,12 @@ export const labels = finances.table(
       .where(sql`${table.externalRef} is not null`),
     check("labels_kind_valid", sql`${table.kind} in ('tag', 'person')`),
     check("labels_charge_by_kind", sql`${table.chargeDefault} = false or ${table.kind} = 'person'`),
+    check(
+      "labels_already_owed_whole",
+      sql`(${table.alreadyOwedCents} is null and ${table.alreadyOwedCurrency} is null and ${table.alreadyOwedSince} is null)
+        or (${table.alreadyOwedCents} > 0 and ${table.alreadyOwedCurrency} ~ '^[A-Z]{3}$' and ${table.alreadyOwedSince} is not null)`,
+    ),
+    check("labels_already_owed_charged", sql`${table.alreadyOwedCents} is null or (${table.kind} = 'person' and ${table.chargeDefault})`),
     check("labels_name_length", sql`length(btrim(${table.name})) between 1 and 80`),
     // A label belongs to a user or a group, never both and never neither — mirrors categories.
     check("labels_owner_xor_group", sql`num_nonnulls(${table.ownerUserId}, ${table.groupId}) = 1`),

@@ -31,6 +31,8 @@ export function OwedBreakdownDialog({ person, onOpenChange }: { person: OwedPers
     switch (line.kind) {
       case "capital":
         return t("breakdownCapital");
+      case "opening":
+        return t("breakdownOpening", { date });
       case "spent":
         return description ? t("breakdownSpentNamed", { date, description }) : t("breakdownSpent", { date });
       case "returned":

@@ -37,3 +37,9 @@ export function codeOf(probe: Probe, labels: ReadonlyMap<string, string>): McpWa
   if (debt) return "debtAsExpense";
   return SAVINGS.test(said) || categories.some((label) => SAVINGS.test(label)) ? "savingsAsExpense" : null;
 }
+
+// An account for what another person owes the person: a receivable, or a name that says «Me debe …». That is a
+// person's «Ya te debía», a forPerson expense or a fromPerson income, never an account (RF-319).
+export function personOwesAccount(subtype: string, name: string): boolean {
+  return subtype === "receivable" || /^\s*me\s+debe\b/.test(plain(name));
+}

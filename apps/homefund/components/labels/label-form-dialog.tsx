@@ -3,13 +3,15 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useTranslations } from "next-intl";
 import { useAction } from "next-safe-action/hooks";
-import { Controller, useForm, type Resolver } from "react-hook-form";
+import { Controller, useForm, useWatch, type Resolver } from "react-hook-form";
 import { toast } from "sonner";
 
 import { createLabelAction, updateLabelAction } from "@/app/actions/labels";
 import {
+  AmountField,
   Button,
   ColorSwatchPicker,
+  DateInput,
   Dialog,
   Field,
   FieldControl,
@@ -25,13 +27,17 @@ import {
   Text,
   TextField,
 } from "@/components/ui";
+import { BASE_CURRENCY, OFFERED_CURRENCIES, type CurrencyCode } from "@/lib/currency";
+import { todayInBogota } from "@/lib/dates";
 import { CATEGORY_COLORS, nextCategoryColor } from "@/lib/fund/category-color";
+import { amountToInput } from "@/lib/money";
 import { useActionErrorToast } from "@/lib/use-action-toast";
 import {
   createLabelSchema,
   updateLabelSchema,
   LABEL_KINDS,
   LABEL_PLACEMENTS,
+  type AlreadyOwedInput,
   type CreateLabelInput,
   type UpdateLabelInput,
 } from "@/lib/validation/label";
@@ -50,6 +56,8 @@ type LabelFormValues = {
   placement: LabelPlacement;
   kind: LabelKind;
   chargeDefault: boolean;
+  // The field is always an object while the form is open; a blank amount turns it into null before validation.
+  alreadyOwed: AlreadyOwedInput | null;
 };
 
 type Label = {
@@ -59,6 +67,7 @@ type Label = {
   placement: LabelPlacement;
   kind: LabelKind;
   chargeDefault: boolean;
+  alreadyOwed: { cents: number; currency: CurrencyCode; since: string } | null;
 };
 
 type LabelFormProps = {
@@ -109,15 +118,27 @@ function LabelForm({
   // Root-scoped: the keys arriving from the schema and the action are full paths.
   const tKey = useTranslations();
 
+  const emptyOwed: AlreadyOwedInput = { amount: "", currency: BASE_CURRENCY, since: todayInBogota() };
+
   const isEdit = !!label;
   // Fixed at birth: a tag never becomes a person, so the form reads it once.
   const kind = label?.kind ?? defaultKind;
   const placement = label?.placement ?? defaultPlacement;
 
+  const schemaResolver = (isEdit
+    ? zodResolver(updateLabelSchema)
+    : zodResolver(createLabelSchema)) as unknown as Resolver<LabelFormValues>;
+
+  // A blank «Ya te debía» is no debt: the schema sees null, which removes it on an edit.
+  const resolver: Resolver<LabelFormValues> = (values, context, options) =>
+    schemaResolver(
+      { ...values, alreadyOwed: kind === "person" && values.alreadyOwed?.amount.trim() ? values.alreadyOwed : null },
+      context,
+      options,
+    );
+
   const form = useForm<LabelFormValues>({
-    resolver: (isEdit
-      ? zodResolver(updateLabelSchema)
-      : zodResolver(createLabelSchema)) as unknown as Resolver<LabelFormValues>,
+    resolver,
     defaultValues: {
       labelId: label?.id ?? "",
       name: label?.name ?? "",
@@ -125,9 +146,19 @@ function LabelForm({
       placement,
       kind,
       chargeDefault: label?.chargeDefault ?? false,
+      alreadyOwed: label?.alreadyOwed
+        ? {
+            amount: amountToInput(label.alreadyOwed.cents, label.alreadyOwed.currency),
+            currency: label.alreadyOwed.currency as AlreadyOwedInput["currency"],
+            since: label.alreadyOwed.since,
+          }
+        : emptyOwed,
     },
   });
 
+  // Writing what they already owed makes the person «se le cobra»: the switch follows and waits until it is cleared.
+  const owedAmount = useWatch({ control: form.control, name: "alreadyOwed.amount" });
+  const hasOpening = kind === "person" && owedAmount.trim().length > 0;
   function onActionSuccess() {
     toast.success(t(isEdit ? "updated" : "created"));
     onOpenChange(false);
@@ -244,20 +275,78 @@ function LabelForm({
               <Text as="label" size="2">
                 <TapTarget align="center" gap="2">
                   <Switch
-                    checked={field.value}
-                    disabled={isPending}
+                    checked={field.value || hasOpening}
+                    disabled={isPending || hasOpening}
                     onCheckedChange={field.onChange}
                   />
                   <Flex direction="column">
                     {t("chargeLabel")}
                     <Text size="1" color="gray">
-                      {t("chargeHint")}
+                      {t(hasOpening ? "chargeForced" : "chargeHint")}
                     </Text>
                   </Flex>
                 </TapTarget>
               </Text>
             )}
           />
+        )}
+        {kind === "person" && (
+          <Flex direction="column" gap="3">
+            <Text size="2" weight="medium">
+              {t("alreadyOwedLabel")}
+            </Text>
+            <Text size="1" color="gray">
+              {t("alreadyOwedHint")}
+            </Text>
+            <Controller
+              name="alreadyOwed.currency"
+              control={form.control}
+              render={({ field, fieldState }) => (
+                <Field invalid={fieldState.invalid}>
+                  <FieldLabel htmlFor="label-owed-currency">{t("alreadyOwedCurrencyLabel")}</FieldLabel>
+                  <Select.Root size="3" value={field.value} onValueChange={field.onChange} disabled={isPending}>
+                    <FieldControl>
+                      <Select.Trigger id="label-owed-currency" />
+                    </FieldControl>
+                    <Select.Content position="popper">
+                      {OFFERED_CURRENCIES.map((currency) => (
+                        <Select.Item key={currency} value={currency}>
+                          {currency}
+                        </Select.Item>
+                      ))}
+                    </Select.Content>
+                  </Select.Root>
+                  <FieldMessage error={fieldState.error} />
+                </Field>
+              )}
+            />
+            <Controller
+              name="alreadyOwed.amount"
+              control={form.control}
+              render={({ field, fieldState }) => (
+                <Field invalid={fieldState.invalid}>
+                  <FieldLabel htmlFor="label-owed-amount">{t("alreadyOwedAmountLabel")}</FieldLabel>
+                  <FieldControl>
+                    <AmountField {...field} id="label-owed-amount" size="3" inputMode="numeric" disabled={isPending} />
+                  </FieldControl>
+                  <FieldMessage error={fieldState.error} />
+                </Field>
+              )}
+            />
+            <Controller
+              name="alreadyOwed.since"
+              control={form.control}
+              render={({ field, fieldState }) => (
+                <Field invalid={fieldState.invalid}>
+                  <FieldLabel htmlFor="label-owed-since">{t("alreadyOwedSinceLabel")}</FieldLabel>
+                  <FieldControl>
+                    <DateInput {...field} id="label-owed-since" size="3" disabled={isPending} />
+                  </FieldControl>
+                  <FieldMessage error={fieldState.error} />
+                </Field>
+              )}
+            />
+          </Flex>
         )}
         <Controller
           name="color"
