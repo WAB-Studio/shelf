@@ -442,7 +442,6 @@
     "pocketCoverDescription": "Cover {pocket}",
     "openingBalanceRow": "<amount></amount> on {date}",
     "balanceInCurrency": "<amount></amount> in {currency}",
-    "creditOf": "{name} ({person})",
     "paidBy": "{person} pays it · still owes <amount></amount>",
     "paidByNothingOwed": "{person} pays it · owes nothing",
     "activeTab": "Active",

@@ -442,7 +442,6 @@
     "pocketCoverDescription": "Cubrir {pocket}",
     "openingBalanceRow": "<amount></amount> el {date}",
     "balanceInCurrency": "<amount></amount> en {currency}",
-    "creditOf": "{name} ({person})",
     "paidBy": "Lo paga {person} · le falta <amount></amount>",
     "paidByNothingOwed": "Lo paga {person} · no debe nada",
     "activeTab": "Activas",
