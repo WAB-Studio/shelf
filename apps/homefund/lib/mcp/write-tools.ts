@@ -14,11 +14,13 @@ import {
   moveCategoryMovements,
   openAccount,
   openCategory,
+  relabelMovements,
   reviseMovement,
 } from "@/db/queries/ledger-write";
 import {
   getTransactionById,
   listTransactions,
+  pocketCoversOf,
   type TransactionListFilters,
   type TransactionListRow,
   type TransactionSplitInput,
@@ -27,10 +29,12 @@ import { pgErrorCode } from "@/lib/db-error";
 import { ActionError } from "@/lib/errors";
 import { CATEGORY_COLORS } from "@/lib/fund/category-color";
 import { ADD, ADD_ONCE, DESTROY, OVERWRITE, READ, previousFields, titled } from "@/lib/mcp/annotations";
-import { resolveLabelIds } from "@/lib/mcp/label-tools";
+import { categoryNameWarnings, movementWarnings, withWarnings, type Probe } from "@/lib/mcp/debt-guard";
+import { resolveLabelIds, resolvePersonId } from "@/lib/mcp/label-tools";
 import { parseForm } from "@/lib/mcp/parse-form";
+import { todayInBogota } from "@/lib/dates";
 import { centsToDecimal } from "@/lib/money";
-import { createAccountSchema, updateAccountSchema } from "@/lib/validation/account";
+import { ACCOUNT_KINDS, ACCOUNT_PLACEMENTS, ACCOUNT_SUBTYPES, createAccountSchema, updateAccountSchema } from "@/lib/validation/account";
 import { createCategoryInputSchema, updateCategorySchema } from "@/lib/validation/category";
 import {
   createTransactionSchema,
@@ -38,6 +42,7 @@ import {
   HOUSEHOLD_MAKER,
   MOVEMENT_SEARCH_MAX,
   movementTypeFilter,
+  NO_PERSON,
   occurredAtSchema,
   updateTransactionSchema,
 } from "@/lib/validation/transaction";
@@ -63,7 +68,22 @@ function movementShape(t: Say) {
     forHousehold: z.boolean().optional().describe(d("forHousehold")),
     madeByMemberId: z.string().nullish().describe(d("madeByMemberId")),
     labels: z.array(z.string()).optional().describe(d("labels")),
+    forPerson: z.string().nullish().describe(d("forPerson")),
+    fromPerson: z.string().nullish().describe(d("fromPerson")),
   };
+}
+
+// The person a movement names, whichever way it is said: «Para quién» on an expense, «De quién» on an income (RF-293).
+// Both ride the same join, so the one is stored as the other; only an income may say `fromPerson`, and never both.
+async function namedPerson(
+  owner: string,
+  named: { forPerson?: string | null; fromPerson?: string | null },
+  isIncome: boolean,
+): Promise<string | null | undefined> {
+  if (named.forPerson && named.fromPerson) throw new ActionError("mcp.errors.fromAndForPerson");
+  if (named.fromPerson && !isIncome) throw new ActionError("mcp.errors.fromPersonNeedsIncome");
+  const ref = named.fromPerson ?? named.forPerson;
+  return ref === undefined ? undefined : ref === null ? null : resolvePersonId(owner, ref);
 }
 
 type MovementInput = z.infer<z.ZodObject<ReturnType<typeof movementShape>>>;
@@ -132,6 +152,13 @@ function patched(current: TransactionListRow, patch: Partial<MovementInput>): Mo
 
 const idOf = (key: string, value: string) => parseForm(z.uuid({ error: key }), value);
 
+// The side a movement leaves open says its kind; a transfer is no expense or income, so it earns no warning.
+function warningProbe(movement: MovementInput): Probe[] {
+  const kind = movement.fromAccountId === null ? "income" : movement.toAccountId === null ? "expense" : null;
+  const lines = movement.splits ?? (movement.categoryId ? [{ categoryId: movement.categoryId }] : []);
+  return kind === null ? [] : [{ kind, description: movement.description, categoryIds: lines.map((line) => line.categoryId) }];
+}
+
 // The categories as list_categories answers them: parents and children in one flat list.
 export async function categoryRows(owner: string) {
   return (await listScopedCategories(owner)).flatMap((parent) => [
@@ -151,15 +178,19 @@ export type MovementFilterInput = {
   categoryId?: string;
   madeByMemberId?: string;
   label?: string;
+  forPerson?: string;
   from?: string;
   to?: string;
   kind?: (typeof MOVEMENT_KINDS)[number];
   createdByUserId?: string;
+  createdVia?: (typeof CREATED_VIA)[number];
   recurringRuleId?: string;
   q?: string;
 };
 
 const MOVEMENT_KINDS = ["expense", "income", "transfer", "adjustment"] as const;
+// How a movement was written (RF-256): the web, Claude through the MCP, the Bandeja's accept, a statement or sheet import.
+const CREATED_VIA = ["web", "mcp", "inbox", "import"] as const;
 
 // The filters a listing and its totals take, the one set the Movimientos screen offers.
 export function movementFilterShape(t: Say) {
@@ -171,8 +202,10 @@ export function movementFilterShape(t: Say) {
     categoryId: z.string().optional().describe(d("filterCategoryId")),
     madeByMemberId: z.string().optional().describe(d("filterMadeByMemberId")),
     label: z.string().optional().describe(d("filterLabel")),
+    forPerson: z.string().optional().describe(d("filterForPerson")),
     kind: z.enum(MOVEMENT_KINDS).optional().describe(d("filterKind")),
     createdByUserId: z.string().optional().describe(d("filterCreatedBy")),
+    createdVia: z.enum(CREATED_VIA).optional().describe(d("filterCreatedVia")),
     recurringRuleId: z.string().optional().describe(d("filterRecurringRule")),
     q: z.string().trim().min(1).max(MOVEMENT_SEARCH_MAX).optional().describe(d("filterQ")),
   };
@@ -189,15 +222,20 @@ export async function movementFilters(owner: string, input: MovementFilterInput)
         ? null
         : idOf("transactions.errors.madeByInvalid", input.madeByMemberId);
   const [labelId] = input.label === undefined ? [] : await resolveLabelIds(owner, [input.label]);
+  // `nobody` keeps the movements that name no person (RF-242).
+  const forPersonId =
+    input.forPerson === undefined ? undefined : input.forPerson === NO_PERSON ? null : await resolvePersonId(owner, input.forPerson);
   return {
     accountId,
     categoryId,
     madeByMemberId,
     labelId,
+    forPersonId,
     from: input.from,
     to: input.to,
     ...(input.kind === undefined ? {} : movementTypeFilter(input.kind)),
     memberUserId: input.createdByUserId === undefined ? undefined : idOf("errors.notFound", input.createdByUserId),
+    createdVia: input.createdVia,
     recurringRuleId: input.recurringRuleId === undefined ? undefined : idOf("errors.notFound", input.recurringRuleId),
     search: input.q,
   };
@@ -221,8 +259,14 @@ export function movementRow(row: TransactionListRow) {
     forHousehold: row.forHousehold,
     madeByMemberId: row.madeByMemberId,
     madeByName: row.madeByName,
+    // How it was written; null for what predates the column and for what a recurring rule or a reconciliation generated.
+    createdVia: row.createdVia,
     labelIds: row.labels.map((label) => label.id),
+    forPersonId: row.forPerson?.id ?? null,
+    forPersonName: row.forPerson?.name ?? null,
     splits: row.splits,
+    // The transfer HomeFund booked from a pocket into its account on its own (RF-249); deleting it undoes it.
+    pocketCover: row.pocketCover,
     updatedAt: row.updatedAt,
   };
 }
@@ -243,6 +287,7 @@ function storedMovement(row: TransactionListRow): Record<string, unknown> {
     forHousehold: row.forHousehold,
     madeByMemberId: row.madeByMemberId,
     labels: row.labels.map((label) => label.id),
+    forPerson: row.forPerson?.id ?? null,
   };
 }
 
@@ -281,19 +326,32 @@ export function registerLedgerTools(server: McpServer, run: Run, t: Say): void {
     {
       ...titled(t, "recordMovement"),
       description: t("tools.recordMovement"),
-      inputSchema: z.object({ ...shape, requestRef: z.string().optional().describe(d("requestRef")) }),
+      // The date is today in Bogotá unless given, and the requestRef is required: a retry reuses it, so a lost answer never duplicates.
+      inputSchema: z.object({
+        ...shape,
+        occurredAt: z.string().optional().describe(d("occurredAtDefault")),
+        requestRef: z.uuid().describe(d("requestRef")),
+        awaitingCounterparty: z.boolean().optional().describe(d("awaitingCounterparty")),
+      }),
       annotations: ADD_ONCE,
     },
-    (input: MovementInput & { requestRef?: string }, ctx) =>
-      run(ctx, async (owner) =>
-        bookMovement(
+    (given: Omit<MovementInput, "occurredAt"> & { occurredAt?: string; requestRef: string; awaitingCounterparty?: boolean }, ctx) =>
+      run(ctx, async (owner) => {
+        const input = { ...given, occurredAt: given.occurredAt ?? todayInBogota() };
+        const booked = await bookMovement(
           parseForm(createTransactionSchema, {
             ...movementForm(input),
             labelIds: await resolveLabelIds(owner, input.labels ?? []),
+            forPersonId: (await namedPerson(owner, input, input.fromAccountId === null && input.toAccountId !== null)) ?? null,
             requestRef: input.requestRef,
           }),
-        ),
-      ),
+          undefined,
+          { awaitingCounterparty: input.awaitingCounterparty, reportPocketCovers: true },
+        );
+        // Said only when the database moved money out of a pocket for it (RF-249).
+        const answer = booked.pocketCovers?.length ? booked : { transactionId: booked.transactionId };
+        return withWarnings(answer, await movementWarnings(owner, warningProbe(input), t));
+      }),
   );
 
   // The stamp is the one Claude read in list_movements: an edit after someone else's save is refused stale (RF-156).
@@ -315,19 +373,35 @@ export function registerLedgerTools(server: McpServer, run: Run, t: Say): void {
         const id = idOf("errors.notFound", transactionId);
         const current = await getTransactionById(id);
         if (!current) throw new ActionError("errors.notFound");
+        const merged = patched(current, patch);
+        const named = await namedPerson(owner, patch, merged.fromAccountId === null && merged.toAccountId !== null);
         await reviseMovement(
           parseForm(updateTransactionSchema, {
-            ...movementForm(patched(current, patch)),
+            ...movementForm(merged),
             transactionId: id,
             // Absent keeps the movement's labels; a list replaces them, as the form's picker does.
             labelIds: patch.labels === undefined ? current.labels.map((label) => label.id) : await resolveLabelIds(owner, patch.labels),
+            // Absent keeps the person it was for; null clears it; a name or id replaces it (RF-242).
+            forPersonId: named === undefined ? (current.forPerson?.id ?? null) : named,
             causedByTransactionId: current.causedByTransactionId,
             expectedUpdatedAt,
           }),
         );
         // A categoryId patch replaces the lines, so what it overwrote is the lines.
-        const sent = { ...patch, splits: patch.splits ?? (patch.categoryId === undefined ? undefined : []) };
-        return { transactionId: id, before: previousFields(storedMovement(current), sent) };
+        const sent = { ...patch, forPerson: patch.fromPerson !== undefined ? patch.fromPerson : patch.forPerson, splits: patch.splits ?? (patch.categoryId === undefined ? undefined : []) };
+        // An edit that touches none of what the rules read warns of nothing, whatever the row already was.
+        const reread = ["description", "categoryId", "splits", "fromAccountId", "toAccountId"].some((key) => patch[key as keyof typeof patch] !== undefined);
+        const lines = merged.splits ?? current.splits;
+        const warnings = reread ? await movementWarnings(owner, warningProbe({ ...merged, splits: lines }), t) : [];
+        const pocketCovers = await pocketCoversOf(id);
+        return withWarnings(
+          {
+            transactionId: id,
+            before: previousFields(storedMovement(current), sent),
+            ...(pocketCovers.length > 0 ? { pocketCovers } : {}),
+          },
+          warnings,
+        );
       }),
   );
 
@@ -355,9 +429,9 @@ export function registerLedgerTools(server: McpServer, run: Run, t: Say): void {
       description: t("tools.createAccount"),
       inputSchema: z.object({
         name: z.string().describe(d("accountName")),
-        kind: z.string().describe(d("accountKind")),
-        subtype: z.string().describe(d("accountSubtype")),
-        placement: z.string().default("personal").describe(d("accountPlacement")),
+        kind: z.enum(ACCOUNT_KINDS).describe(d("accountKind")),
+        subtype: z.enum(ACCOUNT_SUBTYPES).describe(d("accountSubtype")),
+        placement: z.enum(ACCOUNT_PLACEMENTS).default("personal").describe(d("accountPlacement")),
         settlementCurrency: z.string().default("COP").describe(d("settlementCurrency")),
         openingBalanceCents: z.number().int().describe(d("openingBalanceCents")),
         balanceOn: z.string().describe(d("balanceOn")),
@@ -385,7 +459,7 @@ export function registerLedgerTools(server: McpServer, run: Run, t: Say): void {
         accountId: z.string().describe(d("accountId")),
         expectedUpdatedAt: z.string().describe(d("expectedUpdatedAt")),
         name: z.string().optional().describe(d("accountName")),
-        subtype: z.string().optional().describe(d("accountSubtype")),
+        subtype: z.enum(ACCOUNT_SUBTYPES).optional().describe(d("accountSubtype")),
         settlementCurrency: z.string().optional().describe(d("settlementCurrency")),
         openingBalanceCents: z.number().int().optional().describe(d("openingBalanceCents")),
         balanceOn: z.string().optional().describe(d("balanceOn")),
@@ -475,7 +549,9 @@ export function registerLedgerTools(server: McpServer, run: Run, t: Say): void {
       run(ctx, async (owner) => {
         const placement = input.placement === "personal" || input.placement === "group" ? input.placement : undefined;
         const color = input.color ?? (await freeCategoryColor(owner, placement));
-        return openCategory(parseForm(createCategoryInputSchema, { ...input, color }), owner);
+        const form = parseForm(createCategoryInputSchema, { ...input, color });
+        // The web allows any name, so a debt's or a saving's is written and warned of, not refused.
+        return withWarnings(await openCategory(form, owner), categoryNameWarnings(form.name, t));
       }),
   );
 
@@ -546,6 +622,43 @@ export function registerLedgerTools(server: McpServer, run: Run, t: Say): void {
           occurredAt: input.occurredAt === undefined ? undefined : parseForm(occurredAtSchema, input.occurredAt),
         });
         return { ...merged, originals: originals.map(movementRow) };
+      }),
+  );
+
+  // The same labels, and optionally one category, on an explicit list of movements: the person's yes covers exactly those rows.
+  server.registerTool(
+    "relabel_movements",
+    {
+      ...titled(t, "relabelMovements"),
+      description: t("tools.relabelMovements"),
+      inputSchema: z.object({
+        transactionIds: z.array(z.string()).min(1).max(100).describe(d("transactionIds")),
+        expectedCount: z.number().int().min(1).describe(d("relabelExpectedCount")),
+        labels: z.array(z.string()).optional().describe(d("relabelLabels")),
+        categoryId: z.string().optional().describe(d("relabelCategoryId")),
+      }),
+      annotations: OVERWRITE,
+    },
+    (input: { transactionIds: string[]; expectedCount: number; labels?: string[]; categoryId?: string }, ctx) =>
+      run(ctx, async (owner) => {
+        const transactionIds = input.transactionIds.map((id) => idOf("errors.notFound", id));
+        if (new Set(transactionIds).size !== transactionIds.length || transactionIds.length !== input.expectedCount) {
+          throw new ActionError("mcp.errors.relabel.count", { count: String(new Set(transactionIds).size) });
+        }
+        if (input.labels === undefined && input.categoryId === undefined) throw new ActionError("mcp.errors.relabel.nothing");
+        const categoryId = input.categoryId === undefined ? undefined : idOf("errors.notFound", input.categoryId);
+        const labelIds = input.labels === undefined ? undefined : await resolveLabelIds(owner, input.labels);
+        // What each movement held, read before it is rewritten, so the answer can put it back.
+        const before = await listTransactions({ ids: transactionIds }, { limit: transactionIds.length });
+        const { updated } = await relabelMovements({ transactionIds, labelIds, categoryId });
+        return {
+          updated,
+          before: before.map((row) => ({
+            id: row.id,
+            labelIds: row.labels.map((label) => label.id),
+            categoryId: row.splits.length === 1 ? row.splits[0].categoryId : null,
+          })),
+        };
       }),
   );
 

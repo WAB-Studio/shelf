@@ -39,6 +39,10 @@ import type { TransactionListRow } from "@/db/queries/transactions";
 import { Link as LocaleLink, useRouter } from "@/i18n/navigation";
 import type { CurrencyCode } from "@/lib/currency";
 import { civilDateToDate } from "@/lib/dates";
+import {
+  narrateTransfers,
+  transferSidesById,
+} from "@/lib/transactions/transfer-words";
 import { deriveRate } from "@/lib/money";
 import { foreignSettlementCurrency } from "@/lib/validation/transaction";
 import { useActionErrorToast } from "@/lib/use-action-toast";
@@ -126,6 +130,13 @@ export function MovementDetail({
     tc("scopedName", { name }),
   );
   const categoryPaths = categoryPathsById(options.categories, categoryNames);
+  // A transfer into a debt, or out of a payer's hidden account, reads as what happened (RF-272).
+  const narrated = narrateTransfers(
+    [movement],
+    transferSidesById(options.accountDirectory),
+    accountNames,
+    t,
+  ).get(movement.id);
   const categoryColors = new Map<string, string | null>();
   for (const category of options.categories) {
     categoryColors.set(category.id, category.color);
@@ -172,7 +183,7 @@ export function MovementDetail({
   const caption = isAdjustment
     ? null
     : kind === "transfer"
-      ? t("kindTransfer")
+      ? (narrated?.title ?? t("kindTransfer"))
       : (firstSplit && categoryNames.get(firstSplit)) ||
         (kind === "income" ? t("kindIncome") : t("kindExpense"));
   const tileColor = isAdjustment || kind === "transfer" ? null : (firstSplit && categoryColors.get(firstSplit)) ?? null;
@@ -184,7 +195,8 @@ export function MovementDetail({
         accountNames.get((movement.toAccountId ?? movement.fromAccountId) as string)) ??
       ""
     : kind === "transfer"
-      ? `${(movement.fromAccountId && accountNames.get(movement.fromAccountId)) ?? ""} → ${(movement.toAccountId && accountNames.get(movement.toAccountId)) ?? ""}`
+      ? (narrated?.account ??
+        `${(movement.fromAccountId && accountNames.get(movement.fromAccountId)) ?? ""} → ${(movement.toAccountId && accountNames.get(movement.toAccountId)) ?? ""}`)
       : kind === "income"
         ? (movement.toAccountId && accountNames.get(movement.toAccountId)) ?? ""
         : (movement.fromAccountId && accountNames.get(movement.fromAccountId)) ?? "";
@@ -195,19 +207,23 @@ export function MovementDetail({
     year: "numeric",
   });
 
+  // What the database moved from a pocket for it is no cost: it is listed apart and left out of the total (RF-249).
+  const covers = causedCharges.filter((charge) => charge.pocketCover);
+  const charges = causedCharges.filter((charge) => !charge.pocketCover);
+
   // What the movement really cost: itself plus the charges it caused, and only
   // those in its own currency — a charge in another one is listed and totalled
   // on a line of its own, since no figure sums two currencies (RF-124).
   const combinedTotalCents =
     movement.amountCents +
-    causedCharges.reduce(
+    charges.reduce(
       (sum, charge) =>
         charge.currency === movement.currency ? sum + charge.amountCents : sum,
       0,
     );
 
   const otherCurrencyTotals = new Map<CurrencyCode, number>();
-  for (const charge of causedCharges) {
+  for (const charge of charges) {
     if (charge.currency === movement.currency) continue;
     otherCurrencyTotals.set(
       charge.currency,
@@ -350,6 +366,12 @@ export function MovementDetail({
                 <DetailRow label={t("createdBy")} value={creatorName} />
               </>
             )}
+            {movement.forPerson && (
+              <>
+                <Separator size="4" my="3" />
+                <DetailRow label={t(movement.kind === "income" ? "fromPersonLabel" : "forPersonLabel")} value={movement.forPerson.name} />
+              </>
+            )}
             {movement.labels.length > 0 && (
               <>
                 <Separator size="4" my="3" />
@@ -410,7 +432,7 @@ export function MovementDetail({
         {cause && (
           <Flex direction="column" gap="2">
             <Text size="2" color="gray">
-              {t("causeLabel")}
+              {movement.pocketCover ? t("pocketCoverCauseLabel") : t("causeLabel")}
             </Text>
             <Card asChild>
               <LocaleLink href={`/movements/${cause.id}`}>
@@ -434,12 +456,12 @@ export function MovementDetail({
 
         {/* What this movement cost beyond itself (RF-132), each charge with its
             own figure and the total the same currency makes with it. */}
-        {causedCharges.length > 0 && (
+        {charges.length > 0 && (
           <Flex direction="column" gap="2">
             <Text size="2" color="gray">
               {t("causedTitle")}
             </Text>
-            {causedCharges.map((charge) => (
+            {charges.map((charge) => (
               <Card key={charge.id} asChild>
                 <LocaleLink href={`/movements/${charge.id}`}>
                   <MovementRow
@@ -486,6 +508,29 @@ export function MovementDetail({
           </Flex>
         )}
 
+        {covers.length > 0 && (
+          <Flex direction="column" gap="2">
+            <Text size="2" color="gray">
+              {t("pocketCoverTitle")}
+            </Text>
+            {covers.map((cover) => (
+              <Card key={cover.id} asChild>
+                <LocaleLink href={`/movements/${cover.id}`}>
+                  <MovementRow
+                    tile={rowTile(cover)}
+                    title={rowTitle(cover)}
+                    subtitle={rowDate(cover)}
+                    amount={
+                      <Money minor={cover.amountCents} currency={cover.currency} tone="transfer" />
+                    }
+                    tone="transfer"
+                  />
+                </LocaleLink>
+              </Card>
+            ))}
+          </Flex>
+        )}
+
         {deferral && (
           <DeferralControl
             transactionId={movement.id}
@@ -512,8 +557,21 @@ export function MovementDetail({
           </Text>
         )}
 
+        {/* An automatic transfer is undone, never edited: its figure is the shortfall it covers (RF-249). */}
+        {movement.pocketCover && (
+          <Text size="2" color="gray" align="center">
+            {t("pocketCoverNote")}
+          </Text>
+        )}
+
         {/* Another member's movement is read here, never changed (RF-58). */}
-        {!isAdjustment && !othersOwn && (
+        {movement.pocketCover && !othersOwn && (
+          <Button type="button" size="3" variant="soft" color="red" onClick={() => setDeleteOpen(true)}>
+            <Trash2Icon size={16} />
+            {t("pocketCoverUndo")}
+          </Button>
+        )}
+        {!isAdjustment && !othersOwn && !movement.pocketCover && (
         <Flex gap="3">
           <Button
             type="button"
@@ -563,15 +621,17 @@ export function MovementDetail({
         <ConfirmDialog
           open={deleteOpen}
           onOpenChange={setDeleteOpen}
-          title={t("deleteTitle")}
+          title={movement.pocketCover ? t("pocketCoverUndoTitle") : t("deleteTitle")}
           description={
-          movement.settledPlannedPayment
+          movement.pocketCover
+            ? t("pocketCoverUndoDescription")
+            : movement.settledPlannedPayment
             ? movement.settledPlannedPayment.description
               ? t("deleteSettlesPayment", { name: movement.settledPlannedPayment.description })
               : t("deleteSettlesPaymentUnnamed")
             : t("deleteDescription")
         }
-          confirmLabel={t("delete")}
+          confirmLabel={movement.pocketCover ? t("pocketCoverUndo") : t("delete")}
           cancelLabel={tKey("common.cancel")}
           pending={remove.isPending}
           onConfirm={() => remove.execute({ transactionId: movement.id })}

@@ -31,14 +31,34 @@ function requireColor(
 // action turns this into the owner/group XOR the schema keeps off the wire.
 export const LABEL_PLACEMENTS = ["personal", "group"] as const;
 
+export const LABEL_KINDS = ["tag", "person"] as const;
+
+// «Se le cobra» is the default of a person alone (RF-242): a tag has nobody to charge.
+function requirePersonToCharge(
+  data: { kind?: (typeof LABEL_KINDS)[number]; chargeDefault?: boolean },
+  ctx: z.RefinementCtx,
+) {
+  if (data.chargeDefault && data.kind === "tag") {
+    ctx.addIssue({
+      code: "custom",
+      message: "labels.errors.chargeNeedsPerson",
+      path: ["chargeDefault"],
+    });
+  }
+}
+
 export const createLabelSchema = z
   .object({
     name: labelNameSchema,
     color: labelColorSchema,
+    // A free tag, or a person a movement is for (RF-242); fixed once created.
+    kind: z.enum(LABEL_KINDS, { error: "labels.errors.kindInvalid" }).default("tag"),
+    chargeDefault: z.boolean().default(false),
     // The owner or group is resolved from the session, so only the placement travels.
     placement: z.enum(LABEL_PLACEMENTS, { error: "labels.errors.placementInvalid" }),
   })
-  .superRefine(requireColor);
+  .superRefine(requireColor)
+  .superRefine(requirePersonToCharge);
 
 export type CreateLabelInput = z.infer<typeof createLabelSchema>;
 
@@ -48,6 +68,8 @@ export const updateLabelSchema = z
     labelId: z.uuid({ error: "errors.notFound" }),
     name: labelNameSchema,
     color: labelColorSchema,
+    // Absent keeps what is stored; a tag stores false whatever arrives.
+    chargeDefault: z.boolean().optional(),
   })
   .superRefine(requireColor);
 

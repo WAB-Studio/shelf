@@ -188,6 +188,16 @@ export const resumeRecurringRuleSchema = z.object({
   id: z.uuid({ error: "recurringRules.errors.ruleInvalid" }),
 });
 
+export const skipRecurringRuleSchema = z.object({
+  id: z.uuid({ error: "recurringRules.errors.ruleInvalid" }),
+});
+
+// «Deshacer» on a skip: the day the next run had before it.
+export const undoSkipRecurringRuleSchema = z.object({
+  id: z.uuid({ error: "recurringRules.errors.ruleInvalid" }),
+  nextRunOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, { error: "recurringRules.errors.nextRunOnInvalid" }),
+});
+
 export const deleteRecurringRuleSchema = z.object({
   id: z.uuid({ error: "recurringRules.errors.ruleInvalid" }),
 });

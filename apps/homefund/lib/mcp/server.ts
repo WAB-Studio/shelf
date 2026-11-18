@@ -6,23 +6,27 @@ import { createTranslator } from "next-intl";
 import { z } from "zod";
 
 import { listAccounts } from "@/db/queries/accounts";
+import { listAlertChannels } from "@/db/queries/alert-channels";
 import { listCallerMembers } from "@/db/queries/group-members";
 import { getMonthReview } from "@/db/queries/month-review";
 import { getSpendingPatterns, GROWTH_PERCENT } from "@/db/queries/spending-patterns";
 import { importStatement, previewStatement, StatementError } from "@/db/queries/statement-import";
 import { actAsCredentialOwner } from "@/db/session";
+import { SILENT_AFTER_DAYS, readAlertChannels } from "@/lib/alert-channels";
 import { MONTH_PATTERN, lastClosedMonth } from "@/lib/dates";
 import { ABOVE_USUAL_FACTOR, USUAL_WINDOW_MONTHS } from "@/lib/month-review-rules";
 import { ActionError, DATABASE_REFUSALS } from "@/lib/errors";
+import { readInput } from "@/lib/mcp/input-errors";
 import { env } from "@/lib/env";
 import { pgErrorCode } from "@/lib/db-error";
 import { DESTROY, READ, titled } from "@/lib/mcp/annotations";
+import { movementWarnings, withWarnings, type Probe } from "@/lib/mcp/debt-guard";
 import { registerDebtTools } from "@/lib/mcp/debt-tools";
 import { registerBudgetTools } from "@/lib/mcp/budget-tools";
 import { registerGoalTools } from "@/lib/mcp/goal-tools";
 import { registerPlannedPaymentTools } from "@/lib/mcp/planned-payment-tools";
 import { registerRecurringTools } from "@/lib/mcp/recurring-tools";
-import { accountRow, registerAccountTools } from "@/lib/mcp/account-tools";
+import { AccountRefusal, accountRow, registerAccountTools } from "@/lib/mcp/account-tools";
 import { registerDebtStatementTools } from "@/lib/mcp/statement-tools";
 import { registerReportTools } from "@/lib/mcp/report-tools";
 import { registerReviewTools } from "@/lib/mcp/review-tools";
@@ -34,7 +38,7 @@ import { registerMemberDebtTools } from "@/lib/mcp/member-debt-tools";
 import { registerRecipientTools } from "@/lib/mcp/recipient-tools";
 import { registerThirdPartyCreditTools } from "@/lib/mcp/third-party-credit-tools";
 import { registerLedgerTools } from "@/lib/mcp/write-tools";
-import { statementImportSchema, statementSchema } from "@/lib/validation/statement-import";
+import { statementImportSchema, statementSchema, type StatementInput } from "@/lib/validation/statement-import";
 
 import es from "../../messages/es.json";
 import pkg from "../../package.json";
@@ -55,6 +59,22 @@ const tForm = createTranslator({ locale: "es", messages: es });
 function refusal(key: string, values?: Record<string, string>): string {
   return tForm.has(key as never) ? tForm(key as never, values as never) : t("errors.unknown");
 }
+
+// A form's own message is a catalogue key; read through the whole catalogue it is the sentence the form shows.
+function knownSentence(message: string): string | undefined {
+  return tForm.has(message as never) ? tForm(message as never) : undefined;
+}
+
+// The database refusals a tool can reach without a screen's mapping: each answers what to fix, never the driver's message.
+const MCP_DATABASE_REFUSALS: Record<string, string> = {
+  "22P02": "mcp.errors.db.format",
+  "22003": "mcp.errors.db.range",
+  "23505": "mcp.errors.db.duplicate",
+  "23503": "errors.referenceGone",
+  "23514": "mcp.errors.db.rule",
+  "42501": "errors.notFound",
+  "57014": "mcp.errors.db.busy",
+};
 
 // The owner `withMcpAuth` carries, put there by the route's `verify` alone.
 function ownerOf(ctx: ServerContext): string | null {
@@ -80,9 +100,18 @@ async function run(ctx: ServerContext, load: (owner: string) => Promise<unknown>
     if (error instanceof BatchRefusal) {
       return text({ error: refusal(error.messageKey), deliveryId: error.deliveryId, ...(error.field ? { field: error.field } : {}) }, true);
     }
-    if (error instanceof ActionError) return text({ error: refusal(error.messageKey, error.values) }, true);
+    if (error instanceof AccountRefusal) {
+      return text({ error: refusal(error.messageKey, error.values), accountId: error.accountId, account: error.account }, true);
+    }
+    if (error instanceof ActionError) {
+      // A form's generic «something went wrong» names the field it was about, so Claude knows what to fix.
+      const sentence =
+        error.messageKey === "errors.unexpected" && error.field ? `${error.field} ${say("errors.input.invalid")}` : refusal(error.messageKey, error.values);
+      return text({ error: sentence, ...(error.field ? { field: error.field } : {}) }, true);
+    }
     const code = pgErrorCode(error);
     if (code !== undefined && Object.hasOwn(DATABASE_REFUSALS, code)) return text({ error: refusal(DATABASE_REFUSALS[code]) }, true);
+    if (code !== undefined && Object.hasOwn(MCP_DATABASE_REFUSALS, code)) return text({ error: refusal(MCP_DATABASE_REFUSALS[code]) }, true);
     console.error("mcp tool failed:", error instanceof Error ? error.name : "unknown", code ?? "");
     return text({ error: t("errors.unknown") }, true);
   }
@@ -144,6 +173,18 @@ function registerReadTools(server: McpServer): void {
     },
   );
 
+  // RF-251: whether each account's alerts keep arriving, by fixed rules; Claude explains a gap, the app calls no model.
+  server.registerTool(
+    "alert_channels",
+    {
+      ...titled(say, "alertChannels"),
+      description: t("tools.alertChannels", { days: SILENT_AFTER_DAYS }),
+      inputSchema: z.object({}),
+      annotations: READ,
+    },
+    (_input, ctx) => run(ctx, async () => readAlertChannels(await listAlertChannels(), new Date())),
+  );
+
   // RF-184: the patterns by fixed rules; Claude finds what to act on in the conversation, the app calls no model.
   server.registerTool(
     "spending_patterns",
@@ -157,6 +198,15 @@ function registerReadTools(server: McpServer): void {
   );
 }
 
+// The lines of a statement that read as debt, a loan or a saving in an account's expense or income.
+function statementProbes(input: StatementInput): Probe[] {
+  return input.rows.flatMap((row) =>
+    row.counterAccountId
+      ? []
+      : [{ kind: row.amountCents < 0 ? ("expense" as const) : ("income" as const), description: row.description, categoryIds: row.categoryId ? [row.categoryId] : [], line: row.line }],
+  );
+}
+
 // RF-144: a statement Claude read enters in two calls. The preview writes nothing and returns the
 // key the import must quote back, so no import runs on lines nobody looked at.
 function registerStatementTools(server: McpServer): void {
@@ -164,7 +214,7 @@ function registerStatementTools(server: McpServer): void {
     "preview_statement",
     { ...titled(say, "previewStatement"), description: t("tools.previewStatement"), inputSchema: statementSchema, annotations: READ },
     (input, ctx) =>
-      run(ctx, async () => {
+      run(ctx, async (owner) => {
         const preview = await previewStatement(input);
         // RF-136: a line with instalments reads as the proposal a person confirms, never as done.
         const lines = preview.lines.map((line) =>
@@ -172,7 +222,7 @@ function registerStatementTools(server: McpServer): void {
             ? { ...line, deferral: { ...line.deferral, proposal: t("deferralProposal", { count: line.deferral.instalments }) } }
             : line,
         );
-        return { ...preview, lines };
+        return withWarnings({ ...preview, lines }, await movementWarnings(owner, statementProbes(input), say));
       }),
   );
   server.registerTool(
@@ -183,12 +233,19 @@ function registerStatementTools(server: McpServer): void {
       inputSchema: statementImportSchema,
       annotations: DESTROY,
     },
-    (input, ctx) => run(ctx, () => importStatement(input)),
+    (input, ctx) =>
+      run(ctx, async (owner) => withWarnings(await importStatement(input), await movementWarnings(owner, statementProbes(input), say))),
   );
 }
 
 export function buildHandler(): (request: Request) => Promise<Response> {
   return createMcpHandler((server) => {
+    // The protocol's own input check answers in English and in zod's words; this one reads the same schema and names each
+    // field and why in Spanish, as every other refusal. `validateToolInput` is private in the SDK's types only.
+    (server as unknown as { validateToolInput: (tool: { inputSchema?: z.ZodType }, args: unknown) => Promise<unknown> }).validateToolInput = async (
+      tool,
+      args,
+    ) => (tool.inputSchema ? readInput(tool.inputSchema, args, (key, values) => t(key as never, values as never), knownSentence) : args);
     registerReadTools(server);
     registerStatementTools(server);
     registerLedgerTools(server, run, say);
@@ -210,6 +267,8 @@ export function buildHandler(): (request: Request) => Promise<Response> {
     registerDeleteTools(server, run, say);
   }, {
     serverInfo: { name: "homefund", version: pkg.version },
-    instructions: t("instructions"),
+    // Spending for another person is its own paragraph, so the money model's lines can change without touching it (RF-242).
+    // Read raw: the text names «<persona>» placeholders, which the message formatter would take for a tag and answer with the key.
+    instructions: `${t.raw("instructions")}\n\n${t.raw("instructionsPerson")}`,
   });
 }

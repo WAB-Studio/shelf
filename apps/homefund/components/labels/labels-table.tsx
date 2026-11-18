@@ -4,9 +4,11 @@ import type { ReactNode } from "react";
 import { useTranslations } from "next-intl";
 
 import {
+  Badge,
   ColorSwatch,
   DataTable,
   Flex,
+  PlainLink,
   RowMenu,
   Text,
   type DataColumn,
@@ -62,9 +64,22 @@ export function LabelsTable<Row extends LabelTableRow>({
       cell: (row) => (
         <Flex align="center" gap="2" minWidth="0">
           {row.color && <ColorSwatch color={row.color} label={row.name} />}
-          <Text size="2" weight="medium" truncate>
-            {row.name}
-          </Text>
+          {row.kind === "person" ? (
+            <PlainLink href={`/settings/labels/${row.id}`} aria-label={t("personOpen", { name: row.name })}>
+              <Text size="2" weight="medium" truncate>
+                {row.name}
+              </Text>
+            </PlainLink>
+          ) : (
+            <Text size="2" weight="medium" truncate>
+              {row.name}
+            </Text>
+          )}
+          {row.kind === "person" && (
+            <Badge color={row.chargeDefault ? "amber" : "gray"} variant="soft">
+              {t(row.chargeDefault ? "personCharged" : "personNotCharged")}
+            </Badge>
+          )}
         </Flex>
       ),
     },

@@ -4,6 +4,10 @@ import type { ReactNode } from "react";
 import { Plus } from "lucide-react";
 import { useFormatter, useTranslations } from "next-intl";
 import { useState } from "react";
+import { useAction } from "next-safe-action/hooks";
+import { toast } from "sonner";
+
+import { deleteAccountStatementAction } from "@/app/actions/account-statements";
 
 import {
   AccountStatementDialog,
@@ -13,6 +17,7 @@ import {
   Box,
   Button,
   Card,
+  ConfirmDialog,
   DataTable,
   EmptyState,
   Flex,
@@ -23,6 +28,7 @@ import {
 } from "@/components/ui";
 import type { AccountStatementRow } from "@/db/queries/account-statements";
 import type { CurrencyCode } from "@/lib/currency";
+import { useActionErrorToast } from "@/lib/use-action-toast";
 import { civilDateToDate } from "@/lib/dates";
 
 const STATEMENT_WIDTHS = {
@@ -56,7 +62,20 @@ export function StatementsSection({
 }): ReactNode {
   const t = useTranslations("installments");
   const format = useFormatter();
+  const tKey = useTranslations();
   const [recordOpen, setRecordOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  // Newest first: the only statement a person may still correct or take back (RF-284).
+  const last = statements[0];
+  const onActionError = useActionErrorToast();
+  const remove = useAction(deleteAccountStatementAction, {
+    onSuccess() {
+      toast.success(t("statementDeleted"));
+      setDeleteOpen(false);
+    },
+    onError: onActionError,
+  });
 
   function shortDate(date: string): string {
     return format.dateTime(civilDateToDate(date), {
@@ -229,8 +248,27 @@ export function StatementsSection({
         <Heading as="h2" size="3">
           {t("statementsTitle")}
         </Heading>
-        {recordButton}
+        <Flex gap="2" wrap="wrap" justify="end">
+          {canWrite && last && (
+            <>
+              <Button type="button" variant="surface" color="gray" onClick={() => setEditOpen(true)}>
+                {t("statementEdit")}
+              </Button>
+              <Button type="button" variant="surface" color="gray" onClick={() => setDeleteOpen(true)}>
+                {t("statementDelete")}
+              </Button>
+            </>
+          )}
+          {recordButton}
+        </Flex>
       </Flex>
+      {canWrite && last && (
+        <Flex px={{ initial: "0", md: "6" }}>
+          <Text size="2" color="gray">
+            {t("statementLastHint")}
+          </Text>
+        </Flex>
+      )}
 
       <Box display={{ initial: "none", lg: "block" }}>
         <DataTable
@@ -275,6 +313,31 @@ export function StatementsSection({
           </Flex>
         )}
       </Box>
+
+      {editOpen && last && (
+        <AccountStatementDialog
+          open
+          onOpenChange={(open) => {
+            if (!open) setEditOpen(false);
+          }}
+          account={account}
+          currency={currency}
+          statement={last}
+        />
+      )}
+
+      {last && (
+        <ConfirmDialog
+          open={deleteOpen}
+          onOpenChange={setDeleteOpen}
+          title={t("statementDeleteTitle")}
+          description={t("statementDeleteBody", { date: shortDate(last.cutOffDate) })}
+          confirmLabel={t("statementDeleteConfirm")}
+          cancelLabel={tKey("common.cancel")}
+          onConfirm={() => remove.execute({ accountId: account.id, statementId: last.id })}
+          pending={remove.isPending}
+        />
+      )}
 
       {recordOpen && (
         <AccountStatementDialog

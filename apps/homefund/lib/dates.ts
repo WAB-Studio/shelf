@@ -134,6 +134,18 @@ export function nextDayOfMonthOnOrAfter(day: number, reference: string): string 
   return dateToCivilDate(candidate);
 }
 
+// The latest Bogotá `YYYY-MM-DD` on or before `reference` whose day-of-month is `day`, clamped to the month
+// length: the cut-off a statement in hand was printed on.
+export function previousDayOfMonthOnOrBefore(day: number, reference: string): string {
+  const ref = civilDateToDate(reference);
+  let candidate = dayOfMonthClamped(ref, day);
+  if (candidate > ref) {
+    const before = new Date(Date.UTC(ref.getUTCFullYear(), ref.getUTCMonth() - 1, 1, 12));
+    candidate = dayOfMonthClamped(before, day);
+  }
+  return dateToCivilDate(candidate);
+}
+
 // `reference` advanced by `n` calendar months, its day-of-month clamped to the
 // target month's length so a 31 lands on the last day of a short month (Jan 31
 // +1 → Feb 28/29) instead of rolling into the next month.

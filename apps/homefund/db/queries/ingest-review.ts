@@ -2,10 +2,12 @@ import "server-only";
 
 import { and, asc, desc, eq, inArray, isNotNull, sql } from "drizzle-orm";
 
+import { recordedMovementSql, type RecordedMovement } from "@/db/queries/ingest-recorded";
 import { defaultMadeBy, insertTransaction } from "@/db/queries/transactions";
 import type { CreateTransactionArgs } from "@/db/queries/transactions";
 import {
   accounts,
+  categories,
   ingestDeliveries,
   ingestMerchants,
   ingestShapes,
@@ -14,6 +16,7 @@ import {
 } from "@/db/schema";
 import { credentialBadge, type CredentialBadge, type CredentialKind } from "@/lib/validation/webhook";
 import { withUserDb, withUserDbOrTx, type Transaction } from "@/db/session";
+import { namesCreditCard, repairDescription } from "@/lib/ingest/describe";
 import { inboxPendingCount } from "@/lib/ingest/inbox-pending";
 
 export type PendingDeliveryRow = {
@@ -48,6 +51,8 @@ export type PendingDeliveryRow = {
   // Set once the delivery left the queue: when, and the movement an acceptance wrote.
   resolvedAt: Date | null;
   transactionId: string | null;
+  // A movement recorded by hand that this waiting delivery repeats (RF-246); null for the rest.
+  recorded: RecordedMovement | null;
 };
 
 export type RejectReason = NonNullable<typeof ingestDeliveries.$inferSelect.rejectReason>;
@@ -89,6 +94,8 @@ export type AcceptDeliveryArgs = Omit<CreateTransactionArgs, "externalRef"> & {
 export type RejectDeliveryArgs = {
   deliveryId: string;
   silenceShape: boolean;
+  // Why a person sent it away; only «duplicate», for a delivery whose movement already exists (RF-246).
+  reason?: "duplicate";
 };
 
 function isBeforeOpening(
@@ -114,7 +121,7 @@ function isComplete(
     | "proposedCategoryId"
     | "categorySource"
     | "proposedOccurredAt"
-  > & { accountOpeningOn: string | null },
+  > & { accountOpeningOn: string | null; categoryKind: "income" | "expense" | null },
 ): boolean {
   // A day before the account opened cannot be one tap.
   if (isBeforeOpening(row)) return false;
@@ -125,6 +132,11 @@ function isComplete(
       row.proposedAccountId !== null &&
       row.proposedToAccountId !== null
     );
+  }
+
+  // A category of the other kind would be refused on write (RF-278).
+  if (row.categoryKind !== null && row.categoryKind !== (row.proposedDirection === "income" ? "income" : "expense")) {
+    return false;
   }
 
   return (
@@ -183,10 +195,14 @@ export async function listDeliveries({
         createdAt: ingestDeliveries.createdAt,
         resolvedAt: ingestDeliveries.resolvedAt,
         transactionId: ingestDeliveries.transactionId,
+        recorded: recordedMovementSql,
         accountOpeningOn: accounts.initialBalanceOn,
+        accountSubtype: accounts.subtype,
+        categoryKind: categories.kind,
       })
       .from(ingestDeliveries)
       .leftJoin(accounts, eq(accounts.id, ingestDeliveries.proposedAccountId))
+      .leftJoin(categories, eq(categories.id, ingestDeliveries.proposedCategoryId))
       .leftJoin(recipients, eq(recipients.id, ingestDeliveries.recipientId))
       .leftJoin(webhookCredentials, eq(webhookCredentials.id, ingestDeliveries.credentialId))
       .leftJoin(
@@ -205,13 +221,28 @@ export async function listDeliveries({
       .$dynamic();
     const rows = await (limit === undefined ? query : query.limit(limit).offset(offset ?? 0));
 
-    return rows.map(({ accountOpeningOn, credentialPurpose, credentialKind, ...row }) => ({
-      ...row,
-      credentialBadge:
-        credentialPurpose && credentialKind ? credentialBadge(credentialPurpose, credentialKind) : null,
-      isComplete: isComplete({ ...row, accountOpeningOn }),
-      beforeOpening: isBeforeOpening({ ...row, accountOpeningOn }),
-    }));
+    return rows.map(({ accountOpeningOn: openingOn, accountSubtype, categoryKind, credentialPurpose, credentialKind, ...stored }) => {
+      // A card purchase stored against a loan or another debt is read as unassigned: the person picks the card.
+      const dropsDebt =
+        accountSubtype === "loan" &&
+        stored.proposedDirection !== "transfer" &&
+        stored.proposedDirection !== "income" &&
+        namesCreditCard(stored.rawText);
+      const row = dropsDebt ? { ...stored, proposedAccountId: null } : stored;
+      const accountOpeningOn = dropsDebt ? null : openingOn;
+
+      return {
+        ...row,
+        // A description stored damaged is read again from the message it came from (RF-279).
+        proposedDescription: row.recipientId === null
+          ? repairDescription(row.proposedDescription, row.rawText, row.merchantLabel)
+          : row.proposedDescription,
+        credentialBadge:
+          credentialPurpose && credentialKind ? credentialBadge(credentialPurpose, credentialKind) : null,
+        isComplete: isComplete({ ...row, accountOpeningOn, categoryKind }),
+        beforeOpening: isBeforeOpening({ ...row, accountOpeningOn }),
+      };
+    });
   });
 }
 
@@ -319,6 +350,7 @@ export async function acceptDelivery({
       labelIds,
       contributedByMemberId,
       madeByMemberId: madeByMemberId ?? defaultMadeBy(fromAccountId),
+      createdVia: "inbox",
     });
 
     const updated = await tx
@@ -358,14 +390,54 @@ export async function acceptDelivery({
   });
 }
 
+/**
+ * Records several deliveries in ONE transaction: if any is refused (a closed account, a date before opening, a
+ * delivery already decided), none is recorded. The transaction ids come back in the order given.
+ */
+export async function acceptDeliveries(items: AcceptDeliveryArgs[]): Promise<string[]> {
+  return withUserDb(async (tx) => {
+    const ids: string[] = [];
+    for (const item of items) ids.push((await acceptDelivery(item, tx)).transactionId);
+
+    return ids;
+  });
+}
+
+/**
+ * Keeps the account a person picked on a pending delivery's card (RF-312): the account it leaves or lands in, whichever
+ * is given, so a reload shows the choice. An account the policies do not show the caller is refused as not found.
+ */
+export async function chooseDeliveryAccounts({
+  deliveryId,
+  accountId,
+  toAccountId,
+}: {
+  deliveryId: string;
+  accountId?: string;
+  toAccountId?: string;
+}): Promise<void> {
+  const rows = await withUserDb((tx) =>
+    tx.execute<{ id: string }>(sql`
+      update ingest_deliveries
+         set proposed_account_id = coalesce(${accountId ?? null}::uuid, proposed_account_id),
+             proposed_to_account_id = coalesce(${toAccountId ?? null}::uuid, proposed_to_account_id)
+       where id = ${deliveryId}::uuid and status = 'pending'
+         and (${accountId ?? null}::uuid is null or exists (select 1 from accounts a where a.id = ${accountId ?? null}::uuid))
+         and (${toAccountId ?? null}::uuid is null or exists (select 1 from accounts a where a.id = ${toAccountId ?? null}::uuid))
+      returning id`),
+  );
+  if (rows.length === 0) throw new DeliveryNotPending();
+}
+
 export async function rejectDelivery({
   deliveryId,
   silenceShape,
+  reason,
 }: RejectDeliveryArgs, outerTx?: Transaction): Promise<void> {
   return withUserDbOrTx(outerTx, async (tx) => {
     const [delivery] = await tx
       .update(ingestDeliveries)
-      .set({ status: "rejected", resolvedAt: sql`now()` })
+      .set({ status: "rejected", resolvedAt: sql`now()`, ...(reason ? { rejectReason: reason } : {}) })
       .where(
         and(
           eq(ingestDeliveries.id, deliveryId),

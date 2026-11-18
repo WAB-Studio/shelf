@@ -1,44 +1,46 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { useTranslations } from "next-intl";
+import { useAction } from "next-safe-action/hooks";
+import { toast } from "sonner";
+
+import { createTransactionAction } from "@/app/actions/transactions";
 
 import { useOwnerLabel } from "@/components/fund/owner-mark";
+import { ThirdPartyBreakdownDialog } from "@/components/planning/third-party-breakdown";
 import {
+  Button,
   DataTable,
   Flex,
-  PersonalMark,
   Money,
   RowMenu,
   Text,
   type DataColumn,
-  type DataSection,
 } from "@/components/ui";
 import type { AccountRow } from "@/db/queries/accounts";
-
-// The em dash a cell with nothing to name reads as in the desktop design, not a word a
-// translator would ever change.
-const NO_VALUE = "—";
+import { freePartToShow, nameCarriesHolder } from "@/lib/account-detail";
+import { todayInBogota } from "@/lib/dates";
+import { pocketCover } from "@/lib/fund/home-lines";
+import { centsToDecimal } from "@/lib/money";
+import { useActionErrorToast } from "@/lib/use-action-toast";
 
 // The tracks of the Cuentas artboard, in order.
 const WIDTHS = {
   name: "minmax(0, 1fr)",
-  institution: "196px",
-  lastFour: "148px",
   balance: "168px",
   menu: "36px",
 } as const;
 
-// What a table row draws: an account, or the free part of one that holds pockets (RF-173),
-// which reads under its parent as the first of them.
-type Line = { row: AccountRow; free: boolean };
-
 /**
  * «Lo paga <persona> · le falta $X» under a credit somebody else pays (RF-216): the one place its hidden «Me debe»
- * shows, as a figure on the credit and never as an account. Nothing for any other account.
+ * shows, as a figure on the credit and never as an account. The figure opens its breakdown (RF-267): what the payer
+ * owed when the credit was followed, each payment of theirs and what is left. Nothing for any other account.
  */
 export function PaidByLine({ account }: { account: AccountRow }) {
   const t = useTranslations("accounts");
+  const tCredit = useTranslations("thirdPartyCredit");
+  const [open, setOpen] = useState(false);
   const credit = account.thirdParty;
   if (!credit) return null;
 
@@ -48,16 +50,144 @@ export function PaidByLine({ account }: { account: AccountRow }) {
         ? t.rich("paidBy", {
             person: credit.personName,
             amount: () => (
-              <Money
-                minor={credit.personOwesCents}
-                currency={account.settlementCurrency}
-                tone="plain"
-                size="inherit"
-                signed={false}
-              />
+              <Button
+                type="button"
+                variant="ghost"
+                size="1"
+                tap={false}
+                aria-label={tCredit("breakdownOpen", { person: credit.personName })}
+                onClick={() => setOpen(true)}
+              >
+                <Money
+                  minor={credit.personOwesCents}
+                  currency={account.settlementCurrency}
+                  tone="plain"
+                  size="inherit"
+                  signed={false}
+                />
+              </Button>
             ),
           })
         : t("paidByNothingOwed", { person: credit.personName })}
+      {open && (
+        <ThirdPartyBreakdownDialog
+          open
+          onOpenChange={setOpen}
+          liabilityAccountId={account.id}
+          person={credit.personName}
+          currency={account.settlementCurrency}
+        />
+      )}
+    </Text>
+  );
+}
+
+/**
+ * The asset's own part below zero, as a warning on its row (RF-249): the database covers a shortfall from the
+ * account's pockets when they hold it, so what stays negative is money that left with nothing to cover it.
+ */
+export function FreePartWarning({ account }: { account: AccountRow }) {
+  const t = useTranslations("accounts");
+  const own = account.balances[0];
+  // A pocket below zero has its own line, with the way to cover it.
+  if (account.kind !== "asset" || account.parentAccountId || !own || own.balanceCents >= 0) return null;
+
+  return (
+    <Text size="2" color="red">
+      {t("freePartNegative")}
+    </Text>
+    );
+}
+
+/**
+ * A pocket below zero: «gastó $X más de lo que tenía» and a one-tap «Pasar $X desde <cuenta>» that moves what it lacks
+ * from its account, as an ordinary transfer. Nothing for an account that is no pocket or has no balance below zero;
+ * the button only for a pocket the caller writes.
+ */
+export function PocketShortfall({ account, parentName }: { account: AccountRow; parentName: string | null }) {
+  const t = useTranslations("accounts");
+  const onActionError = useActionErrorToast();
+  const own = account.balances[0];
+  const cover = own ? pocketCover({ balanceCents: own.balanceCents, parentAccountId: account.parentAccountId }) : null;
+  const move = useAction(createTransactionAction, {
+    onSuccess() {
+      toast.success(t("pocketCovered", { pocket: account.name }));
+    },
+    onError: onActionError,
+  });
+  if (!own || !cover) return null;
+
+  const amount = () => <Money minor={cover.cents} currency={own.currency} tone="plain" size="inherit" signed={false} />;
+
+  return (
+    <Flex direction="column" gap="1" align="start">
+      <Text size="2" color="red">
+        {t.rich("pocketShort", { amount })}
+      </Text>
+      {account.canWrite && parentName && (
+        <Button
+          type="button"
+          variant="soft"
+          size="1"
+          loading={move.isPending}
+          onClick={() =>
+            move.execute({
+              fromAccountId: cover.parentId,
+              toAccountId: account.id,
+              amount: centsToDecimal(cover.cents),
+              occurredAt: todayInBogota(),
+              description: t("pocketCoverDescription", { pocket: account.name }),
+              splits: [],
+              labelIds: [],
+              requestRef: crypto.randomUUID(),
+            })
+          }
+        >
+          {t.rich("pocketCover", { amount, account: parentName })}
+        </Button>
+      )}
+    </Flex>
+  );
+}
+
+/**
+ * The quiet «Cuádrala» under an account not counted for over a month (RF-262): a text button that opens the account's
+ * own «Cuadrar». Nothing for an account counted lately, or one the caller only reads.
+ */
+export function StaleCountLine({ stale, onReconcile }: { stale: boolean; onReconcile: () => void }) {
+  const t = useTranslations("accounts");
+  if (!stale) return null;
+
+  return (
+    <Flex>
+      <Button type="button" variant="ghost" color="gray" size="1" tap onClick={onReconcile}>
+        {t("reconcileNudge")}
+      </Button>
+    </Flex>
+  );
+}
+
+/**
+ * The one gray line under an account's name, with what it has and nothing else (RF-240): its entity, the end of its
+ * number, its holder when the name does not already say it, and the owner of another member's account. Nothing
+ * for an account with none of them.
+ */
+export function AccountDetail({ account }: { account: AccountRow }) {
+  const t = useTranslations("accounts");
+  const ownerOf = useOwnerLabel();
+  const parts = [
+    account.institution,
+    account.lastFour ? t("lastFourDetail", { digits: account.lastFour }) : null,
+    account.holderName && !nameCarriesHolder(account.name, account.holderName)
+      ? t("holderOf", { name: account.holderName })
+      : null,
+    account.foreignOwner ? ownerOf(account.ownerName) : null,
+  ].filter((part): part is string => Boolean(part));
+  if (parts.length === 0) return null;
+
+  return (
+    <Text size="2" color="gray" truncate>
+      {parts.join(" · ")}
     </Text>
   );
 }
@@ -74,6 +204,8 @@ export function AccountsTable({
   archived,
   hasGroup,
   empty,
+  stale,
+  names,
   onEdit,
   onReconcile,
   onArchive,
@@ -88,6 +220,10 @@ export function AccountsTable({
   // go (RF-60, RF-61), mirroring the phone's card.
   hasGroup: boolean;
   empty?: ReactNode;
+  // The accounts not counted for over a month (RF-262).
+  stale: ReadonlySet<string>;
+  // Each account's name by id, so a pocket can name the account it covers from.
+  names: ReadonlyMap<string, string>;
   onEdit: (row: AccountRow) => void;
   onReconcile: (row: AccountRow) => void;
   onArchive: (row: AccountRow) => void;
@@ -98,95 +234,22 @@ export function AccountsTable({
   const t = useTranslations("accounts");
   const tKey = useTranslations();
 
-  function absent(): ReactNode {
-    return (
-      <Text size="2" color="gray">
-        {NO_VALUE}
-      </Text>
-    );
-  }
-
-  const ownerOf = useOwnerLabel();
-  const ownerLabel = (row: AccountRow) =>
-    row.foreignOwner ? ownerOf(row.ownerName) : t("ownerPersonal");
-
-  // The free line shows the parent's own balance and nothing else, so only the name and balance cells draw it.
-  const linesOf = (rows: AccountRow[]): Line[] =>
-    rows.flatMap((row) =>
-      row.totalBalances ? [{ row, free: false }, { row, free: true }] : [{ row, free: false }],
-    );
-  const bands: DataSection<Line>[] = sections.map((section) => ({
-    ...section,
-    rows: linesOf(section.rows),
-  }));
-  // Each cell of the other columns draws the account itself; the free line leaves them empty.
-  const ofAccount =
-    (cell: (row: AccountRow) => ReactNode) =>
-    ({ row, free }: Line): ReactNode =>
-      free ? null : cell(row);
-
-  const columns: DataColumn<Line>[] = [
+  const columns: DataColumn<AccountRow>[] = [
     {
       key: "name",
       header: t("nameLabel"),
       width: WIDTHS.name,
-      cell: ({ row, free }) =>
-        free ? (
-          <Flex pl="5">
-            <Text size="2" color="gray">
-              {t("freePart")}
-            </Text>
-          </Flex>
-        ) : (
+      cell: (row) => (
         <Flex direction="column" gap="1" minWidth="0" pl={row.parentAccountId ? "5" : "0"}>
-          <Flex align="center" gap="2" minWidth="0">
-            <Text size="2" weight="medium" truncate>
-              {row.thirdParty ? t("creditOf", { name: row.name, person: row.thirdParty.personName }) : row.name}
-            </Text>
-            {row.ownerUserId && (
-              <PersonalMark label={ownerLabel(row)} />
-            )}
-          </Flex>
-          {/* One scope, never both: a personal account names its owner, a
-              group account the group (RF-60). Another member's is theirs by name. */}
-          <Text size="2" color="gray">
-            {row.ownerUserId
-              ? ownerLabel(row)
-              : row.holderName
-                ? t("holderOf", { name: row.holderName })
-                : t("ownerFund")}
+          <Text size="2" weight="medium" truncate>
+            {row.thirdParty ? t("creditOf", { name: row.name, person: row.thirdParty.personName }) : row.name}
           </Text>
+          <AccountDetail account={row} />
           <PaidByLine account={row} />
+          <FreePartWarning account={row} />
+          <PocketShortfall account={row} parentName={row.parentAccountId ? (names.get(row.parentAccountId) ?? null) : null} />
+          <StaleCountLine stale={stale.has(row.id)} onReconcile={() => onReconcile(row)} />
         </Flex>
-        ),
-    },
-    {
-      key: "institution",
-      header: t("institutionLabel"),
-      width: WIDTHS.institution,
-      cell: ofAccount((row) =>
-        row.institution ? (
-          <Text size="2" color="gray" truncate>
-            {row.institution}
-          </Text>
-        ) : (
-          absent()
-        ),
-      ),
-    },
-    {
-      key: "lastFour",
-      header: t("lastFourLabel"),
-      width: WIDTHS.lastFour,
-      numeric: true,
-      cell: ofAccount((row) =>
-        row.lastFour ? (
-          <Text size="2" color="gray">
-            {row.lastFour}
-          </Text>
-        ) : (
-          absent()
-        ),
       ),
     },
     {
@@ -201,9 +264,11 @@ export function AccountsTable({
       // the same cut the phone's card makes; no cell here adds two currencies
       // together (RF-124). The figure carries its own minus, so no expense tone
       // is borrowed to draw one.
-      cell: ({ row, free }) => {
-        // A parent leads with the total of itself and its pockets; its free line is its own part (RF-173).
-        const [settlement, ...others] = free ? row.balances : (row.totalBalances ?? row.balances);
+      cell: (row) => {
+        // A parent leads with the total of itself and its pockets and names its own part under it only when
+        // that part is not the whole (RF-173, RF-240).
+        const [settlement, ...others] = row.totalBalances ?? row.balances;
+        const free = freePartToShow(row.balances, row.totalBalances);
 
         return (
           <Flex direction="column" gap="1" align="end">
@@ -214,7 +279,16 @@ export function AccountsTable({
                 tone="plain"
               />
             )}
-            {!free && others.map((balance) => (
+            {free && (
+              <Text size="1" color="gray">
+                {t.rich("freeOfTotal", {
+                  amount: () => (
+                    <Money minor={free.balanceCents} currency={free.currency} tone="plain" size="inherit" />
+                  ),
+                })}
+              </Text>
+            )}
+            {others.map((balance) => (
               <Text key={balance.currency} size="1" color="gray">
                 {t.rich("balanceInCurrency", {
                   amount: () => (
@@ -239,7 +313,7 @@ export function AccountsTable({
       width: WIDTHS.menu,
       align: "end",
       // Nothing here acts on another member's personal account.
-      cell: ofAccount((row) => row.foreignOwner ? null : (
+      cell: (row) => row.foreignOwner ? null : (
         <RowMenu
           rowName={row.name}
           items={[
@@ -290,7 +364,7 @@ export function AccountsTable({
             },
           ]}
         />
-      )),
+      ),
     },
   ];
 
@@ -298,8 +372,8 @@ export function AccountsTable({
     <DataTable
       label={t("title")}
       columns={columns}
-      sections={bands}
-      rowKey={({ row, free }) => (free ? `${row.id}:free` : row.id)}
+      sections={sections}
+      rowKey={(row) => row.id}
       empty={empty}
     />
   );

@@ -20,6 +20,8 @@ import {
   Flex,
   Select,
   Spinner,
+  Switch,
+  TapTarget,
   Text,
   TextField,
 } from "@/components/ui";
@@ -28,6 +30,7 @@ import { useActionErrorToast } from "@/lib/use-action-toast";
 import {
   createLabelSchema,
   updateLabelSchema,
+  LABEL_KINDS,
   LABEL_PLACEMENTS,
   type CreateLabelInput,
   type UpdateLabelInput,
@@ -35,6 +38,7 @@ import {
 
 // Where a label lands, named once for the screen and the form alike.
 export type LabelPlacement = (typeof LABEL_PLACEMENTS)[number];
+type LabelKind = (typeof LABEL_KINDS)[number];
 
 // A superset of both schemas' shapes: the resolver strips whichever key the
 // active schema does not declare, so only the fields that schema needs ever
@@ -44,6 +48,8 @@ type LabelFormValues = {
   name: string;
   color: string | null;
   placement: LabelPlacement;
+  kind: LabelKind;
+  chargeDefault: boolean;
 };
 
 type Label = {
@@ -51,12 +57,16 @@ type Label = {
   name: string;
   color: string | null;
   placement: LabelPlacement;
+  kind: LabelKind;
+  chargeDefault: boolean;
 };
 
 type LabelFormProps = {
   onOpenChange: (open: boolean) => void;
   label?: Label;
   defaultPlacement: LabelPlacement;
+  // What a new label is born as: «Añadir persona» opens the same form as a person.
+  defaultKind: LabelKind;
   hasGroup: boolean;
   canManageGroup: boolean;
   usedColors: { personal: string[]; group: string[] };
@@ -71,7 +81,13 @@ export function LabelFormDialog({
   return (
     <Dialog.Root open={open} onOpenChange={props.onOpenChange}>
       <Dialog.Content>
-        <Dialog.Title>{t(props.label ? "editTitle" : "addTitle")}</Dialog.Title>
+        <Dialog.Title>
+          {t(
+            props.label
+              ? props.label.kind === "person" ? "editPersonTitle" : "editTitle"
+              : props.defaultKind === "person" ? "addPersonTitle" : "addTitle",
+          )}
+        </Dialog.Title>
         {/* Closing unmounts the content, and the key remounts on a change of
             subject, so the form below is always born with fresh defaults. */}
         <LabelForm key={props.label?.id ?? "create"} {...props} />
@@ -84,6 +100,7 @@ function LabelForm({
   onOpenChange,
   label,
   defaultPlacement,
+  defaultKind,
   hasGroup,
   canManageGroup,
   usedColors,
@@ -93,6 +110,8 @@ function LabelForm({
   const tKey = useTranslations();
 
   const isEdit = !!label;
+  // Fixed at birth: a tag never becomes a person, so the form reads it once.
+  const kind = label?.kind ?? defaultKind;
   const placement = label?.placement ?? defaultPlacement;
 
   const form = useForm<LabelFormValues>({
@@ -104,6 +123,8 @@ function LabelForm({
       name: label?.name ?? "",
       color: label?.color ?? nextCategoryColor(usedColors[placement]),
       placement,
+      kind,
+      chargeDefault: label?.chargeDefault ?? false,
     },
   });
 
@@ -214,6 +235,29 @@ function LabelForm({
               )}
             />
           )
+        )}
+        {kind === "person" && (
+          <Controller
+            name="chargeDefault"
+            control={form.control}
+            render={({ field }) => (
+              <Text as="label" size="2">
+                <TapTarget align="center" gap="2">
+                  <Switch
+                    checked={field.value}
+                    disabled={isPending}
+                    onCheckedChange={field.onChange}
+                  />
+                  <Flex direction="column">
+                    {t("chargeLabel")}
+                    <Text size="1" color="gray">
+                      {t("chargeHint")}
+                    </Text>
+                  </Flex>
+                </TapTarget>
+              </Text>
+            )}
+          />
         )}
         <Controller
           name="color"

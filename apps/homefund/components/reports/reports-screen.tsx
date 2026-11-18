@@ -25,6 +25,7 @@ import {
 import type { BarChartDatum } from "@/components/ui";
 import type { CategoryExpense } from "@/db/queries/reports/expenses-by-category";
 import type { MonthFlow } from "@/db/queries/reports/monthly-flow";
+import type { PersonExpense } from "@/db/queries/reports/spending-for-person";
 import type { ReportsData } from "@/db/queries/reports/reports-screen";
 import type { MemberContributionNamed } from "@/db/queries/reports/reports-screen";
 import type { CurrencyCode } from "@/lib/currency";
@@ -75,7 +76,7 @@ function ReportsHead({ title, month }: { title: string; month: string }) {
 export function ReportsScreen({ data, month }: { data: ReportsData; month: string }) {
   const t = useTranslations("reports");
 
-  const { expensesByCategory, sixMonthFlow } = data;
+  const { expensesByCategory, sixMonthFlow, spendingForPersons } = data;
 
   return (
     <>
@@ -102,12 +103,23 @@ export function ReportsScreen({ data, month }: { data: ReportsData; month: strin
             </section>
           </Flex>
 
-          <Flex direction="column" gap="3" asChild>
-            <section>
-              <Heading as="h2" size="4">{t("contributionsTitle")}</Heading>
-              <ContributionsBody data={data} />
-            </section>
-          </Flex>
+          {data.hasGroup && (
+            <Flex direction="column" gap="3" asChild>
+              <section>
+                <Heading as="h2" size="4">{t("contributionsTitle")}</Heading>
+                <ContributionsBody data={data} />
+              </section>
+            </Flex>
+          )}
+
+          {spendingForPersons.length > 0 && (
+            <Flex direction="column" gap="3" asChild>
+              <section>
+                <Heading as="h2" size="4">{t("forPersonTitle")}</Heading>
+                <ForPersonBody rows={spendingForPersons} />
+              </section>
+            </Flex>
+          )}
         </Flex>
       </Box>
 
@@ -134,11 +146,20 @@ export function ReportsScreen({ data, month }: { data: ReportsData; month: strin
                 <ExpenseBands expenses={expensesByCategory} months={sixMonthFlow} monthStart={`${month}-01`} />
               </ReportCard>
 
-              <ReportCard>
-                <Heading as="h2" size="4">{t("contributionsTitle")}</Heading>
-                <ContributionsBody data={data} />
-              </ReportCard>
+              {data.hasGroup && (
+                <ReportCard>
+                  <Heading as="h2" size="4">{t("contributionsTitle")}</Heading>
+                  <ContributionsBody data={data} />
+                </ReportCard>
+              )}
             </ReportRow>
+
+            {spendingForPersons.length > 0 && (
+              <ReportCard>
+                <Heading as="h2" size="4">{t("forPersonTitle")}</Heading>
+                <ForPersonBody rows={spendingForPersons} />
+              </ReportCard>
+            )}
           </Flex>
         </Flex>
       </Box>
@@ -447,7 +468,37 @@ function ContributionsBody({ data }: { data: ReportsData }) {
   );
 }
 
-function PotRow({ label, children }: { label: string; children: ReactNode }) {
+// What was spent for each person in the month, one list per currency; a name opens Movimientos already
+// narrowed to that person (RF-242). The spending is the payer's own: no row here is a debt.
+function ForPersonBody({ rows }: { rows: PersonExpense[] }) {
+  const t = useTranslations("reports");
+
+  return (
+    <>
+      {byCurrency(rows).map(([currency, group]) => (
+        <Flex key={currency} direction="column" gap="2">
+          <Text size="2" color="gray">
+            {t("forPersonIn", { currency })}
+          </Text>
+          {group.map((row) => (
+            <PotRow
+              key={`${row.personId}|${currency}`}
+              label={
+                <TextLink href={{ pathname: "/movements", query: { person: row.personId } }} size="3">
+                  {row.name}
+                </TextLink>
+              }
+            >
+              <Money minor={row.spentCents} currency={currency} signed={false} size="inherit" />
+            </PotRow>
+          ))}
+        </Flex>
+      ))}
+    </>
+  );
+}
+
+function PotRow({ label, children }: { label: ReactNode; children: ReactNode }) {
   return (
     <Flex align="center" gap="3">
       <Box asChild flexGrow="1" minWidth="0">

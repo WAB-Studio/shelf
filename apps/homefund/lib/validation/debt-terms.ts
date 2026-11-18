@@ -21,7 +21,7 @@ export function rateSchema(keys: { required: string; invalid: string }) {
       return;
     }
 
-    if (!/^\d+(\.\d+)?$/.test(trimmed)) {
+    if (!/^\d+([.,]\d+)?$/.test(trimmed)) {
       ctx.addIssue(keys.invalid);
     }
   });
@@ -37,22 +37,22 @@ export function percentSchema(keys: { required: string; invalid: string }) {
       return;
     }
 
-    if (!/^\d+(\.\d+)?$/.test(trimmed)) {
+    if (!/^\d+([.,]\d+)?$/.test(trimmed)) {
       ctx.addIssue(keys.invalid);
       return;
     }
 
-    if (Number(trimmed) > 100) {
+    if (Number(trimmed.replace(",", ".")) > 100) {
       ctx.addIssue(keys.invalid);
     }
   });
 }
 
 // Shifts a validated non-negative decimal string two places right of the
-// decimal point — an exact string move, so "28.5" reads as "0.285" and no float
+// decimal point — an exact string move, so "28.5" and "28,5" read as "0.285" and no float
 // rounds the rate the numeric column then stores.
 export function percentToFraction(value: string): string {
-  const [intPart, fracPart = ""] = value.trim().split(".");
+  const [intPart, fracPart = ""] = value.trim().replace(",", ".").split(".");
   const digits = (intPart + fracPart).replace(/^0+(?=\d)/, "");
   const fractionLength = fracPart.length + 2;
   const padded = digits.padStart(fractionLength + 1, "0");
@@ -157,6 +157,13 @@ const debtTermsFields = {
   creditLimit: creditLimitSchema.nullish(),
   statementCutOffDay: dayOfMonthSchema("debts.errors.cutOffDayInvalid").nullish(),
   paymentDueDay: dayOfMonthSchema("debts.errors.dueDayInvalid").nullish(),
+  // The cuotas a loan was taken for (RF-286); left out, the stored term stays as it was.
+  termMonths: z
+    .number({ error: "debts.errors.termInvalid" })
+    .int({ error: "debts.errors.termInvalid" })
+    .min(1, { error: "debts.errors.termInvalid" })
+    .max(600, { error: "debts.errors.termInvalid" })
+    .nullish(),
   aval: avalSchema.nullish(),
 };
 
@@ -182,3 +189,9 @@ export const debtTermsSchema = z
   .superRefine(requireMinimumNotBoth);
 
 export type DebtTermsInput = z.infer<typeof debtTermsSchema>;
+
+// A stored fraction as the percentage a person typed it, with the decimal comma the Spanish
+// interface writes: 0.285 reads «28,5». No conversion to a monthly step ever passes through here.
+export function formatRatePercent(fraction: string, decimal: "," | "." = ","): string {
+  return fractionToPercent(fraction).replace(".", decimal);
+}

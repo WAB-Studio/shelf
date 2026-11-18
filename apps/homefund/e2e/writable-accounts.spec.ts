@@ -11,12 +11,12 @@
  */
 import { randomUUID } from "node:crypto";
 
-import { expect, type Locator, type Page, type TestInfo } from "@playwright/test";
+import { expect, type Locator, type Page } from "@playwright/test";
 import messages from "@/messages/es.json";
 
 import { fixtureSql } from "../scripts/harness/fixtures";
 import { MEMBER_STORAGE_STATE, asUser, clearGroup, readScope, seedGroup, test } from "./global-setup";
-const payments = messages.plannedPayments;
+const payments = messages.upcoming;
 const transactions = messages.transactions;
 
 const scope = readScope();
@@ -79,10 +79,6 @@ test.afterEach(async () => {
   await dropRows();
 });
 
-function isDesktop(testInfo: TestInfo): boolean {
-  return testInfo.project.name === "desktop";
-}
-
 // What a select offers, read off its open list; the list closes again after.
 async function offered(page: Page, trigger: Locator): Promise<string[]> {
   await trigger.click();
@@ -103,33 +99,26 @@ function expectCut(names: string[]) {
 }
 
 async function openPayment(page: Page): Promise<Locator> {
-  await page.goto("/es/planning/payments");
+  await page.goto("/es/planning/upcoming");
   await page.getByRole("button", { name: payments.add, exact: true }).first().click();
   const dialog = page.getByRole("dialog");
   await expect(dialog).toBeVisible();
   return dialog;
 }
 
-async function openFullForm(page: Page, testInfo: TestInfo): Promise<Locator> {
+async function openFullForm(page: Page): Promise<Locator> {
   await page.goto("/es");
-  if (isDesktop(testInfo)) {
-    await page.getByRole("button", { name: transactions.quickTypeLink, exact: true }).click();
-  } else {
-    await page.getByRole("button", { name: transactions.quickPlaceholder, exact: true }).click();
-    await page.getByRole("link", { name: transactions.quickTypeLink, exact: true }).click();
-  }
+  await page.getByRole("button", { name: transactions.quickPlaceholder, exact: true }).click();
   const dialog = page.getByRole("dialog");
   await expect(dialog.locator("form").getByRole("heading", { name: transactions.formTitle })).toBeVisible();
+  // Both selects live on the transfer tab (RF-272).
+  await dialog.getByRole("radio", { name: transactions.kindTransfer, exact: true }).click();
   return dialog;
 }
 
 async function choose(page: Page, trigger: Locator, option: string) {
   await trigger.click();
   await page.getByRole("option", { name: option, exact: true }).click();
-}
-
-function band(page: Page): Locator {
-  return page.locator("main > div > .rt-Box").filter({ visible: true });
 }
 
 test.describe("as a plain member", () => {
@@ -140,21 +129,21 @@ test.describe("as a plain member", () => {
     const concept = `Pago ${stamp}`;
     const dialog = await openPayment(page);
 
-    await dialog.getByRole("textbox", { name: payments.conceptLabel }).fill(concept);
-    await dialog.getByRole("textbox", { name: payments.amountLabel }).fill("25000");
-    await choose(page, dialog.locator("#payment-from"), MEMBER_ACCOUNT);
-    await dialog.getByLabel(payments.dueLabel).fill("2027-03-12");
-    await dialog.getByRole("button", { name: payments.save, exact: true }).click();
+    await dialog.getByRole("textbox", { name: payments.form.conceptPay }).fill(concept);
+    await dialog.getByRole("textbox", { name: payments.form.amount }).fill("25000");
+    await choose(page, dialog.locator("#upcoming-account"), MEMBER_ACCOUNT);
+    await dialog.getByLabel(payments.form.datePay).fill("2027-03-12");
+    await dialog.getByRole("button", { name: payments.form.save, exact: true }).click();
 
-    await expect(page.getByText(payments.created, { exact: true })).toBeVisible();
-    await expect(band(page).getByText(concept, { exact: true })).toBeVisible();
+    await expect(page.getByText(payments.form.created, { exact: true })).toBeVisible();
+    await expect(page.getByText(concept, { exact: true }).filter({ visible: true }).first()).toBeVisible();
   });
 
   test("the movement form cuts both selects and saves a transfer between the member's accounts", async ({
     page,
-  }, testInfo) => {
+  }) => {
     // Kills: one select cut only.
-    const dialog = await openFullForm(page, testInfo);
+    const dialog = await openFullForm(page);
 
     expectCut(await offered(page, dialog.locator("#movement-from")));
     expectCut(await offered(page, dialog.locator("#movement-to")));

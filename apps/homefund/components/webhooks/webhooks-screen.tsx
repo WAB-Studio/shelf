@@ -7,6 +7,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 
 import { revokeWebhookCredentialAction } from "@/app/actions/webhook-credentials";
+import { AlertChannels } from "@/components/webhooks/alert-channels";
 import { BankEmails } from "@/components/webhooks/bank-emails";
 import { ClaudeKey } from "@/components/webhooks/claude-key";
 import { IphoneShortcut } from "@/components/webhooks/iphone-shortcut";
@@ -34,6 +35,7 @@ import type {
   WebhookCredentialRow,
 } from "@/db/queries/webhook-credentials";
 import { ANDROID_APK_PATH } from "@/lib/android-app";
+import type { AlertChannel } from "@/lib/alert-channels";
 import { credentialBadge, type CredentialKind } from "@/lib/validation/webhook";
 import { scopedCategoryName } from "@/lib/fund/category-names";
 import { TIME_ZONE } from "@/lib/locales";
@@ -74,6 +76,8 @@ export function WebhooksScreen({
   oauthLine,
   inboundDomain,
   apkReady,
+  alertChannels,
+  nowIso,
 }: {
   credentials: WebhookCredentialRow[];
   options: WebhookCredentialOptions;
@@ -86,6 +90,9 @@ export function WebhooksScreen({
   // RF-187: where Resend Inbound receives; null hides the forwarding way.
   inboundDomain: string | null;
   apkReady: boolean;
+  // RF-251: the account-by-account state of the alerts, and the instant it was read.
+  alertChannels: AlertChannel[];
+  nowIso: string;
 }) {
   const t = useTranslations("webhooks");
   // Root-scoped: `common`'s labels are full catalogue paths.
@@ -290,6 +297,12 @@ export function WebhooksScreen({
           {revokedToggle}
         </Flex>
       </Box>
+
+      {alertChannels.length > 0 && (
+        <Card id="alert-channels">
+          <AlertChannels channels={alertChannels} nowIso={nowIso} />
+        </Card>
+      )}
 
       <Card id="bank-emails">
         <BankEmails

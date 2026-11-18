@@ -708,6 +708,69 @@
       "when": 1794776100415,
       "tag": "0104_an_alert_by_email_and_by_sms_is_one",
       "breakpoints": true
+    },
+    {
+      "idx": 105,
+      "version": "7",
+      "when": 1794930163460,
+      "tag": "0105_a_movement_says_who_it_was_for",
+      "breakpoints": true
+    },
+    {
+      "idx": 106,
+      "version": "7",
+      "when": 1794931597534,
+      "tag": "0106_a_pocket_covers_what_an_account_spends",
+      "breakpoints": true
+    },
+    {
+      "idx": 107,
+      "version": "7",
+      "when": 1794931825713,
+      "tag": "0107_a_receivable_is_money_owed_to_you",
+      "breakpoints": true
+    },
+    {
+      "idx": 108,
+      "version": "7",
+      "when": 1794933150696,
+      "tag": "0108_a_movement_remembers_how_it_was_made",
+      "breakpoints": true
+    },
+    {
+      "idx": 109,
+      "version": "7",
+      "when": 1794933210000,
+      "tag": "0109_a_card_defers_what_the_bank_prints",
+      "breakpoints": true
+    },
+    {
+      "idx": 110,
+      "version": "7",
+      "when": 1794933270000,
+      "tag": "0110_a_loan_has_a_payment_schedule",
+      "breakpoints": true
+    },
+    {
+      "idx": 111,
+      "version": "7",
+      "when": 1794943296033,
+      "tag": "0111_a_card_statement_can_be_corrected",
+      "breakpoints": true
+    },
+    {
+      "idx": 112,
+      "version": "7",
+      "when": 1794943356033,
+      "tag": "0112_a_loan_knows_its_term",
+      "breakpoints": true
+    },
+    {
+      "idx": 113,
+      "version": "7",
+      "when": 1794953022056,
+      "tag": "0113_a_chosen_account_stays_on_its_delivery",
+      "breakpoints": true
     }
   ]
 }

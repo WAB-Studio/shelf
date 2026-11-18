@@ -4,6 +4,7 @@ import type { CallToolResult, McpServer, ServerContext } from "@modelcontextprot
 import { z } from "zod";
 
 import { getUserGroup } from "@/db/queries/groups";
+import { getOwedToMe } from "@/db/queries/owed-to-me";
 import { createLabel, getLabelsScreenData, listScopedLabels, listUsedLabelColors, updateLabel } from "@/db/queries/labels";
 import type { LabelScope } from "@/db/queries/labels";
 import { pgErrorCode } from "@/lib/db-error";
@@ -19,6 +20,7 @@ type Say = (key: string) => string;
 // What a movement's `labels` input names: an id from `list_labels` or a label's name, read as the picker
 // offers them (the person's own and their fund's). A name that no label, or two labels, wear is refused:
 // Claude is told to pass the id then. Whether the labels fit the movement's scope is the database's call, as in the form.
+// A person is no tag: naming one here is refused in words that point at `forPerson` (RF-242).
 export async function resolveLabelIds(owner: string, refs: readonly string[]): Promise<string[]> {
   if (refs.length === 0) return [];
   const known = await listScopedLabels(owner);
@@ -27,9 +29,20 @@ export async function resolveLabelIds(owner: string, refs: readonly string[]): P
     const byId = z.uuid().safeParse(wanted).success ? known.find((label) => label.id === wanted) : undefined;
     const matches = byId ? [byId] : known.filter((label) => label.name.toLowerCase() === wanted.toLowerCase());
     if (matches.length !== 1) throw new ActionError("transactions.errors.labelInvalid");
+    if (matches[0].kind === "person") throw new ActionError("mcp.errors.personIsNotATag");
     return matches[0].id;
   });
   return [...new Set(ids)];
+}
+
+// What `forPerson` names: a person's id from `list_persons` or their name, read the same way. A tag is no person.
+export async function resolvePersonId(owner: string, ref: string): Promise<string> {
+  const known = (await listScopedLabels(owner)).filter((label) => label.kind === "person");
+  const wanted = ref.trim();
+  const byId = z.uuid().safeParse(wanted).success ? known.find((label) => label.id === wanted) : undefined;
+  const matches = byId ? [byId] : known.filter((label) => label.name.toLowerCase() === wanted.toLowerCase());
+  if (matches.length !== 1) throw new ActionError("transactions.errors.forPersonInvalid");
+  return matches[0].id;
 }
 
 // A denied write on a group's label says who governs it, as the Labels screen does (RF-70).
@@ -37,6 +50,9 @@ function rethrowLabelError(error: unknown): never {
   if (pgErrorCode(error) === "42501") throw new ActionError("errors.notLeader");
   throw error;
 }
+
+const isTag = (label: { kind: string }) => label.kind === "tag";
+const isPerson = (label: { kind: string }) => label.kind === "person";
 
 // RF-193: the Labels screen's lists and writes, through its queries and schemas. Claude never deletes a label.
 export function registerLabelTools(server: McpServer, run: Run, t: Say): void {
@@ -57,7 +73,69 @@ export function registerLabelTools(server: McpServer, run: Run, t: Say): void {
           budgetCount: label.budgetCount,
           canManage,
         });
-        return [...data.personal.map(row("personal", true)), ...data.group.map(row("fund", data.isLeader))];
+        return [...data.personal.filter(isTag).map(row("personal", true)), ...data.group.filter(isTag).map(row("fund", data.isLeader))];
+      }),
+  );
+
+  // RF-242: the persons a movement can be for, listed apart from the tags so Claude never offers one as the other.
+  server.registerTool(
+    "list_persons",
+    { ...titled(t, "listPersons"), description: t("tools.listPersons"), inputSchema: z.object({}), annotations: READ },
+    (_input, ctx) =>
+      run(ctx, async () => {
+        const [data, owed] = await Promise.all([getLabelsScreenData(), getOwedToMe()]);
+        // What each person «se le cobra» still owes, per currency (RF-294); a person who owes nothing has none.
+        const owedBy = (id: string) =>
+          owed.flatMap((group) => group.people.filter((one) => one.labelId === id).map((one) => ({ currency: group.currency, cents: one.cents })));
+        const row = (scope: "personal" | "fund", canManage: boolean) => (person: (typeof data.personal)[number]) => ({
+          id: person.id,
+          name: person.name,
+          color: person.color,
+          scope,
+          chargeDefault: person.chargeDefault,
+          owed: owedBy(person.id),
+          movementCount: person.movementCount,
+          budgetCount: person.budgetCount,
+          canManage,
+        });
+        return [...data.personal.filter(isPerson).map(row("personal", true)), ...data.group.filter(isPerson).map(row("fund", data.isLeader))];
+      }),
+  );
+
+  server.registerTool(
+    "create_person",
+    {
+      ...titled(t, "createPerson"),
+      description: t("tools.createPerson"),
+      inputSchema: z.object({
+        name: z.string().describe(d("personName")),
+        placement: z.enum(LABEL_PLACEMENTS).default("personal").describe(d("labelPlacement")),
+        chargeDefault: z.boolean().default(false).describe(d("chargeDefault")),
+        color: z.string().optional().describe(d("labelColor")),
+      }),
+      annotations: ADD,
+    },
+    (input, ctx) =>
+      run(ctx, async (owner) => {
+        let scope: LabelScope = { ownerUserId: owner };
+        if (input.placement === "group") {
+          const group = await getUserGroup();
+          if (!group) throw new ActionError("errors.notFound");
+          scope = { groupId: group.id };
+        }
+        const color = input.color ?? nextCategoryColor(await listUsedLabelColors(scope));
+        const args = parseForm(createLabelSchema, {
+          name: input.name,
+          placement: input.placement,
+          color,
+          kind: "person",
+          chargeDefault: input.chargeDefault,
+        });
+        try {
+          return await createLabel({ scope, name: args.name, color: args.color, kind: "person", chargeDefault: args.chargeDefault });
+        } catch (error) {
+          return rethrowLabelError(error);
+        }
       }),
   );
 
@@ -100,6 +178,7 @@ export function registerLabelTools(server: McpServer, run: Run, t: Say): void {
         labelId: z.string().describe(d("labelId")),
         name: z.string().optional().describe(d("labelName")),
         color: z.string().optional().describe(d("labelColor")),
+        chargeDefault: z.boolean().optional().describe(d("chargeDefault")),
       }),
       annotations: OVERWRITE,
     },
@@ -111,6 +190,7 @@ export function registerLabelTools(server: McpServer, run: Run, t: Say): void {
           labelId: input.labelId,
           name: input.name ?? current.name,
           color: input.color ?? current.color,
+          chargeDefault: input.chargeDefault,
         });
         let updated: boolean;
         try {
@@ -119,7 +199,7 @@ export function registerLabelTools(server: McpServer, run: Run, t: Say): void {
           return rethrowLabelError(error);
         }
         if (!updated) throw new ActionError("errors.notFound");
-        return { labelId: args.labelId, before: previousFields({ name: current.name, color: current.color }, input) };
+        return { labelId: args.labelId, before: previousFields({ name: current.name, color: current.color, chargeDefault: current.chargeDefault }, input) };
       }),
   );
 }

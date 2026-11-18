@@ -11,6 +11,7 @@ import {
 } from "@/db/queries/debt-overview";
 import type { DebtOverviewRow, DebtPocket } from "@/db/queries/debt-overview";
 import { BASE_CURRENCY, type CurrencyCode } from "@/lib/currency";
+import type { PayFromAccount } from "@/lib/pocket-cover";
 
 // One consolidated set, in one currency. Every figure in it is denominated in
 // `currency` and none of them counts a movement, a limit or a rate booked in
@@ -31,6 +32,8 @@ export type DebtCurrencyTotals = {
   creditLimitCents: number | null;
 };
 
+export type DebtSubtype = "card" | "loan";
+
 export type DebtsScreenData = {
   totals: DebtCurrencyTotals & {
     // One set per currency the fund's debts hold, the base currency first and
@@ -39,10 +42,13 @@ export type DebtsScreenData = {
     byCurrency: DebtCurrencyTotals[];
     nextPayment: {
       accountId: string;
-      amountCents: number;
+      // Null while no minimum is known (RF-254): the date stands, the figure is never a zero.
+      amountCents: number | null;
       // What the paying debt bills in, so the figure is drawn in it.
       currency: CurrencyCode;
       date: string;
+      // A loan's cuota number when the payment is one.
+      instalmentNumber?: number;
       name: string;
     } | null;
   };
@@ -54,6 +60,10 @@ export type DebtsScreenData = {
     foreignOwner: boolean;
     ownerName: string | null;
     canWrite: boolean;
+    // Who pays this credit when somebody else does (RF-211); null for any other debt.
+    paidBy: string | null;
+    // A card or a loan: which form edits it (RF-286) and what «Pagar» asks of it (RF-281).
+    subtype: DebtSubtype;
   })[];
   withoutTerms: {
     accountId: string;
@@ -68,8 +78,10 @@ export type DebtsScreenData = {
     creditCents: number;
     otherOwed: DebtPocket[];
     canWrite: boolean;
+    paidBy: string | null;
+    subtype: DebtSubtype;
   }[];
-  payFrom: { id: string; name: string; balanceCents: number }[];
+  payFrom: PayFromAccount[];
 };
 
 // The set a currency starts at, so a currency the fund holds nothing in still
@@ -157,6 +169,8 @@ export async function getDebtsScreenData(
       { foreignOwner: account.foreignOwner, ownerName: account.ownerName },
     ]),
   );
+  const subtypeById = new Map(accounts.map((account) => [account.id, account.subtype === "loan" ? "loan" : "card"] as const));
+  const paidByById = new Map(accounts.map((account) => [account.id, account.thirdParty?.personName ?? null]));
   const personalById = new Map(
     accounts.map((account) => [account.id, account.ownerUserId !== null]),
   );
@@ -186,6 +200,8 @@ export async function getDebtsScreenData(
         ownerName: ownerById.get(row.accountId)?.ownerName ?? null,
         // Absent from the roster is a debt the caller may not write.
         canWrite: writableById.get(row.accountId) ?? false,
+        paidBy: paidByById.get(row.accountId) ?? null,
+        subtype: subtypeById.get(row.accountId) ?? "card",
       },
     ];
   });
@@ -220,6 +236,8 @@ export async function getDebtsScreenData(
             toBillCents: toBillByPocket.get(toBillKey(account.id, balance.currency)) ?? null,
           })),
         canWrite: account.canWrite,
+        paidBy: account.thirdParty?.personName ?? null,
+        subtype: (account.subtype === "loan" ? "loan" : "card") as DebtSubtype,
       };
     });
 
@@ -293,6 +311,7 @@ export async function getDebtsScreenData(
           amountCents: next.amountCents,
           currency: next.row.currency,
           date: next.date,
+          instalmentNumber: next.instalmentNumber,
           name: next.row.name,
         };
 
@@ -307,6 +326,15 @@ export async function getDebtsScreenData(
       // What the source settles in, never a sum across the currencies it holds
       // (RF-124). The roster orders the settlement pocket first.
       balanceCents: account.balances[0]?.balanceCents ?? 0,
+      pockets: accounts
+        .filter((pocket) => pocket.parentAccountId === account.id && pocket.archivedAt === null)
+        .map((pocket) => ({
+          id: pocket.id,
+          name: pocket.name,
+          balanceCents:
+            pocket.balances.find((balance) => balance.currency === pocket.settlementCurrency)?.balanceCents ?? 0,
+          openedOn: pocket.initialBalanceOn,
+        })),
     }));
 
   return {

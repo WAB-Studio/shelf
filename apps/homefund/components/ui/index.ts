@@ -61,6 +61,7 @@ export {
 export { Button, IconButton } from "./button";
 export { ButtonLink } from "./button-link";
 
+export { Checkbox } from "./checkbox";
 export { Switch } from "./switch";
 
 export { ConfirmDialog } from "./confirm-dialog";

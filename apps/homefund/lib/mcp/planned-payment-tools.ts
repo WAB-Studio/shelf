@@ -5,12 +5,14 @@ import { z } from "zod";
 
 import { openPlannedPayment, revisePlannedPayment, settlePlanned } from "@/db/queries/planned-payment-write";
 import { cancelPlannedPayment, listPlannedPayments } from "@/db/queries/planned-payments";
+import { todayInBogota } from "@/lib/dates";
 import { ActionError } from "@/lib/errors";
 import { ADD, ADD_ONCE, DESTROY, OVERWRITE, READ, previousFields, titled } from "@/lib/mcp/annotations";
 import { parseForm } from "@/lib/mcp/parse-form";
 import { centsToDecimal } from "@/lib/money";
 import {
   cancelPlannedPaymentSchema,
+  createExpectedIncomeSchema,
   createPlannedPaymentSchema,
   settlePlannedPaymentSchema,
   updatePlannedPaymentSchema,
@@ -21,7 +23,7 @@ type Say = (key: string) => string;
 
 const STATUSES = ["pending", "done", "cancelled"] as const;
 
-// RF-230: the Por pagar screen's list and writes, through its own query, schemas and write functions. A payment is the id
+// RF-230: «Lo que viene»'s payments, with their list and writes, through its own query, schemas and write functions. A payment is the id
 // `list_planned_payments` answers; settling it books the real movement, and deleting that movement puts it back to pending.
 export function registerPlannedPaymentTools(server: McpServer, run: Run, t: Say): void {
   const d = (key: string) => t(`params.${key}`);
@@ -64,6 +66,37 @@ export function registerPlannedPaymentTools(server: McpServer, run: Run, t: Say)
             dueDate: input.dueDate,
             remindOn: input.remindOn,
             description: input.description,
+          }),
+        ),
+      ),
+  );
+
+  // RF-253: an income somebody owes, which settles on its own when an income of about that amount lands in the account.
+  server.registerTool(
+    "create_expected_income",
+    {
+      ...titled(t, "createExpectedIncome"),
+      description: t("tools.createExpectedIncome"),
+      inputSchema: z.object({
+        toAccountId: z.string().describe(d("incomeAccountId")),
+        amountCents: z.number().int().describe(d("amountCents")),
+        from: z.string().describe(d("incomeFrom")),
+        dueDate: z.string().describe(d("incomeDueDate")),
+        remindOn: z.string().nullish().describe(d("plannedRemindOn")),
+      }),
+      annotations: ADD,
+    },
+    (input, ctx) =>
+      run(ctx, () =>
+        openPlannedPayment(
+          parseForm(createExpectedIncomeSchema, {
+            fromAccountId: null,
+            toAccountId: input.toAccountId,
+            amount: centsToDecimal(input.amountCents),
+            categoryId: null,
+            dueDate: input.dueDate,
+            remindOn: input.remindOn,
+            description: input.from,
           }),
         ),
       ),
@@ -132,13 +165,13 @@ export function registerPlannedPaymentTools(server: McpServer, run: Run, t: Say)
       description: t("tools.settlePlannedPayment"),
       inputSchema: z.object({
         plannedPaymentId: z.string().describe(d("plannedPaymentId")),
-        occurredOn: z.string().describe(d("occurredOn")),
+        occurredOn: z.string().optional().describe(d("occurredOnDefault")),
       }),
       annotations: ADD_ONCE,
     },
     (input, ctx) =>
       run(ctx, () =>
-        settlePlanned(parseForm(settlePlannedPaymentSchema, { plannedPaymentId: input.plannedPaymentId, occurredAt: input.occurredOn })),
+        settlePlanned(parseForm(settlePlannedPaymentSchema, { plannedPaymentId: input.plannedPaymentId, occurredAt: input.occurredOn ?? todayInBogota() })),
       ),
   );
 

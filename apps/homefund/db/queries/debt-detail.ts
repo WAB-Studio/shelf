@@ -12,15 +12,20 @@ import type {
   CurrentStatement,
   PendingSettlement,
 } from "@/db/queries/debt-statements";
+import { listCardDeferrals } from "@/db/queries/card-deferrals";
+import type { CardDeferralRow } from "@/db/queries/card-deferrals";
 import { listDeferralsForAccount } from "@/db/queries/deferrals";
 import type { DeferralRow } from "@/db/queries/deferrals";
 import { getUserGroup } from "@/db/queries/groups";
+import { scheduleOf, schedulePaymentsSql, scheduleRowsSql } from "@/db/queries/loan-schedule";
 import { listThirdPartyCredits } from "@/db/queries/third-party-credits";
 import type { ThirdPartyCreditView } from "@/db/queries/third-party-credits";
 import { foreignOwnerSql, ownerNameSql } from "@/db/queries/accounts";
 import { accounts, debtTerms } from "@/db/schema";
 import type { Account, DebtTerms } from "@/db/schema";
 import { withUserDb } from "@/db/session";
+import type { LoanScheduleSummary } from "@/lib/loan-schedule";
+import type { PayFromAccount } from "@/lib/pocket-cover";
 
 // One pocket of the account: the view derives a figure per currency and no
 // surface sums two of them (RF-124).
@@ -56,6 +61,8 @@ export type DebtDetailData = {
   terms: DebtTerms | null;
   // The purchases a person deferred into instalments (RF-136); derived on read, none moves the balance.
   deferrals: DeferralRow[];
+  // The deferrals the issuer printed on a statement (RF-258), each with what it costs a month and what paying it off saves.
+  cardDeferrals: CardDeferralRow[];
   statements: AccountStatementRow[];
   currentStatement: CurrentStatement | null;
   // The foreign-currency purchases the issuer has not billed yet (RF-123).
@@ -63,10 +70,14 @@ export type DebtDetailData = {
   // What the policies would admit, so the screen offers no action the database
   // would refuse.
   canWrite: boolean;
-  payFrom: { id: string; name: string; balanceCents: number }[];
+  payFrom: PayFromAccount[];
   hasGroup: boolean;
   // Set when somebody else pays this credit (RF-211); its «Me debe» account is not a source of the credit's own payment.
   thirdParty: ThirdPartyCreditView | null;
+  // The payment schedule the bank printed for a loan, read against its payments (RF-264); null when it has none.
+  schedule: LoanScheduleSummary | null;
+  // How many payments reached the debt: a loan's term is read against it when it has no schedule (RF-287).
+  paymentCount: number;
 };
 
 type AccountRead = {
@@ -74,6 +85,8 @@ type AccountRead = {
   terms: DebtTerms | null;
   canWrite: boolean;
   payFrom: DebtDetailData["payFrom"];
+  schedule: LoanScheduleSummary | null;
+  paymentCount: number;
 } | null;
 
 /**
@@ -125,7 +138,16 @@ async function readAccount(accountId: string): Promise<AccountRead> {
         // pockets are not what a payment comes from (RF-16).
         payFrom: sql<DebtDetailData["payFrom"]>`coalesce((
           select jsonb_agg(jsonb_build_object(
-            'id', x.id, 'name', x.name, 'balanceCents', xb.balance_cents
+            'id', x.id, 'name', x.name, 'balanceCents', xb.balance_cents,
+            -- The pockets a payment out of it may draw from (RF-249).
+            'pockets', coalesce((
+              select jsonb_agg(jsonb_build_object(
+                'id', p.id, 'name', p.name, 'balanceCents', pb.balance_cents, 'openedOn', p.initial_balance_on::text
+              ))
+              from accounts p
+              join account_balances pb on pb.id = p.id and pb.currency = p.settlement_currency
+              where p.parent_account_id = x.id and p.archived_at is null
+            ), '[]'::jsonb)
           ) order by x.name)
           from accounts x
           join account_balances xb
@@ -135,6 +157,9 @@ async function readAccount(accountId: string): Promise<AccountRead> {
             -- A «Me debe» is no account a payment comes from (RF-216).
             and not exists (select 1 from third_party_credits c where c.receivable_account_id = x.id)
         ), '[]'::jsonb)`,
+        // The loan's schedule and what reached it ride along: no read of their own (RF-264).
+        scheduleRows: scheduleRowsSql("accounts.id"),
+        schedulePayments: schedulePaymentsSql("accounts.id", "accounts.settlement_currency"),
         terms: debtTerms,
       })
       .from(accounts)
@@ -174,6 +199,8 @@ async function readAccount(accountId: string): Promise<AccountRead> {
       terms: row.terms,
       canWrite: row.canWrite,
       payFrom: row.payFrom,
+      schedule: scheduleOf(row.scheduleRows, row.schedulePayments),
+      paymentCount: row.schedulePayments.length,
     };
   });
 }
@@ -182,7 +209,7 @@ async function readAccount(accountId: string): Promise<AccountRead> {
  * One debt's whole detail (RF-16, RF-136, RNF-09): the account with
  * its derived balance and terms, the purchases a person deferred, its closed statements, the open period's live figures, the purchases
  * still waiting for a statement (RF-123), and the roster a payment is made from.
- * Eight independent reads in ONE `Promise.all` — nothing chains.
+ * Nine independent reads in ONE `Promise.all` — nothing chains.
  *
  * The statements are the closes a person recorded, each carrying the gap between
  * what it printed and what the movements derive (RF-129). None is generated here.
@@ -195,10 +222,11 @@ async function readAccount(accountId: string): Promise<AccountRead> {
 export async function getDebtDetail(
   accountId: string,
 ): Promise<DebtDetailData | null> {
-  const [read, deferrals, statements, currentStatement, pendingSettlements, group, [thirdParty = null]] =
+  const [read, deferrals, cardDeferrals, statements, currentStatement, pendingSettlements, group, [thirdParty = null]] =
     await Promise.all([
       readAccount(accountId),
       listDeferralsForAccount(accountId),
+      listCardDeferrals(accountId),
       listAccountStatements(accountId),
       getCurrentStatement(accountId),
       listPendingSettlements(accountId),
@@ -212,6 +240,7 @@ export async function getDebtDetail(
     account: read.account,
     terms: read.terms,
     deferrals,
+    cardDeferrals,
     statements,
     currentStatement,
     pendingSettlements,
@@ -219,5 +248,7 @@ export async function getDebtDetail(
     payFrom: read.payFrom,
     hasGroup: group !== null,
     thirdParty,
+    schedule: read.schedule,
+    paymentCount: read.paymentCount,
   };
 }

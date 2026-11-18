@@ -6,12 +6,23 @@ import { useRef, useState } from "react";
 import { toast } from "sonner";
 
 import {
+  acceptDeliveriesAction,
   acceptDeliveryAction,
+  chooseDeliveryAccountsAction,
   rejectDeliveryAction,
 } from "@/app/actions/ingest";
 import { deleteTransactionAction } from "@/app/actions/transactions";
 import { AwaitingCounterparty } from "@/components/ingest/awaiting-counterparty";
-import { arrivedVia, DeliveryCard } from "@/components/ingest/delivery-card";
+import {
+  arrivedVia,
+  asksWhichCard,
+  DeliveryCard,
+  movementDefaults,
+  NO_CHOICE,
+  readyInput,
+  withChoice,
+  type DeliveryChoice,
+} from "@/components/ingest/delivery-card";
 import { InboxTable, type InboxTableRow } from "@/components/ingest/inbox-table";
 import { RecipientFormDialog, type RecipientDraft } from "@/components/recipients/recipient-form-dialog";
 import { RefusedDeliveries } from "@/components/ingest/refused-deliveries";
@@ -40,91 +51,10 @@ import type {
 } from "@/db/queries/ingest-review";
 import type { TransactionFormOptions } from "@/db/queries/transaction-form";
 import type { AwaitingCounterpartyRow } from "@/db/queries/transactions";
-import { todayInBogota } from "@/lib/dates";
 import { categoryNamesById } from "@/lib/fund/category-names";
 import { deliveryCurrency } from "@/lib/fund/glance";
-import { scopeOfAccounts } from "@/lib/fund/category-scope";
-import { centsToDecimal } from "@/lib/money";
+import { proposedCategoryId } from "@/lib/fund/category-scope";
 import { useActionErrorToast } from "@/lib/use-action-toast";
-import type { AcceptDeliveryInput } from "@/lib/validation/ingest";
-
-type ReviewDefaults = {
-  fromAccountId: string | null;
-  toAccountId: string | null;
-  amount: string;
-  occurredAt: string;
-  description: string | null;
-  splits: { categoryId: string; amount: string }[];
-};
-
-// A proposed category of another scope than the proposed account is read as no
-// category: the split trigger would refuse it, so it is neither shown nor sent,
-// and the person picks one of the account's own scope (RF-140).
-function proposedCategoryId(
-  delivery: PendingDeliveryRow,
-  options: TransactionFormOptions,
-): string | null {
-  const categoryId = delivery.proposedCategoryId;
-  if (categoryId === null) return null;
-  const category = options.categories.find(
-    (one) =>
-      one.id === categoryId ||
-      one.children.some((child) => child.id === categoryId),
-  );
-  const scope = scopeOfAccounts([delivery.proposedAccountId], options.accounts);
-  return category && scope !== null && category.scope !== scope
-    ? null
-    : categoryId;
-}
-
-// Mirrors `DeliveryCard`'s own prefill, so the desktop table opens the exact
-// same form a phone would (RF-91). Kept private to this screen: the card owns
-// its copy for the same reason a movement's kind is derived at each write path
-// rather than shared through an import that would couple the two.
-function movementDefaults(
-  delivery: PendingDeliveryRow,
-  options: TransactionFormOptions,
-): ReviewDefaults {
-  const amount =
-    delivery.proposedAmountCents === null
-      ? ""
-      : centsToDecimal(delivery.proposedAmountCents);
-  const accountId = delivery.proposedAccountId;
-  const isIncome = delivery.proposedDirection === "income";
-  const isTransfer = delivery.proposedDirection === "transfer";
-  const categoryId = isTransfer ? null : proposedCategoryId(delivery, options);
-
-  return {
-    fromAccountId: isIncome ? null : accountId,
-    toAccountId: isTransfer ? delivery.proposedToAccountId : isIncome ? accountId : null,
-    amount,
-    occurredAt: delivery.proposedOccurredAt ?? todayInBogota(),
-    description: delivery.proposedDescription,
-    splits: categoryId ? [{ categoryId, amount }] : [],
-  };
-}
-
-function completeInput(
-  delivery: PendingDeliveryRow,
-  options: TransactionFormOptions,
-): AcceptDeliveryInput | null {
-  if (
-    !delivery.isComplete ||
-    delivery.proposedAmountCents === null ||
-    delivery.proposedAccountId === null ||
-    (delivery.proposedDirection === "transfer"
-      ? delivery.proposedToAccountId === null
-      : proposedCategoryId(delivery, options) === null)
-  ) {
-    return null;
-  }
-
-  return {
-    deliveryId: delivery.id,
-    ...movementDefaults(delivery, options),
-    labelIds: [],
-  };
-}
 
 function categoryInfo(
   options: TransactionFormOptions,
@@ -176,7 +106,18 @@ export function InboxScreen({
   const [numberDraft, setNumberDraft] = useState<RecipientDraft | null>(null);
   const [rejectId, setRejectId] = useState<string | null>(null);
   const silenceShape = useRef(false);
+  // What the person set on each card (a category, whom it was for), and which ready ones they chose to record
+  // together; both live here so one write carries them (RF-242).
+  const [choices, setChoices] = useState<Record<string, DeliveryChoice>>({});
+  const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
+  const choiceOf = (id: string): DeliveryChoice => choices[id] ?? NO_CHOICE;
+  const readyOf = (delivery: PendingDeliveryRow) =>
+    delivery.recorded === null ? readyInput(delivery, options, choiceOf(delivery.id)) : null;
+  const ready = deliveries.filter((delivery) => readyOf(delivery) !== null);
+  const chosenInputs = ready.filter((delivery) => selected.has(delivery.id)).map((delivery) => readyOf(delivery)!);
 
+  // The account a card was given outlives a reload: it is kept on the delivery, not only on the screen.
+  const keepAccounts = useAction(chooseDeliveryAccountsAction, { onError: onActionError });
   const remove = useAction(deleteTransactionAction, { onError: onActionError });
   const accept = useAction(acceptDeliveryAction, {
     onSuccess({ data }) {
@@ -193,14 +134,40 @@ export function InboxScreen({
     onError: onActionError,
   });
   const reject = useAction(rejectDeliveryAction, {
-    onSuccess() {
+    onSuccess({ input }) {
       toast.success(
-        silenceShape.current ? t("silencedToast") : t("rejectedToast"),
+        input.reason === "duplicate"
+          ? t("duplicateRejectedToast")
+          : silenceShape.current
+            ? t("silencedToast")
+            : t("rejectedToast"),
       );
       setRejectId(null);
     },
     onError: onActionError,
   });
+  // The whole batch is one write: all recorded or none, and the toast says which.
+  const acceptSelected = useAction(acceptDeliveriesAction, {
+    onSuccess({ data }) {
+      toast.success(t("batchAcceptedToast", { count: data?.count ?? 0 }));
+      setSelected(new Set());
+    },
+    onError(error) {
+      toast.error(t("batchRefused"));
+      onActionError(error);
+    },
+  });
+
+  // A delivery a recorded movement already stands for goes in one tap, as a repeat, and is never silenced as a
+  // shape (RF-246); any other asks first.
+  function askReject(id: string) {
+    if (deliveries.find((one) => one.id === id)?.recorded == null) {
+      setRejectId(id);
+      return;
+    }
+    silenceShape.current = false;
+    reject.execute({ deliveryId: id, silenceShape: false, reason: "duplicate" });
+  }
 
   function runReject(nextSilenceShape: boolean) {
     if (!rejectId) return;
@@ -208,12 +175,21 @@ export function InboxScreen({
     reject.execute({ deliveryId: rejectId, silenceShape: nextSilenceShape });
   }
 
+  function select(id: string, on: boolean) {
+    setSelected((current) => {
+      const next = new Set(current);
+      if (on) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  }
+
   // Accepting from the table's menu never writes on its own for an incomplete
   // delivery (RF-91): with no complete input to send, the row's own "accept"
   // opens the same form "openForm" does, rather than calling the action.
   function acceptOrReview(id: string) {
     const delivery = deliveries.find((one) => one.id === id);
-    const input = delivery && completeInput(delivery, options);
+    const input = delivery && readyOf(delivery);
     if (input) accept.execute(input);
     else setReviewId(id);
   }
@@ -223,32 +199,42 @@ export function InboxScreen({
   );
   const accountNames = new Map(options.accounts.map((a) => [a.id, a.name]));
 
-  const tableRows: InboxTableRow[] = deliveries.map((delivery) => ({
-    id: delivery.id,
-    createdAt: delivery.createdAt,
-    merchantLabel: delivery.merchantLabel,
-    via: arrivedVia(delivery, (badge, name) =>
-      t("arrivedVia", { kind: tKey(`webhooks.kind.${badge}`), name }),
-    ),
-    rawText: delivery.rawText,
-    category: categoryInfo(
-      options,
-      categoryNames,
-      proposedCategoryId(delivery, options),
-    ),
-    account: delivery.proposedAccountId
-      ? [delivery.proposedAccountId, delivery.proposedToAccountId]
-          .filter((id) => id !== null)
-          .map((id) => accountNames.get(id) ?? "")
-          .join(" → ")
-      : null,
-    amountMinor: delivery.proposedAmountCents,
-    direction: delivery.proposedDirection ?? "expense",
-    currency: deliveryCurrency(delivery, options),
-    isComplete: delivery.isComplete,
-    canSaveNumber: delivery.extractedIdentifier !== null && delivery.recipientId === null,
-    beforeOpeningOn: delivery.beforeOpening ? delivery.proposedOccurredAt : null,
-  }));
+  const tableRows: InboxTableRow[] = deliveries.map((proposal) => {
+    const delivery = withChoice(proposal, choiceOf(proposal.id));
+    const toAccount = options.accounts.find((account) => account.id === delivery.proposedToAccountId);
+
+    return {
+      id: delivery.id,
+      createdAt: delivery.createdAt,
+      occurredOn: delivery.proposedOccurredAt,
+      selectable: readyOf(proposal) !== null,
+      selected: selected.has(delivery.id),
+      merchantLabel: delivery.merchantLabel,
+      via: arrivedVia(delivery, (badge, name) => t("arrivedVia", { kind: badge, name })),
+      rawText: delivery.rawText,
+      category: categoryInfo(
+        options,
+        categoryNames,
+        choiceOf(delivery.id).categoryId ?? proposedCategoryId(delivery, options),
+      ),
+      account: delivery.proposedAccountId
+        ? [delivery.proposedAccountId, delivery.proposedToAccountId]
+            .filter((id) => id !== null)
+            .map((id) => accountNames.get(id) ?? "")
+            .join(" → ")
+        : null,
+      askCard: asksWhichCard(delivery),
+      toMissing: delivery.proposedDirection === "transfer" && delivery.proposedToAccountId === null,
+      amountMinor: delivery.proposedAmountCents,
+      direction: delivery.proposedDirection ?? "expense",
+      withdrawal: delivery.proposedDirection === "transfer" && toAccount?.subtype === "cash",
+      currency: deliveryCurrency(delivery, options),
+      isComplete: readyOf(proposal) !== null || delivery.isComplete,
+      recorded: delivery.recorded !== null,
+      canSaveNumber: delivery.extractedIdentifier !== null && delivery.recipientId === null,
+      beforeOpeningOn: delivery.beforeOpening ? delivery.proposedOccurredAt : null,
+    };
+  });
 
   const reviewing = deliveries.find((one) => one.id === reviewId) ?? null;
 
@@ -292,16 +278,52 @@ export function InboxScreen({
           {deliveries.length === 0 ? (
             emptyState
           ) : (
+            <>
+          {ready.length > 0 && (
+            <Flex align="center" gap="3" wrap="wrap">
+              {chosenInputs.length === 0 ? (
+                <Button
+                  type="button"
+                  size="3"
+                  variant="ghost"
+                  color="gray"
+                  onClick={() => setSelected(new Set(ready.map((delivery) => delivery.id)))}
+                >
+                  {t("selectReady", { count: ready.length })}
+                </Button>
+              ) : (
+                <>
+                  <Text size="2" color="gray">
+                    {t("selectedCount", { count: chosenInputs.length })}
+                  </Text>
+                  <Button
+                    type="button"
+                    size="3"
+                    disabled={acceptSelected.isPending}
+                    onClick={() => acceptSelected.execute({ items: chosenInputs })}
+                  >
+                    {acceptSelected.isPending && <Spinner />}
+                    {t("acceptSelected", { count: chosenInputs.length })}
+                  </Button>
+                  <Button type="button" size="3" variant="ghost" color="gray" onClick={() => setSelected(new Set())}>
+                    {t("clearSelection")}
+                  </Button>
+                </>
+              )}
+            </Flex>
+          )}
             <InboxTable
               rows={tableRows}
               onAccept={acceptOrReview}
               onReview={setReviewId}
-              onReject={setRejectId}
+              onReject={askReject}
+              onSelectedChange={select}
               onSaveNumber={(id) => {
                 const delivery = deliveries.find((one) => one.id === id);
                 if (delivery) saveNumber(delivery);
               }}
             />
+            </>
           )}
         </Flex>
       </Box>
@@ -314,11 +336,57 @@ export function InboxScreen({
             emptyState
           ) : (
             <Flex direction="column" gap="3">
+          {ready.length > 0 && (
+            <Flex align="center" gap="3" wrap="wrap">
+              {chosenInputs.length === 0 ? (
+                <Button
+                  type="button"
+                  size="3"
+                  variant="ghost"
+                  color="gray"
+                  onClick={() => setSelected(new Set(ready.map((delivery) => delivery.id)))}
+                >
+                  {t("selectReady", { count: ready.length })}
+                </Button>
+              ) : (
+                <>
+                  <Text size="2" color="gray">
+                    {t("selectedCount", { count: chosenInputs.length })}
+                  </Text>
+                  <Button
+                    type="button"
+                    size="3"
+                    disabled={acceptSelected.isPending}
+                    onClick={() => acceptSelected.execute({ items: chosenInputs })}
+                  >
+                    {acceptSelected.isPending && <Spinner />}
+                    {t("acceptSelected", { count: chosenInputs.length })}
+                  </Button>
+                  <Button type="button" size="3" variant="ghost" color="gray" onClick={() => setSelected(new Set())}>
+                    {t("clearSelection")}
+                  </Button>
+                </>
+              )}
+            </Flex>
+          )}
               {deliveries.map((delivery) => (
                 <DeliveryCard
                   key={delivery.id}
                   delivery={delivery}
                   options={options}
+                  choice={choiceOf(delivery.id)}
+                  onChoice={(patch) => {
+                    setChoices((current) => ({ ...current, [delivery.id]: { ...choiceOf(delivery.id), ...patch } }));
+                    if (patch.accountId || patch.toAccountId) {
+                      keepAccounts.execute({
+                        deliveryId: delivery.id,
+                        accountId: patch.accountId ?? undefined,
+                        toAccountId: patch.toAccountId ?? undefined,
+                      });
+                    }
+                  }}
+                  selected={selected.has(delivery.id)}
+                  onSelectedChange={readyOf(delivery) === null ? null : (on) => select(delivery.id, on)}
                   onSaveNumber={() => saveNumber(delivery)}
                 />
               ))}
@@ -346,7 +414,7 @@ export function InboxScreen({
               mode="create"
               options={options}
               deliveryId={reviewing.id}
-              defaults={movementDefaults(reviewing, options)}
+              defaults={movementDefaults(reviewing, options, choiceOf(reviewing.id))}
               dateBeforeOpening={reviewing.beforeOpening}
               onSaved={() => toast.success(t("acceptedToast"))}
               onDone={() => setReviewId(null)}

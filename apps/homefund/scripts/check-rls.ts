@@ -324,6 +324,8 @@ async function main() {
   await checkMemberDebts();
   await checkRecipients();
   await checkThirdPartyCredits();
+  await checkCardDeferrals();
+  await checkLoanSchedule();
 }
 
 // RF-136: a deferral is read and written exactly when its purchase's liability account is, carries 2 to 72
@@ -2324,9 +2326,9 @@ async function checkDebtDerivedFigures() {
 
 // Assertions 81-85, 275 and 276: the account_statements snapshots. The generator, replicated inline, freezes
 // the balance to the movements on or before a past cut-off; the unique key makes a re-run a no-op; and the
-// snapshot is immutable — no UPDATE and no DELETE grant, so not even its owner rewrites or erases it — and
-// gated by the account's scope, so an unrelated user can neither read nor mint one. Only the account's own
-// cascade takes a statement away. Every fixture is seeded through the app's own policies and rolled back.
+// last statement of an account may be corrected and taken back by its writer (RF-284) while an earlier one stays a
+// record, its account and its source never move, and an unrelated user can neither read nor mint one. The account's
+// own cascade takes the rest away. Every fixture is seeded through the app's own policies and rolled back.
 async function checkAccountStatementPolicies() {
   console.log("");
   const subject = randomUUID();
@@ -2335,9 +2337,9 @@ async function checkAccountStatementPolicies() {
   const labels = [
     "81. the statement balance counts only what settled in the card's own currency on or before the cut-off",
     "82. re-running the same insert under the unique key inserts nothing",
-    "83. an update of a statement by authenticated is refused",
+    "83. the last statement's printed figure can be corrected, and its source never changes",
     "84. an unrelated member can neither read nor write a statement on the subject's liability",
-    "275. the statement's own owner is refused the delete and the row survives it",
+    "275. the owner takes back the last statement and an earlier one is refused both the rewrite and the delete",
     "276. deleting the liability account still carries its statement off",
   ];
   const tailLabel = "85. the rolled-back account statement transaction leaves no trace";
@@ -2455,18 +2457,26 @@ async function checkAccountStatementPolicies() {
       const second = await generate();
       assert(labels[1], second.length === 0, `second-run inserted rows = ${second.length}`);
 
-      // 83: no UPDATE grant on account_statements — a rewrite is refused outright (immutability).
+      // 83: the printed figures carry an UPDATE grant and the policy admits the account's last statement; the
+      // source has no grant, so a statement never turns from recorded into imported (RF-284).
       const [{ id: statementId }] = await tx<{ id: string }[]>`
         select id from account_statements where account_id = ${card} and cut_off_date = ${dates.cut_off}`;
+      const corrected = await tx<{ closing_balance_cents: string }[]>`
+        update account_statements set closing_balance_cents = -240000 where id = ${statementId}
+        returning closing_balance_cents`;
       let updateCode: string | undefined;
       await tx
         .savepoint(async (sp) => {
-          await sp`update account_statements set closing_balance_cents = 0 where id = ${statementId}`;
+          await sp`update account_statements set source = 'imported' where id = ${statementId}`;
         })
         .catch((error: unknown) => {
           updateCode = pgErrorCode(error);
         });
-      assert(labels[2], updateCode === "42501", `sqlstate ${updateCode ?? "none"}`);
+      assert(
+        labels[2],
+        corrected.length === 1 && corrected[0].closing_balance_cents === "-240000" && updateCode === "42501",
+        `corrected rows = ${corrected.length}, source sqlstate ${updateCode ?? "none"}`,
+      );
 
       // 84: an unrelated user (no shared group) sees no statement on the subject's liability and cannot
       // mint one there. The distinct cut-off keeps the unique key clear, so only the write policy can reject.
@@ -2489,38 +2499,41 @@ async function checkAccountStatementPolicies() {
         `unrelated read = ${otherSees}, unrelated insert sqlstate ${otherInsertCode ?? "none"}`,
       );
 
-      // 275: neither DELETE policy nor DELETE grant survives on the table, so the one caller who reads the
-      // row and writes everything else on its account is refused it too — the snapshot is a record (RF-84).
+      // 275: a statement is the person's to take back only while it is the account's last: an earlier one is
+      // filtered out of both the rewrite and the delete, which touch no row and raise nothing, and the last one
+      // goes (RF-284). The earlier one lands first so there is one to refuse.
       await enterUserContext(tx, subject);
-      let deleteCode: string | undefined;
-      await tx
-        .savepoint(async (sp) => {
-          await sp`delete from account_statements where id = ${statementId}`;
-        })
-        .catch((error: unknown) => {
-          deleteCode = pgErrorCode(error);
-        });
-      const [{ count: afterRefusal }] = await tx<{ count: string }[]>`
-        select count(*)::text as count from account_statements where id = ${statementId}`;
+      const [{ id: earlierId }] = await tx<{ id: string }[]>`
+        insert into account_statements (account_id, period_start, cut_off_date, closing_balance_cents)
+        values (${card}, ${dates.period_start}, ${dates.before_cut}, -200000) returning id`;
+      const earlierRewritten = await tx<{ id: string }[]>`
+        update account_statements set closing_balance_cents = 0 where id = ${earlierId} returning id`;
+      const earlierDeleted = await tx<{ id: string }[]>`
+        delete from account_statements where id = ${earlierId} returning id`;
+      const lastDeleted = await tx<{ id: string }[]>`
+        delete from account_statements where id = ${statementId} returning id`;
+      const [{ count: afterTakeBack }] = await tx<{ count: string }[]>`
+        select count(*)::text as count from account_statements where id in (${statementId}, ${earlierId})`;
       assert(
         labels[4],
-        deleteCode === "42501" && afterRefusal === "1",
-        `sqlstate ${deleteCode ?? "none"}, rows left = ${afterRefusal}`,
+        earlierRewritten.length === 0 && earlierDeleted.length === 0 && lastDeleted.length === 1 && afterTakeBack === "1",
+        `earlier rewritten = ${earlierRewritten.length}, earlier deleted = ${earlierDeleted.length}, last deleted = ${lastDeleted.length}, rows left = ${afterTakeBack}`,
       );
 
-      // 276: the control for 275 — a statement nothing can reach would satisfy it just as well. Referential
+      // 276: the control for 275 — a statement nothing can reach would satisfy it just as well. The earlier one is
+      // what the take-back left. Referential
       // integrity runs outside row security and outside the grant, so the account's cascade still takes the
       // statement with it. The card's two movements hold the account under `on delete restrict` and go first;
       // both counts are read as `postgres`, so an unreadable row would show up as 0 before the delete.
       await tx`reset role`;
       const [{ count: beforeCascade }] = await tx<{ count: string }[]>`
-        select count(*)::text as count from account_statements where id = ${statementId}`;
+        select count(*)::text as count from account_statements where id = ${earlierId}`;
       await enterUserContext(tx, subject);
       await tx`delete from transactions where from_account_id = ${card} or to_account_id = ${card}`;
       await tx`delete from accounts where id = ${card}`;
       await tx`reset role`;
       const [{ count: afterCascade }] = await tx<{ count: string }[]>`
-        select count(*)::text as count from account_statements where id = ${statementId}`;
+        select count(*)::text as count from account_statements where id = ${earlierId}`;
       assert(
         labels[5],
         beforeCascade === "1" && afterCascade === "0",
@@ -5242,6 +5255,8 @@ const INSERT_GRANT_GAPS: Record<string, string[]> = {
     "record_id",
   ],
   budgets: ["archived_at", "created_at", "id", "updated_at"],
+  // The id, the stamps and `created_by` (the column default) are the database's; the card, the number and the bank's figures are the input.
+  card_deferrals: ["created_at", "created_by", "id", "updated_at"],
   categories: ["created_at", "id", "updated_at"],
   debt_terms: ["created_at", "updated_at"],
   // `created_by` is the column default from `auth.uid()`; the movement, the account and the count are the input.
@@ -5290,6 +5305,8 @@ const INSERT_GRANT_GAPS: Record<string, string[]> = {
   installment_lines: ["created_at", "id", "paid_transaction_id"],
   installment_plans: ["created_at", "id", "updated_at"],
   labels: ["created_at", "id", "updated_at"],
+  // A schedule row is written whole on insert; `id` and the stamp are the table's (RF-264).
+  loan_schedule_rows: ["created_at", "id"],
   // `created_by` is the column default from `auth.uid()` (RF-183).
   member_debts: ["created_at", "created_by", "id"],
   // The OAuth tables carry no grant (RF-168), bar the consent's insert of a code: only the server's own pool writes them.
@@ -5337,6 +5354,8 @@ const INSERT_GRANT_GAPS: Record<string, string[]> = {
     "id",
     "kind",
     "owner_user_id",
+    // Written only by the trigger that covers a shortfall from a pocket (RF-249).
+    "pocket_cover",
     "reconciliation_id",
     "recurring_rule_id",
     "reviewed_at",
@@ -5371,22 +5390,9 @@ const UPDATE_GRANT_GAPS: Record<string, string[]> = {
     "id",
     "reconciled_on",
   ],
-  account_statements: [
-    "account_id",
-    "closed_at",
-    "closing_balance_cents",
-    "credits_cents",
-    "cut_off_date",
-    "debits_cents",
-    "fees_charged_cents",
-    "id",
-    "interest_charged_cents",
-    "minimum_payment_cents",
-    "opening_balance_cents",
-    "payment_due_date",
-    "period_start",
-    "source",
-  ],
+  // The printed figures and the dates are the person's to correct on the last statement (RF-284); its account, its
+  // source and its own stamps never move.
+  account_statements: ["account_id", "closed_at", "id", "source"],
   accounts: ["created_at", "group_id", "id", "kind", "owner_user_id", "updated_at"],
   allowed_emails: ["added_at", "email"],
   app_users: ["created_at", "id", "updated_at"],
@@ -5403,6 +5409,8 @@ const UPDATE_GRANT_GAPS: Record<string, string[]> = {
     "record_id",
   ],
   budgets: ["category_id", "created_at", "external_ref", "group_id", "id", "owner_user_id", "updated_at"],
+  // A later statement rewrites the figures; the card and the bank's number are what the row is.
+  card_deferrals: ["account_id", "authorization_number", "created_at", "created_by", "id", "updated_at"],
   categories: ["created_at", "group_id", "id", "kind", "owner_user_id", "seed_key", "updated_at"],
   debt_terms: ["account_id", "created_at", "updated_at"],
   // A deferral is replaced by deleting it and deferring again: no column is writable.
@@ -5441,12 +5449,10 @@ const UPDATE_GRANT_GAPS: Record<string, string[]> = {
     "from_email",
     "id",
     "owner_user_id",
-    "proposed_account_id",
     "proposed_amount_cents",
     "proposed_category_id",
     "proposed_direction",
     "proposed_occurred_at",
-    "proposed_to_account_id",
     "raw_text",
     "receipt",
     "recipient_id",
@@ -5480,7 +5486,21 @@ const UPDATE_GRANT_GAPS: Record<string, string[]> = {
     "start_date",
     "updated_at",
   ],
-  labels: ["created_at", "external_ref", "group_id", "id", "owner_user_id", "updated_at"],
+  // `kind` is written on insert alone: a label never changes kind (RF-242).
+  labels: ["created_at", "external_ref", "group_id", "id", "kind", "owner_user_id", "updated_at"],
+  // A schedule is replaced whole, deleted and written again (RF-264): no column is writable.
+  loan_schedule_rows: [
+    "account_id",
+    "created_at",
+    "due_on",
+    "id",
+    "insurance_cents",
+    "interest_cents",
+    "number",
+    "principal_cents",
+    "remaining_cents",
+    "total_cents",
+  ],
   // An entry is replaced by deleting it and writing it again (RF-183): no column is writable.
   member_debts: ["amount_cents", "created_at", "created_by", "creditor_member_id", "currency", "debtor_member_id", "description", "group_id", "id", "kind", "occurred_on"],
   // The OAuth tables carry no grant (RF-168), bar the consent's insert of a code: only the server's own pool writes them.
@@ -5524,11 +5544,15 @@ const UPDATE_GRANT_GAPS: Record<string, string[]> = {
     "amount_from_words",
     "created_at",
     "created_by",
+    // Fixed at insert (RF-256): how a movement was written is never edited after.
+    "created_via",
     "external_ref",
     "group_id",
     "id",
     "kind",
     "owner_user_id",
+    // Written only by the trigger that covers a shortfall from a pocket (RF-249).
+    "pocket_cover",
     "reconciliation_id",
     "recurring_rule_id",
     "updated_at",
@@ -5553,8 +5577,11 @@ const UPDATE_GRANT_GAPS: Record<string, string[]> = {
 // DELETE the policies filter; TRUNCATE consults neither a policy nor a row trigger, so the
 // audit trail (RF-45) has nothing to record — the list stays empty.
 const DELETE_GRANTS: string[] = [
+  // The last statement of an account may be taken back (RF-284); the policy filters every other row.
+  "account_statements",
   "accounts",
   "budgets",
+  "card_deferrals",
   "categories",
   "debt_terms",
   "deferrals",
@@ -5566,6 +5593,7 @@ const DELETE_GRANTS: string[] = [
   "installment_lines",
   "installment_plans",
   "labels",
+  "loan_schedule_rows",
   "member_debts",
   "planned_payments",
   "recipients",
@@ -9517,7 +9545,7 @@ async function checkAccountStatementShape() {
     "289. an asset closes a period with no due date and no minimum",
     "290. a due date before the cut-off is refused",
     "291. a second statement on the same account and cut-off is refused",
-    "292. anon and service_role hold nothing on the table, and authenticated holds column grants only",
+    "292. anon and service_role hold nothing on the table, and authenticated holds DELETE table-wide and column grants for the rest",
     "293. the asset close left an audit_log row naming account_statements",
   ];
   const tailLabel = "294. the rolled-back account statement shape transaction leaves no trace";
@@ -9541,7 +9569,8 @@ async function checkAccountStatementShape() {
   );
 
   // 292: a rename carries the old grants forward, so this reads both the table ACL and every column
-  // ACL. `authenticated` must hold nothing table-wide — the column form is the whole grant.
+  // ACL. `authenticated` holds DELETE table-wide (the policy admits only a last statement, RF-284) and the rest
+  // by column.
   const tableAcl = await sql<{ role: string; priv: string }[]>`
     select a.grantee::regrole::text as role, a.privilege_type as priv
     from pg_class c
@@ -9618,8 +9647,8 @@ async function checkAccountStatementShape() {
       assert(
         labels[4],
         strangers.length === 0 &&
-          !tableAcl.some((row) => row.role === "authenticated") &&
-          columnPrivileges.join(",") === "INSERT,SELECT",
+          tableAcl.map((row) => row.priv).join(",") === "DELETE" &&
+          columnPrivileges.join(",") === "INSERT,SELECT,UPDATE",
         `anon and service_role hold [${
           strangers.map((row) => `${row.role}:${row.priv}`).join(", ") || "nothing"
         }], authenticated holds [${
@@ -14310,6 +14339,7 @@ async function checkThirdPartyCredits() {
     columns: "rf211-4. the accounts of a link cannot be changed by an update (42501)",
     audit: "rf211-5. linking, editing and removing each leave an audit row naming the person",
     grants: "rf211-6. anon and service_role hold no privilege on third_party_credits",
+    opening: "rf288-1. a payer's payment dated before the credit was followed is refused by the receivable's opening until its owner moves the opening back and raises it by the payment (what it derives stays), a stranger moves no opening, and the link that hides the receivable (RF-216) stays",
   };
   const fixture = async (tx: M1Tx) => {
     const [owner, stranger] = [randomUUID(), randomUUID()];
@@ -14398,11 +14428,237 @@ async function checkThirdPartyCredits() {
     return [{ ok: moveReceivable === "42501" && moveLiability === "42501", detail: `receivable ${moveReceivable}, liability ${moveLiability}` }];
   });
 
+  await rf136Rows([labels.opening], async (tx) => {
+    const f = await fixture(tx);
+    const paidOn = (await tx<{ day: string }[]>`select (${todayInBogota()}::date - 30)::text as day`)[0].day;
+    const [{ id: lender }] = await tx<{ id: string }[]>`
+      insert into accounts (owner_user_id, name, kind, subtype, settlement_currency, initial_balance_cents, initial_balance_on)
+      values (${f.owner}, 'rls rf288 bank', 'asset', 'bank', 'COP', 0, (${todayInBogota()}::date - 60)) returning id`;
+    await tx`update accounts set initial_balance_cents = 12000 where id = ${f.owes}`;
+    await enterUserContext(tx, f.owner);
+    await link(f.credit, f.owes)(tx);
+    const pay = (sp: M1Tx) =>
+      sp`insert into transactions (from_account_id, to_account_id, amount_cents, occurred_at, description)
+        values (${f.owes}, ${lender}, 5000, ${paidOn}, 'rls rf288 payment')`;
+    const refused = await m1Refusal(tx, pay);
+    await enterUserContext(tx, f.stranger);
+    const strangerMoves = (await tx`update accounts set initial_balance_on = ${paidOn}, initial_balance_cents = 17000 where id = ${f.owes} returning id`).length;
+    await enterUserContext(tx, f.owner);
+    const moved = (await tx`update accounts set initial_balance_on = ${paidOn}, initial_balance_cents = initial_balance_cents + 5000 where id = ${f.owes} returning id`).length;
+    const accepted = await m1Refusal(tx, pay);
+    const [balance] = await tx<{ balance_cents: string }[]>`select balance_cents::text from account_balances where id = ${f.owes}`;
+    const linked = await tx<{ receivable: string }[]>`select receivable_account_id as receivable from third_party_credits where liability_account_id = ${f.credit}`;
+    await tx`reset role`;
+    return [{
+      ok: refused === "MO001" && strangerMoves === 0 && moved === 1 && accepted === null && balance.balance_cents === "12000" &&
+        linked.length === 1 && linked[0].receivable === f.owes,
+      detail: `before the move ${refused}, a stranger moves ${strangerMoves}, the owner moves ${moved}, then the payment ${accepted ?? "accepted"}, derived ${balance.balance_cents} (expected 12000), link kept ${linked.length}`,
+    }];
+  });
+
   await rf136Rows([labels.grants], async (tx) => {
     const [{ held }] = await tx<{ held: number }[]>`
       select count(*)::int as held from unnest(array['anon', 'service_role']) r
       where has_any_column_privilege(r, 'finances.third_party_credits'::regclass, 'SELECT, INSERT, UPDATE, REFERENCES')
          or has_table_privilege(r, 'finances.third_party_credits'::regclass, 'DELETE, TRUNCATE')`;
+    return [{ ok: held === 0, detail: `anon/service_role with a privilege ${held}` }];
+  });
+}
+
+// RF-258: the deferrals a card's statement prints are read and written by whoever reads and writes the card, alone;
+// they hang off a liability, one per authorization number per card; a later statement rewrites the figures and never
+// the card or the number; every write leaves its audit row; anon and service_role hold nothing.
+async function checkCardDeferrals() {
+  console.log("");
+  const labels = {
+    owner: "rf258-1. the owner of a card records a deferral, reads it, rewrites its figures and removes it; a stranger reads none, updates none, removes none and records none (42501)",
+    shape: "rf258-2. a deferral on an asset account is 23514; a second one with the same authorization number on the card is 23505; a blank number, a current instalment past the total, a negative pending balance and a rate above 200 percent are 23514",
+    columns: "rf258-3. the card and the authorization number of a deferral cannot be changed by an update (42501)",
+    audit: "rf258-4. recording, rewriting and removing each leave an audit row naming the person",
+    grants: "rf258-5. anon and service_role hold no privilege on card_deferrals",
+  };
+  const fixture = async (tx: M1Tx) => {
+    const [owner, stranger] = [randomUUID(), randomUUID()];
+    await tx`insert into auth.users (id) values (${owner}), (${stranger})`;
+    await tx`insert into app_users (id) values (${owner}), (${stranger})`;
+    const account = async (name: string, kind: "asset" | "liability") => {
+      const [{ id }] = await tx<{ id: string }[]>`
+        insert into accounts (owner_user_id, name, kind, subtype, settlement_currency, initial_balance_on)
+        values (${owner}, ${name}, ${kind}, ${kind === "asset" ? "bank" : "card"}, 'COP', ${todayInBogota()}) returning id`;
+      return id;
+    };
+    return { owner, stranger, card: await account("rls rf258 card", "liability"), bank: await account("rls rf258 bank", "asset") };
+  };
+  const defer = (
+    card: string,
+    over: { authorization?: string; current?: number; pending?: number; rate?: string } = {},
+  ) => (sp: M1Tx) =>
+    sp`insert into card_deferrals (account_id, authorization_number, description, currency, original_amount_cents, instalments,
+        current_instalment, monthly_instalment_cents, pending_balance_cents, annual_rate, statement_on)
+      values (${card}, ${over.authorization ?? "AUT-1"}, 'AMPLIACION DE PLAZO', 'COP', 804500000, 24, ${over.current ?? 7}, 33520000,
+        ${over.pending ?? 471000000}, ${over.rate ?? "0.281"}, ${todayInBogota()})`;
+
+  await rf136Rows([labels.owner, labels.audit], async (tx) => {
+    const f = await fixture(tx);
+    await enterUserContext(tx, f.owner);
+    const recorded = await m1Refusal(tx, defer(f.card));
+    const mine = (await tx`select id from card_deferrals`).length;
+    const rewritten = (await tx`update card_deferrals set pending_balance_cents = 437480000, current_instalment = 8 returning id`).length;
+    await enterUserContext(tx, f.stranger);
+    const strangerSees = (await tx`select id from card_deferrals`).length;
+    const strangerUpdates = (await tx`update card_deferrals set pending_balance_cents = 1 returning id`).length;
+    const strangerRemoves = (await tx`delete from card_deferrals returning id`).length;
+    const strangerRecords = await m1Refusal(tx, defer(f.card, { authorization: "AUT-2" }));
+    await enterUserContext(tx, f.owner);
+    const removed = (await tx`delete from card_deferrals returning id`).length;
+    await tx`reset role`;
+    const trail = await tx<{ action: string; actor_user_id: string | null }[]>`
+      select action, actor_user_id from audit_log
+      where entity = 'card_deferrals' and actor_user_id = ${f.owner} order by id`;
+    return [
+      {
+        ok: recorded === null && mine === 1 && rewritten === 1 && removed === 1 && strangerSees === 0 && strangerUpdates === 0 &&
+          strangerRemoves === 0 && strangerRecords === "42501",
+        detail: `record ${recorded ?? "accepted"}, owner sees ${mine}, rewrites ${rewritten}, removes ${removed}; stranger sees ${strangerSees}, updates ${strangerUpdates}, removes ${strangerRemoves}, records ${strangerRecords}`,
+      },
+      {
+        ok: JSON.stringify(trail.map((row) => row.action)) === JSON.stringify(["INSERT", "UPDATE", "DELETE"]),
+        detail: `audit ${JSON.stringify(trail)}`,
+      },
+    ];
+  });
+
+  await rf136Rows([labels.shape], async (tx) => {
+    const f = await fixture(tx);
+    await enterUserContext(tx, f.owner);
+    await defer(f.card)(tx);
+    const onAsset = await m1Refusal(tx, defer(f.bank, { authorization: "AUT-9" }));
+    const twice = await m1Refusal(tx, defer(f.card));
+    const blank = await m1Refusal(tx, defer(f.card, { authorization: "  " }));
+    const past = await m1Refusal(tx, defer(f.card, { authorization: "AUT-3", current: 25 }));
+    const negative = await m1Refusal(tx, defer(f.card, { authorization: "AUT-4", pending: -1 }));
+    const rate = await m1Refusal(tx, defer(f.card, { authorization: "AUT-5", rate: "2.5" }));
+    return [{
+      ok: onAsset === "23514" && twice === "23505" && blank === "23514" && past === "23514" && negative === "23514" && rate === "23514",
+      detail: `asset ${onAsset}, twice ${twice}, blank ${blank}, past the total ${past}, negative ${negative}, rate ${rate}`,
+    }];
+  });
+
+  await rf136Rows([labels.columns], async (tx) => {
+    const f = await fixture(tx);
+    await enterUserContext(tx, f.owner);
+    await defer(f.card)(tx);
+    const moveCard = await m1Refusal(tx, (sp) => sp`update card_deferrals set account_id = ${f.bank}`);
+    const renumber = await m1Refusal(tx, (sp) => sp`update card_deferrals set authorization_number = 'AUT-X'`);
+    await tx`reset role`;
+    return [{ ok: moveCard === "42501" && renumber === "42501", detail: `card ${moveCard}, number ${renumber}` }];
+  });
+
+  await rf136Rows([labels.grants], async (tx) => {
+    const [{ held }] = await tx<{ held: number }[]>`
+      select count(*)::int as held from unnest(array['anon', 'service_role']) r
+      where has_any_column_privilege(r, 'finances.card_deferrals'::regclass, 'SELECT, INSERT, UPDATE, REFERENCES')
+         or has_table_privilege(r, 'finances.card_deferrals'::regclass, 'DELETE, TRUNCATE')`;
+    return [{ ok: held === 0, detail: `anon/service_role with a privilege ${held}` }];
+  });
+}
+
+// RF-264: a loan's payment schedule is read and written by whoever reads and writes the loan, alone; it belongs to a
+// loan account; a row's total is the sum of its parts; a schedule is replaced by delete and insert, never updated;
+// every write leaves its audit row; anon and service_role hold nothing.
+async function checkLoanSchedule() {
+  console.log("");
+  const labels = {
+    owner: "rf264-1. the owner of a loan writes its schedule, reads it and replaces it; a stranger reads none, inserts none and deletes none",
+    shape: "rf264-2. a card or a bank account as the owner of a schedule is LS001; a total that is not the sum of its parts, a negative part, a number past 600 and a repeated number or day are 23514 or 23505",
+    columns: "rf264-3. no column of a schedule row can be updated (42501)",
+    audit: "rf264-4. writing and deleting rows each leave an audit row naming the person",
+    grants: "rf264-5. anon and service_role hold no privilege on loan_schedule_rows",
+  };
+  const fixture = async (tx: M1Tx) => {
+    const [owner, stranger] = [randomUUID(), randomUUID()];
+    await tx`insert into auth.users (id) values (${owner}), (${stranger})`;
+    await tx`insert into app_users (id) values (${owner}), (${stranger})`;
+    const account = async (user: string, name: string, subtype: "bank" | "card" | "loan") => {
+      const [{ id }] = await tx<{ id: string }[]>`
+        insert into accounts (owner_user_id, name, kind, subtype, initial_balance_on)
+        values (${user}, ${name}, ${subtype === "bank" ? "asset" : "liability"}, ${subtype}, ${todayInBogota()}) returning id`;
+      return id;
+    };
+    return {
+      owner,
+      stranger,
+      loan: await account(owner, "rls rf264 loan", "loan"),
+      card: await account(owner, "rls rf264 card", "card"),
+      bank: await account(owner, "rls rf264 bank", "bank"),
+    };
+  };
+  const row = (account: string, number: number, dueOn: string, parts: [number, number, number, number?] = [100_00, 10_00, 5_00]) => (sp: M1Tx) =>
+    sp`insert into loan_schedule_rows (account_id, number, due_on, principal_cents, interest_cents, insurance_cents, total_cents, remaining_cents)
+      values (${account}, ${number}, ${dueOn}, ${parts[0]}, ${parts[1]}, ${parts[2]}, ${parts[0] + parts[1] + parts[2]}, ${parts[3] ?? 0})`;
+
+  await rf136Rows([labels.owner, labels.audit], async (tx) => {
+    const f = await fixture(tx);
+    await enterUserContext(tx, f.owner);
+    const first = await m1Refusal(tx, row(f.loan, 1, "2030-01-05", [100_00, 10_00, 5_00, 100_00]));
+    const second = await m1Refusal(tx, row(f.loan, 2, "2030-02-05"));
+    const mine = (await tx`select id from loan_schedule_rows`).length;
+    await enterUserContext(tx, f.stranger);
+    const strangerSees = (await tx`select id from loan_schedule_rows`).length;
+    const strangerRemoves = (await tx`delete from loan_schedule_rows returning id`).length;
+    const strangerInserts = await m1Refusal(tx, row(f.loan, 3, "2030-03-05"));
+    await enterUserContext(tx, f.owner);
+    const removed = (await tx`delete from loan_schedule_rows returning id`).length;
+    await tx`reset role`;
+    const trail = await tx<{ action: string; actor_user_id: string | null }[]>`
+      select action, actor_user_id from audit_log
+      where entity = 'loan_schedule_rows' and actor_user_id = ${f.owner} order by id`;
+    return [
+      {
+        ok: first === null && second === null && mine === 2 && strangerSees === 0 && strangerRemoves === 0 && strangerInserts === "42501" && removed === 2,
+        detail: `owner writes ${first ?? "accepted"}/${second ?? "accepted"}, sees ${mine}, removes ${removed}; stranger sees ${strangerSees}, removes ${strangerRemoves}, inserts ${strangerInserts}`,
+      },
+      {
+        ok: JSON.stringify(trail.map((entry) => entry.action)) === JSON.stringify(["INSERT", "INSERT", "DELETE", "DELETE"]),
+        detail: `audit ${JSON.stringify(trail)}`,
+      },
+    ];
+  });
+
+  await rf136Rows([labels.shape], async (tx) => {
+    const f = await fixture(tx);
+    await enterUserContext(tx, f.owner);
+    await row(f.loan, 1, "2030-01-05")(tx);
+    const onCard = await m1Refusal(tx, row(f.card, 1, "2030-01-05"));
+    const onBank = await m1Refusal(tx, row(f.bank, 1, "2030-01-05"));
+    const sum = await m1Refusal(tx, (sp) =>
+      sp`insert into loan_schedule_rows (account_id, number, due_on, principal_cents, interest_cents, insurance_cents, total_cents, remaining_cents)
+        values (${f.loan}, 2, '2030-02-05', 100, 10, 5, 116, 0)`);
+    const negative = await m1Refusal(tx, row(f.loan, 2, "2030-02-05", [110_00, -5_00, 5_00]));
+    const far = await m1Refusal(tx, row(f.loan, 601, "2030-02-05"));
+    const sameNumber = await m1Refusal(tx, row(f.loan, 1, "2030-02-05"));
+    const sameDay = await m1Refusal(tx, row(f.loan, 2, "2030-01-05"));
+    return [{
+      ok: onCard === "LS001" && onBank === "LS001" && sum === "23514" && negative === "23514" && far === "23514" && sameNumber === "23505" && sameDay === "23505",
+      detail: `card ${onCard}, bank ${onBank}, sum ${sum}, negative ${negative}, number 601 ${far}, same number ${sameNumber}, same day ${sameDay}`,
+    }];
+  });
+
+  await rf136Rows([labels.columns], async (tx) => {
+    const f = await fixture(tx);
+    await enterUserContext(tx, f.owner);
+    await row(f.loan, 1, "2030-01-05")(tx);
+    const moveAccount = await m1Refusal(tx, (sp) => sp`update loan_schedule_rows set account_id = ${f.card}`);
+    const moveAmount = await m1Refusal(tx, (sp) => sp`update loan_schedule_rows set total_cents = total_cents`);
+    await tx`reset role`;
+    return [{ ok: moveAccount === "42501" && moveAmount === "42501", detail: `account ${moveAccount}, amount ${moveAmount}` }];
+  });
+
+  await rf136Rows([labels.grants], async (tx) => {
+    const [{ held }] = await tx<{ held: number }[]>`
+      select count(*)::int as held from unnest(array['anon', 'service_role']) r
+      where has_any_column_privilege(r, 'finances.loan_schedule_rows'::regclass, 'SELECT, INSERT, UPDATE, REFERENCES')
+         or has_table_privilege(r, 'finances.loan_schedule_rows'::regclass, 'DELETE, TRUNCATE')`;
     return [{ ok: held === 0, detail: `anon/service_role with a privilege ${held}` }];
   });
 }

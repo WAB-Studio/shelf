@@ -81,6 +81,12 @@ highlight, a white ground, pill buttons), with HomeFund's own palette and faces.
   «Confirmar diferido». «Quitar diferido» replaces the button once deferred. The balance, «Deuda total» and «Pago mínimo»
   never change with it. A statement line printing «1/36» reaches the person through the MCP preview as «Diferir en 36
   cuotas»; accepting the preview confirms it.
+- `Deudas · diferidos de la tarjeta` is built under RF-258 (2026-11-17), words only, no board: the debt's detail, and Deudas
+  under the table, list «Diferidos de la tarjeta» in a `Panel`, one `PanelBlock` per deferral: the description with the pending
+  balance at the end, «Cuota 7 de 24 · $ 335.000 al mes · 28,1 % E.A.», «Autorización …» (and «En <tarjeta>» on Deudas). One that
+  charges interest adds «Interés de este mes ~$ X», «Si lo pagas hoy te ahorras ~$ X» and an amber `Callout`: «Esta compra quedó
+  a 36 cuotas; te costará ~$ X de interés. Págala completa o cámbiala a 1 cuota en tu banco». The section is absent while the
+  card has none; the balance and the minimum never change with it.
 
 ## Decision of 2026-10-14: the app is called «HomeFund»
 
@@ -393,7 +399,7 @@ Board C1h corrected the same day: a card in credit reads «Según HomeFund −$ 
     «Casa». Antes de salir, pasa el liderazgo a otro miembro desde «Miembros».» · «Entendido» (RF-59). A leader alone in
     the fund leaves like anyone. No desktop face for either.
 - **A planned payment's reminder mails its author** (RF-141): at 7:00 Bogotá on the reminder date, one plain-text mail
-  «Recordatorio: <nombre> vence el <fecha>» with the amount and a link to «Pagos». A fund payment mails its author only
+  «Recordatorio: <nombre> vence el <fecha>» with the amount and a link to «Lo que viene». A fund payment mails its author only
   while they are in the fund; moving the reminder date mails again; a payment past its due date is not mailed.
 - **The five open debt cases** of the 2026-10-15 audit (Q7 a) are settled one by one in a question session before their
   module; the rest of the debt fixes do not wait.
@@ -441,7 +447,7 @@ Board C1h corrected the same day: a card in credit reads «Según HomeFund −$ 
   «Movimientos», one row per payment: its name, «Vence el 15 dic» (or «Venció el 15 oct» in red once the due date has
   passed) and its amount; oldest due first; at most three, the link reads «Ver los 5» when there are more, else «Ver
   pagos». A row leaves when the payment is paid or archived; a payment with no reminder, or whose reminder date has not
-  come, is not shown; none, and the card does not exist. A row opens that payment in «Pagos». RF-141's email goes out the same morning.
+  come, is not shown; none, and the card does not exist. A row opens «Lo que viene». RF-141's email goes out the same morning.
 - **A sign-out Auth refuses leaves this device signed out** (Q30 a): the session is never restored; the login says
   «Cerraste sesión aquí, pero no pudimos cerrarla en tus otros dispositivos.»
 
@@ -515,6 +521,16 @@ Board C1h corrected the same day: a card in credit reads «Según HomeFund −$ 
   - Still to fix from the same critic, no decision needed: the row names the movement's description; «Corregir» comes back
     to the review; the debt detail's header reads the Q9 line as its «Saldo» tile does (Q18 left the header in pesos).
 
+## Decision of 2026-11-17: «Revisar el mes» flags only real surprises, by the user
+
+- «este no es nada inteligente» (RF-239): a whole grocery trip and a 3 kg purchase each read «¿Es correcto este monto?» because the rule
+  compared each with three times the median of the category's split lines, and the household writes groceries as many small lines.
+  The rule now compares the whole movement with the earlier ones of its description, else of its category; see RF-239 for the numbers.
+  Supersedes O7-Q2 a above.
+- The line under «¿Es correcto este monto?» says what the amount was set against, in words a person says aloud: «Tus gastos en
+  «Mercado en Ara» suelen ser de $ 40.000 a $ 80.000, según 12 veces en los últimos 6 meses.» A category reads «Tus gastos en Mercado
+  suelen ser de … según 20 movimientos de los últimos 6 meses.» Never «mediana». One figure when both ends are equal.
+
 ## Decisions of 2026-11-11: HomeFund from an iPhone, by the user
 
 - «Ajustes · Correos del banco» has an «Atajo de iPhone» card under «App para Android»: one line on what it does, then
@@ -563,6 +579,22 @@ Board C1h corrected the same day: a card in credit reads «Según HomeFund −$ 
   the description, «Salió de / Entró a <cuenta> · <fecha>» and the amount; one account select («¿A qué cuenta fue?» or
   «¿De qué cuenta vino?») and «Completar». A remembered account prefills the select with «Sugerida: la usaste antes con
   esta descripción.»; it never completes on its own.
+- The Bandeja's card and row work without opening the form (the user, 2026-11-17):
+  - **The date is the movement's**, as the message prints it («Fecha: 14 nov 2026»), never the hour it arrived; a delivery that
+    prints none shows the day it arrived. The laptop table's first column reads the same day.
+  - **The category is chosen on the card**: below the account, a one-line select labelled «Categoría» lists the categories of the
+    account's scope and kind (a child as «Padre › Hijo»); with none, an amber line «Falta la categoría» sits above it and the select reads «Elegir la categoría». Choosing one makes the
+    card ready, so «Anotar» saves it in one tap with that category (the same way «Para quién» rides on «Anotar», RF-242). A
+    transfer shows no category.
+  - **«Descartar» is on the card**, a soft red button beside «Anotar» (or «Completar y anotar»), not inside the ⋮ menu, which keeps
+    only «Olvidar el comercio» and is absent when there is nothing to forget. It still asks first and still offers «Descartar y no
+    volver a preguntar».
+  - **Several at once**: each ready card and each ready row carries a checkbox named «Elegir <comercio>». Above the list a quiet
+    bar reads «Elegir las listas (n)» with nothing chosen; with some, «n elegidas», «Anotar n» (primary) and «Quitar la selección». A
+    delivery that is not ready has no checkbox. «Anotar n» records them all in one write: if any is refused, none is recorded and
+    the toast says so; when it succeeds the toast reads «n movimientos anotados» and the cards leave the list.
+  - **«Ya registrado»** (RF-246): the card leads with a red «Descartar como repetido», one tap with no confirmation, and keeps
+    «Anotar igual» as a gray text button; the row's menu leads with the same item.
 - A transfer between two currencies is imported at the rate the person confirms (the user, 2026-10-30: «deben ser por
   trm, se confirma con el usuario cuánto le llegó»). The preview marks it `needs_counter_amount` and names the other
   account's currency; Claude asks how much arrived or left there and confirms the resulting TRM. It is booked in the
@@ -613,6 +645,31 @@ Elegidas por el crítico; el usuario puede cambiarlas («Elige lo que recomiende
 ## Decisión del 2026-11-10: bolsillos en Cuentas, por el usuario
 
 Un bolsillo es una cuenta dentro de otra, como los de Bancolombia: «Bolsillo Dinero» vive dentro de «Ahorros Bancolombia 3397». En la lista de Cuentas la cuenta madre muestra el total de ella y sus bolsillos; debajo, sangrada, la línea «Libre» con lo que queda en la madre misma, y luego cada bolsillo con su propio saldo, también sangrado. En el celular el bolsillo es una tarjeta sangrada bajo la de su madre y la madre muestra el total con «Libre» debajo. El formulario de la cuenta, al crear y al editar, trae un campo opcional «Dentro de» con las cuentas de ahorro de la misma persona o fondo y la misma moneda, y «Ninguna». Pasar dinero a un bolsillo es una transferencia normal entre las dos cuentas.
+
+## Decisión del 2026-11-17: Cuentas sin lo que se repite ni lo que está vacío, por el usuario
+
+«Esto es un mierdón de cantidad de cosas.» Cada fila de Cuentas decía «Personal» con un ícono de persona aunque todas lo fueran,
+repetía el titular en el nombre y en una línea, dejaba una columna «Últimos cuatro» con «—» en casi todas y ponía una fila «Libre»
+bajo cada cuenta con bolsillos. Una cosa se dice una vez y en el lugar donde informa; lo vacío no se dibuja.
+
+- **El ámbito se dice en la banda, no en la fila.** Sale el ícono de persona y sale la línea «Personal» / «El fondo» de cada fila.
+  Si la lista mezcla cuentas personales y del fondo, la banda de cada tipo ya dice «Cuentas · Personal» y «Cuentas · <fondo>». Si
+  todas son del fondo, la banda lo nombra («Cuentas · <fondo>»). Si todas son personales, no se escribe «Personal» en ninguna parte.
+  Solo la cuenta personal de otro miembro lleva su dueño («De Andrea»), porque ahí sí distingue.
+- **El titular tiene un solo lugar: el campo «Titular» de la cuenta del fondo (RF-181).** El nombre de la cuenta dice el banco o el
+  producto («BBVA»), no a quién pertenece. Un nombre que ya trae al titular («Mamá — BBVA») no se reescribe, y su fila no repite
+  «Titular: Mamá»: la línea del titular solo sale cuando el nombre no lo dice.
+- **Una línea de detalle bajo el nombre**, en gris, con lo que tenga y nada más, separado por « · »: la entidad, «terminada en 3397», el
+  titular, el dueño ajeno. Una cuenta sin nada de eso es una sola línea. Salen las columnas «Entidad» y «Últimos cuatro»: la tabla
+  queda en Nombre, Saldo y el menú, y el filtro «Entidad» sigue donde está. En el celular la tarjeta usa la misma línea en vez de
+  tres.
+- **Sin fila «Libre».** La cuenta con bolsillos muestra el total de ella y sus bolsillos, y los bolsillos debajo, sangrados. Lo que
+  queda en la madre se escribe como una nota gris bajo el total («Libre $ 249.816») solo cuando es distinto del total, es decir,
+  cuando algún bolsillo tiene dinero; si no, no se escribe. La tarjeta del celular sigue la misma regla.
+- **Los filtros que no filtran no se dibujan.** «Propietario» solo aparece cuando hay cuentas personales y del fondo; «Entidad», solo
+  cuando hay dos entidades o más.
+- Estados: lista vacía, lista filtrada vacía, archivadas (solo «Restaurar» y «Eliminar») y quien lee la cuenta de otro (sin menú) siguen
+  como estaban.
 
 ## Decisión del 2026-11-10: Cuentas por tipo, por el usuario
 
@@ -677,3 +734,233 @@ movimientos y su pago es una transferencia, nunca un ingreso), pero nadie la ve:
 - **«Dejar de seguir»** quita el vínculo y archiva la cuenta interna, que pasa a Archivadas con sus movimientos; la
   confirmación lo dice.
 
+## Decisión del 2026-11-17: el plan de pagos en el crédito, por el usuario
+
+El banco imprime un «plan de pagos» con cada cuota; el crédito lo guarda y lo lee contra lo que ya se pagó. Se construye
+con estas palabras, sin tablero previo, y se refina con lo construido.
+
+- **Sin plan** el crédito no cambia: ningún bloque, ninguna ficha, ningún aviso.
+- **Con plan**, bajo las fichas del saldo (y bajo «Lo paga <persona>» si la hay), el bloque «Plan de pagos»: cuatro fichas,
+  «Próxima cuota» (el valor, con «Cuota 4 de 12 · 5 mar 2027»; «Todas pagadas» al final), «Cuotas por pagar» («de 12»),
+  «Falta pagar» («Con intereses y seguro») y «Termina» (el mes y el año, con el día debajo). Encima de ellas, un aviso
+  ámbar si alguna cuota sin pagar se aleja más de 5 % de la usual: «En noviembre 2027 la cuota es $619.285; la usual es
+  $194.679.», y «Otras 2 cuotas más se alejan más de 5 % de la usual.» si hay más.
+- **«Cuotas»**, una tarjeta con una fila por cuota: «Cuota 3 · 5 feb 2027» y, debajo, «Capital · Interés · Seguro»; a la
+  derecha el total, una insignia con el estado en palabras (verde «Pagada», ámbar «Parcial · $X», roja «Vencida», gris «Por
+  pagar») y «Saldo $X», el capital que queda. Un estado nunca es solo color.
+- **«Lo paga <persona>»**: la ficha «Falta del crédito» cambia su nota por «A John le faltan 14 cuotas: $4.200.000 con
+  intereses» («le falta 1 cuota» en singular); y un aviso ámbar bajo las fichas, «En agosto 2027 la cuota es $356.789; John
+  suele mandar $327.000.», más «Otras 2 cuotas más tampoco la cubren.» si hay más. Sin cuotas por pagar la nota vuelve a la
+  cuota y el día de pago del banco.
+- En el celular, una columna: las fichas se apilan y cada fila de cuota baja el total y la insignia bajo sus cifras.
+
+## Decisión del 2026-11-17 (segunda): «le falta» dice de dónde sale, por el usuario
+
+«¿Cómo sé que John me debe este dinero? No veo de dónde pones eso.» Sin tablero previo; se refina con lo construido.
+
+- **Dónde.** En Cuentas, la cifra de «Lo paga John · le falta $ 2.680.980» es un botón (tinta de texto, sin caja). En el
+  crédito, la ficha «John todavía debe» lleva la nota «Ver cómo se calcula», también un botón.
+- **El diálogo «Cuánto le falta a John»**: «Deuda cuando se unió (10 nov 2026)» y su cifra; «Pagos de John» y, debajo, una
+  línea por pago con el día y el monto en negativo, el más viejo primero (sin pagos: «John todavía no ha pagado nada.»);
+  «Otros movimientos de la cuenta» solo si el saldo guarda algo más; y, tras una línea, «Le falta» en negrita con la cifra.
+  Con plan de pagos, una última línea gris: «Con intereses y seguro, le faltan 14 cuotas: $4.200.000». Un botón «Cerrar».
+- **El crédito mismo relaciona a quien lo paga.** «¿Por qué el crédito mismo no relaciona a John?» Bajo las fichas del saldo,
+  «Lo paga John» abre con tres líneas: «Este crédito lo paga John. Él te manda la cuota y tú le pagas a Lulo.» (el prestamista
+  es la institución del crédito; sin ella, «al banco»), «Le falta $30.000 (capital) · con intereses $33.300 · 3 cuotas» y, en
+  gris, «Deuda cuando lo uniste: $3.007.980 el 10 nov». A la derecha del título, tres botones a la vista: «Registrar pago de
+  John», «Cambiar persona» y «Desunir» (rojo, confirma); ya no hay menú. Un aviso ámbar mientras el mes no ha recibido nada:
+  «John aún no manda la cuota de diciembre (vence el 15).».
+- **«Mes a mes»** es una tabla: «Mes», «John te mandó» y «Pagaste a Lulo» (monto y, debajo, el día), «Diferencia» (lo que
+  John mandó menos lo que pagaste al banco: el 4x1000 y el colchón); un mes sin movimientos lleva rayas. En el celular cada
+  mes es un bloque con sus cuatro líneas.
+- **Deudas.** La fila de un crédito que paga otra persona dice «Lo paga John» en gris bajo el nombre, en la tabla y en las
+  tarjetas.
+- **Estados.** Desde Cuentas el diálogo lee al abrirse: «Leyendo los pagos…» con un indicador, «No pudimos leer el detalle.»
+  con «Reintentar» si falla; desde el crédito ya tiene los datos y no espera.
+
+## Decisión del 2026-11-17: «Para quién», por el usuario
+
+«Cuando gasta a nombre de otra persona… Ángela es mi pareja y no le cobraría dinero a menos que te diga.» Un gasto hecho por
+otra persona sigue siendo gasto de quien lo paga: «Para» dice de quién fue, y no crea deuda ni cuenta por cobrar. Sin
+tablero previo; se refina con lo construido.
+
+- **Las personas viven en «Etiquetas»** (RF-242), con su propio botón «Añadir persona» junto a «Añadir etiqueta», en el celular y
+  en el escritorio. Una persona es una fila más, con su color, y lleva una insignia: «No se le cobra» (gris) o «Se le cobra»
+  (ámbar); nunca solo color. El diálogo de una persona tiene el nombre, el interruptor «Se le cobra» con su línea de ayuda («Apagado,
+  lo que gastas para esta persona es solo gasto tuyo y no te debe nada. Encendido, se te recuerda cobrárselo; una deuda nunca se
+  crea sola»), el color y dónde va. Apagado desde el primer día.
+- **El campo «Para quién»** (no «Para»: ese nombre ya lo lleva el destino de un traspaso) del formulario de movimiento, de la anotación rápida y de la tarjeta de la Bandeja es opcional, un selector
+  de una sola persona con «Nadie» como primera opción, bajo las etiquetas; sale en cualquier movimiento, un traspaso incluido, y solo
+  con las personas del mismo ámbito que la cuenta. En la tarjeta de la Bandeja el selector va sobre el botón «Aceptar», para que
+  el toque único también guarde para quién fue.
+  Si la persona elegida «se le cobra», una línea bajo el selector dice «Se le cobra: este gasto sigue siendo tuyo hasta que
+  registres lo que te debe.» Sin personas, el campo no sale.
+- **En la lista** el movimiento lleva una etiqueta discreta «para Ángela» en gris, junto a su categoría, y nunca dentro de la
+  descripción; el detalle la repite bajo las etiquetas.
+- **Filtros.** Movimientos suma el filtro «Para quién» (una persona o «Nadie»), y el total de arriba cuenta lo que el filtro deja:
+  «Ángela · este mes». Informes suma, bajo el gasto por categoría, la tarjeta «Para quién»: una fila por persona con lo que se gastó
+  para ella ese mes, por moneda, y un toque abre Movimientos ya filtrado. Sin gasto para nadie, la tarjeta no aparece.
+- Estados: guardando, los controles se bloquean; una persona borrada deja sus movimientos sin «para» (el borrado de una etiqueta
+  ya dice cuántos movimientos suelta).
+
+## Decisión del 2026-11-17: «Cuadrar todo», por el usuario
+
+Cuadrar once cuentas una por una, desde capturas, tomó docenas de pasos y dos errores: se usó la deuda a la fecha de corte de
+una tarjeta en vez de la de hoy, y se escribió una deuda con el signo contrario. Una sola pantalla, sin diálogos, para contar
+todas las cuentas a la vez.
+
+- **Dónde.** `/settings/accounts/reconcile`, con la flecha de volver a Cuentas. Cuentas la ofrece con «Cuadrar todo» junto a «Añadir»,
+  y la línea de Inicio (abajo) también lleva a ella. Título «Cuadrar todo»; bajo él: «Escribe lo que dice el banco hoy. Lo que dejes
+  vacío no se toca.»
+- **Qué lista.** Toda cuenta abierta que la persona puede escribir, con sus bolsillos, y ninguna de otro miembro, archivada ni
+  «Me debe» de un crédito ajeno. Primero lo que se tiene, luego tarjetas y préstamos; dentro, por nombre. Una tarjeta del celular
+  y una del escritorio son la misma, una sobre otra, en el ancho de la página.
+- **La fila** es una `Card`: el nombre y debajo, en gris, la entidad y «terminada en 3397»; a la derecha «Según HomeFund» con la cifra
+  de hoy. Una línea gris dice cuándo se cuadró: «Cuadrada hace 12 días», «Cuadrada hoy» o «Nunca cuadrada». Debajo, el campo.
+- **El campo** lleva su etiqueta visible: «Lo que dice el banco hoy» en una cuenta; en una tarjeta o un préstamo, «Lo que debes hoy
+  (cupo total − disponible)» y, como ayuda, «No uses la deuda a la fecha de corte». Una deuda se escribe en positivo, lo que se debe;
+  un menos solo si se pagó de más.
+- **Ayuda del cupo.** Solo en tarjetas y préstamos, un enlace «Calcular con el cupo» abre dos campos, «Cupo total» y «Cupo disponible»;
+  lo que se escribe en ellos llena «Lo que debes hoy» con la resta y se puede corregir a mano. Plegado por defecto.
+- **La diferencia sale en vivo**, en cuanto hay una cifra válida: «Diferencia +$ 150.000», en el tono del saldo (a favor en verde, en
+  contra en gris fuerte, nunca solo color: lleva el signo); en cero, «Cuadra. No se registra ningún movimiento». Una cifra con el signo
+  contrario al saldo dice «Tiene el signo contrario al saldo. Revísala» junto a la diferencia, sin bloquear. Una cifra que no se lee
+  dice por qué, bajo el campo.
+- **Un solo botón al final**, «Cuadrar 4 cuentas» (singular con una), que escribe todo o nada. Sin cifras escritas está desactivado y
+  encima dice «Escribe lo que dice el banco de al menos una cuenta». Mientras escribe, «Cuadrando…». Al terminar vuelve a Cuentas con
+  «4 cuentas cuadradas». Si el saldo de una cambió mientras tanto, no se escribe ninguna: bajo esa fila dice «Los movimientos de esta
+  cuenta cambiaron. Revisa la diferencia y vuelve a cuadrar.», las cifras se leen de nuevo y lo escrito se conserva.
+- **Vacío:** sin cuentas que cuadrar, «No hay cuentas para cuadrar» y un enlace a Cuentas.
+- **El aviso «Cuádrala».** Una cuenta que no se cuadra hace más de 30 días lleva, en Cuentas, una marca gris «Cuádrala» (un botón de
+  texto bajo el nombre que abre el cuadre de esa cuenta); una cuenta que nunca se cuadró cuenta los 30 días desde que se añadió. En
+  Inicio, a lo sumo una línea en la columna de al lado, «3 cuentas sin cuadrar hace más de un mes · Cuadrar todo»; sin cuentas así, nada.
+- **Inicio no muestra los «Descuadre»** (2026-11-17). Las últimas del listado de Inicio son lo que pasó; la diferencia de un cuadre sigue en
+  Movimientos y en el historial de la cuenta.
+
+## Decisión del 2026-11-17: «Lo que viene», por el usuario («sí a todo»)
+
+Pagos, Recurrentes, Suscripciones e «Ingreso esperado» eran cuatro pantallas para una sola pregunta: ¿qué me llega o qué debo
+pagar? Ahora es una, `/planning/upcoming`, «Lo que viene». Los tres caminos viejos (`/planning/payments`, `/recurring`,
+`/subscriptions`) llevan a ella, y el mosaico de Planeación tiene una sola ficha ancha con lo próximo. No hay tablero previo.
+
+- **Una lista por fecha**, sin secciones: lo más cercano (y lo vencido) arriba. Cada fila es una `Card` con el disco de la fecha,
+  el nombre, debajo «lo que es · cuenta» y el monto a la derecha; una línea gris cuando hace falta (qué falta o qué estima) y
+  **una** acción, debajo. El resto vive en el menú de tres puntos.
+- **Lo que es, en palabras:** «Pago», «Te llega» (un ingreso esperado), «Se repite cada mes» (cada semana, cada año; «cada 2 meses»)
+  y «Suscripción» (un cobro que HomeFund encontró repitiéndose; solo los que siguen cobrándose, y no si ya hay una regla que lo
+  genera). Una línea gris lo cuenta cuando duele: «Venció», «Debió llegar», «Debió cobrarse y aún no aparece», «En pausa»,
+  «Estimado con 4 cobros anteriores».
+- **La acción:** «Pagar» (un pago; pide el día en que ocurrió y escribe el gasto), «Ya llegó» (un ingreso esperado; igual, escribe el
+  ingreso), «Saltar este mes» (una regla activa: la próxima vez pasa un periodo más adelante y no se escribe nada; «esta semana» y
+  «este año» según la regla), «Editar» (una regla en pausa) y, en una suscripción, «Ver movimientos» (lleva al listado filtrado por
+  su nombre). Menú: Editar, Cancelar este pago / «Ya no llegará», Pausar o Reanudar, «Ver movimientos generados», Eliminar.
+- **Un solo «Agregar»** arriba a la derecha. El diálogo pregunta «¿Pagas o recibes?» («Pago» · «Ingreso») y «¿Una vez o se
+  repite?» («Una vez» · «Se repite»); después «¿Qué es?» o «¿De quién?», «Monto», la cuenta («¿De qué cuenta sale?» / «¿A qué cuenta
+  llega?»), el día («¿Qué día vence?», «¿Qué día lo esperas?», «¿Qué día es la primera vez?»), y según el caso «¿Cada cuánto?»,
+  «¿Hasta cuándo?», «¿Qué día te aviso?» y «Categoría». Un pago de una vez puede preguntar «¿Va a otra cuenta tuya, como una tarjeta o
+  un crédito?» (y entonces no lleva categoría). Las categorías incluyen las subcategorías, «Mercado › Lácteos». Al editar, las dos
+  preguntas no aparecen: lo que ya es no cambia de tipo.
+- **Vacío:** sin nada, «Aún no tienes nada por venir» y «Toca «Agregar» para anotar un pago que vence, un ingreso que esperas o algo
+  que se repite cada mes», con el botón. Ningún tipo vacío muestra su encabezado, porque no hay encabezados.
+- Arriba, el aviso ámbar «N movimientos automáticos sin revisar» solo cuando hay alguno.
+
+## Decisión del 2026-11-17: pagar tarjetas y créditos, extractos y cupo, por el usuario
+
+- **Pagar tarjeta.** El botón y el diálogo se llaman «Pagar tarjeta». Bajo «Desde» va «Cuánto pagas» con tres opciones en un
+  control segmentado: «Mínimo $X», «Total $Y» y «Otro». Elegir una escribe su cifra en el campo de monto; escribir en el
+  campo elige «Otro». Se abre en «Mínimo» (en «Total» si no hay mínimo). «Total» es lo que pide el último extracto, o todo
+  lo que se debe si no hay extracto. Si el monto pasa lo que se debe, un aviso ámbar sin cerrar nada dice «Pagas $X más de lo
+  que debes…» y el botón sigue activo. Con el mínimo cubierto: «El mínimo de este periodo ya está pagado.»
+- **Mínimo pagado.** Donde la ficha, la fila o la tarjeta del móvil nombraban «Pago mínimo $X», dice en gris «Mínimo de
+  noviembre pagado». Lo abonado en el periodo se descuenta: un abono parcial pide solo el resto.
+- **Cupo disponible.** Nunca pasa del cupo. Con saldo a favor la cifra es el cupo y la nota dice «de $8.000.000 · a favor $1.101.844».
+- **Pagar cuota.** En un préstamo el botón y el diálogo se llaman «Pagar cuota»; las opciones son «Cuota $X» y «Abono extra».
+  Bajo el monto, en gris, una línea dice con qué se separan intereses y capital (el plan de pagos, o la tasa E.A. y los días
+  desde el último pago). Sin tasa: «Este crédito no tiene tasa: el saldo no cuenta intereses.» y el enlace «Agregar la tasa».
+  Al guardar, el aviso dice cuánto fue a capital y cuánto a intereses.
+- **Tasa.** «Tasa E.A. (%)» en el formulario, en la exportación y en la línea de la deuda («Rotativo · 28,5 % E.A.»); acepta coma.
+- **Extractos.** Cinco campos: fecha de corte, fecha de vencimiento, total y, opcionales, mínimo, intereses y comisiones. Las
+  fechas abren en las que dan el día de corte y el de pago guardados. Encima de la tabla, «Editar» y «Borrar» actúan sobre el
+  último extracto, con «Solo el último extracto se puede corregir o borrar.»; borrar pide confirmación y nombra el corte.
+- **Cuadrar todo.** El cupo total abre con el cupo guardado. Bajo los campos, una línea dice de dónde sale lo que se debe: el
+  cupo total menos el disponible, menos lo que el banco ya cuenta de compras en otra moneda por facturar.
+
+## Decisión del 2026-11-17 (tercera): el crédito y la tarjeta dicen una cosa a la vez, por el usuario
+
+«La usabilidad es muy rara, requiere saber exactamente cómo se creó la app.» Un préstamo trae cinco cifras de «lo que falta»
+y los bloques de una tarjeta; una tarjeta ofrece «Lo paga otra persona»; hay tres formularios para crear una deuda. Se
+construye con estas palabras, sin tablero previo, y se refina con lo construido.
+
+- **Préstamo, encima**, una sola cifra junto al nombre: «Falta pagar $168.000 en 3 cuotas», y bajo ella «De dónde sale».
+  «De dónde sale» abre una ventana con una frase que dice de dónde viene la cifra (el plan del banco, el plazo, la cuota o
+  el saldo) y una línea por cada dato que la compone, en palabras: cuotas pagadas («1 de 4»), pagadas a medias, que faltan,
+  lo que falta con intereses y seguro, capital que debes, cuándo termina y, si lo paga otra persona, lo que ella debe del
+  capital y una frase que explica la diferencia con lo que tú debes al banco. Sin deuda: «No debes nada».
+- Bajo ella una sola ficha, «Próxima cuota» (lo que falta de esa cuota, si se pagó corta). Sin plan de pagos el bloque
+  «Plan de pagos» dice «Pídele a Claude que lea tu plan de pagos» y no ofrece subirlo.
+- **Cuota pagada corta**: insignia ámbar «Parcial · faltan $8.000», nunca «Vencida»; «Vencida» es la cuota a la que no
+  llegó nada. Una cuota parcial cuenta entre las que faltan, nunca entre las pagadas.
+- **«Lo paga <persona>»** conserva solo lo de la persona: lo que mandó, lo que todavía debe (capital), este mes y «Mes a
+  mes». «Diferencia» lleva su signo («−$80.000») y, si el banco cobró y la persona no mandó nada, debajo: «John no mandó la
+  cuota». «Registrar pago de John» acepta una fecha anterior al día en que se unió el crédito.
+- **Un préstamo no trae** «Compras en otra moneda», «Periodo abierto» ni «Extractos»; **una tarjeta no ofrece** «Lo paga otra
+  persona».
+- **Crear una deuda**: Deudas ofrece «Nueva tarjeta» y «Nuevo préstamo», dos formularios. La tarjeta pide nombre, entidad,
+  moneda, lo que debes hoy, cupo, día de corte, día de pago, pago mínimo («Monto fijo» o «% del saldo») y «Tasa E.A. (%)»; el
+  préstamo, nombre, entidad, moneda, lo que debes hoy, cuota mensual, día de pago, plazo («Plazo (cuotas)») y «Tasa E.A.
+  (%)». El mismo formulario completa o edita las condiciones desde el menú de la fila («Completar datos», «Editar»). «Añadir
+  cuenta» ya no ofrece «Lo que debo»: dice «¿Una tarjeta o un préstamo? Se agregan en Deudas».
+- **Deudas a 1280**: el nombre de cada fila abre su detalle.
+
+## Decisión del 2026-11-17: un solo formulario de movimiento, por el usuario («sí a todo»)
+
+- **Una pantalla, tres pestañas.** «Nuevo movimiento» y «Editar movimiento» son el mismo formulario. Arriba, tres pestañas:
+  «Gasto», «Ingreso» y «Entre mis cuentas». En el teléfono caen a una segunda línea antes que recortarse. Cambiar de pestaña
+  conserva el monto, las palabras y la fecha, y lleva la cuenta al lugar que pide la pestaña nueva. Editar abre la pestaña del
+  movimiento.
+- **El orden del campo.** «Descripción», luego «Monto» y moneda, luego la cuenta («Cuenta» en gasto e ingreso; «Sale de» y
+  «Entra a» en «Entre mis cuentas»), luego las categorías, «Para quién» y las etiquetas, y la fecha. Ninguna frase explica el
+  modelo: no hay «origen», «destino», «Solo destino = ingreso…» ni «deducido de las cuentas».
+- **Las palabras proponen, no mandan.** Lo que se escribe en «Descripción» se guarda tal cual. Mientras se escribe, el formulario
+  propone el monto, el día («hoy», «ayer», una fecha), la categoría y, en una tarjeta, «a 12 cuotas»; todo sigue editable y lo
+  que la persona corrigió no se le quita. Con «12.000.50» no adivina: pregunta «¿Quisiste decir 12.000,50 o 1.200.050?» y espera.
+- **Cuotas.** «Diferir en cuotas» ya no es un paso aparte: con una tarjeta elegida, «Cuotas» es un campo opcional del gasto.
+- **Sin cuentas.** Donde iría la cuenta dice «Aún no tienes cuentas donde anotar esto. Lo que escribiste se queda aquí.» con
+  «Crear cuenta», que abre el diálogo de la cuenta encima del formulario. Guardar en ese estado abre lo mismo; nunca sale
+  «Elige al menos una cuenta» sobre una lista vacía.
+- **Dividir.** La primera línea se puede editar siempre. Bajo el total, la franja roja dice «Falta asignar $X»; sobre él, «Te
+  pasaste $X»; cuadrado, queda verde con «Todo asignado».
+- **El bolsillo se dice antes.** Si un gasto, o una salida de una cuenta, pasa de lo libre y la cuenta tiene bolsillos, una
+  franja ámbar bajo la cuenta dice «Se tomarán $300.000 de Viajes» antes de guardar. Al guardar, el aviso ofrece «Deshacer».
+- **Una transferencia se lee con palabras de persona.** En Movimientos, Inicio y el detalle: «Pago cuota Lulo», «Pago tarjeta
+  Visa», «John te pagó la cuota», y «Entre mis cuentas» para lo demás. «Traspaso» ya no sale en pantalla.
+
+## Decisión del 2026-11-17: Inicio en líneas cortas, por el usuario
+
+Las palabras primero. Quien abre Inicio contesta en voz alta, sin saber cómo está hecha la app: ¿cuánto tengo?, ¿qué pago este mes?,
+¿en qué se me fue?, ¿hay algo por arreglar?, ¿qué viene? Cada línea es una frase corta con su cifra y cada cifra dice de dónde sale.
+
+- **Tienes.** La cifra grande de la tarjeta oscura dice «Tienes en tus cuentas» y es lo que hay en las cuentas que la persona ve (un
+  bolsillo cuenta una vez con su cuenta; lo que otros le deben no entra). El patrimonio va debajo, pequeño, como un botón «Patrimonio
+  $4.894.500 · ver la resta» que abre «Cómo sale tu patrimonio»: lo que tienes en tus cuentas, lo que te deben (solo si algo), lo que
+  debes en tarjetas y créditos, y el patrimonio. Dos monedas, dos cifras: nunca se suman.
+- **Este mes pagas $X.** Una tarjeta con título y debajo una línea por cada pago, la más próxima primero, cada una un enlace: «Visa
+  $3.148.800 el 20 nov (mínimo $310.000)». La tarjeta que no tiene extracto de este mes dice «Mastercard el 25 nov: falta su extracto» y
+  una nota gris «Sin contar lo que pidan los extractos que faltan». En el celular y en el escritorio por igual. Sin pagos: «Este mes no
+  tienes pagos por hacer.»
+- **Te deben.** La tercera línea, entre «Este mes pagas» y «En <mes> gastaste»: «Te deben $X: John $Y · Carlos $Z», un botón por nombre; nada cuando nadie debe. En Cuentas es una sección y su propio cuadro, y el neto es lo que tengo, menos lo que debo, más lo que te deben.
+- **En noviembre gastaste $X.** Con las tres categorías más grandes en una línea gris, «Arriendo $1.400.000 · Mercado $478.000», y el
+  enlace «Ver reportes». Reemplaza la barra «El mes de un vistazo».
+- **Por arreglar.** Una tarjeta solo con lo que existe, cada línea un enlace a su arreglo: «Emergencias gastó $150.000 más de lo que
+  tenía» (a Cuentas, donde está «Pasar $150.000 desde Ahorros»), «Nequi está por debajo de cero: −$16.000», «2 avisos por revisar en la
+  Bandeja», «Lulo: 2 cuotas quedaron cortas por $7.612» y «3 cuentas sin cuadrar hace más de un mes · Cuadrar todo». Sin nada raro no se
+  dibuja. «Revisar el mes» abre el mes en curso con esta misma lista arriba.
+- **Viene.** El próximo ingreso esperado y el próximo gasto, «Ingreso de $800.000 (Cliente) el 28 nov», «Arriendo $1.400.000 el 5 dic».
+  Sin ninguno de los dos no se dibuja.
+- **Ajuste por cuadre.** Así se llama, en toda la app, lo que antes se llamaba «Diferencia» al cuadrar. La cifra del mes en Inicio es un
+  botón que abre cada cuenta con lo que su cuadre movió: «Nequi +$28.000», «Efectivo −$17.000». No sale en los últimos movimientos.
+- **Cuentas.** «Lo que tengo» es la suma de las filas que se ven. «Libre» nunca es mayor que el total y no se dibuja mientras un
+  bolsillo esté en negativo. Un bolsillo en negativo dice, en rojo, «Gastó $150.000 más de lo que tenía» y un botón «Pasar $150.000 desde
+  Ahorros» que lo mueve de un toque. En el celular, «Saldo inicial … el 1/10/2026» dice su fecha en la primera tarjeta de cada fecha.
+- **Chicos.** Sin fondo no hay «Aportes del mes». «Crear cuenta» de un Inicio vacío abre el formulario. «Crear un fondo» lleva debajo
+  «Un fondo es una cuenta compartida: invitas a otras personas y llevan juntos los gastos del hogar.»

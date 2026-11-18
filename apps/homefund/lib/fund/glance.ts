@@ -9,6 +9,11 @@ export function isOverdue(
   return payment.status === "pending" && payment.dueDate < today;
 }
 
+// A planned payment that leaves from no account is an expected income (RF-253).
+export function isExpectedIncome(payment: { fromAccountId: string | null; toAccountId: string | null }): boolean {
+  return payment.fromAccountId === null && payment.toAccountId !== null;
+}
+
 // What a proposed delivery is read in: its account's own currency, or the fund's
 // when it names none yet, never pesos by default (RF-121, RF-124).
 export function deliveryCurrency<C extends string>(
@@ -44,14 +49,21 @@ export type DueDebt = {
   currency: string;
   owedCents: number;
   minimumPaymentCents: number | null;
+  // What was paid this period covers its minimum: nothing is due on this debt until the next one.
+  minimumPaid?: boolean;
   nextDueDate: string | null;
+  // A loan's first cuota not paid in full; it names the next payment instead of a card's statement date.
+  nextInstalment?: { number: number; dueOn: string; amountCents: number } | null;
 };
 
 export type NextDebtPayment = {
   accountId: string;
   currency: string;
-  amountCents: number;
+  // Null while no minimum is known: a payment's due date without its figure, never a zero.
+  amountCents: number | null;
   date: string;
+  // Set when the payment is a loan's cuota: its number, so the screen says «Cuota 3» and not a statement.
+  instalmentNumber?: number;
 };
 
 // The earliest payment among the debts that owe something: the one the debts screen
@@ -61,13 +73,16 @@ export function nextDebtPayment<T extends DueDebt>(
 ): (NextDebtPayment & { row: T }) | null {
   let next: (NextDebtPayment & { row: T }) | null = null;
   for (const row of rows) {
-    if (row.nextDueDate === null || row.owedCents <= 0) continue;
-    if (next !== null && next.date <= row.nextDueDate) continue;
+    const cuota = row.nextInstalment ?? null;
+    const date = cuota?.dueOn ?? row.nextDueDate;
+    if (date === null || row.owedCents <= 0 || (cuota === null && row.minimumPaid)) continue;
+    if (next !== null && next.date <= date) continue;
     next = {
       accountId: row.accountId,
       currency: row.currency,
-      amountCents: row.minimumPaymentCents ?? 0,
-      date: row.nextDueDate,
+      amountCents: cuota?.amountCents ?? row.minimumPaymentCents,
+      date,
+      ...(cuota ? { instalmentNumber: cuota.number } : {}),
       row,
     };
   }
@@ -167,6 +182,19 @@ export function dayNet(
     nets.set(row.currency, (nets.get(row.currency) ?? 0) + signed);
   }
   return [...nets];
+}
+
+// What a day's net leaves out, per currency: the money moved between the person's own accounts, which the net never
+// counts but the day still lists (RF-19). Order of first appearance.
+export function dayLeftOut(
+  rows: { kind: string; currency: string; amountCents: number; reconciliationId: string | null }[],
+): [string, number][] {
+  const moved = new Map<string, number>();
+  for (const row of rows) {
+    if (row.reconciliationId !== null || row.kind !== "transfer") continue;
+    moved.set(row.currency, (moved.get(row.currency) ?? 0) + row.amountCents);
+  }
+  return [...moved];
 }
 
 // The chart palette: violets, jade, amber, sky and slate, never red, which a chart

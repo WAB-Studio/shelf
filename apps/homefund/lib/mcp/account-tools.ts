@@ -3,15 +3,21 @@ import "server-only";
 import type { CallToolResult, McpServer, ServerContext } from "@modelcontextprotocol/server";
 import { z } from "zod";
 
-import { getReconcileSheet, listAccountReconciliations } from "@/db/queries/account-reconciliations";
+import {
+  getReconcileSheet,
+  reconcileAccounts,
+  type ReconcileSheet,
+  type ReconciledRow,
+} from "@/db/queries/account-reconciliations";
 import { retireAccount } from "@/db/queries/account-write";
 import { listAccounts, restoreAccount } from "@/db/queries/accounts";
-import { confirmReconciliation } from "@/db/queries/reconcile-write";
+import { manyRefusalKey } from "@/db/queries/reconcile-write";
 import { ActionError } from "@/lib/errors";
 import { OVERWRITE, READ, titled } from "@/lib/mcp/annotations";
 import { parseForm } from "@/lib/mcp/parse-form";
+import { todayInBogota } from "@/lib/dates";
 import { centsToDecimal } from "@/lib/money";
-import { reconcileAccountSchema } from "@/lib/validation/account-reconciliation";
+import { MAX_RECONCILED_TOGETHER, reconcileAccountsSchema } from "@/lib/validation/account-reconciliation";
 import { archiveAccountSchema, restoreAccountSchema } from "@/lib/validation/account";
 
 // An account as list_accounts answers it, and as a tool that removes one answers what it removed.
@@ -37,6 +43,90 @@ export function accountRow(account: Awaited<ReturnType<typeof listAccounts>>[num
     balances: account.balances,
     canWrite: account.canWrite,
   };
+}
+
+// RF-245: Claude reads and sends a debt as what is owed, positive, in every figure of the count; the ledger keeps it
+// negative. The one place the two meet is here, so the sheet, the history and the count never disagree on a sign.
+const owed = (kind: "asset" | "liability", cents: number) => (kind === "liability" && cents !== 0 ? -cents : cents);
+
+function sheetAsOwed(sheet: ReconcileSheet) {
+  const { kind } = sheet.account;
+  return {
+    account: { ...sheet.account, derivedCents: owed(kind, sheet.account.derivedCents) },
+    history: sheet.history.map((row) => ({
+      ...row,
+      countedCents: owed(kind, row.countedCents),
+      derivedCents: owed(kind, row.derivedCents),
+      gapCents: owed(kind, row.gapCents),
+    })),
+  };
+}
+
+// A refusal that names the account it came from: a count of many is all or nothing, so the person needs to know which.
+export class AccountRefusal extends ActionError {
+  constructor(
+    messageKey: string,
+    values: Record<string, string> | undefined,
+    public accountId: string,
+    public account: string | null,
+  ) {
+    super(messageKey, values);
+  }
+}
+
+// One account of a count, as Claude reads it: a debt positive, the figure the account holds once counted beside the gap.
+function countedRow(row: ReconciledRow) {
+  return {
+    accountId: row.accountId,
+    name: row.name,
+    kind: row.kind,
+    currency: row.currency,
+    derivedCents: owed(row.kind, row.derivedCents),
+    realAmountCents: owed(row.kind, row.countedCents),
+    gapCents: owed(row.kind, row.gapCents),
+    resultingBalanceCents: owed(row.kind, row.countedCents),
+    signFlip: row.signFlip,
+    reconciliationId: row.reconciliationId,
+  };
+}
+
+type CountItem = { accountId: string; realAmountCents: number; expectedDerivedCents?: number; confirmSignChange?: boolean };
+
+// The one door every count of the MCP goes through: the schema of the form reads the lot, the write function counts it.
+async function count(reconciledOn: string, items: CountItem[], dryRun: boolean) {
+  const form = parseForm(reconcileAccountsSchema, {
+    reconciledOn,
+    items: items.map((item) => ({
+      accountId: item.accountId,
+      realAmount: centsToDecimal(item.realAmountCents),
+      expectedDerivedCents: item.expectedDerivedCents ?? 0,
+    })),
+  });
+  if (!dryRun && items.some((item) => item.expectedDerivedCents === undefined)) {
+    throw new ActionError("mcp.errors.reconcileNeedsExpected");
+  }
+
+  const result = await reconcileAccounts({
+    reconciledOn: form.reconciledOn,
+    dryRun,
+    expectedFrame: "owed",
+    items: form.items.map((item, index) => ({
+      accountId: item.accountId,
+      realAmount: item.realAmount,
+      expectedDerivedCents: items[index].expectedDerivedCents ?? null,
+      guardSign: !items[index].confirmSignChange,
+    })),
+  });
+  if (result.ok) return result.rows;
+
+  const { messageKey, date } = manyRefusalKey(result);
+  const values: Record<string, string> = {};
+  if (date) values.date = date;
+  if (result.reason === "signFlip" && result.kind && result.counted !== undefined && result.derived !== undefined) {
+    values.real = String(owed(result.kind, result.counted));
+    values.derived = String(owed(result.kind, result.derived));
+  }
+  throw new AccountRefusal(messageKey, values, result.accountId, result.name);
 }
 
 type Run = (ctx: ServerContext, load: (owner: string) => Promise<unknown>) => Promise<CallToolResult>;
@@ -95,7 +185,7 @@ export function registerAccountTools(server: McpServer, run: Run, t: Say): void 
           parseForm(day, input.on),
         );
         if (sheet === null) throw new ActionError("errors.notFound");
-        return sheet;
+        return sheetAsOwed(sheet);
       }),
   );
 
@@ -109,22 +199,49 @@ export function registerAccountTools(server: McpServer, run: Run, t: Say): void 
         accountId: z.string().describe(d("targetAccountId")),
         reconciledOn: z.string().describe(d("reconcileOn")),
         realAmountCents: z.number().int().describe(d("reconcileRealAmountCents")),
-        expectedDerivedCents: z.number().int().describe(d("reconcileExpectedDerivedCents")),
+        expectedDerivedCents: z.number().int().optional().describe(d("reconcileExpectedDerivedCents")),
+        confirmSignChange: z.boolean().optional().describe(d("reconcileConfirmSignChange")),
+        dryRun: z.boolean().optional().describe(d("reconcileDryRun")),
       }),
       annotations: OVERWRITE,
     },
     (input, ctx) =>
       run(ctx, async () => {
-        const result = await confirmReconciliation(
-          parseForm(reconcileAccountSchema, {
-            accountId: input.accountId,
-            reconciledOn: input.reconciledOn,
-            realAmount: centsToDecimal(input.realAmountCents),
-            expectedDerivedCents: input.expectedDerivedCents,
-          }),
-        );
-        if (!result.ok) throw new ActionError(result.messageKey, result.date ? { date: result.date } : undefined);
-        return { id: result.id, gapCents: result.gapCents };
+        const dryRun = input.dryRun === true;
+        const [row] = await count(input.reconciledOn, [input], dryRun);
+        const read = countedRow(row);
+        return dryRun ? { dryRun: true, ...read } : { id: row.reconciliationId, ...read };
+      }),
+  );
+
+  // RF-260: many accounts counted on one day, all or nothing; the dry run is what the person says yes to.
+  server.registerTool(
+    "reconcile_accounts",
+    {
+      ...titled(t, "reconcileAccounts"),
+      description: t("tools.reconcileAccounts"),
+      inputSchema: z.object({
+        reconciledOn: z.string().optional().describe(d("reconcileAccountsOn")),
+        accounts: z
+          .array(
+            z.object({
+              accountId: z.string().describe(d("targetAccountId")),
+              realAmountCents: z.number().int().describe(d("reconcileRealAmountCents")),
+              expectedDerivedCents: z.number().int().optional().describe(d("reconcileExpectedDerivedCents")),
+              confirmSignChange: z.boolean().optional().describe(d("reconcileConfirmSignChange")),
+            }),
+          )
+          .min(1)
+          .max(MAX_RECONCILED_TOGETHER),
+        dryRun: z.boolean().optional().describe(d("reconcileDryRun")),
+      }),
+      annotations: OVERWRITE,
+    },
+    (input, ctx) =>
+      run(ctx, async () => {
+        const dryRun = input.dryRun === true;
+        const rows = (await count(input.reconciledOn ?? todayInBogota(), input.accounts, dryRun)).map(countedRow);
+        return { dryRun, written: !dryRun, reconciledOn: input.reconciledOn ?? todayInBogota(), rows };
       }),
   );
 
@@ -137,6 +254,13 @@ export function registerAccountTools(server: McpServer, run: Run, t: Say): void 
       annotations: READ,
     },
     (input: { accountId: string }, ctx) =>
-      run(ctx, () => listAccountReconciliations(parseForm(z.uuid({ error: "transactions.errors.accountInvalid" }), input.accountId))),
+      run(ctx, async () => {
+        const sheet = await getReconcileSheet(
+          parseForm(z.uuid({ error: "transactions.errors.accountInvalid" }), input.accountId),
+          todayInBogota(),
+        );
+        if (sheet === null) throw new ActionError("errors.notFound");
+        return sheetAsOwed(sheet).history;
+      }),
   );
 }

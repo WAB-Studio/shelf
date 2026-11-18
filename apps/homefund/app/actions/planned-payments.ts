@@ -12,6 +12,7 @@ import { ActionError } from "@/lib/errors";
 import { authActionClient } from "@/lib/safe-action";
 import {
   cancelPlannedPaymentSchema,
+  createExpectedIncomeSchema,
   createPlannedPaymentSchema,
   deletePlannedPaymentSchema,
   settlePlannedPaymentSchema,
@@ -21,6 +22,16 @@ import {
 /** Schedules a payment (RF-74); `openPlannedPayment` holds the body. */
 export const createPlannedPaymentAction = authActionClient
   .inputSchema(createPlannedPaymentSchema)
+  .action(async ({ parsedInput }) => {
+    const { plannedPaymentId } = await openPlannedPayment(parsedInput);
+
+    refresh();
+    return { plannedPaymentId };
+  });
+
+/** Schedules an income that is expected (RF-253); the same write as a payment, under the income's own rule. */
+export const createExpectedIncomeAction = authActionClient
+  .inputSchema(createExpectedIncomeSchema)
   .action(async ({ parsedInput }) => {
     const { plannedPaymentId } = await openPlannedPayment(parsedInput);
 

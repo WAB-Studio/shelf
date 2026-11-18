@@ -206,18 +206,27 @@ function renderCases({ transactionId, debtAccountId }: HttpScope): RenderCase[] 
     {
       path: `/${LOCALE}/planning/payments`,
       status: 200,
-      title: title("plannedPayments.title"),
+      title: title("upcoming.title"),
+      landsOn: `/${LOCALE}/planning/upcoming`,
+      why: "«Pagos» became «Lo que viene»",
     },
     {
       path: `/${LOCALE}/planning/recurring`,
       status: 200,
-      title: title("recurringRules.title"),
+      title: title("upcoming.title"),
+      landsOn: `/${LOCALE}/planning/upcoming`,
+      why: "«Recurrentes» became «Lo que viene»",
     },
     { path: `/${LOCALE}/settings`, status: 200, title: title("nav.settings") },
     {
       path: `/${LOCALE}/settings/accounts`,
       status: 200,
       title: title("accounts.title"),
+    },
+    {
+      path: `/${LOCALE}/settings/accounts/reconcile`,
+      status: 200,
+      title: title("accounts.reconcileAllTitle"),
     },
     {
       path: `/${LOCALE}/settings/categories`,
@@ -435,11 +444,24 @@ const landedDeliveries: string[] = [];
 // otherwise outlive every run.
 let httpUserId: string | undefined;
 let httpCookie = "";
+let lateCases: RenderCase[] = [];
 
 // Pages added after the render cases were numbered: rendered at the run's end so no earlier `H` shifts.
-const LATE_RENDER_CASES: RenderCase[] = [
-  { path: `/${LOCALE}/planning/subscriptions`, status: 200, title: title("subscriptions.title") },
-];
+function lateRenderCases({ transactionId }: HttpScope): RenderCase[] {
+  return [
+    { path: `/${LOCALE}/planning/subscriptions`, status: 200, title: title("upcoming.title"), landsOn: `/${LOCALE}/planning/upcoming`, why: "«Suscripciones» became «Lo que viene»" },
+    { path: `/${LOCALE}/planning/upcoming`, status: 200, title: title("upcoming.title") },
+    // A transaction id names no person, so the page calls `notFound()` after `loading.tsx` flushed: noindex in the
+    // body over a 200 on the wire, as `/movements/[id]` does for an id it cannot find.
+    {
+      path: `/${LOCALE}/settings/labels/${transactionId}`,
+      status: 200,
+      title: title("labels.title"),
+      noindex: true,
+      why: "a transaction id names no person: a streamed notFound()",
+    },
+  ];
+}
 
 async function guardSuite(routes: AppRoute[]): Promise<void> {
   for (const { path } of routes) {
@@ -826,7 +848,8 @@ async function main(): Promise<void> {
   await guardSuite(routes);
   console.log("");
   httpCookie = cookie;
-  coverageSuite([...cases, ...LATE_RENDER_CASES], routes);
+  lateCases = lateRenderCases(scope);
+  coverageSuite([...cases, ...lateCases], routes);
   await renderSuite(cases, cookie);
   console.log("");
   await localeSuite(cookie);
@@ -968,8 +991,9 @@ void (async () => {
     await failureNoStoreSuite();
     await emailIngestSuite();
     await widgetKeySuite();
-    await renderSuite(LATE_RENDER_CASES, httpCookie);
+    await renderSuite(lateCases, httpCookie);
     await emailDuplicateSuite();
+    await alertDescriptionSuite();
     await mcpClassesSuite();
   } catch (error) {
     assert(
@@ -1327,8 +1351,8 @@ async function edgeSuite(): Promise<void> {
     await tx`
       insert into accounts (id, owner_user_id, name, kind, subtype, initial_balance_cents, initial_balance_on, last_four)
       values
-        (${namedAccountId}, ${userId}, 'Harness HTTP named card', 'asset', 'bank', 0, current_date, ${namedTail}),
-        (${decoyAccountId}, ${userId}, 'Harness HTTP decoy card', 'asset', 'bank', 0, current_date, ${decoyTail})`;
+        (${namedAccountId}, ${userId}, 'Harness HTTP named card', 'liability', 'card', 0, current_date, ${namedTail}),
+        (${decoyAccountId}, ${userId}, 'Harness HTTP decoy card', 'liability', 'card', 0, current_date, ${decoyTail})`;
   });
   track("accounts", namedAccountId);
   track("accounts", decoyAccountId);
@@ -1909,6 +1933,38 @@ async function emailDuplicateSuite(): Promise<void> {
   );
 }
 
+// A bank alert reads as a short description through every channel: the phone's SMS and the bank's email alike.
+async function alertDescriptionSuite(): Promise<void> {
+  const userId = httpUserId;
+  if (!userId) throw new Error("alertDescriptionSuite ran before the session was read");
+  const token = await edgeCredential(userId);
+  const post = async (path: string, payload: Record<string, string>) => {
+    const response = await fetch(`${HARNESS_BASE_URL}${path}`, {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+      body: JSON.stringify(payload),
+    });
+    const body = (await response.json()) as Record<string, unknown>;
+    if (typeof body.deliveryId === "string") landedDeliveries.push(body.deliveryId);
+    const [row] = await fixtureSql<{ description: string | null }[]>`
+      select proposed_description as description from ingest_deliveries where id = ${String(body.deliveryId)}`;
+    return row?.description ?? null;
+  };
+  const tag = randomUUID().slice(0, 6).toUpperCase();
+  const sms = await post("/api/webhooks/ingest", {
+    text: `Bancolombia: Compraste COP80.800,00 en PIZZERIA ${tag} con tu T.Cred *4872, el 14/11/2026 a las 19:05. Si tienes dudas, encuentranos aqui: 6045109095.`,
+  });
+  const mail = await post("/api/webhooks/email", {
+    subject: "Alertas y Notificaciones",
+    text: `Alertas y Notificaciones Listo! Todo salió bien con tus movimientos Bancolombia: Pagaste $1,000,000.00 a FONDO ${tag} DEL AHORRO desde tu producto 3397 el 14/11/2026 a las 19:06. Si tienes dudas, encuentranos aqui: 6045109095.`,
+  });
+  assert(
+    next("a bank SMS and a bank email both land with the business alone as the description"),
+    sms === `Pizzeria ${tag}` && mail === `Fondo ${tag} del Ahorro`,
+    `the SMS read ${JSON.stringify(sms)}, the email ${JSON.stringify(mail)}`,
+  );
+}
+
 // RF-225: the live server declares the classes a client's permission prompt reads. Its own suite, called last, so its H numbers
 // land after every other one.
 async function mcpClassesSuite(): Promise<void> {
@@ -1937,7 +1993,7 @@ async function mcpClassesSuite(): Promise<void> {
   assert(
     next("/mcp lists every tool with a title and an honest class: reads are read-only, an import and a move to the fund are destructive"),
     listed.status === 200 && exposed.length > 0 && exposed.every((one) => typeof one.title === "string" && one.title.length > 0) &&
-      exposed.filter((one) => one.annotations?.readOnlyHint === true).every((one) => /^(list_|get_|review_|spending_|preview_|movement_|propose_)/.test(one.name)) &&
+      exposed.filter((one) => one.annotations?.readOnlyHint === true).every((one) => /^(alert_|list_|get_|review_|spending_|preview_|movement_|propose_)/.test(one.name)) &&
       destructive("import_statement") && destructive("move_account_to_fund"),
     `it answered ${listed.status} with ${exposed.length} tools`,
   );

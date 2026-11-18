@@ -8,14 +8,15 @@ import { POSTGRES_TIMESTAMPTZ_TEXT } from "@/lib/validation/transaction";
 // The list the screens and both sides of validation read for an account's kind (RF-09).
 export const ACCOUNT_KINDS = ["asset", "liability"] as const;
 
-// What the account is: a bank account, physical cash, a card (RF-56) or a loan (RF-178).
-export const ACCOUNT_SUBTYPES = ["bank", "cash", "card", "loan"] as const;
+// What the account is: a bank account, physical cash, a card (RF-56), a loan (RF-178) or money a person owes
+// the household, a receivable (RF-255).
+export const ACCOUNT_SUBTYPES = ["bank", "cash", "card", "loan", "receivable"] as const;
 
 // Which subtypes each kind admits, mirroring the accounts_subtype_kind DB CHECK:
 // cash and bank hold value (asset); a card and a loan are money owed (liability). The form
 // offers only these per kind, and the refinement below rejects the rest.
 export const SUBTYPES_BY_KIND = {
-  asset: ["bank", "cash"],
+  asset: ["bank", "cash", "receivable"],
   liability: ["card", "loan"],
 } as const satisfies Record<
   (typeof ACCOUNT_KINDS)[number],
@@ -222,6 +223,21 @@ export const handAccountToGroupSchema = z.object({
   accountId: z.uuid({ error: "errors.notFound" }),
 });
 
+
+// «¿Empezó antes?» (RF-303): a movement dated before an account's opening names the account(s) it touches and its day,
+// and the opening moves back to that day. The day is a civil date no later than today, like every opening.
+export const findLaterOpeningSchema = z.object({
+  accountIds: z.array(z.uuid({ error: "errors.notFound" })).min(1).max(2),
+  occurredAt: accountBalanceOnSchema,
+});
+
+export const moveOpeningEarlierSchema = z.object({
+  accountId: z.uuid({ error: "errors.notFound" }),
+  occurredAt: accountBalanceOnSchema,
+});
+
+export type FindLaterOpeningInput = z.infer<typeof findLaterOpeningSchema>;
+export type MoveOpeningEarlierInput = z.infer<typeof moveOpeningEarlierSchema>;
 
 export const restoreAccountSchema = z.object({
   accountId: z.uuid({ error: "errors.notFound" }),

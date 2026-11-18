@@ -13,6 +13,7 @@ import {
 } from "@/components/labels/label-form-dialog";
 import { LabelsTable, type LabelTableRow } from "@/components/labels/labels-table";
 import {
+  Badge,
   Box,
   Button,
   Card,
@@ -23,6 +24,7 @@ import {
   Flex,
   ScreenHeader,
   IconButton,
+  PlainLink,
   Text,
   type DataSection,
 } from "@/components/ui";
@@ -39,8 +41,11 @@ type ManagedLabelRow = LabelTableRow & { placement: LabelPlacement };
 // carries the scope it was read for.
 type FormTarget = {
   placement: LabelPlacement;
-  label?: { id: string; name: string; color: string | null };
+  kind: "tag" | "person";
+  label?: EditableLabel;
 };
+
+type EditableLabel = Pick<LabelManagementRow, "id" | "name" | "color" | "kind" | "chargeDefault">;
 
 // The confirmation names how many movements let go of the label.
 type DeleteTarget = { id: string; movementCount: number };
@@ -75,12 +80,23 @@ export function LabelsScreen({
     onError: onActionError,
   });
 
+  // A person is whom a movement was for (RF-242): its own button, the same form.
   function addButton(placement: LabelPlacement) {
     return (
-      <Button type="button" onClick={() => setFormTarget({ placement })}>
-        <Plus size={16} />
-        {t("add")}
-      </Button>
+      <Flex gap="2" wrap="wrap">
+        <Button type="button" onClick={() => setFormTarget({ placement, kind: "tag" })}>
+          <Plus size={16} />
+          {t("add")}
+        </Button>
+        <Button
+          type="button"
+          variant="soft"
+          onClick={() => setFormTarget({ placement, kind: "person" })}
+        >
+          <Plus size={16} />
+          {t("addPerson")}
+        </Button>
+      </Flex>
     );
   }
 
@@ -109,10 +125,7 @@ export function LabelsScreen({
   ];
 
   function onEditRow(row: ManagedLabelRow) {
-    setFormTarget({
-      placement: row.placement,
-      label: { id: row.id, name: row.name, color: row.color },
-    });
+    setFormTarget({ placement: row.placement, kind: row.kind, label: row });
   }
 
   function onDeleteRow(row: ManagedLabelRow) {
@@ -137,7 +150,7 @@ export function LabelsScreen({
             manageable
             note={personal.length === 0 ? t("emptyDescription") : undefined}
             addButton={addButton("personal")}
-            onEdit={(label) => setFormTarget({ placement: "personal", label })}
+            onEdit={(label) => setFormTarget({ placement: "personal", kind: label.kind, label })}
             onDelete={setDeleteTarget}
           />
           {hasGroup && (
@@ -147,7 +160,7 @@ export function LabelsScreen({
               manageable={canManageGroup}
               note={canManageGroup ? undefined : t("leaderOnly")}
               addButton={addButton("group")}
-              onEdit={(label) => setFormTarget({ placement: "group", label })}
+              onEdit={(label) => setFormTarget({ placement: "group", kind: label.kind, label })}
               onDelete={setDeleteTarget}
             />
           )}
@@ -186,6 +199,7 @@ export function LabelsScreen({
           }
         }
         defaultPlacement={formTarget?.placement ?? "personal"}
+        defaultKind={formTarget?.kind ?? "tag"}
         hasGroup={hasGroup}
         canManageGroup={canManageGroup}
         usedColors={usedColors}
@@ -229,7 +243,7 @@ function LabelSection({
   manageable: boolean;
   note?: string;
   addButton: ReactNode;
-  onEdit: (label: { id: string; name: string; color: string | null }) => void;
+  onEdit: (label: EditableLabel) => void;
   onDelete: (target: DeleteTarget) => void;
 }) {
   return (
@@ -251,9 +265,7 @@ function LabelSection({
             key={row.id}
             row={row}
             manageable={manageable}
-            onEdit={() =>
-              onEdit({ id: row.id, name: row.name, color: row.color })
-            }
+            onEdit={() => onEdit(row)}
             onDelete={() =>
               onDelete({ id: row.id, movementCount: row.movementCount })
             }
@@ -286,9 +298,24 @@ function LabelCard({
               name and loses only the swatch. */}
           {row.color && <ColorSwatch color={row.color} label={row.name} />}
           <Flex direction="column" minWidth="0">
-            <Text weight="medium" truncate>
-              {row.name}
-            </Text>
+            <Flex align="center" gap="2" minWidth="0">
+              {row.kind === "person" ? (
+                <PlainLink href={`/settings/labels/${row.id}`} aria-label={t("personOpen", { name: row.name })}>
+                  <Text weight="medium" truncate>
+                    {row.name}
+                  </Text>
+                </PlainLink>
+              ) : (
+                <Text weight="medium" truncate>
+                  {row.name}
+                </Text>
+              )}
+              {row.kind === "person" && (
+                <Badge color={row.chargeDefault ? "amber" : "gray"} variant="soft">
+                  {t(row.chargeDefault ? "personCharged" : "personNotCharged")}
+                </Badge>
+              )}
+            </Flex>
             <Flex gap="2" wrap="wrap">
               <Text size="2" color="gray">
                 {t("usageCount", { count: row.movementCount })}

@@ -107,6 +107,20 @@ para que el crítico de cualquier app juzgue con los mismos criterios.
 - Marca los miles mientras se escribe un monto. (5ae4177)
 - Guía la primera vez sobre los botones reales, saltable y sin volver solo. (RF-350)
 
+## Entender sin saber cómo se hizo
+
+Críticas del usuario a HomeFund, 2026-11-17: «la usabilidad es muy rara, requiere saber exactamente cómo se creó la app y
+cómo funciona todo, nada es simple».
+
+- Responde las preguntas de la persona, no muestra el modelo: cuánta plata tengo, qué pago este mes, quién me debe,
+  en qué se fue, hay algo raro. Cada una cabe en una frase en Inicio.
+- Haz que cada cifra se toque y diga de dónde sale: «le falta $2.680.980» abre la resta que la produce.
+- Nunca muestres «$0», vacío o «Diferencia» sin el porqué y la acción: «Sin extracto: regístralo», no «Próximo pago $0».
+- Nombra lo interno en palabras de la persona o escóndelo: traspaso, cuenta interna, ajuste, extracto cerrado, bolsillo
+  automático.
+- Pon la relación en el objeto: un crédito que paga otra persona lo dice arriba en su propia ficha, con mes por mes.
+- Juzga una pantalla con alguien que no conoce el código haciendo una tarea real; si necesita preguntar, la pantalla falla.
+
 ## Lo que el usuario rechazó
 
 - Los adornos de plantilla que hacían ver la portada «hecha con IA»: cejas con punto en mayúsculas, destellos, manchas de

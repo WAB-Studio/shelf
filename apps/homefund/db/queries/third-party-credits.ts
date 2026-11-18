@@ -2,13 +2,16 @@ import "server-only";
 
 import { sql } from "drizzle-orm";
 
+import { interestBookedWith } from "@/db/queries/debt-minimum";
 import { insertAccount } from "@/db/queries/accounts";
+import { scheduleOf, schedulePaymentsSql, scheduleRowsSql, type RawPayment, type RawRow } from "@/db/queries/loan-schedule";
 import { bookMovement } from "@/db/queries/ledger-write";
 import { withUserDb } from "@/db/session";
 import type { CurrencyCode } from "@/lib/currency";
 import { todayInBogota } from "@/lib/dates";
 import { pgConstraintName, pgErrorCode } from "@/lib/db-error";
 import { ActionError } from "@/lib/errors";
+import { creditDigest, type CreditScheduleDigest } from "@/lib/loan-schedule";
 import { creditHistory, monthOf, type CreditMonth } from "@/lib/third-party-credit";
 import { createTransactionSchema } from "@/lib/validation/transaction";
 import type {
@@ -17,13 +20,15 @@ import type {
   UpdateThirdPartyCreditInput,
 } from "@/lib/validation/third-party-credit";
 
-// A credit in the person's name that somebody else pays, read whole (RF-212): what the credit still owes, what
-// the payer still owes the person and has paid, and each month's two transfers. Every figure derives from
-// movements; only the link, the payer's name and the lender's terms are stored.
+// A credit in the person's name that somebody else pays, read whole (RF-212): what the credit still owes, which is
+// what the payer still owes the person (RF-301), what the payer has paid, and each month's two transfers. Every
+// figure derives from movements; only the link, the payer's name and the lender's terms are stored.
 export type ThirdPartyCreditView = {
   id: string;
   liabilityAccountId: string;
   liabilityName: string;
+  // Who lent the money, as the credit's account names it; null when it names none.
+  lenderName: string | null;
   receivableAccountId: string;
   receivableName: string;
   personName: string;
@@ -32,32 +37,38 @@ export type ThirdPartyCreditView = {
   dueDay: number | null;
   // What the credit still owes: zero once it is paid or in credit.
   owedCents: number;
-  // What the payer still owes the person: the receivable's balance, below zero when they paid ahead.
+  // What the payer still owes the person: the capital the credit still owes, what the bank says is left. The hidden
+  // «Me debe» is bookkeeping and never a figure a person reads (RF-301).
   personOwesCents: number;
-  // Everything the payer has sent, from the day the receivable opened.
+  // Everything the payer has sent, from the day the person followed the credit.
   personPaidCents: number;
   // The current month first, one line per month since the first trace.
   months: CreditMonth[];
   canWrite: boolean;
+  // The bank's payment schedule when the loan has one (RF-264): what is left of it with interest, what the payer
+  // usually sends and the cuotas that amount will not cover; null when it has none.
+  schedule: CreditScheduleDigest | null;
 };
 
 type RawMonth = { month: string; paid: string; paidOn: string | null; lender: string; lenderOn: string | null };
 
 type RawCredit = Omit<
   ThirdPartyCreditView,
-  "installmentCents" | "owedCents" | "personOwesCents" | "personPaidCents" | "months"
+  "installmentCents" | "owedCents" | "personOwesCents" | "personPaidCents" | "months" | "schedule"
 > & {
   installmentCents: string | null;
-  openedOn: string;
+  // The day the person started following the credit: where its month-by-month history begins.
+  followedOn: string;
   liabilityBalance: string;
-  receivableBalance: string;
   paidTotal: string;
   rows: RawMonth[];
+  scheduleRows: RawRow[];
+  schedulePayments: RawPayment[];
 };
 
 /**
  * The credits somebody else pays that the caller may read — one, when `liabilityAccountId` names it — in ONE
- * statement: the link, both balances from `account_balances`, and the transfers grouped by month. A transfer
+ * statement: the link, the credit's balance from `account_balances`, and the transfers grouped by month. A transfer
  * out of the receivable is the payer's money arriving; a transfer into the liability is the installment going
  * to the lender. The policies scope every table the statement touches.
  */
@@ -65,14 +76,15 @@ export async function listThirdPartyCredits(liabilityAccountId?: string): Promis
   const currentMonth = monthOf(todayInBogota());
   const rows = await withUserDb((tx) =>
     tx.execute<RawCredit>(sql`
-      select c.id, c.liability_account_id as "liabilityAccountId", l.name as "liabilityName",
+      select c.id, c.liability_account_id as "liabilityAccountId", l.name as "liabilityName", l.institution as "lenderName",
         c.receivable_account_id as "receivableAccountId", r.name as "receivableName",
         c.person_name as "personName", l.settlement_currency as currency,
         c.installment_cents::text as "installmentCents", c.due_day as "dueDay",
-        r.initial_balance_on::text as "openedOn",
+        r.initial_balance_on::text as "followedOn",
         coalesce(lb.balance_cents, 0)::text as "liabilityBalance",
-        coalesce(rb.balance_cents, 0)::text as "receivableBalance",
         private.can_write_account(c.liability_account_id) as "canWrite",
+        ${scheduleRowsSql("c.liability_account_id")} as "scheduleRows",
+        ${schedulePaymentsSql("c.liability_account_id", "l.settlement_currency")} as "schedulePayments",
         coalesce((select sum(t.amount_cents) from transactions t
           where t.from_account_id = c.receivable_account_id and t.to_account_id is not null
             and t.currency = l.settlement_currency), 0)::text as "paidTotal",
@@ -80,7 +92,7 @@ export async function listThirdPartyCredits(liabilityAccountId?: string): Promis
           select to_char(t.occurred_at, 'YYYY-MM') as month,
             coalesce(sum(t.amount_cents) filter (where t.from_account_id = c.receivable_account_id), 0)::text as paid,
             (max(t.occurred_at) filter (where t.from_account_id = c.receivable_account_id))::text as "paidOn",
-            coalesce(sum(t.amount_cents) filter (where t.to_account_id = c.liability_account_id), 0)::text as lender,
+            coalesce(sum(t.amount_cents + ${interestBookedWith("t")}) filter (where t.to_account_id = c.liability_account_id), 0)::text as lender,
             (max(t.occurred_at) filter (where t.to_account_id = c.liability_account_id))::text as "lenderOn"
           from transactions t
           where t.from_account_id is not null and t.to_account_id is not null
@@ -91,30 +103,32 @@ export async function listThirdPartyCredits(liabilityAccountId?: string): Promis
       join accounts l on l.id = c.liability_account_id
       join accounts r on r.id = c.receivable_account_id
       left join account_balances lb on lb.id = l.id and lb.currency = l.settlement_currency
-      left join account_balances rb on rb.id = r.id and rb.currency = r.settlement_currency
       where ${liabilityAccountId ?? null}::uuid is null or c.liability_account_id = ${liabilityAccountId ?? null}::uuid
       order by c.person_name, c.created_at`),
   );
 
   return rows.map((row) => {
-    const { openedOn, liabilityBalance, receivableBalance, paidTotal, rows: monthRows, ...rest } = row;
+    const { followedOn, liabilityBalance, paidTotal, rows: monthRows, scheduleRows, schedulePayments, ...rest } = row;
+    const months = creditHistory(
+      monthRows.map((m) => ({
+        month: m.month,
+        paidCents: Number(m.paid),
+        paidOn: m.paidOn,
+        lenderCents: Number(m.lender),
+        lenderOn: m.lenderOn,
+      })),
+      monthOf(followedOn),
+      currentMonth,
+    );
+    const schedule = scheduleOf(scheduleRows, schedulePayments);
     return {
       ...rest,
       installmentCents: row.installmentCents === null ? null : Number(row.installmentCents),
       owedCents: Math.max(0, -Number(liabilityBalance)),
-      personOwesCents: Number(receivableBalance),
+      personOwesCents: Math.max(0, -Number(liabilityBalance)),
       personPaidCents: Number(paidTotal),
-      months: creditHistory(
-        monthRows.map((m) => ({
-          month: m.month,
-          paidCents: Number(m.paid),
-          paidOn: m.paidOn,
-          lenderCents: Number(m.lender),
-          lenderOn: m.lenderOn,
-        })),
-        monthOf(openedOn),
-        currentMonth,
-      ),
+      months,
+      schedule: schedule === null ? null : creditDigest(schedule, months.map((month) => month.paidCents)),
     };
   });
 }
@@ -166,7 +180,7 @@ export async function setUpThirdPartyCredit(
           await insertAccount(tx, {
             name: receivableName.slice(0, 80),
             kind: "asset",
-            subtype: "bank",
+            subtype: "receivable",
             ownerUserId: credit.ownerUserId,
             groupId: credit.groupId,
             isShared: credit.isShared,
@@ -219,19 +233,34 @@ export async function removeThirdPartyCredit(liabilityAccountId: string): Promis
   if (rows.length === 0) throw new ActionError("errors.notFound");
 }
 
+// Moves the receivable's opening to `openedOn`, adding `deltaCents` to what it opened with.
+async function moveReceivableOpening(receivableAccountId: string, openedOn: string, deltaCents: number): Promise<void> {
+  await withUserDb((tx) =>
+    tx.execute(sql`
+      update accounts
+         set initial_balance_on = ${openedOn}::date, initial_balance_cents = initial_balance_cents + ${deltaCents}::bigint
+       where id = ${receivableAccountId}::uuid`),
+  );
+}
+
 /**
  * The payer's money arriving (RF-213): one TRANSFER from the credit's receivable to `toAccountId`, never an
- * income. It is booked by the same write as the movement form, so the form's schema judges it again and a
- * movement dated before an account's opening is refused as it is anywhere else.
+ * income. It is booked by the same write as the movement form, so the form's schema judges it again.
+ *
+ * A payment dated before the day the credit was followed moves the hidden receivable's opening back to that
+ * day, and adds the payment to what it opened with: the payer owed that much more then, so what they owe
+ * today does not change (RF-288). The person never meets a refusal about the opening of an account they cannot see.
  */
 export async function recordThirdPartyPayment(
   input: RecordThirdPartyPaymentInput,
   describe: (person: string) => string,
 ): Promise<{ transactionId: string }> {
   const [link] = await withUserDb((tx) =>
-    tx.execute<{ receivableAccountId: string; personName: string }>(sql`
-      select receivable_account_id as "receivableAccountId", person_name as "personName" from third_party_credits
-      where liability_account_id = ${input.liabilityAccountId}::uuid`),
+    tx.execute<{ receivableAccountId: string; personName: string; openedOn: string }>(sql`
+      select c.receivable_account_id as "receivableAccountId", c.person_name as "personName",
+        r.initial_balance_on::text as "openedOn"
+      from third_party_credits c join accounts r on r.id = c.receivable_account_id
+      where c.liability_account_id = ${input.liabilityAccountId}::uuid`),
   );
   if (!link) throw new ActionError("errors.notFound");
   if (link.receivableAccountId === input.toAccountId) throw new ActionError("thirdPartyCredit.errors.sameAccount");
@@ -247,5 +276,14 @@ export async function recordThirdPartyPayment(
     requestRef: input.requestRef,
   });
   if (!movement.success) throw new ActionError(movement.error.issues[0].message);
-  return bookMovement(movement.data);
+
+  const earlier = input.occurredAt < link.openedOn;
+  if (earlier) await moveReceivableOpening(link.receivableAccountId, input.occurredAt, input.amountCents);
+  try {
+    return await bookMovement(movement.data);
+  } catch (error) {
+    // The payment was refused: the opening goes back where it was, so no figure moved for nothing.
+    if (earlier) await moveReceivableOpening(link.receivableAccountId, link.openedOn, -input.amountCents);
+    throw error;
+  }
 }

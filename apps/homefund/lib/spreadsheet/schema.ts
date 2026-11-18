@@ -41,6 +41,17 @@ export const SHEET_ENTITIES = [
 
 export type SheetEntity = (typeof SHEET_ENTITIES)[number];
 
+// The sheets a person reads and a restore never writes: what is planned, expected and deferred is rebuilt
+// from the movements and the forms, so these leave the file and are never read back (RF-299).
+export const REPORT_ENTITIES = ["plannedPayments", "expectedIncome", "deferredPurchases"] as const;
+
+export type ReportEntity = (typeof REPORT_ENTITIES)[number];
+
+// Every sheet the export can write, importable or not.
+export const EXPORT_ENTITIES = [...SHEET_ENTITIES, ...REPORT_ENTITIES] as const;
+
+export type ExportEntity = SheetEntity | ReportEntity;
+
 // The model carries integer cents (RNF-05); the sheet shows a decimal COP
 // value. The float exists only at this presentation boundary — `toSheet` on the
 // way out, `fromSheet` on the way back in — never in the model or its types.
@@ -410,6 +421,7 @@ export const CHOICE_SETS = {
   color: CATEGORY_COLORS,
   currency: OFFERED_CURRENCIES,
   flag: ["yes", "no"],
+  plannedStatus: ["pending", "done", "cancelled"],
 } as const satisfies Record<string, readonly string[]>;
 
 export type ChoiceSet = keyof typeof CHOICE_SETS;
@@ -453,6 +465,8 @@ export const accountSheetDescriptor = {
     { key: "amount", field: "initialBalanceCents", money: moneyBoundary },
     { key: "balanceOn", field: "initialBalanceOn", date: true },
     { key: "settlementCurrency", field: "settlementCurrency", choice: "currency" },
+    // A pocket names the account it sits inside; a restore does not read it back (RF-298).
+    { key: "insideOf", field: "parentAccountId", ref: { entity: "accounts" } },
   ],
   rowSchema: accountRowSchema,
 } satisfies SheetDescriptor<AccountModel, typeof accountRowSchema>;
@@ -473,6 +487,9 @@ export const categorySheetDescriptor = {
   columns: [
     { key: "name", field: "name" },
     { key: "kind", field: "kind", choice: "categoryKind" },
+    // A fund copies the person's categories, so the same name can sit in both places; a restore does not read
+    // it back.
+    { key: "placement", field: "ownerUserId", choice: "placement" },
     { key: "parent", field: "parentId", ref: { entity: "categories" } },
     { key: "color", field: "color", choice: "color" },
   ],
@@ -531,6 +548,8 @@ export const transactionSheetDescriptor = {
     { key: "adjustment", field: "reconciliationId", flag: true, choice: "flag" },
     { key: "counterAmount", field: "counterAmountCents", money: moneyBoundary },
     { key: "counterIsEstimate", field: "counterIsEstimate", choice: "flag" },
+    // What each line of a split movement holds; the category cell above names its biggest line (RF-298).
+    { key: "division", synthetic: true },
   ],
   rowSchema: transactionRowSchema,
 } satisfies SheetDescriptor<TransactionModel, typeof transactionRowSchema>;
@@ -633,3 +652,55 @@ export const sheetDescriptors = {
   debts: debtSheetDescriptor,
   statements: statementSheetDescriptor,
 } as const;
+
+// A column of a report sheet: it is only written, so it names no model field and has no row schema.
+type ReportColumn = {
+  readonly key: string;
+  readonly field: string;
+  readonly money?: MoneyBoundary;
+  readonly ref?: { readonly entity: RefEntity };
+  readonly date?: true;
+  readonly choice?: ChoiceSet;
+};
+
+// A payment that leaves an account, one that moves between two, the income still expected and the
+// purchases a card deferred, in the words a person reads them (RF-299).
+export const reportSheetDescriptors = {
+  plannedPayments: {
+    columns: [
+      { key: "dueOn", field: "dueOn", date: true },
+      { key: "fromAccount", field: "fromAccount", ref: { entity: "accounts" } },
+      { key: "toAccount", field: "toAccount", ref: { entity: "accounts" } },
+      { key: "amount", field: "amount", money: moneyBoundary },
+      { key: "description", field: "description" },
+      { key: "category", field: "category", ref: { entity: "categories" } },
+      { key: "remindOn", field: "remindOn", date: true },
+      { key: "status", field: "status", choice: "plannedStatus" },
+    ],
+  },
+  expectedIncome: {
+    columns: [
+      { key: "dueOn", field: "dueOn", date: true },
+      { key: "description", field: "description" },
+      { key: "toAccount", field: "toAccount", ref: { entity: "accounts" } },
+      { key: "amount", field: "amount", money: moneyBoundary },
+      { key: "remindOn", field: "remindOn", date: true },
+      { key: "status", field: "status", choice: "plannedStatus" },
+    ],
+  },
+  deferredPurchases: {
+    columns: [
+      { key: "occurredAt", field: "occurredAt", date: true },
+      { key: "account", field: "account", ref: { entity: "accounts" } },
+      { key: "amount", field: "amount", money: moneyBoundary },
+      { key: "description", field: "description" },
+      { key: "instalments", field: "instalments" },
+    ],
+  },
+} as const satisfies Record<ReportEntity, { readonly columns: readonly ReportColumn[] }>;
+
+// The columns of any sheet the export writes, importable or not.
+export const exportColumns = {
+  ...Object.fromEntries(SHEET_ENTITIES.map((entity) => [entity, sheetDescriptors[entity].columns])),
+  ...Object.fromEntries(REPORT_ENTITIES.map((entity) => [entity, reportSheetDescriptors[entity].columns])),
+} as unknown as Record<ExportEntity, readonly { readonly key: string }[]>;

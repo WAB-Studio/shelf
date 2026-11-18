@@ -8,6 +8,8 @@ export class ActionError extends Error {
   constructor(
     public messageKey: string,
     public values?: Record<string, string>,
+    // The input field a refusal is about, when a tool knows it (`/mcp`); a screen never sets it.
+    public field?: string,
   ) {
     super(messageKey);
     this.name = "ActionError";

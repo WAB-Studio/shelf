@@ -1,10 +1,13 @@
 import "server-only";
 
+import { sql } from "drizzle-orm";
+
 import { archiveAccount, deleteAccount, updateAccount } from "@/db/queries/accounts";
+import { withUserDb } from "@/db/session";
 import { pgConstraintName, pgErrorCode } from "@/lib/db-error";
 import { ActionError } from "@/lib/errors";
 import { parseAmount } from "@/lib/money";
-import type { UpdateAccountInput } from "@/lib/validation/account";
+import type { FindLaterOpeningInput, MoveOpeningEarlierInput, UpdateAccountInput } from "@/lib/validation/account";
 
 // The writes behind the account forms' actions and behind `/mcp`: each takes input a Zod schema already
 // parsed and throws an `ActionError` carrying a catalogue key, so both doors refuse in the same words.
@@ -68,4 +71,39 @@ export async function removeAccount({ accountId }: { accountId: string }): Promi
     throw error;
   }
   if (!deleted) throw new ActionError("errors.notFound");
+}
+
+export type LaterOpening = { accountId: string; name: string; kind: "asset" | "liability"; openedOn: string };
+
+/**
+ * The account a movement dated `occurredAt` would be refused by (RF-162): the first of `accountIds`, in the order
+ * given, that the caller may write and whose opening falls after that day. Null when none does, so the screen says
+ * nothing it cannot do. ONE statement; the policies show only what the caller reads.
+ */
+export async function findLaterOpening({ accountIds, occurredAt }: FindLaterOpeningInput): Promise<LaterOpening | null> {
+  const rows = await withUserDb((tx) =>
+    tx.execute<LaterOpening>(sql`
+      select a.id as "accountId", a.name, a.kind, a.initial_balance_on::text as "openedOn"
+      from accounts a
+      where a.id in (${sql.join(accountIds.map((id) => sql`${id}::uuid`), sql`, `)})
+        and a.initial_balance_on > ${occurredAt}::date and private.can_write_account(a.id)
+      order by array_position(array[${sql.join(accountIds.map((id) => sql`${id}::uuid`), sql`, `)}], a.id)
+      limit 1`),
+  );
+  return rows[0] ?? null;
+}
+
+/**
+ * Moves an account's opening back to `occurredAt` (RF-303), the opening amount staying what it was: nothing moved
+ * between the two days, so it is true on the earlier one too. Never moves an opening later, which could cross a
+ * movement (MO002). Refuses what the caller cannot write or an account already open that day.
+ */
+export async function startAccountEarlier({ accountId, occurredAt }: MoveOpeningEarlierInput): Promise<void> {
+  const rows = await withUserDb((tx) =>
+    tx.execute<{ id: string }>(sql`
+      update accounts set initial_balance_on = ${occurredAt}::date
+      where id = ${accountId}::uuid and initial_balance_on > ${occurredAt}::date
+      returning id`),
+  );
+  if (rows.length === 0) throw new ActionError("errors.notFound");
 }

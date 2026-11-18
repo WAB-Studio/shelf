@@ -28,10 +28,11 @@ import { proposedCategoryId } from "@/lib/fund/category-scope";
 import { centsToDecimal, toCents } from "@/lib/money";
 import { pgErrorCode } from "@/lib/db-error";
 import { ADD, DESTROY, OVERWRITE, READ, titled } from "@/lib/mcp/annotations";
-import { resolveLabelIds } from "@/lib/mcp/label-tools";
+import { movementWarnings, withWarnings } from "@/lib/mcp/debt-guard";
+import { resolveLabelIds, resolvePersonId } from "@/lib/mcp/label-tools";
 import { parseForm } from "@/lib/mcp/parse-form";
 import { acceptDeliverySchema, forgetMerchantSchema, restoreShapeSchema } from "@/lib/validation/ingest";
-import { completeCounterpartySchema } from "@/lib/validation/transaction";
+import { completeCounterpartySchema, withPerson } from "@/lib/validation/transaction";
 
 type Say = (key: string) => string;
 type Run = (ctx: ServerContext, load: (owner: string) => Promise<unknown>) => Promise<CallToolResult>;
@@ -66,6 +67,8 @@ const acceptItem = z.object({
   contributedByMemberId: z.string().nullish(),
   madeByMemberId: z.string().nullish(),
   labels: z.array(z.string()).optional(),
+  // «Para quién» (RF-242): a person's id from list_persons, or their name.
+  forPerson: z.string().optional(),
 });
 
 type AcceptItem = z.infer<typeof acceptItem>;
@@ -254,7 +257,13 @@ export function registerInboxTools(server: McpServer, run: Run, t: Say): void {
               return { ...base, resolvedAt: row.resolvedAt, transactionId: row.transactionId, rejectReason: row.rejectReason };
             }
             // What the message did not give: Claude fills these in the list it shows, never silently.
-            return { ...base, notDetected: notDetectedOf(row, lookup), beforeAccountOpening: row.beforeOpening };
+            return {
+              ...base,
+              notDetected: notDetectedOf(row, lookup),
+              beforeAccountOpening: row.beforeOpening,
+              // A movement already recorded by hand that this one repeats: say so before anyone records it twice (RF-246).
+              alreadyRecorded: row.recorded,
+            };
           });
         }),
       ),
@@ -278,7 +287,11 @@ export function registerInboxTools(server: McpServer, run: Run, t: Say): void {
         const forms = await Promise.all(
           input.deliveries.map(async (item) => {
             try {
-              const form = acceptForm(pending.get(item.id)!, item, lookup, await resolveLabelIds(owner, item.labels ?? []));
+              const labelIds = withPerson(
+                await resolveLabelIds(owner, item.labels ?? []),
+                item.forPerson ? await resolvePersonId(owner, item.forPerson) : null,
+              );
+              const form = acceptForm(pending.get(item.id)!, item, lookup, labelIds);
               const verdict = acceptDeliverySchema.safeParse(form);
               if (!verdict.success) throw new BatchRefusal(verdict.error.issues[0].message, item.id);
               await assertContributorGiven(verdict.data);
@@ -288,7 +301,7 @@ export function registerInboxTools(server: McpServer, run: Run, t: Say): void {
             }
           }),
         );
-        return withUserDb(async (tx) => {
+        const result = await withUserDb(async (tx) => {
           const accepted: { deliveryId: string; transactionId: string }[] = [];
           for (const form of forms) {
             try {
@@ -318,6 +331,18 @@ export function registerInboxTools(server: McpServer, run: Run, t: Say): void {
           }
           return { count: accepted.length, accepted };
         });
+        // The same rules as record_movement: a delivery that reads as a debt payment was booked as an expense.
+        const probes = forms.flatMap((form) =>
+          form.fromAccountId !== null && form.toAccountId !== null
+            ? []
+            : [{
+                kind: form.fromAccountId === null ? ("income" as const) : ("expense" as const),
+                description: form.description ?? null,
+                categoryIds: form.splits.map((split) => split.categoryId),
+                deliveryId: form.deliveryId,
+              }],
+        );
+        return withWarnings(result, await movementWarnings(owner, probes, t));
       }),
   );
 

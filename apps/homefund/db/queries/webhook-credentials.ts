@@ -8,6 +8,7 @@ import { db } from "@/db/client";
 import { insertRow } from "@/db/insert-row";
 import { listAccounts } from "@/db/queries/accounts";
 import { listScopedCategories } from "@/db/queries/categories";
+import { callerGroupInfo } from "@/db/queries/groups";
 import type { ScopedCategoryNode } from "@/db/queries/categories";
 import { ingestDeliveries, webhookCredentials } from "@/db/schema";
 import { requireUser, withUserDb } from "@/db/session";
@@ -178,6 +179,7 @@ export async function resolveWebhookCredential(
 
 // What the issue form offers as a credential's fallbacks (RF-86).
 export type WebhookCredentialOptions = {
+  groupName: string | null;
   accounts: { id: string; name: string; scope: "personal" | "group" }[];
   categories: {
     id: string;
@@ -217,12 +219,14 @@ function flattenCategories(nodes: ScopedCategoryNode[]): WebhookCredentialOption
 export async function getWebhookCredentialOptions(): Promise<WebhookCredentialOptions> {
   const user = await requireUser();
 
-  const [accounts, categories] = await Promise.all([
+  const [accounts, categories, group] = await Promise.all([
     listAccounts({ archived: false }),
     listScopedCategories(user.id),
+    withUserDb((tx) => callerGroupInfo(tx, user.id)),
   ]);
 
   return {
+    groupName: group?.name ?? null,
     accounts: accounts
       .filter(
         (account) =>

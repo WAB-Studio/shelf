@@ -11,6 +11,7 @@ import { withUserDb, withUserDbOrTx } from "@/db/session";
 import type { CurrencyCode } from "@/lib/currency";
 import { pgConstraintName, pgErrorCode } from "@/lib/db-error";
 import { ActionError } from "@/lib/errors";
+import { insertTransaction } from "@/db/queries/transactions";
 
 type AccountKind = Account["kind"];
 type AccountSubtype = Account["subtype"];
@@ -39,8 +40,13 @@ export type AccountRow = {
   // The «Me debe» of a credit somebody else pays (RF-216): an asset the ledger keeps and no list offers. Absent on
   // the rows `cash.ts` builds, which never read one.
   internal?: boolean;
-  // Set on a credit somebody else pays: who pays it and what they still owe, the hidden receivable's balance in
-  // the credit's currency, so a total counts it without listing the account.
+  // Who the credit is for, on the hidden «Me debe» alone: the name a list says instead of the account's.
+  internalPersonName?: string | null;
+  // On the hidden «Me debe» alone: what the payer owes in the credit's currency, the capital the credit still owes
+  // (RF-301), which is the figure a total counts in place of this account's own bookkeeping balance.
+  internalOwesCents?: number | null;
+  // Set on a credit somebody else pays: who pays it and what they still owe in the credit's currency, so a list
+  // names the payer without listing the receivable.
   thirdParty?: { personName: string; personOwesCents: number } | null;
   // Only on an account with live pockets: its own balances plus theirs, summed at read time per
   // currency. `balances` stays its own free part (RF-173); no total adds this twice.
@@ -152,11 +158,19 @@ export async function listAccounts(
         archivedAt: accounts.archivedAt,
         updatedAt: sql<string>`accounts.updated_at::text`,
         internal: internalAccountSql,
-        // One credit, one payer: the receivable's settlement-currency balance, derived like every other.
-        thirdParty: sql<{ personName: string; personOwesCents: string } | null>`(
-          select jsonb_build_object('personName', c.person_name, 'personOwesCents', coalesce(rb.balance_cents, 0)::text)
+        internalPersonName: sql<string | null>`(
+          select c.person_name from third_party_credits c where c.receivable_account_id = accounts.id)`,
+        internalOwesCents: sql<string | null>`(
+          select greatest(0, -coalesce(lb.balance_cents, 0))::text
           from third_party_credits c
-          left join account_balances rb on rb.id = c.receivable_account_id and rb.currency = accounts.settlement_currency
+          left join account_balances lb on lb.id = c.liability_account_id and lb.currency = accounts.settlement_currency
+          where c.receivable_account_id = accounts.id)`,
+        // One credit, one payer: what the payer owes is the capital the credit owes, the liability's own settlement
+        // balance (RF-301); the hidden receivable's balance is bookkeeping and never read here.
+        thirdParty: sql<{ personName: string; personOwesCents: string } | null>`(
+          select jsonb_build_object('personName', c.person_name, 'personOwesCents', greatest(0, -coalesce(lb.balance_cents, 0))::text)
+          from third_party_credits c
+          left join account_balances lb on lb.id = c.liability_account_id and lb.currency = accounts.settlement_currency
           where c.liability_account_id = accounts.id)`,
       })
       .from(accounts)
@@ -173,6 +187,7 @@ export async function listAccounts(
     // number, in the minor unit of the currency beside it.
     const listed: AccountRow[] = rows.map((row) => ({
       ...row,
+      internalOwesCents: row.internalOwesCents === null ? null : Number(row.internalOwesCents),
       thirdParty: row.thirdParty
         ? { personName: row.thirdParty.personName, personOwesCents: Number(row.thirdParty.personOwesCents) }
         : null,
@@ -233,7 +248,44 @@ export type CreateAccountArgs = {
 export async function createAccount(
   args: CreateAccountArgs,
 ): Promise<{ accountId: string }> {
-  return refuseForeignHolder(() => withUserDb((tx) => insertAccount(tx, args)));
+  return refuseForeignHolder(() =>
+    withUserDb((tx) => (args.parentAccountId ? insertPocket(tx, args) : insertAccount(tx, args))),
+  );
+}
+
+/**
+ * A new pocket opens empty and takes what the person sets aside from the free part of its parent by one
+ * transfer dated the opening day, so the parent's total never grows (RF-296). The amount above what is free is
+ * refused: the parent's own balance would go below zero and the pockets would be asked to cover it (RF-249).
+ */
+export async function insertPocket(
+  tx: Transaction,
+  args: CreateAccountArgs,
+): Promise<{ accountId: string }> {
+  // The insert first: the pocket trigger names a parent that cannot hold it (PK001) before any amount is judged.
+  const created = await insertAccount(tx, { ...args, amountMinor: 0 });
+  if (args.amountMinor === 0) return created;
+
+  const parentId = args.parentAccountId as string;
+  const [free] = await tx.execute<{ balance_cents: string | null }>(sql`
+    select balance_cents from account_balances
+    where id = ${parentId}::uuid and currency = ${args.settlementCurrency}
+  `);
+  if (args.amountMinor > Number(free?.balance_cents ?? 0))
+    throw new ActionError("accounts.errors.pocketExceedsFree");
+
+  await insertTransaction(tx, {
+    fromAccountId: parentId,
+    toAccountId: created.accountId,
+    amountCents: args.amountMinor,
+    currency: args.settlementCurrency,
+    occurredAt: args.balanceOn,
+    description: args.name,
+    externalRef: null,
+    splits: [],
+    labelIds: [],
+  });
+  return created;
 }
 
 // RF-181: a holder that is no member of the account's fund, or a holder on a personal account, is the one

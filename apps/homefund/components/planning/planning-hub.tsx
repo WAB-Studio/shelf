@@ -16,48 +16,44 @@ import {
   Text,
 } from "@/components/ui";
 import type { BudgetStatus } from "@/db/queries/budgets";
-import type { PlannedPaymentRow } from "@/db/queries/planned-payments";
 import type { GoalProgress } from "@/db/queries/savings-goals";
 import type { CurrencyCode } from "@/lib/currency";
 import { civilDateToDate } from "@/lib/dates";
 import { budgetPercent } from "@/lib/fund/glance";
+import { previewOf, type UpcomingItem } from "@/lib/fund/upcoming";
 import type { Locale } from "@/lib/locales";
 import { formatMoney } from "@/lib/money";
 import { tagFigure } from "@/lib/privacy";
 
 /**
  * The Planeación hub: one card per area, each carrying a live one-line summary
- * derived on the server and a link into its screen. Its six areas and their
+ * derived on the server and a link into its screen. Its areas and their
  * routes come from `destinations.ts`, the one file that lists them.
  */
 export async function PlanningHub({
   budgetsSummary,
   goalsSummary,
-  paymentsSummary,
+  upcomingSummary,
   debtsSummary,
-  recurringSummary,
-  subscriptionsSummary,
   budgetsTop,
   budgetNames,
   goal,
-  payments,
+  upcoming,
   debtsTotal,
   debtsNext,
 }: {
   // The mosaic's own reads: the five fullest budgets, the first goal, the next
-  // three payments and the debts line split into its figure and its next date.
+  // three things coming up and the debts line split into its figure and its next date.
   budgetsTop: BudgetStatus[];
   budgetNames: Map<string, string>;
   goal: GoalProgress | null;
-  payments: PlannedPaymentRow[];
+  upcoming: UpcomingItem[];
   debtsTotal: string;
   debtsNext: string | null;
   budgetsSummary: string;
   goalsSummary: string;
-  paymentsSummary: string;
+  upcomingSummary: string;
   debtsSummary: string;
-  recurringSummary: string;
-  subscriptionsSummary: string;
 }) {
   const t = await getTranslations("planning");
   const format = await getFormatter();
@@ -71,10 +67,8 @@ export async function PlanningHub({
   const titles: Record<(typeof PLANNING_KEYS)[number], string> = {
     budgets: t("budgetsTitle"),
     goals: t("goalsTitle"),
-    payments: t("paymentsTitle"),
+    upcoming: t("upcomingTitle"),
     debts: t("debtsTitle"),
-    recurring: t("recurringTitle"),
-    subscriptions: t("subscriptionsTitle"),
   };
   return (
     <Flex direction="column" gap="4">
@@ -147,37 +141,30 @@ export async function PlanningHub({
             <MosaicNote><Figures>{debtsNext ?? debtsSummary}</Figures></MosaicNote>
           </MosaicTile>
 
-          <MosaicTile href="/planning/payments" size="wide">
-            <Heading as="h2" size="5">{titles.payments}</Heading>
-            {payments.length === 0 ? (
-              <Text size="2" color="gray">{paymentsSummary}</Text>
+          <MosaicTile href="/planning/upcoming" size="wide">
+            <Heading as="h2" size="5">{titles.upcoming}</Heading>
+            {upcoming.length === 0 ? (
+              <Text size="2" color="gray">{upcomingSummary}</Text>
             ) : (
               <Flex gap="5" wrap="wrap">
-                {payments.map((payment) => (
-                  <Flex key={payment.id} direction="column" gap="1" minWidth="0" flexBasis="0" flexGrow="1">
-                    <Text size="2" color="gray">{shortDate(payment.dueDate)}</Text>
-                    <Text size="3" weight="medium" truncate>
-                      {payment.description ?? t("noConcept")}
-                    </Text>
-                    <Money
-                      minor={payment.amountCents}
-                      currency={payment.currency as CurrencyCode}
-                      signed={false}
-                    />
-                  </Flex>
-                ))}
+                {upcoming.map((item) => {
+                  const row = previewOf(item);
+                  return (
+                    <Flex key={row.key} direction="column" gap="1" minWidth="0" flexBasis="0" flexGrow="1">
+                      <Text size="2" color="gray">{shortDate(item.date)}</Text>
+                      <Text size="3" weight="medium" truncate>
+                        {row.name ?? t("noConcept")}
+                      </Text>
+                      <Money
+                        minor={row.amountCents}
+                        currency={row.currency as CurrencyCode}
+                        signed={false}
+                      />
+                    </Flex>
+                  );
+                })}
               </Flex>
             )}
-          </MosaicTile>
-
-          <MosaicTile href="/planning/recurring" size="small">
-            <Heading as="h2" size="5">{titles.recurring}</Heading>
-            <Text size="2" color="gray">{recurringSummary}</Text>
-          </MosaicTile>
-
-          <MosaicTile href="/planning/subscriptions" size="small">
-            <Heading as="h2" size="5">{titles.subscriptions}</Heading>
-            <Text size="2" color="gray"><Figures>{subscriptionsSummary}</Figures></Text>
           </MosaicTile>
       </Mosaic>
 

@@ -119,10 +119,17 @@ export async function revisePlannedPayment({
 export async function settlePlanned({
   plannedPaymentId,
   occurredAt,
+  categoryId,
 }: SettlePlannedPaymentInput): Promise<{ transactionId: string }> {
   const pending = await listPlannedPayments({ status: "pending" });
   const payment = pending.find((row) => row.id === plannedPaymentId);
   if (!payment) throw new ActionError("errors.notFound");
+
+  // An income or an expense carries one category; a transfer carries none. An expected income has none until
+  // it arrives, so the person names it then.
+  const resolvedCategoryId = payment.categoryId ?? categoryId ?? null;
+  const isTransfer = payment.fromAccountId !== null && payment.toAccountId !== null;
+  if (resolvedCategoryId === null && !isTransfer) throw new ActionError("plannedPayments.errors.settleNeedsCategory");
 
   let result: SettlePlannedPaymentResult;
   try {
@@ -131,7 +138,7 @@ export async function settlePlanned({
       fromAccountId: payment.fromAccountId,
       toAccountId: payment.toAccountId,
       amountCents: payment.amountCents,
-      categoryId: payment.categoryId,
+      categoryId: resolvedCategoryId,
       occurredAt,
       description: payment.description,
     });

@@ -4,6 +4,7 @@ import type { CallToolResult, McpServer, ServerContext } from "@modelcontextprot
 import { z } from "zod";
 
 import { getMemberDebts, recordMemberDebt } from "@/db/queries/member-debts";
+import { todayInBogota } from "@/lib/dates";
 import { ActionError } from "@/lib/errors";
 import { ADD, READ, titled } from "@/lib/mcp/annotations";
 import { memberDebtStates } from "@/lib/member-debts";
@@ -46,14 +47,16 @@ export function registerMemberDebtTools(server: McpServer, run: Run, t: Say): vo
         creditorMemberId: z.string().describe(d("creditorMemberId")),
         amountCents: z.number().int().describe(d("amountCents")),
         currency: z.string().optional().describe(d("currency")),
-        occurredOn: z.string().describe(d("occurredOn")),
+        occurredOn: z.string().optional().describe(d("occurredOnDefault")),
         description: z.string().nullable().default(null).describe(d("description")),
       }),
       annotations: ADD,
     },
     (input, ctx) =>
       run(ctx, () =>
-        recordMemberDebt(parseForm(recordMemberDebtSchema, { ...input, amount: centsToDecimal(input.amountCents) })),
+        recordMemberDebt(
+          parseForm(recordMemberDebtSchema, { ...input, occurredOn: input.occurredOn ?? todayInBogota(), amount: centsToDecimal(input.amountCents) }),
+        ),
       ),
   );
 }

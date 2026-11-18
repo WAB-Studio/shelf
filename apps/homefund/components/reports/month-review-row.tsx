@@ -45,11 +45,15 @@ export function MonthReviewRow({ item, creatorNames }: { item: ReviewItem; creat
           ? t("metaCategory", { account: item.accountName, date, category: item.categoryName })
           : t("meta", { account: item.accountName, date })}
       </Text>
-      {item.rule === "above_usual" && item.usualCents !== null && (
+      {item.rule === "above_usual" && item.usualLowCents !== null && item.usualHighCents !== null && (
         <Text size="2" color="gray">
-          {t(item.categoryName ? "usualCategory" : "usual", {
+          {t(item.usualBasis === "description" && item.description ? "usualDescription" : item.categoryName ? "usualCategory" : "usual", {
+            name: item.description ?? "",
             category: item.categoryName ?? "",
-            amount: moneyText(item.usualCents, currency, locale),
+            low: moneyText(item.usualLowCents, currency, locale),
+            high: moneyText(item.usualHighCents, currency, locale),
+            same: item.usualLowCents === item.usualHighCents ? "yes" : "no",
+            count: item.usualCount ?? 0,
             months: item.usualWindowMonths,
           })}
         </Text>

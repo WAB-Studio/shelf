@@ -4,9 +4,13 @@ import type { ReactNode } from "react";
 import { useFormatter, useLocale, useTranslations } from "next-intl";
 import { Fragment, useState } from "react";
 
+import { CardDeferrals } from "@/components/planning/card-deferrals";
 import { DeferredPurchases } from "@/components/planning/deferral-control";
+import { AccountStatementDialog, type StatementAccount } from "@/components/planning/account-statement-dialog";
 import { OwnerMark } from "@/components/fund/owner-mark";
 import { DebtPaymentDialog } from "@/components/planning/debt-payment-dialog";
+import { LoanScheduleSection } from "@/components/planning/loan-schedule-section";
+import { LoanStandingBlock } from "@/components/planning/loan-standing";
 import {
   CreditAndOwedLine,
   owesBesideCredit,
@@ -33,6 +37,7 @@ import type { DebtPocket } from "@/db/queries/debt-overview";
 import type { PendingSettlement } from "@/db/queries/debt-statements";
 import type { CurrencyCode } from "@/lib/currency";
 import { civilDateToDate, todayInBogota } from "@/lib/dates";
+import { loanStanding } from "@/lib/loan-standing";
 import { useMoneyText } from "@/lib/use-privacy";
 
 // The em dash a cell or a tile with nothing to name reads as in the desktop design, not a
@@ -52,6 +57,7 @@ export function DebtDetailScreen({ data }: { data: DebtDetailData }) {
   const t = useTranslations("installments");
   const tDebts = useTranslations("debts");
   const tThirdParty = useTranslations("thirdPartyCredit");
+  const tSchedule = useTranslations("loanSchedule");
   const format = useFormatter();
   const locale = useLocale();
 
@@ -59,24 +65,39 @@ export function DebtDetailScreen({ data }: { data: DebtDetailData }) {
     account,
     terms,
     deferrals,
+    cardDeferrals,
     statements,
     currentStatement,
     pendingSettlements,
     canWrite,
     payFrom,
     thirdParty,
+    schedule,
+    paymentCount,
   } = data;
+
+  // A loan and a card are two things (RF-288): the loan leads with what is left and its schedule, and has no statements,
+  // no purchases in another currency and no open period; the card has no «Lo paga otra persona».
+  const isLoan = account.subtype === "loan";
 
   // The currency the card bills in: the cupo, the minimum and the interest are
   // all read in it, and it is the one a statement is cut in (RF-121).
   const currency = account.settlementCurrency;
 
-  const [dialog, setDialog] = useState<"pay" | "thirdParty" | null>(null);
+  const [dialog, setDialog] = useState<"pay" | "thirdParty" | "statement" | null>(null);
   // The pocket it bills in, read by its sign off the balance the view derives
   // from movements: below zero it owes, above zero it holds a credit that owes
   // nothing and reads «A favor» (RF-80).
   const owedCents = Math.max(0, -account.balanceCents);
   const creditCents = Math.max(0, account.balanceCents);
+
+  const standing = loanStanding({
+    balanceOwedCents: owedCents,
+    schedule,
+    termMonths: terms?.termMonths ?? null,
+    installmentCents: terms?.minimumPaymentCents ?? null,
+    paymentCount,
+  });
 
   // The pockets in other currencies, as the list reads them off the overview.
   const otherOwed: DebtPocket[] = account.balances
@@ -106,6 +127,37 @@ export function DebtDetailScreen({ data }: { data: DebtDetailData }) {
           amountCents: currentStatement.minimumPaymentCents,
           date: currentStatement.nextDueDate,
         };
+
+  // A debt that owes with no minimum known says so and, with no statement yet, offers the one that
+  // would bring it: a zero would read as «owes nothing due».
+  const minimumMissing = (
+    <Flex direction="column" align="start" gap="1">
+      <Text size="2" color="gray">
+        {statements.length === 0 ? t("statementNoneToMinimum") : t("statementMinimumMissing")}
+      </Text>
+      {statements.length === 0 && canWrite && (
+        <Button type="button" variant="ghost" size="1" onClick={() => setDialog("statement")}>
+          {t("statementRecord")}
+        </Button>
+      )}
+    </Flex>
+  );
+
+  // What the statement dialogs need of this debt: where the next period opens and, from the terms, the days
+  // its cut-off and due dates are proposed on.
+  const statementAccount: StatementAccount = {
+    id: account.id,
+    name: account.name,
+    kind: "liability",
+    nextPeriodStart: currentStatement?.periodStart ?? todayInBogota(),
+    lastCutOffDate: statements[0]?.cutOffDate ?? null,
+    cutOffDay: terms?.statementCutOffDay ?? null,
+    dueDay: terms?.paymentDueDay ?? null,
+  };
+
+  function monthName(date: string): string {
+    return format.dateTime(civilDateToDate(date), { month: "long" });
+  }
 
   function shortDate(date: string): string {
     return format.dateTime(civilDateToDate(date), {
@@ -156,7 +208,32 @@ export function DebtDetailScreen({ data }: { data: DebtDetailData }) {
     </Flex>
   );
 
-  const tiles = [
+  // A loan reads its next cuota off the bank's schedule when it has one (RF-266).
+  const scheduleNext = schedule?.next ?? null;
+  const loanNextTile =
+    schedule === null
+      ? null
+      : {
+          key: "nextPayment",
+          label: tSchedule("tileNext"),
+          value:
+            scheduleNext === null ? (
+              NO_VALUE
+            ) : (
+              // A cuota paid short asks only what is missing of it.
+              <Money minor={scheduleNext.totalCents - scheduleNext.paidCents} currency={currency} signed={false} size="inherit" />
+            ),
+          note:
+            scheduleNext === null
+              ? tSchedule("tileNextDone")
+              : tSchedule("tileNextNote", {
+                  number: scheduleNext.number,
+                  count: schedule.count,
+                  date: shortDate(scheduleNext.dueOn),
+                }),
+        };
+
+  const cardTiles = [
     {
       key: "balance",
       label: tDebts("tableBalance"),
@@ -168,7 +245,9 @@ export function DebtDetailScreen({ data }: { data: DebtDetailData }) {
       // The open period's own minimum, derived by the server on the live
       // balance; a debt with no due day names no next payment.
       value:
-        nextPayment === null ? (
+        nextPayment !== null && currentStatement?.minimumPaid ? (
+          tDebts("minimumPaidMonth", { month: monthName(nextPayment.date) })
+        ) : nextPayment === null || nextPayment.amountCents === null ? (
           NO_VALUE
         ) : (
           <Money
@@ -178,7 +257,17 @@ export function DebtDetailScreen({ data }: { data: DebtDetailData }) {
             size="inherit"
           />
         ),
-      note: nextPayment === null ? tDebts("tileNoNextPayment") : shortDate(nextPayment.date),
+      note:
+        nextPayment === null ? (
+          tDebts("tileNoNextPayment")
+        ) : nextPayment.amountCents === null && !currentStatement?.minimumPaid ? (
+          <>
+            {shortDate(nextPayment.date)}
+            {!isLoan && minimumMissing}
+          </>
+        ) : (
+          shortDate(nextPayment.date)
+        ),
     },
     {
       key: "availableCredit",
@@ -188,7 +277,7 @@ export function DebtDetailScreen({ data }: { data: DebtDetailData }) {
           NO_VALUE
         ) : (
           <Money
-            minor={availableCreditCents}
+            minor={Math.min(availableCreditCents, terms?.creditLimitCents ?? availableCreditCents)}
             currency={currency}
             signed={false}
             size="inherit"
@@ -197,13 +286,24 @@ export function DebtDetailScreen({ data }: { data: DebtDetailData }) {
       note:
         terms?.creditLimitCents == null
           ? undefined
-          : tDebts("tileAvailableCreditNote", {
-              // JSX cannot travel through `t()`, so the one path from a stored
-              // integer to a figure is called straight (RF-121).
-              amount: moneyText(terms.creditLimitCents, currency, locale),
-            }),
+          : tDebts(
+              availableCreditCents !== null && availableCreditCents > terms.creditLimitCents
+                ? "tileAvailableCreditFavourNote"
+                : "tileAvailableCreditNote",
+              {
+                // JSX cannot travel through `t()`, so the one path from a stored
+                // integer to a figure is called straight (RF-121).
+                amount: moneyText(terms.creditLimitCents, currency, locale),
+                favour: moneyText(
+                  Math.max(0, (availableCreditCents ?? 0) - terms.creditLimitCents),
+                  currency,
+                  locale,
+                ),
+              },
+            ),
     },
   ];
+  const tiles = isLoan ? (loanNextTile === null ? [cardTiles[1]] : [loanNextTile]) : cardTiles;
 
   return (
     <Flex direction="column" gap="4">
@@ -212,7 +312,19 @@ export function DebtDetailScreen({ data }: { data: DebtDetailData }) {
         meta={
           <>
             <OwnerMark foreignOwner={account.foreignOwner} ownerName={account.ownerName} />
-            {balanceLine}
+            {isLoan ? (
+              <LoanStandingBlock
+                standing={standing}
+                currency={currency}
+                balanceOwedCents={owedCents}
+                schedule={schedule}
+                termMonths={terms?.termMonths ?? null}
+                installmentCents={terms?.minimumPaymentCents ?? null}
+                paymentCount={paymentCount}
+              />
+            ) : (
+              balanceLine
+            )}
           </>
         }
         metaWraps
@@ -228,10 +340,10 @@ export function DebtDetailScreen({ data }: { data: DebtDetailData }) {
                 color="gray"
                 onClick={() => setDialog("pay")}
               >
-                {tDebts("rowPay")}
+                {tDebts(account.subtype === "loan" ? "rowPayLoan" : "rowPayCard")}
               </Button>
               {/* A credit somebody else pays (RF-211) is set up once; its section carries the rest. */}
-              {thirdParty === null && (
+              {isLoan && thirdParty === null && (
                 <Button
                   type="button"
                   variant="surface"
@@ -250,23 +362,45 @@ export function DebtDetailScreen({ data }: { data: DebtDetailData }) {
 
       {thirdParty !== null && <ThirdPartyCreditSection credit={thirdParty} banks={payFrom} />}
 
+      {/* The schedule the bank printed for a loan, read against its payments (RF-266); with none the loan says how to load it (RF-289). */}
+      {isLoan && schedule !== null && <LoanScheduleSection schedule={schedule} currency={currency} />}
+      {isLoan && schedule === null && (
+        <Flex direction="column" gap="1" px={{ initial: "0", md: "6" }}>
+          <Heading as="h2" size="3">
+            {tSchedule("title")}
+          </Heading>
+          <Text size="2" color="gray">
+            {tSchedule("askClaude")}
+          </Text>
+        </Flex>
+      )}
+
       {/* Purchases a person confirmed as deferred: the balance holds them whole (RF-136). */}
-      {deferrals.length > 0 && (
+      {!isLoan && deferrals.length > 0 && (
         <Flex direction="column" px={{ initial: "0", md: "6" }}>
           <DeferredPurchases rows={deferrals} />
         </Flex>
       )}
 
-      <SettlementSection
-        accountId={account.id}
-        currency={currency}
-        pending={pendingSettlements}
-        canWrite={canWrite}
-      />
+      {/* What the issuer printed as deferred, with its monthly interest and what paying it off saves (RF-258). */}
+      {!isLoan && cardDeferrals.length > 0 && (
+        <Flex direction="column" px={{ initial: "0", md: "6" }}>
+          <CardDeferrals rows={cardDeferrals} />
+        </Flex>
+      )}
+
+      {!isLoan && (
+        <SettlementSection
+          accountId={account.id}
+          currency={currency}
+          pending={pendingSettlements}
+          canWrite={canWrite}
+        />
+      )}
 
       {/* The period nobody has cut yet: live figures, and never one of the
           snapshots below (RF-129). */}
-      {currentStatement !== null && (
+      {!isLoan && currentStatement !== null && (
         <Flex direction="column" px={{ initial: "0", md: "6" }}>
           <Panel title={t("currentPeriod")}>
             <Flex direction="column" px="4" py="1">
@@ -292,12 +426,20 @@ export function DebtDetailScreen({ data }: { data: DebtDetailData }) {
                   <Fact
                     label={t("statementMinimum")}
                     value={
-                      <Money
-                        minor={currentStatement.minimumPaymentCents}
-                        currency={currency}
-                        signed={false}
-                        size="inherit"
-                      />
+                      currentStatement.minimumPaid ? (
+                        tDebts("minimumPaidMonth", {
+                          month: monthName(currentStatement.nextDueDate ?? currentStatement.periodStart),
+                        })
+                      ) : currentStatement.minimumPaymentCents === null ? (
+                        minimumMissing
+                      ) : (
+                        <Money
+                          minor={currentStatement.minimumPaymentCents}
+                          currency={currency}
+                          signed={false}
+                          size="inherit"
+                        />
+                      )
                     }
                   />
                 </>
@@ -325,17 +467,25 @@ export function DebtDetailScreen({ data }: { data: DebtDetailData }) {
         </Flex>
       )}
 
-      <StatementsSection
-        account={{
-          id: account.id,
-          name: account.name,
-          kind: "liability",
-          nextPeriodStart: currentStatement?.periodStart ?? todayInBogota(),
-        }}
-        currency={currency}
-        statements={statements}
-        canWrite={canWrite}
-      />
+      {!isLoan && (
+        <StatementsSection
+          account={statementAccount}
+          currency={currency}
+          statements={statements}
+          canWrite={canWrite}
+        />
+      )}
+
+      {dialog === "statement" && (
+        <AccountStatementDialog
+          open
+          onOpenChange={(open) => {
+            if (!open) setDialog(null);
+          }}
+          account={statementAccount}
+          currency={currency}
+        />
+      )}
 
       {dialog === "thirdParty" && (
         <SetUpThirdPartyDialog
@@ -359,6 +509,19 @@ export function DebtDetailScreen({ data }: { data: DebtDetailData }) {
             owedCents,
             creditCents,
             otherOwed,
+            minimumCents: currentStatement?.minimumPaymentCents ?? null,
+            minimumPaid: currentStatement?.minimumPaid ?? false,
+            totalDueCents: currentStatement?.totalDueCents ?? owedCents,
+            ...(account.subtype === "loan"
+              ? {
+                  loan: {
+                    hasSchedule: schedule !== null,
+                    hasRate: terms !== null,
+                    // The next cuota asks only what is missing of it (RF-287).
+                    instalmentCents: schedule?.next ? schedule.next.totalCents - schedule.next.paidCents : (terms?.minimumPaymentCents ?? null),
+                  },
+                }
+              : {}),
           }}
           currency={currency}
           payFrom={payFrom}

@@ -8,8 +8,10 @@ import {
   CHOICE_SETS,
   FLAG_VALUES,
   SHEET_ENTITIES,
+  exportColumns,
   sheetDescriptors,
   type ChoiceSet,
+  type ExportEntity,
   type RefEntity,
   type SheetEntity,
 } from "@/lib/spreadsheet/schema";
@@ -43,7 +45,7 @@ type ParseColumnView = {
 // per entity and the localized header per descriptor column key. The route builds
 // these from next-intl; this module stays free of the message catalogue.
 export type SheetLabels = {
-  readonly sheetName: (entity: SheetEntity) => string;
+  readonly sheetName: (entity: ExportEntity) => string;
   readonly columnHeader: (key: string) => string;
   // The wording a person reads for one member of a closed set (RF-179).
   readonly choiceLabel: (set: ChoiceSet, value: string) => string;
@@ -74,7 +76,7 @@ const HEADER_FILL = "FFE8EEF4";
 const MIN_WIDTH = 10;
 const MAX_WIDTH = 50;
 
-function orderedEntities(): SheetEntity[] {
+function orderedEntities(): ExportEntity[] {
   const rest = SHEET_ENTITIES.filter((entity) => !READING_ORDER.includes(entity));
   return [...READING_ORDER, ...rest];
 }
@@ -281,7 +283,7 @@ export function buildWorkbook(input: {
 
   for (const entity of present) {
     const rows = input.data[entity] ?? [];
-    const columns = sheetDescriptors[entity].columns as readonly ColumnView[];
+    const columns = exportColumns[entity] as readonly ColumnView[];
     const hidden = hideBackground && BACKGROUND_SHEETS.has(entity);
     const sheet = workbook.addWorksheet(input.labels.sheetName(entity), {
       state: hidden ? "hidden" : "visible",

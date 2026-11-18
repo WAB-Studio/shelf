@@ -6,6 +6,7 @@ import { useFormatter, useTranslations } from "next-intl";
 import {
   Badge,
   CategoryTile,
+  Checkbox,
   DataTable,
   Flex,
   Money,
@@ -26,19 +27,32 @@ const NO_VALUE = "—";
 export type InboxTableRow = {
   id: string;
   createdAt: Date;
+  // The day the message prints; null when it prints none (the arrival day stands in).
+  occurredOn: string | null;
+  // A ready row carries a checkbox, and the screen records the chosen ones together.
+  selectable: boolean;
+  selected: boolean;
   merchantLabel: string | null;
-  // «Llegó por <kind> · <key name>», or null once the key is gone (RF-203).
+  // Where it came from, in words, or null once the key is gone (RF-203).
   via: string | null;
   rawText: string;
   category: { name: string; color: string | null } | null;
   account: string | null;
+  // A card purchase whose ending matches no card: the person says which card it was.
+  askCard: boolean;
+  // A transfer that names where the money left from and not where it landed.
+  toMissing: boolean;
   // Null only when the message named no figure at all; an account-less amount
   // still carries the scope's currency rather than falling back to pesos.
   amountMinor: number | null;
   currency: CurrencyCode;
   // What the proposal would record: money out unless the message says money in.
   direction: "income" | "expense" | "transfer";
+  // A transfer into the person's own cash: «Retirar efectivo».
+  withdrawal: boolean;
   isComplete: boolean;
+  // A movement recorded by hand already stands for it, so discarding is what the row proposes (RF-246).
+  recorded: boolean;
   // The message names a number nobody saved yet (RF-189).
   canSaveNumber: boolean;
   // The proposal's own day, set only when it is before the account opened.
@@ -49,14 +63,14 @@ export type InboxTableRow = {
 // that floor is where every fixed track and the flexible message column both
 // have to fit — never a wider viewport most of this table will actually see.
 const WIDTHS = {
-  arrived: "88px",
+  select: "48px",
+  arrived: "72px",
   message: "minmax(0, 1fr)",
-  via: "180px",
-  merchant: "120px",
+  merchant: "110px",
   category: "120px",
-  account: "120px",
+  account: "130px",
   amount: "90px",
-  state: "150px",
+  state: "130px",
 } as const;
 
 /**
@@ -73,9 +87,11 @@ export function InboxTable({
   onReview,
   onReject,
   onSaveNumber,
+  onSelectedChange,
 }: {
   rows: InboxTableRow[];
   empty?: ReactNode;
+  onSelectedChange: (id: string, selected: boolean) => void;
   onSaveNumber: (id: string) => void;
   onAccept: (id: string) => void;
   onReview: (id: string) => void;
@@ -86,12 +102,26 @@ export function InboxTable({
 
   const columns: DataColumn<InboxTableRow>[] = [
     {
+      key: "select",
+      header: t("chooseColumn"),
+      width: WIDTHS.select,
+      cell: (row) =>
+        row.selectable ? (
+          <Checkbox
+            size="3"
+            checked={row.selected}
+            onCheckedChange={(checked) => onSelectedChange(row.id, checked === true)}
+            aria-label={t("chooseDelivery", { name: row.merchantLabel ?? t("noMerchant") })}
+          />
+        ) : null,
+    },
+    {
       key: "arrived",
       header: t("dateLabel"),
       width: WIDTHS.arrived,
       cell: (row) => (
         <Text size="2" color="gray">
-          {format.dateTime(row.createdAt, {
+          {format.dateTime(row.occurredOn === null ? row.createdAt : civilDateToDate(row.occurredOn), {
             day: "numeric",
             month: "short",
           })}
@@ -107,22 +137,16 @@ export function InboxTable({
       // with `minWidth="0"` to give up (the desktop design's own fix for the same gap in
       // the ledger's description column).
       cell: (row) => (
-        <Flex minWidth="0">
-          <Text size="2" color="gray" truncate>
+        <Flex direction="column" minWidth="0">
+          {/* Wraps at word breaks: a cut in the middle of a word hides which message it is. */}
+          <Text size="2" color="gray">
             {row.rawText}
           </Text>
-        </Flex>
-      ),
-    },
-    {
-      key: "via",
-      header: t("connectionLabel"),
-      width: WIDTHS.via,
-      cell: (row) => (
-        <Flex minWidth="0">
-          <Text size="2" color="gray" truncate>
-            {row.via ?? NO_VALUE}
-          </Text>
+          {row.via !== null && (
+            <Text size="1" color="gray" truncate>
+              {row.via}
+            </Text>
+          )}
         </Flex>
       ),
     },
@@ -143,7 +167,11 @@ export function InboxTable({
       header: t("categoryLabel"),
       width: WIDTHS.category,
       cell: (row) =>
-        row.category ? (
+        row.direction === "transfer" ? (
+          <Text size="2" color="gray">
+            {NO_VALUE}
+          </Text>
+        ) : row.category ? (
           <Flex align="center" gap="2" minWidth="0">
             <CategoryTile color={row.category.color} size={9} />
             <Text size="2" color="gray" truncate>
@@ -162,14 +190,19 @@ export function InboxTable({
       width: WIDTHS.account,
       cell: (row) =>
         row.account ? (
-          <Flex minWidth="0">
+          <Flex direction="column" minWidth="0">
             <Text size="2" color="gray" truncate>
               {row.account}
             </Text>
+            {row.toMissing && (
+              <Text size="1" color="amber">
+                {t("toAccountMissing")}
+              </Text>
+            )}
           </Flex>
         ) : (
           <Text size="2" color="amber">
-            {t("accountMissing")}
+            {t(row.askCard ? "cardMissing" : "accountMissing")}
           </Text>
         ),
     },
@@ -191,7 +224,9 @@ export function InboxTable({
                 row.direction === "income"
                   ? "kindIncome"
                   : row.direction === "transfer"
-                    ? "kindTransfer"
+                    ? row.withdrawal
+                      ? "kindWithdrawal"
+                      : "kindTransfer"
                     : "kindExpense",
               )}
             </Text>
@@ -207,12 +242,19 @@ export function InboxTable({
       cell: (row) => (
         <Flex direction="column" align="end" gap="1">
           <Flex align="center" justify="end" gap="2">
-            <Badge color={row.isComplete ? "green" : "amber"}>
-              {row.isComplete ? t("stateComplete") : t("stateIncomplete")}
-            </Badge>
+            {row.recorded ? (
+              <Badge color="blue">{t("alreadyRecorded")}</Badge>
+            ) : (
+              <Badge color={row.isComplete ? "green" : "amber"}>
+                {row.isComplete ? t("stateComplete") : t("stateIncomplete")}
+              </Badge>
+            )}
             <RowMenu
               rowName={row.merchantLabel ?? t("noMerchant")}
               items={[
+                ...(row.recorded
+                  ? [{ key: "rejectRecorded", label: t("rejectDuplicate"), tone: "danger" as const, onSelect: () => onReject(row.id) }]
+                  : []),
                 {
                   key: "accept",
                   label: t("accept"),
@@ -230,12 +272,9 @@ export function InboxTable({
                 ...(row.canSaveNumber
                   ? [{ key: "saveNumber", label: t("saveNumber"), onSelect: () => onSaveNumber(row.id) }]
                   : []),
-                {
-                  key: "reject",
-                  label: t("reject"),
-                  tone: "danger",
-                  onSelect: () => onReject(row.id),
-                },
+                ...(row.recorded
+                  ? []
+                  : [{ key: "reject", label: t("reject"), tone: "danger" as const, onSelect: () => onReject(row.id) }]),
               ]}
             />
           </Flex>
@@ -261,6 +300,7 @@ export function InboxTable({
       rows={rows}
       rowKey={(row) => row.id}
       empty={empty}
+      columnGap="8px"
     />
   );
 }

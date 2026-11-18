@@ -1,5 +1,5 @@
 /**
- * Quick entry, the make-or-break path (RF-22): one field the interpreter reads
+ * The phrase field of the movement form (RF-273): the words the interpreter reads
  * into an editable expense. The interpretation runs in the browser and nowhere
  * else, so no headless check can see the amount and the category land in the
  * fields a person is about to save.
@@ -50,7 +50,7 @@ test("reads the amount and the category out of one line and records the movement
   await expect(sheet).toBeVisible();
 
   await sheet
-    .getByRole("textbox", { name: transactions.quickTitle, exact: true })
+    .locator("#movement-description")
     .fill(`${scope.categoryName} ${AMOUNT_PESOS}`);
 
   // Both proposals land in fields, editable. Two of them carry the amount: the
@@ -71,7 +71,7 @@ test("reads the amount and the category out of one line and records the movement
   await page.getByRole("option", { name: scope.accountName, exact: true }).click();
 
   await sheet
-    .getByRole("button", { name: transactions.quickSave, exact: true })
+    .getByRole("button", { name: transactions.saveMovement, exact: true })
     .click();
   await expect(sheet).toBeHidden();
 
@@ -115,7 +115,7 @@ test("«25 mil» proposes 25000 pesos and saving writes 2500000 cents", async ({
   await expect(sheet).toBeVisible();
 
   await sheet
-    .getByRole("textbox", { name: transactions.quickTitle, exact: true })
+    .locator("#movement-description")
     .fill(`${scope.categoryName} 25 mil`);
   await expect(
     sheet.getByRole("textbox", { name: transactions.amountLabel, exact: true }),
@@ -123,7 +123,7 @@ test("«25 mil» proposes 25000 pesos and saving writes 2500000 cents", async ({
 
   await sheet.getByRole("combobox", { name: transactions.accountLabel, exact: true }).click();
   await page.getByRole("option", { name: scope.accountName, exact: true }).click();
-  await sheet.getByRole("button", { name: transactions.quickSave, exact: true }).click();
+  await sheet.getByRole("button", { name: transactions.saveMovement, exact: true }).click();
   await expect(sheet).toBeHidden();
 
   const rows = await fixtureSql<{ amount_cents: string; amount_from_words: boolean }[]>`
@@ -146,9 +146,9 @@ async function openSheet(page: import("@playwright/test").Page) {
   await expect(sheet).toBeVisible();
   return {
     sheet,
-    quick: sheet.getByRole("textbox", { name: transactions.quickTitle, exact: true }),
+    quick: sheet.locator("#movement-description"),
     amount: sheet.getByRole("textbox", { name: transactions.amountLabel, exact: true }),
-    save: sheet.getByRole("button", { name: transactions.quickSave, exact: true }),
+    save: sheet.getByRole("button", { name: transactions.saveMovement, exact: true }),
     group: sheet.getByRole("radiogroup", { name: askQuestion, exact: true }),
   };
 }

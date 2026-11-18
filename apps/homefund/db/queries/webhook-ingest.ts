@@ -9,6 +9,7 @@ import {
   ingestDeliveries,
   ingestMerchants,
   recipients,
+  webhookCredentials,
 } from "@/db/schema";
 import { learnedCategoryId } from "@/db/queries/learned-category";
 import { withImpersonatedDb } from "@/db/session";
@@ -17,11 +18,21 @@ import { pgErrorCode } from "@/lib/db-error";
 import { todayInBogota } from "@/lib/dates";
 import type { EmailVerdict } from "@/lib/ingest/classify";
 import { DUPLICATE_WINDOW_DAYS, judgeDuplicate, type DuplicateCandidate } from "@/lib/ingest/duplicates";
+import {
+  cardPurchase,
+  describeAlert,
+  looksLikeBankAlert,
+  looksLikeCashWithdrawal,
+  onlyBankAccount,
+  paidOwnCard,
+  repairDescription,
+} from "@/lib/ingest/describe";
+import { keywordCategory } from "@/lib/ingest/learned-category";
 import { emailDescription, emailMerchant } from "@/lib/ingest/email";
 import { fingerprintMessage, merchantOf } from "@/lib/ingest/fingerprint";
 import { applyRecipient, extractNumber, matchRecipient } from "@/lib/ingest/recipient-number";
 import { parseAmount } from "@/lib/money";
-import { interpretQuickEntry } from "@/lib/transactions/interpret";
+import { interpretQuickEntry, readAccountTails } from "@/lib/transactions/interpret";
 import type { WebhookPayloadInput } from "@/lib/validation/webhook";
 
 export type IngestDeliveryResult = {
@@ -137,6 +148,8 @@ export async function recordIngestDelivery({
           id: accounts.id,
           name: accounts.name,
           lastFour: accounts.lastFour,
+          institution: accounts.institution,
+          subtype: accounts.subtype,
           groupId: accounts.groupId,
           settlementCurrency: accounts.settlementCurrency,
         })
@@ -174,7 +187,9 @@ export async function recordIngestDelivery({
               id: ingestDeliveries.id,
               status: ingestDeliveries.status,
               receipt: ingestDeliveries.receipt,
-              fromEmail: ingestDeliveries.fromEmail,
+              // A row stored before the channel was recorded (every bank email then read as the phone's) is
+              // still told by the key it came through (RF-244).
+              fromEmail: sql<boolean>`coalesce(${ingestDeliveries.fromEmail} or ${webhookCredentials.kind} = 'bank_emails', false)`,
               rawText: ingestDeliveries.rawText,
               occurredOn: ingestDeliveries.proposedOccurredAt,
               receivedAt: ingestDeliveries.createdAt,
@@ -184,6 +199,7 @@ export async function recordIngestDelivery({
               merchantLabel: ingestDeliveries.merchantLabel,
             })
             .from(ingestDeliveries)
+            .leftJoin(webhookCredentials, eq(webhookCredentials.id, ingestDeliveries.credentialId))
             .where(
               and(
                 inArray(ingestDeliveries.status, ["pending", "accepted"]),
@@ -219,8 +235,15 @@ export async function recordIngestDelivery({
     const rejectReason = verdictReason ?? (original.kind === "repeats" ? "duplicate" : null);
     const duplicateOfId = original.kind === "repeats" ? original.of.id : null;
 
+    // Only a category of the movement's own kind can be proposed: an income never takes an expense category,
+    // whoever named it (the text, a trusted merchant, the key's default), or the write would be refused (RF-278).
+    const proposedKind = (payload.direction ?? read.direction) === "income" ? "income" : "expense";
+    const ofKind = (categoryId: string | null | undefined): string | null =>
+      categoryId && categoryRows.some((row) => row.id === categoryId && row.kind === proposedKind) ? categoryId : null;
+    const kindRows = categoryRows.filter((row) => row.kind === proposedKind);
+
     const proposal = interpretQuickEntry(payload.text, {
-      categories: categoryRows,
+      categories: kindRows,
       accounts: accountRows,
       defaultAccountId,
       yearGuard: email ? "any" : "dated",
@@ -229,26 +252,44 @@ export async function recordIngestDelivery({
     const proposedAmountCents = rejectReason === null ? readAmountCents : null;
 
     const memory = merchantRows?.[0] ?? null;
-    const trustedCategoryId = memory?.state === "trusted" ? memory.trustedCategoryId : null;
+    const trustedCategoryId = memory?.state === "trusted" ? ofKind(memory.trustedCategoryId) : null;
     const recipient = matchRecipient(extractedIdentifier, recipientRows);
 
-    let proposedCategoryId =
-      trustedCategoryId ?? proposal.categoryId ?? defaultCategoryId ?? null;
+    const fallbackCategoryId = ofKind(defaultCategoryId);
+    let proposedCategoryId = trustedCategoryId ?? proposal.categoryId ?? fallbackCategoryId;
     let categorySource: "merchant" | "interpreter" | "credential_default" | "recipient" | null =
       trustedCategoryId
         ? "merchant"
         : proposal.categoryId
           ? "interpreter"
-          : defaultCategoryId
+          : fallbackCategoryId
             ? "credential_default"
             : null;
 
-    // A bank email's remainder carries its date, identifiers and help line; its sentence is the description (RF-206).
-    let description = (email ? emailDescription(proposal.description) : proposal.description)
+    // A bank alert's remainder carries its label, date, identifiers and help line, whichever channel brought
+    // it (SMS, notification, shortcut or email): what it says happened is the description (RF-206).
+    let description = (
+      describeAlert(payload.text) ??
+      (email || looksLikeBankAlert(payload.text) ? emailDescription(proposal.description) : proposal.description)
+    )
       .trim()
       .slice(0, MAX_DESCRIPTION_LENGTH);
+    // A sentence with its figure cut out names no one: the business the message names stands in (RF-279).
+    description =
+      repairDescription(description, payload.text, merchant?.label ?? null)?.slice(0, MAX_DESCRIPTION_LENGTH) ?? "";
 
-    let proposedAccountId = payload.account_id ?? proposal.accountId;
+    // An alert that names no account tail belongs to the person's only account at that bank.
+    let proposedAccountId =
+      payload.account_id ??
+      proposal.accountId ??
+      (readAccountTails(payload.text, payload.direction ?? proposal.direction).size === 0
+        ? onlyBankAccount(payload.text, accountRows)
+        : null);
+    const cardRead =
+      payload.account_id == null && (payload.direction ?? proposal.direction) !== "income"
+        ? cardPurchase(payload.text, readAccountTails(payload.text, payload.direction ?? proposal.direction), accountRows, defaultAccountId)
+        : { isCard: false as const };
+    if (cardRead.isCard) proposedAccountId = cardRead.accountId;
     let proposedToAccountId: string | null = null;
     let proposedDirection: "income" | "expense" | "transfer" | null =
       payload.direction ?? proposal.direction;
@@ -271,6 +312,28 @@ export async function recordIngestDelivery({
         proposedCategoryId = applied.categoryId;
         categorySource = "recipient";
       }
+    }
+    // A payment to the institution of exactly one of the person's cards or loans pays that card: a transfer.
+    if (!recipient && proposedDirection === "expense") {
+      const card = paidOwnCard(payload.text, accountRows);
+      if (card !== null && card !== proposedAccountId) {
+        proposedDirection = "transfer";
+        proposedToAccountId = card;
+        proposedCategoryId = null;
+        categorySource = null;
+      }
+    }
+    // Cash taken out at a cash machine moves money into the person's own cash: a transfer, as «Retirar efectivo»
+    // writes it. The cash account is the one of the source's scope; with none or several, the person picks (RF-278).
+    if (!recipient && proposedDirection !== "income" && looksLikeCashWithdrawal(payload.text)) {
+      const source = accountRows.find((row) => row.id === proposedAccountId);
+      const cash = accountRows.filter(
+        (row) => row.subtype === "cash" && row.id !== source?.id && (row.groupId ?? null) === (source?.groupId ?? null),
+      );
+      proposedDirection = "transfer";
+      proposedToAccountId = cash.length === 1 ? cash[0].id : null;
+      proposedCategoryId = null;
+      categorySource = null;
     }
     // A delivery that names an account settling outside BASE_CURRENCY is
     // forced rejected below (errors.foreignCurrencyUnsupported): `pesos`
@@ -308,6 +371,17 @@ export async function recordIngestDelivery({
       if (learned !== null) {
         proposedCategoryId = learned;
         categorySource = "merchant";
+      } else {
+        // Then what the merchant's own name points at, before the key's blanket default (RF-280).
+        const named = keywordCategory(
+          merchantLabel ?? proposedDescription,
+          proposedDirection === "income" ? "income" : "expense",
+          categoryRows,
+        );
+        if (named !== null) {
+          proposedCategoryId = named;
+          categorySource = "interpreter";
+        }
       }
     }
     const merchantKey = merchant?.key ?? donor?.merchantKey ?? null;

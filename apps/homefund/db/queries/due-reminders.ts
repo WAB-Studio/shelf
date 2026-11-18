@@ -13,6 +13,8 @@ export type DueReminder = {
   amountCents: number;
   currency: string;
   dueDate: string;
+  // Leaves from no account: an income somebody owes (RF-253).
+  isIncome: boolean;
 };
 
 // Pending payments whose «Recordarme el» date has come (RF-159), oldest due first,
@@ -30,6 +32,7 @@ export async function listDueReminders(
         amountCents: plannedPayments.amountCents,
         currency: settledIn,
         dueDate: plannedPayments.dueDate,
+        isIncome: sql<boolean>`planned_payments.from_account_id is null`,
         total: sql<number>`(count(*) over ())::int`,
       })
       .from(plannedPayments)
@@ -61,6 +64,7 @@ export async function listDueReminders(
       amountCents: row.amountCents,
       currency: row.currency,
       dueDate: row.dueDate,
+      isIncome: row.isIncome,
     })),
     total: found[0]?.total ?? 0,
   };

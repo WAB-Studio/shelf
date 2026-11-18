@@ -32,12 +32,12 @@ const pending = {
 };
 
 // The `one` branch of an ICU plural with `#` filled: the badge's caption at one
-// waiting delivery, taken from the message the screen renders.
+// waiting delivery, taken from the message the screen renders: Inicio's «Por arreglar» line for Bandeja.
 function atOne(message: string): string {
   return (/one \{([^}]*)\}/.exec(message)?.[1] ?? message).replace("#", "1");
 }
 
-const PENDING_BADGE = atOne(messages.dashboard.pendingDeliveriesBadge);
+const PENDING_BADGE = atOne(messages.dashboard.fixInbox);
 
 test.describe("the desktop sidebar", () => {
   test.skip(
@@ -135,7 +135,7 @@ test.describe("the phone's navigation", () => {
   });
 });
 
-test.describe("the dashboard's pending badge", () => {
+test.describe("the dashboard's Bandeja line under «Por arreglar»", () => {
   test("carries the count and reaches the inbox in one tap", async ({ page }) => {
     await seedQueue([pending]);
     await page.goto("/es");

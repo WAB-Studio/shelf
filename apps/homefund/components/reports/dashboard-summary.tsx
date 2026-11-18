@@ -9,6 +9,7 @@ import {
   BandStats,
   Badge,
   Button,
+  Dialog,
   Disc,
   Flex,
   Money,
@@ -19,15 +20,17 @@ import {
   Text,
 } from "@/components/ui";
 import type { MoneyTone } from "@/components/ui";
+import type { MonthAdjustment } from "@/db/queries/home-lines";
 import type { DashboardData } from "@/db/queries/reports/dashboard";
 import type { OwnerNetWorthNamed } from "@/db/queries/reports/dashboard";
 import { PrivacyToggle } from "@/components/fund/privacy-toggle";
 import { Link as LocaleLink } from "@/i18n/navigation";
 import type { CurrencyCode } from "@/lib/currency";
+import type { Holding } from "@/lib/fund/home-lines";
 
 /**
- * The home dashboard's headline: the fund's total net worth over a pill per owner
- * (RF-88), the group counting as one bucket rather than split across its members
+ * The home dashboard's headline: what is in the person's accounts as the big figure, the net worth under it
+ * small and opening its sum, over a pill per owner (RF-88), the group counting as one bucket rather than split across its members
  * (RF-67), then this month's income, expense and net. Every figure arrives already
  * derived and stays an integer in the stored scale; the reading is `Money`'s. No
  * per-account balance list lives here.
@@ -40,19 +43,22 @@ import type { CurrencyCode } from "@/lib/currency";
  * one compact card under it, as display figures; below it the two blocks stack as
  * they always have. The cash withdrawal is a button beside quick entry, not a card.
  */
-export function DashboardSummary({ data }: { data: DashboardData }) {
+export function DashboardSummary({
+  data,
+  holdings,
+  adjustments,
+}: {
+  data: DashboardData;
+  holdings: Holding[];
+  // The month's adjustments account by account, the rows the «Ajuste por cuadre» total is the sum of.
+  adjustments: MonthAdjustment[];
+}) {
   const t = useTranslations("dashboard");
   const tc = useTranslations("common");
   const tr = useTranslations("reports");
   const tn = useTranslations("nav");
 
-  const {
-    netWorth,
-    totalNetWorth,
-    monthFlow,
-    unreviewedCount,
-    inboxPendingCount,
-  } = data;
+  const { netWorth, monthFlow, unreviewedCount } = data;
 
   // The group reads before the members it holds; `sort` is stable, so the rest
   // keep the order the query gave them.
@@ -67,53 +73,41 @@ export function DashboardSummary({ data }: { data: DashboardData }) {
           <Flex direction="column" gap="2">
             {/* Two figures are two totals, so the stack takes a name of its own;
                 one figure is already named by the label under it. */}
-            {totalNetWorth.length > 1 && (
+            {holdings.length > 1 && (
               <Text size="2" color="gray">
                 {tc("currencyTotals")}
               </Text>
             )}
 
-            {totalNetWorth.map((total, index) => (
-              <Flex key={total.currency} direction="column" gap="1">
+            {holdings.map((holding, index) => (
+              <Flex key={holding.currency} direction="column" gap="1">
                 {/* One switch for the whole app, on the first figure's label row. */}
                 <Flex align="center" justify="between" gap="2">
                   <Text size="2" color="gray">
-                    {t("netWorthIn", { currency: total.currency })}
+                    {holdings.length > 1 ? t("haveLabelIn", { currency: holding.currency }) : t("haveLabel")}
                   </Text>
                   {index === 0 && <PrivacyToggle />}
                 </Flex>
                 <BandFigure
-                  minor={total.netWorthCents}
-                  currency={total.currency}
-                  tone={signTone(total.netWorthCents)}
+                  minor={holding.haveCents}
+                  currency={holding.currency}
+                  tone={signTone(holding.haveCents)}
                 />
+                <NetWorthSum holding={holding} />
               </Flex>
             ))}
 
-            {(unreviewedCount > 0 || inboxPendingCount > 0) && (
+            {unreviewedCount > 0 && (
               <Flex gap="2" wrap="wrap">
                 {/* Deep-links to the ledger filtered to generated-unreviewed rows; hidden
                     once nothing awaits review (RF-31). */}
-                {unreviewedCount > 0 && (
-                  <PlainLink href="/movements?unreviewed=1" alignSelf="flex-start">
-                    <TapTarget align="center">
-                      <Badge color="amber" variant="soft" radius="full">
-                        {t("unreviewedBadge", { count: unreviewedCount })}
-                      </Badge>
-                    </TapTarget>
-                  </PlainLink>
-                )}
-                {inboxPendingCount > 0 && (
-                  <PlainLink href="/inbox" alignSelf="flex-start">
-                    <TapTarget align="center">
-                      <Badge color="amber" variant="soft" radius="full">
-                        {t("pendingDeliveriesBadge", {
-                          count: inboxPendingCount,
-                        })}
-                      </Badge>
-                    </TapTarget>
-                  </PlainLink>
-                )}
+                <PlainLink href="/movements?unreviewed=1" alignSelf="flex-start">
+                  <TapTarget align="center">
+                    <Badge color="amber" variant="soft" radius="full">
+                      {t("unreviewedBadge", { count: unreviewedCount })}
+                    </Badge>
+                  </TapTarget>
+                </PlainLink>
               </Flex>
             )}
 
@@ -126,8 +120,14 @@ export function DashboardSummary({ data }: { data: DashboardData }) {
                   ? OWNER_COLORS[owned.indexOf(bucket) % OWNER_COLORS.length]
                   : "var(--gray-9)";
 
+              // One owner is the whole net worth the line under the figure already says: a share of nothing explains nothing.
+              if (owners.length < 2) return null;
+
               return (
                 <Flex key={currency} direction="column" gap="2">
+                  <Text size="2" color="gray">
+                    {t("ownerBarLabel", { currency })}
+                  </Text>
                   {owned.length > 0 && (
                     <ProportionBar
                       aria-label={t("ownerBarLabel", { currency })}
@@ -191,12 +191,9 @@ export function DashboardSummary({ data }: { data: DashboardData }) {
                     tone={signTone(flow.netCents, "income")}
                   />
                   {flow.adjustmentCents !== 0 && (
-                    <MonthStat
-                      label={t("monthAdjustment")}
-                      minor={flow.adjustmentCents}
-                      currency={flow.currency}
-                      tone="plain"
-                      signed="always"
+                    <AdjustmentStat
+                      flow={flow}
+                      rows={adjustments.filter((row) => row.currency === flow.currency)}
                     />
                   )}
                 </BandStats>
@@ -295,5 +292,118 @@ function MonthStat({
         />
       </Text>
     </Flex>
+  );
+}
+
+// The net worth, small under the figure of what is in the accounts: a button that opens the sum it comes from.
+function NetWorthSum({ holding }: { holding: Holding }) {
+  const t = useTranslations("dashboard");
+  const { currency, haveCents, owedToMeCents, owesCents, netCents } = holding;
+
+  return (
+    <Dialog.Root>
+      <Dialog.Trigger>
+        <Button variant="ghost" color="gray" size="1" tap>
+          {t.rich("netSeeLabel", {
+            amount: () => <Money minor={netCents} currency={currency} size="inherit" />,
+          })}
+        </Button>
+      </Dialog.Trigger>
+      <Dialog.Content>
+        <Dialog.Title>{t("netTitle")}</Dialog.Title>
+        <Flex direction="column" gap="3">
+          <SumRow label={t("netHave")} minor={haveCents} currency={currency} />
+          {owedToMeCents !== 0 && (
+            <SumRow label={t("netOwedToMe")} minor={owedToMeCents} currency={currency} signed="always" />
+          )}
+          {owesCents !== 0 && <SumRow label={t("netOwes")} minor={-owesCents} currency={currency} signed="always" />}
+          <SumRow label={t("netTotal")} minor={netCents} currency={currency} bold />
+          <Flex justify="end">
+            <Dialog.Close>
+              <Button type="button" variant="soft" color="gray">
+                {t("close")}
+              </Button>
+            </Dialog.Close>
+          </Flex>
+        </Flex>
+      </Dialog.Content>
+    </Dialog.Root>
+  );
+}
+
+// One line of a sum: its words and its figure.
+function SumRow({
+  label,
+  minor,
+  currency,
+  signed,
+  bold,
+}: {
+  label: string;
+  minor: number;
+  currency: CurrencyCode;
+  signed?: boolean | "always";
+  bold?: boolean;
+}) {
+  return (
+    <Flex justify="between" align="baseline" gap="3">
+      <Text size="2" weight={bold ? "bold" : undefined}>
+        {label}
+      </Text>
+      <Text size="2" weight={bold ? "bold" : "medium"}>
+        <Money minor={minor} currency={currency} signed={signed} size="inherit" />
+      </Text>
+    </Flex>
+  );
+}
+
+// «Ajuste por cuadre del mes»: the total, tappable, opening each account and what its count moved.
+function AdjustmentStat({ flow, rows }: { flow: DashboardData["monthFlow"][number]; rows: MonthAdjustment[] }) {
+  const t = useTranslations("dashboard");
+
+  const stat = (
+    <MonthStat
+      label={t("monthAdjustment")}
+      minor={flow.adjustmentCents}
+      currency={flow.currency}
+      tone="plain"
+      signed="always"
+    />
+  );
+  if (rows.length === 0) return stat;
+
+  return (
+    <Dialog.Root>
+      <Dialog.Trigger>
+        <Button variant="ghost" color="gray">
+          {stat}
+        </Button>
+      </Dialog.Trigger>
+      <Dialog.Content>
+        <Dialog.Title>{t("adjustmentTitle")}</Dialog.Title>
+        <Flex direction="column" gap="3">
+          <Text size="2" color="gray">
+            {t("adjustmentHint")}
+          </Text>
+          {rows.map((row) => (
+            <SumRow
+              key={`${row.accountName}|${row.currency}`}
+              label={row.accountName}
+              minor={row.cents}
+              currency={row.currency as CurrencyCode}
+              signed="always"
+            />
+          ))}
+          <SumRow label={t("adjustmentTotal")} minor={flow.adjustmentCents} currency={flow.currency} signed="always" bold />
+          <Flex justify="end">
+            <Dialog.Close>
+              <Button type="button" variant="soft" color="gray">
+                {t("close")}
+              </Button>
+            </Dialog.Close>
+          </Flex>
+        </Flex>
+      </Dialog.Content>
+    </Dialog.Root>
   );
 }

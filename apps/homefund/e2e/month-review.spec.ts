@@ -9,7 +9,7 @@ import { expect, type Page } from "@playwright/test";
 
 import { fixtureSql } from "../scripts/harness/fixtures";
 import { asHarnessUser, readScope, test } from "./global-setup";
-import { addCivilMonths, currentMonthStart } from "@/lib/dates";
+import { addCivilMonths, currentMonthStart, todayInBogota } from "@/lib/dates";
 
 const scope = readScope();
 const stamp = randomUUID().slice(0, 8);
@@ -46,8 +46,8 @@ test.beforeEach(async () => {
     await tx`
       insert into categories (id, owner_user_id, name, kind, color)
       values (${categoryId}, ${scope.userId}, ${`Mercado ${stamp}`}, 'expense', '#8C4A4A')`;
-    // Three months of a usual 100.000, then 400.000: far above it.
-    for (const n of [4, 3, 2]) await spend(tx, 10_000_000, `${before(n)}-10`, categoryId);
+    // Four months of a usual 100.000 under one description, then 400.000: far above it.
+    for (const n of [5, 4, 3, 2]) await spend(tx, 10_000_000, `${before(n)}-10`, categoryId);
     ids.big = await spend(tx, 40_000_000, `${month}-10`, categoryId);
     ids.twinA = await spend(tx, 5_000_000, `${month}-15`, scope.categoryId);
     ids.twinB = await spend(tx, 5_000_000, `${month}-15`, scope.categoryId);
@@ -77,7 +77,9 @@ for (const width of [360, 1280]) {
     await page.goto(`/es/reports/review?month=${month}`);
     await expect(page.getByRole("heading", { level: 1, name: /^Revisar / })).toBeVisible();
     await expect(page.getByText("¿Es correcto este monto?")).toBeVisible();
-    await expect(page.getByText(/Lo usual en Mercado .*:\s\$\s100\.000\s\(mediana de los últimos 6 meses\)/)).toBeVisible();
+    await expect(
+      page.getByText(/Tus gastos en «Revisión [0-9a-f]{8}» suelen ser de \$\s100\.000, según 4 veces en los últimos 6 meses\./),
+    ).toBeVisible();
     await expect(page.getByText("¿Se registró dos veces?")).toHaveCount(1);
     await expect(page.getByText("2 movimientos iguales")).toBeVisible();
     await expect(page.getByText("¿Leímos bien este monto?")).toBeVisible();
@@ -134,7 +136,7 @@ test("‹ › step between the seeded month and its neighbours, and «Reportes»
     "href",
     `/es/reports/review?month=${addCivilMonths(`${month}-01`, 1).slice(0, 7)}`,
   );
-  // Last month is the newest closed one: no step into the open month.
+  // The current month is the newest one: no step past it.
   await page.goto("/es/reports/review");
   await expect(page.getByRole("link", { name: "mes siguiente ›" })).toHaveCount(0);
   await page.goto("/es/reports");
@@ -154,4 +156,32 @@ test("«Deshacer» under «Revisados» drops the mark: the item waits again, aft
   await expect(page.getByRole("button", { name: /^Revisados/ })).toHaveCount(0);
   await page.reload();
   await expect(okButtons(page)).toHaveCount(4);
+});
+
+test("the review opens the current month and lists what is odd now, «Nada sobresale» only when nothing is", async ({ page }) => {
+  const pocketId = randomUUID();
+  const parentId = randomUUID();
+  await asHarnessUser(async (tx) => {
+    await tx`
+      insert into accounts (id, owner_user_id, name, kind, subtype, initial_balance_cents, initial_balance_on)
+      values
+        (${parentId}, ${scope.userId}, ${`Madre ${stamp}`}, 'asset', 'bank', 90_000_000, ${addCivilMonths(currentMonthStart(), -2)}),
+        (${pocketId}, ${scope.userId}, ${`Bolsillo ${stamp}`}, 'asset', 'bank', 0, ${addCivilMonths(currentMonthStart(), -2)})`;
+    await tx`update accounts set parent_account_id = ${parentId} where id = ${pocketId}`;
+    const [spent] = await tx<{ id: string }[]>`
+      insert into transactions (from_account_id, amount_cents, occurred_at, description)
+      values (${pocketId}, 15_000_000, ${todayInBogota()}, ${`Gasto bolsillo ${stamp}`}) returning id`;
+    await tx`insert into transaction_splits (transaction_id, category_id, amount_cents) values (${spent.id}, ${scope.categoryId}, 15_000_000)`;
+  });
+  try {
+    await page.goto("/es/reports/review");
+    await expect(page.getByRole("heading", { level: 1, name: /^Revisar / })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Por arreglar" })).toBeVisible();
+    await expect(page.getByRole("link", { name: new RegExp(`^Bolsillo ${stamp} gastó \\$\\s150\\.000 más de lo que tenía$`) })).toBeVisible();
+    await expect(page.getByText(/^Nada sobresale/)).toHaveCount(0);
+  } finally {
+    await fixtureSql`delete from transactions where from_account_id in (${pocketId}, ${parentId})`;
+    await fixtureSql`delete from accounts where id = ${pocketId}`;
+    await fixtureSql`delete from accounts where id = ${parentId}`;
+  }
 });

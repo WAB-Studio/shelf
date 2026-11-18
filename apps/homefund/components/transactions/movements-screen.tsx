@@ -35,7 +35,7 @@ import {
   MovementsTable,
   type MovementTableRow,
 } from "@/components/transactions/movements-table";
-import { useQuickEntry } from "@/components/transactions/quick-entry-provider";
+import { useMovementEntry } from "@/components/transactions/movement-entry-provider";
 import {
   Box,
   Button,
@@ -66,11 +66,16 @@ import type { TransactionListRow } from "@/db/queries/transactions";
 import { usePathname, useRouter } from "@/i18n/navigation";
 import { BASE_CURRENCY, type CurrencyCode } from "@/lib/currency";
 import { addCivilDays, civilDateToDate, todayInBogota } from "@/lib/dates";
+import {
+  narrateTransfers,
+  transferSidesById,
+  type TransferNarration,
+} from "@/lib/transactions/transfer-words";
 import { accountNamesById, touchesForeignAccount } from "@/lib/fund/account-names";
 import { categoryNamesById } from "@/lib/fund/category-names";
-import { dayNet } from "@/lib/fund/glance";
+import { dayLeftOut, dayNet } from "@/lib/fund/glance";
 import { useActionErrorToast } from "@/lib/use-action-toast";
-import { HOUSEHOLD_MAKER, MOVEMENT_SEARCH_MAX } from "@/lib/validation/transaction";
+import { HOUSEHOLD_MAKER, MOVEMENT_SEARCH_MAX, NO_PERSON } from "@/lib/validation/transaction";
 
 // A Radix Select item may not carry an empty value, so the "any" option rides
 // this sentinel and maps back to null the moment it is picked.
@@ -130,7 +135,11 @@ export function MovementsScreen({
   const pathname = usePathname();
   const router = useRouter();
   const onActionError = useActionErrorToast();
-  const { openQuick } = useQuickEntry();
+  const { openForm } = useMovementEntry();
+
+  // A person is whom a movement was for (RF-242); the label filter offers the tags alone.
+  const tagLabels = options.labels.filter((label) => label.kind === "tag");
+  const personLabels = options.labels.filter((label) => label.kind === "person");
 
   const [showFilters, setShowFilters] = useState(false);
   // The row a menu opened a dialog over; the ledger holds it, so both dialogs
@@ -163,6 +172,13 @@ export function MovementsScreen({
   );
   const categoryNames = categoryNamesById(options.categories, (name) =>
     tc("scopedName", { name }),
+  );
+  // A transfer into a debt, or out of a payer's hidden account, reads as what happened (RF-272).
+  const transfers = narrateTransfers(
+    rows,
+    transferSidesById(options.accountDirectory),
+    accountNames,
+    t,
   );
   const categoryColors = new Map<string, string | null>();
   for (const category of options.categories) {
@@ -219,9 +235,9 @@ export function MovementsScreen({
   const tableRows: MovementTableRow[] = pageRows.map((row) => ({
     id: row.id,
     occurredAt: row.occurredAt,
-    title: row.description || rowTitle(row, categoryNames, t),
+    title: row.description || rowTitle(row, categoryNames, t, transfers),
     category: rowCategory(row, categoryNames, categoryColors),
-    account: rowSubtitle(row, accountNames, t) ?? "",
+    account: rowSubtitle(row, accountNames, t, transfers) ?? "",
     label: row.labels[0]?.name ?? null,
     amountMinor:
       row.reconciliationId !== null && row.toAccountId === null
@@ -256,6 +272,7 @@ export function MovementsScreen({
       filters.account ||
       filters.category ||
       filters.label ||
+      filters.person ||
       filters.rule ||
       filters.q,
     );
@@ -272,6 +289,7 @@ export function MovementsScreen({
     if (next.account) query.account = next.account;
     if (next.category) query.category = next.category;
     if (next.label) query.label = next.label;
+    if (next.person) query.person = next.person;
     if (next.unreviewed) query.unreviewed = "1";
     if (next.rule) query.rule = next.rule;
     if (next.q) query.q = next.q;
@@ -324,7 +342,7 @@ export function MovementsScreen({
         icon={<ArrowRightLeft size={40} strokeWidth={1.6} />}
         title={t("emptyTitle")}
         action={
-          <Button type="button" size="3" mt="2" onClick={openQuick}>
+          <Button type="button" size="3" mt="2" onClick={openForm}>
             <Plus size={18} strokeWidth={2.2} />
             {t("quickTitle")}
           </Button>
@@ -545,7 +563,7 @@ export function MovementsScreen({
 
                 {/* The ledger spans both scopes, so the read filter offers every
                     label — unlike the write pickers, which narrow to one (RF-89). */}
-                {options.labels.length > 0 && (
+                {tagLabels.length > 0 && (
                   <FilterField label={t("labelFilterLabel")}>
                     {(id) => (
                       <Select.Root
@@ -559,7 +577,7 @@ export function MovementsScreen({
                           <Select.Item value={ANY}>
                             {t("allLabels")}
                           </Select.Item>
-                          {options.labels.map((label) => (
+                          {tagLabels.map((label) => (
                             <Select.Item key={label.id} value={label.id}>
                               <Flex as="span" align="center" gap="2">
                                 {/* `color` is a nullable column; a label stored
@@ -569,6 +587,30 @@ export function MovementsScreen({
                                 )}
                                 {label.name}
                               </Flex>
+                            </Select.Item>
+                          ))}
+                        </Select.Content>
+                      </Select.Root>
+                    )}
+                  </FilterField>
+                )}
+
+                {personLabels.length > 0 && (
+                  <FilterField label={t("forPersonLabel")}>
+                    {(id) => (
+                      <Select.Root
+                        value={filters.person ?? ANY}
+                        onValueChange={(value) =>
+                          patchFilters({ person: value === ANY ? null : value })
+                        }
+                      >
+                        <Select.Trigger id={id} />
+                        <Select.Content position="popper">
+                          <Select.Item value={ANY}>{t("allPersons")}</Select.Item>
+                          <Select.Item value={NO_PERSON}>{t("forPersonNone")}</Select.Item>
+                          {personLabels.map((person) => (
+                            <Select.Item key={person.id} value={person.id}>
+                              {person.name}
                             </Select.Item>
                           ))}
                         </Select.Content>
@@ -689,24 +731,33 @@ export function MovementsScreen({
                       ))}
                     </Text>
                   </Flex>
+                  {dayLeftOut(group.rows).map(([currency, moved]) => (
+                    <Text key={currency} size="1" color="gray">
+                      {t.rich("dayLeftOut", {
+                        amount: () => (
+                          <Money minor={moved} currency={currency as CurrencyCode} tone="plain" signed={false} size="inherit" />
+                        ),
+                      })}
+                    </Text>
+                  ))}
                   {group.rows.map((row) => (
                     <Fragment key={row.id}>
                       <Separator size="4" />
                       <MovementCard
                         row={row}
-                        title={row.description || rowTitle(row, categoryNames, t)}
+                        title={row.description || rowTitle(row, categoryNames, t, transfers)}
                         subtitle={
                           row.description
                             ? [
-                                rowTitle(row, categoryNames, t),
-                                rowSubtitle(row, accountNames, t),
+                                rowTitle(row, categoryNames, t, transfers),
+                                rowSubtitle(row, accountNames, t, transfers),
                               ]
                                 .filter(Boolean)
                                 .join(" · ")
-                            : rowSubtitle(row, accountNames, t)
+                            : rowSubtitle(row, accountNames, t, transfers)
                         }
                         color={rowColor(row, categoryColors)}
-                        categoryName={rowTitle(row, categoryNames, t)}
+                        categoryName={rowTitle(row, categoryNames, t, transfers)}
                         amount={
                           row.reconciliationId !== null ? (
                             <Money
@@ -730,10 +781,14 @@ export function MovementsScreen({
                           )
                         }
                         badge={
-                          row.recurringRuleId !== null ? t("autoBadge") : undefined
+                          row.pocketCover
+                            ? t("pocketCoverBadge")
+                            : row.recurringRuleId !== null
+                              ? t("autoBadge")
+                              : undefined
                         }
                         caused={
-                          row.causedByTransactionId !== null
+                          row.causedByTransactionId !== null && !row.pocketCover
                             ? t("causedBadge")
                             : undefined
                         }
@@ -845,9 +900,10 @@ function rowTitle(
   row: TransactionListRow,
   categoryNames: Map<string, string>,
   t: ReturnType<typeof useTranslations>,
+  transfers: Map<string, TransferNarration>,
 ): string {
   if (row.reconciliationId !== null) return t("kindAdjustment");
-  if (row.kind === "transfer") return t("kindTransfer");
+  if (row.kind === "transfer") return transfers.get(row.id)?.title ?? t("kindTransfer");
   const first = row.splits[0]?.categoryId;
   const fallback = row.kind === "income" ? t("kindIncome") : t("kindExpense");
   return (first && categoryNames.get(first)) || fallback;
@@ -859,13 +915,16 @@ function rowSubtitle(
   row: TransactionListRow,
   accountNames: Map<string, string>,
   t: ReturnType<typeof useTranslations<"transactions">>,
+  transfers: Map<string, TransferNarration>,
 ): string | undefined {
-  const account = accountOfRow(row, accountNames);
+  const account = accountOfRow(row, accountNames, transfers);
   // Who made it comes first: it is what a person scans a household ledger for (RF-182).
   const parts = [
     row.madeByName,
     account,
     row.splits.length > 1 ? t("linesCount", { count: row.splits.length }) : null,
+    // A quiet tag, never part of the description (RF-242).
+    row.forPerson ? t(row.kind === "income" ? "fromPersonTag" : "forPersonTag", { name: row.forPerson.name }) : null,
   ].filter(Boolean);
   return parts.length > 0 ? parts.join(" · ") : undefined;
 }
@@ -873,12 +932,15 @@ function rowSubtitle(
 function accountOfRow(
   row: TransactionListRow,
   accountNames: Map<string, string>,
+  transfers: Map<string, TransferNarration>,
 ): string | undefined {
   if (row.reconciliationId !== null) {
     const accountId = row.toAccountId ?? row.fromAccountId;
     return (accountId && accountNames.get(accountId)) ?? undefined;
   }
   if (row.kind === "transfer") {
+    const narrated = transfers.get(row.id);
+    if (narrated) return narrated.account;
     const from =
       (row.fromAccountId && accountNames.get(row.fromAccountId)) ?? "";
     const to = (row.toAccountId && accountNames.get(row.toAccountId)) ?? "";

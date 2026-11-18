@@ -84,39 +84,27 @@ type Placement = "personal" | "fund";
 
 /**
  * The placement the displayed band states for an account. The phone heads a run
- * of cards with it and calls the group by its own name, so it is the last band
- * to appear above the card; the laptop's table gives every row a scope cell
- * under the name instead, and nothing at all precedes the first row's.
+ * of cards with it and the laptop heads a run of rows with it, both calling the
+ * group by its own name, so it is the last band to appear above the account.
  */
 async function placementOf(
   page: Page,
   name: string,
   fundBand: string,
 ): Promise<Placement | null> {
-  const rows = page
-    .getByRole("table", { name: accounts.title })
-    .getByRole("row")
-    .filter({ hasText: name });
-
-  if ((await rows.count()) > 0) {
-    const scope = await rows.getByRole("cell").first().innerText();
-    if (scope.includes(accounts.ownerFund)) return "fund";
-
-    return scope.includes(accounts.ownerPersonal) ? "personal" : null;
-  }
-
   // The shell's `loading.tsx` stands two boxes of its own under `main > div` until
   // the list streams in; until one band remains there is nothing to read yet.
   const shown = band(page);
   if ((await shown.count()) !== 1) return null;
 
-  const text = await shown.innerText();
-  const at = text.indexOf(name);
+  // The laptop's bands are set in capitals, and `innerText` reads them so.
+  const text = (await shown.innerText()).toLowerCase();
+  const at = text.indexOf(name.toLowerCase());
   if (at < 0) return null;
 
   const bands = [
-    [accounts.ownerPersonal, "personal"],
-    [fundBand, "fund"],
+    [accounts.ownerPersonal.toLowerCase(), "personal"],
+    [fundBand.toLowerCase(), "fund"],
   ] as const;
 
   return (
@@ -210,14 +198,8 @@ async function dropAccount(accountId: string): Promise<void> {
   await fixtureSql`delete from accounts where id = ${accountId}`;
 }
 
-test("creates an account from the form and stores its opening balance signed by its kind", async ({
-  page,
-}) => {
-  // A liability, so the sign is a decision and not the identity: an opening debt
-  // is stored negative, which is what keeps net worth a plain sum (RNF-05).
-  const name = `Tarjeta ${Date.now()}`;
-  const owedPesos = "250000";
-  const owedCents = -25000000;
+test("creates an account from the form and stores its opening balance", async ({ page }) => {
+  const name = `Cuenta ${Date.now()}`;
 
   await page.goto("/es/settings/accounts");
   await page.getByRole("button", { name: accounts.add, exact: true }).click();
@@ -225,35 +207,26 @@ test("creates an account from the form and stores its opening balance signed by 
   const dialog = page.getByRole("dialog");
   await expect(dialog).toBeVisible();
 
-  await dialog.getByRole("textbox", { name: accounts.nameLabel }).fill(name);
-  await dialog
-    .getByRole("radio", { name: accounts.kindLiability, exact: true })
-    .click();
-  await dialog
-    .getByRole("radio", { name: accounts.subtypeCard, exact: true })
-    .click();
-  // The amount field renames itself with the kind, so this also proves the
-  // toggle above landed.
-  await dialog
-    .getByRole("textbox", { name: accounts.openingOwedLabel })
-    .fill(owedPesos);
+  // Cuentas adds what a person holds: a debt has its own forms in Deudas (RF-286).
+  await expect(dialog.getByRole("radio", { name: accounts.kindLiability, exact: true })).toHaveCount(0);
+  await expect(dialog.getByRole("radio", { name: accounts.subtypeCard, exact: true })).toHaveCount(0);
+  await expect(dialog.getByRole("link", { name: accounts.debtHintLink })).toBeVisible();
 
+  await dialog.getByRole("textbox", { name: accounts.nameLabel }).fill(name);
+  await dialog.getByRole("textbox", { name: accounts.openingBalanceLabel }).fill("250000");
   await dialog.getByRole("button", { name: messages.common.save }).click();
 
   await expect(dialog).toBeHidden();
   await expect(band(page).getByText(name, { exact: true })).toBeVisible();
 
-  const rows = await fixtureSql<
-    { id: string; kind: string; subtype: string; initial_balance_cents: string }[]
-  >`
-    select id, kind, subtype, initial_balance_cents::text as initial_balance_cents
+  const rows = await fixtureSql<{ id: string; kind: string; initial_balance_cents: string }[]>`
+    select id, kind, initial_balance_cents::text as initial_balance_cents
     from accounts
     where owner_user_id = ${scope.userId} and name = ${name}`;
 
   expect(rows).toHaveLength(1);
-  expect(rows[0].kind).toBe("liability");
-  expect(rows[0].subtype).toBe("card");
-  expect(rows[0].initial_balance_cents).toBe(String(owedCents));
+  expect(rows[0].kind).toBe("asset");
+  expect(rows[0].initial_balance_cents).toBe("25000000");
 
   // Written through the interface, so it carries no fixture id: dropped here
   // rather than by the tracked cleanup.
@@ -319,14 +292,13 @@ test.describe("the laptop row", () => {
       from account_balances where id = ${account.id}`;
     expect(Number(derived.balance_cents)).toBe(openingCents - movementCents);
 
-    // The fourth of the five tracks, after the name, the entity and the last four
-    // digits.
+    // The second of the three tracks, after the name and before the menu.
     const cell = page
       .getByRole("table", { name: accounts.title })
       .getByRole("row")
       .filter({ hasText: account.name })
       .getByRole("cell")
-      .nth(3);
+      .nth(1);
     await expect(cell).toBeVisible();
 
     // The table states no opening figure, so what says the column is derived is
@@ -508,7 +480,7 @@ test.describe("with a fund behind the caller", () => {
   });
 });
 
-test("lists a pocket under its parent, the parent with the total of both and its own part as «Libre»", async ({
+test("lists a pocket under its parent, the parent with the total of both and its own part as a «Libre» note under it", async ({
   page,
 }) => {
   // The dense table renders from `lg` up; both projects drive it at the laptop's width, as «the laptop row» does.
@@ -522,14 +494,16 @@ test("lists a pocket under its parent, the parent with the total of both and its
 
   await page.goto("/es/settings/accounts");
   const table = page.getByRole("table", { name: accounts.title });
-  const rows = table.getByRole("row").filter({ hasText: new RegExp(`${parent.name}|${accounts.freePart}|${pocket.name}`) });
-  await expect(rows).toHaveCount(3);
+  const rows = table.getByRole("row").filter({ hasText: new RegExp(`${parent.name}|${pocket.name}`) });
+  // No row of its own for «Libre» (RF-240): the parent's balance cell carries it under the total.
+  await expect(rows).toHaveCount(2);
   await expect(rows.nth(0)).toContainText(parent.name);
-  await expect(rows.nth(1)).toContainText(accounts.freePart);
-  await expect(rows.nth(2)).toContainText(pocket.name);
-  expect(pesosOf(await rows.nth(0).getByRole("cell").nth(3).innerText())).toBe(5_502_154);
-  expect(pesosOf(await rows.nth(1).getByRole("cell").nth(3).innerText())).toBe(249_816);
-  expect(pesosOf(await rows.nth(2).getByRole("cell").nth(3).innerText())).toBe(5_252_338);
+  await expect(rows.nth(1)).toContainText(pocket.name);
+  const [total, free] = (await rows.nth(0).getByRole("cell").nth(1).innerText()).split("\n");
+  expect(pesosOf(total)).toBe(5_502_154);
+  expect(free).toContain(accounts.freePart);
+  expect(pesosOf(free)).toBe(249_816);
+  expect(pesosOf(await rows.nth(1).getByRole("cell").nth(1).innerText())).toBe(5_252_338);
 
   await dropAccount(pocket.id);
   await dropAccount(parent.id);

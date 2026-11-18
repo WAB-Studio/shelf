@@ -1128,6 +1128,12 @@ export function keyParsedRows(parsed: ParsedWorkbook, scope: ImportScope): void 
 
 // The reverse label maps, built from the SAME `data` namespace the writer used for
 // the request locale, so a file downloaded in either language round-trips (RF-49).
+// Headers an older export wrote, still read as the column they named: the rate was «Tasa efectiva anual (%)»
+// before it was called «Tasa E.A. (%)» (RF-283).
+export const LEGACY_COLUMN_HEADERS: Partial<Record<SheetEntity, Record<string, string>>> = {
+  debts: { "Tasa efectiva anual (%)": "annualRate", "Effective annual rate (%)": "annualRate" },
+};
+
 async function reverseLabels(): Promise<ReverseSheetLabels> {
   const t = await getTranslations({ locale: await getLocale(), namespace: "data" });
   type Key = Parameters<typeof t>[0];
@@ -1143,6 +1149,7 @@ async function reverseLabels(): Promise<ReverseSheetLabels> {
       const headerToKey = new Map([
         ...columns.map((column) => [t(`columns.${column.key}` as Key), column.key] as const),
         [t("columns.externalRef" as Key), "externalRef"] as const,
+        ...Object.entries(LEGACY_COLUMN_HEADERS[entity] ?? {}),
       ]);
       return [entity, headerToKey] as const;
     }),

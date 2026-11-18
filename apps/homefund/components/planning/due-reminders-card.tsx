@@ -26,7 +26,7 @@ export function DueRemindersCard({
       <Flex direction="column" gap="2">
         <Flex justify="between" align="baseline" gap="3">
           <Heading as="h2" size="4">{t("dueTitle")}</Heading>
-          <TextLink href="/planning/payments" size="2" weight="medium">
+          <TextLink href="/planning/upcoming" size="2" weight="medium">
             {total > rows.length ? t("dueSeeAll", { count: total }) : t("dueSee")}
           </TextLink>
         </Flex>
@@ -38,14 +38,14 @@ export function DueRemindersCard({
             month: "short",
           });
           return (
-            <PlainLink key={row.id} href="/planning/payments">
+            <PlainLink key={row.id} href="/planning/upcoming">
               <Flex align="center" gap="3">
                 <Flex direction="column" flexGrow="1" minWidth="0">
                   <Text size="3" weight="medium" truncate>
                     {row.description ?? t("dueNoName")}
                   </Text>
                   <Text size="2" color={late ? "red" : "gray"}>
-                    {t(late ? "dueLate" : "dueSoon", { date })}
+                    {t(row.isIncome ? (late ? "dueIncomeLate" : "dueIncomeSoon") : late ? "dueLate" : "dueSoon", { date })}
                   </Text>
                 </Flex>
                 <Money

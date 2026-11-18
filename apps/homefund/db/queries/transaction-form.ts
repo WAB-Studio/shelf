@@ -10,6 +10,7 @@ import type { AccountRow } from "@/db/queries/accounts";
 import { listScopedCategories } from "@/db/queries/categories";
 import type { ScopedCategoryNode } from "@/db/queries/categories";
 import { listCallerMembers } from "@/db/queries/group-members";
+import { callerGroupInfo } from "@/db/queries/groups";
 import { listScopedLabels } from "@/db/queries/labels";
 import type { ScopedLabelRow } from "@/db/queries/labels";
 import { listTransactions } from "@/db/queries/transactions";
@@ -41,7 +42,19 @@ export type TransactionFormOptions = {
   accounts: AccountRow[];
   // Every account the caller can read, archived ones included, as a movement or a plan
   // names it: a row on an archived account still reads its name and its owner (RF-58).
-  accountDirectory: { id: string; name: string; foreignOwner: boolean; ownerName: string | null }[];
+  accountDirectory: {
+    id: string;
+    name: string;
+    foreignOwner: boolean;
+    ownerName: string | null;
+    // What a list needs to say a transfer in a person's words instead of its accounts' (a debt, a payer's hidden account).
+    kind: AccountRow["kind"];
+    subtype: AccountRow["subtype"];
+    institution: string | null;
+    internalPersonName: string | null;
+  }[];
+  // The caller's fund, named in the headings that tell its categories from the person's own.
+  groupName: string | null;
   categories: ScopedCategory[];
   labels: ScopedLabel[];
   members: { userId: string; name: string }[];
@@ -93,6 +106,7 @@ export const getTransactionFormOptions = cache(
       currencies,
       recentMovements,
       frequentCategoryIds,
+      group,
     ] = await withUserDb((tx) =>
       Promise.all([
         listAccounts({ archived: false, withInternal: true }, tx),
@@ -104,12 +118,14 @@ export const getTransactionFormOptions = cache(
         listCurrencyOptions(tx),
         listTransactions({}, { limit: CAUSE_CANDIDATE_LIMIT, tx }),
         listFrequentCategoryIds(user.id, tx),
+        callerGroupInfo(tx, user.id),
       ]),
     );
 
     const activeMembers = members.filter((member) => member.archivedAt === null);
 
     return {
+      groupName: group?.name ?? null,
       // A «Me debe» is no account a person picks (RF-216); it stays in the directory, which only names a movement's sides.
       accounts: accountRows.filter((account) => !account.internal),
       accountDirectory: [...accountRows, ...archivedAccountRows].map((account) => ({
@@ -117,6 +133,10 @@ export const getTransactionFormOptions = cache(
         name: account.name,
         foreignOwner: account.foreignOwner,
         ownerName: account.ownerName,
+        kind: account.kind,
+        subtype: account.subtype,
+        institution: account.institution,
+        internalPersonName: account.internalPersonName ?? null,
       })),
       categories,
       labels,

@@ -13,18 +13,19 @@ import {
   handAccountToGroupAction,
   restoreAccountAction,
 } from "@/app/actions/accounts";
-import { useOwnerLabel } from "@/components/fund/owner-mark";
 import { AccountFormDialog } from "@/components/accounts/account-form-dialog";
 import {
   BilledAmountDialog,
   ForeignEstimates,
   type BilledTarget,
 } from "@/components/accounts/foreign-estimates";
+import { OwedToMeSection } from "@/components/accounts/owed-to-me-section";
 import { ReconcileDialog } from "@/components/accounts/reconcile-dialog";
-import { AccountsTable, PaidByLine } from "@/components/accounts/accounts-table";
+import { AccountDetail, AccountsTable, FreePartWarning, PaidByLine, PocketShortfall, StaleCountLine } from "@/components/accounts/accounts-table";
 import {
   Box,
   Button,
+  ButtonLink,
   Card,
   ConfirmDialog,
   DropdownMenu,
@@ -34,7 +35,6 @@ import {
   Flex,
   IconButton,
   Money,
-  PersonalMark,
   ScreenHeader,
   SegmentedControl,
   Separator,
@@ -43,7 +43,9 @@ import {
 } from "@/components/ui";
 import type { AccountRow } from "@/db/queries/accounts";
 import type { AccountPendingSettlement } from "@/db/queries/debt-statements";
+import type { OwedCurrency } from "@/lib/owed-to-me";
 import { usePathname, useRouter } from "@/i18n/navigation";
+import { freePartToShow } from "@/lib/account-detail";
 import { civilDateToDate } from "@/lib/dates";
 import { useActionErrorToast } from "@/lib/use-action-toast";
 import { BASE_CURRENCY, type CurrencyCode } from "@/lib/currency";
@@ -64,7 +66,7 @@ type RowAction =
 type Figure = { currency: CurrencyCode; cents: number };
 
 type Section = {
-  key: "accounts" | "cards" | "loans";
+  key: "accounts" | "receivables" | "cards" | "loans";
   label: string;
   // Whether the section adds up what is owed: its figures then carry the debt as a positive number.
   owes: boolean;
@@ -121,6 +123,8 @@ export function AccountsScreen({
   archived,
   newSubtype,
   members,
+  owed,
+  staleIds,
 }: {
   accounts: AccountRow[];
   groupName: string | null;
@@ -131,9 +135,14 @@ export function AccountsScreen({
   newSubtype?: (typeof ACCOUNT_SUBTYPES)[number] | null;
   // The fund members a fund account can be held by (RF-181).
   members: { id: string; name: string }[];
+  // What other people owe the person, per currency (decision 2 of 2026-11-17): the «Te deben» section.
+  owed: OwedCurrency[];
+  // The accounts not counted for over a month (RF-262), each with a quiet «Cuádrala».
+  staleIds: string[];
 }) {
   const t = useTranslations("accounts");
   const tKey = useTranslations();
+  const stale = new Set(staleIds);
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -233,6 +242,9 @@ export function AccountsScreen({
     ([value, label]) => ({ value, label }),
   ).sort((a, b) => a.label.localeCompare(b.label));
 
+  // A filter that cannot narrow anything is not drawn (RF-240): «Propietario» needs both placements in the tab.
+  const hasBothPlacements = accounts.some((a) => a.ownerUserId) && accounts.some((a) => !a.ownerUserId);
+
   // The entities present in this tab's accounts, named once each, sorted.
   const institutionOptions = Array.from(
     new Set(
@@ -246,7 +258,8 @@ export function AccountsScreen({
   // one is left out. Built once per list, and the tiles read their figures from it.
   function sectionsOf(list: AccountRow[]): Section[] {
     const types: { key: Section["key"]; label: string; owes: boolean; has: (a: AccountRow) => boolean }[] = [
-      { key: "accounts", label: t("sectionAccounts"), owes: false, has: (a) => a.kind === "asset" },
+      { key: "accounts", label: t("sectionAccounts"), owes: false, has: (a) => a.kind === "asset" && a.subtype !== "receivable" },
+      { key: "receivables", label: t("sectionReceivables"), owes: false, has: (a) => a.subtype === "receivable" },
       { key: "cards", label: t("sectionCards"), owes: true, has: (a) => a.kind === "liability" && a.subtype === "card" },
       { key: "loans", label: t("sectionLoans"), owes: true, has: (a) => a.kind === "liability" && a.subtype === "loan" },
     ];
@@ -261,7 +274,11 @@ export function AccountsScreen({
   function splitByPlacement(section: Section) {
     const personal = section.rows.filter((a) => a.ownerUserId);
     const group = section.rows.filter((a) => !a.ownerUserId);
-    if (personal.length === 0 || group.length === 0) {
+    // Personal is what a list says nothing about; a list that is the fund's alone names the fund (RF-240).
+    if (personal.length === 0) {
+      return [{ key: section.key, label: groupName ?? tKey("common.fund"), rows: section.rows }];
+    }
+    if (group.length === 0) {
       return [{ key: section.key, label: "", rows: section.rows }];
     }
     return [
@@ -270,26 +287,33 @@ export function AccountsScreen({
     ];
   }
 
-  // What a person who pays a credit still owes is money the person has coming: the «Me debe» is hidden, so its
-  // balance rides on the credit and counts here, and the net still reads assets minus credit plus that (RF-216).
-  function totalsOf(list: Section[], rows: AccountRow[]) {
-    const owedByPayers = rows.flatMap((row) =>
-      row.thirdParty ? [{ currency: row.settlementCurrency, cents: row.thirdParty.personOwesCents }] : [],
-    );
-    const have = [
-      ...list.filter((x) => !x.owes).map((x) => ({ figures: x.figures, sign: 1 as const })),
-      { figures: owedByPayers, sign: 1 as const },
-    ];
+  // «Lo que tengo» is the sum of the asset rows on screen, nothing hidden. What other people owe the person is the
+  // «Te deben» section below (a payer's credit and a friend «se le cobra» alike, RF-293): its own tile, so the net
+  // reads what is had, less what is owed, plus what is owed to the person, as the screen shows each.
+  function totalsOf(list: Section[]) {
+    const owedToMe = owed.map((group) => ({ currency: group.currency as CurrencyCode, cents: group.totalCents }));
+    const have = list.filter((x) => !x.owes).map((x) => ({ figures: x.figures, sign: 1 as const }));
     const owe = list.filter((x) => x.owes).map((x) => ({ figures: x.figures, sign: 1 as const }));
     return (
       <StatTiles
         tiles={[
           { key: "have", label: t("kindAsset"), value: <Figures figures={mergeFigures(have)} /> },
           { key: "owe", label: t("kindLiability"), value: <Figures figures={mergeFigures(owe)} /> },
+          ...(owedToMe.length === 0
+            ? []
+            : [{ key: "owed", label: tKey("owedToMe.title"), value: <Figures figures={owedToMe} /> }]),
           {
             key: "net",
             label: t("netLabel"),
-            value: <Figures figures={mergeFigures([...have, ...owe.map((x) => ({ ...x, sign: -1 as const }))])} />,
+            value: (
+              <Figures
+                figures={mergeFigures([
+                  ...have,
+                  { figures: owedToMe, sign: 1 as const },
+                  ...owe.map((x) => ({ ...x, sign: -1 as const })),
+                ])}
+              />
+            ),
           },
         ]}
       />
@@ -298,6 +322,20 @@ export function AccountsScreen({
 
   const deskSections = sectionsOf(filteredAccounts);
   const phoneSections = sectionsOf(accounts);
+  const names = new Map(accounts.map((account) => [account.id, account.name]));
+
+  // The opening date is said on the first card that has it; a later card of the same date says only its figure.
+  const openingDated = new Set<string>();
+  const seenOn = new Set<string>();
+  for (const section of phoneSections) {
+    for (const part of splitByPlacement(section)) {
+      for (const account of part.rows) {
+        if (seenOn.has(account.initialBalanceOn)) continue;
+        seenOn.add(account.initialBalanceOn);
+        openingDated.add(account.id);
+      }
+    }
+  }
 
   const pendingFor = (account: AccountRow) =>
     pendingSettlements.filter((movement) => movement.accountId === account.id);
@@ -310,6 +348,13 @@ export function AccountsScreen({
       <Plus size={16} />
       {t("add")}
     </Button>
+  );
+
+  // One screen to count every account at once; offered where there is something to count.
+  const reconcileAllLink = (
+    <ButtonLink href="/settings/accounts/reconcile" variant="surface" color="gray">
+      {t("reconcileAllOpen")}
+    </ButtonLink>
   );
 
   // Add would create an active account, so the archived tab offers none, in
@@ -335,15 +380,18 @@ export function AccountsScreen({
             meta={t("listMeta", { count: filteredAccounts.length })}
             actions={
               !archived && (
-                <Button
-                  type="button"
-                  variant="surface"
-                  color="gray"
-                  onClick={() => setFormTarget("new")}
-                >
-                  <Plus size={15} />
-                  {t("add")}
-                </Button>
+                <>
+                  {accounts.length > 0 && reconcileAllLink}
+                  <Button
+                    type="button"
+                    variant="surface"
+                    color="gray"
+                    onClick={() => setFormTarget("new")}
+                  >
+                    <Plus size={15} />
+                    {t("add")}
+                  </Button>
+                </>
               )
             }
           />
@@ -359,34 +407,38 @@ export function AccountsScreen({
               ]}
               width={140}
             />
-            <FilterSelect
-              label={t("ownerLabel")}
-              value={ownerFilter}
-              onValueChange={(value) =>
-                patchQuery({ owner: value === ANY ? null : value })
-              }
-              items={[
-                { value: ANY, label: t("allOwners") },
-                { value: "personal", label: t("ownerPersonal") },
-                { value: "group", label: t("ownerFund") },
-              ]}
-              width={170}
-            />
-            <FilterSelect
-              label={t("institutionLabel")}
-              value={institutionFilter}
-              onValueChange={(value) =>
-                patchQuery({ institution: value === ANY ? null : value })
-              }
-              items={[
-                { value: ANY, label: t("allInstitutions") },
-                ...institutionOptions.map((institution) => ({
-                  value: institution,
-                  label: institution,
-                })),
-              ]}
-              width={190}
-            />
+            {hasBothPlacements && (
+              <FilterSelect
+                label={t("ownerLabel")}
+                value={ownerFilter}
+                onValueChange={(value) =>
+                  patchQuery({ owner: value === ANY ? null : value })
+                }
+                items={[
+                  { value: ANY, label: t("allOwners") },
+                  { value: "personal", label: t("ownerPersonal") },
+                  { value: "group", label: t("ownerFund") },
+                ]}
+                width={170}
+              />
+            )}
+            {institutionOptions.length > 1 && (
+              <FilterSelect
+                label={t("institutionLabel")}
+                value={institutionFilter}
+                onValueChange={(value) =>
+                  patchQuery({ institution: value === ANY ? null : value })
+                }
+                items={[
+                  { value: ANY, label: t("allInstitutions") },
+                  ...institutionOptions.map((institution) => ({
+                    value: institution,
+                    label: institution,
+                  })),
+                ]}
+                width={190}
+              />
+            )}
             {holderOptions.length > 0 && (
               <FilterSelect
                 label={t("holderFilter")}
@@ -398,9 +450,11 @@ export function AccountsScreen({
             )}
           </FilterBar>
 
-          {!archived && deskSections.length > 0 && totalsOf(deskSections, filteredAccounts)}
+          {!archived && deskSections.length > 0 && totalsOf(deskSections)}
 
           <AccountsTable
+            stale={stale}
+            names={names}
             sections={deskSections.flatMap((section) => {
               const parts = splitByPlacement(section);
               return parts.map((part) => ({
@@ -468,7 +522,17 @@ export function AccountsScreen({
 
       <Box display={{ initial: "block", lg: "none" }}>
         <Flex direction="column" gap="4">
-          <ScreenHeader title={t("title")} actions={!archived ? addButton : undefined} />
+          <ScreenHeader
+            title={t("title")}
+            actions={
+              !archived ? (
+                <>
+                  {accounts.length > 0 && reconcileAllLink}
+                  {addButton}
+                </>
+              ) : undefined
+            }
+          />
           <SegmentedControl.Root
             value={archived ? "archived" : "active"}
             onValueChange={onTabChange}
@@ -485,7 +549,7 @@ export function AccountsScreen({
             emptyState
           ) : (
             <>
-              {!archived && totalsOf(phoneSections, accounts)}
+              {!archived && totalsOf(phoneSections)}
               <Flex direction="column" gap="5">
                 {phoneSections.map((section) => (
                   <Flex key={section.key} direction="column" gap="3">
@@ -507,6 +571,9 @@ export function AccountsScreen({
                         <Box key={account.id} ml={account.parentAccountId ? "5" : "0"}>
                           <AccountCard
                             account={account}
+                            stale={stale.has(account.id)}
+                            names={names}
+                            showOpeningDate={openingDated.has(account.id)}
                             archived={archived}
                             pending={pendingFor(account)}
                             onConfirm={setBilledTarget}
@@ -537,6 +604,8 @@ export function AccountsScreen({
           )}
         </Flex>
       </Box>
+
+      {!archived && <OwedToMeSection owed={owed} />}
 
       <AccountFormDialog
         hasGroup={groupName !== null}
@@ -635,6 +704,9 @@ export function AccountsScreen({
 
 function AccountCard({
   account,
+  stale,
+  names,
+  showOpeningDate,
   archived,
   pending,
   onConfirm,
@@ -646,6 +718,10 @@ function AccountCard({
   onHandOver,
 }: {
   account: AccountRow;
+  stale: boolean;
+  names: ReadonlyMap<string, string>;
+  // Whether the opening line carries its date: it does not repeat on every card.
+  showOpeningDate: boolean;
   archived: boolean;
   pending: AccountPendingSettlement[];
   onConfirm: (target: BilledTarget) => void;
@@ -664,38 +740,24 @@ function AccountCard({
   // is the first entry and every other currency the account holds follows it.
   // A parent leads with the total of itself and its pockets and names its own part under it (RF-173).
   const [settlement, ...others] = account.totalBalances ?? account.balances;
-  const freePart = account.totalBalances ? account.balances[0] : undefined;
-
-  const ownerOf = useOwnerLabel();
-  const ownerLabel = account.foreignOwner ? ownerOf(account.ownerName) : t("ownerPersonal");
+  const freePart = freePartToShow(account.balances, account.totalBalances);
 
   return (
     <Card>
       <Flex direction="column" gap="3">
       <Flex justify="between" align="start" gap="3">
         <Flex direction="column" gap="1" flexGrow="1" minWidth="0">
-          <Flex align="center" gap="2" wrap="wrap">
-            <Text weight="medium">
-              {account.thirdParty ? t("creditOf", { name: account.name, person: account.thirdParty.personName }) : account.name}
-            </Text>
-            {account.ownerUserId && <PersonalMark label={ownerLabel} />}
-          </Flex>
+          <Text weight="medium">
+            {account.thirdParty ? t("creditOf", { name: account.name, person: account.thirdParty.personName }) : account.name}
+          </Text>
+          <AccountDetail account={account} />
           <PaidByLine account={account} />
-          {account.foreignOwner && (
-            <Text size="2" color="gray">
-              {ownerLabel}
-            </Text>
-          )}
-          {account.holderName && (
-            <Text size="2" color="gray">
-              {t("holderOf", { name: account.holderName })}
-            </Text>
-          )}
-          {account.institution && (
-            <Text size="2" color="gray">
-              {account.institution}
-            </Text>
-          )}
+          <FreePartWarning account={account} />
+          <PocketShortfall
+            account={account}
+            parentName={account.parentAccountId ? (names.get(account.parentAccountId) ?? null) : null}
+          />
+          <StaleCountLine stale={stale} onReconcile={onReconcile} />
           {/* The settlement currency is the figure the card leads with, and each
               other currency the account holds sits under it naming itself: no
               line here is the sum of two currencies (RF-124).
@@ -745,7 +807,7 @@ function AccountCard({
               {t("openingBalanceLabel")}
             </Text>
             <Text size="2" color="gray">
-              {t.rich("openingBalanceRow", {
+              {t.rich(showOpeningDate ? "openingBalanceRow" : "openingBalanceBare", {
                 amount: () => (
                   <Money
                     minor={account.initialBalanceCents}

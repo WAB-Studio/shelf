@@ -217,7 +217,7 @@ export function emailToMessage(email: Pick<InboundEmail, "subject" | "text" | "h
 // What a bank email wraps around the sentence a person acts on.
 const GREETING = /¡?\bhola,?\s+[\p{L}\s.*]{1,60}[!.,:]/giu;
 const SENDER_PREFIX =
-  /^(?:(?:todo sali[oó] bien con tus movimientos|alertas? y notificaciones)\s*)?(?:Bancolombia|Nequi|Davivienda|Lulo|ecollect)\s*:\s*/iu;
+  /^(?:alertas? y notificaciones\s*)?(?:[¡!]?\s*listo\s*[!.]*\s*)?(?:todo sali[oó] bien con tus movimientos\s*)?(?:Bancolombia|Nequi|Davivienda|Lulo|ecollect)\s*:\s*/iu;
 // «WILSON, transferiste…» and «WILSON PARADA pagaste…»: the person's own name ahead of the verb.
 const NAME_BEFORE_VERB =
   /^(?:\p{Lu}[\p{Lu}.]*,?\s+)+(?=(?:compraste|pagaste|transferiste|recibiste|retiraste)\b)/u;

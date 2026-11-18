@@ -5,9 +5,11 @@ import { useFormatter, useTranslations } from "next-intl";
 
 import { Button, Flex, Link, Panel, PanelBlock, ScreenHeader, Separator, Text } from "@/components/ui";
 import type { MonthReview } from "@/db/queries/month-review";
+import type { FixItem } from "@/lib/fund/home-lines";
 import { Link as LocaleLink } from "@/i18n/navigation";
 import { civilDateToDate, shiftMonth } from "@/lib/dates";
 
+import { FixLines } from "./fix-lines";
 import { MonthReviewRow } from "./month-review-row";
 
 type ReviewItem = MonthReview["items"][number];
@@ -28,17 +30,22 @@ function ReviewList({ items, creatorNames }: { items: ReviewItem[]; creatorNames
 }
 
 /**
- * «Revisar el mes» (RF-155): the closed month's items by the four fixed rules,
- * the ones still to look at first and the marked ones folded under «Revisados».
- * ‹ › step between closed months, from the first movement's to last month.
+ * «Revisar el mes» (RF-155): the month's items by the four fixed rules,
+ * the ones still to look at first and the marked ones folded under «Revisados»,
+ * under «Por arreglar» when the month is the current one. ‹ › step between months,
+ * from the first movement's to the current one. «Nada sobresale» only when both lists are empty.
  */
 export function MonthReviewScreen({
   review,
-  lastClosed,
+  lastMonth,
+  fixes,
   creatorNames,
 }: {
   review: MonthReview;
-  lastClosed: string;
+  // The newest month, the current one: nothing is reviewed ahead of it.
+  lastMonth: string;
+  // What is odd right now; empty for a month that is over.
+  fixes: FixItem[];
   creatorNames: Record<string, string>;
 }) {
   const t = useTranslations("review");
@@ -48,7 +55,7 @@ export function MonthReviewScreen({
   const prev = shiftMonth(review.month, -1);
   const next = shiftMonth(review.month, 1);
   const hasPrev = review.firstMonth !== null && prev >= review.firstMonth;
-  const hasNext = next <= lastClosed;
+  const hasNext = next <= lastMonth;
   const pending: ReviewItem[] = [];
   const reviewed: ReviewItem[] = [];
   for (const item of review.items) (item.reviewed ? reviewed : pending).push(item);
@@ -73,10 +80,12 @@ export function MonthReviewScreen({
         )}
       </Flex>
 
+      <FixLines items={fixes} />
+
       {review.items.length === 0 ? (
-        <Text as="p">{t(review.noted ? "empty" : "nothingNoted", { month: monthName })}</Text>
+        fixes.length === 0 && <Text as="p">{t(review.noted ? "empty" : "nothingNoted", { month: monthName })}</Text>
       ) : pending.length === 0 ? (
-        <Text as="p">{t("allDone", { month: monthName })}</Text>
+        fixes.length === 0 && <Text as="p">{t("allDone", { month: monthName })}</Text>
       ) : (
         <ReviewList items={pending} creatorNames={creatorNames} />
       )}

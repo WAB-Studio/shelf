@@ -168,8 +168,8 @@ test.describe("lint", () => {
 test.describe("dashboard band on a narrow phone", () => {
   const accountId = randomUUID();
 
-  // Owed in dollars, so the dollar net worth is the longest figure the card draws:
-  // «−US$ 1.222.222.221,23».
+  // Held in dollars, so what the accounts hold is the longest figure the card draws:
+  // «US$ 1.222.222.221,23».
   test.beforeAll(async () => {
     await asHarnessUser(async (tx) => {
       await tx`
@@ -177,8 +177,8 @@ test.describe("dashboard band on a narrow phone", () => {
           id, owner_user_id, name, kind, subtype, initial_balance_cents,
           initial_balance_on, settlement_currency)
         values (
-          ${accountId}, ${scope.userId}, ${`Dólares ${stamp}`}, 'liability', 'loan',
-          -122222222123, ${todayInBogota()}, 'USD')`;
+          ${accountId}, ${scope.userId}, ${`Dólares ${stamp}`}, 'asset', 'bank',
+          122222222123, ${todayInBogota()}, 'USD')`;
     });
   });
 
@@ -188,7 +188,7 @@ test.describe("dashboard band on a narrow phone", () => {
     });
   });
 
-  test("a billion-dollar net worth stays inside the net card @mobile", async ({
+  test("a billion-dollar balance stays inside the net card @mobile", async ({
     page,
   }, testInfo) => {
     test.skip(testInfo.project.name !== "mobile", "the phone's column");

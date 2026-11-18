@@ -3,7 +3,7 @@
 import { Plus } from "lucide-react";
 import { useTranslations } from "next-intl";
 
-import { useQuickEntry } from "@/components/transactions/quick-entry-provider";
+import { useMovementEntry } from "@/components/transactions/movement-entry-provider";
 import {
   Button,
   Card,
@@ -11,29 +11,26 @@ import {
   Flex,
   Panel,
   PanelButton,
-  TapTarget,
   Text,
 } from "@/components/ui";
 
-// The dashboard's one tap into expense quick entry (RF-22): a card that reads like
-// the sheet's field but raises it in place, no route change. The provider wraps
+// The dashboard's one tap into the movement form (RF-272): a card that reads like
+// the form's first field but raises it in place, no route change. The provider wraps
 // the app layout, so the hook is always in scope wherever this renders.
 //
-// `wide` is the row the Inicio artboard draws on the desktop: the same tap, plus
-// the income-or-transfer hand-off the sheet also offers (RF-18), which is a
-// button of its own so no control nests inside another.
+// `wide` is the row the Inicio artboard draws on the desktop.
 export function QuickEntryPill({
   variant = "compact",
 }: {
   variant?: "compact" | "wide" | "action";
 }) {
   const t = useTranslations("transactions");
-  const { openQuick, openFull } = useQuickEntry();
+  const { openForm } = useMovementEntry();
 
   // The empty list's call to action: the same tap as a plain button.
   if (variant === "action") {
     return (
-      <Button tap onClick={openQuick}>
+      <Button tap onClick={openForm}>
         <Plus size={16} strokeWidth={2.4} aria-hidden />
         {t("quickAction")}
       </Button>
@@ -44,7 +41,7 @@ export function QuickEntryPill({
     return (
       <Panel variant="inline">
         <Flex asChild align="center" gap="3" flexGrow="1" minWidth="0">
-          <PanelButton onClick={openQuick}>
+          <PanelButton onClick={openForm}>
             <CategoryTile
               color="var(--accent-9)"
               size={36}
@@ -55,20 +52,13 @@ export function QuickEntryPill({
             </Text>
           </PanelButton>
         </Flex>
-        <PanelButton onClick={openFull}>
-          <TapTarget align="center" px="1">
-            <Text size="2" weight="medium" color="violet">
-              {t("quickTypeLink")}
-            </Text>
-          </TapTarget>
-        </PanelButton>
       </Panel>
     );
   }
 
   return (
     <Card asChild>
-      <PanelButton variant="surface" onClick={openQuick}>
+      <PanelButton variant="surface" onClick={openForm}>
         <Flex align="center" gap="3">
           <CategoryTile
             color="var(--accent-9)"

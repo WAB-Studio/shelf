@@ -4,6 +4,7 @@ import { and, asc, eq, isNull, sql } from "drizzle-orm";
 
 import { getAccountBalances } from "@/db/queries/account-balances";
 import { listAccounts } from "@/db/queries/accounts";
+import type { AccountRow } from "@/db/queries/accounts";
 import { countInboxPending } from "@/db/queries/ingest-review";
 import { getMonthlyFlow } from "@/db/queries/reports/monthly-flow";
 import type { MonthlyFlow } from "@/db/queries/reports/monthly-flow";
@@ -32,6 +33,8 @@ export type CurrencyNetWorth = {
 
 export type DashboardData = {
   hasAccounts: boolean;
+  // The accounts net worth was folded from, hidden receivables included: the lines of Inicio read their own figures off them.
+  accounts: AccountRow[];
   netWorth: OwnerNetWorthNamed[];
   totalNetWorth: CurrencyNetWorth[];
   monthFlow: MonthlyFlow[];
@@ -114,7 +117,18 @@ export async function getDashboardData(): Promise<DashboardData> {
   // A group account is one bucket, never split across its members (RF-67); the
   // signed sum of derived balances IS net worth with no per-kind branch (RNF-05).
   // One bucket per owner AND currency, since an account holds several at once.
-  const buckets = netWorthByOwner(accounts, balances);
+  // The hidden «Me debe» of a credit somebody else pays counts what the credit still owes, the figure Inicio's lines
+  // and Cuentas' «Te deben» show, and never its own bookkeeping balance (RF-301).
+  const payerOwes = new Map(
+    accounts.flatMap((account) =>
+      account.internalOwesCents == null ? [] : [[account.id, { currency: account.settlementCurrency, cents: account.internalOwesCents }] as const],
+    ),
+  );
+  const counted = balances.map((balance) => {
+    const owes = payerOwes.get(balance.accountId);
+    return owes && owes.currency === balance.currency ? { ...balance, balanceCents: owes.cents } : balance;
+  });
+  const buckets = netWorthByOwner(accounts, counted);
 
   const netWorth: OwnerNetWorthNamed[] = buckets.map((bucket) => {
     if (bucket.bucket === "group") {
@@ -143,6 +157,7 @@ export async function getDashboardData(): Promise<DashboardData> {
 
   return {
     hasAccounts: accounts.some((account) => !account.internal),
+    accounts,
     netWorth,
     totalNetWorth,
     monthFlow,

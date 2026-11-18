@@ -3,7 +3,7 @@
 import { refresh } from "next/cache";
 
 import { handAccountToGroup, restoreAccount } from "@/db/queries/accounts";
-import { removeAccount, retireAccount, reviseAccount } from "@/db/queries/account-write";
+import { findLaterOpening, removeAccount, retireAccount, reviseAccount, startAccountEarlier } from "@/db/queries/account-write";
 import { openAccount } from "@/db/queries/ledger-write";
 import { ActionError } from "@/lib/errors";
 import { authActionClient } from "@/lib/safe-action";
@@ -11,7 +11,9 @@ import {
   archiveAccountSchema,
   createAccountSchema,
   deleteAccountSchema,
+  findLaterOpeningSchema,
   handAccountToGroupSchema,
+  moveOpeningEarlierSchema,
   restoreAccountSchema,
   updateAccountSchema,
 } from "@/lib/validation/account";
@@ -35,6 +37,23 @@ export const updateAccountAction = authActionClient
   .inputSchema(updateAccountSchema)
   .action(async ({ parsedInput }) => {
     await reviseAccount(parsedInput);
+
+    refresh();
+  });
+
+/**
+ * Which account a movement dated before its opening was refused by, for «¿Empezó antes?» (RF-303); a read, so it
+ * refreshes nothing.
+ */
+export const findLaterOpeningAction = authActionClient
+  .inputSchema(findLaterOpeningSchema)
+  .action(async ({ parsedInput }) => findLaterOpening(parsedInput));
+
+/** Moves an account's opening back to the day of a movement it refused (RF-303), so the movement can be saved. */
+export const moveOpeningEarlierAction = authActionClient
+  .inputSchema(moveOpeningEarlierSchema)
+  .action(async ({ parsedInput }) => {
+    await startAccountEarlier(parsedInput);
 
     refresh();
   });

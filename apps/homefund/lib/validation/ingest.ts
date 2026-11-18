@@ -21,12 +21,30 @@ export const acceptDeliverySchema = z
 
 export type AcceptDeliveryInput = z.infer<typeof acceptDeliverySchema>;
 
+// Several ready deliveries recorded in one write: each is the single accept's payload, so the same rules hold
+// for every one, and the batch is all or nothing.
+export const acceptDeliveriesSchema = z.object({
+  items: z.array(acceptDeliverySchema).min(1, { error: "ingest.errors.deliveryInvalid" }).max(50),
+});
+
 // Silencing rides on the rejection instead of standing alone: a shape is
 // silenced only by rejecting a delivery shaped like it (RF-92).
 export const rejectDeliverySchema = z.object({
   deliveryId: z.uuid({ error: "ingest.errors.deliveryInvalid" }),
   silenceShape: z.boolean(),
+  reason: z.literal("duplicate").optional(),
 });
+
+// The account or accounts a person picked on a pending card (RF-312), kept on the delivery.
+export const chooseDeliveryAccountsSchema = z
+  .object({
+    deliveryId: z.uuid({ error: "ingest.errors.deliveryInvalid" }),
+    accountId: z.uuid({ error: "ingest.errors.deliveryInvalid" }).optional(),
+    toAccountId: z.uuid({ error: "ingest.errors.deliveryInvalid" }).optional(),
+  })
+  .refine((input) => input.accountId !== undefined || input.toAccountId !== undefined, {
+    error: "ingest.errors.deliveryInvalid",
+  });
 
 // The only way out of `ambiguous`, so a merchant that was learned wrong can be
 // learned again from scratch (RF-94).

@@ -1,5 +1,10 @@
-import { isCivilDate } from "@/lib/dates";
+import { addCivilDays, isCivilDate } from "@/lib/dates";
 import { normalizeGroupMarks, parseAmount } from "@/lib/money";
+import {
+  categoryFromMemory,
+  categoryFromMerchant,
+  type PhraseMemory,
+} from "@/lib/transactions/merchant-category";
 
 // Quick entry reads one text field and proposes an editable movement (RF-22).
 // Everything it returns is a proposal the form may overwrite; a field is null
@@ -55,6 +60,35 @@ const OTHER_PARTY_BEFORE = /\b(?:a|de)\s+(?:la\s+)?(?:cuenta|llave|tarjeta)\s*$/
 // Colombian banks write the day first: `el 24/08/26 a las 18:31` and
 // `el 25/08/2026 a las 20:07` both name a day in August.
 const DATE_PATTERN = /\b(\d{1,2})\/(\d{1,2})\/(\d{4}|\d{2})\b/u;
+// A typed phrase may leave the year out («15/11») and name the day in words or as an ISO date (RF-273).
+const SHORT_DATE_PATTERN = /(?<![\d/])(\d{1,2})\/(\d{1,2})(?![\d/])/u;
+const ISO_DATE_PATTERN = /\b(\d{4})-(\d{2})-(\d{2})\b/u;
+const DAY_WORDS: [RegExp, number][] = [
+  [/(?<![\p{L}\p{N}_])anteayer(?![\p{L}\p{N}_])/iu, -2],
+  [/(?<![\p{L}\p{N}_])ayer(?![\p{L}\p{N}_])/iu, -1],
+  [/(?<![\p{L}\p{N}_])hoy(?![\p{L}\p{N}_])/iu, 0],
+];
+// «a 12 cuotas», «en 6 cuotas», «12 cuotas»: how many instalments a card purchase is split into (RF-273).
+const INSTALMENTS_PATTERN = /(?<![\p{L}\p{N}_])(?:(?:a|en)\s+)?(\d{1,2})\s+cuotas?(?![\p{L}\p{N}_])/iu;
+// A currency said in words beside the figure: «15,99 dólares», «usd 9», «US$15», «20 euros». «US$» sits
+// against its figure, so only the letters-and-word forms need a boundary after them.
+const CURRENCY_WORD =
+  /(?<![\p{L}\p{N}_])(?:us\$|(?:d[oó]lar(?:es)?|usd|euros?|eur)(?![\p{L}\p{N}_])|€)/iu;
+const CURRENCY_OF_WORD: [RegExp, string][] = [
+  [/^(?:us\$|d[oó]lar|usd)/iu, "USD"],
+  [/^(?:euro|eur|€)/iu, "EUR"],
+];
+// What a typed phrase says about the day, with the «el» that may lead a date.
+const DATE_WORDS_IN_TEXT = [
+  /(?<![\p{L}\p{N}_])(?:el\s+)?\d{4}-\d{2}-\d{2}(?![\d])/giu,
+  /(?<![\p{L}\p{N}_])(?:el\s+)?\d{1,2}\/\d{1,2}\/(?:\d{4}|\d{2})(?![\d/])/giu,
+  /(?<![\p{L}\p{N}_])(?:el\s+)?(?<![\d/])\d{1,2}\/\d{1,2}(?![\d/])/giu,
+  /(?<![\p{L}\p{N}_])(?:anteayer|ayer|hoy)(?![\p{L}\p{N}_])/giu,
+];
+
+// Thousands written with dots and then a second dot before one or two digits: «12.000.50» is either
+// «12.000,50» or «1.200.050», and a guess would move real money.
+const MARKS_AMBIGUOUS = /^\d{1,3}(?:\.\d{3})+\.\d{1,2}$/;
 
 interface InterpretContext {
   categories: { id: string; name: string; kind: string }[];
@@ -64,6 +98,10 @@ interface InterpretContext {
   // is no amount. «any»: a year-like run with no currency mark is none either (a bank email's
   // «caso 2026»). Typed quick entry leaves it off, so «2000 de bus» keeps its amount.
   yearGuard?: "dated" | "any";
+  // Today, as `YYYY-MM-DD`: only with it does a phrase read «hoy», «ayer» and a day without its year (RF-273).
+  today?: string;
+  // What the person typed before and where it went, newest first: tried before the common spends.
+  memory?: readonly PhraseMemory[];
 }
 
 // A spaced «M» with words after it («3 M arriendo») is not guessed: the person
@@ -74,6 +112,8 @@ export interface AmountAsk {
   token: string;
   // `fromWords` is false only for the digits as written (RF-155).
   choices: { cents: number; fromWords: boolean }[];
+  // Set when the question is the marks of a figure («12.000.50») and not a spoken multiplier (RF-274).
+  marks?: true;
 }
 
 interface QuickEntryProposal {
@@ -83,21 +123,47 @@ interface QuickEntryProposal {
   ask: AmountAsk | null;
   categoryId: string | null;
   description: string;
+  // A typed phrase without the figure, currency, day and instalments read from it; the category and account words stay.
+  phrase: string;
   accountId: string | null;
   direction: "income" | "expense" | null;
   occurredAt: string | null;
+  // The instalments a phrase asks («a 12 cuotas»), never read from a bank's message (RF-273).
+  instalments: number | null;
+  // The currency a typed phrase names in words («dólares», «usd», «euros»); null when it names none.
+  currency: "USD" | "EUR" | null;
 }
 
 // The day the message names, as `YYYY-MM-DD`; null when it names none or names
 // a day no month holds. Whether that day is in the future needs a clock (RF-98).
-function readOccurredAt(text: string): string | null {
+// With `today`, a phrase may also say «hoy», «ayer», «anteayer» or give a day and month alone, which
+// takes the latest year that is not in the future (RF-273).
+function readOccurredAt(text: string, today?: string): string | null {
+  const iso = ISO_DATE_PATTERN.exec(text);
+  if (iso && isCivilDate(iso[0])) return iso[0];
+
   const match = DATE_PATTERN.exec(text);
-  if (!match) return null;
+  if (match) {
+    const [, day, month, year] = match;
+    const civil = `${year.length === 2 ? `20${year}` : year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
 
-  const [, day, month, year] = match;
-  const civil = `${year.length === 2 ? `20${year}` : year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
+    return isCivilDate(civil) ? civil : null;
+  }
+  if (!today) return null;
 
-  return isCivilDate(civil) ? civil : null;
+  const short = SHORT_DATE_PATTERN.exec(text);
+  if (short) {
+    const [, day, month] = short;
+    const stamp = (year: number) =>
+      `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
+    const year = Number(today.slice(0, 4));
+    for (const candidate of [stamp(year), stamp(year - 1)]) {
+      if (isCivilDate(candidate) && candidate <= today) return candidate;
+    }
+  }
+
+  const word = DAY_WORDS.find(([pattern]) => pattern.test(text));
+  return word ? addCivilDays(today, word[1]) : null;
 }
 
 // The mantissa shifted by the multiplier's zeros, as whole pesos: the digits are
@@ -147,6 +213,27 @@ function phoneLike(run: string): boolean {
   return (digits.length === 10 && digits.startsWith("3")) || digits.startsWith("01800");
 }
 
+// The instalments a phrase names, only inside the range a deferral accepts.
+function readInstalments(text: string): number | null {
+  const match = INSTALMENTS_PATTERN.exec(text);
+  if (!match) return null;
+  const count = Number(match[1]);
+  return count >= 2 && count <= 72 ? count : null;
+}
+
+// The two readings of «12.000.50»: the dot before the last digits as a decimal mark, or every dot as a
+// thousands group. Each as stored cents; null when either does not read as one.
+function marksChoices(written: string): AmountAsk["choices"] | null {
+  const lastDot = written.lastIndexOf(".");
+  const decimal = parseAmount(`${written.slice(0, lastDot).replaceAll(".", "")},${written.slice(lastDot + 1)}`);
+  const thousands = parseAmount(written.replaceAll(".", ""));
+  if (decimal === null || thousands === null) return null;
+  return [
+    { cents: decimal, fromWords: false },
+    { cents: thousands, fromWords: false },
+  ];
+}
+
 // The standalone number that is the amount: a run glued to a letter («D1», «m2»)
 // or part of a date or a clock («24/08/26», «18:31») or a card mask is left in
 // the note. A run the text marks as money wins; then one the text says is a
@@ -169,12 +256,16 @@ function yearLike(text: string, match: RegExpMatchArray, guard: "dated" | "any")
   );
 }
 
+// An ISO code right before the figure («COP122.000,50», «USD 9,99»). Only the codes a bank prints for pesos or
+// the foreign purchases it converts: any three capitals would read a reference («DCB5FA06») as an amount.
+const CURRENCY_MARK = /(?<![\p{L}\d])(?:COP|USD|EUR|GBP|MXN|CAD|BRL|ARS|CLP|PEN)$/u;
+
 function findAmountToken(text: string, yearGuard?: "dated" | "any"): RegExpExecArray | null {
   // A currency mark right before the run («$», «COP122.000,50») says it is money
   // whatever else the text holds; the letters glue it to a word only otherwise.
   const markedBefore = (match: RegExpMatchArray): boolean => {
     const head = text.slice(0, match.index);
-    return /\$\s*$/.test(head) || /(?<![\p{L}\d])[A-Z]{3}$/u.test(head);
+    return /\$\s*$/.test(head) || CURRENCY_MARK.test(head);
   };
   const candidates = [...text.matchAll(AMOUNT_PATTERN)].filter((match) => {
     const before = text[match.index - 1] ?? "";
@@ -263,13 +354,19 @@ export function interpretQuickEntry(
   ctx: InterpretContext,
 ): QuickEntryProposal {
   const lower = text.toLowerCase();
+  // The words that name a day or a number of instalments hold digits that are no amount; they are blanked,
+  // same length, so every index below still points into `text`.
+  const instalments = readInstalments(text);
+  const scan = text
+    .replace(INSTALMENTS_PATTERN, (found) => " ".repeat(found.length))
+    .replace(ISO_DATE_PATTERN, (found) => " ".repeat(found.length));
 
   // The earliest of a digit run, a bare «mil» and a bare «millón» is the amount.
   const amountMatch =
     [
-      findAmountToken(text, ctx.yearGuard),
-      BARE_THOUSAND_PATTERN.exec(text),
-      BARE_MILLION_PATTERN.exec(text),
+      findAmountToken(scan, ctx.yearGuard),
+      BARE_THOUSAND_PATTERN.exec(scan),
+      BARE_MILLION_PATTERN.exec(scan),
     ]
       .filter((match) => match !== null)
       .sort((a, b) => a.index - b.index)[0] ?? null;
@@ -312,7 +409,16 @@ export function interpretQuickEntry(
     }
   }
 
-  const amountPesos = !amountMatch || isAsk
+  // «12.000.50» asks which of its two readings is meant (RF-274), with no amount proposed meanwhile.
+  const marksAsk =
+    ask === null && !isAsk && amountMatch && !multiplierMatch && MARKS_AMBIGUOUS.test(amountMatch[0])
+      ? marksChoices(amountMatch[0])
+      : null;
+  if (marksAsk) {
+    ask = { token: amountMatch![0], choices: marksAsk, marks: true };
+  }
+
+  const amountPesos = !amountMatch || isAsk || marksAsk
     ? null
     : bareWord !== null
       ? BARE_MILLION_PATTERN.test(bareWord)
@@ -345,12 +451,12 @@ export function interpretQuickEntry(
       ? prefixWord(text, namedAccounts[0].name)
       : null;
 
-  // The first category whose name reads as a substring of the text; the token
-  // it matched drops out of the description below.
+  // The first category whose name reads in the text as whole words, so «vivienda» is never found inside
+  // «Davivienda»; the token it matched drops out of the description below.
   const substringCategory =
     ctx.categories.find((category) => {
       const name = category.name.trim().toLowerCase();
-      return name.length > 0 && lower.includes(name);
+      return name.length > 0 && new RegExp(`(?<![\\p{L}\\p{N}])${escapeRegExp(name)}(?![\\p{L}\\p{N}])`, "u").test(lower);
     }) ?? null;
   // Failing that, the one category a word of the text begins a word of.
   const namedCategories = substringCategory
@@ -358,11 +464,29 @@ export function interpretQuickEntry(
     : ctx.categories.filter(
         (category) => prefixWord(text, category.name) !== null,
       );
+  // Then what the person did before (RF-273), then a category one of whose words starts a word of the text, and
+  // last what everyone calls a common spend: none of them needs the category's whole name in the text.
+  const rememberedId =
+    substringCategory || !ctx.memory
+      ? null
+      : categoryFromMemory(text, ctx.memory, ctx.categories);
+  const remembered = rememberedId
+    ? (ctx.categories.find((category) => category.id === rememberedId) ?? null)
+    : null;
+  const merchantId =
+    substringCategory || remembered || namedCategories.length === 1
+      ? null
+      : categoryFromMerchant(text, ctx.categories);
+  const merchant = merchantId
+    ? (ctx.categories.find((category) => category.id === merchantId) ?? null)
+    : null;
   const matchedCategory =
     substringCategory ??
-    (namedCategories.length === 1 ? namedCategories[0] : null);
+    remembered ??
+    (namedCategories.length === 1 ? namedCategories[0] : null) ??
+    merchant;
   const namedCategoryWord =
-    !substringCategory && matchedCategory
+    !substringCategory && !remembered && !merchant && matchedCategory
       ? prefixWord(text, matchedCategory.name)
       : null;
 
@@ -375,7 +499,9 @@ export function interpretQuickEntry(
       amountEnd + ((isAsk ? tokenMatch : multiplierMatch)?.[0].length ?? 0);
     description = `${text.slice(0, amountMatch.index)} ${text.slice(cutEnd)}`;
   }
-  if (matchedCategory) {
+  // The words as typed, minus the figures read from them: the category and account words stay.
+  let phrase = description;
+  if (matchedCategory && !remembered && !merchant) {
     const token = namedCategoryWord ?? matchedCategory.name.trim();
     description = description.replace(new RegExp(escapeRegExp(token), "i"), " ");
   }
@@ -385,6 +511,25 @@ export function interpretQuickEntry(
       " ",
     );
   }
+  // A typed phrase keeps only the words it did not use as a figure: the currency, the day and the
+  // instalments it read leave the description too. A bank's message keeps its text.
+  const typed = ctx.today !== undefined;
+  const currencyWord = typed ? CURRENCY_WORD.exec(text)?.[0] : undefined;
+  const currency = currencyWord
+    ? ((CURRENCY_OF_WORD.find(([pattern]) => pattern.test(currencyWord))?.[1] ?? null) as "USD" | "EUR" | null)
+    : null;
+  const dropReadWords = (value: string): string => {
+    if (!typed) return value;
+    let kept = value.replace(new RegExp(CURRENCY_WORD.source, "giu"), " ");
+    if (amountMatch) kept = kept.replace(/\$\s*(?=\s|$)/u, " ");
+    kept = kept.replace(INSTALMENTS_PATTERN, " ");
+    if (readOccurredAt(text, ctx.today) !== null) {
+      for (const pattern of DATE_WORDS_IN_TEXT) kept = kept.replace(pattern, " ");
+    }
+    return kept;
+  };
+  description = dropReadWords(description);
+  phrase = dropReadWords(phrase).replace(/\s+/g, " ").trim();
   description = description.replace(/\s+/g, " ").trim();
 
   return {
@@ -393,9 +538,12 @@ export function interpretQuickEntry(
     ask,
     categoryId: matchedCategory?.id ?? null,
     description,
+    phrase,
     // A uniquely named bank tail outranks the last-used fallback (RF-97, RF-22).
     accountId: matchedAccountId ?? ctx.defaultAccountId,
     direction,
-    occurredAt: readOccurredAt(text),
+    occurredAt: readOccurredAt(text, ctx.today),
+    instalments,
+    currency,
   };
 }

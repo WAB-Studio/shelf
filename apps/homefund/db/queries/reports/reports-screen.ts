@@ -18,6 +18,8 @@ import type {
 } from "@/db/queries/reports/contributions";
 import { getExpensesByCategory } from "@/db/queries/reports/expenses-by-category";
 import type { CategoryExpense } from "@/db/queries/reports/expenses-by-category";
+import { getSpendingForPersons } from "@/db/queries/reports/spending-for-person";
+import type { PersonExpense } from "@/db/queries/reports/spending-for-person";
 import { getSixMonthFlow } from "@/db/queries/reports/monthly-flow";
 import type { MonthFlow } from "@/db/queries/reports/monthly-flow";
 import { getSessionUser } from "@/db/session";
@@ -44,6 +46,8 @@ export type ReportsData = {
   unassigned: UnassignedIncome[];
   // Who spent how much in the month, by «Lo hizo» (RF-182); the member's name is null for the household.
   spendingByMaker: (SpendingByMaker & { name: string | null })[];
+  // What was spent for each person in the month, by «Para quién» (RF-242); empty when nobody was.
+  spendingForPersons: PersonExpense[];
   hasGroup: boolean;
 };
 
@@ -66,7 +70,7 @@ export async function getReportsData(monthStart: string = currentMonthStart()): 
     members: found ? await listMembers(found.id, { archived: "all" }) : [],
   }));
 
-  const [expensesByCategory, sixMonthFlow, contributionRows, fundCash, fundSpending, unassigned, makerRows, { group, members }, sessionUser] =
+  const [expensesByCategory, sixMonthFlow, contributionRows, fundCash, fundSpending, unassigned, makerRows, spendingForPersons, { group, members }, sessionUser] =
     await Promise.all([
       getExpensesByCategory(monthRange(monthStart)),
       getSixMonthFlow(monthStart),
@@ -75,6 +79,7 @@ export async function getReportsData(monthStart: string = currentMonthStart()): 
       getFundSpending(monthRange(monthStart)),
       getUnassignedIncome(monthRange(monthStart)),
       getSpendingByMaker(monthRange(monthStart)),
+      getSpendingForPersons(monthRange(monthStart)),
       groupAndMembers,
       getSessionUser(),
     ]);
@@ -99,6 +104,7 @@ export async function getReportsData(monthStart: string = currentMonthStart()): 
       ...row,
       name: row.memberId ? (nameByMemberId.get(row.memberId) ?? null) : null,
     })),
+    spendingForPersons,
     hasGroup: group !== null,
   };
 }

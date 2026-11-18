@@ -32,6 +32,8 @@ export const debtTerms = finances.table(
     creditLimitCents: bigint({ mode: "number" }),
     statementCutOffDay: smallint(),
     paymentDueDay: smallint(),
+    // How many monthly cuotas an instalment loan was taken for (RF-286); null for a card or a loan that names none.
+    termMonths: smallint(),
     avalCents: bigint({ mode: "number" }),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
@@ -67,6 +69,10 @@ export const debtTerms = finances.table(
     check(
       "debt_terms_payment_due_day_valid",
       sql`${table.paymentDueDay} is null or ${table.paymentDueDay} between 1 and 31`,
+    ),
+    check(
+      "debt_terms_term_months_valid",
+      sql`${table.termMonths} is null or ${table.termMonths} between 1 and 600`,
     ),
     // Readable and writable exactly when the account it profiles is — the scope is the account's.
     pgPolicy("debt_terms_select", {

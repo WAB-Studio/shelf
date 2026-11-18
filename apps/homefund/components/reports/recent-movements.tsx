@@ -13,6 +13,7 @@ import {
 } from "@/components/ui";
 import type { TransactionListRow } from "@/db/queries/transactions";
 import { civilDateToDate } from "@/lib/dates";
+import type { TransferNarration } from "@/lib/transactions/transfer-words";
 
 // A transfer carries neither category nor sign; an income and an expense read
 // their first split's category and lean on the kind word only when none is set.
@@ -38,8 +39,11 @@ export function RecentMovements({
   accountNames,
   categoryNames,
   categoryColors,
+  transfers,
 }: {
   rows: TransactionListRow[];
+  // A transfer in a person's words (RF-272), by movement id.
+  transfers: Map<string, TransferNarration>;
   kindLabels: KindLabels;
   accountNames: Map<string, string>;
   categoryNames: Map<string, string>;
@@ -75,7 +79,7 @@ export function RecentMovements({
                 <CategoryTile
                   color={rowColor(row, categoryColors)}
                   size={36}
-                  name={rowTitle(row, categoryNames, kindLabels)}
+                  name={rowTitle(row, categoryNames, kindLabels, transfers)}
                   transfer={row.kind === "transfer" || row.reconciliationId !== null}
                 />
               ),
@@ -85,10 +89,10 @@ export function RecentMovements({
               content: (
                 <Flex direction="column" minWidth="0">
                   <Text size="2" weight="medium" truncate>
-                    {row.description || rowTitle(row, categoryNames, kindLabels)}
+                    {row.description || rowTitle(row, categoryNames, kindLabels, transfers)}
                   </Text>
                   <Text size="1" color="gray" truncate>
-                    {rowCaption(row, categoryNames, accountNames, kindLabels)}
+                    {rowCaption(row, categoryNames, accountNames, kindLabels, transfers)}
                   </Text>
                 </Flex>
               ),
@@ -138,9 +142,10 @@ export function rowTitle(
   row: TransactionListRow,
   categoryNames: Map<string, string>,
   kindLabels: KindLabels,
+  transfers?: Map<string, TransferNarration>,
 ): string {
   if (row.reconciliationId !== null) return kindLabels.adjustment;
-  if (row.kind === "transfer") return kindLabels.transfer;
+  if (row.kind === "transfer") return transfers?.get(row.id)?.title ?? kindLabels.transfer;
   const first = row.splits[0]?.categoryId;
   const fallback = row.kind === "income" ? kindLabels.income : kindLabels.expense;
   return (first && categoryNames.get(first)) || fallback;
@@ -153,10 +158,11 @@ export function rowCaption(
   categoryNames: Map<string, string>,
   accountNames: Map<string, string>,
   kindLabels: KindLabels,
+  transfers?: Map<string, TransferNarration>,
 ): string | undefined {
-  const account = rowSubtitle(row, accountNames);
+  const account = rowSubtitle(row, accountNames, transfers);
   if (!row.description) return account;
-  return [rowTitle(row, categoryNames, kindLabels), account]
+  return [rowTitle(row, categoryNames, kindLabels, transfers), account]
     .filter(Boolean)
     .join(" · ");
 }
@@ -166,12 +172,15 @@ export function rowCaption(
 export function rowSubtitle(
   row: TransactionListRow,
   accountNames: Map<string, string>,
+  transfers?: Map<string, TransferNarration>,
 ): string | undefined {
   if (row.reconciliationId !== null) {
     const accountId = row.toAccountId ?? row.fromAccountId;
     return (accountId && accountNames.get(accountId)) ?? undefined;
   }
   if (row.kind === "transfer") {
+    const narrated = transfers?.get(row.id);
+    if (narrated) return narrated.account;
     const from = (row.fromAccountId && accountNames.get(row.fromAccountId)) ?? "";
     const to = (row.toAccountId && accountNames.get(row.toAccountId)) ?? "";
     return `${from} → ${to}`;

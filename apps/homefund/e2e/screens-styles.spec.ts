@@ -44,9 +44,8 @@ const SCREEN_FILES = [
   "components/planning/debts-screen.tsx",
   "components/planning/goals-screen.tsx",
   "components/planning/goals-table.tsx",
-  "components/planning/payments-screen.tsx",
   "components/planning/planning-hub.tsx",
-  "components/planning/recurring-screen.tsx",
+  "components/planning/upcoming-screen.tsx",
   "components/transactions/movement-form.tsx",
   "components/transactions/split-editor.tsx",
 ];
@@ -383,7 +382,7 @@ test.describe("inbox", () => {
 });
 
 test.describe("lint", () => {
-  test("the 17 files pass the screen rule with no debt entry", async () => {
+  test("the 16 files pass the screen rule with no debt entry", async () => {
     test.setTimeout(120_000);
 
     const { default: config } = await import("../eslint.config.mjs");
