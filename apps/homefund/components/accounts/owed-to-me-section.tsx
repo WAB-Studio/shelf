@@ -75,8 +75,8 @@ export function OwedToMeSection({ owed }: { owed: OwedCurrency[] }) {
   ];
 
   return (
-    <Box role="region" aria-label={t("sectionTitle")}>
-      <Box display={{ initial: "none", lg: "block" }}>
+    <>
+      <Box role="region" aria-label={t("sectionTitle")} display={{ initial: "none", lg: "block" }}>
         <DataTable
           label={t("sectionTitle")}
           columns={columns}
@@ -84,7 +84,7 @@ export function OwedToMeSection({ owed }: { owed: OwedCurrency[] }) {
           rowKey={(person) => person.key}
         />
       </Box>
-      <Box display={{ initial: "block", lg: "none" }}>
+      <Box role="region" aria-label={t("sectionTitle")} display={{ initial: "block", lg: "none" }}>
         <Flex direction="column" gap="3">
           <Text size="2" weight="bold" color="gray">
             {t("sectionTitle")}
@@ -103,6 +103,6 @@ export function OwedToMeSection({ owed }: { owed: OwedCurrency[] }) {
         </Flex>
       </Box>
       {open && <OwedBreakdownDialog person={open} onOpenChange={(next) => !next && setOpen(null)} />}
-    </Box>
+    </>
   );
 }
