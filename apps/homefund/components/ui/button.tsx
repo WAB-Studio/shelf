@@ -20,6 +20,8 @@ type TapProp = {
   tap?: boolean;
   // Shares the free space of the row it sits in with its siblings.
   grow?: boolean;
+  // Reads as a word of the line around it, not as a control with a box; never holds the floor.
+  inline?: boolean;
 };
 
 function withTap(tap: boolean, className: string | undefined): string | undefined {
@@ -28,7 +30,7 @@ function withTap(tap: boolean, className: string | undefined): string | undefine
 }
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps & TapProp>(
-  function Button({ tap = true, grow, className, style, radius = "full", ...props }, ref) {
+  function Button({ tap = true, grow, inline, className, style, radius = "full", ...props }, ref) {
     // Pill-shaped by default: the brand's button (DESIGN.md «Violeta y lima»).
     return (
       <ThemesButton
@@ -36,7 +38,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps & TapProp>(
         radius={radius}
         {...props}
         style={grow ? { flex: 1, ...style } : style}
-        className={withTap(tap, className)}
+        className={inline ? (className ? `${styles.inline} ${className}` : styles.inline) : withTap(tap, className)}
       />
     );
   },

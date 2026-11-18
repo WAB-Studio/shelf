@@ -81,7 +81,7 @@ test("spending for a charged person and noting his return shows what is still ow
     await page.keyboard.press("Escape");
 
     await page.goto("/es/settings/accounts");
-    await expect(page.getByRole("region", { name: owed.sectionTitle })).toContainText(carlos);
+    await expect(page.getByRole("region", { name: owed.sectionTitle }).filter({ visible: true })).toContainText(carlos);
   } finally {
     await fixtureSql`delete from transactions where id = any(${movements})`;
     await fixtureSql`delete from labels where id = ${ids.carlos}`;

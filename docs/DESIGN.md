@@ -964,3 +964,21 @@ Las palabras primero. Quien abre Inicio contesta en voz alta, sin saber cómo es
   Ahorros» que lo mueve de un toque. En el celular, «Saldo inicial … el 1/10/2026» dice su fecha en la primera tarjeta de cada fecha.
 - **Chicos.** Sin fondo no hay «Aportes del mes». «Crear cuenta» de un Inicio vacío abre el formulario. «Crear un fondo» lleva debajo
   «Un fondo es una cuenta compartida: invitas a otras personas y llevan juntos los gastos del hogar.»
+
+## Decisión del 2026-11-18: Cuentas se lee de una pieza, por el usuario («se ve feo ahí»)
+
+Lo que la persona vio en Cuentas: la banda de «Tarjetas de crédito» sumaba en positivo y cada fila de abajo estaba en negativo; el
+crédito se llamaba «Crédito Trabajo Lulo (John)» y debajo decía «Lo paga John»; la cifra de esa línea salía más chica que las
+palabras; y «Te deben» era texto suelto bajo la tabla. Solo presentación y palabras.
+
+- **La banda y sus filas dicen lo mismo.** Una deuda se lee como lo que se debe, con su menos, en la banda y en cada fila:
+  «Tarjetas de crédito −$10.602.491» sobre filas de −$8.542.187. La banda es la suma de sus filas, con el signo de ellas. La
+  tarjeta «Lo que debo» de arriba sigue siendo la magnitud, porque su rótulo ya dice que es lo que se debe.
+- **El crédito de otro se llama como la cuenta.** Sale el « (John)» pegado al nombre; «Lo paga John · le falta $2.693.622» ya lo
+  dice. Esto reemplaza la fila «Crédito Trabajo Lulo (John)» de la decisión del 2026-11-11 (segunda).
+- **Una línea es una línea.** La cifra dentro de «le falta $X» es del mismo tamaño y de la misma línea base que las palabras:
+  sigue siendo un botón que abre el desglose, pero sin caja, sin relleno y con la letra de la línea.
+- **«Te deben» es un grupo de la misma tabla.** Con la misma banda («Te deben»), las mismas columnas de Nombre y Saldo y la misma
+  alineación; el nombre abre lo que abría y la cifra, en la tinta de cualquier saldo, abre su desglose. En el celular son
+  tarjetas, como las cuentas.
+- **Sin desborde.** A 390 y a 360 de ancho no hay barra horizontal y cada cifra se lee entera.
