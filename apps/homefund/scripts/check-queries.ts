@@ -21496,17 +21496,19 @@ async function mcpReceivableSuite(): Promise<void> {
   const { tool } = mcpClient(POST, token);
   const subtypeOf = async (id: string) => (await fixtureSql<{ subtype: string; kind: string }[]>`select subtype, kind from accounts where id = ${id}`)[0];
 
-  const owes = await tool("create_account", { name: name("me debe"), kind: "asset", subtype: "receivable", openingBalanceCents: 0, balanceOn: "2026-01-01" });
-  const owesId = (owes.value as { accountId: string }).accountId;
+  // RF-319: Claude no longer opens a receivable; the account a person made by hand (RF-255) is still read and still moves money.
+  const refused = await tool("create_account", { name: name("me debe"), kind: "asset", subtype: "receivable", openingBalanceCents: 0, balanceOn: "2026-01-01" });
+  const owesId = randomUUID();
+  await fixtureSql`
+    insert into accounts (id, owner_user_id, name, kind, subtype, initial_balance_cents, initial_balance_on)
+    values (${owesId}, ${owner.id}, ${name("me debe")}, 'asset', 'receivable', 0, '2026-01-01')`;
   track("accounts", owesId);
   const listed = ((await tool("list_accounts")).value as { id: string; subtype: string }[]).find((row) => row.id === owesId);
-  const onLiability = await tool("create_account", { name: name("mal"), kind: "liability", subtype: "receivable", openingBalanceCents: 0, balanceOn: "2026-01-01" });
   const unknown = await tool("create_account", { name: name("raro"), kind: "asset", subtype: "savings", openingBalanceCents: 0, balanceOn: "2026-01-01" });
   assert(
-    next("RF-255: create_account opens an asset of subtype receivable, list_accounts reads it so, and a receivable on a liability or an unknown subtype is refused"),
-    !owes.isError && (await subtypeOf(owesId))?.subtype === "receivable" && listed?.subtype === "receivable" &&
-      onLiability.isError && (onLiability.value as { error: string }).error === es.accounts.errors.subtypeKindMismatch && unknown.isError,
-    `opened ${JSON.stringify(owes.value)}, listed ${JSON.stringify(listed)}, liability ${JSON.stringify(onLiability.value)}, unknown ${JSON.stringify(unknown.value)}`,
+    next("RF-255, RF-319: create_account refuses a receivable and points at create_person, forPerson and fromPerson, list_accounts still reads one made by hand, and an unknown subtype is refused"),
+    refused.isError && (refused.value as { error: string }).error === es.mcp.errors.personOwesIsNotAnAccount && listed?.subtype === "receivable" && unknown.isError,
+    `refused ${JSON.stringify(refused.value)}, listed ${JSON.stringify(listed)}, unknown ${JSON.stringify(unknown.value)}`,
   );
 
   const category = randomUUID();
