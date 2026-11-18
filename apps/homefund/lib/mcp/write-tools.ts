@@ -30,6 +30,7 @@ import { ActionError } from "@/lib/errors";
 import { CATEGORY_COLORS } from "@/lib/fund/category-color";
 import { ADD, ADD_ONCE, DESTROY, OVERWRITE, READ, previousFields, titled } from "@/lib/mcp/annotations";
 import { categoryNameWarnings, movementWarnings, withWarnings, type Probe } from "@/lib/mcp/debt-guard";
+import { personOwesAccount } from "@/lib/mcp/debt-words";
 import { resolveLabelIds, resolvePersonId } from "@/lib/mcp/label-tools";
 import { parseForm } from "@/lib/mcp/parse-form";
 import { todayInBogota } from "@/lib/dates";
@@ -444,7 +445,9 @@ export function registerLedgerTools(server: McpServer, run: Run, t: Say): void {
     },
     (input: Record<string, string | number | null | undefined>, ctx) =>
       run(ctx, async (owner) => {
-        const { openingBalanceCents, ...rest } = input as { openingBalanceCents: number };
+        const { openingBalanceCents, ...rest } = input as { openingBalanceCents: number; subtype: string; name: string };
+        // What another person owes the person is a person's «Ya te debía», a forPerson expense or a fromPerson income, never an account (RF-319).
+        if (personOwesAccount(rest.subtype, rest.name)) throw new ActionError("mcp.errors.personOwesIsNotAnAccount");
         return openAccount(parseForm(createAccountSchema, { ...rest, amount: centsToDecimal(openingBalanceCents) }), owner);
       }),
   );

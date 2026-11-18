@@ -6,7 +6,18 @@ import { insertRow } from "@/db/insert-row";
 import { callerGroupId, callerGroupInfo } from "@/db/queries/groups";
 import { type LabelKind, labels } from "@/db/schema";
 import type { Transaction } from "@/db/session";
+import type { CurrencyCode } from "@/lib/currency";
 import { requireUser, withUserDb, withUserDbOrTx } from "@/db/session";
+
+// What a person already owed before any movement here (RF-319), in integer cents.
+export type AlreadyOwedRow = { cents: number; currency: CurrencyCode; since: string };
+
+// The three columns, all set or none; the database holds the same rule.
+function owedFromColumns(row: { cents: number | null; currency: string | null; since: string | null }): AlreadyOwedRow | null {
+  return row.cents === null || row.currency === null || row.since === null
+    ? null
+    : { cents: row.cents, currency: row.currency as CurrencyCode, since: row.since };
+}
 
 // A label set is read and written for one scope at a time: a user's personal set
 // or a group's (RF-70). The scope decides which of the XOR columns is set.
@@ -23,7 +34,7 @@ export type LabelRow = {
 
 // A row carries the scope it was read from: a movement's labels must share its
 // scope (RF-70), and the picker tells the two sets apart with no second lookup.
-export type ScopedLabelRow = LabelRow & { scope: "personal" | "group" };
+export type ScopedLabelRow = LabelRow & { scope: "personal" | "group"; alreadyOwed: AlreadyOwedRow | null };
 
 // The management screen's row: the label plus what would break if it went away
 // (RF-70). Both counts derive from the join and the budgets narrowing on it, and
@@ -34,6 +45,7 @@ export type LabelManagementRow = {
   color: string | null;
   kind: LabelKind;
   chargeDefault: boolean;
+  alreadyOwed: AlreadyOwedRow | null;
   // How many transactions wear the label, through `transaction_labels`.
   movementCount: number;
   budgetCount: number;
@@ -45,6 +57,8 @@ export type UpdateLabelArgs = {
   color: string | null;
   // `undefined` leaves «se le cobra» alone; a tag keeps false whatever is asked.
   chargeDefault?: boolean;
+  // `undefined` leaves it alone, `null` removes it; a value also turns «se le cobra» on (RF-319).
+  alreadyOwed?: AlreadyOwedRow | null;
 };
 
 export type CreateLabelArgs = {
@@ -53,6 +67,7 @@ export type CreateLabelArgs = {
   color: string | null;
   kind?: LabelKind;
   chargeDefault?: boolean;
+  alreadyOwed?: AlreadyOwedRow | null;
 };
 
 function scopeWhere(scope: LabelScope) {
@@ -95,14 +110,18 @@ export async function listScopedLabels(
         color: labels.color,
         kind: labels.kind,
         chargeDefault: labels.chargeDefault,
+        alreadyOwedCents: labels.alreadyOwedCents,
+        alreadyOwedCurrency: labels.alreadyOwedCurrency,
+        alreadyOwedSince: labels.alreadyOwedSince,
         ownerUserId: labels.ownerUserId,
       })
       .from(labels)
       .where(or(eq(labels.ownerUserId, userId), eq(labels.groupId, callerGroupId(userId))))
       .orderBy(asc(sql`${labels.ownerUserId} is null`), asc(labels.name));
 
-    return rows.map(({ ownerUserId, ...label }) => ({
+    return rows.map(({ ownerUserId, alreadyOwedCents, alreadyOwedCurrency, alreadyOwedSince, ...label }) => ({
       ...label,
+      alreadyOwed: owedFromColumns({ cents: alreadyOwedCents, currency: alreadyOwedCurrency, since: alreadyOwedSince }),
       scope: ownerUserId === null ? ("group" as const) : ("personal" as const),
     }));
   });
@@ -141,12 +160,20 @@ export async function listManagedLabels(
         color: labels.color,
         kind: labels.kind,
         chargeDefault: labels.chargeDefault,
+        alreadyOwedCents: labels.alreadyOwedCents,
+        alreadyOwedCurrency: labels.alreadyOwedCurrency,
+        alreadyOwedSince: labels.alreadyOwedSince,
         movementCount,
         budgetCount,
       })
       .from(labels)
       .where(scopeWhere(scope))
       .orderBy(asc(labels.name)),
+  ).then((rows) =>
+    rows.map(({ alreadyOwedCents, alreadyOwedCurrency, alreadyOwedSince, ...row }) => ({
+      ...row,
+      alreadyOwed: owedFromColumns({ cents: alreadyOwedCents, currency: alreadyOwedCurrency, since: alreadyOwedSince }),
+    })),
   );
 }
 
@@ -171,6 +198,7 @@ export async function createLabel({
   color,
   kind = "tag",
   chargeDefault = false,
+  alreadyOwed = null,
 }: CreateLabelArgs): Promise<{ labelId: string }> {
   const ownerUserId = "ownerUserId" in scope ? scope.ownerUserId : null;
   const groupId = "groupId" in scope ? scope.groupId : null;
@@ -179,7 +207,17 @@ export async function createLabel({
     const [row] = await insertRow(
       tx,
       labels,
-      { ownerUserId, groupId, name, color, kind, chargeDefault },
+      {
+        ownerUserId,
+        groupId,
+        name,
+        color,
+        kind,
+        chargeDefault: chargeDefault || alreadyOwed !== null,
+        alreadyOwedCents: alreadyOwed?.cents ?? null,
+        alreadyOwedCurrency: alreadyOwed?.currency ?? null,
+        alreadyOwedSince: alreadyOwed?.since ?? null,
+      },
       { returning: { id: labels.id } },
     );
 
@@ -194,6 +232,7 @@ export async function updateLabel({
   name,
   color,
   chargeDefault,
+  alreadyOwed,
 }: UpdateLabelArgs): Promise<boolean> {
   return withUserDb(async (tx) => {
     const rows = await tx
@@ -201,9 +240,19 @@ export async function updateLabel({
       .set({
         name,
         color,
-        ...(chargeDefault === undefined
+        ...(alreadyOwed === undefined
           ? {}
-          : { chargeDefault: sql`${labels.kind} = 'person' and ${chargeDefault}` }),
+          : {
+              alreadyOwedCents: alreadyOwed?.cents ?? null,
+              alreadyOwedCurrency: alreadyOwed?.currency ?? null,
+              alreadyOwedSince: alreadyOwed?.since ?? null,
+            }),
+        // A value for what they already owed makes the person «se le cobra»; a tag stays false either way.
+        ...(alreadyOwed
+          ? { chargeDefault: sql`${labels.kind} = 'person'` }
+          : chargeDefault === undefined
+            ? {}
+            : { chargeDefault: sql`${labels.kind} = 'person' and ${chargeDefault}` }),
       })
       .where(eq(labels.id, labelId))
       .returning({ id: labels.id });

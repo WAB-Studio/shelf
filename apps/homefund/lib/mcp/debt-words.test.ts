@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { codeOf, debtLikeName, type Probe } from "./debt-words";
+import { codeOf, debtLikeName, personOwesAccount, type Probe } from "./debt-words";
 
 const labels = new Map([
   ["deudas", "Deudas"],
@@ -49,5 +49,16 @@ describe("codeOf", () => {
     assert.equal(codeOf(probe("expense", "Ara — Champiñón 250 g", "lacteos"), labels), null);
     assert.equal(codeOf(probe("expense", "Café (tarjeta débito)", "mercado"), labels), null);
     assert.equal(codeOf(probe("income", "Nómina"), labels), null);
+  });
+});
+
+describe("personOwesAccount", () => {
+  it("reads a receivable and a name that says «Me debe …» as what a person owes, however it is spelled", () => {
+    assert.equal(personOwesAccount("receivable", "Cuenta"), true);
+    for (const name of ["Me debe Yulieth", "  me debe mamá", "ME DEBE Carlos"]) assert.equal(personOwesAccount("bank", name), true, name);
+  });
+
+  it("leaves an ordinary account alone", () => {
+    for (const name of ["Bancolombia", "Efectivo", "Medebe SAS"]) assert.equal(personOwesAccount("bank", name), false, name);
   });
 });

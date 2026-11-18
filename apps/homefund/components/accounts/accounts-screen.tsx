@@ -68,7 +68,7 @@ type Figure = { currency: CurrencyCode; cents: number };
 type Section = {
   key: "accounts" | "receivables" | "cards" | "loans";
   label: string;
-  // Whether the section adds up what is owed: its figures then carry the debt as a positive number.
+  // Whether the section adds up what is owed: its figures then carry the debt with its minus, as its rows do.
   owes: boolean;
   rows: AccountRow[];
   figures: Figure[];
@@ -76,13 +76,12 @@ type Section = {
 
 // A figure per currency, never one sum across currencies (RF-124), always in the
 // same alphabetical order so every tile and band reads alike. Each row's
-// `balances` is its own free part, so a pocket and its parent add up once;
-// `sign` -1 turns a liability's negative cents into the debt they stand for.
-function sumByCurrency(rows: AccountRow[], sign: 1 | -1 = 1): Figure[] {
+// `balances` is its own free part, so a pocket and its parent add up once.
+function sumByCurrency(rows: AccountRow[]): Figure[] {
   const totals = new Map<CurrencyCode, number>();
   for (const row of rows) {
     for (const balance of row.balances) {
-      totals.set(balance.currency, (totals.get(balance.currency) ?? 0) + sign * balance.balanceCents);
+      totals.set(balance.currency, (totals.get(balance.currency) ?? 0) + balance.balanceCents);
     }
   }
   return [...totals]
@@ -102,8 +101,7 @@ function mergeFigures(parts: { figures: Figure[]; sign: 1 | -1 }[]): Figure[] {
     .sort((a, b) => a.currency.localeCompare(b.currency));
 }
 
-// What a person owes reads as a positive figure and a card in their favour as a
-// negative one (RF-114); the signed figure carries the minus itself.
+// A debt reads with its minus, in a band as in its rows, and a card in the person's favour without one (RF-114, RF-318).
 function Figures({ figures }: { figures: Figure[] }) {
   // A kind with nothing in it still reads as zero, never a blank tile.
   const shown = figures.length > 0 ? figures : [{ currency: BASE_CURRENCY, cents: 0 }];
@@ -266,7 +264,7 @@ export function AccountsScreen({
     return types
       .map(({ has, ...type }) => ({ ...type, rows: list.filter(has) }))
       .filter((section) => section.rows.length > 0)
-      .map((section) => ({ ...section, figures: sumByCurrency(section.rows, section.owes ? -1 : 1) }));
+      .map((section) => ({ ...section, figures: sumByCurrency(section.rows) }));
   }
 
   // Inside a type the personal accounts and the fund's stay apart, as RF-60 had
@@ -293,7 +291,8 @@ export function AccountsScreen({
   function totalsOf(list: Section[]) {
     const owedToMe = owed.map((group) => ({ currency: group.currency as CurrencyCode, cents: group.totalCents }));
     const have = list.filter((x) => !x.owes).map((x) => ({ figures: x.figures, sign: 1 as const }));
-    const owe = list.filter((x) => x.owes).map((x) => ({ figures: x.figures, sign: 1 as const }));
+    // The sections carry a debt with its minus; the «Lo que debo» tile states what is owed, so it reads the magnitude.
+    const owe = list.filter((x) => x.owes).map((x) => ({ figures: x.figures, sign: -1 as const }));
     return (
       <StatTiles
         tiles={[
@@ -310,7 +309,7 @@ export function AccountsScreen({
                 figures={mergeFigures([
                   ...have,
                   { figures: owedToMe, sign: 1 as const },
-                  ...owe.map((x) => ({ ...x, sign: -1 as const })),
+                  ...owe.map((x) => ({ ...x, sign: 1 as const })),
                 ])}
               />
             ),
@@ -466,7 +465,7 @@ export function AccountsScreen({
                     figures={
                       parts.length === 1
                         ? section.figures
-                        : sumByCurrency(part.rows, section.owes ? -1 : 1)
+                        : sumByCurrency(part.rows)
                     }
                   />
                 ),
@@ -748,7 +747,7 @@ function AccountCard({
       <Flex justify="between" align="start" gap="3">
         <Flex direction="column" gap="1" flexGrow="1" minWidth="0">
           <Text weight="medium">
-            {account.thirdParty ? t("creditOf", { name: account.name, person: account.thirdParty.personName }) : account.name}
+            {account.name}
           </Text>
           <AccountDetail account={account} />
           <PaidByLine account={account} />
