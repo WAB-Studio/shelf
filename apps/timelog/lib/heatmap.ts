@@ -1,7 +1,7 @@
-import { appClass, type AppClass } from "@/lib/app-classes";
+import { appClass, appTone, mainSiteClass, type AppClass } from "@/lib/app-classes";
 import { appName } from "@/lib/app-names";
 import { claudeScreen } from "@/lib/daily";
-import type { ClaudeDay, DayApp } from "@/lib/queries";
+import type { ClaudeDay, DayApp, SiteTime } from "@/lib/queries";
 
 export const HEAT_LEVELS = 4;
 
@@ -28,8 +28,13 @@ export function claudeHeatRow(claude: ClaudeDay[], days: string[], largest: numb
 
 // The week as a grid: the `top` apps of the week by total, a cell per day. An app is its readable name (two processes
 // with one name add up, Windows' own noise is `systemName`). A cell's level, 1 to 4, is its share of the largest cell
-// in the grid; a day with nothing is level 0.
-export function buildHeatmap(rows: DayApp[], days: string[], systemName: string, top: number): Heatmap {
+// in the grid; a day with nothing is level 0. A browser's row is classed by the main class of the week's `sites` (RT-28).
+export function buildHeatmap(rows: DayApp[], days: string[], systemName: string, top: number, sites: SiteTime[] = []): Heatmap {
+  const browserKind = mainSiteClass(sites);
+  const kindOf = (app: string): AppClass => {
+    const tone = appTone(app, systemName, browserKind);
+    return tone === "claudeApp" ? appClass(app, systemName) : tone;
+  };
   const byApp = new Map<string, Map<string, number>>();
   for (const one of rows) {
     const name = appName(one.app, systemName);
@@ -47,14 +52,14 @@ export function buildHeatmap(rows: DayApp[], days: string[], systemName: string,
   return {
     rows: shown.map((one) => ({
       app: one.app,
-      kind: appClass(one.app, systemName),
+      kind: kindOf(one.app),
       total: one.total,
       cells: days.map((day) => {
         const seconds = one.perDay.get(day) ?? 0;
         return { seconds, level: level(seconds) };
       }),
     })),
-    rest: rest.map((one) => ({ app: one.app, kind: appClass(one.app, systemName), total: one.total })),
+    rest: rest.map((one) => ({ app: one.app, kind: kindOf(one.app), total: one.total })),
     largest,
     restCount: rest.length,
     restSeconds: rest.reduce((sum, one) => sum + one.total, 0),

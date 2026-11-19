@@ -6,7 +6,7 @@ import { BarRows } from "@/components/screens/app-rows";
 import { ProjectBars, SiteBars } from "@/components/screens/claude-internet";
 import { Between, Card, Cards, DayColumns, Disclosure, Figure, Heatmap, Hero, HeroColumns, Mosaic, Stack, Text, TextLink, Tile, Title, ToneLegend } from "@/components/ui";
 import { claudeWeekHint } from "@/lib/daily";
-import { appTone } from "@/lib/app-classes";
+import { appTone, mainSiteClass } from "@/lib/app-classes";
 import { buildHeatmap, claudeHeatRow } from "@/lib/heatmap";
 import { withTimeDb } from "@/lib/session";
 import { appsByDay, claudeBetween, dayTotals, editorWindowsBetween, sitesBetween, uploadSpan } from "@/lib/queries";
@@ -43,7 +43,8 @@ export default async function WeekPage({ searchParams }: { searchParams: Promise
   const steps = weekSteps(monday, span.firstDay, today);
   const days = fill(monday, sunday, totals);
   const longestDay = Math.max(1, ...days.map((one) => one.seconds));
-  const heat = buildHeatmap(byDay, days.map((one) => one.day), words.system, APPS_SHOWN);
+  const heat = buildHeatmap(byDay, days.map((one) => one.day), words.system, APPS_SHOWN, sites);
+  const browserKind = mainSiteClass(sites);
   const hint = claudeWeekHint(span);
   const projects = projectsOf(windows);
   const agentSeconds = claude.reduce((total, one) => total + one.code, 0);
@@ -58,11 +59,11 @@ export default async function WeekPage({ searchParams }: { searchParams: Promise
   const heatRows = [
     ...(claudeRow.total === 0 ? [] : [{ key: "claude-total", name: tClaude("screen"), kind: toneName("claude"), tone: "claude" as const, total: words.duration(claudeRow.total), cells: claudeRow.cells.map((cell, index) => cellOf(tClaude("screen"), days[index].day, cell)) }]),
     ...heat.rows.map((row) => {
-      const tone = appTone(row.app, words.system);
+      const tone = appTone(row.app, words.system, browserKind);
       return { key: row.app, name: row.app, kind: toneName(tone), tone, total: words.duration(row.total), cells: row.cells.map((cell, index) => cellOf(row.app, days[index].day, cell)) };
     }),
   ];
-  const restTones = heat.rest.map((one) => appTone(one.app, words.system));
+  const restTones = heat.rest.map((one) => appTone(one.app, words.system, browserKind));
   const legend = [...new Map([...heatRows.map((row) => row.tone), ...restTones].map((tone) => [tone, { key: tone, tone, name: toneName(tone) }])).values()];
 
   const block = (
@@ -124,7 +125,7 @@ export default async function WeekPage({ searchParams }: { searchParams: Promise
               <Disclosure summary={<Text variant="meta">{t("appsMore", { n: heat.restCount, duration: words.duration(heat.restSeconds) })}</Text>}>
                 <BarRows
                   of={heat.rows[0]?.total}
-                  rows={heat.rest.map((one) => ({ key: one.app, name: one.app, tone: appTone(one.app, words.system), figure: words.duration(one.total), seconds: one.total, label: t("restBar", { app: one.app, duration: words.duration(one.total) }) }))}
+                  rows={heat.rest.map((one) => ({ key: one.app, name: one.app, tone: appTone(one.app, words.system, browserKind), figure: words.duration(one.total), seconds: one.total, label: t("restBar", { app: one.app, duration: words.duration(one.total) }) }))}
                 />
               </Disclosure>
             ) : null}

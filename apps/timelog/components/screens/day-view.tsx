@@ -5,7 +5,7 @@ import { AutoRefresh } from "@/components/screens/auto-refresh";
 import { ClaudeBlock, InternetBlock, ProjectBars } from "@/components/screens/claude-internet";
 import { Timeline } from "@/components/ui/timeline";
 import { Card, Cards, Composition, DayStrip, Figure, Hero, HeroColumns, Mosaic, Stack, Text, TextLink, Tile, Title } from "@/components/ui";
-import { appTone, timeByClass } from "@/lib/app-classes";
+import { appTone, mainSiteClass, timeByClass } from "@/lib/app-classes";
 import { readableApp } from "@/lib/app-names";
 import { projectName } from "@/lib/claude-project";
 import { claudeScreen, claudeSources } from "@/lib/daily";
@@ -73,7 +73,8 @@ export async function DayView({ day }: { day: string }) {
   const total = sum(apps);
   const top = apps[0];
   const tSystem = words.system;
-  const classes = timeByClass(apps, tSystem);
+  const browserKind = mainSiteClass(sites);
+  const classes = timeByClass(apps, sites, tSystem);
   const previousTotal = previous[0]?.seconds ?? 0;
   const delta = total - previousTotal;
   const date = t("title", { weekday: words.weekday(day), day: words.dayOfMonth(day), month: words.month(day) });
@@ -96,7 +97,7 @@ export async function DayView({ day }: { day: string }) {
 
   // An app's row opens onto its longest windows, each measured against the app's own time.
   const appRow = (one: AppTime): BarRow => {
-    const tone = appTone(one.app, tSystem);
+    const tone = appTone(one.app, tSystem, browserKind);
     const mine = titlesOf.get(one.app) ?? [];
     return {
       key: one.app,
