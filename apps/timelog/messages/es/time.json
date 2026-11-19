@@ -111,11 +111,12 @@
     "back": "Ir a Hoy"
   },
   "claude": {
+    "title": "Claude",
     "never": "Todavía no llega tiempo de Claude Code: se lee de su carpeta de sesiones en tu PC, y en WSL se indica en aw-timelog.toml (claude_dir).",
     "session": "{project}: {duration}",
     "span": "{from} – {to}",
-    "screenAgent": "Claude: {screen} en pantalla · Claude Code trabajó {agent}",
-    "screenOnly": "Claude: {screen} en pantalla",
+    "screenAgent": "{screen} en pantalla · Claude Code trabajó {agent}",
+    "screenOnly": "{screen} en pantalla",
     "sessionsMore": "y {n} sesiones más"
   },
   "internet": {

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
 
-import { Button, Disclosure, Field, Form, Stack, Text, TextLink, Title } from "@/components/ui";
+import { Button, Disclosure, Field, Form, Narrow, Stack, Text, TextLink, Title } from "@/components/ui";
 import { typedDay } from "@/lib/export-range";
 import { mondayOf } from "@/lib/week";
 import { addDays, civilDay } from "@/lib/zone";
@@ -22,29 +22,31 @@ export default async function ExportPage({ searchParams }: { searchParams: Promi
     { key: "thisMonth" as const, from: `${today.slice(0, 8)}01`, to: today },
   ];
   return (
-    <Stack gap={4}>
-      <TextLink href="/semana">‹ {t("back")}</TextLink>
-      <Title>{t("title")}</Title>
-      <Text as="p">{t("intro")}</Text>
-      <Form action="/api/export" method="get">
-        <Field label={t("from")} name="from" type="date" defaultValue={typedDay(from, addDays(today, -29))} required />
-        <Field label={t("to")} name="to" type="date" defaultValue={typedDay(to, today)} required />
-        {error === "range" ? <Text as="p">{t("badRange")}</Text> : null}
-        <Button type="submit">{t("download")}</Button>
-      </Form>
-      <Stack gap={2}>
-        <Text variant="meta">{t("quick")}</Text>
-        <Stack gap={1}>
-          {shortcuts.map((one) => (
-            <TextLink key={one.key} download href={`/api/export?from=${one.from}&to=${one.to}`}>
-              {t(one.key)} ›
-            </TextLink>
-          ))}
+    <Narrow>
+      <Stack gap={4}>
+        <TextLink href="/semana">‹ {t("back")}</TextLink>
+        <Title>{t("title")}</Title>
+        <Text as="p">{t("intro")}</Text>
+        <Form action="/api/export" method="get">
+          <Field label={t("from")} name="from" type="date" defaultValue={typedDay(from, addDays(today, -29))} required />
+          <Field label={t("to")} name="to" type="date" defaultValue={typedDay(to, today)} required />
+          {error === "range" ? <Text as="p">{t("badRange")}</Text> : null}
+          <Button type="submit">{t("download")}</Button>
+        </Form>
+        <Stack gap={2}>
+          <Text variant="meta">{t("quick")}</Text>
+          <Stack gap={1}>
+            {shortcuts.map((one) => (
+              <TextLink key={one.key} download href={`/api/export?from=${one.from}&to=${one.to}`}>
+                {t(one.key)} ›
+              </TextLink>
+            ))}
+          </Stack>
         </Stack>
+        <Disclosure summary={<Text>{t("detailsTitle")}</Text>}>
+          <Text as="p" variant="meta">{t("details")}</Text>
+        </Disclosure>
       </Stack>
-      <Disclosure summary={<Text>{t("detailsTitle")}</Text>}>
-        <Text as="p" variant="meta">{t("details")}</Text>
-      </Disclosure>
-    </Stack>
+    </Narrow>
   );
 }

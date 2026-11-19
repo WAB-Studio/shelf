@@ -1,13 +1,30 @@
 import Link from "next/link";
-import type { ComponentProps, ReactNode } from "react";
+import type { ComponentProps, CSSProperties, ReactNode } from "react";
 
 import styles from "./ui.module.css";
 
 const join = (...names: (string | false | undefined)[]) => names.filter(Boolean).join(" ");
 
-// One column, 760 at most, the same on every screen so the header never moves.
-export function Page({ children }: { children: ReactNode }) {
-  return <main className={styles.page}>{children}</main>;
+// Desktop first (DESIGN «Escritorio»): with `shell`, from 1100 the header is a sidebar and the screen takes the width
+// beside it; under 1100 one column, 760 at most, the header on top. Without `shell`, one column at every width.
+export function Page({ shell, children }: { shell?: boolean; children: ReactNode }) {
+  return <main className={join(styles.page, shell && styles.shell)}>{children}</main>;
+}
+
+// The two columns of a desktop screen: `main` the wide one (the apps), `aside` the narrow one (sites, projects, Claude).
+// Under 1100 they stack, `main` first. A section inside reads as a panel on the desktop.
+export function Columns({ main, aside }: { main: ReactNode; aside: ReactNode }) {
+  return (
+    <div className={styles.columns}>
+      <div className={styles.column}>{main}</div>
+      <div className={styles.column}>{aside}</div>
+    </div>
+  );
+}
+
+// A form screen («Llaves», «Exportar») keeps a reading width inside the wide page.
+export function Narrow({ children }: { children: ReactNode }) {
+  return <div className={styles.narrow}>{children}</div>;
 }
 
 // A titled part of a screen: its title in the display face, its total at the right. No box, space only.
@@ -29,7 +46,8 @@ function PeriodStep({ step, glyph }: { step?: Step; glyph: string }) {
   return step === undefined ? <span className={styles.periodSpacer} aria-hidden="true" /> : <Link href={step.href} className={styles.periodStep} aria-label={step.label}>{glyph}</Link>;
 }
 
-// The top line of a day or a week: its name and, under it in muted, what it adds up to, with ‹ and › one period away.
+// The top line of a day or a week: its name and what it adds up to (beside it on the phone, under it on the desktop), with
+// ‹ and › one period away.
 // Both arrows are buttons with a name; where a period has no neighbour its place stays empty so the title never moves.
 // `children` is the small line under the title («Actualizado hace…», the way back to now).
 export function Period({ title, summary, prev, next, children }: { title: string; summary?: string; prev?: Step; next?: Step; children?: ReactNode }) {
@@ -39,7 +57,7 @@ export function Period({ title, summary, prev, next, children }: { title: string
         <PeriodStep step={prev} glyph="‹" />
         <h1 className={styles.periodTitle}>
           {title}
-          {summary === undefined ? null : <span className={styles.periodSummary}>{` · ${summary}`}</span>}
+          {summary === undefined ? null : <span className={styles.periodSummary}>{summary}</span>}
         </h1>
         <PeriodStep step={next} glyph="›" />
       </div>
@@ -141,23 +159,28 @@ export function Composition({ parts, label }: { parts: CompositionPart[]; label:
 
 export type DayRow = { key: string; label: string; figure: string; share: number; future: boolean; description: string; href: string };
 
-// The seven days of a week as rows, each a link to its day with its full figure and a bar against the week's longest day.
-// A day not reached is dimmed, reads «—» and opens nothing.
+// The seven days of a week, each a link to its day with its full figure and a bar against the week's longest day: rows
+// on the phone, seven columns standing side by side on the desktop. A day not reached is dimmed, reads «—» and opens nothing.
 export function DayRows({ days }: { days: DayRow[] }) {
   return (
-    <Rows>
-      {days.map((day) =>
-        day.future ? (
-          <div key={day.key} className={styles.rowDim}>
-            <Meter name={day.label} figure="—" share={0} label={day.description} />
-          </div>
-        ) : (
-          <Link key={day.key} href={day.href} className={styles.rowLink}>
-            <Meter name={day.label} figure={day.figure} share={day.share} label={day.description} />
-          </Link>
-        ),
-      )}
-    </Rows>
+    <ol className={styles.days}>
+      {days.map((day) => {
+        const body = (
+          <>
+            <span className={styles.dayTrack} role="img" aria-label={day.description}>
+              <span className={styles.dayFill} style={{ "--share": day.future ? 0 : Math.max(0, Math.min(1, day.share)) } as CSSProperties} />
+            </span>
+            <span className={styles.dayName}>{day.label}</span>
+            <Text mono>{day.future ? "—" : day.figure}</Text>
+          </>
+        );
+        return (
+          <li key={day.key} className={day.future ? styles.rowDim : undefined}>
+            {day.future ? <div className={styles.day}>{body}</div> : <Link href={day.href} className={join(styles.day, styles.rowLink)}>{body}</Link>}
+          </li>
+        );
+      })}
+    </ol>
   );
 }
 

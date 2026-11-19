@@ -3,7 +3,7 @@ import { getTranslations } from "next-intl/server";
 import { BarRows, type BarRow } from "@/components/screens/app-rows";
 import { AutoRefresh } from "@/components/screens/auto-refresh";
 import { ClaudeLine, ProjectBars, SitesBlock } from "@/components/screens/claude-internet";
-import { Composition, Period, Section, Stack, Text, TextLink } from "@/components/ui";
+import { Columns, Composition, Period, Section, Stack, Text, TextLink } from "@/components/ui";
 import { appTone, mainSiteClass, timeByClass } from "@/lib/app-classes";
 import { displayApp, readableApp } from "@/lib/app-names";
 import { claudeScreen } from "@/lib/daily";
@@ -18,8 +18,8 @@ import { addDays, civilDay } from "@/lib/zone";
 const TITLES_SHOWN = 8;
 const APPS_SHOWN = 8;
 
-// One day (RT-04, RT-11): its name and total on one line with ‹ › a day away, the day split by class, then the apps, the
-// sites, the projects and one line for Claude. «Hoy» is this screen for today; any past day opens on `/dia/AAAA-MM-DD`.
+// One day (RT-04, RT-11, RT-34): its name and total with ‹ › a day away, the day split by class, then the apps in the wide
+// column and the sites, the projects and Claude beside them. «Hoy» is this screen for today; any past day opens on `/dia/AAAA-MM-DD`.
 export async function DayView({ day }: { day: string }) {
   const today = civilDay();
   const isToday = day === today;
@@ -120,24 +120,30 @@ export async function DayView({ day }: { day: string }) {
       )}
       {firstUse ? <TextLink button href="/llaves">{t("connect")}</TextLink> : null}
       {firstUse || emptyPast ? null : (
-        <>
-          {apps.length > 0 ? (
-            <Section title={t("apps")}>
-              <BarRows
-                of={apps[0]?.seconds}
-                rows={apps.slice(0, APPS_SHOWN).map(appRow)}
-                overflow={apps.length > APPS_SHOWN ? { summary: t("appsMore", { n: apps.length - APPS_SHOWN, duration: words.duration(sum(apps.slice(APPS_SHOWN))) }), rows: apps.slice(APPS_SHOWN).map(appRow) } : undefined}
-              />
-            </Section>
-          ) : null}
-          <SitesBlock isToday={isToday} sites={sites} pages={pages} hasSites={span.hasSites} words={words} />
-          {projects.length > 0 ? (
-            <Section title={t("projects")} figure={words.duration(sum(projects))}>
-              <ProjectBars projects={projects} words={words} />
-            </Section>
-          ) : null}
-          <ClaudeLine screen={claude === undefined ? 0 : claudeScreen(claude)} agent={claude?.code ?? 0} sessions={sessions} hasClaudeCode={span.hasClaudeCode} words={words} />
-        </>
+        <Columns
+          main={
+            apps.length > 0 ? (
+              <Section title={t("apps")} figure={words.duration(total)}>
+                <BarRows
+                  of={apps[0]?.seconds}
+                  rows={apps.slice(0, APPS_SHOWN).map(appRow)}
+                  overflow={apps.length > APPS_SHOWN ? { summary: t("appsMore", { n: apps.length - APPS_SHOWN, duration: words.duration(sum(apps.slice(APPS_SHOWN))) }), rows: apps.slice(APPS_SHOWN).map(appRow) } : undefined}
+                />
+              </Section>
+            ) : null
+          }
+          aside={
+            <>
+              <SitesBlock isToday={isToday} sites={sites} pages={pages} hasSites={span.hasSites} words={words} />
+              {projects.length > 0 ? (
+                <Section title={t("projects")} figure={words.duration(sum(projects))}>
+                  <ProjectBars projects={projects} words={words} />
+                </Section>
+              ) : null}
+              <ClaudeLine screen={claude === undefined ? 0 : claudeScreen(claude)} agent={claude?.code ?? 0} sessions={sessions} hasClaudeCode={span.hasClaudeCode} words={words} />
+            </>
+          }
+        />
       )}
     </Stack>
   );
