@@ -3,7 +3,8 @@ import { getTranslations } from "next-intl/server";
 import { BarRows, type BarRow } from "@/components/screens/app-rows";
 import { AutoRefresh } from "@/components/screens/auto-refresh";
 import { ClaudeLine, ProjectBars, SitesBlock } from "@/components/screens/claude-internet";
-import { Columns, Composition, Period, Section, Stack, Text, TextLink } from "@/components/ui";
+import { ClassSection, Overview } from "@/components/screens/overview";
+import { Columns, Period, Section, Stack, Text, TextLink } from "@/components/ui";
 import { appTone, mainSiteClass, timeByClass } from "@/lib/app-classes";
 import { displayApp, readableApp } from "@/lib/app-names";
 import { claudeScreen } from "@/lib/daily";
@@ -24,7 +25,7 @@ export async function DayView({ day }: { day: string }) {
   const today = civilDay();
   const isToday = day === today;
   // One settled transaction for every read: they pipeline on its connection, one pool slot and one settle for the screen.
-  const [reads, words, t, tClass] = await Promise.all([
+  const [reads, words, t] = await Promise.all([
     withTimeDb((tx) =>
       Promise.all([
         appsBetween(day, day, tx),
@@ -39,7 +40,6 @@ export async function DayView({ day }: { day: string }) {
     ),
     calendarWords(),
     getTranslations("time.today"),
-    getTranslations("time.classes"),
   ]);
   const [raw, sites, pages, windows, sessions, claudeDays, devices, span] = reads;
   const claude = claudeDays[0];
@@ -101,7 +101,6 @@ export async function DayView({ day }: { day: string }) {
       {isToday ? <AutoRefresh /> : null}
       <Period
         title={date}
-        summary={apps.length > 0 ? t("line", { duration: words.duration(total) }) : undefined}
         prev={span.firstDay !== null && day > span.firstDay ? { href: hrefOf(addDays(day, -1)), label: t("prevDay") } : undefined}
         next={day < today ? { href: hrefOf(addDays(day, 1)), label: t("nextDay") } : undefined}
       >
@@ -116,14 +115,14 @@ export async function DayView({ day }: { day: string }) {
           {span.lastReceived === null || !isToday ? null : <Text as="p" variant="meta">{t("lastUpload", { when: words.moment(span.lastReceived) })}</Text>}
         </Stack>
       ) : (
-        <Composition label={t("byClassLabel")} parts={classes.map((one) => ({ key: one.kind, tone: one.kind, seconds: one.seconds, name: tClass(one.kind), figure: words.duration(one.seconds) }))} />
+        <Overview total={total} apps={apps.length} classes={classes} top={{ name: displayApp(apps[0].app), seconds: apps[0].seconds }} claude={{ screen: claude === undefined ? 0 : claudeScreen(claude), agent: claude?.code ?? 0 }} words={words} />
       )}
       {firstUse ? <TextLink button href="/llaves">{t("connect")}</TextLink> : null}
       {firstUse || emptyPast ? null : (
         <Columns
           main={
             apps.length > 0 ? (
-              <Section panel title={t("apps")} figure={words.duration(total)}>
+              <Section panel title={t("apps")} figure={t("appsCount", { n: apps.length })}>
                 <BarRows
                   of={apps[0]?.seconds}
                   rows={apps.slice(0, APPS_SHOWN).map(appRow)}
@@ -132,6 +131,7 @@ export async function DayView({ day }: { day: string }) {
               </Section>
             ) : null
           }
+          middle={apps.length > 0 ? <ClassSection total={total} classes={classes} words={words} /> : undefined}
           aside={
             <>
               <SitesBlock isToday={isToday} sites={sites} pages={pages} hasSites={span.hasSites} words={words} />

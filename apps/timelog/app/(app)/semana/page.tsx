@@ -4,7 +4,8 @@ import { getTranslations } from "next-intl/server";
 
 import { BarRows, type BarRow } from "@/components/screens/app-rows";
 import { ClaudeLine, ProjectBars, SiteBars } from "@/components/screens/claude-internet";
-import { Between, Columns, Composition, DayRows, Period, Section, Stack, Text, TextLink } from "@/components/ui";
+import { ClassSection, Overview } from "@/components/screens/overview";
+import { Between, Columns, DayRows, Period, Section, Stack, Text, TextLink } from "@/components/ui";
 import { appTone, mainSiteClass, timeByClass } from "@/lib/app-classes";
 import { displayApp } from "@/lib/app-names";
 import { claudeScreen } from "@/lib/daily";
@@ -37,13 +38,12 @@ export default async function WeekPage({ searchParams }: { searchParams: Promise
   const { semana } = await searchParams;
   const asked = askedWeek(semana, today);
   const sunday = addDays(asked, 6);
-  const [[span, totals, byDay, claude, sites, pages, windows, sessions], words, t, tToday, tSites, tClass] = await Promise.all([
+  const [[span, totals, byDay, claude, sites, pages, windows, sessions], words, t, tToday, tSites] = await Promise.all([
     withTimeDb((tx) => Promise.all([uploadSpan(tx), dayTotals(asked, sunday, tx), appsByDay(asked, sunday, tx), claudeBetween(asked, sunday, tx), sitesBetween(asked, sunday, tx), pagesBetween(asked, sunday, tx), editorWindowsBetween(asked, sunday, tx), claudeSessionsBetween(asked, sunday, tx)])),
     calendarWords(),
     getTranslations("time.week"),
     getTranslations("time.today"),
     getTranslations("time.internet"),
-    getTranslations("time.classes"),
   ]);
   const monday = clampWeek(asked, span.firstDay, today);
   if (monday !== asked) redirect(`/semana?semana=${monday}`);
@@ -53,7 +53,6 @@ export default async function WeekPage({ searchParams }: { searchParams: Promise
   const longestDay = Math.max(1, ...minutes);
   const weekApps = appsOfWeek(byDay, days.map((one) => one.day), words.system);
   const apps = weekApps.map((one) => ({ app: one.app, seconds: one.total }));
-  const appsTotal = sum(apps);
   const browserKind = mainSiteClass(sites, pages);
   const classes = timeByClass(apps, sites, words.system, pages);
   const projects = projectsOf(windows);
@@ -88,7 +87,6 @@ export default async function WeekPage({ searchParams }: { searchParams: Promise
     <Stack gap={4}>
       <Period
         title={t("title", rangeOf(words, monday))}
-        summary={t("line", { duration: words.duration(total * 60) })}
         prev={steps.prev ? { href: `/semana?semana=${steps.prev}`, label: t("prev") } : undefined}
         next={steps.next ? { href: `/semana?semana=${steps.next}`, label: t("next") } : undefined}
       >
@@ -101,6 +99,7 @@ export default async function WeekPage({ searchParams }: { searchParams: Promise
         </Stack>
       ) : (
         <>
+          {apps.length === 0 ? null : <Overview total={total * 60} apps={apps.length} classes={classes} top={{ name: displayApp(weekApps[0].app), seconds: weekApps[0].total }} claude={{ screen: screenSeconds, agent: agentSeconds }} words={words} />}
           <DayRows
             days={days.map(({ day }, index) => ({
               key: day,
@@ -112,13 +111,12 @@ export default async function WeekPage({ searchParams }: { searchParams: Promise
               description: day > today ? t("upcoming", { day: dayName(day) }) : t("bar", { day: dayName(day), duration: words.duration(minutes[index] * 60) }),
             }))}
           />
-          {apps.length === 0 ? null : <Composition label={tToday("byClassLabel")} parts={classes.map((one) => ({ key: one.kind, tone: one.kind, seconds: one.seconds, name: tClass(one.kind), figure: words.duration(one.seconds) }))} />}
           <Columns
             main={
               apps.length === 0 ? (
                 <Text as="p">{t("empty")}</Text>
               ) : (
-                <Section panel title={tToday("apps")} figure={words.duration(appsTotal)}>
+                <Section panel title={tToday("apps")} figure={tToday("appsCount", { n: apps.length })}>
                   <BarRows
                     of={weekApps[0]?.total}
                     rows={weekApps.slice(0, APPS_SHOWN).map(appRow)}
@@ -127,6 +125,7 @@ export default async function WeekPage({ searchParams }: { searchParams: Promise
                 </Section>
               )
             }
+            middle={apps.length === 0 ? undefined : <ClassSection total={total * 60} classes={classes} words={words} />}
             aside={
               <>
                 {sites.length > 0 ? (
