@@ -14,7 +14,8 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "node --env-file=.env.local ../../node_modules/drizzle-kit/bin.cjs migrate",
     "check:unit": "node --import tsx --test \"{app,lib,components,scripts}/**/*.test.ts\"",
-    "check:db": "node --import tsx --env-file=.env.local --test scripts/check-db.ts"
+    "check:db": "node --import tsx --env-file=.env.local --test scripts/check-db.ts",
+    "check:e2e": "node --env-file=.env.local ../../node_modules/@playwright/test/cli.js test"
   },
   "dependencies": {
     "@modelcontextprotocol/server": "^2.3.1",

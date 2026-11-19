@@ -108,7 +108,7 @@ test("the main class of sites ignores «other»; the browser draws in it, Claude
   assert.equal(appTone("Sistema", "Sistema"), "system");
 });
 
-test("the study sites and Anki are «study»; the specific rule beats `*.vercel.app` (RT-31)", () => {
+test("the study sites and Anki are «study»; the specific rule beats `*.vercel.app` (RT-32)", () => {
   assert.equal(siteClass("wordbookapp.vercel.app"), "study");
   assert.equal(siteClass("other.vercel.app"), "code");
   assert.equal(siteClass("www.duolingo.com"), "study");

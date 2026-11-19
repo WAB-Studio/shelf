@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
 
-import { Button, Field, Form, Stack, Text, TextLink, Title } from "@/components/ui";
+import { Button, Disclosure, Field, Form, Stack, Text, TextLink, Title } from "@/components/ui";
 import { typedDay } from "@/lib/export-range";
 import { mondayOf } from "@/lib/week";
 import { addDays, civilDay } from "@/lib/zone";
@@ -42,6 +42,9 @@ export default async function ExportPage({ searchParams }: { searchParams: Promi
           ))}
         </Stack>
       </Stack>
+      <Disclosure summary={<Text>{t("detailsTitle")}</Text>}>
+        <Text as="p" variant="meta">{t("details")}</Text>
+      </Disclosure>
     </Stack>
   );
 }
